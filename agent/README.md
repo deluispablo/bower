@@ -56,6 +56,25 @@ Hermetic: `rclone`, `claude` and `curl` are stubs that record their calls, so no
 
 Both jobs, in order: check out the repo; install `rclone` (a pinned version, downloaded from the official GitHub release and checked against the sha256 published in that release's own `SHA256SUMS` — no third-party action needed for a single static binary); install `pandoc` (`apt-get`, Ubuntu's own package); set up Node 22 (`actions/setup-node@v4`); install a pinned `@anthropic-ai/claude-code`; run `agent/run.sh <vault_id> <ingest|lint>` with the secrets and variable below. `timeout-minutes: 20` and `permissions: contents: read` bound each run.
 
+### Caching rclone and the Claude Code CLI
+
+Both the rclone binary and the Claude Code CLI are cached with `actions/cache@v4`, keyed on the pinned version (`rclone-<os>-<version>`, `claude-code-<os>-<version>`) so a version bump invalidates the cache instead of silently reusing a stale build:
+
+- **rclone**: cached at `~/rclone-bin`. On a cache hit the download step (`if: steps.cache-rclone.outputs.cache-hit != 'true'`) is skipped; a separate, always-run step copies the (cached or freshly downloaded) binary into `/usr/local/bin` — the sha256 check still runs on every fresh download, never on a cache hit.
+- **Claude Code CLI**: installed with `npm install --prefix "$HOME/claude-cli"` instead of `npm install -g`, so the whole install lives under one cacheable directory (`~/claude-cli`); a global install spreads files across `/usr/local/lib/node_modules` and `/usr/local/bin`, which isn't practical to cache. On a cache hit the install step is skipped and `$HOME/claude-cli/node_modules/.bin` is added to `$GITHUB_PATH` either way.
+
+`RCLONE_VERSION`, `RCLONE_SHA256` and `CLAUDE_CODE_VERSION` live once, in the job's own `env:`, and both the cache keys and the install steps read them from there — bumping a version is a one-line change.
+
+Pandoc is left uncached: `apt-get install pandoc` on `ubuntu-latest` is a few seconds (the package and its small dependency set are usually already in APT's local cache on the runner image), not worth a cache step of its own.
+
+#### Measuring
+
+Actions cache doesn't emit a step summary of its own; compare two runs by hand:
+
+1. Trigger `Ingest` by hand (`workflow_dispatch`) on a vault whose `0-Inbox/` and `Clippings/` are empty, once with the cache empty (a version bump, or the first run after this change) and once right after, so the cache is warm.
+2. Open each run in the Actions tab and expand the job. Sum the wall time of `Cache rclone` + `Download rclone` + `Install rclone` + `Cache Claude Code CLI` + `Install Claude Code` for both runs (GitHub shows each step's duration in the log view).
+3. The difference between the two sums is the saving. A cache hit itself (both `actions/cache@v4` restores) takes a few seconds; the steps it lets you skip are the download and the `npm install`.
+
 ### Secrets and variable the instance repo needs
 
 Set once, under the instance repo's Settings → Secrets and variables → Actions (`docs/runbook.md` has the exact `gh` commands):

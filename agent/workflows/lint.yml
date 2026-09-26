@@ -26,25 +26,40 @@ jobs:
       contents: read
     env:
       VAULT_ID: ${{ inputs.vault_id }}
+      # Both pinned deliberately; the cache keys below derive from these,
+      # so bumping a version here invalidates the matching cache too.
+      RCLONE_VERSION: '1.75.1'
+      RCLONE_SHA256: '982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab'
+      CLAUDE_CODE_VERSION: '2.1.283'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Cache rclone
+        id: cache-rclone
+        uses: actions/cache@v4
+        with:
+          path: ~/rclone-bin
+          key: rclone-${{ runner.os }}-${{ env.RCLONE_VERSION }}
 
       # Official release, downloaded directly and verified by hash rather
       # than through a third-party action: RCLONE_SHA256 is the
       # linux-amd64.zip line copied from that release's own SHA256SUMS
       # (https://github.com/rclone/rclone/releases/download/v1.75.1/SHA256SUMS).
-      - name: Install rclone
-        env:
-          RCLONE_VERSION: '1.75.1'
-          RCLONE_SHA256: '982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab'
+      - name: Download rclone
+        if: steps.cache-rclone.outputs.cache-hit != 'true'
         run: |
           curl -fsSL -o rclone.zip \
             "https://github.com/rclone/rclone/releases/download/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-amd64.zip"
           echo "${RCLONE_SHA256}  rclone.zip" | sha256sum -c -
           unzip -q rclone.zip
-          sudo install -m 755 "rclone-v${RCLONE_VERSION}-linux-amd64/rclone" /usr/local/bin/rclone
+          mkdir -p ~/rclone-bin
+          install -m 755 "rclone-v${RCLONE_VERSION}-linux-amd64/rclone" ~/rclone-bin/rclone
           rm -rf rclone.zip "rclone-v${RCLONE_VERSION}-linux-amd64"
+
+      - name: Install rclone
+        run: |
+          sudo install -m 755 ~/rclone-bin/rclone /usr/local/bin/rclone
           rclone version
 
       - name: Install pandoc
@@ -57,10 +72,23 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Cache Claude Code CLI
+        id: cache-claude-cli
+        uses: actions/cache@v4
+        with:
+          path: ~/claude-cli
+          key: claude-code-${{ runner.os }}-${{ env.CLAUDE_CODE_VERSION }}
+
+      # Installed into a project-local prefix, not global, so the whole
+      # thing is one directory the cache step above can save and restore.
       # Pinned to the version current when this workflow was written
       # (npm view @anthropic-ai/claude-code version); bump deliberately.
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.283
+        if: steps.cache-claude-cli.outputs.cache-hit != 'true'
+        run: npm install --prefix "$HOME/claude-cli" @anthropic-ai/claude-code@${{ env.CLAUDE_CODE_VERSION }}
+
+      - name: Add Claude Code to PATH
+        run: echo "$HOME/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
       # run.sh's own log carries timestamps, step names and counts only and
       # never prints a credential, so no ::add-mask:: is needed here.
