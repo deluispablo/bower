@@ -9,8 +9,13 @@ export class HttpError extends Error {
   readonly status: ContentfulStatusCode;
   readonly code: string;
 
-  constructor(status: ContentfulStatusCode, code: string, message: string) {
-    super(message);
+  constructor(
+    status: ContentfulStatusCode,
+    code: string,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
     this.name = 'HttpError';
     this.status = status;
     this.code = code;

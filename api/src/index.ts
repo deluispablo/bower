@@ -1,32 +1,44 @@
 import { Hono } from 'hono';
 
+import { createAuthRoutes } from './auth.js';
+import type { AuthDeps } from './auth.js';
 import { assertEnv } from './env.js';
 import type { AppEnv } from './env.js';
 import { createErrorHandler } from './errors.js';
 
-const app = new Hono<AppEnv>();
+/**
+ * Builds the Worker's Hono app. `deps` exist for tests only (a stubbed
+ * Google `fetch`); the deployed Worker is `createApp()` with the defaults.
+ */
+export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
+  const app = new Hono<AppEnv>();
 
-app.use('*', async (c, next) => {
-  const requestId = c.req.header('x-request-id') ?? crypto.randomUUID();
-  c.set('requestId', requestId);
-  c.header('x-request-id', requestId);
-  await next();
-});
+  app.use('*', async (c, next) => {
+    const requestId = c.req.header('x-request-id') ?? crypto.randomUUID();
+    c.set('requestId', requestId);
+    c.header('x-request-id', requestId);
+    await next();
+  });
 
-app.onError(createErrorHandler<AppEnv>());
+  app.onError(createErrorHandler<AppEnv>());
 
-// Validated on every request: cheap (string checks plus one base64 decode),
-// and it means a bad or incomplete deploy fails loudly on the very first
-// request instead of surfacing as a cryptic error deep in a handler. The
-// validated result (defaults applied) is stashed in the context so handlers
-// read `c.get('env')`, never the raw `c.env`.
-app.use('*', (c, next) => {
-  c.set('env', assertEnv(c.env));
-  return next();
-});
+  // Validated on every request: cheap (string checks plus one base64 decode),
+  // and it means a bad or incomplete deploy fails loudly on the very first
+  // request instead of surfacing as a cryptic error deep in a handler. The
+  // validated result (defaults applied) is stashed in the context so handlers
+  // read `c.get('env')`, never the raw `c.env`.
+  app.use('*', (c, next) => {
+    c.set('env', assertEnv(c.env));
+    return next();
+  });
 
-app.get('/health', (c) => {
-  return c.json({ ok: true, version: c.get('env').APP_VERSION });
-});
+  app.get('/health', (c) => {
+    return c.json({ ok: true, version: c.get('env').APP_VERSION });
+  });
 
-export default app;
+  app.route('/', createAuthRoutes(deps));
+
+  return app;
+}
+
+export default createApp();
