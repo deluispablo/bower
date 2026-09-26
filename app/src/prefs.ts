@@ -17,6 +17,11 @@ export interface Prefs {
   pushPromptShown: boolean;
   /** Manual override of the light/dark theme; `'system'` follows the OS. */
   theme: ThemePref;
+  /**
+   * ISO time the health check screen was last opened; `''` before the
+   * first time. Drives the "new report" badge (`health-report.ts`).
+   */
+  healthSeenAt: string;
 }
 
 const DEFAULTS: Prefs = {
@@ -24,6 +29,7 @@ const DEFAULTS: Prefs = {
   autoProcessOnAdd: true,
   pushPromptShown: false,
   theme: 'system',
+  healthSeenAt: '',
 };
 
 const STORAGE_PREFIX = 'bower:pref:';

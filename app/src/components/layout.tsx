@@ -1,7 +1,10 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
+import { findReport, isReportNew } from '../health-report.js';
+import { getPref } from '../prefs.js';
 import { useSession } from '../session.js';
 import { useVault } from '../vault-store.js';
 import { OfflineBanner } from './offline-banner.js';
@@ -16,14 +19,39 @@ const NAV_LINKS = [
   { href: '/settings', label: 'Settings' },
 ];
 
+const HEALTH_PATH = '/lint';
+
 interface LayoutProps {
   children: ComponentChildren;
+}
+
+interface HealthLinkProps {
+  isNew: boolean;
+  onNavigate?: () => void;
+}
+
+/** The health check link, with a "New" badge for a report not yet opened. */
+function HealthLink({ isNew, onNavigate }: HealthLinkProps) {
+  return (
+    <a href={HEALTH_PATH} class="health-link" onClick={onNavigate}>
+      Health
+      {isNew && <span class="nav-badge">New</span>}
+    </a>
+  );
 }
 
 export function Layout({ children }: LayoutProps) {
   const { me, signOut } = useSession();
   const { index } = useVault();
+  const { path } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Re-read on every render: the health screen updates the pref, and a
+  // route change re-renders the layout. No badge while on that screen.
+  const reportTime =
+    index === null ? undefined : findReport(index)?.modifiedTime;
+  const healthIsNew =
+    path !== HEALTH_PATH && isReportNew(reportTime, getPref('healthSeenAt'));
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const closeMenu = (): void => {
@@ -78,6 +106,9 @@ export function Layout({ children }: LayoutProps) {
             <>
               <div class="menu-backdrop" onClick={closeMenu} />
               <div class="menu-panel" aria-label="Menu">
+                <div class="menu-health">
+                  <HealthLink isNew={healthIsNew} onNavigate={closeMenu} />
+                </div>
                 <div class="menu-tree">
                   {index !== null && (
                     <Tree index={index} onNavigate={closeMenu} />
@@ -113,6 +144,7 @@ export function Layout({ children }: LayoutProps) {
               {link.label}
             </a>
           ))}
+          <HealthLink isNew={healthIsNew} />
           <div class="sidebar-tree">
             {index !== null && <Tree index={index} />}
           </div>
