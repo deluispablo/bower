@@ -22,7 +22,7 @@ bower/
 │   │   ├── env.ts              # Env contract + validation
 │   │   ├── crypto.ts, session.ts, security.ts, store.ts, google.ts, github.ts, push.ts
 │   │   └── template.generated.ts   # vault-template bundled at build time
-│   ├── scripts/                # bundle-template.mjs, gen-vapid.ts
+│   ├── scripts/                # bundle-template.mjs, gen-vapid.mjs
 │   ├── wrangler.toml, .dev.vars.example
 │   └── test/
 ├── agent/
@@ -32,7 +32,7 @@ bower/
 │   └── test/smoke.sh           # stubbed rclone/claude/curl
 ├── vault-template/             # CLAUDE.md rulebook, PARA folders, index.md, log.md, About-Me.md
 ├── docs/                       # runbook.md, decisions.md, brand.md, testing.md, security.md, privacy.md
-├── scripts/                    # deploy.sh, new-instance.sh, check-sanitized.sh
+├── scripts/                    # deploy.sh, new-instance.sh, check-sanitized.sh, deploy-api.sh
 ├── .github/                    # CI only (this repo never runs the agent)
 ├── README.md, ARCHITECTURE.md, CONTRIBUTING.md, CLAUDE.md, SECURITY.md, CODE_OF_CONDUCT.md, LICENSE
 └── package.json, pnpm-workspace.yaml, tsconfig.base.json, eslint.config.js
