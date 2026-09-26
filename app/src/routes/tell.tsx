@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 
 import { createTextFile } from '../drive.js';
+import { offlineReason, useOnline } from '../online.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import {
@@ -54,6 +55,7 @@ function formatSentTime(iso: string): string {
 export function Tell() {
   const { me } = useSession();
   const { process } = useRun();
+  const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
 
   const [text, setText] = useState('');
@@ -63,11 +65,12 @@ export function Tell() {
   const [status, setStatus] = useState<string | null>(null);
   const [sent, setSent] = useState<SentItem[]>(() => loadSent());
 
-  const canSend = text.trim() !== '' && !sending && inboxFolderId !== null;
+  const canSend =
+    text.trim() !== '' && !sending && inboxFolderId !== null && online;
 
   async function handleSend(): Promise<void> {
     const trimmed = text.trim();
-    if (trimmed === '' || sending || inboxFolderId === null) return;
+    if (trimmed === '' || sending || inboxFolderId === null || !online) return;
 
     setSending(true);
     setError(null);
@@ -139,11 +142,13 @@ export function Tell() {
 
         {error !== null && <p class="auth-error">{error}</p>}
         {status !== null && <p class="tell-status">{status}</p>}
+        {!online && <p class="offline-reason">{offlineReason('tell')}</p>}
 
         <button
           type="button"
           class="button"
           disabled={!canSend}
+          aria-disabled={!canSend}
           onClick={() => void handleSend()}
         >
           {sending ? 'Sending…' : 'Send'}
