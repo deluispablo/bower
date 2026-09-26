@@ -14,7 +14,7 @@ export interface Prefs {
 
 const DEFAULTS: Prefs = {
   notifyOnFinish: false,
-  autoProcessOnAdd: false,
+  autoProcessOnAdd: true,
 };
 
 const STORAGE_PREFIX = 'bower:pref:';

@@ -343,6 +343,20 @@ export async function listVault(
   return files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
+/**
+ * Direct children of `folderId` (not trashed), one level, no recursion. Used
+ * where `listVault`'s full recursive walk would be needlessly heavy, e.g.
+ * checking names already in the inbox before an upload.
+ */
+export async function listFolder(folderId: string): Promise<DriveFile[]> {
+  const children = await listChildren(folderId);
+  return children.map((child) => {
+    const name =
+      isRecord(child) && typeof child.name === 'string' ? child.name : '';
+    return parseFile(child, name);
+  });
+}
+
 // --- Download --------------------------------------------------------------
 
 function mediaPath(id: string): string {

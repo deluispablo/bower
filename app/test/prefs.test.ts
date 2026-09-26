@@ -24,11 +24,11 @@ afterEach(() => {
 });
 
 describe('prefs', () => {
-  it('defaults to false when nothing is stored', () => {
+  it('defaults to each preference’s own default when nothing is stored', () => {
     stubLocalStorage();
 
     expect(getPref('notifyOnFinish')).toBe(false);
-    expect(getPref('autoProcessOnAdd')).toBe(false);
+    expect(getPref('autoProcessOnAdd')).toBe(true);
   });
 
   it('round-trips a value written with setPref', () => {
