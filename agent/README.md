@@ -55,7 +55,11 @@ Hermetic: `rclone`, `claude` and `curl` are stubs that record their calls, so no
 
 ## Prompts and the rulebook
 
-`prompts/ingest.md` and `prompts/lint.md` tell Claude only what the runner needs: which folders are inputs, what never gets touched (`.obsidian/`, deletions), where output goes, and the five-line summary contract `run.sh` reads with `tail -n 5` as `SUMMARY`. Everything else, how to file a note, tags, templates, self-learning, lives in the vault's own `CLAUDE.md` (`vault-template/CLAUDE.md`), which takes precedence and changes only through an instruction note (`Bower*.md`), never on the agent's own initiative. Keep the prompts short; a new capability is a rulebook change, not a prompt change.
+`prompts/ingest.md` and `prompts/lint.md` tell Claude only what the runner needs: which folders are inputs, what never gets touched (`.obsidian/`, deletions), where output goes, and the five-line summary contract `run.sh` reads with `tail -n 5` as `SUMMARY`. Everything else, how to file a note, tags, templates, self-learning, lives in the vault's own `CLAUDE.md` (`vault-template/CLAUDE.md`), which takes precedence and changes only through an instruction note, never on the agent's own initiative. Keep the prompts short; a new capability is a rulebook change, not a prompt change.
+
+### Instruction notes
+
+An instruction note is only a file directly in `0-Inbox/` named `Bower - <date> <time> <title>.md` (`instructionFileName` in `app/src/tell.ts`) with frontmatter `tags: [instruction]` and `via: app` (`instructionNote`, same file) — the only way the app itself produces one. Anything else named `Bower*.md`, including one clipped into `Clippings/` (a web page titled "Bower ...") or missing that frontmatter, is content to file like any other note: a file name alone must never be enough to make the agent treat untrusted content as a command.
 
 ## Workflows
 
