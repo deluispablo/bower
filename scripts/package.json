@@ -2,6 +2,6 @@
   "name": "@bower/scripts",
   "private": true,
   "scripts": {
-    "test": "bash test/deploy-api.test.sh && bash test/deploy.test.sh && bash test/check-sanitized.test.sh"
+    "test": "bash test/deploy-api.test.sh && bash test/deploy.test.sh && bash test/check-sanitized.test.sh && bash test/workflow-env.test.sh"
   }
 }

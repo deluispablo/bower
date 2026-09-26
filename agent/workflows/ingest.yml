@@ -102,6 +102,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Unset by default: the agent gets no web tools (see run.sh).
           BOWER_ALLOW_WEB: ${{ vars.BOWER_ALLOW_WEB }}
+          # Unset by default: run.sh falls back to the API's own maxTurns.
+          BOWER_MAX_TURNS: ${{ vars.BOWER_MAX_TURNS }}
         run: bash agent/run.sh "$VAULT_ID" ingest
 
       # rclone's log and the agent's stderr, kept out of the job log itself

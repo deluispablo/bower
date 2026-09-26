@@ -4,6 +4,7 @@ Operator-facing changes, newest first. Entries under **Operator action required*
 
 ## Unreleased
 
+- The instance repo's `BOWER_MAX_TURNS` variable is now actually passed to `run.sh` from both workflows (it was documented but had no effect); rerun `scripts/deploy.sh` so the instance repo gets the updated workflows.
 - The runner's agent no longer has web access by default: `WebSearch` and `WebFetch` are denied (with `curl` and `wget`), so a clipped page cannot make it send notes anywhere, and the prompts treat note contents as data, never instructions. An instance that needs the web sets the repository variable `BOWER_ALLOW_WEB=1`; rerun `scripts/deploy.sh` so the instance repo gets the new `run.sh`, prompts and workflows.
 - A note appended to or edited from the app while a run is in progress is no longer overwritten when the run finishes: the runner now uploads only the files the agent added or changed. Rerun `scripts/deploy.sh` so the instance repo gets the new `run.sh`.
 - The weekly health check no longer shows up as a Process run in the app: the runner reports it with `kind: "lint"`, the Worker keeps it apart (`lintrun:<id>`), and the push says "Health check ready" (or "Health check failed") and opens **Health** instead of counting inbox files. Rerun `scripts/deploy.sh` so the instance repo gets the new `run.sh`; until then a lint still reports as an ingest.
