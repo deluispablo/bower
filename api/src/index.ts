@@ -1,15 +1,11 @@
 import { Hono } from 'hono';
 
+import { assertEnv } from './env.js';
 import { createErrorHandler } from './errors.js';
 import type { Variables } from './errors.js';
+import type { Env } from './env.js';
 
-interface Bindings {
-  BOWER_KV: KVNamespace;
-  APP_URL: string;
-  APP_VERSION: string;
-}
-
-const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 app.use('*', async (c, next) => {
   const requestId = c.req.header('x-request-id') ?? crypto.randomUUID();
@@ -18,7 +14,15 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-app.onError(createErrorHandler<{ Bindings: Bindings; Variables: Variables }>());
+app.onError(createErrorHandler<{ Bindings: Env; Variables: Variables }>());
+
+// Validated on every request: cheap (string checks plus one base64 decode),
+// and it means a bad or incomplete deploy fails loudly on the very first
+// request instead of surfacing as a cryptic error deep in a handler.
+app.use('*', (c, next) => {
+  assertEnv(c.env);
+  return next();
+});
 
 app.get('/health', (c) => {
   return c.json({ ok: true, version: c.env.APP_VERSION });

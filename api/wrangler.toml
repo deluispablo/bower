@@ -7,5 +7,11 @@ binding = "BOWER_KV"
 id = "KV_NAMESPACE_ID"
 
 [vars]
-APP_URL = "http://localhost:5173"
+APP_ORIGIN = "https://app.example.com"
+API_ORIGIN = "https://api.example.com"
 APP_VERSION = "0.1.0"
+GITHUB_REPO = "OWNER/bower-home"
+VAPID_SUBJECT = "mailto:you@example.com"
+DAILY_RUN_LIMIT = "20"
+DEFAULT_MAX_TURNS = "30"
+TEMPLATE_FOLDER_NAME = "Bower"
