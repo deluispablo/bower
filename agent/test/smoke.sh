@@ -138,6 +138,8 @@ echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-unset} CLAUDE_CODE_OAUTH_TOKEN=${CL
 echo "STDERR-MARKER while reading 0-Inbox/a.pdf" >&2
 echo late >"$SMOKE_STATE/remote/0-Inbox/late.pdf"
 echo late >"$SMOKE_STATE/remote/Clippings/late.md"
+# "gone": the pending original is removed from Drive while the agent works.
+[ "$SMOKE_SCENARIO" != gone ] || rm "$SMOKE_STATE/remote/0-Inbox/a.pdf"
 if [ "$SMOKE_SCENARIO" = fail ]; then
   exit 1
 fi
@@ -371,3 +373,20 @@ expect_eq "$(calls claude)" '' 'claude calls'
 expect_content_free
 expect_cleaned_up
 echo "ok reauth"
+
+# 7. A pending original leaves Drive mid-run while the agent moves it
+# locally: the delete finds nothing, which counts as done.
+run_case gone
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(posts_count)" 2 'status posts'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.processed)" '["0-Inbox/a.pdf","Clippings/b.md"]' 'processed'
+expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
+expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
+expect_eq "$(post 2 'p.summary.split("\n")[4]')" 'SUMMARY-MARKER 5' 'summary end'
+expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 1 'rclone deletefile calls'
+[ ! -e "$STATE/remote/0-Inbox/a.pdf" ] || die 'original back in 0-Inbox/ in Drive'
+[ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive'
+expect_content_free
+expect_cleaned_up
+echo "ok original removed from Drive mid-run"

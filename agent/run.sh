@@ -259,7 +259,11 @@ RUN_STARTED=0  # the copy is done; a later failure needs no second copy
 while IFS= read -r path <&3; do
   [ -n "$path" ] || continue
   [ ! -e "$VAULT_DIR/$path" ] || continue
-  if ! rclone deletefile "vault:$path" </dev/null >>"$RCLONE_LOG" 2>&1; then
+  delete_rc=0
+  rclone deletefile "vault:$path" </dev/null >>"$RCLONE_LOG" 2>&1 || delete_rc=$?
+  # 4 is rclone's "file not found": someone removed it from Drive during the
+  # run, so it is already gone.
+  if [ "$delete_rc" -ne 0 ] && [ "$delete_rc" -ne 4 ]; then
     fail "$STEP: delete failed"
   fi
 done 3<"$PENDING_FILE"
