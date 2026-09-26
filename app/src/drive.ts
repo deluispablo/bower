@@ -357,6 +357,35 @@ export async function listFolder(folderId: string): Promise<DriveFile[]> {
   });
 }
 
+// --- Search ------------------------------------------------------------
+
+const SEARCH_FIELDS = 'files(id,name,mimeType,modifiedTime)';
+const SEARCH_PAGE_SIZE = '50';
+
+/**
+ * Files anywhere in the user's Drive whose text matches `query` (Drive's own
+ * full-text index over supported types, including `.md`). Not scoped to the
+ * Bower folder: callers narrow the result to the vault themselves (see
+ * `filterToIndex` in `search.ts`). One page (50 files) is enough for a
+ * search box.
+ */
+export async function searchFullText(query: string): Promise<DriveFile[]> {
+  const params = new URLSearchParams({
+    q: `fullText contains '${escapeQuery(query)}' and trashed = false`,
+    fields: SEARCH_FIELDS,
+    pageSize: SEARCH_PAGE_SIZE,
+  });
+  const body = await readJson(
+    await driveFetch(`/drive/v3/files?${params.toString()}`),
+  );
+  if (!Array.isArray(body.files)) throw unexpected();
+  return body.files.map((child) => {
+    const name =
+      isRecord(child) && typeof child.name === 'string' ? child.name : '';
+    return parseFile(child, name);
+  });
+}
+
 // --- Download --------------------------------------------------------------
 
 function mediaPath(id: string): string {

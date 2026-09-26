@@ -11,6 +11,7 @@ import {
   invalidateToken,
   listVault,
   MULTIPART_MAX_BYTES,
+  searchFullText,
   upload,
 } from '../src/drive.js';
 
@@ -369,6 +370,46 @@ describe('listVault', () => {
     expect(files).toHaveLength(500);
     expect(files.filter((f) => f.mimeType === FOLDER_MIME)).toHaveLength(40);
     expect(elapsed).toBeLessThan(3000);
+  });
+});
+
+describe('searchFullText', () => {
+  it('sends the right q, fields and pageSize, and escapes quotes', async () => {
+    const urls: URL[] = [];
+    stubFetch((url) => {
+      urls.push(url);
+      return jsonResponse(200, { files: [] });
+    });
+
+    await searchFullText("it's a plan");
+
+    const url = urls[0];
+    expect(url?.pathname).toBe('/drive/v3/files');
+    expect(url?.searchParams.get('q')).toBe(
+      "fullText contains 'it\\'s a plan' and trashed = false",
+    );
+    expect(url?.searchParams.get('fields')).toBe(
+      'files(id,name,mimeType,modifiedTime)',
+    );
+    expect(url?.searchParams.get('pageSize')).toBe('50');
+  });
+
+  it('returns the matching files', async () => {
+    stubFetch(() =>
+      jsonResponse(200, {
+        files: [
+          note('n1', 'Plan.md', 'PARENT'),
+          note('n2', 'Garden.md', 'PARENT'),
+        ],
+      }),
+    );
+
+    const files = await searchFullText('plan');
+
+    expect(files.map((f) => ({ id: f.id, path: f.path }))).toEqual([
+      { id: 'n1', path: 'Plan.md' },
+      { id: 'n2', path: 'Garden.md' },
+    ]);
   });
 });
 
