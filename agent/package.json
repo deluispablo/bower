@@ -1,0 +1,7 @@
+{
+  "name": "@bower/agent",
+  "private": true,
+  "scripts": {
+    "test": "echo \"agent: no smoke tests yet\""
+  }
+}
