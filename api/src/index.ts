@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { createAdminRoutes } from './admin.js';
 import { createAuthRoutes } from './auth.js';
 import type { AuthDeps } from './auth.js';
 import { createDriveRoutes } from './drive.js';
@@ -43,6 +44,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.route('/', createDriveRoutes(deps));
   app.route('/', createSettingsRoutes(deps));
   app.route('/', createVaultRoutes(deps));
+  app.route('/', createAdminRoutes(deps));
 
   return app;
 }

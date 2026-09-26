@@ -18,6 +18,7 @@ function normalizeEmail(email: string): string {
 
 /** Key layout, documented in `docs/api.md`. The only place prefixes live. */
 export const keys = {
+  userPrefix: (): string => 'user:',
   user: (id: string): string => `user:${id}`,
   email: (email: string): string => `email:${normalizeEmail(email)}`,
   allow: (email: string): string => `allow:${normalizeEmail(email)}`,
@@ -94,6 +95,48 @@ export async function isAllowed(
 ): Promise<boolean> {
   const value = await kv.get(keys.allow(email));
   return value === '1';
+}
+
+/** Adds `email` (case-insensitive) to the operator's allowlist. */
+export async function allow(kv: KVNamespace, email: string): Promise<void> {
+  await kv.put(keys.allow(email), '1');
+}
+
+/** Removes `email` (case-insensitive) from the operator's allowlist. */
+export async function disallow(kv: KVNamespace, email: string): Promise<void> {
+  await kv.delete(keys.allow(email));
+}
+
+/** The subset of a `User` the admin listing exposes; never a token. */
+export interface UserSummary {
+  id: string;
+  email: string;
+  hasVault: boolean;
+  createdAt: string;
+}
+
+/** Every user, for the admin listing. Never includes a token. */
+export async function listUsers(kv: KVNamespace): Promise<UserSummary[]> {
+  const prefix = keys.userPrefix();
+  const users: UserSummary[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const listed = await kv.list({ prefix, cursor });
+    for (const entry of listed.keys) {
+      const user = await getJson<User>(kv, entry.name);
+      if (user !== undefined) {
+        users.push({
+          id: user.id,
+          email: user.email,
+          hasVault: user.vault !== undefined,
+          createdAt: user.createdAt,
+        });
+      }
+    }
+    if (listed.list_complete) break;
+    cursor = listed.cursor;
+  }
+  return users;
 }
 
 export async function getRun(
