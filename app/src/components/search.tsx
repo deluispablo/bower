@@ -7,8 +7,10 @@
  * to build a snippet.
  *
  * The vault index is read directly from the cache rather than through
- * `useVault()`: `VaultProvider` is only mounted by the home route today, but
- * this component lives in the layout and stays mounted across every route.
+ * `useVault()`, which would tie a search box that stays mounted across every
+ * route to `VaultProvider`'s own fetch and render cycle (#37 moved it to
+ * wrap the whole router in `app.tsx`, but this component predates that and
+ * has no need for it: the cache read is enough).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
