@@ -7,6 +7,7 @@ import {
   findUserByEmail,
   getRun,
   getUser,
+  hitRateWindow,
   incrQuota,
   isAllowed,
   keys,
@@ -136,6 +137,23 @@ describe('incrQuota', () => {
 
     expect(await incrQuota(kv, 'user-4', '2026-01-02')).toBe(1);
     expect(await incrQuota(kv, 'user-4', '2026-01-01')).toBe(3);
+  });
+});
+
+describe('hitRateWindow', () => {
+  it('counts per route, IP and minute, and stops writing once full', async () => {
+    const hit = (ip: string, minute: number): Promise<number> =>
+      hitRateWindow(kv, 'process', ip, minute, 2);
+
+    expect(await hit('203.0.113.1', 100)).toBe(1);
+    expect(await hit('203.0.113.1', 100)).toBe(2);
+    expect(await hit('203.0.113.1', 100)).toBe(3);
+    expect(await hit('203.0.113.1', 100)).toBe(3);
+    expect(await kv.get(keys.rate('process', '203.0.113.1', 100))).toBe('2');
+
+    expect(await hit('203.0.113.2', 100)).toBe(1);
+    expect(await hit('203.0.113.1', 101)).toBe(1);
+    expect(await hitRateWindow(kv, 'callback', '203.0.113.1', 100, 2)).toBe(1);
   });
 });
 

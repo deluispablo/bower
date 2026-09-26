@@ -239,6 +239,7 @@ async function postVault(
 ): Promise<Response> {
   const headers: Record<string, string> = {
     'content-type': 'application/json',
+    origin: env.APP_ORIGIN,
   };
   if (cookie !== undefined) headers.cookie = cookie;
   return createApp({ fetchImpl: drive.fetchImpl }).request(

@@ -83,7 +83,7 @@ async function postProcess(
   fetchImpl: FetchLike,
   cookie?: string,
 ): Promise<Response> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { origin: env.APP_ORIGIN };
   if (cookie !== undefined) headers.cookie = cookie;
   return createApp({ fetchImpl }).request(
     `${API}/process`,

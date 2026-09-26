@@ -154,6 +154,14 @@ async function allKeys(): Promise<string[]> {
   return listed.keys.map((entry) => entry.name);
 }
 
+/**
+ * Every key but the per-IP rate-limit counters (`rate:`), which every
+ * callback writes: what a callback stored about the person signing in.
+ */
+async function stateKeys(): Promise<string[]> {
+  return (await allKeys()).filter((name) => !name.startsWith('rate:'));
+}
+
 beforeEach(async () => {
   for (const name of await allKeys()) await kv.delete(name);
 });
@@ -294,7 +302,7 @@ describe('GET /auth/callback', () => {
     expect(response.status).toBe(400);
     const body = await response.json<{ error: { code: string } }>();
     expect(body.error.code).toBe('oauth_state');
-    expect(await allKeys()).toEqual([keys.allow(EMAIL)]);
+    expect(await stateKeys()).toEqual([keys.allow(EMAIL)]);
   });
 
   it('rejects a missing cookie, a missing state, an expired cookie and an error param', async () => {
@@ -344,7 +352,7 @@ describe('GET /auth/callback', () => {
     expect(setCookies(response).some((c) => c.startsWith(SESSION_COOKIE))).toBe(
       false,
     );
-    expect(await allKeys()).toEqual([]);
+    expect(await stateKeys()).toEqual([]);
   });
 
   it('answers 502 google_error when the token endpoint fails', async () => {
@@ -363,7 +371,7 @@ describe('GET /auth/callback', () => {
     expect(response.status).toBe(502);
     const body = await response.json<{ error: { code: string } }>();
     expect(body.error.code).toBe('google_error');
-    expect(await allKeys()).toEqual([keys.allow(EMAIL)]);
+    expect(await stateKeys()).toEqual([keys.allow(EMAIL)]);
   });
 });
 
@@ -392,7 +400,7 @@ describe('POST /auth/logout', () => {
   it('clears the session cookie', async () => {
     const response = await createApp().request(
       `${API}/auth/logout`,
-      { method: 'POST' },
+      { method: 'POST', headers: { origin: env.APP_ORIGIN } },
       env,
     );
 

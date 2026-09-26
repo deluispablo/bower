@@ -10,6 +10,7 @@ import { createErrorHandler } from './errors.js';
 import { createProcessRoutes } from './process.js';
 import { createPushRoutes } from './push-routes.js';
 import { createRunnerRoutes } from './runner.js';
+import { appCors, securityHeaders } from './security.js';
 import { createSettingsRoutes } from './settings.js';
 import { createStatusRoutes } from './status.js';
 import { createVaultRoutes } from './vault.js';
@@ -20,6 +21,10 @@ import { createVaultRoutes } from './vault.js';
  */
 export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+
+  // Outermost, so every response gets the headers: errors, redirects and
+  // CORS preflights included.
+  app.use('*', securityHeaders);
 
   app.use('*', async (c, next) => {
     const requestId = c.req.header('x-request-id') ?? crypto.randomUUID();
@@ -39,6 +44,9 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
     c.set('env', assertEnv(c.env));
     return next();
   });
+
+  // After the env middleware: the allowed origin is `APP_ORIGIN`.
+  app.use('*', appCors());
 
   app.get('/health', (c) => {
     return c.json({ ok: true, version: c.get('env').APP_VERSION });

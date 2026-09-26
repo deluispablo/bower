@@ -21,6 +21,7 @@ import {
   parseVapidPublicKey,
   subscriptionId,
 } from './push.js';
+import { requireSameOrigin } from './security.js';
 import { deletePushSub, getUser, putPushSub } from './store.js';
 import type { PushSubscription } from './types.js';
 
@@ -107,7 +108,7 @@ export function createPushRoutes(): Hono<AppEnv> {
     return c.json({ publicKey: env.VAPID_PUBLIC_KEY });
   });
 
-  push.post('/push/subscribe', requireSession, async (c) => {
+  push.post('/push/subscribe', requireSameOrigin, requireSession, async (c) => {
     const env = c.get('env');
     const userId = c.get('userId');
     if ((await getUser(env.BOWER_KV, userId)) === undefined) {
@@ -124,20 +125,25 @@ export function createPushRoutes(): Hono<AppEnv> {
     return c.body(null, 204);
   });
 
-  push.delete('/push/subscribe', requireSession, async (c) => {
-    const env = c.get('env');
-    const body = await readJsonObject(c.req);
-    const endpoint = body.endpoint;
-    if (typeof endpoint !== 'string' || endpoint.length === 0) {
-      throw badRequest('endpoint must be a non-empty string');
-    }
-    await deletePushSub(
-      env.BOWER_KV,
-      c.get('userId'),
-      await subscriptionId(endpoint),
-    );
-    return c.body(null, 204);
-  });
+  push.delete(
+    '/push/subscribe',
+    requireSameOrigin,
+    requireSession,
+    async (c) => {
+      const env = c.get('env');
+      const body = await readJsonObject(c.req);
+      const endpoint = body.endpoint;
+      if (typeof endpoint !== 'string' || endpoint.length === 0) {
+        throw badRequest('endpoint must be a non-empty string');
+      }
+      await deletePushSub(
+        env.BOWER_KV,
+        c.get('userId'),
+        await subscriptionId(endpoint),
+      );
+      return c.body(null, 204);
+    },
+  );
 
   return push;
 }

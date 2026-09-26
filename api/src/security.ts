@@ -1,0 +1,120 @@
+/**
+ * Request hardening shared by every route: CORS for the app's origin only,
+ * security headers on every response, the same-origin (CSRF) check for
+ * state-changing session routes, and a per-IP rate limit.
+ *
+ * See `docs/security.md` for the threat model these serve.
+ */
+
+import { cors } from 'hono/cors';
+import type { Context, MiddlewareHandler } from 'hono';
+
+import type { AppEnv } from './env.js';
+import { HttpError } from './errors.js';
+import { hitRateWindow } from './store.js';
+
+/**
+ * CORS for `APP_ORIGIN` only, read from the validated env on each request
+ * (so it must run after the `assertEnv` middleware). Cookies are allowed
+ * (`credentials`); any other origin gets no `Access-Control-Allow-Origin`,
+ * so the browser refuses the response and the preflight.
+ */
+export function appCors(): MiddlewareHandler<AppEnv> {
+  return cors({
+    origin: (origin: string, c: Context<AppEnv>) =>
+      origin === c.get('env').APP_ORIGIN ? origin : null,
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    exposeHeaders: ['X-Request-Id'],
+  });
+}
+
+/**
+ * Adds `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` and
+ * `Referrer-Policy: no-referrer` to every response, errors included. The
+ * response's `Content-Type` is left alone (the "Not invited" page stays
+ * HTML).
+ */
+export const securityHeaders: MiddlewareHandler<AppEnv> = async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-store');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('Referrer-Policy', 'no-referrer');
+};
+
+/** The origin of a `Referer` URL, or `undefined` if it is not a URL. */
+function refererOrigin(referer: string | undefined): string | undefined {
+  if (referer === undefined) return undefined;
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * CSRF check for state-changing session routes: the request's `Origin`
+ * header (or, when a browser sends none, the origin of its `Referer`) must
+ * equal `APP_ORIGIN`. Anything else, including neither header, is a 403
+ * `forbidden`. Complements the `SameSite=Lax` session cookie. Runner and
+ * admin routes (bearer keys, no cookie) and `GET` routes do not use it.
+ */
+export const requireSameOrigin: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const origin =
+    c.req.header('origin') ?? refererOrigin(c.req.header('referer'));
+  if (origin !== c.get('env').APP_ORIGIN) {
+    throw new HttpError(403, 'forbidden', 'Cross-site request rejected');
+  }
+  await next();
+};
+
+/** Requests allowed per client IP, per route, per minute. */
+export const RATE_LIMIT_PER_MINUTE = 30;
+
+/**
+ * The client IP as Cloudflare reports it (`cf-connecting-ip`), else the
+ * first `x-forwarded-for` entry, else `unknown` (every such request then
+ * shares one bucket).
+ */
+export function clientIp(c: Context<AppEnv>): string {
+  const cf = c.req.header('cf-connecting-ip')?.trim();
+  if (cf !== undefined && cf !== '') return cf;
+  const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+  if (forwarded !== undefined && forwarded !== '') return forwarded;
+  return 'unknown';
+}
+
+/**
+ * Fixed-window rate limit per client IP for `route`: at most
+ * `RATE_LIMIT_PER_MINUTE` requests in each calendar minute, counted in KV
+ * (`rate:<route>:<ip>:<minute>`, see `hitRateWindow`). Over the limit, a
+ * 429 `rate_limited` with `Retry-After` set to the seconds left in the
+ * minute.
+ *
+ * KV has no atomic increment, so the count is read-then-write: requests
+ * racing in the same window can undercount and let a few extra through.
+ * Accepted: this slows abuse down, it is not an exact quota.
+ */
+export function rateLimit(route: string): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const now = Date.now();
+    const minute = Math.floor(now / 60_000);
+    const count = await hitRateWindow(
+      c.get('env').BOWER_KV,
+      route,
+      clientIp(c),
+      minute,
+      RATE_LIMIT_PER_MINUTE,
+    );
+    if (count > RATE_LIMIT_PER_MINUTE) {
+      const retryAfter = Math.max(
+        1,
+        Math.ceil(((minute + 1) * 60_000 - now) / 1000),
+      );
+      c.header('Retry-After', String(retryAfter));
+      throw new HttpError(429, 'rate_limited', 'Too many requests, slow down');
+    }
+    await next();
+  };
+}

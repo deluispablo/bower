@@ -19,6 +19,7 @@ import type { AppEnv } from './env.js';
 import { HttpError } from './errors.js';
 import { revokeToken } from './google.js';
 import type { FetchLike } from './google.js';
+import { requireSameOrigin } from './security.js';
 import { clearSessionCookie } from './session.js';
 import { deleteUserData, getUser, putUser } from './store.js';
 
@@ -39,7 +40,7 @@ export function createSettingsRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     deps.fetchImpl ?? ((input, init) => fetch(input, init));
   const settings = new Hono<AppEnv>();
 
-  settings.patch('/settings', requireSession, async (c) => {
+  settings.patch('/settings', requireSameOrigin, requireSession, async (c) => {
     const env = c.get('env');
     const user = await getUser(env.BOWER_KV, c.get('userId'));
     if (user === undefined) throw unauthenticated();
@@ -76,7 +77,7 @@ export function createSettingsRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     return c.json({ hasApiKey: user.encApiKey !== undefined });
   });
 
-  settings.delete('/me', requireSession, async (c) => {
+  settings.delete('/me', requireSameOrigin, requireSession, async (c) => {
     const env = c.get('env');
     const userId = c.get('userId');
     const requestId = c.get('requestId');

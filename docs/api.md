@@ -13,6 +13,7 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
 | `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` (deleted by `deletePushSub`, `DELETE /push/subscribe`, and `sendPush` on a 404/410) |
 | `drivetoken:<id>` | `DriveToken` (cached Drive access token) | token lifetime − 60 s, at least 60 s (set by `drive.ts`) | `putDriveToken` | `getDriveToken` |
+| `rate:<route>:<ip>:<minute>` | request count (string) | 120 s | `hitRateWindow` | `hitRateWindow` |
 
 Notes:
 
@@ -20,6 +21,7 @@ Notes:
 - `<email>` is lower-cased and trimmed before use as a key, so lookups are case-insensitive.
 - `quota` has no atomic increment in KV: `incrQuota` reads, increments and writes back. Two requests racing on the same user and date can undercount by one. Accepted as a soft per-user daily limit, not a billing figure.
 - `deleteUserData` removes every `user:`, `run:`, `quota:<id>:*`, `push:<id>:*` and `drivetoken:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user.
+- `rate` keys are the per-IP rate limit (`api/src/security.ts`): `<route>` is `callback` or `process`, `<ip>` the client IP (`cf-connecting-ip`, else the first `x-forwarded-for` entry, else `unknown`), `<minute>` the minutes since the Unix epoch. Read-then-write like `quota`, so racing requests can undercount; accepted, the limit only slows abuse down. A full window is not written again.
 - `deleteDriveToken` also drops `drivetoken:<id>` on its own, used by `GET /drive/token?fresh=1` (see below) to force a fresh mint.
 
 ## `User`
@@ -109,7 +111,9 @@ Response: `{ "run": Run }`, status 202, both for a new run and for the run alrea
 | Status | `error.code` | When |
 | --- | --- | --- |
 | 401 | `unauthenticated` | No valid session cookie, or the user no longer exists |
+| 403 | `forbidden` | `Origin` (or, without it, the `Referer`'s origin) is not `APP_ORIGIN`. Checked before the session, on every state-changing session route (see `docs/security.md`) |
 | 409 | `no_vault` | The user has not set up their Bower folder yet (`POST /vault`) |
+| 429 | `rate_limited` | More than 30 requests this minute from the same IP (also on `GET /auth/callback`). `Retry-After` gives the seconds left in the minute |
 | 429 | `quota` | `DAILY_RUN_LIMIT` runs were already started today (UTC). The body also carries `retryAfter`, the seconds until the next midnight UTC, also sent as the `Retry-After` header |
 | 502 | `dispatch` | GitHub did not accept the dispatch (any status but 204, or unreachable). Only GitHub's status and request id are logged, never the token |
 

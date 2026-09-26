@@ -82,6 +82,7 @@ async function patchSettings(
       method: 'PATCH',
       headers: {
         'content-type': 'application/json',
+        origin: env.APP_ORIGIN,
         ...(cookie === undefined ? {} : { cookie }),
       },
       body: JSON.stringify(body),
@@ -98,7 +99,10 @@ async function deleteMe(
     `${API}/me`,
     {
       method: 'DELETE',
-      headers: cookie === undefined ? {} : { cookie },
+      headers: {
+        origin: env.APP_ORIGIN,
+        ...(cookie === undefined ? {} : { cookie }),
+      },
     },
     env,
   );
@@ -202,7 +206,11 @@ describe('PATCH /settings', () => {
       `${API}/settings`,
       {
         method: 'PATCH',
-        headers: { 'content-type': 'application/json', cookie },
+        headers: {
+          'content-type': 'application/json',
+          origin: env.APP_ORIGIN,
+          cookie,
+        },
         body: 'not json',
       },
       env,
