@@ -12,7 +12,7 @@ export function OfflineBanner() {
   if (online) return null;
 
   return (
-    <div class="offline-banner" role="status">
+    <div class="offline-banner" role="status" aria-live="polite">
       You are offline. Showing saved notes.
     </div>
   );

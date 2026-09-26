@@ -64,7 +64,7 @@ export function PushPrompt() {
   };
 
   return (
-    <div class="push-prompt" role="status">
+    <div class="push-prompt" role="status" aria-live="polite">
       {variant === 'ask' && (
         <>
           <p class="push-prompt-text">Get notified when Bower finishes?</p>

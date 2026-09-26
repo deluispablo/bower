@@ -38,7 +38,7 @@
 .process-button[data-phase='failed'],
 .process-button[data-phase='stale'] {
   background: var(--color-danger);
-  color: #ffffff;
+  color: var(--color-on-danger);
 }
 
 .process-button[data-phase='quota'] {
@@ -48,7 +48,7 @@
 
 .process-button[data-phase='done'] {
   background: var(--color-success);
-  color: #ffffff;
+  color: var(--color-on-success);
 }
 
 .process-spinner {

@@ -75,6 +75,8 @@
 .search-results a {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  min-height: 44px;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   color: var(--color-text);
