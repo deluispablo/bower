@@ -55,7 +55,7 @@ Vault content never enters either repository.
 | --- | --- | --- | --- |
 | **App** | Cloudflare Pages, in the user's browser | Sign in; list and render the vault by reading Drive directly; search (`fullText contains`); upload to `0-Inbox/`; create `Bower - …md` instruction notes; call `/process`; show status and the working animation; push notifications | Store notes; edit notes (v1); hold refresh tokens |
 | **Worker** (`api/`) | Cloudflare Workers + KV | OAuth callback and allowlist; encrypted refresh tokens; vault provisioning from the template; `/process` with quota and single-active-run; `/status`; runner endpoints; push sending | Store content; watch Drive; run on a schedule |
-| **Agent** (`agent/`) | GitHub Actions runner of the instance repo | `rclone` sync down with a 1 h token; `claude -p` inside the vault following its `CLAUDE.md`; `rclone copy` up (never deletes), mirror of the inbox folders; status report | Keep state; print vault content to logs; change rules without an instruction note |
+| **Agent** (`agent/`) | GitHub Actions runner of the instance repo | `rclone` sync down with a 1 h token; `claude -p` inside the vault following its `CLAUDE.md`; `rclone copy` up (never deletes), then `rclone deletefile` only for the pending originals the agent moved away; status report | Keep state; print vault content to logs; change rules without an instruction note |
 | **Vault** | The user's Google Drive | The only state: notes, originals, rulebook, catalogue, journal | Leave the user's account |
 
 ## Data flows
@@ -68,7 +68,7 @@ User (browser) ── read vault / write 0-Inbox, Clippings ──▶ Google Dri
 User (browser) ── POST /process ──▶ Worker ── repository_dispatch {vault_id} ──▶ Instance repo (Actions)
 Runner (weekly lint) ── GET /runner/vaults (Bearer BOWER_API_KEY) ──▶ Worker ── every vault id
 Runner ── GET /runner/vaults/:id (Bearer BOWER_API_KEY) ──▶ Worker ── 1 h Drive token, folder id, maxTurns, apiKey?
-Runner ── rclone sync ↓, claude -p, rclone copy ↑, rclone sync 0-Inbox/Clippings ↑ ──▶ Google Drive
+Runner ── rclone sync ↓, claude -p, rclone copy ↑, rclone deletefile ↑ (processed originals only) ──▶ Google Drive
 Runner ── POST /runner/vaults/:id/status ──▶ Worker ── web push ──▶ User's devices
 User (browser) ── DELETE /me ──▶ Worker ── best-effort revoke at Google, deletes the user's KV data, clears the session cookie ──▶ (the Drive folder itself is never touched)
 ```
@@ -131,7 +131,7 @@ Full checklist and the CORS/CSRF/cookie mechanics: `docs/security.md`. This is t
 
 - **The vault is the only state.** The Worker keeps credentials and pointers; the runner keeps nothing; the app keeps a read cache.
 - **Rules are data.** The agent's behaviour is `CLAUDE.md` in the user's vault, changed only through instruction notes (`Bower - …md`), dated and in plain English. The agent never edits its rules on its own initiative.
-- **Never delete.** Uploads use `rclone copy`; only `0-Inbox/` and `Clippings/` are mirrored, and Drive deletions go to the Trash. Processed originals move to `0-Inbox/Processed/`.
+- **Never delete.** Uploads use `rclone copy`. The only remote deletions are targeted: each file that was pending in `0-Inbox/` or `Clippings/` at the start of a run and that the agent moved away, one `rclone deletefile` per path (a file already gone counts as done). Files added during a run are never touched, and Drive deletions go to the Trash. Processed originals move to `0-Inbox/Processed/`.
 - **Free to run.** Cloudflare Pages/Workers/KV free tiers, GitHub Actions free minutes of a private repo (2,000/month), the operator's existing Claude subscription. No servers, no database of content, no paid provider. A dependency or a service that breaks this needs a decision entry.
 - **Least privilege.** One repo per token; one folder per Drive remote (`root_folder_id`); bearer keys compared in constant time; secrets only in Cloudflare/GitHub; nothing personal in this repository (CI gate).
 - **Fail loud, fail safe.** Any runner error reports `failed`, leaves originals in the inbox, and the next Process retries. Stale runs unblock the button (see Limits).

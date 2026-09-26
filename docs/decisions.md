@@ -35,7 +35,7 @@ Google does not restrict who can sign in; the Worker does (allowlisted emails) a
 Notes are written with the owner's own token, so every file belongs to them. The Worker stores credentials and pointers, never content. If Bower disappears, the folder remains.
 
 ## 2026-09-26 · Processed originals are moved, never deleted
-`0-Inbox/Processed/` keeps everything ingested. Uploads back to Drive use `rclone copy` (never deletes); only the inbox folders are mirrored, and Drive deletions go to the Trash.
+`0-Inbox/Processed/` keeps everything ingested. Uploads back to Drive use `rclone copy` (never deletes); the only remote deletions are the pending originals the agent moved away, one `rclone deletefile` each, so files added during a run stay. Drive deletions go to the Trash.
 
 ## 2026-09-26 · One generic, self-improving rulebook per vault
 `vault-template/CLAUDE.md` ships the PARA structure, the Ingest / Instructions / Query / Lint workflows, self-learning rules (update the owner profile; propose a workflow after three similar documents) and hard limits for unattended runs (never touch `.obsidian/`, never delete, never change rules without an instruction).

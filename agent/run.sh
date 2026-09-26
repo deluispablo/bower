@@ -6,8 +6,8 @@
 # Fetches the vault's folder id and a 1 h Drive token from the API, syncs the
 # vault down with rclone (configured only through environment variables),
 # runs Claude Code inside it following the vault's own CLAUDE.md, copies the
-# result back up (never deleting), mirrors 0-Inbox/ and Clippings/, and
-# reports the outcome to the API.
+# result back up, deletes from Drive only the pending originals the agent
+# moved away, and reports the outcome to the API.
 #
 # Environment:
 #   BOWER_API_URL            the Worker's origin, e.g. https://api.example.com
@@ -246,21 +246,27 @@ if [ "$agent_rc" -ne 0 ]; then
 fi
 
 # --- sync up ----------------------------------------------------------------
-# copy never deletes; only the two inbox folders are mirrored, so originals
-# the agent moved to 0-Inbox/Processed/ leave the inbox in Drive too.
+# copy never deletes. Then each file that was pending at the start and is gone
+# from the local copy (the agent moved it to 0-Inbox/Processed/) is deleted
+# from Drive by its own path, so processed originals leave the inbox. Nothing
+# else is removed: a file added to Drive during the run stays.
 STEP='sync up'
 log "$STEP"
 if ! rclone copy "$VAULT_DIR" vault: --exclude '.obsidian/**' >>"$RCLONE_LOG" 2>&1; then
   fail "$STEP: copy failed"
 fi
 RUN_STARTED=0  # the copy is done; a later failure needs no second copy
-for d in 0-Inbox Clippings; do
-  if [ -d "$VAULT_DIR/$d" ]; then
-    if ! rclone sync "$VAULT_DIR/$d" "vault:$d" >>"$RCLONE_LOG" 2>&1; then
-      fail "$STEP: mirror failed"
-    fi
+while IFS= read -r path <&3; do
+  [ -n "$path" ] || continue
+  [ ! -e "$VAULT_DIR/$path" ] || continue
+  delete_rc=0
+  rclone deletefile "vault:$path" </dev/null >>"$RCLONE_LOG" 2>&1 || delete_rc=$?
+  # 4 is rclone's "file not found": someone removed it from Drive during the
+  # run, so it is already gone.
+  if [ "$delete_rc" -ne 0 ] && [ "$delete_rc" -ne 4 ]; then
+    fail "$STEP: delete failed"
   fi
-done
+done 3<"$PENDING_FILE"
 
 # --- report done ------------------------------------------------------------
 STEP='report done'
