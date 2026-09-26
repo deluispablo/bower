@@ -1,22 +1,89 @@
 # Runbook
 
-Operating notes for a Bower instance. This page currently covers configuration; deploy, pause and tear-down steps land with the issues that need them. To verify an instance works end to end, run `docs/testing.md`. Before turning a private fork public, run `docs/release-checklist.md`.
+Everything an operator needs to deploy and run one Bower instance, written for someone opening this file with no other context. Follow the numbered sections in order for a first deploy; after that, jump to Operations, Pause, Teardown or Troubleshooting as needed. To verify an instance works end to end once deployed, run `docs/testing.md`. Before turning a private fork public, run `docs/release-checklist.md`.
 
-## API configuration
+Two repositories are involved throughout (see `ARCHITECTURE.md`): **this repository** (the public template, cloned once) and **the instance repo** (a private repo of the operator's own, created from this one, that runs the agent). Commands below say which repo they run against.
 
-Every variable `api/src/env.ts` reads, secret or var, with where it comes from and a placeholder example. Secrets are set with `wrangler secret put NAME` (production) or a line in `api/.dev.vars` (local, git-ignored — copy `api/.dev.vars.example`). Vars live in `[vars]` in `api/wrangler.toml`.
+## Fast path
+
+`scripts/deploy.sh` and `scripts/new-instance.sh` automate most of what follows: `deploy.sh` checks prerequisites (Node, pnpm, `wrangler login`, `gh` login), creates the KV namespace, deploys the Worker and the Pages project, and prints the Google redirect URI to paste in; `new-instance.sh` creates the private instance repo from the template and sets its secrets and variables from prompts. Both are safe to re-run: the first run creates, later runs update. Use them for a normal deploy.
+
+The rest of this section is the manual, step-by-step reference: what those scripts do under the hood, what to fall back to when a script doesn't fit your setup, and what the troubleshooting table below assumes you understand.
+
+## 1. Accounts you need
+
+- A **Cloudflare account** (free tier is enough) for the Worker, KV and Pages.
+- A **Google Cloud project** (free) for the OAuth client and the Drive API.
+- A **GitHub account**, plus a private repository for the instance (the agent's runner).
+- Either a **Claude subscription** (`claude setup-token` gives you `CLAUDE_CODE_OAUTH_TOKEN`) or an **Anthropic API key** (`ANTHROPIC_API_KEY`), to run the agent.
+
+## 2. Google OAuth client
+
+1. In the Google Cloud Console, under **APIs & Services → Library**, enable the **Google Drive API**.
+2. Under **APIs & Services → OAuth consent screen**: user type **External**. Scopes: `openid`, `email`, `https://www.googleapis.com/auth/drive`.
+   - While the screen is left in **Testing**, only test users you list by hand can sign in, and their refresh tokens expire after **7 days** — the runner then fails every run for that user until they sign in again (see Troubleshooting). This is fine for the local sign-in test (appendix) but breaks a real instance.
+   - **Publish** the app instead (Publish app button). Because the client asks for full `drive` scope and is not verified (see `ARCHITECTURE.md`, "Why not X"), Google keeps it **unverified**: every user sees a one-time "unverified app" warning on first sign-in, and the client is capped at **100 users**. Verification (a paid security assessment) is out of scope. Publishing lifts the Testing-only restrictions above.
+   - Google requires a public privacy page to publish. The app serves `docs/privacy.md` at `/privacy`, so give Google `<APP_ORIGIN>/privacy` — your real `APP_ORIGIN` — as the privacy policy URL.
+3. Under **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**: Authorized redirect URI is `<API_ORIGIN>/auth/callback` — your real `API_ORIGIN`, for example `https://api.example.com/auth/callback`. Copy the client id and secret; they become `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in step 3 below.
+
+## 3. Cloudflare: Worker, KV, secrets, custom domain, and Pages
+
+### Keep real values out of the tracked file
+
+`api/wrangler.toml` is tracked and holds placeholders (`https://api.example.com`, `OWNER/bower-home`, `KV_NAMESPACE_ID`, ...) — real values never go there. Instead, copy it once to `api/wrangler.local.toml` (already git-ignored) and put your real `[vars]`, the real KV namespace id, and, at the top level (not inside `[vars]`), the Worker's custom domain:
+
+```toml
+workers_dev = false
+routes = [{ pattern = "api.example.com", custom_domain = true }]
+```
+
+`workers_dev = false` turns off the default `*.workers.dev` URL; `routes` with `custom_domain = true` attaches your real domain without a dashboard step. Every `wrangler` command below takes `-c wrangler.local.toml` so it reads this file instead of the tracked one.
+
+`scripts/deploy-api.sh` (`pnpm -C api deploy` / `pnpm -C api secrets`) does not yet take a `-c` flag: its `deploy` subcommand reads and refuses to deploy `api/wrangler.toml` while it still has placeholder values, so it cannot be used together with `wrangler.local.toml` as written today. Until that's fixed (or `scripts/deploy.sh` from a parallel change lands), use the manual `wrangler ... -c wrangler.local.toml` commands below instead of `pnpm -C api deploy`.
+
+### Cloudflare account and KV
+
+1. Sign up at [dash.cloudflare.com](https://dash.cloudflare.com) (free tier), then log the CLI in: `pnpm -C api exec wrangler login` (opens a browser).
+2. Create the KV namespace: `pnpm -C api exec wrangler kv namespace create BOWER_KV -c wrangler.local.toml`. It prints the new namespace's id; paste it into `wrangler.local.toml`'s `[[kv_namespaces]]` block (`id = "..."`).
+
+### `[vars]` and secrets
+
+3. Edit `[vars]` in `wrangler.local.toml`: `APP_ORIGIN`, `API_ORIGIN` (your real domains), `GITHUB_REPO` (`owner/name` of the instance repo), `VAPID_SUBJECT` (a `mailto:` address you read). See the variable table below for what each one means, and adjust `DAILY_RUN_LIMIT` / `DEFAULT_MAX_TURNS` / `TEMPLATE_FOLDER_NAME` if you don't want their defaults.
+4. Run `pnpm -C api gen-vapid` once and keep its two printed lines (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`) at hand.
+5. Set every secret from the table below by piping the value into `wrangler secret put`, from `api/`:
+
+   ```bash
+   printf '%s' "$value" | wrangler secret put NAME -c wrangler.local.toml
+   ```
+
+   An **empty** value here still "succeeds": it records an empty secret, and the Worker then answers `500 {"error":{"code":"config","message":"missing NAME"}}` on every request, including `/health` — see Troubleshooting. Double-check `$value` is actually set before piping it in.
+6. Deploy: `pnpm -C api exec wrangler deploy -c wrangler.local.toml`. It prints the Worker's URL (the `*.workers.dev` one, unused once the custom domain from `routes` above is live).
+7. Smoke check: `curl https://api.example.com/health` (your real `API_ORIGIN`) should answer `200`.
+
+### Cloudflare Pages: the app
+
+8. First time only: `pnpm -C api exec wrangler pages project create NAME --production-branch main` (`NAME` is yours to pick, e.g. `bower-app`). Re-running this once a project exists errors; skip it on later deploys.
+9. Build the app with the Worker's real origin baked in: `VITE_API_URL=https://api.example.com pnpm -C app exec vite build` (your real `API_ORIGIN`; the output goes to `app/dist`).
+10. Deploy it: `pnpm -C api exec wrangler pages deploy app/dist --project-name NAME --branch main` (run from the repo root so `app/dist` resolves; `pnpm -C api exec` still finds `wrangler` from `api/node_modules/.bin` because pnpm resolves the binary before changing directory).
+11. Add the custom domain in the dashboard — there is no CLI command for it: **Workers & Pages → your Pages project → Custom domains → Set up a domain**, for example `app.example.com`.
+
+`APP_ORIGIN` and `API_ORIGIN` **must share a registrable domain** (e.g. `app.example.com` and `api.example.com`): the session cookie is `SameSite=Lax`, so on the default `*.pages.dev` / `*.workers.dev` hostnames the browser never sends it and nobody can stay signed in. Full mechanics in `docs/security.md`.
+
+### Every variable the Worker reads
+
+`api/src/env.ts`'s `assertEnv` validates all of this on every request and fails loudly (`500 config`, naming the first missing one) if anything required is absent.
 
 | Name | Secret or var | How to obtain | Example |
 | --- | --- | --- | --- |
-| `GOOGLE_CLIENT_ID` | Secret | Google Cloud Console → APIs & Services → Credentials, OAuth client (Web application) | `123456789-abc.apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | Secret | Same OAuth client as `GOOGLE_CLIENT_ID` | `GOCSPX-replace-me` |
+| `GOOGLE_CLIENT_ID` | Secret | Google Cloud Console → APIs & Services → Credentials, the OAuth client (step 2) | `123456789-abc.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Secret | Same OAuth client | `GOCSPX-replace-me` |
 | `SESSION_SECRET` | Secret | Generate: `openssl rand -base64 32` | `replace-me` |
 | `TOKEN_ENC_KEY` | Secret | Generate: `openssl rand -base64 32` (must decode to exactly 32 bytes; encrypts stored Google refresh tokens) | `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=` |
-| `BOWER_API_KEY` | Secret | Generate: `openssl rand -base64 32`; set the same value in the Worker and in the instance repo | `replace-me` |
+| `BOWER_API_KEY` | Secret | Generate: `openssl rand -base64 32`; set the same value here and in the instance repo (step 4) | `replace-me` |
 | `GITHUB_TOKEN` | Secret | GitHub → Settings → Developer settings → Fine-grained token, `contents: write` on the instance repo only | `github_pat_replace-me` |
-| `ADMIN_KEY` | Secret | Generate: `openssl rand -base64 32`; bearer key for admin endpoints (see #11) | `replace-me` |
-| `VAPID_PUBLIC_KEY` | Secret | Generate the VAPID key pair once per instance with `pnpm -C api gen-vapid`: base64url of the raw 65-byte P-256 public key. Keep it: a new pair invalidates every browser's push subscription | `replace-me` |
-| `VAPID_PRIVATE_KEY` | Secret | Same `pnpm -C api gen-vapid` run as `VAPID_PUBLIC_KEY`: base64url of the 32-byte private key | `replace-me` |
+| `ADMIN_KEY` | Secret | Generate: `openssl rand -base64 32`; bearer key for the admin endpoints | `replace-me` |
+| `VAPID_PUBLIC_KEY` | Secret | `pnpm -C api gen-vapid`, once per instance: base64url of the raw 65-byte P-256 public key. Keep it — a new pair invalidates every browser's push subscription | `replace-me` |
+| `VAPID_PRIVATE_KEY` | Secret | Same `gen-vapid` run as above: base64url of the 32-byte private key | `replace-me` |
 | `APP_ORIGIN` | Var | The app's deployed origin (Cloudflare Pages) | `https://app.example.com` |
 | `API_ORIGIN` | Var | The Worker's deployed origin (Cloudflare Workers) | `https://api.example.com` |
 | `GITHUB_REPO` | Var | The operator's private instance repo, `owner/name` | `OWNER/bower-home` |
@@ -25,43 +92,28 @@ Every variable `api/src/env.ts` reads, secret or var, with where it comes from a
 | `DEFAULT_MAX_TURNS` | Var (default `30`) | Default `--max-turns` passed to the agent when a run doesn't set its own | `30` |
 | `TEMPLATE_FOLDER_NAME` | Var (default `Bower`) | Name of the folder created in the user's Drive from `vault-template/` | `Bower` |
 | `APP_VERSION` | Var | Set by `[vars]` in `wrangler.toml`; predates this contract (#6) | `0.1.0` |
-| `BOWER_KV` | Binding | `wrangler kv namespace create BOWER_KV`, bound in `[[kv_namespaces]]` in `wrangler.toml` | `KV_NAMESPACE_ID` |
+| `BOWER_KV` | Binding | `wrangler kv namespace create BOWER_KV`, bound in `[[kv_namespaces]]` | `KV_NAMESPACE_ID` |
 
-`assertEnv` (`api/src/env.ts`) validates all of the above on every request and fails with `{ error: { code: 'config', message: 'missing <NAME>' } }` (HTTP 500) naming the first missing secret or var without a default, so a bad deploy fails loudly instead of surfacing as a cryptic error later.
+## 4. Instance repo from the template
 
-`APP_ORIGIN` and `API_ORIGIN` must share a registrable domain (for example `https://app.example.com` and `https://api.example.com`): the session cookie is `SameSite=Lax`, so on the default `*.pages.dev` and `*.workers.dev` hostnames the browser will not send it and nobody can stay signed in. Give the Pages project and the Worker custom domains under one domain you own (see `docs/security.md`). Only `APP_ORIGIN` may call the API from a browser.
+The instance repo is a private repo of the operator's own that only holds the agent's workflows and its own secrets — never this repo's code, never a user's vault content (see "Two repositories per deployment" in `ARCHITECTURE.md`).
 
-## Deploy the API
+Create it either way:
 
-Everything an operator needs to get the Worker live, without reading the code.
+- **'Use this template'**, on this repository's GitHub page (button next to Code), which creates a private copy; then copy `agent/run.sh`, `agent/prompts/` and `agent/workflows/*.yml` into its `.github/workflows/` (see `agent/README.md`) if the template button didn't already place them there for you.
+- Or `scripts/new-instance.sh` (parallel change, see Fast path above), which does the same via `gh` and also prompts for the secrets and variables below.
 
-1. **Cloudflare account.** Sign up (free tier) at dash.cloudflare.com, then `pnpm -C api exec wrangler login` (opens a browser to authorize the CLI).
-2. **Google Cloud project.**
-   - Console → APIs & Services → Library: enable the **Google Drive API**.
-   - APIs & Services → OAuth consent screen: user type **External**, then **Publish app**. This makes it **unverified**: signed-in users see a one-time "unverified app" warning, and the client is capped at 100 users; verification (a paid security assessment) is out of scope. Left **Testing**, refresh tokens expire after 7 days, which breaks the runner — always publish.
-   - Scopes: `openid`, `email`, `https://www.googleapis.com/auth/drive`.
-   - Google requires a public privacy page to publish: the app serves `docs/privacy.md` at `/privacy`, so give Google `<APP_ORIGIN>/privacy` (your real `APP_ORIGIN`) as the privacy policy URL on the consent screen.
-   - Credentials → Create credentials → OAuth client ID → **Web application**. Authorized redirect URI: `https://api.example.com/auth/callback` (your real `API_ORIGIN`). Copy the client id and secret for step 4.
-3. **Custom domain for the Worker.** `APP_ORIGIN` and `API_ORIGIN` must share a registrable domain for the session cookie to work (see `docs/security.md`), so the Worker needs a domain you own, not `*.workers.dev`. Either Cloudflare dashboard → Workers & Pages → your Worker → Settings → Domains & Routes → Add → Custom domain, or add a `routes` entry in `api/wrangler.toml`.
-4. **Edit `[vars]`** in `api/wrangler.toml`: `APP_ORIGIN`, `API_ORIGIN` (your custom domain from step 3), `GITHUB_REPO`, `VAPID_SUBJECT`. See the configuration table above for what each means.
-5. **Set the secrets:** `pnpm -C api secrets`. It explains each one and prompts `wrangler secret put`; press Enter on `SESSION_SECRET`, `TOKEN_ENC_KEY`, `BOWER_API_KEY` or `ADMIN_KEY` to generate it for you. Run `pnpm -C api gen-vapid` first and keep its two lines ready for the `VAPID_*` prompts.
-6. **Deploy:** `bash scripts/deploy-api.sh` (or `pnpm -C api deploy`). It checks you are logged in, creates the `BOWER_KV` namespace on first run and writes its id into `wrangler.toml`, refuses if `[vars]` still has placeholder values, then deploys and prints the Worker's URL.
-7. **Smoke check:** `curl https://api.example.com/health` (your real `API_ORIGIN`) should answer 200.
-8. **Invite the first user:** see "Invite someone" below.
+Either way, set these under the instance repo's **Settings → Secrets and variables → Actions**:
 
-## Runner
+| Name | Kind | How to obtain |
+| --- | --- | --- |
+| `BOWER_API_KEY` | Secret | The exact same value as the Worker's `BOWER_API_KEY` above |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Secret (this or `ANTHROPIC_API_KEY`) | `claude setup-token`, using the operator's Claude subscription |
+| `ANTHROPIC_API_KEY` | Secret (this or `CLAUDE_CODE_OAUTH_TOKEN`) | Claude Console → API keys |
+| `BOWER_API_URL` | Variable | The Worker's deployed origin, same as `API_ORIGIN` | 
+| `BOWER_MAX_TURNS` | Variable (optional) | Overrides the Worker's `DEFAULT_MAX_TURNS` for this instance |
 
-The instance repo runs `agent/run.sh <vault_id> <ingest|lint>` in GitHub Actions, via `agent/workflows/ingest.yml` and `agent/workflows/lint.yml` copied into its `.github/workflows/` by the setup script (see `agent/README.md`). Set these in the instance repo under Settings → Secrets and variables → Actions:
-
-| Name | Secret or variable | How to obtain | Example |
-| --- | --- | --- | --- |
-| `BOWER_API_KEY` | Secret | The same value as the Worker's `BOWER_API_KEY` | `replace-me` |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Secret (this or `ANTHROPIC_API_KEY`) | `claude setup-token` on the operator's machine, with their Claude subscription | `replace-me` |
-| `ANTHROPIC_API_KEY` | Secret (this or `CLAUDE_CODE_OAUTH_TOKEN`) | Claude Console → API keys | `sk-ant-replace-me` |
-| `BOWER_API_URL` | Variable | The Worker's deployed origin, same as `API_ORIGIN` | `https://api.example.com` |
-| `BOWER_MAX_TURNS` | Variable (optional) | Overrides the Worker's `DEFAULT_MAX_TURNS` for this instance | `30` |
-
-Set them with the GitHub CLI, from the instance repo's checkout (or add `-R OWNER/bower-home`):
+With the GitHub CLI, from the instance repo's checkout (or add `-R OWNER/bower-home`):
 
 ```bash
 gh secret set BOWER_API_KEY
@@ -69,19 +121,106 @@ gh secret set CLAUDE_CODE_OAUTH_TOKEN   # or: gh secret set ANTHROPIC_API_KEY
 gh variable set BOWER_API_URL --body "https://api.example.com"
 ```
 
-A user who set their own API key in Settings runs with that key instead: the script exports it as `ANTHROPIC_API_KEY` and unsets `CLAUDE_CODE_OAUTH_TOKEN` for that run only.
+`GITHUB_TOKEN` (the Worker secret from step 3) is a **separate**, fine-grained GitHub token — scoped to `contents: write` on this same instance repo only — that the Worker uses to fire `repository_dispatch` and start a run; it is not one of the instance repo's own secrets above.
 
-The Actions log shows timestamps, step names and counts only. When a run fails, the reason is in the `error` of `GET /status`; the agent's stderr and rclone's output are in `$RUNNER_TEMP/bower-logs/` on the runner, uploaded as the `bower-logs` artifact only on failure (3-day retention; it can hold vault content, which is fine because the instance repo is private).
+## 5. First user, and inviting others
 
-To start a run by hand instead of through the app's Process button, from the instance repo:
+Add an email to the allowlist (case-insensitive; the Worker lower-cases it). The `--remote` flag is required for a production write — without it, `wrangler kv key put` writes to the local dev store instead, and nobody can sign in:
 
 ```bash
-gh workflow run ingest.yml -f vault_id=<id>
+pnpm -C api exec wrangler kv key put --binding BOWER_KV -c wrangler.local.toml --remote "allow:you@example.com" 1
 ```
 
-(`<id>` is the user's id, the same one `GET /runner/vaults/:id` takes — see step 15 below.) `gh workflow run lint.yml -f vault_id=<id>` runs a lint the same way.
+Or through the admin endpoint (exists for a future admin page; the KV command above is enough on its own):
 
-## Local sign-in test
+```bash
+curl -X POST "https://api.example.com/admin/allow" \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com"}'
+```
+
+Answers `204` on success, `400 invalid_email` if `email` is missing, empty or has no `@`.
+
+**Remove someone**, once they can no longer sign in and (if they had already signed in) their data is deleted:
+
+- `pnpm -C api exec wrangler kv key delete --binding BOWER_KV -c wrangler.local.toml --remote "allow:you@example.com"` removes only the invitation — an existing user's data is untouched, so prefer the admin endpoint below for anyone who has already signed in.
+- The admin endpoint deletes the invitation **and** every user record for that email (profile, quota counters, cached Drive token, push subscriptions) and revokes Bower's Google access for them (best effort — a failed revoke is logged and does not stop the removal):
+
+  ```bash
+  curl -X DELETE "https://api.example.com/admin/allow/you@example.com" \
+    -H "Authorization: Bearer $ADMIN_KEY"
+  ```
+
+  Answers `204` whether or not anyone had signed in with that email.
+
+Either way, **the Drive folder itself is never touched** — the user keeps every note; only Bower's access and Worker-side records are removed.
+
+To see who has signed in before removing them: `curl "https://api.example.com/admin/users" -H "Authorization: Bearer $ADMIN_KEY"` returns `[{ id, email, hasVault, createdAt }]` — never a token.
+
+## 6. Operations
+
+### Rotate the Claude token
+
+Generate a new one (`claude setup-token` again, or a new API key in the Claude Console), then `gh secret set CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`) in the instance repo. Nothing on the Worker changes; the next run picks up the new value.
+
+### Rotate keys
+
+Each Worker secret is rotated the same way — pipe the new value into `wrangler secret put NAME -c wrangler.local.toml` from `api/` — but they don't all cost the same while the rotation is in flight:
+
+| Secret | What rotating it breaks, until |
+| --- | --- |
+| `TOKEN_ENC_KEY` | Invalidates **every** stored refresh token at once (they were encrypted with the old key): every user sees `needsReauth: true` and must sign in again before their next run or Drive access. |
+| `SESSION_SECRET` | Every existing session cookie stops verifying: every signed-in user is signed out immediately and must sign in again (no data loss — just a fresh sign-in). |
+| `BOWER_API_KEY` | The runner's calls to `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status` start answering `401` until the **same** new value is also set as the instance repo's `BOWER_API_KEY` secret (`gh secret set BOWER_API_KEY`, step 4) — rotate both together, or every run fails in between. |
+| `GITHUB_TOKEN`, `ADMIN_KEY`, `VAPID_*` | No user-facing disruption: `GITHUB_TOKEN` and `ADMIN_KEY` are only used server-to-server on the next call; a new `VAPID_*` pair invalidates existing push subscriptions (already noted in the variable table) but sign-in and processing are unaffected. |
+
+### Quotas
+
+`DAILY_RUN_LIMIT` (default 20) caps `/process` runs per vault per day; `DEFAULT_MAX_TURNS` (default 30) caps how many turns the agent takes per run, unless the instance repo's `BOWER_MAX_TURNS` variable overrides it. Change either in `wrangler.local.toml`'s `[vars]` and redeploy (step 3.6 above).
+
+### Reading logs
+
+- **Worker**: `pnpm -C api exec wrangler tail -c wrangler.local.toml` streams live requests (method, path, status, exceptions) — nothing here includes note content or credentials (see `CLAUDE.md`'s logging rule and `api/test/log-hygiene.test.ts`).
+- **Agent runs**: the instance repo's **Actions** tab lists every `ingest` / `lint` run, with step names, timestamps and counts only. A failed run's reason is in `GET /status`'s `error`; the full stderr and rclone output are the `bower-logs` artifact, uploaded only `if: failure()`, kept 3 days (`agent/README.md`) — safe only because the instance repo is private.
+
+### Costs to watch
+
+- **Cloudflare free tier**: Workers requests, KV reads/writes and Pages builds all have a free monthly allowance; the dashboard's Analytics tab for the Worker and the KV namespace shows current usage against it.
+- **GitHub Actions minutes**: 2,000 free minutes a month on a private repo; each run is capped at 20 minutes (`timeout-minutes` in the workflows) — the Actions tab's usage view (or **Settings → Billing** on the account owning the instance repo) shows the month's total.
+- **Anthropic usage**: a Claude subscription's own usage limits, or an API key's billed usage in the Claude Console — whichever the instance repo's `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` draws on.
+
+## 7. Pause and teardown
+
+### Pause (reversible; nobody loses data)
+
+Disabling GitHub Actions on the instance repo is the one switch that stops runs without touching anything else: **instance repo → Settings → Actions → General → Disable actions**. Effect: `repository_dispatch` events the Worker sends on `/process` are simply not delivered — the app still lets people sign in, browse and add notes to the inbox, but nothing ever gets picked up until Actions is turned back on, at which point the queued work (whatever is sitting in `0-Inbox/` and `Clippings/`) runs on the next Process press. The Worker, Pages, KV, the allowlist and every user's Drive folder are all untouched.
+
+### Teardown (destructive; irreversible past this point)
+
+In order:
+
+1. **Instance repo**: disable or delete it (GitHub → Settings → Danger Zone). This stops the agent for good.
+2. **Cloudflare Pages**: `pnpm -C api exec wrangler pages project delete NAME -y` — deletes the deployed app and its custom domain mapping.
+3. **Cloudflare Worker**: `pnpm -C api exec wrangler delete -c wrangler.local.toml` — deletes the Worker (`--force` if something else depends on it, which nothing should).
+4. **Cloudflare KV**: `pnpm -C api exec wrangler kv namespace delete --binding BOWER_KV -c wrangler.local.toml` — deletes the allowlist, every user's profile, quota counters, cached Drive tokens and push subscriptions. Do this last, since steps 2–3 don't need it gone first.
+5. **Google Cloud**: optionally delete the OAuth client (Credentials) or the whole project, to stop it counting against any Google-side quota. Not required — an orphaned, disabled client is harmless.
+
+**Never touched, at any step above:** every user's Drive folder and everything in it. Teardown removes the Worker's and Pages' ability to serve anyone and every record the Worker itself kept; it does not, and cannot, reach into a user's Google Drive. Users keep their notes.
+
+## 8. Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Every request, including `/health`, answers `500 {"error":{"code":"config","message":"missing NAME"}}` | That secret or var is missing, or was set to an empty value (an empty `printf` piped into `wrangler secret put` still "succeeds") | `printf '%s' "$value" | wrangler secret put NAME -c wrangler.local.toml` with a real, non-empty `$value`, then redeploy if it was a var in `[vars]` instead |
+| Sign-in shows "Not invited" | The email isn't in the allowlist, or was typed with different case/whitespace than what the operator added | Add it: step 5's `wrangler kv key put ... --remote "allow:<email>" 1` (lower-case; the Worker lower-cases what it checks, but the KV key itself must already be lower-case) |
+| Google shows `redirect_uri_mismatch` | The OAuth client's authorized redirect URI doesn't exactly match `<API_ORIGIN>/auth/callback` (scheme, host or trailing slash differs) | Google Cloud Console → Credentials → the OAuth client → fix the redirect URI to match `API_ORIGIN` exactly |
+| Signed out on every page load, or the cookie is never kept | `APP_ORIGIN` and `API_ORIGIN` don't share a registrable domain (e.g. one is still `*.pages.dev` or `*.workers.dev`) — `SameSite=Lax` means the browser won't send the cookie cross-site | Give both custom domains under one domain you own (step 3.8–3.11), and make sure `[vars]` in `wrangler.local.toml` has the real `APP_ORIGIN`/`API_ORIGIN`, not the placeholders |
+| Process stays `queued` and never moves to `running` | The Worker's dispatch reached GitHub but the workflow didn't run: `GITHUB_TOKEN` lacks `contents: write` on the instance repo, or `GITHUB_REPO` doesn't match the instance repo's real `owner/name` | Check the instance repo's **Actions** tab for a run at all; if there's none, fix `GITHUB_REPO` (`[vars]`) or re-issue `GITHUB_TOKEN` with the right scope and repo. A run that stays `queued` past 25 minutes with no runner pickup unblocks itself for a retry (`QUEUED_STALE_MS`) |
+| Push notifications never arrive | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` unset (falls out as `500 config`, same as any missing secret) or the user is on iOS without having installed the app to the home screen (iOS only delivers web push to an installed PWA) | Set the VAPID secrets (step 3.4–3.5); on iOS, tell the user to add the app to their home screen first |
+| Everyone is signed out again after 7 days | The Google OAuth consent screen is still in **Testing** — refresh tokens issued to test users expire after 7 days there | Publish the app (step 2) |
+
+## Appendix: local sign-in test
 
 Checks Google sign-in end to end on `wrangler dev` with a real Google OAuth client. The automated tests mock Google; this is the manual check. In production the same client needs `${API_ORIGIN}/auth/callback` as an authorized redirect URI.
 
@@ -109,53 +248,3 @@ Checks Google sign-in end to end on `wrangler dev` with a real Google OAuth clie
 15. Runner endpoints. With the Worker running and a vault set up (step 11), take the user id from the `user:<id>` key (step 6) and `BOWER_API_KEY` from `api/.dev.vars`, then run `curl -H "Authorization: Bearer $BOWER_API_KEY" http://localhost:8787/runner/vaults/<user id>`. It answers 200 with `{ folderId, inboxFolderId, driveAccessToken, expiresAt, maxTurns }` (plus `apiKey` if the user set one); `curl -H "Authorization: Bearer <driveAccessToken>" "https://www.googleapis.com/drive/v3/files?pageSize=1"` answers 200. Without the header, or with another key, it answers 401. Then report progress: `curl -X POST -H "Authorization: Bearer $BOWER_API_KEY" -H "content-type: application/json" -d '{"state":"running"}' http://localhost:8787/runner/vaults/<user id>/status` answers 200 with the run in `running`; the same with `-d '{"state":"done","summary":"Test run."}'` answers 200 with the run in `done` and a `finishedAt`.
 16. Push setup. Run `pnpm -C api gen-vapid` and put the two `VAPID_` lines it prints in `api/.dev.vars`, then restart the Worker. `curl http://localhost:8787/push/public-key` answers `{ publicKey }` with the same public key. (Manual, pending the owner.)
 17. Push to a real browser. Signed in on the app in Chrome (Android, or desktop), allow notifications so the app posts its subscription to `POST /push/subscribe` (204; `wrangler kv key list --local --binding BOWER_KV` lists a `push:<id>:<hash>` key). Report a run done as in step 15 with `-d '{"state":"done","processed":["a.md","b.md"]}'`: the device shows "Bower: 2 files processed". Unsubscribe or clear the site's data in the browser and report again: the push service answers 410 and the `push:` key is gone. (Manual, pending the owner; needs the app side of push, #39.)
-
-## Invite someone
-
-Add their email to the allowlist (case-insensitive; the Worker lower-cases it before storing or checking it). Either way works; the `wrangler kv` command is enough on its own — the admin endpoint exists for a future admin page.
-
-Directly in KV:
-
-```bash
-# Production
-pnpm -C api exec wrangler kv key put --binding BOWER_KV "allow:you@example.com" 1
-# Local (wrangler dev)
-pnpm -C api exec wrangler kv key put --local --binding BOWER_KV "allow:you@example.com" 1
-```
-
-Or through the admin endpoint (`ADMIN_KEY` is the secret from the table above, `API_ORIGIN` the Worker's origin):
-
-```bash
-curl -X POST "https://api.example.com/admin/allow" \
-  -H "Authorization: Bearer $ADMIN_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com"}'
-```
-
-Answers `204` with no body on success, `400 invalid_email` if `email` is missing, empty or has no `@`.
-
-## Remove someone
-
-Removing someone drops their invitation so they can no longer sign in. If they had already signed in, the admin endpoint also deletes all of their data (their user record, quota counters, push subscriptions, cached Drive token) and revokes Bower's access to their Google account at Google (best effort: a failed revoke is logged by its error code only and does not stop the removal). The vault itself, in their Drive, is never touched.
-
-The plain `wrangler kv key delete` only removes the invitation; it never touches an existing user's data. Prefer the admin endpoint below for someone who has signed in.
-
-Directly in KV (invitation only):
-
-```bash
-# Production
-pnpm -C api exec wrangler kv key delete --binding BOWER_KV "allow:you@example.com"
-# Local (wrangler dev)
-pnpm -C api exec wrangler kv key delete --local --binding BOWER_KV "allow:you@example.com"
-```
-
-Or through the admin endpoint, which also deletes their data and revokes Google access:
-
-```bash
-curl -X DELETE "https://api.example.com/admin/allow/you@example.com" \
-  -H "Authorization: Bearer $ADMIN_KEY"
-```
-
-Answers `204` with no body, whether or not anyone had signed in with that email.
-
-To see who has signed in before removing them: `curl "https://api.example.com/admin/users" -H "Authorization: Bearer $ADMIN_KEY"` returns `[{ id, email, hasVault, createdAt }]` — never a token.
