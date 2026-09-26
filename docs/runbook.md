@@ -1,6 +1,6 @@
 # Runbook
 
-Operating notes for a Bower instance. This page currently covers configuration; deploy, pause and tear-down steps land with the issues that need them.
+Operating notes for a Bower instance. This page currently covers configuration; deploy, pause and tear-down steps land with the issues that need them. To verify an instance works end to end, run `docs/testing.md`.
 
 ## API configuration
 
