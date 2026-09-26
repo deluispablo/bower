@@ -68,6 +68,13 @@ export interface WorkingSheetProps {
   open: boolean;
   onDismiss: () => void;
   progress?: number;
+  /**
+   * Bumped by the caller each time the button is tapped to bring the sheet
+   * back during `done` / `failed` / `stale`. Without this, a tap after the
+   * linger has already elapsed would compute `sinceMs` from the same old
+   * phase change and find it already expired, opening nothing.
+   */
+  reopenKey?: number;
 }
 
 export function WorkingSheet({
@@ -76,13 +83,17 @@ export function WorkingSheet({
   open,
   onDismiss,
   progress,
+  reopenKey = 0,
 }: WorkingSheetProps): JSX.Element | null {
-  // When the current phase began, updated during render so the first
-  // render of a new phase already measures from the right moment.
+  // When the sheet should measure the linger window from, updated during
+  // render so the first render after a phase change (or a deliberate
+  // reopen) already measures from the right moment.
   const phaseRef = useRef(phase);
+  const reopenKeyRef = useRef(reopenKey);
   const sinceRef = useRef(Date.now());
-  if (phaseRef.current !== phase) {
+  if (phaseRef.current !== phase || reopenKeyRef.current !== reopenKey) {
     phaseRef.current = phase;
+    reopenKeyRef.current = reopenKey;
     sinceRef.current = Date.now();
   }
 
@@ -94,7 +105,7 @@ export function WorkingSheet({
       setTick((tick) => tick + 1);
     }, SHEET_LINGER_MS);
     return () => clearTimeout(timer);
-  }, [phase]);
+  }, [phase, reopenKey]);
 
   const state = workingStateFor(phase);
   const visible =
