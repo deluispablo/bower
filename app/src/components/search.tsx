@@ -58,6 +58,7 @@ export function Search() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     loadIndex()
@@ -120,6 +121,21 @@ export function Search() {
     setOpen(false);
   }, []);
 
+  // Closes only once focus leaves the whole panel, not while it moves from
+  // the input to a recent search or a result inside it — otherwise Tab could
+  // never reach them, since the input's own blur would close the panel
+  // first.
+  const handleFocusOut = useCallback(
+    (event: JSX.TargetedFocusEvent<HTMLDivElement>) => {
+      const next = event.relatedTarget as Node | null;
+      if (next !== null && containerRef.current?.contains(next) === true) {
+        return;
+      }
+      close();
+    },
+    [close],
+  );
+
   const handleFocus = useCallback(() => {
     setOpen(true);
     setRecent(loadRecentSearches());
@@ -158,7 +174,7 @@ export function Search() {
       : `${results.length} result${results.length === 1 ? '' : 's'}.`;
 
   return (
-    <div class="search">
+    <div class="search" ref={containerRef} onFocusOut={handleFocusOut}>
       <input
         ref={inputRef}
         type="search"
@@ -170,7 +186,6 @@ export function Search() {
           setQuery((event.target as HTMLInputElement).value);
         }}
         onFocus={handleFocus}
-        onBlur={close}
         onKeyDown={handleKeyDown}
       />
       {(showRecent || showResults) && (
