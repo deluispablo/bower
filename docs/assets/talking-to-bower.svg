@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" width="900" height="340" role="img" aria-label="Talking to Bower: tell it a rule, a task or a question" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#121c33"/>
+    </linearGradient>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#fbbf24"/></marker>
+    <marker id="arr-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2dd4bf"/></marker>
+    <marker id="arr-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#a78bfa"/></marker>
+  </defs>
+
+  <rect width="900" height="340" rx="18" fill="url(#bg2)"/>
+
+  <!-- flowing connectors from the envelope to each kind of message -->
+  <g fill="none" stroke-width="2" stroke-dasharray="7 7" stroke-linecap="round">
+    <path d="M232 170 C270 170 270 76 300 76" stroke="#fbbf24">
+      <animate attributeName="stroke-dashoffset" from="28" to="0" dur="1s" repeatCount="indefinite"/>
+    </path>
+    <path d="M232 170 H300" stroke="#2dd4bf">
+      <animate attributeName="stroke-dashoffset" from="28" to="0" dur="1s" repeatCount="indefinite"/>
+    </path>
+    <path d="M232 170 C270 170 270 264 300 264" stroke="#a78bfa">
+      <animate attributeName="stroke-dashoffset" from="28" to="0" dur="1s" repeatCount="indefinite"/>
+    </path>
+  </g>
+  <g fill="none" stroke-width="2">
+    <path d="M556 76 H602" stroke="#fbbf24" marker-end="url(#arr-amber)"/>
+    <path d="M556 170 H602" stroke="#2dd4bf" marker-end="url(#arr-teal)"/>
+    <path d="M556 264 H602" stroke="#a78bfa" marker-end="url(#arr-violet)"/>
+  </g>
+
+  <!-- envelope card -->
+  <g transform="translate(32 118)">
+    <rect width="200" height="104" rx="14" fill="#111a2e" stroke="#334155" stroke-width="1.5"/>
+    <g transform="translate(40 52)" fill="none" stroke="#e6edf7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="-18" y="-12" width="36" height="26" rx="3"/>
+      <path d="M-18 -10 L0 4 L18 -10"/>
+      <circle cx="18" cy="-12" r="5" fill="#fbbf24" stroke="none">
+        <animate attributeName="opacity" values="1;0.3;1" dur="1.6s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <text x="72" y="40" font-size="14" font-weight="600" fill="#e6edf7">Tell Bower,</text>
+    <text x="72" y="58" font-size="14" font-weight="600" fill="#e6edf7">in the app</text>
+    <text x="72" y="76" font-size="11.5" fill="#94a3b8">a rule, a task</text>
+    <text x="72" y="92" font-size="11.5" fill="#94a3b8">or a question</text>
+  </g>
+
+  <!-- row 1: a rule -->
+  <g transform="translate(300 36)">
+    <rect width="256" height="80" rx="12" fill="#111a2e" stroke="#fbbf24" stroke-width="1.5" stroke-opacity="0.7"/>
+    <rect x="0" y="12" width="5" height="56" rx="2.5" fill="#fbbf24"/>
+    <text x="20" y="26" font-size="14" font-weight="600" fill="#fbbf24">A rule</text>
+    <text x="20" y="48" font-size="12" fill="#cbd5e1">“When a receipt arrives, add it</text>
+    <text x="20" y="65" font-size="12" fill="#cbd5e1">to the expenses table”</text>
+  </g>
+  <g transform="translate(602 36)">
+    <rect width="266" height="80" rx="12" fill="#1a2440" stroke="#fbbf24" stroke-width="1.5">
+      <animate attributeName="stroke-opacity" values="1;0.35;1" dur="6s" begin="0s" repeatCount="indefinite"/>
+    </rect>
+    <text x="18" y="30" font-size="14" font-weight="600" fill="#e6edf7">Bower remembers it</text>
+    <text x="18" y="52" font-size="12" fill="#94a3b8">and applies it every time,</text>
+    <text x="18" y="68" font-size="12" fill="#94a3b8">from now on</text>
+  </g>
+
+  <!-- row 2: a task -->
+  <g transform="translate(300 130)">
+    <rect width="256" height="80" rx="12" fill="#111a2e" stroke="#2dd4bf" stroke-width="1.5" stroke-opacity="0.7"/>
+    <rect x="0" y="12" width="5" height="56" rx="2.5" fill="#2dd4bf"/>
+    <text x="20" y="26" font-size="14" font-weight="600" fill="#2dd4bf">A task</text>
+    <text x="20" y="48" font-size="12" fill="#cbd5e1">“Compare the three phone plans</text>
+    <text x="20" y="65" font-size="12" fill="#cbd5e1">I saved, in one table”</text>
+  </g>
+  <g transform="translate(602 130)">
+    <rect width="266" height="80" rx="12" fill="#1a2440" stroke="#2dd4bf" stroke-width="1.5">
+      <animate attributeName="stroke-opacity" values="0.35;1;0.35;0.35" dur="6s" begin="0s" repeatCount="indefinite" keyTimes="0;0.33;0.66;1"/>
+    </rect>
+    <text x="18" y="30" font-size="14" font-weight="600" fill="#e6edf7">Bower does it</text>
+    <text x="18" y="52" font-size="12" fill="#94a3b8">and saves the result</text>
+    <text x="18" y="68" font-size="12" fill="#94a3b8">as a new note</text>
+  </g>
+
+  <!-- row 3: a question -->
+  <g transform="translate(300 224)">
+    <rect width="256" height="80" rx="12" fill="#111a2e" stroke="#a78bfa" stroke-width="1.5" stroke-opacity="0.7"/>
+    <rect x="0" y="12" width="5" height="56" rx="2.5" fill="#a78bfa"/>
+    <text x="20" y="26" font-size="14" font-weight="600" fill="#a78bfa">A question</text>
+    <text x="20" y="48" font-size="12" fill="#cbd5e1">“When does my passport expire?”</text>
+  </g>
+  <g transform="translate(602 224)">
+    <rect width="266" height="80" rx="12" fill="#1a2440" stroke="#a78bfa" stroke-width="1.5">
+      <animate attributeName="stroke-opacity" values="0.35;0.35;1;0.35" dur="6s" begin="0s" repeatCount="indefinite" keyTimes="0;0.5;0.75;1"/>
+    </rect>
+    <text x="18" y="30" font-size="14" font-weight="600" fill="#e6edf7">Bower answers</text>
+    <text x="18" y="52" font-size="12" fill="#94a3b8">from your own notes,</text>
+    <text x="18" y="68" font-size="12" fill="#94a3b8">with links to them</text>
+  </g>
+
+  <text x="450" y="326" text-anchor="middle" font-size="12" fill="#94a3b8">Write it the way you would say it. Bower works out which of the three it is.</text>
+</svg>
