@@ -1,0 +1,7 @@
+{
+  "name": "@bower/scripts",
+  "private": true,
+  "scripts": {
+    "test": "bash test/deploy-api.test.sh"
+  }
+}

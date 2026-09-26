@@ -9,6 +9,8 @@
     "test": "vitest run",
     "prebuild": "node scripts/bundle-template.mjs",
     "build": "wrangler deploy --dry-run",
+    "deploy": "bash ../scripts/deploy-api.sh deploy",
+    "secrets": "bash ../scripts/deploy-api.sh secrets",
     "gen-vapid": "node scripts/gen-vapid.mjs"
   },
   "dependencies": {
