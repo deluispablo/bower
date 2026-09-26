@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { apiFetch, ApiError, getMe, logout } from '../src/api.js';
+import {
+  apiFetch,
+  ApiError,
+  createVault,
+  getMe,
+  logout,
+  selectVault,
+} from '../src/api.js';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -126,6 +133,78 @@ describe('getMe', () => {
       name: 'ApiError',
       status: 401,
       code: 'unauthenticated',
+    });
+  });
+});
+
+describe('createVault', () => {
+  it('sends { mode: "create" } and returns the parsed vault', async () => {
+    const vault = {
+      folderId: 'FOLDER_ID',
+      inboxFolderId: 'INBOX_FOLDER_ID',
+      name: 'Bower',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, { vault }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createVault()).resolves.toEqual(vault);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/vault$/);
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe(
+      'application/json',
+    );
+    expect(JSON.parse(init.body as string)).toEqual({ mode: 'create' });
+  });
+
+  it('rejects with the folder_exists ApiError', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(409, {
+        error: { code: 'folder_exists', message: 'Already there' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createVault()).rejects.toMatchObject({
+      status: 409,
+      code: 'folder_exists',
+    });
+  });
+});
+
+describe('selectVault', () => {
+  it('sends { mode: "select", folderId } and returns the parsed vault', async () => {
+    const vault = {
+      folderId: 'FOLDER_ID',
+      inboxFolderId: 'INBOX_FOLDER_ID',
+      name: 'Notes',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { vault }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(selectVault('FOLDER_ID')).resolves.toEqual(vault);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/vault$/);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      mode: 'select',
+      folderId: 'FOLDER_ID',
+    });
+  });
+
+  it('rejects with the bad_request ApiError', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(400, {
+        error: { code: 'bad_request', message: 'Folder not found' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(selectVault('FOLDER_ID')).rejects.toMatchObject({
+      status: 400,
+      code: 'bad_request',
     });
   });
 });

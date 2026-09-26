@@ -24,6 +24,10 @@ export interface SessionState {
 
 export interface Session extends SessionState {
   signOut: () => Promise<void>;
+  /** Replaces `me` in place, e.g. once onboarding provisions a vault. */
+  setMe: (me: Me) => void;
+  /** Re-fetches `me` from the Worker and replaces it. */
+  refresh: () => Promise<void>;
 }
 
 /** Reachable regardless of session status; never redirected away from. */
@@ -98,7 +102,16 @@ export function SessionProvider({ children }: SessionProviderProps) {
     route('/login');
   };
 
-  const value: Session = { ...state, signOut };
+  const setMe = (me: Me): void => {
+    setState({ status: 'signed-in', me });
+  };
+
+  const refresh = async (): Promise<void> => {
+    const me = await getMe();
+    setState({ status: 'signed-in', me });
+  };
+
+  const value: Session = { ...state, signOut, setMe, refresh };
 
   return (
     <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

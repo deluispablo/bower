@@ -110,6 +110,30 @@ export function getMe(): Promise<Me> {
   return apiFetch<Me>('/me');
 }
 
+interface VaultResponse {
+  vault: Vault;
+}
+
+/** `POST /vault { mode: 'create' }`: a new folder from the template. */
+export async function createVault(): Promise<Vault> {
+  const { vault } = await apiFetch<VaultResponse>('/vault', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'create' }),
+  });
+  return vault;
+}
+
+/** `POST /vault { mode: 'select', folderId }`: an existing Drive folder. */
+export async function selectVault(folderId: string): Promise<Vault> {
+  const { vault } = await apiFetch<VaultResponse>('/vault', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'select', folderId }),
+  });
+  return vault;
+}
+
 export function logout(): Promise<void> {
   return apiFetch<void>('/auth/logout', { method: 'POST' });
 }
