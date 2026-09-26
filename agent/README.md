@@ -63,7 +63,7 @@ Both the rclone binary and the Claude Code CLI are cached with `actions/cache@v4
 - **rclone**: cached at `~/rclone-bin`. On a cache hit the download step (`if: steps.cache-rclone.outputs.cache-hit != 'true'`) is skipped; a separate, always-run step copies the (cached or freshly downloaded) binary into `/usr/local/bin` — the sha256 check still runs on every fresh download, never on a cache hit.
 - **Claude Code CLI**: installed with `npm install --prefix "$HOME/claude-cli"` instead of `npm install -g`, so the whole install lives under one cacheable directory (`~/claude-cli`); a global install spreads files across `/usr/local/lib/node_modules` and `/usr/local/bin`, which isn't practical to cache. On a cache hit the install step is skipped and `$HOME/claude-cli/node_modules/.bin` is added to `$GITHUB_PATH` either way.
 
-`RCLONE_VERSION`, `RCLONE_SHA256` and `CLAUDE_CODE_VERSION` live once, in the job's own `env:`, and both the cache keys and the install steps read them from there — bumping a version is a one-line change.
+`BOWER_RCLONE_VERSION`, `BOWER_RCLONE_SHA256` and `CLAUDE_CODE_VERSION` live once, in the job's own `env:`, and both the cache keys and the install steps read them from there — bumping a version is a one-line change.
 
 Pandoc is left uncached: `apt-get install pandoc` on `ubuntu-latest` is a few seconds (the package and its small dependency set are usually already in APT's local cache on the runner image), not worth a cache step of its own.
 
