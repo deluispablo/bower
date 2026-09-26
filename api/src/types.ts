@@ -28,8 +28,17 @@ export interface User {
 
 export type RunState = 'queued' | 'running' | 'done' | 'failed';
 
+/**
+ * What a run does: `ingest` processes the inbox (`POST /process`), `lint` is
+ * the scheduled health check. The two are stored under different keys (see
+ * `store.ts`), so a lint never shows up as the user's current run.
+ */
+export type RunKind = 'ingest' | 'lint';
+
 export interface Run {
   state: RunState;
+  /** Absent on runs stored before kinds existed; read as `ingest`. */
+  kind?: RunKind;
   /** ISO-8601. */
   requestedAt: string;
   /** ISO-8601. */

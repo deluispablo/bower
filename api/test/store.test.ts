@@ -187,6 +187,7 @@ describe('deleteUserData', () => {
     const user = testUser('user-8', 'leaving@example.test');
     await putUser(kv, user);
     await putRun(kv, 'user-8', testRun());
+    await putRun(kv, 'user-8', { ...testRun(), kind: 'lint' }, 'lint');
     await incrQuota(kv, 'user-8', '2026-01-01');
     await incrQuota(kv, 'user-8', '2026-01-02');
     await putPushSub(kv, 'user-8', testPushSub('sub-1'));
@@ -208,6 +209,7 @@ describe('deleteUserData', () => {
       keys.user('user-8'),
       keys.email('leaving@example.test'),
       keys.run('user-8'),
+      keys.lintRun('user-8'),
       keys.quotaPrefix('user-8'),
       keys.pushPrefix('user-8'),
       keys.driveToken('user-8'),

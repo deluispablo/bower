@@ -159,6 +159,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
       const run: Run = {
         state: 'queued',
+        kind: 'ingest',
         requestedAt: now.toISOString(),
         runId: crypto.randomUUID(),
       };
