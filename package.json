@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
-    "build": "pnpm -r --if-present run build"
+    "build": "pnpm -r --if-present run build",
+    "check:sanitized": "bash scripts/check-sanitized.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
