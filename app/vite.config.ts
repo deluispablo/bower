@@ -16,6 +16,16 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
+      // The Web Share Target (`POST /add`) needs a custom `fetch` handler
+      // that a generated service worker cannot have.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        // The app shell only; the Worker API and Drive itself are never
+        // cached offline.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+      },
       manifest: {
         name: 'Bower',
         short_name: 'Bower',
