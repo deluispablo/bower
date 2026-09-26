@@ -1,7 +1,9 @@
+import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import app from '../src/index.js';
 import { assertEnv } from '../src/env.js';
+import type { AppEnv } from '../src/env.js';
 import { HttpError } from '../src/errors.js';
 
 /**
@@ -83,6 +85,38 @@ describe('assertEnv', () => {
       () => assertEnv(validRawEnv({ DAILY_RUN_LIMIT: 'many' })),
       'invalid DAILY_RUN_LIMIT: must be a whole number',
     );
+  });
+});
+
+/**
+ * A throwaway app, separate from the real one, that wires up only
+ * `assertEnv`'s middleware plus a route reading `c.get('env')` — enough to
+ * prove the validated (defaults-applied) env reaches handlers through the
+ * context, without adding a test-only route to the production app.
+ */
+function buildEnvProbeApp(): Hono<AppEnv> {
+  const probeApp = new Hono<AppEnv>();
+
+  probeApp.use('*', (c, next) => {
+    c.set('env', assertEnv(c.env));
+    return next();
+  });
+  probeApp.get('/probe', (c) => {
+    return c.json({ dailyRunLimit: c.get('env').DAILY_RUN_LIMIT });
+  });
+
+  return probeApp;
+}
+
+describe('env in context', () => {
+  it('exposes the DAILY_RUN_LIMIT default through c.get("env") when bindings omit it', async () => {
+    const response = await buildEnvProbeApp().request(
+      '/probe',
+      undefined,
+      validRawEnv(),
+    );
+
+    await expect(response.json()).resolves.toEqual({ dailyRunLimit: '20' });
   });
 });
 

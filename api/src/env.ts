@@ -37,6 +37,20 @@ export interface Env {
   APP_VERSION: string;
 }
 
+/**
+ * The Hono generic for the whole app: `c.env` is the raw, unvalidated
+ * bindings (`Env`), and `c.get('env')` is the result of `assertEnv` —
+ * defaults applied, ready to read. Handlers should read `c.get('env')`,
+ * never `c.env`, so they see the defaults `assertEnv` fills in.
+ */
+export interface AppEnv {
+  Bindings: Env;
+  Variables: {
+    requestId: string;
+    env: Env;
+  };
+}
+
 const REQUIRED_SECRETS = [
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
