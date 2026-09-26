@@ -62,3 +62,29 @@ Notes:
 | `keys.p256dh` | `string` | |
 | `keys.auth` | `string` | |
 | `createdAt` | `string` | ISO-8601 |
+
+## `POST /vault`
+
+Gives the signed-in user a vault in their own Drive. Requires the session cookie. Nothing in Drive is ever overwritten or deleted.
+
+Request body, one of:
+
+| Body | Effect |
+| --- | --- |
+| `{ "mode": "create" }` | Creates a folder named `TEMPLATE_FOLDER_NAME` (default `Bower`) at the root of My Drive and copies the bundled `vault-template/` into it: every folder, every file uploaded as `text/markdown`. A `.gitkeep` becomes its (empty) folder; the file itself is not uploaded. |
+| `{ "mode": "select", "folderId": "FOLDER_ID" }` | Registers an existing Drive folder (for example an Obsidian vault). Adds only the template folders and files it lacks, matched by name folder by folder; an existing file is never replaced. Finds or creates `0-Inbox`. |
+
+Response: `{ "vault": { "folderId", "inboxFolderId", "name" } }`, status 201 for `create` and 200 for `select`. The same object is stored on the `User` and returned by `GET /me`.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 400 | `bad_request` | The body is not JSON, `mode` is neither `create` nor `select`, `folderId` is missing or empty, or `folderId` is not a folder Drive can find |
+| 401 | `unauthenticated` | No valid session cookie |
+| 401 | `reauth` | Google refused the user's token; sign in again |
+| 409 | `vault_exists` | `create` when the user already has a vault |
+| 409 | `folder_exists` | `create` when a folder with that name already exists at the root of My Drive; use `select` with it instead. Nothing is created. |
+| 502 | `drive_error` | Drive answered an unexpected status or was unreachable (the message names the operation and the status only) |
+
+A `create` that fails half-way leaves a partial folder behind; the next `create` answers `folder_exists`, and `select` on that folder completes it.
+
+The template is bundled into the Worker at build time: `api/scripts/bundle-template.mjs` (run by `prebuild`) writes `api/src/template.generated.ts` from `vault-template/`, leaving out `vault-template/README.md`, which describes the folder to readers of this repository. The generated file is committed; after editing `vault-template/`, run `pnpm -C api build` and commit the regenerated file.
