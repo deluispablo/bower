@@ -28,3 +28,23 @@ Every variable `api/src/env.ts` reads, secret or var, with where it comes from a
 | `BOWER_KV` | Binding | `wrangler kv namespace create BOWER_KV`, bound in `[[kv_namespaces]]` in `wrangler.toml` | `KV_NAMESPACE_ID` |
 
 `assertEnv` (`api/src/env.ts`) validates all of the above on every request and fails with `{ error: { code: 'config', message: 'missing <NAME>' } }` (HTTP 500) naming the first missing secret or var without a default, so a bad deploy fails loudly instead of surfacing as a cryptic error later.
+
+## Local sign-in test
+
+Checks Google sign-in end to end on `wrangler dev` with a real Google OAuth client. The automated tests mock Google; this is the manual check. In production the same client needs `${API_ORIGIN}/auth/callback` as an authorized redirect URI.
+
+1. Google Cloud Console → APIs & Services:
+   - Library: enable the **Google Drive API**.
+   - OAuth consent screen: user type External; scopes `openid`, `email` and `https://www.googleapis.com/auth/drive`. A client left in *Testing* expires refresh tokens after 7 days (add your account as a test user if you keep it there for this check); a real instance must be *In production*.
+   - Credentials → Create credentials → OAuth client ID → Web application. Authorized redirect URI: `http://localhost:8787/auth/callback`. Copy the client id and secret.
+2. `cp api/.dev.vars.example api/.dev.vars` and set, in `api/.dev.vars`:
+   - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from step 1.
+   - `SESSION_SECRET` and `TOKEN_ENC_KEY`: each from `openssl rand -base64 32`.
+   - `APP_ORIGIN=http://localhost:5173` and `API_ORIGIN=http://localhost:8787` (values in `.dev.vars` override `[vars]` in `wrangler.toml` under `wrangler dev`).
+3. Allow your Google account in the local KV (lower-case email):
+   `pnpm -C api exec wrangler kv key put --local --binding BOWER_KV "allow:you@example.com" 1`
+4. Start the Worker with `pnpm -C api dev` (and the app with `pnpm -C app dev` if you want to land on it).
+5. Open `http://localhost:8787/auth/login` and accept the consent screen. You should land on `http://localhost:5173`.
+6. Check KV: `pnpm -C api exec wrangler kv key list --local --binding BOWER_KV` lists `user:<id>` and `email:<email>`; `pnpm -C api exec wrangler kv key get --local --binding BOWER_KV "user:<id>"` shows an `encRefreshToken` starting with `v1.` (encrypted, never the plain token).
+7. Open `http://localhost:8787/me` in the same browser: it returns `{ email, vault, quota: { used, limit }, needsReauth }`. `curl -X POST http://localhost:8787/auth/logout` answers 204; after signing out in the browser, `/me` answers 401.
+8. Sign in with a Google account that has no `allow:` key: you see the "Not invited" page, and the key list from step 6 is unchanged.

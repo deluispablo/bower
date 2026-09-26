@@ -48,6 +48,8 @@ export interface AppEnv {
   Variables: {
     requestId: string;
     env: Env;
+    /** The signed-in user's id; set by `requireSession` (`auth.ts`) only. */
+    userId?: string;
   };
 }
 

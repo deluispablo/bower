@@ -131,6 +131,16 @@ export async function incrQuota(
   return next;
 }
 
+/** Reads `date`'s request count for `userId` without changing it; 0 if none. */
+export async function getQuota(
+  kv: KVNamespace,
+  userId: string,
+  date: string,
+): Promise<number> {
+  const current = await kv.get(keys.quota(userId, date), 'text');
+  return current === null ? 0 : Number(current);
+}
+
 export async function listPushSubs(
   kv: KVNamespace,
   userId: string,

@@ -10,7 +10,7 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `email:<email>` | user id (string) | none | `putUser` | `findUserByEmail` |
 | `allow:<email>` | `'1'` | none | the operator, outside this module | `isAllowed` |
 | `run:<id>` | `Run` | none | `putRun` | `getRun` |
-| `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota` |
+| `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
 | `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` |
 | `drivetoken:<id>` | cached Drive access token (string) | caller-supplied | `putDriveToken` | `getDriveToken` |
 
