@@ -4,9 +4,11 @@ import {
   apiFetch,
   ApiError,
   createVault,
+  deleteAccount,
   getMe,
   logout,
   selectVault,
+  updateSettings,
 } from '../src/api.js';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -90,7 +92,7 @@ describe('apiFetch', () => {
 });
 
 describe('getMe', () => {
-  it('parses the { email, vault, quota, needsReauth } shape', async () => {
+  it('parses the { email, vault, quota, needsReauth, hasApiKey } shape', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
         email: 'you@example.com',
@@ -101,6 +103,7 @@ describe('getMe', () => {
         },
         quota: { used: 1, limit: 5 },
         needsReauth: false,
+        hasApiKey: true,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -116,6 +119,7 @@ describe('getMe', () => {
       },
       quota: { used: 1, limit: 5 },
       needsReauth: false,
+      hasApiKey: true,
     });
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toMatch(/\/me$/);
@@ -220,5 +224,65 @@ describe('logout', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/auth\/logout$/);
     expect(init.method).toBe('POST');
+  });
+});
+
+describe('updateSettings', () => {
+  it('sends the JSON body and parses { hasApiKey }', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { hasApiKey: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await updateSettings({ apiKey: 'sk-ant-test' });
+
+    expect(result).toEqual({ hasApiKey: true });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/settings$/);
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body as string)).toEqual({
+      apiKey: 'sk-ant-test',
+    });
+  });
+
+  it('sends apiKey: null to clear a saved key', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { hasApiKey: false }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await updateSettings({ apiKey: null });
+
+    expect(result).toEqual({ hasApiKey: false });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ apiKey: null });
+  });
+});
+
+describe('deleteAccount', () => {
+  it('resolves without throwing on a 204 response', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(deleteAccount()).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/me$/);
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('throws an ApiError on failure', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(401, {
+        error: { code: 'unauthenticated', message: 'Not signed in' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(deleteAccount()).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 401,
+    });
   });
 });

@@ -104,6 +104,7 @@ export interface Me {
   vault: Vault | null;
   quota: { used: number; limit: number };
   needsReauth: boolean;
+  hasApiKey: boolean;
 }
 
 export function getMe(): Promise<Me> {
@@ -141,4 +142,28 @@ export function logout(): Promise<void> {
 /** The Worker's `/auth/login`: a full navigation, never fetched. */
 export function loginUrl(): string {
   return `${API_URL}/auth/login`;
+}
+
+export interface UpdateSettingsInput {
+  /** A new BYOK Claude API key, or `null` to remove a saved one. */
+  apiKey: string | null;
+}
+
+export interface UpdateSettingsResult {
+  hasApiKey: boolean;
+}
+
+export function updateSettings(
+  input: UpdateSettingsInput,
+): Promise<UpdateSettingsResult> {
+  return apiFetch<UpdateSettingsResult>('/settings', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+/** Removes the account and its data. The Drive folder itself is untouched. */
+export function deleteAccount(): Promise<void> {
+  return apiFetch<void>('/me', { method: 'DELETE' });
 }

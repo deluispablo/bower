@@ -2,8 +2,15 @@ import preact from '@preact/preset-vite';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+import pkg from './package.json' with { type: 'json' };
+
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    // Fallback app version for the settings screen footer, used when
+    // VITE_APP_VERSION isn't set. Kept in sync with the API by convention.
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [
     preact(),
     VitePWA({
