@@ -1,0 +1,10 @@
+{
+  "name": "@bower/app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "echo \"app: no sources yet\"",
+    "test": "pnpm exec vitest run --passWithNoTests",
+    "build": "echo \"app: nothing to build yet\""
+  }
+}
