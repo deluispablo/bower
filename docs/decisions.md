@@ -3,6 +3,9 @@
 Short records of the choices that shape Bower, newest first. One entry per decision: date, what, why, what was rejected.
 A private prototype (v4: Drive folder + Apps Script detector + GitHub Actions + rclone) preceded this repository; several entries record what it taught.
 
+## 2026-09-26 · Semantic search over the vault — pending
+Spike (`docs/spikes/semantic-search.md`, #51) recommends embedding notes locally in the runner with a small multilingual model, not Cloudflare Workers AI (a second content-processing third party beyond Anthropic). Implementation decision still open.
+
 ## 2026-09-26 · Self-hosted model; no keys in the repository
 Each operator deploys their own instance with their own Claude subscription (or API key) and their own Google OAuth client. The public repository is a recipe.
 Rejected: a hosted multi-tenant service (would require per-user billing and Google app verification).
