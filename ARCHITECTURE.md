@@ -64,7 +64,7 @@ Vault content never enters either repository.
 User (browser) ── Sign in with Google ──▶ Worker ── stores encrypted refresh token, folder id
 User (browser) ◀── 1 h Drive access token ── Worker
 User (browser) ── POST /vault {mode: create|select} ──▶ Worker ── copies vault-template/ (or fills gaps in an existing folder) ──▶ Google Drive
-User (browser) ── read vault / write 0-Inbox, Clippings ──▶ Google Drive
+User (browser) ── read vault / write 0-Inbox, Clippings / append to a note ──▶ Google Drive
 User (browser) ── POST /process ──▶ Worker ── repository_dispatch {vault_id} ──▶ Instance repo (Actions)
 Runner (weekly lint) ── GET /runner/vaults (Bearer BOWER_API_KEY) ──▶ Worker ── every vault id
 Runner ── GET /runner/vaults/:id (Bearer BOWER_API_KEY) ──▶ Worker ── 1 h Drive token, folder id, maxTurns, apiKey?
@@ -76,6 +76,7 @@ User (browser) ── DELETE /me ──▶ Worker ── best-effort revoke at G
 - **Sign-in**: Google OAuth (`openid email drive`) at `GET /auth/login` → `GET /auth/callback`; the Worker exchanges the code, stores the encrypted refresh token and issues the session cookie.
 - **Vault provisioning**: `POST /vault` either copies `vault-template/` into a new `Bower` folder or fills in whatever an existing folder is missing (never overwrites a file already there); the folder id is stored, never its contents.
 - **Add file**: the app writes straight to Drive with its own 1 h access token (`GET /drive/token`); the Worker is not on this path at all.
+- **Append to a note**: the app reads the note, adds a paragraph at the end and writes it back (`files.update` media upload), checking `modifiedTime` just before the write and retrying once on a conflict. It never writes `CLAUDE.md`, `index.md`, `log.md` or `_*.md` folder notes, and writes no `log.md` line (that is the agent's job).
 - **Process/run**: `POST /process` dispatches one GitHub Actions run in the operator's instance repo; the runner fetches a fresh Drive token and pulls, runs, pushes and reports through the Worker, never through the browser.
 - **Push**: the runner's status report triggers a web-push message straight from the Worker to the browser's push subscription; no third-party notification service.
 - **Delete account**: `DELETE /me` revokes the Google grant (best effort — a user can always leave even if Google does not cooperate), deletes every KV key for that user (profile, quota counters, cached Drive token, push subscriptions), and clears the cookie. The Drive folder and its content are never touched; the user keeps their notes.

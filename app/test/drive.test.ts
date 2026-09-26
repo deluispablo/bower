@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../src/api.js';
 import {
+  appendedText,
+  AppendError,
+  appendToFile,
   createTextFile,
   DriveError,
   FOLDER_MIME,
@@ -9,6 +12,7 @@ import {
   getText,
   getToken,
   invalidateToken,
+  isAppendProtected,
   listVault,
   MULTIPART_MAX_BYTES,
   searchFullText,
@@ -567,5 +571,256 @@ describe('createTextFile', () => {
       }),
     );
     expect(content).toBe('Content-Type: text/markdown\r\n\r\n# Tidy up\n');
+  });
+});
+
+interface FakeNote {
+  text: string;
+  modifiedTime: string;
+}
+
+interface Patch {
+  body: string;
+  contentType: string | null;
+}
+
+interface FakeNoteOptions {
+  /** PATCH answers in order; 200 once the list runs out. */
+  patchStatuses?: number[];
+  /** Runs right before the nth `modifiedTime` read (1-based). */
+  beforeMeta?: Record<number, () => void>;
+}
+
+/**
+ * A fake Drive holding one note, `FILE_ID`: `fields=modifiedTime`, the
+ * `alt=media` download and the media `PATCH`, which bumps `modifiedTime`
+ * like Drive would.
+ */
+function fakeNote(
+  note: FakeNote,
+  { patchStatuses = [], beforeMeta = {} }: FakeNoteOptions = {},
+): { handler: DriveHandler; requests: string[]; patches: Patch[] } {
+  const requests: string[] = [];
+  const patches: Patch[] = [];
+  let metaReads = 0;
+  let version = 1;
+  const handler: DriveHandler = (url, init) => {
+    const method = init.method ?? 'GET';
+    requests.push(`${method} ${url.pathname}${url.search}`);
+    const body = typeof init.body === 'string' ? init.body : '';
+    if (method === 'PATCH') {
+      const headers = new Headers(init.headers);
+      patches.push({ body, contentType: headers.get('Content-Type') });
+      const status = patchStatuses.shift() ?? 200;
+      if (status !== 200) {
+        return jsonResponse(status, { error: { message: 'Drive said no.' } });
+      }
+      version++;
+      note.text = body;
+      note.modifiedTime = `2026-01-01T00:00:0${version}.000Z`;
+      return jsonResponse(200, {
+        id: 'FILE_ID',
+        name: 'Ideas.md',
+        mimeType: 'text/markdown',
+        parents: ['FOLDER_ID'],
+        modifiedTime: note.modifiedTime,
+      });
+    }
+    if (url.searchParams.get('alt') === 'media') {
+      return new Response(note.text, {
+        headers: { 'content-type': 'text/markdown' },
+      });
+    }
+    if (url.searchParams.get('fields') === 'modifiedTime') {
+      metaReads++;
+      beforeMeta[metaReads]?.();
+      return jsonResponse(200, { modifiedTime: note.modifiedTime });
+    }
+    return jsonResponse(404, {});
+  };
+  return { handler, requests, patches };
+}
+
+const TARGET = { id: 'FILE_ID', name: 'Ideas.md', mimeType: 'text/markdown' };
+
+describe('isAppendProtected', () => {
+  it('guards the notes the agent maintains, whatever the case', () => {
+    for (const name of [
+      'CLAUDE.md',
+      'index.md',
+      'log.md',
+      'Log.MD',
+      '_Projects.md',
+    ]) {
+      expect(isAppendProtected(name)).toBe(true);
+    }
+  });
+
+  it('lets ordinary notes through', () => {
+    for (const name of ['Ideas.md', 'my_index.md', 'catalog.md', 'log.txt']) {
+      expect(isAppendProtected(name)).toBe(false);
+    }
+  });
+});
+
+describe('appendedText', () => {
+  it('adds the text as its own paragraph with one blank line before', () => {
+    expect(appendedText('First.', 'Second.')).toBe('First.\n\nSecond.\n');
+    expect(appendedText('First.\n', 'Second.')).toBe('First.\n\nSecond.\n');
+    expect(appendedText('First.\r\n\r\n', 'Second.')).toBe(
+      'First.\n\nSecond.\n',
+    );
+  });
+
+  it('does not start an empty note with blank lines', () => {
+    expect(appendedText('', 'First.')).toBe('First.\n');
+  });
+});
+
+describe('appendToFile', () => {
+  it('reads the note, checks it is unchanged, then PATCHes the new paragraph', async () => {
+    const note: FakeNote = {
+      text: '# Ideas\n\nFirst.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note);
+    stubFetch(drive.handler);
+
+    const result = await appendToFile(TARGET, '  Second.\n');
+
+    expect(result.text).toBe('# Ideas\n\nFirst.\n\nSecond.\n');
+    expect(result.file.modifiedTime).toBe('2026-01-01T00:00:02.000Z');
+    expect(note.text).toBe(result.text);
+    expect(drive.requests).toEqual([
+      'GET /drive/v3/files/FILE_ID?fields=modifiedTime',
+      'GET /drive/v3/files/FILE_ID?alt=media',
+      'GET /drive/v3/files/FILE_ID?fields=modifiedTime',
+      'PATCH /upload/drive/v3/files/FILE_ID?uploadType=media&fields=id,name,mimeType,parents,modifiedTime,size,webViewLink',
+    ]);
+    expect(drive.patches).toEqual([
+      { body: result.text, contentType: 'text/markdown' },
+    ]);
+  });
+
+  it('re-reads and retries once after a 412', async () => {
+    const note: FakeNote = {
+      text: 'First.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note, { patchStatuses: [412] });
+    stubFetch(drive.handler);
+
+    const result = await appendToFile(TARGET, 'Second.');
+
+    expect(result.text).toBe('First.\n\nSecond.\n');
+    expect(drive.patches).toHaveLength(2);
+    expect(drive.requests.filter((r) => r.includes('alt=media'))).toHaveLength(
+      2,
+    );
+  });
+
+  it('gives up with a conflict after a second 412', async () => {
+    const note: FakeNote = {
+      text: 'First.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note, { patchStatuses: [412, 412] });
+    stubFetch(drive.handler);
+
+    const error = await appendToFile(TARGET, 'Second.').catch(
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(AppendError);
+    expect((error as AppendError).code).toBe('conflict');
+    expect(drive.patches).toHaveLength(2);
+    expect(note.text).toBe('First.');
+  });
+
+  it('keeps a write another device made mid-append', async () => {
+    const note: FakeNote = {
+      text: 'First.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note, {
+      beforeMeta: {
+        // Another device saves between this device's read and its write.
+        2: () => {
+          note.text = 'First.\n\nFrom the other device.\n';
+          note.modifiedTime = '2026-01-01T00:00:09.000Z';
+        },
+      },
+    });
+    stubFetch(drive.handler);
+
+    const result = await appendToFile(TARGET, 'From this device.');
+
+    expect(result.text).toBe(
+      'First.\n\nFrom the other device.\n\nFrom this device.\n',
+    );
+    expect(drive.patches).toHaveLength(1);
+  });
+
+  it('gives up with a conflict when the note changes during both attempts', async () => {
+    const note: FakeNote = {
+      text: 'First.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const touch = (second: number) => (): void => {
+      note.modifiedTime = `2026-01-01T00:00:${second}.000Z`;
+    };
+    const drive = fakeNote(note, {
+      beforeMeta: { 2: touch(11), 4: touch(12) },
+    });
+    stubFetch(drive.handler);
+
+    const error = await appendToFile(TARGET, 'Second.').catch(
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(AppendError);
+    expect((error as AppendError).code).toBe('conflict');
+    expect(drive.patches).toHaveLength(0);
+  });
+
+  it('rejects the notes the agent maintains without any request', async () => {
+    const { fetchMock } = stubFetch(() => jsonResponse(500, {}));
+
+    for (const name of ['CLAUDE.md', 'index.md', 'log.md', '_Projects.md']) {
+      const error = await appendToFile({ id: 'FILE_ID', name }, 'Hi.').catch(
+        (err: unknown) => err,
+      );
+      expect(error).toBeInstanceOf(AppendError);
+      expect((error as AppendError).code).toBe('protected');
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects blank text without any request', async () => {
+    const { fetchMock } = stubFetch(() => jsonResponse(500, {}));
+
+    const error = await appendToFile(TARGET, ' \n ').catch(
+      (err: unknown) => err,
+    );
+
+    expect((error as AppendError).code).toBe('empty');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('passes any other Drive failure through', async () => {
+    const note: FakeNote = {
+      text: 'First.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note, { patchStatuses: [500] });
+    stubFetch(drive.handler);
+
+    const error = await appendToFile(TARGET, 'Second.').catch(
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(DriveError);
+    expect((error as DriveError).status).toBe(500);
+    expect(drive.patches).toHaveLength(1);
   });
 });
