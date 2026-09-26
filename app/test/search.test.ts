@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DriveFile } from '../src/drive.js';
 import {
+  clearRecentSearches,
   filterToIndex,
   loadRecentSearches,
   saveRecentSearch,
@@ -170,5 +171,30 @@ describe('recent searches', () => {
     store.set('bower.search.recent', 'not-json');
 
     expect(loadRecentSearches()).toEqual([]);
+  });
+});
+
+describe('clearRecentSearches', () => {
+  it('drops the stored recent-searches list', () => {
+    stubLocalStorage();
+    saveRecentSearch('garden');
+
+    clearRecentSearches();
+
+    expect(loadRecentSearches()).toEqual([]);
+  });
+
+  it('never throws when localStorage.removeItem is blocked', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {
+        throw new Error('blocked');
+      },
+    });
+
+    expect(() => {
+      clearRecentSearches();
+    }).not.toThrow();
   });
 });

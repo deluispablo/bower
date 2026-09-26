@@ -103,3 +103,15 @@ export function addSent(item: SentItem): SentItem[] {
   }
   return list;
 }
+
+/**
+ * Drops the local 'sent' history. Per-user, so `forget.ts` calls this on
+ * sign-out and account deletion. Never throws.
+ */
+export function clearSent(): void {
+  try {
+    localStorage.removeItem(SENT_KEY);
+  } catch {
+    // Storage blocked: nothing to remove.
+  }
+}

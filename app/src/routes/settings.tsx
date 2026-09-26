@@ -236,7 +236,9 @@ function DangerZone() {
     try {
       await deleteAccount();
       // The account is gone; hand back to the sign-in screen the same way
-      // an ordinary sign-out does.
+      // an ordinary sign-out does — including forgetting the device
+      // (IndexedDB, caches, the Drive token, per-user prefs), which
+      // `signOut()` now does on every path.
       await signOut();
     } catch (err) {
       setError(toMessage(err));

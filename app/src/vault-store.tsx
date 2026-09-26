@@ -162,6 +162,15 @@ export function VaultProvider({ children }: VaultProviderProps) {
 
   useEffect(() => {
     if (folderId === null) {
+      // Either not onboarded yet, or signed out: `me` (and so `folderId`)
+      // goes back to `undefined`/`null` the moment `session.tsx` sets
+      // `status: 'signed-out'`, on sign-out, delete-account and a 401 for
+      // a session that was previously signed in. Reacting to that here —
+      // rather than a separate explicit reset call — is the seam that
+      // needs no wiring from `forget.ts` itself: the in-memory index and
+      // note text are dropped as an ordinary consequence of `me` becoming
+      // unavailable, the same way this effect already resets state for a
+      // signed-in user with no vault yet.
       setState({ index: null, files: [], fetchedAt: null, status: 'idle' });
       return;
     }
