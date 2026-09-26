@@ -78,3 +78,15 @@ export function saveRecentSearch(query: string): void {
     // Storage full or blocked: recent searches just don't stick.
   }
 }
+
+/**
+ * Drops the local recent-searches list. Per-user, so `forget.ts` calls this
+ * on sign-out and account deletion. Never throws.
+ */
+export function clearRecentSearches(): void {
+  try {
+    localStorage.removeItem(RECENT_KEY);
+  } catch {
+    // Storage blocked: nothing to remove.
+  }
+}

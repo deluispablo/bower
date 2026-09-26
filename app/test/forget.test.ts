@@ -10,6 +10,8 @@ function stubDeps(overrides: Partial<ForgetDeviceDeps> = {}): ForgetDeviceDeps {
     deleteCache: vi.fn(() => Promise.resolve(true)),
     invalidateToken: vi.fn(),
     resetPrefs: vi.fn(),
+    clearSent: vi.fn(),
+    clearRecentSearches: vi.fn(),
     ...overrides,
   };
 }
@@ -29,6 +31,8 @@ describe('forgetDevice', () => {
     expect(deps.deleteCache).toHaveBeenCalledWith(SHARE_CACHE_NAME);
     expect(deps.invalidateToken).toHaveBeenCalledOnce();
     expect(deps.resetPrefs).toHaveBeenCalledOnce();
+    expect(deps.clearSent).toHaveBeenCalledOnce();
+    expect(deps.clearRecentSearches).toHaveBeenCalledOnce();
   });
 
   it('still runs the rest when clearIdb rejects', async () => {
@@ -42,6 +46,8 @@ describe('forgetDevice', () => {
     expect(deps.deleteCache).toHaveBeenCalledTimes(2);
     expect(deps.invalidateToken).toHaveBeenCalledOnce();
     expect(deps.resetPrefs).toHaveBeenCalledOnce();
+    expect(deps.clearSent).toHaveBeenCalledOnce();
+    expect(deps.clearRecentSearches).toHaveBeenCalledOnce();
     expect(errorSpy).toHaveBeenCalledWith(new Error('idb blocked'));
   });
 
@@ -61,6 +67,8 @@ describe('forgetDevice', () => {
     expect(deps.deleteCache).toHaveBeenCalledTimes(2);
     expect(deps.invalidateToken).toHaveBeenCalledOnce();
     expect(deps.resetPrefs).toHaveBeenCalledOnce();
+    expect(deps.clearSent).toHaveBeenCalledOnce();
+    expect(deps.clearRecentSearches).toHaveBeenCalledOnce();
     expect(errorSpy).toHaveBeenCalledWith(new Error('cache blocked'));
   });
 
@@ -79,7 +87,30 @@ describe('forgetDevice', () => {
 
     expect(deps.clearIdb).toHaveBeenCalledOnce();
     expect(deps.deleteCache).toHaveBeenCalledTimes(2);
+    expect(deps.clearSent).toHaveBeenCalledOnce();
+    expect(deps.clearRecentSearches).toHaveBeenCalledOnce();
     expect(errorSpy).toHaveBeenCalledWith(new Error('token blocked'));
     expect(errorSpy).toHaveBeenCalledWith(new Error('prefs blocked'));
+  });
+
+  it('still runs the rest when clearSent or clearRecentSearches throws', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const deps = stubDeps({
+      clearSent: vi.fn(() => {
+        throw new Error('sent history blocked');
+      }),
+      clearRecentSearches: vi.fn(() => {
+        throw new Error('recent searches blocked');
+      }),
+    });
+
+    await forgetDevice(deps);
+
+    expect(deps.clearIdb).toHaveBeenCalledOnce();
+    expect(deps.deleteCache).toHaveBeenCalledTimes(2);
+    expect(deps.invalidateToken).toHaveBeenCalledOnce();
+    expect(deps.resetPrefs).toHaveBeenCalledOnce();
+    expect(errorSpy).toHaveBeenCalledWith(new Error('sent history blocked'));
+    expect(errorSpy).toHaveBeenCalledWith(new Error('recent searches blocked'));
   });
 });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   addSent,
+  clearSent,
   instructionFileName,
   instructionNote,
   loadSent,
@@ -217,5 +218,30 @@ describe('loadSent / addSent', () => {
     });
 
     expect(loadSent()).toEqual([]);
+  });
+});
+
+describe('clearSent', () => {
+  it('drops the stored sent history', () => {
+    vi.stubGlobal('localStorage', createMemoryStorage());
+    addSent({ name: 'a.md', text: 'a', sentAt: NOW.toISOString() });
+
+    clearSent();
+
+    expect(loadSent()).toEqual([]);
+  });
+
+  it('never throws when localStorage.removeItem is blocked', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {
+        throw new Error('blocked');
+      },
+    });
+
+    expect(() => {
+      clearSent();
+    }).not.toThrow();
   });
 });
