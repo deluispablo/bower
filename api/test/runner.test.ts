@@ -126,7 +126,13 @@ async function postProcess(fetchImpl: FetchLike): Promise<Response> {
   const token = await signSession({ userId: USER_ID }, env.SESSION_SECRET);
   return createApp({ fetchImpl }).request(
     `${API}/process`,
-    { method: 'POST', headers: { cookie: `${SESSION_COOKIE}=${token}` } },
+    {
+      method: 'POST',
+      headers: {
+        cookie: `${SESSION_COOKIE}=${token}`,
+        origin: env.APP_ORIGIN,
+      },
+    },
     env,
   );
 }

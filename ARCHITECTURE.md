@@ -20,7 +20,7 @@ bower/
 │   ├── src/
 │   │   ├── index.ts            # routes
 │   │   ├── env.ts              # Env contract + validation
-│   │   ├── crypto.ts, session.ts, store.ts, google.ts, github.ts, push.ts
+│   │   ├── crypto.ts, session.ts, security.ts, store.ts, google.ts, github.ts, push.ts
 │   │   └── template.generated.ts   # vault-template bundled at build time
 │   ├── scripts/                # bundle-template.mjs, gen-vapid.ts
 │   ├── wrangler.toml, .dev.vars.example

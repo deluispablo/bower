@@ -478,6 +478,7 @@ describe('push routes', () => {
   ): Promise<Response> {
     const headers: Record<string, string> = {
       'content-type': 'application/json',
+      origin: env.APP_ORIGIN,
     };
     if (cookie !== null) headers.cookie = cookie;
     return createApp().request(

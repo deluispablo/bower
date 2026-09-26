@@ -21,6 +21,7 @@ import {
   fetchUserInfo,
 } from './google.js';
 import type { FetchLike } from './google.js';
+import { rateLimit, requireSameOrigin } from './security.js';
 import {
   SESSION_TTL_SECONDS,
   clearSessionCookie,
@@ -158,7 +159,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     );
   });
 
-  auth.get('/auth/callback', async (c) => {
+  auth.get('/auth/callback', rateLimit('callback'), async (c) => {
     const env = c.get('env');
     if (c.req.query('error') !== undefined) {
       throw new HttpError(400, 'oauth_state', 'Sign-in was cancelled');
@@ -219,7 +220,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     return c.redirect(env.APP_ORIGIN, 302);
   });
 
-  auth.post('/auth/logout', (c) => {
+  auth.post('/auth/logout', requireSameOrigin, (c) => {
     c.header('Set-Cookie', clearSessionCookie());
     return c.body(null, 204);
   });

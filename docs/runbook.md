@@ -29,6 +29,8 @@ Every variable `api/src/env.ts` reads, secret or var, with where it comes from a
 
 `assertEnv` (`api/src/env.ts`) validates all of the above on every request and fails with `{ error: { code: 'config', message: 'missing <NAME>' } }` (HTTP 500) naming the first missing secret or var without a default, so a bad deploy fails loudly instead of surfacing as a cryptic error later.
 
+`APP_ORIGIN` and `API_ORIGIN` must share a registrable domain (for example `https://app.example.com` and `https://api.example.com`): the session cookie is `SameSite=Lax`, so on the default `*.pages.dev` and `*.workers.dev` hostnames the browser will not send it and nobody can stay signed in. Give the Pages project and the Worker custom domains under one domain you own (see `docs/security.md`). Only `APP_ORIGIN` may call the API from a browser.
+
 ## Runner
 
 The instance repo runs `agent/run.sh <vault_id> <ingest|lint>` in GitHub Actions, via `agent/workflows/ingest.yml` and `agent/workflows/lint.yml` copied into its `.github/workflows/` by the setup script (see `agent/README.md`). Set these in the instance repo under Settings → Secrets and variables → Actions:

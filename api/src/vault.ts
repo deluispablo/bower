@@ -21,6 +21,7 @@ import type { DriveApi, DriveFile } from './drive-api.js';
 import type { AppEnv } from './env.js';
 import { HttpError } from './errors.js';
 import type { FetchLike } from './google.js';
+import { requireSameOrigin } from './security.js';
 import { getUser, putUser } from './store.js';
 import { TEMPLATE_FILES } from './template.generated.js';
 import type { TemplateFile } from './template.generated.js';
@@ -168,7 +169,7 @@ export function createVaultRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     deps.fetchImpl ?? ((input, init) => fetch(input, init));
   const routes = new Hono<AppEnv>();
 
-  routes.post('/vault', requireSession, async (c) => {
+  routes.post('/vault', requireSameOrigin, requireSession, async (c) => {
     const env = c.get('env');
     const user = await getUser(env.BOWER_KV, c.get('userId'));
     if (user === undefined) {

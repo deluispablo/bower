@@ -28,6 +28,8 @@ export const keys = {
   push: (userId: string, subId: string): string => `push:${userId}:${subId}`,
   pushPrefix: (userId: string): string => `push:${userId}:`,
   driveToken: (userId: string): string => `drivetoken:${userId}`,
+  rate: (route: string, ip: string, minute: number): string =>
+    `rate:${route}:${ip}:${minute}`,
 };
 
 /** Daily quota counters live for 48 h, one day longer than they matter for. */
@@ -172,6 +174,32 @@ export async function incrQuota(
   const next = (current === null ? 0 : Number(current)) + 1;
   await kv.put(key, String(next), { expirationTtl: QUOTA_TTL_SECONDS });
   return next;
+}
+
+/** Rate-limit windows expire two minutes after they start: long enough to cover their own minute. */
+const RATE_TTL_SECONDS = 120;
+
+/**
+ * Counts one request against the rate-limit window `rate:<route>:<ip>:<minute>`
+ * and returns the count including it. Once the stored count has reached
+ * `limit`, the window is not written again (the result is `limit + 1`), so
+ * a flood of refused requests costs reads, not KV writes. Read-then-write,
+ * like `incrQuota`: racing requests can undercount. Acceptable for a limit
+ * meant to slow abuse down.
+ */
+export async function hitRateWindow(
+  kv: KVNamespace,
+  route: string,
+  ip: string,
+  minute: number,
+  limit: number,
+): Promise<number> {
+  const key = keys.rate(route, ip, minute);
+  const current = await kv.get(key, 'text');
+  const count = current === null ? 0 : Number(current);
+  if (count >= limit) return count + 1;
+  await kv.put(key, String(count + 1), { expirationTtl: RATE_TTL_SECONDS });
+  return count + 1;
 }
 
 /** Reads `date`'s request count for `userId` without changing it; 0 if none. */
