@@ -17,6 +17,10 @@ describe('decideRedirect', () => {
     expect(decideRedirect('signed-in', true, '/settings')).toBeNull();
   });
 
+  it('sends a signed-in user with a vault away from /login', () => {
+    expect(decideRedirect('signed-in', true, '/login')).toBe('/');
+  });
+
   it('never redirects away from the public /not-invited path', () => {
     expect(decideRedirect('signed-out', false, '/not-invited')).toBeNull();
     expect(decideRedirect('signed-in', false, '/not-invited')).toBeNull();

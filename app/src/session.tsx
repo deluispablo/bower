@@ -46,7 +46,7 @@ export function decideRedirect(
   if (!hasVault) {
     return currentPath === '/onboarding' ? null : '/onboarding';
   }
-  return null;
+  return currentPath === '/login' ? '/' : null;
 }
 
 const SessionContext = createContext<Session | undefined>(undefined);
