@@ -66,6 +66,7 @@ User (browser) ◀── 1 h Drive access token ── Worker
 User (browser) ── POST /vault {mode: create|select} ──▶ Worker ── copies vault-template/ (or fills gaps in an existing folder) ──▶ Google Drive
 User (browser) ── read vault / write 0-Inbox, Clippings ──▶ Google Drive
 User (browser) ── POST /process ──▶ Worker ── repository_dispatch {vault_id} ──▶ Instance repo (Actions)
+Runner (weekly lint) ── GET /runner/vaults (Bearer BOWER_API_KEY) ──▶ Worker ── every vault id
 Runner ── GET /runner/vaults/:id (Bearer BOWER_API_KEY) ──▶ Worker ── 1 h Drive token, folder id, maxTurns, apiKey?
 Runner ── rclone sync ↓, claude -p, rclone copy ↑, rclone sync 0-Inbox/Clippings ↑ ──▶ Google Drive
 Runner ── POST /runner/vaults/:id/status ──▶ Worker ── web push ──▶ User's devices
@@ -79,7 +80,7 @@ User (browser) ── DELETE /me ──▶ Worker ── best-effort revoke at G
 - **Push**: the runner's status report triggers a web-push message straight from the Worker to the browser's push subscription; no third-party notification service.
 - **Delete account**: `DELETE /me` revokes the Google grant (best effort — a user can always leave even if Google does not cooperate), deletes every KV key for that user (profile, quota counters, cached Drive token, push subscriptions), and clears the cookie. The Drive folder and its content are never touched; the user keeps their notes.
 
-Trigger model: **button only**. The app calls `/process` after Add and Tell Bower; the user presses Process for anything that arrived through Drive, Obsidian or another path. No cron, no change watching, no state about "what is new" outside the vault itself.
+Trigger model: **button only**. The app calls `/process` after Add and Tell Bower; the user presses Process for anything that arrived through Drive, Obsidian or another path. No cron for processing, no change watching, no state about "what is new" outside the vault itself. The one scheduled run is the weekly health check (`lint.yml`, Sundays): it checks the notes, makes only safe mechanical fixes and writes `Lint Report.md`.
 
 ## Credentials
 
