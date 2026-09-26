@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 
-import { ApiError, startProcess } from '../api.js';
 import { createTextFile } from '../drive.js';
+import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import {
   addSent,
@@ -32,7 +32,6 @@ const EXAMPLES: Example[] = [
 ];
 
 const SENT_MESSAGE = 'Sent. Bower is on it.';
-const QUOTA_MESSAGE = 'Daily limit reached, Bower will run it tomorrow.';
 
 /** The first line of `text`, shortened if it runs long. */
 function firstLine(text: string): string {
@@ -54,6 +53,7 @@ function formatSentTime(iso: string): string {
 
 export function Tell() {
   const { me } = useSession();
+  const { process } = useRun();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
 
   const [text, setText] = useState('');
@@ -87,24 +87,14 @@ export function Tell() {
     }
 
     // The note is safely in the inbox at this point, so it counts as sent
-    // whatever happens next: a quota hit is expected and shown to the user;
-    // any other /process failure just means the next Process press (or a
-    // later run) picks the note up, so it is logged rather than blocking.
-    let message = SENT_MESSAGE;
-    try {
-      await startProcess();
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'quota') {
-        message = QUOTA_MESSAGE;
-      } else {
-        console.error(err);
-      }
-    }
+    // whatever the run does next (queued, quota, failed…): the header
+    // button is where that status shows now.
+    void process();
 
     setSent(addSent({ name, text: trimmed, sentAt: now.toISOString() }));
     setText('');
     setTitle('');
-    setStatus(message);
+    setStatus(SENT_MESSAGE);
     setSending(false);
   }
 

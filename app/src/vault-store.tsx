@@ -6,9 +6,8 @@
  * unchanged vault never flashes.
  *
  * Plain Preact context + hook, same shape as `session.tsx`. `VaultProvider`
- * is mounted by `routes/home.tsx` for now, since it is the only consumer;
- * once #31 adds real navigation it likely moves up to `app.tsx` so every
- * route shares one instance.
+ * is mounted in `app.tsx`, around the router, so every route (and the
+ * `RunProvider` it wraps, #37) shares one instance.
  */
 
 import { createContext } from 'preact';
@@ -232,10 +231,8 @@ export function useVault(): Vault {
 
 /**
  * Call once a run reports `done` (#37): the vault content may have changed
- * underneath, so drop the cached index. A mounted `VaultProvider` picks the
- * change up next time it loads (mount or `refresh()`); nudging an already
- * mounted one to refresh immediately is left for whoever wires up that live
- * status update.
+ * underneath, so drop the cached index. `run-store.tsx` calls this and then
+ * `refresh()` from `useVault()` to update the mounted provider right away.
  */
 export async function invalidateAfterRun(): Promise<void> {
   await invalidateIndexCache();

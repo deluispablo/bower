@@ -6,6 +6,7 @@ import {
   createVault,
   deleteAccount,
   getMe,
+  getStatus,
   logout,
   selectVault,
   updateSettings,
@@ -88,6 +89,74 @@ describe('apiFetch', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(apiFetch('/health')).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('carries retryAfter from a 429 quota body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(429, {
+        error: { code: 'quota', message: 'Daily limit reached' },
+        retryAfter: 12345,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      apiFetch('/process', { method: 'POST' }),
+    ).rejects.toMatchObject({ code: 'quota', retryAfter: 12345 });
+  });
+
+  it('leaves retryAfter undefined when the body has none', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(409, {
+        error: { code: 'no_vault', message: 'No folder yet' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      apiFetch('/process', { method: 'POST' }),
+    ).rejects.toMatchObject({ code: 'no_vault', retryAfter: undefined });
+  });
+});
+
+describe('getStatus', () => {
+  it('parses { run, stale }', async () => {
+    const run = {
+      state: 'running' as const,
+      requestedAt: '2026-01-01T00:00:00.000Z',
+      startedAt: '2026-01-01T00:00:05.000Z',
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { run, stale: false }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getStatus()).resolves.toEqual({ run, stale: false });
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toMatch(/\/status$/);
+  });
+
+  it('parses a null run', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { run: null, stale: false }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getStatus()).resolves.toEqual({ run: null, stale: false });
+  });
+
+  it('rejects with the unauthenticated ApiError', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(401, {
+        error: { code: 'unauthenticated', message: 'Not signed in' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getStatus()).rejects.toMatchObject({
+      status: 401,
+      code: 'unauthenticated',
+    });
   });
 });
 

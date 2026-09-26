@@ -11,12 +11,20 @@ const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
+  /** 429 `quota` only: seconds until the daily limit resets. */
+  readonly retryAfter?: number;
 
-  constructor(status: number, code: string, message: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    retryAfter?: number,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -35,6 +43,15 @@ function isApiErrorBody(value: unknown): value is ApiErrorBody {
     typeof (err as { code: unknown }).code === 'string' &&
     typeof (err as { message: unknown }).message === 'string'
   );
+}
+
+/** The 429 `quota` body also carries `retryAfter` alongside `error`. */
+function extractRetryAfter(value: unknown): number | undefined {
+  if (typeof value !== 'object' || value === null || !('retryAfter' in value)) {
+    return undefined;
+  }
+  const retryAfter = value.retryAfter;
+  return typeof retryAfter === 'number' ? retryAfter : undefined;
 }
 
 export async function apiFetch<T>(
@@ -72,7 +89,12 @@ export async function apiFetch<T>(
 
   if (!response.ok) {
     if (isApiErrorBody(body)) {
-      throw new ApiError(response.status, body.error.code, body.error.message);
+      throw new ApiError(
+        response.status,
+        body.error.code,
+        body.error.message,
+        extractRetryAfter(body),
+      );
     }
     throw new ApiError(
       response.status,
@@ -189,4 +211,18 @@ export interface Run {
  */
 export function startProcess(): Promise<{ run: Run }> {
   return apiFetch<{ run: Run }>('/process', { method: 'POST' });
+}
+
+export interface StatusResponse {
+  run: Run | null;
+  stale: boolean;
+}
+
+/**
+ * `GET /status`: the signed-in user's current run, with staleness. A
+ * `stale: true` run has already been rewritten server-side to `failed`
+ * with `error: "stale"`.
+ */
+export function getStatus(): Promise<StatusResponse> {
+  return apiFetch<StatusResponse>('/status');
 }

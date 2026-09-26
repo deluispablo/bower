@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'preact/hooks';
 
-import { formatAgo, useVault, VaultProvider } from '../vault-store.js';
+import { formatAgo, useVault } from '../vault-store.js';
 
 const MINUTE_MS = 60_000;
 
-function HomeList() {
+export function Home() {
   const { index, fetchedAt, status, refresh } = useVault();
   const [now, setNow] = useState(() => Date.now());
 
@@ -53,13 +53,5 @@ function HomeList() {
         </ul>
       )}
     </section>
-  );
-}
-
-export function Home() {
-  return (
-    <VaultProvider>
-      <HomeList />
-    </VaultProvider>
   );
 }

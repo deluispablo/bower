@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks';
 
 import { loginUrl } from '../api.js';
 import { useSession } from '../session.js';
+import { ProcessButton } from './process-button.js';
 import { Search } from './search.js';
 
 const NAV_LINKS = [
@@ -27,7 +28,9 @@ export function Layout({ children }: LayoutProps) {
           <img src="/logo.svg" alt="" width="32" height="32" />
         </a>
         <Search />
-        <div class="topbar-slot" data-slot="process" />
+        <div class="topbar-slot" data-slot="process">
+          <ProcessButton />
+        </div>
         <div class="menu">
           <button
             type="button"
