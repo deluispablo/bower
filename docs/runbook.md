@@ -4,11 +4,42 @@ Everything an operator needs to deploy and run one Bower instance, written for s
 
 Two repositories are involved throughout (see `ARCHITECTURE.md`): **this repository** (the public template, cloned once) and **the instance repo** (a private repo of the operator's own, created from this one, that runs the agent). Commands below say which repo they run against.
 
-## Fast path
+## Fast path: `scripts/deploy.sh`
 
-`scripts/deploy.sh` and `scripts/new-instance.sh` automate most of what follows: `deploy.sh` checks prerequisites (Node, pnpm, `wrangler login`, `gh` login), creates the KV namespace, deploys the Worker and the Pages project, and prints the Google redirect URI to paste in; `new-instance.sh` creates the private instance repo from the template and sets its secrets and variables from prompts. Both are safe to re-run: the first run creates, later runs update. Use them for a normal deploy.
+`scripts/deploy.sh` takes you from a clone to a running instance and asks only for what it cannot work out; a few things only a browser can do stay manual, and it tells you which. Before running it, do sections 1 and 2 below (accounts, tools, the Google OAuth client) and create the fine-grained `GITHUB_TOKEN` (section 4; the token can only be scoped to a repo that exists, so if you have no instance repo yet, run `bash scripts/new-instance.sh OWNER/bower-home` first). Sections 3 to 5 are the manual, step-by-step reference for what the script does.
 
-The rest of this section is the manual, step-by-step reference: what those scripts do under the hood, what to fall back to when a script doesn't fit your setup, and what the troubleshooting table below assumes you understand.
+### Run it
+
+```bash
+bash scripts/deploy.sh
+```
+
+In order, it:
+
+1. Checks the prerequisites: Node 22+, pnpm, git, openssl, gh; runs `pnpm install`; checks `wrangler whoami` and `gh auth status`. Anything missing stops it before it changes anything.
+2. Reads `api/wrangler.local.toml`, or, the first time, creates it from `api/wrangler.toml` by asking for your API domain, app domain, instance repo (`owner/name`) and contact email. This file is git-ignored: your real domains, repo and KV id never reach the tracked `api/wrangler.toml`, which keeps its placeholders. It also gets the Worker's custom domain, at the top level: `workers_dev = false` and `routes = [{ pattern = "api.example.com", custom_domain = true }]`. Every `wrangler` call for the Worker passes `-c wrangler.local.toml`. To change a value later, edit that file and rerun.
+3. Creates or updates your private instance repo with `scripts/new-instance.sh` (see "The instance repo" below). The first time, it asks for the runner's Claude credential.
+4. Finds or creates the `BOWER_KV` namespace, writes its id into `api/wrangler.local.toml`, and deploys the Worker on its custom domain.
+5. Sets the Worker's secrets (see "Every variable the Worker reads" below). It generates `SESSION_SECRET`, `TOKEN_ENC_KEY`, `BOWER_API_KEY`, `ADMIN_KEY` and the VAPID pair itself and pipes them straight into `wrangler secret put`, and asks (input hidden) for `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GITHUB_TOKEN`; an empty answer is refused. `BOWER_API_KEY` is set in the Worker and in the instance repo in the same run. `ADMIN_KEY` is written to `api/.prod.secrets` (git-ignored, readable only by you): that file is the only place it is kept.
+6. Builds the app with `VITE_API_URL` set to your `API_ORIGIN` and deploys it to Cloudflare Pages, creating the Pages project (`bower-app`, or whatever `PAGES_PROJECT` says) the first time.
+7. Prints what is left to do by hand, with your real values filled in.
+
+No secret value is ever printed to the terminal.
+
+### Left to do by hand (once)
+
+1. **App custom domain.** Wrangler cannot set it. Cloudflare dashboard → Workers & Pages → your Pages project (`bower-app`) → Custom domains → Set up a custom domain → add `app.example.com` (your real app domain).
+2. **Google OAuth client.** Check the authorized redirect URI (`https://api.example.com/auth/callback`) and the privacy policy URL (`https://app.example.com/privacy`) the script printed.
+3. **Smoke check:** `curl https://api.example.com/health` (your real `API_ORIGIN`) should answer 200.
+4. **Invite the first user:** see section 5 below; `ADMIN_KEY` is in `api/.prod.secrets`.
+
+### Rerunning and updating
+
+The script is idempotent. After `git pull` here, rerun `bash scripts/deploy.sh`: it redeploys the Worker and the app, re-copies the workflows and agent files into the instance repo (pushing only if they changed), reuses the KV namespace and the Pages project, and skips every secret that is already set.
+
+`bash scripts/deploy.sh --rotate` sets every secret again, in the Worker and in the instance repo. It asks for the Google client id and secret, the GitHub token and the Claude credential again, and generates new values for the rest, so: everyone is signed out and has to sign in with Google again (new `SESSION_SECRET` and `TOKEN_ENC_KEY`), every device has to allow notifications again (new VAPID pair), and `api/.prod.secrets` gets the new `ADMIN_KEY`.
+
+To update only the Worker: `bash scripts/deploy-api.sh` (or `pnpm -C api deploy`), and `bash scripts/deploy-api.sh secrets [--rotate]` (or `pnpm -C api secrets`) for its secrets. They read and create `api/wrangler.local.toml` the same way; `secrets` needs `gh` and the instance repo, because `BOWER_API_KEY` goes to both at once.
 
 ## 1. Accounts you need
 
@@ -38,8 +69,6 @@ routes = [{ pattern = "api.example.com", custom_domain = true }]
 ```
 
 `workers_dev = false` turns off the default `*.workers.dev` URL; `routes` with `custom_domain = true` attaches your real domain without a dashboard step. Every `wrangler` command below takes `-c wrangler.local.toml` so it reads this file instead of the tracked one.
-
-`scripts/deploy-api.sh` (`pnpm -C api deploy` / `pnpm -C api secrets`) does not yet take a `-c` flag: its `deploy` subcommand reads and refuses to deploy `api/wrangler.toml` while it still has placeholder values, so it cannot be used together with `wrangler.local.toml` as written today. Until that's fixed (or `scripts/deploy.sh` from a parallel change lands), use the manual `wrangler ... -c wrangler.local.toml` commands below instead of `pnpm -C api deploy`.
 
 ### Cloudflare account and KV
 
@@ -98,10 +127,10 @@ routes = [{ pattern = "api.example.com", custom_domain = true }]
 
 The instance repo is a private repo of the operator's own that only holds the agent's workflows and its own secrets — never this repo's code, never a user's vault content (see "Two repositories per deployment" in `ARCHITECTURE.md`).
 
-Create it either way:
+There are two ways to get one:
 
-- **'Use this template'**, on this repository's GitHub page (button next to Code), which creates a private copy; then copy `agent/run.sh`, `agent/prompts/` and `agent/workflows/*.yml` into its `.github/workflows/` (see `agent/README.md`) if the template button didn't already place them there for you.
-- Or `scripts/new-instance.sh` (parallel change, see Fast path above), which does the same via `gh` and also prompts for the secrets and variables below.
+- **`scripts/new-instance.sh` (recommended).** `scripts/deploy.sh` runs it for you; on its own it is `bash scripts/new-instance.sh [OWNER/NAME] [--rotate]`. It creates `OWNER/NAME` as a private repo with `gh repo create --private` (or updates it if it exists), copies `agent/workflows/*.yml` into `.github/workflows/` and `agent/run.sh` and `agent/prompts/` into `agent/`, commits and pushes when something changed, asks for the Claude credential (skipped when one is set, unless `--rotate`) and sets `BOWER_API_URL`. The repo holds only what the runner needs.
+- **"Use this template"** on this repository's GitHub page creates a private copy of the whole repository instead: code, docs, this repo's CI. The workflows still have to be in its `.github/workflows/` and the secrets set, so run `bash scripts/new-instance.sh OWNER/NAME` against it afterwards (it only adds and updates files, never removes any), or let `scripts/deploy.sh` do it with that repo as your instance repo. Marking this repository as a template is a GitHub setting (Settings → General → Template repository) that the maintainer turns on; until then, the button is not shown.
 
 Either way, set these under the instance repo's **Settings → Secrets and variables → Actions**:
 
