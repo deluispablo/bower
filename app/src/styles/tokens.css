@@ -1,0 +1,98 @@
+/*
+ * Bower design tokens. Source of truth: docs/brand.md (keep both in sync).
+ * Light is the default; dark follows the system unless the root element
+ * carries data-theme="light" or data-theme="dark".
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Brand (theme independent) */
+  --bower-teal: #2dd4bf;
+  --bower-navy: #0b1220;
+  --bower-amber: #fbbf24;
+
+  /* Colour roles: light theme */
+  --color-bg: #ffffff;
+  --color-surface: #f1f5f9;
+  --color-text: #0b1220;
+  --color-text-muted: #475569;
+  --color-link: #0f766e;
+  --color-brand: var(--bower-teal);
+  --color-on-brand: #0b1220;
+  --color-accent: var(--bower-amber);
+  --color-on-accent: #0b1220;
+  --color-border: #e2e8f0;
+  --color-border-strong: #64748b;
+  --color-focus: #0f766e;
+  --color-danger: #b91c1c;
+  --color-success: #15803d;
+
+  /* Typography */
+  --font-sans: Inter, "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;   /* 12px */
+  --text-sm: 0.875rem;  /* 14px */
+  --text-base: 1rem;    /* 16px, body */
+  --text-lg: 1.25rem;   /* 20px */
+  --text-xl: 1.5rem;    /* 24px */
+  --text-2xl: 2rem;     /* 32px */
+  --text-3xl: 2.5rem;   /* 40px */
+  --leading-body: 1.5;
+  --leading-heading: 1.2;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+
+  /* Spacing: 4px grid */
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-12: 3rem;     /* 48px */
+  --space-16: 4rem;     /* 64px */
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px rgb(11 18 32 / 0.08);
+  --shadow-md: 0 4px 16px rgb(11 18 32 / 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-bg: #0b1220;
+    --color-surface: #162033;
+    --color-text: #f1f5f9;
+    --color-text-muted: #94a3b8;
+    --color-link: #2dd4bf;
+    --color-border: #263349;
+    --color-border-strong: #64748b;
+    --color-focus: #2dd4bf;
+    --color-danger: #f87171;
+    --color-success: #4ade80;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0b1220;
+  --color-surface: #162033;
+  --color-text: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-link: #2dd4bf;
+  --color-border: #263349;
+  --color-border-strong: #64748b;
+  --color-focus: #2dd4bf;
+  --color-danger: #f87171;
+  --color-success: #4ade80;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
+}
