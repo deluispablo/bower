@@ -4,7 +4,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../src/env.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
-import { STALE_RUN_MS, isActiveRun } from '../src/process.js';
+import {
+  QUEUED_STALE_MS,
+  RUNNING_STALE_MS,
+  isActiveRun,
+  markStale,
+  runStaleness,
+} from '../src/process.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { getQuota, getRun, keys, putRun, putUser } from '../src/store.js';
 import type { Run, User } from '../src/types.js';
@@ -104,66 +110,128 @@ beforeEach(async () => {
   await Promise.all(listed.keys.map((entry) => kv.delete(entry.name)));
 });
 
-describe('isActiveRun', () => {
+describe('runStaleness', () => {
   const now = new Date('2026-06-01T12:00:00.000Z');
   const minutesAgo = (minutes: number): string =>
     new Date(now.getTime() - minutes * 60 * 1000).toISOString();
 
-  it('is active for a fresh queued run', () => {
+  it('queued is active at 24 minutes, stale at 26', () => {
     expect(
-      isActiveRun({ state: 'queued', requestedAt: minutesAgo(1) }, now),
-    ).toBe(true);
+      runStaleness({ state: 'queued', requestedAt: minutesAgo(24) }, now),
+    ).toEqual({ active: true, stale: false });
+    expect(
+      runStaleness({ state: 'queued', requestedAt: minutesAgo(26) }, now),
+    ).toEqual({ active: false, stale: true });
   });
 
-  it('is active for a running run started recently, even if requested long ago', () => {
+  it('running is active at 29 minutes from startedAt, stale at 31', () => {
     expect(
-      isActiveRun(
+      runStaleness(
         {
           state: 'running',
           requestedAt: minutesAgo(40),
-          startedAt: minutesAgo(5),
+          startedAt: minutesAgo(29),
         },
         now,
       ),
-    ).toBe(true);
-  });
-
-  it('is not active once done or failed', () => {
+    ).toEqual({ active: true, stale: false });
     expect(
-      isActiveRun({ state: 'done', requestedAt: minutesAgo(1) }, now),
-    ).toBe(false);
-    expect(
-      isActiveRun({ state: 'failed', requestedAt: minutesAgo(1) }, now),
-    ).toBe(false);
-  });
-
-  it('is not active when stale (25 minutes or more without news)', () => {
-    expect(
-      isActiveRun({ state: 'queued', requestedAt: minutesAgo(30) }, now),
-    ).toBe(false);
-    expect(
-      isActiveRun(
+      runStaleness(
         {
           state: 'running',
           requestedAt: minutesAgo(40),
-          startedAt: minutesAgo(26),
+          startedAt: minutesAgo(31),
         },
         now,
       ),
-    ).toBe(false);
+    ).toEqual({ active: false, stale: true });
+  });
+
+  it('running with no startedAt falls back to requestedAt', () => {
     expect(
-      isActiveRun(
+      runStaleness({ state: 'running', requestedAt: minutesAgo(24) }, now),
+    ).toEqual({ active: true, stale: false });
+    expect(
+      runStaleness({ state: 'running', requestedAt: minutesAgo(31) }, now),
+    ).toEqual({ active: false, stale: true });
+  });
+
+  it('done and failed are never active or stale, however old', () => {
+    expect(
+      runStaleness({ state: 'done', requestedAt: minutesAgo(1000) }, now),
+    ).toEqual({ active: false, stale: false });
+    expect(
+      runStaleness({ state: 'failed', requestedAt: minutesAgo(1000) }, now),
+    ).toEqual({ active: false, stale: false });
+  });
+
+  it('is neither active nor stale when there is no run', () => {
+    expect(runStaleness(undefined, now)).toEqual({
+      active: false,
+      stale: false,
+    });
+  });
+
+  it('is stale exactly at the limit, for both states', () => {
+    expect(
+      runStaleness(
         {
           state: 'queued',
-          requestedAt: new Date(now.getTime() - STALE_RUN_MS).toISOString(),
+          requestedAt: new Date(now.getTime() - QUEUED_STALE_MS).toISOString(),
         },
         now,
       ),
-    ).toBe(false);
+    ).toEqual({ active: false, stale: true });
+    expect(
+      runStaleness(
+        {
+          state: 'running',
+          requestedAt: minutesAgo(60),
+          startedAt: new Date(now.getTime() - RUNNING_STALE_MS).toISOString(),
+        },
+        now,
+      ),
+    ).toEqual({ active: false, stale: true });
+  });
+});
+
+describe('isActiveRun', () => {
+  const now = new Date('2026-06-01T12:00:00.000Z');
+
+  it('agrees with runStaleness(...).active', () => {
+    const fresh: Run = { state: 'queued', requestedAt: now.toISOString() };
+    const stale: Run = {
+      state: 'queued',
+      requestedAt: new Date(now.getTime() - QUEUED_STALE_MS).toISOString(),
+    };
+    expect(isActiveRun(fresh, now)).toBe(runStaleness(fresh, now).active);
+    expect(isActiveRun(stale, now)).toBe(runStaleness(stale, now).active);
+    expect(isActiveRun(stale, now)).toBe(false);
   });
 
   it('is not active when there is no run', () => {
     expect(isActiveRun(undefined, now)).toBe(false);
+  });
+});
+
+describe('markStale', () => {
+  it('marks failed with error stale, sets finishedAt, keeps the rest', () => {
+    const now = new Date('2026-06-01T12:00:00.000Z');
+    const run: Run = {
+      state: 'running',
+      requestedAt: '2026-06-01T11:00:00.000Z',
+      startedAt: '2026-06-01T11:05:00.000Z',
+      runId: 'r1',
+    };
+
+    expect(markStale(run, now)).toEqual({
+      state: 'failed',
+      requestedAt: run.requestedAt,
+      startedAt: run.startedAt,
+      runId: 'r1',
+      error: 'stale',
+      finishedAt: now.toISOString(),
+    });
   });
 });
 
@@ -232,6 +300,31 @@ describe('POST /process', () => {
     expect(run.state).toBe('queued');
     expect(github.calls).toHaveLength(1);
     expect(await getRun(kv, USER_ID)).toEqual(run);
+  });
+
+  it('records the stale run as failed before dispatching, even if the new dispatch fails', async () => {
+    await seedUser();
+    const stale: Run = {
+      state: 'running',
+      requestedAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+      startedAt: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+      runId: 'stale-run-id',
+    };
+    await putRun(kv, USER_ID, stale);
+    const github = githubStub(500);
+
+    const response = await postProcess(github.fetchImpl, await sessionCookie());
+
+    expect(response.status).toBe(502);
+    const stored = await getRun(kv, USER_ID);
+    expect(stored).toMatchObject({
+      state: 'failed',
+      error: 'stale',
+      runId: 'stale-run-id',
+      requestedAt: stale.requestedAt,
+      startedAt: stale.startedAt,
+    });
+    expect(Date.parse(stored?.finishedAt ?? '')).not.toBeNaN();
   });
 
   it('answers 429 quota with retryAfter once the daily limit is reached', async () => {

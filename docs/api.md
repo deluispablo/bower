@@ -99,7 +99,7 @@ The Worker sends a `repository_dispatch` to the operator's instance repo (`GITHU
 In order:
 
 1. No user or no vault: 401 or 409, nothing else happens.
-2. If the stored run is `queued` or `running` and not stale, it is returned as is: no new dispatch, nothing counted. A run is stale when its `startedAt` (or `requestedAt` before it started) is 25 minutes old or more; a stale run no longer blocks and is replaced below.
+2. If the stored run is `queued` or `running` and not stale, it is returned as is: no new dispatch, nothing counted. See the staleness table below for when a run is stale. A stale run does not block: it is stored as `failed` with `error: "stale"` first (so it is never silently replaced), then a new run is dispatched below.
 3. If today's count (UTC date) has reached `DAILY_RUN_LIMIT`, the answer is 429.
 4. The dispatch is sent. If GitHub does not answer 204, the answer is 502 and nothing is stored or counted.
 5. A new run `{ state: "queued", requestedAt, runId }` is stored under `run:<id>`, today's count goes up by one, and the run is returned.
@@ -124,7 +124,34 @@ The daily count lives in `quota:<id>:<yyyy-mm-dd>`, so each UTC day starts from 
 | `done` | `POST /runner/vaults/:id/status` | The runner finished; `finishedAt`, `summary` and `processed` are set |
 | `failed` | `POST /runner/vaults/:id/status` | The runner gave up; `finishedAt` and `error` are set |
 
-A `queued` or `running` run with no news for 25 minutes stops blocking `POST /process` (`isActiveRun` in `api/src/process.ts`). A `done` or `failed` run never blocks: the next `POST /process` starts a new one.
+### Staleness
+
+A `queued` or `running` run with no news for long enough is stale: the runner never started, or died mid-run. A stale run no longer blocks `POST /process`, and both `POST /process` and `GET /status` mark it `failed` with `error: "stale"` before moving on, so it is recorded rather than silently dropped. A `done` or `failed` run is never stale: the next `POST /process` starts a new one regardless of age.
+
+| State | Measured from | Stale after |
+| --- | --- | --- |
+| `queued` | `requestedAt` | 25 minutes |
+| `running` | `startedAt` (`requestedAt` if somehow absent) | 30 minutes |
+| `done`, `failed` | — | never |
+
+One function, `runStaleness` in `api/src/process.ts`, is the single source of truth for this table; `isActiveRun` (used by `POST /process`) and `GET /status` both build on it, so they always agree.
+
+## `GET /status`
+
+The signed-in user's current run, with staleness. Requires the session cookie; no request body. The app polls this to show idle / queued / running / done / failed truthfully, including a run that will never report back.
+
+In order:
+
+1. No valid session: 401 `unauthenticated`.
+2. No stored run: `{ "run": null, "stale": false }`.
+3. The stored run is stale (see the table above): it is stored as `failed` with `error: "stale"` and `finishedAt` set to now, and `{ "run": <that failed run>, "stale": true }` is returned.
+4. Otherwise the stored run is returned as is: `{ "run": Run, "stale": false }`.
+
+Response: `{ "run": Run | null, "stale": boolean }`, status 200.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 401 | `unauthenticated` | No valid session cookie, or the user no longer exists |
 
 ## Runner endpoints
 

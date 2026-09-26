@@ -10,6 +10,7 @@ import { createErrorHandler } from './errors.js';
 import { createProcessRoutes } from './process.js';
 import { createRunnerRoutes } from './runner.js';
 import { createSettingsRoutes } from './settings.js';
+import { createStatusRoutes } from './status.js';
 import { createVaultRoutes } from './vault.js';
 
 /**
@@ -49,6 +50,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.route('/', createAdminRoutes(deps));
   app.route('/', createProcessRoutes(deps));
   app.route('/', createRunnerRoutes(deps));
+  app.route('/', createStatusRoutes());
 
   return app;
 }
