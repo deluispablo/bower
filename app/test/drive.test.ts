@@ -12,9 +12,12 @@ import {
   getText,
   getToken,
   invalidateToken,
-  isAppendProtected,
+  isProtectedNote,
   listVault,
   MULTIPART_MAX_BYTES,
+  readNoteForEdit,
+  SaveError,
+  saveNoteText,
   searchFullText,
   upload,
 } from '../src/drive.js';
@@ -643,7 +646,7 @@ function fakeNote(
 
 const TARGET = { id: 'FILE_ID', name: 'Ideas.md', mimeType: 'text/markdown' };
 
-describe('isAppendProtected', () => {
+describe('isProtectedNote', () => {
   it('guards the notes the agent maintains, whatever the case', () => {
     for (const name of [
       'CLAUDE.md',
@@ -652,13 +655,13 @@ describe('isAppendProtected', () => {
       'Log.MD',
       '_Projects.md',
     ]) {
-      expect(isAppendProtected(name)).toBe(true);
+      expect(isProtectedNote(name)).toBe(true);
     }
   });
 
   it('lets ordinary notes through', () => {
     for (const name of ['Ideas.md', 'my_index.md', 'catalog.md', 'log.txt']) {
-      expect(isAppendProtected(name)).toBe(false);
+      expect(isProtectedNote(name)).toBe(false);
     }
   });
 });
@@ -822,5 +825,144 @@ describe('appendToFile', () => {
     expect(error).toBeInstanceOf(DriveError);
     expect((error as DriveError).status).toBe(500);
     expect(drive.patches).toHaveLength(1);
+  });
+});
+
+const PATCH_REQUEST =
+  'PATCH /upload/drive/v3/files/FILE_ID?uploadType=media&fields=id,name,mimeType,parents,modifiedTime,size,webViewLink';
+
+describe('readNoteForEdit', () => {
+  it('reads modifiedTime before the text, as the save baseline', async () => {
+    const note: FakeNote = {
+      text: '# Ideas\n',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note);
+    stubFetch(drive.handler);
+
+    const opened = await readNoteForEdit('FILE_ID');
+
+    expect(opened).toEqual({
+      text: '# Ideas\n',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    });
+    expect(drive.requests).toEqual([
+      'GET /drive/v3/files/FILE_ID?fields=modifiedTime',
+      'GET /drive/v3/files/FILE_ID?alt=media',
+    ]);
+  });
+});
+
+describe('saveNoteText', () => {
+  it('checks modifiedTime is unchanged, then PATCHes the whole text', async () => {
+    const note: FakeNote = {
+      text: 'Old.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note);
+    stubFetch(drive.handler);
+
+    const result = await saveNoteText(TARGET, 'New.\n', {
+      baseModifiedTime: '2026-01-01T00:00:01.000Z',
+    });
+
+    expect(result.text).toBe('New.\n');
+    expect(result.file.modifiedTime).toBe('2026-01-01T00:00:02.000Z');
+    expect(note.text).toBe('New.\n');
+    expect(drive.requests).toEqual([
+      'GET /drive/v3/files/FILE_ID?fields=modifiedTime',
+      PATCH_REQUEST,
+    ]);
+    expect(drive.patches).toEqual([
+      { body: 'New.\n', contentType: 'text/markdown' },
+    ]);
+  });
+
+  it('reports a conflict without writing when the note changed since opening', async () => {
+    const note: FakeNote = {
+      text: 'Changed elsewhere.',
+      modifiedTime: '2026-01-01T00:00:09.000Z',
+    };
+    const drive = fakeNote(note);
+    stubFetch(drive.handler);
+
+    const error = await saveNoteText(TARGET, 'Mine.', {
+      baseModifiedTime: '2026-01-01T00:00:01.000Z',
+    }).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(SaveError);
+    expect((error as SaveError).code).toBe('conflict');
+    expect((error as SaveError).currentModifiedTime).toBe(
+      '2026-01-01T00:00:09.000Z',
+    );
+    expect(drive.patches).toHaveLength(0);
+    expect(note.text).toBe('Changed elsewhere.');
+  });
+
+  it('treats an unknown baseline as a conflict', async () => {
+    const note: FakeNote = {
+      text: 'Old.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note);
+    stubFetch(drive.handler);
+
+    const error = await saveNoteText(TARGET, 'Mine.', {
+      baseModifiedTime: null,
+    }).catch((err: unknown) => err);
+
+    expect((error as SaveError).code).toBe('conflict');
+    expect(drive.patches).toHaveLength(0);
+  });
+
+  it('maps a 412 from Drive to a conflict', async () => {
+    const note: FakeNote = {
+      text: 'Old.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note, { patchStatuses: [412] });
+    stubFetch(drive.handler);
+
+    const error = await saveNoteText(TARGET, 'Mine.', {
+      baseModifiedTime: '2026-01-01T00:00:01.000Z',
+    }).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(SaveError);
+    expect((error as SaveError).code).toBe('conflict');
+    expect((error as SaveError).currentModifiedTime).toBeNull();
+    expect(drive.patches).toHaveLength(1);
+    expect(note.text).toBe('Old.');
+  });
+
+  it('overwrites without checking when forced ("keep mine")', async () => {
+    const note: FakeNote = {
+      text: 'Changed elsewhere.',
+      modifiedTime: '2026-01-01T00:00:09.000Z',
+    };
+    const drive = fakeNote(note);
+    stubFetch(drive.handler);
+
+    const result = await saveNoteText(TARGET, 'Mine.', {
+      baseModifiedTime: '2026-01-01T00:00:01.000Z',
+      force: true,
+    });
+
+    expect(result.text).toBe('Mine.');
+    expect(drive.requests).toEqual([PATCH_REQUEST]);
+    expect(note.text).toBe('Mine.');
+  });
+
+  it('rejects the notes the agent maintains without any request', async () => {
+    const { fetchMock } = stubFetch(() => jsonResponse(500, {}));
+
+    for (const name of ['CLAUDE.md', 'index.md', 'log.md', '_Projects.md']) {
+      const error = await saveNoteText({ id: 'FILE_ID', name }, 'Hi.', {
+        baseModifiedTime: '2026-01-01T00:00:01.000Z',
+        force: true,
+      }).catch((err: unknown) => err);
+      expect(error).toBeInstanceOf(SaveError);
+      expect((error as SaveError).code).toBe('protected');
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

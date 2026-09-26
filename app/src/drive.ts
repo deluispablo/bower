@@ -3,8 +3,8 @@
  * the short-lived access token from the Worker's `GET /drive/token`; this
  * module keeps that token in memory, retries once with a fresh token when
  * Drive answers 401, and wraps the few endpoints the app needs: recursive
- * listing of the Bower folder, file download, uploads, and appending to a
- * note.
+ * listing of the Bower folder, file download, uploads, appending to a note
+ * and saving an edited note.
  *
  * Tokens are never logged. Failures surface as `DriveError` (Drive itself)
  * or `ApiError` (the Worker, including code `reauth` when Google access has
@@ -566,10 +566,11 @@ export async function updateFileText(
 const PROTECTED_NOTES = new Set(['claude.md', 'index.md', 'log.md']);
 
 /**
- * Whether the app must not append to a note named `name`: `CLAUDE.md`,
- * `index.md`, `log.md` and `_*.md` folder notes belong to the agent.
+ * Whether the app must not write to a note named `name` (append or edit):
+ * `CLAUDE.md`, `index.md`, `log.md` and `_*.md` folder notes belong to the
+ * agent.
  */
-export function isAppendProtected(name: string): boolean {
+export function isProtectedNote(name: string): boolean {
   const lower = name.toLowerCase();
   return (
     PROTECTED_NOTES.has(lower) ||
@@ -603,11 +604,14 @@ export function appendedText(current: string, addition: string): string {
   return body === '' ? `${addition}\n` : `${body}\n\n${addition}\n`;
 }
 
-export interface AppendTarget {
+/** The note a write goes to: enough to guard it and keep its content type. */
+export interface NoteTarget {
   id: string;
   name: string;
   mimeType?: string;
 }
+
+export type AppendTarget = NoteTarget;
 
 export interface AppendResult {
   /** The note's full text as saved. */
@@ -631,6 +635,27 @@ function conflict(): AppendError {
 }
 
 /**
+ * Writes `text` over the note, keeping its content type. A 412, should
+ * Drive ever answer one, becomes `onConflict()`.
+ */
+async function writeNote(
+  target: NoteTarget,
+  text: string,
+  onConflict: () => Error,
+): Promise<AppendResult> {
+  const options: UpdateTextOptions = {};
+  if (target.mimeType !== undefined && target.mimeType !== '') {
+    options.mimeType = target.mimeType;
+  }
+  try {
+    return { text, file: await updateFileText(target.id, text, options) };
+  } catch (err) {
+    if (err instanceof DriveError && err.status === 412) throw onConflict();
+    throw err;
+  }
+}
+
+/**
  * One read-append-write pass. Drive v3 has no `etag` field on files and
  * documents no `If-Match` on `files.update`, so the freshness check is
  * `modifiedTime`: taken before the read and compared again right before
@@ -643,31 +668,20 @@ async function appendOnce(
   const before = await modifiedTimeOf(target.id);
   const current = await getText(target.id);
   if ((await modifiedTimeOf(target.id)) !== before) throw conflict();
-
-  const text = appendedText(current, addition);
-  const options: UpdateTextOptions = {};
-  if (target.mimeType !== undefined && target.mimeType !== '') {
-    options.mimeType = target.mimeType;
-  }
-  try {
-    return { text, file: await updateFileText(target.id, text, options) };
-  } catch (err) {
-    if (err instanceof DriveError && err.status === 412) throw conflict();
-    throw err;
-  }
+  return writeNote(target, appendedText(current, addition), conflict);
 }
 
 /**
  * Appends `text` (trimmed) to the end of a note as its own paragraph. On a
  * conflict with another write it re-reads and retries once; a second
  * conflict throws `AppendError('conflict')`. Notes the agent maintains
- * (`isAppendProtected`) and empty text are rejected before any request.
+ * (`isProtectedNote`) and empty text are rejected before any request.
  */
 export async function appendToFile(
   target: AppendTarget,
   text: string,
 ): Promise<AppendResult> {
-  if (isAppendProtected(target.name)) {
+  if (isProtectedNote(target.name)) {
     throw new AppendError('protected', 'Bower maintains this note itself.');
   }
   const addition = text.trim();
@@ -685,4 +699,87 @@ export async function appendToFile(
       if (!retry) throw err;
     }
   }
+}
+
+// --- Edit --------------------------------------------------------------
+
+export interface NoteForEdit {
+  text: string;
+  /** The file's `modifiedTime` read just before `text`: the save baseline. */
+  modifiedTime: string;
+}
+
+/**
+ * A note's current text and the `modifiedTime` to compare against when the
+ * edit is saved. `modifiedTime` is read first, so the text is never older
+ * than the baseline: a write landing in between only makes the later save
+ * report a conflict, it can never hide one.
+ */
+export async function readNoteForEdit(id: string): Promise<NoteForEdit> {
+  const modifiedTime = await modifiedTimeOf(id);
+  const text = await getText(id);
+  return { text, modifiedTime };
+}
+
+export type SaveErrorCode = 'protected' | 'conflict';
+
+export class SaveError extends Error {
+  readonly code: SaveErrorCode;
+  /**
+   * For a conflict: the note's `modifiedTime` now, when known. Using it as
+   * the next baseline means "I have seen that version".
+   */
+  readonly currentModifiedTime: string | null;
+
+  constructor(
+    code: SaveErrorCode,
+    message: string,
+    currentModifiedTime: string | null = null,
+  ) {
+    super(message);
+    this.name = 'SaveError';
+    this.code = code;
+    this.currentModifiedTime = currentModifiedTime;
+  }
+}
+
+export interface SaveOptions {
+  /**
+   * `modifiedTime` when the editor opened (`readNoteForEdit`), or `null`
+   * when unknown (opened offline): an unknown baseline always conflicts, so
+   * the user decides.
+   */
+  baseModifiedTime: string | null;
+  /** Skips the freshness check and overwrites ("keep mine"). */
+  force?: boolean;
+}
+
+function saveConflict(current: string | null): SaveError {
+  return new SaveError(
+    'conflict',
+    'The note changed since editing started.',
+    current,
+  );
+}
+
+/**
+ * Replaces a note's whole text with `text`. Unless `force` is set, it first
+ * reads `modifiedTime` again and throws `SaveError('conflict')` without
+ * writing when it differs from `baseModifiedTime`; a 412 from Drive is a
+ * conflict too. Notes the agent maintains (`isProtectedNote`) are rejected
+ * before any request.
+ */
+export async function saveNoteText(
+  target: NoteTarget,
+  text: string,
+  options: SaveOptions,
+): Promise<AppendResult> {
+  if (isProtectedNote(target.name)) {
+    throw new SaveError('protected', 'Bower maintains this note itself.');
+  }
+  if (options.force !== true) {
+    const current = await modifiedTimeOf(target.id);
+    if (current !== options.baseModifiedTime) throw saveConflict(current);
+  }
+  return writeNote(target, text, () => saveConflict(null));
 }
