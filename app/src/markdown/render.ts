@@ -2,6 +2,9 @@
  * Renders a note like Obsidian's reading view: GitHub-flavoured Markdown
  * (tables, read-only task lists, code, blockquotes), wikilinks resolved
  * against the vault index, `==highlight==`, callouts and heading anchors.
+ * Attachments: links to files other than notes open in Drive; embedded
+ * images and notes become placeholders (`embeds.ts`) that the note view
+ * fills in after rendering, so this stays synchronous and needs no network.
  * The output is sanitized with DOMPurify: nothing in a note can run script.
  */
 
@@ -12,8 +15,16 @@ import type { Tokens, TokenizerAndRendererExtension } from 'marked';
 
 import type { VaultIndex } from '../vault-index.js';
 import { parseFrontmatter } from './frontmatter.js';
+import { embedKind, imagePlaceholder } from './embeds.js';
 import { escapeHtml, slugify } from './html.js';
-import { renderTextWithWikilinks, renderWikilink } from './wikilinks.js';
+import {
+  headingFragment,
+  renderFileLink,
+  renderTextWithWikilinks,
+  renderWikilink,
+  resolveMarkdownLink,
+} from './wikilinks.js';
+import type { EmbedOptions } from './wikilinks.js';
 
 export interface RenderedNote {
   /** Sanitized HTML of the note body. */
@@ -29,6 +40,19 @@ export interface RenderedNote {
   tags: string[];
 }
 
+export interface RenderOptions {
+  /**
+   * Path of the note relative to the Bower folder; relative Markdown links
+   * resolve against its folder. Defaults to the top of the folder.
+   */
+  path?: string;
+  /**
+   * Whether `![[Other note]]` becomes a transclusion placeholder. `false`
+   * when rendering a note that is itself transcluded: no recursion.
+   */
+  transclude?: boolean;
+}
+
 const ALLOWED_TAGS = [
   'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'dd', 'del', 'details', 'div',
   'dl', 'dt', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img',
@@ -38,8 +62,9 @@ const ALLOWED_TAGS = [
 ]; // prettier-ignore
 
 const ALLOWED_ATTR = [
-  'align', 'alt', 'checked', 'class', 'disabled', 'href', 'id', 'open', 'rel',
-  'src', 'start', 'target', 'title', 'type',
+  'align', 'alt', 'checked', 'class', 'data-bower-embed', 'data-bower-file',
+  'disabled', 'href', 'id', 'open', 'rel', 'src', 'start', 'target', 'title',
+  'type',
 ]; // prettier-ignore
 
 /** Links and images: web, mail, a note of this app, or a heading anchor. */
@@ -50,7 +75,15 @@ const PURIFY_CONFIG: Config = {
   ALLOWED_ATTR,
   ALLOWED_URI_REGEXP,
   // DOMPurify checks every other attribute value against the URI pattern.
-  ADD_URI_SAFE_ATTR: ['align', 'start', 'type', 'rel', 'target'],
+  ADD_URI_SAFE_ATTR: [
+    'align',
+    'start',
+    'type',
+    'rel',
+    'target',
+    'data-bower-embed',
+    'data-bower-file',
+  ],
   ALLOW_DATA_ATTR: false,
   ALLOW_ARIA_ATTR: false,
   FORBID_TAGS: ['script', 'iframe', 'style'],
@@ -97,8 +130,31 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function createMarked(index: VaultIndex): Marked {
+function createMarked(index: VaultIndex, options: RenderOptions): Marked {
   const slugCounts = new Map<string, number>();
+  const notePath = options.path ?? '';
+  const embedOptions: EmbedOptions = {
+    placeholders: true,
+    transclude: options.transclude ?? true,
+    notePath,
+  };
+
+  // `![[...]]` alone on a line is a block, so a transcluded note is not
+  // wrapped in a paragraph.
+  const embedBlock: TokenizerAndRendererExtension = {
+    name: 'embedBlock',
+    level: 'block',
+    start: (src) => src.match(/^ {0,3}!\[\[[^[\]\n]+?\]\][ \t]*$/m)?.index,
+    tokenizer(src) {
+      const match = /^ {0,3}(!\[\[[^[\]\n]+?\]\])[ \t]*(?:\n+|$)/.exec(src);
+      if (match === null) return undefined;
+      return { type: 'embedBlock', raw: match[0], link: match[1] };
+    },
+    renderer(token) {
+      const link = typeof token.link === 'string' ? token.link : '';
+      return `${renderWikilink(link, index, true, embedOptions)}\n`;
+    },
+  };
 
   const wikilink: TokenizerAndRendererExtension = {
     name: 'wikilink',
@@ -110,7 +166,12 @@ function createMarked(index: VaultIndex): Marked {
       return { type: 'wikilink', raw: match[0], embed: match[1] === '!' };
     },
     renderer(token) {
-      return renderWikilink(token.raw, index, token.embed === true);
+      return renderWikilink(
+        token.raw,
+        index,
+        token.embed === true,
+        embedOptions,
+      );
     },
   };
 
@@ -171,8 +232,43 @@ function createMarked(index: VaultIndex): Marked {
 
   const marked = new Marked({ gfm: true, breaks: true });
   marked.use({
-    extensions: [wikilink, highlight, callout],
+    extensions: [embedBlock, wikilink, highlight, callout],
     renderer: {
+      // Links into the Bower folder: notes open in the app, other files in
+      // Drive, `[](photo.png)` with no text shows the image. URLs and
+      // anything unresolved fall back to marked's default (`false`).
+      link({ href, tokens }: Tokens.Link): string | false {
+        const target = resolveMarkdownLink(href, notePath, index);
+        if (target === undefined) return false;
+        const { file } = target;
+        const inner = this.parser.parseInline(tokens);
+        if (inner === '' && embedKind(file) === 'image') {
+          return imagePlaceholder(file, file.name);
+        }
+        const text = inner === '' ? escapeHtml(file.name) : inner;
+        return renderFileLink(
+          file,
+          text,
+          false,
+          headingFragment(target.fragment),
+        );
+      },
+      // `![alt](path)`: an image placeholder, a transcluded note, or a
+      // Drive link for any other file.
+      image({ href, text }: Tokens.Image): string | false {
+        const target = resolveMarkdownLink(href, notePath, index);
+        if (target === undefined) return false;
+        const { file } = target;
+        const label = text.trim() === '' ? file.name : text;
+        if (embedKind(file) === 'image') return imagePlaceholder(file, label);
+        return renderFileLink(
+          file,
+          escapeHtml(label),
+          true,
+          headingFragment(target.fragment),
+          embedOptions,
+        );
+      },
       heading({ tokens, depth, text }: Tokens.Heading): string {
         const base = slugify(text) || 'section';
         const seen = slugCounts.get(base) ?? 0;
@@ -225,12 +321,16 @@ function renderFrontmatter(
 /**
  * Renders a note to sanitized HTML. Needs a DOM (`window`) for the sanitizer.
  */
-export function renderNote(text: string, index: VaultIndex): RenderedNote {
+export function renderNote(
+  text: string,
+  index: VaultIndex,
+  options: RenderOptions = {},
+): RenderedNote {
   const { data, body } = parseFrontmatter(text);
   const tags = Array.isArray(data.tags)
     ? data.tags.filter((tag): tag is string => typeof tag === 'string')
     : [];
-  const html = createMarked(index).parse(body, { async: false });
+  const html = createMarked(index, options).parse(body, { async: false });
   return {
     html: sanitizeHtml(html),
     frontmatter: data,

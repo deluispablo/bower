@@ -1,12 +1,22 @@
 /**
  * Obsidian wikilinks: `[[Note]]`, `[[Note|alias]]`, `[[Note#Heading]]`,
  * `[[folder/Note]]`, `[[Note.md]]`, resolved against the vault index.
- * Embeds (`![[...]]`) are rendered as plain links for now.
+ * Links to notes open in the app; links to any other file open it in Drive.
+ * Embeds (`![[...]]`) become image or transclusion placeholders when the
+ * caller asks for them (`EmbedOptions`), plain links otherwise.
  */
 
 import type { DriveFile } from '../drive.js';
 import { basenameKey } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
+import {
+  embedKind,
+  fileLinkHtml,
+  imagePlaceholder,
+  parseLinkTarget,
+  resolveRelativePath,
+  transclusionPlaceholder,
+} from './embeds.js';
 import { escapeHtml, headingAnchor } from './html.js';
 
 export interface Wikilink {
@@ -99,6 +109,38 @@ export function resolveWikilink(
   return best;
 }
 
+export interface ResolvedLink {
+  file: DriveFile;
+  /** Heading or other fragment after `#`, decoded. */
+  fragment?: string;
+}
+
+/**
+ * Finds the file a Markdown link destination (`[text](dest)`,
+ * `![alt](dest)`) points to: relative to the folder of the note at
+ * `notePath` first, as Obsidian writes them, then like a wikilink (path from
+ * the top of the Bower folder, then file name). URLs and anchors resolve to
+ * `undefined`.
+ */
+export function resolveMarkdownLink(
+  href: string,
+  notePath: string,
+  index: VaultIndex,
+): ResolvedLink | undefined {
+  const target = parseLinkTarget(href);
+  if (target === undefined) return undefined;
+  const relative = resolveRelativePath(notePath, target.path);
+  const file =
+    (relative === undefined
+      ? undefined
+      : (index.byPath.get(relative) ?? index.byPath.get(`${relative}.md`))) ??
+    resolveWikilink(target.path, index);
+  if (file === undefined) return undefined;
+  return target.fragment === undefined
+    ? { file }
+    : { file, fragment: target.fragment };
+}
+
 /** Text shown for a link: the alias, else `Note > Heading`, without `.md`. */
 export function wikilinkText(link: Wikilink): string {
   if (link.alias !== undefined) return link.alias;
@@ -109,24 +151,73 @@ export function wikilinkText(link: Wikilink): string {
   return target === '' ? link.heading : `${target} > ${link.heading}`;
 }
 
+/** How `renderWikilink` treats embeds (`![[...]]`). */
+export interface EmbedOptions {
+  /** Emit image and transclusion placeholders instead of plain links. */
+  placeholders?: boolean;
+  /** Allow note transclusion; `false` inside a transcluded note (no recursion). */
+  transclude?: boolean;
+  /** Path of the note being rendered; it is never transcluded into itself. */
+  notePath?: string;
+}
+
+/** `#fragment` that reaches a heading; `''` when there is none. */
+export function headingFragment(heading: string | undefined): string {
+  // `[[Note#A#B]]` points at the last heading, as in Obsidian.
+  const last = heading?.split('#').pop()?.trim();
+  return last === undefined || last === '' ? '' : `#${headingAnchor(last)}`;
+}
+
 /**
- * HTML for one wikilink: `<a class="wikilink" href="/note/<id>">` when it
- * resolves (or points at a heading of the same note), otherwise
- * `<span class="wikilink-missing">`. Embeds get the extra class
- * `wikilink-embed`.
+ * HTML for a link or embed to a file that resolved. Notes link into the
+ * app (`/note/<id>`), other files open in Drive. With `placeholders`, an
+ * embedded image becomes an `<img data-bower-file>` and an embedded note a
+ * transclusion block. `textHtml` must already be escaped.
+ */
+export function renderFileLink(
+  file: DriveFile,
+  textHtml: string,
+  embed: boolean,
+  fragment: string,
+  options: EmbedOptions = {},
+): string {
+  const kind = embedKind(file);
+  const placeholders = embed && options.placeholders === true;
+  if (kind === 'note') {
+    if (
+      placeholders &&
+      options.transclude !== false &&
+      file.path !== options.notePath
+    ) {
+      return transclusionPlaceholder(file, textHtml, fragment);
+    }
+    const extra = embed ? ' wikilink-embed' : '';
+    const href = `/note/${encodeURIComponent(file.id)}${fragment}`;
+    return `<a class="wikilink${extra}" href="${escapeHtml(href)}">${textHtml}</a>`;
+  }
+  if (kind === 'image' && placeholders) {
+    return imagePlaceholder(file, file.name);
+  }
+  return fileLinkHtml(file, textHtml, embed);
+}
+
+/**
+ * HTML for one wikilink: a link to the note (`/note/<id>`) or, for any
+ * other file, to Drive (see `renderFileLink`); a heading of the same note
+ * links to its anchor; otherwise `<span class="wikilink-missing">`. Embeds
+ * get the extra class `wikilink-embed`, or become placeholders when
+ * `options.placeholders` is set.
  */
 export function renderWikilink(
   raw: string,
   index: VaultIndex,
   embed = false,
+  options: EmbedOptions = {},
 ): string {
   const link = parseWikilink(raw);
   const text = escapeHtml(wikilinkText(link));
   const extra = embed ? ' wikilink-embed' : '';
-  // `[[Note#A#B]]` points at the last heading, as in Obsidian.
-  const heading = link.heading?.split('#').pop()?.trim();
-  const fragment =
-    heading === undefined || heading === '' ? '' : `#${headingAnchor(heading)}`;
+  const fragment = headingFragment(link.heading);
 
   if (link.target === '' && fragment !== '') {
     return `<a class="wikilink${extra}" href="${escapeHtml(fragment)}">${text}</a>`;
@@ -135,8 +226,15 @@ export function renderWikilink(
   if (file === undefined) {
     return `<span class="wikilink-missing${extra}">${text}</span>`;
   }
-  const href = `/note/${encodeURIComponent(file.id)}${fragment}`;
-  return `<a class="wikilink${extra}" href="${escapeHtml(href)}">${text}</a>`;
+  if (embed && options.placeholders === true && embedKind(file) === 'image') {
+    // `![[photo.png|300]]` sets a width in Obsidian; only a real alias is alt text.
+    const alt =
+      link.alias !== undefined && !/^\d+(x\d+)?$/.test(link.alias)
+        ? link.alias
+        : file.name;
+    return imagePlaceholder(file, alt);
+  }
+  return renderFileLink(file, text, embed, fragment, options);
 }
 
 /** Escapes a plain string, turning any wikilinks inside it into links. */

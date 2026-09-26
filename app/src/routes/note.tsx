@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
+import { NoteBody } from '../components/note-body.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
 import { breadcrumb, siblings } from '../navigation.js';
@@ -28,7 +29,10 @@ export function Note() {
     getNoteText(id)
       .then((text) => {
         if (cancelled) return;
-        setLoad({ status: 'ready', rendered: renderNote(text, index) });
+        setLoad({
+          status: 'ready',
+          rendered: renderNote(text, index, { path: file.path }),
+        });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -96,10 +100,7 @@ export function Note() {
               }}
             />
           )}
-          <div
-            class="markdown"
-            dangerouslySetInnerHTML={{ __html: load.rendered.html }}
-          />
+          <NoteBody html={load.rendered.html} />
         </>
       )}
 

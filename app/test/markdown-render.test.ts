@@ -235,6 +235,103 @@ describe('renderNote', () => {
     ]);
   });
 
+  it('renders attachments: image placeholders, Drive links, transclusions', () => {
+    const attachments = buildVaultIndex([
+      file('plan', '1-Projects/Garden/Garden Plan.md'),
+      file('seeds', '1-Projects/Garden/Seed List.md'),
+      {
+        ...file('bed', '1-Projects/Garden/img/bed.png'),
+        mimeType: 'image/png',
+      },
+      {
+        ...file('scan', 'Attachments/scan.pdf'),
+        mimeType: 'application/pdf',
+        webViewLink: 'https://drive.google.com/file/d/scan/view',
+      },
+    ]);
+    const note = renderNote(
+      [
+        'Intro with ![[bed.png|The bed]] inline.',
+        '',
+        '![[Seed List]]',
+        '',
+        '![Bed](img/bed.png) and [](img/bed.png)',
+        '',
+        '[the scan](../../Attachments/scan.pdf), [[scan.pdf]] and ![[scan.pdf]]',
+        '',
+        '[seeds](Seed%20List.md#Tomatoes) and [web](https://example.com/a.png)',
+        '',
+        '![[Garden Plan]]',
+      ].join('\n'),
+      attachments,
+      { path: '1-Projects/Garden/Garden Plan.md' },
+    );
+    const root = dom(note.html);
+
+    const images = [...root.querySelectorAll('img')];
+    expect(images.map((img) => img.getAttribute('data-bower-file'))).toEqual([
+      'bed',
+      'bed',
+      'bed',
+    ]);
+    expect(images.map((img) => img.alt)).toEqual(['The bed', 'Bed', 'bed.png']);
+    expect(images.every((img) => !img.hasAttribute('src'))).toBe(true);
+
+    // A lone embed line is a block of its own, not inside a paragraph.
+    const embed = root.querySelector('div[data-bower-embed="seeds"]');
+    expect(embed?.parentElement).toBe(root);
+    expect(embed?.querySelector('a')?.getAttribute('href')).toBe('/note/seeds');
+
+    const drive = [...root.querySelectorAll('a.wikilink-file')];
+    expect(drive).toHaveLength(3);
+    for (const link of drive) {
+      expect(link.getAttribute('href')).toBe(
+        'https://drive.google.com/file/d/scan/view',
+      );
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener');
+    }
+    expect(drive[0]?.textContent).toBe('the scan');
+
+    expect(
+      root.querySelector('a[href="/note/seeds#user-content-tomatoes"]')
+        ?.textContent,
+    ).toBe('seeds');
+    expect(
+      root.querySelector('a[href="https://example.com/a.png"]'),
+    ).not.toBeNull();
+    // A note never transcludes itself.
+    expect(root.querySelector('[data-bower-embed="plan"]')).toBeNull();
+    expect(
+      root.querySelector('a.wikilink-embed[href="/note/plan"]'),
+    ).not.toBeNull();
+  });
+
+  it('renders embedded notes as links when transclusion is off', () => {
+    const note = renderNote('![[Seed List]]', index, { transclude: false });
+    const root = dom(note.html);
+    expect(root.querySelector('[data-bower-embed]')).toBeNull();
+    expect(root.querySelector('a.wikilink-embed')?.getAttribute('href')).toBe(
+      '/note/seeds',
+    );
+  });
+
+  it('allows only the two placeholder data attributes', () => {
+    const root = dom(
+      sanitizeHtml(
+        '<img data-bower-file="x" data-other="y" alt="a">' +
+          '<div data-bower-embed="n"></div>',
+      ),
+    );
+    expect(root.querySelector('img')?.getAttribute('data-bower-file')).toBe(
+      'x',
+    );
+    expect(root.querySelector('img')?.hasAttribute('data-other')).toBe(false);
+    expect(root.querySelector('div')?.getAttribute('data-bower-embed')).toBe(
+      'n',
+    );
+  });
+
   it('returns no properties block without frontmatter', () => {
     const note = renderNote('Just text.', index);
     expect(note.frontmatter).toEqual({});

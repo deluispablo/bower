@@ -5,6 +5,7 @@ import {
   parseWikilink,
   renderTextWithWikilinks,
   renderWikilink,
+  resolveMarkdownLink,
   resolveWikilink,
 } from '../src/markdown/wikilinks.js';
 import { buildVaultIndex } from '../src/vault-index.js';
@@ -131,10 +132,44 @@ describe('renderWikilink', () => {
 
   it('marks embeds, resolved or not', () => {
     expect(renderWikilink('![[Seed List.png]]', index, true)).toBe(
-      '<a class="wikilink wikilink-embed" href="/note/seed-photo">Seed List.png</a>',
+      '<a class="wikilink wikilink-file wikilink-embed" ' +
+        'href="https://drive.google.com/file/d/seed-photo/view" ' +
+        'target="_blank" rel="noopener">Seed List.png</a>',
     );
     expect(renderWikilink('![[gone.png]]', index, true)).toBe(
       '<span class="wikilink-missing wikilink-embed">gone.png</span>',
+    );
+  });
+
+  it('opens other files in Drive instead of the note view', () => {
+    expect(renderWikilink('[[scan.pdf]]', index)).toBe(
+      '<a class="wikilink wikilink-file" ' +
+        'href="https://drive.google.com/file/d/scan/view" ' +
+        'target="_blank" rel="noopener">scan.pdf</a>',
+    );
+  });
+
+  it('emits placeholders for embeds when asked', () => {
+    const options = { placeholders: true, notePath: 'index.md' };
+    expect(renderWikilink('![[Seed List.png|300]]', index, true, options)).toBe(
+      '<img class="embed-image" data-bower-file="seed-photo" alt="Seed List.png">',
+    );
+    expect(renderWikilink('![[Garden Plan#Beds]]', index, true, options)).toBe(
+      '<div class="transclusion-pending" data-bower-embed="plan">' +
+        '<a class="wikilink wikilink-embed" href="/note/plan#user-content-beds">' +
+        'Garden Plan &gt; Beds</a></div>',
+    );
+    // No transclusion inside a transcluded note, nor of a note into itself.
+    expect(
+      renderWikilink('![[Garden Plan]]', index, true, {
+        ...options,
+        transclude: false,
+      }),
+    ).toBe(
+      '<a class="wikilink wikilink-embed" href="/note/plan">Garden Plan</a>',
+    );
+    expect(renderWikilink('![[index]]', index, true, options)).toBe(
+      '<a class="wikilink wikilink-embed" href="/note/index">index</a>',
     );
   });
 
@@ -145,5 +180,33 @@ describe('renderWikilink', () => {
       'See <a class="wikilink" href="/note/plan">Garden Plan</a> &amp; ' +
         '<span class="wikilink-missing">Nowhere</span>',
     );
+  });
+});
+
+describe('resolveMarkdownLink', () => {
+  it('resolves relative to the note, then like a wikilink', () => {
+    const from = '1-Projects/Garden/Garden Plan.md';
+    expect(resolveMarkdownLink('Seed%20List.md', from, index)?.file.id).toBe(
+      'seed',
+    );
+    expect(resolveMarkdownLink('Archive/Seed List', from, index)?.file.id).toBe(
+      'seed-deep',
+    );
+    expect(
+      resolveMarkdownLink('../../0-Inbox/scan.pdf', from, index)?.file.id,
+    ).toBe('scan');
+    expect(resolveMarkdownLink('scan.pdf', from, index)?.file.id).toBe('scan');
+    const heading = resolveMarkdownLink('Seed List.md#Tomatoes', from, index);
+    expect(heading?.file.id).toBe('seed');
+    expect(heading?.fragment).toBe('Tomatoes');
+  });
+
+  it('leaves URLs and unknown paths alone', () => {
+    expect(
+      resolveMarkdownLink('https://example.com/scan.pdf', 'index.md', index),
+    ).toBeUndefined();
+    expect(
+      resolveMarkdownLink('nowhere.png', 'index.md', index),
+    ).toBeUndefined();
   });
 });

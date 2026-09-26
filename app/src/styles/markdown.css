@@ -147,6 +147,21 @@
   cursor: default;
 }
 
+.markdown .transclusion {
+  border-left: 3px solid var(--color-border-strong);
+  padding-left: var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+
+.markdown .transclusion-title {
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-2);
+}
+
+.markdown .transclusion-body > :last-child {
+  margin-bottom: 0;
+}
+
 .markdown .callout {
   --callout-color: var(--color-link);
   border-left: 4px solid var(--callout-color);
