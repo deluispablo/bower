@@ -151,7 +151,7 @@ export function Add() {
       try {
         await startProcess();
       } catch (err) {
-        if (err instanceof ApiError && err.status === 429) {
+        if (err instanceof ApiError && err.code === 'quota') {
           setMessage(
             'Daily limit reached, Bower will not run again until tomorrow.',
           );
