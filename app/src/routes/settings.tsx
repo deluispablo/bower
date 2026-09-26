@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { Me } from '../api.js';
 import { ApiError, deleteAccount, loginUrl, updateSettings } from '../api.js';
 import { getPref, setPref } from '../prefs.js';
+import type { ThemePref } from '../prefs.js';
 import {
   currentPushState,
   currentPushSupport,
@@ -11,6 +12,7 @@ import {
 } from '../push.js';
 import { useSession } from '../session.js';
 import '../styles/settings.css';
+import { setTheme } from '../theme.js';
 
 /**
  * `apiFetch` already turns a non-2xx response into an `ApiError` carrying a
@@ -109,6 +111,42 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
       </div>
       {error && <p class="settings-error">{error}</p>}
     </section>
+  );
+}
+
+const THEME_OPTIONS: Array<{ value: ThemePref; label: string }> = [
+  { value: 'system', label: 'Match my device' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
+/** Light/dark, following the system by default, with a manual override (#42). */
+function AppearanceSection() {
+  const [theme, setThemeState] = useState<ThemePref>(() => getPref('theme'));
+
+  return (
+    <div class="settings-section">
+      <h2>Appearance</h2>
+      <div class="settings-field">
+        <label for="theme-select">Theme</label>
+        <select
+          id="theme-select"
+          class="settings-select"
+          value={theme}
+          onChange={(e) => {
+            const value = e.currentTarget.value as ThemePref;
+            setThemeState(value);
+            setTheme(value);
+          }}
+        >
+          {THEME_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
   );
 }
 
@@ -278,6 +316,8 @@ export function Settings() {
         )}
         <a href={loginUrl()}>Reconnect Google</a>
       </div>
+
+      <AppearanceSection />
 
       <NotificationsSection />
 
