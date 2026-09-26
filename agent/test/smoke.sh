@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test for agent/run.sh. Hermetic: rclone, claude and curl are stubs
-# that record their calls and act per scenario, so nothing touches the
+# that record their calls and act per scenario (rclone over a fake Drive
+# directory), so nothing touches the
 # network, Google or Claude. jq is the real one when installed (it is on
 # GitHub's ubuntu runners); otherwise a small Node stand-in covers the three
 # filters run.sh uses.
@@ -66,8 +67,14 @@ STUB
 
 cat >"$STUBS/rclone" <<'STUB'
 #!/usr/bin/env bash
-# rclone stub: records calls; "sync vault: <dir>" fills <dir> per scenario.
+# rclone stub: records calls and keeps a fake Drive under $SMOKE_STATE/remote.
+# The first "sync vault: <dir>" fills the remote per scenario, then every
+# "sync vault: <dir>" copies the remote into <dir>; "sync <dir> vault:<folder>"
+# makes the remote folder a mirror of <dir>; "copy <dir> vault:" copies <dir>
+# into the remote (never deleting); "deletefile vault:<path>" removes
+# one remote file and fails with rclone's "file not found" code when absent.
 set -euo pipefail
+remote="$SMOKE_STATE/remote"
 echo "rclone $*" >>"$SMOKE_STATE/calls.log"
 if [ ! -f "$SMOKE_STATE/rclone-env.log" ]; then
   {
@@ -79,19 +86,33 @@ if [ ! -f "$SMOKE_STATE/rclone-env.log" ]; then
   printf '%s' "${RCLONE_CONFIG_VAULT_TOKEN:-}" >"$SMOKE_STATE/rclone-token.json"
 fi
 if [ "$1" = sync ] && [ "$2" = vault: ]; then
-  dir=$3
-  mkdir -p "$dir/0-Inbox/Processed" "$dir/Clippings"
-  touch "$dir/0-Inbox/.gitkeep"
-  [ "$SMOKE_SCENARIO" = nocfg ] || echo '# rules' >"$dir/CLAUDE.md"
-  case "$SMOKE_SCENARIO" in
-    empty | reauth) ;;
-    *)
-      echo pdf >"$dir/0-Inbox/a.pdf"
-      echo old >"$dir/0-Inbox/Processed/old.pdf"
-      echo note >"$dir/0-Inbox/_Inbox.md"
-      echo clip >"$dir/Clippings/b.md"
-      ;;
-  esac
+  if [ ! -d "$remote" ]; then
+    mkdir -p "$remote/0-Inbox/Processed" "$remote/Clippings"
+    touch "$remote/0-Inbox/.gitkeep"
+    [ "$SMOKE_SCENARIO" = nocfg ] || echo '# rules' >"$remote/CLAUDE.md"
+    case "$SMOKE_SCENARIO" in
+      empty | reauth) ;;
+      *)
+        echo pdf >"$remote/0-Inbox/a.pdf"
+        echo old >"$remote/0-Inbox/Processed/old.pdf"
+        echo note >"$remote/0-Inbox/_Inbox.md"
+        echo clip >"$remote/Clippings/b.md"
+        ;;
+    esac
+  fi
+  mkdir -p "$3"
+  cp -R "$remote/." "$3/"
+elif [ "$1" = sync ]; then
+  # A mirror up: the remote folder becomes exactly the local one.
+  rm -rf "${remote:?}/${3#vault:}"
+  mkdir -p "$remote/${3#vault:}"
+  cp -R "$2/." "$remote/${3#vault:}/"
+elif [ "$1" = copy ] && [ "$3" = vault: ]; then
+  cp -R "$2/." "$remote/"
+elif [ "$1" = deletefile ]; then
+  target="$remote/${2#vault:}"
+  [ -f "$target" ] || exit 4
+  rm "$target"
 fi
 echo "rclone stub output naming 0-Inbox/a.pdf"
 STUB
@@ -99,7 +120,8 @@ STUB
 cat >"$STUBS/claude" <<'STUB'
 #!/usr/bin/env bash
 # claude stub: records its flags and credentials, prints a summary, moves
-# the inbox file to Processed/ like the real agent would.
+# the inbox file to Processed/ like the real agent would. Meanwhile a file
+# lands in each inbox folder of the fake Drive, as an Add from the app would.
 set -euo pipefail
 turns='' tools='' prompt=''
 while [ "$#" -gt 0 ]; do
@@ -114,6 +136,8 @@ echo "claude max-turns=$turns rulebook=$([ -f CLAUDE.md ] && echo yes || echo no
 printf '%s' "$tools" >"$SMOKE_STATE/claude-tools.txt"
 echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-unset} CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-unset}" >"$SMOKE_STATE/claude-env.log"
 echo "STDERR-MARKER while reading 0-Inbox/a.pdf" >&2
+echo late >"$SMOKE_STATE/remote/0-Inbox/late.pdf"
+echo late >"$SMOKE_STATE/remote/Clippings/late.md"
 if [ "$SMOKE_SCENARIO" = fail ]; then
   exit 1
 fi
@@ -225,7 +249,7 @@ expect_eq() { [ "$1" = "$2" ] || die "$3: expected [$2], got [$1]"; }
 
 # The script's own output must never carry vault content or credentials.
 expect_content_free() {
-  for needle in a.pdf b.md SUMMARY-MARKER STDERR-MARKER "$DRIVE_TOKEN" \
+  for needle in a.pdf b.md late.pdf late.md SUMMARY-MARKER STDERR-MARKER "$DRIVE_TOKEN" \
     "$USER_API_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -259,15 +283,18 @@ expect_eq "$(calls curl | grep -c 'auth=ok')" 3 'curl calls with the runner key'
 expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request'
 expect_eq "$(calls curl | sed -n 2p)" "curl POST $API_URL/runner/vaults/vault-1/status auth=ok" 'status request'
 rclone_calls=$(calls rclone)
-expect_eq "$(printf '%s\n' "$rclone_calls" | wc -l | tr -d ' ')" 4 'rclone calls'
+expect_eq "$(printf '%s\n' "$rclone_calls" | wc -l | tr -d ' ')" 3 'rclone calls'
 printf '%s\n' "$rclone_calls" | sed -n 1p | grep -q "^rclone sync vault: .* --exclude \.obsidian/\*\*$" ||
   die 'first rclone call is not the sync down'
 printf '%s\n' "$rclone_calls" | sed -n 2p | grep -q '^rclone copy .* vault: ' ||
   die 'second rclone call is not the copy up'
-printf '%s\n' "$rclone_calls" | sed -n 3p | grep -q '^rclone sync .*/0-Inbox vault:0-Inbox$' ||
-  die 'third rclone call is not the 0-Inbox mirror'
-printf '%s\n' "$rclone_calls" | sed -n 4p | grep -q '^rclone sync .*/Clippings vault:Clippings$' ||
-  die 'fourth rclone call is not the Clippings mirror'
+expect_eq "$(printf '%s\n' "$rclone_calls" | sed -n 3p)" 'rclone deletefile vault:0-Inbox/a.pdf' 'targeted delete'
+remote="$STATE/remote"
+[ ! -e "$remote/0-Inbox/a.pdf" ] || die 'processed original still in 0-Inbox/ in Drive'
+[ -f "$remote/0-Inbox/Processed/a.pdf" ] || die 'processed original missing from 0-Inbox/Processed/ in Drive'
+for f in 0-Inbox/late.pdf Clippings/late.md Clippings/b.md 0-Inbox/_Inbox.md 0-Inbox/Processed/old.pdf; do
+  [ -f "$remote/$f" ] || die "a file that was not processed is gone from Drive: $f"
+done
 expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
   'Read,Write,Edit,MultiEdit,Glob,Grep,LS,WebSearch,WebFetch,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*)' \
@@ -305,6 +332,9 @@ post 2 p.error | grep -q '^agent run' || die 'error does not name the agent run 
 expect_eq "$(post 2 'p.processed === undefined && p.summary === undefined')" true 'failed has no processed or summary'
 expect_eq "$(calls rclone | grep -c '^rclone copy ')" 1 'rclone copy calls'
 expect_eq "$(calls rclone | grep -c '^rclone sync ')" 1 'rclone sync calls (sync down only)'
+expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
+[ -f "$STATE/remote/0-Inbox/a.pdf" ] || die 'original left 0-Inbox/ in Drive after a failure'
+[ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive after a failure'
 expect_content_free
 expect_cleaned_up
 echo "ok agent failure"
