@@ -88,3 +88,37 @@ Response: `{ "vault": { "folderId", "inboxFolderId", "name" } }`, status 201 for
 A `create` that fails half-way leaves a partial folder behind; the next `create` answers `folder_exists`, and `select` on that folder completes it.
 
 The template is bundled into the Worker at build time: `api/scripts/bundle-template.mjs` (run by `prebuild`) writes `api/src/template.generated.ts` from `vault-template/`, leaving out `vault-template/README.md`, which describes the folder to readers of this repository. The generated file is committed; after editing `vault-template/`, run `pnpm -C api build` and commit the regenerated file.
+
+## `POST /process`
+
+Starts one agent run for the signed-in user's vault. Requires the session cookie; no request body. The app calls it after Add and Tell Bower, and when the user presses Process.
+
+The Worker sends a `repository_dispatch` to the operator's instance repo (`GITHUB_REPO`, authenticated with `GITHUB_TOKEN`) with `event_type: "ingest"` and `client_payload: { "vault_id": "<id>" }`. The `vault_id` is the user's id: each user has one vault, and the runner fetches its credentials with `GET /runner/vaults/:id`.
+
+In order:
+
+1. No user or no vault: 401 or 409, nothing else happens.
+2. If the stored run is `queued` or `running` and not stale, it is returned as is: no new dispatch, nothing counted. A run is stale when its `startedAt` (or `requestedAt` before it started) is 25 minutes old or more; a stale run no longer blocks and is replaced below.
+3. If today's count (UTC date) has reached `DAILY_RUN_LIMIT`, the answer is 429.
+4. The dispatch is sent. If GitHub does not answer 204, the answer is 502 and nothing is stored or counted.
+5. A new run `{ state: "queued", requestedAt, runId }` is stored under `run:<id>`, today's count goes up by one, and the run is returned.
+
+Response: `{ "run": Run }`, status 202, both for a new run and for the run already in progress.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 401 | `unauthenticated` | No valid session cookie, or the user no longer exists |
+| 409 | `no_vault` | The user has not set up their Bower folder yet (`POST /vault`) |
+| 429 | `quota` | `DAILY_RUN_LIMIT` runs were already started today (UTC). The body also carries `retryAfter`, the seconds until the next midnight UTC, also sent as the `Retry-After` header |
+| 502 | `dispatch` | GitHub did not accept the dispatch (any status but 204, or unreachable). Only GitHub's status and request id are logged, never the token |
+
+The daily count lives in `quota:<id>:<yyyy-mm-dd>`, so each UTC day starts from zero; the key itself expires after 48 h. KV has no transactions: two requests at the same instant can both dispatch, or both pass the quota check at the limit. Accepted for a per-user soft limit.
+
+### `Run` lifecycle so far
+
+| State | Set by | Meaning |
+| --- | --- | --- |
+| `queued` | `POST /process` | GitHub accepted the dispatch; the runner has not reported yet |
+| `running`, `done`, `failed` | the runner endpoints (not built yet) | The runner started, finished, or failed |
+
+A `queued` or `running` run with no news for 25 minutes stops blocking `POST /process` (`isActiveRun` in `api/src/process.ts`).
