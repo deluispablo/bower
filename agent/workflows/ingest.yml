@@ -1,0 +1,87 @@
+# Copied into the operator's instance repo under .github/workflows/ by the
+# setup script (M4). This public repo never runs it: these files live
+# under agent/workflows/, not .github/workflows/, so CI never picks them up.
+#
+# Starts one run of agent/run.sh over one vault, in ingest mode: the Worker's
+# repository_dispatch after /process, or a manual run for troubleshooting.
+name: Ingest
+
+on:
+  repository_dispatch:
+    types: [ingest]
+  workflow_dispatch:
+    inputs:
+      vault_id:
+        description: Vault to process (the user id from the Worker)
+        required: true
+        type: string
+
+concurrency:
+  group: ingest-${{ github.event.client_payload.vault_id || inputs.vault_id }}
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      VAULT_ID: ${{ github.event.client_payload.vault_id || inputs.vault_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Official release, downloaded directly and verified by hash rather
+      # than through a third-party action: RCLONE_SHA256 is the
+      # linux-amd64.zip line copied from that release's own SHA256SUMS
+      # (https://github.com/rclone/rclone/releases/download/v1.75.1/SHA256SUMS).
+      - name: Install rclone
+        env:
+          RCLONE_VERSION: '1.75.1'
+          RCLONE_SHA256: '982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab'
+        run: |
+          curl -fsSL -o rclone.zip \
+            "https://github.com/rclone/rclone/releases/download/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-amd64.zip"
+          echo "${RCLONE_SHA256}  rclone.zip" | sha256sum -c -
+          unzip -q rclone.zip
+          sudo install -m 755 "rclone-v${RCLONE_VERSION}-linux-amd64/rclone" /usr/local/bin/rclone
+          rm -rf rclone.zip "rclone-v${RCLONE_VERSION}-linux-amd64"
+          rclone version
+
+      - name: Install pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Pinned to the version current when this workflow was written
+      # (npm view @anthropic-ai/claude-code version); bump deliberately.
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.283
+
+      # run.sh's own log carries timestamps, step names and counts only and
+      # never prints a credential, so no ::add-mask:: is needed here.
+      - name: Run ingest
+        env:
+          BOWER_API_URL: ${{ vars.BOWER_API_URL }}
+          BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: bash agent/run.sh "$VAULT_ID" ingest
+
+      # rclone's log and the agent's stderr, kept out of the job log itself
+      # (see agent/README.md); may hold vault content, so this repo is
+      # private and the retention is short.
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bower-logs
+          path: ${{ runner.temp }}/bower-logs/
+          retention-days: 3
+          if-no-files-found: ignore

@@ -31,7 +31,7 @@ Every variable `api/src/env.ts` reads, secret or var, with where it comes from a
 
 ## Runner
 
-The instance repo runs `agent/run.sh <vault_id> <ingest|lint>` in GitHub Actions (see `agent/README.md`). Set these in the instance repo under Settings → Secrets and variables → Actions:
+The instance repo runs `agent/run.sh <vault_id> <ingest|lint>` in GitHub Actions, via `agent/workflows/ingest.yml` and `agent/workflows/lint.yml` copied into its `.github/workflows/` by the setup script (see `agent/README.md`). Set these in the instance repo under Settings → Secrets and variables → Actions:
 
 | Name | Secret or variable | How to obtain | Example |
 | --- | --- | --- | --- |
@@ -41,9 +41,25 @@ The instance repo runs `agent/run.sh <vault_id> <ingest|lint>` in GitHub Actions
 | `BOWER_API_URL` | Variable | The Worker's deployed origin, same as `API_ORIGIN` | `https://api.example.com` |
 | `BOWER_MAX_TURNS` | Variable (optional) | Overrides the Worker's `DEFAULT_MAX_TURNS` for this instance | `30` |
 
+Set them with the GitHub CLI, from the instance repo's checkout (or add `-R OWNER/bower-home`):
+
+```bash
+gh secret set BOWER_API_KEY
+gh secret set CLAUDE_CODE_OAUTH_TOKEN   # or: gh secret set ANTHROPIC_API_KEY
+gh variable set BOWER_API_URL --body "https://api.example.com"
+```
+
 A user who set their own API key in Settings runs with that key instead: the script exports it as `ANTHROPIC_API_KEY` and unsets `CLAUDE_CODE_OAUTH_TOKEN` for that run only.
 
-The Actions log shows timestamps, step names and counts only. When a run fails, the reason is in the `error` of `GET /status`; the agent's stderr and rclone's output are in `$RUNNER_TEMP/bower-logs/` on the runner.
+The Actions log shows timestamps, step names and counts only. When a run fails, the reason is in the `error` of `GET /status`; the agent's stderr and rclone's output are in `$RUNNER_TEMP/bower-logs/` on the runner, uploaded as the `bower-logs` artifact only on failure (3-day retention; it can hold vault content, which is fine because the instance repo is private).
+
+To start a run by hand instead of through the app's Process button, from the instance repo:
+
+```bash
+gh workflow run ingest.yml -f vault_id=<id>
+```
+
+(`<id>` is the user's id, the same one `GET /runner/vaults/:id` takes — see step 15 below.) `gh workflow run lint.yml -f vault_id=<id>` runs a lint the same way.
 
 ## Local sign-in test
 
