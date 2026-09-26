@@ -15,6 +15,8 @@
 #   CLAUDE_CODE_OAUTH_TOKEN  or ANTHROPIC_API_KEY; not needed when the API
 #                            returns the user's own apiKey
 #   BOWER_MAX_TURNS          optional; defaults to the API's maxTurns
+#   BOWER_ALLOW_WEB          optional; 1 lets the agent use WebSearch and
+#                            WebFetch, anything else (the default) denies them
 #   RUNNER_TEMP              optional; set by GitHub Actions
 #
 # Requires bash, curl, jq, rclone and claude on PATH.
@@ -28,7 +30,22 @@
 
 set -euo pipefail
 
-readonly ALLOWED_TOOLS='Read,Write,Edit,MultiEdit,Glob,Grep,LS,WebSearch,WebFetch,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*)'
+# Everything in 0-Inbox/ and Clippings/ is untrusted text (clipped web pages,
+# forwarded files), so by default the agent gets no tool that reaches the
+# network: a prompt-injected note must not be able to send vault content out.
+# The web tools come back only when the instance opts in with BOWER_ALLOW_WEB=1.
+# The deny list wins over any allow rule, including one in a settings file
+# inside the vault.
+readonly BASE_TOOLS='Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*)'
+readonly WEB_TOOLS='WebSearch,WebFetch'
+readonly NETWORK_COMMANDS='Bash(curl:*),Bash(wget:*)'
+if [ "${BOWER_ALLOW_WEB:-}" = 1 ]; then
+  readonly ALLOWED_TOOLS="$BASE_TOOLS,$WEB_TOOLS"
+  readonly DISALLOWED_TOOLS="$NETWORK_COMMANDS"
+else
+  readonly ALLOWED_TOOLS="$BASE_TOOLS"
+  readonly DISALLOWED_TOOLS="$WEB_TOOLS,$NETWORK_COMMANDS"
+fi
 
 log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
 
@@ -243,7 +260,7 @@ set +e
 (
   cd "$VAULT_DIR"
   claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format text \
-    --allowedTools "$ALLOWED_TOOLS" </dev/null
+    --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
 ) >"$AGENT_OUT" 2>"$AGENT_ERR"
 agent_rc=$?
 set -e

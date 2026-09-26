@@ -123,17 +123,19 @@ cat >"$STUBS/claude" <<'STUB'
 # the inbox file to Processed/ like the real agent would. Meanwhile a file
 # lands in each inbox folder of the fake Drive, as an Add from the app would.
 set -euo pipefail
-turns='' tools='' prompt=''
+turns='' tools='' denied='' prompt=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -p) prompt=$2; shift 2 ;;
     --max-turns) turns=$2; shift 2 ;;
     --allowedTools) tools=$2; shift 2 ;;
+    --disallowedTools) denied=$2; shift 2 ;;
     *) shift ;;
   esac
 done
 echo "claude max-turns=$turns rulebook=$([ -f CLAUDE.md ] && echo yes || echo no) prompt=$([ -n "$prompt" ] && echo yes || echo no)" >>"$SMOKE_STATE/calls.log"
 printf '%s' "$tools" >"$SMOKE_STATE/claude-tools.txt"
+printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
 echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-unset} CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-unset}" >"$SMOKE_STATE/claude-env.log"
 echo "STDERR-MARKER while reading 0-Inbox/a.pdf" >&2
 echo late >"$SMOKE_STATE/remote/0-Inbox/late.pdf"
@@ -220,7 +222,7 @@ run_case() {
   : >"$STATE/posts.log"
   set +e
   env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GITHUB_RUN_ID \
-    -u BOWER_MAX_TURNS \
+    -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB \
     PATH="$STUBS:$PATH" \
     RUNNER_TEMP="$STATE/runner-temp" \
     BOWER_API_URL="$API_URL" \
@@ -303,8 +305,11 @@ for f in 0-Inbox/late.pdf Clippings/late.md Clippings/b.md 0-Inbox/_Inbox.md 0-I
 done
 expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
-  'Read,Write,Edit,MultiEdit,Glob,Grep,LS,WebSearch,WebFetch,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*)' \
-  'allowed tools'
+  'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*)' \
+  'allowed tools (no web by default)'
+expect_eq "$(cat "$STATE/claude-denied.txt")" \
+  'WebSearch,WebFetch,Bash(curl:*),Bash(wget:*)' \
+  'disallowed tools (web denied by default)'
 expect_eq "$(cat "$STATE/rclone-env.log")" "$(printf '%s\n' TYPE=drive SCOPE=drive ROOT_FOLDER_ID=FOLDER_ID EXPORT_FORMATS=txt)" 'rclone env'
 expect_eq "$(node -e '
   const t = JSON.parse(require("fs").readFileSync(0, "utf8"));
@@ -415,3 +420,15 @@ expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claud
 expect_content_free
 expect_cleaned_up
 echo "ok lint"
+
+# 9. The instance opts in to web access: WebSearch and WebFetch are allowed,
+# network commands in Bash stay denied.
+run_case web BOWER_ALLOW_WEB=1
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(cat "$STATE/claude-tools.txt")" \
+  'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*),WebSearch,WebFetch' \
+  'allowed tools (web opted in)'
+expect_eq "$(cat "$STATE/claude-denied.txt")" 'Bash(curl:*),Bash(wget:*)' 'disallowed tools (web opted in)'
+expect_content_free
+expect_cleaned_up
+echo "ok web opt-in"
