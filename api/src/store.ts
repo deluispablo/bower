@@ -10,7 +10,7 @@
  * input crossing this boundary.
  */
 
-import type { PushSubscription, Run, User } from './types.js';
+import type { DriveToken, PushSubscription, Run, User } from './types.js';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -177,24 +177,26 @@ export async function deletePushSub(
 }
 
 /**
- * Caches a Drive access token for `userId`. `ttlSeconds` is the caller's
- * to set (the token's own remaining lifetime), not a fixed constant here.
+ * Caches a Drive access token (with its expiry) for `userId`. `ttlSeconds`
+ * is the caller's to set (the token's own remaining lifetime), not a fixed
+ * constant here.
  */
 export async function putDriveToken(
   kv: KVNamespace,
   userId: string,
-  token: string,
+  token: DriveToken,
   ttlSeconds: number,
 ): Promise<void> {
-  await kv.put(keys.driveToken(userId), token, { expirationTtl: ttlSeconds });
+  await putJson(kv, keys.driveToken(userId), token, {
+    expirationTtl: ttlSeconds,
+  });
 }
 
 export async function getDriveToken(
   kv: KVNamespace,
   userId: string,
-): Promise<string | undefined> {
-  const value = await kv.get(keys.driveToken(userId));
-  return value ?? undefined;
+): Promise<DriveToken | undefined> {
+  return getJson<DriveToken>(kv, keys.driveToken(userId));
 }
 
 /**

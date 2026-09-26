@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { createAuthRoutes } from './auth.js';
 import type { AuthDeps } from './auth.js';
+import { createDriveRoutes } from './drive.js';
 import { assertEnv } from './env.js';
 import type { AppEnv } from './env.js';
 import { createErrorHandler } from './errors.js';
@@ -37,6 +38,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   });
 
   app.route('/', createAuthRoutes(deps));
+  app.route('/', createDriveRoutes(deps));
 
   return app;
 }
