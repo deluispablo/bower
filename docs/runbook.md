@@ -53,3 +53,53 @@ Checks Google sign-in end to end on `wrangler dev` with a real Google OAuth clie
 11. Create a vault (sign in again first if you did step 10). Copy the `bower_session` cookie value from the browser's developer tools, then run `curl -X POST -H "cookie: bower_session=<value>" -H "content-type: application/json" -d '{"mode":"create"}' http://localhost:8787/vault`. It answers 201 with `{ vault: { folderId, inboxFolderId, name } }`, and `/me` shows the same `vault`. In drive.google.com, My Drive now has a `Bower` folder holding `CLAUDE.md`, `index.md`, `log.md`, `About-Me.md` and the folders `0-Inbox` (with `Processed`), `1-Projects`, `2-Areas`, `3-Resources`, `4-Archives`, `Answers`, `Clippings`. Running the same command again answers 409 `vault_exists`.
 12. Select an existing folder. In drive.google.com, pick a folder that already has notes (an Obsidian vault, or a copy of one) and note each file's "Last modified" time; the folder id is the last part of its URL. Run step 11's command with `-d '{"mode":"select","folderId":"<id>"}'`. It answers 200; no existing file changed (same modified times and content), only the template files and folders the folder lacked were added, and `0-Inbox` exists.
 13. Signed in again, get the session cookie's value from the browser, then `curl -X DELETE http://localhost:8787/me -b "bower_session=<value>"` answers 204; `pnpm -C api exec wrangler kv key list --local --binding BOWER_KV` no longer lists that `user:<id>` or `email:<email>`, and drive.google.com still shows the folder the sign-in created.
+
+## Invite someone
+
+Add their email to the allowlist (case-insensitive; the Worker lower-cases it before storing or checking it). Either way works; the `wrangler kv` command is enough on its own — the admin endpoint exists for a future admin page.
+
+Directly in KV:
+
+```bash
+# Production
+pnpm -C api exec wrangler kv key put --binding BOWER_KV "allow:you@example.com" 1
+# Local (wrangler dev)
+pnpm -C api exec wrangler kv key put --local --binding BOWER_KV "allow:you@example.com" 1
+```
+
+Or through the admin endpoint (`ADMIN_KEY` is the secret from the table above, `API_ORIGIN` the Worker's origin):
+
+```bash
+curl -X POST "https://api.example.com/admin/allow" \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com"}'
+```
+
+Answers `204` with no body on success, `400 invalid_email` if `email` is missing, empty or has no `@`.
+
+## Remove someone
+
+Removing someone drops their invitation so they can no longer sign in. If they had already signed in, the admin endpoint also deletes all of their data (their user record, quota counters, push subscriptions, cached Drive token) and revokes Bower's access to their Google account at Google (best effort: a failed revoke is logged by its error code only and does not stop the removal). The vault itself, in their Drive, is never touched.
+
+The plain `wrangler kv key delete` only removes the invitation; it never touches an existing user's data. Prefer the admin endpoint below for someone who has signed in.
+
+Directly in KV (invitation only):
+
+```bash
+# Production
+pnpm -C api exec wrangler kv key delete --binding BOWER_KV "allow:you@example.com"
+# Local (wrangler dev)
+pnpm -C api exec wrangler kv key delete --local --binding BOWER_KV "allow:you@example.com"
+```
+
+Or through the admin endpoint, which also deletes their data and revokes Google access:
+
+```bash
+curl -X DELETE "https://api.example.com/admin/allow/you@example.com" \
+  -H "Authorization: Bearer $ADMIN_KEY"
+```
+
+Answers `204` with no body, whether or not anyone had signed in with that email.
+
+To see who has signed in before removing them: `curl "https://api.example.com/admin/users" -H "Authorization: Bearer $ADMIN_KEY"` returns `[{ id, email, hasVault, createdAt }]` — never a token.
