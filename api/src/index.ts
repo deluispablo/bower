@@ -7,6 +7,7 @@ import { assertEnv } from './env.js';
 import type { AppEnv } from './env.js';
 import { createErrorHandler } from './errors.js';
 import { createSettingsRoutes } from './settings.js';
+import { createVaultRoutes } from './vault.js';
 
 /**
  * Builds the Worker's Hono app. `deps` exist for tests only (a stubbed
@@ -41,6 +42,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.route('/', createAuthRoutes(deps));
   app.route('/', createDriveRoutes(deps));
   app.route('/', createSettingsRoutes(deps));
+  app.route('/', createVaultRoutes(deps));
 
   return app;
 }
