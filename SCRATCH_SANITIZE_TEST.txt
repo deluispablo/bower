@@ -1,2 +1,0 @@
-scratch file for the sanitize-gate CI demo
-contact someone@gmail.com
