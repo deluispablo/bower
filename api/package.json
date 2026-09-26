@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
     "prebuild": "node scripts/bundle-template.mjs",
-    "build": "wrangler deploy --dry-run"
+    "build": "wrangler deploy --dry-run",
+    "gen-vapid": "node scripts/gen-vapid.mjs"
   },
   "dependencies": {
     "hono": "^4.13.9"

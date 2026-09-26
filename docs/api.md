@@ -11,7 +11,7 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `allow:<email>` | `'1'` | none | the operator, outside this module | `isAllowed` |
 | `run:<id>` | `Run` | none | `putRun` | `getRun` |
 | `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
-| `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` |
+| `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` (deleted by `deletePushSub`, `DELETE /push/subscribe`, and `sendPush` on a 404/410) |
 | `drivetoken:<id>` | `DriveToken` (cached Drive access token) | token lifetime − 60 s, at least 60 s (set by `drive.ts`) | `putDriveToken` | `getDriveToken` |
 
 Notes:
@@ -58,10 +58,10 @@ Notes:
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `id` | `string` | |
-| `endpoint` | `string` | |
-| `keys.p256dh` | `string` | |
-| `keys.auth` | `string` | |
+| `id` | `string` | `base64url(SHA-256(endpoint))`, first 32 characters; the `<subId>` of its key |
+| `endpoint` | `string` | The push service URL (`https:`); never logged |
+| `keys.p256dh` | `string` | base64url, the browser's P-256 public key (65 bytes) |
+| `keys.auth` | `string` | base64url, the browser's 16-byte auth secret |
 | `createdAt` | `string` | ISO-8601 |
 
 ## `POST /vault`
@@ -192,7 +192,7 @@ The runner's progress report. Body, validated strictly (an unknown field, a wron
 The stored run (`run:<id>`) is updated; without one, a run is started with `requestedAt` set to now.
 
 - `running`: `state` and `startedAt` (now) are set. A run that is already `running` keeps its `startedAt`. Outcome fields of an earlier attempt (`finishedAt`, `summary`, `processed`, `error`) are dropped.
-- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed` and `error` become exactly the report's (absent when the report has none). Then `sendPush` is called (`api/src/push.ts`; a no-op until web push exists).
+- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed` and `error` become exactly the report's (absent when the report has none). Then the user's devices get a push notification (see [Web push](#web-push)): `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. A push failure never fails the report.
 
 Response: `{ "run": Run }`, status 200.
 
@@ -201,6 +201,44 @@ Response: `{ "run": Run }`, status 200.
 | 400 | `bad_request` | The body is not a JSON object matching the table above |
 | 401 | `unauthorized` | Missing or wrong runner key |
 | 404 | `not_found` | No user with that id, or the user has no vault yet |
+
+## Web push
+
+The Worker sends notifications itself, with Web Crypto only (`api/src/push.ts`): the payload is encrypted per RFC 8291 (`aes128gcm`) and each request is signed with a VAPID JWT per RFC 8292 (ES256, `aud` the push service's origin, `sub` `VAPID_SUBJECT`, valid 12 h). Keys come from `pnpm -C api gen-vapid` (see `docs/runbook.md`). Nothing logs an endpoint, a key or a payload.
+
+### Payload
+
+What the service worker receives in the `push` event, as JSON:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `title` | `string` | `Bower` |
+| `body` | `string` | `2 files processed` (or `1 file processed`), `Nothing new to process`, or `Something went wrong` |
+| `url` | `string` | App path to open on click; `/` |
+
+Sent with `TTL: 86400`, `Urgency: normal`, `Content-Encoding: aes128gcm` to every subscription of the user when a run is reported `done` or `failed`. A 404 or 410 from the push service deletes that subscription; any other failure is logged by status only and the subscription is kept.
+
+### `GET /push/public-key`
+
+No session needed. Response: `{ "publicKey": string }`, the `VAPID_PUBLIC_KEY` (base64url, 65-byte uncompressed P-256 point) to pass as `applicationServerKey` to `pushManager.subscribe`. A 500 `config` when the key is missing or malformed.
+
+### `POST /push/subscribe`
+
+Requires the session cookie. Body: `{ "subscription": { "endpoint": string, "keys": { "p256dh": string, "auth": string } } }`, the shape of the browser's `PushSubscription.toJSON()` (other subscription fields, such as `expirationTime`, are ignored). Stored as a `PushSubscription` under `push:<userId>:<id>`; subscribing the same endpoint again replaces it. Response: 204, no body.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 400 | `bad_request` | Not a JSON object; `endpoint` not an `https:` URL (at most 2,048 characters); `p256dh` not a base64url 65-byte P-256 point; `auth` not base64url of 16 bytes |
+| 401 | `unauthenticated` | No valid session cookie, or the session's user no longer exists |
+
+### `DELETE /push/subscribe`
+
+Requires the session cookie. Body: `{ "endpoint": string }`. Deletes the subscription stored for that endpoint, if any. Response: 204, no body.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 400 | `bad_request` | Not a JSON object, or `endpoint` missing or empty |
+| 401 | `unauthenticated` | No valid session cookie |
 
 ## `GET /drive/token`
 

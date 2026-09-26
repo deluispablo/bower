@@ -23,6 +23,7 @@ import type { AppEnv } from './env.js';
 import { HttpError } from './errors.js';
 import type { FetchLike } from './google.js';
 import { sendPush } from './push.js';
+import type { PushPayload } from './push.js';
 import { getRun, getUser, putRun } from './store.js';
 import type { DriveToken, Run, User } from './types.js';
 
@@ -192,6 +193,25 @@ function applyReport(
   return run;
 }
 
+/**
+ * The notification for a finished run: how many files were processed
+ * (`done`), that there was nothing to do (`done` with none), or that the
+ * run failed. Never a file name or the summary.
+ */
+export function runPushPayload(run: Run): PushPayload {
+  let body: string;
+  if (run.state === 'failed') {
+    body = 'Something went wrong';
+  } else {
+    const count = run.processed?.length ?? 0;
+    body =
+      count === 0
+        ? 'Nothing new to process'
+        : `${count} ${count === 1 ? 'file' : 'files'} processed`;
+  }
+  return { title: 'Bower', body, url: '/' };
+}
+
 type VaultUser = User & { vault: NonNullable<User['vault']> };
 
 function hasVault(user: User | undefined): user is VaultUser {
@@ -266,7 +286,7 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     await putRun(kv, user.id, run);
 
     if (run.state === 'done' || run.state === 'failed') {
-      await sendPush(env, user.id, run);
+      await sendPush(env, user.id, runPushPayload(run), fetchImpl);
     }
     return c.json({ run });
   });
