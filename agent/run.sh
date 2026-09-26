@@ -5,9 +5,10 @@
 #
 # Fetches the vault's folder id and a 1 h Drive token from the API, syncs the
 # vault down with rclone (configured only through environment variables),
-# runs Claude Code inside it following the vault's own CLAUDE.md, copies the
-# result back up, deletes from Drive only the pending originals the agent
-# moved away, and reports the outcome to the API.
+# runs Claude Code inside it following the vault's own CLAUDE.md, copies back
+# up only the files the agent added or changed (so a note edited in the app
+# during the run keeps its newer content), deletes from Drive only the pending
+# originals the agent moved away, and reports the outcome to the API.
 #
 # Environment:
 #   BOWER_API_URL            the Worker's origin, e.g. https://api.example.com
@@ -88,6 +89,9 @@ readonly WORK_DIR LOG_DIR
 readonly VAULT_DIR="$WORK_DIR/vault"
 readonly VAULT_JSON="$WORK_DIR/vault.json"
 readonly PENDING_FILE="$WORK_DIR/pending.txt"
+readonly MANIFEST_BEFORE="$WORK_DIR/manifest-before.txt"
+readonly MANIFEST_AFTER="$WORK_DIR/manifest-after.txt"
+readonly CHANGED_FILE="$WORK_DIR/changed.txt"
 readonly AGENT_OUT="$WORK_DIR/agent.out"
 readonly AGENT_ERR="$LOG_DIR/agent.err"
 readonly RCLONE_LOG="$LOG_DIR/rclone.log"
@@ -129,13 +133,44 @@ report() {
       --data-binary @- -o /dev/null "$API_BASE/status"
 }
 
-# Best effort after a failure: upload whatever the agent already wrote, with
-# copy only (never deletes), so originals stay in the inbox.
+# Print one "<checksum> <size> <path>" line per file of the local copy,
+# .obsidian/ excluded, sorted bytewise; paths are relative to the vault.
+# cksum is POSIX and reads content, so an edit is seen whatever its mtime.
+manifest() {
+  (
+    cd "$VAULT_DIR" &&
+      find . -type f ! -path './.obsidian/*' -exec cksum {} + |
+      sed 's|^\([0-9]* [0-9]*\) \./|\1 |' |
+        LC_ALL=C sort
+  )
+}
+
+# Copy up, never deleting, only the files that are new or changed since
+# MANIFEST_BEFORE was taken, so a note edited in Drive during the run (for
+# example from the app) is not overwritten by the older local copy. Logs the
+# count only.
+copy_changed_up() {
+  manifest >"$MANIFEST_AFTER" || return 1
+  LC_ALL=C comm -13 "$MANIFEST_BEFORE" "$MANIFEST_AFTER" |
+    cut -d ' ' -f 3- >"$CHANGED_FILE" || return 1
+  local count
+  count=$(grep -c . "$CHANGED_FILE" || true)
+  log "$count files changed"
+  if [ "$count" -eq 0 ]; then
+    return 0
+  fi
+  # --files-from-raw reads each line as a path as is (no comment or
+  # whitespace handling).
+  rclone copy "$VAULT_DIR" vault: --files-from-raw "$CHANGED_FILE" \
+    >>"$RCLONE_LOG" 2>&1
+}
+
+# Best effort after a failure: upload whatever the agent already added or
+# changed, with copy only (never deletes), so originals stay in the inbox.
 copy_up_after_failure() {
   if [ "$RUN_STARTED" -eq 1 ]; then
     log "sync up (copy only)"
-    rclone copy "$VAULT_DIR" vault: --exclude '.obsidian/**' >>"$RCLONE_LOG" 2>&1 ||
-      log "sync up (copy only) failed"
+    copy_changed_up || log "sync up (copy only) failed"
   fi
 }
 
@@ -252,6 +287,15 @@ if ! PROCESSED_JSON='' report running; then
   fail "$STEP: API unreachable"
 fi
 
+# The local copy is still exactly what sync down fetched: record it, so the
+# upload can tell what the agent added or changed. Taken here rather than
+# right after sync down so a run with nothing pending reads no file.
+STEP='manifest'
+log "$STEP"
+if ! manifest >"$MANIFEST_BEFORE"; then
+  fail "$STEP: listing the local copy failed"
+fi
+
 STEP='agent run'
 log "$STEP"
 PROMPT=$(cat "$PROMPT_FILE")
@@ -269,13 +313,14 @@ if [ "$agent_rc" -ne 0 ]; then
 fi
 
 # --- sync up ----------------------------------------------------------------
-# copy never deletes. Then each file that was pending at the start and is gone
-# from the local copy (the agent moved it to 0-Inbox/Processed/) is deleted
-# from Drive by its own path, so processed originals leave the inbox. Nothing
-# else is removed: a file added to Drive during the run stays.
+# Only the files the agent added or changed are copied, and copy never
+# deletes: a file added or edited in Drive during the run keeps its content.
+# Then each file that was pending at the start and is gone from the local copy
+# (the agent moved it to 0-Inbox/Processed/) is deleted from Drive by its own
+# path, so processed originals leave the inbox. Nothing else is removed.
 STEP='sync up'
 log "$STEP"
-if ! rclone copy "$VAULT_DIR" vault: --exclude '.obsidian/**' >>"$RCLONE_LOG" 2>&1; then
+if ! copy_changed_up; then
   fail "$STEP: copy failed"
 fi
 RUN_STARTED=0  # the copy is done; a later failure needs no second copy

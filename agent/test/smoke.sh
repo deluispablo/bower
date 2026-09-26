@@ -71,7 +71,8 @@ cat >"$STUBS/rclone" <<'STUB'
 # The first "sync vault: <dir>" fills the remote per scenario, then every
 # "sync vault: <dir>" copies the remote into <dir>; "sync <dir> vault:<folder>"
 # makes the remote folder a mirror of <dir>; "copy <dir> vault:" copies <dir>
-# into the remote (never deleting); "deletefile vault:<path>" removes
+# into the remote (never deleting), or only the paths listed in the file
+# given with --files-from or --files-from-raw; "deletefile vault:<path>" removes
 # one remote file and fails with rclone's "file not found" code when absent.
 set -euo pipefail
 remote="$SMOKE_STATE/remote"
@@ -97,6 +98,9 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         echo old >"$remote/0-Inbox/Processed/old.pdf"
         echo note >"$remote/0-Inbox/_Inbox.md"
         echo clip >"$remote/Clippings/b.md"
+        mkdir -p "$remote/Wiki"
+        echo v1 >"$remote/Wiki/app.md"
+        echo v1 >"$remote/Wiki/agent.md"
         ;;
     esac
   fi
@@ -108,7 +112,16 @@ elif [ "$1" = sync ]; then
   mkdir -p "$remote/${3#vault:}"
   cp -R "$2/." "$remote/${3#vault:}/"
 elif [ "$1" = copy ] && [ "$3" = vault: ]; then
-  cp -R "$2/." "$remote/"
+  case "${4:-}" in
+    --files-from | --files-from-raw)
+      while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        mkdir -p "$(dirname "$remote/$path")"
+        cp "$2/$path" "$remote/$path"
+      done <"$5"
+      ;;
+    *) cp -R "$2/." "$remote/" ;;
+  esac
 elif [ "$1" = deletefile ]; then
   target="$remote/${2#vault:}"
   [ -f "$target" ] || exit 4
@@ -142,6 +155,14 @@ echo late >"$SMOKE_STATE/remote/0-Inbox/late.pdf"
 echo late >"$SMOKE_STATE/remote/Clippings/late.md"
 # "gone": the pending original is removed from Drive while the agent works.
 [ "$SMOKE_SCENARIO" != gone ] || rm "$SMOKE_STATE/remote/0-Inbox/a.pdf"
+# "edited" and "fail": the user edits one note in the app while the agent
+# rewrites another one.
+case "$SMOKE_SCENARIO" in
+  edited | fail)
+    echo 'v2 from the app' >"$SMOKE_STATE/remote/Wiki/app.md"
+    echo 'v2 from the agent' >Wiki/agent.md
+    ;;
+esac
 if [ "$SMOKE_SCENARIO" = fail ]; then
   exit 1
 fi
@@ -255,7 +276,7 @@ expect_eq() { [ "$1" = "$2" ] || die "$3: expected [$2], got [$1]"; }
 
 # The script's own output must never carry vault content or credentials.
 expect_content_free() {
-  for needle in a.pdf b.md late.pdf late.md SUMMARY-MARKER STDERR-MARKER "$DRIVE_TOKEN" \
+  for needle in a.pdf b.md late.pdf late.md Wiki app.md agent.md SUMMARY-MARKER STDERR-MARKER "$DRIVE_TOKEN" \
     "$USER_API_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -294,8 +315,9 @@ rclone_calls=$(calls rclone)
 expect_eq "$(printf '%s\n' "$rclone_calls" | wc -l | tr -d ' ')" 3 'rclone calls'
 printf '%s\n' "$rclone_calls" | sed -n 1p | grep -q "^rclone sync vault: .* --exclude \.obsidian/\*\*$" ||
   die 'first rclone call is not the sync down'
-printf '%s\n' "$rclone_calls" | sed -n 2p | grep -q '^rclone copy .* vault: ' ||
-  die 'second rclone call is not the copy up'
+printf '%s\n' "$rclone_calls" | sed -n 2p | grep -q '^rclone copy .* vault: --files-from-raw ' ||
+  die 'second rclone call is not the changed-only copy up'
+grep -q ' 1 files changed$' "$STATE/out.log" || die 'changed count not logged'
 expect_eq "$(printf '%s\n' "$rclone_calls" | sed -n 3p)" 'rclone deletefile vault:0-Inbox/a.pdf' 'targeted delete'
 remote="$STATE/remote"
 [ ! -e "$remote/0-Inbox/a.pdf" ] || die 'processed original still in 0-Inbox/ in Drive'
@@ -348,6 +370,8 @@ expect_eq "$(calls rclone | grep -c '^rclone sync ')" 1 'rclone sync calls (sync
 expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
 [ -f "$STATE/remote/0-Inbox/a.pdf" ] || die 'original left 0-Inbox/ in Drive after a failure'
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive after a failure'
+expect_eq "$(cat "$STATE/remote/Wiki/app.md")" 'v2 from the app' 'note edited in the app during a failed run'
+expect_eq "$(cat "$STATE/remote/Wiki/agent.md")" 'v2 from the agent' 'note the agent changed before failing'
 expect_content_free
 expect_cleaned_up
 echo "ok agent failure"
@@ -432,3 +456,19 @@ expect_eq "$(cat "$STATE/claude-denied.txt")" 'Bash(curl:*),Bash(wget:*)' 'disal
 expect_content_free
 expect_cleaned_up
 echo "ok web opt-in"
+
+# 10. A note is edited in the app while the agent rewrites another one: only
+# what the agent added or changed is uploaded, so the app's edit survives.
+run_case edited
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(calls rclone | grep -c '^rclone copy .* --files-from-raw ')" 1 'changed-only copy calls'
+grep -q ' 2 files changed$' "$STATE/out.log" || die 'changed count not logged'
+remote="$STATE/remote"
+expect_eq "$(cat "$remote/Wiki/app.md")" 'v2 from the app' 'note edited in the app during the run'
+expect_eq "$(cat "$remote/Wiki/agent.md")" 'v2 from the agent' 'note the agent changed'
+[ -f "$remote/0-Inbox/Processed/a.pdf" ] || die 'processed original missing from 0-Inbox/Processed/ in Drive'
+[ ! -e "$remote/0-Inbox/a.pdf" ] || die 'processed original still in 0-Inbox/ in Drive'
+expect_content_free
+expect_cleaned_up
+echo "ok note edited in the app during a run"
