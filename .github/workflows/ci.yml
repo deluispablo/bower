@@ -11,6 +11,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for personal data and secret-shaped strings
+        run: bash scripts/check-sanitized.sh
+
   ci:
     runs-on: ubuntu-latest
     steps:
