@@ -1,0 +1,8 @@
+TOKEN_ENC_KEY=replace-me
+SESSION_SECRET=replace-me
+GOOGLE_CLIENT_ID=replace-me
+GOOGLE_CLIENT_SECRET=replace-me
+BOWER_API_KEY=replace-me
+GITHUB_TOKEN=replace-me
+VAPID_PRIVATE_KEY=replace-me
+VAPID_PUBLIC_KEY=replace-me

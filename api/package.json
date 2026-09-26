@@ -2,9 +2,20 @@
   "name": "@bower/api",
   "private": true,
   "type": "module",
+  "version": "0.1.0",
   "scripts": {
-    "typecheck": "echo \"api: no sources yet\"",
-    "test": "pnpm exec vitest run --passWithNoTests",
-    "build": "echo \"api: nothing to build yet\""
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run",
+    "build": "wrangler deploy --dry-run"
+  },
+  "dependencies": {
+    "hono": "^4.13.9"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260926.1",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.141.0"
   }
 }

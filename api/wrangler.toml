@@ -1,0 +1,11 @@
+name = "bower-api"
+main = "src/index.ts"
+compatibility_date = "2026-08-22"
+
+[[kv_namespaces]]
+binding = "BOWER_KV"
+id = "KV_NAMESPACE_ID"
+
+[vars]
+APP_URL = "http://localhost:5173"
+APP_VERSION = "0.1.0"
