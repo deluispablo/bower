@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-size.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p .",
-    "test": "pnpm exec vitest run --passWithNoTests"
+    "test": "pnpm exec vitest run --passWithNoTests",
+    "size": "node scripts/check-size.mjs"
   },
   "dependencies": {
     "dompurify": "^3.4.16",
@@ -16,7 +17,10 @@
     "idb-keyval": "^6.3.0",
     "preact": "^10.29.8",
     "preact-iso": "^2.12.2",
+    "workbox-expiration": "^7.4.1",
     "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1",
     "workbox-window": "^7.4.1"
   },
   "devDependencies": {

@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
+import { offlineReason, useOnline } from '../online.js';
 import '../styles/process.css';
 import { pendingCount, useRun } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
@@ -43,6 +44,7 @@ export function ProcessButton() {
   const { me } = useSession();
   const { phase, message, process } = useRun();
   const { files } = useVault();
+  const online = useOnline();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastKey, setToastKey] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -91,6 +93,8 @@ export function ProcessButton() {
   }
 
   const reopens = phase === 'queued' || phase === 'running' || phase === 'done';
+  // Offline is the only reason to disable: during a run a tap reopens the sheet.
+  const disabled = !online;
 
   // Nothing to process before the account has a folder (login, onboarding).
   if (me?.vault == null) return null;
@@ -102,6 +106,8 @@ export function ProcessButton() {
         class="process-button"
         data-phase={phase}
         aria-haspopup={reopens ? 'dialog' : undefined}
+        disabled={disabled}
+        aria-disabled={disabled}
         onClick={onClick}
       >
         {phase === 'running' && (
@@ -109,6 +115,9 @@ export function ProcessButton() {
         )}
         <span aria-live="polite">{labelFor(phase, pendingCount(files))}</span>
       </button>
+      {!online && (
+        <span class="process-offline-reason">{offlineReason('process')}</span>
+      )}
       <Toast message={toastMessage} messageKey={toastKey} />
       <PushPrompt />
       <WorkingSheet

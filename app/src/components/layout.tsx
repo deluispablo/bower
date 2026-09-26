@@ -4,6 +4,7 @@ import { useState } from 'preact/hooks';
 import { loginUrl } from '../api.js';
 import { useSession } from '../session.js';
 import { useVault } from '../vault-store.js';
+import { OfflineBanner } from './offline-banner.js';
 import { ProcessButton } from './process-button.js';
 import { Search } from './search.js';
 import { Tree } from './tree.js';
@@ -79,6 +80,7 @@ export function Layout({ children }: LayoutProps) {
           )}
         </div>
       </header>
+      <OfflineBanner />
       {me?.needsReauth && (
         <div class="reauth-banner">
           <span>Google access needs to be renewed.</span>

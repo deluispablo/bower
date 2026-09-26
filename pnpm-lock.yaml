@@ -65,7 +65,16 @@ importers:
       preact-iso:
         specifier: ^2.12.2
         version: 2.12.2(preact-render-to-string@6.7.0)(preact@10.29.8)
+      workbox-expiration:
+        specifier: ^7.4.1
+        version: 7.4.1
       workbox-precaching:
+        specifier: ^7.4.1
+        version: 7.4.1
+      workbox-routing:
+        specifier: ^7.4.1
+        version: 7.4.1
+      workbox-strategies:
         specifier: ^7.4.1
         version: 7.4.1
       workbox-window:

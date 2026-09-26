@@ -1,6 +1,15 @@
 .process {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+}
+
+.process-offline-reason {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-align: center;
 }
 
 .process-button {

@@ -3,6 +3,7 @@ import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
 import { listFolder, upload } from '../drive.js';
+import { offlineReason, useOnline } from '../online.js';
 import { getPref } from '../prefs.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
@@ -37,6 +38,7 @@ export function Add() {
   const { me } = useSession();
   const { process } = useRun();
   const { route } = useLocation();
+  const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -273,10 +275,17 @@ export function Add() {
 
       {message !== null && <p class="add-message">{message}</p>}
 
+      {!online && <p class="offline-reason">{offlineReason('add')}</p>}
+
       <button
         type="button"
         class="button"
-        disabled={busy || inboxFolderId === null || files.length === 0}
+        disabled={
+          busy || inboxFolderId === null || files.length === 0 || !online
+        }
+        aria-disabled={
+          busy || inboxFolderId === null || files.length === 0 || !online
+        }
         onClick={() => void processFiles(files)}
       >
         {busy ? 'Adding…' : 'Add to Bower'}
