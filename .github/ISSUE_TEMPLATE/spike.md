@@ -2,7 +2,7 @@
 name: Spike
 about: Time-boxed investigation to answer a question before committing to an approach
 title: ""
-labels: spike
+labels: "type:spike"
 assignees: ""
 ---
 
@@ -33,4 +33,4 @@ assignees: ""
 
 ## Notes for the implementer
 
-Read `CONTRIBUTING.md` first. One branch, one PR, `Closes #<this issue>` in the PR body. No personal data, no secrets.
+Read `CLAUDE.md` and `ARCHITECTURE.md` first. One branch, one PR, `Closes #<this issue>` in the PR body. No personal data, no secrets.

@@ -2,7 +2,7 @@
 name: Feature
 about: Propose a new piece of work that fits a milestone
 title: ""
-labels: ""
+labels: "type:feature"
 assignees: ""
 ---
 
@@ -32,4 +32,4 @@ assignees: ""
 
 ## Notes for the implementer
 
-Read `CONTRIBUTING.md` first. One branch, one PR, `Closes #<this issue>` in the PR body. No personal data, no secrets.
+Read `CLAUDE.md` and `ARCHITECTURE.md` first. One branch, one PR, `Closes #<this issue>` in the PR body. No personal data, no secrets.
