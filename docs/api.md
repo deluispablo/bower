@@ -12,7 +12,7 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `run:<id>` | `Run` | none | `putRun` | `getRun` |
 | `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
 | `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` |
-| `drivetoken:<id>` | cached Drive access token (string) | caller-supplied | `putDriveToken` | `getDriveToken` |
+| `drivetoken:<id>` | `DriveToken` (cached Drive access token) | token lifetime − 60 s, at least 60 s (set by `drive.ts`) | `putDriveToken` | `getDriveToken` |
 
 Notes:
 
@@ -45,6 +45,13 @@ Notes:
 | `processed` | `string[]` | optional |
 | `error` | `string` | optional |
 | `runId` | `string` | optional |
+
+## `DriveToken`
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `accessToken` | `string` | Google access token (scope `drive`); plaintext, lives about 1 h |
+| `expiresAt` | `string` | ISO-8601; when Google stops accepting it |
 
 ## `PushSubscription`
 

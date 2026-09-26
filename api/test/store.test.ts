@@ -11,6 +11,7 @@ import {
   isAllowed,
   keys,
   listPushSubs,
+  putDriveToken,
   putPushSub,
   putRun,
   putUser,
@@ -172,9 +173,15 @@ describe('deleteUserData', () => {
     await incrQuota(kv, 'user-8', '2026-01-02');
     await putPushSub(kv, 'user-8', testPushSub('sub-1'));
     await putPushSub(kv, 'user-8', testPushSub('sub-2'));
-    await kv.put(keys.driveToken('user-8'), 'test-access-token', {
-      expirationTtl: 3600,
-    });
+    await putDriveToken(
+      kv,
+      'user-8',
+      {
+        accessToken: 'test-access-token',
+        expiresAt: '2026-01-01T01:00:00.000Z',
+      },
+      3600,
+    );
     await kv.put(keys.allow('leaving@example.test'), '1');
 
     await deleteUserData(kv, 'user-8');

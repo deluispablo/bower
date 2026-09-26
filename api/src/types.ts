@@ -42,6 +42,13 @@ export interface Run {
   runId?: string;
 }
 
+/** A cached Google access token for Drive; plaintext, but lives at most 1 h. */
+export interface DriveToken {
+  accessToken: string;
+  /** ISO-8601; when Google stops accepting `accessToken`. */
+  expiresAt: string;
+}
+
 export interface PushSubscription {
   id: string;
   endpoint: string;

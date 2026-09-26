@@ -18,6 +18,7 @@ export const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 export const GOOGLE_USERINFO_URL =
   'https://openidconnect.googleapis.com/v1/userinfo';
+export const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 
 /**
  * Full Drive scope: `drive.file` only sees files the app created itself,
@@ -83,21 +84,54 @@ async function callGoogle(
   url: string,
   init: RequestInit,
 ): Promise<Record<string, unknown>> {
-  let response: Response;
+  const response = await fetchGoogle(what, fetchImpl, url, init);
+  if (!response.ok) throw googleStatusError(what, response.status);
+  return readGoogleJson(what, response);
+}
+
+/** Sends one request to Google; a network failure is a 502 `google_error`. */
+async function fetchGoogle(
+  what: string,
+  fetchImpl: FetchLike,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
   try {
-    response = await fetchImpl(url, init);
+    return await fetchImpl(url, init);
   } catch (err) {
     throw new HttpError(502, 'google_error', `${what} unreachable`, {
       cause: err,
     });
   }
-  if (!response.ok) {
-    throw new HttpError(
-      502,
-      'google_error',
-      `${what} returned ${response.status}`,
-    );
+}
+
+function googleStatusError(what: string, status: number): HttpError {
+  return new HttpError(502, 'google_error', `${what} returned ${status}`);
+}
+
+/**
+ * The OAuth `error` code of a non-2xx answer (e.g. `invalid_grant`), or
+ * `undefined` when the body is not JSON or carries none. Only this code is
+ * read: nothing else from the body reaches an error message or a log.
+ */
+async function oauthErrorCode(response: Response): Promise<string | undefined> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    // Not JSON, so there is no code to read; the caller still throws.
+    return undefined;
   }
+  return isRecord(body) && typeof body.error === 'string'
+    ? body.error
+    : undefined;
+}
+
+/** Reads a 2xx answer's JSON object body; anything else is a 502 `google_error`. */
+async function readGoogleJson(
+  what: string,
+  response: Response,
+): Promise<Record<string, unknown>> {
   let body: unknown;
   try {
     body = await response.json();
@@ -192,4 +226,75 @@ export async function fetchUserInfo(
     throw new HttpError(502, 'google_error', 'userinfo has no subject');
   }
   return { email, emailVerified: body.email_verified === true, sub };
+}
+
+export interface GoogleAccessToken {
+  accessToken: string;
+  /** Access token lifetime in seconds. */
+  expiresIn: number;
+}
+
+/**
+ * Mints a fresh access token from a refresh token
+ * (`grant_type=refresh_token`). Throws `HttpError(401, 'reauth')` when
+ * Google answers 400 `invalid_grant` (the user revoked the app, or the
+ * refresh token expired), and `HttpError(502, 'google_error')` on any
+ * other failure.
+ */
+export async function refreshAccessToken(
+  params: { refreshToken: string; clientId: string; clientSecret: string },
+  fetchImpl: FetchLike = fetch,
+): Promise<GoogleAccessToken> {
+  const what = 'token endpoint';
+  const response = await fetchGoogle(what, fetchImpl, GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: params.refreshToken,
+      client_id: params.clientId,
+      client_secret: params.clientSecret,
+    }).toString(),
+  });
+  if (!response.ok) {
+    if (
+      response.status === 400 &&
+      (await oauthErrorCode(response)) === 'invalid_grant'
+    ) {
+      throw new HttpError(
+        401,
+        'reauth',
+        'Google access was revoked, sign in again',
+      );
+    }
+    throw googleStatusError(what, response.status);
+  }
+  const body = await readGoogleJson(what, response);
+  const accessToken = body.access_token;
+  const expiresIn = body.expires_in;
+  if (typeof accessToken !== 'string' || accessToken.length === 0) {
+    throw new HttpError(502, 'google_error', 'no access token');
+  }
+  if (typeof expiresIn !== 'number') {
+    throw new HttpError(502, 'google_error', 'no token lifetime');
+  }
+  return { accessToken, expiresIn };
+}
+
+/**
+ * Revokes a refresh or access token at Google (revoking a refresh token
+ * also revokes the access tokens minted from it). Throws
+ * `HttpError(502, 'google_error')` on a non-2xx answer or a network failure.
+ */
+export async function revokeToken(
+  token: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<void> {
+  const what = 'revoke endpoint';
+  const response = await fetchGoogle(what, fetchImpl, GOOGLE_REVOKE_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token }).toString(),
+  });
+  if (!response.ok) throw googleStatusError(what, response.status);
 }
