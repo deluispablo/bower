@@ -537,15 +537,14 @@ export function createTextFile(
 // --- Update and append -------------------------------------------------
 
 export interface UpdateTextOptions {
-  /** Sent as `If-Match`; Drive answers 412 when it no longer matches. */
-  ifMatch?: string;
   /** Content type of the new text. Defaults to `text/markdown`. */
   mimeType?: string;
 }
 
 /**
  * Replaces a file's content with `text` (`files.update`, media upload). A
- * non-2xx answer throws `DriveError`, including 412 when `ifMatch` is stale.
+ * non-2xx answer throws `DriveError`. Drive v3 documents no precondition
+ * header for this call, so callers check freshness themselves.
  */
 export async function updateFileText(
   id: string,
@@ -555,7 +554,6 @@ export async function updateFileText(
   const headers = new Headers({
     'Content-Type': options.mimeType ?? 'text/markdown',
   });
-  if (options.ifMatch !== undefined) headers.set('If-Match', options.ifMatch);
   const response = await driveFetch(
     `/upload/drive/v3/files/${encodeURIComponent(id)}?uploadType=media&fields=${FILE_FIELDS}`,
     { method: 'PATCH', headers, body: text },
@@ -633,24 +631,21 @@ function conflict(): AppendError {
 }
 
 /**
- * One read-append-write pass. Drive v3 has no `etag` field on files, so the
- * freshness check is `modifiedTime`: taken before the read and compared
- * again right before the write. If the download does carry an `ETag`
- * header, it is sent as `If-Match` too, and a 412 counts as a conflict.
+ * One read-append-write pass. Drive v3 has no `etag` field on files and
+ * documents no `If-Match` on `files.update`, so the freshness check is
+ * `modifiedTime`: taken before the read and compared again right before
+ * the write. A 412, should Drive ever answer one, also counts as a conflict.
  */
 async function appendOnce(
   target: AppendTarget,
   addition: string,
 ): Promise<AppendResult> {
   const before = await modifiedTimeOf(target.id);
-  const download = await driveFetch(mediaPath(target.id));
-  const etag = download.headers.get('ETag');
-  const current = await download.text();
+  const current = await getText(target.id);
   if ((await modifiedTimeOf(target.id)) !== before) throw conflict();
 
   const text = appendedText(current, addition);
   const options: UpdateTextOptions = {};
-  if (etag !== null && etag !== '') options.ifMatch = etag;
   if (target.mimeType !== undefined && target.mimeType !== '') {
     options.mimeType = target.mimeType;
   }

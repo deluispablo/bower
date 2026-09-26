@@ -577,13 +577,10 @@ describe('createTextFile', () => {
 interface FakeNote {
   text: string;
   modifiedTime: string;
-  /** `ETag` header on the download; none when `null`. */
-  etag: string | null;
 }
 
 interface Patch {
   body: string;
-  ifMatch: string | null;
   contentType: string | null;
 }
 
@@ -597,7 +594,7 @@ interface FakeNoteOptions {
 /**
  * A fake Drive holding one note, `FILE_ID`: `fields=modifiedTime`, the
  * `alt=media` download and the media `PATCH`, which bumps `modifiedTime`
- * (and the `ETag`, when there is one) like Drive would.
+ * like Drive would.
  */
 function fakeNote(
   note: FakeNote,
@@ -613,11 +610,7 @@ function fakeNote(
     const body = typeof init.body === 'string' ? init.body : '';
     if (method === 'PATCH') {
       const headers = new Headers(init.headers);
-      patches.push({
-        body,
-        ifMatch: headers.get('If-Match'),
-        contentType: headers.get('Content-Type'),
-      });
+      patches.push({ body, contentType: headers.get('Content-Type') });
       const status = patchStatuses.shift() ?? 200;
       if (status !== 200) {
         return jsonResponse(status, { error: { message: 'Drive said no.' } });
@@ -625,7 +618,6 @@ function fakeNote(
       version++;
       note.text = body;
       note.modifiedTime = `2026-01-01T00:00:0${version}.000Z`;
-      if (note.etag !== null) note.etag = `"etag-${version}"`;
       return jsonResponse(200, {
         id: 'FILE_ID',
         name: 'Ideas.md',
@@ -635,9 +627,9 @@ function fakeNote(
       });
     }
     if (url.searchParams.get('alt') === 'media') {
-      const headers = new Headers({ 'content-type': 'text/markdown' });
-      if (note.etag !== null) headers.set('ETag', note.etag);
-      return new Response(note.text, { headers });
+      return new Response(note.text, {
+        headers: { 'content-type': 'text/markdown' },
+      });
     }
     if (url.searchParams.get('fields') === 'modifiedTime') {
       metaReads++;
@@ -686,11 +678,10 @@ describe('appendedText', () => {
 });
 
 describe('appendToFile', () => {
-  it('reads the note, then PATCHes it with If-Match and the new paragraph', async () => {
+  it('reads the note, checks it is unchanged, then PATCHes the new paragraph', async () => {
     const note: FakeNote = {
       text: '# Ideas\n\nFirst.',
       modifiedTime: '2026-01-01T00:00:01.000Z',
-      etag: '"etag-1"',
     };
     const drive = fakeNote(note);
     stubFetch(drive.handler);
@@ -707,7 +698,7 @@ describe('appendToFile', () => {
       'PATCH /upload/drive/v3/files/FILE_ID?uploadType=media&fields=id,name,mimeType,parents,modifiedTime,size,webViewLink',
     ]);
     expect(drive.patches).toEqual([
-      { body: result.text, ifMatch: '"etag-1"', contentType: 'text/markdown' },
+      { body: result.text, contentType: 'text/markdown' },
     ]);
   });
 
@@ -715,7 +706,6 @@ describe('appendToFile', () => {
     const note: FakeNote = {
       text: 'First.',
       modifiedTime: '2026-01-01T00:00:01.000Z',
-      etag: '"etag-1"',
     };
     const drive = fakeNote(note, { patchStatuses: [412] });
     stubFetch(drive.handler);
@@ -733,7 +723,6 @@ describe('appendToFile', () => {
     const note: FakeNote = {
       text: 'First.',
       modifiedTime: '2026-01-01T00:00:01.000Z',
-      etag: '"etag-1"',
     };
     const drive = fakeNote(note, { patchStatuses: [412, 412] });
     stubFetch(drive.handler);
@@ -748,11 +737,10 @@ describe('appendToFile', () => {
     expect(note.text).toBe('First.');
   });
 
-  it('without an ETag, keeps a write another device made mid-append', async () => {
+  it('keeps a write another device made mid-append', async () => {
     const note: FakeNote = {
       text: 'First.',
       modifiedTime: '2026-01-01T00:00:01.000Z',
-      etag: null,
     };
     const drive = fakeNote(note, {
       beforeMeta: {
@@ -771,7 +759,28 @@ describe('appendToFile', () => {
       'First.\n\nFrom the other device.\n\nFrom this device.\n',
     );
     expect(drive.patches).toHaveLength(1);
-    expect(drive.patches[0]?.ifMatch).toBeNull();
+  });
+
+  it('gives up with a conflict when the note changes during both attempts', async () => {
+    const note: FakeNote = {
+      text: 'First.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const touch = (second: number) => (): void => {
+      note.modifiedTime = `2026-01-01T00:00:${second}.000Z`;
+    };
+    const drive = fakeNote(note, {
+      beforeMeta: { 2: touch(11), 4: touch(12) },
+    });
+    stubFetch(drive.handler);
+
+    const error = await appendToFile(TARGET, 'Second.').catch(
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(AppendError);
+    expect((error as AppendError).code).toBe('conflict');
+    expect(drive.patches).toHaveLength(0);
   });
 
   it('rejects the notes the agent maintains without any request', async () => {
@@ -802,7 +811,6 @@ describe('appendToFile', () => {
     const note: FakeNote = {
       text: 'First.',
       modifiedTime: '2026-01-01T00:00:01.000Z',
-      etag: null,
     };
     const drive = fakeNote(note, { patchStatuses: [500] });
     stubFetch(drive.handler);
