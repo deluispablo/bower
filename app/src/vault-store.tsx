@@ -6,8 +6,9 @@
  * unchanged vault never flashes.
  *
  * Plain Preact context + hook, same shape as `session.tsx`. `VaultProvider`
- * is mounted in `app.tsx`, around the router, so every route (and the
- * `RunProvider` it wraps, #37) shares one instance.
+ * is mounted once in `app.tsx`, above the router, so every route — the
+ * tree (`layout.tsx`), Home, the note view, and the `RunProvider` it wraps
+ * (#37) — shares one instance and one cache.
  */
 
 import { createContext } from 'preact';

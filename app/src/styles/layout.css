@@ -83,6 +83,13 @@ button {
   position: relative;
 }
 
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  background: rgb(11 18 32 / 0.4);
+}
+
 .menu-panel {
   position: absolute;
   top: calc(100% + var(--space-2));
@@ -91,12 +98,28 @@ button {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  min-width: 200px;
+  width: min(20rem, 90vw);
+  max-height: calc(100vh - var(--space-16));
   padding: var(--space-3);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
+  overflow-y: auto;
+}
+
+.menu-tree {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+@media (min-width: 900px) {
+  /* The sidebar shows the tree persistently; the top-bar menu is
+     email/sign-out only. */
+  .menu-tree {
+    display: none;
+  }
 }
 
 .menu-email {
@@ -452,7 +475,122 @@ button {
   border-bottom: 1px solid var(--color-border);
 }
 
-.home-note-path {
+.home-note-meta {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+}
+
+.home-card {
+  display: block;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.home-card h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+}
+
+.home-card-count {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+}
+
+.home-card p:last-child {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.home-card-link:hover {
+  background: var(--color-surface);
+}
+
+.home-section-title {
+  margin: var(--space-6) 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+/* Tree (sidebar, mobile drawer): collapsible folders, notes as links. */
+.tree {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 40px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tree-row:hover {
+  background: var(--color-surface);
+}
+
+.tree-row:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.tree-row svg {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-tree {
+  flex: 1;
+  min-height: 0;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  overflow-y: auto;
+}
+
+/* Note view: breadcrumb, rendered body (see markdown.css), prev/next. */
+.breadcrumb {
+  margin-bottom: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.breadcrumb a {
+  color: inherit;
+}
+
+.note-siblings {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
 }
