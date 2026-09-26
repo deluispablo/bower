@@ -145,7 +145,7 @@ Full walkthrough: [`docs/runbook.md`](docs/runbook.md). Short version, driven mo
 2. Create the Google OAuth client and publish its consent screen ([runbook §2](docs/runbook.md#2-google-oauth-client)).
 3. Run `bash scripts/deploy.sh`. It creates your private instance repo, the Worker, KV and Pages, and sets every secret it can generate itself.
 4. Do the two things it cannot: set the app's custom domain in the Cloudflare dashboard, and check the OAuth client's redirect URI — both printed by the script with your real values.
-5. Invite yourself with the allowlist command the script prints, then press Process.
+5. Invite yourself with the one-line allowlist command in the runbook (§5), then press Process.
 
 ## Status
 
