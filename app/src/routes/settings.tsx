@@ -1,8 +1,14 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 
 import type { Me } from '../api.js';
 import { ApiError, deleteAccount, loginUrl, updateSettings } from '../api.js';
 import { getPref, setPref } from '../prefs.js';
+import {
+  currentPushState,
+  currentPushSupport,
+  disablePush,
+  enablePush,
+} from '../push.js';
 import { useSession } from '../session.js';
 import '../styles/settings.css';
 
@@ -106,6 +112,80 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
   );
 }
 
+/**
+ * The Notifications toggle: reflects the browser's actual subscription
+ * state (`currentPushState()`, checked once on mount) rather than only the
+ * local preference, since the two can drift (permission revoked elsewhere,
+ * a subscription that expired). Calls `enablePush()`/`disablePush()` and
+ * keeps `notifyOnFinish` in sync so other screens can read it.
+ */
+function NotificationsSection() {
+  const [state, setState] = useState<'on' | 'off'>(() =>
+    getPref('notifyOnFinish') ? 'on' : 'off',
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [support] = useState(() => currentPushSupport());
+
+  useEffect(() => {
+    let cancelled = false;
+    void currentPushState().then((pushState) => {
+      if (cancelled) return;
+      setState(pushState);
+      setPref('notifyOnFinish', pushState === 'on');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggle = async (checked: boolean): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (checked) {
+        await enablePush();
+      } else {
+        await disablePush();
+      }
+      const pushState = await currentPushState();
+      setState(pushState);
+      setPref('notifyOnFinish', pushState === 'on');
+      if (checked && pushState !== 'on') {
+        setError('Notifications were not turned on.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Could not update notifications.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div class="settings-section">
+      <h2>Notifications</h2>
+      <label class="settings-toggle">
+        <input
+          type="checkbox"
+          checked={state === 'on'}
+          disabled={busy || support !== 'ready'}
+          onChange={(e) => {
+            void toggle(e.currentTarget.checked);
+          }}
+        />
+        Notify me when Bower finishes
+      </label>
+      {support === 'needs-install' && (
+        <p class="settings-hint">
+          Add Bower to your Home Screen first to get notifications.
+        </p>
+      )}
+      {error && <p class="settings-error">{error}</p>}
+    </div>
+  );
+}
+
 function DangerZone() {
   const { signOut } = useSession();
   const [confirming, setConfirming] = useState(false);
@@ -176,7 +256,6 @@ function DangerZone() {
 
 export function Settings() {
   const { me, signOut } = useSession();
-  const [notify, setNotify] = useState(() => getPref('notifyOnFinish'));
   const [autoProcess, setAutoProcess] = useState(() =>
     getPref('autoProcessOnAdd'),
   );
@@ -200,25 +279,7 @@ export function Settings() {
         <a href={loginUrl()}>Reconnect Google</a>
       </div>
 
-      <div class="settings-section">
-        <h2>Notifications</h2>
-        <label class="settings-toggle">
-          <input
-            type="checkbox"
-            checked={notify}
-            onChange={(e) => {
-              const checked = e.currentTarget.checked;
-              setNotify(checked);
-              setPref('notifyOnFinish', checked);
-            }}
-          />
-          Notify me when Bower finishes
-        </label>
-        {
-          // The push subscription itself is added in #39; this screen only
-          // stores the preference so that work has something to read.
-        }
-      </div>
+      <NotificationsSection />
 
       <ApiKeySection me={me} />
 
