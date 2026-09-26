@@ -440,6 +440,7 @@ describe('GET /me', () => {
       vault: null,
       quota: { used: 2, limit: Number(env.DAILY_RUN_LIMIT) },
       needsReauth: false,
+      hasApiKey: false,
     });
   });
 

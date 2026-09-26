@@ -238,6 +238,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
         limit: Number(env.DAILY_RUN_LIMIT),
       },
       needsReauth: user.needsReauth === true,
+      hasApiKey: user.encApiKey !== undefined,
     });
   });
 

@@ -1,0 +1,278 @@
+import { env as testEnv } from 'cloudflare:test';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { decrypt, encrypt, importEncryptionKey } from '../src/crypto.js';
+import type { Env } from '../src/env.js';
+import { GOOGLE_REVOKE_URL } from '../src/google.js';
+import type { FetchLike } from '../src/google.js';
+import { createApp } from '../src/index.js';
+import { SESSION_COOKIE, signSession } from '../src/session.js';
+import { incrQuota, keys, putPushSub, putUser } from '../src/store.js';
+import type { User } from '../src/types.js';
+
+/**
+ * `Cloudflare.Env` is empty in this repo (no `wrangler types`), so the
+ * bindings from `wrangler.toml` and `vitest.config.ts` are asserted once.
+ */
+const env = testEnv as unknown as Env;
+const kv = env.BOWER_KV;
+
+const API = 'https://api.example.com';
+const USER_ID = 'user-1';
+const EMAIL = 'you@example.com';
+const REFRESH_TOKEN = 'test-refresh-token';
+const API_KEY = 'sk-ant-test-key';
+
+interface ErrorBody {
+  error: { code: string; message: string };
+}
+
+/** A hermetic stand-in for Google's revoke endpoint: records each call. */
+function revokeStub(status = 200): { fetchImpl: FetchLike; tokens: string[] } {
+  const tokens: string[] = [];
+  const fetchImpl: FetchLike = (input, init) => {
+    if (input !== GOOGLE_REVOKE_URL) {
+      return Promise.reject(new Error(`unexpected fetch in test: ${input}`));
+    }
+    const body = init?.body;
+    const form = new URLSearchParams(typeof body === 'string' ? body : '');
+    tokens.push(form.get('token') ?? '');
+    return Promise.resolve(new Response('', { status }));
+  };
+  return { fetchImpl, tokens };
+}
+
+/** Stores a user whose refresh token is encrypted with the fixture key. */
+async function seedUser(extra: Partial<User> = {}): Promise<User> {
+  const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+  const user: User = {
+    id: USER_ID,
+    email: EMAIL,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    encRefreshToken: await encrypt(REFRESH_TOKEN, key),
+    ...extra,
+  };
+  await putUser(kv, user);
+  return user;
+}
+
+async function sessionCookie(userId = USER_ID): Promise<string> {
+  const token = await signSession({ userId }, env.SESSION_SECRET);
+  return `${SESSION_COOKIE}=${token}`;
+}
+
+function setCookies(response: Response): string[] {
+  return response.headers.getSetCookie();
+}
+
+function cookieNamed(response: Response, name: string): string {
+  const cookie = setCookies(response).find((c) => c.startsWith(`${name}=`));
+  expect(cookie, `Set-Cookie ${name}`).toBeDefined();
+  return cookie as string;
+}
+
+async function patchSettings(
+  fetchImpl: FetchLike,
+  body: unknown,
+  cookie?: string,
+): Promise<Response> {
+  return createApp({ fetchImpl }).request(
+    `${API}/settings`,
+    {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        ...(cookie === undefined ? {} : { cookie }),
+      },
+      body: JSON.stringify(body),
+    },
+    env,
+  );
+}
+
+async function deleteMe(
+  fetchImpl: FetchLike,
+  cookie?: string,
+): Promise<Response> {
+  return createApp({ fetchImpl }).request(
+    `${API}/me`,
+    {
+      method: 'DELETE',
+      headers: cookie === undefined ? {} : { cookie },
+    },
+    env,
+  );
+}
+
+async function getMe(fetchImpl: FetchLike, cookie?: string): Promise<Response> {
+  return createApp({ fetchImpl }).request(
+    `${API}/me`,
+    { headers: cookie === undefined ? {} : { cookie } },
+    env,
+  );
+}
+
+async function allKeys(): Promise<string[]> {
+  const listed = await kv.list({});
+  return listed.keys.map((entry) => entry.name);
+}
+
+beforeEach(async () => {
+  for (const name of await allKeys()) await kv.delete(name);
+});
+
+describe('PATCH /settings', () => {
+  it('stores an encrypted key and reports hasApiKey: true', async () => {
+    await seedUser();
+    const google = revokeStub();
+
+    const response = await patchSettings(
+      google.fetchImpl,
+      { apiKey: API_KEY },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ hasApiKey: true });
+
+    const stored = await kv.get<User>(keys.user(USER_ID), 'json');
+    expect(stored?.encApiKey?.startsWith('v1.')).toBe(true);
+    expect(stored?.encApiKey).not.toContain(API_KEY);
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    expect(await decrypt(stored?.encApiKey ?? '', key)).toBe(API_KEY);
+
+    const me = await getMe(google.fetchImpl, await sessionCookie());
+    const meBody = await me.json<{ hasApiKey: boolean }>();
+    expect(meBody.hasApiKey).toBe(true);
+  });
+
+  it('clears the key on apiKey: null', async () => {
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    await seedUser({ encApiKey: await encrypt(API_KEY, key) });
+    const google = revokeStub();
+
+    const response = await patchSettings(
+      google.fetchImpl,
+      { apiKey: null },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ hasApiKey: false });
+    const stored = await kv.get<User>(keys.user(USER_ID), 'json');
+    expect(stored?.encApiKey).toBeUndefined();
+  });
+
+  it('leaves the key untouched when apiKey is missing', async () => {
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    const existing = await encrypt(API_KEY, key);
+    await seedUser({ encApiKey: existing });
+    const google = revokeStub();
+
+    const response = await patchSettings(
+      google.fetchImpl,
+      { unrelated: 'ignored' },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ hasApiKey: true });
+    const stored = await kv.get<User>(keys.user(USER_ID), 'json');
+    expect(stored?.encApiKey).toBe(existing);
+  });
+
+  it('answers 400 bad_request for a number, an empty string, or a malformed body', async () => {
+    await seedUser();
+    const google = revokeStub();
+    const cookie = await sessionCookie();
+
+    const bodies: unknown[] = [
+      { apiKey: 42 },
+      { apiKey: '' },
+      { apiKey: true },
+    ];
+    for (const body of bodies) {
+      const response = await patchSettings(google.fetchImpl, body, cookie);
+      expect(response.status).toBe(400);
+      const json = await response.json<ErrorBody>();
+      expect(json.error.code).toBe('bad_request');
+    }
+
+    const notJson = await createApp({ fetchImpl: google.fetchImpl }).request(
+      `${API}/settings`,
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', cookie },
+        body: 'not json',
+      },
+      env,
+    );
+    expect(notJson.status).toBe(400);
+    expect((await notJson.json<ErrorBody>()).error.code).toBe('bad_request');
+  });
+
+  it('answers 401 without a session', async () => {
+    const response = await patchSettings(revokeStub().fetchImpl, {
+      apiKey: API_KEY,
+    });
+
+    expect(response.status).toBe(401);
+    expect((await response.json<ErrorBody>()).error.code).toBe(
+      'unauthenticated',
+    );
+  });
+});
+
+describe('DELETE /me', () => {
+  it('revokes the token, deletes the user, clears the cookie, and signs the session out', async () => {
+    await seedUser();
+    await incrQuota(kv, USER_ID, '2026-01-01');
+    await putPushSub(kv, USER_ID, {
+      id: 'sub-1',
+      endpoint: 'https://push.example.com/sub-1',
+      keys: { p256dh: 'p256dh', auth: 'auth' },
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    await kv.put(keys.allow(EMAIL), '1');
+    const google = revokeStub();
+    const cookie = await sessionCookie();
+
+    const response = await deleteMe(google.fetchImpl, cookie);
+
+    expect(response.status).toBe(204);
+    const cleared = cookieNamed(response, SESSION_COOKIE);
+    expect(cleared).toContain('Max-Age=0');
+
+    expect(google.tokens).toEqual([REFRESH_TOKEN]);
+
+    const remaining = await allKeys();
+    expect(remaining.some((k) => k.startsWith('user:'))).toBe(false);
+    expect(remaining.some((k) => k.startsWith('email:'))).toBe(false);
+    expect(remaining.some((k) => k.startsWith('quota:'))).toBe(false);
+    expect(remaining.some((k) => k.startsWith('push:'))).toBe(false);
+    expect(remaining.some((k) => k.startsWith('drivetoken:'))).toBe(false);
+    expect(remaining).toContain(keys.allow(EMAIL));
+
+    const me = await getMe(google.fetchImpl, cookie);
+    expect(me.status).toBe(401);
+  });
+
+  it('still deletes and answers 204 when the revoke call fails', async () => {
+    await seedUser();
+    const google = revokeStub(500);
+
+    const response = await deleteMe(google.fetchImpl, await sessionCookie());
+
+    expect(response.status).toBe(204);
+    expect(await allKeys()).toEqual([]);
+  });
+
+  it('answers 401 without a session', async () => {
+    const response = await deleteMe(revokeStub().fetchImpl);
+
+    expect(response.status).toBe(401);
+    expect((await response.json<ErrorBody>()).error.code).toBe(
+      'unauthenticated',
+    );
+  });
+});
