@@ -3,9 +3,14 @@
  * the pending count from `useVault()`'s file listing; starts a run on tap
  * (idle), or reveals the reason on tap once it stopped (failed / stale /
  * over quota). `done` announces itself without a tap.
+ *
+ * It also owns the working sheet (#38): the sheet opens by itself when a
+ * run starts, closes on dismiss, and a tap on the button while a run is
+ * queued, running or just done reopens it. So the button is no longer
+ * disabled during a run; a tap then never starts a second run.
  */
 
-import { useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import '../styles/process.css';
 import { pendingCount, useRun } from '../run-store.js';
@@ -14,6 +19,7 @@ import { useSession } from '../session.js';
 import { useVault } from '../vault-store.js';
 import { PushPrompt } from './push-prompt.js';
 import { Toast } from './toast.js';
+import { WorkingSheet } from './working-sheet.js';
 
 function labelFor(phase: RunPhase, pending: number): string {
   switch (phase) {
@@ -39,6 +45,24 @@ export function ProcessButton() {
   const { files } = useVault();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastKey, setToastKey] = useState(0);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const prevPhase = useRef<RunPhase>(phase);
+
+  // The sheet opens when a run starts (here or on another device) and is
+  // closed again once the button is back to idle or over quota.
+  useEffect(() => {
+    const wasActive =
+      prevPhase.current === 'queued' || prevPhase.current === 'running';
+    prevPhase.current = phase;
+    if ((phase === 'queued' || phase === 'running') && !wasActive) {
+      setSheetOpen(true);
+    }
+    if (phase === 'idle' || phase === 'quota') setSheetOpen(false);
+  }, [phase]);
+
+  const closeSheet = useCallback((): void => {
+    setSheetOpen(false);
+  }, []);
 
   // A finished run announces itself without waiting for a tap.
   useEffect(() => {
@@ -48,6 +72,11 @@ export function ProcessButton() {
   }, [phase, message]);
 
   function onClick(): void {
+    // During a run (or right after it), a tap brings the sheet back.
+    if (phase === 'queued' || phase === 'running' || phase === 'done') {
+      setSheetOpen(true);
+      return;
+    }
     if (phase === 'failed' || phase === 'stale' || phase === 'quota') {
       if (message !== undefined) {
         setToastMessage(message);
@@ -55,10 +84,13 @@ export function ProcessButton() {
       }
       return;
     }
-    if (phase === 'idle') void process();
+    if (phase === 'idle') {
+      setSheetOpen(true);
+      void process();
+    }
   }
 
-  const disabled = phase === 'queued' || phase === 'running';
+  const reopens = phase === 'queued' || phase === 'running' || phase === 'done';
 
   // Nothing to process before the account has a folder (login, onboarding).
   if (me?.vault == null) return null;
@@ -69,7 +101,7 @@ export function ProcessButton() {
         type="button"
         class="process-button"
         data-phase={phase}
-        disabled={disabled}
+        aria-haspopup={reopens ? 'dialog' : undefined}
         onClick={onClick}
       >
         {phase === 'running' && (
@@ -79,6 +111,12 @@ export function ProcessButton() {
       </button>
       <Toast message={toastMessage} messageKey={toastKey} />
       <PushPrompt />
+      <WorkingSheet
+        phase={phase}
+        message={message}
+        open={sheetOpen}
+        onDismiss={closeSheet}
+      />
     </div>
   );
 }
