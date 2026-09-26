@@ -98,6 +98,10 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         echo old >"$remote/0-Inbox/Processed/old.pdf"
         echo note >"$remote/0-Inbox/_Inbox.md"
         echo clip >"$remote/Clippings/b.md"
+        # A web clipper names files after the page title: a page titled
+        # "Bower trick" must be filed like any other clipping, never obeyed
+        # as an instruction note (those are 0-Inbox/ only, see ingest.md).
+        echo clip >"$remote/Clippings/Bower trick.md"
         mkdir -p "$remote/Wiki"
         echo v1 >"$remote/Wiki/app.md"
         echo v1 >"$remote/Wiki/agent.md"
@@ -276,8 +280,8 @@ expect_eq() { [ "$1" = "$2" ] || die "$3: expected [$2], got [$1]"; }
 
 # The script's own output must never carry vault content or credentials.
 expect_content_free() {
-  for needle in a.pdf b.md late.pdf late.md Wiki app.md agent.md SUMMARY-MARKER STDERR-MARKER "$DRIVE_TOKEN" \
-    "$USER_API_KEY" test-oauth-token; do
+  for needle in a.pdf b.md "Bower trick" late.pdf late.md Wiki app.md agent.md SUMMARY-MARKER STDERR-MARKER \
+    "$DRIVE_TOKEN" "$USER_API_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
     fi
@@ -293,6 +297,19 @@ expect_cleaned_up() {
 
 # --- scenarios --------------------------------------------------------------
 
+# 0. The ingest prompt (verbatim what run.sh passes to `claude -p`) must
+# restrict instruction notes to 0-Inbox/ with the app's own frontmatter, so a
+# Bower*.md clipped into Clippings/ is never read as a command.
+CASE='ingest prompt contract'
+INGEST_PROMPT=$(cat "$HERE/../prompts/ingest.md")
+printf '%s' "$INGEST_PROMPT" | grep -Fq 'directly in `0-Inbox/`' ||
+  die 'ingest prompt does not restrict instruction notes to 0-Inbox/'
+printf '%s' "$INGEST_PROMPT" | grep -Fq 'tags: [instruction]' ||
+  die 'ingest prompt does not require the instruction frontmatter'
+printf '%s' "$INGEST_PROMPT" | grep -Fq 'Bower*.md` in `Clippings/`' ||
+  die 'ingest prompt does not call out a Clippings/ Bower*.md as content'
+echo "ok ingest prompt contract"
+
 # 1. Ingest happy path.
 run_case happy GITHUB_RUN_ID=4242
 expect_eq "$RC" 0 'exit code'
@@ -304,7 +321,8 @@ expect_eq "$(post 1 'p.processed === undefined')" true 'running has no processed
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.kind)" ingest 'second kind'
 expect_eq "$(post 2 p.runId)" 4242 'done runId'
-expect_eq "$(post 2 p.processed)" '["0-Inbox/a.pdf","Clippings/b.md"]' 'processed'
+expect_eq "$(post 2 p.processed)" \
+  '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed'
 expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
 expect_eq "$(post 2 'p.summary.split("\n")[4]')" 'SUMMARY-MARKER 5' 'summary end'
@@ -325,6 +343,13 @@ remote="$STATE/remote"
 for f in 0-Inbox/late.pdf Clippings/late.md Clippings/b.md 0-Inbox/_Inbox.md 0-Inbox/Processed/old.pdf; do
   [ -f "$remote/$f" ] || die "a file that was not processed is gone from Drive: $f"
 done
+# A Bower*.md clipped into Clippings/ (a web clipper naming the file after
+# the page title) is filed like any other clipping, not read as an
+# instruction: it is listed in `processed` (checked above) but, exactly like
+# Clippings/b.md, stays in place rather than being moved away as an
+# instruction note would be.
+[ -f "$remote/Clippings/Bower trick.md" ] ||
+  die 'a Bower-named clipping was treated as an instruction note, not a clipping'
 expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
   'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*)' \
@@ -415,7 +440,8 @@ run_case gone
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(posts_count)" 2 'status posts'
 expect_eq "$(post 2 p.state)" done 'second state'
-expect_eq "$(post 2 p.processed)" '["0-Inbox/a.pdf","Clippings/b.md"]' 'processed'
+expect_eq "$(post 2 p.processed)" \
+  '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed'
 expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
 expect_eq "$(post 2 'p.summary.split("\n")[4]')" 'SUMMARY-MARKER 5' 'summary end'
