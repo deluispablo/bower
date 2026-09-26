@@ -62,9 +62,9 @@ routes = [{ pattern = "api.example.com", custom_domain = true }]
 
 ### Cloudflare Pages: the app
 
-8. First time only: `pnpm -C api exec wrangler pages project create NAME --production-branch main` (`NAME` is yours to pick, e.g. `bower-app`). Re-running this once a project exists errors; skip it on later deploys.
+8. First time only, from `app/` (so wrangler does not pick up `api/wrangler.toml`, which is a Worker config): `../api/node_modules/.bin/wrangler pages project create NAME --production-branch main` (`NAME` is yours to pick, e.g. `bower-app`). If it fails with an npm error about delegating to Cloudflare Workers (wrangler 4.14x does this on some machines), re-run it once with `--force`, which creates the project on classic Pages; later commands need no flag. Re-running this once a project exists errors; skip it on later deploys.
 9. Build the app with the Worker's real origin baked in: `VITE_API_URL=https://api.example.com pnpm -C app exec vite build` (your real `API_ORIGIN`; the output goes to `app/dist`).
-10. Deploy it: `pnpm -C api exec wrangler pages deploy app/dist --project-name NAME --branch main` (run from the repo root so `app/dist` resolves; `pnpm -C api exec` still finds `wrangler` from `api/node_modules/.bin` because pnpm resolves the binary before changing directory).
+10. Deploy it, from `app/`: `../api/node_modules/.bin/wrangler pages deploy dist --project-name NAME --branch main` (`pnpm -C api exec wrangler` would run inside `api/`, read `api/wrangler.toml` and refuse it as a non-Pages config).
 11. Add the custom domain in the dashboard — there is no CLI command for it: **Workers & Pages → your Pages project → Custom domains → Set up a domain**, for example `app.example.com`.
 
 `APP_ORIGIN` and `API_ORIGIN` **must share a registrable domain** (e.g. `app.example.com` and `api.example.com`): the session cookie is `SameSite=Lax`, so on the default `*.pages.dev` / `*.workers.dev` hostnames the browser never sends it and nobody can stay signed in. Full mechanics in `docs/security.md`.
@@ -201,7 +201,7 @@ Disabling GitHub Actions on the instance repo is the one switch that stops runs 
 In order:
 
 1. **Instance repo**: disable or delete it (GitHub → Settings → Danger Zone). This stops the agent for good.
-2. **Cloudflare Pages**: `pnpm -C api exec wrangler pages project delete NAME -y` — deletes the deployed app and its custom domain mapping.
+2. **Cloudflare Pages**: from `app/`, `../api/node_modules/.bin/wrangler pages project delete NAME -y` — deletes the deployed app and its custom domain mapping.
 3. **Cloudflare Worker**: `pnpm -C api exec wrangler delete -c wrangler.local.toml` — deletes the Worker (`--force` if something else depends on it, which nothing should).
 4. **Cloudflare KV**: `pnpm -C api exec wrangler kv namespace delete --binding BOWER_KV -c wrangler.local.toml` — deletes the allowlist, every user's profile, quota counters, cached Drive tokens and push subscriptions. Do this last, since steps 2–3 don't need it gone first.
 5. **Google Cloud**: optionally delete the OAuth client (Credentials) or the whole project, to stop it counting against any Google-side quota. Not required — an orphaned, disabled client is harmless.
