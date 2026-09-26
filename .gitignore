@@ -10,3 +10,6 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local AI-session artefacts (subagent worktrees)
+.claude/worktrees/
