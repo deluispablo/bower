@@ -207,8 +207,10 @@ die() {
   exit 1
 }
 
-# run_case <scenario> [NAME=value ...]: runs run.sh for an ingest with the
-# stubs first on PATH; extra assignments are passed to env.
+# run_case <scenario> [NAME=value ...]: runs run.sh in $MODE (ingest unless
+# the scenario sets it) with the stubs first on PATH; extra assignments are
+# passed to env.
+MODE=ingest
 run_case() {
   CASE=$1
   shift
@@ -227,7 +229,7 @@ run_case() {
     SMOKE_SCENARIO="$CASE" SMOKE_STATE="$STATE" \
     SMOKE_RUNNER_KEY="$RUNNER_KEY" SMOKE_DRIVE_TOKEN="$DRIVE_TOKEN" \
     SMOKE_USER_API_KEY="$USER_API_KEY" \
-    "$@" bash "$RUN_SH" vault-1 ingest >"$STATE/out.log" 2>&1
+    "$@" bash "$RUN_SH" vault-1 "$MODE" >"$STATE/out.log" 2>&1
   RC=$?
   set -e
 }
@@ -273,9 +275,11 @@ run_case happy GITHUB_RUN_ID=4242
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(posts_count)" 2 'status posts'
 expect_eq "$(post 1 p.state)" running 'first state'
+expect_eq "$(post 1 p.kind)" ingest 'first kind'
 expect_eq "$(post 1 p.runId)" 4242 'runId'
 expect_eq "$(post 1 'p.processed === undefined')" true 'running has no processed'
 expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.kind)" ingest 'second kind'
 expect_eq "$(post 2 p.runId)" 4242 'done runId'
 expect_eq "$(post 2 p.processed)" '["0-Inbox/a.pdf","Clippings/b.md"]' 'processed'
 expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
@@ -316,6 +320,7 @@ run_case empty
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(posts_count)" 1 'status posts'
 expect_eq "$(post 1 p.state)" done 'state'
+expect_eq "$(post 1 p.kind)" ingest 'kind'
 expect_eq "$(post 1 p.processed)" '[]' 'processed'
 post 1 p.runId | grep -Eq '^[0-9a-f]{16}$' || die 'random runId is not 16 hex characters'
 expect_eq "$(calls claude)" '' 'claude calls'
@@ -330,6 +335,7 @@ expect_eq "$RC" 2 'exit code'
 expect_eq "$(posts_count)" 2 'status posts'
 expect_eq "$(post 1 p.state)" running 'first state'
 expect_eq "$(post 2 p.state)" failed 'second state'
+expect_eq "$(post 2 p.kind)" ingest 'failed kind'
 post 2 p.error | grep -q '^agent run' || die 'error does not name the agent run step'
 expect_eq "$(post 2 'p.processed === undefined && p.summary === undefined')" true 'failed has no processed or summary'
 expect_eq "$(calls rclone | grep -c '^rclone copy ')" 1 'rclone copy calls'
@@ -390,3 +396,22 @@ expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 
 expect_content_free
 expect_cleaned_up
 echo "ok original removed from Drive mid-run"
+
+# 8. Scheduled lint: every report says kind lint, done carries the summary
+# and no processed list, so the API keeps it apart from ingest runs.
+MODE=lint
+run_case lint GITHUB_RUN_ID=4343
+MODE=ingest
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(posts_count)" 2 'status posts'
+expect_eq "$(post 1 p.state)" running 'first state'
+expect_eq "$(post 1 p.kind)" lint 'first kind'
+expect_eq "$(post 1 p.runId)" 4343 'runId'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.kind)" lint 'second kind'
+expect_eq "$(post 2 'p.processed === undefined')" true 'lint has no processed'
+expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
+expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
+expect_content_free
+expect_cleaned_up
+echo "ok lint"

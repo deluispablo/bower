@@ -96,11 +96,12 @@ on_exit() {
 trap on_exit EXIT
 
 # POST a status report. Values go into the payload through jq, never through
-# the log. Usage: report <state> [error]; reads PROCESSED_JSON and SUMMARY
-# when set.
+# the log. Every report carries the mode as its kind (ingest or lint), so the
+# API keeps a lint apart from the user's ingest runs. Usage: report <state>
+# [error]; reads PROCESSED_JSON and SUMMARY when set.
 report() {
   local state=$1 error=${2:-}
-  local args=(--arg state "$state" --arg runId "$RUN_ID")
+  local args=(--arg state "$state" --arg kind "$MODE" --arg runId "$RUN_ID")
   [ -n "$error" ] && args+=(--arg error "$error")
   [ -n "${PROCESSED_JSON:-}" ] && args+=(--argjson processed "$PROCESSED_JSON")
   [ -n "${SUMMARY:-}" ] && args+=(--arg summary "$SUMMARY")
@@ -207,7 +208,12 @@ STEP='list pending'
   fi
 ) >"$PENDING_FILE"
 PENDING_COUNT=$(grep -c . "$PENDING_FILE" || true)
-PROCESSED_JSON=$(jq -Rn '[inputs]' <"$PENDING_FILE")
+# Only an ingest processes the pending files; a lint reports its summary
+# without a processed list.
+PROCESSED_JSON=''
+if [ "$MODE" = ingest ]; then
+  PROCESSED_JSON=$(jq -Rn '[inputs]' <"$PENDING_FILE")
+fi
 log "$PENDING_COUNT files pending"
 
 if [ "$MODE" = ingest ] && [ "$PENDING_COUNT" -eq 0 ]; then

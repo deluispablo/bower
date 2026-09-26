@@ -8,7 +8,10 @@
  *   a 1 h Drive access token (never the refresh token), `maxTurns`, and the
  *   user's own Claude API key when they set one.
  * - `POST /runner/vaults/:id/status`: the run's progress (`running`,
- *   `done`, `failed`), stored as the user's `Run`.
+ *   `done`, `failed`) and its `kind` (`ingest`, the default, or `lint`),
+ *   stored as the user's `Run` of that kind: an ingest under `run:<id>`, a
+ *   lint under `lintrun:<id>`, so a lint never shows up in `GET /status`
+ *   or blocks `POST /process`.
  *
  * `:id` is the user id, as `POST /process` dispatches it (`vault_id`).
  * Nothing here logs the operator key, a token, the API key, file names or
@@ -27,7 +30,7 @@ import type { FetchLike } from './google.js';
 import { sendPush } from './push.js';
 import type { PushPayload } from './push.js';
 import { getRun, getUser, listVaultIds, putRun } from './store.js';
-import type { DriveToken, Run, User } from './types.js';
+import type { DriveToken, Run, RunKind, User } from './types.js';
 
 /** Longest `summary` or `error` kept on a `Run`; longer text is cut. */
 export const MAX_TEXT_LENGTH = 2000;
@@ -78,6 +81,8 @@ type ReportState = 'running' | 'done' | 'failed';
 /** A validated `POST /runner/vaults/:id/status` body. */
 interface StatusReport {
   state: ReportState;
+  /** `ingest` when the body has none, so older runners keep working. */
+  kind: RunKind;
   runId?: string;
   summary?: string;
   processed?: string[];
@@ -85,8 +90,10 @@ interface StatusReport {
 }
 
 const REPORT_STATES: readonly string[] = ['running', 'done', 'failed'];
+const RUN_KINDS: readonly string[] = ['ingest', 'lint'];
 const REPORT_FIELDS: ReadonlySet<string> = new Set([
   'state',
+  'kind',
   'runId',
   'summary',
   'processed',
@@ -99,6 +106,10 @@ function badRequest(message: string): HttpError {
 
 function isReportState(value: unknown): value is ReportState {
   return typeof value === 'string' && REPORT_STATES.includes(value);
+}
+
+function isRunKind(value: unknown): value is RunKind {
+  return typeof value === 'string' && RUN_KINDS.includes(value);
 }
 
 /** An optional string field: absent, or a string (cut to `MAX_TEXT_LENGTH`). */
@@ -116,10 +127,10 @@ function optionalText(
 
 /**
  * Validates a status report strictly: a JSON object with a known `state`,
- * only the known fields, each of the right type. `summary` and `error` are
- * cut to `MAX_TEXT_LENGTH` characters and `processed` to `MAX_PROCESSED`
- * entries, so a `Run` stays small in KV. Anything else is a 400
- * `bad_request`.
+ * an optional known `kind` (`ingest` when absent), only the known fields,
+ * each of the right type. `summary` and `error` are cut to
+ * `MAX_TEXT_LENGTH` characters and `processed` to `MAX_PROCESSED` entries,
+ * so a `Run` stays small in KV. Anything else is a 400 `bad_request`.
  */
 function parseStatusReport(body: unknown): StatusReport {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
@@ -135,7 +146,11 @@ function parseStatusReport(body: unknown): StatusReport {
   if (!isReportState(state)) {
     throw badRequest('state must be running, done or failed');
   }
-  const report: StatusReport = { state };
+  const kind = record.kind ?? 'ingest';
+  if (!isRunKind(kind)) {
+    throw badRequest('kind must be ingest or lint');
+  }
+  const report: StatusReport = { state, kind };
 
   const runId = record.runId;
   if (runId !== undefined) {
@@ -166,7 +181,7 @@ function parseStatusReport(body: unknown): StatusReport {
 /**
  * The run after `report`, at `now` (ISO-8601). Without a stored run, one is
  * started with `requestedAt = now`. The report's `runId` wins over the
- * stored one.
+ * stored one, and the run takes the report's `kind`.
  *
  * - `running`: `startedAt = now`, unless the run was already running (then
  *   its `startedAt` is kept). Any outcome of an earlier attempt
@@ -180,7 +195,11 @@ function applyReport(
   now: string,
 ): Run {
   const base: Run = current ?? { state: 'queued', requestedAt: now };
-  const run: Run = { state: report.state, requestedAt: base.requestedAt };
+  const run: Run = {
+    state: report.state,
+    kind: report.kind,
+    requestedAt: base.requestedAt,
+  };
   const runId = report.runId ?? base.runId;
   if (runId !== undefined) run.runId = runId;
 
@@ -201,11 +220,21 @@ function applyReport(
 }
 
 /**
- * The notification for a finished run: how many files were processed
- * (`done`), that there was nothing to do (`done` with none), or that the
- * run failed. Never a file name or the summary.
+ * The notification for a finished run. An ingest (or a run without `kind`)
+ * says how many files were processed (`done`), that there was nothing to
+ * do (`done` with none), or that the run failed, and opens `/`. A lint says
+ * the health check is ready or failed, and opens `/lint`. Never a file name
+ * or the summary.
  */
 export function runPushPayload(run: Run): PushPayload {
+  if (run.kind === 'lint') {
+    return {
+      title: 'Bower',
+      body:
+        run.state === 'failed' ? 'Health check failed' : 'Health check ready',
+      url: '/lint',
+    };
+  }
   let body: string;
   if (run.state === 'failed') {
     body = 'Something went wrong';
@@ -294,9 +323,11 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const body: unknown = await c.req.json().catch(() => undefined);
     const report = parseStatusReport(body);
 
-    const current = await getRun(kv, user.id);
+    // Each kind has its own key: a lint report never reads or writes the
+    // ingest run that `GET /status` and `POST /process` look at.
+    const current = await getRun(kv, user.id, report.kind);
     const run = applyReport(current, report, new Date().toISOString());
-    await putRun(kv, user.id, run);
+    await putRun(kv, user.id, run, report.kind);
 
     if (run.state === 'done' || run.state === 'failed') {
       await sendPush(env, user.id, runPushPayload(run), fetchImpl);

@@ -9,7 +9,8 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `user:<id>` | `User` | none | `putUser` | `getUser`, `findUserByEmail`, `listUsers`, `listVaultIds` |
 | `email:<email>` | user id (string) | none | `putUser` | `findUserByEmail` |
 | `allow:<email>` | `'1'` | none | the operator, outside this module | `isAllowed` |
-| `run:<id>` | `Run` | none | `putRun` | `getRun` |
+| `run:<id>` | `Run` (the latest ingest) | none | `putRun` | `getRun` |
+| `lintrun:<id>` | `Run` (the latest scheduled lint) | none | `putRun(…, 'lint')` | `getRun(…, 'lint')` |
 | `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
 | `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` (deleted by `deletePushSub`, `DELETE /push/subscribe`, and `sendPush` on a 404/410) |
 | `drivetoken:<id>` | `DriveToken` (cached Drive access token) | token lifetime − 60 s, at least 60 s (set by `drive.ts`) | `putDriveToken` | `getDriveToken` |
@@ -20,7 +21,7 @@ Notes:
 - `<id>` is always a `User.id`.
 - `<email>` is lower-cased and trimmed before use as a key, so lookups are case-insensitive.
 - `quota` has no atomic increment in KV: `incrQuota` reads, increments and writes back. Two requests racing on the same user and date can undercount by one. Accepted as a soft per-user daily limit, not a billing figure.
-- `deleteUserData` removes every `user:`, `run:`, `quota:<id>:*`, `push:<id>:*` and `drivetoken:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user.
+- `deleteUserData` removes every `user:`, `run:`, `lintrun:`, `quota:<id>:*`, `push:<id>:*` and `drivetoken:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user.
 - `rate` keys are the per-IP rate limit (`api/src/security.ts`): `<route>` is `callback` or `process`, `<ip>` the client IP (`cf-connecting-ip`, else the first `x-forwarded-for` entry, else `unknown`), `<minute>` the minutes since the Unix epoch. Read-then-write like `quota`, so racing requests can undercount; accepted, the limit only slows abuse down. A full window is not written again.
 - `deleteDriveToken` also drops `drivetoken:<id>` on its own, used by `GET /drive/token?fresh=1` (see below) to force a fresh mint.
 
@@ -41,6 +42,7 @@ Notes:
 | Field | Type | Notes |
 | --- | --- | --- |
 | `state` | `'queued' \| 'running' \| 'done' \| 'failed'` | |
+| `kind` | `'ingest' \| 'lint'` | optional; absent on runs stored before kinds existed, read as `ingest`. `run:<id>` only ever holds an ingest, `lintrun:<id>` a lint |
 | `requestedAt` | `string` | ISO-8601 |
 | `startedAt` | `string` | optional; ISO-8601 |
 | `finishedAt` | `string` | optional; ISO-8601 |
@@ -104,7 +106,7 @@ In order:
 2. If the stored run is `queued` or `running` and not stale, it is returned as is: no new dispatch, nothing counted. See the staleness table below for when a run is stale. A stale run does not block: it is stored as `failed` with `error: "stale"` first (so it is never silently replaced), then a new run is dispatched below.
 3. If today's count (UTC date) has reached `DAILY_RUN_LIMIT`, the answer is 429.
 4. The dispatch is sent. If GitHub does not answer 204, the answer is 502 and nothing is stored or counted.
-5. A new run `{ state: "queued", requestedAt, runId }` is stored under `run:<id>`, today's count goes up by one, and the run is returned.
+5. A new run `{ state: "queued", kind: "ingest", requestedAt, runId }` is stored under `run:<id>`, today's count goes up by one, and the run is returned.
 
 Response: `{ "run": Run }`, status 202, both for a new run and for the run already in progress.
 
@@ -198,15 +200,16 @@ The runner's progress report. Body, validated strictly (an unknown field, a wron
 | Field | Type | Notes |
 | --- | --- | --- |
 | `state` | `'running' \| 'done' \| 'failed'` | Required |
+| `kind` | `'ingest' \| 'lint'` | Optional; `ingest` when absent, so runners that predate it keep working |
 | `runId` | `string` | Optional, non-empty; replaces the stored `runId` when given |
 | `summary` | `string` | Optional; cut to 2,000 characters |
 | `processed` | `string[]` | Optional; cut to 200 entries |
 | `error` | `string` | Optional; cut to 2,000 characters |
 
-The stored run (`run:<id>`) is updated; without one, a run is started with `requestedAt` set to now.
+The stored run of that kind is updated and takes the report's `kind`: an ingest under `run:<id>`, a lint under `lintrun:<id>`. A lint report never reads or writes `run:<id>`, so `GET /status`, `POST /process` and the app's Process button ignore it. Without a stored run of that kind, one is started with `requestedAt` set to now.
 
 - `running`: `state` and `startedAt` (now) are set. A run that is already `running` keeps its `startedAt`. Outcome fields of an earlier attempt (`finishedAt`, `summary`, `processed`, `error`) are dropped.
-- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed` and `error` become exactly the report's (absent when the report has none). Then the user's devices get a push notification (see [Web push](#web-push)): `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. A push failure never fails the report.
+- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed` and `error` become exactly the report's (absent when the report has none). Then the user's devices get a push notification (see [Web push](#web-push)). For an ingest: `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. For a lint: `Health check ready`, or `Health check failed` for `failed`, never a count. A push failure never fails the report.
 
 Response: `{ "run": Run }`, status 200.
 
@@ -227,8 +230,8 @@ What the service worker receives in the `push` event, as JSON:
 | Field | Type | Notes |
 | --- | --- | --- |
 | `title` | `string` | `Bower` |
-| `body` | `string` | `2 files processed` (or `1 file processed`), `Nothing new to process`, or `Something went wrong` |
-| `url` | `string` | App path to open on click; `/` |
+| `body` | `string` | An ingest: `2 files processed` (or `1 file processed`), `Nothing new to process`, or `Something went wrong`. A lint: `Health check ready` or `Health check failed` |
+| `url` | `string` | App path to open on click: `/` for an ingest, `/lint` (the Health screen) for a lint |
 
 Sent with `TTL: 86400`, `Urgency: normal`, `Content-Encoding: aes128gcm` to every subscription of the user when a run is reported `done` or `failed`. A 404 or 410 from the push service deletes that subscription; any other failure is logged by status only and the subscription is kept.
 

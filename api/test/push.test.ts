@@ -402,11 +402,40 @@ describe('runPushPayload', () => {
     expect(
       runPushPayload({ state: 'failed', requestedAt: at, error: 'x' }).body,
     ).toBe('Something went wrong');
+    expect(
+      runPushPayload({
+        state: 'done',
+        kind: 'ingest',
+        requestedAt: at,
+        processed: ['a'],
+      }),
+    ).toEqual({ title: 'Bower', body: '1 file processed', url: '/' });
+  });
+
+  it('says the health check is ready or failed for a lint, never a count', () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    expect(
+      runPushPayload({
+        state: 'done',
+        kind: 'lint',
+        requestedAt: at,
+        processed: ['a', 'b'],
+      }),
+    ).toEqual({ title: 'Bower', body: 'Health check ready', url: '/lint' });
+    expect(
+      runPushPayload({
+        state: 'failed',
+        kind: 'lint',
+        requestedAt: at,
+        error: 'x',
+      }),
+    ).toEqual({ title: 'Bower', body: 'Health check failed', url: '/lint' });
   });
 });
 
 describe('runner status report', () => {
-  it('pushes "2 files processed" when a run is reported done', async () => {
+  /** Reports `body` for a user with one subscriber; the payload it got. */
+  async function reportAndDecrypt(body: unknown): Promise<unknown> {
     const env = await vapidEnv();
     const userId = 'push-runner-user';
     await putUser(kv, {
@@ -432,10 +461,7 @@ describe('runner status report', () => {
           authorization: `Bearer ${env.BOWER_API_KEY}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({
-          state: 'done',
-          processed: ['one.md', 'two.md'],
-        }),
+        body: JSON.stringify(body),
       },
       env,
     );
@@ -444,11 +470,26 @@ describe('runner status report', () => {
     expect(sent).toHaveLength(1);
     const [request] = sent;
     if (request === undefined) throw new Error('no request');
-    expect(await decrypt(request.body, alice)).toEqual({
-      title: 'Bower',
-      body: '2 files processed',
-      url: '/',
-    });
+    return decrypt(request.body, alice);
+  }
+
+  it('pushes "2 files processed" when a run is reported done', async () => {
+    expect(
+      await reportAndDecrypt({
+        state: 'done',
+        processed: ['one.md', 'two.md'],
+      }),
+    ).toEqual({ title: 'Bower', body: '2 files processed', url: '/' });
+  });
+
+  it('pushes "Health check ready" when a lint is reported done', async () => {
+    expect(
+      await reportAndDecrypt({
+        state: 'done',
+        kind: 'lint',
+        processed: ['one.md', 'two.md'],
+      }),
+    ).toEqual({ title: 'Bower', body: 'Health check ready', url: '/lint' });
   });
 });
 

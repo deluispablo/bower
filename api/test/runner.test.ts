@@ -137,6 +137,15 @@ async function postProcess(fetchImpl: FetchLike): Promise<Response> {
   );
 }
 
+async function getStatus(): Promise<Response> {
+  const token = await signSession({ userId: USER_ID }, env.SESSION_SECRET);
+  return createApp({ fetchImpl: stub().fetchImpl }).request(
+    `${API}/status`,
+    { headers: { cookie: `${SESSION_COOKIE}=${token}` } },
+    env,
+  );
+}
+
 interface RunBody {
   run: Run;
 }
@@ -439,9 +448,92 @@ describe('POST /runner/vaults/:id/status', () => {
     expect(response.status).toBe(200);
     const { run } = await response.json<RunBody>();
     expect(run.state).toBe('running');
+    expect(run.kind).toBe('ingest');
     expect(run.runId).toBe('run-1');
     expect(run.startedAt).toBe(run.requestedAt);
     expect(await getRun(kv, USER_ID)).toEqual(run);
+    expect(await getRun(kv, USER_ID, 'lint')).toBeUndefined();
+  });
+
+  it('stores an explicit ingest report under the ingest run', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      kind: 'ingest',
+      processed: ['a.md'],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run).toMatchObject({
+      state: 'done',
+      kind: 'ingest',
+      processed: ['a.md'],
+    });
+    expect(await getRun(kv, USER_ID)).toEqual(run);
+    expect(await getRun(kv, USER_ID, 'lint')).toBeUndefined();
+  });
+
+  it('keeps a lint apart: the ingest run, GET /status and /process are untouched', async () => {
+    await seedUser();
+    const ingest: Run = {
+      state: 'done',
+      kind: 'ingest',
+      requestedAt: '2026-06-01T12:00:00.000Z',
+      startedAt: '2026-06-01T12:01:00.000Z',
+      finishedAt: '2026-06-01T12:05:00.000Z',
+      processed: ['a.md'],
+      runId: 'ingest-run-id',
+    };
+    await putRun(kv, USER_ID, ingest);
+
+    const runningResponse = await postStatus({
+      state: 'running',
+      kind: 'lint',
+      runId: 'lint-run-id',
+    });
+    expect(runningResponse.status).toBe(200);
+    const running = (await runningResponse.json<RunBody>()).run;
+    expect(running).toMatchObject({
+      state: 'running',
+      kind: 'lint',
+      runId: 'lint-run-id',
+    });
+    expect(await getRun(kv, USER_ID, 'lint')).toEqual(running);
+    expect(await getRun(kv, USER_ID)).toEqual(ingest);
+
+    // The app sees the last ingest, not the lint in progress.
+    const status = await getStatus();
+    expect(status.status).toBe(200);
+    expect(await status.json()).toEqual({ run: ingest, stale: false });
+
+    // A press while the lint runs starts an ingest instead of waiting on it.
+    const github = stub();
+    const pressed = await postProcess(github.fetchImpl);
+    expect(pressed.status).toBe(202);
+    expect((await pressed.json<RunBody>()).run.state).toBe('queued');
+    expect(github.calls).toHaveLength(1);
+    const queued = await getRun(kv, USER_ID);
+
+    const done = (
+      await (
+        await postStatus({
+          state: 'done',
+          kind: 'lint',
+          summary: 'Two broken links.',
+        })
+      ).json<RunBody>()
+    ).run;
+    expect(done).toMatchObject({
+      state: 'done',
+      kind: 'lint',
+      runId: 'lint-run-id',
+      startedAt: running.startedAt,
+      summary: 'Two broken links.',
+    });
+    expect(await getRun(kv, USER_ID, 'lint')).toEqual(done);
+    expect(await getRun(kv, USER_ID)).toEqual(queued);
   });
 
   it('caps summary, error and processed', async () => {
@@ -465,6 +557,8 @@ describe('POST /runner/vaults/:id/status', () => {
     ['not JSON', '{'],
     ['not an object', ['running']],
     ['an unknown state', { state: 'queued' }],
+    ['an unknown kind', { state: 'done', kind: 'backup' }],
+    ['a non-string kind', { state: 'done', kind: 1 }],
     ['a missing state', { summary: 'x' }],
     ['an unknown field', { state: 'done', extra: 1 }],
     ['a non-string summary', { state: 'done', summary: 1 }],
@@ -483,6 +577,7 @@ describe('POST /runner/vaults/:id/status', () => {
     expect(response.status).toBe(400);
     expect((await response.json<ErrorBody>()).error.code).toBe('bad_request');
     expect(await getRun(kv, USER_ID)).toBeUndefined();
+    expect(await getRun(kv, USER_ID, 'lint')).toBeUndefined();
   });
 
   it('answers 404 not_found for an unknown id', async () => {

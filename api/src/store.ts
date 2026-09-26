@@ -10,7 +10,13 @@
  * input crossing this boundary.
  */
 
-import type { DriveToken, PushSubscription, Run, User } from './types.js';
+import type {
+  DriveToken,
+  PushSubscription,
+  Run,
+  RunKind,
+  User,
+} from './types.js';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -23,6 +29,7 @@ export const keys = {
   email: (email: string): string => `email:${normalizeEmail(email)}`,
   allow: (email: string): string => `allow:${normalizeEmail(email)}`,
   run: (id: string): string => `run:${id}`,
+  lintRun: (id: string): string => `lintrun:${id}`,
   quota: (userId: string, date: string): string => `quota:${userId}:${date}`,
   quotaPrefix: (userId: string): string => `quota:${userId}:`,
   push: (userId: string, subId: string): string => `push:${userId}:${subId}`,
@@ -162,19 +169,31 @@ export async function listVaultIds(kv: KVNamespace): Promise<string[]> {
   return ids;
 }
 
+/** The key a run of `kind` lives under: `run:<id>` or `lintrun:<id>`. */
+function runKey(id: string, kind: RunKind): string {
+  return kind === 'lint' ? keys.lintRun(id) : keys.run(id);
+}
+
+/**
+ * The user's latest run of `kind`. `ingest` (the default) is the run the
+ * app shows and `POST /process` checks; `lint` is the scheduled health
+ * check, kept apart so it never blocks or shows up as an ingest.
+ */
 export async function getRun(
   kv: KVNamespace,
   id: string,
+  kind: RunKind = 'ingest',
 ): Promise<Run | undefined> {
-  return getJson<Run>(kv, keys.run(id));
+  return getJson<Run>(kv, runKey(id, kind));
 }
 
 export async function putRun(
   kv: KVNamespace,
   id: string,
   run: Run,
+  kind: RunKind = 'ingest',
 ): Promise<void> {
-  await putJson(kv, keys.run(id), run);
+  await putJson(kv, runKey(id, kind), run);
 }
 
 /**
@@ -301,8 +320,8 @@ export async function deleteDriveToken(
 
 /**
  * Deletes every key belonging to `userId`: `user:`, its `email:` index
- * (looked up from the user record before deleting it), `run:`, every
- * `quota:<id>:*`, every `push:<id>:*` and `drivetoken:<id>`. Never touches
+ * (looked up from the user record before deleting it), `run:`, `lintrun:`,
+ * every `quota:<id>:*`, every `push:<id>:*` and `drivetoken:<id>`. Never touches
  * `allow:<email>` — the allowlist is the operator's, not the user's.
  */
 export async function deleteUserData(
@@ -313,6 +332,7 @@ export async function deleteUserData(
   const deletions: Promise<void>[] = [
     kv.delete(keys.user(userId)),
     kv.delete(keys.run(userId)),
+    kv.delete(keys.lintRun(userId)),
     kv.delete(keys.driveToken(userId)),
     deleteByPrefix(kv, keys.quotaPrefix(userId)),
     deleteByPrefix(kv, keys.pushPrefix(userId)),
