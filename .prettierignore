@@ -1,0 +1,6 @@
+pnpm-lock.yaml
+**/*.md
+node_modules
+dist
+.wrangler
+.claude

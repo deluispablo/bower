@@ -4,12 +4,12 @@
   "type": "module",
   "engines": {
     "node": ">=22",
-    "pnpm": ">=9"
+    "pnpm": "^9"
   },
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "lint": "eslint . && prettier --check package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.js .prettierrc.json app/package.json app/tsconfig.json api/package.json api/tsconfig.json agent/package.json",
-    "format": "prettier --write package.json pnpm-workspace.yaml tsconfig.base.json eslint.config.js .prettierrc.json app/package.json app/tsconfig.json api/package.json api/tsconfig.json agent/package.json",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
     "build": "pnpm -r --if-present run build"
