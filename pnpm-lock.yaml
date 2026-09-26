@@ -53,6 +53,9 @@ importers:
       dompurify:
         specifier: ^3.4.16
         version: 3.4.16
+      idb-keyval:
+        specifier: ^6.3.0
+        version: 6.3.0
       marked:
         specifier: ^18.0.14
         version: 18.0.14
@@ -2245,6 +2248,9 @@ packages:
   html-encoding-sniffer@7.0.0:
     resolution: {integrity: sha512-UikN5yr7xsCDAq87Or5or0PAlD3HJJOKVzM05az588WnpDJ4Ux7a2A53Qi6gofGg2/EtvF/H4hCi/TXfCW4Y6w==}
     engines: {node: ^22.13.0 || >=24.0.0}
+
+  idb-keyval@6.3.0:
+    resolution: {integrity: sha512-um+2dgAWmYsu615EXpWVwSmapJhON0G43t3Ka/EVaohzPQXSMqKEqeDK/oIW3Ow+BXaF2PvSc+oBTFp793A5Ow==}
 
   idb@7.1.1:
     resolution: {integrity: sha512-gchesWBzyvGHRO9W8tzUWFDycow5gwjvFKfyV9FF32Y7F50yZMp7mP+T2mJIWFx49zicqyC4uefHM17o6xKIVQ==}
@@ -5530,6 +5536,8 @@ snapshots:
       '@exodus/bytes': 1.16.0
     transitivePeerDependencies:
       - '@noble/hashes'
+
+  idb-keyval@6.3.0: {}
 
   idb@7.1.1: {}
 

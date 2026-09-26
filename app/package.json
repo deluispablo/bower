@@ -13,6 +13,7 @@
   "dependencies": {
     "dompurify": "^3.4.16",
     "marked": "^18.0.14",
+    "idb-keyval": "^6.3.0",
     "preact": "^10.29.8",
     "preact-iso": "^2.12.2",
     "workbox-precaching": "^7.4.1",
