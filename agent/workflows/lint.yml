@@ -28,8 +28,8 @@ jobs:
       VAULT_ID: ${{ inputs.vault_id }}
       # Both pinned deliberately; the cache keys below derive from these,
       # so bumping a version here invalidates the matching cache too.
-      RCLONE_VERSION: '1.75.1'
-      RCLONE_SHA256: '982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab'
+      BOWER_RCLONE_VERSION: '1.75.1'
+      BOWER_RCLONE_SHA256: '982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab'
       CLAUDE_CODE_VERSION: '2.1.283'
     steps:
       - name: Checkout
@@ -40,22 +40,22 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/rclone-bin
-          key: rclone-${{ runner.os }}-${{ env.RCLONE_VERSION }}
+          key: rclone-${{ runner.os }}-${{ env.BOWER_RCLONE_VERSION }}
 
       # Official release, downloaded directly and verified by hash rather
-      # than through a third-party action: RCLONE_SHA256 is the
+      # than through a third-party action: BOWER_RCLONE_SHA256 is the
       # linux-amd64.zip line copied from that release's own SHA256SUMS
       # (https://github.com/rclone/rclone/releases/download/v1.75.1/SHA256SUMS).
       - name: Download rclone
         if: steps.cache-rclone.outputs.cache-hit != 'true'
         run: |
           curl -fsSL -o rclone.zip \
-            "https://github.com/rclone/rclone/releases/download/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-amd64.zip"
-          echo "${RCLONE_SHA256}  rclone.zip" | sha256sum -c -
+            "https://github.com/rclone/rclone/releases/download/v${BOWER_RCLONE_VERSION}/rclone-v${BOWER_RCLONE_VERSION}-linux-amd64.zip"
+          echo "${BOWER_RCLONE_SHA256}  rclone.zip" | sha256sum -c -
           unzip -q rclone.zip
           mkdir -p ~/rclone-bin
-          install -m 755 "rclone-v${RCLONE_VERSION}-linux-amd64/rclone" ~/rclone-bin/rclone
-          rm -rf rclone.zip "rclone-v${RCLONE_VERSION}-linux-amd64"
+          install -m 755 "rclone-v${BOWER_RCLONE_VERSION}-linux-amd64/rclone" ~/rclone-bin/rclone
+          rm -rf rclone.zip "rclone-v${BOWER_RCLONE_VERSION}-linux-amd64"
 
       - name: Install rclone
         run: |
