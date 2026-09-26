@@ -1,5 +1,7 @@
 # Bower
 
+[![CI](https://github.com/deluispablo/bower/actions/workflows/ci.yml/badge.svg)](https://github.com/deluispablo/bower/actions/workflows/ci.yml)
+
 A second brain that files itself.
 
 You drop a file into your inbox (or type a request), press **Process**, and a few minutes later it is a note in your own Google Drive: summarised, filed, linked and indexed. Nothing to install, no server to run, 0 € a month on top of a Claude subscription and Google Drive.

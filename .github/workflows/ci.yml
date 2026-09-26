@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Check for Cloudflare Worker config
+        id: wrangler-config
+        run: echo "exists=$([ -f api/wrangler.toml ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Dry-run Cloudflare Worker deploy
+        if: steps.wrangler-config.outputs.exists == 'true'
+        working-directory: api
+        run: pnpm dlx wrangler deploy --dry-run
