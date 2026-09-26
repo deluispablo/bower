@@ -52,7 +52,7 @@ Hermetic: `rclone`, `claude` and `curl` are stubs that record their calls, so no
 `workflows/ingest.yml` and `workflows/lint.yml` are GitHub Actions workflows that call `run.sh`. They live here, under `agent/workflows/`, not under `.github/workflows/`: **this public repo never runs them.** `scripts/new-instance.sh` (which `scripts/deploy.sh` runs) copies both files into the instance repo's `.github/workflows/`, with `run.sh` and `prompts/`, when the instance is created, and again on every rerun (`git pull` here, then `scripts/deploy.sh`, as `docs/runbook.md` describes).
 
 - **`ingest.yml`**: triggers on `repository_dispatch` (`types: [ingest]`, sent by the Worker's `POST /process` with `client_payload: { vault_id }`) and on `workflow_dispatch` with a `vault_id` input, for a manual run. `concurrency` is keyed by vault id (`ingest-<vault_id>`, `cancel-in-progress: false`), so two runs for the same vault queue instead of overlapping, and different vaults run in parallel.
-- **`lint.yml`**: `workflow_dispatch` only, same `vault_id` input, `concurrency` keyed `lint-<vault_id>`. A scheduled lint is a later milestone (M5); for now it only runs when triggered by hand.
+- **`lint.yml`**: the weekly health check. On `schedule` (`cron: '17 6 * * 0'`, Sundays at 06:17 UTC), a first job `list` calls `GET /runner/vaults` with `BOWER_API_URL` and `BOWER_API_KEY` and emits the vault ids as a JSON array output; the `lint` job then runs once per vault through `matrix: vault_id: ${{ fromJSON(needs.list.outputs.vaults) }}`, with `max-parallel: 1` (one vault at a time, on the operator's single Claude credential) and `fail-fast: false` (one failing vault, say a user whose Google access was revoked, does not cancel the rest). With no vaults yet, `lint` is skipped. A manual `workflow_dispatch` with a `vault_id` input still lints that one vault and skips `list`. `concurrency` is per job, keyed `lint-<vault_id>`. The `list` job logs only the number of vaults; the ids are opaque user ids and nothing else about a user reaches the log. Each run overwrites `Lint Report.md` at the top of the vault (`prompts/lint.md`), which the app shows as **Health check**.
 
 Both jobs, in order: check out the repo; install `rclone` (a pinned version, downloaded from the official GitHub release and checked against the sha256 published in that release's own `SHA256SUMS` — no third-party action needed for a single static binary); install `pandoc` (`apt-get`, Ubuntu's own package); set up Node 22 (`actions/setup-node@v4`); install a pinned `@anthropic-ai/claude-code`; run `agent/run.sh <vault_id> <ingest|lint>` with the secrets and variable below. `timeout-minutes: 20` and `permissions: contents: read` bound each run.
 
@@ -81,10 +81,10 @@ Set once, under the instance repo's Settings → Secrets and variables → Actio
 
 | Name | Kind | Used for |
 | --- | --- | --- |
-| `BOWER_API_KEY` | Secret | `run.sh`'s calls to the Worker (`Authorization: Bearer`) |
+| `BOWER_API_KEY` | Secret | `run.sh`'s calls to the Worker and `lint.yml`'s `list` job (`Authorization: Bearer`) |
 | `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` | Secret | The operator's Claude credentials for `claude -p` (a user's own API key, when set, overrides this for their run) |
-| `BOWER_API_URL` | Variable | The Worker's deployed origin |
+| `BOWER_API_URL` | Variable | The Worker's deployed origin (also read by `lint.yml`'s `list` job) |
 
 ### Logs on failure
 
-Both workflows upload `$RUNNER_TEMP/bower-logs/` (rclone's log and the agent's stderr) as the `bower-logs` artifact, kept 3 days, only `if: failure()`. **This can contain vault content** (file names, error text from `claude`), which is why it only happens in the instance repo, which is private, and never here. The job's own console log stays content-free (see `run.sh`'s comment on what it prints); nothing there needs `::add-mask::` because nothing there is a secret in the first place.
+Both workflows upload `$RUNNER_TEMP/bower-logs/` (rclone's log and the agent's stderr) as an artifact, kept 3 days, only `if: failure()`: `bower-logs` for `ingest.yml`, `bower-logs-<n>` for `lint.yml` (`<n>` is the matrix leg's `strategy.job-index`, since artifact names must be unique within a run). **This can contain vault content** (file names, error text from `claude`), which is why it only happens in the instance repo, which is private, and never here. The job's own console log stays content-free (see `run.sh`'s comment on what it prints); nothing there needs `::add-mask::` because nothing there is a secret in the first place.

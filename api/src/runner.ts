@@ -2,6 +2,8 @@
  * The endpoints the GitHub Actions runner calls, authenticated with the
  * single operator key `BOWER_API_KEY` (never a per-user secret):
  *
+ * - `GET /runner/vaults`: the id of every user with a vault, for the
+ *   scheduled lint; ids only, never an email or a token.
  * - `GET /runner/vaults/:id`: what one run needs — the vault's folder ids,
  *   a 1 h Drive access token (never the refresh token), `maxTurns`, and the
  *   user's own Claude API key when they set one.
@@ -24,7 +26,7 @@ import { HttpError } from './errors.js';
 import type { FetchLike } from './google.js';
 import { sendPush } from './push.js';
 import type { PushPayload } from './push.js';
-import { getRun, getUser, putRun } from './store.js';
+import { getRun, getUser, listVaultIds, putRun } from './store.js';
 import type { DriveToken, Run, User } from './types.js';
 
 /** Longest `summary` or `error` kept on a `Run`; longer text is cut. */
@@ -53,6 +55,11 @@ export const requireRunnerKey: MiddlewareHandler<AppEnv> = async (c, next) => {
   }
   await next();
 };
+
+/** What `GET /runner/vaults` answers: one entry per user with a vault. */
+export interface RunnerVaultList {
+  vaults: { id: string }[];
+}
 
 /** What `GET /runner/vaults/:id` answers. */
 export interface RunnerVault {
@@ -237,6 +244,12 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     }
     return user;
   }
+
+  runner.get('/runner/vaults', async (c) => {
+    const ids = await listVaultIds(c.get('env').BOWER_KV);
+    const body: RunnerVaultList = { vaults: ids.map((id) => ({ id })) };
+    return c.json(body);
+  });
 
   runner.get('/runner/vaults/:id', async (c) => {
     const env = c.get('env');

@@ -30,6 +30,15 @@ describe('prefs', () => {
     expect(getPref('notifyOnFinish')).toBe(false);
     expect(getPref('autoProcessOnAdd')).toBe(true);
     expect(getPref('theme')).toBe('system');
+    expect(getPref('healthSeenAt')).toBe('');
+  });
+
+  it('round-trips the time the health check was last opened', () => {
+    stubLocalStorage();
+
+    setPref('healthSeenAt', '2026-06-07T09:00:00.000Z');
+
+    expect(getPref('healthSeenAt')).toBe('2026-06-07T09:00:00.000Z');
   });
 
   it('round-trips a value written with setPref', () => {

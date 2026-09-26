@@ -208,15 +208,19 @@ Each Worker secret is rotated the same way — pipe the new value into `wrangler
 
 `DAILY_RUN_LIMIT` (default 20) caps `/process` runs per vault per day; `DEFAULT_MAX_TURNS` (default 30) caps how many turns the agent takes per run, unless the instance repo's `BOWER_MAX_TURNS` variable overrides it. Change either in `wrangler.local.toml`'s `[vars]` and redeploy (step 3.6 above).
 
+### Weekly health check
+
+The instance repo's `lint.yml` runs on its own every Sunday at 06:17 UTC: a first job lists every user with a Bower folder (`GET /runner/vaults`, authenticated with `BOWER_API_KEY`), then the check runs once per folder, one at a time. Each run rewrites `Lint Report.md` at the top of that user's folder; the app shows it under **Health**, with a badge when a new one arrives. A user whose Google access was revoked fails their own run (see Troubleshooting) without stopping the others. To check one folder by hand: instance repo → **Actions** → **Lint vault** → **Run workflow**, with the user id as `vault_id`. To stop the weekly run alone, disable that workflow in the Actions tab (**Lint vault** → **⋯** → **Disable workflow**).
+
 ### Reading logs
 
 - **Worker**: `pnpm -C api exec wrangler tail -c wrangler.local.toml` streams live requests (method, path, status, exceptions) — nothing here includes note content or credentials (see `CLAUDE.md`'s logging rule and `api/test/log-hygiene.test.ts`).
-- **Agent runs**: the instance repo's **Actions** tab lists every `ingest` / `lint` run, with step names, timestamps and counts only. A failed run's reason is in `GET /status`'s `error`; the full stderr and rclone output are the `bower-logs` artifact, uploaded only `if: failure()`, kept 3 days (`agent/README.md`) — safe only because the instance repo is private.
+- **Agent runs**: the instance repo's **Actions** tab lists every `ingest` / `lint` run, with step names, timestamps and counts only. A failed run's reason is in `GET /status`'s `error`; the full stderr and rclone output are the `bower-logs` artifact (`bower-logs-<n>` for each failed folder of the weekly health check), uploaded only `if: failure()`, kept 3 days (`agent/README.md`) — safe only because the instance repo is private.
 
 ### Costs to watch
 
 - **Cloudflare free tier**: Workers requests, KV reads/writes and Pages builds all have a free monthly allowance; the dashboard's Analytics tab for the Worker and the KV namespace shows current usage against it.
-- **GitHub Actions minutes**: 2,000 free minutes a month on a private repo; each run is capped at 20 minutes (`timeout-minutes` in the workflows) — the Actions tab's usage view (or **Settings → Billing** on the account owning the instance repo) shows the month's total.
+- **GitHub Actions minutes**: 2,000 free minutes a month on a private repo; each run is capped at 20 minutes (`timeout-minutes` in the workflows), and the weekly health check adds one run per user every Sunday — the Actions tab's usage view (or **Settings → Billing** on the account owning the instance repo) shows the month's total.
 - **Anthropic usage**: a Claude subscription's own usage limits, or an API key's billed usage in the Claude Console — whichever the instance repo's `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` draws on.
 
 ## 7. Pause and teardown

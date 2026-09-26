@@ -7,7 +7,7 @@ import { GOOGLE_TOKEN_URL } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
 import { MAX_PROCESSED, MAX_TEXT_LENGTH } from '../src/runner.js';
-import type { RunnerVault } from '../src/runner.js';
+import type { RunnerVault, RunnerVaultList } from '../src/runner.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import {
   getRun,
@@ -194,6 +194,72 @@ describe('runner key', () => {
     );
 
     expect(response.status).toBe(401);
+  });
+});
+
+async function listVaults(
+  authorization: string | null = RUNNER_AUTH,
+): Promise<Response> {
+  return createApp({ fetchImpl: stub().fetchImpl }).request(
+    `${API}/runner/vaults`,
+    { headers: authorization === null ? {} : { authorization } },
+    env,
+  );
+}
+
+describe('GET /runner/vaults', () => {
+  it('lists the id of every user with a vault, and nothing else', async () => {
+    await seedUser();
+    await putUser(kv, {
+      id: 'user-2',
+      email: 'alex@example.com',
+      createdAt: '2026-01-02T00:00:00.000Z',
+      encRefreshToken: 'unused',
+      vault: {
+        folderId: 'FOLDER_ID',
+        inboxFolderId: 'INBOX_FOLDER_ID',
+        name: 'Bower',
+      },
+    });
+    await putUser(kv, {
+      id: 'user-3',
+      email: 'no-vault@example.com',
+      createdAt: '2026-01-03T00:00:00.000Z',
+      encRefreshToken: 'unused',
+    });
+
+    const response = await listVaults();
+
+    expect(response.status).toBe(200);
+    const body = await response.json<RunnerVaultList>();
+    expect(body.vaults.map((vault) => vault.id).sort()).toEqual([
+      USER_ID,
+      'user-2',
+    ]);
+    expect(body.vaults.every((vault) => Object.keys(vault).length === 1)).toBe(
+      true,
+    );
+    expect(JSON.stringify(body)).not.toContain('@');
+  });
+
+  it('answers an empty list when nobody has a vault', async () => {
+    const response = await listVaults();
+
+    expect(response.status).toBe(200);
+    expect(await response.json<RunnerVaultList>()).toEqual({ vaults: [] });
+  });
+
+  it.each([
+    ['missing', null],
+    ['wrong', 'Bearer not-the-key'],
+    ['admin', `Bearer ${env.ADMIN_KEY}`],
+  ])('answers 401 unauthorized with a %s key', async (_, auth) => {
+    await seedUser();
+
+    const response = await listVaults(auth);
+
+    expect(response.status).toBe(401);
+    expect((await response.json<ErrorBody>()).error.code).toBe('unauthorized');
   });
 });
 
