@@ -55,6 +55,10 @@ export async function apiFetch<T>(
     throw new ApiError(0, 'network', 'Could not reach the server.');
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   let body: unknown;
   try {
     body = await response.json();
@@ -87,4 +91,30 @@ export interface HealthResponse {
 
 export function getHealth(): Promise<HealthResponse> {
   return apiFetch<HealthResponse>('/health');
+}
+
+export interface Vault {
+  folderId: string;
+  inboxFolderId: string;
+  name: string;
+}
+
+export interface Me {
+  email: string;
+  vault: Vault | null;
+  quota: { used: number; limit: number };
+  needsReauth: boolean;
+}
+
+export function getMe(): Promise<Me> {
+  return apiFetch<Me>('/me');
+}
+
+export function logout(): Promise<void> {
+  return apiFetch<void>('/auth/logout', { method: 'POST' });
+}
+
+/** The Worker's `/auth/login`: a full navigation, never fetched. */
+export function loginUrl(): string {
+  return `${API_URL}/auth/login`;
 }

@@ -8,9 +8,35 @@ import { Home } from './routes/home.js';
 import { Login } from './routes/login.js';
 import { Note } from './routes/note.js';
 import { NotFound } from './routes/not-found.js';
+import { NotInvited } from './routes/not-invited.js';
 import { Onboarding } from './routes/onboarding.js';
 import { Settings } from './routes/settings.js';
 import { Tell } from './routes/tell.js';
+import { SessionProvider, useSession } from './session.js';
+
+function AppRoutes() {
+  const { status } = useSession();
+
+  if (status === 'loading') {
+    return <p class="app-loading">Loading…</p>;
+  }
+
+  return (
+    <Layout>
+      <Router>
+        <Route path="/" component={Home} />
+        <Route path="/login" component={Login} />
+        <Route path="/not-invited" component={NotInvited} />
+        <Route path="/note/:id" component={Note} />
+        <Route path="/add" component={Add} />
+        <Route path="/tell" component={Tell} />
+        <Route path="/settings" component={Settings} />
+        <Route path="/onboarding" component={Onboarding} />
+        <Route default component={NotFound} />
+      </Router>
+    </Layout>
+  );
+}
 
 export function App() {
   const [needRefresh, setNeedRefresh] = useState(false);
@@ -28,18 +54,9 @@ export function App() {
 
   return (
     <LocationProvider>
-      <Layout>
-        <Router>
-          <Route path="/" component={Home} />
-          <Route path="/login" component={Login} />
-          <Route path="/note/:id" component={Note} />
-          <Route path="/add" component={Add} />
-          <Route path="/tell" component={Tell} />
-          <Route path="/settings" component={Settings} />
-          <Route path="/onboarding" component={Onboarding} />
-          <Route default component={NotFound} />
-        </Router>
-      </Layout>
+      <SessionProvider>
+        <AppRoutes />
+      </SessionProvider>
       {needRefresh && (
         <div class="update-bar">
           <span>Update available</span>
