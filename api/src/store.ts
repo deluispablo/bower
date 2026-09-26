@@ -141,6 +141,27 @@ export async function listUsers(kv: KVNamespace): Promise<UserSummary[]> {
   return users;
 }
 
+/**
+ * The id of every user who has a vault, for the runner's scheduled runs.
+ * Pages through `user:` keys with `kv.list`; returns ids only, never an
+ * email or a token.
+ */
+export async function listVaultIds(kv: KVNamespace): Promise<string[]> {
+  const prefix = keys.userPrefix();
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const listed = await kv.list({ prefix, cursor });
+    for (const entry of listed.keys) {
+      const user = await getJson<User>(kv, entry.name);
+      if (user?.vault !== undefined) ids.push(user.id);
+    }
+    if (listed.list_complete) break;
+    cursor = listed.cursor;
+  }
+  return ids;
+}
+
 export async function getRun(
   kv: KVNamespace,
   id: string,

@@ -6,7 +6,7 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 
 | Key pattern | Value | TTL | Written by | Read by |
 | --- | --- | --- | --- | --- |
-| `user:<id>` | `User` | none | `putUser` | `getUser`, `findUserByEmail` |
+| `user:<id>` | `User` | none | `putUser` | `getUser`, `findUserByEmail`, `listUsers`, `listVaultIds` |
 | `email:<email>` | user id (string) | none | `putUser` | `findUserByEmail` |
 | `allow:<email>` | `'1'` | none | the operator, outside this module | `isAllowed` |
 | `run:<id>` | `Run` | none | `putRun` | `getRun` |
@@ -160,6 +160,16 @@ Response: `{ "run": Run | null, "stale": boolean }`, status 200.
 ## Runner endpoints
 
 Called by the GitHub Actions runner of the instance repo, never by the app. Every route under `/runner/` requires `Authorization: Bearer <BOWER_API_KEY>`, compared in constant time; anything else is a 401 `unauthorized`. `:id` is the user id, the `vault_id` that `POST /process` dispatches. Nothing here logs the key, a token, the user's API key, file names or summaries.
+
+### `GET /runner/vaults`
+
+The id of every user who has a vault, so the scheduled lint (`agent/workflows/lint.yml`) can run once per vault. The Worker pages through the `user:` keys (`listVaultIds`); users without a vault yet are left out.
+
+Response, status 200: `{ "vaults": [{ "id": "<user id>" }] }` (an empty array when nobody has a vault). Ids only: never an email, a folder id or a token.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 401 | `unauthorized` | Missing or wrong runner key |
 
 ### `GET /runner/vaults/:id`
 
