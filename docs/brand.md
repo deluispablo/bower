@@ -42,7 +42,9 @@ Brand colours: teal `#2dd4bf`, deep navy `#0b1220`, amber `#fbbf24`. Neutrals ar
 | `--color-border-strong` | Input and control outlines | `#64748b` | `#64748b` |
 | `--color-focus` | Focus ring | `#0f766e` | `#2dd4bf` |
 | `--color-danger` | Errors | `#b91c1c` | `#f87171` |
+| `--color-on-danger` | Text on a `--color-danger` fill (e.g. the danger button) | `#ffffff` | `#0b1220` |
 | `--color-success` | Confirmations | `#15803d` | `#4ade80` |
+| `--color-on-success` | Text on a `--color-success` fill (e.g. the "done" button) | `#ffffff` | `#0b1220` |
 
 Contrast (WCAG 2.1; AA needs 4.5:1 for body text, 3:1 for control outlines):
 
@@ -60,6 +62,8 @@ Contrast (WCAG 2.1; AA needs 4.5:1 for body text, 3:1 for control outlines):
 | on-accent on accent | 11.22 | 11.22 |
 | border-strong on bg | 4.76 | 3.93 |
 | border-strong on surface | 4.34 | 3.42 |
+
+`on-danger`/`on-success` are `bg`'s own colour, so their contrast on a danger or success fill is the same figure as "danger on bg" / "success on bg" above, just with the two colours swapped (contrast is symmetric).
 
 The theme follows the system. The root element may carry `data-theme="light"` or `data-theme="dark"` to override it.
 

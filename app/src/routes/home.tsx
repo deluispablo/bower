@@ -37,16 +37,24 @@ export function Home() {
         <p class="home-updated">Updated {formatAgo(fetchedAt, now)}</p>
       )}
       {status === 'offline' && (
-        <p class="home-status">Offline: showing saved notes</p>
+        <p class="home-status" role="status" aria-live="polite">
+          Offline: showing saved notes
+        </p>
       )}
       {status === 'error' && (
-        <p class="home-status">Could not load your notes.</p>
+        <p class="home-status" role="status" aria-live="polite">
+          Could not load your notes.
+        </p>
       )}
 
       <div class="home-card">
         <h2>Inbox</h2>
         <p class="home-card-count">{pending}</p>
-        <p>Press Process in the top bar to file them.</p>
+        <p>
+          {pending > 0
+            ? 'Press Process in the top bar to file them.'
+            : 'Nothing waiting to be filed.'}
+        </p>
       </div>
 
       <a class="home-card home-card-link" href="/#folder=Answers">

@@ -5,6 +5,9 @@
  * browsing, storage quota) never throws.
  */
 
+/** Light/dark, or follow the operating system (see `theme.ts`). */
+export type ThemePref = 'system' | 'light' | 'dark';
+
 export interface Prefs {
   /** Notify me when Bower finishes. Read by the push subscription added in #39. */
   notifyOnFinish: boolean;
@@ -12,12 +15,15 @@ export interface Prefs {
   autoProcessOnAdd: boolean;
   /** The push permission prompt (#39) has been shown once already. */
   pushPromptShown: boolean;
+  /** Manual override of the light/dark theme; `'system'` follows the OS. */
+  theme: ThemePref;
 }
 
 const DEFAULTS: Prefs = {
   notifyOnFinish: false,
   autoProcessOnAdd: true,
   pushPromptShown: false,
+  theme: 'system',
 };
 
 const STORAGE_PREFIX = 'bower:pref:';

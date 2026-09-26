@@ -26,7 +26,9 @@
   --color-border-strong: #64748b;
   --color-focus: #0f766e;
   --color-danger: #b91c1c;
+  --color-on-danger: #ffffff;
   --color-success: #15803d;
+  --color-on-success: #ffffff;
 
   /* Typography */
   --font-sans:
@@ -78,7 +80,9 @@
     --color-border-strong: #64748b;
     --color-focus: #2dd4bf;
     --color-danger: #f87171;
+    --color-on-danger: #0b1220;
     --color-success: #4ade80;
+    --color-on-success: #0b1220;
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
   }
@@ -95,7 +99,9 @@
   --color-border-strong: #64748b;
   --color-focus: #2dd4bf;
   --color-danger: #f87171;
+  --color-on-danger: #0b1220;
   --color-success: #4ade80;
+  --color-on-success: #0b1220;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
 }

@@ -48,6 +48,10 @@ export function ProcessButton() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastKey, setToastKey] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Bumped whenever a tap deliberately brings the sheet back, so the sheet
+  // re-measures its linger window even if the phase itself hasn't changed
+  // (e.g. tapping "Done" again after it already lingered and faded).
+  const [reopenKey, setReopenKey] = useState(0);
   const prevPhase = useRef<RunPhase>(phase);
 
   // The sheet opens when a run starts (here or on another device) and is
@@ -74,9 +78,11 @@ export function ProcessButton() {
   }, [phase, message]);
 
   function onClick(): void {
-    // During a run (or right after it), a tap brings the sheet back.
+    // During a run (or right after it), a tap brings the sheet back, even
+    // if it had already lingered away.
     if (phase === 'queued' || phase === 'running' || phase === 'done') {
       setSheetOpen(true);
+      setReopenKey((key) => key + 1);
       return;
     }
     if (phase === 'failed' || phase === 'stale' || phase === 'quota') {
@@ -125,6 +131,7 @@ export function ProcessButton() {
         message={message}
         open={sheetOpen}
         onDismiss={closeSheet}
+        reopenKey={reopenKey}
       />
     </div>
   );

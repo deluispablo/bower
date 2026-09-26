@@ -29,6 +29,7 @@ describe('prefs', () => {
 
     expect(getPref('notifyOnFinish')).toBe(false);
     expect(getPref('autoProcessOnAdd')).toBe(true);
+    expect(getPref('theme')).toBe('system');
   });
 
   it('round-trips a value written with setPref', () => {
@@ -37,6 +38,14 @@ describe('prefs', () => {
     setPref('notifyOnFinish', true);
 
     expect(getPref('notifyOnFinish')).toBe(true);
+  });
+
+  it('round-trips the theme override', () => {
+    stubLocalStorage();
+
+    setPref('theme', 'dark');
+
+    expect(getPref('theme')).toBe('dark');
   });
 
   it('keeps each preference under its own key', () => {

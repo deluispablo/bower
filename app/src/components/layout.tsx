@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { loginUrl } from '../api.js';
 import { useSession } from '../session.js';
@@ -24,6 +24,23 @@ export function Layout({ children }: LayoutProps) {
   const { me, signOut } = useSession();
   const { index } = useVault();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  const closeMenu = (): void => {
+    setMenuOpen(false);
+    menuButtonRef.current?.focus();
+  };
+
+  // The drawer traps no focus (Tab can still reach the rest of the page),
+  // but it must still close on Escape like any dismissible panel.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') closeMenu();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [menuOpen]);
 
   return (
     <div class="shell">
@@ -38,8 +55,10 @@ export function Layout({ children }: LayoutProps) {
         <div class="menu">
           <button
             type="button"
+            ref={menuButtonRef}
             class="menu-button"
             aria-label="Menu"
+            aria-haspopup="true"
             aria-expanded={menuOpen}
             onClick={() => {
               setMenuOpen((open) => !open);
@@ -57,11 +76,11 @@ export function Layout({ children }: LayoutProps) {
           </button>
           {menuOpen && (
             <>
-              <div class="menu-backdrop" onClick={() => setMenuOpen(false)} />
-              <div class="menu-panel">
+              <div class="menu-backdrop" onClick={closeMenu} />
+              <div class="menu-panel" aria-label="Menu">
                 <div class="menu-tree">
                   {index !== null && (
-                    <Tree index={index} onNavigate={() => setMenuOpen(false)} />
+                    <Tree index={index} onNavigate={closeMenu} />
                   )}
                 </div>
                 {me && <p class="menu-email">{me.email}</p>}
