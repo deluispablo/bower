@@ -49,7 +49,7 @@ Hermetic: `rclone`, `claude` and `curl` are stubs that record their calls, so no
 
 ## Workflows
 
-`workflows/ingest.yml` and `workflows/lint.yml` are GitHub Actions workflows that call `run.sh`. They live here, under `agent/workflows/`, not under `.github/workflows/`: **this public repo never runs them.** The operator's setup script (M4) copies both files into the instance repo's `.github/workflows/` when the instance is created, and the operator re-copies them on update (`git pull` here, then copy over, as `docs/runbook.md` describes).
+`workflows/ingest.yml` and `workflows/lint.yml` are GitHub Actions workflows that call `run.sh`. They live here, under `agent/workflows/`, not under `.github/workflows/`: **this public repo never runs them.** `scripts/new-instance.sh` (which `scripts/deploy.sh` runs) copies both files into the instance repo's `.github/workflows/`, with `run.sh` and `prompts/`, when the instance is created, and again on every rerun (`git pull` here, then `scripts/deploy.sh`, as `docs/runbook.md` describes).
 
 - **`ingest.yml`**: triggers on `repository_dispatch` (`types: [ingest]`, sent by the Worker's `POST /process` with `client_payload: { vault_id }`) and on `workflow_dispatch` with a `vault_id` input, for a manual run. `concurrency` is keyed by vault id (`ingest-<vault_id>`, `cancel-in-progress: false`), so two runs for the same vault queue instead of overlapping, and different vaults run in parallel.
 - **`lint.yml`**: `workflow_dispatch` only, same `vault_id` input, `concurrency` keyed `lint-<vault_id>`. A scheduled lint is a later milestone (M5); for now it only runs when triggered by hand.

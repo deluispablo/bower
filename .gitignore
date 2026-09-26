@@ -15,3 +15,7 @@ Thumbs.db
 
 # Local AI-session artefacts (subagent worktrees)
 .claude/worktrees/
+
+# Operator-local deploy config and generated production secrets (scripts/deploy.sh)
+api/wrangler.local.toml
+api/.prod.secrets

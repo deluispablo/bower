@@ -23,7 +23,7 @@ bower/
 │   │   ├── crypto.ts, session.ts, security.ts, store.ts, google.ts, github.ts, push.ts
 │   │   └── template.generated.ts   # vault-template bundled at build time
 │   ├── scripts/                # bundle-template.mjs, gen-vapid.mjs
-│   ├── wrangler.toml, .dev.vars.example
+│   ├── wrangler.toml, .dev.vars.example   # placeholders; the real deploy config is the git-ignored wrangler.local.toml
 │   └── test/
 ├── agent/
 │   ├── run.sh                  # sync down → claude -p → copy up → status
@@ -32,7 +32,7 @@ bower/
 │   └── test/smoke.sh           # stubbed rclone/claude/curl
 ├── vault-template/             # CLAUDE.md rulebook, PARA folders, index.md, log.md, About-Me.md
 ├── docs/                       # runbook.md, decisions.md, brand.md, testing.md, security.md, privacy.md
-├── scripts/                    # deploy.sh, new-instance.sh, check-sanitized.sh, deploy-api.sh
+├── scripts/                    # deploy.sh (one-shot deploy), new-instance.sh (instance repo), deploy-api.sh (Worker only), check-sanitized.sh
 ├── .github/                    # CI only (this repo never runs the agent)
 ├── README.md, ARCHITECTURE.md, CONTRIBUTING.md, CLAUDE.md, SECURITY.md, CODE_OF_CONDUCT.md, LICENSE
 └── package.json, pnpm-workspace.yaml, tsconfig.base.json, eslint.config.js
@@ -42,10 +42,10 @@ bower/
 
 | | This repository (public template) | The operator's instance (private, e.g. `bower-home`) |
 | --- | --- | --- |
-| Holds | Code, docs, vault template, workflow files | The workflow files copied from `agent/workflows/`, `agent/run.sh`, instance config |
+| Holds | Code, docs, vault template, workflow files | `.github/workflows/` copied from `agent/workflows/`, plus `agent/run.sh` and `agent/prompts/` (`scripts/new-instance.sh`) |
 | Secrets | None, ever | `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`, `BOWER_API_KEY`; variable `BOWER_API_URL` |
 | GitHub Actions | CI only | Runs the agent; logs are private |
-| Updated by | Pull requests here | `git pull` from here, then redeploy |
+| Updated by | Pull requests here | `git pull` from here, then rerun `scripts/deploy.sh` |
 
 Vault content never enters either repository.
 
