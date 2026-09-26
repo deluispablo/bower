@@ -1,59 +1,60 @@
-# Contributing and implementation guide
+# Contributing
 
-This file is written for whoever implements an issue, human or model. Read it before touching code.
+Thanks for your interest in Bower. Bug reports, fixes, documentation and ideas are welcome. By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). For security issues, see [SECURITY.md](SECURITY.md) instead of opening an issue.
 
-## Ground rules
+## Before you start
 
-1. **One issue, one branch, one PR.** Branch `issue-<n>-<slug>` from `main`. The PR title is the issue title; the body starts with `Closes #<n>` and lists what was done and what was left out, with reasons.
-2. **Do what the issue says, no more.** Acceptance criteria are the definition of done. Anything you think is missing becomes a comment on the issue or a new issue, not silent extra code.
-3. **No personal data, ever.** No emails, folder ids, tokens, names or vault content in code, tests, fixtures, docs or commit messages. Use `you@example.com`, `FOLDER_ID`, `Alex`.
-4. **No secrets in the repo.** Secrets come from environment variables or Cloudflare/GitHub secrets. `.dev.vars` and `.env*` are ignored by git.
-5. **Small and boring.** Prefer the standard library and one well-known dependency over three clever ones. Every dependency added must be justified in the PR.
-6. **Tests where logic lives.** Pure functions (crypto, quota, markdown, path handling) get unit tests. Handlers get at least a happy path and one failure path. UI gets smoke tests only when cheap.
-7. **Docs travel with code.** If a change alters how the operator deploys or how a user acts, update `docs/runbook.md` or the user-facing copy in the same PR.
+- **Open an issue first** for anything beyond a small fix, using the [issue templates](../../issues/new/choose), so the approach can be agreed before you invest time in it. The [milestones](../../milestones) are the plan; new work should fit one of them or say why not.
+- Read [ARCHITECTURE.md](ARCHITECTURE.md): what lives where, how the pieces talk, and the policies that keep the system free to run and safe to operate.
+- If you use an AI coding assistant, it reads [CLAUDE.md](CLAUDE.md) automatically. The rules there apply to humans too; they are just written tersely.
 
-## Stack (do not change without an issue)
+## Development setup
 
-| Area | Stack |
-| --- | --- |
-| Repo | pnpm workspaces, TypeScript strict, ESLint + Prettier, GitHub Actions CI (lint, typecheck, test, build) |
-| `api/` | Cloudflare Workers, Hono, KV, Web Crypto (AES-GCM for tokens at rest), Vitest with `@cloudflare/vitest-pool-workers` |
-| `app/` | Vite, Preact (with `preact/compat`), TypeScript, `marked` for Markdown, `idb-keyval` for cache, plain CSS with custom properties, `vite-plugin-pwa` |
-| `agent/` | Bash (`set -Eeuo pipefail`), `rclone`, Claude Code CLI (`claude -p`), GitHub Actions workflows |
-| Docs | Markdown; diagrams as SVG in `docs/assets/` or Mermaid in Markdown |
+You need Node 22 and [pnpm](https://pnpm.io/) 9 (`corepack enable` gives you pnpm).
 
-## Conventions
-
-- **TypeScript:** `strict: true`, no `any` (use `unknown` and narrow), explicit return types on exported functions, `readonly` where possible.
-- **Errors:** never swallow. In the Worker, map errors to JSON `{ error: { code, message } }` with the right HTTP status. In the app, show the user a short sentence and log details to the console.
-- **Naming:** files `kebab-case.ts`, types `PascalCase`, functions and variables `camelCase`, constants `UPPER_SNAKE` only for true constants.
-- **Commits:** imperative, one line, optional body explaining why. Example: `api: reject sign-in when email is not allowlisted`.
-- **Logging in the agent:** never print vault content, file names or agent summaries to the Actions log. They go to the status callback only.
-- **Language:** everything in the repo is in English: code, comments, docs, UI copy.
-
-## How the pieces talk
-
-```
-app (browser) ──cookie session──▶ api (Worker) ──repository_dispatch──▶ agent (Actions runner)
-app (browser) ──Drive access token from api──▶ Google Drive (read vault, write to 0-Inbox/)
-agent ──Bearer BOWER_API_KEY──▶ api (get Drive token, report status)
-agent ──rclone with that token──▶ Google Drive (sync vault down, copy results up)
-api ──web push──▶ app (notification)
+```bash
+git clone https://github.com/deluispablo/bower
+cd bower
+pnpm install                              # every workspace + dev tools, from pnpm-lock.yaml
+cp api/.dev.vars.example api/.dev.vars    # fill in local secrets (see docs/runbook.md)
+cp app/.env.example app/.env
+pnpm -C api dev                           # Worker on http://localhost:8787
+pnpm -C app dev                           # app on http://localhost:5173
 ```
 
-The vault folder in Drive is the only state that matters. The Worker keeps credentials and pointers, never content. The runner keeps nothing.
+Running the whole loop locally needs a Google OAuth client of your own (the runbook explains how) and, for the agent, a Claude subscription or API key. Tests need none of that.
 
-## Local development
+## Checks
 
-- `pnpm install` at the root.
-- `pnpm -C api dev` runs the Worker locally with `wrangler dev`; secrets in `api/.dev.vars` (see `api/.dev.vars.example`).
-- `pnpm -C app dev` runs the app against the local Worker.
-- `pnpm test`, `pnpm lint`, `pnpm typecheck` at the root run everything.
+CI runs these on every pull request and on every push to `main`; run them locally first.
 
-## Definition of done for a PR
+```bash
+pnpm lint          # ESLint + Prettier, whole repository
+pnpm typecheck     # tsc --noEmit, every workspace
+pnpm test          # Vitest per workspace + the agent smoke test with stubbed rclone and claude
+pnpm build         # app build + wrangler deploy --dry-run for the Worker
+```
 
-- [ ] Acceptance criteria of the issue met, each one checked in the PR body.
-- [ ] CI green.
-- [ ] No personal data, no secrets.
-- [ ] Docs updated if behaviour visible to operator or user changed.
-- [ ] Left-outs and follow-ups written as issue comments or new issues.
+The test suites are **hermetic**: no network, no real Google, no real Claude. Google and GitHub endpoints are mocked; the agent smoke test stubs `rclone` and `claude`. What tests deliberately do not cover is the agent's judgement on real notes; that is checked by hand with [docs/testing.md](docs/testing.md).
+
+## Code standards
+
+- TypeScript `strict`, no `any`, explicit return types on exported functions. Files `kebab-case.ts`, types `PascalCase`.
+- Errors are never swallowed. The Worker answers `{ error: { code, message } }` with the right status; the app tells the user one short sentence and logs details to the console.
+- No personal data and no secrets anywhere in the repository, including tests, fixtures and commit messages. CI fails on email addresses, Drive folder ids and token-shaped strings.
+- Dependencies are a cost. Add one only with a one-line reason in the pull request. Free tiers only; nothing that needs a server.
+- Everything in English: code, comments, docs, UI copy. UI copy avoids jargon.
+- Google-style doc comments on exported functions when the name does not say it all.
+
+## Pull requests
+
+- Branch from `main` with a prefix and the issue number: `feat/12-oauth-login`, `fix/`, `docs/`, `chore/`.
+- One pull request, one purpose. Commits follow [Conventional Commits](https://www.conventionalcommits.org/) with an imperative subject: `feat(api): reject sign-in when email is not allowlisted`.
+- The body follows [the template](.github/pull_request_template.md): what and why (`Closes #12`), how it was verified, the checklist, and what was left out and why.
+- Add tests for every behaviour change. A bug fix starts with a test that fails without it.
+- If the change alters how an operator deploys or how a user acts, update `docs/runbook.md` or the UI copy in the same pull request.
+- Label the PR `needs-review`. Merges are squash merges by the maintainer once CI is green.
+
+## Releases
+
+Bower is deployed, not published. Operators pull `main` into their instance and redeploy; `docs/runbook.md` says how. Breaking changes for operators (new secret, renamed variable) are listed under **Operator action required** in the pull request and in `docs/changelog.md`.
