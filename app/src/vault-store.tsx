@@ -29,7 +29,7 @@ import {
   saveIndex,
   saveNote,
 } from './cache.js';
-import { DriveError, getText, listVault } from './drive.js';
+import { appendToFile, DriveError, getText, listVault } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { useSession } from './session.js';
 import { buildVaultIndex } from './vault-index.js';
@@ -50,6 +50,11 @@ export interface VaultState {
 export interface Vault extends VaultState {
   refresh: () => Promise<void>;
   getNoteText: (id: string) => Promise<string>;
+  /**
+   * Appends `text` to a note in Drive as its own paragraph and updates the
+   * cached note text and listing, resolving to the note's new full text.
+   */
+  appendToNote: (id: string, text: string) => Promise<string>;
 }
 
 /** A note that has never been fetched, offline, with nothing cached to show. */
@@ -224,7 +229,50 @@ export function VaultProvider({ children }: VaultProviderProps) {
     }
   }, []);
 
-  const value: Vault = { ...state, refresh, getNoteText };
+  const appendToNote = useCallback(
+    async (id: string, text: string): Promise<string> => {
+      const file = stateRef.current.index?.byId.get(id);
+      if (file === undefined) throw new Error('Note not in the index.');
+      const result = await appendToFile(file, text);
+      const modifiedTime = result.file.modifiedTime ?? '';
+      const now = new Date().toISOString();
+
+      // Cache the saved text under the new modifiedTime and patch this one
+      // file in the listing, so the note view shows the new paragraph at
+      // once without walking the whole Bower folder again.
+      try {
+        await saveNote(id, result.text, modifiedTime, now);
+      } catch (err) {
+        console.error(err);
+      }
+      const files = stateRef.current.files.map((f) =>
+        f.id === id
+          ? {
+              ...f,
+              ...(modifiedTime !== '' ? { modifiedTime } : {}),
+              ...(result.file.size !== undefined
+                ? { size: result.file.size }
+                : {}),
+            }
+          : f,
+      );
+      const fetchedAt = stateRef.current.fetchedAt ?? now;
+      setState((prev) => ({
+        ...prev,
+        files,
+        index: buildVaultIndex(files),
+      }));
+      try {
+        await saveIndex(files, fetchedAt);
+      } catch (err) {
+        console.error(err);
+      }
+      return result.text;
+    },
+    [],
+  );
+
+  const value: Vault = { ...state, refresh, getNoteText, appendToNote };
 
   return (
     <VaultContext.Provider value={value}>{children}</VaultContext.Provider>

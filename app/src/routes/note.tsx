@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
+import { AppendForm } from '../components/append-form.js';
 import { NoteBody } from '../components/note-body.js';
+import { isAppendProtected } from '../drive.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
 import { breadcrumb, siblings } from '../navigation.js';
@@ -10,14 +12,14 @@ import '../styles/markdown.css';
 
 type NoteLoad =
   | { status: 'loading' }
-  | { status: 'ready'; rendered: RenderedNote }
+  | { status: 'ready'; id: string; rendered: RenderedNote }
   | { status: 'offline' }
   | { status: 'error'; message: string };
 
 export function Note() {
   const { params } = useRoute();
   const id = params.id ?? '';
-  const { index, getNoteText } = useVault();
+  const { index, getNoteText, appendToNote } = useVault();
   const [load, setLoad] = useState<NoteLoad>({ status: 'loading' });
 
   const file = index?.byId.get(id);
@@ -25,12 +27,17 @@ export function Note() {
   useEffect(() => {
     if (index === null || file === undefined) return;
     let cancelled = false;
-    setLoad({ status: 'loading' });
+    // Keep showing this note while it re-renders against a fresh index
+    // (after a refresh or an append); only a different note starts over.
+    setLoad((prev) =>
+      prev.status === 'ready' && prev.id === id ? prev : { status: 'loading' },
+    );
     getNoteText(id)
       .then((text) => {
         if (cancelled) return;
         setLoad({
           status: 'ready',
+          id,
           rendered: renderNote(text, index, { path: file.path }),
         });
       })
@@ -69,6 +76,16 @@ export function Note() {
   const crumbs = breadcrumb(file.path);
   const { prev, next } = siblings(index, file.id);
 
+  async function handleAppend(text: string): Promise<void> {
+    if (index === null || file === undefined) return;
+    const saved = await appendToNote(id, text);
+    setLoad({
+      status: 'ready',
+      id,
+      rendered: renderNote(saved, index, { path: file.path }),
+    });
+  }
+
   return (
     <section class="note-view">
       {crumbs.length > 0 && (
@@ -101,6 +118,9 @@ export function Note() {
             />
           )}
           <NoteBody html={load.rendered.html} />
+          {!isAppendProtected(file.name) && (
+            <AppendForm key={id} onAppend={handleAppend} />
+          )}
         </>
       )}
 

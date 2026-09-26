@@ -3,7 +3,8 @@
  * the short-lived access token from the Worker's `GET /drive/token`; this
  * module keeps that token in memory, retries once with a fresh token when
  * Drive answers 401, and wraps the few endpoints the app needs: recursive
- * listing of the Bower folder, file download, and uploads.
+ * listing of the Bower folder, file download, uploads, and appending to a
+ * note.
  *
  * Tokens are never logged. Failures surface as `DriveError` (Drive itself)
  * or `ApiError` (the Worker, including code `reauth` when Google access has
@@ -531,4 +532,162 @@ export function createTextFile(
     metadataFor(parentId, name, 'text/markdown'),
     new Blob([content], { type: 'text/markdown' }),
   );
+}
+
+// --- Update and append -------------------------------------------------
+
+export interface UpdateTextOptions {
+  /** Sent as `If-Match`; Drive answers 412 when it no longer matches. */
+  ifMatch?: string;
+  /** Content type of the new text. Defaults to `text/markdown`. */
+  mimeType?: string;
+}
+
+/**
+ * Replaces a file's content with `text` (`files.update`, media upload). A
+ * non-2xx answer throws `DriveError`, including 412 when `ifMatch` is stale.
+ */
+export async function updateFileText(
+  id: string,
+  text: string,
+  options: UpdateTextOptions = {},
+): Promise<DriveFile> {
+  const headers = new Headers({
+    'Content-Type': options.mimeType ?? 'text/markdown',
+  });
+  if (options.ifMatch !== undefined) headers.set('If-Match', options.ifMatch);
+  const response = await driveFetch(
+    `/upload/drive/v3/files/${encodeURIComponent(id)}?uploadType=media&fields=${FILE_FIELDS}`,
+    { method: 'PATCH', headers, body: text },
+  );
+  const body = await readJson(response);
+  return parseFile(body, typeof body.name === 'string' ? body.name : '');
+}
+
+/** Notes Bower maintains itself, which the app never writes to. */
+const PROTECTED_NOTES = new Set(['claude.md', 'index.md', 'log.md']);
+
+/**
+ * Whether the app must not append to a note named `name`: `CLAUDE.md`,
+ * `index.md`, `log.md` and `_*.md` folder notes belong to the agent.
+ */
+export function isAppendProtected(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    PROTECTED_NOTES.has(lower) ||
+    (lower.startsWith('_') && lower.endsWith('.md'))
+  );
+}
+
+export type AppendErrorCode = 'protected' | 'empty' | 'conflict';
+
+export class AppendError extends Error {
+  readonly code: AppendErrorCode;
+
+  constructor(code: AppendErrorCode, message: string) {
+    super(message);
+    this.name = 'AppendError';
+    this.code = code;
+  }
+}
+
+/** Attempts per append: the first one plus one retry after a conflict. */
+export const APPEND_ATTEMPTS = 2;
+
+/**
+ * `current` with `addition` as its own paragraph at the end: exactly one
+ * blank line before it (trailing newlines of `current` are folded into
+ * that blank line, so repeated appends do not pile up empty lines), one
+ * newline after.
+ */
+export function appendedText(current: string, addition: string): string {
+  const body = current.replace(/(\r?\n)+$/, '');
+  return body === '' ? `${addition}\n` : `${body}\n\n${addition}\n`;
+}
+
+export interface AppendTarget {
+  id: string;
+  name: string;
+  mimeType?: string;
+}
+
+export interface AppendResult {
+  /** The note's full text as saved. */
+  text: string;
+  /** The file's metadata after the save (fresh `modifiedTime`). */
+  file: DriveFile;
+}
+
+async function modifiedTimeOf(id: string): Promise<string> {
+  const body = await readJson(
+    await driveFetch(
+      `/drive/v3/files/${encodeURIComponent(id)}?fields=modifiedTime`,
+    ),
+  );
+  if (typeof body.modifiedTime !== 'string') throw unexpected();
+  return body.modifiedTime;
+}
+
+function conflict(): AppendError {
+  return new AppendError('conflict', 'The note changed while saving.');
+}
+
+/**
+ * One read-append-write pass. Drive v3 has no `etag` field on files, so the
+ * freshness check is `modifiedTime`: taken before the read and compared
+ * again right before the write. If the download does carry an `ETag`
+ * header, it is sent as `If-Match` too, and a 412 counts as a conflict.
+ */
+async function appendOnce(
+  target: AppendTarget,
+  addition: string,
+): Promise<AppendResult> {
+  const before = await modifiedTimeOf(target.id);
+  const download = await driveFetch(mediaPath(target.id));
+  const etag = download.headers.get('ETag');
+  const current = await download.text();
+  if ((await modifiedTimeOf(target.id)) !== before) throw conflict();
+
+  const text = appendedText(current, addition);
+  const options: UpdateTextOptions = {};
+  if (etag !== null && etag !== '') options.ifMatch = etag;
+  if (target.mimeType !== undefined && target.mimeType !== '') {
+    options.mimeType = target.mimeType;
+  }
+  try {
+    return { text, file: await updateFileText(target.id, text, options) };
+  } catch (err) {
+    if (err instanceof DriveError && err.status === 412) throw conflict();
+    throw err;
+  }
+}
+
+/**
+ * Appends `text` (trimmed) to the end of a note as its own paragraph. On a
+ * conflict with another write it re-reads and retries once; a second
+ * conflict throws `AppendError('conflict')`. Notes the agent maintains
+ * (`isAppendProtected`) and empty text are rejected before any request.
+ */
+export async function appendToFile(
+  target: AppendTarget,
+  text: string,
+): Promise<AppendResult> {
+  if (isAppendProtected(target.name)) {
+    throw new AppendError('protected', 'Bower maintains this note itself.');
+  }
+  const addition = text.trim();
+  if (addition === '') {
+    throw new AppendError('empty', 'Nothing to add.');
+  }
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await appendOnce(target, addition);
+    } catch (err) {
+      const retry =
+        err instanceof AppendError &&
+        err.code === 'conflict' &&
+        attempt < APPEND_ATTEMPTS;
+      if (!retry) throw err;
+    }
+  }
 }

@@ -30,7 +30,7 @@ export function useOnline(): boolean {
   return online;
 }
 
-export type OfflineAction = 'add' | 'tell' | 'process';
+export type OfflineAction = 'add' | 'tell' | 'process' | 'append';
 
 /**
  * The sentence shown next to a control disabled because the app is
@@ -46,5 +46,7 @@ export function offlineReason(action: OfflineAction): string {
       return 'You are offline. Sending needs a connection.';
     case 'process':
       return 'You are offline. Bower can run when you are back online.';
+    case 'append':
+      return 'You are offline. Adding to a note needs a connection.';
   }
 }
