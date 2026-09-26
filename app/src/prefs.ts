@@ -51,3 +51,25 @@ export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
     // Storage full or blocked: the preference just doesn't stick.
   }
 }
+
+/** Every preference except `theme`, which is a device setting, not a user one. */
+const PER_USER_PREFS: ReadonlyArray<Exclude<keyof Prefs, 'theme'>> = [
+  'notifyOnFinish',
+  'autoProcessOnAdd',
+  'pushPromptShown',
+];
+
+/**
+ * Drops every per-user preference so the next person on this device starts
+ * from the defaults, keeping `theme` (the device's own display setting).
+ * Called by `forget.ts` on sign-out and account deletion.
+ */
+export function resetPrefs(): void {
+  for (const key of PER_USER_PREFS) {
+    try {
+      localStorage.removeItem(STORAGE_PREFIX + key);
+    } catch {
+      // Storage blocked: nothing to remove.
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getPref, setPref } from '../src/prefs.js';
+import { getPref, resetPrefs, setPref } from '../src/prefs.js';
 
 function stubLocalStorage(): Map<string, string> {
   const store = new Map<string, string>();
@@ -89,5 +89,36 @@ describe('prefs', () => {
     store.set('bower:pref:notifyOnFinish', 'not-json');
 
     expect(getPref('notifyOnFinish')).toBe(false);
+  });
+
+  it('resetPrefs drops per-user prefs but keeps theme', () => {
+    stubLocalStorage();
+    setPref('notifyOnFinish', true);
+    setPref('autoProcessOnAdd', false);
+    setPref('pushPromptShown', true);
+    setPref('theme', 'dark');
+
+    resetPrefs();
+
+    expect(getPref('notifyOnFinish')).toBe(false);
+    expect(getPref('autoProcessOnAdd')).toBe(true);
+    expect(getPref('pushPromptShown')).toBe(false);
+    expect(getPref('theme')).toBe('dark');
+  });
+
+  it('resetPrefs never throws when localStorage.removeItem is blocked', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: () => {
+        // no-op
+      },
+      removeItem: () => {
+        throw new Error('blocked');
+      },
+    });
+
+    expect(() => {
+      resetPrefs();
+    }).not.toThrow();
   });
 });

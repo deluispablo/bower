@@ -13,6 +13,7 @@ import { useLocation } from 'preact-iso';
 
 import { ApiError, getMe, logout } from './api.js';
 import type { Me } from './api.js';
+import forgetDevice from './forget.js';
 
 export type SessionStatus = 'loading' | 'signed-out' | 'signed-in';
 
@@ -32,6 +33,40 @@ export interface Session extends SessionState {
 
 /** Reachable regardless of session status; never redirected away from. */
 const PUBLIC_PATHS = new Set(['/not-invited', '/privacy']);
+
+/**
+ * Whether `getMe()` has already answered once for this browser tab.
+ * `sessionStorage` (not `localStorage`) on purpose: it survives a reload
+ * but not a closed tab, which is exactly "previously signed in in this
+ * tab" — the signal that a 401 means an expired or revoked session worth
+ * forgetting the device for, rather than a plain visitor who was never
+ * signed in here and has nothing on the device to forget.
+ */
+const HAD_SESSION_KEY = 'bower:had-session';
+
+function markHadSession(): void {
+  try {
+    sessionStorage.setItem(HAD_SESSION_KEY, '1');
+  } catch {
+    // Storage blocked: worst case a later 401 skips `forgetDevice()`.
+  }
+}
+
+function hadSessionInThisTab(): boolean {
+  try {
+    return sessionStorage.getItem(HAD_SESSION_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function clearHadSessionMarker(): void {
+  try {
+    sessionStorage.removeItem(HAD_SESSION_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+}
 
 /**
  * Where the app should navigate given the session and the current path, or
@@ -68,12 +103,19 @@ export function SessionProvider({ children }: SessionProviderProps) {
     getMe()
       .then((me) => {
         if (cancelled) return;
+        markHadSession();
         setState({ status: 'signed-in', me });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
+          const wasSignedIn = hadSessionInThisTab();
+          clearHadSessionMarker();
           setState({ status: 'signed-out' });
+          // Session expired elsewhere or the user was removed: the device
+          // may still hold that user's notes. A plain visitor who was
+          // never signed in here has nothing to forget.
+          if (wasSignedIn) void forgetDevice();
           return;
         }
         console.error(err);
@@ -98,6 +140,13 @@ export function SessionProvider({ children }: SessionProviderProps) {
     } catch (err) {
       console.error(err);
     }
+    // Clear the device whether the logout request succeeded or not: the
+    // Worker session cookie is what matters least here, the notes cached
+    // on this device are what matters most. Also covers delete-account
+    // (`routes/settings.tsx`), which calls `signOut()` once the account
+    // itself is gone.
+    clearHadSessionMarker();
+    await forgetDevice();
     setState({ status: 'signed-out' });
     route('/login');
   };
@@ -108,6 +157,7 @@ export function SessionProvider({ children }: SessionProviderProps) {
 
   const refresh = async (): Promise<void> => {
     const me = await getMe();
+    markHadSession();
     setState({ status: 'signed-in', me });
   };
 
