@@ -249,6 +249,10 @@ In order:
 | Push notifications never arrive | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` unset (falls out as `500 config`, same as any missing secret) or the user is on iOS without having installed the app to the home screen (iOS only delivers web push to an installed PWA) | Set the VAPID secrets (step 3.4–3.5); on iOS, tell the user to add the app to their home screen first |
 | Everyone is signed out again after 7 days | The Google OAuth consent screen is still in **Testing** — refresh tokens issued to test users expire after 7 days there | Publish the app (step 2) |
 
+## Extensions
+
+Optional modules an operator can add on top of their own instance, kept out of the core deploy: `docs/extensions/email-in.md` (a Gmail-fed inbox), not built, design only.
+
 ## Appendix: local sign-in test
 
 Checks Google sign-in end to end on `wrangler dev` with a real Google OAuth client. The automated tests mock Google; this is the manual check. In production the same client needs `${API_ORIGIN}/auth/callback` as an authorized redirect URI.
