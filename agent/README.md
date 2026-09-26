@@ -42,3 +42,7 @@ pnpm -C agent test     # or: bash agent/test/smoke.sh
 ```
 
 Hermetic: `rclone`, `claude` and `curl` are stubs that record their calls, so nothing reaches the network, Google or Claude. `jq` is the real one when installed; otherwise the test supplies a small Node stand-in. Scenarios: ingest happy path, empty inbox, agent failure, missing `CLAUDE.md`, user API key, Google reauth. Every scenario also checks that the script's own output names no file, summary or credential. It runs in root `pnpm test`, so CI runs it on every PR.
+
+## Prompts and the rulebook
+
+`prompts/ingest.md` and `prompts/lint.md` tell Claude only what the runner needs: which folders are inputs, what never gets touched (`.obsidian/`, deletions), where output goes, and the five-line summary contract `run.sh` reads with `tail -n 5` as `SUMMARY`. Everything else, how to file a note, tags, templates, self-learning, lives in the vault's own `CLAUDE.md` (`vault-template/CLAUDE.md`), which takes precedence and changes only through an instruction note (`Bower*.md`), never on the agent's own initiative. Keep the prompts short; a new capability is a rulebook change, not a prompt change.
