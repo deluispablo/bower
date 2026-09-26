@@ -8,6 +8,7 @@ import { assertEnv } from './env.js';
 import type { AppEnv } from './env.js';
 import { createErrorHandler } from './errors.js';
 import { createProcessRoutes } from './process.js';
+import { createRunnerRoutes } from './runner.js';
 import { createSettingsRoutes } from './settings.js';
 import { createVaultRoutes } from './vault.js';
 
@@ -47,6 +48,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.route('/', createVaultRoutes(deps));
   app.route('/', createAdminRoutes(deps));
   app.route('/', createProcessRoutes(deps));
+  app.route('/', createRunnerRoutes(deps));
 
   return app;
 }

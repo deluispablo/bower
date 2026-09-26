@@ -115,14 +115,65 @@ Response: `{ "run": Run }`, status 202, both for a new run and for the run alrea
 
 The daily count lives in `quota:<id>:<yyyy-mm-dd>`, so each UTC day starts from zero; the key itself expires after 48 h. KV has no transactions: two requests at the same instant can both dispatch, or both pass the quota check at the limit. Accepted for a per-user soft limit.
 
-### `Run` lifecycle so far
+### `Run` lifecycle
 
 | State | Set by | Meaning |
 | --- | --- | --- |
 | `queued` | `POST /process` | GitHub accepted the dispatch; the runner has not reported yet |
-| `running`, `done`, `failed` | the runner endpoints (not built yet) | The runner started, finished, or failed |
+| `running` | `POST /runner/vaults/:id/status` | The runner started; `startedAt` is set |
+| `done` | `POST /runner/vaults/:id/status` | The runner finished; `finishedAt`, `summary` and `processed` are set |
+| `failed` | `POST /runner/vaults/:id/status` | The runner gave up; `finishedAt` and `error` are set |
 
-A `queued` or `running` run with no news for 25 minutes stops blocking `POST /process` (`isActiveRun` in `api/src/process.ts`).
+A `queued` or `running` run with no news for 25 minutes stops blocking `POST /process` (`isActiveRun` in `api/src/process.ts`). A `done` or `failed` run never blocks: the next `POST /process` starts a new one.
+
+## Runner endpoints
+
+Called by the GitHub Actions runner of the instance repo, never by the app. Every route under `/runner/` requires `Authorization: Bearer <BOWER_API_KEY>`, compared in constant time; anything else is a 401 `unauthorized`. `:id` is the user id, the `vault_id` that `POST /process` dispatches. Nothing here logs the key, a token, the user's API key, file names or summaries.
+
+### `GET /runner/vaults/:id`
+
+What one run needs:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `folderId` | `string` | The vault's Drive folder |
+| `inboxFolderId` | `string` | Its `0-Inbox` folder |
+| `driveAccessToken` | `string` | A Google access token (scope `drive`), the same cached token `GET /drive/token` serves; never the refresh token |
+| `expiresAt` | `string` | ISO-8601; when Google stops accepting `driveAccessToken` (at least a minute away) |
+| `maxTurns` | `number` | `DEFAULT_MAX_TURNS` |
+| `apiKey` | `string` | Optional; the user's own Claude API key, decrypted here and nowhere else. Absent unless the user set one |
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 401 | `unauthorized` | Missing or wrong runner key |
+| 404 | `not_found` | No user with that id, or the user has no vault yet |
+| 409 | `reauth` | Google refused the user's refresh token (`invalid_grant`). The user is flagged `needsReauth` (the app asks them to sign in again); the runner reports `failed` with this reason and stops. A 409, not a 401, so it is not mistaken for a bad runner key |
+| 502 | `google_error` | Any other Google failure |
+
+### `POST /runner/vaults/:id/status`
+
+The runner's progress report. Body, validated strictly (an unknown field, a wrong type or another `state` is a 400 `bad_request`):
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `state` | `'running' \| 'done' \| 'failed'` | Required |
+| `runId` | `string` | Optional, non-empty; replaces the stored `runId` when given |
+| `summary` | `string` | Optional; cut to 2,000 characters |
+| `processed` | `string[]` | Optional; cut to 200 entries |
+| `error` | `string` | Optional; cut to 2,000 characters |
+
+The stored run (`run:<id>`) is updated; without one, a run is started with `requestedAt` set to now.
+
+- `running`: `state` and `startedAt` (now) are set. A run that is already `running` keeps its `startedAt`. Outcome fields of an earlier attempt (`finishedAt`, `summary`, `processed`, `error`) are dropped.
+- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed` and `error` become exactly the report's (absent when the report has none). Then `sendPush` is called (`api/src/push.ts`; a no-op until web push exists).
+
+Response: `{ "run": Run }`, status 200.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 400 | `bad_request` | The body is not a JSON object matching the table above |
+| 401 | `unauthorized` | Missing or wrong runner key |
+| 404 | `not_found` | No user with that id, or the user has no vault yet |
 
 ## `GET /drive/token`
 
