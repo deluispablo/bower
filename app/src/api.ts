@@ -167,3 +167,26 @@ export function updateSettings(
 export function deleteAccount(): Promise<void> {
   return apiFetch<void>('/me', { method: 'DELETE' });
 }
+
+export type RunState = 'queued' | 'running' | 'done' | 'failed';
+
+/** Mirrors `Run` in `api/src/types.ts`. */
+export interface Run {
+  state: RunState;
+  requestedAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  summary?: string;
+  processed?: string[];
+  error?: string;
+  runId?: string;
+}
+
+/**
+ * `POST /process`: starts an agent run for the signed-in user's vault, or
+ * returns the run already in progress. 429 (`ApiError` code `quota`) means
+ * today's runs are used up.
+ */
+export function startProcess(): Promise<{ run: Run }> {
+  return apiFetch<{ run: Run }>('/process', { method: 'POST' });
+}
