@@ -20,6 +20,7 @@ Notes:
 - `<email>` is lower-cased and trimmed before use as a key, so lookups are case-insensitive.
 - `quota` has no atomic increment in KV: `incrQuota` reads, increments and writes back. Two requests racing on the same user and date can undercount by one. Accepted as a soft per-user daily limit, not a billing figure.
 - `deleteUserData` removes every `user:`, `run:`, `quota:<id>:*`, `push:<id>:*` and `drivetoken:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user.
+- `deleteDriveToken` also drops `drivetoken:<id>` on its own, used by `GET /drive/token?fresh=1` (see below) to force a fresh mint.
 
 ## `User`
 
@@ -122,3 +123,15 @@ The daily count lives in `quota:<id>:<yyyy-mm-dd>`, so each UTC day starts from 
 | `running`, `done`, `failed` | the runner endpoints (not built yet) | The runner started, finished, or failed |
 
 A `queued` or `running` run with no news for 25 minutes stops blocking `POST /process` (`isActiveRun` in `api/src/process.ts`).
+
+## `GET /drive/token`
+
+Returns a short-lived Drive access token for the signed-in user: `{ accessToken, expiresAt, folderId }` (`folderId` is `null` before the vault is provisioned). Requires the session cookie.
+
+`?fresh=1`: drops the cached token (`drivetoken:<id>`) before minting, so the response is never the token Drive just answered a 401 with. The app's `driveFetch` sends this on its one retry after a Drive 401 (see `app/src/drive.ts`); without it, a retry could receive the same rejected token back from the cache. Without `fresh=1` the cached token is returned as usual.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 401 | `unauthenticated` | No valid session cookie, or the session's user no longer exists |
+| 401 | `reauth` | Google refused the user's refresh token (`invalid_grant`); happens on the `fresh=1` path too |
+| 502 | `google_error` | Any other Google failure |

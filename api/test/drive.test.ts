@@ -12,7 +12,13 @@ import {
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
-import { getDriveToken, getUser, keys, putUser } from '../src/store.js';
+import {
+  getDriveToken,
+  getUser,
+  keys,
+  putDriveToken,
+  putUser,
+} from '../src/store.js';
 import type { User } from '../src/types.js';
 
 /**
@@ -233,6 +239,53 @@ describe('GET /drive/token', () => {
     expect(me.status).toBe(200);
     const meBody = await me.json<{ needsReauth: boolean }>();
     expect(meBody.needsReauth).toBe(true);
+  });
+
+  it('ignores the cache and mints a fresh token when fresh=1', async () => {
+    await seedUser();
+    const cookie = await sessionCookie();
+    const stale = {
+      accessToken: 'stale-token',
+      expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
+    };
+    await putDriveToken(kv, USER_ID, stale, 3600);
+
+    const google = stub(tokenOk(3599));
+    const response = await get(
+      google.fetchImpl,
+      '/drive/token?fresh=1',
+      cookie,
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json<{ accessToken: string }>();
+    expect(body.accessToken).toBe(ACCESS_TOKEN);
+    expect(google.calls).toHaveLength(1);
+    expect(await getDriveToken(kv, USER_ID)).toMatchObject({
+      accessToken: ACCESS_TOKEN,
+    });
+  });
+
+  it('answers 401 reauth and flags the user when fresh=1 hits invalid_grant', async () => {
+    await seedUser();
+    const cookie = await sessionCookie();
+    const stale = {
+      accessToken: 'stale-token',
+      expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
+    };
+    await putDriveToken(kv, USER_ID, stale, 3600);
+
+    const response = await get(
+      stub(oauthError('invalid_grant')).fetchImpl,
+      '/drive/token?fresh=1',
+      cookie,
+    );
+
+    expect(response.status).toBe(401);
+    const body = await response.json<ErrorBody>();
+    expect(body.error.code).toBe('reauth');
+    expect((await getUser(kv, USER_ID))?.needsReauth).toBe(true);
+    expect(await getDriveToken(kv, USER_ID)).toBeUndefined();
   });
 
   it('answers 502 google_error and leaves the user alone on another failure', async () => {

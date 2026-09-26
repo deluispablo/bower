@@ -62,18 +62,29 @@ let cachedToken: DriveToken | null = null;
 let cachedUntil = 0;
 let pendingToken: Promise<DriveToken> | null = null;
 
+export interface GetTokenOptions {
+  /**
+   * Skips the cache and asks the Worker for a fresh token (`?fresh=1`),
+   * bypassing its own cache too. Used after Drive has already rejected the
+   * cached token with a 401.
+   */
+  fresh?: boolean;
+}
+
 /**
  * The current Drive access token, fetched from the Worker when none is
  * cached or the cached one expires within 60 s. Concurrent callers share one
  * request. A Worker `ApiError` (for example code `reauth`) propagates.
  */
-export function getToken(): Promise<DriveToken> {
-  if (cachedToken !== null && Date.now() < cachedUntil) {
+export function getToken(options: GetTokenOptions = {}): Promise<DriveToken> {
+  const fresh = options.fresh ?? false;
+  if (!fresh && cachedToken !== null && Date.now() < cachedUntil) {
     return Promise.resolve(cachedToken);
   }
   if (pendingToken !== null) return pendingToken;
 
-  const request = apiFetch<DriveToken>('/drive/token').then(
+  const path = fresh ? '/drive/token?fresh=1' : '/drive/token';
+  const request = apiFetch<DriveToken>(path).then(
     (token) => {
       if (pendingToken === request) {
         cachedToken = token;
@@ -137,7 +148,11 @@ async function authorizedFetch(
   if (response.status !== 401) return response;
 
   invalidateToken();
-  response = await send(url, init, (await getToken()).accessToken);
+  response = await send(
+    url,
+    init,
+    (await getToken({ fresh: true })).accessToken,
+  );
   if (response.status === 401) {
     throw new ApiError(401, 'reauth', 'Google access needs to be renewed.');
   }

@@ -44,11 +44,14 @@ type DriveHandler = (
 function stubFetch(drive: DriveHandler): {
   fetchMock: ReturnType<typeof vi.fn>;
   tokenCalls: () => number;
+  tokenUrls: () => string[];
 } {
   let tokens = 0;
+  const urls: string[] = [];
   const fetchMock = vi.fn((input: string, init: RequestInit = {}) => {
-    if (input.endsWith('/drive/token')) {
+    if (input.includes('/drive/token')) {
       tokens++;
+      urls.push(input);
       return Promise.resolve(
         jsonResponse(200, {
           accessToken: `token-${tokens}`,
@@ -60,7 +63,7 @@ function stubFetch(drive: DriveHandler): {
     return Promise.resolve(drive(new URL(input), init));
   });
   vi.stubGlobal('fetch', fetchMock);
-  return { fetchMock, tokenCalls: () => tokens };
+  return { fetchMock, tokenCalls: () => tokens, tokenUrls: () => urls };
 }
 
 function authHeader(init: RequestInit): string | null {
@@ -175,7 +178,7 @@ describe('getToken', () => {
 describe('driveFetch retries', () => {
   it('refetches the token once on a 401 and retries the call', async () => {
     const seen: Array<string | null> = [];
-    const { tokenCalls } = stubFetch((_url, init) => {
+    const { tokenCalls, tokenUrls } = stubFetch((_url, init) => {
       seen.push(authHeader(init));
       return seen.length === 1
         ? jsonResponse(401, { error: { code: 401, message: 'Invalid' } })
@@ -185,6 +188,10 @@ describe('driveFetch retries', () => {
     await expect(getText('FILE_ID')).resolves.toBe('# Hello');
     expect(seen).toEqual(['Bearer token-1', 'Bearer token-2']);
     expect(tokenCalls()).toBe(2);
+    // Only the retry, after Drive's 401, asks the Worker for a fresh token.
+    const [first, second] = tokenUrls();
+    expect(first).not.toContain('fresh=1');
+    expect(second).toContain('fresh=1');
   });
 
   it('turns a second 401 into an ApiError with code reauth', async () => {
