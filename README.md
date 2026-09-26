@@ -21,7 +21,7 @@ You drop a file into your inbox (or type a request), press **Process**, and a fe
 | `api/` | One Worker: OAuth, encrypted tokens, allowlist, quotas, dispatching the agent, push notifications | Cloudflare Workers + KV (free) |
 | `agent/` | A shell script and two workflows: sync the vault, run Claude Code, sync back | GitHub Actions of the operator (free tier) |
 | `vault-template/` | An empty vault with the generic, self-improving rulebook every user starts from | Copied into each user's Drive |
-| `docs/` | Runbook, architecture, decisions | — |
+| `docs/` | Runbook, architecture, decisions, testing | — |
 
 ## Model
 
