@@ -17,14 +17,7 @@ Bower keeps your notes organised in your own Google Drive. You add things, Bower
 4. **Read it anywhere** — in the app, or in Obsidian pointed at the same Google Drive folder.
 5. **Talk to change how it works** — see below.
 
-```mermaid
-flowchart LR
-    A["Add a file or a note"] --> B["Press Process"]
-    B --> C["Bower files it in your Drive"]
-    C --> D["Read it: app or Obsidian"]
-    C --> E["Tell Bower a rule, task or question"]
-    E -.-> B
-```
+<p align="center"><img src="docs/assets/how-it-works.svg" alt="How Bower works: you add something, press Process, your notes grow, you get a notification" width="720"></p>
 
 ### Talking to Bower
 
@@ -34,18 +27,7 @@ A note in your inbox named `Bower - ...` is read the same way as anything else, 
 - **A task** ("Compare my last three phone plans") gets done, and the result is filed where it belongs.
 - **A question** ("When does my passport expire?") gets answered in an `Answers` note, linked to whatever it used to answer it.
 
-```mermaid
-sequenceDiagram
-    participant You
-    participant App
-    participant Bower
-    You->>App: Write a "Bower - ..." note
-    App->>Bower: Press Process
-    Bower->>Bower: Rule, task or question?
-    Bower-->>You: Rule -> updates its rulebook
-    Bower-->>You: Task -> writes the result
-    Bower-->>You: Question -> answers in Answers
-```
+<p align="center"><img src="docs/assets/talking-to-bower.svg" alt="Talking to Bower: tell it a rule, a task or a question" width="720"></p>
 
 <!-- demo GIF: docs/assets/demo.gif, recorded by the owner with a demo vault -->
 
