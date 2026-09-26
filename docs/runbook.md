@@ -145,6 +145,7 @@ Either way, set these under the instance repo's **Settings → Secrets and varia
 | `ANTHROPIC_API_KEY` | Secret (this or `CLAUDE_CODE_OAUTH_TOKEN`) | Claude Console → API keys |
 | `BOWER_API_URL` | Variable | The Worker's deployed origin, same as `API_ORIGIN` | 
 | `BOWER_MAX_TURNS` | Variable (optional) | Overrides the Worker's `DEFAULT_MAX_TURNS` for this instance |
+| `BOWER_ALLOW_WEB` | Variable (optional) | Leave unset (the default): the agent gets no web access, so a clipped page cannot make it send notes anywhere. `1` gives it `WebSearch` and `WebFetch`; only set it if your users' rulebooks need the web, and tell them (`docs/privacy.md`). See "Tools and web access" in `agent/README.md` |
 
 With the GitHub CLI, from the instance repo's checkout (or add `-R OWNER/bower-home`):
 
