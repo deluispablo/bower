@@ -31,7 +31,7 @@ export interface Session extends SessionState {
 }
 
 /** Reachable regardless of session status; never redirected away from. */
-const PUBLIC_PATHS = new Set(['/not-invited']);
+const PUBLIC_PATHS = new Set(['/not-invited', '/privacy']);
 
 /**
  * Where the app should navigate given the session and the current path, or

@@ -12,6 +12,7 @@ export function Login() {
       <a href={loginUrl()} class="button">
         Sign in with Google
       </a>
+      <a href="/privacy">Privacy</a>
     </section>
   );
 }

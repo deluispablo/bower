@@ -320,6 +320,7 @@ export function Settings() {
         >
           Source code
         </a>
+        <a href="/privacy">Privacy</a>
       </div>
     </section>
   );

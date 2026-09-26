@@ -40,7 +40,7 @@ Everything an operator needs to get the Worker live, without reading the code.
    - Console → APIs & Services → Library: enable the **Google Drive API**.
    - APIs & Services → OAuth consent screen: user type **External**, then **Publish app**. This makes it **unverified**: signed-in users see a one-time "unverified app" warning, and the client is capped at 100 users; verification (a paid security assessment) is out of scope. Left **Testing**, refresh tokens expire after 7 days, which breaks the runner — always publish.
    - Scopes: `openid`, `email`, `https://www.googleapis.com/auth/drive`.
-   - Google requires a public privacy page to publish: host `docs/privacy.md` (once written, M4) somewhere public and link it on the consent screen.
+   - Google requires a public privacy page to publish: the app serves `docs/privacy.md` at `/privacy`, so give Google `<APP_ORIGIN>/privacy` (your real `APP_ORIGIN`) as the privacy policy URL on the consent screen.
    - Credentials → Create credentials → OAuth client ID → **Web application**. Authorized redirect URI: `https://api.example.com/auth/callback` (your real `API_ORIGIN`). Copy the client id and secret for step 4.
 3. **Custom domain for the Worker.** `APP_ORIGIN` and `API_ORIGIN` must share a registrable domain for the session cookie to work (see `docs/security.md`), so the Worker needs a domain you own, not `*.workers.dev`. Either Cloudflare dashboard → Workers & Pages → your Worker → Settings → Domains & Routes → Add → Custom domain, or add a `routes` entry in `api/wrangler.toml`.
 4. **Edit `[vars]`** in `api/wrangler.toml`: `APP_ORIGIN`, `API_ORIGIN` (your custom domain from step 3), `GITHUB_REPO`, `VAPID_SUBJECT`. See the configuration table above for what each means.
