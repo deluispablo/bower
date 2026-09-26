@@ -318,6 +318,17 @@ function renderFrontmatter(
   );
 }
 
+const plainMarked = new Marked({ gfm: true, breaks: true });
+
+/**
+ * Renders plain Markdown to sanitized HTML: no wikilinks, no frontmatter,
+ * no vault index — for static app copy such as `docs/privacy.md`, not a
+ * note. Needs a DOM (`window`) for the sanitizer.
+ */
+export function renderPlainMarkdown(text: string): string {
+  return sanitizeHtml(plainMarked.parse(text, { async: false }));
+}
+
 /**
  * Renders a note to sanitized HTML. Needs a DOM (`window`) for the sanitizer.
  */

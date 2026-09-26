@@ -10,6 +10,7 @@ import { Note } from './routes/note.js';
 import { NotFound } from './routes/not-found.js';
 import { NotInvited } from './routes/not-invited.js';
 import { Onboarding } from './routes/onboarding.js';
+import { Privacy } from './routes/privacy.js';
 import { Settings } from './routes/settings.js';
 import { Tell } from './routes/tell.js';
 import { RunProvider } from './run-store.js';
@@ -29,6 +30,7 @@ function AppRoutes() {
         <Route path="/" component={Home} />
         <Route path="/login" component={Login} />
         <Route path="/not-invited" component={NotInvited} />
+        <Route path="/privacy" component={Privacy} />
         <Route path="/note/:id" component={Note} />
         <Route path="/add" component={Add} />
         <Route path="/tell" component={Tell} />

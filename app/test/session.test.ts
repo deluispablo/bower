@@ -26,6 +26,12 @@ describe('decideRedirect', () => {
     expect(decideRedirect('signed-in', false, '/not-invited')).toBeNull();
   });
 
+  it('never redirects away from the public /privacy path', () => {
+    expect(decideRedirect('signed-out', false, '/privacy')).toBeNull();
+    expect(decideRedirect('signed-in', false, '/privacy')).toBeNull();
+    expect(decideRedirect('signed-in', true, '/privacy')).toBeNull();
+  });
+
   it('does not redirect while loading', () => {
     expect(decideRedirect('loading', false, '/')).toBeNull();
   });
