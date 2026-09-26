@@ -242,6 +242,14 @@ export async function getDriveToken(
   return getJson<DriveToken>(kv, keys.driveToken(userId));
 }
 
+/** Drops the cached Drive access token for `userId`, if any. */
+export async function deleteDriveToken(
+  kv: KVNamespace,
+  userId: string,
+): Promise<void> {
+  await kv.delete(keys.driveToken(userId));
+}
+
 /**
  * Deletes every key belonging to `userId`: `user:`, its `email:` index
  * (looked up from the user record before deleting it), `run:`, every

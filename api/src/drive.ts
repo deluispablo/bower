@@ -16,7 +16,13 @@ import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import { refreshAccessToken } from './google.js';
 import type { FetchLike, GoogleAccessToken } from './google.js';
-import { getDriveToken, getUser, putDriveToken, putUser } from './store.js';
+import {
+  deleteDriveToken,
+  getDriveToken,
+  getUser,
+  putDriveToken,
+  putUser,
+} from './store.js';
 import type { DriveToken, User } from './types.js';
 
 /**
@@ -88,6 +94,11 @@ export function createDriveRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const user = await getUser(env.BOWER_KV, c.get('userId'));
     if (user === undefined) {
       throw new HttpError(401, 'unauthenticated', 'Not signed in');
+    }
+    // `?fresh=1`: the caller already knows the cached token doesn't work
+    // (Drive answered 401 with it), so drop it before minting.
+    if (c.req.query('fresh') === '1') {
+      await deleteDriveToken(env.BOWER_KV, user.id);
     }
     const { accessToken, expiresAt } = await getAccessToken(
       env,
