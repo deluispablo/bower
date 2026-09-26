@@ -3,8 +3,10 @@ import { useState } from 'preact/hooks';
 
 import { loginUrl } from '../api.js';
 import { useSession } from '../session.js';
+import { useVault } from '../vault-store.js';
 import { ProcessButton } from './process-button.js';
 import { Search } from './search.js';
+import { Tree } from './tree.js';
 
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
@@ -19,6 +21,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const { me, signOut } = useSession();
+  const { index } = useVault();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -52,19 +55,27 @@ export function Layout({ children }: LayoutProps) {
             </svg>
           </button>
           {menuOpen && (
-            <div class="menu-panel" role="menu">
-              {me && <p class="menu-email">{me.email}</p>}
-              <button
-                type="button"
-                class="menu-signout"
-                onClick={() => {
-                  setMenuOpen(false);
-                  void signOut();
-                }}
-              >
-                Sign out
-              </button>
-            </div>
+            <>
+              <div class="menu-backdrop" onClick={() => setMenuOpen(false)} />
+              <div class="menu-panel">
+                <div class="menu-tree">
+                  {index !== null && (
+                    <Tree index={index} onNavigate={() => setMenuOpen(false)} />
+                  )}
+                </div>
+                {me && <p class="menu-email">{me.email}</p>}
+                <button
+                  type="button"
+                  class="menu-signout"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    void signOut();
+                  }}
+                >
+                  Sign out
+                </button>
+              </div>
+            </>
           )}
         </div>
       </header>
@@ -81,6 +92,9 @@ export function Layout({ children }: LayoutProps) {
               {link.label}
             </a>
           ))}
+          <div class="sidebar-tree">
+            {index !== null && <Tree index={index} />}
+          </div>
         </nav>
         <main class="content">{children}</main>
       </div>

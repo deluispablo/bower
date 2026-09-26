@@ -1,0 +1,219 @@
+/**
+ * Pure helpers behind the tree, the Home lists and the note view. No Drive
+ * calls, no Preact: everything here takes a `VaultIndex` or a plain file
+ * list and returns data, so it is unit-tested directly (`navigation.test.ts`).
+ */
+
+import { FOLDER_MIME } from './drive.js';
+import type { DriveFile } from './drive.js';
+import { basenameKey } from './vault-index.js';
+import type { VaultIndex } from './vault-index.js';
+
+const INBOX_FOLDERS = new Set(['0-Inbox', 'Clippings']);
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function compareNames(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+}
+
+function folderOf(path: string): string {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? '' : path.slice(0, slash);
+}
+
+/**
+ * A note's age in plain English, coarser the further back it is (unlike
+ * `vault-store.ts`'s `formatAgo`, which is a "how stale is the index"
+ * indicator and collapses anything past a day to "yesterday").
+ */
+export function relativeTime(iso: string, now: number | Date): string {
+  const nowMs = now instanceof Date ? now.getTime() : now;
+  const days = Math.floor(Math.max(0, nowMs - Date.parse(iso)) / DAY_MS);
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) {
+    const weeks = Math.floor(days / 7);
+    return `${weeks} week${weeks === 1 ? '' : 's'} ago`;
+  }
+  if (days < 365) {
+    const months = Math.floor(days / 30);
+    return `${months} month${months === 1 ? '' : 's'} ago`;
+  }
+  const years = Math.floor(days / 365);
+  return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
+/** Top 20 (by default) notes by `modifiedTime` descending. Missing times sort last. */
+export function recentNotes(index: VaultIndex, n = 20): DriveFile[] {
+  return [...index.notes]
+    .sort((a, b) => (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''))
+    .slice(0, n);
+}
+
+/**
+ * How many files are still waiting in the inbox: anything under `0-Inbox/`
+ * or `Clippings/`, at any depth, except folders, files under a `Processed/`
+ * folder, and folder notes (`_*.md`). Takes the raw file list (not the
+ * index), so it also counts files the index hides for other reasons.
+ */
+export function pendingCount(files: DriveFile[]): number {
+  return files.filter((file) => {
+    if (file.mimeType === FOLDER_MIME) return false;
+    const segments = file.path.split('/');
+    if (!INBOX_FOLDERS.has(segments[0] ?? '')) return false;
+    if (segments.some((segment) => segment === 'Processed')) return false;
+    if (file.name.startsWith('_') && file.name.toLowerCase().endsWith('.md')) {
+      return false;
+    }
+    return true;
+  }).length;
+}
+
+export interface TreeNode {
+  /** Path relative to the Bower folder; '' for the root. */
+  path: string;
+  name: string;
+  folders: TreeNode[];
+  /** Hub notes (basename === folder name) first, then alphabetical. */
+  notes: DriveFile[];
+}
+
+function sortNode(node: TreeNode): void {
+  node.folders.sort((a, b) => compareNames(a.name, b.name));
+  const hubKey = node.path === '' ? '' : basenameKey(node.name);
+  node.notes.sort((a, b) => {
+    const aHub = hubKey !== '' && basenameKey(a.name) === hubKey;
+    const bHub = hubKey !== '' && basenameKey(b.name) === hubKey;
+    if (aHub !== bHub) return aHub ? -1 : 1;
+    return compareNames(a.name, b.name);
+  });
+  for (const child of node.folders) sortNode(child);
+}
+
+/**
+ * Nests the index's visible folders and notes into a tree. Folder notes
+ * (`_Folder.md`) never appear: `buildVaultIndex` already excludes them from
+ * `index.notes`. A "hub" note is identified by basename only (its name
+ * matches its folder's name) — frontmatter tags (`hub`, `moc`) are not
+ * available here, since the index holds no note text.
+ */
+export function buildTree(index: VaultIndex): TreeNode {
+  const byPath = new Map<string, TreeNode>();
+  const root: TreeNode = { path: '', name: '', folders: [], notes: [] };
+  byPath.set('', root);
+
+  function ensure(path: string): TreeNode {
+    const existing = byPath.get(path);
+    if (existing !== undefined) return existing;
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    const parent = ensure(folderOf(path));
+    const node: TreeNode = { path, name, folders: [], notes: [] };
+    parent.folders.push(node);
+    byPath.set(path, node);
+    return node;
+  }
+
+  for (const folder of index.folders) ensure(folder.path);
+  for (const note of index.notes) ensure(folderOf(note.path)).notes.push(note);
+
+  sortNode(root);
+  return root;
+}
+
+export interface BreadcrumbSegment {
+  name: string;
+  /** Folder path, usable as the tree's `expandPath`. */
+  path: string;
+}
+
+/** Folder segments of a note's path, each carrying its own full path. */
+export function breadcrumb(path: string): BreadcrumbSegment[] {
+  const segments = path.split('/');
+  segments.pop(); // the note's own file name
+  const result: BreadcrumbSegment[] = [];
+  let acc = '';
+  for (const segment of segments) {
+    acc = acc === '' ? segment : `${acc}/${segment}`;
+    result.push({ name: segment, path: acc });
+  }
+  return result;
+}
+
+export interface Siblings {
+  prev: DriveFile | null;
+  next: DriveFile | null;
+}
+
+/** The previous and next note in the same folder, sorted by name. */
+export function siblings(index: VaultIndex, id: string): Siblings {
+  const file = index.byId.get(id);
+  if (file === undefined) return { prev: null, next: null };
+  const folder = folderOf(file.path);
+  const inFolder = index.notes
+    .filter((note) => folderOf(note.path) === folder)
+    .sort((a, b) => compareNames(a.name, b.name));
+  const at = inFolder.findIndex((note) => note.id === file.id);
+  if (at === -1) return { prev: null, next: null };
+  return {
+    prev: at > 0 ? (inFolder[at - 1] ?? null) : null,
+    next: at < inFolder.length - 1 ? (inFolder[at + 1] ?? null) : null,
+  };
+}
+
+/**
+ * One visible row of the tree, in document order. `depth` is the folder
+ * nesting level (0 for a top-level row); `expanded` only applies to a
+ * folder row.
+ */
+export interface TreeRow {
+  kind: 'folder' | 'note';
+  path: string;
+  depth: number;
+  expanded?: boolean;
+}
+
+/**
+ * Where keyboard focus goes next in the tree, given the currently visible
+ * `rows` (already reflecting which folders are expanded) and the key
+ * pressed. Pure: expanding or collapsing a folder is the caller's job (it
+ * changes what rows exist next render); this only ever picks an index.
+ *
+ * - Up/Down: previous/next visible row, clamped.
+ * - Right on an expanded folder: into its first child (next row). On a
+ *   collapsed folder or a note: no move (the caller expands instead).
+ * - Left on an expanded folder: no move (the caller collapses instead). On
+ *   a collapsed folder or a note: up to the enclosing folder's row.
+ * - Anything else (e.g. Enter, which opens/toggles instead of moving): no move.
+ */
+export function nextFocusIndex(
+  rows: TreeRow[],
+  current: number,
+  key: string,
+): number {
+  if (rows.length === 0) return current;
+  const at = Math.min(Math.max(current, 0), rows.length - 1);
+  const row = rows[at];
+  if (row === undefined) return at;
+
+  if (key === 'ArrowDown') return Math.min(at + 1, rows.length - 1);
+  if (key === 'ArrowUp') return Math.max(at - 1, 0);
+
+  if (key === 'ArrowRight') {
+    if (row.kind === 'folder' && row.expanded === true) {
+      return Math.min(at + 1, rows.length - 1);
+    }
+    return at;
+  }
+
+  if (key === 'ArrowLeft') {
+    if (row.kind === 'folder' && row.expanded === true) return at;
+    for (let i = at - 1; i >= 0; i--) {
+      const candidate = rows[i];
+      if (candidate !== undefined && candidate.depth < row.depth) return i;
+    }
+    return at;
+  }
+
+  return at;
+}
