@@ -6,7 +6,13 @@ import { isApiStatusRequest, isGoogleApi } from '../src/sw-routes.js';
 
 describe('offlineReason', () => {
   it('has a sentence for every action, each mentioning being offline', () => {
-    const actions: OfflineAction[] = ['add', 'tell', 'process', 'append'];
+    const actions: OfflineAction[] = [
+      'add',
+      'tell',
+      'process',
+      'append',
+      'edit',
+    ];
     for (const action of actions) {
       expect(offlineReason(action)).toMatch(/^You are offline\./);
     }
@@ -33,6 +39,12 @@ describe('offlineReason', () => {
   it('has the exact sentence for adding to a note', () => {
     expect(offlineReason('append')).toBe(
       'You are offline. Adding to a note needs a connection.',
+    );
+  });
+
+  it('has the exact sentence for saving an edited note', () => {
+    expect(offlineReason('edit')).toBe(
+      'You are offline. Saving your changes needs a connection.',
     );
   });
 });

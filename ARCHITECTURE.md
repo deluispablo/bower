@@ -53,7 +53,7 @@ Vault content never enters either repository.
 
 | Component | Runs on | Responsibility | Never does |
 | --- | --- | --- | --- |
-| **App** | Cloudflare Pages, in the user's browser | Sign in; list and render the vault by reading Drive directly; search (`fullText contains`); upload to `0-Inbox/`; create `Bower - …md` instruction notes; call `/process`; show status and the working animation; push notifications | Store notes; edit notes (v1); hold refresh tokens |
+| **App** | Cloudflare Pages, in the user's browser | Sign in; list and render the vault by reading Drive directly; search (`fullText contains`); upload to `0-Inbox/`; create `Bower - …md` instruction notes; append to and edit notes; call `/process`; show status and the working animation; push notifications | Store notes; write the notes the agent maintains; hold refresh tokens |
 | **Worker** (`api/`) | Cloudflare Workers + KV | OAuth callback and allowlist; encrypted refresh tokens; vault provisioning from the template; `/process` with quota and single-active-run; `/status`; runner endpoints; push sending | Store content; watch Drive; run on a schedule |
 | **Agent** (`agent/`) | GitHub Actions runner of the instance repo | `rclone` sync down with a 1 h token; `claude -p` inside the vault following its `CLAUDE.md`; `rclone copy` up (never deletes), then `rclone deletefile` only for the pending originals the agent moved away; status report | Keep state; print vault content to logs; change rules without an instruction note |
 | **Vault** | The user's Google Drive | The only state: notes, originals, rulebook, catalogue, journal | Leave the user's account |
@@ -64,7 +64,7 @@ Vault content never enters either repository.
 User (browser) ── Sign in with Google ──▶ Worker ── stores encrypted refresh token, folder id
 User (browser) ◀── 1 h Drive access token ── Worker
 User (browser) ── POST /vault {mode: create|select} ──▶ Worker ── copies vault-template/ (or fills gaps in an existing folder) ──▶ Google Drive
-User (browser) ── read vault / write 0-Inbox, Clippings / append to a note ──▶ Google Drive
+User (browser) ── read vault / write 0-Inbox, Clippings / append to or edit a note ──▶ Google Drive
 User (browser) ── POST /process ──▶ Worker ── repository_dispatch {vault_id} ──▶ Instance repo (Actions)
 Runner (weekly lint) ── GET /runner/vaults (Bearer BOWER_API_KEY) ──▶ Worker ── every vault id
 Runner ── GET /runner/vaults/:id (Bearer BOWER_API_KEY) ──▶ Worker ── 1 h Drive token, folder id, maxTurns, apiKey?
@@ -77,6 +77,7 @@ User (browser) ── DELETE /me ──▶ Worker ── best-effort revoke at G
 - **Vault provisioning**: `POST /vault` either copies `vault-template/` into a new `Bower` folder or fills in whatever an existing folder is missing (never overwrites a file already there); the folder id is stored, never its contents.
 - **Add file**: the app writes straight to Drive with its own 1 h access token (`GET /drive/token`); the Worker is not on this path at all.
 - **Append to a note**: the app reads the note, adds a paragraph at the end and writes it back (`files.update` media upload), checking `modifiedTime` just before the write and retrying once on a conflict. It never writes `CLAUDE.md`, `index.md`, `log.md` or `_*.md` folder notes, and writes no `log.md` line (that is the agent's job).
+- **Edit a note**: the app reads the note's `modifiedTime`, then its text, when the editor opens; on Save it reads `modifiedTime` again and writes the whole text (`files.update` media upload) only if it is unchanged. Otherwise the user chooses: keep mine (overwrite), take theirs (drop the edit and reload) or open both (the current version in a new tab, the edit kept). Drive's own version history is the safety net. Same guard as append: never `CLAUDE.md`, `index.md`, `log.md` or `_*.md`.
 - **Process/run**: `POST /process` dispatches one GitHub Actions run in the operator's instance repo; the runner fetches a fresh Drive token and pulls, runs, pushes and reports through the Worker, never through the browser.
 - **Push**: the runner's status report triggers a web-push message straight from the Worker to the browser's push subscription; no third-party notification service.
 - **Delete account**: `DELETE /me` revokes the Google grant (best effort — a user can always leave even if Google does not cooperate), deletes every KV key for that user (profile, quota counters, cached Drive token, push subscriptions), and clears the cookie. The Drive folder and its content are never touched; the user keeps their notes.

@@ -3,11 +3,14 @@ import { useRoute } from 'preact-iso';
 
 import { AppendForm } from '../components/append-form.js';
 import { NoteBody } from '../components/note-body.js';
-import { isAppendProtected } from '../drive.js';
+import { NoteEditor } from '../components/note-editor.js';
+import { isProtectedNote } from '../drive.js';
+import type { SaveOptions } from '../drive.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
 import { breadcrumb, siblings } from '../navigation.js';
 import { OfflineError, useVault } from '../vault-store.js';
+import type { EditableNote } from '../vault-store.js';
 import '../styles/markdown.css';
 
 type NoteLoad =
@@ -16,11 +19,28 @@ type NoteLoad =
   | { status: 'offline' }
   | { status: 'error'; message: string };
 
+/** The editor open on note `id`; a different note shows its rendered view. */
+interface Editing {
+  id: string;
+  note: EditableNote;
+}
+
 export function Note() {
   const { params } = useRoute();
   const id = params.id ?? '';
-  const { index, getNoteText, appendToNote } = useVault();
+  const { index, getNoteText, appendToNote, openNoteForEdit, saveEditedNote } =
+    useVault();
   const [load, setLoad] = useState<NoteLoad>({ status: 'loading' });
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const [opening, setOpening] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Leaving a note (after confirming, if there were unsaved changes) drops
+  // its edit, so coming back shows the note rather than a stale editor.
+  useEffect(() => {
+    setEditing(null);
+    setEditError(null);
+  }, [id]);
 
   const file = index?.byId.get(id);
 
@@ -76,15 +96,47 @@ export function Note() {
   const crumbs = breadcrumb(file.path);
   const { prev, next } = siblings(index, file.id);
 
-  async function handleAppend(text: string): Promise<void> {
+  function showText(text: string): void {
     if (index === null || file === undefined) return;
-    const saved = await appendToNote(id, text);
     setLoad({
       status: 'ready',
       id,
-      rendered: renderNote(saved, index, { path: file.path }),
+      rendered: renderNote(text, index, { path: file.path }),
     });
   }
+
+  async function handleAppend(text: string): Promise<void> {
+    showText(await appendToNote(id, text));
+  }
+
+  async function handleEdit(): Promise<void> {
+    setOpening(true);
+    setEditError(null);
+    try {
+      setEditing({ id, note: await openNoteForEdit(id) });
+    } catch (err) {
+      console.error(err);
+      setEditError('Could not open this note for editing. Try again.');
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  async function handleSave(text: string, options: SaveOptions): Promise<void> {
+    const saved = await saveEditedNote(id, text, options);
+    showText(saved.text);
+    setEditing(null);
+  }
+
+  async function handleTakeTheirs(): Promise<void> {
+    const current = await openNoteForEdit(id);
+    showText(current.text);
+    setEditing(null);
+  }
+
+  const isEditing = editing !== null && editing.id === id;
+  const canEdit =
+    !isProtectedNote(file.name) && load.status === 'ready' && !isEditing;
 
   return (
     <section class="note-view">
@@ -101,14 +153,44 @@ export function Note() {
         </nav>
       )}
 
-      <h1>{file.name.replace(/\.md$/i, '')}</h1>
+      <div class="note-edit-header">
+        <h1>{file.name.replace(/\.md$/i, '')}</h1>
+        {canEdit && (
+          <button
+            type="button"
+            class="button"
+            disabled={opening}
+            onClick={() => void handleEdit()}
+          >
+            {opening ? 'Opening…' : 'Edit'}
+          </button>
+        )}
+      </div>
+      {editError !== null && (
+        <p class="auth-error" role="alert">
+          {editError}
+        </p>
+      )}
 
-      {load.status === 'loading' && <p>Loading…</p>}
-      {load.status === 'offline' && (
+      {isEditing && (
+        <NoteEditor
+          key={id}
+          noteId={id}
+          initial={editing.note}
+          onSave={handleSave}
+          onTakeTheirs={handleTakeTheirs}
+          onClose={() => {
+            setEditing(null);
+          }}
+        />
+      )}
+
+      {!isEditing && load.status === 'loading' && <p>Loading…</p>}
+      {!isEditing && load.status === 'offline' && (
         <p>Offline: this note is not saved on this device yet.</p>
       )}
-      {load.status === 'error' && <p>{load.message}</p>}
-      {load.status === 'ready' && (
+      {!isEditing && load.status === 'error' && <p>{load.message}</p>}
+      {!isEditing && load.status === 'ready' && (
         <>
           {load.rendered.frontmatterHtml !== '' && (
             <div
@@ -118,7 +200,7 @@ export function Note() {
             />
           )}
           <NoteBody html={load.rendered.html} />
-          {!isAppendProtected(file.name) && (
+          {!isProtectedNote(file.name) && (
             <AppendForm key={id} onAppend={handleAppend} />
           )}
         </>

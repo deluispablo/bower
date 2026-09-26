@@ -5,6 +5,7 @@ Operator-facing changes, newest first. Entries under **Operator action required*
 ## Unreleased
 
 - The weekly health check no longer shows up as a Process run in the app: the runner reports it with `kind: "lint"`, the Worker keeps it apart (`lintrun:<id>`), and the push says "Health check ready" (or "Health check failed") and opens **Health** instead of counting inbox files. Rerun `scripts/deploy.sh` so the instance repo gets the new `run.sh`; until then a lint still reports as an ingest.
+- Notes can be edited from the app: **Edit**, next to a note's title, opens a plain-text editor with a small formatting toolbar. If the note changed elsewhere since the editor opened, Save asks whether to keep your version, take the other one, or open both (not offered for `CLAUDE.md`, `index.md`, `log.md` or `_*.md` folder notes).
 - An email-in inbox is documented as an optional, not-built extension an operator could add on their own instance: `docs/extensions/email-in.md`.
 - Weekly health check: the instance repo's `lint.yml` now runs every Sunday at 06:17 UTC over every user's Bower folder (listed with the new `GET /runner/vaults`), and the app shows the result under **Health**, with a badge when a new one arrives. Rerun `scripts/deploy.sh` (or `scripts/new-instance.sh`) to copy the new workflow into the instance repo; see "Weekly health check" in `docs/runbook.md`.
 - A file added to `0-Inbox/` or `Clippings/` while a run is in progress is no longer sent to the Drive Trash when the run finishes; the runner now deletes only the originals it processed.

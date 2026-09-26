@@ -29,8 +29,15 @@ import {
   saveIndex,
   saveNote,
 } from './cache.js';
-import { appendToFile, DriveError, getText, listVault } from './drive.js';
-import type { DriveFile } from './drive.js';
+import {
+  appendToFile,
+  DriveError,
+  getText,
+  listVault,
+  readNoteForEdit,
+  saveNoteText,
+} from './drive.js';
+import type { DriveFile, SaveOptions } from './drive.js';
 import { useSession } from './session.js';
 import { buildVaultIndex } from './vault-index.js';
 import type { VaultIndex } from './vault-index.js';
@@ -55,6 +62,29 @@ export interface Vault extends VaultState {
    * cached note text and listing, resolving to the note's new full text.
    */
   appendToNote: (id: string, text: string) => Promise<string>;
+  /**
+   * A note's current text from Drive plus the `modifiedTime` an edit is
+   * saved against. Offline it falls back to the text on this device with
+   * `modifiedTime: null` (unknown), so a later save always asks the user.
+   * Also used for "take theirs" after a conflict.
+   */
+  openNoteForEdit: (id: string) => Promise<EditableNote>;
+  /**
+   * Saves an edited note's whole text (`saveNoteText`, which throws
+   * `SaveError('conflict')` when the note changed) and updates the cached
+   * note text and listing, resolving to the saved text.
+   */
+  saveEditedNote: (
+    id: string,
+    text: string,
+    options: SaveOptions,
+  ) => Promise<EditableNote>;
+}
+
+export interface EditableNote {
+  text: string;
+  /** Baseline for the next save; `null` when unknown (opened offline). */
+  modifiedTime: string | null;
 }
 
 /** A note that has never been fetched, offline, with nothing cached to show. */
@@ -107,6 +137,13 @@ function isNetworkFailure(err: unknown): boolean {
   return (
     (err instanceof DriveError || err instanceof ApiError) && err.status === 0
   );
+}
+
+/** The listed file for note `id`; a note missing from the index is a bug. */
+function noteFile(state: VaultState, id: string): DriveFile {
+  const file = state.index?.byId.get(id);
+  if (file === undefined) throw new Error('Note not in the index.');
+  return file;
 }
 
 const VaultContext = createContext<Vault | undefined>(undefined);
@@ -229,19 +266,21 @@ export function VaultProvider({ children }: VaultProviderProps) {
     }
   }, []);
 
-  const appendToNote = useCallback(
-    async (id: string, text: string): Promise<string> => {
-      const file = stateRef.current.index?.byId.get(id);
-      if (file === undefined) throw new Error('Note not in the index.');
-      const result = await appendToFile(file, text);
-      const modifiedTime = result.file.modifiedTime ?? '';
+  /**
+   * Caches `text` as note `id` under its new `modifiedTime` and patches that
+   * one file in the listing, so the note view shows it at once without
+   * walking the whole Bower folder again. Cache failures are logged only.
+   */
+  const recordNote = useCallback(
+    async (
+      id: string,
+      text: string,
+      saved: { modifiedTime?: string; size?: number },
+    ): Promise<void> => {
+      const modifiedTime = saved.modifiedTime ?? '';
       const now = new Date().toISOString();
-
-      // Cache the saved text under the new modifiedTime and patch this one
-      // file in the listing, so the note view shows the new paragraph at
-      // once without walking the whole Bower folder again.
       try {
-        await saveNote(id, result.text, modifiedTime, now);
+        await saveNote(id, text, modifiedTime, now);
       } catch (err) {
         console.error(err);
       }
@@ -250,9 +289,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
           ? {
               ...f,
               ...(modifiedTime !== '' ? { modifiedTime } : {}),
-              ...(result.file.size !== undefined
-                ? { size: result.file.size }
-                : {}),
+              ...(saved.size !== undefined ? { size: saved.size } : {}),
             }
           : f,
       );
@@ -267,12 +304,61 @@ export function VaultProvider({ children }: VaultProviderProps) {
       } catch (err) {
         console.error(err);
       }
-      return result.text;
     },
     [],
   );
 
-  const value: Vault = { ...state, refresh, getNoteText, appendToNote };
+  const appendToNote = useCallback(
+    async (id: string, text: string): Promise<string> => {
+      const result = await appendToFile(noteFile(stateRef.current, id), text);
+      await recordNote(id, result.text, result.file);
+      return result.text;
+    },
+    [recordNote],
+  );
+
+  const openNoteForEdit = useCallback(
+    async (id: string): Promise<EditableNote> => {
+      try {
+        const fresh = await readNoteForEdit(id);
+        await recordNote(id, fresh.text, { modifiedTime: fresh.modifiedTime });
+        return fresh;
+      } catch (err) {
+        if (!isNetworkFailure(err)) throw err;
+        return { text: await getNoteText(id), modifiedTime: null };
+      }
+    },
+    [recordNote, getNoteText],
+  );
+
+  const saveEditedNote = useCallback(
+    async (
+      id: string,
+      text: string,
+      options: SaveOptions,
+    ): Promise<EditableNote> => {
+      const result = await saveNoteText(
+        noteFile(stateRef.current, id),
+        text,
+        options,
+      );
+      await recordNote(id, result.text, result.file);
+      return {
+        text: result.text,
+        modifiedTime: result.file.modifiedTime ?? null,
+      };
+    },
+    [recordNote],
+  );
+
+  const value: Vault = {
+    ...state,
+    refresh,
+    getNoteText,
+    appendToNote,
+    openNoteForEdit,
+    saveEditedNote,
+  };
 
   return (
     <VaultContext.Provider value={value}>{children}</VaultContext.Provider>
