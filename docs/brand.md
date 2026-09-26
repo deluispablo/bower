@@ -4,19 +4,24 @@ Bower is named after the bowerbird, which builds and decorates a bower from twig
 
 ## Mark and files
 
-The bird is five shapes on a 64 × 64 grid: a teal body, a navy wing, a navy eye, an amber beak and an amber twig. No gradients, no outlines, no raster.
+The bird is five shapes on a 64 × 64 grid: a teal body with a round head and a short tail cocked up and back, a smaller darker-teal wing (`#0f766e`), a navy eye, an amber beak and an amber twig. No gradients, no outlines, no raster.
 
 | File | Use |
 | --- | --- |
 | `app/public/logo.svg` | Mark only, transparent. Avatars, in-app header, README. |
-| `app/public/logo-wordmark.svg` | Mark + "Bower". The word is outlined from Poppins Bold (SIL Open Font License 1.1), so no font is loaded. It is navy on light and `#f1f5f9` when the viewer prefers dark (`prefers-color-scheme` inside the SVG). |
+| `app/public/logo-wordmark.svg` | Mark + "Bower" with a navy word, for light backgrounds. The word is outlined from Poppins Bold (SIL Open Font License 1.1), so no font is loaded. |
+| `app/public/logo-wordmark-dark.svg` | The same with a `#f1f5f9` word, for dark backgrounds. Pick the file by the page's theme (for example `<picture>` with a `prefers-color-scheme` source, or the app's current theme); neither file switches colour on its own. |
 | `app/public/icons/favicon.svg` | Browser tab. Mark on a navy rounded square so it reads on light and dark tab bars. |
 | `app/public/icons/favicon.ico` | Legacy favicon, 16, 32 and 48 px. |
 | `app/public/icons/icon-192.png`, `icon-512.png` | PWA icons (`purpose: any`): navy rounded square, transparent corners. |
 | `app/public/icons/maskable-512.png` | PWA icon (`purpose: maskable`): full-bleed navy; the whole bird sits inside the central circle of radius 40 % (the safe zone). |
 | `app/public/icons/apple-touch-icon.png` | 180 × 180, full-bleed navy, no transparency (iOS rounds the corners itself). |
 
-Clear space around the mark: at least a quarter of its height. Minimum size: 16 px for the mark on navy, 24 px for the bare mark, 96 px wide for the wordmark.
+In every icon the bird's bounding box is centred on the canvas. Clear space around the mark: at least a quarter of its height. Minimum size: 16 px for the mark on navy, 24 px for the bare mark, 96 px wide for the wordmark.
+
+### Regenerating
+
+Edit the bird in `scripts/brand/build.py` (the only copy of its shapes), then run `python3 scripts/brand/build.py`. It rewrites every file above, centres the bird by its measured bounding box, and fails if an icon is off-centre, the maskable bird leaves the safe zone or `logo.svg` reaches 6 KB. It needs Pillow, fontTools, Playwright with Chromium and Poppins Bold on the developer machine (see the script header); none of these are app dependencies. After changing colours in `tokens.css`, run `python3 scripts/brand/contrast.py` (standard library only) and update the contrast table below.
 
 ## Palette
 
@@ -82,6 +87,6 @@ Spacing is a 4 px grid: `--space-1` 4, `--space-2` 8, `--space-3` 12, `--space-4
 
 - Do put the mark on white, slate or navy; don't put it on teal, amber or a photo.
 - Do use navy text on teal and amber fills; don't use teal or amber as text on a light background.
-- Do keep the bird facing right, flat and in its three colours; don't rotate, outline, add gradients or recolour it.
+- Do keep the bird facing right, flat and in its own colours; don't rotate, mirror, outline, add gradients or recolour it.
 - Do use the navy-square favicon or app icons below 24 px; don't shrink the bare mark or the wordmark below their minimum sizes.
 - Do say "Bower" in text with a capital B; don't set the name in the wordmark font inside running text.

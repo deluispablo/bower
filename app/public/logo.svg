@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bower">
-  <g transform="translate(-1.25 -0.75)">
-    <path fill="#2dd4bf" d="M52 22C52 15 46.5 10.5 40 10.5C34 10.5 29.5 14.5 28.5 20C27.5 25.5 20 30.5 13 38L4 49.5L15.5 47C19.5 53 26.5 55.5 34 55C46 54 54 45 54 34C54 30 53.5 27.5 53 26Z"/>
-    <path fill="#0b1220" d="M23 37C29 30.5 40 30.5 46 37C41 44.5 29 46.5 16 45Z"/>
-    <circle fill="#0b1220" cx="44" cy="20.5" r="2.8"/>
-    <path fill="#fbbf24" d="M51.5 19L61.5 23.5L51.5 27.5Z"/>
-    <path fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linecap="round" d="M54.9 31L60 14M58.4 19.3L62.5 17"/>
+  <g transform="translate(-2.812 0.875)">
+    <path fill="#2dd4bf" d="M51.6 18A10 10 0 0 0 32.4 18C31.5 22.5 28 25.5 23 27.5L10.5 21.5Q6.5 20 6.5 24L7.5 27Q10.5 31 15.5 33.5C14.5 44.5 22.5 52 34 52C45 52 51.5 45.5 52 37.5C52.3 33 51.3 29.5 50 27.5L51.4 24.4Z"/>
+    <path fill="#0f766e" d="M44 35C41 29.5 30 28.5 18.5 32.5C25 41 37 42 44 35Z"/>
+    <circle fill="#0b1220" cx="45" cy="19.5" r="2.4"/>
+    <path fill="#fbbf24" d="M51 16.5L60.5 21L51 24.5Z"/>
+    <path fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linecap="round" d="M54.4 28.5L59.4 11.5M57.8 17L61.9 14.7"/>
   </g>
 </svg>
