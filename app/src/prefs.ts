@@ -10,11 +10,14 @@ export interface Prefs {
   notifyOnFinish: boolean;
   /** Process automatically after adding. Read by #35. */
   autoProcessOnAdd: boolean;
+  /** The push permission prompt (#39) has been shown once already. */
+  pushPromptShown: boolean;
 }
 
 const DEFAULTS: Prefs = {
   notifyOnFinish: false,
   autoProcessOnAdd: true,
+  pushPromptShown: false,
 };
 
 const STORAGE_PREFIX = 'bower:pref:';

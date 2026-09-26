@@ -12,6 +12,7 @@ import { pendingCount, useRun } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import { useSession } from '../session.js';
 import { useVault } from '../vault-store.js';
+import { PushPrompt } from './push-prompt.js';
 import { Toast } from './toast.js';
 
 function labelFor(phase: RunPhase, pending: number): string {
@@ -77,6 +78,7 @@ export function ProcessButton() {
         <span aria-live="polite">{labelFor(phase, pendingCount(files))}</span>
       </button>
       <Toast message={toastMessage} messageKey={toastKey} />
+      <PushPrompt />
     </div>
   );
 }

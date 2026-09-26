@@ -13,6 +13,7 @@ import type { PrecacheEntry } from 'workbox-precaching';
 import { precacheAndRoute } from 'workbox-precaching';
 
 import { filesFromFormData, storeSharedFiles } from './share-target.js';
+import './sw-push.js';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry | string>;

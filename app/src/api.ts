@@ -226,3 +226,48 @@ export interface StatusResponse {
 export function getStatus(): Promise<StatusResponse> {
   return apiFetch<StatusResponse>('/status');
 }
+
+export interface PushPublicKeyResponse {
+  publicKey: string;
+}
+
+/**
+ * `GET /push/public-key`: the VAPID public key (base64url, raw P-256 point)
+ * to pass as `applicationServerKey` to `pushManager.subscribe`.
+ */
+export function getPushPublicKey(): Promise<PushPublicKeyResponse> {
+  return apiFetch<PushPublicKeyResponse>('/push/public-key');
+}
+
+/**
+ * `POST /push/subscribe`: stores this browser's push subscription for the
+ * signed-in user. `subscription` is a `PushSubscription.toJSON()` result;
+ * only `endpoint` and `keys.p256dh`/`keys.auth` are sent, matching what the
+ * Worker accepts (see `docs/api.md`).
+ */
+export function subscribePush(
+  subscription: PushSubscriptionJSON,
+): Promise<void> {
+  const endpoint = subscription.endpoint;
+  const p256dh = subscription.keys?.p256dh;
+  const auth = subscription.keys?.auth;
+  if (endpoint === undefined || p256dh === undefined || auth === undefined) {
+    throw new Error('Incomplete push subscription.');
+  }
+  return apiFetch<void>('/push/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      subscription: { endpoint, keys: { p256dh, auth } },
+    }),
+  });
+}
+
+/** `DELETE /push/subscribe`: removes the subscription stored for `endpoint`. */
+export function unsubscribePush(endpoint: string): Promise<void> {
+  return apiFetch<void>('/push/subscribe', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint }),
+  });
+}

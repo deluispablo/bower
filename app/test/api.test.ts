@@ -6,9 +6,12 @@ import {
   createVault,
   deleteAccount,
   getMe,
+  getPushPublicKey,
   getStatus,
   logout,
   selectVault,
+  subscribePush,
+  unsubscribePush,
   updateSettings,
 } from '../src/api.js';
 
@@ -352,6 +355,143 @@ describe('deleteAccount', () => {
     await expect(deleteAccount()).rejects.toMatchObject({
       name: 'ApiError',
       status: 401,
+    });
+  });
+});
+
+describe('getPushPublicKey', () => {
+  it('parses { publicKey }', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { publicKey: 'PUBLIC_KEY' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getPushPublicKey()).resolves.toEqual({
+      publicKey: 'PUBLIC_KEY',
+    });
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toMatch(/\/push\/public-key$/);
+  });
+
+  it('rejects with the config ApiError', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(500, {
+        error: { code: 'config', message: 'Push is not configured' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getPushPublicKey()).rejects.toMatchObject({
+      status: 500,
+      code: 'config',
+    });
+  });
+});
+
+describe('subscribePush', () => {
+  it('sends { subscription: { endpoint, keys } } and resolves on 204', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const subscription: PushSubscriptionJSON = {
+      endpoint: 'https://push.example/abc',
+      keys: { p256dh: 'P256DH_KEY', auth: 'AUTH_SECRET' },
+    };
+
+    await expect(subscribePush(subscription)).resolves.toBeUndefined();
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/push\/subscribe$/);
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe(
+      'application/json',
+    );
+    expect(JSON.parse(init.body as string)).toEqual({
+      subscription: {
+        endpoint: 'https://push.example/abc',
+        keys: { p256dh: 'P256DH_KEY', auth: 'AUTH_SECRET' },
+      },
+    });
+  });
+
+  it('ignores extra fields such as expirationTime', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await subscribePush({
+      endpoint: 'https://push.example/abc',
+      expirationTime: null,
+      keys: { p256dh: 'P256DH_KEY', auth: 'AUTH_SECRET' },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      subscription: {
+        endpoint: 'https://push.example/abc',
+        keys: { p256dh: 'P256DH_KEY', auth: 'AUTH_SECRET' },
+      },
+    });
+  });
+
+  it('throws without calling fetch when endpoint or keys are missing', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(() => subscribePush({})).toThrow('Incomplete push subscription.');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects with the bad_request ApiError', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(400, {
+        error: { code: 'bad_request', message: 'Bad endpoint' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      subscribePush({
+        endpoint: 'https://push.example/abc',
+        keys: { p256dh: 'P256DH_KEY', auth: 'AUTH_SECRET' },
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'bad_request' });
+  });
+});
+
+describe('unsubscribePush', () => {
+  it('sends { endpoint } and resolves on 204', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      unsubscribePush('https://push.example/abc'),
+    ).resolves.toBeUndefined();
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/push\/subscribe$/);
+    expect(init.method).toBe('DELETE');
+    expect(JSON.parse(init.body as string)).toEqual({
+      endpoint: 'https://push.example/abc',
+    });
+  });
+
+  it('rejects with the bad_request ApiError', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(400, {
+        error: { code: 'bad_request', message: 'Missing endpoint' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(unsubscribePush('')).rejects.toMatchObject({
+      status: 400,
+      code: 'bad_request',
     });
   });
 });
