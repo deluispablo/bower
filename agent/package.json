@@ -2,6 +2,6 @@
   "name": "@bower/agent",
   "private": true,
   "scripts": {
-    "test": "echo \"agent: no smoke tests yet\""
+    "test": "bash test/smoke.sh"
   }
 }
