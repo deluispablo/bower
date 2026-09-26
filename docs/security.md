@@ -12,6 +12,7 @@ How a Bower instance is meant to be attacked and defended. To report a vulnerabi
 6. **What the runner sees:** with `BOWER_API_KEY`, one vault's folder ids, a one-hour Drive access token and, for users who set one, their Claude API key. It keeps nothing after the run and logs no file names, summaries or tokens.
 7. **Browsers:** only `APP_ORIGIN` may call the Worker with the cookie. CORS allows that origin alone, and state-changing session routes also check `Origin` (or `Referer`) against it, so another site cannot act on a signed-in user's behalf.
 8. **Abuse:** the public entry points that cost something (`GET /auth/callback`, `POST /process`) are rate limited per IP; `POST /process` also has the per-user daily quota.
+9. **The Google Picker API key** (`VITE_GOOGLE_API_KEY`, #53) is public by design: it is baked into the built app's JS, readable by anyone. It grants no access on its own — the Picker still uses the signed-in user's own Drive access token for the actual listing — and is restricted, in the Google Cloud Console, to the Picker API and to the app's origin (HTTP referrer), so it is useless if copied elsewhere.
 
 ### Same-site deployment
 

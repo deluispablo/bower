@@ -20,8 +20,9 @@
 #    the Google client id and secret and the GitHub token. BOWER_API_KEY
 #    goes to the Worker and the instance repo at once; ADMIN_KEY is saved
 #    to api/.prod.secrets (git-ignored, mode 600).
-# 6. Builds the app with VITE_API_URL set to the Worker's origin and
-#    deploys it to Cloudflare Pages, creating the project the first time.
+# 6. Builds the app with VITE_API_URL set to the Worker's origin, optionally
+#    VITE_GOOGLE_API_KEY for the onboarding folder picker, and deploys it to
+#    Cloudflare Pages, creating the project the first time.
 # 7. Prints what is left to do by hand: the Pages custom domain, the Google
 #    redirect URI and privacy URL.
 #
@@ -76,14 +77,25 @@ check_prerequisites() {
 }
 
 deploy_app() {
-  local api_origin list
+  local api_origin list google_api_key
   api_origin=$(toml_get API_ORIGIN)
   printf '%s' "$PAGES_PROJECT" | grep -qE '^[a-z0-9][a-z0-9-]*$' ||
     die "PAGES_PROJECT must be lower-case letters, digits and dashes: $PAGES_PROJECT"
 
   log ""
+  log "Optional: the Google Picker lets users choose their folder visually"
+  log "on onboarding (docs/runbook.md, \"Google OAuth client\"). Leave blank to skip."
+  printf 'Google Picker API key (optional): ' >&2
+  IFS= read -r google_api_key || true
+  google_api_key=$(printf '%s' "$google_api_key" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+  log ""
   log "Building the app for $api_origin..."
-  (cd "$ROOT" && VITE_API_URL="$api_origin" pnpm -C app exec vite build </dev/null)
+  if [ -n "$google_api_key" ]; then
+    (cd "$ROOT" && VITE_API_URL="$api_origin" VITE_GOOGLE_API_KEY="$google_api_key" pnpm -C app exec vite build </dev/null)
+  else
+    (cd "$ROOT" && VITE_API_URL="$api_origin" pnpm -C app exec vite build </dev/null)
+  fi
   [ -f "$ROOT/app/dist/index.html" ] || die "The app build did not produce app/dist/index.html."
 
   # Pages commands run from the repo root without -c: Pages does not take a

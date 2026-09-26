@@ -56,6 +56,10 @@ To update only the Worker: `bash scripts/deploy-api.sh` (or `pnpm -C api deploy`
    - **Publish** the app instead (Publish app button). Because the client asks for full `drive` scope and is not verified (see `ARCHITECTURE.md`, "Why not X"), Google keeps it **unverified**: every user sees a one-time "unverified app" warning on first sign-in, and the client is capped at **100 users**. Verification (a paid security assessment) is out of scope. Publishing lifts the Testing-only restrictions above.
    - Google requires a public privacy page to publish. The app serves `docs/privacy.md` at `/privacy`, so give Google `<APP_ORIGIN>/privacy` — your real `APP_ORIGIN` — as the privacy policy URL.
 3. Under **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**: Authorized redirect URI is `<API_ORIGIN>/auth/callback` — your real `API_ORIGIN`, for example `https://api.example.com/auth/callback`. Copy the client id and secret; they become `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in step 3 below.
+4. **Optional: the Google Picker**, for the "Choose a folder" button on onboarding (without it, onboarding falls back to pasting the folder link).
+   - Under **APIs & Services → Library**, enable the **Google Picker API**.
+   - Under **APIs & Services → Credentials → Create credentials → API key**, create one, then **Restrict key**: under "API restrictions" pick the Picker API only; under "Application restrictions" choose **Websites** and add your real `APP_ORIGIN` (for example `https://app.example.com/*`). The key is public by design — it ends up in the built app's JS — restricting it to the Picker API and to your origin is what keeps it from being useful anywhere else (see `docs/security.md`).
+   - Set it at build time: `VITE_GOOGLE_API_KEY=<the key> VITE_API_URL=<API_ORIGIN> pnpm -C app exec vite build`. `scripts/deploy.sh` asks for it (optional; leave it blank to skip) and passes it the same way.
 
 ## 3. Cloudflare: Worker, KV, secrets, custom domain, and Pages
 

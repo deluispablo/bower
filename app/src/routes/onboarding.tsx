@@ -3,8 +3,16 @@ import { useLocation } from 'preact-iso';
 
 import { ApiError, createVault, loginUrl, selectVault } from '../api.js';
 import type { Vault } from '../api.js';
+import { getToken } from '../drive.js';
 import { parseFolderId } from '../onboarding.js';
+import {
+  folderIdFromPickerResponse,
+  loadPicker,
+  openFolderPicker,
+} from '../picker.js';
 import { useSession } from '../session.js';
+
+const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
 
 type Busy = 'create' | 'select' | null;
 
@@ -21,6 +29,8 @@ export function Onboarding() {
   const [inputError, setInputError] = useState<string | null>(null);
   const [error, setError] = useState<ErrorState | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
+  // No key configured: skip straight to the paste-a-link fallback.
+  const [pickerFallback, setPickerFallback] = useState(GOOGLE_API_KEY === '');
 
   function onVault(vault: Vault): void {
     if (me) setMe({ ...me, vault });
@@ -77,6 +87,18 @@ export function Onboarding() {
     setShowSelectForm(true);
   }
 
+  async function finishSelect(folderId: string): Promise<void> {
+    setBusy('select');
+    try {
+      const vault = await selectVault(folderId);
+      onVault(vault);
+    } catch (err) {
+      onError(err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleSelect(): Promise<void> {
     const folderId = parseFolderId(folderInput);
     if (folderId === null) {
@@ -85,12 +107,26 @@ export function Onboarding() {
     }
     setInputError(null);
     setError(null);
+    await finishSelect(folderId);
+  }
+
+  async function handleChooseFolder(): Promise<void> {
+    setInputError(null);
+    setError(null);
     setBusy('select');
     try {
-      const vault = await selectVault(folderId);
-      onVault(vault);
+      const [token, picker] = await Promise.all([getToken(), loadPicker()]);
+      openFolderPicker(picker, token.accessToken, GOOGLE_API_KEY, (data) => {
+        const folderId = folderIdFromPickerResponse(data);
+        if (folderId !== null) void finishSelect(folderId);
+      });
     } catch (err) {
-      onError(err);
+      console.error(err);
+      setPickerFallback(true);
+      setError({
+        kind: 'message',
+        text: "Couldn't open the folder picker. Paste the link instead.",
+      });
     } finally {
       setBusy(null);
     }
@@ -136,7 +172,7 @@ export function Onboarding() {
         >
           I already have a folder
         </button>
-      ) : (
+      ) : pickerFallback ? (
         <div class="onboarding-form">
           <label for="onboarding-folder">Paste the folder link or id</label>
           <input
@@ -156,6 +192,17 @@ export function Onboarding() {
             onClick={() => void handleSelect()}
           >
             Use this folder
+          </button>
+        </div>
+      ) : (
+        <div class="onboarding-form">
+          <button
+            type="button"
+            class="button"
+            disabled={busy !== null}
+            onClick={() => void handleChooseFolder()}
+          >
+            {busy === 'select' ? 'Working…' : 'Choose a folder'}
           </button>
         </div>
       )}
