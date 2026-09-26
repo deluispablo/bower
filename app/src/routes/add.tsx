@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
-import { ApiError, startProcess } from '../api.js';
 import { listFolder, upload } from '../drive.js';
 import { getPref } from '../prefs.js';
+import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
@@ -35,6 +35,7 @@ function withName(file: File, name: string): File {
 
 export function Add() {
   const { me } = useSession();
+  const { process } = useRun();
   const { route } = useLocation();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
 
@@ -145,23 +146,12 @@ export function Add() {
     }
   }
 
-  /** After a run's worth of uploads: process (unless disabled) and go home. */
-  async function finish(): Promise<void> {
+  /** After a run's worth of uploads: process (unless disabled) and go home.
+   * The run itself (queued, done, quota, failed…) is the header button's
+   * job from here; this screen only reports the upload. */
+  function finish(): void {
     if (getPref('autoProcessOnAdd')) {
-      try {
-        await startProcess();
-      } catch (err) {
-        if (err instanceof ApiError && err.code === 'quota') {
-          setMessage(
-            'Daily limit reached, Bower will not run again until tomorrow.',
-          );
-          setTimeout(() => route('/'), 1500);
-          return;
-        }
-        // The upload itself succeeded; a process failure is not the user's
-        // upload failing, so it just goes to the console.
-        console.error(err);
-      }
+      void process();
     }
     setMessage('Files added. Bower is on it.');
     setTimeout(() => route('/'), 900);
@@ -180,7 +170,7 @@ export function Add() {
     setBusy(false);
     if (filesRef.current.length === 0) return;
     if (!filesRef.current.every((f) => f.status === 'done')) return;
-    await finish();
+    finish();
   }
 
   function onFileInputChange(event: JSX.TargetedEvent<HTMLInputElement>): void {

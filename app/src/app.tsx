@@ -12,7 +12,9 @@ import { NotInvited } from './routes/not-invited.js';
 import { Onboarding } from './routes/onboarding.js';
 import { Settings } from './routes/settings.js';
 import { Tell } from './routes/tell.js';
+import { RunProvider } from './run-store.js';
 import { SessionProvider, useSession } from './session.js';
+import { VaultProvider } from './vault-store.js';
 
 function AppRoutes() {
   const { status } = useSession();
@@ -55,7 +57,11 @@ export function App() {
   return (
     <LocationProvider>
       <SessionProvider>
-        <AppRoutes />
+        <VaultProvider>
+          <RunProvider>
+            <AppRoutes />
+          </RunProvider>
+        </VaultProvider>
       </SessionProvider>
       {needRefresh && (
         <div class="update-bar">
