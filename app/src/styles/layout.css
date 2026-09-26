@@ -324,3 +324,95 @@ button {
   color: var(--color-text);
   background: var(--color-bg);
 }
+
+.tell-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.chip {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--color-border);
+}
+
+.tell-form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  max-width: 32rem;
+}
+
+.tell-form label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.tell-form input {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.tell-textarea {
+  min-height: 8rem;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-bg);
+  resize: vertical;
+}
+
+.tell-status {
+  color: var(--color-success);
+}
+
+.tell-sent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.tell-sent-item {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.tell-sent-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.tell-sent-time {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.tell-sent-preview {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
