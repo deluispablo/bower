@@ -29,6 +29,22 @@ Every variable `api/src/env.ts` reads, secret or var, with where it comes from a
 
 `assertEnv` (`api/src/env.ts`) validates all of the above on every request and fails with `{ error: { code: 'config', message: 'missing <NAME>' } }` (HTTP 500) naming the first missing secret or var without a default, so a bad deploy fails loudly instead of surfacing as a cryptic error later.
 
+## Runner
+
+The instance repo runs `agent/run.sh <vault_id> <ingest|lint>` in GitHub Actions (see `agent/README.md`). Set these in the instance repo under Settings → Secrets and variables → Actions:
+
+| Name | Secret or variable | How to obtain | Example |
+| --- | --- | --- | --- |
+| `BOWER_API_KEY` | Secret | The same value as the Worker's `BOWER_API_KEY` | `replace-me` |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Secret (this or `ANTHROPIC_API_KEY`) | `claude setup-token` on the operator's machine, with their Claude subscription | `replace-me` |
+| `ANTHROPIC_API_KEY` | Secret (this or `CLAUDE_CODE_OAUTH_TOKEN`) | Claude Console → API keys | `sk-ant-replace-me` |
+| `BOWER_API_URL` | Variable | The Worker's deployed origin, same as `API_ORIGIN` | `https://api.example.com` |
+| `BOWER_MAX_TURNS` | Variable (optional) | Overrides the Worker's `DEFAULT_MAX_TURNS` for this instance | `30` |
+
+A user who set their own API key in Settings runs with that key instead: the script exports it as `ANTHROPIC_API_KEY` and unsets `CLAUDE_CODE_OAUTH_TOKEN` for that run only.
+
+The Actions log shows timestamps, step names and counts only. When a run fails, the reason is in the `error` of `GET /status`; the agent's stderr and rclone's output are in `$RUNNER_TEMP/bower-logs/` on the runner.
+
 ## Local sign-in test
 
 Checks Google sign-in end to end on `wrangler dev` with a real Google OAuth client. The automated tests mock Google; this is the manual check. In production the same client needs `${API_ORIGIN}/auth/callback` as an authorized redirect URI.

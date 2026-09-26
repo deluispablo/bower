@@ -1,3 +1,44 @@
 # Agent
 
 `run.sh`, prompts and workflows that the operator's private instance repo runs via GitHub Actions; see `ARCHITECTURE.md`.
+
+## `run.sh`
+
+```bash
+agent/run.sh <vault_id> <ingest|lint>
+```
+
+One run over one vault:
+
+1. `GET /runner/vaults/:id` for the folder id, a 1 h Drive token, `maxTurns` and the user's own API key (if any). A 409 `reauth` is reported as `failed`.
+2. `rclone sync` the vault down (without `.obsidian/`), using a remote `vault` configured only through `RCLONE_CONFIG_VAULT_*` environment variables. No `rclone.conf`.
+3. Refuses to run without `CLAUDE.md` at the top of the folder.
+4. Lists pending files in `0-Inbox/` and `Clippings/` (not `0-Inbox/Processed/`, not the `_*.md` folder notes). An ingest with nothing pending reports `done` with `processed: []` and stops.
+5. Reports `running`, then runs `claude -p` with `prompts/<mode>.md` inside the vault, with a fixed tool allowlist.
+6. On success: `rclone copy` up (never deletes), then `rclone sync` of `0-Inbox/` and `Clippings/` only, so originals moved to `0-Inbox/Processed/` leave the inbox. Reports `done` with the pending list as `processed` and the agent's last five lines as `summary`.
+7. On any failure: `rclone copy` up only (if the agent ran), reports `failed` with a short error naming the step, exits 2. Originals stay in the inbox.
+
+Exit codes: `0` done, `2` failed.
+
+The log has timestamps, step names and counts only. File names, paths inside the vault, the agent's output and credentials never reach it; they go only into the API payload. The agent's stdout stays in a temporary work dir that is removed at exit. The agent's stderr (`agent.err`) and rclone's output (`rclone.log`) go to `$RUNNER_TEMP/bower-logs/` when `RUNNER_TEMP` is set (so the workflow can keep them privately on failure), otherwise into the work dir.
+
+### Environment
+
+| Name | Required | Notes |
+| --- | --- | --- |
+| `BOWER_API_URL` | Yes | The Worker's origin, e.g. `https://api.example.com` |
+| `BOWER_API_KEY` | Yes | The runner key, sent as `Authorization: Bearer` |
+| `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` | Yes, unless the user set their own key | When the API returns `apiKey`, it becomes `ANTHROPIC_API_KEY` for the run and `CLAUDE_CODE_OAUTH_TOKEN` is unset |
+| `BOWER_MAX_TURNS` | No | Overrides the API's `maxTurns` |
+| `RUNNER_TEMP` | No | Set by GitHub Actions; the work dir and logs go under it |
+| `GITHUB_RUN_ID` | No | Set by GitHub Actions; used as `runId`, otherwise a random hex id |
+
+Tools on `PATH`: `bash`, `curl`, `jq` (1.6 or later), `rclone`, `claude`. GitHub's `ubuntu-latest` has `bash`, `curl` and `jq`; the workflow installs the other two.
+
+## Smoke test
+
+```bash
+pnpm -C agent test     # or: bash agent/test/smoke.sh
+```
+
+Hermetic: `rclone`, `claude` and `curl` are stubs that record their calls, so nothing reaches the network, Google or Claude. `jq` is the real one when installed; otherwise the test supplies a small Node stand-in. Scenarios: ingest happy path, empty inbox, agent failure, missing `CLAUDE.md`, user API key, Google reauth. Every scenario also checks that the script's own output names no file, summary or credential. It runs in root `pnpm test`, so CI runs it on every PR.
