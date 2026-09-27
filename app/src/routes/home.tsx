@@ -46,6 +46,7 @@ import { shouldShowTour } from '../onboarding.js';
 import { offlineReason, useOnline } from '../online.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
+import { findProposals, openProposals } from '../proposals.js';
 import type { RunPhase } from '../run-store.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
@@ -66,10 +67,45 @@ import {
   useTour,
 } from '../tour-store.js';
 import { isAppFile } from '../vault-index.js';
-import { formatAgo, pinned, useVault } from '../vault-store.js';
+import { formatAgo, OfflineError, pinned, useVault } from '../vault-store.js';
+import type { Vault } from '../vault-store.js';
 import '../styles/home.css';
 
 const MINUTE_MS = 60_000;
+
+/**
+ * How many open suggestions Bower's proposals file holds (#199), read only
+ * when the file changed since Health last showed them; 0 otherwise, while
+ * it loads, or when it cannot be read (logged, never shown: Health says so).
+ */
+function useNewProposals(
+  index: Vault['index'],
+  getNoteText: Vault['getNoteText'],
+): number {
+  const [count, setCount] = useState(0);
+  const file = index === null ? undefined : findProposals(index);
+  const isNew = isReportNew(file?.modifiedTime, getPref('proposalsSeenAt'));
+  useEffect(() => {
+    if (file === undefined || !isNew) {
+      setCount(0);
+      return;
+    }
+    let cancelled = false;
+    getNoteText(file.id)
+      .then((text) => {
+        if (!cancelled) setCount(openProposals(text).length);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (!(err instanceof OfflineError)) console.error(err);
+        setCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [file, isNew, getNoteText]);
+  return count;
+}
 
 interface DesktopTellProps {
   inboxFolderId: string | null;
@@ -184,8 +220,15 @@ function Greeting({
 
 export function Home() {
   const { me } = useSession();
-  const { index, files, fetchedAt, status, unpinNote, unpinFolder } =
-    useVault();
+  const {
+    index,
+    files,
+    fetchedAt,
+    status,
+    unpinNote,
+    unpinFolder,
+    getNoteText,
+  } = useVault();
   const { phase, run, process } = useRun();
   const online = useOnline();
   const [now, setNow] = useState(() => Date.now());
@@ -212,6 +255,7 @@ export function Home() {
   const reportTime =
     index === null ? undefined : findReport(index)?.modifiedTime;
   const newHealthReport = isReportNew(reportTime, getPref('healthSeenAt'));
+  const newProposals = useNewProposals(index, getNoteText);
   const healthHint =
     reportTime === undefined
       ? 'No check yet'
@@ -235,12 +279,14 @@ export function Home() {
     justDone,
     pending,
     newHealthReport,
+    newProposals,
   });
   const settledBird = birdStateFor({
     offline,
     justDone: false,
     pending,
     newHealthReport,
+    newProposals,
   });
   const play = useRef({ state: idealBird, id: 0 });
   if (play.current.state !== idealBird) {
@@ -253,7 +299,14 @@ export function Home() {
       ? settledBird
       : idealBird;
 
-  const bubble = bubbleFor({ offline, error, done, newHealthReport, pending });
+  const bubble = bubbleFor({
+    offline,
+    error,
+    done,
+    newHealthReport,
+    newProposals,
+    pending,
+  });
   const greeting = greetingFor(new Date(now), me?.name);
 
   // The first-run tour (#149): once per account, or again from Settings.

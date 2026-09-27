@@ -56,6 +56,11 @@ export interface BubbleState {
   done?: DoneResult;
   /** The health report changed since Health was last opened (`isReportNew`). */
   newHealthReport: boolean;
+  /**
+   * Open suggestions from Bower (#199) in a proposals file that changed
+   * since Health last showed them; 0 (or absent) when there are none new.
+   */
+  newProposals?: number;
   /** Files waiting in the inbox (`pendingCount`). */
   pending: number;
 }
@@ -90,6 +95,11 @@ export function refusedMessage(n: number): string {
   return `${n} ${plural(n, 'change')} ${was} refused; nothing was lost.`;
 }
 
+/** "I have 2 suggestions for your rules. They are in Health." (#199) */
+export function proposalsMessage(n: number): string {
+  return `I have ${n} ${plural(n, 'suggestion')} for your rules. They are in Health.`;
+}
+
 /**
  * The bird's speech bubble on Home (spec §6, Home row): one sentence for
  * whatever is most worth saying right now, highest precedence first:
@@ -100,8 +110,9 @@ export function refusedMessage(n: number): string {
  * 4. `done.refused` — changes the post-run audit refused this run.
  * 5. `done` — a run just finished; report what it did.
  * 6. `newHealthReport` — a fresh health report hasn't been opened yet.
- * 7. `pending > 0` — n things waiting in the inbox.
- * 8. otherwise — nothing waiting, nothing new: "All tidy."
+ * 7. `newProposals > 0` — Bower has new suggestions waiting in Health.
+ * 8. `pending > 0` — n things waiting in the inbox.
+ * 9. otherwise — nothing waiting, nothing new: "All tidy."
  */
 export function bubbleFor(state: BubbleState): string {
   if (state.offline) return "No signal here. I'll keep an eye out.";
@@ -119,6 +130,9 @@ export function bubbleFor(state: BubbleState): string {
   if (state.newHealthReport) {
     return "Sunday's health check is ready. Want to see it?";
   }
+  if (state.newProposals !== undefined && state.newProposals > 0) {
+    return proposalsMessage(state.newProposals);
+  }
   if (state.pending > 0) {
     return `${state.pending} new ${plural(state.pending, 'thing')} in your inbox. Shall I tidy up?`;
   }
@@ -132,6 +146,8 @@ export interface BirdStateInput {
   justDone: boolean;
   pending: number;
   newHealthReport: boolean;
+  /** Same as `BubbleState.newProposals`. */
+  newProposals?: number;
 }
 
 /**
@@ -144,6 +160,9 @@ export interface BirdStateInput {
 export function birdStateFor(input: BirdStateInput): BirdState {
   if (input.offline) return 'offline';
   if (input.justDone) return 'showoff';
-  if (input.pending === 0 && !input.newHealthReport) return 'asleep';
+  const proposals = input.newProposals ?? 0;
+  if (input.pending === 0 && !input.newHealthReport && proposals === 0) {
+    return 'asleep';
+  }
   return 'looking';
 }
