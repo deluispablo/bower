@@ -131,8 +131,22 @@ export interface Me {
   hasApiKey: boolean;
 }
 
-export function getMe(): Promise<Me> {
-  return apiFetch<Me>('/me');
+/**
+ * What `/me` answers, once, right after a sign-in with an address that is
+ * not on the invite list: the Worker reads it from a five-minute cookie and
+ * clears it, so a reload no longer has the address.
+ */
+export interface NotInvitedMe {
+  notInvited: true;
+  email: string;
+}
+
+export function isNotInvited(me: Me | NotInvitedMe): me is NotInvitedMe {
+  return 'notInvited' in me && me.notInvited;
+}
+
+export function getMe(): Promise<Me | NotInvitedMe> {
+  return apiFetch<Me | NotInvitedMe>('/me');
 }
 
 interface VaultResponse {
@@ -163,9 +177,13 @@ export function logout(): Promise<void> {
   return apiFetch<void>('/auth/logout', { method: 'POST' });
 }
 
-/** The Worker's `/auth/login`: a full navigation, never fetched. */
-export function loginUrl(): string {
-  return `${API_URL}/auth/login`;
+/**
+ * The Worker's `/auth/login`: a full navigation, never fetched.
+ * `selectAccount` makes Google show its account picker ("Try another account").
+ */
+export function loginUrl(options: { selectAccount?: boolean } = {}): string {
+  const query = options.selectAccount === true ? '?prompt=select_account' : '';
+  return `${API_URL}/auth/login${query}`;
 }
 
 export interface UpdateSettingsInput {

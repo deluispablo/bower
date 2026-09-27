@@ -1,7 +1,8 @@
 /**
  * Not invited (spec §6, Not invited row): the bird confused, the address
- * that signed in (from session state only — never fetched or guessed),
- * who to ask, "Try another account" and "Sign out".
+ * that signed in (only from the Worker's one-time `/me` answer, kept in
+ * session state; after a reload it says "that account"), who to ask,
+ * "Try another account" (Google's account picker) and "Sign out".
  */
 
 import { loginUrl } from '../api.js';
@@ -10,7 +11,7 @@ import { useSession } from '../session.js';
 import '../styles/auth.css';
 
 export function NotInvited() {
-  const { me, signOut } = useSession();
+  const { notInvitedEmail, signOut } = useSession();
 
   return (
     <section class="auth-screen">
@@ -20,19 +21,20 @@ export function NotInvited() {
       <div class="auth-heading">
         <h1>This Bower isn&rsquo;t open to you yet</h1>
         <p class="auth-note">
-          {me?.email !== undefined ? (
+          {notInvitedEmail !== undefined ? (
             <>
-              You signed in as <span class="auth-address">{me.email}</span>, but
-              that address isn&rsquo;t on the invite list.{' '}
+              You signed in as{' '}
+              <span class="auth-address">{notInvitedEmail}</span>, but that
+              address isn&rsquo;t on the invite list.{' '}
             </>
           ) : (
-            "That Google account isn't on the invite list. "
+            "You signed in with that account, but it isn't on the invite list. "
           )}
           Ask the person who runs this Bower to add you, then sign in again.
         </p>
       </div>
       <div class="auth-actions">
-        <a href={loginUrl()} class="button">
+        <a href={loginUrl({ selectAccount: true })} class="button">
           Try another account
         </a>
         <button

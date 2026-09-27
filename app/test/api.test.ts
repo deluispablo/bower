@@ -8,6 +8,8 @@ import {
   getMe,
   getPushPublicKey,
   getStatus,
+  isNotInvited,
+  loginUrl,
   logout,
   selectVault,
   subscribePush,
@@ -195,6 +197,22 @@ describe('getMe', () => {
     });
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toMatch(/\/me$/);
+  });
+
+  it('recognises the one-time { notInvited, email } answer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(200, { notInvited: true, email: 'you@example.com' }),
+        ),
+    );
+
+    const me = await getMe();
+
+    expect(isNotInvited(me)).toBe(true);
+    expect(me).toEqual({ notInvited: true, email: 'you@example.com' });
   });
 
   it('throws an ApiError with status 401 when signed out', async () => {
@@ -493,5 +511,28 @@ describe('unsubscribePush', () => {
       status: 400,
       code: 'bad_request',
     });
+  });
+});
+
+describe('isNotInvited', () => {
+  it('is false for a signed-in user', () => {
+    expect(
+      isNotInvited({
+        email: 'you@example.com',
+        vault: null,
+        quota: { used: 0, limit: 5 },
+        needsReauth: false,
+        hasApiKey: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('loginUrl', () => {
+  it('asks for the account picker only when told to', () => {
+    expect(loginUrl()).toMatch(/\/auth\/login$/);
+    expect(loginUrl({ selectAccount: true })).toMatch(
+      /\/auth\/login\?prompt=select_account$/,
+    );
   });
 });
