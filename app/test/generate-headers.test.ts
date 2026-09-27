@@ -96,7 +96,7 @@ describe('buildHeaders', () => {
     expect(lines).toContain(
       'Permissions-Policy: camera=(), microphone=(), geolocation=()',
     );
-    expect(lines).toContain('Referrer-Policy: no-referrer');
+    expect(lines).toContain('Referrer-Policy: strict-origin-when-cross-origin');
   });
 });
 
