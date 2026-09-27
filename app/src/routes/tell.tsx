@@ -1,70 +1,101 @@
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
+import type { JSX } from 'preact';
 
+import { Bird } from '../components/bird.js';
+import { useFocusTrap } from '../components/use-focus-trap.js';
+import { IconClock, IconClose } from '../components/icons.js';
+import { TellComposer } from '../components/tell-composer.js';
 import { createTextFile } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import {
   addSent,
+  firstLine,
   instructionFileName,
   instructionNote,
   loadSent,
+  statusLineFor,
 } from '../tell.js';
-import type { SentItem } from '../tell.js';
+import type { RunSnapshot, SentItem } from '../tell.js';
 
-interface Example {
-  label: string;
-  text: string;
+/** The bird's opening line (spec §6, Tell Bower row). */
+const OPENING_LINE =
+  "A rule, a task or a question. I'll put it in your inbox and get to it on the next tidy-up.";
+
+interface TellHistoryProps {
+  sent: SentItem[];
+  runSnapshot: RunSnapshot;
+  onClose: () => void;
 }
 
-const EXAMPLES: Example[] = [
-  {
-    label: 'A rule',
-    text: 'From now on, file recipes under Cooking and tag them #recipe',
-  },
-  {
-    label: 'A task',
-    text: 'Summarise the PDF I added today in three bullet points',
-  },
-  {
-    label: 'A question',
-    text: 'What did I save about trip planning last month?',
-  },
-];
+/**
+ * The full sent list, as a modal dialog (spec §6): the same dialog pattern
+ * as the explorer drawer (#140) — `role="dialog"`, focus trapped inside
+ * while open, Escape and the close button both dismiss it.
+ */
+function TellHistory({
+  sent,
+  runSnapshot,
+  onClose,
+}: TellHistoryProps): JSX.Element {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, onClose);
 
-const SENT_MESSAGE = 'Sent. Tidying up.';
-
-/** The first line of `text`, shortened if it runs long. */
-function firstLine(text: string): string {
-  const line = text.split('\n')[0] ?? '';
-  return line.length > 140 ? `${line.slice(0, 140)}…` : line;
-}
-
-/** A compact "sent at" label, e.g. "Sep 26, 14:05". */
-function formatSentTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return (
+    <div class="tell-history">
+      <div class="tell-history-backdrop" aria-hidden="true" onClick={onClose} />
+      <div
+        ref={panelRef}
+        class="tell-history-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sent history"
+        tabIndex={-1}
+      >
+        <div class="tell-history-head">
+          <h2>Sent</h2>
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <IconClose />
+          </button>
+        </div>
+        {sent.length === 0 ? (
+          <p>Nothing sent yet.</p>
+        ) : (
+          <ul class="tell-history-list">
+            {sent.map((item) => (
+              <li key={`${item.name}-${item.sentAt}`} class="tell-history-item">
+                <p class="tell-history-text">{firstLine(item.text)}</p>
+                <p class="tell-status-line">
+                  {statusLineFor(item, runSnapshot)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function Tell() {
   const { me } = useSession();
-  const { process } = useRun();
+  const { phase, run, process } = useRun();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
 
   const [text, setText] = useState('');
-  const [title, setTitle] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
   const [sent, setSent] = useState<SentItem[]>(() => loadSent());
+  const [historyOpen, setHistoryOpen] = useState(false);
 
+  const runSnapshot: RunSnapshot = { phase, run };
   const canSend =
     text.trim() !== '' && !sending && inboxFolderId !== null && online;
 
@@ -74,10 +105,11 @@ export function Tell() {
 
     setSending(true);
     setError(null);
-    setStatus(null);
 
     const now = new Date();
-    const name = instructionFileName(trimmed, title, now);
+    // No separate title field in the conversation view: the note's name
+    // falls back to the first six words of the message, same as before.
+    const name = instructionFileName(trimmed, '', now);
     const content = instructionNote(trimmed, now);
 
     try {
@@ -90,88 +122,68 @@ export function Tell() {
     }
 
     // The note is safely in the inbox at this point, so it counts as sent
-    // whatever the run does next (queued, quota, failed…): the header
-    // button is where that status shows now.
+    // whatever the run does next (queued, quota, failed…): the bubble's own
+    // status line is where that shows now.
     void process();
 
     setSent(addSent({ name, text: trimmed, sentAt: now.toISOString() }));
     setText('');
-    setTitle('');
-    setStatus(SENT_MESSAGE);
     setSending(false);
   }
 
   return (
-    <section>
-      <h1>Tell Bower</h1>
-
-      <div class="tell-examples">
-        {EXAMPLES.map((example) => (
-          <button
-            key={example.label}
-            type="button"
-            class="chip"
-            onClick={() => setText(example.text)}
-          >
-            {example.label}
-          </button>
-        ))}
-      </div>
-
-      <div class="tell-form">
-        <label for="tell-title">Title (optional)</label>
-        <input
-          id="tell-title"
-          type="text"
-          value={title}
-          onInput={(event) => {
-            setTitle((event.target as HTMLInputElement).value);
-          }}
-        />
-
-        <label for="tell-text">Message</label>
-        <textarea
-          id="tell-text"
-          class="tell-textarea"
-          placeholder="A rule, a task or a question. For example: file every receipt under Finance."
-          value={text}
-          onInput={(event) => {
-            setText((event.target as HTMLTextAreaElement).value);
-          }}
-        />
-
-        {error !== null && <p class="auth-error">{error}</p>}
-        {status !== null && <p class="tell-status">{status}</p>}
-        {!online && <p class="offline-reason">{offlineReason('tell')}</p>}
-
+    <section class="tell-screen">
+      <div class="tell-head">
+        <h1>Tell Bower</h1>
         <button
           type="button"
-          class="button"
-          disabled={!canSend}
-          aria-disabled={!canSend}
-          onClick={() => void handleSend()}
+          class="icon-button"
+          aria-label="Sent history"
+          aria-haspopup="dialog"
+          aria-expanded={historyOpen}
+          onClick={() => {
+            setHistoryOpen(true);
+          }}
         >
-          {sending ? 'Sending…' : 'Send'}
+          <IconClock />
         </button>
       </div>
 
-      <h2>Sent</h2>
-      {sent.length === 0 ? (
-        <p>Nothing sent yet.</p>
-      ) : (
-        <ul class="tell-sent-list">
-          {sent.map((item) => (
-            <li key={`${item.name}-${item.sentAt}`} class="tell-sent-item">
-              <div class="tell-sent-header">
-                <strong>{item.name}</strong>
-                <span class="tell-sent-time">
-                  {formatSentTime(item.sentAt)}
-                </span>
-              </div>
-              <p class="tell-sent-preview">{firstLine(item.text)}</p>
-            </li>
-          ))}
-        </ul>
+      <div class="tell-feed">
+        <div class="tell-row tell-row--bird">
+          <Bird state="looking" size={44} />
+          <p class="tell-bubble tell-bubble--bird">{OPENING_LINE}</p>
+        </div>
+        {[...sent].reverse().map((item) => (
+          <div
+            key={`${item.name}-${item.sentAt}`}
+            class="tell-row tell-row--sent"
+          >
+            <p class="tell-bubble tell-bubble--sent">{item.text}</p>
+            <p class="tell-status-line">{statusLineFor(item, runSnapshot)}</p>
+          </div>
+        ))}
+      </div>
+
+      {error !== null && <p class="auth-error">{error}</p>}
+      {!online && <p class="offline-reason">{offlineReason('tell')}</p>}
+
+      <TellComposer
+        value={text}
+        onChange={setText}
+        onSubmit={() => void handleSend()}
+        disabled={!canSend}
+        sending={sending}
+      />
+
+      {historyOpen && (
+        <TellHistory
+          sent={sent}
+          runSnapshot={runSnapshot}
+          onClose={() => {
+            setHistoryOpen(false);
+          }}
+        />
       )}
     </section>
   );
