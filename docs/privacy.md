@@ -20,6 +20,8 @@ When you sign in and use the app, it keeps, in its own database:
 
 Your notes and files are never copied into this instance's own storage. They live only in your own Google Drive, in the folder you signed in with. This instance keeps a pointer to that folder, not its contents.
 
+If you sign in with an address that is not on the invite list, nothing is stored about you. Your browser keeps a small cookie for at most five minutes, holding that address encrypted, only so the app can show you which account was turned away; it is deleted as soon as that screen reads it.
+
 ## What leaves where
 
 - When you tap Tidy up, a temporary job reads the files waiting in your Bower folder in your Google Drive and sends their text to Anthropic's API (the company that makes Claude) so it can organise them for you. Nothing else leaves your Drive, and nothing is sent anywhere else.

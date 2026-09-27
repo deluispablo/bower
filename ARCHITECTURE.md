@@ -90,6 +90,7 @@ Trigger model: **button only**. The app calls `/process` after Add and Tell Bowe
 | --- | --- | --- | --- | --- |
 | Google refresh token (scope `drive`) | The user | Worker KV, AES-GCM encrypted with `TOKEN_ENC_KEY` | Worker, to mint 1 h access tokens for the browser and the runner | Leaves the Worker |
 | Session cookie | The user | Browser (HS256 signed, HttpOnly) | App → Worker | — |
+| `bower_not_invited` cookie (a rejected sign-in's address, AES-GCM encrypted inside an HS256-signed token) | The person turned away | Browser (HttpOnly, Secure, SameSite=Lax), 5 minutes, cleared by the first `GET /me` | Worker → app's Not invited screen, via `GET /me` | Put the address in a URL, KV or logs |
 | Claude token or API key | The operator (or a user with BYOK) | Instance repo secret (or encrypted in KV for BYOK) | Runner | Enters this repo or the Worker logs |
 | `BOWER_API_KEY` | The operator | Worker secret + instance repo secret | Runner ↔ Worker | — |
 | GitHub fine-grained token (`contents: write` on the instance repo) | The operator | Worker secret | Worker, to dispatch | — |

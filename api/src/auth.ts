@@ -9,8 +9,13 @@
 import { Hono } from 'hono';
 import type { Context, MiddlewareHandler } from 'hono';
 
-import { encrypt, importEncryptionKey, timingSafeEqual } from './crypto.js';
-import type { AppEnv } from './env.js';
+import {
+  decrypt,
+  encrypt,
+  importEncryptionKey,
+  timingSafeEqual,
+} from './crypto.js';
+import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import {
   buildAuthUrl,
@@ -56,23 +61,57 @@ function redirectUri(apiOrigin: string): string {
   return `${apiOrigin}/auth/callback`;
 }
 
-const NOT_INVITED_HTML = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Not invited</title>
-<style>
-body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.5; }
-</style>
-</head>
-<body>
-<h1>Not invited</h1>
-<p>You have not been invited to this Bower.</p>
-<p>Ask the person who runs it to add your Google account, then sign in again.</p>
-</body>
-</html>
-`;
+/**
+ * Cookie telling the app which address was turned away, for its Not invited
+ * screen. The value is a signed token (`purpose: 'not_invited'`) whose only
+ * other claim is the address, AES-GCM encrypted: never readable as is.
+ */
+export const NOT_INVITED_COOKIE = 'bower_not_invited';
+
+/** Five minutes: enough to land on the app's Not invited screen once. */
+const NOT_INVITED_TTL_SECONDS = 5 * 60;
+
+const NOT_INVITED_PURPOSE = 'not_invited';
+
+function notInvitedCookie(token: string, maxAgeSeconds: number): string {
+  return `${NOT_INVITED_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}`;
+}
+
+async function signNotInvited(email: string, env: Env): Promise<string> {
+  const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+  return signToken(
+    { purpose: NOT_INVITED_PURPOSE, email: await encrypt(email, key) },
+    env.SESSION_SECRET,
+    NOT_INVITED_TTL_SECONDS,
+  );
+}
+
+/**
+ * The address in a `bower_not_invited` cookie, or `undefined` when there is
+ * none or it does not verify (bad signature, expired, another purpose, not
+ * decryptable): any of those is treated as no cookie at all.
+ */
+async function readNotInvited(
+  cookieHeader: string | undefined,
+  env: Env,
+): Promise<string | undefined> {
+  const token = readCookie(cookieHeader, NOT_INVITED_COOKIE);
+  if (token === undefined) return undefined;
+  try {
+    const claims = await verifyToken(token, env.SESSION_SECRET);
+    if (
+      claims.purpose !== NOT_INVITED_PURPOSE ||
+      typeof claims.email !== 'string'
+    ) {
+      return undefined;
+    }
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    return await decrypt(claims.email, key);
+  } catch {
+    // A bad or stale cookie only means there is no address to show.
+    return undefined;
+  }
+}
 
 function unauthenticated(): HttpError {
   return new HttpError(401, 'unauthenticated', 'Not signed in');
@@ -154,6 +193,8 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
         redirectUri: redirectUri(env.API_ORIGIN),
         state,
         codeChallenge: await codeChallenge(verifier),
+        // Only this exact value is forwarded: "Try another account".
+        selectAccount: c.req.query('prompt') === 'select_account',
       }),
       302,
     );
@@ -192,9 +233,17 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
     const kv = env.BOWER_KV;
     if (!(await isAllowed(kv, info.email))) {
-      // Nothing is written to KV for someone who was not invited.
-      c.header('Set-Cookie', oauthCookie('', 0));
-      return c.html(NOT_INVITED_HTML, 403);
+      // Nothing is written to KV for someone who was not invited, and the
+      // address travels only inside the encrypted cookie, never the URL.
+      c.header(
+        'Set-Cookie',
+        notInvitedCookie(
+          await signNotInvited(info.email, env),
+          NOT_INVITED_TTL_SECONDS,
+        ),
+      );
+      c.header('Set-Cookie', oauthCookie('', 0), { append: true });
+      return c.redirect(`${env.APP_ORIGIN}/not-invited`, 302);
     }
 
     const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
@@ -223,6 +272,26 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   auth.post('/auth/logout', requireSameOrigin, (c) => {
     c.header('Set-Cookie', clearSessionCookie());
     return c.body(null, 204);
+  });
+
+  // Without a valid session, a `bower_not_invited` cookie answers once with
+  // the address that was turned away, then is cleared; otherwise 401.
+  auth.get('/me', async (c, next) => {
+    const env = c.get('env');
+    const cookieHeader = c.req.header('cookie');
+    const token = readSessionCookie(cookieHeader);
+    if (token !== undefined) {
+      try {
+        await verifySession(token, env.SESSION_SECRET);
+        return next();
+      } catch {
+        // Not a usable session: fall through to the not-invited cookie.
+      }
+    }
+    const email = await readNotInvited(cookieHeader, env);
+    if (email === undefined) return next();
+    c.header('Set-Cookie', notInvitedCookie('', 0));
+    return c.json({ notInvited: true, email });
   });
 
   auth.get('/me', requireSession, async (c) => {

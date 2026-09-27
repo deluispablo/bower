@@ -11,8 +11,8 @@ import type { ComponentChildren } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
-import { ApiError, getMe, logout } from './api.js';
-import type { Me } from './api.js';
+import { ApiError, getMe, isNotInvited, logout } from './api.js';
+import type { Me, NotInvitedMe } from './api.js';
 import forgetDevice from './forget.js';
 
 export type SessionStatus = 'loading' | 'signed-out' | 'signed-in';
@@ -21,6 +21,11 @@ export interface SessionState {
   status: SessionStatus;
   me?: Me;
   error?: string;
+  /**
+   * The address just turned away at sign-in, for the Not invited screen.
+   * Only set from the Worker's one-time `/me` answer; never guessed.
+   */
+  notInvitedEmail?: string;
 }
 
 export interface Session extends SessionState {
@@ -43,6 +48,15 @@ const PUBLIC_PATHS = new Set(['/not-invited', '/privacy']);
  * signed in here and has nothing on the device to forget.
  */
 const HAD_SESSION_KEY = 'bower:had-session';
+
+/** Session state for a `/me` answer: signed in, or turned away at sign-in. */
+function stateFromMe(me: Me | NotInvitedMe): SessionState {
+  if (isNotInvited(me)) {
+    return { status: 'signed-out', notInvitedEmail: me.email };
+  }
+  markHadSession();
+  return { status: 'signed-in', me };
+}
 
 function markHadSession(): void {
   try {
@@ -103,8 +117,7 @@ export function SessionProvider({ children }: SessionProviderProps) {
     getMe()
       .then((me) => {
         if (cancelled) return;
-        markHadSession();
-        setState({ status: 'signed-in', me });
+        setState(stateFromMe(me));
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -156,9 +169,7 @@ export function SessionProvider({ children }: SessionProviderProps) {
   };
 
   const refresh = async (): Promise<void> => {
-    const me = await getMe();
-    markHadSession();
-    setState({ status: 'signed-in', me });
+    setState(stateFromMe(await getMe()));
   };
 
   const value: Session = { ...state, signOut, setMe, refresh };
