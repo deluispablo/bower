@@ -12,6 +12,8 @@ Those of `CLAUDE.md` plus: no new runtime dependency without a one-line reason (
 
 ## Milestones and order
 
+Order note (2026-09-28): M15 (the audit) runs first on the UI side, in parallel with M11 and M12, which touch the runner, the Worker and CI only; then M16, M17, M13 and M14. The UI issues of M13 and M14 follow the audited canvas (app spec §14).
+
 | Milestone | Issues | Depends on | Why this order |
 | --- | --- | --- | --- |
 | M11 · Agent hardening | minimal env, no network tools, protected paths (policy + audit), pre-scan quarantine, report fields + app, red-team corpus, security doc | main | Closes the exfiltration and persistence channels before any stranger's content reaches a run. |

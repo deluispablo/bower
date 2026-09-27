@@ -68,11 +68,11 @@ Chosen approach: **the same app in a demo build**, not a second app and not a sh
 
 - `VITE_DEMO=1` selects `app/src/demo/api.ts`, an implementation of the same `api.ts` surface backed by a fixture vault (an invented person, "Alex"; about thirty English notes across PARA; an inbox with three items; one health report; a sent history) that lives only in memory. Production builds never include it (dynamic import behind the flag, checked by the size budget).
 - Tidy up plays a scripted run: queued, running with the three inbox items filed one by one, done with the toast; Tell Bower answers with scripted replies for the example chips and one generic reply otherwise; Add accepts files into the fixture inbox; Settings shows the real screens with actions that explain they are disabled in the demo.
-- Login becomes **"Run your own Bower"**: what it is, what you need (a Google account, free Cloudflare and GitHub accounts, a Claude subscription or API key, about an hour), the three links (repository, runbook, the "what is Bower" page the owner is writing), and "Explore the demo". The first-run tour (#149) runs in the demo with demo copy and ends on that screen. A persistent banner says the notes are samples.
+- The demo reuses the **What is Bower** intro (#207, four pages before the sign-in): its last page, and the sign-in route itself, become **"Run your own Bower"**: what you need (a Google account, free Cloudflare and GitHub accounts, a Claude subscription or API key, about an hour), the three links (repository, runbook, the "what is Bower" site page), and "Explore the demo" which enters the app as Alex. No shell on those routes (#204). The first-run tour (#149) runs in the demo with demo copy and ends on that screen. A persistent banner says the notes are samples.
 - Deployed to its own Pages project (`bower-demo`) by `scripts/deploy-demo.sh`; linked from the README. Real instances add `<meta name="robots" content="noindex">`; the demo does not.
 - The demo doubles as the hermetic end-to-end fixture: Playwright drives it in CI (no network, no Google, no Claude) through the six main flows and produces the README screenshots (#152).
 
-Screens and copy follow the owner's upcoming UI design draft.
+Screens and copy follow the audited canvas (spec §14 of the app redesign, M15 to M17): soft palette, menu left and Tidy up right, one bird per screen.
 
 ## 6. Track D: a Bower that learns, from the first sign-in
 
@@ -88,7 +88,7 @@ The app compares the vault's `bower_rules_version` with the template's (it knows
 
 ### D.2 The first-run interview
 
-Right after "Building your bower", the bird asks four questions in the Tell Bower conversation (#146's composer): what you will keep here, which languages your notes come in, three areas of your life to start with, and how you like titles and tags (an example is shown). The answers are written by the app, through Drive, into `About-Me.md` (profile) and `Rules.md` (title and tag preferences), and the three areas become folder notes under `2-Areas/`. Skippable; replayable from Settings. No run is needed for the agent to know this on its first Tidy up.
+Right after "Building your bower" and before "Start with what you have" (#219, the Drive import step), the bird asks four questions in the Tell Bower conversation (#146's composer): what you will keep here, which languages your notes come in, three areas of your life to start with, and how you like titles and tags (an example is shown). The answers are written by the app, through Drive, into `About-Me.md` (profile) and `Rules.md` (title and tag preferences), and the three areas become folder notes under `2-Areas/`. Skippable; replayable from Settings. No run is needed for the agent to know this on its first Tidy up.
 
 ### D.3 Proposals the user approves
 
@@ -96,7 +96,7 @@ The agent keeps proposing (as `log.md` does today) but in a structured file, `An
 
 ### D.4 Corrections
 
-On a note, "This was misfiled" opens Tell Bower with a prefilled message naming the note and asking for the right folder; the resulting instruction note moves the file and, when the same correction happens twice, the agent files a proposal. The lint run reads recent corrections from `log.md`.
+On a note, "This was misfiled" (a row in the note's More menu, #210) opens Tell Bower with a prefilled message naming the note and asking for the right folder; the resulting instruction note moves the file and, when the same correction happens twice, the agent files a proposal. The lint run reads recent corrections from `log.md`.
 
 ### D.5 Memory hygiene
 
