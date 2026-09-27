@@ -3,11 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addSent,
   clearSent,
+  firstLine,
+  formatSentDate,
   instructionFileName,
   instructionNote,
   loadSent,
+  statusLineFor,
 } from '../src/tell.js';
-import type { SentItem } from '../src/tell.js';
+import type { RunSnapshot, SentItem } from '../src/tell.js';
+import type { Run } from '../src/api.js';
 
 // Built from local components (not an ISO/UTC string) so the local getters
 // `instructionFileName` reads (`getFullYear`, `getHours`, …) are stable no
@@ -243,5 +247,116 @@ describe('clearSent', () => {
     expect(() => {
       clearSent();
     }).not.toThrow();
+  });
+});
+
+describe('firstLine', () => {
+  it('returns the whole text when it is one short line', () => {
+    expect(firstLine('file every receipt under Finance')).toBe(
+      'file every receipt under Finance',
+    );
+  });
+
+  it('drops everything after the first newline', () => {
+    expect(firstLine('first line\nsecond line')).toBe('first line');
+  });
+
+  it('shortens a line over 140 characters with an ellipsis', () => {
+    const long = 'x'.repeat(150);
+    const result = firstLine(long);
+    expect(result).toBe(`${'x'.repeat(140)}…`);
+  });
+});
+
+describe('formatSentDate', () => {
+  it('formats a valid ISO date', () => {
+    // Component parts, not a literal string: the exact rendering depends on
+    // the runner's locale, so only check it produced something non-empty
+    // and stable in shape (month, day, time).
+    const result = formatSentDate('2026-09-26T14:05:00.000Z');
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('returns an empty string for an invalid date', () => {
+    expect(formatSentDate('not a date')).toBe('');
+  });
+});
+
+describe('statusLineFor', () => {
+  const item: SentItem = {
+    name: 'Bower - 2026-09-26 1405 a rule.md',
+    text: 'a rule',
+    sentAt: '2026-09-26T14:05:00.000Z',
+  };
+
+  function runOf(state: Run['state'], finishedAt?: string): RunSnapshot {
+    const run: Run = {
+      state,
+      requestedAt: '2026-09-26T14:00:00.000Z',
+      ...(finishedAt !== undefined ? { finishedAt } : {}),
+    };
+    return { phase: state, run };
+  }
+
+  it('idle: "Sent · <date>"', () => {
+    expect(statusLineFor(item, { phase: 'idle', run: null })).toBe(
+      `Sent · ${formatSentDate(item.sentAt)}`,
+    );
+  });
+
+  it('queued: "Tidying up…"', () => {
+    expect(statusLineFor(item, runOf('queued'))).toBe('Tidying up…');
+  });
+
+  it('running: "Tidying up…"', () => {
+    expect(statusLineFor(item, runOf('running'))).toBe('Tidying up…');
+  });
+
+  it('done, item sent before the run finished: "Done"', () => {
+    const snapshot = runOf('done', '2026-09-26T14:10:00.000Z');
+    expect(statusLineFor(item, snapshot)).toBe('Done');
+  });
+
+  it('done, item sent after the run finished: falls back to the sent line', () => {
+    const snapshot = runOf('done', '2026-09-26T14:00:00.000Z');
+    expect(statusLineFor(item, snapshot)).toBe(
+      `Sent · ${formatSentDate(item.sentAt)}`,
+    );
+  });
+
+  it('done with no finishedAt on the run: falls back to the sent line', () => {
+    const run: Run = { state: 'done', requestedAt: '2026-09-26T14:00:00.000Z' };
+    expect(statusLineFor(item, { phase: 'done', run })).toBe(
+      `Sent · ${formatSentDate(item.sentAt)}`,
+    );
+  });
+
+  it('failed: "Sent · <date>"', () => {
+    expect(statusLineFor(item, runOf('failed'))).toBe(
+      `Sent · ${formatSentDate(item.sentAt)}`,
+    );
+  });
+
+  it('stale or quota: falls back to the sent line', () => {
+    const stale: RunSnapshot = {
+      phase: 'stale',
+      run: { state: 'failed', requestedAt: '2026-09-26T14:00:00.000Z' },
+    };
+    const quota: RunSnapshot = { phase: 'quota', run: null };
+    expect(statusLineFor(item, stale)).toBe(
+      `Sent · ${formatSentDate(item.sentAt)}`,
+    );
+    expect(statusLineFor(item, quota)).toBe(
+      `Sent · ${formatSentDate(item.sentAt)}`,
+    );
+  });
+
+  it('a missing run snapshot: falls back to the sent line', () => {
+    expect(statusLineFor(item, null)).toBe(
+      `Sent · ${formatSentDate(item.sentAt)}`,
+    );
+    expect(statusLineFor(item, undefined)).toBe(
+      `Sent · ${formatSentDate(item.sentAt)}`,
+    );
   });
 });
