@@ -1,10 +1,12 @@
 /**
- * Google Picker for the onboarding "Choose a folder" button (#53). The
+ * Google Picker for the onboarding "Choose a folder" button (#53) and for
+ * Add's "From your Drive" button (#217). The
  * Picker library is never bundled: `loadPicker` injects
  * `https://apis.google.com/js/api.js` on first call and waits for
  * `gapi.load('picker', ...)`, so nothing is fetched until a user actually
- * clicks the button. `folderIdFromPickerResponse` is pure and unit-tested;
- * `loadPicker` and `openFolderPicker` touch the DOM and `google.picker`
+ * clicks the button. `folderIdFromPickerResponse` and
+ * `filesFromPickerResponse` are pure and unit-tested; `loadPicker`,
+ * `openFolderPicker` and `openFilePicker` touch the DOM and `google.picker`
  * directly and are never called in tests.
  */
 
@@ -110,4 +112,85 @@ export function folderIdFromPickerResponse(
   if (data.action !== 'picked') return null;
   const id = data.docs?.[0]?.id;
   return typeof id === 'string' && id !== '' ? id : null;
+}
+
+const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
+
+/**
+ * Builds and shows the Picker for Add's "From your Drive" button: several
+ * files and folders at once, over four views (recent files, the ones the
+ * user owns, the ones shared with them, the starred ones). Same library
+ * load and Drive access token as `openFolderPicker`. `onResult` receives
+ * the raw picker response; pass it to `filesFromPickerResponse`.
+ */
+export function openFilePicker(
+  pickerApi: typeof google.picker,
+  accessToken: string,
+  apiKey: string,
+  onResult: (data: google.picker.ResponseObject) => void,
+): void {
+  const view = (): google.picker.DocsView =>
+    new pickerApi.DocsView().setIncludeFolders(true).setSelectFolderEnabled(true);
+  new pickerApi.PickerBuilder()
+    // Recent first: the plain view lists everything, newest first.
+    .addView(view())
+    .addView(view().setOwnedByMe(true))
+    .addView(view().setOwnedByMe(false))
+    .addView(view().setStarred(true))
+    .enableFeature(pickerApi.Feature.MULTISELECT_ENABLED)
+    .setTitle('From your Drive')
+    .setOAuthToken(accessToken)
+    .setDeveloperKey(apiKey)
+    .setCallback(onResult)
+    .build()
+    .setVisible(true);
+}
+
+/** One item picked with `openFilePicker`. */
+export interface PickedItem {
+  id: string;
+  name: string;
+  mimeType: string;
+  isFolder: boolean;
+}
+
+export interface PickedFiles {
+  /** The picks to copy, in the order the Picker returned them. */
+  items: PickedItem[];
+  /** Picks left out because they are the Bower folder or sit right in it. */
+  excluded: number;
+}
+
+/**
+ * The files and folders in a Picker response, minus the Bower folder
+ * itself and anything directly inside it (the Picker cannot hide a folder,
+ * so it is filtered here). A cancelled or empty response gives no items.
+ * A document without an id is skipped; one without a name gets
+ * "Untitled". Pure: no DOM, no `google.picker`, unit-tested directly.
+ */
+export function filesFromPickerResponse(
+  data: google.picker.ResponseObject,
+  bowerFolderId: string | null,
+): PickedFiles {
+  const result: PickedFiles = { items: [], excluded: 0 };
+  if (data.action !== 'picked' || data.docs === undefined) return result;
+  for (const doc of data.docs) {
+    if (typeof doc.id !== 'string' || doc.id === '') continue;
+    if (
+      bowerFolderId !== null &&
+      (doc.id === bowerFolderId || doc.parentId === bowerFolderId)
+    ) {
+      result.excluded++;
+      continue;
+    }
+    const mimeType = typeof doc.mimeType === 'string' ? doc.mimeType : '';
+    result.items.push({
+      id: doc.id,
+      name:
+        typeof doc.name === 'string' && doc.name !== '' ? doc.name : 'Untitled',
+      mimeType,
+      isFolder: mimeType === FOLDER_MIME_TYPE,
+    });
+  }
+  return result;
 }

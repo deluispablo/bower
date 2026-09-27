@@ -13,6 +13,10 @@ declare namespace google.picker {
   /** One Drive item as it appears in a picker result's `docs` array. */
   interface ResponseDocument {
     id: string;
+    name?: string;
+    mimeType?: string;
+    /** The folder the item sits in, when the Picker knows it. */
+    parentId?: string;
   }
 
   /** What `PickerBuilder.setCallback`'s callback receives. */
@@ -21,10 +25,18 @@ declare namespace google.picker {
     docs?: ResponseDocument[];
   }
 
+  /** The `google.picker.Feature` values this app enables. */
+  const Feature: {
+    readonly MULTISELECT_ENABLED: string;
+  };
+
   class DocsView {
+    constructor(viewId?: string);
     setIncludeFolders(include: boolean): this;
     setSelectFolderEnabled(enabled: boolean): this;
     setMimeTypes(mimeTypes: string): this;
+    setOwnedByMe(me: boolean): this;
+    setStarred(starred: boolean): this;
   }
 
   interface Picker {
@@ -36,6 +48,8 @@ declare namespace google.picker {
     setOAuthToken(token: string): this;
     setDeveloperKey(key: string): this;
     setCallback(callback: (data: ResponseObject) => void): this;
+    setTitle(title: string): this;
+    enableFeature(feature: string): this;
     build(): Picker;
   }
 }
