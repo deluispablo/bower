@@ -1,19 +1,45 @@
-import { useEffect, useState } from 'preact/hooks';
+import type { JSX } from 'preact';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
+import { AboutPanel } from '../components/about-panel.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
+import { useShellSlot } from '../components/shell-slots.js';
 import { isProtectedNote } from '../drive.js';
 import type { SaveOptions } from '../drive.js';
+import { driveViewUrl } from '../markdown/embeds.js';
+import { propertiesFor } from '../markdown/frontmatter.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
 import { breadcrumb, siblings } from '../navigation.js';
+import type { BreadcrumbSegment } from '../navigation.js';
 import { isAppFile } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
 import '../styles/markdown.css';
+
+interface BreadcrumbProps {
+  crumbs: BreadcrumbSegment[];
+}
+
+/** The breadcrumb, filled into the shell's header `crumb` slot. */
+function Breadcrumb({ crumbs }: BreadcrumbProps): JSX.Element {
+  return (
+    <nav class="breadcrumb" aria-label="Folder">
+      {crumbs.map((crumb) => (
+        <span key={crumb.path}>
+          <a href={`/#folder=${encodeURIComponent(crumb.path)}`}>
+            {crumb.name}
+          </a>
+          <span aria-hidden="true"> / </span>
+        </span>
+      ))}
+    </nav>
+  );
+}
 
 type NoteLoad =
   | { status: 'loading' }
@@ -79,6 +105,28 @@ export function Note() {
     // file it resolves to) becomes available on a cold-start deep link.
   }, [id, index, file, getNoteText]);
 
+  // Fills the shell's header breadcrumb and "About this note" column
+  // (#144, shell-slots.ts). Both hooks run on every render (Rules of
+  // Hooks), before `index`/`file` are known to exist, hence the guards
+  // inside; both are memoized so an unrelated re-render (typing in the
+  // append form, say) does not refill the slot every time.
+  const crumbContent = useMemo(() => {
+    if (file === undefined) return null;
+    const crumbs = breadcrumb(file.path);
+    return crumbs.length > 0 ? <Breadcrumb crumbs={crumbs} /> : null;
+  }, [file]);
+  useShellSlot('crumb', crumbContent);
+
+  const aboutContent = useMemo(() => {
+    if (index === null || file === undefined || load.status !== 'ready') {
+      return null;
+    }
+    return <AboutPanel index={index} file={file} html={load.rendered.html} />;
+    // Keyed on the rendered html itself, not the whole `load` (which also
+    // changes while still loading, before there is anything new to show).
+  }, [index, file, load.status === 'ready' ? load.rendered.html : null]);
+  useShellSlot('aside', aboutContent);
+
   if (index === null) {
     return (
       <section>
@@ -95,8 +143,14 @@ export function Note() {
     );
   }
 
-  const crumbs = breadcrumb(file.path);
   const { prev, next } = siblings(index, file.id);
+  const properties =
+    load.status === 'ready' ? propertiesFor(load.rendered.frontmatter) : null;
+  const hasProperties =
+    properties !== null &&
+    (properties.tags.length > 0 ||
+      properties.created !== undefined ||
+      properties.source !== undefined);
 
   function showText(text: string): void {
     if (index === null || file === undefined) return;
@@ -142,36 +196,64 @@ export function Note() {
 
   return (
     <section class="note-view">
-      {crumbs.length > 0 && (
-        <nav class="breadcrumb" aria-label="Folder">
-          {crumbs.map((crumb) => (
-            <span key={crumb.path}>
-              <a href={`/#folder=${encodeURIComponent(crumb.path)}`}>
-                {crumb.name}
-              </a>
-              <span aria-hidden="true"> / </span>
-            </span>
-          ))}
-        </nav>
-      )}
-
       <div class="note-edit-header">
         <h1>{file.name.replace(/\.md$/i, '')}</h1>
-        {canEdit && (
-          <button
-            type="button"
-            class="button"
-            disabled={opening}
-            onClick={() => void handleEdit()}
+        <div class="note-header-actions">
+          <a
+            class="button-link"
+            href={driveViewUrl(file)}
+            target="_blank"
+            rel="noopener"
           >
-            {opening ? 'Opening…' : 'Edit'}
-          </button>
-        )}
+            Open in Drive
+          </a>
+          {canEdit && (
+            <button
+              type="button"
+              class="button"
+              disabled={opening}
+              onClick={() => void handleEdit()}
+            >
+              {opening ? 'Opening…' : 'Edit'}
+            </button>
+          )}
+        </div>
       </div>
       {editError !== null && (
         <p class="auth-error" role="alert">
           {editError}
         </p>
+      )}
+
+      {hasProperties && properties !== null && (
+        <div class="note-properties">
+          {properties.tags.length > 0 && (
+            <ul class="tags">
+              {properties.tags.map((tag) => (
+                <li key={tag}>
+                  <a
+                    class="tag"
+                    href={`/search?q=${encodeURIComponent(`#${tag}`)}`}
+                  >
+                    #{tag}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+          {properties.created !== undefined && (
+            <span class="note-property">
+              <span class="note-property-label">Created</span>
+              {properties.created}
+            </span>
+          )}
+          {properties.source !== undefined && (
+            <span class="note-property">
+              <span class="note-property-label">Source</span>
+              {properties.source}
+            </span>
+          )}
+        </div>
       )}
 
       {isAppFile(file.path, file.name) && <AppFileBanner file={file} />}
@@ -196,13 +278,6 @@ export function Note() {
       {!isEditing && load.status === 'error' && <p>{load.message}</p>}
       {!isEditing && load.status === 'ready' && (
         <>
-          {load.rendered.frontmatterHtml !== '' && (
-            <div
-              dangerouslySetInnerHTML={{
-                __html: load.rendered.frontmatterHtml,
-              }}
-            />
-          )}
           <NoteBody html={load.rendered.html} />
           {!isProtectedNote(file.name) && (
             <AppendForm key={id} onAppend={handleAppend} />

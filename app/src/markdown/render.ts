@@ -130,6 +130,15 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/**
+ * A callout's default title (no `[!kind] Title` given): `[!bower]` is the
+ * agent's own note (spec §6 row Note, issue #144), styled and worded as
+ * "Bower's note"; any other kind just gets its name capitalized.
+ */
+function defaultCalloutTitle(kind: string): string {
+  return kind === 'bower' ? "Bower's note" : capitalize(kind);
+}
+
 function createMarked(index: VaultIndex, options: RenderOptions): Marked {
   const slugCounts = new Map<string, number>();
   const notePath = options.path ?? '';
@@ -210,7 +219,9 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
         type: 'callout',
         raw: match[0],
         kind,
-        titleTokens: this.lexer.inline(title === '' ? capitalize(kind) : title),
+        titleTokens: this.lexer.inline(
+          title === '' ? defaultCalloutTitle(kind) : title,
+        ),
         tokens: this.lexer.blockTokens(body, []),
       };
     },

@@ -134,11 +134,13 @@
 }
 
 .markdown .wikilink {
-  text-decoration: none;
+  color: var(--color-link);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
 }
 
 .markdown .wikilink:hover {
-  text-decoration: underline;
+  text-decoration-style: solid;
 }
 
 .markdown .wikilink-missing {
@@ -199,6 +201,26 @@
   margin-bottom: 0;
 }
 
+/* The agent's own note (spec §6 row Note): `> [!bower]`, never a "Bower:"
+   paragraph — too easy for a user to trigger by accident (issue #144). The
+   mark is the app's own icon (app/public/icons/favicon.svg), added in CSS
+   so the sanitizer's link/image allowlist (render.ts) never has to widen
+   for it. */
+.markdown .callout-bower .callout-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.markdown .callout-bower .callout-title::before {
+  content: '';
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background: url('/icons/favicon.svg') center / contain no-repeat;
+  border-radius: var(--radius-sm);
+}
+
 .frontmatter {
   margin: 0 0 var(--space-4);
   border: 1px solid var(--color-border);
@@ -243,4 +265,47 @@
   padding: 0 var(--space-2);
   font-size: var(--text-xs);
   color: var(--color-link);
+  text-decoration: none;
+}
+
+.tags .tag:hover {
+  text-decoration: underline;
+}
+
+/*
+ * The note screen's properties row (routes/note.tsx, markdown/frontmatter.ts
+ * `propertiesFor`): tags as pills (linking to the switcher, #142, with
+ * `#tag` prefilled), created date, source — each shown only when present.
+ */
+.note-properties {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.note-properties .tags {
+  margin: 0;
+}
+
+.note-property-label {
+  margin-right: var(--space-1);
+}
+
+.note-header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Reading measure (spec §6 row Note): the note's own column, not the third
+   "About this note" column, which sits outside `.note-view` in the shell. */
+@media (min-width: 900px) {
+  .note-view {
+    max-width: 720px;
+  }
 }
