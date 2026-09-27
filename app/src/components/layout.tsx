@@ -3,11 +3,15 @@
  *
  * Phone: a top bar (the bird and the wordmark, the Tidy up pill, the menu
  * button that opens the explorer drawer) and a bottom nav (Home, Add,
- * Tell, Settings). Health is reached from the explorer's Health row.
+ * Tell, Settings). Health is reached from the explorer's Health row. On a
+ * note screen the wordmark is replaced by the back link (the `crumb` slot),
+ * and the `actions` slot next to the pill holds Open in Drive (#144).
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
  * header row over the content (breadcrumb slot, theme toggle, the pill),
- * and on note screens a third column, filled through `aside` (#144).
+ * and on note screens a third column, filled through the `aside` shell slot
+ * (#144, `shell-slots.ts` — the note screen sits inside `children`, so it
+ * cannot reach these any other way).
  *
  * The header is one element restyled per breakpoint, so the pill (which
  * owns the working sheet and its toasts) is only ever mounted once.
@@ -25,6 +29,7 @@ import { effectiveTheme, setTheme } from '../theme.js';
 import { useVault } from '../vault-store.js';
 import { Bird } from './bird.js';
 import { Explorer, ExplorerDrawer, HEALTH_PATH } from './explorer.js';
+import { useShellSlots } from './shell-slots.js';
 import {
   IconChat,
   IconHome,
@@ -87,16 +92,13 @@ function ThemeToggle(): JSX.Element {
 
 interface LayoutProps {
   children: ComponentChildren;
-  /** Desktop header's breadcrumb; empty until the Note screen fills it (#144). */
-  crumb?: ComponentChildren;
-  /** Desktop third column, "About this note" (#144); nothing renders there yet. */
-  aside?: ComponentChildren;
 }
 
-export function Layout({ children, crumb, aside }: LayoutProps): JSX.Element {
+export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
   const { index } = useVault();
   const { path } = useLocation();
+  const { crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Re-read on every render: the health screen updates the pref, and a
@@ -144,7 +146,7 @@ export function Layout({ children, crumb, aside }: LayoutProps): JSX.Element {
   );
 
   return (
-    <div class={aside === undefined ? 'shell' : 'shell shell-with-aside'}>
+    <div class={aside === null ? 'shell' : 'shell shell-with-aside'}>
       <nav class="shell-sidebar" aria-label="Your notes">
         <Explorer
           variant="sidebar"
@@ -154,14 +156,20 @@ export function Layout({ children, crumb, aside }: LayoutProps): JSX.Element {
       </nav>
       <div class="shell-main">
         <header class="topbar">
-          <a href="/" class="brand topbar-brand" aria-label="Bower home">
-            <Bird state="looking" size={32} />
-            <span class="brand-word">Bower</span>
-          </a>
-          <div class="topbar-crumb">{crumb}</div>
+          {crumb === null ? (
+            <a href="/" class="brand topbar-brand" aria-label="Bower home">
+              <Bird state="looking" size={32} />
+              <span class="brand-word">Bower</span>
+            </a>
+          ) : (
+            <div class="topbar-crumb">{crumb}</div>
+          )}
           <ThemeToggle />
           <div class="topbar-slot" data-slot="process">
             <ProcessButton />
+          </div>
+          <div class="topbar-slot topbar-actions" data-slot="actions">
+            {actions}
           </div>
           <button
             type="button"
@@ -185,7 +193,7 @@ export function Layout({ children, crumb, aside }: LayoutProps): JSX.Element {
         )}
         <main class="content">{children}</main>
       </div>
-      {aside !== undefined && (
+      {aside !== null && (
         <aside class="shell-aside" aria-label="About this note">
           {aside}
         </aside>

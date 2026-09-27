@@ -20,7 +20,6 @@ import { escapeHtml, slugify } from './html.js';
 import {
   headingFragment,
   renderFileLink,
-  renderTextWithWikilinks,
   renderWikilink,
   resolveMarkdownLink,
 } from './wikilinks.js';
@@ -31,11 +30,6 @@ export interface RenderedNote {
   html: string;
   /** Parsed frontmatter; `tags`, when present, is a `string[]`. */
   frontmatter: Record<string, unknown>;
-  /**
-   * Sanitized, collapsible `<details class="frontmatter">` block with the
-   * properties and the tags as chips; empty when the note has none.
-   */
-  frontmatterHtml: string;
   /** Tags from the frontmatter, without `#`. */
   tags: string[];
 }
@@ -54,16 +48,16 @@ export interface RenderOptions {
 }
 
 const ALLOWED_TAGS = [
-  'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'dd', 'del', 'details', 'div',
+  'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'dd', 'del', 'div',
   'dl', 'dt', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img',
   'input', 'kbd', 'li', 'mark', 'ol', 'p', 'pre', 's', 'small', 'span',
-  'strong', 'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th',
+  'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th',
   'thead', 'tr', 'u', 'ul',
 ]; // prettier-ignore
 
 const ALLOWED_ATTR = [
   'align', 'alt', 'checked', 'class', 'data-bower-embed', 'data-bower-file',
-  'disabled', 'href', 'id', 'open', 'rel', 'src', 'start', 'target', 'title',
+  'disabled', 'href', 'id', 'rel', 'src', 'start', 'target', 'title',
   'type',
 ]; // prettier-ignore
 
@@ -128,6 +122,15 @@ const CALLOUT_PATTERN =
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * A callout's default title (no `[!kind] Title` given): `[!bower]` is the
+ * agent's own note (spec §6 row Note, issue #144), styled and worded as
+ * "Bower's note"; any other kind just gets its name capitalized.
+ */
+function defaultCalloutTitle(kind: string): string {
+  return kind === 'bower' ? "Bower's note" : capitalize(kind);
 }
 
 function createMarked(index: VaultIndex, options: RenderOptions): Marked {
@@ -210,7 +213,9 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
         type: 'callout',
         raw: match[0],
         kind,
-        titleTokens: this.lexer.inline(title === '' ? capitalize(kind) : title),
+        titleTokens: this.lexer.inline(
+          title === '' ? defaultCalloutTitle(kind) : title,
+        ),
         tokens: this.lexer.blockTokens(body, []),
       };
     },
@@ -282,42 +287,6 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
   return marked;
 }
 
-function formatValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  if (Array.isArray(value)) return value.map(formatValue).join(', ');
-  if (typeof value === 'object' && value !== null) {
-    return Object.entries(value)
-      .map(([key, item]) => `${key}: ${formatValue(item)}`)
-      .join('; ');
-  }
-  return '';
-}
-
-function renderFrontmatter(
-  data: Record<string, unknown>,
-  tags: string[],
-  index: VaultIndex,
-): string {
-  const keys = Object.keys(data);
-  if (keys.length === 0) return '';
-  const rows = keys.map((key) => {
-    const value =
-      key === 'tags'
-        ? `<ul class="tags">${tags
-            .map((tag) => `<li class="tag">#${escapeHtml(tag)}</li>`)
-            .join('')}</ul>`
-        : renderTextWithWikilinks(formatValue(data[key]), index);
-    return `<dt>${escapeHtml(key)}</dt><dd>${value}</dd>`;
-  });
-  return (
-    '<details class="frontmatter"><summary>Properties</summary>' +
-    `<dl>${rows.join('')}</dl></details>`
-  );
-}
-
 const plainMarked = new Marked({ gfm: true, breaks: true });
 
 /**
@@ -345,7 +314,6 @@ export function renderNote(
   return {
     html: sanitizeHtml(html),
     frontmatter: data,
-    frontmatterHtml: sanitizeHtml(renderFrontmatter(data, tags, index)),
     tags,
   };
 }

@@ -16,6 +16,7 @@ import { SearchRedirect } from './routes/search.js';
 import { Settings } from './routes/settings.js';
 import { Tell } from './routes/tell.js';
 import { RunProvider } from './run-store.js';
+import { ShellSlotsProvider } from './components/shell-slots.js';
 import { SessionProvider, useSession } from './session.js';
 import { openSwitcher } from './switcher-store.js';
 import { VaultProvider } from './vault-store.js';
@@ -55,22 +56,24 @@ function AppRoutes() {
   }
 
   return (
-    <Layout>
-      <Router>
-        <Route path="/" component={Home} />
-        <Route path="/login" component={Login} />
-        <Route path="/not-invited" component={NotInvited} />
-        <Route path="/privacy" component={Privacy} />
-        <Route path="/note/:id" component={Note} />
-        <Route path="/add" component={Add} />
-        <Route path="/tell" component={Tell} />
-        <Route path="/search" component={SearchRedirect} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/lint" component={Health} />
-        <Route path="/onboarding" component={Onboarding} />
-        <Route default component={NotFound} />
-      </Router>
-    </Layout>
+    <ShellSlotsProvider>
+      <Layout>
+        <Router>
+          <Route path="/" component={Home} />
+          <Route path="/login" component={Login} />
+          <Route path="/not-invited" component={NotInvited} />
+          <Route path="/privacy" component={Privacy} />
+          <Route path="/note/:id" component={Note} />
+          <Route path="/add" component={Add} />
+          <Route path="/tell" component={Tell} />
+          <Route path="/search" component={SearchRedirect} />
+          <Route path="/settings" component={Settings} />
+          <Route path="/lint" component={Health} />
+          <Route path="/onboarding" component={Onboarding} />
+          <Route default component={NotFound} />
+        </Router>
+      </Layout>
+    </ShellSlotsProvider>
   );
 }
 

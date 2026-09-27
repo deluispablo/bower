@@ -1,8 +1,11 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 
 import {
   normalizeTags,
+  outlineOf,
   parseFrontmatter,
+  propertiesFor,
 } from '../src/markdown/frontmatter.js';
 
 function note(...lines: string[]): string {
@@ -181,5 +184,69 @@ describe('parseFrontmatter', () => {
     });
     expect(Object.getPrototypeOf(data)).toBe(Object.prototype);
     expect(Object.keys(data)).toContain('__proto__');
+  });
+});
+
+describe('propertiesFor', () => {
+  it('reads tags from a list, created and source when present', () => {
+    expect(
+      propertiesFor({
+        tags: ['recipe', 'bread'],
+        created: '2026-09-12',
+        source: 'Clipping, filed by Bower',
+      }),
+    ).toEqual({
+      tags: ['recipe', 'bread'],
+      created: '2026-09-12',
+      source: 'Clipping, filed by Bower',
+    });
+  });
+
+  it('reads tags from a space/comma separated string, without #', () => {
+    expect(propertiesFor({ tags: '#recipe, bread' }).tags).toEqual([
+      'recipe',
+      'bread',
+    ]);
+  });
+
+  it('leaves created and source out when missing, blank or not a scalar', () => {
+    expect(propertiesFor({})).toEqual({
+      tags: [],
+      created: undefined,
+      source: undefined,
+    });
+    expect(
+      propertiesFor({ created: '   ', source: ['not', 'a', 'string'] }),
+    ).toEqual({ tags: [], created: undefined, source: undefined });
+  });
+
+  it('formats a numeric or boolean created/source as text', () => {
+    expect(propertiesFor({ created: 2026, source: true })).toEqual({
+      tags: [],
+      created: '2026',
+      source: 'true',
+    });
+  });
+});
+
+describe('outlineOf', () => {
+  it('lists h2/h3 headings in document order, ignoring h1 and h4', () => {
+    const html =
+      '<h1 id="title">Title</h1>' +
+      '<p>Intro</p>' +
+      '<h2 id="a">Feeding schedule</h2>' +
+      '<p>...</p>' +
+      '<h3 id="b">Days 1 to 3</h3>' +
+      '<h2 id="c">Troubleshooting</h2>' +
+      '<h4 id="d">Ignored</h4>';
+    expect(outlineOf(html)).toEqual([
+      { id: 'a', text: 'Feeding schedule', depth: 2 },
+      { id: 'b', text: 'Days 1 to 3', depth: 3 },
+      { id: 'c', text: 'Troubleshooting', depth: 2 },
+    ]);
+  });
+
+  it('returns an empty list for a note with no headings', () => {
+    expect(outlineOf('<p>Just a paragraph.</p>')).toEqual([]);
   });
 });

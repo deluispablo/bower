@@ -135,6 +135,41 @@ summary:focus-visible {
   min-width: 0;
 }
 
+/* Phone note screen (#144): the back link (crumb slot content) replaces the
+   wordmark; the full breadcrumb (also crumb slot content, `routes/note.tsx`)
+   only shows once there is room for it, in the desktop header below. */
+.topbar-crumb .breadcrumb {
+  display: none;
+}
+
+.topbar-back {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding-left: var(--space-1);
+  overflow: hidden;
+  color: var(--color-heading);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+}
+
+.topbar-back .icon {
+  flex-shrink: 0;
+  transform: rotate(180deg);
+}
+
+.topbar-back-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-actions {
+  display: flex;
+}
+
 .topbar .process-offline-reason {
   max-width: 10rem;
 }
@@ -506,10 +541,16 @@ summary:focus-visible {
   }
 
   .topbar-brand,
+  .topbar-back,
+  .topbar-actions,
   .menu-button,
   .bottom-nav,
   .drawer {
     display: none;
+  }
+
+  .topbar-crumb .breadcrumb {
+    display: block;
   }
 
   .theme-toggle {

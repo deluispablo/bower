@@ -222,3 +222,12 @@ export function IconGoogle(): JSX.Element {
     </svg>
   );
 }
+
+export function IconExternalLink(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M9 6H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4" />
+      <path d="M14 4h6v6M20 4l-9 9" />
+    </Svg>
+  );
+}

@@ -1,0 +1,128 @@
+/**
+ * Desktop "About this note" third column (spec §5.2, issue #144): Outline
+ * (the rendered note's own headings), Linked mentions (only once
+ * `VaultIndex` carries `backlinks`, #150 — it does not yet, so this section
+ * never renders today) and In this folder (the note's siblings, current one
+ * marked). Filled into the shell through the `aside` slot (`shell-slots.ts`)
+ * by `routes/note.tsx`; never rendered directly by `Layout`.
+ */
+
+import type { JSX } from 'preact';
+
+import type { DriveFile } from '../drive.js';
+import { outlineOf } from '../markdown/frontmatter.js';
+import { isAppFile } from '../vault-index.js';
+import type { VaultIndex } from '../vault-index.js';
+import '../styles/about-panel.css';
+
+function folderOf(path: string): string {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? '' : path.slice(0, slash);
+}
+
+function compareNames(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+}
+
+function titleOf(name: string): string {
+  return name.replace(/\.md$/i, '');
+}
+
+/**
+ * Not on `VaultIndex` yet (#150): guarded so "Linked mentions" stays
+ * invisible until a real `backlinks` map exists. No data work here, per the
+ * issue — this is only the shape the section expects once it does.
+ */
+interface IndexWithBacklinks {
+  backlinks: Map<string, DriveFile[]>;
+}
+
+function backlinksFor(index: VaultIndex, id: string): DriveFile[] | undefined {
+  const withBacklinks = index as Partial<IndexWithBacklinks>;
+  return withBacklinks.backlinks?.get(id);
+}
+
+/** The note's siblings (spec: "In this folder"): every visible note in the
+ * same folder, by name, the note itself included. */
+function notesInFolder(index: VaultIndex, file: DriveFile): DriveFile[] {
+  const folder = folderOf(file.path);
+  return index.notes
+    .filter(
+      (note) =>
+        folderOf(note.path) === folder && !isAppFile(note.path, note.name),
+    )
+    .sort((a, b) => compareNames(a.name, b.name));
+}
+
+export interface AboutPanelProps {
+  index: VaultIndex;
+  file: DriveFile;
+  /** The note's rendered, sanitized HTML (`RenderedNote.html`). */
+  html: string;
+}
+
+export function AboutPanel({
+  index,
+  file,
+  html,
+}: AboutPanelProps): JSX.Element {
+  const outline = outlineOf(html);
+  const backlinks = backlinksFor(index, file.id);
+  const siblings = notesInFolder(index, file);
+
+  return (
+    <>
+      {outline.length > 0 && (
+        <section class="about-section" aria-label="Outline">
+          <h2 class="about-heading">Outline</h2>
+          <nav class="about-outline">
+            {outline.map((heading) => (
+              <a
+                key={heading.id}
+                href={`#${heading.id}`}
+                class={`about-row about-outline-row about-outline-row-${String(heading.depth)}`}
+              >
+                {heading.text}
+              </a>
+            ))}
+          </nav>
+        </section>
+      )}
+
+      {backlinks !== undefined && backlinks.length > 0 && (
+        <section class="about-section" aria-label="Linked mentions">
+          <h2 class="about-heading">Linked mentions</h2>
+          <nav class="about-links">
+            {backlinks.map((note) => (
+              <a
+                key={note.id}
+                href={`/note/${note.id}`}
+                class="about-row about-link-row"
+              >
+                {titleOf(note.name)}
+              </a>
+            ))}
+          </nav>
+        </section>
+      )}
+
+      {siblings.length > 0 && (
+        <section class="about-section" aria-label="In this folder">
+          <h2 class="about-heading">In this folder</h2>
+          <nav class="about-folder">
+            {siblings.map((note) => (
+              <a
+                key={note.id}
+                href={`/note/${note.id}`}
+                class="about-row about-folder-row"
+                aria-current={note.id === file.id ? 'page' : undefined}
+              >
+                {titleOf(note.name)}
+              </a>
+            ))}
+          </nav>
+        </section>
+      )}
+    </>
+  );
+}
