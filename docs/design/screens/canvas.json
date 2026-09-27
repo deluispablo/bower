@@ -1,66 +1,90 @@
 {
   "v": 3,
-  "attachments": {},
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-09-28T20:00:00Z"
+  },
+  "title": "Bower App Revised",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
   "boards": {
-    "Login.dc.html": {
+    "Audit.dc.html": {
+      "w": 1280,
+      "h": 2100,
+      "title": "The audit",
+      "expand": "fill",
       "x": 0,
-      "y": 1280,
+      "y": 0
+    },
+    "Dev-Notes.dc.html": {
+      "w": 1280,
+      "h": 2000,
+      "title": "Notes for development",
+      "expand": "fill",
+      "x": 1360,
+      "y": 0
+    },
+    "Login.dc.html": {
+      "x": 2350,
+      "y": 2400,
       "w": 390,
       "h": 844,
       "title": "Sign in",
       "is_interactive": true
     },
     "Not-Invited.dc.html": {
-      "x": 470,
-      "y": 1280,
+      "x": 2820,
+      "y": 2400,
       "w": 390,
       "h": 844,
       "title": "Not invited",
       "is_interactive": true
     },
     "Onb-Welcome.dc.html": {
-      "x": 940,
-      "y": 1280,
+      "x": 3290,
+      "y": 2400,
       "w": 390,
       "h": 844,
       "title": "1 · Welcome",
       "is_interactive": true
     },
     "Onb-Folder.dc.html": {
-      "x": 1410,
-      "y": 1280,
+      "x": 3760,
+      "y": 2400,
       "w": 390,
       "h": 844,
       "title": "2 · Choose folder",
       "is_interactive": true
     },
     "Onb-Building.dc.html": {
-      "x": 1880,
-      "y": 1280,
+      "x": 4230,
+      "y": 2400,
       "w": 390,
       "h": 844,
       "title": "3 · Building",
       "is_interactive": true
     },
     "Onb-Add.dc.html": {
-      "x": 2350,
-      "y": 1280,
+      "x": 5170,
+      "y": 2400,
       "w": 390,
       "h": 844,
       "title": "4 · Tour: Add",
       "is_interactive": true
     },
     "Onb-Tidy.dc.html": {
-      "x": 2820,
-      "y": 1280,
+      "x": 5640,
+      "y": 2400,
       "w": 390,
       "h": 844,
       "title": "5 · Tour: Tidy up",
       "is_interactive": true
     },
     "Onb-Tell.dc.html": {
-      "x": 3290,
-      "y": 1280,
+      "x": 6110,
+      "y": 2400,
       "w": 390,
       "h": 844,
       "title": "6 · Tour: Tell",
@@ -68,83 +92,83 @@
     },
     "Phone-Home.dc.html": {
       "x": 0,
-      "y": 2504,
+      "y": 3410,
       "w": 390,
       "h": 844,
       "title": "Home",
       "is_interactive": true
     },
     "Phone-Switcher.dc.html": {
-      "x": 470,
-      "y": 2504,
+      "x": 2350,
+      "y": 3410,
       "w": 390,
       "h": 844,
       "title": "Quick switcher",
       "is_interactive": true
     },
     "Phone-Note.dc.html": {
-      "x": 940,
-      "y": 2504,
+      "x": 2820,
+      "y": 3410,
       "w": 390,
       "h": 844,
       "title": "Note",
       "is_interactive": true
     },
     "Phone-Add.dc.html": {
-      "x": 1410,
-      "y": 2504,
+      "x": 3760,
+      "y": 3410,
       "w": 390,
       "h": 844,
       "title": "Add",
       "is_interactive": true
     },
     "Phone-Tell.dc.html": {
-      "x": 1880,
-      "y": 2504,
+      "x": 5170,
+      "y": 3410,
       "w": 390,
       "h": 844,
       "title": "Tell Bower",
       "is_interactive": true
     },
     "Phone-Working.dc.html": {
-      "x": 2350,
-      "y": 2504,
+      "x": 5640,
+      "y": 3410,
       "w": 390,
       "h": 844,
       "title": "Tidying up (sheet)"
     },
     "Phone-Offline.dc.html": {
-      "x": 2820,
-      "y": 2504,
+      "x": 6110,
+      "y": 3410,
       "w": 390,
       "h": 844,
       "title": "Home · offline"
     },
     "Phone-Done.dc.html": {
-      "x": 3290,
-      "y": 2504,
+      "x": 6580,
+      "y": 3410,
       "w": 390,
       "h": 844,
       "title": "Home · done"
     },
     "Phone-Settings.dc.html": {
       "x": 0,
-      "y": 3728,
+      "y": 4520,
       "w": 390,
       "h": 844,
       "title": "Settings"
     },
     "Phone-Health.dc.html": {
       "x": 470,
-      "y": 3728,
+      "y": 4520,
       "w": 390,
       "h": 844,
       "title": "Health check",
       "is_interactive": true
     },
     "Phone-Privacy.dc.html": {
-      "x": 940,
-      "y": 3728,
+      "x": 1880,
+      "y": 4520,
       "w": 390,
       "h": 844,
       "title": "Privacy",
@@ -152,141 +176,299 @@
     },
     "Phone-NotFound.dc.html": {
       "x": 1410,
-      "y": 3728,
+      "y": 4520,
       "w": 390,
       "h": 844,
       "title": "Not found",
       "is_interactive": true
     },
     "Phone-Push.dc.html": {
-      "x": 1880,
-      "y": 3728,
+      "x": 940,
+      "y": 4520,
       "w": 390,
       "h": 844,
       "title": "Notifications",
       "is_interactive": true
     },
     "Desktop-Note.dc.html": {
-      "x": 2880,
-      "y": 0,
+      "x": 1520,
+      "y": 5810,
       "w": 1440,
       "h": 900,
       "title": "Desktop · reading a note",
       "is_interactive": true
     },
     "Desktop-Home.dc.html": {
-      "x": 4400,
-      "y": 0,
+      "x": 0,
+      "y": 5810,
       "w": 1440,
       "h": 900,
       "title": "Desktop · home",
       "is_interactive": true
     },
     "Desktop-Files.dc.html": {
-      "x": 5920,
-      "y": 0,
+      "x": 4560,
+      "y": 5810,
       "w": 1440,
       "h": 900,
       "title": "Desktop · Bower's files shown",
       "is_interactive": true
     },
     "Phone-Files.dc.html": {
-      "x": 3760,
-      "y": 2504,
+      "x": 940,
+      "y": 3410,
       "w": 390,
       "h": 844,
       "title": "Your notes (drawer)",
       "is_interactive": true
     },
     "Mascot.dc.html": {
-      "x": 0,
-      "y": 4952,
+      "x": 2880,
+      "y": 11960,
       "w": 1440,
       "h": 1180,
       "title": "Mascot · faces and twelve states"
     },
     "Brand.dc.html": {
       "x": 0,
-      "y": 0,
+      "y": 11960,
       "w": 1440,
       "h": 900,
       "title": "Brand sheet"
     },
     "Logo.dc.html": {
       "x": 1520,
-      "y": 0,
+      "y": 11960,
       "w": 1280,
       "h": 760,
       "title": "Logo: lockups, icon, favicon, one colour, clear space"
     },
-    "Readme.dc.html": {
+    "Phone-Folder.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Folder",
+      "is_interactive": true,
+      "x": 1880,
+      "y": 3410
+    },
+    "Phone-Note-Menu.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Note · more menu",
+      "is_interactive": true,
+      "x": 3290,
+      "y": 3410
+    },
+    "Phone-Pin-Sheet.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Drawer · hold a row to pin",
+      "is_interactive": true,
+      "x": 1410,
+      "y": 3410
+    },
+    "Phone-Home-Pins.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Home · editing pins",
+      "is_interactive": true,
+      "x": 470,
+      "y": 3410
+    },
+    "Desktop-Folder.dc.html": {
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · a folder, context menu open",
+      "is_interactive": true,
+      "x": 3040,
+      "y": 5810
+    },
+    "Tablet-Home.dc.html": {
+      "w": 768,
+      "h": 1024,
+      "title": "Tablet · home (768)",
+      "is_interactive": true,
+      "x": 2350,
+      "y": 4520
+    },
+    "Tablet-Note.dc.html": {
+      "w": 768,
+      "h": 1024,
+      "title": "Tablet · a note (768)",
+      "is_interactive": true,
+      "x": 3198,
+      "y": 4520
+    },
+    "Intro-1.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "What is Bower · 1 of 4",
+      "is_interactive": true,
       "x": 0,
-      "y": 6372,
+      "y": 2400
+    },
+    "Intro-2.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "What is Bower · 2 of 4",
+      "is_interactive": true,
+      "x": 470,
+      "y": 2400
+    },
+    "Intro-3.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "What is Bower · 3 of 4",
+      "is_interactive": true,
+      "x": 940,
+      "y": 2400
+    },
+    "Intro-4.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "What is Bower · 4 of 4",
+      "is_interactive": true,
+      "x": 1410,
+      "y": 2400
+    },
+    "Intro-InApp.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "What is Bower · from Settings",
+      "is_interactive": true,
+      "x": 1880,
+      "y": 2400
+    },
+    "Intro-Desktop.dc.html": {
       "w": 1280,
-      "h": 1700,
-      "title": "README: hero, why a bowerbird, how it works",
-      "expand": "fill"
-    }
-  },
-  "createdOnFiles": {
-    "at": "2026-09-27T12:00:00Z",
-    "v": 1
-  },
-  "designSystems": [],
-  "launch": {
-    "view": "canvas"
-  },
-  "notes": {
-    "t1": {
-      "x": 0,
-      "y": -260,
-      "text": "1 · Identidad, logo, escritorio",
-      "kind": "title1",
-      "w": 240,
-      "maxW": 7360
+      "h": 800,
+      "title": "What is Bower · desktop, 2 of 4",
+      "is_interactive": true,
+      "x": 7600,
+      "y": 5810
     },
-    "t2": {
-      "x": 0,
-      "y": 1040,
-      "text": "2 · Entrar por primera vez (Play desde Sign in)",
-      "kind": "title1",
-      "w": 240,
-      "maxW": 3680
+    "Phone-Add-Drive.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Add · from your Drive",
+      "is_interactive": true,
+      "x": 4230,
+      "y": 3410
     },
-    "t3": {
-      "x": 0,
-      "y": 2264,
-      "text": "3 · El día a día (Play desde Home)",
-      "kind": "title1",
-      "w": 240,
-      "maxW": 4150
+    "Phone-Drive-Picker.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Add · picking from your Drive",
+      "is_interactive": true,
+      "x": 4700,
+      "y": 3410
     },
-    "t4": {
-      "x": 0,
-      "y": 3488,
-      "text": "4 · Ajustes, salud y estados límite",
-      "kind": "title1",
-      "w": 240,
-      "maxW": 2270
+    "Onb-Drive.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "4 · Start with what you have",
+      "is_interactive": true,
+      "x": 4700,
+      "y": 2400
     },
-    "t5": {
-      "x": 0,
-      "y": 4712,
-      "text": "5 · La mascota",
-      "kind": "title1",
-      "w": 240,
-      "maxW": 1440
+    "Desktop-Add.dc.html": {
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Add, from your Drive",
+      "is_interactive": true,
+      "x": 6080,
+      "y": 5810
     },
-    "t6": {
+    "Site-Welcome.dc.html": {
+      "w": 390,
+      "h": 4700,
+      "title": "What is Bower, phone",
+      "expand": "fill",
       "x": 0,
-      "y": 6132,
-      "text": "6 · El README",
-      "kind": "title1",
-      "w": 240,
-      "maxW": 1280
+      "y": 6980
+    },
+    "Site-What-It-Is-Not.dc.html": {
+      "w": 390,
+      "h": 1860,
+      "title": "A window onto your own Drive",
+      "expand": "fill",
+      "x": 470,
+      "y": 6980
+    },
+    "Site-Filing.dc.html": {
+      "w": 390,
+      "h": 1640,
+      "title": "Where does it go",
+      "expand": "fill",
+      "x": 940,
+      "y": 6980
+    },
+    "Site-Dots.dc.html": {
+      "w": 390,
+      "h": 1560,
+      "title": "It joins the dots",
+      "expand": "fill",
+      "x": 1410,
+      "y": 6980
+    },
+    "Site-Project-Flat.dc.html": {
+      "w": 390,
+      "h": 2500,
+      "title": "P · A project: flat hunting",
+      "expand": "fill",
+      "x": 1880,
+      "y": 6980
+    },
+    "Site-Project-Job.dc.html": {
+      "w": 390,
+      "h": 2500,
+      "title": "P · A job hunt that talks to the flat hunt",
+      "expand": "fill",
+      "x": 2350,
+      "y": 6980
+    },
+    "Site-Area-Health.dc.html": {
+      "w": 390,
+      "h": 2500,
+      "title": "A · An area: health over time",
+      "expand": "fill",
+      "x": 2820,
+      "y": 6980
+    },
+    "Site-Resource-Reading.dc.html": {
+      "w": 390,
+      "h": 2500,
+      "title": "R · A resource: reading",
+      "expand": "fill",
+      "x": 3290,
+      "y": 6980
+    },
+    "Site-Archive-Trip.dc.html": {
+      "w": 390,
+      "h": 2500,
+      "title": "A · The archive: a finished trip",
+      "expand": "fill",
+      "x": 3760,
+      "y": 6980
+    },
+    "Site-What-It-Is-Not-Desktop.dc.html": {
+      "w": 1280,
+      "h": 1040,
+      "title": "A window onto your own Drive, desktop",
+      "x": 4230,
+      "y": 6980
+    },
+    "Site-Readme-Section.dc.html": {
+      "w": 900,
+      "h": 1640,
+      "title": "README: how it works, what it does, what it is not",
+      "x": 4400,
+      "y": 11960
     }
   },
   "order": [
+    "Audit.dc.html",
+    "Dev-Notes.dc.html",
     "Login.dc.html",
     "Not-Invited.dc.html",
     "Onb-Welcome.dc.html",
@@ -315,8 +497,92 @@
     "Mascot.dc.html",
     "Brand.dc.html",
     "Logo.dc.html",
-    "Readme.dc.html"
+    "Phone-Folder.dc.html",
+    "Phone-Note-Menu.dc.html",
+    "Phone-Pin-Sheet.dc.html",
+    "Phone-Home-Pins.dc.html",
+    "Desktop-Folder.dc.html",
+    "Tablet-Home.dc.html",
+    "Tablet-Note.dc.html",
+    "Intro-1.dc.html",
+    "Intro-2.dc.html",
+    "Intro-3.dc.html",
+    "Intro-4.dc.html",
+    "Intro-InApp.dc.html",
+    "Intro-Desktop.dc.html",
+    "Phone-Add-Drive.dc.html",
+    "Phone-Drive-Picker.dc.html",
+    "Onb-Drive.dc.html",
+    "Desktop-Add.dc.html",
+    "Site-Welcome.dc.html",
+    "Site-What-It-Is-Not.dc.html",
+    "Site-Filing.dc.html",
+    "Site-Dots.dc.html",
+    "Site-Project-Flat.dc.html",
+    "Site-Project-Job.dc.html",
+    "Site-Area-Health.dc.html",
+    "Site-Resource-Reading.dc.html",
+    "Site-Archive-Trip.dc.html",
+    "Site-What-It-Is-Not-Desktop.dc.html",
+    "Site-Readme-Section.dc.html"
   ],
-  "pages": [],
-  "title": "Bower Redesign"
+  "notes": {
+    "t0": {
+      "x": 0,
+      "y": -260,
+      "text": "0 · La auditoria y las notas de desarrollo",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 2640
+    },
+    "t1": {
+      "x": 0,
+      "y": 2140,
+      "text": "1 · Primera visita: Que es Bower en cuatro pantallas, y entrar (Play desde la 1 de 4)",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 6500
+    },
+    "t2": {
+      "x": 0,
+      "y": 3150,
+      "text": "2 · El dia a dia en el movil: barra, Pinned, carpeta, menu de la nota, Add desde tu Drive",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 6970
+    },
+    "t3": {
+      "x": 0,
+      "y": 4260,
+      "text": "3 · Ajustes, estados limite y la tablet (768)",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 4040
+    },
+    "t4": {
+      "x": 0,
+      "y": 5550,
+      "text": "4 · Escritorio: Pinned en la barra lateral, carpeta con menu contextual",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 6000
+    },
+    "t5": {
+      "x": 0,
+      "y": 6720,
+      "text": "5 · Que es Bower, que no es, y un caso por letra de PARA",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 6000
+    },
+    "t6": {
+      "x": 0,
+      "y": 11700,
+      "text": "6 · Marca, logo, mascota y el README",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 5200
+    }
+  },
+  "designSystems": []
 }
