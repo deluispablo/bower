@@ -69,7 +69,9 @@ export function recentNotes(
 /**
  * How many files are still waiting in the inbox: anything under `0-Inbox/`
  * or `Clippings/`, at any depth, except folders, files under a `Processed/`
- * folder, and folder notes (`_*.md`). Takes the raw file list (not the
+ * or `0-Inbox/Quarantine/` folder, and folder notes (`_*.md`). A quarantined
+ * file was already reported once, the run that flagged it (spec A.5; issue
+ * #264): it never becomes pending again. Takes the raw file list (not the
  * index), so it also counts files the index hides for other reasons.
  */
 export function pendingCount(files: DriveFile[]): number {
@@ -78,6 +80,7 @@ export function pendingCount(files: DriveFile[]): number {
     const segments = file.path.split('/');
     if (!INBOX_FOLDERS.has(segments[0] ?? '')) return false;
     if (segments.some((segment) => segment === 'Processed')) return false;
+    if (segments[0] === '0-Inbox' && segments[1] === 'Quarantine') return false;
     if (file.name.startsWith('_') && file.name.toLowerCase().endsWith('.md')) {
       return false;
     }
