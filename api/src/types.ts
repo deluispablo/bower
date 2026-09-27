@@ -24,6 +24,8 @@ export interface User {
   /** AES-GCM envelope from `crypto.ts`; never plaintext. */
   encApiKey?: string;
   needsReauth?: boolean;
+  /** ISO-8601; when the user finished or skipped the first-run tour. */
+  tourSeenAt?: string;
 }
 
 export type RunState = 'queued' | 'running' | 'done' | 'failed';

@@ -1,6 +1,6 @@
 /**
  * User-owned settings and account deletion: `PATCH /settings` (BYOK Claude
- * API key) and `DELETE /me`.
+ * API key, when the first-run tour was seen) and `DELETE /me`.
  *
  * Nothing here logs or returns an API key or a refresh token.
  */
@@ -34,6 +34,19 @@ function errorCode(err: unknown): string {
   return 'unknown';
 }
 
+/**
+ * Whether `value` is an ISO 8601 date-time exactly as
+ * `Date.prototype.toISOString()` writes it (UTC, milliseconds, `Z`): it must
+ * parse and survive the round trip unchanged, so `2026-02-30…`, a bare date
+ * or an offset other than `Z` are all refused.
+ */
+function isIsoDateTime(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const time = Date.parse(value);
+  if (Number.isNaN(time)) return false;
+  return new Date(time).toISOString() === value;
+}
+
 /** The settings and account routes as a Hono sub-app, mounted at `/` by `index.ts`. */
 export function createSettingsRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const fetchImpl: FetchLike =
@@ -56,23 +69,43 @@ export function createSettingsRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       throw new HttpError(400, 'bad_request', 'Body must be a JSON object');
     }
-    const { apiKey } = body as Record<string, unknown>;
+    const { apiKey, tourSeenAt } = body as Record<string, unknown>;
 
-    if (apiKey === null) {
-      delete user.encApiKey;
-      await putUser(env.BOWER_KV, user);
-    } else if (typeof apiKey === 'string' && apiKey.length > 0) {
-      const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
-      user.encApiKey = await encrypt(apiKey, key);
-      await putUser(env.BOWER_KV, user);
-    } else if (apiKey !== undefined) {
+    // Validate every field before anything is written.
+    if (
+      apiKey !== undefined &&
+      apiKey !== null &&
+      !(typeof apiKey === 'string' && apiKey.length > 0)
+    ) {
       throw new HttpError(
         400,
         'bad_request',
         'apiKey must be a non-empty string or null',
       );
     }
-    // apiKey === undefined: missing, no change.
+    if (tourSeenAt !== undefined && !isIsoDateTime(tourSeenAt)) {
+      throw new HttpError(
+        400,
+        'invalid_tour_seen_at',
+        'tourSeenAt must be an ISO 8601 date-time in UTC',
+      );
+    }
+
+    // Missing fields (undefined) leave the stored value untouched.
+    let changed = false;
+    if (apiKey === null) {
+      delete user.encApiKey;
+      changed = true;
+    } else if (typeof apiKey === 'string') {
+      const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+      user.encApiKey = await encrypt(apiKey, key);
+      changed = true;
+    }
+    if (typeof tourSeenAt === 'string') {
+      user.tourSeenAt = tourSeenAt;
+      changed = true;
+    }
+    if (changed) await putUser(env.BOWER_KV, user);
 
     return c.json({ hasApiKey: user.encApiKey !== undefined });
   });
