@@ -81,6 +81,17 @@ curl -X POST "https://api.example.com/admin/allow" \
 - [ ] **Wrong runner key.** `curl -H "Authorization: Bearer wrong-key" https://api.example.com/runner/vaults/USER_ID`. Expected: 401 `unauthorized`.
 - [ ] **Delete account.** Signed in as the test account, `curl -X DELETE -b "bower_session=<value>" -H "Origin: https://app.example.com" https://api.example.com/me`. Expected: 204. Look: `wrangler kv key list` (add `--local` for local) no longer lists `user:USER_ID` or `email:test-user@example.com`, any `run:`, `quota:`, `push:` or `drivetoken:` key for that user is gone, but the `Bower` folder is still in the test account's Drive, untouched — the vault is never deleted.
 
+## Demo mode
+
+`VITE_DEMO=1 pnpm -C app build` builds the app with no backend: a dynamic import in `app/src/api.ts` loads `app/src/demo/` (its own chunk, never in a real build), which puts an in-memory Worker client and Drive client behind the functions the app already calls. The notes are an invented person's, Alex's, from `app/src/demo/fixture.ts` (the rulebook, `Rules.md` and `About-Me.md` come from `vault-template/`); edits last until the page reloads. For a dev server, `VITE_DEMO=1 pnpm -C app dev`.
+
+- **Tidy up** plays a scripted run: queued for 1.5 s, then the three inbox items filed one by one, done at 8 s with an answer in `Answers/`.
+- **Tell Bower** answers the three example messages with scripted replies (the rule lands in `Rules.md`) and anything else with one generic answer, on the next Tidy up.
+- **Add** puts files in the inbox; the next Tidy up files them under `3-Resources/`.
+- **Settings** changes are kept in memory; deleting the account and turning on notifications answer with error code `demo`; signing out only clears the device.
+
+The same flows run in CI without a network: `app/test/demo-flows.test.ts` stubs `fetch` to fail on any call, and `app/test/demo-contract.test.ts` runs one set of assertions against the real clients (over a mocked `fetch`) and the demo ones, so the demo cannot drift from what the app expects. A production build must not contain the demo: `pnpm -C app build` lists no `demo-*.js` chunk and `check-size` stays where it was.
+
 ## Where to look
 
 - **Cloudflare `wrangler tail`** (`pnpm -C api exec wrangler tail`, or the dashboard for a deployed instance): what the Worker logs — request ids and `error.code` values, never a token, a refresh token or an email.

@@ -12,7 +12,7 @@
  * to be granted again).
  */
 
-import { apiFetch, ApiError } from './api.js';
+import { ApiError, getDriveToken, whenReady } from './api.js';
 
 export const DRIVE_BASE = 'https://www.googleapis.com';
 export const FOLDER_MIME = 'application/vnd.google-apps.folder';
@@ -85,8 +85,7 @@ export function getToken(options: GetTokenOptions = {}): Promise<DriveToken> {
   }
   if (pendingToken !== null) return pendingToken;
 
-  const path = fresh ? '/drive/token?fresh=1' : '/drive/token';
-  const request = apiFetch<DriveToken>(path).then(
+  const request = getDriveToken(fresh).then(
     (token) => {
       if (pendingToken === request) {
         cachedToken = token;
@@ -316,7 +315,7 @@ export interface ListOptions {
  * with at most `concurrency` folder listings in flight. Each entry carries
  * its `/`-joined path relative to `folderId`; the result is sorted by path.
  */
-export async function listVault(
+async function listVaultHttp(
   folderId: string,
   options: ListOptions = {},
 ): Promise<DriveFile[]> {
@@ -350,7 +349,7 @@ export async function listVault(
  * where `listVault`'s full recursive walk would be needlessly heavy, e.g.
  * checking names already in the inbox before an upload.
  */
-export async function listFolder(folderId: string): Promise<DriveFile[]> {
+async function listFolderHttp(folderId: string): Promise<DriveFile[]> {
   const children = await listChildren(folderId);
   return children.map((child) => {
     const name =
@@ -371,7 +370,7 @@ const SEARCH_PAGE_SIZE = '50';
  * `filterToIndex` in `search.ts`). One page (50 files) is enough for a
  * search box.
  */
-export async function searchFullText(query: string): Promise<DriveFile[]> {
+async function searchFullTextHttp(query: string): Promise<DriveFile[]> {
   const params = new URLSearchParams({
     q: `fullText contains '${escapeQuery(query)}' and trashed = false`,
     fields: SEARCH_FIELDS,
@@ -395,12 +394,12 @@ function mediaPath(id: string): string {
 }
 
 /** A file's content as text. */
-export async function getText(id: string): Promise<string> {
+async function getTextHttp(id: string): Promise<string> {
   return (await driveFetch(mediaPath(id))).text();
 }
 
 /** A file's content as a `Blob`. */
-export async function getBlob(id: string): Promise<Blob> {
+async function getBlobHttp(id: string): Promise<Blob> {
   return (await driveFetch(mediaPath(id))).blob();
 }
 
@@ -504,7 +503,7 @@ async function uploadResumable(
  * resumable upload in chunks above. `onProgress(sent, total)` is called
  * after each chunk (once, at the end, for a multipart upload).
  */
-export async function upload(
+async function uploadHttp(
   parentId: string,
   file: File,
   onProgress?: UploadProgress,
@@ -541,7 +540,7 @@ export interface CreateTextFileOptions {
 }
 
 /** Creates a Markdown file named `name` in `parentId`. */
-export function createTextFile(
+function createTextFileHttp(
   parentId: string,
   name: string,
   content: string,
@@ -565,7 +564,7 @@ export function createTextFile(
  * it first (#218). Never an instruction note: the copy's `bower` app
  * property is cleared (#255).
  */
-export async function copyIntoInbox(
+async function copyIntoInboxHttp(
   id: string,
   name: string,
   inboxId: string,
@@ -658,10 +657,8 @@ async function exportBlob(
   mimeType: string,
   fallbackMimeType?: string,
 ): Promise<{ blob: Blob; mimeType: string }> {
-  const path = (type: string): string =>
-    `/drive/v3/files/${encodeURIComponent(id)}/export?mimeType=${encodeURIComponent(type)}`;
   try {
-    return { blob: await (await driveFetch(path(mimeType))).blob(), mimeType };
+    return { blob: await exportFile(id, mimeType), mimeType };
   } catch (err) {
     const canFallBack =
       fallbackMimeType !== undefined &&
@@ -669,10 +666,16 @@ async function exportBlob(
       (err.status === 400 || err.status === 403);
     if (!canFallBack) throw err;
     return {
-      blob: await (await driveFetch(path(fallbackMimeType))).blob(),
+      blob: await exportFile(id, fallbackMimeType),
       mimeType: fallbackMimeType,
     };
   }
+}
+
+/** `files.export`: the bytes of Google file `id` converted to `mimeType`. */
+async function exportFileHttp(id: string, mimeType: string): Promise<Blob> {
+  const path = `/drive/v3/files/${encodeURIComponent(id)}/export?mimeType=${encodeURIComponent(mimeType)}`;
+  return (await driveFetch(path)).blob();
 }
 
 /**
@@ -719,7 +722,7 @@ export interface UpdateTextOptions {
  * non-2xx answer throws `DriveError`. Drive v3 documents no precondition
  * header for this call, so callers check freshness themselves.
  */
-export async function updateFileText(
+async function updateFileTextHttp(
   id: string,
   text: string,
   options: UpdateTextOptions = {},
@@ -741,7 +744,7 @@ export async function updateFileText(
  * caution as the agent's `rclone deletefile` (`ARCHITECTURE.md`). Used to
  * remove a folder note that pinning created and unpinning leaves empty.
  */
-export async function deleteFile(id: string): Promise<void> {
+async function deleteFileHttp(id: string): Promise<void> {
   await driveFetch(`/drive/v3/files/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -810,7 +813,7 @@ export interface AppendResult {
 /** A file's current `modifiedTime`, freshly read (no cache). Used to check a
  * write is not about to clobber another one, since Drive v3 documents no
  * precondition header for `files.update` (`updateFileText`). */
-export async function modifiedTimeOf(id: string): Promise<string> {
+async function modifiedTimeOfHttp(id: string): Promise<string> {
   const body = await readJson(
     await driveFetch(
       `/drive/v3/files/${encodeURIComponent(id)}?fields=modifiedTime`,
@@ -972,4 +975,157 @@ export async function saveNoteText(
     if (current !== options.baseModifiedTime) throw saveConflict(current);
   }
   return writeNote(target, text, () => saveConflict(null));
+}
+
+// --- Client ------------------------------------------------------------
+
+/**
+ * The Drive calls everything else in this module is built on, as one
+ * object. The exported functions below delegate to the current
+ * implementation: the real one (`httpDriveClient`, over `driveFetch`) by
+ * default, the in-memory one in a demo build (`VITE_DEMO=1`,
+ * `demo/index.ts`). Appending, saving an edit and adding from the Picker
+ * stay above, composed from these, so their checks run in the demo too.
+ */
+export interface DriveClient {
+  listVault(folderId: string, options?: ListOptions): Promise<DriveFile[]>;
+  listFolder(folderId: string): Promise<DriveFile[]>;
+  searchFullText(query: string): Promise<DriveFile[]>;
+  getText(id: string): Promise<string>;
+  getBlob(id: string): Promise<Blob>;
+  upload(
+    parentId: string,
+    file: File,
+    onProgress?: UploadProgress,
+    options?: UploadOptions,
+  ): Promise<DriveFile>;
+  createTextFile(
+    parentId: string,
+    name: string,
+    content: string,
+  ): Promise<DriveFile>;
+  copyIntoInbox(id: string, name: string, inboxId: string): Promise<DriveFile>;
+  exportFile(id: string, mimeType: string): Promise<Blob>;
+  updateFileText(
+    id: string,
+    text: string,
+    options?: UpdateTextOptions,
+  ): Promise<DriveFile>;
+  deleteFile(id: string): Promise<void>;
+  modifiedTimeOf(id: string): Promise<string>;
+}
+
+/** The real Drive client: Google's API, with the Worker's token. */
+export const httpDriveClient: DriveClient = {
+  listVault: listVaultHttp,
+  listFolder: listFolderHttp,
+  searchFullText: searchFullTextHttp,
+  getText: getTextHttp,
+  getBlob: getBlobHttp,
+  upload: uploadHttp,
+  createTextFile: createTextFileHttp,
+  copyIntoInbox: copyIntoInboxHttp,
+  exportFile: exportFileHttp,
+  updateFileText: updateFileTextHttp,
+  deleteFile: deleteFileHttp,
+  modifiedTimeOf: modifiedTimeOfHttp,
+};
+
+let drive: DriveClient = httpDriveClient;
+
+/** Swaps the Drive client. Only `demo/index.ts` and tests call it. */
+export function setDriveClient(client: DriveClient): void {
+  drive = client;
+}
+
+function withDrive<T>(call: (client: DriveClient) => Promise<T>): Promise<T> {
+  return whenReady(() => call(drive));
+}
+
+/**
+ * Every file and folder under `folderId` (not trashed), walking subfolders
+ * with at most `concurrency` folder listings in flight. Each entry carries
+ * its `/`-joined path relative to `folderId`; the result is sorted by path.
+ */
+export function listVault(
+  folderId: string,
+  options: ListOptions = {},
+): Promise<DriveFile[]> {
+  return withDrive((c) => c.listVault(folderId, options));
+}
+
+/** Direct children of `folderId` (not trashed), one level, no recursion. */
+export function listFolder(folderId: string): Promise<DriveFile[]> {
+  return withDrive((c) => c.listFolder(folderId));
+}
+
+/** Files anywhere in the user's Drive whose text matches `query`; see `searchFullTextHttp`. */
+export function searchFullText(query: string): Promise<DriveFile[]> {
+  return withDrive((c) => c.searchFullText(query));
+}
+
+/** A file's content as text. */
+export function getText(id: string): Promise<string> {
+  return withDrive((c) => c.getText(id));
+}
+
+/** A file's content as a `Blob`. */
+export function getBlob(id: string): Promise<Blob> {
+  return withDrive((c) => c.getBlob(id));
+}
+
+/**
+ * Uploads `file` into `parentId`: one multipart request up to 5 MB, a
+ * resumable upload in chunks above. `onProgress(sent, total)` is called
+ * after each chunk (once, at the end, for a multipart upload).
+ */
+export function upload(
+  parentId: string,
+  file: File,
+  onProgress?: UploadProgress,
+  options: UploadOptions = {},
+): Promise<DriveFile> {
+  return withDrive((c) => c.upload(parentId, file, onProgress, options));
+}
+
+/** Creates a Markdown file named `name` in `parentId`. */
+export function createTextFile(
+  parentId: string,
+  name: string,
+  content: string,
+): Promise<DriveFile> {
+  return withDrive((c) => c.createTextFile(parentId, name, content));
+}
+
+/** Copies Drive file `id` into the inbox as `name`; see `copyIntoInboxHttp`. */
+export function copyIntoInbox(
+  id: string,
+  name: string,
+  inboxId: string,
+): Promise<DriveFile> {
+  return withDrive((c) => c.copyIntoInbox(id, name, inboxId));
+}
+
+/** `files.export`: Google file `id` converted to `mimeType`. */
+export function exportFile(id: string, mimeType: string): Promise<Blob> {
+  return withDrive((c) => c.exportFile(id, mimeType));
+}
+
+/** Replaces a file's content with `text`; see `updateFileTextHttp`. */
+export function updateFileText(
+  id: string,
+  text: string,
+  options: UpdateTextOptions = {},
+): Promise<DriveFile> {
+  return withDrive((c) => c.updateFileText(id, text, options));
+}
+
+/** Moves a file to Drive's Trash; see `deleteFileHttp`. */
+export function deleteFile(id: string): Promise<void> {
+  return withDrive((c) => c.deleteFile(id));
+}
+
+/** A file's current `modifiedTime`, freshly read; see `modifiedTimeOfHttp`. */
+export function modifiedTimeOf(id: string): Promise<string> {
+  return withDrive((c) => c.modifiedTimeOf(id));
 }
