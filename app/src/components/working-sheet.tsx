@@ -129,7 +129,7 @@ export function WorkingSheet({
       : undefined;
 
   return (
-    <div class="working-sheet" role="dialog" aria-label="Processing status">
+    <div class="working-sheet" role="dialog" aria-label="Tidying up status">
       <button
         type="button"
         class="working-sheet-close"

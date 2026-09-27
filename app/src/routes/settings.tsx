@@ -326,7 +326,7 @@ export function Settings() {
       <ApiKeySection me={me} />
 
       <div class="settings-section">
-        <h2>Processing</h2>
+        <h2>Tidying up</h2>
         <label class="settings-toggle">
           <input
             type="checkbox"
@@ -337,7 +337,7 @@ export function Settings() {
               setPref('autoProcessOnAdd', checked);
             }}
           />
-          Process automatically after adding
+          Tidy up right after adding
         </label>
       </div>
 

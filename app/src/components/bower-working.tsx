@@ -47,8 +47,8 @@ export const NEST_DEPTH = 22;
 export const INDETERMINATE_FILL = 0.5;
 
 const LABELS: Record<WorkingState, string> = {
-  queued: 'Queued…',
-  running: 'Working…',
+  queued: 'Tidying up…',
+  running: 'Tidying up…',
   done: 'Done',
   failed: 'Something went wrong',
 };
