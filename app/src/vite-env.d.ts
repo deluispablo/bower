@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_APP_VERSION?: string;
   /** Developer API key for the Google Picker (#53). Public by design. */
   readonly VITE_GOOGLE_API_KEY?: string;
+  /** `'1'` builds the demo: no backend, Alex's sample notes (`src/demo/`). */
+  readonly VITE_DEMO?: string;
 }
 
 interface ImportMeta {

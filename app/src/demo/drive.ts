@@ -1,0 +1,156 @@
+/**
+ * The demo's Drive client (#192): the `DriveClient` surface of `drive.ts`
+ * over the in-memory folder (`vault.ts`). Same answers as Drive where the
+ * app relies on them: paths relative to the listed folder, a fresh
+ * `modifiedTime` on every write (so the edit and append conflict checks in
+ * `drive.ts` run for real), `DriveError(404)` for an unknown id. Every call
+ * first lets a run in flight catch up (`DemoServer.advance`), so a listing
+ * taken mid-run shows the items filed so far.
+ */
+
+import { DriveError, FOLDER_MIME } from '../drive.js';
+import type { DriveClient, DriveFile } from '../drive.js';
+import { reply } from './api.js';
+import type { DemoServer } from './server.js';
+import type { Entry } from './vault.js';
+
+function notFound(): DriveError {
+  return new DriveError(404, 'File not found.');
+}
+
+export function createDemoDrive(server: DemoServer): DriveClient {
+  const { vault } = server;
+
+  const entry = (id: string): Entry => {
+    server.advance();
+    const found = vault.get(id);
+    if (found === undefined) throw notFound();
+    return found;
+  };
+
+  const file = (id: string): Entry => {
+    const found = entry(id);
+    if (found.mimeType === FOLDER_MIME) {
+      throw new DriveError(400, 'That is a folder.');
+    }
+    return found;
+  };
+
+  const folder = (id: string): Entry => {
+    const found = entry(id);
+    if (found.mimeType !== FOLDER_MIME) throw notFound();
+    return found;
+  };
+
+  const create = (
+    parentId: string,
+    name: string,
+    mimeType: string,
+    content: string | Blob,
+  ): DriveFile => {
+    folder(parentId);
+    const created = vault.add({
+      name,
+      mimeType,
+      parentId,
+      modifiedTime: vault.stamp(),
+      content,
+    });
+    return vault.toFile(created, name);
+  };
+
+  const blobOf = (found: Entry): Blob => {
+    const content = found.content ?? '';
+    return typeof content === 'string'
+      ? new Blob([content], { type: found.mimeType })
+      : content;
+  };
+
+  return {
+    listVault: (folderId) =>
+      reply(() => {
+        folder(folderId);
+        const files: DriveFile[] = [];
+        const walk = (id: string, prefix: string): void => {
+          for (const child of vault.children(id)) {
+            const path = prefix === '' ? child.name : `${prefix}/${child.name}`;
+            files.push(vault.toFile(child, path));
+            if (child.mimeType === FOLDER_MIME) walk(child.id, path);
+          }
+        };
+        walk(folderId, '');
+        return files.sort((a, b) =>
+          a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+        );
+      }),
+
+    listFolder: (folderId) =>
+      reply(() => {
+        folder(folderId);
+        return vault.children(folderId).map((c) => vault.toFile(c, c.name));
+      }),
+
+    searchFullText: async (query) => {
+      server.advance();
+      const needle = query.trim().toLowerCase();
+      const hits: DriveFile[] = [];
+      if (needle === '') return hits;
+      for (const found of vault.all()) {
+        if (found.mimeType === FOLDER_MIME) continue;
+        const text = (await vault.text(found.id)) ?? '';
+        if (`${found.name}\n${text}`.toLowerCase().includes(needle)) {
+          hits.push(vault.toFile(found, found.name));
+        }
+      }
+      return hits.slice(0, 50);
+    },
+
+    getText: async (id) => (await vault.text(file(id).id)) ?? '',
+
+    getBlob: (id) => reply(() => blobOf(file(id))),
+
+    upload: (parentId, upload, onProgress) =>
+      reply(() => {
+        const created = create(
+          parentId,
+          upload.name,
+          upload.type || 'application/octet-stream',
+          upload,
+        );
+        onProgress?.(upload.size, upload.size);
+        return created;
+      }),
+
+    createTextFile: (parentId, name, content) =>
+      reply(() => create(parentId, name, 'text/markdown', content)),
+
+    copyIntoInbox: (id, name, inboxId) =>
+      reply(() => {
+        const original = file(id);
+        return create(inboxId, name, original.mimeType, original.content ?? '');
+      }),
+
+    exportFile: (id) =>
+      reply(() => {
+        // The demo folder holds no Google Docs, Sheets or Slides to export.
+        file(id);
+        throw new DriveError(400, 'This file cannot be exported.');
+      }),
+
+    updateFileText: (id, text) =>
+      reply(() => {
+        const found = file(id);
+        found.content = text;
+        found.modifiedTime = vault.stamp();
+        return vault.toFile(found, found.name);
+      }),
+
+    deleteFile: (id) =>
+      reply(() => {
+        entry(id);
+        vault.remove(id);
+      }),
+
+    modifiedTimeOf: (id) => reply(() => entry(id).modifiedTime),
+  };
+}
