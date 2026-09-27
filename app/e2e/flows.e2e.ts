@@ -91,6 +91,18 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'note');
 });
 
+test('a missing note shows Not found', async ({ page }, testInfo) => {
+  await openHome(page);
+  await page.goto('/note/does-not-exist');
+
+  await expect(
+    page.getByRole('heading', { name: /can.t find that note/ }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Search for it' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Go home' })).toBeVisible();
+  await shot(page, testInfo, 'note-not-found');
+});
+
 test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
