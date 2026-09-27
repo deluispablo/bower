@@ -11,13 +11,17 @@
  * prop), so the switcher stays one tap away rather than replacing the
  * drawer.
  *
- * Notes: the same debounced Drive full-text search as the old search box
+ * Notes: the vault index's own names and paths are matched synchronously,
+ * before any network round trip (`switcher.ts#rankNotes`, #308); the same
+ * debounced Drive full-text search as the old search box
  * (`search.ts#filterToIndex`, the 2-character minimum, recent searches when
- * the field is empty), now also excluding Bower's own files
+ * the field is empty) fills in behind it, both excluding Bower's own files
  * (`vault-index.ts#isAppFile`, via `filterToIndex`'s `showAppFiles` flag).
- * Commands (`switcher.ts#commandsFor`) are always there, query or not.
- * `mergeResults` orders and highlights the match; the highlighted span
- * itself is drawn here — the pure module only returns offsets.
+ * Commands (`switcher.ts#commandsFor`) are always there, query or not, and
+ * always last. `rankNotes` ranks and dedupes the two note sources;
+ * `mergeResults` appends the commands and highlights the match — the
+ * highlighted span itself is drawn here, the pure module only returns
+ * offsets.
  *
  * Mounted once in `layout.tsx`; only actually rendered while open, so every
  * open starts from a clean field. Focus (trap, Escape, return-to-opener) is
@@ -53,7 +57,12 @@ import type {
   SwitcherEntry,
   SwitcherNote,
 } from '../switcher.js';
-import { commandsFor, folderPath, mergeResults } from '../switcher.js';
+import {
+  commandsFor,
+  folderPath,
+  mergeResults,
+  rankNotes,
+} from '../switcher.js';
 import { effectiveTheme, setTheme } from '../theme.js';
 import { useVault } from '../vault-store.js';
 import { Bird } from './bird.js';
@@ -289,9 +298,22 @@ function SwitcherPanel({
 
   const trimmed = query.trim();
   const showRecent = trimmed === '' && recent.length > 0;
+
+  // Index names and paths are matched synchronously, from the vault index
+  // already loaded — no Drive call, so this never waits on `notes` (the
+  // debounced full-text search's own state) to show something (#308).
+  const rankedNotes = useMemo(() => {
+    if (trimmed.length < MIN_QUERY_LENGTH) return [];
+    const indexNotes =
+      index !== null
+        ? filterToIndex(index.notes, index, getPref('showAppFiles'))
+        : [];
+    return rankNotes(indexNotes, notes, trimmed);
+  }, [index, notes, trimmed]);
+
   const entries = useMemo(
-    () => mergeResults(notes, commands, trimmed),
-    [notes, commands, trimmed],
+    () => mergeResults(rankedNotes, commands, trimmed),
+    [rankedNotes, commands, trimmed],
   );
 
   // The highlight starts (and resets) on the list's first row whenever the
@@ -363,9 +385,9 @@ function SwitcherPanel({
   );
 
   const resultsMessage =
-    notes.length === 0
+    rankedNotes.length === 0
       ? `No notes contain ${trimmed}.`
-      : `${notes.length} note${notes.length === 1 ? '' : 's'}.`;
+      : `${rankedNotes.length} note${rankedNotes.length === 1 ? '' : 's'}.`;
 
   return (
     <>

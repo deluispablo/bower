@@ -1,6 +1,8 @@
 /**
  * Pure helpers for the quick switcher (`components/switcher.tsx`, #142):
- * ordering and highlighting notes and commands into one list, and building
+ * ranking the vault index's own name/path matches against Drive's
+ * full-text results (`rankNotes`, #308), ordering and highlighting the
+ * ranked notes and commands into one list (`mergeResults`), and building
  * the command list itself. No Preact, no DOM: everything here takes plain
  * data and returns plain data, so it is unit-tested directly
  * (`switcher.test.ts`).
@@ -8,8 +10,8 @@
  * Debounce, the 2-character minimum and recent searches stay in the
  * component (moved over from `search.tsx` unchanged); the Drive full-text
  * search and its vault/app-file filtering stay in `search.ts`
- * (`filterToIndex`) — this module only merges and highlights whatever the
- * component already narrowed down.
+ * (`filterToIndex`) — this module only ranks, merges and highlights
+ * whatever the component already narrowed down.
  */
 
 import type { DriveFile } from './drive.js';
@@ -61,6 +63,55 @@ function matchSpan(text: string, query: string): HighlightSpan | null {
   const at = text.toLowerCase().indexOf(query.toLowerCase());
   if (at === -1) return null;
   return { start: at, end: at + query.length };
+}
+
+/**
+ * `indexNotes` (every note already in the vault index, filtered to the
+ * vault and to the `showAppFiles` preference, same as the tree) ranked and
+ * merged with `textNotes` (Drive's full-text search, already narrowed to
+ * the vault by `search.ts#filterToIndex`) into one note list, synchronously
+ * — no Drive call needed for the ranking itself (#308):
+ *
+ * 1. A name-prefix match: `query` is a case-insensitive prefix of the
+ *    file's name.
+ * 2. A path match: not a name-prefix match, but `query` occurs somewhere in
+ *    the file's path — which also covers a fragment matched mid-name,
+ *    since a file's path always ends with its name.
+ * 3. A full-text match: found only by Drive's full-text search, not
+ *    locally in the index at all.
+ *
+ * A note in both `indexNotes` and `textNotes` appears once, ranked by 1 or
+ * 2 above and keeping `textNotes`' snippet. Blank `query` returns nothing
+ * (the switcher shows recent searches instead).
+ */
+export function rankNotes(
+  indexNotes: DriveFile[],
+  textNotes: SwitcherNote[],
+  query: string,
+): SwitcherNote[] {
+  const trimmed = query.trim().toLowerCase();
+  if (trimmed === '') return [];
+
+  const snippetById = new Map(
+    textNotes.map(({ file, snippet }) => [file.id, snippet]),
+  );
+  const localMatches = indexNotes.filter((file) =>
+    file.path.toLowerCase().includes(trimmed),
+  );
+  const namePrefix = localMatches.filter((file) =>
+    file.name.toLowerCase().startsWith(trimmed),
+  );
+  const pathOnly = localMatches.filter(
+    (file) => !file.name.toLowerCase().startsWith(trimmed),
+  );
+  const localIds = new Set(localMatches.map((file) => file.id));
+  const textOnly = textNotes.filter(({ file }) => !localIds.has(file.id));
+
+  const toEntry = (file: DriveFile): SwitcherNote => ({
+    file,
+    snippet: snippetById.get(file.id) ?? null,
+  });
+  return [...namePrefix.map(toEntry), ...pathOnly.map(toEntry), ...textOnly];
 }
 
 /**
