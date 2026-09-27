@@ -10,12 +10,14 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p .",
     "test": "pnpm exec vitest run --passWithNoTests",
-    "size": "node scripts/check-size.mjs"
+    "size": "node scripts/check-size.mjs",
+    "e2e": "playwright test",
+    "e2e:shots": "cross-env BOWER_README_SHOTS=1 playwright test --project=desktop"
   },
   "dependencies": {
     "dompurify": "^3.4.16",
-    "marked": "^18.0.14",
     "idb-keyval": "^6.3.0",
+    "marked": "^18.0.14",
     "preact": "^10.29.8",
     "preact-iso": "^2.12.2",
     "workbox-expiration": "^7.4.1",
@@ -25,6 +27,7 @@
     "workbox-window": "^7.4.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@preact/preset-vite": "^2.10.6",
     "cross-env": "^7.0.3",
     "jsdom": "^30.1.1",

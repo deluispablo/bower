@@ -20,3 +20,9 @@ Thumbs.db
 api/wrangler.local.toml
 api/.prod.secrets
 __pycache__/
+
+# Playwright end-to-end output (app/playwright.config.ts): results, traces
+# and the per-run screenshots uploaded as CI artifacts
+app/e2e/results/
+app/e2e/screenshots/
+playwright-report/
