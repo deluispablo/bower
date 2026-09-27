@@ -35,7 +35,14 @@ function mount(
   onEdit = vi.fn(),
   pinned = false,
   onTogglePin = vi.fn(),
-): { onEdit: () => void; onTogglePin: () => void; onClose: () => void } {
+  canAppend = true,
+  onAddParagraph = vi.fn(),
+): {
+  onEdit: () => void;
+  onTogglePin: () => void;
+  onAddParagraph: () => void;
+  onClose: () => void;
+} {
   const onClose = vi.fn();
 
   function Harness() {
@@ -45,8 +52,10 @@ function mount(
       file: NOTE,
       noteName: 'Shopping list',
       canEdit,
+      canAppend,
       pinned,
       onTogglePin,
+      onAddParagraph,
       onEdit,
       onClose: () => {
         onClose();
@@ -63,7 +72,7 @@ function mount(
   void act(() => {
     render(h(Harness, {}), root);
   });
-  return { onEdit, onTogglePin, onClose };
+  return { onEdit, onTogglePin, onAddParagraph, onClose };
 }
 
 function rows(): HTMLElement[] {
@@ -100,24 +109,40 @@ afterEach(() => {
 });
 
 describe('NoteMenu', () => {
-  it('lists six rows for a normal note, Pin first', () => {
+  it('lists seven rows for a normal note, Pin first', () => {
     mount(true);
-    expect(rows()).toHaveLength(6);
+    expect(rows()).toHaveLength(7);
     expect(rowByText('Pin to Home')).toBeDefined();
     expect(rowByText('Ask Bower about this note')).toBeDefined();
     expect(rowByText('This was misfiled')).toBeDefined();
     expect(rowByText('Open in Drive')).toBeDefined();
     expect(rowByText('Copy link')).toBeDefined();
+    expect(rowByText('Add a paragraph…')).toBeDefined();
     expect(rowByText('Edit the text')).toBeDefined();
     expect(rows()[0]?.textContent).toContain('Pin to Home');
   });
 
-  it('lists five rows, Edit left out, for a protected note', () => {
+  it('lists six rows, Edit left out, for a protected note', () => {
     mount(false);
-    expect(rows()).toHaveLength(5);
+    expect(rows()).toHaveLength(6);
     expect(rows().some((r) => r.textContent?.includes('Edit the text'))).toBe(
       false,
     );
+  });
+
+  it('leaves out Add a paragraph when the note cannot be appended to', () => {
+    mount(true, vi.fn(), false, vi.fn(), false);
+    expect(rows()).toHaveLength(6);
+    expect(rows().some((r) => r.textContent?.includes('Add a paragraph'))).toBe(
+      false,
+    );
+  });
+
+  it('closes and calls onAddParagraph when Add a paragraph is activated', () => {
+    const { onAddParagraph, onClose } = mount(true);
+    click(rowByText('Add a paragraph…'));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onAddParagraph).toHaveBeenCalledOnce();
   });
 
   it('says Unpin from Home when the note is already pinned', () => {

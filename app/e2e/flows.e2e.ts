@@ -91,6 +91,18 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'note');
 });
 
+test('a missing note shows Not found', async ({ page }, testInfo) => {
+  await openHome(page);
+  await page.goto('/note/does-not-exist');
+
+  await expect(
+    page.getByRole('heading', { name: /can.t find that note/ }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Search for it' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Go home' })).toBeVisible();
+  await shot(page, testInfo, 'note-not-found');
+});
+
 test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
@@ -215,4 +227,42 @@ test('Settings switches the theme to dark, and it sticks', async ({
   await expect(page.getByRole('radio', { name: 'Dark' })).toBeChecked();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await shot(page, testInfo, 'settings');
+});
+
+test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await navigate(page, /^Settings$/);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+
+  // Account · Tidying up · Look · Bower · Advanced, in that order (scoped
+  // to the settings section: the desktop sidebar has its own h2s).
+  const headings = await page
+    .locator('.settings')
+    .getByRole('heading', { level: 2 })
+    .allTextContents();
+  expect(headings).toEqual(['Tidying up', 'Look', 'Bower', 'Advanced']);
+
+  // The web-lookup row is present but disabled until #374 lands.
+  const webLookup = page
+    .locator('.settings')
+    .getByRole('switch', { name: 'Let Bower look things up on the web' });
+  await expect(webLookup).toBeVisible();
+  await expect(webLookup).toBeDisabled();
+  await expect(
+    page.locator('.settings').getByText('Coming soon.'),
+  ).toBeVisible();
+
+  // Sign out is a plain button, apart from Sign out everywhere; in the
+  // demo build, Sign out everywhere, the own API key and Delete each show
+  // the not-in-the-demo sentence instead of a working control. Scoped to
+  // the settings section: the desktop sidebar has its own Sign out button.
+  const settings = page.locator('.settings');
+  await expect(
+    settings.getByRole('button', { name: 'Sign out', exact: true }),
+  ).toBeVisible();
+  await expect(
+    settings.getByText('Not in the demo: run your own Bower to use this.'),
+  ).toHaveCount(3);
 });

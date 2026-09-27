@@ -322,6 +322,52 @@ describe('renderNote', () => {
     expect(note.tags).toEqual([]);
   });
 
+  describe('drops a first heading equal to the title (issue #307)', () => {
+    it('drops it when the body opens with `# <title>`', () => {
+      const note = renderNote('# Garden\n\nPlan in [[Garden Plan]].', index, {
+        title: 'Garden',
+      });
+      const root = dom(note.html);
+      expect(root.querySelector('h1')).toBeNull();
+      expect(note.html).toContain('Plan in');
+    });
+
+    it('matches case-insensitively and ignores emphasis markers', () => {
+      const note = renderNote('# **garden**\n\nBody.', index, {
+        title: 'Garden',
+      });
+      expect(dom(note.html).querySelector('h1')).toBeNull();
+    });
+
+    it('leaves the heading when no title is given', () => {
+      const note = renderNote('# Garden\n\nBody.', index);
+      expect(dom(note.html).querySelector('h1')?.textContent).toBe('Garden');
+    });
+
+    it('leaves the heading when its text does not match the title', () => {
+      const note = renderNote('# Garden\n\nBody.', index, {
+        title: 'Seed List',
+      });
+      expect(dom(note.html).querySelector('h1')?.textContent).toBe('Garden');
+    });
+
+    it('leaves a matching heading alone when it is not the first block', () => {
+      const note = renderNote('Intro.\n\n# Garden\n\nBody.', index, {
+        title: 'Garden',
+      });
+      expect(dom(note.html).querySelector('h1')?.textContent).toBe('Garden');
+    });
+
+    it('only drops the very first heading, keeping later ones', () => {
+      const note = renderNote('# Garden\n\n## Garden\n\nBody.', index, {
+        title: 'Garden',
+      });
+      const root = dom(note.html);
+      expect(root.querySelector('h1')).toBeNull();
+      expect(root.querySelector('h2')?.textContent).toBe('Garden');
+    });
+  });
+
   it('sanitizes stand-alone HTML with the same allowlist', () => {
     expect(
       sanitizeHtml('<b onmouseover="x()">ok</b><script>x()</script>'),
