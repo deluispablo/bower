@@ -11,7 +11,9 @@ import {
 } from '../src/components/shell-slots.js';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
-import { usesShell } from '../src/shell-routes.js';
+import { BackLink } from '../src/components/back-link.js';
+import { bowerUrlFor } from '../src/routes/tell-redirect.js';
+import { helpStepFor, isInnerScreen, usesShell } from '../src/shell-routes.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 const location = { path: '/', route: vi.fn() };
@@ -67,7 +69,7 @@ vi.mock('../src/cache.js', () => ({
   loadNote: () => Promise.resolve(undefined),
 }));
 
-const { Layout } = await import('../src/components/layout.js');
+const { Layout, avatarInitial } = await import('../src/components/layout.js');
 
 let root: HTMLDivElement;
 
@@ -119,22 +121,28 @@ afterEach(() => {
 });
 
 describe('Layout', () => {
-  it('renders the four bottom nav links, the current one marked, no Health', () => {
+  it('renders the four tabs, the current one marked, no Health', () => {
     location.path = '/add';
     mount();
-    const links = Array.from(
-      root.querySelectorAll<HTMLAnchorElement>('.bottom-nav a'),
-    );
+    const nav = query('nav.bottom-nav');
+    expect(nav.getAttribute('aria-label')).toBe('Primary');
+    const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>('a'));
     expect(links.map((a) => a.textContent)).toEqual([
       'Home',
+      'Notes',
       'Add',
-      'Tell',
-      'Settings',
+      'Bower',
+    ]);
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '/',
+      '/notes',
+      '/add',
+      '/bower',
     ]);
     expect(links.map((a) => a.getAttribute('aria-current'))).toEqual([
       null,
-      'page',
       null,
+      'page',
       null,
     ]);
     for (const link of links) {
@@ -149,17 +157,76 @@ describe('Layout', () => {
     expect(pills[0]?.textContent).toBe('Tidy up (1)');
   });
 
-  it('renders the pill after the title, menu button first (spec §14)', () => {
+  it('orders the bar: folder menu, title, pill, "?", avatar (#318)', () => {
     mount();
     const bar = query('.topbar');
     const order = Array.from(bar.children).map((el) => el.className);
     const menuIndex = order.findIndex((c) => c.includes('menu-button'));
-    const titleIndex = order.findIndex((c) => c.includes('topbar-brand'));
+    const titleIndex = order.findIndex((c) => c.includes('topbar-crumb'));
     const pillIndex = order.findIndex((c) => c.includes('topbar-pill'));
+    const helpIndex = order.findIndex((c) => c.includes('topbar-help'));
     expect(menuIndex).toBe(0);
     expect(titleIndex).toBeGreaterThan(menuIndex);
     expect(pillIndex).toBeGreaterThan(titleIndex);
-    expect(pillIndex).toBe(order.length - 1);
+    expect(helpIndex).toBeGreaterThan(pillIndex);
+    expect(order[order.length - 1]).toBe('topbar-avatar');
+
+    expect(query('.menu-button').getAttribute('aria-label')).toBe(
+      'Your folders',
+    );
+    expect(query('.topbar-help').getAttribute('aria-label')).toBe(
+      'About this screen',
+    );
+    const avatar = query<HTMLAnchorElement>('.topbar-avatar');
+    expect(avatar.getAttribute('href')).toBe('/settings');
+    expect(avatar.getAttribute('aria-label')).toBe('Settings');
+    expect(avatar.textContent).toBe('Y');
+  });
+
+  it('shows the wordmark as text, and never the bird, in the bar', () => {
+    mount();
+    const title = query('.topbar .topbar-title');
+    expect(title.textContent).toBe('Bower');
+    expect(title.querySelector('svg')).toBeNull();
+    expect(root.querySelector('.topbar .bird')).toBeNull();
+  });
+
+  it('shows Back instead of the folder menu on an inner screen', () => {
+    location.path = '/health';
+    mount();
+    expect(root.querySelector('.topbar .menu-button')).toBeNull();
+    const back = query<HTMLAnchorElement>('.topbar .topbar-back');
+    expect(back.getAttribute('aria-label')).toBe('Back to Home');
+    expect(back.getAttribute('href')).toBe('/');
+  });
+
+  it('shows the Back a screen gives the bar, in place of the default', () => {
+    location.path = '/note/id-1';
+    const backLink = h(BackLink, { href: '/folder/2-Areas', label: 'Areas' });
+    function FillBack() {
+      useShellSlot('back', backLink);
+      return null;
+    }
+    root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(
+        h(ShellSlotsProvider, null, h(Layout, null, h(FillBack, null))),
+        root,
+      );
+    });
+    const back = query<HTMLAnchorElement>('.topbar .topbar-back');
+    expect(back.getAttribute('aria-label')).toBe('Back to Areas');
+    expect(back.getAttribute('href')).toBe('/folder/2-Areas');
+  });
+
+  it('opens the tour at the step for the tab on "?"', () => {
+    location.path = '/bower';
+    mount();
+    click(query('.topbar-help'));
+    const dialog = query('[role="dialog"]');
+    expect(dialog.textContent).toContain('Tell Bower');
+    expect(dialog.textContent).not.toContain('Drop anything here.');
   });
 
   it('shows the explorer as a desktop landmark, not a dialog', () => {
@@ -170,6 +237,17 @@ describe('Layout', () => {
     expect(sidebar.textContent).toContain('you@example.com');
     expect(sidebar.querySelector('[role="tree"]')).not.toBeNull();
     expect(root.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('keeps Settings as a desktop sidebar row, not in the drawer', () => {
+    mount();
+    expect(
+      query('nav[aria-label="Your notes"] a[href="/settings"]').textContent,
+    ).toBe('Settings');
+    openDrawer();
+    expect(
+      root.querySelector('[role="dialog"] a[href="/settings"]'),
+    ).toBeNull();
   });
 
   it('opens the drawer as a modal dialog and closes it on Escape', () => {
@@ -262,8 +340,62 @@ describe('usesShell', () => {
   });
 
   it('is true for every other route, so those keep the bottom nav', () => {
-    for (const path of ['/', '/add', '/tell', '/settings', '/note/id-1']) {
+    for (const path of [
+      '/',
+      '/notes',
+      '/add',
+      '/bower',
+      '/tell',
+      '/settings',
+      '/note/id-1',
+    ]) {
       expect(usesShell(path)).toBe(true);
     }
+  });
+});
+
+describe('bowerUrlFor', () => {
+  it('sends /tell to /bower, keeping the query string', () => {
+    expect(bowerUrlFor({})).toBe('/bower');
+    expect(bowerUrlFor({ text: '[[Shopping list]] ' })).toBe(
+      '/bower?text=%5B%5BShopping+list%5D%5D+',
+    );
+  });
+});
+
+describe('isInnerScreen', () => {
+  it('is false for the four tabs and the bare screens', () => {
+    for (const path of ['/', '/notes', '/add', '/bower', '/login']) {
+      expect(isInnerScreen(path)).toBe(false);
+    }
+  });
+
+  it('is true for a note, a folder, Health, Settings and Not found', () => {
+    for (const path of [
+      '/note/id-1',
+      '/folder/2-Areas',
+      '/health',
+      '/settings',
+      '/no-such-page',
+    ]) {
+      expect(isInnerScreen(path)).toBe(true);
+    }
+  });
+});
+
+describe('helpStepFor', () => {
+  it('points "?" at the step for the tab on screen', () => {
+    expect(helpStepFor('/add')).toBe('add');
+    expect(helpStepFor('/bower')).toBe('tell');
+    expect(helpStepFor('/')).toBeUndefined();
+    expect(helpStepFor('/notes')).toBeUndefined();
+  });
+});
+
+describe('avatarInitial', () => {
+  it("is the email's first letter, upper case, or ? without one", () => {
+    expect(avatarInitial('you@example.com')).toBe('Y');
+    expect(avatarInitial(undefined)).toBe('?');
+    expect(avatarInitial('')).toBe('?');
   });
 });

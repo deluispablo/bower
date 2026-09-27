@@ -1,3 +1,5 @@
+import type { TourTarget } from './components/tour.js';
+
 /**
  * Which routes render inside the shell (`components/layout.tsx`) and which
  * render bare (spec §14): sign-in, Not invited, Privacy, Terms, the
@@ -17,6 +19,32 @@ const BARE_PATHS = new Set([
   '/onboarding',
   '/welcome',
 ]);
+
+/** The Bower tab (#317), which replaced `/tell`. */
+export const BOWER_PATH = '/bower';
+
+/** The four tabs (#317); every other screen in the shell is an inner one. */
+const TAB_PATHS = new Set(['/', '/notes', '/add', BOWER_PATH]);
+
+/**
+ * Whether `path` is an inner screen (#318): a note, a folder, Health,
+ * Settings, Not found — anything in the shell that is not one of the four
+ * tabs. Its top bar shows Back where a tab shows the folder menu button.
+ */
+export function isInnerScreen(path: string): boolean {
+  return usesShell(path) && !TAB_PATHS.has(path);
+}
+
+/**
+ * Which tour step the top bar's "?" opens on `path` (#318): the step about
+ * the tab on screen, or the first one. Until each tab has its own help
+ * sheet (#330).
+ */
+export function helpStepFor(path: string): TourTarget | undefined {
+  if (path === '/add') return 'add';
+  if (path === BOWER_PATH) return 'tell';
+  return undefined;
+}
 
 export function usesShell(path: string): boolean {
   return !BARE_PATHS.has(path);

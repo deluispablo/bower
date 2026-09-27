@@ -61,6 +61,12 @@ export async function navigate(page: Page, name: RegExp): Promise<void> {
   await visible(page.getByRole('link', { name })).click();
 }
 
+/** Opens Settings: the avatar in the top bar on the phone, a sidebar row
+ * on desktop (#318); both are links named "Settings". */
+export async function openSettings(page: Page): Promise<void> {
+  await navigate(page, /^Settings$/);
+}
+
 /**
  * Saves the screen as `e2e/screenshots/<project>/<name>.png` (uploaded as a
  * CI artifact). With `BOWER_README_SHOTS=1` (`pnpm e2e:shots`) the desktop

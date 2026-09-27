@@ -7,7 +7,15 @@
  * by-product for the README and the CI artifacts, never compared.
  */
 
-import { expect, navigate, openHome, shot, test, visible } from './demo.js';
+import {
+  expect,
+  navigate,
+  openHome,
+  openSettings,
+  shot,
+  test,
+  visible,
+} from './demo.js';
 
 test.describe('open Home', () => {
   test.use({ introSeen: false });
@@ -20,14 +28,36 @@ test.describe('open Home', () => {
     await expect(
       page.getByRole('heading', { name: /Bower files it/ }),
     ).toBeInViewport();
-    // One "Next" per page; the desktop's side arrows are extra.
+    // Nine pages, one "Next" on each of the first eight; the desktop's side
+    // arrows are extra.
+    const headings = [
+      'Where does it go?',
+      'Ask, and it does more',
+      'A window onto your own Drive',
+      'A project: flat hunting',
+      'An area: your health',
+      'A resource: what you read',
+      'The archive: finished, kept',
+      'What will you start with?',
+    ];
     const next = page.getByRole('button', { name: 'Next', exact: true });
-    for (let i = 0; i < 3; i += 1) {
-      await next.nth(i).click();
+    await expect(next).toHaveCount(8);
+    // Each page's resting frame, for the PR and the CI artifact (not the
+    // README, so not through `shot`).
+    const intro = async (n: number): Promise<void> => {
+      const { testDir, name: project } = testInfo.project;
+      await page.screenshot({
+        animations: 'disabled',
+        caret: 'hide',
+        path: `${testDir}/screenshots/${project}/intro-${n}.png`,
+      });
+    };
+    await intro(1);
+    for (const [index, name] of headings.entries()) {
+      await next.nth(index).click();
+      await expect(page.getByRole('heading', { name })).toBeInViewport();
+      await intro(index + 2);
     }
-    await expect(
-      page.getByRole('heading', { name: 'What people use it for' }),
-    ).toBeInViewport();
     await page.getByRole('button', { name: 'Explore the demo' }).click();
 
     const tour = page.getByRole('dialog');
@@ -67,6 +97,20 @@ test.describe('open Home', () => {
       ),
     ).toBeVisible();
     await shot(page, testInfo, 'home');
+  });
+});
+
+test.describe('first visit, Skip', () => {
+  test.use({ introSeen: false });
+
+  test('Skip on the intro lands on the sign-in', async ({ page }) => {
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/welcome$/);
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(
+      page.getByRole('heading', { name: 'Bower', level: 1 }),
+    ).toBeVisible();
   });
 });
 
@@ -196,7 +240,8 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
 
 test('Tell Bower sends a question to the inbox', async ({ page }, testInfo) => {
   await openHome(page);
-  await navigate(page, /^Tell( Bower)?$/);
+  await navigate(page, /^Bower$/);
+  await expect(page).toHaveURL(/\/bower$/);
   await expect(
     page.getByText("A rule, a task or a question. I'll put it in your inbox"),
   ).toBeVisible();
@@ -219,7 +264,7 @@ test('Settings switches the theme to dark, and it sticks', async ({
   page,
 }, testInfo) => {
   await openHome(page);
-  await navigate(page, /^Settings$/);
+  await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
   await page.getByRole('radio', { name: 'Dark' }).check();
@@ -234,7 +279,7 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
   page,
 }) => {
   await openHome(page);
-  await navigate(page, /^Settings$/);
+  await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
   // Account · Tidying up · Look · Bower · Advanced, in that order (scoped
@@ -266,4 +311,123 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
   await expect(
     settings.getByText('Not in the demo: run your own Bower to use this.'),
   ).toHaveCount(3);
+});
+
+test.describe('/login never redirects to the intro (#313)', () => {
+  test.use({ introSeen: false });
+
+  test('a first-time visitor who goes straight to /login sees sign-in, not the intro', async ({
+    page,
+  }) => {
+    // In the demo build a signed-in-as-Alex visitor at /login sees "Run
+    // your own Bower" (app.tsx), never the sign-in form — but either way
+    // it must never bounce to /welcome just because the intro is unseen.
+    await page.goto('/login');
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(
+      page.getByRole('heading', { name: 'Bower', level: 1 }),
+    ).toBeVisible();
+  });
+});
+
+test('Terms and Privacy Back go to /login when signed out, back through history otherwise (#313)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await openSettings(page);
+  await visible(page.getByRole('link', { name: 'Terms' })).click();
+  await expect(page).toHaveURL(/\/terms$/);
+
+  // Signed in (the demo is always signed in as Alex): Back steps through
+  // history to Settings, not to /login.
+  await visible(page.getByRole('button', { name: 'Back' })).click();
+  await expect(page).toHaveURL(/\/settings$/);
+});
+
+test('four tabs on the phone, the sidebar instead on desktop', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  const tabs = page.locator('nav.bottom-nav');
+  if (testInfo.project.name === 'desktop') {
+    await expect(tabs).toBeHidden();
+    return;
+  }
+  await expect(tabs).toBeVisible();
+  const links = tabs.getByRole('link');
+  await expect(links).toHaveText(['Home', 'Notes', 'Add', 'Bower']);
+  await expect(links.first()).toHaveAttribute('aria-current', 'page');
+
+  await tabs.getByRole('link', { name: 'Notes' }).click();
+  await expect(page).toHaveURL(/\/notes$/);
+  await expect(links.nth(1)).toHaveAttribute('aria-current', 'page');
+  await expect(
+    page.getByRole('textbox', { name: 'Filter your notes' }),
+  ).toBeVisible();
+  await expect(page.getByRole('tree').first()).toBeVisible();
+  await shot(page, testInfo, 'tabs-notes');
+});
+
+test('an old /tell link opens the Bower tab with its text', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.evaluate(() => {
+    history.pushState(null, '', '/tell?text=Hello%20Bower');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page).toHaveURL(/\/bower\?text=Hello(\+|%20)Bower$/);
+  await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue(
+    'Hello Bower',
+  );
+});
+
+test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  const bar = page.locator('header.topbar');
+  const help = bar.getByRole('button', { name: 'About this screen' });
+  await expect(help).toBeVisible();
+  if (testInfo.project.name === 'phone') {
+    await expect(
+      bar.getByRole('button', { name: 'Your folders' }),
+    ).toBeVisible();
+    await expect(bar.getByText('Bower', { exact: true })).toBeVisible();
+    await expect(bar.getByRole('link', { name: 'Settings' })).toHaveText('A');
+    await shot(page, testInfo, 'bar-home');
+  }
+
+  // "?" opens the tour at the step for this tab, until the help sheets.
+  await help.click();
+  const tour = page.getByRole('dialog');
+  await expect(tour.getByText(/^1 of 4 · Add$/)).toBeVisible();
+  await tour.getByRole('button', { name: 'Skip tour' }).click();
+  await expect(tour).toBeHidden();
+
+  await visible(page.getByRole('link', { name: /^Bower$/ })).click();
+  await help.click();
+  await expect(tour.getByText(/^3 of 4 · Tell Bower$/)).toBeVisible();
+  await tour.getByRole('button', { name: 'Skip tour' }).click();
+
+  if (testInfo.project.name !== 'phone') return;
+  await page.goto('/');
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Skip tour' })
+    .click();
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('Lisbon');
+  await switcher
+    .getByRole('option', { name: /Lisbon Trip/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/note\//);
+  await expect(bar.getByRole('button', { name: 'Your folders' })).toBeHidden();
+  await expect(bar.getByRole('link', { name: /^Back to / })).toBeVisible();
+  await expect(bar.locator('.topbar-title')).toHaveText('Lisbon Trip');
+  await shot(page, testInfo, 'bar-note');
 });

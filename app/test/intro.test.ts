@@ -4,7 +4,7 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { introSeen, markIntroSeen } from '../src/intro.js';
+import { introRuns, introSeen, markIntroSeen } from '../src/intro.js';
 
 describe('introSeen', () => {
   it('is false on a first visit (nothing stored yet)', () => {
@@ -25,6 +25,21 @@ describe('introSeen', () => {
 describe('markIntroSeen', () => {
   it('does not throw when the storage throws (best effort)', () => {
     expect(() => markIntroSeen(throwingStorage())).not.toThrow();
+  });
+});
+
+describe('introRuns', () => {
+  it('splits a prose string into plain and bold runs', () => {
+    expect(introRuns('**Told.** You said so.')).toEqual([
+      { text: 'Told.', bold: true },
+      { text: ' You said so.', bold: false },
+    ]);
+  });
+
+  it('keeps a string without markers as one plain run', () => {
+    expect(introRuns('No menus to learn.')).toEqual([
+      { text: 'No menus to learn.', bold: false },
+    ]);
   });
 });
 
@@ -71,8 +86,9 @@ function throwingStorage(): Storage {
   };
 }
 
-// Smoke test for the four pages (UI smoke only, as cheap as it gets: no
-// interaction, just that each page's heading is on the page). `preact-iso`
+// Smoke test for the nine pages (UI smoke only, as cheap as it gets: each
+// page's heading is on the page, and Skip or reaching the last page sets the
+// seen flag). `preact-iso`
 // is mocked the same way `test/layout.test.ts` mocks it, so the component
 // does not need a real Router/LocationProvider.
 const location = {
@@ -87,6 +103,9 @@ vi.mock('preact-iso', () => ({
 
 const { Intro } = await import('../src/routes/intro.js');
 const { INTRO_PAGES } = await import('../src/intro.js');
+
+// jsdom does not implement element scrolling; the track only needs to accept it.
+HTMLElement.prototype.scrollTo = vi.fn();
 
 let root: HTMLDivElement;
 
@@ -105,14 +124,44 @@ describe('Intro', () => {
     });
     document.body.replaceChildren();
     location.query = {};
+    location.route.mockClear();
+    localStorage.clear();
   });
 
-  it('renders all four pages, each with its heading', () => {
+  it('renders all nine pages, each with its heading', () => {
     mount();
     const headings = Array.from(root.querySelectorAll('.intro-heading')).map(
       (el) => el.textContent,
     );
+    expect(headings).toHaveLength(9);
     expect(headings).toEqual(INTRO_PAGES.map((page) => page.heading));
+  });
+
+  it('marks the intro seen and goes to the sign-in on Skip', () => {
+    mount();
+    expect(introSeen(localStorage)).toBe(false);
+    const skip = root.querySelector<HTMLButtonElement>('.intro-skip');
+    void act(() => {
+      skip?.click();
+    });
+    expect(introSeen(localStorage)).toBe(true);
+    expect(location.route).toHaveBeenCalledWith('/login');
+  });
+
+  it('marks the intro seen on reaching the last page', () => {
+    mount();
+    const next = Array.from(
+      root.querySelectorAll<HTMLButtonElement>('.intro-next'),
+    );
+    expect(next).toHaveLength(8);
+    void act(() => {
+      next[6]?.click();
+    });
+    expect(introSeen(localStorage)).toBe(false);
+    void act(() => {
+      next[7]?.click();
+    });
+    expect(introSeen(localStorage)).toBe(true);
   });
 
   it('shows Skip and Sign in with Google on a first visit', () => {

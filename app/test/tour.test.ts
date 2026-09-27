@@ -11,7 +11,7 @@ vi.mock('../src/api.js', async (importOriginal) => ({
   isDemo: () => state.demo,
 }));
 
-const { TOUR_STEPS, Tour, placeCoach } =
+const { TOUR_STEPS, Tour, placeCoach, tourStartIndex } =
   await import('../src/components/tour.js');
 
 let root: HTMLElement;
@@ -56,7 +56,7 @@ beforeEach(() => {
   targets.innerHTML =
     '<a href="/add" data-tour="add">Add</a>' +
     '<button type="button" data-tour="tidy">Tidy up</button>' +
-    '<a href="/tell" data-tour="tell">Tell</a>' +
+    '<a href="/bower" data-tour="tell">Bower</a>' +
     '<div role="status" data-tour="banner">These are sample notes.</div>';
   document.body.append(targets);
   root = document.createElement('div');
@@ -200,5 +200,14 @@ describe('placeCoach', () => {
     const place = placeCoach(null, 360, 640, true);
     expect(place.spot).toBeNull();
     expect(place.card.width).toBe('328px');
+  });
+});
+
+describe('tourStartIndex', () => {
+  it('finds the step for a control, or starts at the first', () => {
+    expect(tourStartIndex(TOUR_STEPS, 'tell')).toBe(2);
+    expect(tourStartIndex(TOUR_STEPS, 'add')).toBe(0);
+    expect(tourStartIndex(TOUR_STEPS, 'banner')).toBe(0);
+    expect(tourStartIndex(TOUR_STEPS, undefined)).toBe(0);
   });
 });
