@@ -5,7 +5,9 @@ import type { Env } from '../src/env.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
 import {
+  createSlidingWindow,
   GENERIC_RATE_LIMIT_PER_MINUTE,
+  genericWindow,
   MAX_BODY_BYTES,
   RATE_LIMIT_PER_MINUTE,
 } from '../src/security.js';
@@ -87,6 +89,7 @@ function expectSecurityHeaders(response: Response): void {
 beforeEach(async () => {
   const listed = await kv.list({});
   await Promise.all(listed.keys.map((entry) => kv.delete(entry.name)));
+  genericWindow.clear();
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   await seedUser();
@@ -438,23 +441,21 @@ describe('input limits', () => {
 });
 
 describe('generic rate limit', () => {
-  async function getRoute(
-    path: string,
-    ip: string,
-    kvOverride?: KVNamespace,
-  ): Promise<Response> {
+  async function getRoute(path: string, ip: string): Promise<Response> {
     return createApp().request(
       `${API}${path}`,
       { headers: { cookie: await sessionCookie(), 'cf-connecting-ip': ip } },
-      kvOverride === undefined ? env : { ...env, BOWER_KV: kvOverride },
+      env,
     );
   }
 
-  it('answers 429 with Retry-After past 120 cookie requests from one IP in a minute, across routes', async () => {
-    for (let i = 0; i < GENERIC_RATE_LIMIT_PER_MINUTE - 1; i += 1) {
+  it('answers 429 with Retry-After past 120 cookie requests from one IP in 60 s, across routes', async () => {
+    expect((await getRoute('/me', IP)).status).toBe(200);
+    // 20 s later: the window slides, it does not reset on the minute.
+    vi.setSystemTime(new Date(NOW.getTime() + 20_000));
+    for (let i = 1; i < GENERIC_RATE_LIMIT_PER_MINUTE; i += 1) {
       expect((await getRoute('/status', IP)).status).toBe(200);
     }
-    expect((await getRoute('/me', IP)).status).toBe(200);
 
     const limited = await getRoute('/status', IP);
 
@@ -463,56 +464,62 @@ describe('generic rate limit', () => {
       code: 'rate_limited',
       message: 'Too many requests, slow down',
     });
-    expect(limited.headers.get('retry-after')).toBe('50');
+    // The first request (at NOW) leaves the window in 40 s.
+    expect(limited.headers.get('retry-after')).toBe('40');
     expectSecurityHeaders(limited);
 
     expect((await getRoute('/status', OTHER_IP)).status).toBe(200);
     // Public routes are not counted.
     expect((await getRoute('/health', IP)).status).toBe(200);
 
-    const minute = Math.floor(NOW.getTime() / 60_000);
-    expect(await kv.get(keys.rate('generic', IP, minute), 'text')).toBe(
-      String(GENERIC_RATE_LIMIT_PER_MINUTE),
-    );
-
-    vi.setSystemTime(new Date(NOW.getTime() + 60_000));
+    // Once the first request is 60 s old, one more fits.
+    vi.setSystemTime(new Date(NOW.getTime() + 60_001));
     expect((await getRoute('/status', IP)).status).toBe(200);
+    expect((await getRoute('/status', IP)).status).toBe(429);
   });
 
-  it('counts the strict routes too, without changing their own limit', async () => {
+  it('costs no KV write and leaves the strict limits as they were', async () => {
     const github = githubStub();
     const headers = { origin: env.APP_ORIGIN, 'cf-connecting-ip': IP };
     for (let i = 0; i < RATE_LIMIT_PER_MINUTE; i += 1) {
       expect((await postProcess(github.fetchImpl, headers)).status).toBe(202);
     }
-
-    const minute = Math.floor(NOW.getTime() / 60_000);
-    expect(await kv.get(keys.rate('generic', IP, minute), 'text')).toBe(
-      String(RATE_LIMIT_PER_MINUTE),
-    );
     expect((await postProcess(github.fetchImpl, headers)).status).toBe(429);
+    // 31 generic hits so far: far from 120.
+    expect((await getRoute('/status', IP)).status).toBe(200);
+
+    const listed = await kv.list({ prefix: 'rate:' });
+    expect(listed.keys.map((entry) => entry.name)).toEqual([
+      keys.rate('process', IP, Math.floor(NOW.getTime() / 60_000)),
+    ]);
+  });
+});
+
+describe('createSlidingWindow', () => {
+  it('does not count a refused request', () => {
+    const window = createSlidingWindow(2, 60_000, 10);
+
+    expect(window.hit('a', 0)).toBe(0);
+    expect(window.hit('a', 10_000)).toBe(0);
+    expect(window.hit('a', 20_000)).toBe(40);
+    expect(window.hit('a', 59_000)).toBe(1);
+    // The request at 0 has left; the refused ones never counted.
+    expect(window.hit('a', 60_000)).toBe(0);
   });
 
-  it('lets the request through, logged, when KV refuses the window write', async () => {
-    const failingKv = new Proxy(kv, {
-      get(target, prop): unknown {
-        if (prop === 'put') {
-          return (): Promise<never> =>
-            Promise.reject(new Error('KV PUT failed: 429 Too Many Requests'));
-        }
-        const value: unknown = Reflect.get(target, prop);
-        return typeof value === 'function' ? value.bind(target) : value;
-      },
-    });
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('drops idle keys and caps the number of keys', () => {
+    const window = createSlidingWindow(5, 60_000, 3);
 
-    const response = await getRoute('/status', IP, failingKv);
+    window.hit('a', 0);
+    window.hit('b', 1_000);
+    window.hit('c', 2_000);
+    window.hit('d', 3_000);
+    // Over the cap: the least recently seen key (a) is evicted.
+    expect(window.size()).toBe(3);
 
-    expect(response.status).toBe(200);
-    expect(logged).toHaveBeenCalledWith(
-      expect.stringContaining('generic rate window unavailable: Error'),
-    );
-    logged.mockRestore();
+    window.hit('e', 62_000);
+    // b and c are idle (last seen over 60 s ago) and pruned.
+    expect(window.size()).toBe(2);
   });
 });
 

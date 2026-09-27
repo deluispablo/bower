@@ -107,8 +107,8 @@ function carriesBody(request: Request): boolean {
  * A write (`POST`, `PUT`, `PATCH`, `DELETE`) that carries a body must send
  * it as `Content-Type: application/json` (parameters such as `charset`
  * allowed), else a 415 `unsupported_media_type`. Writes that take no body
- * (`POST /auth/logout`, `POST /process`, `DELETE /me`,
- * `DELETE /admin/allow/:email`) send none and are not checked. Also closes
+ * (`POST /auth/logout`, `POST /auth/logout-all`, `POST /process`,
+ * `DELETE /me`, `DELETE /admin/allow/:email`) send none and are not checked. Also closes
  * the "simple request" door: a cross-site form can only send
  * `text/plain`, `multipart/form-data` or `application/x-www-form-urlencoded`.
  */
@@ -169,8 +169,7 @@ export const GENERIC_RATE_LIMIT_PER_MINUTE = 120;
  * The routes the browser calls with the session cookie, and so the ones
  * under the generic limit (mounted by `index.ts`, before each route's own
  * strict limit). Left out: `/health` and `GET /push/public-key` (public,
- * no cookie) and `/runner/*`, `/admin/*` (bearer keys). An unknown path is
- * not counted either: it costs a 404, not a KV write.
+ * no cookie), `/runner/*`, `/admin/*` (bearer keys) and unknown paths.
  */
 export const COOKIE_ROUTES: readonly string[] = [
   '/auth/*',
@@ -196,20 +195,6 @@ export function clientIp(c: Context<AppEnv>): string {
   return 'unknown';
 }
 
-/** Seconds left in the current minute, at least 1 (for `Retry-After`). */
-function secondsLeftInMinute(now: number, minute: number): number {
-  return Math.max(1, Math.ceil(((minute + 1) * 60_000 - now) / 1000));
-}
-
-function tooManyRequests(
-  c: Context<AppEnv>,
-  now: number,
-  minute: number,
-): never {
-  c.header('Retry-After', String(secondsLeftInMinute(now, minute)));
-  throw new HttpError(429, 'rate_limited', 'Too many requests, slow down');
-}
-
 /**
  * Fixed-window rate limit per client IP for `route`: at most
  * `RATE_LIMIT_PER_MINUTE` requests in each calendar minute, counted in KV
@@ -232,41 +217,110 @@ export function rateLimit(route: string): MiddlewareHandler<AppEnv> {
       minute,
       RATE_LIMIT_PER_MINUTE,
     );
-    if (count > RATE_LIMIT_PER_MINUTE) tooManyRequests(c, now, minute);
+    if (count > RATE_LIMIT_PER_MINUTE) {
+      const retryAfter = Math.max(
+        1,
+        Math.ceil(((minute + 1) * 60_000 - now) / 1000),
+      );
+      c.header('Retry-After', String(retryAfter));
+      throw new HttpError(429, 'rate_limited', 'Too many requests, slow down');
+    }
     await next();
   };
 }
 
+/** Most client IPs the generic limit tracks at once, per isolate. */
+export const GENERIC_RATE_LIMIT_MAX_KEYS = 10_000;
+
+/** A sliding-window request counter per key, kept in memory. */
+export interface SlidingWindow {
+  /**
+   * Counts one request for `key` at `now` (ms) and answers 0 if it is within
+   * the limit, else the seconds (at least 1) until the oldest counted
+   * request leaves the window. A refused request is not counted.
+   */
+  hit(key: string, now: number): number;
+  /** Forgets every key (tests). */
+  clear(): void;
+  /** How many keys are tracked (tests). */
+  size(): number;
+}
+
+/**
+ * A sliding window of `windowMs` allowing `limit` requests per key, in a
+ * `Map` from key to the timestamps of its counted requests. Each call prunes
+ * the key's expired timestamps and moves the key to the back of the map, so
+ * the front holds the least recently seen keys: idle keys are dropped from
+ * the front on each call, and past `maxKeys` the least recently seen key is
+ * evicted. Pure memory, nothing to fail.
+ */
+export function createSlidingWindow(
+  limit: number,
+  windowMs: number,
+  maxKeys: number,
+): SlidingWindow {
+  const hits = new Map<string, number[]>();
+
+  function pruneIdle(now: number): void {
+    for (const [key, times] of hits) {
+      const newest = times[times.length - 1];
+      if (newest !== undefined && newest > now - windowMs) break;
+      hits.delete(key);
+    }
+  }
+
+  return {
+    hit(key: string, now: number): number {
+      pruneIdle(now);
+      const times = (hits.get(key) ?? []).filter((t) => t > now - windowMs);
+      hits.delete(key);
+      if (times.length >= limit) {
+        hits.set(key, times);
+        const oldest = times[0] ?? now;
+        return Math.max(1, Math.ceil((oldest + windowMs - now) / 1000));
+      }
+      times.push(now);
+      hits.set(key, times);
+      while (hits.size > maxKeys) {
+        const first = hits.keys().next();
+        if (first.done === true) break;
+        hits.delete(first.value);
+      }
+      return 0;
+    },
+    clear(): void {
+      hits.clear();
+    },
+    size(): number {
+      return hits.size;
+    },
+  };
+}
+
+/** The generic limit's window, one per isolate (module scope). */
+export const genericWindow: SlidingWindow = createSlidingWindow(
+  GENERIC_RATE_LIMIT_PER_MINUTE,
+  60_000,
+  GENERIC_RATE_LIMIT_MAX_KEYS,
+);
+
 /**
  * The generic limit on every cookie route (`COOKIE_ROUTES`): at most
- * `GENERIC_RATE_LIMIT_PER_MINUTE` requests per client IP per calendar
- * minute, all routes together, in its own KV window
- * (`rate:generic:<ip>:<minute>`). Over the limit, the same 429
- * `rate_limited` with `Retry-After` as `rateLimit`.
+ * `GENERIC_RATE_LIMIT_PER_MINUTE` requests per client IP in any 60 seconds,
+ * all routes together. Over the limit, the same 429 `rate_limited`, with
+ * `Retry-After` set to the seconds until the oldest counted request leaves
+ * the window.
  *
- * Fails open: the app fires a few requests at once on load, and KV refuses
- * more than one write per second to a key, so a failed KV read or write is
- * logged (request id only) and the request goes on. The strict limits keep
- * failing closed.
+ * In memory (`genericWindow`), not KV: it costs no KV write, so normal use
+ * never eats the free tier's daily writes. Best-effort per isolate: each
+ * Cloudflare isolate counts on its own and forgets on eviction, so a client
+ * spread across isolates gets more. The strict limits stay on KV.
  */
 export const genericRateLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const now = Date.now();
-  const minute = Math.floor(now / 60_000);
-  let count = 0;
-  try {
-    count = await hitRateWindow(
-      c.get('env').BOWER_KV,
-      'generic',
-      clientIp(c),
-      minute,
-      GENERIC_RATE_LIMIT_PER_MINUTE,
-    );
-  } catch (err) {
-    const reason = err instanceof Error ? err.name : 'unknown';
-    console.error(
-      `[${c.get('requestId')}] generic rate window unavailable: ${reason}`,
-    );
+  const retryAfter = genericWindow.hit(clientIp(c), Date.now());
+  if (retryAfter > 0) {
+    c.header('Retry-After', String(retryAfter));
+    throw new HttpError(429, 'rate_limited', 'Too many requests, slow down');
   }
-  if (count > GENERIC_RATE_LIMIT_PER_MINUTE) tooManyRequests(c, now, minute);
   await next();
 };
