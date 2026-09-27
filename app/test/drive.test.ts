@@ -1255,4 +1255,27 @@ describe('saveNoteText', () => {
     }
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('lets the rulebook update through with forceProtected, still checking freshness', async () => {
+    const note: FakeNote = {
+      text: 'Old rulebook.',
+      modifiedTime: '2026-01-01T00:00:01.000Z',
+    };
+    const drive = fakeNote(note);
+    stubFetch(drive.handler);
+    const rulebook = { id: 'FILE_ID', name: 'CLAUDE.md' };
+
+    const stale = await saveNoteText(rulebook, 'New.', {
+      baseModifiedTime: '2026-01-01T00:00:00.000Z',
+      forceProtected: true,
+    }).catch((err: unknown) => err);
+    expect((stale as SaveError).code).toBe('conflict');
+    expect(note.text).toBe('Old rulebook.');
+
+    await saveNoteText(rulebook, 'New rulebook.', {
+      baseModifiedTime: '2026-01-01T00:00:01.000Z',
+      forceProtected: true,
+    });
+    expect(note.text).toBe('New rulebook.');
+  });
 });

@@ -20,10 +20,12 @@ import {
   disablePush,
   enablePush,
 } from '../push.js';
+import { isRulebookBehind } from '../rulebook.js';
 import { useSession } from '../session.js';
 import { replayTour } from '../tour-store.js';
 import '../styles/settings.css';
 import { setTheme } from '../theme.js';
+import { useVault } from '../vault-store.js';
 
 /**
  * `apiFetch` already turns a non-2xx response into an `ApiError` carrying a
@@ -261,6 +263,85 @@ function NotificationsToggle() {
 }
 
 /**
+ * "Update Bower's rules (vN → vM)" (#197), shown only when the Bower
+ * folder's rulebook is older than the one compiled into the app. The
+ * template's version comes from a lazily loaded chunk
+ * (`rulebook-template.ts`), so its text never weighs on startup.
+ */
+function UpdateRulesRow() {
+  const vault = useVault();
+  const [templateVersion, setTemplateVersion] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('../rulebook-template.js')
+      .then((template) => {
+        if (!cancelled) setTemplateVersion(template.TEMPLATE_RULES_VERSION);
+      })
+      .catch((err: unknown) => {
+        console.error(err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const vaultVersion = vault.index?.bowerRulesVersion ?? null;
+  const behind =
+    vaultVersion !== null &&
+    templateVersion !== null &&
+    isRulebookBehind(vaultVersion, templateVersion);
+
+  const update = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await vault.updateRules();
+      const moved =
+        result.moved === 0
+          ? ''
+          : result.moved === 1
+            ? ' One line of yours moved to Your rules.'
+            : ` ${result.moved} lines of yours moved to Your rules.`;
+      setDone(`Bower's rules are up to date (v${result.to}).${moved}`);
+    } catch (err) {
+      console.error(err);
+      setError("Could not update Bower's rules. Try again in a moment.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      {behind && (
+        <button
+          type="button"
+          class="settings-row"
+          disabled={busy}
+          onClick={() => void update()}
+        >
+          <span class="settings-row-text">
+            <span class="settings-row-label">
+              Update Bower's rules (v{vaultVersion} → v{templateVersion})
+            </span>
+            <span class="toggle-hint">
+              Replaces Bower's rulebook with the latest one; rules you added to
+              it move to Your rules, and About me is left alone.
+            </span>
+          </span>
+        </button>
+      )}
+      {done && <p class="settings-note">{done}</p>}
+      {error && <p class="settings-error">{error}</p>}
+    </>
+  );
+}
+
+/**
  * Settings › Advanced (spec §6): the own Claude API key form, "Show me
  * around again" (replays the first-run tour on Home through a one-shot flag
  * in memory, `tour-store.ts`; `tourSeenAt` is left alone) and the same
@@ -277,6 +358,8 @@ function AdvancedSection({ me }: { me: Me }) {
       <h2>Advanced</h2>
 
       <ApiKeySection me={me} />
+
+      <UpdateRulesRow />
 
       <button
         type="button"
@@ -305,7 +388,7 @@ function AdvancedSection({ me }: { me: Me }) {
 
       <Toggle
         label="Show Bower's own files"
-        hint="Rulebook, catalogue, journal, instruction notes, health reports and dot-folders (.obsidian, .claude), grouped at the bottom of your notes."
+        hint="Rulebook, your rules, about me, catalogue, journal, instruction notes, health reports and dot-folders (.obsidian, .claude), grouped at the bottom of your notes."
         checked={showAppFiles}
         onChange={(checked) => {
           setShowAppFiles(checked);

@@ -945,6 +945,13 @@ export interface SaveOptions {
   baseModifiedTime: string | null;
   /** Skips the freshness check and overwrites ("keep mine"). */
   force?: boolean;
+  /**
+   * Lets this one save through the protected-note guard. Only the rulebook
+   * update (Settings › Advanced, `vault-store.tsx`'s `updateRules`, #197)
+   * sets it, to replace `CLAUDE.md` with the template's; the freshness
+   * check still applies unless `force` is set too.
+   */
+  forceProtected?: boolean;
 }
 
 function saveConflict(current: string | null): SaveError {
@@ -960,14 +967,14 @@ function saveConflict(current: string | null): SaveError {
  * reads `modifiedTime` again and throws `SaveError('conflict')` without
  * writing when it differs from `baseModifiedTime`; a 412 from Drive is a
  * conflict too. Notes the agent maintains (`isProtectedNote`) are rejected
- * before any request.
+ * before any request, unless `forceProtected` is set (the rulebook update).
  */
 export async function saveNoteText(
   target: NoteTarget,
   text: string,
   options: SaveOptions,
 ): Promise<AppendResult> {
-  if (isProtectedNote(target.name)) {
+  if (isProtectedNote(target.name) && options.forceProtected !== true) {
     throw new SaveError('protected', 'Bower maintains this note itself.');
   }
   if (options.force !== true) {
