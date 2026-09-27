@@ -28,7 +28,7 @@ const kv = baseEnv.BOWER_KV;
 const API = 'https://api.example.com';
 const PAYLOAD: PushPayload = {
   title: 'Bower',
-  body: '2 files processed',
+  body: '2 files tidied up',
   url: '/',
 };
 
@@ -388,16 +388,16 @@ describe('sendPush', () => {
 });
 
 describe('runPushPayload', () => {
-  it('counts processed files, or says there was nothing, or that it failed', () => {
+  it('counts the tidied-up files, or says there was nothing, or that it failed', () => {
     const at = '2026-01-01T00:00:00.000Z';
     expect(
       runPushPayload({ state: 'done', requestedAt: at, processed: ['a', 'b'] }),
-    ).toEqual({ title: 'Bower', body: '2 files processed', url: '/' });
+    ).toEqual({ title: 'Bower', body: '2 files tidied up', url: '/' });
     expect(
       runPushPayload({ state: 'done', requestedAt: at, processed: ['a'] }).body,
-    ).toBe('1 file processed');
+    ).toBe('1 file tidied up');
     expect(runPushPayload({ state: 'done', requestedAt: at }).body).toBe(
-      'Nothing new to process',
+      'Nothing new to tidy up',
     );
     expect(
       runPushPayload({ state: 'failed', requestedAt: at, error: 'x' }).body,
@@ -409,7 +409,7 @@ describe('runPushPayload', () => {
         requestedAt: at,
         processed: ['a'],
       }),
-    ).toEqual({ title: 'Bower', body: '1 file processed', url: '/' });
+    ).toEqual({ title: 'Bower', body: '1 file tidied up', url: '/' });
   });
 
   it('says the health check is ready or failed for a lint, never a count', () => {
@@ -473,13 +473,13 @@ describe('runner status report', () => {
     return decrypt(request.body, alice);
   }
 
-  it('pushes "2 files processed" when a run is reported done', async () => {
+  it('pushes "2 files tidied up" when a run is reported done', async () => {
     expect(
       await reportAndDecrypt({
         state: 'done',
         processed: ['one.md', 'two.md'],
       }),
-    ).toEqual({ title: 'Bower', body: '2 files processed', url: '/' });
+    ).toEqual({ title: 'Bower', body: '2 files tidied up', url: '/' });
   });
 
   it('pushes "Health check ready" when a lint is reported done', async () => {
