@@ -277,6 +277,7 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
     'Requests',
     'Activity',
   ]);
+  await shot(page, testInfo, 'bower');
 
   // The demo already has a question waiting, so the tip starts closed.
   await page.getByRole('button', { name: 'Things you can ask' }).click();
@@ -300,6 +301,7 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
     .filter({ hasText: 'How much did I spend on the kitchen this year?' });
   await expect(row).toBeVisible();
   await expect(row.getByText('Waiting', { exact: true })).toBeVisible();
+  await row.scrollIntoViewIfNeeded();
   await shot(page, testInfo, 'tell');
 
   // No run started: no working sheet, and the note waits in the inbox
