@@ -23,6 +23,8 @@ Your notes and files are never copied into this instance's own storage. They liv
 
 If you sign in with an address that is not on the invite list, nothing is stored about you. Your browser keeps a small cookie for at most five minutes, holding that address encrypted, only so the app can show you which account was turned away; it is deleted as soon as that screen reads it.
 
+The first-run questions the bird asks (what you will keep here, your notes' languages, a few areas to start with, how you like titles and tags) go straight into your own Bower folder in your Drive — `About-Me.md`, `Rules.md` and a folder note per area — the same as anything else you tell the app. This instance's own database never sees your answers; you can change them any time from **Settings → Advanced → "Tell Bower about yourself again"**, or by editing those files directly.
+
 ## What leaves where
 
 - When you tap Tidy up, a temporary job reads the files waiting in your Bower folder in your Google Drive and sends their text to Anthropic's API (the company that makes Claude) so it can organise them for you. Nothing else leaves your Drive, and nothing is sent anywhere else.

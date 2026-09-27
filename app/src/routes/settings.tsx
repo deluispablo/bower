@@ -378,6 +378,22 @@ function AdvancedSection({ me }: { me: Me }) {
       <button
         type="button"
         class="settings-row"
+        onClick={() => route('/onboarding?step=interview&from=settings')}
+      >
+        <span class="settings-row-text">
+          <span class="settings-row-label">
+            Tell Bower about yourself again
+          </span>
+          <span class="toggle-hint">
+            The four first-run questions, again — About me and Your rules keep
+            everything else you have added.
+          </span>
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="settings-row"
         onClick={() => {
           replayTour();
           route('/');

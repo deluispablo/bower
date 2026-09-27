@@ -255,6 +255,17 @@ Each Bower folder holds three rule files with three owners: `CLAUDE.md` is Bower
 
 When you change `vault-template/CLAUDE.md` in a way existing folders should receive, bump `bower_rules_version` by one in the same PR, and add every line you removed or reworded to `app/src/rulebook-retired.ts`; see `vault-template/README.md`.
 
+### The first-run interview
+
+Right after **Building your bower** and before **Start with what you have**, the bird asks four questions in the Tell Bower conversation (#198): what the user will keep here, which languages their notes come in, three areas of their life to start with, and how they like titles and tags written, with an example. Each is a chip or the user's own words.
+
+The pure part (`app/src/interview.ts`'s `interviewToFiles`) turns the answers into `About-Me.md`'s and `Rules.md`'s new text and the area folder notes to create; `app/src/vault-store.tsx`'s `runInterview` does the writing, conflict-checked the same way as the rulebook update:
+
+- `About-Me.md` and `Rules.md` each gain (or have replaced) a `## From the interview` section — created from an empty note if the folder has neither yet — and nothing else in either file changes.
+- Every area answered gets its own folder under `2-Areas/` and a `_<name>.md` note inside it (the same "folder note" convention as `2-Areas/_Areas.md` itself), except one whose folder is already there — an area the user already started is never touched.
+
+The step is skippable (writes nothing) and replayable any time from **Settings → Advanced → "Tell Bower about yourself again"**, which runs the same write and returns to Settings instead of going on to the Drive step or the tour. No agent run is needed for this to take effect: the next Tidy up reads the updated files like any other.
+
 ### Reading logs
 
 - **Worker**: `pnpm -C api exec wrangler tail -c wrangler.local.toml` streams live requests (method, path, status, exceptions) — nothing here includes note content or credentials (see `CLAUDE.md`'s logging rule and `api/test/log-hygiene.test.ts`).
