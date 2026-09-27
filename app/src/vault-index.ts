@@ -28,6 +28,19 @@ export interface VaultIndex {
    * Recent, search or the switcher.
    */
   agentSettingsFolder?: DriveFile;
+  /**
+   * Each folder's own note (`_<Folder>.md`, hidden from the tree by
+   * `isHidden`), keyed by the folder's path. Pins (#215) reads and writes a
+   * folder's `pinned` frontmatter here; a folder with none yet has no entry.
+   */
+  folderNotes: Map<string, DriveFile>;
+  /** `pinned` timestamp by note id, for every note known to be pinned. Empty
+   * until `vault-store` hydrates it (`withPinnedAt`): `buildVaultIndex` is
+   * pure and does no frontmatter reads. */
+  notePinnedAt: Map<string, string>;
+  /** `pinned` timestamp by folder path, for every folder known to be pinned.
+   * Same caveat as `notePinnedAt`. */
+  folderPinnedAt: Map<string, string>;
 }
 
 const HIDDEN_FOLDERS = new Set(['Processed']);
@@ -40,12 +53,24 @@ function isMarkdown(name: string): boolean {
   return name.toLowerCase().endsWith('.md');
 }
 
+/** A folder's own note: `_<Folder>.md`, living inside the folder it describes. */
+function isFolderNoteName(name: string): boolean {
+  return name.startsWith('_') && isMarkdown(name);
+}
+
 export function isHidden(file: DriveFile): boolean {
   const segments = file.path.split('/');
   if (segments.some((segment) => segment.startsWith('.'))) return true;
   const folders = isFolder(file) ? segments : segments.slice(0, -1);
   if (folders.some((segment) => HIDDEN_FOLDERS.has(segment))) return true;
-  return !isFolder(file) && file.name.startsWith('_') && isMarkdown(file.name);
+  return !isFolder(file) && isFolderNoteName(file.name);
+}
+
+/** `path`'s containing folder (everything before its last `/`), or `''` for
+ * a top-level file. */
+function dirname(path: string): string {
+  const i = path.lastIndexOf('/');
+  return i < 0 ? '' : path.slice(0, i);
 }
 
 /** Lower-cased name without its extension (`My Note.md` → `my note`). */
@@ -121,12 +146,17 @@ export function buildVaultIndex(files: DriveFile[]): VaultIndex {
     byBasename: new Map(),
     folders: [],
     notes: [],
+    folderNotes: new Map(),
+    notePinnedAt: new Map(),
+    folderPinnedAt: new Map(),
   };
 
   for (const file of files) {
     if (isHidden(file)) {
       if (file.path === '.claude' && isFolder(file)) {
         index.agentSettingsFolder = file;
+      } else if (!isFolder(file) && isFolderNoteName(file.name)) {
+        index.folderNotes.set(dirname(file.path), file);
       }
       continue;
     }
@@ -144,4 +174,19 @@ export function buildVaultIndex(files: DriveFile[]): VaultIndex {
   }
 
   return index;
+}
+
+/**
+ * `index` with `notePinnedAt`/`folderPinnedAt` replaced by the given maps.
+ * `buildVaultIndex` does no I/O, so it always starts these empty;
+ * `vault-store` calls this once it has read (or lazily fetched) the
+ * `pinned` frontmatter of the notes and folder notes that need it. Pure:
+ * everything else on `index` is kept as is.
+ */
+export function withPinnedAt(
+  index: VaultIndex,
+  notePinnedAt: Map<string, string>,
+  folderPinnedAt: Map<string, string>,
+): VaultIndex {
+  return { ...index, notePinnedAt, folderPinnedAt };
 }
