@@ -232,7 +232,7 @@ What the service worker receives in the `push` event, as JSON:
 | --- | --- | --- |
 | `title` | `string` | `Bower` |
 | `body` | `string` | An ingest: `2 files processed` (or `1 file processed`), `Nothing new to process`, or `Something went wrong`. A lint: `Health check ready` or `Health check failed` |
-| `url` | `string` | App path to open on click: `/` for an ingest, `/lint` (the Health screen) for a lint |
+| `url` | `string` | App path to open on click: `/` for an ingest, `/health` (the Health screen) for a lint |
 
 Sent with `TTL: 86400`, `Urgency: normal`, `Content-Encoding: aes128gcm` to every subscription of the user when a run is reported `done` or `failed`. A 404 or 410 from the push service deletes that subscription; any other failure is logged by status only and the subscription is kept.
 

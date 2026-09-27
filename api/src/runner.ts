@@ -223,8 +223,8 @@ function applyReport(
  * The notification for a finished run. An ingest (or a run without `kind`)
  * says how many files were tidied up (`done`), that there was nothing to
  * do (`done` with none), or that the run failed, and opens `/`. A lint says
- * the health check is ready or failed, and opens `/lint`. Never a file name
- * or the summary.
+ * the health check is ready or failed, and opens `/health`. Never a file
+ * name or the summary.
  */
 export function runPushPayload(run: Run): PushPayload {
   if (run.kind === 'lint') {
@@ -232,7 +232,7 @@ export function runPushPayload(run: Run): PushPayload {
       title: 'Bower',
       body:
         run.state === 'failed' ? 'Health check failed' : 'Health check ready',
-      url: '/lint',
+      url: '/health',
     };
   }
   let body: string;

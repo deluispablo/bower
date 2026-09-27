@@ -39,7 +39,7 @@ import {
 import { Tree } from './tree.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
-export const HEALTH_PATH = '/lint';
+export const HEALTH_PATH = '/health';
 
 export interface ExplorerProps {
   variant: 'sidebar' | 'drawer';
