@@ -2,10 +2,19 @@
 # setup script (M4). This public repo never runs it: these files live
 # under agent/workflows/, not .github/workflows/, so CI never picks them up.
 #
-# Runs agent/run.sh in lint mode (the weekly health check). On schedule,
-# every Sunday at 06:17 UTC, the `list` job asks the Worker for every vault
-# id and the `lint` job runs once per vault, one at a time. A manual run
-# (workflow_dispatch) lints the single vault it is given and skips `list`.
+# Runs agent/run.sh in lint mode (the weekly health check), in two parts
+# that never share a credential (issue #259):
+#
+# - `dispatch`, on schedule (every Sunday at 06:17 UTC) or by hand, asks the
+#   Worker (POST /runner/lint/dispatch, with BOWER_API_KEY) to start one lint
+#   run per vault, or for the one vault given by hand. The Worker mints a
+#   ticket for each and sends one repository_dispatch (bower-lint) per
+#   vault. This job alone holds BOWER_API_KEY, and it never runs the agent.
+# - `lint`, on that repository_dispatch, runs the agent over that one vault
+#   with that one run's ticket; it never sees BOWER_API_KEY.
+#
+# Each vault's run is its own workflow run, so they run side by side rather
+# than one at a time.
 name: Lint vault
 
 on:
@@ -14,58 +23,51 @@ on:
   workflow_dispatch:
     inputs:
       vault_id:
-        description: Vault to lint (the user id from the Worker)
-        required: true
+        description: Vault to lint (the user id from the Worker); empty for every vault
+        required: false
         type: string
+  repository_dispatch:
+    types: [bower-lint]
 
 jobs:
-  list:
-    if: github.event_name == 'schedule'
+  dispatch:
+    if: github.event_name != 'repository_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
-    outputs:
-      vaults: ${{ steps.list.outputs.vaults }}
     steps:
-      # The answer holds opaque user ids only; the log prints just the count.
-      - name: List vaults
-        id: list
+      # The body carries the vault id given by hand (through jq, never
+      # interpolated into the script), or nothing for every vault. The
+      # answer is a count; the log prints only that.
+      - name: Start the health checks
         env:
           BOWER_API_URL: ${{ vars.BOWER_API_URL }}
           BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}
+          VAULT_ID: ${{ inputs.vault_id }}
         run: |
-          curl -fsS -o vaults.json \
+          if [ -n "$VAULT_ID" ]; then
+            body=$(jq -cn --arg id "$VAULT_ID" '{vaultId: $id}')
+          else
+            body='{}'
+          fi
+          curl -fsS -o dispatched.json -X POST \
             -H "Authorization: Bearer $BOWER_API_KEY" \
-            "${BOWER_API_URL%/}/runner/vaults"
-          vaults=$(jq -c '[.vaults[].id]' vaults.json)
-          echo "vaults=$vaults" >> "$GITHUB_OUTPUT"
-          echo "$(jq length <<<"$vaults") vaults to lint"
+            -H 'Content-Type: application/json' \
+            --data "$body" \
+            "${BOWER_API_URL%/}/runner/lint/dispatch"
+          echo "$(jq .dispatched dispatched.json) health checks started"
 
   lint:
-    needs: list
-    # Runs after `list` on schedule, and on its own when `list` is skipped
-    # (a manual run). Nothing to do when no user has a vault yet.
-    if: >-
-      !cancelled() &&
-      (needs.list.result == 'success' || needs.list.result == 'skipped') &&
-      (github.event_name != 'schedule' || needs.list.outputs.vaults != '[]')
-    strategy:
-      # One vault at a time: the runs share the operator's Claude credential.
-      # One failing vault (for example, Google access revoked) does not
-      # cancel the others.
-      max-parallel: 1
-      fail-fast: false
-      matrix:
-        vault_id: ${{ fromJSON(github.event_name == 'schedule' && needs.list.outputs.vaults || format('[{0}]', toJSON(inputs.vault_id))) }}
+    if: github.event_name == 'repository_dispatch'
     concurrency:
-      group: lint-${{ matrix.vault_id }}
+      group: lint-${{ github.event.client_payload.vault_id }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
     env:
-      VAULT_ID: ${{ matrix.vault_id }}
+      VAULT_ID: ${{ github.event.client_payload.vault_id }}
       # Both pinned deliberately; the cache keys below derive from these,
       # so bumping a version here invalidates the matching cache too.
       BOWER_RCLONE_VERSION: '1.75.1'
@@ -130,25 +132,29 @@ jobs:
       - name: Add Claude Code to PATH
         run: echo "$HOME/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
-      # The runner key and settings reach run.sh through a file, not the Run
+      # The run ticket and settings reach run.sh through a file, not the Run
       # step's environment: a process's initial environment stays readable in
       # /proc/<pid>/environ for its whole life, and the agent runs as a child
       # of run.sh's shell. printf is a shell builtin, so no value shows up in
       # a process list either. run.sh reads the file into shell variables and
       # deletes it before anything else (agent/README.md, "Runner settings").
+      # The ticket comes from the dispatch, never from a secret: this job
+      # holds no credential that works for another vault (issue #259). It is
+      # masked, so it never shows in the log.
       - name: Hand the runner settings to run.sh
         env:
           BOWER_API_URL: ${{ vars.BOWER_API_URL }}
-          BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}
+          BOWER_RUN_TICKET: ${{ github.event.client_payload.ticket }}
           # Unset by default: the agent gets no web tools (see run.sh).
           BOWER_ALLOW_WEB: ${{ vars.BOWER_ALLOW_WEB }}
           # Unset by default: run.sh falls back to the API's own maxTurns.
           BOWER_MAX_TURNS: ${{ vars.BOWER_MAX_TURNS }}
         run: |
+          echo "::add-mask::$BOWER_RUN_TICKET"
           umask 077
           {
             printf 'BOWER_API_URL=%s\n' "$BOWER_API_URL"
-            printf 'BOWER_API_KEY=%s\n' "$BOWER_API_KEY"
+            printf 'BOWER_RUN_TICKET=%s\n' "$BOWER_RUN_TICKET"
             printf 'BOWER_ALLOW_WEB=%s\n' "$BOWER_ALLOW_WEB"
             printf 'BOWER_MAX_TURNS=%s\n' "$BOWER_MAX_TURNS"
           } >"$RUNNER_TEMP/bower-secrets"
@@ -171,8 +177,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          # One artifact per matrix leg; artifact names must be unique per run.
-          name: bower-logs-${{ strategy.job-index }}
+          name: bower-logs
           path: ${{ runner.temp }}/bower-logs/
           retention-days: 3
           if-no-files-found: ignore
