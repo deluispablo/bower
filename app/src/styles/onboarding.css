@@ -1,0 +1,263 @@
+/*
+ * First run (spec §7, #149): Welcome, Where your notes live and Building
+ * your bower. Welcome and Building reuse the `.auth-screen` column
+ * (layout.css) and the auth classes (auth.css); the folder form keeps
+ * `.onboarding-form` and `.onboarding-notice` (layout.css).
+ */
+
+.onb {
+  padding-inline: var(--space-4);
+}
+
+.onb-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: 1.2;
+  color: var(--color-heading);
+}
+
+.onb-title:focus {
+  outline: none;
+}
+
+.onb-title:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 4px;
+}
+
+.onb-lead {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: var(--leading-body);
+}
+
+.onb-primary {
+  width: 100%;
+  min-height: 48px;
+}
+
+.onb-dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.onb-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+}
+
+.onb-dots .is-on {
+  background: var(--color-brand);
+}
+
+/* Where your notes live */
+
+.onb-folder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 28rem;
+  margin: var(--space-8) auto;
+}
+
+.onb-ask {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.onb-bubble {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  line-height: 1.4;
+}
+
+.onb-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+.onb-card:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.onb-card:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.onb-card .icon,
+.onb-card svg {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  color: var(--color-text-muted);
+}
+
+.onb-card--recommended {
+  border-color: var(--color-brand);
+  background: var(--color-brand-tint);
+}
+
+.onb-card--recommended svg {
+  color: var(--color-link);
+}
+
+.onb-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.onb-card-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.onb-card-hint {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.onb-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  color: var(--color-text-muted);
+}
+
+/* Building your bower */
+
+.onb-build-bird {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) var(--space-12) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.onb-build-bird svg {
+  overflow: visible;
+}
+
+.onb-progress {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+/* Indeterminate while the request runs, full once the folder exists. */
+.onb-progress-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: var(--color-brand);
+  transform: translateX(-60%) scaleX(0.4);
+  transform-origin: left;
+  animation: onb-progress 1.6s var(--ease-in-out) infinite;
+}
+
+.onb-progress.is-done .onb-progress-fill {
+  transform: none;
+  animation: none;
+}
+
+.onb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  max-width: 20rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+  animation: onb-chip var(--motion-bird) var(--ease-out) both;
+}
+
+.onb-chip svg {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+}
+
+.onb-chips.is-done .onb-chip {
+  animation: none;
+}
+
+.onb-status {
+  margin: 0;
+  min-height: 1.5em;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+@keyframes onb-progress {
+  from {
+    transform: translateX(-60%) scaleX(0.4);
+  }
+  to {
+    transform: translateX(160%) scaleX(0.4);
+  }
+}
+
+@keyframes onb-chip {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-card {
+    transition: none;
+  }
+
+  /* No loop: a still, partly filled bar; the chips are simply there. */
+  .onb-progress-fill {
+    animation: none;
+    transform: scaleX(0.4);
+  }
+
+  .onb-chip {
+    animation: none;
+  }
+}
