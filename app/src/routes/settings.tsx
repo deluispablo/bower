@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'preact/hooks';
+import type { JSX } from 'preact';
 
 import type { Me } from '../api.js';
 import { ApiError, deleteAccount, loginUrl, updateSettings } from '../api.js';
+import { Bird } from '../components/bird.js';
+import { Toggle } from '../components/toggle.js';
 import { getPref, setPref } from '../prefs.js';
 import type { ThemePref } from '../prefs.js';
 import {
@@ -27,6 +30,25 @@ function toMessage(err: unknown): string {
 
 function driveUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
+}
+
+/** External link, kept local: the icon set (`components/icons.tsx`) is owned by #144 in parallel. */
+function ExternalIcon(): JSX.Element {
+  return (
+    <svg
+      class="icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5" />
+    </svg>
+  );
 }
 
 interface ApiKeySectionProps {
@@ -70,27 +92,24 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
   };
 
   return (
-    <section class="settings-section">
-      <h2>Claude API key</h2>
-      <div class="settings-field">
-        <label for="api-key">Use my own Claude API key</label>
-        <p class="settings-hint">
-          Runs Bower on your own Anthropic billing instead of the person who
-          runs it.
-        </p>
-        {me.hasApiKey && <p class="settings-note">A key is saved.</p>}
-        <input
-          id="api-key"
-          type="password"
-          autocomplete="off"
-          placeholder="sk-ant-…"
-          value={value}
-          disabled={busy}
-          onInput={(e) => {
-            setValue(e.currentTarget.value);
-          }}
-        />
-      </div>
+    <div class="settings-field">
+      <label for="api-key">Use my own Claude API key</label>
+      <p class="settings-hint">
+        Runs Bower on your own Anthropic billing instead of the person who runs
+        it.
+      </p>
+      {me.hasApiKey && <p class="settings-note">A key is saved.</p>}
+      <input
+        id="api-key"
+        type="password"
+        autocomplete="off"
+        placeholder="sk-ant-…"
+        value={value}
+        disabled={busy}
+        onInput={(e) => {
+          setValue(e.currentTarget.value);
+        }}
+      />
       <div class="settings-actions">
         <button
           type="button"
@@ -110,7 +129,7 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
         </button>
       </div>
       {error && <p class="settings-error">{error}</p>}
-    </section>
+    </div>
   );
 }
 
@@ -124,40 +143,43 @@ const THEME_OPTIONS: Array<{ value: ThemePref; label: string }> = [
 function AppearanceSection() {
   const [theme, setThemeState] = useState<ThemePref>(() => getPref('theme'));
 
+  const choose = (value: ThemePref): void => {
+    setThemeState(value);
+    setTheme(value);
+  };
+
   return (
     <div class="settings-section">
-      <h2>Appearance</h2>
-      <div class="settings-field">
-        <label for="theme-select">Theme</label>
-        <select
-          id="theme-select"
-          class="settings-select"
-          value={theme}
-          onChange={(e) => {
-            const value = e.currentTarget.value as ThemePref;
-            setThemeState(value);
-            setTheme(value);
-          }}
-        >
-          {THEME_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+      <h2>Look</h2>
+      <div class="settings-segmented" role="radiogroup" aria-label="Theme">
+        {THEME_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            class="settings-segment"
+            role="radio"
+            aria-checked={theme === option.value}
+            onClick={() => {
+              choose(option.value);
+            }}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
 /**
- * The Notifications toggle: reflects the browser's actual subscription
- * state (`currentPushState()`, checked once on mount) rather than only the
- * local preference, since the two can drift (permission revoked elsewhere,
- * a subscription that expired). Calls `enablePush()`/`disablePush()` and
- * keeps `notifyOnFinish` in sync so other screens can read it.
+ * The "Ping me when it's done" switch: reflects the browser's actual
+ * subscription state (`currentPushState()`, checked once on mount) rather
+ * than only the local preference, since the two can drift (permission
+ * revoked elsewhere, a subscription that expired). Calls
+ * `enablePush()`/`disablePush()` and keeps `notifyOnFinish` in sync so
+ * other screens (the push prompt) can read it.
  */
-function NotificationsSection() {
+function NotificationsToggle() {
   const [state, setState] = useState<'on' | 'off'>(() =>
     getPref('notifyOnFinish') ? 'on' : 'off',
   );
@@ -201,31 +223,30 @@ function NotificationsSection() {
   };
 
   return (
-    <div class="settings-section">
-      <h2>Notifications</h2>
-      <label class="settings-toggle">
-        <input
-          type="checkbox"
-          checked={state === 'on'}
-          disabled={busy || support !== 'ready'}
-          onChange={(e) => {
-            void toggle(e.currentTarget.checked);
-          }}
-        />
-        Notify me when Bower finishes
-      </label>
-      {support === 'needs-install' && (
-        <p class="settings-hint">
-          Add Bower to your Home Screen first to get notifications.
-        </p>
-      )}
+    <>
+      <Toggle
+        label="Ping me when it's done"
+        hint={
+          support === 'needs-install'
+            ? 'Add Bower to your Home Screen first to get notifications.'
+            : 'Notifications on this phone'
+        }
+        checked={state === 'on'}
+        disabled={busy || support !== 'ready'}
+        onChange={(checked) => void toggle(checked)}
+      />
       {error && <p class="settings-error">{error}</p>}
-    </div>
+    </>
   );
 }
 
-/** Settings › Advanced (spec §5.3): the same `showAppFiles` pref as the explorer's footer button. */
-function AdvancedSection() {
+/**
+ * Settings › Advanced (spec §6): the own Claude API key form, "Show me
+ * around again" (the onboarding tour, #149 — no `/welcome?tour=1` route
+ * exists yet, so this row stays disabled until #149 wires it up) and the
+ * same `showAppFiles` pref as the explorer's footer button.
+ */
+function AdvancedSection({ me }: { me: Me }) {
   const [showAppFiles, setShowAppFiles] = useState(() =>
     getPref('showAppFiles'),
   );
@@ -233,22 +254,25 @@ function AdvancedSection() {
   return (
     <div class="settings-section">
       <h2>Advanced</h2>
-      <label class="settings-toggle">
-        <input
-          type="checkbox"
-          checked={showAppFiles}
-          onChange={(e) => {
-            const checked = e.currentTarget.checked;
-            setShowAppFiles(checked);
-            setPref('showAppFiles', checked);
-          }}
-        />
-        Show Bower's own files
-      </label>
-      <p class="settings-hint">
-        Rulebook, catalogue, journal, instruction notes and health reports,
-        grouped at the bottom of your notes.
-      </p>
+
+      <ApiKeySection me={me} />
+
+      <button type="button" class="settings-row" disabled>
+        <span class="settings-row-text">
+          <span class="settings-row-label">Show me around again</span>
+          <span class="toggle-hint">Replay the three-step tour</span>
+        </span>
+      </button>
+
+      <Toggle
+        label="Show Bower's own files"
+        hint="Rulebook, catalogue, journal, instruction notes and health reports, grouped at the bottom of your notes."
+        checked={showAppFiles}
+        onChange={(checked) => {
+          setShowAppFiles(checked);
+          setPref('showAppFiles', checked);
+        }}
+      />
     </div>
   );
 }
@@ -277,7 +301,6 @@ function DangerZone() {
 
   return (
     <section class="settings-section">
-      <h2>Danger zone</h2>
       {!confirming && (
         <button
           type="button"
@@ -337,40 +360,49 @@ export function Settings() {
     <section class="settings">
       <h1>Settings</h1>
 
+      <div class="settings-section settings-account">
+        <Bird state="looking" size={48} />
+        <div class="settings-account-info">
+          {me.name !== undefined && (
+            <p class="settings-account-name">{me.name}</p>
+          )}
+          <p class="settings-account-email">{me.email}</p>
+        </div>
+        <div class="settings-account-links">
+          {me.vault && (
+            <a
+              href={driveUrl(me.vault.folderId)}
+              target="_blank"
+              rel="noopener"
+            >
+              <ExternalIcon /> Drive
+            </a>
+          )}
+          <a href={loginUrl()}>Reconnect Google</a>
+        </div>
+      </div>
+
       <div class="settings-section">
-        <h2>Account</h2>
-        <p>{me.email}</p>
-        {me.vault && (
-          <a href={driveUrl(me.vault.folderId)} target="_blank" rel="noopener">
-            Open your Bower folder in Drive
-          </a>
-        )}
-        <a href={loginUrl()}>Reconnect Google</a>
+        <h2>Tidying up</h2>
+        <Toggle
+          label="Tidy up right after adding"
+          hint="One run per batch of files"
+          checked={autoProcess}
+          onChange={(checked) => {
+            setAutoProcess(checked);
+            setPref('autoProcessOnAdd', checked);
+          }}
+        />
+        <NotificationsToggle />
+        <div class="settings-static-row">
+          <span class="settings-row-label">Weekly health check</span>
+          <span class="settings-static-value">Every Sunday</span>
+        </div>
       </div>
 
       <AppearanceSection />
 
-      <NotificationsSection />
-
-      <ApiKeySection me={me} />
-
-      <div class="settings-section">
-        <h2>Tidying up</h2>
-        <label class="settings-toggle">
-          <input
-            type="checkbox"
-            checked={autoProcess}
-            onChange={(e) => {
-              const checked = e.currentTarget.checked;
-              setAutoProcess(checked);
-              setPref('autoProcessOnAdd', checked);
-            }}
-          />
-          Tidy up right after adding
-        </label>
-      </div>
-
-      <AdvancedSection />
+      <AdvancedSection me={me} />
 
       <div class="settings-section">
         <button

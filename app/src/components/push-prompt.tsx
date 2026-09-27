@@ -1,13 +1,15 @@
 /**
- * The one-time card asking for push permission, shown right after the
- * first `done` (#39). Mounted from `process-button.tsx`. On iOS before the
- * PWA is installed, push isn't possible yet ("needs-install"), so this
- * shows the install hint instead of the permission buttons.
+ * The one-time bottom sheet asking for push permission, shown right after
+ * the first `done` (#39; restyled as a sheet with the bird singing in
+ * #148). Mounted from `process-button.tsx`. On iOS before the PWA is
+ * installed, push isn't possible yet ("needs-install"), so this shows the
+ * install hint instead of the permission buttons.
  */
 
 import { useEffect, useState } from 'preact/hooks';
 
 import '../styles/push-prompt.css';
+import { Bird } from './bird.js';
 import {
   currentPermission,
   currentPushSupport,
@@ -65,9 +67,14 @@ export function PushPrompt() {
 
   return (
     <div class="push-prompt" role="status" aria-live="polite">
+      <Bird state="singing" size={88} />
       {variant === 'ask' && (
         <>
-          <p class="push-prompt-text">Get notified when Bower finishes?</p>
+          <p class="push-prompt-title">Want a ping when I&rsquo;m done?</p>
+          <p class="push-prompt-text">
+            Tidying up takes a few minutes. I&rsquo;ll send one short
+            notification when everything is filed, and nothing else, ever.
+          </p>
           <div class="push-prompt-actions">
             <button
               type="button"
@@ -75,7 +82,7 @@ export function PushPrompt() {
               disabled={busy}
               onClick={() => void onYes()}
             >
-              Yes, notify me
+              Yes, ping me
             </button>
             <button
               type="button"
@@ -90,10 +97,10 @@ export function PushPrompt() {
       )}
       {variant === 'ios-hint' && (
         <>
-          <p class="push-prompt-text">
+          <p class="push-prompt-title">
             Add Bower to your Home Screen first to get notifications.
           </p>
-          <p class="push-prompt-hint">Tap Share, then Add to Home Screen.</p>
+          <p class="push-prompt-text">Tap Share, then Add to Home Screen.</p>
           <div class="push-prompt-actions">
             <button type="button" class="push-prompt-button" onClick={dismiss}>
               Got it

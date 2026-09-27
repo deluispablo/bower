@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DriveFile } from '../src/drive.js';
-import { REPORT_PATH, findReport, isReportNew } from '../src/health-report.js';
+import {
+  REPORT_PATH,
+  findReport,
+  findingsIn,
+  fixMessage,
+  isReportNew,
+  reportDateLabel,
+  summarise,
+} from '../src/health-report.js';
+import { parseFrontmatter } from '../src/markdown/frontmatter.js';
 import { buildVaultIndex } from '../src/vault-index.js';
+
+/** A realistic `Lint Report.md`, the fixture `summarise`/`findingsIn` tests against. */
+const REPORT_FIXTURE = `---
+notes: 184
+findings: 3
+brokenLinks: 1
+---
+
+Sunday's check.
+
+## To fix
+- [ ] 2 notes without tags: Trip to Lisbon, Car insurance renewal
+- [ ] Duplicate: "Sourdough" and "Sourdough starter" — same recipe, two notes
+- [ ] Broken link in Weeknight curry: [[Flour type]] does not exist
+`;
 
 function note(path: string): DriveFile {
   const name = path.split('/').pop() ?? path;
@@ -52,5 +76,104 @@ describe('isReportNew', () => {
   it('is never new without a report or with an unreadable time', () => {
     expect(isReportNew(undefined, '')).toBe(false);
     expect(isReportNew('not-a-date', '')).toBe(false);
+  });
+});
+
+describe('summarise', () => {
+  it('reads the three figures from the frontmatter', () => {
+    const report = parseFrontmatter(REPORT_FIXTURE);
+
+    expect(summarise(report)).toEqual({
+      notes: 184,
+      findings: 3,
+      brokenLinks: 1,
+    });
+  });
+
+  it('is all zeros for a report with no frontmatter yet', () => {
+    const report = parseFrontmatter('Nothing to report.');
+
+    expect(summarise(report)).toEqual({
+      notes: 0,
+      findings: 0,
+      brokenLinks: 0,
+    });
+  });
+
+  it('is all zeros for an empty report', () => {
+    expect(summarise(parseFrontmatter(''))).toEqual({
+      notes: 0,
+      findings: 0,
+      brokenLinks: 0,
+    });
+  });
+
+  it('never returns a negative or non-finite count', () => {
+    const report = parseFrontmatter(
+      '---\nnotes: -3\nfindings: not-a-number\n---\nBody.',
+    );
+
+    expect(summarise(report)).toEqual({
+      notes: 0,
+      findings: 0,
+      brokenLinks: 0,
+    });
+  });
+});
+
+describe('findingsIn', () => {
+  it('reads the checklist items from the fixture, splitting off a detail after the colon', () => {
+    const report = parseFrontmatter(REPORT_FIXTURE);
+
+    expect(findingsIn(report.body)).toEqual([
+      {
+        text: '2 notes without tags',
+        detail: 'Trip to Lisbon, Car insurance renewal',
+      },
+      {
+        text: 'Duplicate',
+        detail: '"Sourdough" and "Sourdough starter" — same recipe, two notes',
+      },
+      {
+        text: 'Broken link in Weeknight curry',
+        detail: '[[Flour type]] does not exist',
+      },
+    ]);
+  });
+
+  it('is empty for a report with no checklist', () => {
+    expect(findingsIn('Nothing to fix.')).toEqual([]);
+  });
+
+  it('keeps a checklist item with no colon as text only', () => {
+    expect(findingsIn('- [ ] Everything looks fine')).toEqual([
+      { text: 'Everything looks fine' },
+    ]);
+  });
+});
+
+describe('reportDateLabel', () => {
+  it('formats a valid Drive timestamp', () => {
+    // Component parts, not a literal string: the exact rendering depends on
+    // the runner's locale, so only check it produced something non-empty.
+    expect(reportDateLabel('2026-06-07T06:30:00.000Z').length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('is empty for an unreadable date', () => {
+    expect(reportDateLabel('not-a-date')).toBe('');
+  });
+});
+
+describe('fixMessage', () => {
+  it('names the report date', () => {
+    expect(fixMessage('Jun 7')).toBe(
+      'Fix what the health check from Jun 7 found',
+    );
+  });
+
+  it('falls back when there is no date to name', () => {
+    expect(fixMessage('')).toBe('Fix what the health check found');
   });
 });

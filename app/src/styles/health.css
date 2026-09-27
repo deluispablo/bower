@@ -1,0 +1,158 @@
+/*
+ * Health check (spec §6, Health check row): the bird done with its bubble,
+ * three headline figures, the findings list and the "Ask Bower to fix
+ * these" button. Phone-first; a little more breathing room from 900 px.
+ */
+
+.health {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 40rem;
+}
+
+.health-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.health-head h1 {
+  margin: 0;
+}
+
+.health-drive-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-link);
+  font-size: var(--text-sm);
+}
+
+.health-drive-link .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.health-bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.health-bubble {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+}
+
+.health-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.health-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.health-figure-count {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-2xl);
+  line-height: 1;
+}
+
+.health-figure-count--warn {
+  color: var(--bower-amber);
+}
+
+.health-figure-count--ok {
+  color: var(--color-success);
+}
+
+.health-figure-label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.3;
+}
+
+.health-findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.health-findings h2 {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.health-findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.health-finding {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.health-finding-text {
+  margin: 0;
+  font-weight: var(--weight-medium);
+}
+
+.health-finding-detail {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.health-fix-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  border-radius: var(--radius-full);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+
+.health-fix-button:hover {
+  filter: brightness(0.95);
+}
+
+@media (min-width: 900px) {
+  .health-figures {
+    max-width: 28rem;
+  }
+}
