@@ -5,6 +5,7 @@ import type { DriveFile } from '../src/drive.js';
 import {
   breadcrumb,
   buildTree,
+  folderCounts,
   nextFocusIndex,
   pendingCount,
   recentNotes,
@@ -147,10 +148,66 @@ describe('buildTree', () => {
     ]);
   });
 
+  it('sorts by last modified when asked: newest note first, folders by their newest note', () => {
+    const index = buildVaultIndex([
+      dir('Alpha'),
+      dir('Beta'),
+      entry('Alpha/Old.md', 'text/markdown', '2026-01-01T00:00:00.000Z'),
+      entry('Beta/Fresh.md', 'text/markdown', '2026-03-01T00:00:00.000Z'),
+      entry('Beta/Middle.md', 'text/markdown', '2026-02-01T00:00:00.000Z'),
+      entry('Beta/Undated.md'),
+    ]);
+    const tree = buildTree(index, 'modified');
+    expect(tree.folders.map((f) => f.name)).toEqual(['Beta', 'Alpha']);
+    expect(tree.folders[0]?.notes.map((n) => n.name)).toEqual([
+      'Fresh.md',
+      'Middle.md',
+      'Undated.md',
+    ]);
+  });
+
+  it('sorts by name by default', () => {
+    const index = buildVaultIndex([
+      dir('Beta'),
+      dir('Alpha'),
+      entry('Beta/Fresh.md', 'text/markdown', '2026-03-01T00:00:00.000Z'),
+    ]);
+    expect(buildTree(index).folders.map((f) => f.name)).toEqual([
+      'Alpha',
+      'Beta',
+    ]);
+  });
+
   it('builds an empty tree for an empty vault', () => {
     const tree = buildTree(buildVaultIndex([]));
     expect(tree.folders).toEqual([]);
     expect(tree.notes).toEqual([]);
+  });
+});
+
+describe('folderCounts', () => {
+  it('counts the notes in each folder, subfolders included', () => {
+    const index = buildVaultIndex([
+      dir('2-Areas'),
+      dir('2-Areas/Cooking'),
+      dir('2-Areas/Finance'),
+      dir('4-Archive'),
+      entry('2-Areas/Overview.md'),
+      entry('2-Areas/Cooking/Flour types.md'),
+      entry('2-Areas/Cooking/Sourdough starter.md'),
+      entry('2-Areas/Cooking/_Cooking.md'),
+      entry('index.md'),
+    ]);
+    const counts = folderCounts(index);
+    expect(counts.get('2-Areas')).toBe(3);
+    expect(counts.get('2-Areas/Cooking')).toBe(2);
+    expect(counts.get('2-Areas/Finance')).toBe(0);
+    expect(counts.get('4-Archive')).toBe(0);
+    expect(counts.has('')).toBe(false);
+  });
+
+  it('is empty for an empty vault', () => {
+    expect(folderCounts(buildVaultIndex([])).size).toBe(0);
   });
 });
 

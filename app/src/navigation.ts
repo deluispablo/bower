@@ -79,7 +79,10 @@ export interface TreeNode {
   notes: DriveFile[];
 }
 
-function sortNode(node: TreeNode): void {
+/** How the explorer orders the tree: by name, or most recently modified first. */
+export type TreeSort = 'name' | 'modified';
+
+function sortByName(node: TreeNode): void {
   node.folders.sort((a, b) => compareNames(a.name, b.name));
   const hubKey = node.path === '' ? '' : basenameKey(node.name);
   node.notes.sort((a, b) => {
@@ -88,7 +91,30 @@ function sortNode(node: TreeNode): void {
     if (aHub !== bHub) return aHub ? -1 : 1;
     return compareNames(a.name, b.name);
   });
-  for (const child of node.folders) sortNode(child);
+  for (const child of node.folders) sortByName(child);
+}
+
+/**
+ * Newest first: notes by `modifiedTime`, folders by their newest note at any
+ * depth. Missing times sort last; ties fall back to the name. Returns the
+ * node's newest time ('' when it holds no dated note).
+ */
+function sortByModified(node: TreeNode): string {
+  const newest = new Map<TreeNode, string>();
+  for (const child of node.folders) newest.set(child, sortByModified(child));
+  node.folders.sort(
+    (a, b) =>
+      (newest.get(b) ?? '').localeCompare(newest.get(a) ?? '') ||
+      compareNames(a.name, b.name),
+  );
+  node.notes.sort(
+    (a, b) =>
+      (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
+      compareNames(a.name, b.name),
+  );
+  let latest = node.notes[0]?.modifiedTime ?? '';
+  for (const time of newest.values()) if (time > latest) latest = time;
+  return latest;
 }
 
 /**
@@ -96,9 +122,13 @@ function sortNode(node: TreeNode): void {
  * (`_Folder.md`) never appear: `buildVaultIndex` already excludes them from
  * `index.notes`. A "hub" note is identified by basename only (its name
  * matches its folder's name) — frontmatter tags (`hub`, `moc`) are not
- * available here, since the index holds no note text.
+ * available here, since the index holds no note text. `sort` is the
+ * explorer's order (`explorerSort` pref); by name unless asked otherwise.
  */
-export function buildTree(index: VaultIndex): TreeNode {
+export function buildTree(
+  index: VaultIndex,
+  sort: TreeSort = 'name',
+): TreeNode {
   const byPath = new Map<string, TreeNode>();
   const root: TreeNode = { path: '', name: '', folders: [], notes: [] };
   byPath.set('', root);
@@ -117,8 +147,28 @@ export function buildTree(index: VaultIndex): TreeNode {
   for (const folder of index.folders) ensure(folder.path);
   for (const note of index.notes) ensure(folderOf(note.path)).notes.push(note);
 
-  sortNode(root);
+  if (sort === 'modified') sortByModified(root);
+  else sortByName(root);
   return root;
+}
+
+/**
+ * How many notes each folder holds, subfolders included, keyed by folder
+ * path (the tree's per-folder counts). Every visible folder has an entry,
+ * empty ones at 0; the root ('') has none. Folder notes are already left
+ * out of `index.notes`, so they never count.
+ */
+export function folderCounts(index: VaultIndex): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const folder of index.folders) counts.set(folder.path, 0);
+  for (const note of index.notes) {
+    let folder = folderOf(note.path);
+    while (folder !== '') {
+      counts.set(folder, (counts.get(folder) ?? 0) + 1);
+      folder = folderOf(folder);
+    }
+  }
+  return counts;
 }
 
 export interface BreadcrumbSegment {
