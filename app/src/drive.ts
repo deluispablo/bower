@@ -705,6 +705,20 @@ export async function updateFileText(
   return parseFile(body, typeof body.name === 'string' ? body.name : '');
 }
 
+/**
+ * Trashes a file (`files.update`, `trashed: true`) rather than deleting it
+ * outright, so it can still be recovered from Drive's own Trash — the same
+ * caution as the agent's `rclone deletefile` (`ARCHITECTURE.md`). Used to
+ * remove a folder note that pinning created and unpinning leaves empty.
+ */
+export async function deleteFile(id: string): Promise<void> {
+  await driveFetch(`/drive/v3/files/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  });
+}
+
 /** Notes Bower maintains itself, which the app never writes to. */
 const PROTECTED_NOTES = new Set(['claude.md', 'index.md', 'log.md']);
 
@@ -763,7 +777,10 @@ export interface AppendResult {
   file: DriveFile;
 }
 
-async function modifiedTimeOf(id: string): Promise<string> {
+/** A file's current `modifiedTime`, freshly read (no cache). Used to check a
+ * write is not about to clobber another one, since Drive v3 documents no
+ * precondition header for `files.update` (`updateFileText`). */
+export async function modifiedTimeOf(id: string): Promise<string> {
   const body = await readJson(
     await driveFetch(
       `/drive/v3/files/${encodeURIComponent(id)}?fields=modifiedTime`,

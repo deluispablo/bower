@@ -8,6 +8,7 @@ import {
   copyIntoInbox,
   copyOrExportIntoInbox,
   createTextFile,
+  deleteFile,
   DriveError,
   exportPlanFor,
   FOLDER_MIME,
@@ -577,6 +578,36 @@ describe('createTextFile', () => {
       }),
     );
     expect(content).toBe('Content-Type: text/markdown\r\n\r\n# Tidy up\n');
+  });
+});
+
+describe('deleteFile', () => {
+  it('trashes the file with files.update rather than deleting it outright', async () => {
+    let url = new URL('https://www.googleapis.com');
+    let init: RequestInit = {};
+    stubFetch((u, i) => {
+      url = u;
+      init = i;
+      return jsonResponse(200, { id: 'FILE_ID', trashed: true });
+    });
+
+    await deleteFile('FILE_ID');
+
+    expect(init.method).toBe('PATCH');
+    expect(url.pathname).toBe('/drive/v3/files/FILE_ID');
+    expect(new Headers(init.headers).get('Content-Type')).toBe(
+      'application/json',
+    );
+    expect(JSON.parse(init.body as string)).toEqual({ trashed: true });
+  });
+
+  it('throws a DriveError when Drive refuses it', async () => {
+    stubFetch(() => jsonResponse(404, { error: { message: 'Not found.' } }));
+
+    await expect(deleteFile('FILE_ID')).rejects.toMatchObject({
+      name: 'DriveError',
+      status: 404,
+    });
   });
 });
 

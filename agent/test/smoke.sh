@@ -106,6 +106,11 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         echo v1 >"$remote/3-Resources/app.md"
         echo v1 >"$remote/3-Resources/agent.md"
         echo '# readme' >"$remote/README.md"
+        # A pinned note (issue #215): the agent must leave `pinned` as it is
+        # when a run does not touch the note at all.
+        mkdir -p "$remote/2-Areas"
+        printf -- '---\npinned: 2026-01-01T00:00:00.000Z\n---\nHealth insurance renewal.\n' \
+          >"$remote/2-Areas/Insurance.md"
         # The vault's own Claude Code settings: run.sh must replace them
         # with the instance repo's policy and never upload either.
         mkdir -p "$remote/.claude"
@@ -477,6 +482,10 @@ remote="$STATE/remote"
 for f in 0-Inbox/late.pdf Clippings/late.md Clippings/b.md 0-Inbox/_Inbox.md 0-Inbox/Processed/old.pdf; do
   [ -f "$remote/$f" ] || die "a file that was not processed is gone from Drive: $f"
 done
+# The pinned note survives the run untouched, `pinned` and all (#215).
+expect_eq "$(cat "$remote/2-Areas/Insurance.md")" \
+  "$(printf -- '---\npinned: 2026-01-01T00:00:00.000Z\n---\nHealth insurance renewal.')" \
+  'pinned note survives the run'
 # A Bower*.md clipped into Clippings/ (a web clipper naming the file after
 # the page title) is filed like any other clipping, not read as an
 # instruction: it is listed in `processed` (checked above) but, exactly like

@@ -162,4 +162,5 @@ Your own rules live in `Rules.md`; Bower reads both. Where they disagree, `Rules
 - Never touch `.obsidian/`. In unattended runs this is absolute; if a rule would need it (e.g. a graph colour for a new tag), write the pending change to `log.md` instead.
 - Never delete notes or originals. Archive or move to `Processed/`.
 - Never rewrite a note the owner edited today unless an instruction asks for it; add to it instead.
+- Keep a note's `pinned` frontmatter as it is when you rewrite the note; a folder note (`_<Folder>.md`) is the owner's, never file it or move it.
 - Converting a note (e.g. translating) may replace its inbox copy.
