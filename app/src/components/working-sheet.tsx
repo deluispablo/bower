@@ -1,9 +1,16 @@
 /**
- * The sheet that holds the processing animation (#38): a bottom sheet on
- * mobile, a card under the header on desktop (`styles/bower-working.css`).
- * It shows while a run is queued or running and for 3 s after it ends,
- * unless the user closed it (× or Escape). A non-modal dialog: no focus
- * trap, the rest of the app stays usable.
+ * The sheet that holds the processing animation (#38, redesigned in #147): a
+ * bottom sheet on mobile, a card under the header on desktop
+ * (`styles/bower-working.css`). It shows while a run is queued or running
+ * and for 3 s after it ends (also for a failure, a stale run, or the day's
+ * quota running out), unless the user closed it (× or Escape). A non-modal
+ * dialog: no focus trap, the rest of the app stays usable.
+ *
+ * While a run is queued or running it also shows "n of m filed" with a bar
+ * (`progressFor`, indeterminate when the run hasn't reported both counts —
+ * which is always, today), how long ago it started, a reassurance line, and
+ * the names it has filed so far (`run.processed`; a destination folder only
+ * once the runner reports one, which it does not yet — see the PR).
  *
  * The caller (`process-button.tsx`) owns `open`: it opens the sheet when a
  * run starts and when the header button is tapped during a run, and closes
@@ -13,7 +20,9 @@
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
+import type { Run } from '../api.js';
 import type { RunPhase } from '../run-store.js';
+import { progressFor } from '../run-progress.js';
 import { BowerWorking, workingLabel } from './bower-working.js';
 import type { WorkingState } from './bower-working.js';
 
@@ -22,8 +31,8 @@ export const SHEET_LINGER_MS = 3_000;
 
 /**
  * Whether the sheet shows: always while queued/running, for
- * `SHEET_LINGER_MS` after done/failed/stale, never once dismissed and never
- * for idle or quota. `sinceMs` is the time since the phase began.
+ * `SHEET_LINGER_MS` after done/failed/stale/quota, never once dismissed and
+ * never for idle. `sinceMs` is the time since the phase began.
  */
 export function sheetVisible(
   phase: RunPhase,
@@ -38,9 +47,9 @@ export function sheetVisible(
     case 'done':
     case 'failed':
     case 'stale':
+    case 'quota':
       return sinceMs < SHEET_LINGER_MS;
     case 'idle':
-    case 'quota':
       return false;
   }
 }
@@ -55,29 +64,45 @@ export function workingStateFor(phase: RunPhase): WorkingState | null {
     case 'failed':
     case 'stale':
       return 'failed';
-    case 'idle':
     case 'quota':
+      return 'quota';
+    case 'idle':
       return null;
   }
 }
 
+/** "Started n min ago" ("Started just now" under a minute). */
+export function startedAgo(requestedAt: string, nowMs: number): string {
+  const minutes = Math.max(
+    0,
+    Math.floor((nowMs - Date.parse(requestedAt)) / 60_000),
+  );
+  return minutes === 0 ? 'Started just now' : `Started ${minutes} min ago`;
+}
+
 export interface WorkingSheetProps {
   phase: RunPhase;
+  /** The current run, for its start time and the names it has filed. */
+  run: Run | null;
   /** The run store's message ("3 files processed", an error, …). */
   message?: string;
   open: boolean;
   onDismiss: () => void;
   /**
    * Bumped by the caller each time the button is tapped to bring the sheet
-   * back during `done` / `failed` / `stale`. Without this, a tap after the
-   * linger has already elapsed would compute `sinceMs` from the same old
-   * phase change and find it already expired, opening nothing.
+   * back during `done` / `failed` / `stale` / `quota`. Without this, a tap
+   * after the linger has already elapsed would compute `sinceMs` from the
+   * same old phase change and find it already expired, opening nothing.
    */
   reopenKey?: number;
 }
 
+const REASSURANCE =
+  "Usually takes three to five minutes. You can close this; I'll ping you when I'm done.";
+
 export function WorkingSheet({
   phase,
+  run,
   message,
   open,
   onDismiss,
@@ -98,12 +123,28 @@ export function WorkingSheet({
   // Re-render once the linger time is up so the sheet can go away.
   const [, setTick] = useState(0);
   useEffect(() => {
-    if (phase !== 'done' && phase !== 'failed' && phase !== 'stale') return;
+    if (
+      phase !== 'done' &&
+      phase !== 'failed' &&
+      phase !== 'stale' &&
+      phase !== 'quota'
+    ) {
+      return;
+    }
     const timer = setTimeout(() => {
       setTick((tick) => tick + 1);
     }, SHEET_LINGER_MS);
     return () => clearTimeout(timer);
   }, [phase, reopenKey]);
+
+  // Re-render once a minute so "Started n min ago" keeps up while a run goes.
+  useEffect(() => {
+    if (phase !== 'queued' && phase !== 'running') return;
+    const timer = setInterval(() => {
+      setTick((tick) => tick + 1);
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [phase]);
 
   const state = workingStateFor(phase);
   const visible =
@@ -126,18 +167,62 @@ export function WorkingSheet({
       ? message
       : undefined;
 
+  const active = state === 'queued' || state === 'running';
+  const filed = run?.processed;
+  const progress = active ? progressFor({ processed: filed?.length }) : null;
+  const started =
+    active && run?.requestedAt !== undefined
+      ? startedAgo(run.requestedAt, Date.now())
+      : undefined;
+
   return (
     <div class="working-sheet" role="dialog" aria-label="Tidying up status">
-      <button
-        type="button"
-        class="working-sheet-close"
-        aria-label="Close"
-        onClick={onDismiss}
-      >
-        ×
-      </button>
+      <div class="working-sheet-head">
+        <h2 class="working-sheet-title">Tidying up</h2>
+        <button
+          type="button"
+          class="working-sheet-close"
+          aria-label="Close"
+          onClick={onDismiss}
+        >
+          ×
+        </button>
+      </div>
       <BowerWorking state={state} />
       {detail !== undefined && <p class="working-sheet-detail">{detail}</p>}
+      {active && (
+        <div class="working-sheet-progress">
+          <div class="working-sheet-progress-row">
+            {progress !== null && (
+              <span>{`${progress.filed} of ${progress.total} filed`}</span>
+            )}
+            {started !== undefined && (
+              <span class="working-sheet-started">{started}</span>
+            )}
+          </div>
+          <div
+            class="working-sheet-bar"
+            data-indeterminate={progress === null ? '' : undefined}
+          >
+            {progress !== null && (
+              <div
+                class="working-sheet-bar-fill"
+                style={{ width: `${progress.ratio * 100}%` }}
+              />
+            )}
+          </div>
+          <p class="working-sheet-reassurance">{REASSURANCE}</p>
+        </div>
+      )}
+      {filed !== undefined && filed.length > 0 && (
+        <ul class="working-sheet-files">
+          {filed.map((name) => (
+            <li key={name} class="working-sheet-file">
+              {name}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -2,9 +2,9 @@
  * The tidy-up animation (#38, rebuilt on the bird in #137): while a run is
  * queued or running the bird ferries a paper and a twig from the inbox tray
  * to the nest (`tidying` with its scene); when it is done the bird shows off
- * once and then looks around; when it fails it is confused. All motion is
- * the bird's own CSS (`styles/bird.css`), so there is no asset request and
- * no timer.
+ * once and then looks around; when it fails, or the day's quota is used up,
+ * it is confused (#147). All motion is the bird's own CSS
+ * (`styles/bird.css`), so there is no asset request and no timer.
  *
  * Under `prefers-reduced-motion: reduce` (or `reducedMotion`) the bird holds
  * still and a single dot pulses (opacity only) while a run is queued or
@@ -20,7 +20,7 @@ import { Bird } from './bird.js';
 
 import '../styles/bower-working.css';
 
-export type WorkingState = 'queued' | 'running' | 'done' | 'failed';
+export type WorkingState = 'queued' | 'running' | 'done' | 'failed' | 'quota';
 
 export interface BowerWorkingProps {
   state: WorkingState;
@@ -36,6 +36,7 @@ const LABELS: Record<WorkingState, string> = {
   running: 'Tidying up…',
   done: 'Done',
   failed: 'Something went wrong',
+  quota: 'Limit reached',
 };
 
 /** The text under the bird for a state. */
@@ -52,6 +53,7 @@ export function workingBird(state: WorkingState): BirdState {
     case 'done':
       return 'showoff';
     case 'failed':
+    case 'quota':
       return 'confused';
   }
 }

@@ -45,7 +45,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .bw *,
-  .working-sheet {
+  .working-sheet,
+  .working-sheet * {
     animation: none !important;
     transition: none !important;
   }
@@ -86,10 +87,19 @@
   animation: working-sheet-in var(--motion-base) var(--ease-out);
 }
 
+.working-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.working-sheet-title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
 .working-sheet-close {
-  position: absolute;
-  top: var(--space-1);
-  right: var(--space-1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -119,6 +129,104 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   text-align: center;
+}
+
+/* "n of m filed", started-ago, the bar and the reassurance line — shown
+   only while a run is queued or running. */
+
+.working-sheet-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.working-sheet-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.working-sheet-started {
+  color: var(--color-text-muted);
+}
+
+.working-sheet-bar {
+  position: relative;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.working-sheet-bar-fill {
+  height: 100%;
+  background: var(--color-brand);
+  transition: width var(--motion-base) var(--ease-out);
+}
+
+/* Indeterminate: a highlight slides across, since there is no ratio to draw
+   yet (today's runner never reports a total — see `run-progress.ts`). */
+.working-sheet-bar[data-indeterminate]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--color-brand);
+  border-radius: var(--radius-full);
+  animation: working-bar-slide 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .working-sheet-bar[data-indeterminate]::after {
+    animation: none !important;
+  }
+}
+
+@keyframes working-bar-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.working-sheet-reassurance {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+/* The names filed so far (`run.processed`); a destination folder joins each
+   row once the runner reports one — it does not today. */
+
+.working-sheet-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.working-sheet-file {
+  padding: var(--space-1) 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-top: 1px solid var(--color-border);
+}
+
+.working-sheet-file:first-child {
+  border-top: none;
 }
 
 @media (min-width: 900px) {
