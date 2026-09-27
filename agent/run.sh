@@ -6,9 +6,11 @@
 # Fetches the vault's folder id and a 1 h Drive token from the API, syncs the
 # vault down with rclone (configured only through environment variables),
 # converts pending Office, HTML and EPUB files to Markdown with pandoc (for
-# an ingest), runs Claude Code inside it following the vault's own CLAUDE.md
-# under the permission policy in claude-settings.json (next to this script),
-# audits what the agent changed (see "post-run audit" below), copies back up
+# an ingest), pre-scans the pending text files for injection patterns and
+# quarantines what is flagged (agent/scan.sh, see "pre-scan" below) before
+# Claude ever reads them, runs Claude Code inside it following the vault's
+# own CLAUDE.md under the permission policy in claude-settings.json (next to
+# this script), audits what the agent changed (see "post-run audit" below), copies back up
 # only the accepted files the agent added or changed (so a note edited in the
 # app during the run keeps its newer content), deletes from Drive only the
 # pending originals the agent moved to an accepted place, and reports the
@@ -117,6 +119,8 @@ readonly MANIFEST_BEFORE="$WORK_DIR/manifest-before.txt"
 readonly MANIFEST_AFTER="$WORK_DIR/manifest-after.txt"
 readonly CHANGED_FILE="$WORK_DIR/changed.txt"
 readonly REFUSED_FILE="$WORK_DIR/refused.txt"
+readonly FLAGGED_FILE="$WORK_DIR/flagged.txt"
+readonly QUARANTINED_FILE="$WORK_DIR/quarantined.txt"
 readonly SAVED_KEYS="$WORK_DIR/saved-keys.txt"
 readonly PRE_RUN_DIR="$WORK_DIR/pre-run"
 readonly AGENT_OUT="$WORK_DIR/agent.out"
@@ -129,6 +133,7 @@ STEP='start'   # the step in progress, named in any failure report
 REPORTED=0     # 1 once a final state (done or failed) was reported
 RUN_STARTED=0  # 1 once the agent may have changed the local copy
 REFUSED_JSON=''      # the audit's refused paths, a JSON array, once it ran
+QUARANTINED_JSON=''  # the pre-scan's quarantined paths, a JSON array, once it ran
 TOO_MANY_CHANGES=0   # 1 when the audit refused the whole run
 
 on_exit() {
@@ -157,6 +162,7 @@ report() {
   [ -n "${PROCESSED_JSON:-}" ] && args+=(--argjson processed "$PROCESSED_JSON")
   [ -n "${SUMMARY:-}" ] && args+=(--arg summary "$SUMMARY")
   [ -n "$REFUSED_JSON" ] && args+=(--argjson refused "$REFUSED_JSON")
+  [ -n "${QUARANTINED_JSON:-}" ] && args+=(--argjson quarantined "$QUARANTINED_JSON")
   jq -cn "${args[@]}" '$ARGS.named' |
     curl -fsS -X POST \
       -H "Authorization: Bearer $BOWER_API_KEY" \
@@ -460,6 +466,51 @@ if [ "$MODE" = ingest ]; then
   if [ $((converted + unconverted)) -gt 0 ]; then
     log "$STEP: $converted converted, $unconverted could not be converted"
   fi
+fi
+
+# --- pre-scan ----------------------------------------------------------
+# Everything pending is untrusted text, so before Claude reads any of it,
+# agent/scan.sh (best-effort, grep/awk, no network) looks over 0-Inbox/
+# and Clippings/ (Quarantine/ itself, and Processed/, excluded) for
+# patterns that read like instructions aimed at an assistant, including
+# in the Markdown siblings the conversion step just wrote. A flagged
+# file is moved to 0-Inbox/Quarantine/ (created here if missing, its
+# path under 0-Inbox/ or Clippings/ kept underneath so two files sharing
+# a name never collide) so Claude never sees it, and is dropped from the
+# pending list before `processed` is built. Reported as `quarantined`,
+# names only; the log carries the count, never a name.
+STEP='pre-scan'
+(
+  cd "$VAULT_DIR"
+  dirs=()
+  for d in 0-Inbox Clippings; do
+    [ -d "$d" ] && dirs+=("$d")
+  done
+  [ "${#dirs[@]}" -eq 0 ] || bash "$AGENT_DIR/scan.sh" "${dirs[@]}"
+) >"$FLAGGED_FILE" 2>>"$AGENT_ERR" || true
+flagged_count=$(grep -c . "$FLAGGED_FILE" || true)
+: >"$QUARANTINED_FILE"
+if [ "$flagged_count" -gt 0 ]; then
+  while IFS= read -r path <&3; do
+    [ -n "$path" ] || continue
+    rel=$path
+    case "$rel" in
+      0-Inbox/*) rel=${rel#0-Inbox/} ;;
+    esac
+    dest="0-Inbox/Quarantine/$rel"
+    if mkdir -p "$VAULT_DIR/$(dirname "$dest")" &&
+      mv "$VAULT_DIR/$path" "$VAULT_DIR/$dest"; then
+      printf '%s\n' "$dest" >>"$QUARANTINED_FILE"
+    fi
+  done 3<"$FLAGGED_FILE"
+fi
+QUARANTINED_JSON=$(LC_ALL=C sort "$QUARANTINED_FILE" | jq -Rn '[inputs]') || QUARANTINED_JSON='[]'
+log "$STEP: $flagged_count files quarantined"
+
+if [ "$MODE" = ingest ] && [ "$flagged_count" -gt 0 ]; then
+  LC_ALL=C comm -23 <(LC_ALL=C sort "$PENDING_FILE") <(LC_ALL=C sort "$FLAGGED_FILE") \
+    >"$WORK_DIR/pending-after-scan.txt" || true
+  PROCESSED_JSON=$(jq -Rn '[inputs]' <"$WORK_DIR/pending-after-scan.txt")
 fi
 
 # Claude itself runs under `env -i` with an explicit allow-list, so an
