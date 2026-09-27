@@ -56,14 +56,14 @@ describe('buildHeaders', () => {
     expect(directive(headers, 'frame-src')).toBeUndefined();
   });
 
-  it('adds apis.google.com to script-src and frame-src when a Picker key is set', () => {
+  it('adds apis.google.com to script-src, and both the loader and the Picker dialog to frame-src, when a Picker key is set', () => {
     const headers = buildHeaders({ apiUrl: API_URL, googleApiKey: 'a-key' });
 
     expect(directive(headers, 'script-src')).toBe(
       `script-src 'self' https://apis.google.com`,
     );
     expect(directive(headers, 'frame-src')).toBe(
-      `frame-src https://apis.google.com`,
+      `frame-src https://apis.google.com https://docs.google.com`,
     );
   });
 

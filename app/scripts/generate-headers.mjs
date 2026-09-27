@@ -5,11 +5,13 @@
  *
  * Built from the same `VITE_`-prefixed values Vite bakes into the bundle:
  * `VITE_API_URL` (the Worker's origin, added to `connect-src`) and, only
- * when set at build time, `VITE_GOOGLE_API_KEY` (adds
- * `https://apis.google.com` to `script-src` and `frame-src` for the Google
- * Picker, see `app/src/picker.ts`). `loadEnv` (from `vite`, already a
- * dependency) reads `.env` files and `process.env` the same way Vite itself
- * does, so this script and the build can never disagree on the values.
+ * when set at build time, `VITE_GOOGLE_API_KEY` (adds `https://apis.google.com`
+ * — the loader script `app/src/picker.ts` injects — to `script-src`, and
+ * both that and `https://docs.google.com` — the Picker's own dialog, an
+ * iframe, never referenced by URL in our source — to `frame-src`).
+ * `loadEnv` (from `vite`, already a dependency) reads `.env` files and
+ * `process.env` the same way Vite itself does, so this script and the
+ * build can never disagree on the values.
  *
  * `style-src` needs `'unsafe-inline'`: several components set a dynamic
  * inline `style` attribute (`tree.tsx`'s and `working-sheet.tsx`'s row
@@ -103,7 +105,9 @@ export function buildHeaders({ apiUrl, googleApiKey }) {
     `img-src 'self' data: blob: https://lh3.googleusercontent.com`,
     `font-src 'self'`,
     `worker-src 'self'`,
-    ...(pickerEnabled ? [`frame-src${picker}`] : []),
+    ...(pickerEnabled
+      ? [`frame-src https://apis.google.com https://docs.google.com`]
+      : []),
     `frame-ancestors 'none'`,
     `object-src 'none'`,
     `base-uri 'self'`,
