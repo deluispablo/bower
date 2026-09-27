@@ -117,6 +117,15 @@
   font-size: var(--text-sm);
 }
 
+/* The Health card's two lines (status, then cadence): same look as the
+   other cards' single trailing line, but neither is the last child of the
+   other, so each needs the class rather than `:last-child`. */
+.home-card-sub {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .home-card-link:hover {
   background: var(--color-surface);
 }

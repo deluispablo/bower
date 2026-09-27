@@ -419,10 +419,6 @@ export function Settings() {
       <div class="settings-section">
         <h2>Tidying up</h2>
         <NotificationsToggle />
-        <div class="settings-static-row">
-          <span class="settings-row-label">Weekly health check</span>
-          <span class="settings-static-value">Every Sunday</span>
-        </div>
       </div>
 
       <AppearanceSection />

@@ -7,6 +7,7 @@ import { Add } from './routes/add.js';
 import { Health } from './routes/health.js';
 import { Home } from './routes/home.js';
 import { Intro } from './routes/intro.js';
+import { LintRedirect } from './routes/lint-redirect.js';
 import { Login } from './routes/login.js';
 import { Note } from './routes/note.js';
 import { NotFound } from './routes/not-found.js';
@@ -71,7 +72,8 @@ function AppRoutes() {
       <Route path="/tell" component={Tell} />
       <Route path="/search" component={SearchRedirect} />
       <Route path="/settings" component={Settings} />
-      <Route path="/lint" component={Health} />
+      <Route path="/health" component={Health} />
+      <Route path="/lint" component={LintRedirect} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/welcome" component={Intro} />
       <Route default component={NotFound} />

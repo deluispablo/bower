@@ -192,6 +192,43 @@ export function folderCounts(index: VaultIndex): Map<string, number> {
   return counts;
 }
 
+function nodeMatches(name: string, query: string): boolean {
+  return name.toLowerCase().includes(query);
+}
+
+/**
+ * `node`, trimmed to what matches `query` (case-insensitive, name only): a
+ * note survives if its own name matches; a folder survives, with its full
+ * subtree kept as-is, if its own name matches, or — filtered the same way —
+ * if any descendant does. `null` once nothing below `node` matches, so the
+ * caller drops it; the root itself is never dropped (`filterTree` always
+ * returns a node, empty when nothing matches).
+ */
+function filterNode(node: TreeNode, query: string): TreeNode | null {
+  if (node.path !== '' && nodeMatches(node.name, query)) return node;
+  const notes = node.notes.filter((note) => nodeMatches(note.name, query));
+  const folders: TreeNode[] = [];
+  for (const folder of node.folders) {
+    const filtered = filterNode(folder, query);
+    if (filtered !== null) folders.push(filtered);
+  }
+  if (notes.length === 0 && folders.length === 0) return null;
+  return { ...node, folders, notes };
+}
+
+/**
+ * The drawer's filter (spec §14): `tree` narrowed to notes and folders whose
+ * name contains `query` (case-insensitive), keeping the parent folders of
+ * every match so its path stays visible; an empty or blank `query` returns
+ * `tree` unchanged. Pure — the caller (`tree.tsx`) decides which folders to
+ * force open from the result.
+ */
+export function filterTree(tree: TreeNode, query: string): TreeNode {
+  const trimmed = query.trim().toLowerCase();
+  if (trimmed === '') return tree;
+  return filterNode(tree, trimmed) ?? { ...tree, folders: [], notes: [] };
+}
+
 export interface AppFileEntry {
   file: DriveFile;
   /** Friendly name (`appFileLabel`), what the "Bower's files" group shows. */

@@ -36,6 +36,14 @@
   height: 16px;
 }
 
+/* Replaces Settings' old static "Weekly health check · Every Sunday" row
+   (spec §14): the cadence lives here and on Home's Health card instead. */
+.health-cadence {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .health-bubble-row {
   display: flex;
   align-items: flex-end;

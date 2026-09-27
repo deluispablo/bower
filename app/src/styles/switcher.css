@@ -13,7 +13,11 @@
   position: fixed;
   left: var(--space-3);
   right: var(--space-3);
-  top: 76px;
+  /* The header's (and any banner's) live bottom edge, set by `layout.tsx`
+     on `<html>`; 76px is only the fallback before that first measurement
+     (spec §14 — no more guessing a fixed offset that a banner can sit
+     under). */
+  top: var(--switcher-top, 76px);
   bottom: var(--space-4);
   display: flex;
   flex-direction: column;
@@ -196,7 +200,7 @@
   .switcher-panel {
     left: 50%;
     right: auto;
-    top: 96px;
+    top: var(--switcher-top, 96px);
     bottom: auto;
     width: min(560px, calc(100vw - var(--space-8)));
     max-height: min(560px, calc(100vh - 160px));

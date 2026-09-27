@@ -149,7 +149,7 @@ export function Health() {
     return (
       <section class="health">
         <h1>Health check</h1>
-        <p>No health check yet. Bower runs one every Sunday.</p>
+        <p>No health check yet. Runs every Sunday.</p>
       </section>
     );
   }
@@ -172,6 +172,7 @@ export function Health() {
           </a>
         )}
       </div>
+      <p class="health-cadence">Runs every Sunday.</p>
 
       {load.status === 'loading' && <p>Loading…</p>}
       {load.status === 'offline' && (

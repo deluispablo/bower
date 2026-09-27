@@ -10,6 +10,11 @@
  * included). The explorer (`explorer.tsx`) passes the order (`sort`) and a
  * `collapseKey` that collapses every folder whenever it changes.
  *
+ * A non-blank `filter` (the drawer's live filter, spec §14) swaps in
+ * `filterTree`'s result and force-expands every folder it kept, so a match
+ * is always visible; the tree's own expand/collapse state underneath is
+ * untouched and takes back over once the filter is cleared.
+ *
  * Icons are generic (folder / note, from `icons.tsx`): a per-type icon
  * from the first frontmatter tag was in scope, but the index built in
  * `vault-index.ts` has no note text, only Drive metadata, so no tag is
@@ -22,6 +27,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   appFileGroup,
   buildTree,
+  filterTree,
   folderCounts,
   nextFocusIndex,
 } from '../navigation.js';
@@ -82,6 +88,14 @@ function folderFromHash(): string | null {
   return match?.[1] === undefined ? null : decodeURIComponent(match[1]);
 }
 
+/** Every folder path in `node`, so a filtered tree can be shown fully open. */
+function allFolderPaths(node: TreeNode, out: Set<string>): void {
+  for (const folder of node.folders) {
+    out.add(folder.path);
+    allFolderPaths(folder, out);
+  }
+}
+
 interface TreeProps {
   index: VaultIndex;
   /** Called when a note link is activated, e.g. to close the mobile drawer. */
@@ -95,6 +109,12 @@ interface TreeProps {
    * preference). Off by default: the tree is the user's notes only.
    */
   showAppFiles?: boolean;
+  /**
+   * The drawer's live filter (spec §14): narrows the tree to name matches,
+   * force-expanding their parent folders. Blank or left out: the tree
+   * behaves as before, with its own expand/collapse state.
+   */
+  filter?: string;
 }
 
 export function Tree({
@@ -103,6 +123,7 @@ export function Tree({
   sort = 'name',
   collapseKey = 0,
   showAppFiles = false,
+  filter = '',
 }: TreeProps): JSX.Element {
   const tree = useMemo(() => buildTree(index, sort), [index, sort]);
   const counts = useMemo(() => folderCounts(index), [index]);
@@ -110,6 +131,18 @@ export function Tree({
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set<string>(),
   );
+
+  const filtering = filter.trim() !== '';
+  const displayTree = useMemo(
+    () => (filtering ? filterTree(tree, filter) : tree),
+    [tree, filtering, filter],
+  );
+  const displayExpanded = useMemo(() => {
+    if (!filtering) return expanded;
+    const paths = new Set<string>();
+    allFolderPaths(displayTree, paths);
+    return paths;
+  }, [filtering, displayTree, expanded]);
   const [focusIndex, setFocusIndex] = useState(0);
   const rowRefs = useRef<Array<HTMLElement | null>>([]);
   const revealedHash = useRef(false);
@@ -124,9 +157,9 @@ export function Tree({
 
   const rows = useMemo(() => {
     const out: Row[] = [];
-    flatten(tree, 0, expanded, out);
+    flatten(displayTree, 0, displayExpanded, out);
     return out;
-  }, [tree, expanded]);
+  }, [displayTree, displayExpanded]);
 
   // Deep-link from Home's "Answers" shortcut: expand that top-level folder
   // once notes have loaded, no route of its own (kept minimal, see the PR).
@@ -202,14 +235,16 @@ export function Tree({
       group.instructionNotesCount > 0 ||
       group.agentSettings !== null);
 
+  const emptyText = filtering ? 'No matches.' : 'Nothing here yet.';
+
   if (rows.length === 0 && !showGroup) {
-    return <p class="tree-empty">Nothing here yet.</p>;
+    return <p class="tree-empty">{emptyText}</p>;
   }
 
   return (
     <>
       {rows.length === 0 ? (
-        <p class="tree-empty">Nothing here yet.</p>
+        <p class="tree-empty">{emptyText}</p>
       ) : (
         <ul class="tree" role="tree">
           {rows.map((row, i) => {

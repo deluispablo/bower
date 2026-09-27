@@ -22,7 +22,7 @@
  */
 
 import type { ComponentChildren, JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
@@ -111,6 +111,27 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const { path } = useLocation();
   const { crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const headRef = useRef<HTMLDivElement>(null);
+
+  // The quick switcher's own top offset (spec §14, `switcher.css`'s
+  // `--switcher-top`): the live bottom edge of the header *and* whichever
+  // banners are showing under it, so opening the switcher never covers the
+  // offline banner or the reconnect-Google one. A fixed pixel guess (the
+  // old 76 px) drifts as soon as a banner appears or the header wraps.
+  useEffect(() => {
+    const el = headRef.current;
+    if (el === null || typeof ResizeObserver !== 'function') return;
+    const setOffset = (): void => {
+      document.documentElement.style.setProperty(
+        '--switcher-top',
+        `${el.getBoundingClientRect().bottom}px`,
+      );
+    };
+    setOffset();
+    const observer = new ResizeObserver(setOffset);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Re-read on every render: the health screen updates the pref, and a
   // route change re-renders the layout. No badge while on that screen.
@@ -167,41 +188,43 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         />
       </nav>
       <div class="shell-main">
-        <header class="topbar">
-          <button
-            type="button"
-            class="icon-button menu-button"
-            aria-label="Your notes"
-            aria-haspopup="dialog"
-            aria-expanded={drawerOpen}
-            onClick={() => {
-              setDrawerOpen(true);
-            }}
-          >
-            <IconMenu />
-          </button>
-          {crumb === null ? (
-            <a href="/" class="brand topbar-brand" aria-label="Bower home">
-              <span class="brand-word">Bower</span>
-            </a>
-          ) : (
-            <div class="topbar-crumb">{crumb}</div>
+        <div ref={headRef}>
+          <header class="topbar">
+            <button
+              type="button"
+              class="icon-button menu-button"
+              aria-label="Your notes"
+              aria-haspopup="dialog"
+              aria-expanded={drawerOpen}
+              onClick={() => {
+                setDrawerOpen(true);
+              }}
+            >
+              <IconMenu />
+            </button>
+            {crumb === null ? (
+              <a href="/" class="brand topbar-brand" aria-label="Bower home">
+                <span class="brand-word">Bower</span>
+              </a>
+            ) : (
+              <div class="topbar-crumb">{crumb}</div>
+            )}
+            <ThemeToggle />
+            <div class="topbar-slot topbar-actions" data-slot="actions">
+              {actions}
+            </div>
+            <div class="topbar-slot topbar-pill" data-slot="process">
+              <ProcessButton />
+            </div>
+          </header>
+          <OfflineBanner />
+          {me?.needsReauth === true && (
+            <div class="reauth-banner">
+              <span>Google access needs to be renewed.</span>
+              <a href={loginUrl()}>Reconnect Google</a>
+            </div>
           )}
-          <ThemeToggle />
-          <div class="topbar-slot topbar-actions" data-slot="actions">
-            {actions}
-          </div>
-          <div class="topbar-slot topbar-pill" data-slot="process">
-            <ProcessButton />
-          </div>
-        </header>
-        <OfflineBanner />
-        {me?.needsReauth === true && (
-          <div class="reauth-banner">
-            <span>Google access needs to be renewed.</span>
-            <a href={loginUrl()}>Reconnect Google</a>
-          </div>
-        )}
+        </div>
         <main class="content">{children}</main>
       </div>
       {aside !== null && (

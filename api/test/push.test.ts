@@ -421,7 +421,7 @@ describe('runPushPayload', () => {
         requestedAt: at,
         processed: ['a', 'b'],
       }),
-    ).toEqual({ title: 'Bower', body: 'Health check ready', url: '/lint' });
+    ).toEqual({ title: 'Bower', body: 'Health check ready', url: '/health' });
     expect(
       runPushPayload({
         state: 'failed',
@@ -429,7 +429,7 @@ describe('runPushPayload', () => {
         requestedAt: at,
         error: 'x',
       }),
-    ).toEqual({ title: 'Bower', body: 'Health check failed', url: '/lint' });
+    ).toEqual({ title: 'Bower', body: 'Health check failed', url: '/health' });
   });
 });
 
@@ -489,7 +489,7 @@ describe('runner status report', () => {
         kind: 'lint',
         processed: ['one.md', 'two.md'],
       }),
-    ).toEqual({ title: 'Bower', body: 'Health check ready', url: '/lint' });
+    ).toEqual({ title: 'Bower', body: 'Health check ready', url: '/health' });
   });
 });
 
