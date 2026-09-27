@@ -19,7 +19,7 @@ When you sign in and use the app, it keeps, in its own database:
 
 ## What this instance never stores
 
-Your notes and files are never copied into this instance's own storage. They live only in your own Google Drive, in the folder you signed in with. This instance keeps a pointer to that folder, not its contents.
+Your notes and files are never copied into this instance's own storage. They live only in your own Google Drive, in the folder you signed in with. This instance keeps a pointer to that folder, not its contents. When you copy in files from elsewhere in your Drive, they land in that same folder and the originals elsewhere in your Drive are never changed.
 
 If you sign in with an address that is not on the invite list, nothing is stored about you. Your browser keeps a small cookie for at most five minutes, holding that address encrypted, only so the app can show you which account was turned away; it is deleted as soon as that screen reads it.
 

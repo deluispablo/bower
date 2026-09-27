@@ -31,7 +31,9 @@ export function Login() {
       </a>
       <p class="auth-note">
         Only people the person running this Bower has invited can sign in. Bower
-        reads and writes one folder in your Drive and nothing else.
+        reads and writes your Bower folder; when you pick files from the rest of
+        your Drive, it copies them into that folder and never changes the
+        originals.
       </p>
       <p class="auth-legal-links">
         <a href="/privacy" class="button-link">
