@@ -185,14 +185,6 @@ summary:focus-visible {
   color: var(--color-link);
 }
 
-.offline-banner {
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  border-bottom: 1px solid var(--color-border);
-}
-
 .reauth-banner {
   display: flex;
   flex-wrap: wrap;
@@ -864,82 +856,8 @@ summary:focus-visible {
   }
 }
 
-/* Add screen: styles/add.css (its own file — see routes/add.tsx). */
-
-.home-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.home-updated {
-  margin: var(--space-1) 0 var(--space-4);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.home-status {
-  margin: 0 0 var(--space-4);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.home-notes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.home-notes li {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.home-note-meta {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.home-card {
-  display: block;
-  margin: 0 0 var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  text-decoration: none;
-}
-
-.home-card h2 {
-  margin: 0 0 var(--space-1);
-  font-size: var(--text-lg);
-}
-
-.home-card-count {
-  margin: 0 0 var(--space-1);
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-bold);
-}
-
-.home-card p:last-child {
-  margin: 0;
-  color: var(--color-text-muted);
-}
-
-.home-card-link:hover {
-  background: var(--color-surface);
-}
-
-.home-section-title {
-  margin: var(--space-6) 0 var(--space-2);
-  font-size: var(--text-lg);
-}
+/* Add screen: styles/add.css (its own file — see routes/add.tsx).
+   Home: styles/home.css (its own file — see routes/home.tsx). */
 
 /* Tree (explorer): collapsible folders with note counts, notes as links. */
 .tree {

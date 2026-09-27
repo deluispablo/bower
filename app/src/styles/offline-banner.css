@@ -1,0 +1,26 @@
+/* The offline banner (#41, redesigned #143): the bird card of
+   Phone-Offline.dc.html, under the top bar on every screen. */
+
+.offline-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) var(--space-4) 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.offline-banner-text {
+  flex: 1;
+}
+
+@media (min-width: 900px) {
+  .offline-banner {
+    margin: var(--space-4) var(--space-6) 0;
+  }
+}
