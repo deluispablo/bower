@@ -214,7 +214,7 @@ Called by the GitHub Actions runner of the instance repo, never by the app (`api
 
 Starts the weekly health check. Called by `lint.yml`'s `dispatch` job with `BOWER_API_KEY`, on its schedule or by hand. Body optional: none or `{}` for every user with a vault (`listVaultIds`), or `{ "vaultId": "<user id>" }` for one. For each vault, in turn: a ticket is minted and its hash stored under `lintticket:<id>`; a `repository_dispatch` is sent with `event_type: "bower-lint"` and `client_payload: { "vault_id": "<id>", "ticket": "<ticket>" }`; and a `{ state: "queued", kind: "lint", requestedAt, runId }` run is stored under `lintrun:<id>`. One vault's failed dispatch does not stop the others: its ticket is deleted and nothing is stored for it.
 
-Each vault costs one GitHub call (an outgoing request) and four KV operations. The Workers free plan allows 50 outgoing requests per incoming one, so one call starts at most 50 health checks there; past that, the dispatches fail and the answer is a 502.
+Each vault costs about five subrequests: one GitHub call and four KV operations, which Workers count as subrequests too. The Workers free plan allows 50 subrequests per request, so one call starts about 10 health checks there; past that, the rest fail and the answer is a 502.
 
 Response, status 200: `{ "dispatched": <number> }`.
 
