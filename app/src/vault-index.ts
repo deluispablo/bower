@@ -41,6 +41,13 @@ export interface VaultIndex {
   /** `pinned` timestamp by folder path, for every folder known to be pinned.
    * Same caveat as `notePinnedAt`. */
   folderPinnedAt: Map<string, string>;
+  /**
+   * The vault's `bower_rules_version`, from the frontmatter of its
+   * `CLAUDE.md` (`rulesVersionOf`, #197), or `null` while unknown: not read
+   * yet, no `CLAUDE.md`, or its text could not be fetched. Same caveat as
+   * `notePinnedAt`: `vault-store` fills it in (`withRulesVersion`).
+   */
+  bowerRulesVersion: number | null;
 }
 
 const HIDDEN_FOLDERS = new Set(['Processed']);
@@ -83,13 +90,14 @@ export function basenameKey(name: string): string {
  * Bower's own files: kept in the index (so `/note/:id` still opens them) but
  * left out of the tree, Recent, search and the switcher unless the
  * `showAppFiles` preference is on (spec §5.3). Top-level only —
- * `CLAUDE.md`, `index.md`, `log.md`, `About-Me.md`, `README.md`,
+ * `CLAUDE.md`, `Rules.md`, `index.md`, `log.md`, `About-Me.md`, `README.md`,
  * `Lint Report.md` and any dated `Lint Report *.md` — except the agent's
  * instruction notes (`Bower - *.md`), which count at any depth. The name is
  * matched as written; only the `.md` extension is case-insensitive.
  */
 const TOP_LEVEL_APP_BASENAMES = new Set([
   'CLAUDE',
+  'Rules',
   'index',
   'log',
   'About-Me',
@@ -116,6 +124,7 @@ export function isAppFile(path: string, name: string): boolean {
  */
 export const APP_FILE_LABELS: Record<string, string> = {
   'CLAUDE.md': 'Rulebook',
+  'Rules.md': 'Your rules',
   'index.md': 'Catalogue',
   'log.md': 'Journal',
   'About-Me.md': 'About me',
@@ -149,6 +158,7 @@ export function buildVaultIndex(files: DriveFile[]): VaultIndex {
     folderNotes: new Map(),
     notePinnedAt: new Map(),
     folderPinnedAt: new Map(),
+    bowerRulesVersion: null,
   };
 
   for (const file of files) {
@@ -189,4 +199,12 @@ export function withPinnedAt(
   folderPinnedAt: Map<string, string>,
 ): VaultIndex {
   return { ...index, notePinnedAt, folderPinnedAt };
+}
+
+/** `index` with `bowerRulesVersion` set; everything else kept as is. Pure. */
+export function withRulesVersion(
+  index: VaultIndex,
+  bowerRulesVersion: number | null,
+): VaultIndex {
+  return { ...index, bowerRulesVersion };
 }
