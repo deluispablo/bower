@@ -6,6 +6,7 @@ import {
   appFileLabel,
   buildVaultIndex,
   isAppFile,
+  isHidden,
 } from '../src/vault-index.js';
 
 let nextId = 0;
@@ -24,6 +25,9 @@ describe('buildVaultIndex', () => {
   const files = [
     dir('.obsidian'),
     entry('.obsidian/app.json', 'application/json'),
+    dir('.claude'),
+    entry('.claude/settings.json', 'application/json'),
+    entry('.hidden.md'),
     dir('0-Inbox'),
     dir('0-Inbox/Processed'),
     entry('0-Inbox/Processed/scan.pdf', 'application/pdf'),
@@ -31,6 +35,8 @@ describe('buildVaultIndex', () => {
     dir('1-Projects/Garden'),
     dir('1-Projects/Garden/Processed'),
     entry('1-Projects/Garden/Processed/old.md'),
+    dir('1-Projects/Garden/.trash'),
+    entry('1-Projects/Garden/.trash/deleted.md'),
     entry('1-Projects/_Garden.md'),
     entry('1-Projects/Garden/Seed List.md'),
     entry('1-Projects/Garden/photo.JPG', 'image/jpeg'),
@@ -40,7 +46,7 @@ describe('buildVaultIndex', () => {
   ];
   const index = buildVaultIndex(files);
 
-  it('hides .obsidian, _*.md folder notes and anything under Processed/', () => {
+  it('hides dot-folders at any depth, dot-files, _*.md folder notes and anything under Processed/', () => {
     const paths = [...index.byPath.keys()].sort();
     expect(paths).toEqual([
       '0-Inbox',
@@ -53,6 +59,10 @@ describe('buildVaultIndex', () => {
       'index.md',
     ]);
     expect(index.byId.size).toBe(paths.length);
+  });
+
+  it('sets aside the top-level `.claude` folder as `agentSettingsFolder`', () => {
+    expect(index.agentSettingsFolder?.path).toBe('.claude');
   });
 
   it('maps by id and by path', () => {
@@ -86,6 +96,37 @@ describe('buildVaultIndex', () => {
       '2-Areas/seed list.MD',
       'index.md',
     ]);
+  });
+});
+
+describe('isHidden', () => {
+  it('hides a dot-folder at the top level (depth 0)', () => {
+    expect(isHidden(dir('.trash'))).toBe(true);
+    expect(isHidden(entry('.trash/x.md'))).toBe(true);
+  });
+
+  it('hides a dot-folder nested two levels deep (depth 2)', () => {
+    expect(isHidden(dir('1-Projects/Garden/.smart-connections'))).toBe(true);
+    expect(
+      isHidden(entry('1-Projects/Garden/.smart-connections/data.json')),
+    ).toBe(true);
+  });
+
+  it('hides a `.hidden.md`-style file even outside any dot-folder', () => {
+    expect(isHidden(entry('.hidden.md'))).toBe(true);
+    expect(isHidden(entry('1-Projects/.hidden.md'))).toBe(true);
+  });
+
+  it('still hides anything under Processed/, unchanged', () => {
+    expect(isHidden(dir('0-Inbox/Processed'))).toBe(true);
+    expect(
+      isHidden(entry('0-Inbox/Processed/scan.pdf', 'application/pdf')),
+    ).toBe(true);
+  });
+
+  it('does not hide a folder or file that merely contains a dot', () => {
+    expect(isHidden(dir('2026.Q1'))).toBe(false);
+    expect(isHidden(entry('1-Projects/Garden/Seed List.md'))).toBe(false);
   });
 });
 

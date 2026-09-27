@@ -1,8 +1,11 @@
 /**
  * In-memory index of the Bower folder built from a `listVault` result.
- * Pure: no Drive calls. Hides what the user should not browse: Obsidian's
- * settings (`.obsidian/`), folder notes named `_*.md`, and processed
- * originals (anything under a `Processed/` folder, at any depth).
+ * Pure: no Drive calls. Hides what the user should not browse: any dot-folder
+ * at any depth (`.obsidian`, `.claude`, `.trash`, whatever another editor
+ * adds — spec §14), processed originals (anything under a `Processed/`
+ * folder, at any depth), folder notes named `_*.md`, and any dot-file
+ * (`.hidden.md`-style). Opening the folder in Obsidian or another editor
+ * never changes what the app shows.
  */
 
 import { FOLDER_MIME } from './drive.js';
@@ -17,9 +20,17 @@ export interface VaultIndex {
   folders: DriveFile[];
   /** Markdown files only. */
   notes: DriveFile[];
+  /**
+   * The top-level `.claude` folder, set aside so the explorer's "Bower's
+   * files" group can list it as "Agent settings" when `showAppFiles` is on
+   * (spec §14). Every other dot-folder stays hidden regardless of that
+   * setting; this is the one exception, and it never appears in the tree,
+   * Recent, search or the switcher.
+   */
+  agentSettingsFolder?: DriveFile;
 }
 
-const HIDDEN_FOLDERS = new Set(['.obsidian', 'Processed']);
+const HIDDEN_FOLDERS = new Set(['Processed']);
 
 function isFolder(file: DriveFile): boolean {
   return file.mimeType === FOLDER_MIME;
@@ -31,6 +42,7 @@ function isMarkdown(name: string): boolean {
 
 export function isHidden(file: DriveFile): boolean {
   const segments = file.path.split('/');
+  if (segments.some((segment) => segment.startsWith('.'))) return true;
   const folders = isFolder(file) ? segments : segments.slice(0, -1);
   if (folders.some((segment) => HIDDEN_FOLDERS.has(segment))) return true;
   return !isFolder(file) && file.name.startsWith('_') && isMarkdown(file.name);
@@ -112,7 +124,12 @@ export function buildVaultIndex(files: DriveFile[]): VaultIndex {
   };
 
   for (const file of files) {
-    if (isHidden(file)) continue;
+    if (isHidden(file)) {
+      if (file.path === '.claude' && isFolder(file)) {
+        index.agentSettingsFolder = file;
+      }
+      continue;
+    }
     index.byId.set(file.id, file);
     if (!index.byPath.has(file.path)) index.byPath.set(file.path, file);
     if (isFolder(file)) {
