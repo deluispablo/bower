@@ -63,51 +63,53 @@ The shapes come from the design canvas (`docs/design/gen.py`, `BIRD_CORE` and `S
 
 ## Palette
 
-Brand colours: teal `#2dd4bf`, deep navy `#0b1220`, amber `#fbbf24`. Neutrals are from the slate scale. Teal and amber are fills; they are never text colours on a light background (teal on white is 1.86:1).
+Brand colours: teal `#5fcfbc`, deep navy `#0b1220`, amber `#f0b64f`. Light is warm (off-white and beige, not slate). Teal and amber are fills; they are never text colours on a light background (teal on the light page is 1.99:1).
 
 | Token | Role | Light | Dark |
 | --- | --- | --- | --- |
-| `--color-sidebar` | Explorer, bottom nav, drawer | `#f5f7fa` | `#070c16` |
-| `--color-bg` | Page background | `#ffffff` | `#0b1220` |
-| `--color-surface` | Cards, sheets, inputs | `#f1f5f9` | `#162033` |
-| `--color-surface-hover` | Hover, active rows | `#e8edf3` | `#1c2942` |
-| `--color-text` | Body text | `#0b1220` | `#e6ebf2` |
-| `--color-heading` | Headings | `#0b1220` | `#f1f5f9` |
-| `--color-text-muted` | Secondary text, captions | `#475569` | `#94a3b8` |
-| `--color-brand-tint` | Selection, callouts, tag pills | `rgb(45 212 191 / .16)` | `rgb(45 212 191 / .16)` |
-| `--color-link` | Links, text buttons | `#0f766e` | `#2dd4bf` |
-| `--color-brand` | Primary button fill, highlights | `#2dd4bf` | `#2dd4bf` |
+| `--color-sidebar` | Explorer, bottom nav, drawer | `#f1efeb` | `#0b1120` |
+| `--color-bg` | Page background | `#faf9f6` | `#111a2b` |
+| `--color-surface` | Cards, sheets, inputs | `#ffffff` | `#1a2538` |
+| `--color-surface-hover` | Hover, active rows | `#ebe8e2` | `#233049` |
+| `--color-text` | Body text | `#1c2333` | `#dfe5ee` |
+| `--color-heading` | Headings | `#1c2333` | `#f1f5f9` |
+| `--color-text-muted` | Secondary text, captions | `#475569` | `#9fabbf` |
+| `--color-brand-tint` | Selection, callouts, tag pills | `rgb(95 207 188 / .16)` | `rgb(95 207 188 / .16)` |
+| `--color-link` | Links, text buttons | `#278074` | `#5fcfbc` |
+| `--color-brand` | Primary button fill, highlights | `#5fcfbc` | `#5fcfbc` |
 | `--color-on-brand` | Text on `--color-brand` | `#0b1220` | `#0b1220` |
-| `--color-accent` | Badges, the "new" dot, the twig | `#fbbf24` | `#fbbf24` |
+| `--color-accent` | Badges, the "new" dot, the twig | `#f0b64f` | `#f0b64f` |
 | `--color-on-accent` | Text on `--color-accent` | `#0b1220` | `#0b1220` |
-| `--color-border` | Dividers (decorative) | `#e2e8f0` | `#263349` |
+| `--color-border` | Dividers (decorative) | `#e3e0da` | `#2c3a54` |
 | `--color-border-strong` | Input and control outlines | `#64748b` | `#64748b` |
-| `--color-focus` | Focus ring | `#0f766e` | `#2dd4bf` |
-| `--color-danger` | Errors | `#b91c1c` | `#f87171` |
+| `--color-focus` | Focus ring | `#278074` | `#5fcfbc` |
+| `--color-danger` | Errors | `#e12020` | `#ef8a8a` |
 | `--color-on-danger` | Text on a `--color-danger` fill (e.g. the danger button) | `#ffffff` | `#0b1220` |
-| `--color-success` | Confirmations | `#15803d` | `#4ade80` |
+| `--color-success` | Confirmations | `#2d8250` | `#7ed3a1` |
 | `--color-on-success` | Text on a `--color-success` fill (e.g. the "done" button) | `#ffffff` | `#0b1220` |
+
+The soft set (`docs/design/screens/Brand.dc.html`, spec §14) gives one accent value each for teal, amber, success and danger; on light, `--color-link`/`--color-focus` and `--color-danger`/`--color-success` are a darker shade of the same hue instead of the literal accent, because the accent value alone fails AA as text or a fill's own text on the light (warm) page — see the contrast table. Dark uses the literal accent values throughout.
 
 Contrast (WCAG 2.1; AA needs 4.5:1 for body text, 3:1 for control outlines):
 
 | Pair | Light | Dark |
 | --- | --- | --- |
-| text on bg | 18.72 | 15.63 |
-| text on surface | 17.09 | 13.60 |
-| text on sidebar | 17.45 | 16.33 |
-| text-muted on bg | 7.58 | 7.30 |
-| text-muted on surface | 6.92 | 6.36 |
-| text-muted on sidebar | 7.06 | 7.63 |
-| link on bg | 5.47 | 10.06 |
-| link on surface | 5.00 | 8.76 |
-| danger on bg | 6.47 | 6.77 |
-| success on bg | 5.02 | 10.74 |
-| on-brand on brand | 10.06 | 10.06 |
-| on-accent on accent | 11.22 | 11.22 |
-| border-strong on bg | 4.76 | 3.93 |
-| border-strong on surface | 4.34 | 3.42 |
+| text on bg | 14.91 | 13.74 |
+| text on surface | 15.70 | 12.14 |
+| text on sidebar | 13.67 | 14.87 |
+| text-muted on bg | 7.20 | 7.50 |
+| text-muted on surface | 7.58 | 6.63 |
+| text-muted on sidebar | 6.60 | 8.12 |
+| link on bg | 4.51 | 9.23 |
+| link on surface | 4.74 | 8.16 |
+| danger on bg | 4.50 | 7.19 |
+| success on bg | 4.51 | 9.71 |
+| on-brand on brand | 9.93 | 9.93 |
+| on-accent on accent | 10.26 | 10.26 |
+| border-strong on bg | 4.52 | 3.66 |
+| border-strong on surface | 4.76 | 3.23 |
 
-`on-danger`/`on-success` are `bg`'s own colour, so their contrast on a danger or success fill is the same figure as "danger on bg" / "success on bg" above, just with the two colours swapped (contrast is symmetric).
+Table generated by `python3 scripts/brand/contrast.py`; all pairs pass. `on-danger`/`on-success` are not checked by the script (it only checks `on-brand`/`on-accent`): on dark, the fill is the light pastel accent so dark navy text (`#0b1220`) reads well, same as `on-brand`/`on-accent`; on light, the fill had to darken to pass AA as its own pair above, so its own text flips to white (`#ffffff`) instead.
 
 The theme follows the system. The root element may carry `data-theme="light"` or `data-theme="dark"` to override it.
 
