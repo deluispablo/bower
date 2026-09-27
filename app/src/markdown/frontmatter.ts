@@ -313,27 +313,65 @@ export function normalizeTags(value: unknown): string[] {
   return tags;
 }
 
+export interface RawFrontmatter {
+  /**
+   * The raw YAML lines between the `---` delimiters, exactly as written, or
+   * `null` when `text` has no frontmatter block. For a caller (`pins.ts`)
+   * that rewrites a single top-level key and must leave every other line
+   * untouched: unlike `parseFrontmatter`, nothing here is parsed.
+   */
+  lines: string[] | null;
+  /** Everything after the closing delimiter, or the whole note when there
+   * is no frontmatter block. */
+  body: string;
+}
+
+/**
+ * Splits a note into its frontmatter's raw lines and its body. No
+ * frontmatter, or no closing `---`/`...`, gives `lines: null` and the whole
+ * text as the body.
+ */
+export function splitFrontmatter(text: string): RawFrontmatter {
+  const source = text.startsWith('﻿') ? text.slice(1) : text;
+  const lines = source.split(/\r?\n/);
+  if ((lines[0] ?? '').trimEnd() !== '---') return { lines: null, body: text };
+
+  const end = lines.findIndex(
+    (line, i) =>
+      i > 0 && (line.trimEnd() === '---' || line.trimEnd() === '...'),
+  );
+  if (end < 0) return { lines: null, body: text };
+
+  return { lines: lines.slice(1, end), body: lines.slice(end + 1).join('\n') };
+}
+
+/**
+ * The 0-based index of a top-level `key:` line among raw frontmatter
+ * `lines` (`splitFrontmatter`), or -1 when absent. A nested (indented) key
+ * of the same name never matches.
+ */
+export function findKeyLine(lines: string[], key: string): number {
+  return lines.findIndex((line) => {
+    if (isBlank(line) || isComment(line) || indentOf(line) > 0) return false;
+    const pair = splitKeyValue(line);
+    return pair !== null && pair[0] === key;
+  });
+}
+
 /**
  * Splits a note into its frontmatter and body. `tags`, when present, is
  * normalised to `string[]`. No frontmatter, or no closing `---`, gives empty
  * data and the whole text as the body.
  */
 export function parseFrontmatter(text: string): Frontmatter {
-  const source = text.startsWith('﻿') ? text.slice(1) : text;
-  const lines = source.split(/\r?\n/);
-  if ((lines[0] ?? '').trimEnd() !== '---') return { data: {}, body: text };
+  const { lines, body } = splitFrontmatter(text);
+  if (lines === null) return { data: {}, body: text };
 
-  const end = lines.findIndex(
-    (line, i) =>
-      i > 0 && (line.trimEnd() === '---' || line.trimEnd() === '...'),
-  );
-  if (end < 0) return { data: {}, body: text };
-
-  const data = parseMapping(lines.slice(1, end));
+  const data = parseMapping(lines);
   if (Object.prototype.hasOwnProperty.call(data, 'tags')) {
     setKey(data, 'tags', normalizeTags(data.tags));
   }
-  return { data, body: lines.slice(end + 1).join('\n') };
+  return { data, body };
 }
 
 /** A string or number/boolean value, formatted for plain display; anything
