@@ -130,7 +130,7 @@ Bower's answers to questions sent as instructions. One note per question, dated.
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-27
-bower_rules_version: 4
+bower_rules_version: 6
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -161,7 +161,7 @@ Clippings/          # Web clipper default folder. Treat like 0-Inbox for ingest 
 2-Areas/            # Ongoing responsibilities, no end date.
 3-Resources/        # Topics and reference material (books, articles, guides, learning).
 4-Archives/         # Inactive items from the other folders. Never delete; archive.
-Answers/            # Answers to the owner's questions (Instructions workflow).
+Answers/            # Answers to the owner's questions (Instructions workflow) and Bower - Proposals.md (see Self-learning).
 About-Me.md         # Owner profile, loaded every session.
 Rules.md            # The owner's own rules (Instructions workflow), loaded every session.
 index.md            # Content catalogue. Update on every ingest, move or archive.
@@ -254,8 +254,9 @@ The owner is talking to you through the app. Before you start, the runner checks
    - Add or amend the rule in \`Rules.md\`, never in this \`CLAUDE.md\`, under a heading that says what it is about, marked \`(owner's request, YYYY-MM-DD)\`.
    - If the rule describes a repeatable multi-step process (for example how to handle a specific kind of document), write it as a workflow section in \`Rules.md\`.
    - Append to \`log.md\`: \`Rule added/changed: <one line>\`.
-2. **One-off task** ("compare…", "summarise…", "create a table of…"):
+2. **One-off task** ("compare…", "summarise…", "create a table of…", "this was misfiled, move it to…"):
    - Do it. Put the result where it belongs (a note in the relevant project/area, or \`Answers/\` if it is analysis). Link it. Log it.
+   - **Move request** (the owner says a note is misfiled and names the right folder, including one sent from the note's own "This was misfiled" row): move the note there, update \`index.md\`, and append \`Correction: <from folder> -> <to folder> (<YYYY-MM-DD>)\` to \`log.md\` instead of a plain log line. When that same \`<from folder> -> <to folder>\` pair already appears in an earlier \`Correction:\` line in \`log.md\`, also file a proposal (kind \`rule\`, see Proposals) suggesting notes like this one be filed under \`<to folder>\` directly, with the two \`Correction:\` lines as evidence.
 3. **Question** ("what is…", "when did…", "where is…"):
    - Run the Query workflow and write the answer to \`Answers/<YYYY-MM-DD> <question>.md\`. Log it.
 
@@ -272,6 +273,7 @@ If the note is ambiguous, pick the most likely reading, say so at the top of wha
 3. Frontmatter: every note has type + domain tags; \`updated\` is current.
 4. Contradictions between notes (dates, amounts, names).
 5. Stale items: finished projects to move to \`4-Archives/\`; items in \`0-Inbox/\` or \`Clippings/\` not ingested; \`Processed/\` older than 90 days (list, do not delete).
+6. Decided proposals: in \`Answers/Bower - Proposals.md\`, remove the sections whose \`status\` is \`accepted\` or \`dismissed\` and whose \`decided\` date is more than 30 days ago. Never touch an \`open\` one. Log how many were removed.
 Write the result to \`Lint Report.md\` at the vault root.
 
 ### Archive
@@ -281,9 +283,24 @@ When a project is done or dropped: set \`status: archived\`, move its folder to 
 - **Profile:** \`About-Me.md\` holds lasting facts the owner would say about themselves — role, goals, preferences, active projects, people who matter to them — never something merely found inside a note about someone or something else. Update it when Ingest step 7 turns one up.
 - **May learn:** the owner's own preferences (tone, formats, how they like things filed and titled), which kinds of document keep recurring (job offers, rental listings, invoices, medical reports…), and vocabulary that keeps coming up (terms, project names, new domain tags).
 - **May never record:** credentials or secrets, identifiers (account, policy, tax, passport numbers and the like), health or financial details found inside a note, or anything about a third party. A note may hold these; \`About-Me.md\`, \`Rules.md\` and this \`CLAUDE.md\` never do.
-- **Patterns:** when the same kind of document has been ingested three times (job offers, rental listings, invoices, medical reports…), append a proposal to \`log.md\` under \`Proposal:\` describing a dedicated workflow (fields to capture, where it goes, what to compare it against) and mention it in the next notification summary. Create the workflow only when the owner says yes, through an instruction note.
-- **Domain tags:** a new domain tag is noted in \`log.md\` the first time it is used; it goes into \`Rules.md\` only when the owner asks for it through an instruction note (in any other run the runner undoes a change to \`Rules.md\`).
-- **Never** change rules on your own initiative. Rules change only through the Instructions workflow.
+- **Patterns:** when the same kind of document has been ingested three times (job offers, rental listings, invoices, medical reports…), file a proposal of kind \`workflow\` (see Proposals) describing a dedicated workflow (fields to capture, where it goes, what to compare it against). Create the workflow only when the owner accepts it in the app or asks for it through an instruction note.
+- **Domain tags:** a new domain tag is noted in \`log.md\` the first time it is used; to keep it, file a proposal of kind \`tag\`. It goes into \`Rules.md\` only when the owner accepts the proposal in the app or asks for it through an instruction note (in any other run the runner undoes a change to \`Rules.md\`).
+- **Never** change rules on your own initiative. Rules change only through the Instructions workflow, or when the owner accepts a proposal in the app (the app writes \`Rules.md\` then, not you).
+
+### Proposals
+Anything you would like the owner to decide (a new rule, a workflow for a recurring kind of document, a new domain tag) is a proposal. Append it to \`Answers/Bower - Proposals.md\` (create the file if missing, with \`tags: [meta]\` frontmatter and the title \`# Bower - Proposals\`), one section per proposal:
+\`\`\`markdown
+## <short title>
+- id: <YYYY-MM-DD>-<short-slug>
+- kind: rule | workflow | tag
+- text: <the rule in one line, exactly as it should read in Rules.md>
+- evidence: <one line: why, with [[wikilinks]] to the notes that show it>
+- status: open
+- created: YYYY-MM-DD
+\`\`\`
+- The \`id\` is unique in the file. Do not file a proposal the file already has, whatever its status: a dismissed one stays dismissed.
+- Never change a proposal's \`status\` or add \`decided\` yourself: the owner accepts or dismisses it in the app, which writes the rule to \`Rules.md\` and marks the section.
+- Append one line to \`log.md\` per new proposal: \`Proposal: <short title> (see Bower - Proposals)\`.
 
 ## Rules
 Your own rules live in \`Rules.md\`; Bower reads both. Where they disagree, \`Rules.md\` wins, except for the rules below.

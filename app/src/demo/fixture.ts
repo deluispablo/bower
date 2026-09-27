@@ -478,6 +478,39 @@ Done in August: new chain, brake pads and a tune-up. Kept for the receipts.`,
     'status: archived\n',
   ),
   { path: 'Answers/_Answers.md', content: answersNote, modifiedTime: at(1) },
+  // Two suggestions waiting for Alex, so Health shows Accept and Dismiss
+  // (#199), and one already dismissed, which the list leaves out.
+  note(
+    'Answers/Bower - Proposals.md',
+    26,
+    'meta',
+    `# Bower - Proposals
+
+## Recipes go to Cooking
+- id: 2026-09-26-recipes
+- kind: rule
+- text: File every recipe under 3-Resources/Cooking with the tag cooking.
+- evidence: The last three recipes went there: [[Weeknight curry]], [[Sourdough]] and one from a clipping.
+- status: open
+- created: 2026-09-26
+
+## Runs go to the running log
+- id: 2026-09-26-runs
+- kind: workflow
+- text: When a run is recorded, add its date, distance and time to [[Running log]] and link it from [[Half Marathon]].
+- evidence: Three runs added to [[Running log]] by hand this month.
+- status: open
+- created: 2026-09-26
+
+## A tag for bills
+- id: 2026-09-12-bills-tag
+- kind: tag
+- text: Use the domain tag bills for invoices and renewals.
+- evidence: Used on [[Bills and renewals]].
+- status: dismissed
+- created: 2026-09-12
+- decided: 2026-09-13`,
+  ),
   note(
     'Answers/2026-09-21 Which subscriptions renew this autumn.md',
     21,

@@ -11,6 +11,7 @@
 
 .switcher-panel {
   position: fixed;
+  z-index: 50;
   left: var(--space-3);
   right: var(--space-3);
   /* The header's (and any banner's) live bottom edge, set by `layout.tsx`

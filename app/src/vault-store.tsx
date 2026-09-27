@@ -54,6 +54,15 @@ import {
   sortPinned,
 } from './pins.js';
 import {
+  applyDecision,
+  dayOf,
+  findProposals,
+  parseProposals,
+  ProposalError,
+  rulesWithAccepted,
+} from './proposals.js';
+import type { ProposalDecision } from './proposals.js';
+import {
   countRuleLines,
   migrationBlock,
   rulesVersionOf,
@@ -139,6 +148,13 @@ export interface Vault extends VaultState {
    * is, and the two sections are replaced, not duplicated.
    */
   submitInterview: (answers: InterviewAnswers) => Promise<InterviewOutcome>;
+  /**
+   * Accepts or dismisses one of Bower's proposals (#199,
+   * `runProposalDecision`): Accept appends its rule to `Rules.md` first,
+   * then both accept and dismiss mark the proposal, each write
+   * conflict-checked.
+   */
+  decideProposal: (id: string, decision: ProposalDecision) => Promise<void>;
 }
 
 /** What `updateRules` did. */
@@ -581,6 +597,80 @@ export async function runInterview(
     createdRules,
     createdAreas,
   };
+}
+
+export interface ProposalDecisionInput {
+  /** The Bower folder, where a missing `Rules.md` is created. */
+  folderId: string;
+  /** `Answers/Bower - Proposals.md` as listed. */
+  proposalsFile: DriveFile;
+  /** `Rules.md` as listed, when the folder has one. */
+  rulesFile: DriveFile | undefined;
+  id: string;
+  decision: ProposalDecision;
+  /** `YYYY-MM-DD` written as the decision's date. */
+  on: string;
+}
+
+/** What `runProposalDecision` wrote, for the caller to patch its cache with. */
+export interface ProposalDecisionWrites {
+  /** The proposals file after the write, or `null` when it did not change. */
+  proposals: { text: string; file: DriveFile } | null;
+  /** `Rules.md` after the write, or `null` when its text did not change. */
+  rules: { text: string; file: DriveFile } | null;
+  /** Whether `Rules.md` was created (it is not in any listing yet). */
+  createdRules: boolean;
+}
+
+/**
+ * A proposal decided (#199), through Drive: reads the proposals file fresh
+ * and finds the proposal (`ProposalError('missing')` when it is gone). On
+ * Accept, the rule goes to `Rules.md` first (`rulesWithAccepted`, created
+ * from an empty note when the folder has none), so should the second write
+ * fail the rule is already safe and accepting again adds nothing twice;
+ * then the proposal is marked (`applyDecision`). Each write only goes out
+ * when its text changed, conflict-checked against the `modifiedTime` read
+ * just before it.
+ */
+export async function runProposalDecision(
+  input: ProposalDecisionInput,
+): Promise<ProposalDecisionWrites> {
+  const { folderId, proposalsFile, rulesFile, id, decision, on } = input;
+  const before = await readNoteForEdit(proposalsFile.id);
+  const proposal = parseProposals(before.text).find((p) => p.id === id);
+  if (proposal === undefined) {
+    throw new ProposalError('missing', 'That suggestion is no longer there.');
+  }
+  // Refuses a proposal already decided the other way before touching
+  // `Rules.md`.
+  const marked = applyDecision(before.text, id, decision, on);
+
+  let rules: ProposalDecisionWrites['rules'] = null;
+  let createdRules = false;
+  if (decision === 'accepted') {
+    const rulesBefore =
+      rulesFile !== undefined ? await readNoteForEdit(rulesFile.id) : null;
+    const text = rulesWithAccepted(rulesBefore?.text ?? '', proposal, on);
+    if (text !== (rulesBefore?.text ?? '')) {
+      if (rulesFile === undefined) {
+        const created = await createTextFile(folderId, RULES_PATH, text);
+        rules = { text, file: created };
+        createdRules = true;
+      } else if (rulesBefore !== null) {
+        rules = await saveNoteText(rulesFile, text, {
+          baseModifiedTime: rulesBefore.modifiedTime,
+        });
+      }
+    }
+  }
+
+  const proposals =
+    marked === before.text
+      ? null
+      : await saveNoteText(proposalsFile, marked, {
+          baseModifiedTime: before.modifiedTime,
+        });
+  return { proposals, rules, createdRules };
 }
 
 /** Attempts per note or folder-note pin write: the first one plus one retry
@@ -1054,6 +1144,45 @@ export function VaultProvider({ children }: VaultProviderProps) {
     [folderId, refresh, recordNote, load],
   );
 
+  const decideProposal = useCallback(
+    async (id: string, decision: ProposalDecision): Promise<void> => {
+      if (folderId === null) throw new Error('No Bower folder yet.');
+      const index = stateRef.current.index;
+      const proposalsFile = index === null ? undefined : findProposals(index);
+      if (index === null || proposalsFile === undefined) {
+        throw new ProposalError(
+          'missing',
+          'That suggestion is no longer there.',
+        );
+      }
+      const writes = await runProposalDecision({
+        folderId,
+        proposalsFile,
+        rulesFile: index.byPath.get(RULES_PATH),
+        id,
+        decision,
+        on: dayOf(new Date()),
+      });
+      if (writes.rules !== null) {
+        await recordNote(
+          writes.rules.file.id,
+          writes.rules.text,
+          writes.rules.file,
+        );
+      }
+      if (writes.proposals !== null) {
+        await recordNote(
+          writes.proposals.file.id,
+          writes.proposals.text,
+          writes.proposals.file,
+        );
+      }
+      // A new `Rules.md` is not in the listing yet: list the folder again.
+      if (writes.createdRules) await load('refresh');
+    },
+    [folderId, recordNote, load],
+  );
+
   const value: Vault = {
     ...state,
     refresh,
@@ -1067,6 +1196,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
     unpinFolder,
     updateRules,
     submitInterview,
+    decideProposal,
   };
 
   return (

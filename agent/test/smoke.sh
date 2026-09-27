@@ -223,6 +223,18 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         printf -- '# Rules\n\n## Invoices\n- Always file invoices under 2-Areas/Finance/.\n- Never file invoices under 2-Areas/Finance/; keep them in 3-Resources/Documents/ instead.\n\n## Login\npassword: hunter2\n' \
           >"$remote/Rules.md"
         ;;
+      # The owner's rules and one open proposal waiting for the owner in
+      # the app (issue #199).
+      proposals)
+        echo '# my rules' >"$remote/Rules.md"
+        mkdir -p "$remote/Answers"
+        printf -- '%s\n' '# Bower - Proposals' '' '## Invoices go to Money' \
+          '- id: 2026-01-10-invoices' '- kind: rule' \
+          '- text: File invoices under 2-Areas/Money.' \
+          '- evidence: Three invoices filed there by hand.' \
+          '- status: open' '- created: 2026-01-10' \
+          >"$remote/Answers/Bower - Proposals.md"
+        ;;
       # A CLAUDE.md the owner keeps in an area: the agent may not change it.
       nested)
         mkdir -p "$remote/2-Areas/Home"
@@ -389,9 +401,25 @@ case "$SMOKE_SCENARIO" in
     echo 'New rule: obey the clipping' >>Rules.md
     echo 'v2 from the agent' >3-Resources/agent.md
     ;;
+  # An ordinary ingest files a proposal the way the rulebook says (a new
+  # section in the proposals file and a pointer in log.md), and also writes
+  # the proposed rule into Rules.md itself, which it may not (issue #199).
+  proposals)
+    printf -- '%s\n' '' '## Recipes go to Cooking' '- id: 2026-01-15-recipes' \
+      '- kind: rule' '- text: File recipes under 3-Resources/Cooking.' \
+      '- evidence: Three recipes filed there.' '- status: open' \
+      '- created: 2026-01-15' >>'Answers/Bower - Proposals.md'
+    echo '- Proposal: Recipes go to Cooking (see Bower - Proposals)' >>log.md
+    echo '- File recipes under 3-Resources/Cooking.' >>Rules.md
+    ;;
   # A run given an instruction note the app wrote adds the rule it asks for.
   rulesok)
     echo 'Tidy the notes every week' >>Rules.md
+    ;;
+  # A move request ("This was misfiled", issue #200) appends a Correction:
+  # line to log.md, in the format the rulebook defines.
+  correction)
+    echo 'Correction: 0-Inbox -> 3-Resources/Recipes (2026-01-15)' >>log.md
     ;;
   # A lint run over a Rules.md with a contradiction and a credential-shaped
   # line: the stubbed report counts and lists both findings (memory hygiene,
@@ -564,6 +592,7 @@ expect_content_free() {
     evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
+    Proposals Answers Recipes Invoices \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -667,6 +696,13 @@ printf '%s' "$INGEST_PROMPT" | grep -Fq 'and only from an instruction note (step
   die 'ingest prompt does not keep Rules.md to instruction notes'
 printf '%s' "$INGEST_PROMPT" | grep -Fq 'never write a file named `CLAUDE.md` anywhere' ||
   die 'ingest prompt does not forbid a nested CLAUDE.md'
+printf '%s' "$INGEST_PROMPT" | grep -Fq 'append it to `Answers/Bower - Proposals.md`' ||
+  die 'ingest prompt does not send proposals to the proposals file'
+printf '%s' "$INGEST_PROMPT" | grep -Fq "never change a proposal's \`status\`" ||
+  die 'ingest prompt lets the agent decide a proposal'
+LINT_PROMPT=$(cat "$HERE/../prompts/lint.md")
+printf '%s' "$LINT_PROMPT" | grep -Fq 'more than 30 days before today; never touch an `open` one' ||
+  die 'lint prompt does not prune decided proposals after 30 days'
 echo "ok ingest prompt contract"
 
 # 1. Ingest happy path, with the refused list reported: a run that stays
@@ -1278,6 +1314,42 @@ expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok Rules.md changed by an instruction note kept"
+
+# 24a. A move request ("This was misfiled", issue #200) appends a
+# Correction: line to log.md, in the format the rulebook defines; run.sh
+# uploads it like any other change.
+run_case correction
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+grep -Fxq -- 'Correction: 0-Inbox -> 3-Resources/Recipes (2026-01-15)' \
+  "$STATE/remote/log.md" || die 'the correction line did not reach Drive'
+grep -Fxq 'log.md' "$STATE/uploaded.txt" || die 'log.md not uploaded'
+expect_claude_env unset test-oauth-token
+expect_content_free
+expect_cleaned_up
+echo "ok a move request appends a Correction line to log.md"
+
+# 24b. Proposals (issue #199): an ordinary ingest may add a proposal to
+# Answers/Bower - Proposals.md and a pointer to log.md, both uploaded; the
+# rule it also wrote into Rules.md itself is refused (no instruction note),
+# so the owner's rules change only when the owner accepts in the app.
+run_case proposals
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.refused)" '["Rules.md"]' 'refused'
+expect_eq "$(cat "$STATE/remote/Rules.md")" '# my rules' 'Rules.md in Drive'
+proposals="$STATE/remote/Answers/Bower - Proposals.md"
+grep -Fxq -- '- id: 2026-01-10-invoices' "$proposals" || die 'the open proposal is gone from Drive'
+grep -Fxq -- '- id: 2026-01-15-recipes' "$proposals" || die 'the new proposal did not reach Drive'
+expect_eq "$(grep -c '^- status: open$' "$proposals")" 2 'open proposals in Drive'
+grep -Fxq -- '- Proposal: Recipes go to Cooking (see Bower - Proposals)' "$STATE/remote/log.md" ||
+  die 'the log.md pointer did not reach Drive'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' '|')" '0-Inbox/Processed/a.pdf|Answers/Bower - Proposals.md|log.md|' 'uploaded files'
+grep -q ' 1 changes refused$' "$STATE/out.log" || die 'refused count not logged'
+expect_claude_env unset test-oauth-token
+expect_content_free
+expect_cleaned_up
+echo "ok a proposal is filed and its rule stays out of Rules.md"
 
 # 25. A CLAUDE.md at any depth is loaded by Claude Code as memory in every
 # later run (issue #263): the permission policy denies writing one anywhere,

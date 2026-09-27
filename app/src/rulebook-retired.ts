@@ -25,4 +25,9 @@ export const RETIRED_RULEBOOK_LINES: readonly string[] = [
   '### Instructions (any file in the inbox whose name starts with `Bower`)',
   'The owner is talking to you. Read the whole note, decide which of the three it is, act, log it, then move the note to `0-Inbox/Processed/`.',
   '- **Profile:** anything lasting about the owner goes to `About-Me.md` (Ingest step 7).',
+  "Answers/            # Answers to the owner's questions (Instructions workflow).",
+  '- **Patterns:** when the same kind of document has been ingested three times (job offers, rental listings, invoices, medical reports…), append a proposal to `log.md` under `Proposal:` describing a dedicated workflow (fields to capture, where it goes, what to compare it against) and mention it in the next notification summary. Create the workflow only when the owner says yes, through an instruction note.',
+  '- **Domain tags:** a new domain tag is noted in `log.md` the first time it is used; it goes into `Rules.md` only when the owner asks for it through an instruction note (in any other run the runner undoes a change to `Rules.md`).',
+  '- **Never** change rules on your own initiative. Rules change only through the Instructions workflow.',
+  '2. **One-off task** ("compare…", "summarise…", "create a table of…"):',
 ];
