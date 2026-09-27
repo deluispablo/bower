@@ -86,7 +86,16 @@ describe('decideRedirect', () => {
 
     it('goes home once the intro has been seen (Skip or Explore the demo)', () => {
       expect(decideRedirect('signed-in', true, '/', true, true)).toBeNull();
-      expect(decideRedirect('signed-in', true, '/login', true, true)).toBe('/');
+    });
+
+    // #287: the tour's last step links to /login, which a demo build
+    // renders as "Run your own Bower" (`app.tsx`), not a sign-in form. A
+    // signed-in-as-Alex visitor who already saw the intro must be able to
+    // land there instead of bouncing back to Home.
+    it('leaves /login alone once the intro has been seen', () => {
+      expect(
+        decideRedirect('signed-in', true, '/login', true, true),
+      ).toBeNull();
     });
 
     it('never sends a deep link to /welcome, even unseen', () => {
