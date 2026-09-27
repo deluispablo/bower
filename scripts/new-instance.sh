@@ -9,7 +9,8 @@
 # 1. Creates OWNER/NAME as a private repo (`gh repo create --private`) when
 #    it does not exist yet; otherwise updates it.
 # 2. Copies what the runner needs into it and pushes, only when something
-#    changed: agent/workflows/*.yml into .github/workflows/, agent/run.sh
+#    changed: agent/workflows/*.yml into .github/workflows/, agent/run.sh,
+#    agent/claude-settings.json (the permission policy for every run)
 #    and agent/prompts/*.md into agent/.
 # 3. Asks (input hidden) for the Claude credential the runner uses, a
 #    Claude subscription token (`claude setup-token`) or an Anthropic API
@@ -108,7 +109,7 @@ sync_files() {
   fi
   mkdir -p "$dir/.github/workflows" "$dir/agent/prompts"
   cp "$ROOT"/agent/workflows/*.yml "$dir/.github/workflows/"
-  cp "$ROOT/agent/run.sh" "$dir/agent/run.sh"
+  cp "$ROOT/agent/run.sh" "$ROOT/agent/claude-settings.json" "$dir/agent/"
   cp "$ROOT"/agent/prompts/*.md "$dir/agent/prompts/"
   git -C "$dir" add .github/workflows agent
   if git -C "$dir" diff --cached --quiet; then

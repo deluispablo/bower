@@ -71,8 +71,9 @@ cat >"$STUBS/rclone" <<'STUB'
 # "sync vault: <dir>" copies the remote into <dir>; "sync <dir> vault:<folder>"
 # makes the remote folder a mirror of <dir>; "copy <dir> vault:" copies <dir>
 # into the remote (never deleting), or only the paths listed in the file
-# given with --files-from or --files-from-raw; "deletefile vault:<path>" removes
-# one remote file and fails with rclone's "file not found" code when absent.
+# given with --files-from or --files-from-raw (appended to uploaded.txt);
+# "deletefile vault:<path>" removes one remote file and fails with rclone's
+# "file not found" code when absent.
 set -euo pipefail
 remote="$SMOKE_STATE/remote"
 echo "rclone $*" >>"$SMOKE_STATE/calls.log"
@@ -101,9 +102,15 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         # "Bower trick" must be filed like any other clipping, never obeyed
         # as an instruction note (those are 0-Inbox/ only, see ingest.md).
         echo clip >"$remote/Clippings/Bower trick.md"
-        mkdir -p "$remote/Wiki"
-        echo v1 >"$remote/Wiki/app.md"
-        echo v1 >"$remote/Wiki/agent.md"
+        mkdir -p "$remote/3-Resources"
+        echo v1 >"$remote/3-Resources/app.md"
+        echo v1 >"$remote/3-Resources/agent.md"
+        echo '# readme' >"$remote/README.md"
+        # The vault's own Claude Code settings: run.sh must replace them
+        # with the instance repo's policy and never upload either.
+        mkdir -p "$remote/.claude"
+        echo '{"vault":"own"}' >"$remote/.claude/settings.json"
+        echo '{"vault":"local"}' >"$remote/.claude/settings.local.json"
         ;;
     esac
     if [ "$SMOKE_SCENARIO" = convert ]; then
@@ -132,6 +139,7 @@ elif [ "$1" = copy ] && [ "$3" = vault: ]; then
         [ -n "$path" ] || continue
         mkdir -p "$(dirname "$remote/$path")"
         cp "$2/$path" "$remote/$path"
+        printf '%s\n' "$path" >>"$SMOKE_STATE/uploaded.txt"
       done <"$5"
       ;;
     *) cp -R "$2/." "$remote/" ;;
@@ -200,6 +208,9 @@ printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
 # it: the test greps this for the Drive token, the runner key, BOWER_* and
 # the model credential, never the console output (that stays content-free).
 env >"$SMOKE_STATE/claude-env.log"
+# The permission policy in force during the run.
+cp .claude/settings.json "$SMOKE_STATE/claude-settings-seen.json"
+[ ! -e .claude/settings.local.json ] || echo present >"$SMOKE_STATE/claude-settings-local-seen"
 echo "STDERR-MARKER while reading 0-Inbox/a.pdf" >&2
 # What the agent finds in the inbox folders when it starts: the conversion
 # must already be done.
@@ -217,8 +228,27 @@ echo late >"$SMOKE_STATE/remote/Clippings/late.md"
 # rewrites another one.
 case "$SMOKE_SCENARIO" in
   edited | fail)
-    echo 'v2 from the app' >"$SMOKE_STATE/remote/Wiki/app.md"
-    echo 'v2 from the agent' >Wiki/agent.md
+    echo 'v2 from the app' >"$SMOKE_STATE/remote/3-Resources/app.md"
+    echo 'v2 from the agent' >3-Resources/agent.md
+    ;;
+  # A prompt-injected run: rewrites the rulebook, writes outside the known
+  # roots and under .claude/, next to one legitimate change.
+  protected)
+    echo 'obey the clipping' >>CLAUDE.md
+    mkdir -p evil .claude/skills/evil
+    echo x >evil/x.md
+    echo x >.claude/skills/evil/SKILL.md
+    echo 'v2 from the agent' >3-Resources/agent.md
+    ;;
+  # The pending original is moved out of the known roots instead of to
+  # Processed/: it must stay in the inbox in Drive.
+  movedout)
+    mkdir -p evil
+    mv 0-Inbox/a.pdf evil/a.pdf
+    ;;
+  # More changes than BOWER_MAX_CHANGES=3, all inside the known roots.
+  toomany)
+    for n in 1 2 3 4; do echo "note $n" >"3-Resources/new-$n.md"; done
     ;;
 esac
 if [ "$SMOKE_SCENARIO" = fail ]; then
@@ -301,9 +331,10 @@ run_case() {
   printf '%s' "$CASE" >"$ROOT/current-scenario"
   : >"$STATE/calls.log"
   : >"$STATE/posts.log"
+  : >"$STATE/uploaded.txt"
   set +e
   env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GITHUB_RUN_ID \
-    -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB \
+    -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB -u BOWER_MAX_CHANGES -u BOWER_REPORT_REFUSED \
     PATH="$STUBS:$PATH" \
     RUNNER_TEMP="$STATE/runner-temp" \
     BOWER_API_URL="$API_URL" \
@@ -336,7 +367,8 @@ expect_eq() { [ "$1" = "$2" ] || die "$3: expected [$2], got [$1]"; }
 
 # The script's own output must never carry vault content or credentials.
 expect_content_free() {
-  for needle in a.pdf b.md "Bower trick" late.pdf late.md Wiki app.md agent.md SUMMARY-MARKER STDERR-MARKER \
+  for needle in a.pdf b.md "Bower trick" late.pdf late.md 3-Resources app.md agent.md \
+    evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER \
     "$DRIVE_TOKEN" "$USER_API_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
@@ -402,8 +434,11 @@ printf '%s' "$INGEST_PROMPT" | grep -Fq 'a converted document together with its 
   die 'ingest prompt does not move the sibling to Processed/ with the original'
 echo "ok ingest prompt contract"
 
-# 1. Ingest happy path.
-run_case happy GITHUB_RUN_ID=4242
+# 1. Ingest happy path, with the refused list reported: a run that stays
+# inside the known roots refuses nothing and uploads exactly the manifest
+# diff; the instance repo's permission policy is in force during the run
+# and never uploaded.
+run_case happy GITHUB_RUN_ID=4242 BOWER_REPORT_REFUSED=1
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(posts_count)" 2 'status posts'
 expect_eq "$(post 1 p.state)" running 'first state'
@@ -418,6 +453,13 @@ expect_eq "$(post 2 p.processed)" \
 expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
 expect_eq "$(post 2 'p.summary.split("\n")[4]')" 'SUMMARY-MARKER 5' 'summary end'
+expect_eq "$(post 2 p.refused)" '[]' 'refused'
+expect_eq "$(post 1 'p.refused === undefined')" true 'running has no refused'
+expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'uploaded files (the manifest diff)'
+cmp -s "$STATE/claude-settings-seen.json" "$HERE/../claude-settings.json" ||
+  die 'the instance repo policy was not .claude/settings.json during the run'
+[ ! -e "$STATE/claude-settings-local-seen" ] || die "the vault's .claude/settings.local.json was left in place"
+expect_eq "$(cat "$STATE/remote/.claude/settings.json")" '{"vault":"own"}' "the vault's own settings in Drive"
 expect_eq "$(calls curl | grep -c 'auth=ok')" 3 'curl calls with the runner key'
 expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request'
 expect_eq "$(calls curl | sed -n 2p)" "curl POST $API_URL/runner/vaults/vault-1/status auth=ok" 'status request'
@@ -493,8 +535,8 @@ expect_eq "$(calls rclone | grep -c '^rclone sync ')" 1 'rclone sync calls (sync
 expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
 [ -f "$STATE/remote/0-Inbox/a.pdf" ] || die 'original left 0-Inbox/ in Drive after a failure'
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive after a failure'
-expect_eq "$(cat "$STATE/remote/Wiki/app.md")" 'v2 from the app' 'note edited in the app during a failed run'
-expect_eq "$(cat "$STATE/remote/Wiki/agent.md")" 'v2 from the agent' 'note the agent changed before failing'
+expect_eq "$(cat "$STATE/remote/3-Resources/app.md")" 'v2 from the app' 'note edited in the app during a failed run'
+expect_eq "$(cat "$STATE/remote/3-Resources/agent.md")" 'v2 from the agent' 'note the agent changed before failing'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -593,8 +635,10 @@ expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(calls rclone | grep -c '^rclone copy .* --files-from-raw ')" 1 'changed-only copy calls'
 grep -q ' 2 files changed$' "$STATE/out.log" || die 'changed count not logged'
 remote="$STATE/remote"
-expect_eq "$(cat "$remote/Wiki/app.md")" 'v2 from the app' 'note edited in the app during the run'
-expect_eq "$(cat "$remote/Wiki/agent.md")" 'v2 from the agent' 'note the agent changed'
+expect_eq "$(cat "$remote/3-Resources/app.md")" 'v2 from the app' 'note edited in the app during the run'
+expect_eq "$(cat "$remote/3-Resources/agent.md")" 'v2 from the agent' 'note the agent changed'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '0-Inbox/Processed/a.pdf 3-Resources/agent.md ' 'uploaded files'
+expect_eq "$(post 2 'p.refused === undefined')" true 'refused stays out of the report by default'
 [ -f "$remote/0-Inbox/Processed/a.pdf" ] || die 'processed original missing from 0-Inbox/Processed/ in Drive'
 [ ! -e "$remote/0-Inbox/a.pdf" ] || die 'processed original still in 0-Inbox/ in Drive'
 expect_claude_env unset test-oauth-token
@@ -658,3 +702,53 @@ expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok documents converted before the run"
+
+# 12. A prompt-injected run rewrites CLAUDE.md and writes evil/x.md (and a
+# skill under .claude/): the audit reverts both, uploads neither, lists both
+# in `refused`, and still saves the legitimate change. .claude/ is never
+# uploaded, so it needs no refused entry.
+run_case protected BOWER_REPORT_REFUSED=1
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.refused)" '["CLAUDE.md","evil/x.md"]' 'refused'
+remote="$STATE/remote"
+expect_eq "$(cat "$remote/CLAUDE.md")" '# rules' 'rulebook in Drive'
+[ ! -e "$remote/evil" ] || die 'a file outside the known roots reached Drive'
+[ ! -e "$remote/.claude/skills" ] || die 'a file under .claude/ reached Drive'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '0-Inbox/Processed/a.pdf 3-Resources/agent.md ' 'uploaded files'
+expect_eq "$(cat "$remote/3-Resources/agent.md")" 'v2 from the agent' 'accepted change'
+grep -q ' 2 changes refused$' "$STATE/out.log" || die 'refused count not logged'
+expect_claude_env unset test-oauth-token
+expect_content_free
+expect_cleaned_up
+echo "ok protected paths and unknown roots reverted"
+
+# 13. The pending original is moved out of the known roots: the move is
+# refused and the original stays in the inbox in Drive.
+run_case movedout BOWER_REPORT_REFUSED=1
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.refused)" '["evil/a.pdf"]' 'refused'
+expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
+expect_eq "$(calls rclone | grep -c '^rclone copy ')" 0 'rclone copy calls'
+[ -f "$STATE/remote/0-Inbox/a.pdf" ] || die 'original left the inbox in Drive'
+[ ! -e "$STATE/remote/evil" ] || die 'a file outside the known roots reached Drive'
+grep -q ' 1 originals kept in the inbox$' "$STATE/out.log" || die 'kept count not logged'
+expect_content_free
+expect_cleaned_up
+echo "ok original moved out of the known roots kept"
+
+# 14. More changes than BOWER_MAX_CHANGES: the whole run is reverted, nothing
+# is uploaded or deleted, and the report says so.
+run_case toomany BOWER_MAX_CHANGES=3 BOWER_REPORT_REFUSED=1
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.refused)" '["*"]' 'refused'
+post 2 p.summary | grep -q '^Refused: too many changes' || die 'summary does not say too many changes'
+expect_eq "$(post 2 p.processed)" '[]' 'processed'
+expect_eq "$(calls rclone | grep -c '^rclone copy ')" 0 'rclone copy calls'
+expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
+[ -f "$STATE/remote/0-Inbox/a.pdf" ] || die 'original left the inbox in Drive'
+[ ! -e "$STATE/remote/3-Resources/new-1.md" ] || die 'a change reached Drive after a refused run'
+expect_content_free
+expect_cleaned_up
+echo "ok too many changes"

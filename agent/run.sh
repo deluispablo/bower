@@ -6,11 +6,13 @@
 # Fetches the vault's folder id and a 1 h Drive token from the API, syncs the
 # vault down with rclone (configured only through environment variables),
 # converts pending Office, HTML and EPUB files to Markdown with pandoc (for
-# an ingest), runs Claude Code inside it following the vault's own CLAUDE.md,
-# copies back up only the files the agent added or changed (so a note edited
-# in the app during the run keeps its newer content), deletes from Drive only
-# the pending originals the agent moved away, and reports the outcome to the
-# API.
+# an ingest), runs Claude Code inside it following the vault's own CLAUDE.md
+# under the permission policy in claude-settings.json (next to this script),
+# audits what the agent changed (see "post-run audit" below), copies back up
+# only the accepted files the agent added or changed (so a note edited in the
+# app during the run keeps its newer content), deletes from Drive only the
+# pending originals the agent moved to an accepted place, and reports the
+# outcome to the API.
 #
 # Environment:
 #   BOWER_API_URL            the Worker's origin, e.g. https://api.example.com
@@ -20,6 +22,10 @@
 #   BOWER_MAX_TURNS          optional; defaults to the API's maxTurns
 #   BOWER_ALLOW_WEB          optional; 1 lets the agent use WebSearch and
 #                            WebFetch, anything else (the default) denies them
+#   BOWER_MAX_CHANGES        optional; the most files one run may add or
+#                            change (default 200); above it nothing is saved
+#   BOWER_REPORT_REFUSED     optional; 1 adds the audit's `refused` list to the
+#                            status report (off until the Worker accepts it)
 #   RUNNER_TEMP              optional; set by GitHub Actions
 #
 # Requires bash, curl, jq, rclone, pandoc and claude on PATH.
@@ -80,9 +86,24 @@ for name in BOWER_API_URL BOWER_API_KEY; do
   fi
 done
 
+# The Worker validates status reports strictly and rejects unknown fields
+# until it learns `refused` (#182), so the field stays out of the report
+# unless BOWER_REPORT_REFUSED=1 (the smoke test turns it on). #182 drops
+# this switch and always sends it.
+REPORT_REFUSED=${BOWER_REPORT_REFUSED:-0}
+MAX_CHANGES=${BOWER_MAX_CHANGES:-200}
+case "$MAX_CHANGES" in
+  '' | *[!0-9]*)
+    log "BOWER_MAX_CHANGES is not a number"
+    exit 2
+    ;;
+esac
+readonly REPORT_REFUSED MAX_CHANGES
+
 AGENT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly AGENT_DIR
 readonly PROMPT_FILE="$AGENT_DIR/prompts/$MODE.md"
+readonly SETTINGS_FILE="$AGENT_DIR/claude-settings.json"
 readonly API_BASE="${BOWER_API_URL%/}/runner/vaults/$VAULT_ID"
 readonly RUN_ID="${GITHUB_RUN_ID:-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')}"
 
@@ -102,6 +123,9 @@ readonly PENDING_FILE="$WORK_DIR/pending.txt"
 readonly MANIFEST_BEFORE="$WORK_DIR/manifest-before.txt"
 readonly MANIFEST_AFTER="$WORK_DIR/manifest-after.txt"
 readonly CHANGED_FILE="$WORK_DIR/changed.txt"
+readonly REFUSED_FILE="$WORK_DIR/refused.txt"
+readonly SAVED_KEYS="$WORK_DIR/saved-keys.txt"
+readonly PRE_RUN_DIR="$WORK_DIR/pre-run"
 readonly AGENT_OUT="$WORK_DIR/agent.out"
 readonly AGENT_ERR="$LOG_DIR/agent.err"
 readonly RCLONE_LOG="$LOG_DIR/rclone.log"
@@ -111,6 +135,8 @@ mkdir -p "$VAULT_DIR" "$LOG_DIR"
 STEP='start'   # the step in progress, named in any failure report
 REPORTED=0     # 1 once a final state (done or failed) was reported
 RUN_STARTED=0  # 1 once the agent may have changed the local copy
+REFUSED_JSON=''      # the audit's refused paths, a JSON array, once it ran
+TOO_MANY_CHANGES=0   # 1 when the audit refused the whole run
 
 on_exit() {
   local rc=$?
@@ -137,6 +163,9 @@ report() {
   [ -n "$error" ] && args+=(--arg error "$error")
   [ -n "${PROCESSED_JSON:-}" ] && args+=(--argjson processed "$PROCESSED_JSON")
   [ -n "${SUMMARY:-}" ] && args+=(--arg summary "$SUMMARY")
+  if [ "$REPORT_REFUSED" = 1 ] && [ -n "$REFUSED_JSON" ]; then
+    args+=(--argjson refused "$REFUSED_JSON")
+  fi
   jq -cn "${args[@]}" '$ARGS.named' |
     curl -fsS -X POST \
       -H "Authorization: Bearer $BOWER_API_KEY" \
@@ -145,29 +174,103 @@ report() {
 }
 
 # Print one "<checksum> <size> <path>" line per file of the local copy,
-# .obsidian/ excluded, sorted bytewise; paths are relative to the vault.
-# cksum is POSIX and reads content, so an edit is seen whatever its mtime.
+# .obsidian/ and .claude/ excluded, sorted bytewise; paths are relative to the
+# vault. cksum is POSIX and reads content, so an edit is seen whatever its
+# mtime. Leaving .claude/ out means nothing in it is ever uploaded: not the
+# permission policy copied in before the run, not anything the agent writes
+# there.
 manifest() {
   (
     cd "$VAULT_DIR" &&
-      find . -type f ! -path './.obsidian/*' -exec cksum {} + |
+      find . -type f ! -path './.obsidian/*' ! -path './.claude/*' -exec cksum {} + |
       sed 's|^\([0-9]* [0-9]*\) \./|\1 |' |
         LC_ALL=C sort
   )
 }
 
-# Copy up, never deleting, only the files that are new or changed since
-# MANIFEST_BEFORE was taken, so a note edited in Drive during the run (for
-# example from the app) is not overwritten by the older local copy. Logs the
-# count only.
-copy_changed_up() {
+# The places a run may write to: the PARA folders, the inboxes, Answers/ and
+# the few root notes the rulebook maintains. CLAUDE.md and README.md are
+# deliberately not here (the rulebook is protected: the owner's own rules go
+# to Rules.md), and neither is anything else at the vault's root.
+in_known_root() {
+  case "$1" in
+    0-Inbox/* | 1-Projects/* | 2-Areas/* | 3-Resources/* | 4-Archives/* | \
+      Answers/* | Clippings/*) return 0 ;;
+    Rules.md | About-Me.md | index.md | log.md | 'Lint Report.md') return 0 ;;
+  esac
+  return 1
+}
+
+# Before the run: keep a copy of every file outside the known roots
+# (CLAUDE.md and README.md among them), so the audit can put back one the
+# agent changed.
+keep_pre_run_copy() {
+  local path
+  while IFS= read -r path; do
+    in_known_root "$path" && continue
+    mkdir -p "$PRE_RUN_DIR/$(dirname "$path")" &&
+      cp -p "$VAULT_DIR/$path" "$PRE_RUN_DIR/$path" || return 1
+  done < <(cut -d ' ' -f 3- "$MANIFEST_BEFORE")
+}
+
+# Post-run audit. Lists the files that are new or changed since
+# MANIFEST_BEFORE was taken and decides what may be uploaded:
+# - more than MAX_CHANGES of them: nothing is (refused ["*"]);
+# - otherwise each one outside the known roots is refused and reverted in the
+#   local copy (put back from the pre-run copy, or removed when it is new),
+#   and the rest is accepted.
+# Writes the accepted paths to CHANGED_FILE, sets REFUSED_JSON and
+# TOO_MANY_CHANGES. Logs counts only.
+audit() {
   manifest >"$MANIFEST_AFTER" || return 1
   LC_ALL=C comm -13 "$MANIFEST_BEFORE" "$MANIFEST_AFTER" |
-    cut -d ' ' -f 3- >"$CHANGED_FILE" || return 1
-  local count
-  count=$(grep -c . "$CHANGED_FILE" || true)
+    cut -d ' ' -f 3- >"$WORK_DIR/all-changed.txt" || return 1
+  local count path
+  count=$(grep -c . "$WORK_DIR/all-changed.txt" || true)
   log "$count files changed"
-  if [ "$count" -eq 0 ]; then
+  : >"$CHANGED_FILE"
+  : >"$REFUSED_FILE"
+  if [ "$count" -gt "$MAX_CHANGES" ]; then
+    TOO_MANY_CHANGES=1
+    REFUSED_JSON='["*"]'
+    log "more than $MAX_CHANGES files changed: nothing saved"
+    return 0
+  fi
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    if in_known_root "$path"; then
+      printf '%s\n' "$path" >>"$CHANGED_FILE"
+      continue
+    fi
+    printf '%s\n' "$path" >>"$REFUSED_FILE"
+    if [ -f "$PRE_RUN_DIR/$path" ]; then
+      cp -p "$PRE_RUN_DIR/$path" "$VAULT_DIR/$path" || return 1
+    else
+      rm -f "$VAULT_DIR/$path" || return 1
+    fi
+  done <"$WORK_DIR/all-changed.txt"
+  REFUSED_JSON=$(LC_ALL=C sort "$REFUSED_FILE" | jq -Rn '[inputs]') || return 1
+  log "$(grep -c . "$REFUSED_FILE" || true) changes refused"
+}
+
+# Audit, then copy up, never deleting, only the accepted files, so a note
+# edited in Drive during the run (for example from the app) is not
+# overwritten by the older local copy. Also records the "<checksum> <size>"
+# of every file Drive holds after the copy as far as this run knows (the
+# accepted ones plus those nobody changed), for the pending-original deletes;
+# none when the whole run was refused.
+copy_changed_up() {
+  audit || return 1
+  : >"$SAVED_KEYS"
+  if [ "$TOO_MANY_CHANGES" -eq 0 ]; then
+    {
+      awk 'FILENAME == ARGV[1] { up[$0] = 1; next }
+        { p = $0; sub(/^[^ ]* [^ ]* /, "", p); if (p in up) print $1 " " $2 }' \
+        "$CHANGED_FILE" "$MANIFEST_AFTER" &&
+        LC_ALL=C comm -12 "$MANIFEST_BEFORE" "$MANIFEST_AFTER" | cut -d ' ' -f 1-2
+    } | LC_ALL=C sort -u >"$SAVED_KEYS" || return 1
+  fi
+  if [ ! -s "$CHANGED_FILE" ]; then
     return 0
   fi
   # --files-from-raw reads each line as a path as is (no comment or
@@ -254,6 +357,24 @@ if [ ! -f "$VAULT_DIR/CLAUDE.md" ]; then
   fail "$STEP: CLAUDE.md missing, not a Bower folder"
 fi
 
+# The permission policy comes from the instance repo, never from the vault:
+# claude-settings.json replaces the vault's own .claude/settings.json, and
+# .claude/settings.local.json (which Claude Code would rank above it) is
+# removed from the local copy. It denies writes to the protected paths
+# (CLAUDE.md, README.md, .claude/, .obsidian/) and Bash commands that name a
+# URL. .claude/ is left out of the manifest, so none of this is uploaded.
+STEP='permission policy'
+if [ ! -f "$SETTINGS_FILE" ]; then
+  fail "$STEP: claude-settings.json missing next to run.sh"
+fi
+if ! {
+  mkdir -p "$VAULT_DIR/.claude" &&
+    rm -f "$VAULT_DIR/.claude/settings.local.json" &&
+    cp "$SETTINGS_FILE" "$VAULT_DIR/.claude/settings.json"
+}; then
+  fail "$STEP: copy failed"
+fi
+
 # --- pending files ----------------------------------------------------------
 # Everything in 0-Inbox/ and Clippings/ except processed originals, the
 # folder notes (_*.md) and .gitkeep. Paths are relative to the vault.
@@ -305,6 +426,9 @@ STEP='manifest'
 log "$STEP"
 if ! manifest >"$MANIFEST_BEFORE"; then
   fail "$STEP: listing the local copy failed"
+fi
+if ! keep_pre_run_copy; then
+  fail "$STEP: keeping a pre-run copy failed"
 fi
 
 # --- convert documents ------------------------------------------------------
@@ -393,21 +517,33 @@ if [ "$agent_rc" -ne 0 ]; then
   fail "$STEP: exit $agent_rc"
 fi
 
-# --- sync up ----------------------------------------------------------------
-# Only the files the agent added or changed are copied, and copy never
-# deletes: a file added or edited in Drive during the run keeps its content.
-# Then each file that was pending at the start and is gone from the local copy
-# (the agent moved it to 0-Inbox/Processed/) is deleted from Drive by its own
-# path, so processed originals leave the inbox. Nothing else is removed.
+# --- post-run audit and sync up -------------------------------------------
+# The audit (see audit() above) reverts what the agent may not change: the
+# protected paths, anything outside the known roots, or, past MAX_CHANGES
+# files, the whole run. Only the accepted files the agent added or changed
+# are copied, and copy never deletes: a file added or edited in Drive during
+# the run keeps its content. Then each file that was pending at the start,
+# is gone from the local copy and whose content Drive holds under another
+# path (the agent moved it to 0-Inbox/Processed/ or next to its note) is
+# deleted from Drive by its own path, so processed originals leave the
+# inbox; one moved to a refused place, or any after a refused run, stays
+# where it was. Nothing else is removed.
 STEP='sync up'
 log "$STEP"
 if ! copy_changed_up; then
   fail "$STEP: copy failed"
 fi
 RUN_STARTED=0  # the copy is done; a later failure needs no second copy
+kept=0
 while IFS= read -r path <&3; do
   [ -n "$path" ] || continue
   [ ! -e "$VAULT_DIR/$path" ] || continue
+  key=$(P="$path" awk '{ p = $0; sub(/^[^ ]* [^ ]* /, "", p)
+    if (p == ENVIRON["P"]) { print $1 " " $2; exit } }' "$MANIFEST_BEFORE")
+  if [ -z "$key" ] || ! grep -qxF -- "$key" "$SAVED_KEYS"; then
+    kept=$((kept + 1))
+    continue
+  fi
   delete_rc=0
   rclone deletefile "vault:$path" </dev/null >>"$RCLONE_LOG" 2>&1 || delete_rc=$?
   # 4 is rclone's "file not found": someone removed it from Drive during the
@@ -416,11 +552,17 @@ while IFS= read -r path <&3; do
     fail "$STEP: delete failed"
   fi
 done 3<"$PENDING_FILE"
+[ "$kept" -eq 0 ] || log "$kept originals kept in the inbox"
 
 # --- report done ------------------------------------------------------------
 STEP='report done'
 log "$STEP"
 SUMMARY=$(tail -n 5 "$AGENT_OUT")
+if [ "$TOO_MANY_CHANGES" -eq 1 ]; then
+  # Nothing was saved, so nothing was processed, whatever the agent said.
+  SUMMARY="Refused: too many changes (more than $MAX_CHANGES files). Nothing was saved."
+  [ -z "$PROCESSED_JSON" ] || PROCESSED_JSON='[]'
+fi
 if ! report done; then
   REPORTED=1
   log "report done failed: API unreachable"
