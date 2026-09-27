@@ -130,7 +130,7 @@ Bower's answers to questions sent as instructions. One note per question, dated.
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-27
-bower_rules_version: 5
+bower_rules_version: 6
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -254,8 +254,9 @@ The owner is talking to you through the app. Before you start, the runner checks
    - Add or amend the rule in \`Rules.md\`, never in this \`CLAUDE.md\`, under a heading that says what it is about, marked \`(owner's request, YYYY-MM-DD)\`.
    - If the rule describes a repeatable multi-step process (for example how to handle a specific kind of document), write it as a workflow section in \`Rules.md\`.
    - Append to \`log.md\`: \`Rule added/changed: <one line>\`.
-2. **One-off task** ("compare…", "summarise…", "create a table of…"):
+2. **One-off task** ("compare…", "summarise…", "create a table of…", "this was misfiled, move it to…"):
    - Do it. Put the result where it belongs (a note in the relevant project/area, or \`Answers/\` if it is analysis). Link it. Log it.
+   - **Move request** (the owner says a note is misfiled and names the right folder, including one sent from the note's own "This was misfiled" row): move the note there, update \`index.md\`, and append \`Correction: <from folder> -> <to folder> (<YYYY-MM-DD>)\` to \`log.md\` instead of a plain log line. When that same \`<from folder> -> <to folder>\` pair already appears in an earlier \`Correction:\` line in \`log.md\`, also file a proposal (kind \`rule\`, see Proposals) suggesting notes like this one be filed under \`<to folder>\` directly, with the two \`Correction:\` lines as evidence.
 3. **Question** ("what is…", "when did…", "where is…"):
    - Run the Query workflow and write the answer to \`Answers/<YYYY-MM-DD> <question>.md\`. Log it.
 

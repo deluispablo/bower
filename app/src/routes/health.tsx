@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
-import type { JSX } from 'preact';
 
 import { Bird } from '../components/bird.js';
+import { IconExternalLink } from '../components/icons.js';
 import { SaveError } from '../drive.js';
 import {
   findReport,
@@ -22,25 +22,6 @@ import {
 import type { Proposal, ProposalDecision, ProposalKind } from '../proposals.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import '../styles/health.css';
-
-/** External link, kept local: the icon set (`components/icons.tsx`) is owned by #144 in parallel. */
-function ExternalIcon(): JSX.Element {
-  return (
-    <svg
-      class="icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5" />
-    </svg>
-  );
-}
 
 type ReportLoad =
   | { status: 'loading' }
@@ -334,7 +315,7 @@ export function Health() {
             rel="noopener"
             class="health-drive-link"
           >
-            <ExternalIcon /> Open report in Drive
+            <IconExternalLink /> Open report in Drive
           </a>
         )}
       </div>
