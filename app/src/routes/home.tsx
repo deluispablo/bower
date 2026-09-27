@@ -307,7 +307,8 @@ export function Home() {
             <IconHeart />
             Health
           </h2>
-          <p>{healthHint}</p>
+          <p class="home-card-sub">{healthHint}</p>
+          <p class="home-card-sub">Runs every Sunday.</p>
         </a>
         <div class="home-card home-desktop-only">
           <h2>
