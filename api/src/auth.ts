@@ -309,6 +309,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       },
       needsReauth: user.needsReauth === true,
       hasApiKey: user.encApiKey !== undefined,
+      ...(user.tourSeenAt === undefined ? {} : { tourSeenAt: user.tourSeenAt }),
     });
   });
 

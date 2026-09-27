@@ -219,6 +219,83 @@ describe('PATCH /settings', () => {
     expect((await notJson.json<ErrorBody>()).error.code).toBe('bad_request');
   });
 
+  it('stores tourSeenAt, returns it from /me, and leaves the key alone', async () => {
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    const existing = await encrypt(API_KEY, key);
+    await seedUser({ encApiKey: existing });
+    const google = revokeStub();
+    const cookie = await sessionCookie();
+    const tourSeenAt = '2026-09-27T10:00:00.000Z';
+
+    const response = await patchSettings(
+      google.fetchImpl,
+      { tourSeenAt },
+      cookie,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ hasApiKey: true });
+    const stored = await kv.get<User>(keys.user(USER_ID), 'json');
+    expect(stored?.tourSeenAt).toBe(tourSeenAt);
+    expect(stored?.encApiKey).toBe(existing);
+
+    const me = await getMe(google.fetchImpl, cookie);
+    const meBody = await me.json<{ tourSeenAt?: string }>();
+    expect(meBody.tourSeenAt).toBe(tourSeenAt);
+  });
+
+  it('leaves tourSeenAt out of /me until the tour is seen', async () => {
+    await seedUser();
+    const google = revokeStub();
+
+    const me = await getMe(google.fetchImpl, await sessionCookie());
+    const meBody = await me.json<Record<string, unknown>>();
+    expect('tourSeenAt' in meBody).toBe(false);
+  });
+
+  it('answers 400 invalid_tour_seen_at for a malformed tourSeenAt and stores nothing', async () => {
+    await seedUser();
+    const google = revokeStub();
+    const cookie = await sessionCookie();
+
+    const bodies: unknown[] = [
+      { tourSeenAt: 'yesterday' },
+      { tourSeenAt: '2026-09-27' },
+      { tourSeenAt: '2026-02-30T10:00:00.000Z' },
+      { tourSeenAt: '2026-09-27T10:00:00+02:00' },
+      { tourSeenAt: '' },
+      { tourSeenAt: 42 },
+      { tourSeenAt: null },
+    ];
+    for (const body of bodies) {
+      const response = await patchSettings(google.fetchImpl, body, cookie);
+      expect(response.status, JSON.stringify(body)).toBe(400);
+      const json = await response.json<ErrorBody>();
+      expect(json.error.code).toBe('invalid_tour_seen_at');
+      expect(json.error.message).not.toBe('');
+    }
+
+    const stored = await kv.get<User>(keys.user(USER_ID), 'json');
+    expect(stored?.tourSeenAt).toBeUndefined();
+  });
+
+  it('keeps tourSeenAt out of the admin listing', async () => {
+    await seedUser({ tourSeenAt: '2026-09-27T10:00:00.000Z' });
+
+    const response = await createApp({
+      fetchImpl: revokeStub().fetchImpl,
+    }).request(
+      `${API}/admin/users`,
+      { headers: { authorization: `Bearer ${env.ADMIN_KEY}` } },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    const users = await response.json<Record<string, unknown>[]>();
+    expect(users).toHaveLength(1);
+    expect(users[0]).not.toHaveProperty('tourSeenAt');
+  });
+
   it('answers 401 without a session', async () => {
     const response = await patchSettings(revokeStub().fetchImpl, {
       apiKey: API_KEY,

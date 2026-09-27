@@ -36,6 +36,7 @@ Notes:
 | `encRefreshToken` | `string` | AES-GCM envelope (`crypto.ts`); never plaintext |
 | `encApiKey` | `string` | optional; AES-GCM envelope (`crypto.ts`); never plaintext |
 | `needsReauth` | `boolean` | optional |
+| `tourSeenAt` | `string` | optional; ISO-8601, when the user finished or skipped the first-run tour. Set through `PATCH /settings`, returned by `GET /me`, never in `GET /admin/users` |
 
 ## `Run`
 

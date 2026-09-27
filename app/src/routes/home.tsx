@@ -5,7 +5,8 @@
  * and the desktop sidebar's button), the Inbox and Answers count cards, and
  * Recent. Desktop adds the Health and Notes cards and an inline Tell Bower
  * composer next to Recent, reusing `TellComposer` (#146) exactly as
- * `routes/tell.tsx` does.
+ * `routes/tell.tsx` does. The first-run tour (#149, `components/tour.tsx`)
+ * opens over it once per account, or when Settings asks for a replay.
  */
 
 import type { JSX } from 'preact';
@@ -24,6 +25,7 @@ import {
   IconSearch,
 } from '../components/icons.js';
 import { TellComposer } from '../components/tell-composer.js';
+import { Tour } from '../components/tour.js';
 import { createTextFile } from '../drive.js';
 import { findReport, isReportNew } from '../health-report.js';
 import {
@@ -38,6 +40,7 @@ import {
   recentNotes,
   relativeTime,
 } from '../navigation.js';
+import { shouldShowTour } from '../onboarding.js';
 import { offlineReason, useOnline } from '../online.js';
 import { getPref } from '../prefs.js';
 import type { RunPhase } from '../run-store.js';
@@ -53,6 +56,12 @@ import {
   statusLineFor,
 } from '../tell.js';
 import type { RunSnapshot, SentItem } from '../tell.js';
+import {
+  endTour,
+  markTourSeen,
+  showoffPlayed,
+  useTour,
+} from '../tour-store.js';
 import { isAppFile } from '../vault-index.js';
 import { formatAgo, useVault } from '../vault-store.js';
 import '../styles/home.css';
@@ -234,14 +243,21 @@ export function Home() {
 
   const bubble = bubbleFor({ offline, error, done, newHealthReport, pending });
   const greeting = greetingFor(new Date(now), me?.name);
-  const onDone = () => setRestedPlay(playId);
+
+  // The first-run tour (#149): once per account, or again from Settings.
+  // "Let's go" ends it with one show-off on Home.
+  const tour = useTour();
+  const showTour =
+    me !== undefined && !tour.dismissed && shouldShowTour(me, tour.replay);
+  const greetingBird: BirdState = tour.showoff ? 'showoff' : birdState;
+  const onDone = tour.showoff ? showoffPlayed : () => setRestedPlay(playId);
 
   return (
     <section class="home">
       <Greeting
         variant="phone"
         size={88}
-        state={birdState}
+        state={greetingBird}
         greeting={greeting}
         bubble={bubble}
         onDone={onDone}
@@ -249,7 +265,7 @@ export function Home() {
       <Greeting
         variant="desktop"
         size={112}
-        state={birdState}
+        state={greetingBird}
         greeting={greeting}
         bubble={bubble}
         onDone={onDone}
@@ -336,6 +352,14 @@ export function Home() {
           process={process}
         />
       </div>
+      {showTour && (
+        <Tour
+          onEnd={(finished) => {
+            endTour(finished);
+            void markTourSeen(me);
+          }}
+        />
+      )}
     </section>
   );
 }

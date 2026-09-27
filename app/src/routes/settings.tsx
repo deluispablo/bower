@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
+import { useLocation } from 'preact-iso';
 
 import type { Me } from '../api.js';
 import { ApiError, deleteAccount, loginUrl, updateSettings } from '../api.js';
@@ -14,6 +15,7 @@ import {
   enablePush,
 } from '../push.js';
 import { useSession } from '../session.js';
+import { replayTour } from '../tour-store.js';
 import '../styles/settings.css';
 import { setTheme } from '../theme.js';
 
@@ -242,11 +244,12 @@ function NotificationsToggle() {
 
 /**
  * Settings › Advanced (spec §6): the own Claude API key form, "Show me
- * around again" (the onboarding tour, #149 — no `/welcome?tour=1` route
- * exists yet, so this row stays disabled until #149 wires it up) and the
- * same `showAppFiles` pref as the explorer's footer button.
+ * around again" (replays the first-run tour on Home through a one-shot flag
+ * in memory, `tour-store.ts`; `tourSeenAt` is left alone) and the same
+ * `showAppFiles` pref as the explorer's footer button.
  */
 function AdvancedSection({ me }: { me: Me }) {
+  const { route } = useLocation();
   const [showAppFiles, setShowAppFiles] = useState(() =>
     getPref('showAppFiles'),
   );
@@ -257,7 +260,14 @@ function AdvancedSection({ me }: { me: Me }) {
 
       <ApiKeySection me={me} />
 
-      <button type="button" class="settings-row" disabled>
+      <button
+        type="button"
+        class="settings-row"
+        onClick={() => {
+          replayTour();
+          route('/');
+        }}
+      >
         <span class="settings-row-text">
           <span class="settings-row-label">Show me around again</span>
           <span class="toggle-hint">Replay the three-step tour</span>

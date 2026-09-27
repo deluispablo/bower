@@ -50,12 +50,20 @@ interface NavLink {
   /** Sidebar label (desktop). */
   label: string;
   Icon: () => JSX.Element;
+  /** The first-run tour's anchor (`components/tour.tsx`). */
+  tour?: 'add' | 'tell';
 }
 
 const NAV_LINKS: readonly NavLink[] = [
   { href: '/', short: 'Home', label: 'Home', Icon: IconHome },
-  { href: '/add', short: 'Add', label: 'Add', Icon: IconPlus },
-  { href: '/tell', short: 'Tell', label: 'Tell Bower', Icon: IconChat },
+  { href: '/add', short: 'Add', label: 'Add', Icon: IconPlus, tour: 'add' },
+  {
+    href: '/tell',
+    short: 'Tell',
+    label: 'Tell Bower',
+    Icon: IconChat,
+    tour: 'tell',
+  },
   {
     href: '/settings',
     short: 'Settings',
@@ -131,12 +139,13 @@ export function Layout({ children }: LayoutProps): JSX.Element {
 
   const sidebarNav = (
     <nav class="explorer-nav" aria-label="Primary">
-      {NAV_LINKS.map(({ href, label, Icon }) => (
+      {NAV_LINKS.map(({ href, label, Icon, tour }) => (
         <a
           key={href}
           href={href}
           class="explorer-row"
           aria-current={currentFor(href, path)}
+          data-tour={tour}
         >
           <Icon />
           <span class="explorer-row-label">{label}</span>
@@ -199,8 +208,13 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         </aside>
       )}
       <nav class="bottom-nav" aria-label="Primary">
-        {NAV_LINKS.map(({ href, short, Icon }) => (
-          <a key={href} href={href} aria-current={currentFor(href, path)}>
+        {NAV_LINKS.map(({ href, short, Icon, tour }) => (
+          <a
+            key={href}
+            href={href}
+            aria-current={currentFor(href, path)}
+            data-tour={tour}
+          >
             <Icon />
             <span>{short}</span>
           </a>

@@ -106,6 +106,7 @@ export function ProcessButton() {
         type="button"
         class="process-button"
         data-phase={phase}
+        data-tour="tidy"
         aria-haspopup={reopens ? 'dialog' : undefined}
         disabled={disabled}
         aria-disabled={disabled}
