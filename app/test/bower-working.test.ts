@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Run } from '../src/api.js';
 import {
   workingBird,
   workingClasses,
   workingLabel,
 } from '../src/components/bower-working.js';
 import {
+  doneNotes,
   SHEET_LINGER_MS,
   sheetVisible,
   startedAgo,
@@ -77,6 +79,41 @@ describe('workingStateFor', () => {
     expect(workingStateFor('stale')).toBe('failed');
     expect(workingStateFor('quota')).toBe('quota');
     expect(workingStateFor('idle')).toBeNull();
+  });
+});
+
+describe('doneNotes', () => {
+  const base: Run = { state: 'done', requestedAt: '2026-09-27T12:00:00.000Z' };
+
+  it('is empty when there is nothing to say', () => {
+    expect(doneNotes(base)).toEqual([]);
+    expect(doneNotes(null)).toEqual([]);
+    expect(doneNotes({ ...base, quarantined: [], refused: [] })).toEqual([]);
+  });
+
+  it('shows the quarantined line, then the refused line, both present', () => {
+    expect(
+      doneNotes({
+        ...base,
+        quarantined: ['0-Inbox/Quarantine/a.md', '0-Inbox/Quarantine/b.md'],
+        refused: ['CLAUDE.md'],
+      }),
+    ).toEqual([
+      'Bower set aside 2 files that contained instructions. Look at them in Drive and move them back if they are fine.',
+      '1 change was refused; nothing was lost.',
+    ]);
+  });
+
+  it('shows only the quarantined line when refused is absent', () => {
+    expect(doneNotes({ ...base, quarantined: ['a.md'] })).toEqual([
+      'Bower set aside 1 file that contained instructions. Look at them in Drive and move them back if they are fine.',
+    ]);
+  });
+
+  it('shows only the refused line when quarantined is absent', () => {
+    expect(doneNotes({ ...base, refused: ['a.md', 'b.md'] })).toEqual([
+      '2 changes were refused; nothing was lost.',
+    ]);
   });
 });
 

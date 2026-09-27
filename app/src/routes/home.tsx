@@ -216,7 +216,11 @@ export function Home() {
   const error = status === 'error';
   const justDone = phase === 'done';
   const done = justDone
-    ? { processed: run?.processed?.length ?? 0 }
+    ? {
+        processed: run?.processed?.length ?? 0,
+        quarantined: run?.quarantined?.length,
+        refused: run?.refused?.length,
+      }
     : undefined;
 
   const idealBird = birdStateFor({

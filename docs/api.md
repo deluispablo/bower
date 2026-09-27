@@ -244,13 +244,17 @@ The runner's progress report. Body, validated strictly (an unknown field, a wron
 | `kind` | `'ingest' \| 'lint'` | Optional; `ingest` when absent, so runners that predate it keep working |
 | `runId` | `string` | Optional, non-empty; replaces the stored `runId` when given |
 | `summary` | `string` | Optional; cut to 2,000 characters |
-| `processed` | `string[]` | Optional; cut to 200 entries |
+| `processed` | `string[]` | Optional; cut to 200 entries, each entry cut to 2,000 characters |
+| `quarantined` | `string[]` | Optional; paths the pre-scan set aside under `0-Inbox/Quarantine/` this run (spec A.5); same bounds as `processed` |
+| `refused` | `string[]` | Optional; paths (or `"*"` for the whole run) the post-run audit refused (spec A.3/A.4); same bounds as `processed` |
 | `error` | `string` | Optional; cut to 2,000 characters |
+
+A report with `quarantined` and/or `refused` but no `processed` is still valid.
 
 The stored run of that kind is updated and takes the report's `kind`: an ingest under `run:<id>`, a lint under `lintrun:<id>`. A lint report never reads or writes `run:<id>`, so `GET /status`, `POST /process` and the app's Process button ignore it. Without a stored run of that kind, one is started with `requestedAt` set to now.
 
-- `running`: `state` and `startedAt` (now) are set. A run that is already `running` keeps its `startedAt`. Outcome fields of an earlier attempt (`finishedAt`, `summary`, `processed`, `error`) are dropped.
-- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed` and `error` become exactly the report's (absent when the report has none). Then the user's devices get a push notification (see [Web push](#web-push)). For an ingest: `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. For a lint: `Health check ready`, or `Health check failed` for `failed`, never a count. A push failure never fails the report.
+- `running`: `state` and `startedAt` (now) are set. A run that is already `running` keeps its `startedAt`. Outcome fields of an earlier attempt (`finishedAt`, `summary`, `processed`, `quarantined`, `refused`, `error`) are dropped.
+- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed`, `quarantined`, `refused` and `error` become exactly the report's (absent when the report has none). Then the user's devices get a push notification (see [Web push](#web-push)). For an ingest: `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. For a lint: `Health check ready`, or `Health check failed` for `failed`, never a count. A push failure never fails the report.
 
 Response: `{ "run": Run }`, status 200.
 
@@ -271,7 +275,7 @@ What the service worker receives in the `push` event, as JSON:
 | Field | Type | Notes |
 | --- | --- | --- |
 | `title` | `string` | `Bower` |
-| `body` | `string` | An ingest: `2 files processed` (or `1 file processed`), `Nothing new to process`, or `Something went wrong`. A lint: `Health check ready` or `Health check failed` |
+| `body` | `string` | An ingest: `2 files tidied up` (or `1 file tidied up`), `Nothing new to tidy up`, or `Something went wrong`; a `done` body gets a short `" · n set aside"` suffix when the run quarantined anything. A lint: `Health check ready` or `Health check failed` |
 | `url` | `string` | App path to open on click: `/` for an ingest, `/health` (the Health screen) for a lint |
 
 Sent with `TTL: 86400`, `Urgency: normal`, `Content-Encoding: aes128gcm` to every subscription of the user when a run is reported `done` or `failed`. A 404 or 410 from the push service deletes that subscription; any other failure is logged by status only and the subscription is kept.
