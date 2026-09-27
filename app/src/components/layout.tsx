@@ -1,51 +1,113 @@
-import type { ComponentChildren } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+/**
+ * The shell every screen sits in (spec §5.1, §5.2).
+ *
+ * Phone: a top bar (the bird and the wordmark, the Tidy up pill, the menu
+ * button that opens the explorer drawer) and a bottom nav (Home, Add,
+ * Tell, Settings). Health is reached from the explorer's Health row.
+ *
+ * Desktop (900 px and wider): the explorer as a permanent left column, a
+ * header row over the content (breadcrumb slot, theme toggle, the pill),
+ * and on note screens a third column, filled through `aside` (#144).
+ *
+ * The header is one element restyled per breakpoint, so the pill (which
+ * owns the working sheet and its toasts) is only ever mounted once.
+ */
+
+import type { ComponentChildren, JSX } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
 import { findReport, isReportNew } from '../health-report.js';
 import { getPref } from '../prefs.js';
 import { useSession } from '../session.js';
+import { setTheme } from '../theme.js';
 import { useVault } from '../vault-store.js';
 import { Bird } from './bird.js';
+import { Explorer, ExplorerDrawer, HEALTH_PATH } from './explorer.js';
+import {
+  IconChat,
+  IconHome,
+  IconMenu,
+  IconMoon,
+  IconPlus,
+  IconSliders,
+  IconSun,
+} from './icons.js';
 import { OfflineBanner } from './offline-banner.js';
 import { ProcessButton } from './process-button.js';
-import { Search } from './search.js';
-import { Tree } from './tree.js';
 
-const NAV_LINKS = [
-  { href: '/', label: 'Home' },
-  { href: '/add', label: 'Add' },
-  { href: '/tell', label: 'Tell Bower' },
-  { href: '/settings', label: 'Settings' },
+interface NavLink {
+  href: string;
+  /** Bottom nav label (phone). */
+  short: string;
+  /** Sidebar label (desktop). */
+  label: string;
+  Icon: () => JSX.Element;
+}
+
+const NAV_LINKS: readonly NavLink[] = [
+  { href: '/', short: 'Home', label: 'Home', Icon: IconHome },
+  { href: '/add', short: 'Add', label: 'Add', Icon: IconPlus },
+  { href: '/tell', short: 'Tell', label: 'Tell Bower', Icon: IconChat },
+  {
+    href: '/settings',
+    short: 'Settings',
+    label: 'Settings',
+    Icon: IconSliders,
+  },
 ];
 
-const HEALTH_PATH = '/lint';
+const DESKTOP_QUERY = '(min-width: 900px)';
 
-interface LayoutProps {
-  children: ComponentChildren;
+function currentFor(href: string, path: string): 'page' | undefined {
+  return href === path ? 'page' : undefined;
 }
 
-interface HealthLinkProps {
-  isNew: boolean;
-  onNavigate?: () => void;
+type Theme = 'light' | 'dark';
+
+function effectiveTheme(): Theme {
+  const pref = getPref('theme');
+  if (pref !== 'system') return pref;
+  const dark =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return dark ? 'dark' : 'light';
 }
 
-/** The health check link, with a "New" badge for a report not yet opened. */
-function HealthLink({ isNew, onNavigate }: HealthLinkProps) {
+/** Desktop header: flips between light and dark (Settings keeps "system"). */
+function ThemeToggle(): JSX.Element {
+  const [theme, setThemeState] = useState<Theme>(effectiveTheme);
+  const next: Theme = theme === 'dark' ? 'light' : 'dark';
   return (
-    <a href={HEALTH_PATH} class="health-link" onClick={onNavigate}>
-      Health
-      {isNew && <span class="nav-badge">New</span>}
-    </a>
+    <button
+      type="button"
+      class="icon-button theme-toggle"
+      aria-label="Switch theme"
+      title="Switch theme"
+      onClick={() => {
+        setTheme(next);
+        setThemeState(next);
+      }}
+    >
+      {theme === 'dark' ? <IconSun /> : <IconMoon />}
+    </button>
   );
 }
 
-export function Layout({ children }: LayoutProps) {
-  const { me, signOut } = useSession();
+interface LayoutProps {
+  children: ComponentChildren;
+  /** Desktop header's breadcrumb; empty until the Note screen fills it (#144). */
+  crumb?: ComponentChildren;
+  /** Desktop third column, "About this note" (#144); nothing renders there yet. */
+  aside?: ComponentChildren;
+}
+
+export function Layout({ children, crumb, aside }: LayoutProps): JSX.Element {
+  const { me } = useSession();
   const { index } = useVault();
   const { path } = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Re-read on every render: the health screen updates the pref, and a
   // route change re-renders the layout. No badge while on that screen.
@@ -53,112 +115,102 @@ export function Layout({ children }: LayoutProps) {
     index === null ? undefined : findReport(index)?.modifiedTime;
   const healthIsNew =
     path !== HEALTH_PATH && isReportNew(reportTime, getPref('healthSeenAt'));
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
-  const closeMenu = (): void => {
-    setMenuOpen(false);
-    menuButtonRef.current?.focus();
+  const closeDrawer = (): void => {
+    setDrawerOpen(false);
   };
 
-  // The drawer traps no focus (Tab can still reach the rest of the page),
-  // but it must still close on Escape like any dismissible panel.
+  // Any route change (a note opened from the tree or the search) closes
+  // the drawer; so does growing the window into the desktop layout, where
+  // the explorer is always on screen.
   useEffect(() => {
-    if (!menuOpen) return;
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') closeMenu();
+    setDrawerOpen(false);
+  }, [path]);
+
+  useEffect(() => {
+    if (!drawerOpen || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia(DESKTOP_QUERY);
+    function onChange(): void {
+      if (query.matches) setDrawerOpen(false);
     }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [menuOpen]);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, [drawerOpen]);
+
+  const sidebarNav = (
+    <nav class="explorer-nav" aria-label="Primary">
+      {NAV_LINKS.map(({ href, label, Icon }) => (
+        <a
+          key={href}
+          href={href}
+          class="explorer-row"
+          aria-current={currentFor(href, path)}
+        >
+          <Icon />
+          <span class="explorer-row-label">{label}</span>
+        </a>
+      ))}
+    </nav>
+  );
 
   return (
-    <div class="shell">
-      <header class="topbar">
-        <a href="/" class="topbar-logo" aria-label="Bower home">
-          <Bird state="looking" size={32} />
-        </a>
-        <Search />
-        <div class="topbar-slot" data-slot="process">
-          <ProcessButton />
-        </div>
-        <div class="menu">
+    <div class={aside === undefined ? 'shell' : 'shell shell-with-aside'}>
+      <nav class="shell-sidebar" aria-label="Your notes">
+        <Explorer
+          variant="sidebar"
+          healthIsNew={healthIsNew}
+          nav={sidebarNav}
+        />
+      </nav>
+      <div class="shell-main">
+        <header class="topbar">
+          <a href="/" class="brand topbar-brand" aria-label="Bower home">
+            <Bird state="looking" size={32} />
+            <span class="brand-word">Bower</span>
+          </a>
+          <div class="topbar-crumb">{crumb}</div>
+          <ThemeToggle />
+          <div class="topbar-slot" data-slot="process">
+            <ProcessButton />
+          </div>
           <button
             type="button"
-            ref={menuButtonRef}
-            class="menu-button"
-            aria-label="Menu"
-            aria-haspopup="true"
-            aria-expanded={menuOpen}
+            class="icon-button menu-button"
+            aria-label="Your notes"
+            aria-haspopup="dialog"
+            aria-expanded={drawerOpen}
             onClick={() => {
-              setMenuOpen((open) => !open);
+              setDrawerOpen(true);
             }}
           >
-            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-              <path
-                d="M4 7h16M4 12h16M4 17h16"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                fill="none"
-              />
-            </svg>
+            <IconMenu />
           </button>
-          {menuOpen && (
-            <>
-              <div class="menu-backdrop" onClick={closeMenu} />
-              <div class="menu-panel" aria-label="Menu">
-                <div class="menu-health">
-                  <HealthLink isNew={healthIsNew} onNavigate={closeMenu} />
-                </div>
-                <div class="menu-tree">
-                  {index !== null && (
-                    <Tree index={index} onNavigate={closeMenu} />
-                  )}
-                </div>
-                {me && <p class="menu-email">{me.email}</p>}
-                <button
-                  type="button"
-                  class="menu-signout"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    void signOut();
-                  }}
-                >
-                  Sign out
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </header>
-      <OfflineBanner />
-      {me?.needsReauth && (
-        <div class="reauth-banner">
-          <span>Google access needs to be renewed.</span>
-          <a href={loginUrl()}>Reconnect Google</a>
-        </div>
-      )}
-      <div class="body">
-        <nav class="sidebar" aria-label="Primary">
-          {NAV_LINKS.map((link) => (
-            <a key={link.href} href={link.href}>
-              {link.label}
-            </a>
-          ))}
-          <HealthLink isNew={healthIsNew} />
-          <div class="sidebar-tree">
-            {index !== null && <Tree index={index} />}
+        </header>
+        <OfflineBanner />
+        {me?.needsReauth === true && (
+          <div class="reauth-banner">
+            <span>Google access needs to be renewed.</span>
+            <a href={loginUrl()}>Reconnect Google</a>
           </div>
-        </nav>
+        )}
         <main class="content">{children}</main>
       </div>
+      {aside !== undefined && (
+        <aside class="shell-aside" aria-label="About this note">
+          {aside}
+        </aside>
+      )}
       <nav class="bottom-nav" aria-label="Primary">
-        {NAV_LINKS.map((link) => (
-          <a key={link.href} href={link.href}>
-            {link.label}
+        {NAV_LINKS.map(({ href, short, Icon }) => (
+          <a key={href} href={href} aria-current={currentFor(href, path)}>
+            <Icon />
+            <span>{short}</span>
           </a>
         ))}
       </nav>
+      {drawerOpen && (
+        <ExplorerDrawer healthIsNew={healthIsNew} onClose={closeDrawer} />
+      )}
     </div>
   );
 }
