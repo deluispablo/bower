@@ -117,7 +117,7 @@ describe('renderNote', () => {
 
     const external = root.querySelector('a[href="https://example.com/guide"]');
     expect(external?.getAttribute('target')).toBe('_blank');
-    expect(external?.getAttribute('rel')).toBe('noopener');
+    expect(external?.getAttribute('rel')).toBe('noopener noreferrer');
     const mail = root.querySelector('a[href^="mailto:"]');
     expect(mail?.hasAttribute('target')).toBe(false);
 
@@ -273,7 +273,7 @@ describe('renderNote', () => {
         'https://drive.google.com/file/d/scan/view',
       );
       expect(link.getAttribute('target')).toBe('_blank');
-      expect(link.getAttribute('rel')).toBe('noopener');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
     }
     expect(drive[0]?.textContent).toBe('the scan');
 
@@ -326,5 +326,117 @@ describe('renderNote', () => {
     expect(
       sanitizeHtml('<b onmouseover="x()">ok</b><script>x()</script>'),
     ).toBe('<b>ok</b>');
+  });
+});
+
+/**
+ * The sanitiser profile (#188): what a hostile note, for example a web page
+ * clipped into the Bower folder, can and cannot put on the page.
+ */
+describe('sanitiser profile', () => {
+  const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+
+  function hostile(): HTMLElement {
+    const note = renderNote(
+      [
+        '[js](javascript:alert(1)) [JS](JaVaScRiPt:alert(1)) [vb](vbscript:msgbox(1))',
+        '[tab](java\tscript:alert(1)) ![img](javascript:alert(1))',
+        '<a href="javascript:alert(1)">a</a> <a href="&#106;avascript:alert(1)">b</a>',
+        '<a href=" javascript:alert(1)">c</a> <a href="vbscript:msgbox(1)">d</a>',
+        '<a href="java&#x09;script:alert(1)">e</a>',
+        '',
+        '<svg onload="alert(1)"><circle r="5"></circle><script>alert(1)</script></svg>',
+        '<math><mi xlink:href="javascript:alert(1)">m</mi></math>',
+        '',
+        `<img id="png" src="${PNG}"> ![inline](${PNG})`,
+        '<img id="svg" src="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+">',
+        '<img id="html" src="data:text/html,<script>alert(1)</script>">',
+        '<a id="data-link" href="data:text/html,<script>alert(1)</script>">f</a>',
+        '<a id="data-img-link" href="' + PNG + '">g</a>',
+        '',
+        '[web](https://example.com/page) <a href="HTTP://example.com/up" rel="opener" target="_self">up</a>',
+        '[[Garden Plan]] [anchor](#top) <a href="/note/plan#user-content-x">in</a>',
+        '<a href="/note/../auth/logout">climb</a> <a href="//example.com/x">proto</a>',
+        '<a href="mailto:you@example.com" target="_blank">mail</a>',
+      ].join('\n'),
+      index,
+    );
+    return dom(note.html);
+  }
+
+  it('never lets javascript: or vbscript: through, however written', () => {
+    const root = hostile();
+    expect(root.querySelector('script')).toBeNull();
+    // A tab inside the scheme stops Markdown from making a link at all:
+    // what is left is text, so check attributes, not the whole HTML.
+    for (const element of root.querySelectorAll('*')) {
+      for (const attribute of element.attributes) {
+        expect(attribute.value).not.toMatch(/javascript|vbscript|script:/i);
+      }
+    }
+    for (const element of root.querySelectorAll('[href], [src]')) {
+      for (const name of ['href', 'src']) {
+        const value = element.getAttribute(name);
+        if (value !== null)
+          expect(value).toMatch(
+            /^(https?:|mailto:|\/note\/|#|data:image\/png)/i,
+          );
+      }
+    }
+  });
+
+  it('drops SVG and MathML elements with their handlers', () => {
+    const root = hostile();
+    expect(root.querySelector('svg, circle, math, mi')).toBeNull();
+    expect(root.innerHTML).not.toMatch(/onload|xlink/i);
+  });
+
+  it('keeps data: URLs only as raster images in img', () => {
+    const root = hostile();
+    expect(root.querySelector('#user-content-png')?.getAttribute('src')).toBe(
+      PNG,
+    );
+    expect(root.querySelector(`img[alt="inline"]`)?.getAttribute('src')).toBe(
+      PNG,
+    );
+    expect(root.querySelector('#user-content-svg')?.hasAttribute('src')).toBe(
+      false,
+    );
+    expect(root.querySelector('#user-content-html')?.hasAttribute('src')).toBe(
+      false,
+    );
+    expect(
+      root.querySelector('#user-content-data-link')?.hasAttribute('href'),
+    ).toBe(false);
+    expect(
+      root.querySelector('#user-content-data-img-link')?.hasAttribute('href'),
+    ).toBe(false);
+  });
+
+  it('opens external links in a new tab without opener or referrer', () => {
+    const root = hostile();
+    for (const href of ['https://example.com/page', 'HTTP://example.com/up']) {
+      const link = root.querySelector(`a[href="${href}"]`);
+      expect(link?.getAttribute('target')).toBe('_blank');
+      expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+    }
+  });
+
+  it('leaves links inside the app alone and drops paths that climb out of /note/', () => {
+    const root = hostile();
+    for (const href of ['/note/plan', '#top', '/note/plan#user-content-x']) {
+      const link = root.querySelector(`a[href="${href}"]`);
+      expect(link).not.toBeNull();
+      expect(link?.hasAttribute('target')).toBe(false);
+      expect(link?.hasAttribute('rel')).toBe(false);
+    }
+    const mail = root.querySelector('a[href^="mailto:"]');
+    expect(mail?.hasAttribute('target')).toBe(false);
+    for (const text of ['climb', 'proto']) {
+      const link = [...root.querySelectorAll('a')].find(
+        (anchor) => anchor.textContent === text,
+      );
+      expect(link?.hasAttribute('href')).toBe(false);
+    }
   });
 });

@@ -42,7 +42,8 @@ export interface RenderOptions {
   path?: string;
   /**
    * Whether `![[Other note]]` becomes a transclusion placeholder. `false`
-   * when rendering a note that is itself transcluded: no recursion.
+   * when rendering a note transcluded at the depth cap, so nesting stops
+   * there (`hydrate-embeds.ts`).
    */
   transclude?: boolean;
 }
@@ -61,8 +62,23 @@ const ALLOWED_ATTR = [
   'type',
 ]; // prettier-ignore
 
-/** Links and images: web, mail, a note of this app, or a heading anchor. */
-const ALLOWED_URI_REGEXP = /^(?:(?:https?|mailto):|\/note\/|#)/i;
+/**
+ * Links and images: web, mail, a note of this app (`/note/<id>`, optionally
+ * `#heading`; nothing that could climb out with `..`), or a heading anchor.
+ * DOMPurify separately lets `data:` through on `img`; the hook below keeps
+ * only raster images of those.
+ */
+const ALLOWED_URI_REGEXP = /^(?:(?:https?|mailto):|\/note\/[\w%-]+(?:#|$)|#)/i;
+
+/**
+ * `data:` URLs a note may use, and only as an `<img>` source: base64 raster
+ * images, as pasted or clipped into Obsidian. Never SVG (a document that can
+ * carry script if opened on its own) nor any other type.
+ */
+const RASTER_DATA_URI = /^data:image\/(?:png|jpeg|gif|webp|avif|bmp);base64,/i;
+
+/** External links: web pages, opened in a new tab. */
+const EXTERNAL_HREF = /^https?:/i;
 
 const PURIFY_CONFIG: Config = {
   ALLOWED_TAGS,
@@ -80,7 +96,9 @@ const PURIFY_CONFIG: Config = {
   ],
   ALLOW_DATA_ATTR: false,
   ALLOW_ARIA_ATTR: false,
-  FORBID_TAGS: ['script', 'iframe', 'style'],
+  // Belt and braces: none of these is in ALLOWED_TAGS either. No SVG or
+  // MathML at all, so their namespaces cannot smuggle script or styles.
+  FORBID_TAGS: ['script', 'iframe', 'style', 'svg', 'math'],
   FORBID_ATTR: ['style'],
   // Prefix ids with `user-content-` (see HEADING_ID_PREFIX).
   SANITIZE_NAMED_PROPS: true,
@@ -99,13 +117,24 @@ function getPurifier(): Purifier {
       node.setAttribute('disabled', '');
     } else if (tag === 'a') {
       const href = node.getAttribute('href') ?? '';
-      if (/^https?:/i.test(href)) {
+      if (EXTERNAL_HREF.test(href)) {
+        // Every external link opens in a new tab that gets neither
+        // `window.opener` nor the app's URL as referrer.
         node.setAttribute('target', '_blank');
-        node.setAttribute('rel', 'noopener');
+        node.setAttribute('rel', 'noopener noreferrer');
       } else {
+        // Links inside the app (`/note/`, `#heading`) and `mailto:` stay
+        // plain, whatever the note asked for.
         node.removeAttribute('target');
         node.removeAttribute('rel');
       }
+    }
+    for (const name of ['href', 'src']) {
+      const value = node.getAttribute(name);
+      if (value === null || !/^data:/i.test(value.trim())) continue;
+      const rasterImage =
+        tag === 'img' && name === 'src' && RASTER_DATA_URI.test(value.trim());
+      if (!rasterImage) node.removeAttribute(name);
     }
   });
   purifier = instance;

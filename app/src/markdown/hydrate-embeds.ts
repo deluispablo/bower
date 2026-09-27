@@ -117,7 +117,7 @@ function failedImageLink(file: DriveFile, alt: string): HTMLAnchorElement {
   link.className = 'wikilink wikilink-file embed-failed';
   link.href = driveViewUrl(file);
   link.target = '_blank';
-  link.rel = 'noopener';
+  link.rel = 'noopener noreferrer';
   link.textContent = alt === '' ? file.name : alt;
   return link;
 }

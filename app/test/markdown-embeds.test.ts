@@ -142,7 +142,7 @@ describe('placeholders', () => {
     expect(fileLinkHtml(pdf, 'scan.pdf', true)).toBe(
       '<a class="wikilink wikilink-file wikilink-embed" ' +
         'href="https://drive.google.com/file/d/scan/view" target="_blank" ' +
-        'rel="noopener">scan.pdf</a>',
+        'rel="noopener noreferrer">scan.pdf</a>',
     );
   });
 

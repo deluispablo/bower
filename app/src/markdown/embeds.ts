@@ -127,7 +127,7 @@ export function fileLinkHtml(
   const extra = embed ? ' wikilink-embed' : '';
   return (
     `<a class="wikilink wikilink-file${extra}" ` +
-    `href="${escapeHtml(driveViewUrl(file))}" target="_blank" rel="noopener">` +
+    `href="${escapeHtml(driveViewUrl(file))}" target="_blank" rel="noopener noreferrer">` +
     `${textHtml}</a>`
   );
 }
