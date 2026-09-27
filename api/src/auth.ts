@@ -192,8 +192,8 @@ export const requireSession: MiddlewareHandler<
 };
 
 /** Reads and checks the `bower_oauth` cookie; 400 `oauth_state` on any failure. */
-async function readOAuthCookie(
-  c: Context<AppEnv>,
+async function readOAuthCookie<E extends AppEnv>(
+  c: Context<E>,
   state: string,
 ): Promise<{ verifier: string }> {
   const token = readCookie(c.req.header('cookie'), OAUTH_COOKIE);
@@ -218,6 +218,35 @@ async function readOAuthCookie(
   }
   return { verifier };
 }
+
+/** What `checkOAuthCallback` leaves for the callback handler. */
+type CallbackEnv = AppEnv & {
+  Variables: { oauthCode: string; oauthVerifier: string };
+};
+
+/** The strict limit on `GET /auth/callback`, per client IP. */
+const limitCallback = rateLimit<CallbackEnv>('callback');
+
+/**
+ * The callback's checks that touch no KV, then its strict limit: Google's
+ * answer carries a code and a state, and the `bower_oauth` cookie verifies
+ * (HMAC) and matches that state. A request without a valid cookie is
+ * refused with a 400 before it is counted or anything is written.
+ */
+const checkOAuthCallback: MiddlewareHandler<CallbackEnv> = async (c, next) => {
+  if (c.req.query('error') !== undefined) {
+    throw new HttpError(400, 'oauth_state', 'Sign-in was cancelled');
+  }
+  const code = c.req.query('code');
+  const state = c.req.query('state');
+  if (code === undefined || code === '' || state === undefined) {
+    throw new HttpError(400, 'oauth_state', 'Sign-in could not be verified');
+  }
+  const { verifier } = await readOAuthCookie(c, state);
+  c.set('oauthCode', code);
+  c.set('oauthVerifier', verifier);
+  await limitCallback(c, next);
+};
 
 export interface AuthDeps {
   /** Used for every call to Google; tests pass a stub. Defaults to `fetch`. */
@@ -253,17 +282,10 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     );
   });
 
-  auth.get('/auth/callback', rateLimit('callback'), async (c) => {
+  auth.get('/auth/callback', checkOAuthCallback, async (c) => {
     const env = c.get('env');
-    if (c.req.query('error') !== undefined) {
-      throw new HttpError(400, 'oauth_state', 'Sign-in was cancelled');
-    }
-    const code = c.req.query('code');
-    const state = c.req.query('state');
-    if (code === undefined || code === '' || state === undefined) {
-      throw new HttpError(400, 'oauth_state', 'Sign-in could not be verified');
-    }
-    const { verifier } = await readOAuthCookie(c, state);
+    const code = c.get('oauthCode');
+    const verifier = c.get('oauthVerifier');
 
     const tokens = await exchangeCode(
       {

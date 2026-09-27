@@ -10,9 +10,10 @@ import {
   genericWindow,
   MAX_BODY_BYTES,
   RATE_LIMIT_PER_MINUTE,
+  strictWindow,
 } from '../src/security.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
-import { keys, putUser } from '../src/store.js';
+import { putUser } from '../src/store.js';
 
 /**
  * `Cloudflare.Env` is empty in this repo (no `wrangler types`), so the
@@ -44,9 +45,9 @@ function githubStub(): { calls: string[]; fetchImpl: FetchLike } {
   return { calls, fetchImpl };
 }
 
-async function seedUser(): Promise<void> {
+async function seedUser(id = USER_ID): Promise<void> {
   await putUser(kv, {
-    id: USER_ID,
+    id,
     email: 'you@example.com',
     createdAt: '2026-01-01T00:00:00.000Z',
     encRefreshToken: 'v1.test-envelope',
@@ -58,18 +59,22 @@ async function seedUser(): Promise<void> {
   });
 }
 
-async function sessionCookie(): Promise<string> {
-  const token = await signSession({ userId: USER_ID }, env.SESSION_SECRET);
+async function sessionCookie(userId = USER_ID): Promise<string> {
+  const token = await signSession({ userId }, env.SESSION_SECRET);
   return `${SESSION_COOKIE}=${token}`;
 }
 
 async function postProcess(
   fetchImpl: FetchLike,
   headers: Record<string, string>,
+  userId = USER_ID,
 ): Promise<Response> {
   return createApp({ fetchImpl }).request(
     `${API}/process`,
-    { method: 'POST', headers: { cookie: await sessionCookie(), ...headers } },
+    {
+      method: 'POST',
+      headers: { cookie: await sessionCookie(userId), ...headers },
+    },
     env,
   );
 }
@@ -90,6 +95,7 @@ beforeEach(async () => {
   const listed = await kv.list({});
   await Promise.all(listed.keys.map((entry) => kv.delete(entry.name)));
   genericWindow.clear();
+  strictWindow.clear();
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   await seedUser();
@@ -248,7 +254,7 @@ describe('same-origin check', () => {
 });
 
 describe('rate limit', () => {
-  it('answers 429 with Retry-After on the 31st POST /process from one IP in a minute', async () => {
+  it('answers 429 with Retry-After on the 31st POST /process from one user in 60 s', async () => {
     const github = githubStub();
     const headers = { origin: env.APP_ORIGIN, 'cf-connecting-ip': IP };
 
@@ -256,6 +262,8 @@ describe('rate limit', () => {
       const response = await postProcess(github.fetchImpl, headers);
       expect(response.status).toBe(202);
     }
+    // 20 s later: the window slides, it does not reset on the minute.
+    vi.setSystemTime(new Date(NOW.getTime() + 20_000));
     const limited = await postProcess(github.fetchImpl, headers);
 
     expect(limited.status).toBe(429);
@@ -263,52 +271,70 @@ describe('rate limit', () => {
       code: 'rate_limited',
       message: 'Too many requests, slow down',
     });
-    // 12:00:10 → 50 seconds left in the minute.
-    expect(limited.headers.get('retry-after')).toBe('50');
+    // The first request (at NOW) leaves the window in 40 s.
+    expect(limited.headers.get('retry-after')).toBe('40');
     expectSecurityHeaders(limited);
 
-    const other = await postProcess(github.fetchImpl, {
+    // Keyed by user, not IP: another IP does not help the same user...
+    const sameUser = await postProcess(github.fetchImpl, {
       origin: env.APP_ORIGIN,
       'cf-connecting-ip': OTHER_IP,
     });
-    expect(other.status).toBe(202);
+    expect(sameUser.status).toBe(429);
+    // ...and another user on the same IP is not limited.
+    await seedUser('user-2');
+    const otherUser = await postProcess(github.fetchImpl, headers, 'user-2');
+    expect(otherUser.status).toBe(202);
 
-    // A new minute is a new window.
-    vi.setSystemTime(new Date(NOW.getTime() + 60_000));
-    const nextMinute = await postProcess(github.fetchImpl, headers);
-    expect(nextMinute.status).toBe(202);
+    // Once the first requests are 60 s old, the user fits again.
+    vi.setSystemTime(new Date(NOW.getTime() + 60_001));
+    const later = await postProcess(github.fetchImpl, headers);
+    expect(later.status).toBe(202);
   });
 
-  it('keys the window on the first X-Forwarded-For entry without cf-connecting-ip', async () => {
-    await postProcess(githubStub().fetchImpl, {
-      origin: env.APP_ORIGIN,
-      'x-forwarded-for': '198.51.100.1, 10.0.0.1',
+  it('costs no KV write', async () => {
+    const github = githubStub();
+    const headers = { origin: env.APP_ORIGIN, 'cf-connecting-ip': IP };
+    for (let i = 0; i < RATE_LIMIT_PER_MINUTE; i += 1) {
+      await postProcess(github.fetchImpl, headers);
+    }
+    const put = vi.spyOn(kv, 'put');
+
+    expect((await postProcess(github.fetchImpl, headers)).status).toBe(429);
+
+    expect(put).not.toHaveBeenCalled();
+    put.mockRestore();
+    const listed = await kv.list({ prefix: 'rate:' });
+    expect(listed.keys).toEqual([]);
+  });
+
+  it('keys GET /auth/callback on the first X-Forwarded-For entry without cf-connecting-ip', async () => {
+    const app = createApp({
+      fetchImpl: () => Promise.resolve(new Response(null, { status: 400 })),
     });
-
-    const minute = Math.floor(NOW.getTime() / 60_000);
-    expect(
-      await kv.get(keys.rate('process', '198.51.100.1', minute), 'text'),
-    ).toBe('1');
-  });
-
-  it('limits GET /auth/callback per IP too', async () => {
-    const callback = (): Promise<Response> =>
+    const login = await app.request(`${API}/auth/login`, {}, env);
+    const setCookie = login.headers.getSetCookie()[0] ?? '';
+    const cookie = setCookie.split(';')[0] ?? '';
+    const state =
+      new URL(login.headers.get('location') ?? '').searchParams.get('state') ??
+      '';
+    const callback = (forwardedFor: string): Promise<Response> =>
       Promise.resolve(
-        createApp().request(
-          `${API}/auth/callback`,
-          { headers: { 'cf-connecting-ip': IP } },
+        app.request(
+          `${API}/auth/callback?code=test-code&state=${state}`,
+          { headers: { cookie, 'x-forwarded-for': forwardedFor } },
           env,
         ),
       );
 
     for (let i = 0; i < RATE_LIMIT_PER_MINUTE; i += 1) {
-      expect((await callback()).status).toBe(400);
+      expect((await callback('198.51.100.1, 10.0.0.1')).status).toBe(502);
     }
-    const limited = await callback();
 
+    const limited = await callback('198.51.100.1, 10.0.0.2');
     expect(limited.status).toBe(429);
-    expect((await limited.json<ErrorBody>()).error.code).toBe('rate_limited');
-    expect(limited.headers.get('retry-after')).toBe('50');
+    expect(limited.headers.get('retry-after')).toBe('60');
+    expect((await callback('198.51.100.2, 10.0.0.1')).status).toBe(502);
   });
 });
 
@@ -478,7 +504,7 @@ describe('generic rate limit', () => {
     expect((await getRoute('/status', IP)).status).toBe(429);
   });
 
-  it('costs no KV write and leaves the strict limits as they were', async () => {
+  it('costs no KV write and counts apart from the strict limits', async () => {
     const github = githubStub();
     const headers = { origin: env.APP_ORIGIN, 'cf-connecting-ip': IP };
     for (let i = 0; i < RATE_LIMIT_PER_MINUTE; i += 1) {
@@ -489,9 +515,7 @@ describe('generic rate limit', () => {
     expect((await getRoute('/status', IP)).status).toBe(200);
 
     const listed = await kv.list({ prefix: 'rate:' });
-    expect(listed.keys.map((entry) => entry.name)).toEqual([
-      keys.rate('process', IP, Math.floor(NOW.getTime() / 60_000)),
-    ]);
+    expect(listed.keys).toEqual([]);
   });
 });
 
