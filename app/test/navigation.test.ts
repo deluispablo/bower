@@ -275,7 +275,24 @@ describe('appFileGroup', () => {
     expect(appFileGroup(index)).toEqual({
       files: [],
       instructionNotesCount: 0,
+      agentSettings: null,
     });
+  });
+
+  it('lists the top-level `.claude` folder as "Agent settings"', () => {
+    const index = buildVaultIndex([
+      dir('.claude'),
+      entry('.claude/settings.json', 'application/json'),
+      entry('Notes.md'),
+    ]);
+    const group = appFileGroup(index);
+    expect(group.agentSettings?.label).toBe('Agent settings');
+    expect(group.agentSettings?.file.path).toBe('.claude');
+  });
+
+  it('has no agent settings entry for a nested `.claude`-named folder', () => {
+    const index = buildVaultIndex([dir('1-Projects/.claude')]);
+    expect(appFileGroup(index).agentSettings).toBeNull();
   });
 });
 

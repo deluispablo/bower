@@ -27,7 +27,19 @@ import {
 } from '../navigation.js';
 import type { TreeNode, TreeRow, TreeSort } from '../navigation.js';
 import type { VaultIndex } from '../vault-index.js';
-import { IconChevronRight, IconFolder, IconNote } from './icons.js';
+import {
+  IconChevronRight,
+  IconExternalLink,
+  IconFolder,
+  IconNote,
+} from './icons.js';
+
+/** `webViewLink` should always be set (`FILE_FIELDS` requests it), but falls back to the folder's own Drive URL just in case. */
+function driveFolderUrl(file: { id: string; webViewLink?: string }): string {
+  return (
+    file.webViewLink ?? `https://drive.google.com/drive/folders/${file.id}`
+  );
+}
 
 interface Row extends TreeRow {
   name: string;
@@ -185,7 +197,10 @@ export function Tree({
   }
 
   const showGroup =
-    showAppFiles && (group.files.length > 0 || group.instructionNotesCount > 0);
+    showAppFiles &&
+    (group.files.length > 0 ||
+      group.instructionNotesCount > 0 ||
+      group.agentSettings !== null);
 
   if (rows.length === 0 && !showGroup) {
     return <p class="tree-empty">Nothing here yet.</p>;
@@ -278,6 +293,21 @@ export function Tree({
                   </span>
                   <span class="tag-app">app</span>
                 </span>
+              </li>
+            )}
+            {group.agentSettings && (
+              <li>
+                <a
+                  href={driveFolderUrl(group.agentSettings.file)}
+                  target="_blank"
+                  rel="noopener"
+                  class="tree-row tree-note tree-app"
+                >
+                  <IconFolder />
+                  <span class="tree-name">{group.agentSettings.label}</span>
+                  <IconExternalLink />
+                  <span class="tag-app">app</span>
+                </a>
               </li>
             )}
           </ul>

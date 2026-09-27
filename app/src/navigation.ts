@@ -203,13 +203,20 @@ export interface AppFileGroup {
   files: AppFileEntry[];
   /** How many `Bower - *.md` instruction notes exist, at any depth. */
   instructionNotesCount: number;
+  /**
+   * The `.claude` folder as "Agent settings" (spec §14), `null` when the
+   * vault has none. It opens in Drive, read-only — never `/note/:id`, since
+   * it is a folder, not a note.
+   */
+  agentSettings: AppFileEntry | null;
 }
 
 /**
  * Bower's own files, gathered for the explorer's "Bower's files" group
  * (shown only when `showAppFiles` is on): the top-level named files with
- * their friendly labels, and a count of instruction notes (shown as one
- * "Instruction notes (n)" row rather than individually).
+ * their friendly labels, a count of instruction notes (shown as one
+ * "Instruction notes (n)" row rather than individually), and the `.claude`
+ * folder, labelled "Agent settings", when the vault has one.
  */
 export function appFileGroup(index: VaultIndex): AppFileGroup {
   const files: AppFileEntry[] = [];
@@ -223,7 +230,11 @@ export function appFileGroup(index: VaultIndex): AppFileGroup {
     files.push({ file: note, label: appFileLabel(note.name) });
   }
   files.sort((a, b) => compareNames(a.label, b.label));
-  return { files, instructionNotesCount };
+  const agentSettings =
+    index.agentSettingsFolder === undefined
+      ? null
+      : { file: index.agentSettingsFolder, label: 'Agent settings' };
+  return { files, instructionNotesCount, agentSettings };
 }
 
 export interface BreadcrumbSegment {
