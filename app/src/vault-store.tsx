@@ -50,8 +50,19 @@ import {
   setPinned,
   sortPinned,
 } from './pins.js';
+import {
+  countRuleLines,
+  migrationBlock,
+  rulesVersionOf,
+  rulesWithUserLines,
+  splitLegacyRules,
+} from './rulebook.js';
 import { useSession } from './session.js';
-import { buildVaultIndex, withPinnedAt } from './vault-index.js';
+import {
+  buildVaultIndex,
+  withPinnedAt,
+  withRulesVersion,
+} from './vault-index.js';
 import type { VaultIndex } from './vault-index.js';
 
 export type VaultStatus =
@@ -106,6 +117,25 @@ export interface Vault extends VaultState {
    * note only when nothing else is left in it.
    */
   unpinFolder: (path: string) => Promise<void>;
+  /**
+   * "Update Bower's rules" (Settings › Advanced, #197): appends the owner's
+   * own additions to the old rulebook (`splitLegacyRules`) to `Rules.md`
+   * (creating it from the template when missing), then replaces `CLAUDE.md`
+   * with the template compiled into the app. Both writes are
+   * conflict-checked; running it again after a failure never duplicates
+   * lines.
+   */
+  updateRules: () => Promise<RulesUpdate>;
+}
+
+/** What `updateRules` did. */
+export interface RulesUpdate {
+  /** The vault's `bower_rules_version` before the update. */
+  from: number;
+  /** The version it has now: the template's, or `from` if it was not behind. */
+  to: number;
+  /** How many of the owner's lines moved to `Rules.md` (blank lines not counted). */
+  moved: number;
 }
 
 export interface PinnedNote {
@@ -263,6 +293,144 @@ async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
   return { notePinnedAt, folderPinnedAt };
 }
 
+/** The rulebook's path, relative to the Bower folder. */
+const RULEBOOK_PATH = 'CLAUDE.md';
+/** The owner's rules, next to it. */
+const RULES_PATH = 'Rules.md';
+
+/**
+ * The vault's `bower_rules_version` (#197), from the cached `CLAUDE.md`
+ * text when it is current, otherwise from one fetch (which is cached for
+ * next time). `null` with no `CLAUDE.md`, or when neither is available.
+ */
+async function hydrateRulesVersion(index: VaultIndex): Promise<number | null> {
+  const file = index.byPath.get(RULEBOOK_PATH);
+  if (file === undefined) return null;
+  const modifiedTime = file.modifiedTime ?? '';
+  const cached = await loadNote(file.id);
+  if (cached !== undefined && cached.modifiedTime === modifiedTime) {
+    return rulesVersionOf(cached.text);
+  }
+  try {
+    const text = await getText(file.id);
+    await saveNote(file.id, text, modifiedTime, new Date().toISOString());
+    return rulesVersionOf(text);
+  } catch (err) {
+    console.error(err);
+    return cached !== undefined ? rulesVersionOf(cached.text) : null;
+  }
+}
+
+/** `index` with everything `buildVaultIndex` leaves empty filled in: pins
+ * and the rulebook's version. */
+async function hydrate(index: VaultIndex): Promise<VaultIndex> {
+  const { notePinnedAt, folderPinnedAt } = await hydratePinnedAt(index);
+  const version = await hydrateRulesVersion(index);
+  return withRulesVersion(
+    withPinnedAt(index, notePinnedAt, folderPinnedAt),
+    version,
+  );
+}
+
+/** The template compiled into the app (`rulebook-template.ts`). */
+export interface RulebookTemplate {
+  /** `vault-template/CLAUDE.md`. */
+  text: string;
+  /** `vault-template/Rules.md`. */
+  rules: string;
+  /** Its `bower_rules_version`. */
+  version: number;
+  /** Lines only earlier versions of it had (`rulebook-retired.ts`). */
+  retired: readonly string[];
+}
+
+export interface RulesUpdateInput {
+  /** The Bower folder, where a missing `Rules.md` is created. */
+  folderId: string;
+  /** `CLAUDE.md` as listed. */
+  rulebook: DriveFile;
+  /** `Rules.md` as listed, when the folder has one. */
+  rulesFile: DriveFile | undefined;
+  template: RulebookTemplate;
+}
+
+/** What `runRulesUpdate` wrote, for the caller to patch its cache with. */
+export interface RulesUpdateWrites {
+  result: RulesUpdate;
+  /** The rulebook as it is now: rewritten, or as read when not behind. */
+  rulebook: { text: string; file: DriveFile };
+  /** `Rules.md` after an append, or `null` when it was not rewritten. */
+  rules: { text: string; file: DriveFile } | null;
+  /** Whether `Rules.md` was created (it is not in any listing yet). */
+  createdRules: boolean;
+}
+
+/**
+ * The rulebook update (#197), through Drive: reads `CLAUDE.md` fresh; when
+ * its `bower_rules_version` is behind the template's, appends the owner's
+ * additions to it (`splitLegacyRules`, `migrationBlock`) to `Rules.md` (creating it from the
+ * template when missing), then replaces `CLAUDE.md` with the template, the
+ * one write the protected-note guard lets through (`forceProtected`). The
+ * owner's lines go first, so should the rulebook write fail they are
+ * already safe in `Rules.md`, and running it again adds nothing twice
+ * (`rulesWithUserLines`). Both writes are checked against the
+ * `modifiedTime` read just before them.
+ */
+export async function runRulesUpdate(
+  input: RulesUpdateInput,
+): Promise<RulesUpdateWrites> {
+  const { folderId, rulebook, rulesFile, template } = input;
+  const old = await readNoteForEdit(rulebook.id);
+  const from = rulesVersionOf(old.text);
+  if (from >= template.version) {
+    return {
+      result: { from, to: from, moved: 0 },
+      rulebook: {
+        text: old.text,
+        file: { ...rulebook, modifiedTime: old.modifiedTime },
+      },
+      rules: null,
+      createdRules: false,
+    };
+  }
+
+  const legacy = splitLegacyRules(old.text, template.text, template.retired);
+  const userRules = migrationBlock(legacy, from);
+  let rules: RulesUpdateWrites['rules'] = null;
+  let createdRules = false;
+  if (rulesFile === undefined) {
+    await createTextFile(
+      folderId,
+      RULES_PATH,
+      rulesWithUserLines(template.rules, userRules),
+    );
+    createdRules = true;
+  } else if (userRules.length > 0) {
+    const current = await readNoteForEdit(rulesFile.id);
+    const next = rulesWithUserLines(current.text, userRules);
+    if (next !== current.text) {
+      rules = await saveNoteText(rulesFile, next, {
+        baseModifiedTime: current.modifiedTime,
+      });
+    }
+  }
+
+  const saved = await saveNoteText(rulebook, template.text, {
+    baseModifiedTime: old.modifiedTime,
+    forceProtected: true,
+  });
+  return {
+    result: {
+      from,
+      to: template.version,
+      moved: countRuleLines(legacy.userRules) + countRuleLines(legacy.migrated),
+    },
+    rulebook: saved,
+    rules,
+    createdRules,
+  };
+}
+
 /** Attempts per note or folder-note pin write: the first one plus one retry
  * after a conflict, same as `appendToFile`. */
 const PIN_ATTEMPTS = 2;
@@ -303,11 +471,9 @@ export function VaultProvider({ children }: VaultProviderProps) {
         }
         const fetchedAt = new Date().toISOString();
         await saveIndex(fresh, fetchedAt);
-        const builtIndex = buildVaultIndex(fresh);
-        const { notePinnedAt, folderPinnedAt } =
-          await hydratePinnedAt(builtIndex);
+        const index = await hydrate(buildVaultIndex(fresh));
         setState({
-          index: withPinnedAt(builtIndex, notePinnedAt, folderPinnedAt),
+          index,
           files: fresh,
           fetchedAt,
           status: 'idle',
@@ -351,26 +517,16 @@ export function VaultProvider({ children }: VaultProviderProps) {
           fetchedAt: cached.fetchedAt,
           status: 'idle',
         });
-        // Pinned state lags a beat behind the instant cached paint above
-        // (this file's own opening comment): fill it in as soon as it is
-        // ready, unless `load('initial')` already replaced this index.
-        void hydratePinnedAt(builtIndex).then(
-          ({ notePinnedAt, folderPinnedAt }) => {
-            if (cancelled) return;
-            setState((prev) =>
-              prev.index === builtIndex
-                ? {
-                    ...prev,
-                    index: withPinnedAt(
-                      builtIndex,
-                      notePinnedAt,
-                      folderPinnedAt,
-                    ),
-                  }
-                : prev,
-            );
-          },
-        );
+        // Pinned state and the rulebook's version lag a beat behind the
+        // instant cached paint above (this file's own opening comment):
+        // fill them in as soon as they are ready, unless `load('initial')`
+        // already replaced this index.
+        void hydrate(builtIndex).then((index) => {
+          if (cancelled) return;
+          setState((prev) =>
+            prev.index === builtIndex ? { ...prev, index } : prev,
+          );
+        });
       })
       .catch((err: unknown) => {
         console.error(err);
@@ -447,10 +603,19 @@ export function VaultProvider({ children }: VaultProviderProps) {
       const iso = pinnedOf(text);
       if (iso === null) notePinnedAt.delete(id);
       else notePinnedAt.set(id, iso);
-      const index = withPinnedAt(
-        builtIndex,
-        notePinnedAt,
-        stateRef.current.index?.folderPinnedAt ?? new Map<string, string>(),
+      // Same for the rulebook's version: carried over, or read from the
+      // text just saved when this note is the rulebook.
+      const bowerRulesVersion =
+        files.find((f) => f.id === id)?.path === RULEBOOK_PATH
+          ? rulesVersionOf(text)
+          : (stateRef.current.index?.bowerRulesVersion ?? null);
+      const index = withRulesVersion(
+        withPinnedAt(
+          builtIndex,
+          notePinnedAt,
+          stateRef.current.index?.folderPinnedAt ?? new Map<string, string>(),
+        ),
+        bowerRulesVersion,
       );
       setState((prev) => ({ ...prev, files, index }));
       try {
@@ -562,10 +727,13 @@ export function VaultProvider({ children }: VaultProviderProps) {
       );
       if (pinnedAt === null) folderPinnedAt.delete(path);
       else folderPinnedAt.set(path, pinnedAt);
-      const index = withPinnedAt(
-        builtIndex,
-        stateRef.current.index?.notePinnedAt ?? new Map<string, string>(),
-        folderPinnedAt,
+      const index = withRulesVersion(
+        withPinnedAt(
+          builtIndex,
+          stateRef.current.index?.notePinnedAt ?? new Map<string, string>(),
+          folderPinnedAt,
+        ),
+        stateRef.current.index?.bowerRulesVersion ?? null,
       );
       setState((prev) => ({ ...prev, files, index }));
       try {
@@ -643,6 +811,36 @@ export function VaultProvider({ children }: VaultProviderProps) {
     [recordFolderNote],
   );
 
+  const updateRules = useCallback(async (): Promise<RulesUpdate> => {
+    if (folderId === null) throw new Error('No Bower folder yet.');
+    const rulebook = stateRef.current.index?.byPath.get(RULEBOOK_PATH);
+    if (rulebook === undefined) throw new Error('No rulebook in the index.');
+    const {
+      TEMPLATE_RULEBOOK: text,
+      TEMPLATE_RULES: rules,
+      TEMPLATE_RULES_VERSION: version,
+      TEMPLATE_RETIRED_LINES: retired,
+    } = await import('./rulebook-template.js');
+
+    const writes = await runRulesUpdate({
+      folderId,
+      rulebook,
+      rulesFile: stateRef.current.index?.byPath.get(RULES_PATH),
+      template: { text, rules, version, retired },
+    });
+    if (writes.rules !== null) {
+      await recordNote(
+        writes.rules.file.id,
+        writes.rules.text,
+        writes.rules.file,
+      );
+    }
+    await recordNote(rulebook.id, writes.rulebook.text, writes.rulebook.file);
+    // A new `Rules.md` is not in the listing yet: list the folder again.
+    if (writes.createdRules) await load('refresh');
+    return writes.result;
+  }, [folderId, recordNote, load]);
+
   const value: Vault = {
     ...state,
     refresh,
@@ -654,6 +852,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
     unpinNote,
     pinFolder,
     unpinFolder,
+    updateRules,
   };
 
   return (

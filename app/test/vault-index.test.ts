@@ -7,6 +7,7 @@ import {
   buildVaultIndex,
   isAppFile,
   isHidden,
+  withRulesVersion,
 } from '../src/vault-index.js';
 
 let nextId = 0;
@@ -134,6 +135,7 @@ describe('isAppFile', () => {
   it('is true for each top-level file Bower keeps for itself', () => {
     for (const name of [
       'CLAUDE.md',
+      'Rules.md',
       'index.md',
       'log.md',
       'About-Me.md',
@@ -158,6 +160,7 @@ describe('isAppFile', () => {
   it('is false once one of those names is nested (not top-level)', () => {
     expect(isAppFile('1-Projects/index.md', 'index.md')).toBe(false);
     expect(isAppFile('1-Projects/CLAUDE.md', 'CLAUDE.md')).toBe(false);
+    expect(isAppFile('3-Resources/Rules.md', 'Rules.md')).toBe(false);
   });
 
   it('is true for an instruction note (Bower - *.md) at any depth', () => {
@@ -188,6 +191,7 @@ describe('isAppFile', () => {
 describe('appFileLabel', () => {
   it('maps each top-level file to its friendly name', () => {
     expect(appFileLabel('CLAUDE.md')).toBe('Rulebook');
+    expect(appFileLabel('Rules.md')).toBe('Your rules');
     expect(appFileLabel('index.md')).toBe('Catalogue');
     expect(appFileLabel('log.md')).toBe('Journal');
     expect(appFileLabel('About-Me.md')).toBe('About me');
@@ -203,5 +207,16 @@ describe('appFileLabel', () => {
     expect(appFileLabel('Bower - 2026-09-26 1405 Receipts.md')).toBe(
       'Bower - 2026-09-26 1405 Receipts',
     );
+  });
+});
+
+describe('bowerRulesVersion', () => {
+  it('starts unknown and is set by withRulesVersion, nothing else changed', () => {
+    const index = buildVaultIndex([entry('CLAUDE.md'), entry('Rules.md')]);
+    expect(index.bowerRulesVersion).toBeNull();
+    const versioned = withRulesVersion(index, 2);
+    expect(versioned.bowerRulesVersion).toBe(2);
+    expect(versioned.byPath).toBe(index.byPath);
+    expect(index.bowerRulesVersion).toBeNull();
   });
 });
