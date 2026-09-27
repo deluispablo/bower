@@ -381,7 +381,17 @@ fi
 case "$http_code" in
   200) ;;
   409) fail "$STEP: Google access revoked, the user must sign in again" ;;
-  *) fail "$STEP: HTTP $http_code" ;;
+  *)
+    # The Worker always answers an error as JSON { error: { code, message } }.
+    # Anything else was answered before the request reached it, at
+    # Cloudflare's edge: a zone security setting blocking the runner (issue
+    # #276; docs/runbook.md, Troubleshooting). Saying which saves looking
+    # for a wrong key that is not there.
+    if [ -n "$(field error 2>/dev/null || true)" ]; then
+      fail "$STEP: HTTP $http_code"
+    fi
+    fail "$STEP: HTTP $http_code, not answered by the Worker"
+    ;;
 esac
 
 FOLDER_ID=$(field folderId)

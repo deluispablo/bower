@@ -77,6 +77,17 @@ if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
   printf '%s' "$body" >"$out"
   exit 0
 fi
+# "edge": Cloudflare blocks the runner before the Worker (a zone security
+# setting): an HTML page and a 403 on every call, whatever the key.
+if [ "$SMOKE_SCENARIO" = edge ]; then
+  if [ "$method" = POST ]; then
+    echo 'curl: (22) The requested URL returned error: 403' >&2
+    exit 22
+  fi
+  [ -z "$out" ] || printf '%s' '<!DOCTYPE html><title>Just a moment...</title>' >"$out"
+  [ "$fmt" != '%{http_code}' ] || printf '403'
+  exit 0
+fi
 if [ "$auth" != ok ]; then
   if [ "$method" = POST ]; then
     echo 'curl: (22) The requested URL returned error: 401' >&2
@@ -1097,3 +1108,15 @@ expect_content_free
 expect_cleaned_up
 echo "ok a wrong runner key fails at the vault info"
 
+# 22. Blocked before the Worker (issue #276): a 403 with an HTML page instead
+# of the Worker's JSON error. The failure says the Worker did not answer, so
+# the operator looks at the Cloudflare zone, not at the key.
+run_case edge
+expect_eq "$RC" 2 'exit code'
+expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request with the right key'
+grep -q ' failed: fetch vault info: HTTP 403, not answered by the Worker$' "$STATE/out.log" ||
+  die 'failure does not say the Worker did not answer'
+expect_eq "$(calls rclone)" '' 'rclone calls'
+expect_content_free
+expect_cleaned_up
+echo "ok a block before the Worker is named as such"
