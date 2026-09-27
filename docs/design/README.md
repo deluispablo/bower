@@ -12,8 +12,10 @@ The approved redesign (Obsidian-like look, the bird as mascot, every screen) liv
 
 `gen.py` holds one bird drawing (`BIRD_CORE`), one stylesheet (`CSS`, every pose as CSS keyframes) and one function per screen. Run `python3 docs/design/gen.py` after editing it; never edit the files under `screens/` by hand. Each screen is a self-contained HTML page: open it in a browser to see it at real size, with the bird moving. The one exception is `Mascot.dc.html`, whose grid is filled from data and shows raw `{{item.name}}` placeholders outside the canvas runtime.
 
-`canvas.json` is the layout of the review canvas (position and size of every screen, row titles). Rows: identity and desktop; getting in for the first time; every day; settings and edge states; the mascot.
+`canvas.json` is the layout of the review canvas (position and size of every screen, row titles). Rows: identity, logo and desktop; getting in for the first time; every day; settings and edge states; the mascot; the README.
+
+Three screens are not app screens: `Brand.dc.html` (the brand sheet: the bowerbird story, the mark on its grounds, faces, palette, type, controls, motion, voice), `Logo.dc.html` (lockups, app icon, favicon sizes, the one-colour version, clear space, don'ts) and `Readme.dc.html` (the README as GitHub will show it, with the parts that become SVG files marked).
 
 ## The bird for the README and GitHub
 
-`python3 docs/design/assets.py` writes `docs/assets/bird-hero.svg`, `bird-tidy.svg` and `social-preview.svg` from the same drawing. The still mark, `docs/assets/logo.svg`, and the app's own icons (`app/public/`) come from `scripts/brand/build.py`, which holds the same drawing without its props.
+`python3 docs/design/assets.py` writes `docs/assets/logo.svg`, `hero.svg`, `why.svg`, `how-it-works.svg` and `social-preview.svg` from the same drawing, each with its animation inside the SVG so GitHub plays it in an `<img>`. Text in them uses the system sans-serif (an SVG in an `<img>` cannot load a web font). The app's own icons (`app/public/`) come from `scripts/brand/build.py`, which holds the same drawing without its props.

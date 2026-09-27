@@ -69,9 +69,11 @@ Unchanged radii (6/10/16 px). Cards get a 1 px `--color-border`; sheets a 20 px 
 
 ### 4.1 Drawing
 
-The mascot is the mark. One drawing, `viewBox 0 0 100 100`, facing right, feet on y = 91: round body (teal), round head overlapping it that turns on the neck, one big navy eye with two white highlights, a small amber beak with a darker jaw that opens, a leaf-shaped dark-teal wing that starts at the shoulder on the body's flank, one short cocked dark-teal tail feather, two amber feet, a faint lighter cheek. The exact paths are in the canvas (`gen.py`, `BIRD_CORE`) and become the single source in `scripts/brand/build.py`, which regenerates `logo.svg`, both wordmarks and every icon from it. The wordmark keeps Poppins Bold outlines.
+The mascot is the mark. One drawing (v8.2, approved 2026-09-28), `viewBox 0 0 100 100`, facing right, feet on y = 91: round body (teal) with a lighter belly; round head on a same-colour neck that stretches and turns; one big navy eye with two white highlights and a faint lighter cheek; an upper and a lower eyelid in head colour (lower lid up = happy, upper lid down = worried or sleepy); a pill-shaped amber beak with a darker jaw that opens; one long leaf-shaped dark-teal wing lying along the flank, hinged at the shoulder (a positive rotation lifts its tip; there is no far wing); three thin dark-teal tail feathers fanning back and up from the rump; two amber stick legs with flat pill feet. Every part pivots on its joint in drawing units (tail on the rump, head at the base of the neck, wing at the shoulder, legs under the belly) so no rotation can detach it. The exact paths are in `docs/design/gen.py` (`BIRD_CORE`, `SCENE`) and become the single source in `scripts/brand/build.py`, which regenerates `logo.svg`, both wordmarks and every icon from it. The wordmark keeps Poppins Bold outlines.
 
-Rules: white, slate or navy behind it; never on teal, amber or a photo; never mirrored except when the animation turns it round; never outlined or gradiented. It only holds a twig, paper or gem while carrying one.
+Rejected on the way and not to be revisited: a static twig in the beak, a crest or comb, a white pupil-less eye, two eyes, a fat egg body, a far wing (v1 to v7).
+
+Rules: white, warm light, slate or navy behind it; never on teal, amber or a photo; never mirrored except when the animation turns it round; never outlined, shadowed, gradiented or recoloured. It only holds a twig, paper or gem while carrying one. Lockups, app icon, favicon sizes, the one-colour version and clear space are drawn in `docs/design/screens/Logo.dc.html`.
 
 ### 4.2 Rig
 
