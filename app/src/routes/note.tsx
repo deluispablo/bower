@@ -5,13 +5,13 @@ import { useRoute } from 'preact-iso';
 import { AboutPanel } from '../components/about-panel.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
-import { IconChevronRight, IconExternalLink } from '../components/icons.js';
+import { IconChevronRight, IconMore } from '../components/icons.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
+import { NoteMenu } from '../components/note-menu.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { isProtectedNote } from '../drive.js';
-import type { DriveFile, SaveOptions } from '../drive.js';
-import { driveViewUrl } from '../markdown/embeds.js';
+import type { SaveOptions } from '../drive.js';
 import { propertiesFor } from '../markdown/frontmatter.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
@@ -66,21 +66,36 @@ function Crumb({ crumbs }: CrumbProps): JSX.Element {
   );
 }
 
-/** The shell header's `actions` slot content on a phone (issue #144): the
- * desktop screen already has "Open in Drive" next to the title, so this is
- * hidden there (`layout.css`) rather than shown twice. */
-function TopbarActions({ file }: { file: DriveFile }): JSX.Element {
+interface MoreButtonProps {
+  expanded: boolean;
+  onClick: () => void;
+  class?: string;
+}
+
+/** The note's one "more" menu trigger (#210): shown twice in the markup —
+ * this one in the shell header's `actions` slot for the phone, another in
+ * `.note-header-actions` for desktop — `layout.css` and `note-menu.css`
+ * show only the one that fits the breakpoint, the same way the shell
+ * already does for the crumb slot vs the breadcrumb. */
+function MoreButton({
+  expanded,
+  onClick,
+  class: className,
+}: MoreButtonProps): JSX.Element {
   return (
-    <a
-      class="icon-button"
-      aria-label="Open in Drive"
-      title="Open in Drive"
-      href={driveViewUrl(file)}
-      target="_blank"
-      rel="noopener"
+    <button
+      type="button"
+      class={
+        className === undefined ? 'icon-button' : `icon-button ${className}`
+      }
+      aria-label="More"
+      title="More"
+      aria-haspopup="menu"
+      aria-expanded={expanded}
+      onClick={onClick}
     >
-      <IconExternalLink />
-    </a>
+      <IconMore />
+    </button>
   );
 }
 
@@ -103,14 +118,15 @@ export function Note() {
     useVault();
   const [load, setLoad] = useState<NoteLoad>({ status: 'loading' });
   const [editing, setEditing] = useState<Editing | null>(null);
-  const [opening, setOpening] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Leaving a note (after confirming, if there were unsaved changes) drops
   // its edit, so coming back shows the note rather than a stale editor.
   useEffect(() => {
     setEditing(null);
     setEditError(null);
+    setMenuOpen(false);
   }, [id]);
 
   const file = index?.byId.get(id);
@@ -161,8 +177,13 @@ export function Note() {
 
   const actionsContent = useMemo(() => {
     if (file === undefined) return null;
-    return <TopbarActions file={file} />;
-  }, [file]);
+    return (
+      <MoreButton
+        expanded={menuOpen}
+        onClick={() => setMenuOpen((open) => !open)}
+      />
+    );
+  }, [file, menuOpen]);
   useShellSlot('actions', actionsContent);
 
   const aboutContent = useMemo(() => {
@@ -214,15 +235,12 @@ export function Note() {
   }
 
   async function handleEdit(): Promise<void> {
-    setOpening(true);
     setEditError(null);
     try {
       setEditing({ id, note: await openNoteForEdit(id) });
     } catch (err) {
       console.error(err);
       setEditError('Could not open this note for editing. Try again.');
-    } finally {
-      setOpening(false);
     }
   }
 
@@ -239,31 +257,31 @@ export function Note() {
   }
 
   const isEditing = editing !== null && editing.id === id;
-  const canEdit =
-    !isProtectedNote(file.name) && load.status === 'ready' && !isEditing;
+  const noteTitle = file.name.replace(/\.md$/i, '');
+  // "Edit the text" (the note menu) is left out for Bower's own files (spec
+  // §14) — a broader set than `isProtectedNote`, which only blocks the
+  // actual save (drive.ts): About-Me.md and README.md, say, are technically
+  // writable but not offered here, on purpose.
+  const canEdit = !isAppFile(file.path, file.name) && !isEditing;
 
   return (
     <section class="note-view">
       <div class="note-edit-header">
-        <h1>{file.name.replace(/\.md$/i, '')}</h1>
+        <h1>{noteTitle}</h1>
         <div class="note-header-actions">
-          <a
-            class="button-link"
-            href={driveViewUrl(file)}
-            target="_blank"
-            rel="noopener"
-          >
-            Open in Drive
-          </a>
-          {canEdit && (
-            <button
-              type="button"
-              class="button"
-              disabled={opening}
-              onClick={() => void handleEdit()}
-            >
-              {opening ? 'Opening…' : 'Edit'}
-            </button>
+          <MoreButton
+            class="note-header-more"
+            expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          />
+          {menuOpen && (
+            <NoteMenu
+              file={file}
+              noteName={noteTitle}
+              canEdit={canEdit}
+              onEdit={() => void handleEdit()}
+              onClose={() => setMenuOpen(false)}
+            />
           )}
         </div>
       </div>

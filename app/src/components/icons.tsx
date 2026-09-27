@@ -240,3 +240,39 @@ export function IconWifi(): JSX.Element {
     </Svg>
   );
 }
+
+export function IconMore(): JSX.Element {
+  return (
+    <Svg>
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconPin(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M12 17v5M8 3h8l-1 6 3 3H6l3-3z" />
+    </Svg>
+  );
+}
+
+export function IconCopy(): JSX.Element {
+  return (
+    <Svg>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V5a1 1 0 0 1 1-1h10" />
+    </Svg>
+  );
+}
+
+export function IconEdit(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M4 20l4-1 11-11-3-3L5 16z" />
+      <path d="M13 7l3 3" />
+    </Svg>
+  );
+}
