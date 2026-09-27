@@ -14,6 +14,8 @@ Self-hosted, zero servers, 0 € a month.</p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" alt="MIT license"></a>
 </p>
 
+<p align="center"><strong><a href="https://bower-demo.pages.dev">Try the demo</a></strong> — sample notes, no sign-up, nothing saved.</p>
+
 ---
 
 ## Why a bowerbird

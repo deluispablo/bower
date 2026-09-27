@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/generate-headers.mjs && node scripts/check-size.mjs",
+    "build:demo": "cross-env VITE_DEMO=1 vite build && node scripts/generate-headers.mjs && node scripts/check-size.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p .",
     "test": "pnpm exec vitest run --passWithNoTests",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
+    "cross-env": "^7.0.3",
     "jsdom": "^30.1.1",
     "vite": "^8.3.1",
     "vite-plugin-pwa": "^1.3.0"
