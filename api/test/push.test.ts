@@ -412,6 +412,37 @@ describe('runPushPayload', () => {
     ).toEqual({ title: 'Bower', body: '1 file tidied up', url: '/' });
   });
 
+  it('adds a short suffix when the run quarantined anything', () => {
+    const at = '2026-01-01T00:00:00.000Z';
+    expect(
+      runPushPayload({
+        state: 'done',
+        requestedAt: at,
+        processed: ['a'],
+        quarantined: ['0-Inbox/Quarantine/b.md', '0-Inbox/Quarantine/c.md'],
+      }).body,
+    ).toBe('1 file tidied up · 2 set aside');
+    expect(
+      runPushPayload({
+        state: 'done',
+        requestedAt: at,
+        quarantined: ['0-Inbox/Quarantine/b.md'],
+      }).body,
+    ).toBe('Nothing new to tidy up · 1 set aside');
+    // Never for a lint, and never when nothing was quarantined.
+    expect(
+      runPushPayload({
+        state: 'done',
+        kind: 'lint',
+        requestedAt: at,
+        quarantined: ['x'],
+      }).body,
+    ).toBe('Health check ready');
+    expect(
+      runPushPayload({ state: 'done', requestedAt: at, processed: ['a'] }).body,
+    ).toBe('1 file tidied up');
+  });
+
   it('says the health check is ready or failed for a lint, never a count', () => {
     const at = '2026-01-01T00:00:00.000Z';
     expect(

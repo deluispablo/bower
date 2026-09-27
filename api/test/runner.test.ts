@@ -536,7 +536,7 @@ describe('POST /runner/vaults/:id/status', () => {
     expect(await getRun(kv, USER_ID)).toEqual(queued);
   });
 
-  it('caps summary, error and processed', async () => {
+  it('caps summary, error, processed, quarantined and refused counts', async () => {
     await seedUser();
 
     const response = await postStatus({
@@ -544,6 +544,8 @@ describe('POST /runner/vaults/:id/status', () => {
       summary: 's'.repeat(MAX_TEXT_LENGTH + 10),
       error: 'e'.repeat(MAX_TEXT_LENGTH + 10),
       processed: Array.from({ length: MAX_PROCESSED + 5 }, (_, i) => `${i}.md`),
+      quarantined: Array.from({ length: MAX_PROCESSED + 5 }, (_, i) => `q${i}`),
+      refused: Array.from({ length: MAX_PROCESSED + 5 }, (_, i) => `r${i}`),
     });
 
     expect(response.status).toBe(200);
@@ -551,6 +553,43 @@ describe('POST /runner/vaults/:id/status', () => {
     expect(run.summary).toHaveLength(MAX_TEXT_LENGTH);
     expect(run.error).toHaveLength(MAX_TEXT_LENGTH);
     expect(run.processed).toHaveLength(MAX_PROCESSED);
+    expect(run.quarantined).toHaveLength(MAX_PROCESSED);
+    expect(run.refused).toHaveLength(MAX_PROCESSED);
+  });
+
+  it('cuts each quarantined and refused entry to MAX_TEXT_LENGTH', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      quarantined: ['p'.repeat(MAX_TEXT_LENGTH + 10)],
+      refused: ['p'.repeat(MAX_TEXT_LENGTH + 10)],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.quarantined?.[0]).toHaveLength(MAX_TEXT_LENGTH);
+    expect(run.refused?.[0]).toHaveLength(MAX_TEXT_LENGTH);
+  });
+
+  it('accepts quarantined and refused with no processed at all', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      quarantined: ['0-Inbox/Quarantine/a.md'],
+      refused: ['CLAUDE.md'],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run).toMatchObject({
+      state: 'done',
+      quarantined: ['0-Inbox/Quarantine/a.md'],
+      refused: ['CLAUDE.md'],
+    });
+    expect(run.processed).toBeUndefined();
+    expect(await getRun(kv, USER_ID)).toEqual(run);
   });
 
   it.each([
@@ -569,6 +608,13 @@ describe('POST /runner/vaults/:id/status', () => {
       { state: 'done', processed: [1] },
     ],
     ['processed not an array', { state: 'done', processed: 'a.md' }],
+    [
+      'a quarantined entry that is not a string',
+      { state: 'done', quarantined: [1] },
+    ],
+    ['quarantined not an array', { state: 'done', quarantined: 'a.md' }],
+    ['a refused entry that is not a string', { state: 'done', refused: [1] }],
+    ['refused not an array', { state: 'done', refused: 'a.md' }],
   ])('answers 400 bad_request for %s', async (_, body) => {
     await seedUser();
 

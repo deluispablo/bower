@@ -32,10 +32,17 @@ import type { PushPayload } from './push.js';
 import { getRun, getUser, listVaultIds, putRun } from './store.js';
 import type { DriveToken, Run, RunKind, User } from './types.js';
 
-/** Longest `summary` or `error` kept on a `Run`; longer text is cut. */
+/**
+ * Longest `summary` or `error` kept on a `Run`, and the longest any single
+ * `processed`, `quarantined` or `refused` entry is cut to; longer text is
+ * cut.
+ */
 export const MAX_TEXT_LENGTH = 2000;
 
-/** Most `processed` entries kept on a `Run`; the rest are dropped. */
+/**
+ * Most `processed`, `quarantined` or `refused` entries kept on a `Run`; the
+ * rest are dropped.
+ */
 export const MAX_PROCESSED = 200;
 
 function unauthorized(): HttpError {
@@ -86,6 +93,8 @@ interface StatusReport {
   runId?: string;
   summary?: string;
   processed?: string[];
+  quarantined?: string[];
+  refused?: string[];
   error?: string;
 }
 
@@ -97,6 +106,8 @@ const REPORT_FIELDS: ReadonlySet<string> = new Set([
   'runId',
   'summary',
   'processed',
+  'quarantined',
+  'refused',
   'error',
 ]);
 
@@ -126,11 +137,36 @@ function optionalText(
 }
 
 /**
+ * An optional array-of-strings field: absent, or an array of strings, cut
+ * to `MAX_PROCESSED` entries with each entry cut to `MAX_TEXT_LENGTH`
+ * characters. Used for `processed`, `quarantined` and `refused` alike.
+ */
+function optionalStringArray(
+  body: Record<string, unknown>,
+  field: string,
+): string[] | undefined {
+  const value = body[field];
+  if (value === undefined) return undefined;
+  if (
+    !Array.isArray(value) ||
+    !value.every((entry): entry is string => typeof entry === 'string')
+  ) {
+    throw badRequest(`${field} must be an array of strings`);
+  }
+  return value
+    .slice(0, MAX_PROCESSED)
+    .map((entry) => entry.slice(0, MAX_TEXT_LENGTH));
+}
+
+/**
  * Validates a status report strictly: a JSON object with a known `state`,
  * an optional known `kind` (`ingest` when absent), only the known fields,
  * each of the right type. `summary` and `error` are cut to
- * `MAX_TEXT_LENGTH` characters and `processed` to `MAX_PROCESSED` entries,
- * so a `Run` stays small in KV. Anything else is a 400 `bad_request`.
+ * `MAX_TEXT_LENGTH` characters; `processed`, `quarantined` and `refused`
+ * are cut to `MAX_PROCESSED` entries, each entry to `MAX_TEXT_LENGTH`
+ * characters, so a `Run` stays small in KV. A report with `quarantined`
+ * and/or `refused` but no `processed` is still valid. Anything else is a
+ * 400 `bad_request`.
  */
 function parseStatusReport(body: unknown): StatusReport {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
@@ -165,16 +201,12 @@ function parseStatusReport(body: unknown): StatusReport {
   const error = optionalText(record, 'error');
   if (error !== undefined) report.error = error;
 
-  const processed = record.processed;
-  if (processed !== undefined) {
-    if (
-      !Array.isArray(processed) ||
-      !processed.every((entry): entry is string => typeof entry === 'string')
-    ) {
-      throw badRequest('processed must be an array of strings');
-    }
-    report.processed = processed.slice(0, MAX_PROCESSED);
-  }
+  const processed = optionalStringArray(record, 'processed');
+  if (processed !== undefined) report.processed = processed;
+  const quarantined = optionalStringArray(record, 'quarantined');
+  if (quarantined !== undefined) report.quarantined = quarantined;
+  const refused = optionalStringArray(record, 'refused');
+  if (refused !== undefined) report.refused = refused;
   return report;
 }
 
@@ -185,9 +217,11 @@ function parseStatusReport(body: unknown): StatusReport {
  *
  * - `running`: `startedAt = now`, unless the run was already running (then
  *   its `startedAt` is kept). Any outcome of an earlier attempt
- *   (`finishedAt`, `summary`, `processed`, `error`) is dropped.
- * - `done` / `failed`: `finishedAt = now`; `summary`, `processed` and
- *   `error` are exactly the report's (absent when the report has none).
+ *   (`finishedAt`, `summary`, `processed`, `quarantined`, `refused`,
+ *   `error`) is dropped.
+ * - `done` / `failed`: `finishedAt = now`; `summary`, `processed`,
+ *   `quarantined`, `refused` and `error` are exactly the report's (absent
+ *   when the report has none).
  */
 function applyReport(
   current: Run | undefined,
@@ -215,6 +249,8 @@ function applyReport(
   run.finishedAt = now;
   if (report.summary !== undefined) run.summary = report.summary;
   if (report.processed !== undefined) run.processed = report.processed;
+  if (report.quarantined !== undefined) run.quarantined = report.quarantined;
+  if (report.refused !== undefined) run.refused = report.refused;
   if (report.error !== undefined) run.error = report.error;
   return run;
 }
@@ -222,9 +258,10 @@ function applyReport(
 /**
  * The notification for a finished run. An ingest (or a run without `kind`)
  * says how many files were tidied up (`done`), that there was nothing to
- * do (`done` with none), or that the run failed, and opens `/`. A lint says
- * the health check is ready or failed, and opens `/health`. Never a file
- * name or the summary.
+ * do (`done` with none), or that the run failed, and opens `/`; a `done`
+ * body gets a short " · n set aside" suffix when the run quarantined
+ * anything. A lint says the health check is ready or failed, and opens
+ * `/health`. Never a file name or the summary.
  */
 export function runPushPayload(run: Run): PushPayload {
   if (run.kind === 'lint') {
@@ -244,6 +281,8 @@ export function runPushPayload(run: Run): PushPayload {
       count === 0
         ? 'Nothing new to tidy up'
         : `${count} ${count === 1 ? 'file' : 'files'} tidied up`;
+    const quarantined = run.quarantined?.length ?? 0;
+    if (quarantined > 0) body += ` · ${quarantined} set aside`;
   }
   return { title: 'Bower', body, url: '/' };
 }
