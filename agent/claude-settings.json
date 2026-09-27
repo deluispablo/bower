@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "deny": [
+      "Write(CLAUDE.md)",
+      "Edit(CLAUDE.md)",
+      "MultiEdit(CLAUDE.md)",
+      "Write(README.md)",
+      "Edit(README.md)",
+      "MultiEdit(README.md)",
+      "Write(.claude/**)",
+      "Edit(.claude/**)",
+      "MultiEdit(.claude/**)",
+      "Write(.obsidian/**)",
+      "Edit(.obsidian/**)",
+      "MultiEdit(.obsidian/**)",
+      "Bash(*://*)"
+    ]
+  }
+}
