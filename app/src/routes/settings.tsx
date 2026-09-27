@@ -6,6 +6,7 @@ import type { Me } from '../api.js';
 import {
   ApiError,
   deleteAccount,
+  isDemo,
   loginUrl,
   logoutAll,
   updateSettings,
@@ -35,6 +36,10 @@ function toMessage(err: unknown): string {
   console.error(err);
   return err instanceof ApiError ? err.message : 'Something went wrong.';
 }
+
+/** Delete account, the own API key and Sign out everywhere all need a
+ * real backend (#193): the demo shows this sentence instead of acting. */
+const NOT_IN_DEMO = 'Not in the demo: run your own Bower to use this.';
 
 function driveUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
@@ -76,6 +81,15 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (isDemo()) {
+    return (
+      <div class="settings-field">
+        <label>Use my own Claude API key</label>
+        <p class="settings-note">{NOT_IN_DEMO}</p>
+      </div>
+    );
+  }
 
   const save = async (): Promise<void> => {
     const apiKey = value.trim();
@@ -354,14 +368,18 @@ function SignOutSection() {
         >
           Sign out
         </button>
-        <button
-          type="button"
-          class="settings-button settings-button-secondary"
-          disabled={busy}
-          onClick={() => void signOutEverywhere()}
-        >
-          Sign out everywhere
-        </button>
+        {isDemo() ? (
+          <p class="settings-note">{NOT_IN_DEMO}</p>
+        ) : (
+          <button
+            type="button"
+            class="settings-button settings-button-secondary"
+            disabled={busy}
+            onClick={() => void signOutEverywhere()}
+          >
+            Sign out everywhere
+          </button>
+        )}
       </div>
       {error && <p class="settings-error">{error}</p>}
     </div>
@@ -373,6 +391,14 @@ function DangerZone() {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (isDemo()) {
+    return (
+      <section class="settings-section">
+        <p class="settings-note">{NOT_IN_DEMO}</p>
+      </section>
+    );
+  }
 
   const confirmDelete = async (): Promise<void> => {
     setBusy(true);

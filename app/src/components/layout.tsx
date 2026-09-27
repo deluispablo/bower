@@ -32,6 +32,7 @@ import { getPref } from '../prefs.js';
 import { useSession } from '../session.js';
 import { effectiveTheme, setTheme } from '../theme.js';
 import { useVault } from '../vault-store.js';
+import { DemoBanner } from './demo-banner.js';
 import { Explorer, ExplorerDrawer, HEALTH_PATH } from './explorer.js';
 import { useShellSlots } from './shell-slots.js';
 import {
@@ -224,6 +225,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
               <ProcessButton />
             </div>
           </header>
+          <DemoBanner />
           <OfflineBanner />
           {me?.needsReauth === true && (
             <div class="reauth-banner">
