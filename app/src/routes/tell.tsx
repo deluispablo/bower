@@ -1,5 +1,6 @@
 import { useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
+import { useLocation } from 'preact-iso';
 
 import { Bird } from '../components/bird.js';
 import { useFocusTrap } from '../components/use-focus-trap.js';
@@ -88,8 +89,11 @@ export function Tell() {
   const { phase, run, process } = useRun();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
+  const { query } = useLocation();
 
-  const [text, setText] = useState('');
+  // Prefilled once, e.g. from the health check's "Ask Bower to fix these"
+  // (`/tell?text=…`, #148): read only on mount, so retyping never fights it.
+  const [text, setText] = useState(() => query.text ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<SentItem[]>(() => loadSent());
