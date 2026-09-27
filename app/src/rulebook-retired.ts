@@ -16,6 +16,8 @@ export const RETIRED_RULEBOOK_LINES: readonly string[] = [
   '   - If the rule describes a repeatable multi-step process (for example how to handle a specific kind of document), create a workflow section under **Workflows**. If it grows beyond ~40 lines, move it to `.claude/skills/<name>/SKILL.md` and leave a one-line pointer here.',
   "   - Bump `updated` in this file's frontmatter. Append to `log.md`: `Rule added/changed: <one line>`.",
   '- **Domain tags:** new domain tags are added to the list above the first time they are used.',
+  '**Domain tags** (what topic; add new ones organically, then list them in `Rules.md`):',
+  '- **Domain tags:** new domain tags are added to `Rules.md` the first time they are used.',
   '- Keep originals (PDF, DOCX, XLSX, images) next to their Markdown note. The `.md` note is the entry point.',
   '1. Read the item fully. Convert to Markdown if it is not (keep the original).',
   '3. Write the summary or converted note using the templates above. Move the original next to the note when it belongs there (documents), otherwise leave it in `0-Inbox/Processed/`.',
