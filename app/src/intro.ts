@@ -192,7 +192,8 @@ export interface IntroVerb {
 export const INTRO_VERBS: readonly IntroVerb[] = [
   {
     verb: 'Reads',
-    detail: 'every word of a file, photos included, when you ask for a summary.',
+    detail:
+      'every word of a file, photos included, when you ask for a summary.',
   },
   {
     verb: 'Looks up',
