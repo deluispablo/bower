@@ -12,8 +12,9 @@
  *    once the folder exists. On an error the bird is confused and the
  *    message says what to do.
  * 4. Start with what you have (only with `VITE_GOOGLE_API_KEY` set, spec
- *    §14 "Add from your Drive"): the same Picker and copy-into-inbox path
- *    as Add's "From your Drive" button. "Later" and, once any pick settles,
+ *    §14 "Add from your Drive"): the same Picker and copy-or-export-into-
+ *    inbox path as Add's "From your Drive" button (#218: a Doc, Sheet or
+ *    Slides file is exported first). "Later" and, once any pick settles,
  *    "Continue" both go to Home, where the tour starts. Without the key
  *    Building's Continue goes straight there instead, as before.
  */
@@ -33,7 +34,7 @@ import {
   IconInbox,
   IconPlus,
 } from '../components/icons.js';
-import { copyIntoInbox, getToken } from '../drive.js';
+import { copyOrExportIntoInbox, exportPlanFor, getToken } from '../drive.js';
 import { parseFolderId } from '../onboarding.js';
 import {
   filesFromPickerResponse,
@@ -78,8 +79,30 @@ interface DriveQueueItem {
   id: string;
   driveId: string;
   name: string;
+  /** Decides whether the copy is exported first (`exportPlanFor`, #218). */
+  mimeType: string;
   status: DriveItemStatus;
   error?: string;
+}
+
+/** The queue card's status line, once done or while it is copying or
+ * exporting: the same wording as Add's own `driveStatusText` (#218). */
+function driveStatusText(mimeType: string, done: boolean): string {
+  const plan = exportPlanFor(mimeType);
+  if (plan.action !== 'export') {
+    return done
+      ? 'Copied from your Drive · the original stays where it was'
+      : 'Copying from your Drive…';
+  }
+  const savedAs =
+    plan.extension === '.md'
+      ? 'Markdown'
+      : plan.extension === '.csv'
+        ? 'a table'
+        : 'a PDF';
+  return done
+    ? `Saved as ${savedAs} from your Drive · the original stays where it was`
+    : `Saving as ${savedAs}…`;
 }
 
 /** The six folders of a new Bower folder, as the Building screen shows them. */
@@ -119,7 +142,7 @@ export function Onboarding(): JSX.Element {
   const [pickerFallback, setPickerFallback] = useState(GOOGLE_API_KEY === '');
   const [driveQueue, setDriveQueue] = useState<DriveQueueItem[]>([]);
   const [drivePickerOpening, setDrivePickerOpening] = useState(false);
-  const [driveNote, setDriveNote] = useState<string | null>(null);
+  const [driveNotes, setDriveNotes] = useState<string[]>([]);
   const heading = useRef<HTMLHeadingElement>(null);
   const continueButton = useRef<HTMLButtonElement>(null);
   const driveContinueButton = useRef<HTMLButtonElement>(null);
@@ -274,7 +297,10 @@ export function Onboarding(): JSX.Element {
     const inboxFolderId = vault?.inboxFolderId;
     if (inboxFolderId === undefined) return;
     try {
-      await copyIntoInbox(item.driveId, item.name, inboxFolderId);
+      await copyOrExportIntoInbox(
+        { id: item.driveId, name: item.name, mimeType: item.mimeType },
+        inboxFolderId,
+      );
       setDriveQueue((prev) =>
         prev.map((it) => (it.id === item.id ? { ...it, status: 'done' } : it)),
       );
@@ -294,10 +320,12 @@ export function Onboarding(): JSX.Element {
     }
   }
 
-  /** Same copy path as Add's "From your Drive": picks land in the inbox one
-   * at a time, each as its own queue card; the Bower folder is left out by
-   * `filesFromPickerResponse`, as it is there. Unlike Add, a picked folder
-   * is copied as itself rather than expanded into its files. */
+  /** Same copy-or-export path as Add's "From your Drive" (#218): picks land
+   * in the inbox one at a time, each as its own queue card; the Bower
+   * folder is left out by `filesFromPickerResponse`, as it is there, and a
+   * Drawing or Form (no format to save it as) is left out with a sentence.
+   * Unlike Add, a picked folder is copied as itself rather than expanded
+   * into its files. */
   async function onDrivePicked(
     data: google.picker.ResponseObject,
   ): Promise<void> {
@@ -306,16 +334,26 @@ export function Onboarding(): JSX.Element {
       data,
       vault?.folderId ?? null,
     );
-    setDriveNote(
-      excluded > 0
-        ? 'Your Bower folder was left out: what is in it is already in Bower.'
-        : null,
-    );
-    if (items.length === 0) return;
-    const created: DriveQueueItem[] = items.map((item: PickedItem) => ({
+    const notes: string[] = [];
+    if (excluded > 0) {
+      notes.push(
+        'Your Bower folder was left out: what is in it is already in Bower.',
+      );
+    }
+    const files = items.filter((item: PickedItem) => {
+      if (exportPlanFor(item.mimeType).action !== 'skip') return true;
+      notes.push(
+        `${item.name} is a Google Drawing or Form: there is no format to save it as, so it was left out.`,
+      );
+      return false;
+    });
+    setDriveNotes(notes);
+    if (files.length === 0) return;
+    const created: DriveQueueItem[] = files.map((item) => ({
       id: crypto.randomUUID(),
       driveId: item.id,
       name: item.name,
+      mimeType: item.mimeType,
       status: 'copying',
     }));
     setDriveQueue((prev) => [...prev, ...created]);
@@ -327,7 +365,7 @@ export function Onboarding(): JSX.Element {
   /** Loads the Picker (only now, never before the button is pressed) and
    * opens it over the user's Drive, exactly as Add's button does. */
   async function onPickFromDrive(): Promise<void> {
-    setDriveNote(null);
+    setDriveNotes([]);
     setDrivePickerOpening(true);
     try {
       const [token, picker] = await Promise.all([getToken(), loadPicker()]);
@@ -336,7 +374,7 @@ export function Onboarding(): JSX.Element {
       });
     } catch (err) {
       console.error(err);
-      setDriveNote('Could not open your Drive. Try again in a moment.');
+      setDriveNotes(['Could not open your Drive. Try again in a moment.']);
     } finally {
       setDrivePickerOpening(false);
     }
@@ -491,8 +529,8 @@ export function Onboarding(): JSX.Element {
           <span class="onb-card-text">
             <span class="onb-card-title">Pick files from my Drive</span>
             <span class="onb-card-hint">
-              Recent, My Drive, Shared with me. Copies land in your inbox; the
-              originals stay where they are.
+              Recent, My Drive, Shared with me. Docs become Markdown, Sheets a
+              table, Slides a PDF; everything else is copied as it is.
             </span>
           </span>
         </button>
@@ -507,7 +545,11 @@ export function Onboarding(): JSX.Element {
           </span>
         </button>
 
-        {driveNote !== null && <p class="onb-note">{driveNote}</p>}
+        {driveNotes.map((note) => (
+          <p key={note} class="onb-note">
+            {note}
+          </p>
+        ))}
 
         {driveQueue.length > 0 && (
           <ul class="onb-drive-queue">
@@ -529,9 +571,8 @@ export function Onboarding(): JSX.Element {
                 <span class="onb-drive-queue-body">
                   <span class="onb-drive-queue-name">{item.name}</span>
                   <span class="onb-drive-queue-status">
-                    {item.status === 'copying' && 'Copying from your Drive…'}
-                    {item.status === 'done' &&
-                      'Copied from your Drive · the original stays where it was'}
+                    {item.status !== 'failed' &&
+                      driveStatusText(item.mimeType, item.status === 'done')}
                     {item.status === 'failed' && (item.error ?? 'Failed')}
                   </span>
                 </span>

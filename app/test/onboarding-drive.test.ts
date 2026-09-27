@@ -5,6 +5,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me, Vault } from '../src/api.js';
+import type * as DriveModule from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import type * as PickerModule from '../src/picker.js';
 
@@ -30,9 +31,12 @@ const getToken = vi.fn(() =>
     folderId: 'FOLDER_ID',
   }),
 );
-const copyIntoInbox = vi.fn<
-  (id: string, name: string, inboxId: string) => Promise<DriveFile>
->((id, name) => Promise.resolve(driveFile(`${id}_COPY`, name, 'x')));
+const copyOrExportIntoInbox = vi.fn<
+  (
+    pick: { id: string; name: string; mimeType: string },
+    inboxId: string,
+  ) => Promise<DriveFile>
+>((pick) => Promise.resolve(driveFile(`${pick.id}_COPY`, pick.name, 'x')));
 const openFilePicker =
   vi.fn<
     (
@@ -78,7 +82,14 @@ vi.mock('../src/tour-store.js', () => ({
   markTourSeen: (who: Me) => markTourSeen(who),
 }));
 
-vi.mock('../src/drive.js', () => ({ copyIntoInbox, getToken }));
+vi.mock('../src/drive.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof DriveModule>();
+  return {
+    exportPlanFor: actual.exportPlanFor,
+    copyOrExportIntoInbox,
+    getToken,
+  };
+});
 
 vi.mock('../src/picker.js', async (importOriginal) => {
   const actual = await importOriginal<typeof PickerModule>();
@@ -191,7 +202,7 @@ describe('Onboarding: Start with what you have', () => {
 
     await act(() => button('Later').click());
     expect(location.route).toHaveBeenCalledWith('/');
-    expect(copyIntoInbox).not.toHaveBeenCalled();
+    expect(copyOrExportIntoInbox).not.toHaveBeenCalled();
   });
 
   it('picking files copies each into the inbox, one card each, then Continue', async () => {
@@ -206,11 +217,17 @@ describe('Onboarding: Start with what you have', () => {
         { id: 'B_ID', name: 'Warranty.pdf', mimeType: 'application/pdf' },
       ],
     });
-    await waitFor(() => copyIntoInbox.mock.calls.length === 2);
+    await waitFor(() => copyOrExportIntoInbox.mock.calls.length === 2);
 
-    expect(copyIntoInbox.mock.calls).toEqual([
-      ['A_ID', 'Lease.pdf', 'INBOX_ID'],
-      ['B_ID', 'Warranty.pdf', 'INBOX_ID'],
+    expect(copyOrExportIntoInbox.mock.calls).toEqual([
+      [
+        { id: 'A_ID', name: 'Lease.pdf', mimeType: 'application/pdf' },
+        'INBOX_ID',
+      ],
+      [
+        { id: 'B_ID', name: 'Warranty.pdf', mimeType: 'application/pdf' },
+        'INBOX_ID',
+      ],
     ]);
     await waitFor(
       () =>
@@ -226,7 +243,7 @@ describe('Onboarding: Start with what you have', () => {
   });
 
   it('shows one sentence for a failed copy, Continue still appears', async () => {
-    copyIntoInbox.mockRejectedValueOnce(new Error('Drive said no.'));
+    copyOrExportIntoInbox.mockRejectedValueOnce(new Error('Drive said no.'));
     const consoleError = vi
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
@@ -260,6 +277,59 @@ describe('Onboarding: Start with what you have', () => {
     await waitFor(() =>
       (root.textContent ?? '').includes('Your Bower folder was left out'),
     );
-    expect(copyIntoInbox).not.toHaveBeenCalled();
+    expect(copyOrExportIntoInbox).not.toHaveBeenCalled();
+  });
+
+  it('exports a Google Doc as Markdown instead of copying it as-is', async () => {
+    await mountOnboarding('test-key');
+    await reachBuilding();
+    await act(() => button('Continue').click());
+
+    await pick({
+      action: 'picked',
+      docs: [
+        {
+          id: 'DOC_ID',
+          name: 'Notes',
+          mimeType: 'application/vnd.google-apps.document',
+        },
+      ],
+    });
+    await waitFor(() => copyOrExportIntoInbox.mock.calls.length === 1);
+
+    expect(copyOrExportIntoInbox).toHaveBeenCalledWith(
+      {
+        id: 'DOC_ID',
+        name: 'Notes',
+        mimeType: 'application/vnd.google-apps.document',
+      },
+      'INBOX_ID',
+    );
+    await waitFor(() =>
+      (root.textContent ?? '').includes(
+        'Saved as Markdown from your Drive · the original stays where it was',
+      ),
+    );
+  });
+
+  it('leaves out a Drawing or a Form with a sentence, nothing copied', async () => {
+    await mountOnboarding('test-key');
+    await reachBuilding();
+    await act(() => button('Continue').click());
+
+    await pick({
+      action: 'picked',
+      docs: [
+        {
+          id: 'DRAW_ID',
+          name: 'Sketch',
+          mimeType: 'application/vnd.google-apps.drawing',
+        },
+      ],
+    });
+    await waitFor(() =>
+      (root.textContent ?? '').includes('there is no format to save it as'),
+    );
+    expect(copyOrExportIntoInbox).not.toHaveBeenCalled();
   });
 });
