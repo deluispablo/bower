@@ -217,6 +217,8 @@ Each Worker secret is rotated the same way — pipe the new value into `wrangler
 
 The instance repo's `lint.yml` runs on its own every Sunday at 06:17 UTC: a first job lists every user with a Bower folder (`GET /runner/vaults`, authenticated with `BOWER_API_KEY`), then the check runs once per folder, one at a time. Each run rewrites `Lint Report.md` at the top of that user's folder; the app shows it under **Health**, with a badge when a new one arrives, and each user gets a push `Health check ready` (or `Health check failed`) that opens it. The check never shows up as a Tidy up run in the app: its status is kept apart, under `lintrun:<id>` in KV. A user whose Google access was revoked fails their own run (see Troubleshooting) without stopping the others. To check one folder by hand: instance repo → **Actions** → **Lint vault** → **Run workflow**, with the user id as `vault_id`. To stop the weekly run alone, disable that workflow in the Actions tab (**Lint vault** → **⋯** → **Disable workflow**).
 
+`Lint Report.md`, like Bower's other own files (`CLAUDE.md`, `index.md`, `log.md`, `About-Me.md`, `README.md` and any `Bower - *.md` instruction note), stays out of the app's explorer, Recent, search and switcher by default. The explorer's footer button and Settings → Advanced → "Show Bower's own files" both reveal them, grouped at the bottom of the tree.
+
 ### Reading logs
 
 - **Worker**: `pnpm -C api exec wrangler tail -c wrangler.local.toml` streams live requests (method, path, status, exceptions) — nothing here includes note content or credentials (see `CLAUDE.md`'s logging rule and `api/test/log-hygiene.test.ts`).
