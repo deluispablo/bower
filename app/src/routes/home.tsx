@@ -27,7 +27,12 @@ import { Search } from '../components/search.js';
 import { TellComposer } from '../components/tell-composer.js';
 import { createTextFile } from '../drive.js';
 import { findReport, isReportNew } from '../health-report.js';
-import { birdStateFor, bubbleFor, greetingFor } from '../home.js';
+import {
+  ANSWERS_FOLDER,
+  birdStateFor,
+  bubbleFor,
+  greetingFor,
+} from '../home.js';
 import {
   folderCounts,
   pendingCount,
@@ -53,7 +58,6 @@ import { formatAgo, useVault } from '../vault-store.js';
 import '../styles/home.css';
 
 const MINUTE_MS = 60_000;
-const ANSWERS_FOLDER = 'Answers';
 
 interface DesktopTellProps {
   inboxFolderId: string | null;

@@ -88,6 +88,9 @@
   bottom: calc(var(--space-16) + var(--space-2));
   transform: translateX(-50%);
   z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   max-width: calc(100vw - var(--space-8));
   padding: var(--space-3) var(--space-4);
   background: var(--color-text);
@@ -96,6 +99,22 @@
   box-shadow: var(--shadow-md);
   font-size: var(--text-sm);
   text-align: center;
+}
+
+.toast-message {
+  min-width: 0;
+}
+
+.toast-link {
+  flex-shrink: 0;
+  color: var(--color-brand);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.toast-link:hover {
+  text-decoration: underline;
 }
 
 @media (min-width: 900px) {
