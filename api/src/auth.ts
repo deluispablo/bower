@@ -40,11 +40,16 @@ import {
   verifyToken,
 } from './session.js';
 import {
+  deleteUserData,
   findUserByEmail,
   getQuota,
+  getSessionGeneration,
   getUser,
   isAllowed,
+  isDeleted,
+  putSessionGeneration,
   putUser,
+  updateUser,
 } from './store.js';
 import type { SessionClaims } from './session.js';
 import type { User } from './types.js';
@@ -129,16 +134,38 @@ function sessionExpired(cause?: unknown): HttpError {
 }
 
 /**
+ * The user's current session generation: the `sessiongen:<id>` key, or the
+ * legacy `sessionGeneration` field of the record if that is higher (a
+ * "Sign out everywhere" made before the key existed).
+ */
+async function currentGeneration(kv: KVNamespace, user: User): Promise<number> {
+  const stored = await getSessionGeneration(kv, user.id);
+  return Math.max(stored, user.sessionGeneration ?? 0);
+}
+
+/** An authenticated request: its user and the generation its cookie carries. */
+interface Authenticated {
+  user: User;
+  /** The higher of the cookie's `gen` and the user's current generation. */
+  generation: number;
+}
+
+/**
  * The user a request's session cookie belongs to. Throws a 401: `unauthenticated`
  * for no cookie, a bad or malformed one, or a user that no longer exists
- * (deleted account); `session_expired` for a session past its absolute
- * lifetime (30 days from sign-in) or signed before the user's latest
- * "Sign out everywhere" (`gen` below `sessionGeneration`).
+ * (a `deleted:<id>` tombstone, checked first, or no record); `session_expired`
+ * for a session past its absolute lifetime (30 days from sign-in) or signed
+ * before the user's latest "Sign out everywhere" (`gen` below the
+ * `sessiongen:<id>` generation).
+ *
+ * Revocation state lives in keys only deletion and logout-all write, never
+ * in the user record other routes rewrite. KV is eventually consistent, so
+ * another location may still accept a revoked cookie for up to about 60 s.
  */
 async function authenticate(
   cookieHeader: string | undefined,
   env: Env,
-): Promise<User> {
+): Promise<Authenticated> {
   const token = readSessionCookie(cookieHeader);
   if (token === undefined) throw unauthenticated();
   let claims: SessionClaims;
@@ -157,10 +184,16 @@ async function authenticate(
       cause: err,
     });
   }
-  const user = await getUser(env.BOWER_KV, claims.userId);
-  if (user === undefined) throw unauthenticated();
-  if (claims.gen < (user.sessionGeneration ?? 0)) throw sessionExpired();
-  return user;
+  const kv = env.BOWER_KV;
+  const [deleted, user, stored] = await Promise.all([
+    isDeleted(kv, claims.userId),
+    getUser(kv, claims.userId),
+    getSessionGeneration(kv, claims.userId),
+  ]);
+  if (deleted || user === undefined) throw unauthenticated();
+  const generation = Math.max(stored, user.sessionGeneration ?? 0);
+  if (claims.gen < generation) throw sessionExpired();
+  return { user, generation: Math.max(generation, claims.gen) };
 }
 
 /**
@@ -183,7 +216,7 @@ export const requireSession: MiddlewareHandler<
 > = async (c, next) => {
   let user: User;
   try {
-    user = await authenticate(c.req.header('cookie'), c.get('env'));
+    ({ user } = await authenticate(c.req.header('cookie'), c.get('env')));
   } catch (err) {
     rejectSession(c, err);
   }
@@ -328,23 +361,33 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
     const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
     const encRefreshToken = await encrypt(tokens.refreshToken, key);
+    // An existing user gets only its token (and reauth flag) changed. A
+    // deleted one (tombstone) is never revived, even when a stale write
+    // re-created its record: that record is removed and a fresh account
+    // with a new id is created, so no cookie of the old one works again.
     const existing = await findUserByEmail(kv, info.email);
-    const user: User =
-      existing === undefined
-        ? {
-            id: crypto.randomUUID(),
-            email: info.email,
-            createdAt: new Date().toISOString(),
+    let user =
+      existing === undefined || (await isDeleted(kv, existing.id))
+        ? undefined
+        : await updateUser(kv, existing.id, {
             encRefreshToken,
-          }
-        : { ...existing, encRefreshToken };
-    delete user.needsReauth;
-    await putUser(kv, user);
+            needsReauth: null,
+          });
+    if (user === undefined) {
+      if (existing !== undefined) await deleteUserData(kv, existing.id);
+      user = {
+        id: crypto.randomUUID(),
+        email: info.email,
+        createdAt: new Date().toISOString(),
+        encRefreshToken,
+      };
+      await putUser(kv, user);
+    }
 
     // Always a brand-new session (fresh `sid` and `iat`), never the one the
     // browser may already hold, carrying the user's current generation.
     const session = await signSession(
-      { userId: user.id, gen: user.sessionGeneration ?? 0 },
+      { userId: user.id, gen: await currentGeneration(kv, user) },
       env.SESSION_SECRET,
     );
     c.header('Set-Cookie', sessionCookie(session, SESSION_TTL_SECONDS), {
@@ -361,15 +404,20 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
   // "Sign out everywhere": every session signed so far, on any device,
   // stops working, this one included.
+  // The generation lives in `sessiongen:<id>`, which nothing else writes,
+  // so a request holding an older copy of the user record cannot undo it.
   auth.post('/auth/logout-all', requireSameOrigin, async (c) => {
-    let user: User;
+    let session: Authenticated;
     try {
-      user = await authenticate(c.req.header('cookie'), c.get('env'));
+      session = await authenticate(c.req.header('cookie'), c.get('env'));
     } catch (err) {
       rejectSession(c, err);
     }
-    user.sessionGeneration = (user.sessionGeneration ?? 0) + 1;
-    await putUser(c.get('env').BOWER_KV, user);
+    await putSessionGeneration(
+      c.get('env').BOWER_KV,
+      session.user.id,
+      session.generation + 1,
+    );
     c.header('Set-Cookie', clearSessionCookie());
     return c.body(null, 204);
   });
@@ -380,7 +428,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const env = c.get('env');
     let user: User;
     try {
-      user = await authenticate(c.req.header('cookie'), c.get('env'));
+      ({ user } = await authenticate(c.req.header('cookie'), c.get('env')));
     } catch (err) {
       const email = await readNotInvited(c.req.header('cookie'), env);
       if (email === undefined) rejectSession(c, err);

@@ -253,6 +253,7 @@ describe('DELETE /admin/allow/:email', () => {
     expect(remaining.some((k) => k.startsWith('user:'))).toBe(false);
     expect(remaining.some((k) => k.startsWith('email:'))).toBe(false);
     expect(remaining.some((k) => k.startsWith('allow:'))).toBe(false);
+    expect(remaining.filter((k) => k.startsWith('deleted:'))).toHaveLength(1);
 
     const cb = await callback(googleStub().fetchImpl);
     expect(cb.status).toBe(302);

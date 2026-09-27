@@ -35,6 +35,8 @@ export const keys = {
   push: (userId: string, subId: string): string => `push:${userId}:${subId}`,
   pushPrefix: (userId: string): string => `push:${userId}:`,
   driveToken: (userId: string): string => `drivetoken:${userId}`,
+  sessionGen: (userId: string): string => `sessiongen:${userId}`,
+  deleted: (userId: string): string => `deleted:${userId}`,
 };
 
 /** Daily quota counters live for 48 h, one day longer than they matter for. */
@@ -76,14 +78,97 @@ export async function getUser(
 }
 
 /**
- * Stores `user` and keeps the `email:<email>` → id index in sync with its
- * (normalized) `email` field.
+ * Creates the record for a new user and its `email:<email>` → id index.
+ * Only for a record that does not exist yet (sign-in): every later change
+ * goes through `updateUser`, which never writes back fields it was not
+ * asked to change.
  */
 export async function putUser(kv: KVNamespace, user: User): Promise<void> {
   await Promise.all([
     putJson(kv, keys.user(user.id), user),
     kv.put(keys.email(user.email), user.id),
   ]);
+}
+
+/**
+ * The fields of a `User` a route may change after sign-up. `null` removes
+ * an optional field; a missing (or `undefined`) field is left as stored.
+ * `id`, `email` and `createdAt` never change, and revocation state lives
+ * in its own keys (`sessiongen:`, `deleted:`), not here.
+ */
+export interface UserPatch {
+  vault?: NonNullable<User['vault']>;
+  encRefreshToken?: string;
+  encApiKey?: string | null;
+  needsReauth?: true | null;
+  tourSeenAt?: string | null;
+}
+
+/**
+ * Changes only the fields in `patch`: re-reads the record just before
+ * writing and merges the patch into that copy, instead of writing back a
+ * whole record the caller read earlier. KV has no field-level writes, so
+ * two writers racing on the same field still resolve last-write-wins, but
+ * a writer can no longer undo a change to a field it did not touch.
+ *
+ * Returns the merged record, or `undefined` (and writes nothing) when the
+ * user no longer exists or carries a deletion tombstone, so a request that
+ * raced an account deletion cannot re-create the record.
+ */
+export async function updateUser(
+  kv: KVNamespace,
+  id: string,
+  patch: UserPatch,
+): Promise<User | undefined> {
+  const [current, deleted] = await Promise.all([
+    getUser(kv, id),
+    isDeleted(kv, id),
+  ]);
+  if (current === undefined || deleted) return undefined;
+  const merged: Record<string, unknown> = { ...current };
+  for (const [field, value] of Object.entries(patch)) {
+    if (value === null) delete merged[field];
+    else if (value !== undefined) merged[field] = value;
+  }
+  const next = merged as unknown as User;
+  await putJson(kv, keys.user(id), next);
+  return next;
+}
+
+/**
+ * The user's session generation from `sessiongen:<id>`, written only by
+ * "Sign out everywhere"; 0 when the key is missing. Sessions signed with a
+ * lower generation are rejected.
+ */
+export async function getSessionGeneration(
+  kv: KVNamespace,
+  userId: string,
+): Promise<number> {
+  const value = await kv.get(keys.sessionGen(userId), 'text');
+  if (value === null) return 0;
+  const generation = Number(value);
+  return Number.isSafeInteger(generation) && generation > 0 ? generation : 0;
+}
+
+/** Stores `generation` in `sessiongen:<id>`. Only "Sign out everywhere" calls this. */
+export async function putSessionGeneration(
+  kv: KVNamespace,
+  userId: string,
+  generation: number,
+): Promise<void> {
+  await kv.put(keys.sessionGen(userId), String(generation));
+}
+
+/**
+ * Whether `userId` was deleted (`DELETE /me` or an operator removal). The
+ * `deleted:<id>` tombstone is kept for good: ids are never reused, and a
+ * record a stale write re-created after the deletion must stay dead.
+ */
+export async function isDeleted(
+  kv: KVNamespace,
+  userId: string,
+): Promise<boolean> {
+  return (await kv.get(keys.deleted(userId), 'text')) !== null;
 }
 
 export async function findUserByEmail(
@@ -122,7 +207,10 @@ export interface UserSummary {
   createdAt: string;
 }
 
-/** Every user, for the admin listing. Never includes a token. */
+/**
+ * Every user, for the admin listing. Never includes a token. A record a
+ * stale write re-created after its deletion (see `isDeleted`) is left out.
+ */
 export async function listUsers(kv: KVNamespace): Promise<UserSummary[]> {
   const prefix = keys.userPrefix();
   const users: UserSummary[] = [];
@@ -131,7 +219,7 @@ export async function listUsers(kv: KVNamespace): Promise<UserSummary[]> {
     const listed = await kv.list({ prefix, cursor });
     for (const entry of listed.keys) {
       const user = await getJson<User>(kv, entry.name);
-      if (user !== undefined) {
+      if (user !== undefined && !(await isDeleted(kv, user.id))) {
         users.push({
           id: user.id,
           email: user.email,
@@ -149,7 +237,7 @@ export async function listUsers(kv: KVNamespace): Promise<UserSummary[]> {
 /**
  * The id of every user who has a vault, for the runner's scheduled runs.
  * Pages through `user:` keys with `kv.list`; returns ids only, never an
- * email or a token.
+ * email or a token. Deleted users (tombstoned) are left out.
  */
 export async function listVaultIds(kv: KVNamespace): Promise<string[]> {
   const prefix = keys.userPrefix();
@@ -159,7 +247,9 @@ export async function listVaultIds(kv: KVNamespace): Promise<string[]> {
     const listed = await kv.list({ prefix, cursor });
     for (const entry of listed.keys) {
       const user = await getJson<User>(kv, entry.name);
-      if (user?.vault !== undefined) ids.push(user.id);
+      if (user?.vault !== undefined && !(await isDeleted(kv, user.id))) {
+        ids.push(user.id);
+      }
     }
     if (listed.list_complete) break;
     cursor = listed.cursor;
@@ -293,19 +383,26 @@ export async function deleteDriveToken(
 /**
  * Deletes every key belonging to `userId`: `user:`, its `email:` index
  * (looked up from the user record before deleting it), `run:`, `lintrun:`,
- * every `quota:<id>:*`, every `push:<id>:*` and `drivetoken:<id>`. Never touches
- * `allow:<email>` — the allowlist is the operator's, not the user's.
+ * every `quota:<id>:*`, every `push:<id>:*`, `drivetoken:<id>` and
+ * `sessiongen:<id>`. Never touches `allow:<email>` — the allowlist is the
+ * operator's, not the user's.
+ *
+ * Writes the `deleted:<id>` tombstone first and keeps it: a request that
+ * read the record before the deletion and writes it back afterwards cannot
+ * bring the account (or its sessions) back.
  */
 export async function deleteUserData(
   kv: KVNamespace,
   userId: string,
 ): Promise<void> {
+  await kv.put(keys.deleted(userId), '1');
   const user = await getUser(kv, userId);
   const deletions: Promise<void>[] = [
     kv.delete(keys.user(userId)),
     kv.delete(keys.run(userId)),
     kv.delete(keys.lintRun(userId)),
     kv.delete(keys.driveToken(userId)),
+    kv.delete(keys.sessionGen(userId)),
     deleteByPrefix(kv, keys.quotaPrefix(userId)),
     deleteByPrefix(kv, keys.pushPrefix(userId)),
   ];

@@ -22,7 +22,7 @@ import type { AppEnv } from './env.js';
 import { HttpError } from './errors.js';
 import type { FetchLike } from './google.js';
 import { requireSameOrigin } from './security.js';
-import { getUser, putUser } from './store.js';
+import { getUser, updateUser } from './store.js';
 import { TEMPLATE_FILES } from './template.generated.js';
 import type { TemplateFile } from './template.generated.js';
 import type { User } from './types.js';
@@ -200,7 +200,10 @@ export function createVaultRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
         ? await createVault(drive, env.TEMPLATE_FOLDER_NAME)
         : await selectVault(drive, request.folderId);
 
-    await putUser(env.BOWER_KV, { ...user, vault });
+    // Only `vault` is written, merged into a fresh read of the record.
+    if ((await updateUser(env.BOWER_KV, user.id, { vault })) === undefined) {
+      throw new HttpError(401, 'unauthenticated', 'Not signed in');
+    }
     return c.json({ vault }, request.mode === 'create' ? 201 : 200);
   });
 

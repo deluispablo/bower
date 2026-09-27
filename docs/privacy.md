@@ -41,7 +41,7 @@ Signing in keeps you signed in on that device for at most 30 days; then you sign
 
 You have two ways to remove this instance's access to your information, and they do different things:
 
-- **Settings → Delete account, in the app.** This deletes everything this instance stores about you (your email, your encrypted refresh token, your folder id, your run history, your push subscription, when you saw the tour) and, where possible, tells Google to revoke this app's access to your account. It also signs you out on every device. Your notes and your Bower folder are not touched — they stay in your Google Drive exactly as they are.
+- **Settings → Delete account, in the app.** This deletes everything this instance stores about you (your email, your encrypted refresh token, your folder id, your run history, your push subscription, when you saw the tour) and, where possible, tells Google to revoke this app's access to your account. It also signs you out on every device. All that remains is a marker holding the account's random id, with nothing about you, so the deleted account can never be used again; signing in later starts a new one. Your notes and your Bower folder are not touched — they stay in your Google Drive exactly as they are.
 - **Revoke access at [myaccount.google.com](https://myaccount.google.com)**, under Security → Third-party apps with account access. This immediately stops the app from reaching your Google Drive at all. It does not, by itself, delete what this instance already stored about you — use Delete account for that too.
 
 Doing both removes every trace of you from this instance and cuts off its access to your Google account. Your notes remain in your Drive either way; you keep them.

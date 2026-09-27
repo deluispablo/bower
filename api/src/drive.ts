@@ -21,7 +21,7 @@ import {
   getDriveToken,
   getUser,
   putDriveToken,
-  putUser,
+  updateUser,
 } from './store.js';
 import type { DriveToken, User } from './types.js';
 
@@ -38,7 +38,7 @@ const EXPIRY_MARGIN_SECONDS = 60;
  * cached for `expiresIn - 60` seconds (at least 60).
  *
  * When Google reports the refresh token as revoked (`invalid_grant`), sets
- * `user.needsReauth = true`, stores the user, and rethrows the
+ * `user.needsReauth = true`, stores that one field, and rethrows the
  * `HttpError(401, 'reauth')`. Any other Google failure is a 502
  * `google_error`.
  */
@@ -66,7 +66,7 @@ export async function getAccessToken(
   } catch (err) {
     if (err instanceof HttpError && err.code === 'reauth') {
       user.needsReauth = true;
-      await putUser(kv, user);
+      await updateUser(kv, user.id, { needsReauth: true });
     }
     throw err;
   }

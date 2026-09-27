@@ -33,10 +33,14 @@ import {
 } from '../src/session.js';
 import {
   findUserByEmail,
+  getSessionGeneration,
   getUser,
   incrQuota,
+  isDeleted,
   keys,
+  putSessionGeneration,
   putUser,
+  updateUser,
 } from '../src/store.js';
 import type { User } from '../src/types.js';
 
@@ -340,6 +344,82 @@ describe('GET /auth/callback', () => {
     expect((await getUser(kv, 'user-existing'))?.sessionGeneration).toBe(3);
   });
 
+  it('signs with the sessiongen generation when it is higher than the legacy one', async () => {
+    await allow(EMAIL);
+    await putUser(kv, {
+      id: 'user-existing',
+      email: EMAIL,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      encRefreshToken: 'v1.old-iv.old-ciphertext',
+      sessionGeneration: 1,
+    });
+    await putSessionGeneration(kv, 'user-existing', 4);
+    const app = createApp({ fetchImpl: googleStub().fetchImpl });
+    const { cookie, state } = await login(app);
+
+    const response = await callback(
+      app,
+      `code=test-code&state=${state}`,
+      cookie,
+    );
+
+    const token = cookieValue(cookieNamed(response, SESSION_COOKIE));
+    expect((await verifySession(token, env.SESSION_SECRET)).gen).toBe(4);
+  });
+
+  it('signs a deleted user in fresh, never reviving the old account', async () => {
+    await allow(EMAIL);
+    // What a stale write can leave behind after DELETE /me: the old record
+    // and its email index, under a deletion tombstone.
+    await putUser(kv, {
+      id: 'user-old',
+      email: EMAIL,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      vault: {
+        folderId: 'FOLDER_ID',
+        inboxFolderId: 'FOLDER_ID',
+        name: 'Bower',
+      },
+      encRefreshToken: 'v1.old-iv.old-ciphertext',
+      encApiKey: 'v1.old-iv.old-api-key',
+    });
+    await kv.put(keys.deleted('user-old'), '1');
+    const oldSession = await signSession(
+      { userId: 'user-old' },
+      env.SESSION_SECRET,
+    );
+    const app = createApp({ fetchImpl: googleStub().fetchImpl });
+    const { cookie, state } = await login(app);
+
+    const response = await callback(
+      app,
+      `code=test-code&state=${state}`,
+      cookie,
+    );
+
+    expect(response.status).toBe(302);
+    const token = cookieValue(cookieNamed(response, SESSION_COOKIE));
+    const claims = await verifySession(token, env.SESSION_SECRET);
+    expect(claims.userId).not.toBe('user-old');
+    expect(await getUser(kv, 'user-old')).toBeUndefined();
+    expect(await isDeleted(kv, 'user-old')).toBe(true);
+    const fresh = (await findUserByEmail(kv, EMAIL)) as User;
+    expect(fresh.id).toBe(claims.userId);
+    expect(fresh.vault).toBeUndefined();
+    expect(fresh.encApiKey).toBeUndefined();
+
+    const me = async (cookieHeader: string): Promise<Response> =>
+      createApp().request(
+        `${API}/me`,
+        { headers: { cookie: cookieHeader } },
+        env,
+      );
+    const signedIn = await me(`${SESSION_COOKIE}=${token}`);
+    expect(signedIn.status).toBe(200);
+    expect((await signedIn.json<{ vault: unknown }>()).vault).toBeNull();
+    expect((await me(`${SESSION_COOKIE}=${oldSession}`)).status).toBe(401);
+  });
+
   it('rejects a state that does not match the cookie', async () => {
     await allow(EMAIL);
     const app = createApp({ fetchImpl: googleStub().fetchImpl });
@@ -528,8 +608,10 @@ async function seedUser(sessionGeneration?: number): Promise<void> {
     email: EMAIL,
     createdAt: '2026-01-01T00:00:00.000Z',
     encRefreshToken: 'v1.test-iv.test-ciphertext',
-    ...(sessionGeneration === undefined ? {} : { sessionGeneration }),
   });
+  if (sessionGeneration !== undefined) {
+    await putSessionGeneration(kv, 'user-1', sessionGeneration);
+  }
 }
 
 async function errorCodeOf(response: Response): Promise<string> {
@@ -571,7 +653,8 @@ describe('POST /auth/logout-all', () => {
 
     expect(response.status).toBe(204);
     expectSessionCleared(response);
-    expect((await getUser(kv, 'user-1'))?.sessionGeneration).toBe(1);
+    expect(await getSessionGeneration(kv, 'user-1')).toBe(1);
+    expect((await getUser(kv, 'user-1'))?.sessionGeneration).toBeUndefined();
 
     for (const cookie of [here, elsewhere]) {
       const denied = await status(cookie);
@@ -600,7 +683,62 @@ describe('POST /auth/logout-all', () => {
       'https://evil.example.com',
     );
     expect(foreign.status).toBe(403);
-    expect((await getUser(kv, 'user-1'))?.sessionGeneration).toBeUndefined();
+    expect(await getSessionGeneration(kv, 'user-1')).toBe(0);
+  });
+
+  it('is not undone by a stale write of the user record', async () => {
+    await seedUser();
+    const cookie = `${SESSION_COOKIE}=${await signSession({ userId: 'user-1' }, env.SESSION_SECRET)}`;
+    // Another request (a stolen cookie calling PATCH /settings) read the
+    // whole record before the sign-out and writes after it.
+    const stale = await kv.get(keys.user('user-1'), 'text');
+
+    expect((await logoutAll(cookie)).status).toBe(204);
+    await kv.put(keys.user('user-1'), stale ?? '');
+    await updateUser(kv, 'user-1', { tourSeenAt: '2026-01-02T00:00:00.000Z' });
+
+    expect(await getSessionGeneration(kv, 'user-1')).toBe(1);
+    const denied = await status(cookie);
+    expect(denied.status).toBe(401);
+    expect(await errorCodeOf(denied)).toBe('session_expired');
+  });
+
+  it('bumps past a newer generation carried by the cookie itself', async () => {
+    await seedUser();
+    // This location still reads generation 0, but the cookie was signed at 2.
+    const cookie = `${SESSION_COOKIE}=${await signSession({ userId: 'user-1', gen: 2 }, env.SESSION_SECRET)}`;
+
+    expect((await logoutAll(cookie)).status).toBe(204);
+
+    expect(await getSessionGeneration(kv, 'user-1')).toBe(3);
+    expect((await status(cookie)).status).toBe(401);
+  });
+
+  it('keeps honouring a generation stored in the record before sessiongen existed', async () => {
+    await putUser(kv, {
+      id: 'user-1',
+      email: EMAIL,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      encRefreshToken: 'v1.test-iv.test-ciphertext',
+      sessionGeneration: 2,
+    });
+    const old = `${SESSION_COOKIE}=${await signSession({ userId: 'user-1', gen: 1 }, env.SESSION_SECRET)}`;
+    const current = `${SESSION_COOKIE}=${await signSession({ userId: 'user-1', gen: 2 }, env.SESSION_SECRET)}`;
+
+    expect((await status(old)).status).toBe(401);
+    expect((await logoutAll(current)).status).toBe(204);
+    expect(await getSessionGeneration(kv, 'user-1')).toBe(3);
+  });
+
+  it('answers 401 unauthenticated for a deleted user even if its record came back', async () => {
+    await seedUser();
+    await kv.put(keys.deleted('user-1'), '1');
+    const cookie = `${SESSION_COOKIE}=${await signSession({ userId: 'user-1' }, env.SESSION_SECRET)}`;
+
+    const denied = await status(cookie);
+
+    expect(denied.status).toBe(401);
+    expect(await errorCodeOf(denied)).toBe('unauthenticated');
   });
 });
 

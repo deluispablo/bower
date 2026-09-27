@@ -6,7 +6,7 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 
 | Key pattern | Value | TTL | Written by | Read by |
 | --- | --- | --- | --- | --- |
-| `user:<id>` | `User` | none | `putUser` | `getUser`, `findUserByEmail`, `listUsers`, `listVaultIds` |
+| `user:<id>` | `User` | none | `putUser` (new user), `updateUser` (every later change) | `getUser`, `findUserByEmail`, `listUsers`, `listVaultIds` |
 | `email:<email>` | user id (string) | none | `putUser` | `findUserByEmail` |
 | `allow:<email>` | `'1'` | none | the operator, outside this module | `isAllowed` |
 | `run:<id>` | `Run` (the latest ingest) | none | `putRun` | `getRun` |
@@ -14,13 +14,16 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
 | `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` (deleted by `deletePushSub`, `DELETE /push/subscribe`, and `sendPush` on a 404/410) |
 | `drivetoken:<id>` | `DriveToken` (cached Drive access token) | token lifetime − 60 s, at least 60 s (set by `drive.ts`) | `putDriveToken` | `getDriveToken` |
+| `sessiongen:<id>` | session generation (string) | none | `putSessionGeneration`, only from `POST /auth/logout-all` | `getSessionGeneration` (every cookie route, sign-in) |
+| `deleted:<id>` | `'1'` (tombstone) | none, kept for good | `deleteUserData` (`DELETE /me`, `DELETE /admin/allow/:email`) | `isDeleted` (every cookie route, sign-in, `updateUser`, `listUsers`, `listVaultIds`) |
 
 Notes:
 
 - `<id>` is always a `User.id`.
 - `<email>` is lower-cased and trimmed before use as a key, so lookups are case-insensitive.
 - `quota` has no atomic increment in KV: `incrQuota` reads, increments and writes back. Two requests racing on the same user and date can undercount by one. Accepted as a soft per-user daily limit, not a billing figure.
-- `deleteUserData` removes every `user:`, `run:`, `lintrun:`, `quota:<id>:*`, `push:<id>:*` and `drivetoken:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user.
+- `deleteUserData` first writes the `deleted:<id>` tombstone, then removes every `user:`, `run:`, `lintrun:`, `quota:<id>:*`, `push:<id>:*`, `drivetoken:<id>` and `sessiongen:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user. The tombstone holds no personal data (the key is a random id) and stays, so a record a stale write re-creates after the deletion is never treated as a user again. Ids are never reused: signing in again after a deletion creates a new account with a new id.
+- Revocation state (`sessiongen:`, `deleted:`) lives outside `user:<id>`, in keys no other route writes. A route that changes the user record goes through `updateUser`, which re-reads the record and merges only the fields it changes, so a request holding an older copy of the record cannot write back fields it did not touch. KV is eventually consistent: a read in another location can be up to about 60 s old, so a sign-out everywhere or a deletion can take that long to reach every location.
 - `deleteDriveToken` also drops `drivetoken:<id>` on its own, used by `GET /drive/token?fresh=1` (see below) to force a fresh mint.
 
 ## `User`
@@ -35,7 +38,7 @@ Notes:
 | `encApiKey` | `string` | optional; AES-GCM envelope (`crypto.ts`); never plaintext |
 | `needsReauth` | `boolean` | optional |
 | `tourSeenAt` | `string` | optional; ISO-8601, when the user finished or skipped the first-run tour. Set through `PATCH /settings`, returned by `GET /me`, never in `GET /admin/users` |
-| `sessionGeneration` | `number` | optional, absent reads as 0; bumped by `POST /auth/logout-all`. Sessions signed with a lower generation are rejected |
+| `sessionGeneration` | `number` | optional, legacy and read only: where `POST /auth/logout-all` kept the generation before `sessiongen:<id>`. Nothing writes it any more; a stored value still counts (the higher of the two applies) |
 
 ## `Run`
 
@@ -70,12 +73,12 @@ Notes:
 
 ## Sessions
 
-`GET /auth/callback` signs a new session on every sign-in and sets it as the `bower_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`, 30 days). Its claims are `userId`, `gen` (the user's `sessionGeneration`; a cookie without one reads as 0), `sid` (random, so no two sign-ins share a token), `iat` and `exp`. Every route that takes the cookie, `GET /me` included, loads the user and answers:
+`GET /auth/callback` signs a new session on every sign-in and sets it as the `bower_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`, 30 days). Its claims are `userId`, `gen` (the user's session generation from `sessiongen:<id>`; a cookie without one reads as 0), `sid` (random, so no two sign-ins share a token), `iat` and `exp`. Every route that takes the cookie, `GET /me` included, loads the user and answers:
 
 | Status | `code` | When |
 | --- | --- | --- |
-| 401 | `unauthenticated` | No cookie, a bad signature or malformed token, or the user no longer exists (the account was deleted) |
-| 401 | `session_expired` | The session is more than 30 days old (`iat`; never extended), or `gen` is below the user's `sessionGeneration` (signed out everywhere) |
+| 401 | `unauthenticated` | No cookie, a bad signature or malformed token, or the user no longer exists (a `deleted:<id>` tombstone, checked first, or no record) |
+| 401 | `session_expired` | The session is more than 30 days old (`iat`; never extended), or `gen` is below the user's session generation (`sessiongen:<id>`; signed out everywhere) |
 
 A rejected cookie is also cleared (`Max-Age=0`). The app treats any 401 from `GET /me` as signed out and shows the sign-in screen.
 
@@ -85,7 +88,7 @@ Same origin (see `docs/security.md`). Clears the cookie on this browser only. Re
 
 ### `POST /auth/logout-all`
 
-"Sign out everywhere". Same origin, and requires a valid session cookie. Increments the user's `sessionGeneration`, so every session signed so far, on every device, is rejected from then on, and clears this browser's cookie. The next sign-in signs with the new generation. Response: 204.
+"Sign out everywhere". Same origin, and requires a valid session cookie. Writes the next generation to `sessiongen:<id>` (one above the higher of the stored generation and this cookie's `gen`), so every session signed so far, on every device, is rejected from then on (within about 60 s everywhere, see [Data model](#data-model)), and clears this browser's cookie. The next sign-in signs with the new generation. Response: 204.
 
 | Status | `code` | When |
 | --- | --- | --- |
