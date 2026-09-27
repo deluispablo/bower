@@ -13,6 +13,7 @@ import {
   readSessionCookie,
   sessionCookie,
   signSession,
+  signToken,
   verifySession,
 } from '../src/session.js';
 import type { SessionErrorCode } from '../src/session.js';
@@ -71,9 +72,55 @@ describe('signSession / verifySession', () => {
     expect(decodeJson(header)).toEqual({ alg: 'HS256', typ: 'JWT' });
     expect(decodeJson(payload)).toEqual({
       userId: 'user-123',
+      gen: 0,
+      sid: expect.any(String) as unknown,
       iat: NOW / 1000,
       exp: NOW / 1000 + SESSION_TTL_SECONDS,
     });
+  });
+
+  it('issues a new session id every time, even within the same second', async () => {
+    const first = await signSession({ userId: 'user-123' }, SECRET, NOW);
+    const second = await signSession({ userId: 'user-123' }, SECRET, NOW);
+    expect(first).not.toBe(second);
+  });
+
+  it('round-trips the generation and iat; a token without gen reads as 0', async () => {
+    const token = await signSession(
+      { userId: 'user-123', gen: 4 },
+      SECRET,
+      NOW,
+    );
+    expect(await verifySession(token, SECRET, NOW)).toEqual({
+      userId: 'user-123',
+      gen: 4,
+      iat: NOW / 1000,
+      exp: NOW / 1000 + SESSION_TTL_SECONDS,
+    });
+
+    const legacy = await signToken(
+      { userId: 'user-123' },
+      SECRET,
+      SESSION_TTL_SECONDS,
+      NOW,
+    );
+    expect((await verifySession(legacy, SECRET, NOW)).gen).toBe(0);
+  });
+
+  it('rejects a session older than 30 days even when exp is later', async () => {
+    const longLived = await signToken(
+      { userId: 'user-123', gen: 0 },
+      SECRET,
+      SESSION_TTL_SECONDS * 2,
+      NOW,
+    );
+    const lifetimeEnd = NOW + SESSION_TTL_SECONDS * 1000;
+    expect(
+      await sessionErrorCode(verifySession(longLived, SECRET, lifetimeEnd)),
+    ).toBe('expired');
+    await expect(
+      verifySession(longLived, SECRET, lifetimeEnd - 1000),
+    ).resolves.toMatchObject({ userId: 'user-123' });
   });
 
   it('rejects an altered payload', async () => {
@@ -149,7 +196,7 @@ describe('signSession / verifySession', () => {
     ).toBe('unsupported_alg');
   });
 
-  it('rejects correctly signed tokens with a missing or invalid userId or exp', async () => {
+  it('rejects correctly signed tokens with a missing or invalid userId, iat, gen or exp', async () => {
     const header = encodeJson({ alg: 'HS256', typ: 'JWT' });
     const key = await crypto.subtle.importKey(
       'raw',
@@ -168,9 +215,15 @@ describe('signSession / verifySession', () => {
       return `${input}.${base64UrlEncode(new Uint8Array(signature))}`;
     }
     const exp = NOW / 1000 + 60;
+    const iat = NOW / 1000;
 
     for (const claims of [
       { exp },
+      { userId: 'user-123', exp },
+      { userId: 'user-123', iat: '1', exp },
+      { userId: 'user-123', iat, exp, gen: -1 },
+      { userId: 'user-123', iat, exp, gen: 1.5 },
+      { userId: 'user-123', iat, exp, gen: '1' },
       { userId: '', exp },
       { userId: 42, exp },
       { userId: 'user-123' },

@@ -1,5 +1,5 @@
 import { env as testEnv } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { decrypt, encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
@@ -345,11 +345,17 @@ describe('DELETE /me', () => {
   it('still deletes and answers 204 when the revoke call fails', async () => {
     await seedUser();
     const google = revokeStub(500);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const response = await deleteMe(google.fetchImpl, await sessionCookie());
 
     expect(response.status).toBe(204);
     expect(await allKeys()).toEqual([]);
+    // Only the error code is logged, never the token.
+    const logged = errors.mock.calls.flat().map(String).join(' ');
+    expect(logged).toContain('revoke failed: google_error');
+    expect(logged).not.toContain(REFRESH_TOKEN);
+    errors.mockRestore();
   });
 
   it('answers 401 without a session', async () => {

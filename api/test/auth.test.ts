@@ -264,6 +264,7 @@ describe('GET /auth/callback', () => {
       env.SESSION_SECRET,
     );
     expect(claims.userId).toBe(stored.id);
+    expect(claims.gen).toBe(0);
 
     const cleared = cookieNamed(response, OAUTH_COOKIE);
     expect(cookieValue(cleared)).toBe('');
@@ -304,6 +305,36 @@ describe('GET /auth/callback', () => {
     expect(await decrypt(user.encRefreshToken, key)).toBe(REFRESH_TOKEN);
     const userKeys = (await allKeys()).filter((k) => k.startsWith('user:'));
     expect(userKeys).toEqual(['user:user-existing']);
+  });
+
+  it('issues a new session on every sign-in, carrying the current generation', async () => {
+    await allow(EMAIL);
+    await putUser(kv, {
+      id: 'user-existing',
+      email: EMAIL,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      encRefreshToken: 'v1.old-iv.old-ciphertext',
+      sessionGeneration: 3,
+    });
+    const app = createApp({ fetchImpl: googleStub().fetchImpl });
+
+    const sessions: string[] = [];
+    for (let i = 0; i < 2; i += 1) {
+      const { cookie, state } = await login(app);
+      const response = await callback(
+        app,
+        `code=test-code&state=${state}`,
+        cookie,
+      );
+      sessions.push(cookieValue(cookieNamed(response, SESSION_COOKIE)));
+    }
+
+    expect(sessions[0]).not.toBe(sessions[1]);
+    for (const token of sessions) {
+      const claims = await verifySession(token, env.SESSION_SECRET);
+      expect(claims.gen).toBe(3);
+    }
+    expect((await getUser(kv, 'user-existing'))?.sessionGeneration).toBe(3);
   });
 
   it('rejects a state that does not match the cookie', async () => {
@@ -448,6 +479,88 @@ describe('POST /auth/logout', () => {
   });
 });
 
+async function seedUser(sessionGeneration?: number): Promise<void> {
+  await putUser(kv, {
+    id: 'user-1',
+    email: EMAIL,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    encRefreshToken: 'v1.test-iv.test-ciphertext',
+    ...(sessionGeneration === undefined ? {} : { sessionGeneration }),
+  });
+}
+
+async function errorCodeOf(response: Response): Promise<string> {
+  return (await response.json<{ error: { code: string } }>()).error.code;
+}
+
+function expectSessionCleared(response: Response): void {
+  const cleared = cookieNamed(response, SESSION_COOKIE);
+  expect(cookieValue(cleared)).toBe('');
+  expect(cleared).toContain('Max-Age=0');
+}
+
+describe('POST /auth/logout-all', () => {
+  async function logoutAll(
+    cookie?: string,
+    origin = env.APP_ORIGIN,
+  ): Promise<Response> {
+    return createApp().request(
+      `${API}/auth/logout-all`,
+      {
+        method: 'POST',
+        headers: { origin, ...(cookie === undefined ? {} : { cookie }) },
+      },
+      env,
+    );
+  }
+
+  async function status(cookie: string): Promise<Response> {
+    return createApp().request(`${API}/status`, { headers: { cookie } }, env);
+  }
+
+  it('bumps the generation, clears the cookie, and ends every earlier session', async () => {
+    await seedUser();
+    const here = `${SESSION_COOKIE}=${await signSession({ userId: 'user-1' }, env.SESSION_SECRET)}`;
+    const elsewhere = `${SESSION_COOKIE}=${await signSession({ userId: 'user-1' }, env.SESSION_SECRET)}`;
+    expect((await status(elsewhere)).status).toBe(200);
+
+    const response = await logoutAll(here);
+
+    expect(response.status).toBe(204);
+    expectSessionCleared(response);
+    expect((await getUser(kv, 'user-1'))?.sessionGeneration).toBe(1);
+
+    for (const cookie of [here, elsewhere]) {
+      const denied = await status(cookie);
+      expect(denied.status).toBe(401);
+      expect(await errorCodeOf(denied)).toBe('session_expired');
+      expectSessionCleared(denied);
+    }
+
+    // A later sign-in carries the new generation and works again.
+    const fresh = await signSession(
+      { userId: 'user-1', gen: 1 },
+      env.SESSION_SECRET,
+    );
+    expect((await status(`${SESSION_COOKIE}=${fresh}`)).status).toBe(200);
+  });
+
+  it('answers 401 without a session and 403 from another origin', async () => {
+    await seedUser();
+    const noCookie = await logoutAll();
+    expect(noCookie.status).toBe(401);
+    expect(await errorCodeOf(noCookie)).toBe('unauthenticated');
+
+    const token = await signSession({ userId: 'user-1' }, env.SESSION_SECRET);
+    const foreign = await logoutAll(
+      `${SESSION_COOKIE}=${token}`,
+      'https://evil.example.com',
+    );
+    expect(foreign.status).toBe(403);
+    expect((await getUser(kv, 'user-1'))?.sessionGeneration).toBeUndefined();
+  });
+});
+
 describe('GET /me', () => {
   async function me(cookie?: string): Promise<Response> {
     return createApp().request(
@@ -545,6 +658,75 @@ describe('GET /me', () => {
       const body = await response.json<{ error: { code: string } }>();
       expect(body.error.code).toBe('unauthenticated');
     }
+  });
+
+  it('answers 401 session_expired for an older generation and clears the cookie', async () => {
+    await seedUser(2);
+    const token = await signSession(
+      { userId: 'user-1', gen: 1 },
+      env.SESSION_SECRET,
+    );
+
+    const response = await me(`${SESSION_COOKIE}=${token}`);
+
+    expect(response.status).toBe(401);
+    expect(await errorCodeOf(response)).toBe('session_expired');
+    expectSessionCleared(response);
+  });
+
+  it('answers 401 session_expired for a session older than 30 days', async () => {
+    await seedUser();
+    const signedAt = Date.now() - (SESSION_TTL_SECONDS + 60) * 1000;
+    const token = await signToken(
+      { userId: 'user-1', gen: 0 },
+      env.SESSION_SECRET,
+      SESSION_TTL_SECONDS * 2,
+      signedAt,
+    );
+
+    const response = await me(`${SESSION_COOKIE}=${token}`);
+
+    expect(response.status).toBe(401);
+    expect(await errorCodeOf(response)).toBe('session_expired');
+  });
+
+  it('still accepts a cookie signed before generations existed', async () => {
+    await seedUser();
+    const legacy = await signToken(
+      { userId: 'user-1' },
+      env.SESSION_SECRET,
+      SESSION_TTL_SECONDS,
+    );
+
+    expect((await me(`${SESSION_COOKIE}=${legacy}`)).status).toBe(200);
+  });
+
+  it('answers 401 unauthenticated once the user no longer exists', async () => {
+    const token = await signSession({ userId: 'user-1' }, env.SESSION_SECRET);
+
+    const response = await me(`${SESSION_COOKIE}=${token}`);
+
+    expect(response.status).toBe(401);
+    expect(await errorCodeOf(response)).toBe('unauthenticated');
+    expectSessionCleared(response);
+  });
+
+  it('prefers the not-invited answer over a stale session cookie', async () => {
+    await seedUser(1);
+    const stale = await signSession({ userId: 'user-1' }, env.SESSION_SECRET);
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    const notInvited = await signToken(
+      { purpose: 'not_invited', email: await encrypt(EMAIL, key) },
+      env.SESSION_SECRET,
+      300,
+    );
+
+    const response = await me(
+      `${SESSION_COOKIE}=${stale}; ${NOT_INVITED_COOKIE}=${notInvited}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ notInvited: true, email: EMAIL });
   });
 
   it('answers 401 for a tampered session cookie', async () => {

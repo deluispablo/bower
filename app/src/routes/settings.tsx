@@ -3,7 +3,13 @@ import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
 import type { Me } from '../api.js';
-import { ApiError, deleteAccount, loginUrl, updateSettings } from '../api.js';
+import {
+  ApiError,
+  deleteAccount,
+  loginUrl,
+  logoutAll,
+  updateSettings,
+} from '../api.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { Toggle } from '../components/toggle.js';
 import { getPref, setPref } from '../prefs.js';
@@ -310,6 +316,58 @@ function AdvancedSection({ me }: { me: Me }) {
   );
 }
 
+/**
+ * Sign out on this device, or everywhere: "Sign out everywhere" ends every
+ * session of the account on the Worker first, then signs this device out
+ * the ordinary way. A 401 means this session had already ended, so the
+ * device is signed out all the same.
+ */
+function SignOutSection() {
+  const { signOut } = useSession();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const signOutEverywhere = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await logoutAll();
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setError(toMessage(err));
+        setBusy(false);
+        return;
+      }
+      console.error(err);
+    }
+    await signOut();
+  };
+
+  return (
+    <div class="settings-section">
+      <div class="settings-actions">
+        <button
+          type="button"
+          class="settings-button settings-button-secondary"
+          disabled={busy}
+          onClick={() => void signOut()}
+        >
+          Sign out
+        </button>
+        <button
+          type="button"
+          class="settings-button settings-button-secondary"
+          disabled={busy}
+          onClick={() => void signOutEverywhere()}
+        >
+          Sign out everywhere
+        </button>
+      </div>
+      {error && <p class="settings-error">{error}</p>}
+    </div>
+  );
+}
+
 function DangerZone() {
   const { signOut } = useSession();
   const [confirming, setConfirming] = useState(false);
@@ -380,7 +438,7 @@ function DangerZone() {
 }
 
 export function Settings() {
-  const { me, signOut } = useSession();
+  const { me } = useSession();
 
   useShellSlot('crumb', CRUMB);
 
@@ -425,15 +483,7 @@ export function Settings() {
 
       <AdvancedSection me={me} />
 
-      <div class="settings-section">
-        <button
-          type="button"
-          class="settings-button settings-button-secondary"
-          onClick={() => void signOut()}
-        >
-          Sign out
-        </button>
-      </div>
+      <SignOutSection />
 
       <DangerZone />
 

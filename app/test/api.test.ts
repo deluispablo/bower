@@ -11,6 +11,7 @@ import {
   isNotInvited,
   loginUrl,
   logout,
+  logoutAll,
   selectVault,
   subscribePush,
   unsubscribePush,
@@ -314,6 +315,37 @@ describe('logout', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/auth\/logout$/);
     expect(init.method).toBe('POST');
+  });
+});
+
+describe('logoutAll', () => {
+  it('posts to /auth/logout-all and resolves on 204', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(logoutAll()).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/auth\/logout-all$/);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('include');
+  });
+
+  it('rejects with the Worker error code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(401, {
+          error: { code: 'session_expired', message: 'Session ended' },
+        }),
+      ),
+    );
+
+    await expect(logoutAll()).rejects.toMatchObject({
+      status: 401,
+      code: 'session_expired',
+    });
   });
 });
 

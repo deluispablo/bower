@@ -180,6 +180,14 @@ export function logout(): Promise<void> {
 }
 
 /**
+ * "Sign out everywhere": ends every session of this account, on every
+ * device, this one included (`POST /auth/logout-all`).
+ */
+export function logoutAll(): Promise<void> {
+  return apiFetch<void>('/auth/logout-all', { method: 'POST' });
+}
+
+/**
  * The Worker's `/auth/login`: a full navigation, never fetched.
  * `selectAccount` makes Google show its account picker ("Try another account").
  */
