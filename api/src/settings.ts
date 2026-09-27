@@ -21,7 +21,8 @@ import { revokeToken } from './google.js';
 import type { FetchLike } from './google.js';
 import { requireSameOrigin } from './security.js';
 import { clearSessionCookie } from './session.js';
-import { deleteUserData, getUser, putUser } from './store.js';
+import { deleteUserData, getUser, updateUser } from './store.js';
+import type { UserPatch } from './store.js';
 
 function unauthenticated(): HttpError {
   return new HttpError(401, 'unauthenticated', 'Not signed in');
@@ -55,8 +56,7 @@ export function createSettingsRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
   settings.patch('/settings', requireSameOrigin, requireSession, async (c) => {
     const env = c.get('env');
-    const user = await getUser(env.BOWER_KV, c.get('userId'));
-    if (user === undefined) throw unauthenticated();
+    const userId = c.get('userId');
 
     let body: unknown;
     try {
@@ -91,21 +91,21 @@ export function createSettingsRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       );
     }
 
-    // Missing fields (undefined) leave the stored value untouched.
-    let changed = false;
+    // Missing fields (undefined) leave the stored value untouched, and only
+    // the fields sent are written (merged into a fresh read of the record).
+    const patch: UserPatch = {};
     if (apiKey === null) {
-      delete user.encApiKey;
-      changed = true;
+      patch.encApiKey = null;
     } else if (typeof apiKey === 'string') {
       const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
-      user.encApiKey = await encrypt(apiKey, key);
-      changed = true;
+      patch.encApiKey = await encrypt(apiKey, key);
     }
-    if (typeof tourSeenAt === 'string') {
-      user.tourSeenAt = tourSeenAt;
-      changed = true;
-    }
-    if (changed) await putUser(env.BOWER_KV, user);
+    if (typeof tourSeenAt === 'string') patch.tourSeenAt = tourSeenAt;
+    const user =
+      Object.keys(patch).length === 0
+        ? await getUser(env.BOWER_KV, userId)
+        : await updateUser(env.BOWER_KV, userId, patch);
+    if (user === undefined) throw unauthenticated();
 
     return c.json({ hasApiKey: user.encApiKey !== undefined });
   });

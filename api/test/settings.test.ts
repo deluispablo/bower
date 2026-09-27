@@ -7,7 +7,14 @@ import { GOOGLE_REVOKE_URL } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
-import { incrQuota, keys, putPushSub, putUser } from '../src/store.js';
+import {
+  incrQuota,
+  keys,
+  listVaultIds,
+  putPushSub,
+  putUser,
+  updateUser,
+} from '../src/store.js';
 import type { User } from '../src/types.js';
 
 /**
@@ -342,6 +349,36 @@ describe('DELETE /me', () => {
     expect(me.status).toBe(401);
   });
 
+  it('keeps the account deleted when a stale write re-creates its record', async () => {
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    const user = await seedUser({
+      vault: {
+        folderId: 'FOLDER_ID',
+        inboxFolderId: 'FOLDER_ID',
+        name: 'Bower',
+      },
+      encApiKey: await encrypt(API_KEY, key),
+    });
+    const google = revokeStub();
+    const cookie = await sessionCookie();
+
+    expect((await deleteMe(google.fetchImpl, cookie)).status).toBe(204);
+
+    // A request that read the whole record before the deletion (another
+    // location's cached copy) writes it back afterwards, index included.
+    await kv.put(keys.user(USER_ID), JSON.stringify(user));
+    await kv.put(keys.email(EMAIL), USER_ID);
+    // A request racing the deletion through the merge helper writes nothing.
+    expect(
+      await updateUser(kv, USER_ID, { tourSeenAt: '2026-01-02T00:00:00.000Z' }),
+    ).toBeUndefined();
+
+    const me = await getMe(google.fetchImpl, cookie);
+    expect(me.status).toBe(401);
+    expect((await me.json<ErrorBody>()).error.code).toBe('unauthenticated');
+    expect(await listVaultIds(kv)).not.toContain(USER_ID);
+  });
+
   it('still deletes and answers 204 when the revoke call fails', async () => {
     await seedUser();
     const google = revokeStub(500);
@@ -350,7 +387,7 @@ describe('DELETE /me', () => {
     const response = await deleteMe(google.fetchImpl, await sessionCookie());
 
     expect(response.status).toBe(204);
-    expect(await allKeys()).toEqual([]);
+    expect(await allKeys()).toEqual([keys.deleted(USER_ID)]);
     // Only the error code is logged, never the token.
     const logged = errors.mock.calls.flat().map(String).join(' ');
     expect(logged).toContain('revoke failed: google_error');
