@@ -11,6 +11,8 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `allow:<email>` | `'1'` | none | the operator, outside this module | `isAllowed` |
 | `run:<id>` | `Run` (the latest ingest) | none | `putRun` | `getRun` |
 | `lintrun:<id>` | `Run` (the latest scheduled lint) | none | `putRun(…, 'lint')` | `getRun(…, 'lint')` |
+| `runticket:<id>` | `RunTicket` (`{ hash, expiresAt }`: the SHA-256 of the current ingest's ticket, never the ticket) | 55 min (`RUN_TICKET_TTL_MS`) | `issueRunTicket` (`POST /process`) | `checkRunTicket` (runner routes); deleted by a `done`/`failed` report |
+| `lintticket:<id>` | `RunTicket`, for the current lint | 55 min | `issueRunTicket` (`POST /runner/lint/dispatch`) | `checkRunTicket`; deleted by a `done`/`failed` report |
 | `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
 | `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` (deleted by `deletePushSub`, `DELETE /push/subscribe`, and `sendPush` on a 404/410) |
 | `drivetoken:<id>` | `DriveToken` (cached Drive access token) | token lifetime − 60 s, at least 60 s (set by `drive.ts`) | `putDriveToken` | `getDriveToken` |
@@ -22,7 +24,7 @@ Notes:
 - `<id>` is always a `User.id`.
 - `<email>` is lower-cased and trimmed before use as a key, so lookups are case-insensitive.
 - `quota` has no atomic increment in KV: `incrQuota` reads, increments and writes back. Two requests racing on the same user and date can undercount by one. Accepted as a soft per-user daily limit, not a billing figure.
-- `deleteUserData` first writes the `deleted:<id>` tombstone, then removes every `user:`, `run:`, `lintrun:`, `quota:<id>:*`, `push:<id>:*`, `drivetoken:<id>` and `sessiongen:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user. The tombstone holds no personal data (the key is a random id) and stays, so a record a stale write re-creates after the deletion is never treated as a user again. Ids are never reused: signing in again after a deletion creates a new account with a new id.
+- `deleteUserData` first writes the `deleted:<id>` tombstone, then removes every `user:`, `run:`, `lintrun:`, `runticket:`, `lintticket:`, `quota:<id>:*`, `push:<id>:*`, `drivetoken:<id>` and `sessiongen:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user. The tombstone holds no personal data (the key is a random id) and stays, so a record a stale write re-creates after the deletion is never treated as a user again. Ids are never reused: signing in again after a deletion creates a new account with a new id.
 - Revocation state (`sessiongen:`, `deleted:`) lives outside `user:<id>`, in keys no other route writes. A route that changes the user record goes through `updateUser`, which re-reads the record and merges only the fields it changes, so a request holding an older copy of the record cannot write back fields it did not touch. KV is eventually consistent: a read in another location can be up to about 60 s old, so a sign-out everywhere or a deletion can take that long to reach every location.
 - `deleteDriveToken` also drops `drivetoken:<id>` on its own, used by `GET /drive/token?fresh=1` (see below) to force a fresh mint.
 
@@ -140,14 +142,14 @@ The template is bundled into the Worker at build time: `api/scripts/bundle-templ
 
 Starts one agent run for the signed-in user's vault. Requires the session cookie; no request body. The app calls it after Add and Tell Bower, and when the user presses Process.
 
-The Worker sends a `repository_dispatch` to the operator's instance repo (`GITHUB_REPO`, authenticated with `GITHUB_TOKEN`) with `event_type: "ingest"` and `client_payload: { "vault_id": "<id>" }`. The `vault_id` is the user's id: each user has one vault, and the runner fetches its credentials with `GET /runner/vaults/:id`.
+The Worker sends a `repository_dispatch` to the operator's instance repo (`GITHUB_REPO`, authenticated with `GITHUB_TOKEN`) with `event_type: "ingest"` and `client_payload: { "vault_id": "<id>", "ticket": "<ticket>" }`. The `vault_id` is the user's id: each user has one vault, and the runner fetches its credentials with `GET /runner/vaults/:id`. The `ticket` is this run's credential for the runner routes (see [Runner endpoints](#runner-endpoints)): 32 random bytes, base64url. Only its SHA-256 is stored, under `runticket:<id>`, before the dispatch; it replaces the previous run's.
 
 In order:
 
 1. No user or no vault: 401 or 409, nothing else happens.
 2. If the stored run is `queued` or `running` and not stale, it is returned as is: no new dispatch, nothing counted. See the staleness table below for when a run is stale. A stale run does not block: it is stored as `failed` with `error: "stale"` first (so it is never silently replaced), then a new run is dispatched below.
 3. If today's count (UTC date) has reached `DAILY_RUN_LIMIT`, the answer is 429.
-4. The dispatch is sent. If GitHub does not answer 204, the answer is 502 and nothing is stored or counted.
+4. The run's ticket is minted and its hash stored, then the dispatch is sent. If GitHub does not answer 204, the ticket is deleted again, the answer is 502 and nothing else is stored or counted.
 5. A new run `{ state: "queued", kind: "ingest", requestedAt, runId }` is stored under `run:<id>`, today's count goes up by one, and the run is returned.
 
 Response: `{ "run": Run }`, status 202, both for a new run and for the run already in progress.
@@ -203,17 +205,35 @@ Response: `{ "run": Run | null, "stale": boolean }`, status 200.
 
 ## Runner endpoints
 
-Called by the GitHub Actions runner of the instance repo, never by the app. Every route under `/runner/` requires `Authorization: Bearer <BOWER_API_KEY>`, compared in constant time; anything else is a 401 `unauthorized`. `:id` is the user id, the `vault_id` that `POST /process` dispatches. Nothing here logs the key, a token, the user's API key, file names or summaries.
+Called by the GitHub Actions runner of the instance repo, never by the app (`api/src/runner.ts`, `api/src/run-ticket.ts`). Two credentials, each sent as `Authorization: Bearer <credential>`; anything else is a 401 `unauthorized`. `:id` is the user id, the `vault_id` of the dispatch. Nothing here logs a key, a ticket, a token, the user's API key, file names or summaries.
+
+- **A run ticket** for `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status`. Each run gets its own: `POST /process` mints one for an ingest, `POST /runner/lint/dispatch` one per vault for a lint, and sends it in the `repository_dispatch`. The Worker keeps only its SHA-256 (`runticket:<id>`, `lintticket:<id>`) and compares hashes in constant time. A ticket works only for its own `:id` and its own kind of run (an ingest's ticket cannot report a lint, nor the other way round), and stops working when the run reports `done` or `failed`, when a newer run of the same kind on the same vault gets a ticket, or 55 min after it was minted (`RUN_TICKET_TTL_MS`: the 25 min queued window plus the 30 min running window).
+- **The operator key `BOWER_API_KEY`**, compared in constant time, for `POST /runner/lint/dispatch` only. While the Worker var `RUNNER_ACCEPT_LEGACY_KEY` is `1`, a transition flag that is off by default, it is also accepted wherever a ticket is, and by `GET /runner/vaults`, so an instance repo whose workflows predate run tickets keeps working (`docs/runbook.md`, "Upgrading to run tickets"). With the flag off, the key is a 401 there.
+
+### `POST /runner/lint/dispatch`
+
+Starts the weekly health check. Called by `lint.yml`'s `dispatch` job with `BOWER_API_KEY`, on its schedule or by hand. Body optional: none or `{}` for every user with a vault (`listVaultIds`), or `{ "vaultId": "<user id>" }` for one. For each vault, in turn: a ticket is minted and its hash stored under `lintticket:<id>`; a `repository_dispatch` is sent with `event_type: "bower-lint"` and `client_payload: { "vault_id": "<id>", "ticket": "<ticket>" }`; and a `{ state: "queued", kind: "lint", requestedAt, runId }` run is stored under `lintrun:<id>`. One vault's failed dispatch does not stop the others: its ticket is deleted and nothing is stored for it.
+
+Each vault costs one GitHub call (an outgoing request) and four KV operations. The Workers free plan allows 50 outgoing requests per incoming one, so one call starts at most 50 health checks there; past that, the dispatches fail and the answer is a 502.
+
+Response, status 200: `{ "dispatched": <number> }`.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 400 | `bad_request` | The body is not empty, `{}` or `{ "vaultId": "<non-empty string>" }` |
+| 401 | `unauthorized` | Missing or wrong operator key (a run ticket is refused too) |
+| 404 | `not_found` | `vaultId` names no user, or a user without a vault |
+| 502 | `dispatch` | GitHub did not accept at least one dispatch; the message says how many of how many |
 
 ### `GET /runner/vaults`
 
-The id of every user who has a vault, so the scheduled lint (`agent/workflows/lint.yml`) can run once per vault. The Worker pages through the `user:` keys (`listVaultIds`); users without a vault yet are left out.
+Legacy: only while `RUNNER_ACCEPT_LEGACY_KEY` is `1`, for the old `lint.yml` whose `list` job still calls it. The id of every user who has a vault. The Worker pages through the `user:` keys (`listVaultIds`); users without a vault yet are left out.
 
 Response, status 200: `{ "vaults": [{ "id": "<user id>" }] }` (an empty array when nobody has a vault). Ids only: never an email, a folder id or a token.
 
 | Status | `error.code` | When |
 | --- | --- | --- |
-| 401 | `unauthorized` | Missing or wrong runner key |
+| 401 | `unauthorized` | Missing or wrong operator key, or the legacy flag is off |
 
 ### `GET /runner/vaults/:id`
 
@@ -230,9 +250,9 @@ What one run needs:
 
 | Status | `error.code` | When |
 | --- | --- | --- |
-| 401 | `unauthorized` | Missing or wrong runner key |
+| 401 | `unauthorized` | Missing, retired or expired ticket, or a ticket for another vault (or the operator key while the legacy flag is off) |
 | 404 | `not_found` | No user with that id, or the user has no vault yet |
-| 409 | `reauth` | Google refused the user's refresh token (`invalid_grant`). The user is flagged `needsReauth` (the app asks them to sign in again); the runner reports `failed` with this reason and stops. A 409, not a 401, so it is not mistaken for a bad runner key |
+| 409 | `reauth` | Google refused the user's refresh token (`invalid_grant`). The user is flagged `needsReauth` (the app asks them to sign in again); the runner reports `failed` with this reason and stops. A 409, not a 401, so it is not mistaken for a bad ticket |
 | 502 | `google_error` | Any other Google failure |
 
 ### `POST /runner/vaults/:id/status`
@@ -255,14 +275,14 @@ A report with `quarantined` and/or `refused` but no `processed` is still valid.
 The stored run of that kind is updated and takes the report's `kind`: an ingest under `run:<id>`, a lint under `lintrun:<id>`. A lint report never reads or writes `run:<id>`, so `GET /status`, `POST /process` and the app's Process button ignore it. Without a stored run of that kind, one is started with `requestedAt` set to now.
 
 - `running`: `state` and `startedAt` (now) are set. A run that is already `running` keeps its `startedAt`. Outcome fields of an earlier attempt (`finishedAt`, `summary`, `processed`, `quarantined`, `refused`, `error`) are dropped.
-- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed`, `quarantined`, `refused` and `error` become exactly the report's (absent when the report has none). Then the user's devices get a push notification (see [Web push](#web-push)). For an ingest: `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. For a lint: `Health check ready`, or `Health check failed` for `failed`, never a count. A push failure never fails the report.
+- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed`, `quarantined`, `refused` and `error` become exactly the report's (absent when the report has none). The run's ticket is deleted: it can fetch nothing and report nothing more. Then the user's devices get a push notification (see [Web push](#web-push)). For an ingest: `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. For a lint: `Health check ready`, or `Health check failed` for `failed`, never a count. A push failure never fails the report.
 
 Response: `{ "run": Run }`, status 200.
 
 | Status | `error.code` | When |
 | --- | --- | --- |
 | 400 | `bad_request` | The body is not a JSON object matching the table above |
-| 401 | `unauthorized` | Missing or wrong runner key |
+| 401 | `unauthorized` | Missing, retired or expired ticket, a ticket for another vault, or one for the other kind of run (or the operator key while the legacy flag is off) |
 | 404 | `not_found` | No user with that id, or the user has no vault yet |
 
 ## Web push
