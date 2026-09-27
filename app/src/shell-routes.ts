@@ -18,6 +18,9 @@ const BARE_PATHS = new Set([
   '/welcome',
 ]);
 
+/** The Bower tab (#317), which replaced `/tell`. */
+export const BOWER_PATH = '/bower';
+
 export function usesShell(path: string): boolean {
   return !BARE_PATHS.has(path);
 }

@@ -11,6 +11,7 @@ import {
 } from '../src/components/shell-slots.js';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
+import { bowerUrlFor } from '../src/routes/tell-redirect.js';
 import { usesShell } from '../src/shell-routes.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
@@ -119,22 +120,28 @@ afterEach(() => {
 });
 
 describe('Layout', () => {
-  it('renders the four bottom nav links, the current one marked, no Health', () => {
+  it('renders the four tabs, the current one marked, no Health', () => {
     location.path = '/add';
     mount();
-    const links = Array.from(
-      root.querySelectorAll<HTMLAnchorElement>('.bottom-nav a'),
-    );
+    const nav = query('nav.bottom-nav');
+    expect(nav.getAttribute('aria-label')).toBe('Primary');
+    const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>('a'));
     expect(links.map((a) => a.textContent)).toEqual([
       'Home',
+      'Notes',
       'Add',
-      'Tell',
-      'Settings',
+      'Bower',
+    ]);
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '/',
+      '/notes',
+      '/add',
+      '/bower',
     ]);
     expect(links.map((a) => a.getAttribute('aria-current'))).toEqual([
       null,
-      'page',
       null,
+      'page',
       null,
     ]);
     for (const link of links) {
@@ -170,6 +177,17 @@ describe('Layout', () => {
     expect(sidebar.textContent).toContain('you@example.com');
     expect(sidebar.querySelector('[role="tree"]')).not.toBeNull();
     expect(root.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('keeps Settings reachable from the drawer and the sidebar', () => {
+    mount();
+    expect(
+      query('nav[aria-label="Your notes"] a[href="/settings"]').textContent,
+    ).toBe('Settings');
+    openDrawer();
+    expect(query('[role="dialog"] a[href="/settings"]').textContent).toBe(
+      'Settings',
+    );
   });
 
   it('opens the drawer as a modal dialog and closes it on Escape', () => {
@@ -262,8 +280,25 @@ describe('usesShell', () => {
   });
 
   it('is true for every other route, so those keep the bottom nav', () => {
-    for (const path of ['/', '/add', '/tell', '/settings', '/note/id-1']) {
+    for (const path of [
+      '/',
+      '/notes',
+      '/add',
+      '/bower',
+      '/tell',
+      '/settings',
+      '/note/id-1',
+    ]) {
       expect(usesShell(path)).toBe(true);
     }
+  });
+});
+
+describe('bowerUrlFor', () => {
+  it('sends /tell to /bower, keeping the query string', () => {
+    expect(bowerUrlFor({})).toBe('/bower');
+    expect(bowerUrlFor({ text: '[[Shopping list]] ' })).toBe(
+      '/bower?text=%5B%5BShopping+list%5D%5D+',
+    );
   });
 });

@@ -97,7 +97,7 @@ export function Tell() {
   const { query } = useLocation();
 
   // Prefilled once, e.g. from the health check's "Ask Bower to fix these"
-  // (`/tell?text=…`, #148): read only on mount, so retyping never fights it.
+  // (`/bower?text=…`, #148; old `/tell` links redirect here): read only on mount, so retyping never fights it.
   const [text, setText] = useState(() => query.text ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);

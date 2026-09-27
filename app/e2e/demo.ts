@@ -61,6 +61,14 @@ export async function navigate(page: Page, name: RegExp): Promise<void> {
   await visible(page.getByRole('link', { name })).click();
 }
 
+/** Opens Settings: a sidebar row on desktop; on the phone, a row in the
+ * drawer behind the menu button (#317). */
+export async function openSettings(page: Page): Promise<void> {
+  const menu = page.getByRole('button', { name: 'Your notes' });
+  if (await menu.isVisible()) await menu.click();
+  await navigate(page, /^Settings$/);
+}
+
 /**
  * Saves the screen as `e2e/screenshots/<project>/<name>.png` (uploaded as a
  * CI artifact). With `BOWER_README_SHOTS=1` (`pnpm e2e:shots`) the desktop

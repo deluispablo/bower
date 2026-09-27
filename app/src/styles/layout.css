@@ -478,6 +478,17 @@ button.page-bare-back {
   text-transform: uppercase;
 }
 
+/* The Notes tab (#317, `routes/notes.tsx`): the explorer as a screen, so
+   it takes the content column's own padding instead of its drawer insets. */
+.explorer-page .explorer-filter {
+  margin: 0 0 var(--space-2);
+}
+
+.explorer-page .explorer-rows,
+.explorer-page .explorer-tree {
+  padding: 0;
+}
+
 .explorer-tree {
   flex: 1;
   min-height: 0;
