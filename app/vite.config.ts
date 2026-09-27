@@ -23,8 +23,10 @@ export default defineConfig({
       filename: 'sw.ts',
       injectManifest: {
         // The app shell only; the Worker API and Drive itself are never
-        // cached offline.
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // cached offline. `woff2` covers the self-hosted fonts under
+        // public/fonts/ (#136), precached the same way as the rest of the
+        // shell.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
       },
       manifest: {
         name: 'Bower',
