@@ -1,39 +1,60 @@
+/*
+ * The push permission bottom sheet (#39, restyled in #148): the same
+ * bottom-sheet-on-mobile / card-on-desktop pattern as the Tidying up sheet
+ * (`bower-working.css`), centred, with the bird singing on top.
+ */
+
 .push-prompt {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-3);
-  margin: var(--space-3) auto 0;
-  padding: var(--space-4);
-  max-width: 28rem;
+  padding: var(--space-6) var(--space-4)
+    calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
   background: var(--color-surface);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  text-align: center;
+  border-top: 1px solid var(--color-border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-md);
+  animation: push-prompt-in var(--motion-base) var(--ease-out);
+}
+
+.push-prompt-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-lg);
 }
 
 .push-prompt-text {
   margin: 0;
-  font-weight: var(--weight-medium);
-}
-
-.push-prompt-hint {
-  margin: 0;
+  max-width: 26rem;
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
+  line-height: var(--leading-body);
 }
 
 .push-prompt-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 22rem;
+  margin-top: var(--space-1);
 }
 
 .push-prompt-button {
-  min-height: 44px;
+  min-height: 48px;
   padding: var(--space-2) var(--space-4);
   background: var(--color-brand);
   color: var(--color-on-brand);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   font-weight: var(--weight-medium);
   cursor: pointer;
 }
@@ -49,7 +70,6 @@
 
 .push-prompt-button-secondary {
   background: none;
-  border: 1px solid var(--color-border-strong);
   color: var(--color-text);
 }
 
@@ -57,4 +77,46 @@
   margin: 0;
   color: var(--color-danger);
   font-size: var(--text-sm);
+}
+
+@media (min-width: 900px) {
+  .push-prompt {
+    top: calc(var(--space-16) + var(--space-3));
+    right: var(--space-4);
+    bottom: auto;
+    left: auto;
+    width: 360px;
+    padding: var(--space-6) var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    animation-name: push-card-in;
+  }
+}
+
+@keyframes push-prompt-in {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes push-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .push-prompt {
+    animation: none;
+  }
 }
