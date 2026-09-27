@@ -335,3 +335,61 @@ export function parseFrontmatter(text: string): Frontmatter {
   }
   return { data, body: lines.slice(end + 1).join('\n') };
 }
+
+/** A string or number/boolean value, formatted for plain display; anything
+ * else (a mapping, a list, an empty or blank string) has no display form. */
+function toDisplayString(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return undefined;
+}
+
+export interface NoteProperties {
+  tags: string[];
+  created?: string;
+  source?: string;
+}
+
+/**
+ * The note screen's properties row (spec §6 row Note, issue #144): tags,
+ * created date and source, each present only when the frontmatter has it.
+ * `data` is frontmatter data as `parseFrontmatter` returns it; `tags` is
+ * read from the raw value directly (a list or a space/comma separated
+ * string), not only from an already-normalised array, so this works whether
+ * or not the caller normalised it first.
+ */
+export function propertiesFor(data: Record<string, unknown>): NoteProperties {
+  return {
+    tags: normalizeTags(data.tags),
+    created: toDisplayString(data.created),
+    source: toDisplayString(data.source),
+  };
+}
+
+export interface OutlineHeading {
+  id: string;
+  text: string;
+  depth: 2 | 3;
+}
+
+/**
+ * The note screen's outline (spec §5.2, issue #144): every `h2`/`h3` in a
+ * note's rendered HTML (`RenderedNote.html`), in document order, with its id
+ * (headings already get one from the renderer's `slugify`; the sanitizer
+ * then prefixes it `user-content-`, see `html.ts`'s `HEADING_ID_PREFIX`) and
+ * its text. Needs a DOM (`DOMParser`); tests run under the `jsdom`
+ * environment (see this file's test's `@vitest-environment` comment).
+ */
+export function outlineOf(html: string): OutlineHeading[] {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return Array.from(doc.querySelectorAll('h2, h3')).map((heading) => ({
+    id: heading.id,
+    text: heading.textContent?.trim() ?? '',
+    depth: heading.tagName === 'H3' ? 3 : 2,
+  }));
+}
