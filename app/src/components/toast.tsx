@@ -1,56 +1,35 @@
 /**
- * A single, minimal toast: bottom of the screen, above the bottom nav,
- * auto-hides. No library, no queue — the caller owns the text and bumps
- * `messageKey` whenever it should (re)appear, even for the same text.
- *
- * An optional `linkHref` (spec §6, Home done row) adds a "See" link — the
- * done toast points it at the Answers folder or the last filed note, when
- * its id is known.
+ * The one toast (issues #216, #304): bottom of the screen, above the bottom
+ * nav, with an optional link and a Close. Mounted once, in the shell
+ * (`layout.tsx`); what it shows and for how long lives in `toast-store.ts`,
+ * so mounting it again on a route change never brings a toast back.
  */
 
-import { useEffect, useState } from 'preact/hooks';
+import type { JSX } from 'preact';
 
-const DEFAULT_DURATION_MS = 5_000;
+import '../styles/toast.css';
+import { dismissToast, useToast } from '../toast-store.js';
 
-export interface ToastProps {
-  /** Text to show, or `null` for nothing to show yet. */
-  message: string | null;
-  /** Bumped by the caller each time `message` should (re)appear. */
-  messageKey: number;
-  /** Milliseconds before it auto-hides. */
-  duration?: number;
-  /** Destination for the trailing link, or absent for no link. */
-  linkHref?: string;
-  /** The link's own text. */
-  linkLabel?: string;
-}
-
-export function Toast({
-  message,
-  messageKey,
-  duration = DEFAULT_DURATION_MS,
-  linkHref,
-  linkLabel = 'See',
-}: ToastProps) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (messageKey === 0 || message === null) return;
-    setVisible(true);
-    const timer = setTimeout(() => setVisible(false), duration);
-    return () => clearTimeout(timer);
-  }, [messageKey, duration, message]);
-
-  if (!visible || message === null) return null;
+export function Toast(): JSX.Element | null {
+  const toast = useToast();
+  if (toast === null) return null;
 
   return (
     <div class="toast" role="status" aria-live="polite">
-      <span class="toast-message">{message}</span>
-      {linkHref !== undefined && (
-        <a class="toast-link" href={linkHref}>
-          {linkLabel}
+      <span class="toast-message">{toast.message}</span>
+      {toast.link !== undefined && (
+        <a class="toast-link" href={toast.link.href}>
+          {toast.link.label}
         </a>
       )}
+      <button
+        type="button"
+        class="toast-close"
+        aria-label="Close"
+        onClick={dismissToast}
+      >
+        ×
+      </button>
     </div>
   );
 }

@@ -1,9 +1,10 @@
 /**
  * The sheet that holds the processing animation (#38, redesigned in #147): a
  * bottom sheet on mobile, a card under the header on desktop
- * (`styles/bower-working.css`). It shows while a run is queued or running
- * and for 3 s after it ends (also for a failure, a stale run, or the day's
- * quota running out), unless the user closed it (× or Escape). A non-modal
+ * (`styles/bower-working.css`). It shows while a run is queued or running,
+ * through `done` until the run store goes back to idle (8 s, or sooner when
+ * closed), and for 3 s after a failure, a stale run, or the day's quota
+ * running out, unless the user closed it (× or Escape). A non-modal
  * dialog: no focus trap, the rest of the app stays usable.
  *
  * While a run is queued or running it also shows "n of m filed" with a bar
@@ -16,9 +17,9 @@
  * spec A.3/A.5), under the summary: `run.quarantined` and `run.refused`,
  * either, both or neither.
  *
- * The caller (`process-button.tsx`) owns `open`: it opens the sheet when a
- * run starts and when the header button is tapped during a run, and closes
- * it on dismiss.
+ * The run store (`run-store.tsx`, #304) owns `open`: the sheet opens by
+ * itself once per run, never because a screen mounted again, and when the
+ * header button is tapped during a run; it closes on dismiss.
  */
 
 import type { JSX } from 'preact';
@@ -31,13 +32,14 @@ import { progressFor } from '../run-progress.js';
 import { BowerWorking, workingLabel } from './bower-working.js';
 import type { WorkingState } from './bower-working.js';
 
-/** How long the sheet stays up after a run ends. */
+/** How long the sheet stays up after a run stops without finishing. */
 export const SHEET_LINGER_MS = 3_000;
 
 /**
- * Whether the sheet shows: always while queued/running, for
- * `SHEET_LINGER_MS` after done/failed/stale/quota, never once dismissed and
- * never for idle. `sinceMs` is the time since the phase began.
+ * Whether the sheet shows: always while queued/running/done (the run store
+ * ends `done` itself), for `SHEET_LINGER_MS` after failed/stale/quota, never
+ * once dismissed and never for idle. `sinceMs` is the time since the phase
+ * began.
  */
 export function sheetVisible(
   phase: RunPhase,
@@ -48,8 +50,8 @@ export function sheetVisible(
   switch (phase) {
     case 'queued':
     case 'running':
-      return true;
     case 'done':
+      return true;
     case 'failed':
     case 'stale':
     case 'quota':
@@ -142,12 +144,7 @@ export function WorkingSheet({
   // Re-render once the linger time is up so the sheet can go away.
   const [, setTick] = useState(0);
   useEffect(() => {
-    if (
-      phase !== 'done' &&
-      phase !== 'failed' &&
-      phase !== 'stale' &&
-      phase !== 'quota'
-    ) {
+    if (phase !== 'failed' && phase !== 'stale' && phase !== 'quota') {
       return;
     }
     const timer = setTimeout(() => {

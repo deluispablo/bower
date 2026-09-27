@@ -6,9 +6,20 @@
  * reports one. Polling pauses while the tab is hidden and resumes on
  * `visibilitychange`/`focus`.
  *
- * Mounted in `app.tsx`, inside `VaultProvider`: a run that finishes `done`
- * drops the cached vault index and refreshes it, since the vault content
- * may have changed underneath.
+ * Mounted in `app.tsx`, inside `VaultProvider`: a run that finishes `done`,
+ * or goes `stale` after the Worker's timeout, drops the cached vault index
+ * and refreshes it, since the vault content may have changed underneath.
+ *
+ * After a run (#304): `done` goes back to `idle` as soon as the working
+ * sheet is dismissed, or after `DONE_LINGER_MS`, whichever comes first; the
+ * result message stays on the state for the sheet, and is announced once,
+ * in the toast (`toast-store.ts`). A run that was already over when the app
+ * first heard of it (a reload hours later) is not announced at all: it goes
+ * straight to `idle`.
+ *
+ * The store also owns whether the working sheet is open, so no component
+ * mounting again (a route change) can bring it back: it opens by itself
+ * once per run id, and otherwise only when asked (`openSheet`).
  *
  * The state machine is a pure reducer (`reduce`) so every transition is
  * unit-testable without rendering anything; the provider below is just
@@ -29,7 +40,10 @@ import { ApiError, getStatus, startProcess } from './api.js';
 import type { Run } from './api.js';
 import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
+import { ANSWERS_FOLDER } from './home.js';
+import { folderHref } from './navigation.js';
 import { useSession } from './session.js';
+import { showToast } from './toast-store.js';
 import { isHidden } from './vault-index.js';
 import { invalidateAfterRun, useVault } from './vault-store.js';
 
@@ -41,6 +55,10 @@ export interface RunState {
   run: Run | null;
   message?: string;
   retryAfter?: number;
+  /** Whether the working sheet is open. */
+  sheetOpen: boolean;
+  /** The run the sheet last opened by itself for (`runKey`), or `null`. */
+  sheetRunId: string | null;
 }
 
 export type RunEvent =
@@ -50,9 +68,16 @@ export type RunEvent =
   | { type: 'status'; run: Run | null; stale: boolean }
   | { type: 'poll-timeout' }
   | { type: 'done-timeout' }
+  | { type: 'sheet-opened' }
+  | { type: 'sheet-dismissed' }
   | { type: 'reset' };
 
-const IDLE_STATE: RunState = { phase: 'idle', run: null };
+const IDLE_STATE: RunState = {
+  phase: 'idle',
+  run: null,
+  sheetOpen: false,
+  sheetRunId: null,
+};
 const STALE_MESSAGE = 'Bower did not answer; try again';
 const GENERIC_FAILED_MESSAGE = 'Something went wrong';
 
@@ -62,6 +87,17 @@ function phaseForRun(run: Run): RunPhase {
   if (run.state === 'done') return 'done';
   return 'failed';
 }
+
+/**
+ * How a run is told apart from the one before: the runner's id when the
+ * Worker has one, otherwise the time it was asked for (always set).
+ */
+export function runKey(run: Run): string {
+  return run.runId ?? run.requestedAt;
+}
+
+/** How long `done` lasts before going back to `idle` by itself. */
+export const DONE_LINGER_MS = 8_000;
 
 /**
  * "N files processed" / "1 file processed" / "Nothing new to process": the
@@ -108,42 +144,112 @@ export function nextPollDelay(
   return POLL_INTERVAL_MS;
 }
 
+/**
+ * The sheet fields once `run` is in flight: open, the first time this run
+ * is seen; otherwise as they were (a dismissed sheet stays dismissed).
+ */
+function sheetForActive(
+  state: RunState,
+  run: Run,
+): Pick<RunState, 'sheetOpen' | 'sheetRunId'> {
+  const key = runKey(run);
+  if (key === state.sheetRunId) {
+    return { sheetOpen: state.sheetOpen, sheetRunId: state.sheetRunId };
+  }
+  return { sheetOpen: true, sheetRunId: key };
+}
+
+function isActive(phase: RunPhase): boolean {
+  return phase === 'queued' || phase === 'running';
+}
+
+/** `done` over: back to `idle`, the sheet closed, the run and its message kept. */
+function afterDone(state: RunState): RunState {
+  return { ...state, phase: 'idle', sheetOpen: false };
+}
+
 /** The state machine, pure: every transition the store can make. */
 export function reduce(state: RunState, event: RunEvent): RunState {
+  const sheet = { sheetOpen: state.sheetOpen, sheetRunId: state.sheetRunId };
   switch (event.type) {
-    case 'process-started':
-      return { phase: phaseForRun(event.run), run: event.run };
+    case 'process-started': {
+      const phase = phaseForRun(event.run);
+      const opened = isActive(phase) ? sheetForActive(state, event.run) : sheet;
+      return { phase, run: event.run, ...opened };
+    }
     case 'process-quota':
       return {
         phase: 'quota',
         run: state.run,
         message: event.message,
         retryAfter: event.retryAfter,
+        ...sheet,
       };
     case 'process-failed':
-      return { phase: 'failed', run: state.run, message: event.message };
+      return {
+        phase: 'failed',
+        run: state.run,
+        message: event.message,
+        ...sheet,
+      };
     case 'status': {
       if (event.stale) {
-        return { phase: 'stale', run: event.run, message: STALE_MESSAGE };
+        return {
+          phase: 'stale',
+          run: event.run,
+          message: STALE_MESSAGE,
+          ...sheet,
+        };
       }
       if (event.run === null) {
-        return { phase: 'idle', run: null };
+        return { ...IDLE_STATE, sheetRunId: state.sheetRunId };
       }
       const run = event.run;
-      const message =
-        run.state === 'done'
-          ? resultMessage(run)
-          : run.state === 'failed'
-            ? (run.error ?? GENERIC_FAILED_MESSAGE)
-            : undefined;
-      return { phase: phaseForRun(run), run, message };
+      const phase = phaseForRun(run);
+      if (isActive(phase)) {
+        return {
+          phase,
+          run,
+          message: undefined,
+          ...sheetForActive(state, run),
+        };
+      }
+      if (phase === 'done') {
+        const message = resultMessage(run);
+        // Only a run this session saw in flight finishes as `done`; one that
+        // was already over when it was first heard of is just the last run.
+        if (!isActive(state.phase) && state.phase !== 'done') {
+          return {
+            phase: 'idle',
+            run,
+            message,
+            sheetOpen: false,
+            sheetRunId: state.sheetRunId,
+          };
+        }
+        return { phase, run, message, ...sheet };
+      }
+      return {
+        phase,
+        run,
+        message: run.error ?? GENERIC_FAILED_MESSAGE,
+        ...sheet,
+      };
     }
     case 'poll-timeout':
-      return { phase: 'stale', run: state.run, message: STALE_MESSAGE };
+      return {
+        phase: 'stale',
+        run: state.run,
+        message: STALE_MESSAGE,
+        ...sheet,
+      };
     case 'done-timeout':
-      return state.phase === 'done'
-        ? { phase: 'idle', run: state.run, message: state.message }
-        : state;
+      return state.phase === 'done' ? afterDone(state) : state;
+    case 'sheet-opened':
+      return state.sheetOpen ? state : { ...state, sheetOpen: true };
+    case 'sheet-dismissed':
+      if (state.phase === 'done') return afterDone(state);
+      return state.sheetOpen ? { ...state, sheetOpen: false } : state;
     case 'reset':
       return IDLE_STATE;
     default: {
@@ -172,6 +278,10 @@ export function pendingCount(files: DriveFile[]): number {
 
 export interface RunStore extends RunState {
   process: () => Promise<void>;
+  /** Opens the working sheet (a tap on the pill during or after a run). */
+  openSheet: () => void;
+  /** Closes the working sheet; a `done` run goes back to `idle` with it. */
+  dismissSheet: () => void;
 }
 
 const RunContext = createContext<RunStore | undefined>(undefined);
@@ -212,21 +322,38 @@ export function RunProvider({ children }: RunProviderProps) {
     // interval effect below takes over from there.
   }, [hasVault, poll]);
 
-  // `done` shows for 3 s, then the button label goes back to idle.
+  // `done` lasts `DONE_LINGER_MS` at most, then goes back to idle (closing
+  // the sheet first gets there sooner: `sheet-dismissed`).
   useEffect(() => {
     if (state.phase !== 'done') return;
     const timer = setTimeout(() => {
       apply({ type: 'done-timeout' });
-    }, 3_000);
+    }, DONE_LINGER_MS);
     return () => clearTimeout(timer);
   }, [state.phase, apply]);
 
-  // On `done`: the vault content may have changed underneath, so drop the
-  // cached index and refresh it. Runs once per transition into `done` (the
-  // effect depends on `state.run`, which does not change again while the
-  // phase stays `done`).
+  // A finished run announces itself once, in the toast, with a link to the
+  // answers. Keyed on the run so a second `done` for the same run (or this
+  // effect running again) never shows it twice.
+  const announcedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (state.phase !== 'done') return;
+    if (state.phase !== 'done' || state.run === null) return;
+    const key = runKey(state.run);
+    if (announcedRef.current === key) return;
+    announcedRef.current = key;
+    showToast(state.message ?? resultMessage(state.run), {
+      href: folderHref(ANSWERS_FOLDER),
+      label: 'See',
+    });
+  }, [state.phase, state.run, state.message]);
+
+  // On `done`, and on `stale` after the Worker's timeout (the run may have
+  // filed part of the inbox before it stopped answering): the vault content
+  // may have changed underneath, so drop the cached index and refresh it.
+  // Runs once per transition (the effect depends on `state.run`, which does
+  // not change again while the phase stays put).
+  useEffect(() => {
+    if (state.phase !== 'done' && state.phase !== 'stale') return;
     void invalidateAfterRun().then(() => refresh());
   }, [state.phase, state.run, refresh]);
 
@@ -315,7 +442,15 @@ export function RunProvider({ children }: RunProviderProps) {
     }
   }, [apply]);
 
-  const value: RunStore = { ...state, process };
+  const openSheet = useCallback((): void => {
+    apply({ type: 'sheet-opened' });
+  }, [apply]);
+
+  const dismissSheet = useCallback((): void => {
+    apply({ type: 'sheet-dismissed' });
+  }, [apply]);
+
+  const value: RunStore = { ...state, process, openSheet, dismissSheet };
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>;
 }
