@@ -16,11 +16,14 @@
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 
+import type { DriveFile } from '../drive.js';
 import { folderHref, folderOf } from '../navigation.js';
+import { noteTitle } from '../note-title.js';
 import { openSwitcher } from '../switcher-store.js';
 import type { PinnedItem } from '../vault-store.js';
 import { Bird } from './bird.js';
 import { IconClose, IconFolder, IconNote } from './icons.js';
+import { useNoteTitles } from './use-note-titles.js';
 import '../styles/pinned-section.css';
 
 const TILE_LIMIT = 8;
@@ -48,6 +51,7 @@ function folderMeta(path: string, count: number): string {
 function tileFor(
   item: PinnedItem,
   noteCounts: ReadonlyMap<string, number>,
+  titles: ReadonlyMap<string, string>,
   onUnpinNote: (id: string) => Promise<void>,
   onUnpinFolder: (path: string) => Promise<void>,
 ): Tile {
@@ -55,7 +59,7 @@ function tileFor(
     return {
       key: item.file.id,
       href: `/note/${item.file.id}`,
-      name: item.file.name.replace(/\.md$/i, ''),
+      name: titles.get(item.file.id) ?? noteTitle(item.file),
       meta: noteMeta(item.file.path),
       icon: <IconNote />,
       unpin: () => onUnpinNote(item.file.id),
@@ -93,12 +97,20 @@ export function PinnedSection({
   // The tile that just finished unpinning: kept on screen, showing the
   // bird's `done` pose, even once `items` itself has already dropped it.
   const [pending, setPending] = useState<Tile | null>(null);
+  const shown = items.slice(0, TILE_LIMIT);
+  const noteFiles: DriveFile[] = shown
+    .filter(
+      (item): item is Extract<PinnedItem, { kind: 'note' }> =>
+        item.kind === 'note',
+    )
+    .map((item) => item.file);
+  const titles = useNoteTitles(noteFiles);
 
   if (items.length === 0) return null;
 
-  const live = items
-    .slice(0, TILE_LIMIT)
-    .map((item) => tileFor(item, noteCounts, onUnpinNote, onUnpinFolder));
+  const live = shown.map((item) =>
+    tileFor(item, noteCounts, titles, onUnpinNote, onUnpinFolder),
+  );
   const tiles =
     pending !== null && !live.some((tile) => tile.key === pending.key)
       ? [...live, pending]
