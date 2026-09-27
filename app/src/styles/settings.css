@@ -22,6 +22,131 @@
   font-size: var(--text-lg);
 }
 
+/* Account card: the bird, the name/email, the Drive link. */
+
+.settings-account {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.settings-account-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.settings-account-name {
+  margin: 0;
+  font-weight: var(--weight-medium);
+}
+
+.settings-account-email {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.settings-account-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.settings-account-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-link);
+}
+
+.settings-account-links .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Look: the segmented theme control. */
+
+.settings-segmented {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.settings-segment {
+  flex: 1;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings-segment:hover {
+  background: var(--color-surface-hover);
+}
+
+.settings-segment[aria-checked='true'] {
+  border-color: var(--color-brand);
+  color: var(--color-link);
+}
+
+.settings-segment:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Advanced: a row that only navigates (or, without its route yet, sits
+   disabled), and the informational "Weekly health check" row. */
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-row:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-row-label {
+  font-size: var(--text-base);
+}
+
+.settings-static-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 44px;
+}
+
+.settings-static-value {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .settings-hint {
   margin: 0;
   color: var(--color-text-muted);
@@ -63,29 +188,6 @@
 .settings-field input[type='password']:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
-}
-
-.settings-select {
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--color-text);
-  font: inherit;
-}
-
-.settings-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 44px;
-  cursor: pointer;
-}
-
-.settings-toggle input {
-  width: 20px;
-  height: 20px;
 }
 
 .settings-actions {
