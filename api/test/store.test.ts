@@ -6,15 +6,21 @@ import {
   deletePushSub,
   findUserByEmail,
   getRun,
+  getSessionGeneration,
   getUser,
   incrQuota,
   isAllowed,
+  isDeleted,
   keys,
   listPushSubs,
+  listUsers,
+  listVaultIds,
   putDriveToken,
   putPushSub,
   putRun,
+  putSessionGeneration,
   putUser,
+  updateUser,
 } from '../src/store.js';
 import type { PushSubscription, Run, User } from '../src/types.js';
 
@@ -61,6 +67,8 @@ beforeEach(async () => {
     'quota:',
     'push:',
     'drivetoken:',
+    'sessiongen:',
+    'deleted:',
   ];
   await Promise.all(
     prefixes.map(async (prefix) => {
@@ -94,6 +102,56 @@ describe('users', () => {
 
   it('returns undefined for an email with no user', async () => {
     expect(await findUserByEmail(kv, 'nobody@example.test')).toBeUndefined();
+  });
+});
+
+describe('updateUser', () => {
+  it('writes only the patched fields over a fresh read of the record', async () => {
+    await putUser(kv, testUser('user-9', 'merge@example.test'));
+    // Two writers that each read the record before either wrote.
+    await updateUser(kv, 'user-9', { tourSeenAt: '2026-01-02T00:00:00.000Z' });
+    const merged = await updateUser(kv, 'user-9', { encApiKey: 'v1.iv.key' });
+
+    expect(merged?.tourSeenAt).toBe('2026-01-02T00:00:00.000Z');
+    expect(merged?.encApiKey).toBe('v1.iv.key');
+    expect(await getUser(kv, 'user-9')).toEqual(merged);
+  });
+
+  it('removes a field patched to null and leaves missing ones alone', async () => {
+    await putUser(kv, {
+      ...testUser('user-10', 'remove@example.test'),
+      encApiKey: 'v1.iv.key',
+      needsReauth: true,
+    });
+
+    await updateUser(kv, 'user-10', { needsReauth: null });
+
+    const stored = await getUser(kv, 'user-10');
+    expect(stored?.needsReauth).toBeUndefined();
+    expect(stored?.encApiKey).toBe('v1.iv.key');
+  });
+
+  it('writes nothing for a missing or deleted user', async () => {
+    expect(
+      await updateUser(kv, 'missing-user', { tourSeenAt: 'x' }),
+    ).toBeUndefined();
+    expect(await getUser(kv, 'missing-user')).toBeUndefined();
+
+    const user = testUser('user-11', 'gone@example.test');
+    await putUser(kv, user);
+    await kv.put(keys.deleted('user-11'), '1');
+    expect(
+      await updateUser(kv, 'user-11', { tourSeenAt: 'x' }),
+    ).toBeUndefined();
+    expect(await getUser(kv, 'user-11')).toEqual(user);
+  });
+});
+
+describe('session generation', () => {
+  it('reads 0 until "Sign out everywhere" stores one', async () => {
+    expect(await getSessionGeneration(kv, 'user-12')).toBe(0);
+    await putSessionGeneration(kv, 'user-12', 2);
+    expect(await getSessionGeneration(kv, 'user-12')).toBe(2);
   });
 });
 
@@ -195,6 +253,7 @@ describe('deleteUserData', () => {
       keys.quotaPrefix('user-8'),
       keys.pushPrefix('user-8'),
       keys.driveToken('user-8'),
+      keys.sessionGen('user-8'),
     ];
     for (const prefix of prefixesThatMustBeEmpty) {
       const listed = await kv.list({ prefix });
@@ -202,6 +261,25 @@ describe('deleteUserData', () => {
     }
 
     expect(await isAllowed(kv, 'leaving@example.test')).toBe(true);
+    expect(await isDeleted(kv, 'user-8')).toBe(true);
+  });
+
+  it('leaves a record a stale write re-created out of every listing', async () => {
+    const user: User = {
+      ...testUser('user-13', 'zombie@example.test'),
+      vault: {
+        folderId: 'FOLDER_ID',
+        inboxFolderId: 'FOLDER_ID',
+        name: 'Bower',
+      },
+    };
+    await putUser(kv, user);
+    await deleteUserData(kv, 'user-13');
+    // A request that read the record before the deletion writes it back.
+    await kv.put(keys.user('user-13'), JSON.stringify(user));
+
+    expect(await listVaultIds(kv)).not.toContain('user-13');
+    expect((await listUsers(kv)).map((u) => u.id)).not.toContain('user-13');
   });
 
   it('is safe to call for a user id that was never stored', async () => {

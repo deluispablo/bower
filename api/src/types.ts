@@ -27,8 +27,10 @@ export interface User {
   /** ISO-8601; when the user finished or skipped the first-run tour. */
   tourSeenAt?: string;
   /**
-   * Bumped by "Sign out everywhere" (`POST /auth/logout-all`); a session
-   * cookie signed with a lower generation is rejected. Absent reads as 0.
+   * Legacy, read only: where "Sign out everywhere" kept the generation
+   * before it moved to its own `sessiongen:<id>` key (see `store.ts`).
+   * Nothing writes it any more; a stored value still counts, so a sign-out
+   * made before the move is not forgotten. Absent reads as 0.
    */
   sessionGeneration?: number;
 }
