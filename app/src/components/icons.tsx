@@ -195,6 +195,34 @@ export function IconClock(): JSX.Element {
   );
 }
 
+/** A plain page: the help sheets' "Photo, files, your Drive, a link" (#330). */
+export function IconFile(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4" />
+    </Svg>
+  );
+}
+
+/** A shield: Rules on the Bower help sheet (#330). */
+export function IconShield(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+    </Svg>
+  );
+}
+
+/** A play triangle: the help sheets' "Show me around" (#330). */
+export function IconPlay(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M7 5l12 7-12 7z" />
+    </Svg>
+  );
+}
+
 export function IconSend(): JSX.Element {
   return (
     <Svg>

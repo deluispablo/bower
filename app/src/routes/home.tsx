@@ -5,7 +5,7 @@
  * and the desktop sidebar's button), the Inbox and Answers count cards, and
  * Recent. Desktop adds the Health and Notes cards and an inline Tell Bower
  * composer next to Recent, reusing `TellComposer` (#146) exactly as
- * `routes/tell.tsx` does. The first-run tour (#149, `components/tour.tsx`)
+ * `routes/tell.tsx` does. The first-run tour (#330, `components/help-sheet.tsx`)
  * opens over it once per account, or when Settings asks for a replay.
  */
 
@@ -27,7 +27,7 @@ import {
 import { PinnedSection } from '../components/pinned-section.js';
 import { ProcessButton } from '../components/process-button.js';
 import { TellComposer } from '../components/tell-composer.js';
-import { Tour } from '../components/tour.js';
+import { Tour } from '../components/help-sheet.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
 import { findReport, isReportNew } from '../health-report.js';

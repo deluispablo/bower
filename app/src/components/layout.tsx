@@ -30,11 +30,14 @@ import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
 import { useSession } from '../session.js';
-import { BOWER_PATH, helpStepFor, isInnerScreen } from '../shell-routes.js';
+import { BOWER_PATH, helpScreenFor, isInnerScreen } from '../shell-routes.js';
 import { effectiveTheme, setTheme } from '../theme.js';
+import { replayTour } from '../tour-store.js';
+import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
 import { DemoBanner } from './demo-banner.js';
 import { Explorer, ExplorerDrawer, useHealthIsNew } from './explorer.js';
+import { HelpSheet } from './help-sheet.js';
 import { useShellSlots } from './shell-slots.js';
 import {
   IconChat,
@@ -51,18 +54,27 @@ import { OfflineBanner } from './offline-banner.js';
 import { RunSheets } from './run-sheets.js';
 import { Switcher } from './switcher.js';
 import { Toast } from './toast.js';
-import { Tour } from './tour.js';
 
 interface NavLink {
   href: string;
   label: string;
   Icon: () => JSX.Element;
-  /** The first-run tour's anchor (`components/tour.tsx`). */
-  tour?: 'add' | 'tell';
+  /** The tab a help sheet sits over (`components/help-sheet.tsx`). */
+  tour?: HelpTab;
 }
 
-const HOME: NavLink = { href: '/', label: 'Home', Icon: IconHome };
-const NOTES: NavLink = { href: '/notes', label: 'Notes', Icon: IconFolder };
+const HOME: NavLink = {
+  href: '/',
+  label: 'Home',
+  Icon: IconHome,
+  tour: 'home',
+};
+const NOTES: NavLink = {
+  href: '/notes',
+  label: 'Notes',
+  Icon: IconFolder,
+  tour: 'notes',
+};
 const ADD: NavLink = {
   href: '/add',
   label: 'Add',
@@ -74,7 +86,7 @@ const BOWER: NavLink = {
   href: BOWER_PATH,
   label: 'Bower',
   Icon: IconChat,
-  tour: 'tell',
+  tour: 'bower',
 };
 const SETTINGS: NavLink = {
   href: '/settings',
@@ -129,11 +141,10 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
-  const { path } = useLocation();
+  const { path, route } = useLocation();
   const { back, crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // "?" (About this screen): the tour, at the step for this tab, until
-  // each tab has its own help sheet (#330).
+  // "?" (About this screen): the help sheet for the screen on show (#330).
   const [helpOpen, setHelpOpen] = useState(false);
   const inner = isInnerScreen(path);
   const headRef = useRef<HTMLDivElement>(null);
@@ -200,7 +211,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
 
   return (
     <div class={aside === null ? 'shell' : 'shell shell-with-aside'}>
-      <nav class="shell-sidebar" aria-label="Your notes">
+      <nav class="shell-sidebar" aria-label="Your notes" data-tour="notes">
         <Explorer
           variant="sidebar"
           healthIsNew={healthIsNew}
@@ -281,10 +292,15 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         <ExplorerDrawer healthIsNew={healthIsNew} onClose={closeDrawer} />
       )}
       {helpOpen && (
-        <Tour
-          startAt={helpStepFor(path)}
-          onEnd={() => {
+        <HelpSheet
+          screen={helpScreenFor(path)}
+          onClose={() => {
             setHelpOpen(false);
+          }}
+          onShowMeAround={() => {
+            setHelpOpen(false);
+            replayTour();
+            route('/');
           }}
         />
       )}
