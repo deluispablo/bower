@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildHeaders } from '../scripts/generate-headers.mjs';
+import { apiUrlWarning, buildHeaders } from '../scripts/generate-headers.mjs';
 
 const API_URL = 'https://api.example.com';
 const API_ORIGIN = 'https://api.example.com';
@@ -15,16 +15,29 @@ function directive(headers: string, name: string): string | undefined {
 }
 
 describe('buildHeaders', () => {
-  it('throws instead of writing a placeholder when VITE_API_URL is missing', () => {
-    expect(() =>
-      buildHeaders({ apiUrl: undefined, googleApiKey: undefined }),
-    ).toThrow(/VITE_API_URL/);
-  });
-
-  it('throws when VITE_API_URL is not a URL', () => {
+  it('throws when VITE_API_URL is set but not a URL', () => {
     expect(() =>
       buildHeaders({ apiUrl: 'not-a-url', googleApiKey: undefined }),
     ).toThrow(/VITE_API_URL/);
+  });
+
+  it("does not throw when VITE_API_URL is unset, and falls back to connect-src 'self' alone (matching api.ts's own same-origin default)", () => {
+    const headers = buildHeaders({
+      apiUrl: undefined,
+      googleApiKey: undefined,
+    });
+
+    expect(directive(headers, 'connect-src')).toBe(
+      `connect-src 'self' https://www.googleapis.com`,
+    );
+  });
+
+  it('treats an empty VITE_API_URL the same as unset', () => {
+    const headers = buildHeaders({ apiUrl: '', googleApiKey: undefined });
+
+    expect(directive(headers, 'connect-src')).toBe(
+      `connect-src 'self' https://www.googleapis.com`,
+    );
   });
 
   it('puts the real API origin in connect-src, no placeholder left behind', () => {
@@ -84,5 +97,18 @@ describe('buildHeaders', () => {
       'Permissions-Policy: camera=(), microphone=(), geolocation=()',
     );
     expect(lines).toContain('Referrer-Policy: no-referrer');
+  });
+});
+
+describe('apiUrlWarning', () => {
+  it('warns once when VITE_API_URL is unset or empty', () => {
+    expect(apiUrlWarning(undefined)).toMatch(/VITE_API_URL/);
+    expect(apiUrlWarning('')).toMatch(/VITE_API_URL/);
+  });
+
+  it('has nothing to warn about once VITE_API_URL is set', () => {
+    expect(apiUrlWarning(API_URL)).toBeNull();
+    // A value that isn't a URL is `buildHeaders`'s job to reject, not a warning.
+    expect(apiUrlWarning('not-a-url')).toBeNull();
   });
 });
