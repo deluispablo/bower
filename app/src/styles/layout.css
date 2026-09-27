@@ -80,6 +80,35 @@ summary:focus-visible {
   min-width: 0;
 }
 
+/*
+ * No shell (spec §14, app.tsx): sign-in, Not invited, Privacy, Terms and
+ * the onboarding — no top bar, no bottom nav, no drawer. Each screen keeps
+ * its own spacing (`.auth-screen`, `.onb`, `.privacy`); Privacy and Terms
+ * add their own back link, `.page-bare-back`.
+ */
+.page-bare {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+.page-bare-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  margin: var(--space-2) 0 0 var(--space-2);
+  color: var(--color-heading);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+}
+
+.page-bare-back .icon {
+  transform: rotate(180deg);
+}
+
 .icon {
   width: 22px;
   height: 22px;
@@ -135,6 +164,36 @@ summary:focus-visible {
   min-width: 0;
 }
 
+/* The wordmark grows to fill the bar so the pill lands flush right instead
+   of bunching up next to it on the left (Audit finding 5). */
+.topbar-brand {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The screen title (Add, Tell Bower, Settings), phone only: the crumb slot
+   content in place of the wordmark. Desktop shows nothing here (unchanged);
+   the route's own `.screen-title` heading in the content column covers it
+   there instead. */
+.topbar-title {
+  margin: 0;
+  padding-left: var(--space-1);
+  overflow: hidden;
+  color: var(--color-heading);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Add, Tell Bower, Settings: the same title as `.topbar-title`, but in the
+   content column, where the header (`.topbar-title`, phone only) has none
+   to give it (desktop, 900 px and wider — see the media query below). */
+.screen-title {
+  display: none;
+}
+
 /* Phone note screen (#144): the back link (crumb slot content) replaces the
    wordmark; the full breadcrumb (also crumb slot content, `routes/note.tsx`)
    only shows once there is room for it, in the desktop header below. */
@@ -168,6 +227,12 @@ summary:focus-visible {
 
 .topbar-actions {
   display: flex;
+}
+
+/* Flush to the right edge (spec §14), after the actions slot whether or not
+   it holds anything. */
+.topbar-pill {
+  margin-left: auto;
 }
 
 .topbar .process-offline-reason {
@@ -542,11 +607,18 @@ summary:focus-visible {
 
   .topbar-brand,
   .topbar-back,
+  .topbar-title,
   .topbar-actions,
   .menu-button,
   .bottom-nav,
   .drawer {
     display: none;
+  }
+
+  /* The header shows nothing where the phone title sat; the route's own
+     `.screen-title` heading in the content column takes over instead. */
+  .screen-title {
+    display: block;
   }
 
   .topbar-crumb .breadcrumb {
@@ -724,6 +796,13 @@ summary:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+/* Phone: `.screen-title` is hidden (the crumb slot has the title instead),
+   leaving only the sent-history button — keep it at the right edge rather
+   than let `space-between` fall back to flex-start for a single child. */
+.tell-head .icon-button {
+  margin-left: auto;
 }
 
 .tell-feed {

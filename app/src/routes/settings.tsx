@@ -5,6 +5,7 @@ import { useLocation } from 'preact-iso';
 import type { Me } from '../api.js';
 import { ApiError, deleteAccount, loginUrl, updateSettings } from '../api.js';
 import { Bird } from '../components/bird.js';
+import { useShellSlot } from '../components/shell-slots.js';
 import { Toggle } from '../components/toggle.js';
 import { getPref, setPref } from '../prefs.js';
 import type { ThemePref } from '../prefs.js';
@@ -134,6 +135,10 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
     </div>
   );
 }
+
+/** The phone top bar's title (spec §14): a stable element, so it never
+ * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
+const CRUMB = <h1 class="topbar-title">Settings</h1>;
 
 const THEME_OPTIONS: Array<{ value: ThemePref; label: string }> = [
   { value: 'system', label: 'Match my device' },
@@ -362,13 +367,15 @@ export function Settings() {
     getPref('autoProcessOnAdd'),
   );
 
+  useShellSlot('crumb', CRUMB);
+
   if (!me) return null;
 
   const version = import.meta.env.VITE_APP_VERSION ?? __APP_VERSION__;
 
   return (
     <section class="settings">
-      <h1>Settings</h1>
+      <h1 class="screen-title">Settings</h1>
 
       <div class="settings-section settings-account">
         <Bird state="looking" size={48} />

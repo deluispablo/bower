@@ -5,6 +5,7 @@ import { useLocation } from 'preact-iso';
 import { linkNoteName } from '../add.js';
 import { Bird } from '../components/bird.js';
 import { IconNote } from '../components/icons.js';
+import { useShellSlot } from '../components/shell-slots.js';
 import { createTextFile, listFolder, upload } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
 import { getPref, setPref } from '../prefs.js';
@@ -14,6 +15,10 @@ import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
 
 import '../styles/add.css';
+
+/** The phone top bar's title (spec §14): a stable element, so it never
+ * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
+const CRUMB = <h1 class="topbar-title">Add</h1>;
 
 type QueueStatus = 'waiting' | 'uploading' | 'done' | 'failed';
 
@@ -66,6 +71,8 @@ export function Add() {
   const [autoProcess, setAutoProcess] = useState(() =>
     getPref('autoProcessOnAdd'),
   );
+
+  useShellSlot('crumb', CRUMB);
 
   useEffect(() => {
     queueRef.current = queue;
@@ -238,7 +245,7 @@ export function Add() {
 
   return (
     <section class="add-screen">
-      <h1>Add</h1>
+      <h1 class="screen-title">Add</h1>
 
       <input
         ref={fileInputRef}
