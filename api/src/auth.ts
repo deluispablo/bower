@@ -1,7 +1,7 @@
 /**
  * Sign-in with Google and the session it creates: `/auth/login`,
- * `/auth/callback`, `/auth/logout`, `/me`, and the `requireSession`
- * middleware later routes reuse.
+ * `/auth/callback`, `/auth/logout`, `/auth/logout-all`, `/me`, and the
+ * `requireSession` middleware later routes reuse.
  *
  * Nothing here logs emails, codes or tokens; error messages are generic.
  */
@@ -29,6 +29,7 @@ import type { FetchLike } from './google.js';
 import { rateLimit, requireSameOrigin } from './security.js';
 import {
   SESSION_TTL_SECONDS,
+  SessionError,
   clearSessionCookie,
   readCookie,
   readSessionCookie,
@@ -45,6 +46,7 @@ import {
   isAllowed,
   putUser,
 } from './store.js';
+import type { SessionClaims } from './session.js';
 import type { User } from './types.js';
 
 /** Cookie holding the OAuth `state` and PKCE verifier between login and callback. */
@@ -117,24 +119,70 @@ function unauthenticated(): HttpError {
   return new HttpError(401, 'unauthenticated', 'Not signed in');
 }
 
+function sessionExpired(cause?: unknown): HttpError {
+  return new HttpError(
+    401,
+    'session_expired',
+    'Your session has ended, sign in again',
+    cause === undefined ? undefined : { cause },
+  );
+}
+
 /**
- * Requires a valid session cookie and sets `c.get('userId')`. Any failure
- * (no cookie, bad signature, expired) is a 401 `unauthenticated`.
+ * The user a request's session cookie belongs to. Throws a 401: `unauthenticated`
+ * for no cookie, a bad or malformed one, or a user that no longer exists
+ * (deleted account); `session_expired` for a session past its absolute
+ * lifetime (30 days from sign-in) or signed before the user's latest
+ * "Sign out everywhere" (`gen` below `sessionGeneration`).
  */
-export const requireSession: MiddlewareHandler<
-  AppEnv & { Variables: { userId: string } }
-> = async (c, next) => {
-  const token = readSessionCookie(c.req.header('cookie'));
+async function authenticate(
+  cookieHeader: string | undefined,
+  env: Env,
+): Promise<User> {
+  const token = readSessionCookie(cookieHeader);
   if (token === undefined) throw unauthenticated();
-  let userId: string;
+  let claims: SessionClaims;
   try {
-    ({ userId } = await verifySession(token, c.get('env').SESSION_SECRET));
+    claims = await verifySession(token, env.SESSION_SECRET);
   } catch (err) {
+    if (err instanceof SessionError && err.code === 'expired') {
+      throw sessionExpired(err);
+    }
     throw new HttpError(401, 'unauthenticated', 'Not signed in', {
       cause: err,
     });
   }
-  c.set('userId', userId);
+  const user = await getUser(env.BOWER_KV, claims.userId);
+  if (user === undefined) throw unauthenticated();
+  if (claims.gen < (user.sessionGeneration ?? 0)) throw sessionExpired();
+  return user;
+}
+
+/**
+ * Clears a session cookie the request carried but that was rejected, so the
+ * browser stops sending it, then rethrows `err`.
+ */
+function rejectSession<E extends AppEnv>(c: Context<E>, err: unknown): never {
+  if (readSessionCookie(c.req.header('cookie')) !== undefined) {
+    c.header('Set-Cookie', clearSessionCookie(), { append: true });
+  }
+  throw err;
+}
+
+/**
+ * Requires a valid, current session (see `authenticate`) and sets
+ * `c.get('userId')`. Any failure is a 401 that also clears the cookie.
+ */
+export const requireSession: MiddlewareHandler<
+  AppEnv & { Variables: { userId: string } }
+> = async (c, next) => {
+  let user: User;
+  try {
+    user = await authenticate(c.req.header('cookie'), c.get('env'));
+  } catch (err) {
+    rejectSession(c, err);
+  }
+  c.set('userId', user.id);
   await next();
 };
 
@@ -261,7 +309,12 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     delete user.needsReauth;
     await putUser(kv, user);
 
-    const session = await signSession({ userId: user.id }, env.SESSION_SECRET);
+    // Always a brand-new session (fresh `sid` and `iat`), never the one the
+    // browser may already hold, carrying the user's current generation.
+    const session = await signSession(
+      { userId: user.id, gen: user.sessionGeneration ?? 0 },
+      env.SESSION_SECRET,
+    );
     c.header('Set-Cookie', sessionCookie(session, SESSION_TTL_SECONDS), {
       append: true,
     });
@@ -274,31 +327,35 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     return c.body(null, 204);
   });
 
-  // Without a valid session, a `bower_not_invited` cookie answers once with
-  // the address that was turned away, then is cleared; otherwise 401.
-  auth.get('/me', async (c, next) => {
-    const env = c.get('env');
-    const cookieHeader = c.req.header('cookie');
-    const token = readSessionCookie(cookieHeader);
-    if (token !== undefined) {
-      try {
-        await verifySession(token, env.SESSION_SECRET);
-        return next();
-      } catch {
-        // Not a usable session: fall through to the not-invited cookie.
-      }
+  // "Sign out everywhere": every session signed so far, on any device,
+  // stops working, this one included.
+  auth.post('/auth/logout-all', requireSameOrigin, async (c) => {
+    let user: User;
+    try {
+      user = await authenticate(c.req.header('cookie'), c.get('env'));
+    } catch (err) {
+      rejectSession(c, err);
     }
-    const email = await readNotInvited(cookieHeader, env);
-    if (email === undefined) return next();
-    c.header('Set-Cookie', notInvitedCookie('', 0));
-    return c.json({ notInvited: true, email });
+    user.sessionGeneration = (user.sessionGeneration ?? 0) + 1;
+    await putUser(c.get('env').BOWER_KV, user);
+    c.header('Set-Cookie', clearSessionCookie());
+    return c.body(null, 204);
   });
 
-  auth.get('/me', requireSession, async (c) => {
+  // Without a valid session, a `bower_not_invited` cookie answers once with
+  // the address that was turned away, then is cleared; otherwise 401.
+  auth.get('/me', async (c) => {
     const env = c.get('env');
-    const userId = c.get('userId');
-    const user = await getUser(env.BOWER_KV, userId);
-    if (user === undefined) throw unauthenticated();
+    let user: User;
+    try {
+      user = await authenticate(c.req.header('cookie'), c.get('env'));
+    } catch (err) {
+      const email = await readNotInvited(c.req.header('cookie'), env);
+      if (email === undefined) rejectSession(c, err);
+      c.header('Set-Cookie', notInvitedCookie('', 0));
+      return c.json({ notInvited: true, email });
+    }
+    const userId = user.id;
     const today = new Date().toISOString().slice(0, 10);
     return c.json({
       email: user.email,
