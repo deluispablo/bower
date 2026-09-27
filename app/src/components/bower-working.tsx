@@ -14,9 +14,9 @@
 import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 
-import { ONCE_STATES } from './bird.js';
-import type { BirdState } from './bird.js';
-import { Bird } from './bird.tsx';
+import { ONCE_STATES } from './bird-classes.js';
+import type { BirdState } from './bird-classes.js';
+import { Bird } from './bird.js';
 
 import '../styles/bower-working.css';
 

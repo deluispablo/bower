@@ -1,7 +1,7 @@
 /**
  * The bird (spec §4): one drawing, every state. The markup is the design
  * canvas's (`docs/design/gen.py`, `BIRD_CORE` and `SCENE`) with its class
- * names; `birdClasses` (`bird.ts`) picks the pose and face classes and
+ * names; `birdClasses` (`bird-classes.ts`) picks the pose and face classes and
  * `styles/bird.css` does all the moving, so no JavaScript timer runs.
  *
  * Every part is always in the markup, props included; CSS hides the ones a
@@ -19,12 +19,12 @@
 import type { JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 
-import { ONCE_STATES, birdClasses } from './bird.js';
-import type { BirdFace, BirdState } from './bird.js';
+import { ONCE_STATES, birdClasses } from './bird-classes.js';
+import type { BirdFace, BirdState } from './bird-classes.js';
 
 import '../styles/bird.css';
 
-export type { BirdFace, BirdState } from './bird.js';
+export type { BirdFace, BirdState } from './bird-classes.js';
 
 export interface BirdProps {
   state: BirdState;

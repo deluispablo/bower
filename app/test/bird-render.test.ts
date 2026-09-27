@@ -4,8 +4,8 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { Bird } from '../src/components/bird.tsx';
-import type { BirdProps } from '../src/components/bird.tsx';
+import { Bird } from '../src/components/bird.js';
+import type { BirdProps } from '../src/components/bird.js';
 
 function mount(props: BirdProps): SVGSVGElement {
   const root = document.createElement('div');

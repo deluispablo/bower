@@ -4,8 +4,8 @@ import {
   BIRD_STATES,
   ONCE_STATES,
   birdClasses,
-} from '../src/components/bird.js';
-import type { BirdFace, BirdState } from '../src/components/bird.js';
+} from '../src/components/bird-classes.js';
+import type { BirdFace, BirdState } from '../src/components/bird-classes.js';
 
 /** The pose class each state plays, as named in docs/design/gen.py. */
 const POSES: Record<BirdState, string> = {
