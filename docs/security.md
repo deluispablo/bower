@@ -28,3 +28,15 @@ The session cookie stays `SameSite=Lax`, so the app and the Worker **must share 
 - [x] Secret hygiene: `api/test/log-hygiene.test.ts` fails if any `console.*` call in `api/src/` passes or interpolates a variable named like a token, secret, key, email, refresh token or cookie. No violation was found when it was added.
 - [x] CI supply chain: every `uses:` in `.github/workflows/ci.yml` and the instance workflows (`agent/workflows/ingest.yml`, `lint.yml`) pinned to a full commit SHA, version in a comment; `pull_request` and `push` runs gated by a `supply-chain` job (`pnpm audit --audit-level=high`, gitleaks); `permissions: contents: read` at the top of `ci.yml`, widened per job only where needed (the `supply-chain` job's PR comments); Dependabot (`.github/dependabot.yml`) weekly for npm (grouped minor/patch) and GitHub Actions.
 - [x] This threat model.
+
+## Accepted audit exceptions
+
+None currently. `pnpm audit --audit-level=high` is clean; the one high that `supply-chain` first caught (below) is resolved, not suppressed.
+
+`pnpm.auditConfig.ignoreGhsas` (the pnpm ≥ 11 mechanism for silencing a specific advisory) does not exist on the pnpm version this repo pins (`packageManager: pnpm@9.15.9`, `engines.pnpm: ^9`): pnpm 9 only understands `auditConfig.ignoreCves`, and the advisory below has no CVE id (`cves: []` in `pnpm audit --json`), so neither key would have worked, config or CLI (pnpm 9's `audit` has no `--ignore` flag either). Bumping the repo to pnpm 11 to gain `ignoreGhsas` was out of scope for closing this one finding.
+
+Instead, `pnpm.overrides.sharp` in the root `package.json` forces `sharp` to `>=0.35.4` (patched) everywhere in the tree:
+
+| Advisory | Path | Fix |
+| --- | --- | --- |
+| `GHSA-g89c-p67h-r497`, `GHSA-2jg2-4ch7-h545` (sharp, libheif, `<0.35.4`) — registered as `GHSA-rgj7-g3m4-5g8c` | `api > @cloudflare/vitest-pool-workers@0.22.0 > miniflare (alpha) > sharp@0.35.2` | `sharp@0.35.4` was already present in the lockfile for another consumer; the override just makes every consumer, including `miniflare`'s, resolve to that one already-patched version instead of carrying a second, vulnerable copy. Full `pnpm test` (218 API tests, exercising the Worker's `vitest-pool-workers` sandbox) passes unchanged on `sharp@0.35.4`. Safe to drop once `@cloudflare/vitest-pool-workers` itself pins a patched `miniflare`/`sharp` and the override becomes redundant. |
