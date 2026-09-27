@@ -10,7 +10,15 @@ import { createErrorHandler } from './errors.js';
 import { createProcessRoutes } from './process.js';
 import { createPushRoutes } from './push-routes.js';
 import { createRunnerRoutes } from './runner.js';
-import { appCors, securityHeaders } from './security.js';
+import {
+  appCors,
+  COOKIE_ROUTES,
+  genericRateLimit,
+  limitBody,
+  requestId,
+  requireJsonBody,
+  securityHeaders,
+} from './security.js';
 import { createSettingsRoutes } from './settings.js';
 import { createStatusRoutes } from './status.js';
 import { createVaultRoutes } from './vault.js';
@@ -26,12 +34,8 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   // CORS preflights included.
   app.use('*', securityHeaders);
 
-  app.use('*', async (c, next) => {
-    const requestId = c.req.header('x-request-id') ?? crypto.randomUUID();
-    c.set('requestId', requestId);
-    c.header('x-request-id', requestId);
-    await next();
-  });
+  // Bounded: a client id outside `[A-Za-z0-9._-]{1,64}` is replaced.
+  app.use('*', requestId);
 
   app.onError(createErrorHandler<AppEnv>());
 
@@ -47,6 +51,18 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
 
   // After the env middleware: the allowed origin is `APP_ORIGIN`.
   app.use('*', appCors());
+
+  // Input limits before any handler reads a body: 64 KB at most (413), and a
+  // write with a body must be JSON (415). No KV involved, so they run first.
+  app.use('*', limitBody);
+  app.use('*', requireJsonBody);
+
+  // The generic per-IP limit on every cookie route, ahead of the strict
+  // per-route limits the routes mount themselves (`/auth/callback`,
+  // `/process`).
+  for (const path of COOKIE_ROUTES) {
+    app.use(path, genericRateLimit);
+  }
 
   app.get('/health', (c) => {
     return c.json({ ok: true, version: c.get('env').APP_VERSION });

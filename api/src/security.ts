@@ -1,11 +1,13 @@
 /**
  * Request hardening shared by every route: CORS for the app's origin only,
- * security headers on every response, the same-origin (CSRF) check for
- * state-changing session routes, and a per-IP rate limit.
+ * security headers on every response, a bounded request id, input limits
+ * (body size, JSON content type), the same-origin (CSRF) check for
+ * state-changing session routes, and per-IP rate limits.
  *
  * See `docs/security.md` for the threat model these serve.
  */
 
+import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import type { Context, MiddlewareHandler } from 'hono';
 
@@ -52,6 +54,82 @@ export const securityHeaders: MiddlewareHandler<AppEnv> = async (c, next) => {
   c.header('Content-Security-Policy', "frame-ancestors 'none'");
 };
 
+/** What a client-supplied `x-request-id` may look like to be kept. */
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+
+/**
+ * The request id for this request: the client's `x-request-id` when it is 1
+ * to 64 characters of `A-Z a-z 0-9 . _ -`, else a fresh UUID. A value that
+ * fails the check is never echoed or logged.
+ */
+export function requestIdFrom(header: string | undefined): string {
+  return header !== undefined && REQUEST_ID_PATTERN.test(header)
+    ? header
+    : crypto.randomUUID();
+}
+
+/**
+ * Sets the `requestId` variable (see `requestIdFrom`) and echoes it in the
+ * `x-request-id` response header. Mounted right after `securityHeaders`, so
+ * every log line and error response carries it.
+ */
+export const requestId: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const id = requestIdFrom(c.req.header('x-request-id'));
+  c.set('requestId', id);
+  c.header('x-request-id', id);
+  await next();
+};
+
+/** Largest request body accepted, in bytes (64 KB). */
+export const MAX_BODY_BYTES = 64 * 1024;
+
+/**
+ * Rejects a request body over `MAX_BODY_BYTES` with a 413
+ * `payload_too_large`, before any handler parses it: on `Content-Length`
+ * when the request declares one, else by counting the streamed body as it
+ * is read (Hono's `bodyLimit`). Requests without a body pass untouched.
+ */
+export const limitBody: MiddlewareHandler<AppEnv> = bodyLimit({
+  maxSize: MAX_BODY_BYTES,
+  onError: () => {
+    throw new HttpError(413, 'payload_too_large', 'Request body too large');
+  },
+});
+
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/** Whether `request` carries a body: a stream that is not declared empty. */
+function carriesBody(request: Request): boolean {
+  return request.body !== null && request.headers.get('content-length') !== '0';
+}
+
+/**
+ * A write (`POST`, `PUT`, `PATCH`, `DELETE`) that carries a body must send
+ * it as `Content-Type: application/json` (parameters such as `charset`
+ * allowed), else a 415 `unsupported_media_type`. Writes that take no body
+ * (`POST /auth/logout`, `POST /auth/logout-all`, `POST /process`,
+ * `DELETE /me`, `DELETE /admin/allow/:email`) send none and are not checked. Also closes
+ * the "simple request" door: a cross-site form can only send
+ * `text/plain`, `multipart/form-data` or `application/x-www-form-urlencoded`.
+ */
+export const requireJsonBody: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (WRITE_METHODS.has(c.req.method) && carriesBody(c.req.raw)) {
+    const type = c.req
+      .header('content-type')
+      ?.split(';')[0]
+      ?.trim()
+      .toLowerCase();
+    if (type !== 'application/json') {
+      throw new HttpError(
+        415,
+        'unsupported_media_type',
+        'Send the request body as application/json',
+      );
+    }
+  }
+  await next();
+};
+
 /** The origin of a `Referer` URL, or `undefined` if it is not a URL. */
 function refererOrigin(referer: string | undefined): string | undefined {
   if (referer === undefined) return undefined;
@@ -78,8 +156,31 @@ export const requireSameOrigin: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
-/** Requests allowed per client IP, per route, per minute. */
+/**
+ * Requests allowed per client IP, per minute, on each of the two strict
+ * routes (`GET /auth/callback`, `POST /process`).
+ */
 export const RATE_LIMIT_PER_MINUTE = 30;
+
+/** Requests allowed per client IP, per minute, across every cookie route. */
+export const GENERIC_RATE_LIMIT_PER_MINUTE = 120;
+
+/**
+ * The routes the browser calls with the session cookie, and so the ones
+ * under the generic limit (mounted by `index.ts`, before each route's own
+ * strict limit). Left out: `/health` and `GET /push/public-key` (public,
+ * no cookie), `/runner/*`, `/admin/*` (bearer keys) and unknown paths.
+ */
+export const COOKIE_ROUTES: readonly string[] = [
+  '/auth/*',
+  '/me',
+  '/drive/token',
+  '/settings',
+  '/vault',
+  '/process',
+  '/status',
+  '/push/subscribe',
+];
 
 /**
  * The client IP as Cloudflare reports it (`cf-connecting-ip`), else the
@@ -127,3 +228,99 @@ export function rateLimit(route: string): MiddlewareHandler<AppEnv> {
     await next();
   };
 }
+
+/** Most client IPs the generic limit tracks at once, per isolate. */
+export const GENERIC_RATE_LIMIT_MAX_KEYS = 10_000;
+
+/** A sliding-window request counter per key, kept in memory. */
+export interface SlidingWindow {
+  /**
+   * Counts one request for `key` at `now` (ms) and answers 0 if it is within
+   * the limit, else the seconds (at least 1) until the oldest counted
+   * request leaves the window. A refused request is not counted.
+   */
+  hit(key: string, now: number): number;
+  /** Forgets every key (tests). */
+  clear(): void;
+  /** How many keys are tracked (tests). */
+  size(): number;
+}
+
+/**
+ * A sliding window of `windowMs` allowing `limit` requests per key, in a
+ * `Map` from key to the timestamps of its counted requests. Each call prunes
+ * the key's expired timestamps and moves the key to the back of the map, so
+ * the front holds the least recently seen keys: idle keys are dropped from
+ * the front on each call, and past `maxKeys` the least recently seen key is
+ * evicted. Pure memory, nothing to fail.
+ */
+export function createSlidingWindow(
+  limit: number,
+  windowMs: number,
+  maxKeys: number,
+): SlidingWindow {
+  const hits = new Map<string, number[]>();
+
+  function pruneIdle(now: number): void {
+    for (const [key, times] of hits) {
+      const newest = times[times.length - 1];
+      if (newest !== undefined && newest > now - windowMs) break;
+      hits.delete(key);
+    }
+  }
+
+  return {
+    hit(key: string, now: number): number {
+      pruneIdle(now);
+      const times = (hits.get(key) ?? []).filter((t) => t > now - windowMs);
+      hits.delete(key);
+      if (times.length >= limit) {
+        hits.set(key, times);
+        const oldest = times[0] ?? now;
+        return Math.max(1, Math.ceil((oldest + windowMs - now) / 1000));
+      }
+      times.push(now);
+      hits.set(key, times);
+      while (hits.size > maxKeys) {
+        const first = hits.keys().next();
+        if (first.done === true) break;
+        hits.delete(first.value);
+      }
+      return 0;
+    },
+    clear(): void {
+      hits.clear();
+    },
+    size(): number {
+      return hits.size;
+    },
+  };
+}
+
+/** The generic limit's window, one per isolate (module scope). */
+export const genericWindow: SlidingWindow = createSlidingWindow(
+  GENERIC_RATE_LIMIT_PER_MINUTE,
+  60_000,
+  GENERIC_RATE_LIMIT_MAX_KEYS,
+);
+
+/**
+ * The generic limit on every cookie route (`COOKIE_ROUTES`): at most
+ * `GENERIC_RATE_LIMIT_PER_MINUTE` requests per client IP in any 60 seconds,
+ * all routes together. Over the limit, the same 429 `rate_limited`, with
+ * `Retry-After` set to the seconds until the oldest counted request leaves
+ * the window.
+ *
+ * In memory (`genericWindow`), not KV: it costs no KV write, so normal use
+ * never eats the free tier's daily writes. Best-effort per isolate: each
+ * Cloudflare isolate counts on its own and forgets on eviction, so a client
+ * spread across isolates gets more. The strict limits stay on KV.
+ */
+export const genericRateLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const retryAfter = genericWindow.hit(clientIp(c), Date.now());
+  if (retryAfter > 0) {
+    c.header('Retry-After', String(retryAfter));
+    throw new HttpError(429, 'rate_limited', 'Too many requests, slow down');
+  }
+  await next();
+};

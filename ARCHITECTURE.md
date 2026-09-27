@@ -118,6 +118,8 @@ See `docs/decisions.md` for the full record, including what else was tried in th
 | One GitHub Actions run | 20 min (`timeout-minutes` in `agent/workflows/*.yml`) | Actions kills the job past this; `run.sh`'s own trap tries to report `failed` first, but a hard kill can pre-empt it |
 | Stale-run unblock | 25 min for a `queued` run with no runner pickup, 30 min for a `running` run with no status report (`QUEUED_STALE_MS`, `RUNNING_STALE_MS` in `api/src/process.ts`) | Longer than the 20 min run cap on purpose, so a normal run never gets pre-empted by its own staleness check; catches a runner that died without reporting |
 | Rate limit | 30 requests/minute per client IP, on `GET /auth/callback` and `POST /process` (`RATE_LIMIT_PER_MINUTE`, `api/src/security.ts`) | Slows abuse of the two public entry points that cost something (a Google token exchange, a workflow dispatch) |
+| Generic rate limit | 120 requests per client IP in any 60 s, across every cookie route; in memory, best-effort per isolate (`GENERIC_RATE_LIMIT_PER_MINUTE`, `api/src/security.ts`) | Caps any one client well above normal use (the busiest minute of Home plus Tidy up is about 16 calls) |
+| Request body | 64 KB, JSON only on writes (`MAX_BODY_BYTES`, `api/src/security.ts`) | Every body the Worker accepts is a small JSON object; anything bigger or of another type is refused before parsing |
 | Runs per user per day | 20 by default (`DAILY_RUN_LIMIT`, `api/src/env.ts`), operator-configurable | The runner spends the operator's Claude subscription; a soft cap keeps one user from exhausting it |
 
 ## Threat model
