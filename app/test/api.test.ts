@@ -347,6 +347,20 @@ describe('updateSettings', () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(init.body as string)).toEqual({ apiKey: null });
   });
+
+  it('sends tourSeenAt alone, without an apiKey', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { hasApiKey: false }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await updateSettings({ tourSeenAt: '2026-09-27T10:00:00.000Z' });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      tourSeenAt: '2026-09-27T10:00:00.000Z',
+    });
+  });
 });
 
 describe('deleteAccount', () => {

@@ -1,7 +1,9 @@
 /**
- * Pure helpers for the onboarding screen. No DOM, no fetch: unit-tested
- * directly.
+ * Pure helpers for the onboarding screen and the first-run tour. No DOM, no
+ * fetch: unit-tested directly.
  */
+
+import type { Me } from './api.js';
 
 const BARE_ID = /^[a-zA-Z0-9_-]+$/;
 const FOLDERS_SEGMENT = /\/folders\/([a-zA-Z0-9_-]+)/;
@@ -36,4 +38,15 @@ export function parseFolderId(input: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Whether Home shows the first-run tour (spec §7): once per account, when it
+ * has a folder and the Worker has no `tourSeenAt` for it, or whenever
+ * Settings › Show me around again asked for a replay (`replay`, a one-shot
+ * flag kept in memory, never a pref).
+ */
+export function shouldShowTour(me: Me, replay: boolean): boolean {
+  if (replay) return true;
+  return me.vault !== null && me.tourSeenAt === undefined;
 }

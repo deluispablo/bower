@@ -129,6 +129,8 @@ export interface Me {
   quota: { used: number; limit: number };
   needsReauth: boolean;
   hasApiKey: boolean;
+  /** ISO-8601; when the first-run tour was finished or skipped. Absent until then. */
+  tourSeenAt?: string;
 }
 
 /**
@@ -186,9 +188,12 @@ export function loginUrl(options: { selectAccount?: boolean } = {}): string {
   return `${API_URL}/auth/login${query}`;
 }
 
+/** A missing field leaves the stored value as it is. */
 export interface UpdateSettingsInput {
   /** A new BYOK Claude API key, or `null` to remove a saved one. */
-  apiKey: string | null;
+  apiKey?: string | null;
+  /** ISO-8601 (`Date.prototype.toISOString()`): the first-run tour was seen. */
+  tourSeenAt?: string;
 }
 
 export interface UpdateSettingsResult {
