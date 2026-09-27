@@ -1,11 +1,20 @@
 /*
- * Reading view of a note. Wrap the output of renderNote in an element with
- * class "markdown"; the properties row (routes/note.tsx) carries its own
- * classes, further down this file.
+ * Reading view of a note (the design's `.prose`, spec §6 row Note, issue
+ * #307 3.5). Wrap the output of renderNote in an element with class
+ * "markdown".
  */
 
 .markdown {
   overflow-wrap: break-word;
+}
+
+/* Reading measure (issue #307, 3.5): 17 px body text at 1.6 line height,
+   wider than the app's own 16 px/1.5 default, matching the Phone-Note and
+   Desktop-Note boards' `.prose`. */
+.markdown p,
+.markdown li {
+  font-size: 1.0625rem; /* 17px */
+  line-height: 1.6;
 }
 
 .markdown h1,
@@ -24,8 +33,11 @@
   font-size: var(--text-2xl);
 }
 
+/* 20px (issue #307, 3.5): the design's `.prose h2` — the note's own
+   headings, not the title, which the header shows once and the renderer
+   never repeats (`markdown/render.ts`'s `dropLeadingTitleHeading`). */
 .markdown h2 {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
 }
 
 .markdown h3 {
@@ -243,29 +255,6 @@
 
 .tags .tag:hover {
   text-decoration: underline;
-}
-
-/*
- * The note screen's properties row (routes/note.tsx, markdown/frontmatter.ts
- * `propertiesFor`): tags as pills (linking to the switcher, #142, with
- * `#tag` prefilled), created date, source — each shown only when present.
- */
-.note-properties {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-4);
-  margin: 0 0 var(--space-6);
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-
-.note-properties .tags {
-  margin: 0;
-}
-
-.note-property-label {
-  margin-right: var(--space-1);
 }
 
 /* `position: relative` anchors the note menu popover (issue #210,

@@ -46,6 +46,14 @@ export interface RenderOptions {
    * there (`hydrate-embeds.ts`).
    */
   transclude?: boolean;
+  /**
+   * The note's own title, as its header already shows it (`routes/note.tsx`,
+   * `file.name` without `.md`). When the body's very first block is a
+   * heading whose text equals it (case-insensitive, ignoring emphasis
+   * markers), that heading is dropped so the title never appears twice
+   * (issue #307). Left undefined, no heading is ever dropped.
+   */
+  title?: string;
 }
 
 const ALLOWED_TAGS = [
@@ -316,6 +324,26 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
   return marked;
 }
 
+/**
+ * `body`, without its leading heading when that heading's text equals
+ * `title` (issue #307: the note header already shows the title once, so a
+ * `# <title>` first line would otherwise repeat it as an H1 inside the
+ * body). Only the note's very first block counts — a heading anywhere else,
+ * even one that happens to match, stays. `undefined` `title` never drops
+ * anything.
+ */
+function dropLeadingTitleHeading(
+  body: string,
+  title: string | undefined,
+): string {
+  if (title === undefined) return body;
+  const match = /^\s*(#{1,6})[ \t]+([^\n]*?)[ \t]*#*[ \t]*(?:\n|$)/.exec(body);
+  if (match === null) return body;
+  const headingText = (match[2] ?? '').replace(/[*_`]+/g, '').trim();
+  if (headingText.toLowerCase() !== title.trim().toLowerCase()) return body;
+  return body.slice(match[0].length);
+}
+
 const plainMarked = new Marked({ gfm: true, breaks: true });
 
 /**
@@ -339,7 +367,10 @@ export function renderNote(
   const tags = Array.isArray(data.tags)
     ? data.tags.filter((tag): tag is string => typeof tag === 'string')
     : [];
-  const html = createMarked(index, options).parse(body, { async: false });
+  const strippedBody = dropLeadingTitleHeading(body, options.title);
+  const html = createMarked(index, options).parse(strippedBody, {
+    async: false,
+  });
   return {
     html: sanitizeHtml(html),
     frontmatter: data,

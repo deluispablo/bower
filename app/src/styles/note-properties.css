@@ -1,0 +1,126 @@
+/*
+ * A note's properties (folder, tags, created, source; issue #307): the
+ * trigger row below 1200 px and the sheet it opens
+ * (`components/note-properties.tsx`). The panel-side "Properties" section
+ * lives in `about-panel.css` instead, since it is part of `AboutPanel`.
+ */
+
+.note-properties-trigger {
+  align-self: flex-start;
+  min-height: 32px;
+  margin: 0 0 var(--space-4);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.note-properties-trigger:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+/* From 1200 px the properties live in the About column instead
+   (`about-panel.css`'s own `.about-properties` rule). */
+@media (min-width: 1200px) {
+  .note-properties-trigger {
+    display: none;
+  }
+}
+
+.note-properties-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgb(7 12 22 / 0.5);
+}
+
+.note-properties-sheet-panel {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 80vh;
+  padding: var(--space-4);
+  padding-bottom: var(--space-6);
+  overflow-y: auto;
+  background: var(--color-sidebar);
+  border-top: 1px solid var(--color-border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-md);
+  outline: none;
+  animation: note-properties-sheet-in var(--motion-base) var(--ease-out);
+}
+
+.note-properties-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.note-properties-sheet-title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.note-properties-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.note-property {
+  color: var(--color-text-muted);
+}
+
+.note-property-folder {
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+.note-property-folder:hover {
+  text-decoration: underline;
+}
+
+.note-property-label {
+  margin-right: var(--space-1);
+}
+
+.note-property-tags {
+  margin: 0;
+}
+
+@keyframes note-properties-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-properties-sheet-panel {
+    animation: none;
+  }
+}
+
+/* From 1200 px the sheet never opens (the trigger is hidden), but guard the
+   panel too in case a viewport crosses the breakpoint while it is open. */
+@media (min-width: 1200px) {
+  .note-properties-sheet {
+    display: none;
+  }
+}

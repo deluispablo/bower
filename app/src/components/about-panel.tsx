@@ -1,6 +1,8 @@
 /**
- * Desktop "About this note" third column (spec §5.2, issue #144): Outline
- * (the rendered note's own headings), Linked mentions (only once
+ * Desktop "About this note" third column (spec §5.2, issue #144): Properties
+ * (folder, tags, created, source — issue #307; the same section a phone or
+ * tablet gets as a sheet instead, below 1200 px, `note-properties.tsx`),
+ * Outline (the rendered note's own headings), Linked mentions (only once
  * `VaultIndex` carries `backlinks`, #150 — it does not yet, so this section
  * never renders today) and In this folder (the note's siblings, current one
  * marked). Filled into the shell through the `aside` slot (`shell-slots.ts`)
@@ -11,8 +13,11 @@ import type { JSX } from 'preact';
 
 import type { DriveFile } from '../drive.js';
 import { outlineOf } from '../markdown/frontmatter.js';
+import type { NoteProperties } from '../markdown/frontmatter.js';
 import { isAppFile } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
+import { hasNoteProperties, NotePropertiesList } from './note-properties.js';
+import type { NoteFolderLink } from './note-properties.js';
 import '../styles/about-panel.css';
 
 function folderOf(path: string): string {
@@ -59,12 +64,18 @@ export interface AboutPanelProps {
   file: DriveFile;
   /** The note's rendered, sanitized HTML (`RenderedNote.html`). */
   html: string;
+  /** Folder, tags, created, source (issue #307); `properties` is the same
+   * object `routes/note.tsx` also hands the phone/tablet sheet. */
+  properties: NoteProperties;
+  folder?: NoteFolderLink;
 }
 
 export function AboutPanel({
   index,
   file,
   html,
+  properties,
+  folder,
 }: AboutPanelProps): JSX.Element {
   const outline = outlineOf(html);
   const backlinks = backlinksFor(index, file.id);
@@ -72,6 +83,13 @@ export function AboutPanel({
 
   return (
     <>
+      {hasNoteProperties(folder, properties) && (
+        <section class="about-section about-properties" aria-label="Properties">
+          <h2 class="about-heading">Properties</h2>
+          <NotePropertiesList folder={folder} properties={properties} />
+        </section>
+      )}
+
       {outline.length > 0 && (
         <section class="about-section" aria-label="Outline">
           <h2 class="about-heading">Outline</h2>

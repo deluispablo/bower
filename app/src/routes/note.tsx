@@ -9,18 +9,25 @@ import { IconChevronRight, IconMore } from '../components/icons.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
 import { NoteMenu } from '../components/note-menu.js';
+import {
+  NotePropertiesSheet,
+  NotePropertiesTrigger,
+  hasNoteProperties,
+} from '../components/note-properties.js';
+import type { NoteFolderLink } from '../components/note-properties.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { isProtectedNote } from '../drive.js';
 import type { SaveOptions } from '../drive.js';
 import { propertiesFor } from '../markdown/frontmatter.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
-import { breadcrumb, folderHref, siblings } from '../navigation.js';
+import { breadcrumb, folderHref, folderOf, siblings } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
 import { runPinAction } from '../pin-action.js';
 import { isAppFile } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
+import { NotFound } from './not-found.js';
 import '../styles/markdown.css';
 
 interface CrumbProps {
@@ -94,6 +101,16 @@ function MoreButton({
   );
 }
 
+/** The note's containing folder as a link (issue #307's "Properties"): its
+ * name and folder-screen href, or `undefined` for a top-level note (there
+ * is nothing to link to — the breadcrumb's own "Home" already covers it). */
+function folderLinkFor(path: string): NoteFolderLink | undefined {
+  const parent = folderOf(path);
+  if (parent === '') return undefined;
+  const name = parent.slice(parent.lastIndexOf('/') + 1);
+  return { name, href: folderHref(parent) };
+}
+
 type NoteLoad =
   | { status: 'loading' }
   | { status: 'ready'; id: string; rendered: RenderedNote }
@@ -122,6 +139,8 @@ export function Note() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [appendOpen, setAppendOpen] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
 
   // Leaving a note (after confirming, if there were unsaved changes) drops
   // its edit, so coming back shows the note rather than a stale editor.
@@ -129,6 +148,8 @@ export function Note() {
     setEditing(null);
     setEditError(null);
     setMenuOpen(false);
+    setAppendOpen(false);
+    setPropertiesOpen(false);
   }, [id]);
 
   const file = index?.byId.get(id);
@@ -147,7 +168,10 @@ export function Note() {
         setLoad({
           status: 'ready',
           id,
-          rendered: renderNote(text, index, { path: file.path }),
+          rendered: renderNote(text, index, {
+            path: file.path,
+            title: file.name.replace(/\.md$/i, ''),
+          }),
         });
       })
       .catch((err: unknown) => {
@@ -192,7 +216,15 @@ export function Note() {
     if (index === null || file === undefined || load.status !== 'ready') {
       return null;
     }
-    return <AboutPanel index={index} file={file} html={load.rendered.html} />;
+    return (
+      <AboutPanel
+        index={index}
+        file={file}
+        html={load.rendered.html}
+        properties={propertiesFor(load.rendered.frontmatter)}
+        folder={folderLinkFor(file.path)}
+      />
+    );
     // Keyed on the rendered html itself, not the whole `load` (which also
     // changes while still loading, before there is anything new to show).
   }, [index, file, load.status === 'ready' ? load.rendered.html : null]);
@@ -207,28 +239,25 @@ export function Note() {
   }
 
   if (file === undefined) {
-    return (
-      <section>
-        <p>This note is not in your Bower folder.</p>
-      </section>
-    );
+    return <NotFound />;
   }
 
   const { prev, next } = siblings(index, file.id);
   const properties =
     load.status === 'ready' ? propertiesFor(load.rendered.frontmatter) : null;
+  const folderLink = folderLinkFor(file.path);
   const hasProperties =
-    properties !== null &&
-    (properties.tags.length > 0 ||
-      properties.created !== undefined ||
-      properties.source !== undefined);
+    properties !== null && hasNoteProperties(folderLink, properties);
 
   function showText(text: string): void {
     if (index === null || file === undefined) return;
     setLoad({
       status: 'ready',
       id,
-      rendered: renderNote(text, index, { path: file.path }),
+      rendered: renderNote(text, index, {
+        path: file.path,
+        title: file.name.replace(/\.md$/i, ''),
+      }),
     });
   }
 
@@ -274,6 +303,7 @@ export function Note() {
   // actual save (drive.ts): About-Me.md and README.md, say, are technically
   // writable but not offered here, on purpose.
   const canEdit = !isAppFile(file.path, file.name) && !isEditing;
+  const canAppend = !isProtectedNote(file.name);
 
   return (
     <section class="note-view">
@@ -290,8 +320,10 @@ export function Note() {
               file={file}
               noteName={noteTitle}
               canEdit={canEdit}
+              canAppend={canAppend}
               pinned={index.notePinnedAt.has(file.id)}
               onTogglePin={() => void handleTogglePin()}
+              onAddParagraph={() => setAppendOpen(true)}
               onEdit={() => void handleEdit()}
               onClose={() => setMenuOpen(false)}
             />
@@ -305,34 +337,14 @@ export function Note() {
       )}
 
       {hasProperties && properties !== null && (
-        <div class="note-properties">
-          {properties.tags.length > 0 && (
-            <ul class="tags">
-              {properties.tags.map((tag) => (
-                <li key={tag}>
-                  <a
-                    class="tag"
-                    href={`/search?q=${encodeURIComponent(`#${tag}`)}`}
-                  >
-                    #{tag}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-          {properties.created !== undefined && (
-            <span class="note-property">
-              <span class="note-property-label">Created</span>
-              {properties.created}
-            </span>
-          )}
-          {properties.source !== undefined && (
-            <span class="note-property">
-              <span class="note-property-label">Source</span>
-              {properties.source}
-            </span>
-          )}
-        </div>
+        <NotePropertiesTrigger onClick={() => setPropertiesOpen(true)} />
+      )}
+      {propertiesOpen && hasProperties && properties !== null && (
+        <NotePropertiesSheet
+          folder={folderLink}
+          properties={properties}
+          onClose={() => setPropertiesOpen(false)}
+        />
       )}
 
       {isAppFile(file.path, file.name) && <AppFileBanner file={file} />}
@@ -358,7 +370,7 @@ export function Note() {
       {!isEditing && load.status === 'ready' && (
         <>
           <NoteBody html={load.rendered.html} />
-          {!isProtectedNote(file.name) && (
+          {canAppend && appendOpen && (
             <AppendForm key={id} onAppend={handleAppend} />
           )}
         </>
