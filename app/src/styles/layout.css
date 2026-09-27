@@ -744,67 +744,7 @@ summary:focus-visible {
   color: var(--color-text-muted);
 }
 
-/* Add screen: pick or drop files, upload progress. */
-.add-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: var(--space-3) 0;
-}
-
-.add-dropzone {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 8rem;
-  margin: var(--space-3) 0;
-  padding: var(--space-4);
-  border: 2px dashed var(--color-border-strong);
-  border-radius: var(--radius-md);
-  color: var(--color-text-muted);
-  text-align: center;
-}
-
-.add-dropzone-active {
-  background: var(--color-surface);
-  border-color: var(--color-focus);
-  color: var(--color-text);
-}
-
-.add-file-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: var(--space-3) 0;
-  padding: 0;
-  list-style: none;
-}
-
-.add-file-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.add-file-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.add-file-status {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.add-message {
-  color: var(--color-success);
-}
+/* Add screen: styles/add.css (its own file — see routes/add.tsx). */
 
 .home-header {
   display: flex;

@@ -257,6 +257,7 @@ In order:
 | A Tidy up run stays `queued` and never moves to `running` | The Worker's dispatch reached GitHub but the workflow didn't run: `GITHUB_TOKEN` lacks `contents: write` on the instance repo, or `GITHUB_REPO` doesn't match the instance repo's real `owner/name` | Check the instance repo's **Actions** tab for a run at all; if there's none, fix `GITHUB_REPO` (`[vars]`) or re-issue `GITHUB_TOKEN` with the right scope and repo. A run that stays `queued` past 25 minutes with no runner pickup unblocks itself for a retry (`QUEUED_STALE_MS`) |
 | Push notifications never arrive | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` unset (falls out as `500 config`, same as any missing secret) or the user is on iOS without having installed the app to the home screen (iOS only delivers web push to an installed PWA) | Set the VAPID secrets (step 3.4–3.5); on iOS, tell the user to add the app to their home screen first |
 | Everyone is signed out again after 7 days | The Google OAuth consent screen is still in **Testing** — refresh tokens issued to test users expire after 7 days there | Publish the app (step 2) |
+| Pasting a link into Add saves a note but doesn't summarise it | Expected: the link becomes `Link - <host> <date> <time>.md` in the inbox right away, and the agent reads the page during the next Tidy up run, not when the note is saved | Run Tidy up (or leave "Tidy up right after adding" on) to have Bower read it |
 
 ## Extensions
 
