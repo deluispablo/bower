@@ -1,0 +1,684 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-09-28T22:00:00Z"
+  },
+  "title": "Bower v3 Screens",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Brief.dc.html": {
+      "w": 1280,
+      "h": 1100,
+      "title": "Bower v3: the decisions",
+      "expand": "fill",
+      "x": 0,
+      "y": 0
+    },
+    "Phone-Home.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Home · 3 waiting",
+      "is_interactive": true,
+      "x": 0,
+      "y": 4200
+    },
+    "Phone-Home-Empty.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Home · first day",
+      "is_interactive": true,
+      "x": 470,
+      "y": 4200
+    },
+    "Phone-Home-Running.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Home · tidying up",
+      "is_interactive": true,
+      "x": 940,
+      "y": 4200
+    },
+    "Phone-Home-Done.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Home · done",
+      "is_interactive": true,
+      "x": 1410,
+      "y": 4200
+    },
+    "Phone-Home-Failed.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Home · a run failed",
+      "is_interactive": true,
+      "x": 1880,
+      "y": 4200
+    },
+    "Phone-Home-Pins.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Home · editing pins",
+      "is_interactive": true,
+      "x": 2350,
+      "y": 4200
+    },
+    "Phone-Notes.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Notes · the tree",
+      "is_interactive": true,
+      "x": 2820,
+      "y": 4200
+    },
+    "Phone-Drawer.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "The folder menu (top-left on every tab)",
+      "is_interactive": true,
+      "x": 3290,
+      "y": 4200
+    },
+    "Phone-Folder.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "A root folder, explained",
+      "is_interactive": true,
+      "x": 3760,
+      "y": 4200
+    },
+    "Phone-Folder-Project.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "A project folder: files and notes together",
+      "is_interactive": true,
+      "x": 4230,
+      "y": 4200
+    },
+    "Phone-File.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "A file, previewed",
+      "is_interactive": true,
+      "x": 4700,
+      "y": 4200
+    },
+    "Phone-Note.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "A note Bower wrote when asked",
+      "is_interactive": true,
+      "x": 5170,
+      "y": 4200
+    },
+    "Phone-Note-Menu.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "The more menu (note, file or folder)",
+      "is_interactive": true,
+      "x": 5640,
+      "y": 4200
+    },
+    "Phone-Add.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Add - the doors, what it is, the pile",
+      "is_interactive": true,
+      "x": 0,
+      "y": 5320
+    },
+    "Phone-Drive-Picker.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "From your Drive",
+      "is_interactive": true,
+      "x": 470,
+      "y": 5320
+    },
+    "Phone-Bower.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Bower · Rules, grouped",
+      "is_interactive": true,
+      "x": 940,
+      "y": 5320
+    },
+    "Phone-Rule-Menu.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "A rule, tapped",
+      "is_interactive": true,
+      "x": 2820,
+      "y": 5320
+    },
+    "Phone-Bower-Requests.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Bower · Requests",
+      "is_interactive": true,
+      "x": 1410,
+      "y": 5320
+    },
+    "Phone-Bower-Activity.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Bower · Activity",
+      "is_interactive": true,
+      "x": 1880,
+      "y": 5320
+    },
+    "Phone-Bower-Empty.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Bower · first time",
+      "is_interactive": true,
+      "x": 2350,
+      "y": 5320
+    },
+    "Phone-Ideas.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Ideas · things to try",
+      "is_interactive": true,
+      "x": 3290,
+      "y": 5320
+    },
+    "Phone-Help.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "\"?\" · Home",
+      "is_interactive": true,
+      "x": 3760,
+      "y": 5320
+    },
+    "Phone-Settings.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Settings",
+      "is_interactive": true,
+      "x": 4230,
+      "y": 5320
+    },
+    "Phone-Working.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Tidying up (sheet)",
+      "is_interactive": true,
+      "x": 5170,
+      "y": 5320
+    },
+    "Phone-Working-Failed.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "A run failed (sheet)",
+      "is_interactive": true,
+      "x": 5640,
+      "y": 5320
+    },
+    "Phone-Switcher.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Search: notes, files and commands",
+      "is_interactive": true,
+      "x": 6110,
+      "y": 5320
+    },
+    "Phone-Health.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Health check",
+      "is_interactive": true,
+      "x": 6580,
+      "y": 5320
+    },
+    "Phone-NotFound.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Not found",
+      "is_interactive": true,
+      "x": 7050,
+      "y": 5320
+    },
+    "Intro-1.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "What is Bower · 1 of 9",
+      "is_interactive": true,
+      "x": 0,
+      "y": 1200
+    },
+    "Intro-2.dc.html": {
+      "w": 390,
+      "h": 1000,
+      "title": "What is Bower · 2 of 9",
+      "is_interactive": true,
+      "expand": "fill",
+      "x": 470,
+      "y": 1200
+    },
+    "Intro-3.dc.html": {
+      "w": 390,
+      "h": 900,
+      "title": "What is Bower · 3 of 9",
+      "is_interactive": true,
+      "expand": "fill",
+      "x": 940,
+      "y": 1200
+    },
+    "Intro-4.dc.html": {
+      "w": 390,
+      "h": 960,
+      "title": "What is Bower · 4 of 9",
+      "is_interactive": true,
+      "expand": "fill",
+      "x": 1410,
+      "y": 1200
+    },
+    "Intro-5.dc.html": {
+      "w": 390,
+      "h": 1560,
+      "title": "What is Bower · 5 of 9 · a project",
+      "is_interactive": true,
+      "expand": "fill",
+      "x": 1880,
+      "y": 1200
+    },
+    "Intro-6.dc.html": {
+      "w": 390,
+      "h": 1520,
+      "title": "What is Bower · 6 of 9 · an area",
+      "is_interactive": true,
+      "expand": "fill",
+      "x": 2350,
+      "y": 1200
+    },
+    "Intro-7.dc.html": {
+      "w": 390,
+      "h": 1520,
+      "title": "What is Bower · 7 of 9 · a resource",
+      "is_interactive": true,
+      "expand": "fill",
+      "x": 2820,
+      "y": 1200
+    },
+    "Intro-8.dc.html": {
+      "w": 390,
+      "h": 1440,
+      "title": "What is Bower · 8 of 9 · the archive",
+      "is_interactive": true,
+      "expand": "fill",
+      "x": 3290,
+      "y": 1200
+    },
+    "Intro-9.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "What is Bower · 9 of 9",
+      "is_interactive": true,
+      "x": 3760,
+      "y": 1200
+    },
+    "Intro-InApp.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "What is Bower · from Settings (Close and Done)",
+      "is_interactive": true,
+      "x": 4230,
+      "y": 1200
+    },
+    "Login.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Sign in",
+      "is_interactive": true,
+      "x": 4700,
+      "y": 1200
+    },
+    "Onb-Welcome.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "First run · 1 welcome",
+      "is_interactive": true,
+      "x": 5170,
+      "y": 1200
+    },
+    "Onb-Folder.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "First run · 2 where things live",
+      "is_interactive": true,
+      "x": 5640,
+      "y": 1200
+    },
+    "Onb-Building.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "First run · 3 building",
+      "is_interactive": true,
+      "x": 6110,
+      "y": 1200
+    },
+    "Onb-Drive.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "First run · 4 start with what you have",
+      "is_interactive": true,
+      "x": 6580,
+      "y": 1200
+    },
+    "Help-Home.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "First run · the tour, Home",
+      "is_interactive": true,
+      "x": 0,
+      "y": 3080
+    },
+    "Help-Notes.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "First run · the tour, Notes",
+      "is_interactive": true,
+      "x": 470,
+      "y": 3080
+    },
+    "Help-Add.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "First run · the tour, Add",
+      "is_interactive": true,
+      "x": 940,
+      "y": 3080
+    },
+    "Help-Bower.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "First run · the tour, Bower",
+      "is_interactive": true,
+      "x": 1410,
+      "y": 3080
+    },
+    "Help-Q-Notes.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "\"?\" · Notes",
+      "is_interactive": true,
+      "x": 1880,
+      "y": 3080
+    },
+    "Help-Q-Add.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "\"?\" · Add",
+      "is_interactive": true,
+      "x": 2350,
+      "y": 3080
+    },
+    "Help-Q-Bower.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "\"?\" · Bower",
+      "is_interactive": true,
+      "x": 2820,
+      "y": 3080
+    },
+    "Help-Q-Folder.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "\"?\" · Folder",
+      "is_interactive": true,
+      "x": 3290,
+      "y": 3080
+    },
+    "Phone-Tidy-Confirm.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Tidy up · is that everything?",
+      "is_interactive": true,
+      "x": 4700,
+      "y": 5320
+    },
+    "Desktop-Home.dc.html": {
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Home on a 4-column grid",
+      "is_interactive": true,
+      "x": 0,
+      "y": 6440
+    },
+    "Desktop-Notes.dc.html": {
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · a folder, files and notes",
+      "is_interactive": true,
+      "x": 1520,
+      "y": 6440
+    },
+    "Desktop-Note.dc.html": {
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · a file with its note",
+      "is_interactive": true,
+      "x": 3040,
+      "y": 6440
+    },
+    "Desktop-Add.dc.html": {
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Add",
+      "is_interactive": true,
+      "x": 4560,
+      "y": 6440
+    },
+    "Desktop-Bower.dc.html": {
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · the Bower tab, three aligned columns",
+      "is_interactive": true,
+      "x": 6080,
+      "y": 6440
+    },
+    "Desktop-Responsive.dc.html": {
+      "w": 1280,
+      "h": 640,
+      "title": "Desktop · the container rules",
+      "x": 9120,
+      "y": 6440
+    },
+    "Desktop-Settings.dc.html": {
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Settings",
+      "is_interactive": true,
+      "x": 7600,
+      "y": 6440
+    },
+    "Demo-Home.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Demo · Home with the banner",
+      "is_interactive": true,
+      "x": 470,
+      "y": 7620
+    },
+    "Demo-Add.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Demo - Add, the same doors, Drive greyed",
+      "is_interactive": true,
+      "x": 940,
+      "y": 7620
+    },
+    "Demo-Tidy-Confirm.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Demo - the same question, with the recording notice",
+      "is_interactive": true,
+      "x": 1410,
+      "y": 7620
+    },
+    "Demo-Working.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Demo - the recorded run (no model, no cost)",
+      "is_interactive": true,
+      "x": 1880,
+      "y": 7620
+    },
+    "Demo-Intro.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Demo - the same intro and tour as the app",
+      "is_interactive": true,
+      "x": 0,
+      "y": 7620
+    },
+    "Demo-RunYourOwn.dc.html": {
+      "w": 390,
+      "h": 844,
+      "title": "Demo · Run your own Bower",
+      "is_interactive": true,
+      "x": 2350,
+      "y": 7620
+    },
+    "Demo-Desktop-Home.dc.html": {
+      "w": 1440,
+      "h": 900,
+      "title": "Demo · desktop Home",
+      "is_interactive": true,
+      "x": 2820,
+      "y": 7620
+    }
+  },
+  "order": [
+    "Brief.dc.html",
+    "Phone-Home.dc.html",
+    "Phone-Home-Empty.dc.html",
+    "Phone-Home-Running.dc.html",
+    "Phone-Home-Done.dc.html",
+    "Phone-Home-Failed.dc.html",
+    "Phone-Home-Pins.dc.html",
+    "Phone-Notes.dc.html",
+    "Phone-Drawer.dc.html",
+    "Phone-Folder.dc.html",
+    "Phone-Folder-Project.dc.html",
+    "Phone-File.dc.html",
+    "Phone-Note.dc.html",
+    "Phone-Note-Menu.dc.html",
+    "Phone-Add.dc.html",
+    "Phone-Drive-Picker.dc.html",
+    "Phone-Bower.dc.html",
+    "Phone-Rule-Menu.dc.html",
+    "Phone-Bower-Requests.dc.html",
+    "Phone-Bower-Activity.dc.html",
+    "Phone-Bower-Empty.dc.html",
+    "Phone-Ideas.dc.html",
+    "Phone-Help.dc.html",
+    "Phone-Settings.dc.html",
+    "Phone-Working.dc.html",
+    "Phone-Working-Failed.dc.html",
+    "Phone-Switcher.dc.html",
+    "Phone-Health.dc.html",
+    "Phone-NotFound.dc.html",
+    "Intro-1.dc.html",
+    "Intro-2.dc.html",
+    "Intro-3.dc.html",
+    "Intro-4.dc.html",
+    "Intro-5.dc.html",
+    "Intro-6.dc.html",
+    "Intro-7.dc.html",
+    "Intro-8.dc.html",
+    "Intro-9.dc.html",
+    "Intro-InApp.dc.html",
+    "Login.dc.html",
+    "Onb-Welcome.dc.html",
+    "Onb-Folder.dc.html",
+    "Onb-Building.dc.html",
+    "Onb-Drive.dc.html",
+    "Help-Home.dc.html",
+    "Help-Notes.dc.html",
+    "Help-Add.dc.html",
+    "Help-Bower.dc.html",
+    "Help-Q-Notes.dc.html",
+    "Help-Q-Add.dc.html",
+    "Help-Q-Bower.dc.html",
+    "Help-Q-Folder.dc.html",
+    "Phone-Tidy-Confirm.dc.html",
+    "Desktop-Home.dc.html",
+    "Desktop-Notes.dc.html",
+    "Desktop-Note.dc.html",
+    "Desktop-Add.dc.html",
+    "Desktop-Bower.dc.html",
+    "Desktop-Responsive.dc.html",
+    "Desktop-Settings.dc.html",
+    "Demo-Home.dc.html",
+    "Demo-Add.dc.html",
+    "Demo-Tidy-Confirm.dc.html",
+    "Demo-Working.dc.html",
+    "Demo-Intro.dc.html",
+    "Demo-RunYourOwn.dc.html",
+    "Demo-Desktop-Home.dc.html"
+  ],
+  "notes": {
+    "t0": {
+      "x": 0,
+      "y": -260,
+      "text": "Las decisiones",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 1280
+    },
+    "t1": {
+      "x": 0,
+      "y": 940,
+      "text": "1 · Primera visita: la intro en nueve pantallas (scroll horizontal), entrar, primer arranque",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 6970
+    },
+    "t2": {
+      "x": 0,
+      "y": 2820,
+      "text": "1b · El tour del primer arranque: una hoja por pestaña; las mismas hojas salen con el ?",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 3680
+    },
+    "t3": {
+      "x": 0,
+      "y": 3940,
+      "text": "2 · Home en sus estados, Notes, el menu de carpetas, carpetas, archivo, nota",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 6030
+    },
+    "t4": {
+      "x": 0,
+      "y": 5060,
+      "text": "3 · Add, la pestaña Bower, Ideas, ayuda, ajustes, hojas y bordes",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 7440
+    },
+    "t5": {
+      "x": 0,
+      "y": 6180,
+      "text": "4 · Escritorio, en una reticula de 4 columnas a 980 px",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 10400
+    },
+    "t6": {
+      "x": 0,
+      "y": 7360,
+      "text": "5 · La demo: la misma intro y tour, la banda, el tidy up grabado (el modelo no corre), Run your own Bower",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 4260
+    }
+  },
+  "designSystems": []
+}

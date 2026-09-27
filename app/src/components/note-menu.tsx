@@ -16,6 +16,11 @@
  * path and nothing else from the note, the same `/tell?text=` mechanism
  * as "Ask Bower about this note"; the owner fills in the right folder and
  * sends it as an instruction note.
+ *
+ * "Add a paragraph…" (issue #307, Part E 18.4) reveals the append form
+ * ("Add to this note") that used to sit on every note by default; it is a
+ * rare action, so it now lives here instead, gated the same way the form
+ * itself was (`!isProtectedNote`, `routes/note.tsx`).
  */
 
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -30,6 +35,7 @@ import {
   IconExternalLink,
   IconFolder,
   IconPin,
+  IconPlus,
 } from './icons.js';
 import { useFocusTrap } from './use-focus-trap.js';
 import '../styles/note-menu.css';
@@ -40,10 +46,14 @@ export interface NoteMenuProps {
   noteName: string;
   /** False for Bower's own files (spec §14): the Edit row is left out. */
   canEdit: boolean;
+  /** False for a protected note (`isProtectedNote`): the Add a paragraph
+   * row is left out. */
+  canAppend: boolean;
   /** Whether the note currently has a `pinned` timestamp (#215, #216). */
   pinned: boolean;
   /** Pins or unpins the note; the row's own label follows `pinned`. */
   onTogglePin: () => void;
+  onAddParagraph: () => void;
   onEdit: () => void;
   onClose: () => void;
 }
@@ -70,8 +80,10 @@ export function NoteMenu({
   file,
   noteName,
   canEdit,
+  canAppend,
   pinned,
   onTogglePin,
+  onAddParagraph,
   onEdit,
   onClose,
 }: NoteMenuProps): JSX.Element {
@@ -190,6 +202,22 @@ export function NoteMenu({
             readOnly
             value={location.href}
           />
+        )}
+        {canAppend && (
+          <button
+            type="button"
+            role="menuitem"
+            class="note-menu-row"
+            onClick={selectAndClose(onAddParagraph)}
+          >
+            <IconPlus />
+            <span class="note-menu-row-text">
+              <span class="note-menu-row-label">Add a paragraph…</span>
+              <span class="note-menu-row-hint">
+                A new paragraph at the end of this note
+              </span>
+            </span>
+          </button>
         )}
         {canEdit && (
           <button
