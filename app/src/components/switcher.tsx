@@ -42,6 +42,7 @@ import { useLocation } from 'preact-iso';
 
 import { loadNote } from '../cache.js';
 import { searchFullText } from '../drive.js';
+import { noteTitle } from '../note-title.js';
 import { getPref } from '../prefs.js';
 import { pendingCount, useRun } from '../run-store.js';
 import {
@@ -153,7 +154,7 @@ function NoteRow({
         <IconNote />
         <span class="switcher-row-text">
           <span class="switcher-row-name">
-            <Highlighted text={entry.file.name} span={entry.highlight} />
+            <Highlighted text={noteTitle(entry.file)} span={entry.highlight} />
           </span>
           <span class="switcher-row-path">{folderPath(entry.file)}</span>
           {entry.snippet !== null && (

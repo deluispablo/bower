@@ -11,6 +11,7 @@
 import type { JSX } from 'preact';
 
 import { folderHref } from '../navigation.js';
+import { noteTitle } from '../note-title.js';
 import type { PinnedItem } from '../vault-store.js';
 import { IconFolder, IconNote } from './icons.js';
 
@@ -39,9 +40,7 @@ export function PinnedSidebar({
               class="explorer-row"
             >
               <IconNote />
-              <span class="explorer-row-label">
-                {item.file.name.replace(/\.md$/i, '')}
-              </span>
+              <span class="explorer-row-label">{noteTitle(item.file)}</span>
             </a>
           ) : (
             <a

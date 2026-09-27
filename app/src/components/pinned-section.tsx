@@ -17,6 +17,7 @@ import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 
 import { folderHref, folderOf } from '../navigation.js';
+import { noteTitle } from '../note-title.js';
 import { openSwitcher } from '../switcher-store.js';
 import type { PinnedItem } from '../vault-store.js';
 import { Bird } from './bird.js';
@@ -55,7 +56,7 @@ function tileFor(
     return {
       key: item.file.id,
       href: `/note/${item.file.id}`,
-      name: item.file.name.replace(/\.md$/i, ''),
+      name: noteTitle(item.file),
       meta: noteMeta(item.file.path),
       icon: <IconNote />,
       unpin: () => onUnpinNote(item.file.id),

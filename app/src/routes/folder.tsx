@@ -41,6 +41,7 @@ import {
   relativeTime,
 } from '../navigation.js';
 import type { BreadcrumbSegment, FolderContents } from '../navigation.js';
+import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { useVault } from '../vault-store.js';
@@ -191,9 +192,7 @@ function FolderBody({
               <li key={note.id}>
                 <a class="folder-row" href={`/note/${note.id}`}>
                   <IconNote />
-                  <span class="folder-row-name">
-                    {note.name.replace(/\.md$/i, '')}
-                  </span>
+                  <span class="folder-row-name">{noteTitle(note)}</span>
                   {note.modifiedTime !== undefined && (
                     <span class="folder-row-meta">
                       {relativeTime(note.modifiedTime, now)}

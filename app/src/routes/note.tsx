@@ -23,6 +23,7 @@ import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
 import { breadcrumb, folderHref, folderOf, siblings } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
+import { noteTitle as computeNoteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { isAppFile } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
@@ -113,7 +114,10 @@ function folderLinkFor(path: string): NoteFolderLink | undefined {
 
 type NoteLoad =
   | { status: 'loading' }
-  | { status: 'ready'; id: string; rendered: RenderedNote }
+  // `text` is the note's raw text, kept alongside `rendered` only so the
+  // header can resolve `noteTitle`'s frontmatter/heading fallback without
+  // re-fetching it.
+  | { status: 'ready'; id: string; text: string; rendered: RenderedNote }
   | { status: 'offline' }
   | { status: 'error'; message: string };
 
@@ -168,9 +172,10 @@ export function Note() {
         setLoad({
           status: 'ready',
           id,
+          text,
           rendered: renderNote(text, index, {
             path: file.path,
-            title: file.name.replace(/\.md$/i, ''),
+            title: computeNoteTitle(file, text),
           }),
         });
       })
@@ -254,9 +259,10 @@ export function Note() {
     setLoad({
       status: 'ready',
       id,
+      text,
       rendered: renderNote(text, index, {
         path: file.path,
-        title: file.name.replace(/\.md$/i, ''),
+        title: computeNoteTitle(file, text),
       }),
     });
   }
@@ -297,7 +303,10 @@ export function Note() {
   }
 
   const isEditing = editing !== null && editing.id === id;
-  const noteTitle = file.name.replace(/\.md$/i, '');
+  const title =
+    load.status === 'ready' && load.id === id
+      ? computeNoteTitle(file, load.text)
+      : computeNoteTitle(file);
   // "Edit the text" (the note menu) is left out for Bower's own files (spec
   // §14) — a broader set than `isProtectedNote`, which only blocks the
   // actual save (drive.ts): About-Me.md and README.md, say, are technically
@@ -308,7 +317,7 @@ export function Note() {
   return (
     <section class="note-view">
       <div class="note-edit-header">
-        <h1>{noteTitle}</h1>
+        <h1>{title}</h1>
         <div class="note-header-actions">
           <MoreButton
             class="note-header-more"
@@ -318,7 +327,7 @@ export function Note() {
           {menuOpen && (
             <NoteMenu
               file={file}
-              noteName={noteTitle}
+              noteName={title}
               canEdit={canEdit}
               canAppend={canAppend}
               pinned={index.notePinnedAt.has(file.id)}
@@ -379,12 +388,12 @@ export function Note() {
       {(prev !== null || next !== null) && (
         <nav class="note-siblings" aria-label="Notes in this folder">
           {prev !== null ? (
-            <a href={`/note/${prev.id}`}>← {prev.name.replace(/\.md$/i, '')}</a>
+            <a href={`/note/${prev.id}`}>← {computeNoteTitle(prev)}</a>
           ) : (
             <span />
           )}
           {next !== null && (
-            <a href={`/note/${next.id}`}>{next.name.replace(/\.md$/i, '')} →</a>
+            <a href={`/note/${next.id}`}>{computeNoteTitle(next)} →</a>
           )}
         </nav>
       )}

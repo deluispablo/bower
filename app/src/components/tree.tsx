@@ -48,6 +48,7 @@ import {
   nextFocusIndex,
 } from '../navigation.js';
 import type { TreeNode, TreeRow, TreeSort } from '../navigation.js';
+import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { useVault } from '../vault-store.js';
 import type { VaultIndex } from '../vault-index.js';
@@ -257,10 +258,10 @@ export function Tree({
     }
   }
 
-  /** The row's own name, without a note's `.md`, for the sheet's dialog
-   * name and its "Ask Bower" wording. */
+  /** The row's own title (`noteTitle`, no note's `.md`), for the sheet's
+   * dialog name and its "Ask Bower" wording. */
   function displayName(row: Row): string {
-    return row.kind === 'note' ? row.name.replace(/\.md$/i, '') : row.name;
+    return row.kind === 'note' ? noteTitle(row) : row.name;
   }
 
   function pinSheetFor(row: Row): JSX.Element {
@@ -438,7 +439,7 @@ export function Tree({
                       onFocus={() => setFocusIndex(i)}
                     >
                       <IconNote />
-                      <span class="tree-name">{row.name}</span>
+                      <span class="tree-name">{noteTitle(row)}</span>
                     </a>
                     <button
                       type="button"
@@ -476,7 +477,7 @@ export function Tree({
                     onContextMenu={longPress.onContextMenu}
                   >
                     <IconNote />
-                    <span class="tree-name">{row.name}</span>
+                    <span class="tree-name">{noteTitle(row)}</span>
                   </a>
                 )}
                 {!linkFolders && sheetOpen && pinSheetFor(row)}
