@@ -131,6 +131,11 @@ export function decideRedirect(
   if (!hasVault) {
     return currentPath === '/onboarding' ? null : '/onboarding';
   }
+  // A demo build's `/login` is the "Run your own Bower" screen (`app.tsx`'s
+  // route line), not a real sign-in form: once the intro has been seen, a
+  // signed-in-as-Alex visitor following the tour's last link there must be
+  // left alone rather than bounced back to Home.
+  if (isDemoBuild && currentPath === '/login') return null;
   return currentPath === '/login' ? '/' : null;
 }
 

@@ -46,6 +46,11 @@ test.describe('open Home', () => {
     }
     await tour.getByRole('link', { name: 'Run your own Bower' }).click();
     await expect(tour).toBeHidden();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(
+      page.getByRole('heading', { name: 'Bower', level: 1 }),
+    ).toBeVisible();
+    await expect(page.getByText('This is a demo: sample notes')).toBeVisible();
 
     // Back on Home from a fresh load: the demo forgets everything on reload,
     // so the tour is offered again.
