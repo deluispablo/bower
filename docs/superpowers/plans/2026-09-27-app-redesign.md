@@ -27,10 +27,10 @@
 
 | Milestone | Issues | Depends on | Why this order |
 | --- | --- | --- | --- |
-| M6 · Foundations | #136 tokens and fonts · #137 the bird · #138 rename Tidy up · #139 README and design sources | main | Every later PR uses the tokens and the bird; the rename touches copy everywhere and is easiest before the screens change. #139 is this branch. |
+| M6 · Foundations | #136 tokens and fonts · #137 the bird · #138 rename Tidy up · #139 README and design sources · #161 the bird ported to v8.2 | main | Every later PR uses the tokens and the bird; the rename touches copy everywhere and is easiest before the screens change. #161 redraws the component on the mascot the owner approved after #137 shipped (design sources in #160); the component's API does not change, so screens built on it do not wait for it. |
 | M7 · Shell and explorer | #140 shell, drawer, nav · #141 hidden app files · #142 quick switcher | M6 | The shell is the frame every screen sits in. Hidden files change what the index exposes, so the switcher (#142) comes after them. |
-| M8 · Screens | #143 Home, Login, Not invited, Not found · #144 Note · #145 Add · #146 Tell · #147 Tidying up sheet, Done · #148 Settings, Health, Privacy, push prompt | M7 | Independent of each other except #147 after #143 (the Done state lives on Home) and #148 after #147 (the push prompt is shown after the first finished run). Can run in parallel worktrees. |
-| M9 · First run | #149 welcome, folder, building, tour, `tourSeenAt` | M8 | The tour points at Add, the pill and Tell as they will finally look. |
+| M8 · Screens | #143 Home, Login, Not invited, Not found · #144 Note · #145 Add · #146 Tell · #147 Tidying up sheet, Done · #148 Settings, Health, Privacy, push prompt | M7 | Independent of each other except #147 after #143 and #161 (the Done state lives on Home; the sheet's scene is the v8.2 one) and #148 after #147 (the push prompt is shown after the first finished run). #144, #145 and #146 only need #140 and can start while #141 and #142 are in flight. Can run in parallel worktrees. |
+| M9 · First run | #149 welcome, folder, building, tour, `tourSeenAt` | M8, #161 | The tour points at Add, the pill and Tell as they will finally look; Building is the v8.2 state. |
 | M10 · Phase 2 | #150 linked mentions · #151 per-message status from the runner · #152 screenshots and demo | M8 or M9 | New data from the agent, and real pictures once the screens exist. |
 
 ### Dependency graph
@@ -38,6 +38,9 @@
 ```mermaid
 flowchart LR
     T136[#136 tokens] --> B137[#137 bird]
+    B137 --> V161[#161 bird v8.2]
+    V161 --> SH147
+    V161 --> TO149
     T136 --> L140[#140 shell]
     B137 --> L140
     R138[#138 rename] --> L140
@@ -69,7 +72,8 @@ flowchart LR
 | #136 | M | Sonnet | Mostly CSS and a font subset; the contrast script decides. |
 | #137 | L | Opus | The rig, the CSS, `build.py`; the riskiest visual work. Review on a phone. |
 | #138 | S | Sonnet | Grep-driven. |
-| #139 | M | done | This branch. |
+| #139 | M | done | Merged as PR #153. |
+| #161 | L | Opus | The v8.2 rig on the same component API; build.py and the icons again. Compare with Mascot.dc.html side by side. |
 | #140 | L | Opus | Layout, focus management, keyboard; touches every screen. |
 | #141 | M | Sonnet | One pure function and its callers. |
 | #142 | M | Sonnet | Replaces a component; keyboard handling needs care. |
