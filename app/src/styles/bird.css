@@ -6,7 +6,8 @@
  * moves animates `transform` or `opacity`.
  *
  * Durations of 120, 200 and 320 ms use the motion tokens (tokens.css); the
- * longer cycles keep the canvas's own seconds. `hello`, `showoff` and
+ * longer cycles keep the canvas's own seconds, except `done`, which lasts
+ * 2 s as spec §4.3 says (the canvas loops it every 3 s). `hello`, `showoff` and
  * `done` play once: their choreography runs one iteration, and the `rig`'s
  * `animationend` tells the caller to go back to `looking`.
  */
@@ -405,16 +406,16 @@
   animation: blink 6s infinite;
 }
 .p-done .rig {
-  animation: hopwink 3s ease-in-out;
+  animation: hopwink 2s ease-in-out;
 }
 .p-done .ey {
-  animation: wink 3s linear;
+  animation: wink 2s linear;
 }
 .p-done .jw {
   transform: rotate(12deg);
 }
 .p-done .tl {
-  animation: tailwag 0.5s ease-in-out 6 alternate;
+  animation: tailwag 0.5s ease-in-out 4 alternate;
 }
 
 /* Still faces */
