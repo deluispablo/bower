@@ -416,6 +416,11 @@ case "$SMOKE_SCENARIO" in
   rulesok)
     echo 'Tidy the notes every week' >>Rules.md
     ;;
+  # A move request ("This was misfiled", issue #200) appends a Correction:
+  # line to log.md, in the format the rulebook defines.
+  correction)
+    echo 'Correction: 0-Inbox -> 3-Resources/Recipes (2026-01-15)' >>log.md
+    ;;
   # A lint run over a Rules.md with a contradiction and a credential-shaped
   # line: the stubbed report counts and lists both findings (memory hygiene,
   # issue #201).
@@ -1309,6 +1314,20 @@ expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok Rules.md changed by an instruction note kept"
+
+# 24a. A move request ("This was misfiled", issue #200) appends a
+# Correction: line to log.md, in the format the rulebook defines; run.sh
+# uploads it like any other change.
+run_case correction
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+grep -Fxq -- 'Correction: 0-Inbox -> 3-Resources/Recipes (2026-01-15)' \
+  "$STATE/remote/log.md" || die 'the correction line did not reach Drive'
+grep -Fxq 'log.md' "$STATE/uploaded.txt" || die 'log.md not uploaded'
+expect_claude_env unset test-oauth-token
+expect_content_free
+expect_cleaned_up
+echo "ok a move request appends a Correction line to log.md"
 
 # 24b. Proposals (issue #199): an ordinary ingest may add a proposal to
 # Answers/Bower - Proposals.md and a pointer to log.md, both uploaded; the
