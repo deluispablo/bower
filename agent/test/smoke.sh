@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Smoke test for agent/run.sh. Hermetic: rclone, claude and curl are stubs
-# that record their calls and act per scenario (rclone over a fake Drive
-# directory), so nothing touches the
-# network, Google or Claude. jq is the real one when installed (it is on
+# Smoke test for agent/run.sh. Hermetic: rclone, claude, pandoc and curl are
+# stubs that record their calls and act per scenario (rclone over a fake Drive
+# directory), so nothing touches the network, Google or Claude. jq is the real one when installed (it is on
 # GitHub's ubuntu runners); otherwise a small Node stand-in covers the three
 # filters run.sh uses.
 #
@@ -107,6 +106,17 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         echo v1 >"$remote/Wiki/agent.md"
         ;;
     esac
+    if [ "$SMOKE_SCENARIO" = convert ]; then
+      # Documents run.sh converts before the agent runs: two good ones, one
+      # pandoc cannot read, one with an upper-case extension, and one whose
+      # Markdown sibling already exists (left alone).
+      echo docx >"$remote/0-Inbox/quarterly-report.docx"
+      echo html >"$remote/Clippings/saved-page.html"
+      echo CORRUPT >"$remote/0-Inbox/damaged.docx"
+      echo rtf >"$remote/0-Inbox/memo.RTF"
+      echo odt >"$remote/0-Inbox/already.odt"
+      echo mine >"$remote/0-Inbox/already.md"
+    fi
   fi
   mkdir -p "$3"
   cp -R "$remote/." "$3/"
@@ -132,6 +142,31 @@ elif [ "$1" = deletefile ]; then
   rm "$target"
 fi
 echo "rclone stub output naming 0-Inbox/a.pdf"
+STUB
+
+cat >"$STUBS/pandoc" <<'STUB'
+#!/usr/bin/env bash
+# pandoc stub: records its arguments, writes a marker Markdown file to the -o
+# path, and fails (after writing a partial output) on an input that says
+# CORRUPT, as the real one does on a file it cannot read.
+set -euo pipefail
+printf '%s\n' "$*" >>"$SMOKE_STATE/pandoc-calls.log"
+out=''
+input=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) out=$2; shift 2 ;;
+    --) input=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+[ -n "$out" ] && [ -n "$input" ] || { echo 'pandoc stub: expected -o <out> -- <in>' >&2; exit 90; }
+if grep -q CORRUPT "$input"; then
+  echo partial >"$out"
+  echo "PANDOC-MARKER cannot read $input" >&2
+  exit 64
+fi
+echo 'converted by pandoc' >"$out"
 STUB
 
 cat >"$STUBS/claude" <<'STUB'
@@ -166,6 +201,14 @@ printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
 # the model credential, never the console output (that stays content-free).
 env >"$SMOKE_STATE/claude-env.log"
 echo "STDERR-MARKER while reading 0-Inbox/a.pdf" >&2
+# What the agent finds in the inbox folders when it starts: the conversion
+# must already be done.
+find 0-Inbox Clippings -type f | LC_ALL=C sort >"$SMOKE_STATE/claude-saw.txt"
+# "convert": file one converted document the way ingest.md says, the
+# original and its Markdown sibling together.
+if [ "$SMOKE_SCENARIO" = convert ]; then
+  mv 0-Inbox/quarterly-report.docx 0-Inbox/quarterly-report.md 0-Inbox/Processed/
+fi
 echo late >"$SMOKE_STATE/remote/0-Inbox/late.pdf"
 echo late >"$SMOKE_STATE/remote/Clippings/late.md"
 # "gone": the pending original is removed from Drive while the agent works.
@@ -294,6 +337,7 @@ expect_eq() { [ "$1" = "$2" ] || die "$3: expected [$2], got [$1]"; }
 # The script's own output must never carry vault content or credentials.
 expect_content_free() {
   for needle in a.pdf b.md "Bower trick" late.pdf late.md Wiki app.md agent.md SUMMARY-MARKER STDERR-MARKER \
+    quarterly-report saved-page damaged memo already PANDOC-MARKER \
     "$DRIVE_TOKEN" "$USER_API_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -331,6 +375,14 @@ expect_claude_env() {
   grep -q '^PATH=' "$log" || die 'PATH missing from claude env (its own tools would fail to run)'
 }
 
+# The agent gets neither pandoc (a URL as input is a way out) nor cp (it can
+# copy any file on the runner into the vault), whatever the web setting.
+expect_no_copy_or_convert_tool() {
+  if grep -Eq 'pandoc|\(cp:' "$STATE/claude-tools.txt"; then
+    die 'the agent was given pandoc or cp'
+  fi
+}
+
 # --- scenarios --------------------------------------------------------------
 
 # 0. The ingest prompt (verbatim what run.sh passes to `claude -p`) must
@@ -344,6 +396,10 @@ printf '%s' "$INGEST_PROMPT" | grep -Fq 'tags: [instruction]' ||
   die 'ingest prompt does not require the instruction frontmatter'
 printf '%s' "$INGEST_PROMPT" | grep -Fq 'Bower*.md` in `Clippings/`' ||
   die 'ingest prompt does not call out a Clippings/ Bower*.md as content'
+printf '%s' "$INGEST_PROMPT" | grep -Fq 'the `.md` file next to the original with the same base name' ||
+  die 'ingest prompt does not explain the converted Markdown sibling'
+printf '%s' "$INGEST_PROMPT" | grep -Fq 'a converted document together with its `.md`' ||
+  die 'ingest prompt does not move the sibling to Processed/ with the original'
 echo "ok ingest prompt contract"
 
 # 1. Ingest happy path.
@@ -388,8 +444,13 @@ done
   die 'a Bower-named clipping was treated as an instruction note, not a clipping'
 expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
-  'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*)' \
+  'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*)' \
   'allowed tools (no web by default)'
+expect_no_copy_or_convert_tool
+[ ! -e "$STATE/pandoc-calls.log" ] || die 'pandoc ran with no document pending'
+if grep -q 'convert documents' "$STATE/out.log"; then
+  die 'conversion logged with no document pending'
+fi
 expect_eq "$(cat "$STATE/claude-denied.txt")" \
   'WebSearch,WebFetch,Bash(curl:*),Bash(wget:*)' \
   'disallowed tools (web denied by default)'
@@ -515,8 +576,9 @@ echo "ok lint"
 run_case web BOWER_ALLOW_WEB=1
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
-  'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*),WebSearch,WebFetch' \
+  'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),WebSearch,WebFetch' \
   'allowed tools (web opted in)'
+expect_no_copy_or_convert_tool
 expect_eq "$(cat "$STATE/claude-denied.txt")" 'Bash(curl:*),Bash(wget:*)' 'disallowed tools (web opted in)'
 expect_claude_env unset test-oauth-token
 expect_content_free
@@ -539,3 +601,60 @@ expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok note edited in the app during a run"
+
+# 11. Documents are converted before the agent runs: each Office, HTML or
+# EPUB file pending gets a Markdown sibling, made by pandoc in sandbox mode;
+# a file pandoc cannot read does not abort the run and leaves no sibling; a
+# document whose sibling already exists is not converted again.
+run_case convert
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(grep -c . "$STATE/pandoc-calls.log")" 4 'pandoc calls'
+while IFS= read -r args; do
+  case " $args " in
+    *' --sandbox '*) ;;
+    *) die "pandoc ran without --sandbox: $args" ;;
+  esac
+  case " $args " in
+    *' -t gfm '*) ;;
+    *) die "pandoc did not write GitHub Markdown: $args" ;;
+  esac
+  case "$args" in
+    *://*) die "pandoc was given a URL: $args" ;;
+  esac
+done <"$STATE/pandoc-calls.log"
+grep -Fxq -- '--sandbox -f docx -t gfm --wrap=none -o 0-Inbox/quarterly-report.md -- 0-Inbox/quarterly-report.docx' \
+  "$STATE/pandoc-calls.log" || die 'docx not converted to its sibling'
+grep -Fxq -- '--sandbox -f html -t gfm --wrap=none -o Clippings/saved-page.md -- Clippings/saved-page.html' \
+  "$STATE/pandoc-calls.log" || die 'html not converted to its sibling'
+grep -Fxq -- '--sandbox -f rtf -t gfm --wrap=none -o 0-Inbox/memo.md -- 0-Inbox/memo.RTF' \
+  "$STATE/pandoc-calls.log" || die 'upper-case extension not converted'
+if grep -Fq already "$STATE/pandoc-calls.log"; then
+  die 'a document with a sibling was converted again'
+fi
+saw="$STATE/claude-saw.txt"
+for f in 0-Inbox/quarterly-report.md Clippings/saved-page.md 0-Inbox/memo.md \
+  0-Inbox/quarterly-report.docx 0-Inbox/damaged.docx; do
+  grep -Fxq "$f" "$saw" || die "the agent did not find $f when it started"
+done
+if grep -Fxq 0-Inbox/damaged.md "$saw"; then
+  die 'a failed conversion left a sibling'
+fi
+grep -q ' convert documents: 3 converted, 1 could not be converted$' "$STATE/out.log" ||
+  die 'conversion counts not logged'
+grep -q PANDOC-MARKER "$STATE/runner-temp/bower-logs/pandoc.log" || die 'pandoc output not kept in the logs dir'
+remote="$STATE/remote"
+expect_eq "$(cat "$remote/0-Inbox/Processed/quarterly-report.md")" 'converted by pandoc' 'converted sibling filed in Drive'
+[ -f "$remote/0-Inbox/Processed/quarterly-report.docx" ] || die 'original not filed with its sibling in Drive'
+[ ! -e "$remote/0-Inbox/quarterly-report.docx" ] || die 'filed original still in 0-Inbox/ in Drive'
+expect_eq "$(cat "$remote/Clippings/saved-page.md")" 'converted by pandoc' 'converted sibling uploaded to Drive'
+[ -f "$remote/0-Inbox/damaged.docx" ] || die 'unconvertible original gone from Drive'
+[ ! -e "$remote/0-Inbox/damaged.md" ] || die 'a failed conversion reached Drive'
+expect_eq "$(cat "$remote/0-Inbox/already.md")" 'mine' 'existing sibling left alone'
+expect_eq "$(post 2 'p.processed.some((f) => f.endsWith("quarterly-report.md") || f.endsWith("saved-page.md"))')" \
+  false 'converted siblings are not reported as processed originals'
+expect_no_copy_or_convert_tool
+expect_claude_env unset test-oauth-token
+expect_content_free
+expect_cleaned_up
+echo "ok documents converted before the run"

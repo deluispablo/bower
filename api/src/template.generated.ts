@@ -167,7 +167,7 @@ log.md              # Chronological record of operations. Append-only.
 \`\`\`
 - Each PARA folder has an \`_<Name>.md\` note explaining its purpose; keep it.
 - Each project or area folder has a **hub note** with the folder's name (e.g. \`Move House/Move House.md\`).
-- Keep originals (PDF, DOCX, XLSX, images) next to their Markdown note. The \`.md\` note is the entry point.
+- Keep originals (PDF, XLSX, images) next to their Markdown note. The \`.md\` note is the entry point. Documents Bower converts before it starts (DOCX, ODT, HTML, EPUB, RTF) are the exception: their original goes to \`0-Inbox/Processed/\` with its converted \`.md\` (see Ingest).
 - Create subfolders only when a project or area has several notes.
 - In \`3-Resources/\`, one folder per topic, created as needed.
 
@@ -234,9 +234,9 @@ Leave sensitive IDs (passport, tax numbers, account numbers) in the original, no
 ## Workflows
 
 ### Ingest (whenever something lands in \`0-Inbox/\` or \`Clippings/\`)
-1. Read the item fully. Convert to Markdown if it is not (keep the original).
+1. Read the item fully. A DOCX, ODT, HTML, EPUB or RTF file arrives already converted: read the \`.md\` next to it with the same base name (\`report.docx\` and \`report.md\`), never the original. One with no such \`.md\` could not be converted: file nothing from it, move it to \`0-Inbox/Processed/\` and mention it in the run's problems.
 2. Decide the PARA destination; create a project/area folder and hub note if needed.
-3. Write the summary or converted note using the templates above. Move the original next to the note when it belongs there (documents), otherwise leave it in \`0-Inbox/Processed/\`.
+3. Write the summary or converted note using the templates above. Move a PDF, spreadsheet or image original next to the note when it belongs there; a converted document's original goes to \`0-Inbox/Processed/\` together with its converted \`.md\`; anything else stays for step 8.
 4. Translate to English if needed.
 5. Link it: add it to its hub note and to 2-3 strongest related notes.
 6. Cross-check with what the vault already holds; flag contradictions and gaps in the note.

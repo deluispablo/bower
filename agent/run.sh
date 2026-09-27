@@ -5,10 +5,12 @@
 #
 # Fetches the vault's folder id and a 1 h Drive token from the API, syncs the
 # vault down with rclone (configured only through environment variables),
-# runs Claude Code inside it following the vault's own CLAUDE.md, copies back
-# up only the files the agent added or changed (so a note edited in the app
-# during the run keeps its newer content), deletes from Drive only the pending
-# originals the agent moved away, and reports the outcome to the API.
+# converts pending Office, HTML and EPUB files to Markdown with pandoc (for
+# an ingest), runs Claude Code inside it following the vault's own CLAUDE.md,
+# copies back up only the files the agent added or changed (so a note edited
+# in the app during the run keeps its newer content), deletes from Drive only
+# the pending originals the agent moved away, and reports the outcome to the
+# API.
 #
 # Environment:
 #   BOWER_API_URL            the Worker's origin, e.g. https://api.example.com
@@ -20,7 +22,7 @@
 #                            WebFetch, anything else (the default) denies them
 #   RUNNER_TEMP              optional; set by GitHub Actions
 #
-# Requires bash, curl, jq, rclone and claude on PATH.
+# Requires bash, curl, jq, rclone, pandoc and claude on PATH.
 #
 # `claude` itself runs under `env -i` with its own, smaller allow-list (see
 # the comment above the agent run step): the Drive token, the runner key and
@@ -38,10 +40,14 @@ set -euo pipefail
 # Everything in 0-Inbox/ and Clippings/ is untrusted text (clipped web pages,
 # forwarded files), so by default the agent gets no tool that reaches the
 # network: a prompt-injected note must not be able to send vault content out.
-# The web tools come back only when the instance opts in with BOWER_ALLOW_WEB=1.
-# The deny list wins over any allow rule, including one in a settings file
-# inside the vault.
-readonly BASE_TOOLS='Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*)'
+# Bash is limited to mv, mkdir and ls. pandoc is not an agent tool (it takes
+# a URL as input, a way out) and neither is cp (it can copy /proc/self/environ
+# or any other file on the runner into the vault): documents are converted by
+# this script before the agent runs (see "convert documents" below). The web
+# tools come back only when the instance opts in with BOWER_ALLOW_WEB=1, the
+# one way a run can reach the network. The deny list wins over any allow
+# rule, including one in a settings file inside the vault.
+readonly BASE_TOOLS='Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*)'
 readonly WEB_TOOLS='WebSearch,WebFetch'
 readonly NETWORK_COMMANDS='Bash(curl:*),Bash(wget:*)'
 if [ "${BOWER_ALLOW_WEB:-}" = 1 ]; then
@@ -99,6 +105,7 @@ readonly CHANGED_FILE="$WORK_DIR/changed.txt"
 readonly AGENT_OUT="$WORK_DIR/agent.out"
 readonly AGENT_ERR="$LOG_DIR/agent.err"
 readonly RCLONE_LOG="$LOG_DIR/rclone.log"
+readonly PANDOC_LOG="$LOG_DIR/pandoc.log"
 mkdir -p "$VAULT_DIR" "$LOG_DIR"
 
 STEP='start'   # the step in progress, named in any failure report
@@ -300,13 +307,53 @@ if ! manifest >"$MANIFEST_BEFORE"; then
   fail "$STEP: listing the local copy failed"
 fi
 
+# --- convert documents ------------------------------------------------------
+# The agent has no pandoc, so Office, HTML and EPUB files pending in 0-Inbox/
+# and Clippings/ are converted here, before it runs: each becomes a Markdown
+# sibling with the same base name (report.docx -> report.md), which the agent
+# files and then moves to 0-Inbox/Processed/ with the original (ingest.md).
+# A file whose sibling already exists is left as it is. --sandbox keeps
+# pandoc to the one input file: no other file, no URL, no network. Taken
+# after the manifest, so the siblings are new files and go up with the
+# agent's changes. A lint processes nothing, so it converts nothing. A file
+# pandoc cannot read stays as it is, for the agent to move to Processed/ as
+# unconvertible; the log counts, never names, and pandoc's own messages go
+# to a private log file.
+STEP='convert documents'
+if [ "$MODE" = ingest ]; then
+  converted=0
+  unconverted=0
+  while IFS= read -r path <&3; do
+    case "$path" in
+      *.[dD][oO][cC][xX]) from=docx ;;
+      *.[oO][dD][tT]) from=odt ;;
+      *.[hH][tT][mM][lL] | *.[hH][tT][mM]) from=html ;;
+      *.[eE][pP][uU][bB]) from=epub ;;
+      *.[rR][tT][fF]) from=rtf ;;
+      *) continue ;;
+    esac
+    sibling="${path%.*}.md"
+    [ ! -e "$VAULT_DIR/$sibling" ] || continue
+    if (cd "$VAULT_DIR" && pandoc --sandbox -f "$from" -t gfm --wrap=none \
+      -o "$sibling" -- "$path") </dev/null >>"$PANDOC_LOG" 2>&1; then
+      converted=$((converted + 1))
+    else
+      rm -f "$VAULT_DIR/$sibling"
+      unconverted=$((unconverted + 1))
+    fi
+  done 3<"$PENDING_FILE"
+  if [ $((converted + unconverted)) -gt 0 ]; then
+    log "$STEP: $converted converted, $unconverted could not be converted"
+  fi
+fi
+
 # Claude itself runs under `env -i` with an explicit allow-list, so an
 # instruction that reaches the model despite the tool allow/deny list above
 # still finds no Drive token, no runner key and no BOWER_* value in its own
 # process; only the shell around it (sync down, sync up, the status report)
 # keeps those. Allowed through:
 #   HOME, PATH        to run at all, including the tools in $ALLOWED_TOOLS
-#                      (mv, mkdir, ls, cp, pandoc)
+#                      (mv, mkdir, ls)
 #   LANG, LC_ALL       stable text encoding while the agent reads vault files
 #   TMPDIR             Claude Code's own scratch space
 #   TERM               non-interactive output formatting
