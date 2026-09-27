@@ -19,7 +19,7 @@ function driveFile(id: string, name: string, mimeType: string): DriveFile {
   return { id, name, mimeType, parents: ['SOURCE_ID'], path: name };
 }
 
-const location = { path: '/onboarding', route: vi.fn() };
+const location = { path: '/onboarding', query: {}, route: vi.fn() };
 const setMe = vi.fn();
 const refresh = vi.fn(() => Promise.resolve());
 const createVault = vi.fn<() => Promise<Vault>>();
@@ -85,6 +85,13 @@ vi.mock('../src/tour-store.js', () => ({
     endTour(finished);
   },
   markTourSeen: (who: Me) => markTourSeen(who),
+}));
+
+const submitInterview = vi.fn(() =>
+  Promise.resolve({ areasCreated: [], areasSkipped: [] }),
+);
+vi.mock('../src/vault-store.js', () => ({
+  useVault: () => ({ submitInterview }),
 }));
 
 vi.mock('../src/drive.js', async (importOriginal) => {
@@ -158,6 +165,15 @@ async function reachBuilding(): Promise<void> {
   await flush();
 }
 
+/** Building's Continue (#198) always goes to the interview first; these
+ * Drive-step tests are not about the interview, so skip straight through
+ * it to whatever comes next (the Drive step, or Home without a Picker
+ * key). */
+async function passInterview(): Promise<void> {
+  await act(() => button('Continue').click());
+  await act(() => button('Skip the interview').click());
+}
+
 /** Presses the Drive card with a Picker that answers `response` at once. */
 async function pick(response: google.picker.ResponseObject): Promise<void> {
   loadPicker.mockResolvedValueOnce({} as typeof google.picker);
@@ -176,36 +192,53 @@ afterEach(() => {
 });
 
 describe('Onboarding: without a Picker key', () => {
-  it("skips the Drive step: Building's Continue goes straight home, six dots", async () => {
+  it('goes through the interview, then skips the Drive step: straight home, seven dots', async () => {
     await mountOnboarding('');
     await reachBuilding();
-    expect(dots()).toBe(6);
+    expect(dots()).toBe(7);
 
     await act(() => button('Continue').click());
+    expect(heading()).toBe('Tell Bower about yourself');
+    expect(dots()).toBe(7);
+
+    await act(() => button('Skip the interview').click());
     expect(location.route).toHaveBeenCalledWith('/');
     expect(heading()).not.toBe('Start with what you have');
   });
 });
 
 describe('Onboarding: Start with what you have', () => {
-  it('shows the step after Building, seven dots, the fourth on', async () => {
+  it('shows the interview after Building (eighth dot on), then the Drive step (fifth on)', async () => {
     await mountOnboarding('test-key');
     await reachBuilding();
 
     await act(() => button('Continue').click());
+    expect(heading()).toBe('Tell Bower about yourself');
+    expect(dots()).toBe(8);
+    const atInterview = Array.from(root.querySelectorAll('.onb-dots span'));
+    expect(
+      atInterview.filter((span) => span.classList.contains('is-on')),
+    ).toHaveLength(1);
+    expect(
+      atInterview.findIndex((span) => span.classList.contains('is-on')),
+    ).toBe(3);
+
+    await act(() => button('Skip the interview').click());
     expect(heading()).toBe('Start with what you have');
-    expect(dots()).toBe(7);
-    const all = Array.from(root.querySelectorAll('.onb-dots span'));
-    expect(all.filter((span) => span.classList.contains('is-on'))).toHaveLength(
-      1,
+    expect(dots()).toBe(8);
+    const atDrive = Array.from(root.querySelectorAll('.onb-dots span'));
+    expect(
+      atDrive.filter((span) => span.classList.contains('is-on')),
+    ).toHaveLength(1);
+    expect(atDrive.findIndex((span) => span.classList.contains('is-on'))).toBe(
+      4,
     );
-    expect(all.findIndex((span) => span.classList.contains('is-on'))).toBe(3);
   });
 
   it('"Later" goes to the tour without picking anything', async () => {
     await mountOnboarding('test-key');
     await reachBuilding();
-    await act(() => button('Continue').click());
+    await passInterview();
 
     await act(() => button('Later').click());
     expect(location.route).toHaveBeenCalledWith('/');
@@ -215,7 +248,7 @@ describe('Onboarding: Start with what you have', () => {
   it('picking files copies each into the inbox, one card each, then Continue', async () => {
     await mountOnboarding('test-key');
     await reachBuilding();
-    await act(() => button('Continue').click());
+    await passInterview();
 
     await pick({
       action: 'picked',
@@ -256,7 +289,7 @@ describe('Onboarding: Start with what you have', () => {
       .mockImplementation(() => undefined);
     await mountOnboarding('test-key');
     await reachBuilding();
-    await act(() => button('Continue').click());
+    await passInterview();
 
     await pick({
       action: 'picked',
@@ -275,7 +308,7 @@ describe('Onboarding: Start with what you have', () => {
   it('leaves out the Bower folder with a sentence', async () => {
     await mountOnboarding('test-key');
     await reachBuilding();
-    await act(() => button('Continue').click());
+    await passInterview();
 
     await pick({
       action: 'picked',
@@ -290,7 +323,7 @@ describe('Onboarding: Start with what you have', () => {
   it('exports a Google Doc as Markdown instead of copying it as-is', async () => {
     await mountOnboarding('test-key');
     await reachBuilding();
-    await act(() => button('Continue').click());
+    await passInterview();
 
     await pick({
       action: 'picked',
@@ -331,7 +364,7 @@ describe('Onboarding: Start with what you have', () => {
     );
     await mountOnboarding('test-key');
     await reachBuilding();
-    await act(() => button('Continue').click());
+    await passInterview();
 
     await pick({
       action: 'picked',
@@ -351,7 +384,7 @@ describe('Onboarding: Start with what you have', () => {
   it('leaves out a Drawing or a Form with a sentence, nothing copied', async () => {
     await mountOnboarding('test-key');
     await reachBuilding();
-    await act(() => button('Continue').click());
+    await passInterview();
 
     await pick({
       action: 'picked',

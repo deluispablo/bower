@@ -1,0 +1,82 @@
+/*
+ * The first-run interview (#198): one question at a time, reusing the
+ * onboarding column and bubble (`onboarding.css`'s `.onb`, `.onb-ask`,
+ * `.onb-bubble`) and the plain `.chip` (`layout.css`) for its own picked
+ * state.
+ */
+
+.interview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 28rem;
+  margin: var(--space-8) auto;
+}
+
+.interview-question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.interview-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.interview-chip.is-on {
+  background: var(--color-brand-tint);
+  border-color: var(--color-brand);
+  color: var(--color-link);
+}
+
+.interview-input {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.interview-area-add {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.interview-area-add .interview-input {
+  flex: 1;
+}
+
+.interview-secondary {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.interview-dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.interview-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+.interview-dots .is-on {
+  background: var(--color-brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interview-dots span {
+    transition: none;
+  }
+}

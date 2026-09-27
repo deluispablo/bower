@@ -1,6 +1,6 @@
 /**
- * First run (spec §7, #149; the Drive step of #219): four screens in one
- * route, with local state.
+ * First run (spec §7, #149; the Drive step of #219; the interview of #198):
+ * five screens in one route, with local state.
  *
  * 1. Welcome: the bird says hello. "Show me around" and "Skip the tour"
  *    both go on to the folder; skipping also records that the tour was
@@ -11,12 +11,18 @@
  *    folders appear as chips and a progress bar runs; "Continue" appears
  *    once the folder exists. On an error the bird is confused and the
  *    message says what to do.
- * 4. Start with what you have (only with `VITE_GOOGLE_API_KEY` set, spec
+ * 4. The interview (`components/interview.tsx`, spec D.2): four questions,
+ *    one at a time. "Finish" writes the answers through `useVault`'s
+ *    `submitInterview`; "Skip the interview" writes nothing. Replayable
+ *    from Settings as `/onboarding?step=interview&from=settings`, which
+ *    starts here directly and returns to Settings instead of going on.
+ * 5. Start with what you have (only with `VITE_GOOGLE_API_KEY` set, spec
  *    §14 "Add from your Drive"): the same Picker and copy-or-export-into-
  *    inbox path as Add's "From your Drive" button (#218: a Doc, Sheet or
  *    Slides file is exported first). "Later" and, once any pick settles,
  *    "Continue" both go to Home, where the tour starts. Without the key
- *    Building's Continue goes straight there instead, as before.
+ *    the interview's own "Finish"/"Skip" go straight there instead, as
+ *    Building's "Continue" always did before the interview existed.
  */
 
 import type { JSX } from 'preact';
@@ -34,7 +40,9 @@ import {
   IconInbox,
   IconPlus,
 } from '../components/icons.js';
+import { Interview } from '../components/interview.js';
 import { copyOrExportIntoInbox, exportPlanFor, getToken } from '../drive.js';
+import type { InterviewAnswers } from '../interview.js';
 import { parseFolderId } from '../onboarding.js';
 import {
   filesFromPickerResponse,
@@ -46,6 +54,7 @@ import {
 } from '../picker.js';
 import { useSession } from '../session.js';
 import { endTour, markTourSeen } from '../tour-store.js';
+import { useVault } from '../vault-store.js';
 import { expandPicks } from './add.js';
 import '../styles/onboarding.css';
 
@@ -55,7 +64,7 @@ const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
  * straight to Home, as it always has. */
 const HAS_DRIVE_STEP = GOOGLE_API_KEY !== '';
 
-type Step = 'welcome' | 'folder' | 'building' | 'drive';
+type Step = 'welcome' | 'folder' | 'building' | 'interview' | 'drive';
 
 type Mode = 'create' | 'select';
 
@@ -67,12 +76,13 @@ type ErrorState =
   | { kind: 'message'; text: string };
 
 const STEPS: readonly Step[] = HAS_DRIVE_STEP
-  ? ['welcome', 'folder', 'building', 'drive']
-  : ['welcome', 'folder', 'building'];
+  ? ['welcome', 'folder', 'building', 'interview', 'drive']
+  : ['welcome', 'folder', 'building', 'interview'];
 
 /** Dots for this route's own steps plus the three-step tour that follows
- * (never rendered here): six without the Drive step, seven with it. */
-const DOT_COUNT = HAS_DRIVE_STEP ? 7 : 6;
+ * (never rendered here): seven without the Drive step, eight with it — one
+ * more than before the interview (#198) existed, either way. */
+const DOT_COUNT = HAS_DRIVE_STEP ? 8 : 7;
 
 type DriveItemStatus = 'copying' | 'done' | 'failed';
 
@@ -130,10 +140,17 @@ function Dots({ step }: { step: Step }): JSX.Element {
 
 export function Onboarding(): JSX.Element {
   const { me, setMe, refresh } = useSession();
-  const { route } = useLocation();
-  const [step, setStep] = useState<Step>('welcome');
+  const { route, query } = useLocation();
+  const vault = useVault();
+  // Settings › Advanced → "Tell Bower about yourself again" replays just
+  // the interview, and returns there instead of going on to the tour.
+  const replayingFromSettings =
+    query.step === 'interview' && query.from === 'settings';
+  const [step, setStep] = useState<Step>(
+    replayingFromSettings ? 'interview' : 'welcome',
+  );
   const [mode, setMode] = useState<Mode>('create');
-  const [vault, setVault] = useState<Vault | null>(null);
+  const [createdVault, setCreatedVault] = useState<Vault | null>(null);
   const [showSelectForm, setShowSelectForm] = useState(false);
   const [folderInput, setFolderInput] = useState('');
   const [inputError, setInputError] = useState<string | null>(null);
@@ -144,6 +161,8 @@ export function Onboarding(): JSX.Element {
   const [driveQueue, setDriveQueue] = useState<DriveQueueItem[]>([]);
   const [drivePickerOpening, setDrivePickerOpening] = useState(false);
   const [driveNotes, setDriveNotes] = useState<string[]>([]);
+  const [interviewBusy, setInterviewBusy] = useState(false);
+  const [interviewError, setInterviewError] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const continueButton = useRef<HTMLButtonElement>(null);
   const driveContinueButton = useRef<HTMLButtonElement>(null);
@@ -161,8 +180,8 @@ export function Onboarding(): JSX.Element {
   }, [step]);
 
   useEffect(() => {
-    if (vault !== null) continueButton.current?.focus();
-  }, [vault]);
+    if (createdVault !== null) continueButton.current?.focus();
+  }, [createdVault]);
 
   const driveQueueIdle =
     driveQueue.length > 0 &&
@@ -184,7 +203,7 @@ export function Onboarding(): JSX.Element {
 
   function onVault(created: Vault): void {
     if (me) setMe({ ...me, vault: created });
-    setVault(created);
+    setCreatedVault(created);
   }
 
   function onError(err: unknown): void {
@@ -284,18 +303,47 @@ export function Onboarding(): JSX.Element {
     }
   }
 
-  /** Building's Continue: on to the Drive step when there is a Picker key,
-   * straight to Home otherwise (unchanged behaviour without the key). */
+  /** Building's Continue: on to the interview, always. */
   function continueFromBuilding(): void {
-    if (HAS_DRIVE_STEP) {
+    setStep('interview');
+  }
+
+  /** The interview's own "Finish" or "Skip": on to the Drive step when
+   * there is a Picker key, straight to Home otherwise — or, replaying from
+   * Settings, back there instead of either. */
+  function afterInterview(): void {
+    if (replayingFromSettings) {
+      route('/settings');
+    } else if (HAS_DRIVE_STEP) {
       setStep('drive');
     } else {
       route('/');
     }
   }
 
+  async function handleInterviewFinish(
+    answers: InterviewAnswers,
+  ): Promise<void> {
+    setInterviewError(null);
+    setInterviewBusy(true);
+    try {
+      await vault.submitInterview(answers);
+      afterInterview();
+    } catch (err) {
+      console.error(err);
+      setInterviewError('Could not save that. Try again in a moment.');
+    } finally {
+      setInterviewBusy(false);
+    }
+  }
+
+  function handleInterviewSkip(): void {
+    setInterviewError(null);
+    afterInterview();
+  }
+
   async function copyDriveItem(item: DriveQueueItem): Promise<void> {
-    const inboxFolderId = vault?.inboxFolderId;
+    const inboxFolderId = createdVault?.inboxFolderId;
     if (inboxFolderId === undefined) return;
     try {
       await copyOrExportIntoInbox(
@@ -333,7 +381,7 @@ export function Onboarding(): JSX.Element {
     if (data.action !== 'picked') return;
     const { items, excluded } = filesFromPickerResponse(
       data,
-      vault?.folderId ?? null,
+      createdVault?.folderId ?? null,
     );
     const notes: string[] = [];
     if (excluded > 0) {
@@ -503,6 +551,19 @@ export function Onboarding(): JSX.Element {
     );
   }
 
+  if (step === 'interview') {
+    return (
+      <Interview
+        onFinish={(answers) => void handleInterviewFinish(answers)}
+        onSkip={handleInterviewSkip}
+        busy={interviewBusy}
+        error={interviewError}
+        headingRef={heading}
+        dots={replayingFromSettings ? undefined : <Dots step={step} />}
+      />
+    );
+  }
+
   if (step === 'drive') {
     return (
       <section class="onb onb-folder onb-drive">
@@ -601,7 +662,7 @@ export function Onboarding(): JSX.Element {
     );
   }
 
-  const ready = vault !== null;
+  const ready = createdVault !== null;
   const birdState: BirdState =
     error !== null ? 'confused' : ready ? 'done' : 'building';
 
