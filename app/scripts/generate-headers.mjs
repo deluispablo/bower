@@ -119,7 +119,7 @@ export function buildHeaders({ apiUrl, googleApiKey }) {
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Referrer-Policy: no-referrer
+  Referrer-Policy: strict-origin-when-cross-origin
 `;
 }
 
