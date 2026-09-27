@@ -131,6 +131,8 @@ routes = [{ pattern = "api.example.com", custom_domain = true }]
 
 The instance repo is a private repo of the operator's own that only holds the agent's workflows and its own secrets — never this repo's code, never a user's vault content (see "Two repositories per deployment" in `ARCHITECTURE.md`).
 
+Each run installs what the runner needs on GitHub's `ubuntu-latest`: `rclone`, `pandoc` and Claude Code. `pandoc` stays even though the agent can no longer call it: `agent/run.sh` itself uses it, in sandbox mode, to turn the Word, OpenDocument, HTML, EPUB and RTF files waiting in the inbox into Markdown before the agent starts (see "Document conversion" in `agent/README.md`).
+
 There are two ways to get one:
 
 - **`scripts/new-instance.sh` (recommended).** `scripts/deploy.sh` runs it for you; on its own it is `bash scripts/new-instance.sh [OWNER/NAME] [--rotate]`. It creates `OWNER/NAME` as a private repo with `gh repo create --private` (or updates it if it exists), copies `agent/workflows/*.yml` into `.github/workflows/` and `agent/run.sh` and `agent/prompts/` into `agent/`, commits and pushes when something changed, asks for the Claude credential (skipped when one is set, unless `--rotate`) and sets `BOWER_API_URL`. The repo holds only what the runner needs. `ingest.yml` and `lint.yml` pin every `uses:` to a commit SHA (Dependabot keeps this repo's copies current); rerun `scripts/new-instance.sh` after a `git pull` here to carry a bump into the instance repo, same as any other workflow change.
@@ -145,7 +147,7 @@ Either way, set these under the instance repo's **Settings → Secrets and varia
 | `ANTHROPIC_API_KEY` | Secret (this or `CLAUDE_CODE_OAUTH_TOKEN`) | Claude Console → API keys |
 | `BOWER_API_URL` | Variable | The Worker's deployed origin, same as `API_ORIGIN` | 
 | `BOWER_MAX_TURNS` | Variable (optional) | Overrides the Worker's `DEFAULT_MAX_TURNS` for this instance |
-| `BOWER_ALLOW_WEB` | Variable (optional) | Leave unset (the default): the agent gets no web access, so a clipped page cannot make it send notes anywhere. `1` gives it `WebSearch` and `WebFetch`; only set it if your users' rulebooks need the web, and tell them (`docs/privacy.md`). See "Tools and web access" in `agent/README.md` |
+| `BOWER_ALLOW_WEB` | Variable (optional) | Leave unset (the default): the agent gets no web access, so a clipped page cannot make it send notes anywhere. This variable is the one way a run can reach the network: `1` gives it `WebSearch` and `WebFetch`; only set it if your users' rulebooks need the web, and tell them (`docs/privacy.md`). See "Tools and web access" in `agent/README.md` |
 
 With the GitHub CLI, from the instance repo's checkout (or add `-R OWNER/bower-home`):
 
@@ -230,7 +232,7 @@ The instance repo's `lint.yml` runs on its own every Sunday at 06:17 UTC: a firs
 ### Reading logs
 
 - **Worker**: `pnpm -C api exec wrangler tail -c wrangler.local.toml` streams live requests (method, path, status, exceptions) — nothing here includes note content or credentials (see `CLAUDE.md`'s logging rule and `api/test/log-hygiene.test.ts`).
-- **Agent runs**: the instance repo's **Actions** tab lists every `ingest` / `lint` run, with step names, timestamps and counts only. A failed run's reason is in `GET /status`'s `error` (for the weekly health check, in the `error` of the `lintrun:<id>` KV value instead); the full stderr and rclone output are the `bower-logs` artifact (`bower-logs-<n>` for each failed folder of the weekly health check), uploaded only `if: failure()`, kept 3 days (`agent/README.md`) — safe only because the instance repo is private.
+- **Agent runs**: the instance repo's **Actions** tab lists every `ingest` / `lint` run, with step names, timestamps and counts only. A failed run's reason is in `GET /status`'s `error` (for the weekly health check, in the `error` of the `lintrun:<id>` KV value instead); the full stderr, rclone output and pandoc's messages are the `bower-logs` artifact (`bower-logs-<n>` for each failed folder of the weekly health check), uploaded only `if: failure()`, kept 3 days (`agent/README.md`) — safe only because the instance repo is private.
 
 ### Security headers check
 
@@ -278,6 +280,7 @@ In order:
 | Push notifications never arrive | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` unset (falls out as `500 config`, same as any missing secret) or the user is on iOS without having installed the app to the home screen (iOS only delivers web push to an installed PWA) | Set the VAPID secrets (step 3.4–3.5); on iOS, tell the user to add the app to their home screen first |
 | Everyone is signed out again after 7 days | The Google OAuth consent screen is still in **Testing** — refresh tokens issued to test users expire after 7 days there | Publish the app (step 2) |
 | Pasting a link into Add saves a note but doesn't summarise it | Expected: the link becomes `Link - <host> <date> <time>.md` in the inbox right away, and the agent reads the page during the next Tidy up run, not when the note is saved | Run Tidy up to have Bower read it |
+| A Word, OpenDocument, HTML, EPUB or RTF file ends up in `0-Inbox/Processed/` with no note, and the run's summary mentions it under `Problems` | `pandoc` could not read it (a damaged or password-protected file), so it had no Markdown sibling; the run's log shows only `convert documents: <n> converted, <n> could not be converted`, and the agent has no converter of its own | Open the file on a computer; save it again (or as PDF) and add it to the inbox again. A run that fails for another reason keeps `pandoc.log` in the `bower-logs` artifact |
 | A Tidy up run's log or a note the agent wrote suggests the model tried to reach the Drive API, the Worker, or read `BOWER_API_KEY`/an access token, and couldn't | By design: `claude -p` runs under `env -i` with an explicit allow-list (`agent/run.sh`), so the model's own process never has the Drive token, `BOWER_API_KEY` or any other `BOWER_*`/`RCLONE_CONFIG_*` value, even though the surrounding shell does the sync down/up and the status report. A prompt-injected note (untrusted text in `0-Inbox/` or `Clippings/`) asking the model to use one of those must fail | Nothing to fix; this is the runner's minimal-environment guarantee (`docs/security.md` §6) |
 
 ## What the app hides
