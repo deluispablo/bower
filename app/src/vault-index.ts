@@ -42,6 +42,66 @@ export function basenameKey(name: string): string {
   return (dot > 0 ? name.slice(0, dot) : name).toLowerCase();
 }
 
+/**
+ * Bower's own files: kept in the index (so `/note/:id` still opens them) but
+ * left out of the tree, Recent, search and the switcher unless the
+ * `showAppFiles` preference is on (spec §5.3). Top-level only —
+ * `CLAUDE.md`, `index.md`, `log.md`, `About-Me.md`, `README.md`,
+ * `Lint Report.md` and any dated `Lint Report *.md` — except the agent's
+ * instruction notes (`Bower - *.md`), which count at any depth. The name is
+ * matched as written; only the `.md` extension is case-insensitive.
+ */
+const TOP_LEVEL_APP_BASENAMES = new Set([
+  'CLAUDE',
+  'index',
+  'log',
+  'About-Me',
+  'README',
+  'Lint Report',
+]);
+
+export function isAppFile(path: string, name: string): boolean {
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return false;
+  const base = name.slice(0, dot);
+  if (name.slice(dot + 1).toLowerCase() !== 'md') return false;
+
+  if (base.startsWith('Bower - ')) return true;
+  if (path.includes('/')) return false;
+
+  return TOP_LEVEL_APP_BASENAMES.has(base) || base.startsWith('Lint Report ');
+}
+
+/**
+ * Friendly names for Bower's own top-level files, shown in the "Bower's
+ * files" group instead of the raw file name. Instruction notes
+ * (`Bower - *.md`) are not here: they are labelled by their own title.
+ */
+export const APP_FILE_LABELS: Record<string, string> = {
+  'CLAUDE.md': 'Rulebook',
+  'index.md': 'Catalogue',
+  'log.md': 'Journal',
+  'About-Me.md': 'About me',
+  'README.md': 'Read me',
+  'Lint Report.md': 'Health report',
+};
+
+/**
+ * `APP_FILE_LABELS`, with a dated `Lint Report *.md` also mapped to
+ * "Health report" and any other app file (an instruction note) falling back
+ * to its own title (its file name, extension dropped).
+ */
+export function appFileLabel(name: string): string {
+  const dot = name.lastIndexOf('.');
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const known = APP_FILE_LABELS[`${base}.md`];
+  if (known !== undefined) return known;
+  if (base.startsWith('Lint Report ')) {
+    return APP_FILE_LABELS['Lint Report.md'] ?? 'Health report';
+  }
+  return base;
+}
+
 export function buildVaultIndex(files: DriveFile[]): VaultIndex {
   const index: VaultIndex = {
     byId: new Map(),

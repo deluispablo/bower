@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
-import { buildVaultIndex } from '../src/vault-index.js';
+import {
+  appFileLabel,
+  buildVaultIndex,
+  isAppFile,
+} from '../src/vault-index.js';
 
 let nextId = 0;
 
@@ -82,5 +86,81 @@ describe('buildVaultIndex', () => {
       '2-Areas/seed list.MD',
       'index.md',
     ]);
+  });
+});
+
+describe('isAppFile', () => {
+  it('is true for each top-level file Bower keeps for itself', () => {
+    for (const name of [
+      'CLAUDE.md',
+      'index.md',
+      'log.md',
+      'About-Me.md',
+      'README.md',
+      'Lint Report.md',
+    ]) {
+      expect(isAppFile(name, name)).toBe(true);
+    }
+  });
+
+  it('is true for a dated Lint Report at the top level', () => {
+    expect(
+      isAppFile('Lint Report 2026-09-01.md', 'Lint Report 2026-09-01.md'),
+    ).toBe(true);
+  });
+
+  it('is case-insensitive on the extension only', () => {
+    expect(isAppFile('CLAUDE.MD', 'CLAUDE.MD')).toBe(true);
+    expect(isAppFile('index.Md', 'index.Md')).toBe(true);
+  });
+
+  it('is false once one of those names is nested (not top-level)', () => {
+    expect(isAppFile('1-Projects/index.md', 'index.md')).toBe(false);
+    expect(isAppFile('1-Projects/CLAUDE.md', 'CLAUDE.md')).toBe(false);
+  });
+
+  it('is true for an instruction note (Bower - *.md) at any depth', () => {
+    const name = 'Bower - 2026-09-26 1405 Receipts.md';
+    expect(isAppFile(name, name)).toBe(true);
+    expect(isAppFile(`0-Inbox/${name}`, name)).toBe(true);
+    expect(isAppFile(`1-Projects/Garden/${name}`, name)).toBe(true);
+  });
+
+  it('is false for a user note that merely starts with "Bower" (no dash)', () => {
+    expect(isAppFile('Bower notes.md', 'Bower notes.md')).toBe(false);
+    expect(isAppFile('0-Inbox/Bower notes.md', 'Bower notes.md')).toBe(false);
+  });
+
+  it('is false for a folder note (that stays hidden for its own reason)', () => {
+    expect(isAppFile('1-Projects/_Folder.md', '_Folder.md')).toBe(false);
+  });
+
+  it('is false for an ordinary user note', () => {
+    expect(isAppFile('1-Projects/Plan.md', 'Plan.md')).toBe(false);
+  });
+
+  it('is false for a non-Markdown file, even with a matching name', () => {
+    expect(isAppFile('README.txt', 'README.txt')).toBe(false);
+  });
+});
+
+describe('appFileLabel', () => {
+  it('maps each top-level file to its friendly name', () => {
+    expect(appFileLabel('CLAUDE.md')).toBe('Rulebook');
+    expect(appFileLabel('index.md')).toBe('Catalogue');
+    expect(appFileLabel('log.md')).toBe('Journal');
+    expect(appFileLabel('About-Me.md')).toBe('About me');
+    expect(appFileLabel('README.md')).toBe('Read me');
+    expect(appFileLabel('Lint Report.md')).toBe('Health report');
+  });
+
+  it('maps a dated Lint Report to "Health report" too', () => {
+    expect(appFileLabel('Lint Report 2026-09-01.md')).toBe('Health report');
+  });
+
+  it('labels an instruction note by its own title', () => {
+    expect(appFileLabel('Bower - 2026-09-26 1405 Receipts.md')).toBe(
+      'Bower - 2026-09-26 1405 Receipts',
+    );
   });
 });
