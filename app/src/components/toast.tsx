@@ -2,6 +2,10 @@
  * A single, minimal toast: bottom of the screen, above the bottom nav,
  * auto-hides. No library, no queue — the caller owns the text and bumps
  * `messageKey` whenever it should (re)appear, even for the same text.
+ *
+ * An optional `linkHref` (spec §6, Home done row) adds a "See" link — the
+ * done toast points it at the Answers folder or the last filed note, when
+ * its id is known.
  */
 
 import { useEffect, useState } from 'preact/hooks';
@@ -15,12 +19,18 @@ export interface ToastProps {
   messageKey: number;
   /** Milliseconds before it auto-hides. */
   duration?: number;
+  /** Destination for the trailing link, or absent for no link. */
+  linkHref?: string;
+  /** The link's own text. */
+  linkLabel?: string;
 }
 
 export function Toast({
   message,
   messageKey,
   duration = DEFAULT_DURATION_MS,
+  linkHref,
+  linkLabel = 'See',
 }: ToastProps) {
   const [visible, setVisible] = useState(false);
 
@@ -35,7 +45,12 @@ export function Toast({
 
   return (
     <div class="toast" role="status" aria-live="polite">
-      {message}
+      <span class="toast-message">{message}</span>
+      {linkHref !== undefined && (
+        <a class="toast-link" href={linkHref}>
+          {linkLabel}
+        </a>
+      )}
     </div>
   );
 }

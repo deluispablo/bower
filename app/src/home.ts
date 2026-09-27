@@ -6,6 +6,9 @@
 
 import type { BirdState } from './components/bird-classes.js';
 
+/** The folder Bower writes answers to (spec §6, Home and Tell Bower rows). */
+export const ANSWERS_FOLDER = 'Answers';
+
 type DayPart = 'morning' | 'afternoon' | 'evening';
 
 /** Morning before noon, afternoon before 6 pm, evening after. */

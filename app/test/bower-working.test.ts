@@ -8,15 +8,17 @@ import {
 import {
   SHEET_LINGER_MS,
   sheetVisible,
+  startedAgo,
   workingStateFor,
 } from '../src/components/working-sheet.js';
 
 describe('workingBird', () => {
-  it('tidies while queued or running, shows off when done, is confused when failed', () => {
+  it('tidies while queued or running, shows off when done, is confused when failed or over quota', () => {
     expect(workingBird('queued')).toBe('tidying');
     expect(workingBird('running')).toBe('tidying');
     expect(workingBird('done')).toBe('showoff');
     expect(workingBird('failed')).toBe('confused');
+    expect(workingBird('quota')).toBe('confused');
   });
 });
 
@@ -26,6 +28,7 @@ describe('workingLabel', () => {
     expect(workingLabel('running')).toBe('Tidying up…');
     expect(workingLabel('done')).toBe('Done');
     expect(workingLabel('failed')).toBe('Something went wrong');
+    expect(workingLabel('quota')).toBe('Limit reached');
   });
 });
 
@@ -47,8 +50,8 @@ describe('sheetVisible', () => {
     expect(sheetVisible('running', 10 * 60_000, false)).toBe(true);
   });
 
-  it('lingers 3 s after done, failed or stale', () => {
-    for (const phase of ['done', 'failed', 'stale'] as const) {
+  it('lingers 3 s after done, failed, stale or over quota', () => {
+    for (const phase of ['done', 'failed', 'stale', 'quota'] as const) {
       expect(sheetVisible(phase, 0, false)).toBe(true);
       expect(sheetVisible(phase, SHEET_LINGER_MS - 1, false)).toBe(true);
       expect(sheetVisible(phase, SHEET_LINGER_MS, false)).toBe(false);
@@ -60,9 +63,8 @@ describe('sheetVisible', () => {
     expect(sheetVisible('done', 0, true)).toBe(false);
   });
 
-  it('never shows for idle or quota', () => {
+  it('never shows for idle', () => {
     expect(sheetVisible('idle', 0, false)).toBe(false);
-    expect(sheetVisible('quota', 0, false)).toBe(false);
   });
 });
 
@@ -73,7 +75,24 @@ describe('workingStateFor', () => {
     expect(workingStateFor('done')).toBe('done');
     expect(workingStateFor('failed')).toBe('failed');
     expect(workingStateFor('stale')).toBe('failed');
+    expect(workingStateFor('quota')).toBe('quota');
     expect(workingStateFor('idle')).toBeNull();
-    expect(workingStateFor('quota')).toBeNull();
+  });
+});
+
+describe('startedAgo', () => {
+  const requestedAt = '2026-09-27T12:00:00.000Z';
+  const nowMs = Date.parse(requestedAt);
+
+  it('says "just now" under a minute', () => {
+    expect(startedAgo(requestedAt, nowMs)).toBe('Started just now');
+    expect(startedAgo(requestedAt, nowMs + 59_000)).toBe('Started just now');
+  });
+
+  it('counts whole minutes since', () => {
+    expect(startedAgo(requestedAt, nowMs + 60_000)).toBe('Started 1 min ago');
+    expect(startedAgo(requestedAt, nowMs + 5 * 60_000)).toBe(
+      'Started 5 min ago',
+    );
   });
 });
