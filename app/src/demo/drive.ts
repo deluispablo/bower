@@ -124,6 +124,18 @@ export function createDemoDrive(server: DemoServer): DriveClient {
     createTextFile: (parentId, name, content) =>
       reply(() => create(parentId, name, 'text/markdown', content)),
 
+    createFolder: (parentId, name) =>
+      reply(() => {
+        folder(parentId);
+        const created = vault.add({
+          name,
+          mimeType: FOLDER_MIME,
+          parentId,
+          modifiedTime: vault.stamp(),
+        });
+        return vault.toFile(created, name);
+      }),
+
     copyIntoInbox: (id, name, inboxId) =>
       reply(() => {
         const original = file(id);

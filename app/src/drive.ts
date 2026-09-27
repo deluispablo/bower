@@ -557,6 +557,24 @@ function createTextFileHttp(
 }
 
 /**
+ * Creates a folder named `name` in `parentId` (`files.create`, no media):
+ * the first-run interview's own area folders (#198), each holding one
+ * `_<name>.md` folder note, same convention as any other folder's
+ * (`vault-index.ts`'s `isFolderNoteName`).
+ */
+async function createFolderHttp(
+  parentId: string,
+  name: string,
+): Promise<DriveFile> {
+  const response = await driveFetch(`/drive/v3/files?fields=${FILE_FIELDS}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, parents: [parentId], mimeType: FOLDER_MIME }),
+  });
+  return parseFile(await readJson(response), name);
+}
+
+/**
  * Copies the Drive file `id` into the inbox folder `inboxId` as `name`
  * (`files.copy`), unconditionally: the original keeps its id, its parent
  * and its content. Used directly for a plain copy; a Google Doc, Sheet or
@@ -1012,6 +1030,7 @@ export interface DriveClient {
     content: string,
     options?: CreateTextFileOptions,
   ): Promise<DriveFile>;
+  createFolder(parentId: string, name: string): Promise<DriveFile>;
   copyIntoInbox(id: string, name: string, inboxId: string): Promise<DriveFile>;
   exportFile(id: string, mimeType: string): Promise<Blob>;
   updateFileText(
@@ -1032,6 +1051,7 @@ export const httpDriveClient: DriveClient = {
   getBlob: getBlobHttp,
   upload: uploadHttp,
   createTextFile: createTextFileHttp,
+  createFolder: createFolderHttp,
   copyIntoInbox: copyIntoInboxHttp,
   exportFile: exportFileHttp,
   updateFileText: updateFileTextHttp,
@@ -1104,6 +1124,14 @@ export function createTextFile(
   options: CreateTextFileOptions = {},
 ): Promise<DriveFile> {
   return withDrive((c) => c.createTextFile(parentId, name, content, options));
+}
+
+/** Creates a folder named `name` in `parentId`. */
+export function createFolder(
+  parentId: string,
+  name: string,
+): Promise<DriveFile> {
+  return withDrive((c) => c.createFolder(parentId, name));
 }
 
 /** Copies Drive file `id` into the inbox as `name`; see `copyIntoInboxHttp`. */
