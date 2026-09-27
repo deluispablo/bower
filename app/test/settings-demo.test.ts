@@ -82,10 +82,12 @@ describe('Settings outside the demo', () => {
     mount();
     expect(root.querySelector('#api-key')).not.toBeNull();
     expect(
-      textsOf('.settings-button-secondary').includes('Sign out everywhere'),
+      textsOf('.settings-row').some((t) => t.includes('Sign out everywhere')),
     ).toBe(true);
     expect(
-      textsOf('.settings-button-danger').includes('Delete my Bower account'),
+      textsOf('.settings-link-danger').some((t) =>
+        t.includes('Delete my Bower account'),
+      ),
     ).toBe(true);
     expect(textsOf('.settings-note')).not.toContain(NOT_IN_DEMO);
   });
@@ -101,17 +103,20 @@ describe('Settings in a demo build', () => {
   it('shows the sentence instead of Sign out everywhere, keeps Sign out', () => {
     state.demo = true;
     mount();
+    const rows = textsOf('.settings-row');
     const buttons = textsOf('.settings-button-secondary');
     expect(buttons).toContain('Sign out');
-    expect(buttons).not.toContain('Sign out everywhere');
+    expect(rows.some((t) => t.includes('Sign out everywhere'))).toBe(false);
   });
 
   it('shows the sentence instead of Delete my Bower account', () => {
     state.demo = true;
     mount();
-    expect(textsOf('.settings-button-danger')).not.toContain(
-      'Delete my Bower account',
-    );
+    expect(
+      textsOf('.settings-link-danger').some((t) =>
+        t.includes('Delete my Bower account'),
+      ),
+    ).toBe(false);
   });
 
   it('shows the sentence exactly three times (API key, sign out everywhere, delete)', () => {

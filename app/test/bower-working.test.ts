@@ -47,13 +47,15 @@ describe('workingClasses', () => {
 });
 
 describe('sheetVisible', () => {
-  it('shows while queued or running, however long', () => {
+  it('shows while queued, running or done, however long', () => {
     expect(sheetVisible('queued', 0, false)).toBe(true);
     expect(sheetVisible('running', 10 * 60_000, false)).toBe(true);
+    // The run store ends `done` itself (8 s, or on dismiss).
+    expect(sheetVisible('done', SHEET_LINGER_MS, false)).toBe(true);
   });
 
-  it('lingers 3 s after done, failed, stale or over quota', () => {
-    for (const phase of ['done', 'failed', 'stale', 'quota'] as const) {
+  it('lingers 3 s after failed, stale or over quota', () => {
+    for (const phase of ['failed', 'stale', 'quota'] as const) {
       expect(sheetVisible(phase, 0, false)).toBe(true);
       expect(sheetVisible(phase, SHEET_LINGER_MS - 1, false)).toBe(true);
       expect(sheetVisible(phase, SHEET_LINGER_MS, false)).toBe(false);

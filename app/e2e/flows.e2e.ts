@@ -150,6 +150,49 @@ test('Tidy up files the inbox and says so', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'tidy-up');
 });
 
+test('the working sheet opens once per run, and the run ends back at Tidy up', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(page.getByRole('button', { name: 'Tidy up (3)' })).click();
+
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet).toBeVisible();
+  await shot(page, testInfo, 'run-working');
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+
+  // Home → Add → Home while the scripted run is still going: no screen
+  // mounting again brings the sheet back (#304).
+  await navigate(page, /^Add$/);
+  await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible();
+  await expect(sheet).toBeHidden();
+  await navigate(page, /^Home$/);
+  await expect(page).toHaveURL('/');
+  await expect(
+    visible(page.getByRole('button', { name: 'Tidying up…' })),
+  ).toBeVisible();
+  await expect(sheet).toBeHidden();
+
+  // Done is announced once, in a toast that closes; the sheet stays closed
+  // and the pill reads Tidy up again within seconds, not "Done ✓" for good.
+  const toast = page.getByRole('status').filter({
+    hasText: '3 files processed',
+  });
+  await expect(toast).toBeVisible({ timeout: 20_000 });
+  await expect(sheet).toBeHidden();
+  await shot(page, testInfo, 'run-done');
+  // By keyboard: on the phone the one-time notifications prompt slides up
+  // over the bottom of the screen at the same moment.
+  await toast.getByRole('button', { name: 'Close' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(toast).toBeHidden();
+  await expect(
+    visible(page.getByRole('button', { name: /^Tidy up/ })),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(sheet).toBeHidden();
+});
+
 test('Tell Bower sends a question to the inbox', async ({ page }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Tell( Bower)?$/);
@@ -184,4 +227,42 @@ test('Settings switches the theme to dark, and it sticks', async ({
   await expect(page.getByRole('radio', { name: 'Dark' })).toBeChecked();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await shot(page, testInfo, 'settings');
+});
+
+test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await navigate(page, /^Settings$/);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+
+  // Account · Tidying up · Look · Bower · Advanced, in that order (scoped
+  // to the settings section: the desktop sidebar has its own h2s).
+  const headings = await page
+    .locator('.settings')
+    .getByRole('heading', { level: 2 })
+    .allTextContents();
+  expect(headings).toEqual(['Tidying up', 'Look', 'Bower', 'Advanced']);
+
+  // The web-lookup row is present but disabled until #374 lands.
+  const webLookup = page
+    .locator('.settings')
+    .getByRole('switch', { name: 'Let Bower look things up on the web' });
+  await expect(webLookup).toBeVisible();
+  await expect(webLookup).toBeDisabled();
+  await expect(
+    page.locator('.settings').getByText('Coming soon.'),
+  ).toBeVisible();
+
+  // Sign out is a plain button, apart from Sign out everywhere; in the
+  // demo build, Sign out everywhere, the own API key and Delete each show
+  // the not-in-the-demo sentence instead of a working control. Scoped to
+  // the settings section: the desktop sidebar has its own Sign out button.
+  const settings = page.locator('.settings');
+  await expect(
+    settings.getByRole('button', { name: 'Sign out', exact: true }),
+  ).toBeVisible();
+  await expect(
+    settings.getByText('Not in the demo: run your own Bower to use this.'),
+  ).toHaveCount(3);
 });

@@ -3,18 +3,17 @@
  * the pending count from `useVault()`'s file listing; starts a run on tap
  * (idle), or reopens the working sheet on tap once it stopped (failed /
  * stale / over quota) to show the bird confused with the reason (#147).
- * `done` also announces itself with a toast, without a tap.
+ * `done` announces itself with a toast from the run store (#304).
  *
- * It also owns the working sheet (#38, redesigned in #147): the sheet opens
- * by itself when a run starts, closes on dismiss, and a tap on the button in
- * any non-idle phase reopens it. So the button is no longer disabled during
- * a run; a tap then never starts a second run.
+ * It also renders the working sheet (#38, redesigned in #147). Whether the
+ * sheet is open lives in the run store (#304): it opens by itself once per
+ * run, closes on dismiss, and a tap on the button in any non-idle phase
+ * reopens it. So the button is no longer disabled during a run; a tap then
+ * never starts a second run.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 
-import { ANSWERS_FOLDER } from '../home.js';
-import { folderHref } from '../navigation.js';
 import { offlineReason, useOnline } from '../online.js';
 import '../styles/process.css';
 import { pendingCount, useRun } from '../run-store.js';
@@ -22,7 +21,6 @@ import type { RunPhase } from '../run-store.js';
 import { useSession } from '../session.js';
 import { useVault } from '../vault-store.js';
 import { PushPrompt } from './push-prompt.js';
-import { Toast } from './toast.js';
 import { WorkingSheet } from './working-sheet.js';
 
 export function labelFor(phase: RunPhase, pending: number): string {
@@ -44,53 +42,25 @@ export function labelFor(phase: RunPhase, pending: number): string {
 
 export function ProcessButton() {
   const { me } = useSession();
-  const { phase, run, message, process } = useRun();
+  const { phase, run, message, process, sheetOpen, openSheet, dismissSheet } =
+    useRun();
   const { files } = useVault();
   const online = useOnline();
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastKey, setToastKey] = useState(0);
-  const [sheetOpen, setSheetOpen] = useState(false);
   // Bumped whenever a tap deliberately brings the sheet back, so the sheet
   // re-measures its linger window even if the phase itself hasn't changed
-  // (e.g. tapping "Done" again after it already lingered and faded).
+  // (e.g. tapping "Failed" again after it already lingered and faded).
   const [reopenKey, setReopenKey] = useState(0);
-  const prevPhase = useRef<RunPhase>(phase);
-
-  // The sheet opens when a run starts (here or on another device), lingers
-  // through a failure, a stale run or the day's quota running out exactly
-  // as it does for `done` (`sheetVisible`), and is closed again once the
-  // button is back to idle.
-  useEffect(() => {
-    const wasActive =
-      prevPhase.current === 'queued' || prevPhase.current === 'running';
-    prevPhase.current = phase;
-    if ((phase === 'queued' || phase === 'running') && !wasActive) {
-      setSheetOpen(true);
-    }
-    if (phase === 'idle') setSheetOpen(false);
-  }, [phase]);
-
-  const closeSheet = useCallback((): void => {
-    setSheetOpen(false);
-  }, []);
-
-  // A finished run announces itself without waiting for a tap.
-  useEffect(() => {
-    if (phase !== 'done' || message === undefined) return;
-    setToastMessage(message);
-    setToastKey((key) => key + 1);
-  }, [phase, message]);
 
   function onClick(): void {
     if (phase === 'idle') {
-      setSheetOpen(true);
+      openSheet();
       void process();
       return;
     }
     // Any other phase brings the sheet back, even if it had already
     // lingered away: queued/running shows progress, done shows off,
     // failed/stale/quota shows the bird confused with today's message.
-    setSheetOpen(true);
+    openSheet();
     setReopenKey((key) => key + 1);
   }
 
@@ -121,18 +91,13 @@ export function ProcessButton() {
       {!online && (
         <span class="process-offline-reason">{offlineReason('process')}</span>
       )}
-      <Toast
-        message={toastMessage}
-        messageKey={toastKey}
-        linkHref={folderHref(ANSWERS_FOLDER)}
-      />
       <PushPrompt />
       <WorkingSheet
         phase={phase}
         run={run}
         message={message}
         open={sheetOpen}
-        onDismiss={closeSheet}
+        onDismiss={dismissSheet}
         reopenKey={reopenKey}
       />
     </div>
