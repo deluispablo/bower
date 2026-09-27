@@ -16,7 +16,11 @@ function compareNames(a: string, b: string): number {
   return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
 }
 
-function folderOf(path: string): string {
+/** `path`'s containing folder (everything before its last `/`), or `''` for
+ * a top-level file or folder. Exported for the Pinned tile's own display
+ * text (`components/pinned-section.tsx`, issue #216), which needs a note's
+ * or a folder's parent path the same way the tree already does. */
+export function folderOf(path: string): string {
   const slash = path.lastIndexOf('/');
   return slash === -1 ? '' : path.slice(0, slash);
 }

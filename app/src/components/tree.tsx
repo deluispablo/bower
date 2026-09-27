@@ -22,11 +22,21 @@
  * from the first frontmatter tag was in scope, but the index built in
  * `vault-index.ts` has no note text, only Drive metadata, so no tag is
  * available here. Left out; see the PR.
+ *
+ * `linkFolders` also gates the desktop-only pin entry points (spec §14,
+ * issue #216): a hover pin button on every row plus a `contextmenu`
+ * (right-click, or the keyboard's Menu key / Shift+F10) menu with the same
+ * items as the drawer's held-row sheet (`pin-sheet.tsx`). The drawer itself
+ * (`linkFolders` false) gets that sheet from a long press instead
+ * (`use-long-press.ts`) — never both at once, since a phone never has
+ * `linkFolders` set and a desktop tree never receives pointer holds long
+ * enough to matter.
  */
 
 import type { JSX, RefCallback } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import { driveViewUrl } from '../markdown/embeds.js';
 import {
   appFileGroup,
   buildTree,
@@ -34,16 +44,22 @@ import {
   filterTree,
   folderCounts,
   folderHref,
+  folderOf,
   nextFocusIndex,
 } from '../navigation.js';
 import type { TreeNode, TreeRow, TreeSort } from '../navigation.js';
+import { runPinAction } from '../pin-action.js';
+import { useVault } from '../vault-store.js';
 import type { VaultIndex } from '../vault-index.js';
 import {
   IconChevronRight,
   IconExternalLink,
   IconFolder,
   IconNote,
+  IconPin,
 } from './icons.js';
+import { PinSheet } from './pin-sheet.js';
+import { useLongPress } from './use-long-press.js';
 
 interface Row extends TreeRow {
   name: string;
@@ -124,6 +140,9 @@ export function Tree({
   filter = '',
   linkFolders = false,
 }: TreeProps): JSX.Element {
+  const { pinNote, unpinNote, pinFolder, unpinFolder } = useVault();
+  // The one row (folder or note) whose pin sheet/menu is open, or `null`.
+  const [openRow, setOpenRow] = useState<Row | null>(null);
   const tree = useMemo(() => buildTree(index, sort), [index, sort]);
   const counts = useMemo(() => folderCounts(index), [index]);
   const group = useMemo(() => appFileGroup(index), [index]);
@@ -215,6 +234,75 @@ export function Tree({
     focusAt(nextFocusIndex(rows, i, event.key));
   }
 
+  function isPinned(row: Row): boolean {
+    return row.kind === 'note'
+      ? index.notePinnedAt.has(row.id ?? '')
+      : index.folderPinnedAt.has(row.path);
+  }
+
+  async function togglePin(row: Row): Promise<void> {
+    const already = isPinned(row);
+    const message = already ? 'Unpinned' : 'Pinned to Home';
+    if (row.kind === 'note') {
+      const id = row.id ?? '';
+      await runPinAction(
+        () => (already ? unpinNote(id) : pinNote(id)),
+        message,
+      );
+    } else {
+      await runPinAction(
+        () => (already ? unpinFolder(row.path) : pinFolder(row.path)),
+        message,
+      );
+    }
+  }
+
+  /** The row's own name, without a note's `.md`, for the sheet's dialog
+   * name and its "Ask Bower" wording. */
+  function displayName(row: Row): string {
+    return row.kind === 'note' ? row.name.replace(/\.md$/i, '') : row.name;
+  }
+
+  function pinSheetFor(row: Row): JSX.Element {
+    const name = displayName(row);
+    const driveHref =
+      row.kind === 'note'
+        ? (() => {
+            const file = index.byId.get(row.id ?? '');
+            return file === undefined ? '' : driveViewUrl(file);
+          })()
+        : (() => {
+            const file = index.byPath.get(row.path);
+            return file === undefined ? '' : driveFolderUrl(file);
+          })();
+    return (
+      <PinSheet
+        kind={row.kind}
+        name={name}
+        pinned={isPinned(row)}
+        openHref={folderHref(
+          row.kind === 'note' ? folderOf(row.path) : row.path,
+        )}
+        tellHref={`/tell?text=${encodeURIComponent(
+          row.kind === 'note' ? `[[${name}]] ` : `${name} `,
+        )}`}
+        driveHref={driveHref}
+        onTogglePin={() => void togglePin(row)}
+        onClose={() => setOpenRow(null)}
+      />
+    );
+  }
+
+  // One instance for every drawer row (`useLongPress`'s own doc comment):
+  // resolves the row from the `data-row-path` the pressed element carries,
+  // since calling the hook once per row inside `rows.map` below would break
+  // the Rules of Hooks (rows come and go as folders expand and collapse).
+  const longPress = useLongPress((target) => {
+    const path = target.dataset.rowPath;
+    const found = rows.find((candidate) => candidate.path === path);
+    if (found !== undefined) setOpenRow(found);
+  });
+
   const showGroup =
     showAppFiles &&
     (group.files.length > 0 ||
@@ -238,6 +326,8 @@ export function Tree({
               rowRefs.current[i] = el;
             };
             const tabIndex = i === focusIndex ? 0 : -1;
+            const pinLabel = `${isPinned(row) ? 'Unpin' : 'Pin'} ${displayName(row)}`;
+            const sheetOpen = openRow?.path === row.path;
             return (
               <li
                 key={row.path}
@@ -247,8 +337,15 @@ export function Tree({
               >
                 {row.kind === 'folder' && linkFolders ? (
                   <span
-                    class="tree-row tree-folder"
-                    style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
+                    class="tree-row tree-folder tree-row-pinnable"
+                    style={{
+                      paddingLeft: `${row.depth * 22 + 8}px`,
+                      position: 'relative',
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setOpenRow(row);
+                    }}
                   >
                     <button
                       type="button"
@@ -274,6 +371,20 @@ export function Tree({
                         {counts.get(row.path) ?? 0}
                       </span>
                     </a>
+                    <button
+                      type="button"
+                      class="tree-pin"
+                      aria-label={pinLabel}
+                      aria-pressed={isPinned(row)}
+                      // Out of the roving tab order, like the chevron above:
+                      // a keyboard user reaches the same toggle through the
+                      // row's own menu (Shift+F10 / the Menu key).
+                      tabIndex={-1}
+                      onClick={() => void togglePin(row)}
+                    >
+                      <IconPin />
+                    </button>
+                    {sheetOpen && pinSheetFor(row)}
                   </span>
                 ) : row.kind === 'folder' ? (
                   <button
@@ -282,12 +393,19 @@ export function Tree({
                     class="tree-row tree-folder"
                     style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
                     tabIndex={tabIndex}
+                    data-row-path={row.path}
                     onClick={() => {
+                      if (longPress.consumeLongPress()) return;
                       toggle(row.path);
                       setFocusIndex(i);
                     }}
                     onKeyDown={(event) => onRowKeyDown(event, i)}
                     onFocus={() => setFocusIndex(i)}
+                    onPointerDown={longPress.onPointerDown}
+                    onPointerMove={longPress.onPointerMove}
+                    onPointerUp={longPress.onPointerUp}
+                    onPointerCancel={longPress.onPointerCancel}
+                    onContextMenu={longPress.onContextMenu}
                   >
                     <span
                       class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
@@ -298,6 +416,42 @@ export function Tree({
                     <span class="tree-name">{row.name}</span>
                     <span class="tree-count">{counts.get(row.path) ?? 0}</span>
                   </button>
+                ) : linkFolders ? (
+                  <span
+                    class="tree-row tree-note tree-row-pinnable"
+                    style={{
+                      paddingLeft: `${row.depth * 22 + 8}px`,
+                      position: 'relative',
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setOpenRow(row);
+                    }}
+                  >
+                    <a
+                      href={`/note/${row.id ?? ''}`}
+                      ref={setRef}
+                      class="tree-note-link"
+                      tabIndex={tabIndex}
+                      onClick={() => onNavigate?.()}
+                      onKeyDown={(event) => onRowKeyDown(event, i)}
+                      onFocus={() => setFocusIndex(i)}
+                    >
+                      <IconNote />
+                      <span class="tree-name">{row.name}</span>
+                    </a>
+                    <button
+                      type="button"
+                      class="tree-pin"
+                      aria-label={pinLabel}
+                      aria-pressed={isPinned(row)}
+                      tabIndex={-1}
+                      onClick={() => void togglePin(row)}
+                    >
+                      <IconPin />
+                    </button>
+                    {sheetOpen && pinSheetFor(row)}
+                  </span>
                 ) : (
                   <a
                     href={`/note/${row.id ?? ''}`}
@@ -305,14 +459,27 @@ export function Tree({
                     class="tree-row tree-note"
                     style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
                     tabIndex={tabIndex}
-                    onClick={() => onNavigate?.()}
+                    data-row-path={row.path}
+                    onClick={(event) => {
+                      if (longPress.consumeLongPress()) {
+                        event.preventDefault();
+                        return;
+                      }
+                      onNavigate?.();
+                    }}
                     onKeyDown={(event) => onRowKeyDown(event, i)}
                     onFocus={() => setFocusIndex(i)}
+                    onPointerDown={longPress.onPointerDown}
+                    onPointerMove={longPress.onPointerMove}
+                    onPointerUp={longPress.onPointerUp}
+                    onPointerCancel={longPress.onPointerCancel}
+                    onContextMenu={longPress.onContextMenu}
                   >
                     <IconNote />
                     <span class="tree-name">{row.name}</span>
                   </a>
                 )}
+                {!linkFolders && sheetOpen && pinSheetFor(row)}
               </li>
             );
           })}
