@@ -14,7 +14,7 @@ import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { RunPhase } from '../run-store.js';
-import { BowerWorking, sceneFor } from './bower-working.js';
+import { BowerWorking, workingLabel } from './bower-working.js';
 import type { WorkingState } from './bower-working.js';
 
 /** How long the sheet stays up after a run ends. */
@@ -122,9 +122,9 @@ export function WorkingSheet({
 
   if (!visible || state === null) return null;
 
-  // The run store's message, unless it only repeats the scene's label.
+  // The run store's message, unless it only repeats the label under the bird.
   const detail =
-    message !== undefined && message !== sceneFor(state).label
+    message !== undefined && message !== workingLabel(state)
       ? message
       : undefined;
 

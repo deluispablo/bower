@@ -7,6 +7,7 @@ import { findReport, isReportNew } from '../health-report.js';
 import { getPref } from '../prefs.js';
 import { useSession } from '../session.js';
 import { useVault } from '../vault-store.js';
+import { Bird } from './bird.tsx';
 import { OfflineBanner } from './offline-banner.js';
 import { ProcessButton } from './process-button.js';
 import { Search } from './search.js';
@@ -74,7 +75,7 @@ export function Layout({ children }: LayoutProps) {
     <div class="shell">
       <header class="topbar">
         <a href="/" class="topbar-logo" aria-label="Bower home">
-          <img src="/logo.svg" alt="" width="32" height="32" />
+          <Bird state="looking" size={32} />
         </a>
         <Search />
         <div class="topbar-slot" data-slot="process">

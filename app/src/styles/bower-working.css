@@ -1,14 +1,11 @@
 /*
- * The processing animation (#38) and the sheet that holds it. Everything
- * that moves animates `transform` or `opacity` only. Colours come from the
- * tokens (tokens.css), so light and dark both work; papers stay white.
+ * The tidy-up animation (#38, the bird since #137) and the sheet that holds
+ * it. The bird's own motion lives in bird.css; this file lays it out, adds
+ * the reduced-motion dot and styles the sheet. Everything that moves
+ * animates `transform` or `opacity` only.
  */
 
 .bw {
-  --bw-paper: #ffffff;
-  --bw-paper-line: #94a3b8;
-  --bw-nest: #92400e;
-
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -16,12 +13,11 @@
   margin: 0;
 }
 
-.bw-scene {
-  display: block;
-  width: 100%;
-  max-width: 320px;
-  height: auto;
-  overflow: visible;
+/* The scene reaches about half the bird's size past each side of its box. */
+.bw-stage {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-4) var(--space-12) 0;
 }
 
 .bw-label {
@@ -31,150 +27,14 @@
   text-align: center;
 }
 
-/* Shapes */
-
-.bw-ground {
-  stroke: var(--color-border);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.bw-paper {
-  fill: var(--bw-paper);
-  stroke: var(--bw-paper-line);
-  stroke-width: 1;
-}
-
-.bw-paper-line {
-  fill: none;
-  stroke: var(--bw-paper-line);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-}
-
-.bw-tray {
-  fill: var(--color-border-strong);
-}
-
-.bw-nest {
-  fill: var(--bw-nest);
-}
-
-.bw-twig {
-  fill: none;
-  stroke: var(--bower-amber);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-}
-
-.bw-body {
-  fill: var(--bower-teal);
-}
-
-.bw-wing {
-  fill: #0f766e;
-}
-
-.bw-eye {
-  fill: var(--bower-navy);
-}
-
-.bw-beak {
-  fill: var(--bower-amber);
-}
-
-.bw-question {
-  fill: var(--color-text);
-  font-family: var(--font-sans);
-  font-size: 24px;
-  font-weight: var(--weight-bold);
-}
+/* Reduced motion: the bird holds still; one dot pulses while a run is active. */
 
 .bw-dot {
-  fill: var(--color-brand);
-}
-
-/* Moving parts: the bird is drawn around its feet, at the local origin. */
-
-.bw-pos,
-.bw-turn,
-.bw-bob,
-.bw-drop,
-.bw-pile {
-  transform-box: view-box;
-  transform-origin: 0 0;
-}
-
-.bw-wing {
-  transform-box: fill-box;
-  transform-origin: 80% 20%;
-}
-
-.bw-pile {
-  transition: transform var(--motion-bird) var(--ease-out);
-}
-
-.bw-carry,
-.bw-drop,
-.bw-question,
-.bw-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand);
   opacity: 0;
-}
-
-/* Queued: perched on the nest's rim, a gentle bob. */
-
-.bw--queued .bw-pos,
-.bw--done .bw-pos {
-  transform: translate(222px, 112px);
-}
-
-.bw--queued .bw-bob {
-  animation: bw-bob 1.6s ease-in-out infinite alternate;
-}
-
-/* Running: tray, pick, carry, drop, back; about 4 s a loop. */
-
-.bw--running .bw-pos {
-  transform: translate(222px, 112px);
-  animation: bw-fly 4s ease-in-out infinite;
-}
-
-.bw--running .bw-turn {
-  animation: bw-turn 4s linear infinite;
-}
-
-.bw--running .bw-wing {
-  animation: bw-flap 0.28s ease-in-out infinite alternate;
-}
-
-.bw--running .bw-carry {
-  opacity: 1;
-  animation: bw-carry 4s linear infinite;
-}
-
-.bw--running .bw-drop {
-  animation: bw-drop 4s ease-in infinite;
-}
-
-.bw--indeterminate .bw-pile {
-  animation: bw-fill 90s ease-out forwards;
-}
-
-/* Failed: sitting on the tray, puzzled. */
-
-.bw--failed .bw-pos {
-  transform: translate(58px, 100px);
-}
-
-.bw--failed .bw-question {
-  opacity: 1;
-}
-
-/* Reduced motion: nothing moves; one dot pulses while a run is active. */
-
-.bw.bw--still .bw-scene * {
-  animation: none;
-  transition: none;
 }
 
 .bw.bw--still.bw--queued .bw-dot,
@@ -194,128 +54,6 @@
   .bw--running .bw-dot {
     opacity: 1;
     animation: bw-pulse 1.6s ease-in-out infinite !important;
-  }
-}
-
-@keyframes bw-bob {
-  from {
-    transform: translateY(0);
-  }
-
-  to {
-    transform: translateY(-3px);
-  }
-}
-
-@keyframes bw-fly {
-  0% {
-    transform: translate(250px, 102px);
-  }
-
-  18% {
-    transform: translate(160px, 46px);
-  }
-
-  35% {
-    transform: translate(60px, 98px);
-  }
-
-  40% {
-    transform: translate(60px, 103px);
-  }
-
-  46% {
-    transform: translate(60px, 98px);
-  }
-
-  64% {
-    transform: translate(160px, 42px);
-  }
-
-  82% {
-    transform: translate(250px, 98px);
-  }
-
-  88%,
-  100% {
-    transform: translate(250px, 102px);
-  }
-}
-
-@keyframes bw-turn {
-  0%,
-  44% {
-    transform: scaleX(-1);
-  }
-
-  48%,
-  90% {
-    transform: scaleX(1);
-  }
-
-  94%,
-  100% {
-    transform: scaleX(-1);
-  }
-}
-
-@keyframes bw-flap {
-  from {
-    transform: scaleY(1);
-  }
-
-  to {
-    transform: scaleY(0.5);
-  }
-}
-
-@keyframes bw-carry {
-  0%,
-  39% {
-    opacity: 0;
-  }
-
-  40%,
-  88% {
-    opacity: 1;
-  }
-
-  89%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes bw-drop {
-  0%,
-  88% {
-    opacity: 0;
-    transform: translateY(0);
-  }
-
-  89% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  98% {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-
-  100% {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-}
-
-@keyframes bw-fill {
-  from {
-    transform: translateY(22px);
-  }
-
-  to {
-    transform: translateY(4px);
   }
 }
 
