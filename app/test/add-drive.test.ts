@@ -83,6 +83,14 @@ vi.mock('../src/picker.js', async (importOriginal) => {
   realLoadPicker = actual.loadPicker;
   return { ...actual, loadPicker, openFilePicker };
 });
+// #289 added a `useVault()` call to Add (the refresh after a batch's
+// worth of uploads). Mocked the same way sibling suites do
+// (`layout.test.ts`, `settings-demo.test.ts`): no real VaultProvider
+// needed for a plain UI check.
+vi.mock('../src/vault-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/vault-store.js')>()),
+  useVault: () => ({ refresh: vi.fn() }),
+}));
 
 let root: HTMLElement;
 
