@@ -232,3 +232,22 @@ None blocking. Two the lead may revisit while building:
 
 - Whether the light theme needs its own pass of the explorer colours once real notes are on screen.
 - The exact easing values, to be tuned in the browser against the canvas.
+
+## 14. Revision of 28 September
+
+An audit of `main` after M6 to M9 (the app at 375 and 1280 px, the canvases, the README) redrew every screen. The findings and their severity are on `docs/design/screens/Audit.dc.html`; the issues are milestones M15 to M17. The decisions, in one place:
+
+- **Phone top bar**, every screen: the menu button first (the drawer slides in from the left), then the wordmark on Home or the screen title (Add, Tell Bower, Settings) or the back link (a note, a folder), then the `actions` slot, then **Tidy up at the right edge**. A note shows back, Tidy up, More. Section 5.1 is superseded on this point.
+- **No shell** on the sign-in, Not invited, Privacy, Terms, the onboarding and the intro.
+- **One bird per screen.** The wordmark is text alone (phone bar, sidebar, drawer footer, Settings). The bird stays on the sign-in, the Home greeting, the sheets, the tour, the drop zone and the Tell bubbles. Bars and cards use Idle, never Looking. Offline: the banner is text with the wifi icon; the greeting bird is the sad one.
+- **What is Bower** (`Intro-1` to `Intro-4`): four swipeable pages before the sign-in on the first visit (Skip top right, Next per page, Sign in on the last), again from Settings › Advanced › What is Bower (Close, Done) and from a link on the sign-in. Sign-in links Privacy · Terms · What is Bower?.
+- **Add fills the inbox, nothing more.** "Tidy up right after adding" is gone everywhere (`autoProcessOnAdd`). Add shows the amber card: add a pile, tap Tidy up once. The tour's Tidy up step says why. Section 6 row Add and the Settings row are superseded.
+- **Add from your Drive** (`Phone-Add-Drive`, `Phone-Drive-Picker`, `Desktop-Add`, `Onb-Drive`): a third button on Add opens the Google Picker over the whole Drive (the app already holds that scope); picks are copied into the inbox, Docs, Sheets and Slides exported on the way (Markdown, CSV, PDF), originals untouched. The first run asks once, after Building: "Start with what you have".
+- **Hidden folders**: every folder whose name starts with "." (`.obsidian`, `.claude`, `.trash`, whatever another editor adds), plus `Processed`. `.claude` appears as "Agent settings" only with Bower's own files shown. Section 5.3 extended.
+- **Folder screen** `/folder/<path>` (`Phone-Folder`, `Desktop-Folder`): name, counts, chips (Pinned, Ask Bower, Open in Drive), subfolders, notes newest first. The Answers card, breadcrumb segments, the desktop tree and pinned folders open it. The `#folder=` hash goes.
+- **Pins** (`Phone-Home`, `Phone-Home-Pins`, `Phone-Pin-Sheet`, `Desktop-Home`): a note is pinned by frontmatter `pinned: <ISO time>`; a folder through its folder note `_<Folder>.md`. Order is pin time, newest first, no manual reorder. Home shows a Pinned section above Recent, hidden while empty; the desktop sidebar a Pinned group. Entry points: the note menu, a long press on a drawer row, a hover pin on a tree row, the Folder chip. The agent keeps `pinned` as it is.
+- **Note menu** (`Phone-Note-Menu`): one More button; Pin to Home, Ask Bower about this note, Open in Drive, Copy link, Edit the text (last, with a hint; hidden for Bower's own files). The header link and the Edit button go. Editing exists and is not advertised.
+- **Palette**: the soft set (`Brand.dc.html`): dark sidebar #0b1120, page #111a2b, surface #1a2538, hover #233049, border #2c3a54, text #dfe5ee; teal #5fcfbc, deep teal #2f9c8d, amber #f0b64f, success #7ed3a1, danger #ef8a8a; warm light set. Section 3.1 is superseded by the sheet.
+- **Breakpoints**: 600 (content column 640 px, centred), 900 (sidebar), 1200 (the About panel). `Tablet-Home` and `Tablet-Note` are the 768 px reference.
+- **Redundancies removed**: the inbox count appears on the pill and the Home card only (no sidebar Inbox row, no sidebar status card); Open in Drive once; the static "Weekly health check" row replaced by a sentence on the Health card and screen; `/lint` becomes `/health`.
+- **README**: how it works in seven steps (filing its own), "What the bird does with your files" with one case per PARA letter, "What Bower is not" including "Not the only way in" (Obsidian, Google Docs, a file manager on the same folder). `Site-Readme-Section.dc.html`.
