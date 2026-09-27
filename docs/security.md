@@ -40,6 +40,7 @@ The session cookie stays `SameSite=Lax`, so the app and the Worker **must share 
 - [x] Runner protected paths: permission policy from the instance repo (`agent/claude-settings.json`), post-run audit with known roots and `BOWER_MAX_CHANGES` in `agent/run.sh`; covered by `agent/test/smoke.sh`.
 - [ ] Prompt injection: red-team corpus (`agent/test/redteam/`) run once against a real model, outcome table filled in below. See "Prompt injection".
 - [x] Runner pre-scan: `agent/scan.sh` flags injection-shaped pending files and `agent/run.sh` quarantines them before the agent runs; covered by `agent/test/scan.test.sh` and `agent/test/smoke.sh`.
+- [x] Web Share Target (#262/M3): the service worker's `POST /add` handler stores a share only when `Sec-Fetch-Site: none` (the OS share sheet, not a cross-site page's own `FormData` POST), and shared files land in the Add queue as waiting cards, uploaded only once the user taps "Add to Bower" (`app/src/share-target.ts`, `isTrustedShareRequest`; `app/src/sw.ts`).
 - [x] This threat model.
 
 ## Prompt injection

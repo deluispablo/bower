@@ -1003,6 +1003,7 @@ export interface DriveClient {
     parentId: string,
     name: string,
     content: string,
+    options?: CreateTextFileOptions,
   ): Promise<DriveFile>;
   copyIntoInbox(id: string, name: string, inboxId: string): Promise<DriveFile>;
   exportFile(id: string, mimeType: string): Promise<Blob>;
@@ -1093,8 +1094,9 @@ export function createTextFile(
   parentId: string,
   name: string,
   content: string,
+  options: CreateTextFileOptions = {},
 ): Promise<DriveFile> {
-  return withDrive((c) => c.createTextFile(parentId, name, content));
+  return withDrive((c) => c.createTextFile(parentId, name, content, options));
 }
 
 /** Copies Drive file `id` into the inbox as `name`; see `copyIntoInboxHttp`. */

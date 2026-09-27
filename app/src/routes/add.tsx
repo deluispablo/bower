@@ -159,6 +159,7 @@ export function Add() {
   const [linkError, setLinkError] = useState<string | null>(null);
   const [pickerOpening, setPickerOpening] = useState(false);
   const [driveNotes, setDriveNotes] = useState<string[]>([]);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   useShellSlot('crumb', CRUMB);
 
@@ -185,22 +186,30 @@ export function Add() {
   }, [inboxFolderId]);
 
   // Web Share Target: the service worker redirected here with the shared
-  // files waiting in Cache Storage.
+  // files waiting in Cache Storage. They join the queue as waiting cards,
+  // same as chosen or dropped files: nothing uploads until the person taps
+  // "Add to Bower" (#262/M3).
   useEffect(() => {
     if (sharedHandledRef.current) return;
     if (typeof window === 'undefined') return;
-    if (new URLSearchParams(window.location.search).get('shared') !== '1') {
+    const shared = new URLSearchParams(window.location.search).get('shared');
+    if (shared === 'failed') {
+      // The service worker logged the real error (#134); the page only
+      // needs one sentence.
+      sharedHandledRef.current = true;
+      setShareError('Could not receive the shared files. Try again.');
       return;
     }
+    if (shared !== '1') return;
     sharedHandledRef.current = true;
     takeSharedFiles()
       .then((shared) => {
         if (shared.length === 0) return;
-        const created = addFiles(shared);
-        void runQueue(created);
+        addFiles(shared);
       })
       .catch((err: unknown) => {
         console.error(err);
+        setShareError('Could not receive the shared files. Try again.');
       });
     // Runs once, right after mount.
   }, []);
@@ -403,6 +412,8 @@ export function Add() {
   return (
     <section class="add-screen">
       <h1 class="screen-title">Add</h1>
+
+      {shareError !== null && <p class="add-field-error">{shareError}</p>}
 
       <input
         ref={fileInputRef}
