@@ -51,6 +51,7 @@ test.describe('open Home', () => {
       page.getByRole('heading', { name: 'Bower', level: 1 }),
     ).toBeVisible();
     await expect(page.getByText('This is a demo: sample notes')).toBeVisible();
+    await shot(page, testInfo, 'login');
 
     // Back on Home from a fresh load: the demo forgets everything on reload,
     // so the tour is offered again.

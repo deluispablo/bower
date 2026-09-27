@@ -1,7 +1,9 @@
 /**
- * Sign in (spec §6, Login row): the bird saying hello on a ground line, the
- * wordmark, a one-line promise, the Google button, the invited-only note,
- * and links to Privacy and Terms.
+ * Sign in (spec §6, Login row; #331): the bird saying hello on a ground
+ * line, the wordmark, a one-line promise, the Google button, the
+ * invited-only note, and links to Privacy and Terms. On desktop
+ * `.auth-screen--login` (auth.css) centres the whole block vertically in
+ * the viewport; the phone keeps `.auth-screen`'s own top margin.
  */
 
 import { loginUrl } from '../api.js';
@@ -14,7 +16,7 @@ export function Login() {
   const { error } = useSession();
 
   return (
-    <section class="auth-screen">
+    <section class="auth-screen auth-screen--login">
       <div class="auth-bird auth-bird--ground">
         <Bird state="hello" size={96} />
       </div>
