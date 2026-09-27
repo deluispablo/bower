@@ -150,6 +150,49 @@ test('Tidy up files the inbox and says so', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'tidy-up');
 });
 
+test('the working sheet opens once per run, and the run ends back at Tidy up', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(page.getByRole('button', { name: 'Tidy up (3)' })).click();
+
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet).toBeVisible();
+  await shot(page, testInfo, 'run-working');
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+
+  // Home → Add → Home while the scripted run is still going: no screen
+  // mounting again brings the sheet back (#304).
+  await navigate(page, /^Add$/);
+  await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible();
+  await expect(sheet).toBeHidden();
+  await navigate(page, /^Home$/);
+  await expect(page).toHaveURL('/');
+  await expect(
+    visible(page.getByRole('button', { name: 'Tidying up…' })),
+  ).toBeVisible();
+  await expect(sheet).toBeHidden();
+
+  // Done is announced once, in a toast that closes; the sheet stays closed
+  // and the pill reads Tidy up again within seconds, not "Done ✓" for good.
+  const toast = page.getByRole('status').filter({
+    hasText: '3 files processed',
+  });
+  await expect(toast).toBeVisible({ timeout: 20_000 });
+  await expect(sheet).toBeHidden();
+  await shot(page, testInfo, 'run-done');
+  // By keyboard: on the phone the one-time notifications prompt slides up
+  // over the bottom of the screen at the same moment.
+  await toast.getByRole('button', { name: 'Close' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(toast).toBeHidden();
+  await expect(
+    visible(page.getByRole('button', { name: /^Tidy up/ })),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(sheet).toBeHidden();
+});
+
 test('Tell Bower sends a question to the inbox', async ({ page }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Tell( Bower)?$/);

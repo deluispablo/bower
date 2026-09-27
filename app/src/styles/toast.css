@@ -1,0 +1,66 @@
+/* The one toast (`components/toast.tsx`, `toast-store.ts`). */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-16) + var(--space-2));
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: calc(100vw - var(--space-8));
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.toast-message {
+  min-width: 0;
+}
+
+.toast-link {
+  flex-shrink: 0;
+  color: var(--color-brand);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.toast-link:hover {
+  text-decoration: underline;
+}
+
+.toast-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2))
+    calc(-1 * var(--space-2)) 0;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  color: inherit;
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toast-close:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (min-width: 900px) {
+  .toast {
+    bottom: var(--space-4);
+  }
+}
