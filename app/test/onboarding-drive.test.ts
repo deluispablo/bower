@@ -13,6 +13,8 @@ import type * as PickerModule from '../src/picker.js';
 // copy path and card wording as Add's "From your Drive" (#217); only the
 // route and its own queue rendering are onboarding's.
 
+const FOLDER = 'application/vnd.google-apps.folder';
+
 function driveFile(id: string, name: string, mimeType: string): DriveFile {
   return { id, name, mimeType, parents: ['SOURCE_ID'], path: name };
 }
@@ -37,6 +39,9 @@ const copyOrExportIntoInbox = vi.fn<
     inboxId: string,
   ) => Promise<DriveFile>
 >((pick) => Promise.resolve(driveFile(`${pick.id}_COPY`, pick.name, 'x')));
+const listFolder = vi.fn<(folderId: string) => Promise<DriveFile[]>>(() =>
+  Promise.resolve([]),
+);
 const openFilePicker =
   vi.fn<
     (
@@ -86,8 +91,10 @@ vi.mock('../src/drive.js', async (importOriginal) => {
   const actual = await importOriginal<typeof DriveModule>();
   return {
     exportPlanFor: actual.exportPlanFor,
+    FOLDER_MIME: actual.FOLDER_MIME,
     copyOrExportIntoInbox,
     getToken,
+    listFolder,
   };
 });
 
@@ -309,6 +316,35 @@ describe('Onboarding: Start with what you have', () => {
       (root.textContent ?? '').includes(
         'Saved as Markdown from your Drive · the original stays where it was',
       ),
+    );
+  });
+
+  it("copies a picked folder's own files, at most 50, and says so when more (shares Add's expandPicks)", async () => {
+    const folder = [
+      driveFile('SUB_ID', 'Receipts', FOLDER),
+      ...Array.from({ length: 51 }, (_, i) =>
+        driveFile(`F${i}_ID`, `scan-${i}.pdf`, 'application/pdf'),
+      ),
+    ];
+    listFolder.mockImplementation((id) =>
+      Promise.resolve(id === 'DIR_ID' ? folder : []),
+    );
+    await mountOnboarding('test-key');
+    await reachBuilding();
+    await act(() => button('Continue').click());
+
+    await pick({
+      action: 'picked',
+      docs: [{ id: 'DIR_ID', name: 'Tax 2025', mimeType: FOLDER }],
+    });
+    await waitFor(() => copyOrExportIntoInbox.mock.calls.length === 50, 200);
+
+    expect(listFolder).toHaveBeenCalledWith('DIR_ID');
+    expect(
+      copyOrExportIntoInbox.mock.calls.map(([pick]) => pick.id),
+    ).not.toContain('SUB_ID');
+    expect(root.textContent).toContain(
+      'Tax 2025 has more than 50 files: the first 50 were added.',
     );
   });
 

@@ -46,6 +46,7 @@ import {
 } from '../picker.js';
 import { useSession } from '../session.js';
 import { endTour, markTourSeen } from '../tour-store.js';
+import { expandPicks } from './add.js';
 import '../styles/onboarding.css';
 
 const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
@@ -322,10 +323,10 @@ export function Onboarding(): JSX.Element {
 
   /** Same copy-or-export path as Add's "From your Drive" (#218): picks land
    * in the inbox one at a time, each as its own queue card; the Bower
-   * folder is left out by `filesFromPickerResponse`, as it is there, and a
-   * Drawing or Form (no format to save it as) is left out with a sentence.
-   * Unlike Add, a picked folder is copied as itself rather than expanded
-   * into its files. */
+   * folder is left out by `filesFromPickerResponse`, as it is there, a
+   * picked folder is expanded into its own files by `expandPicks`, same as
+   * Add, and a Drawing or Form (no format to save it as) is left out with
+   * a sentence. */
   async function onDrivePicked(
     data: google.picker.ResponseObject,
   ): Promise<void> {
@@ -340,7 +341,8 @@ export function Onboarding(): JSX.Element {
         'Your Bower folder was left out: what is in it is already in Bower.',
       );
     }
-    const files = items.filter((item: PickedItem) => {
+    const expanded = await expandPicks(items, notes);
+    const files = expanded.filter((item: PickedItem) => {
       if (exportPlanFor(item.mimeType).action !== 'skip') return true;
       notes.push(
         `${item.name} is a Google Drawing or Form: there is no format to save it as, so it was left out.`,
