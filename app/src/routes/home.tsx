@@ -138,7 +138,7 @@ function DesktopTell({
       />
       {last !== null && (
         <div class="home-tell-last">
-          <Bird state="looking" face="happy" size={40} />
+          <Bird state="idle" face="happy" size={40} />
           <p>
             Last one: &ldquo;{firstLine(last.text)}&rdquo;.{' '}
             {statusLineFor(last, runSnapshot)}
