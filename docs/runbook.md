@@ -265,6 +265,10 @@ In order:
 | Everyone is signed out again after 7 days | The Google OAuth consent screen is still in **Testing** — refresh tokens issued to test users expire after 7 days there | Publish the app (step 2) |
 | Pasting a link into Add saves a note but doesn't summarise it | Expected: the link becomes `Link - <host> <date> <time>.md` in the inbox right away, and the agent reads the page during the next Tidy up run, not when the note is saved | Run Tidy up (or leave "Tidy up right after adding" on) to have Bower read it |
 
+## What the app hides
+
+The explorer, Recent, search and the switcher never show: any dot-folder at any depth (`.obsidian`, `.claude`, `.trash`, whatever another editor adds), anything under a `Processed/` folder, folder notes (`_*.md`) and dot-files (`.hidden.md`-style) — one rule, `isHidden` in `app/src/vault-index.ts`. Opening the folder in Obsidian, or any other editor, never changes what the app shows. With "Show Bower's own files" on, `.claude` alone reappears in the explorer's "Bower's files" group as "Agent settings" (read-only, opens in Drive); every other dot-folder stays hidden regardless of that setting.
+
 ## Extensions
 
 Optional modules an operator can add on top of their own instance, kept out of the core deploy: `docs/extensions/email-in.md` (a Gmail-fed inbox), not built, design only.

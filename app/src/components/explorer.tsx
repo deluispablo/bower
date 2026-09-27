@@ -195,7 +195,9 @@ export function Explorer({
         onClick={toggleAppFiles}
       >
         {showAppFiles ? <IconEye /> : <IconEyeOff />}
-        <span>Bower's own files: {showAppFiles ? 'shown' : 'hidden'}</span>
+        <span>
+          Bower's own files and dot-folders: {showAppFiles ? 'shown' : 'hidden'}
+        </span>
       </button>
       {me !== undefined && (
         <div class="explorer-account">
