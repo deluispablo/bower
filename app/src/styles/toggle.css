@@ -1,0 +1,80 @@
+/* The settings switch (`components/toggle.tsx`): a real checkbox, styled as
+   a track and thumb with `appearance: none` so no OS chrome shows through. */
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  cursor: pointer;
+}
+
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.toggle-label {
+  font-size: var(--text-base);
+}
+
+.toggle-hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.toggle-input {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  background: var(--color-border-strong);
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.toggle-input::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background: var(--color-bg);
+  border-radius: 50%;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.toggle-input:checked {
+  background: var(--color-brand);
+}
+
+.toggle-input:checked::after {
+  transform: translateX(18px);
+  background: var(--color-on-brand);
+}
+
+.toggle-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle-input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle-input,
+  .toggle-input::after {
+    transition: none;
+  }
+}
