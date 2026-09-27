@@ -16,4 +16,4 @@ The approved redesign (Obsidian-like look, the bird as mascot, every screen) liv
 
 ## The bird for the README and GitHub
 
-`python3 docs/design/assets.py` writes `docs/assets/logo.svg`, `bird-hero.svg`, `bird-tidy.svg` and `social-preview.svg` from the same drawing. The app's own icons (`app/public/`) are regenerated from `scripts/brand/build.py`, which issue M6 moves onto this drawing.
+`python3 docs/design/assets.py` writes `docs/assets/bird-hero.svg`, `bird-tidy.svg` and `social-preview.svg` from the same drawing. The still mark, `docs/assets/logo.svg`, and the app's own icons (`app/public/`) come from `scripts/brand/build.py`, which holds the same drawing without its props.

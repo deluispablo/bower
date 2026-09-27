@@ -1,6 +1,5 @@
 # Writes the bird as standalone SVG files for the README and GitHub:
 #
-#   docs/assets/logo.svg            the mark, still
 #   docs/assets/bird-hero.svg       the bird looking around (CSS animation
 #                                   inside the SVG; GitHub plays it in <img>)
 #   docs/assets/bird-tidy.svg       the tidy-up scene: inbox to nest
@@ -44,7 +43,7 @@ def write(name, text):
     print('wrote', os.path.relpath(path, os.path.join(HERE, '..', '..')), len(text), 'bytes')
 
 
-write('logo.svg', wrap(64, 64, '0 0 100 100', bird('', 0, 0, 100)))
+# docs/assets/logo.svg, the still mark, comes from scripts/brand/build.py.
 
 write('bird-hero.svg', wrap(240, 240, '0 0 100 100', bird('p-look', 0, 0, 100)))
 

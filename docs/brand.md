@@ -1,14 +1,15 @@
 # Brand
 
-Bower is named after the bowerbird, which builds and decorates a bower from twigs and bright finds. The mark is that bird: flat, friendly, side view, carrying a twig. The CSS tokens that implement this page live in `app/src/styles/tokens.css`; change both together.
+Bower is named after the bowerbird, which builds and decorates a bower from twigs and bright finds. The mark is that bird: flat, friendly, side view. The same drawing is the app's mascot, animated on every screen. The CSS tokens that implement this page live in `app/src/styles/tokens.css`; change both together.
 
 ## Mark and files
 
-The bird is five shapes on a 64 × 64 grid: a teal body with a round head and a short tail cocked up and back, a smaller darker-teal wing (`#0f766e`), a navy eye, an amber beak and an amber twig. No gradients, no outlines, no raster.
+One drawing on a 100 × 100 grid, facing right, feet on y = 91: a round teal body (`#2dd4bf`), a round head overlapping it, one big navy eye (`#0b1220`) with two white highlights, a small amber beak (`#fbbf24`) with a darker jaw (`#d97706`), a leaf-shaped dark-teal wing (`#0f766e`) that starts at the shoulder, one short cocked dark-teal tail feather, two dark-amber feet and a faint lighter cheek (`#99f6e4`). No gradients, no outlines, no raster. It holds a twig, paper or gem only while carrying one, so the mark has none.
 
 | File | Use |
 | --- | --- |
-| `app/public/logo.svg` | Mark only, transparent. Avatars, in-app header, README. |
+| `app/public/logo.svg` | Mark only, transparent. Avatars, sign-in page. The in-app header draws the animated bird instead (`<Bird state="looking">`). |
+| `docs/assets/logo.svg` | The same file for the README and GitHub. |
 | `app/public/logo-wordmark.svg` | Mark + "Bower" with a navy word, for light backgrounds. The word is outlined from Poppins Bold (SIL Open Font License 1.1), so no font is loaded. |
 | `app/public/logo-wordmark-dark.svg` | The same with a `#f1f5f9` word, for dark backgrounds. Pick the file by the page's theme (for example `<picture>` with a `prefers-color-scheme` source, or the app's current theme); neither file switches colour on its own. |
 | `app/public/icons/favicon.svg` | Browser tab. Mark on a navy rounded square so it reads on light and dark tab bars. |
@@ -19,9 +20,43 @@ The bird is five shapes on a 64 × 64 grid: a teal body with a round head and a 
 
 In every icon the bird's bounding box is centred on the canvas. Clear space around the mark: at least a quarter of its height. Minimum size: 16 px for the mark on navy, 24 px for the bare mark, 96 px wide for the wordmark.
 
+### The bird in the app
+
+`<Bird>` (`app/src/components/bird.tsx`, styles in `app/src/styles/bird.css`) draws the mark with every part in its own group, so each state is CSS on the same markup: no JavaScript timer, no image request. Every bird is `aria-hidden`; the text next to it carries the meaning.
+
+| Group | Origin | Moves |
+| --- | --- | --- |
+| `rig` | feet | breathe, hop, squash on landing, strut, fly |
+| `turn` | feet | faces left or right (`scaleX(-1)`) |
+| `hd` head (eye, beak, cheek) | neck | turns up to 16 degrees, leans, tucks |
+| `ey` eye | centre | blink, wink, dilate, look left or right |
+| `jw` jaw | hinge | chirp, sing |
+| `wg` wing | shoulder | flap, flutter, spread, shrug |
+| `tl` tail | base | flick, wag, settle, stream in flight |
+| `ft` feet | top | tuck in flight |
+
+Props (twig `tw`, paper `pp`, notes `nt`, question mark `qm`, z `zz`, sparkles `sp`, cloud `cl`) are separate elements, hidden unless a state shows them. `scene` adds the inbox tray, the nest and the two walls (`tray`, `nest`, `wall`) that Tidying up and Building use.
+
+| State | Where | Motion | Plays |
+| --- | --- | --- | --- |
+| Looking | Every idle bird: header, explorer footer, greeting | Breath, blink, head turns up, down, back; whole bird turns round every 11 s; tail flick | Loop |
+| Hello | Sign-in, first open of the day, end of the tour | Flies in flapping with feet tucked, lands with a squash, tail settles, looks at you, two chirps, one hop | Once |
+| Shiny | Search box on focus, a file over the drop zone, a link pasted | Eye grows, leans in, wing flutters, tail wags, two bounces | Loop while focused |
+| Singing | Tell Bower while typing and right after send | Head up, jaw keeps the beat, three notes float off, tail wags | Loop while typing |
+| Tidying up | Button and sheet during a run | Ferries a paper then a twig from inbox to nest; the nest fills, folder names appear | Loop until the run ends |
+| Show-off | Run finished, tour finished, first note ever filed | Strut, deep bow, wing spread, tail fanned, sparkles | Once, then Looking |
+| Confused | Run failed, note not found, not invited, 404 | Head tilts both ways, wing shrug, question mark | Slow loop |
+| Building | Folder creation on first run, long first loads | Twig in beak, hops between two walls of twigs that go up stick by stick | Loop until done |
+| Asleep | Empty inbox, nothing sent yet | Head tucked, eye shut, slow breath, two z | Loop |
+| Peeking | Behind the drop zone; behind the search box before typing | Only the top of the head shows, eye follows the caret, head pops up | Loop |
+| Offline | Offline banner, note not on this device | Puffed, desaturated, cloud above, slow blink | Still |
+| Done | Small wins: upload done, message sent, settings saved | One hop, wink, chirp | Once, 2 s |
+
+Five still faces from the same dials (jaw, eye, head): happy, curious, worried, sleepy, proud (`face` prop). Plays-once states call `onDone` when the `rig`'s animation ends; the caller switches back to Looking. Under `prefers-reduced-motion: reduce` (or `reducedMotion`) no state plays: the bird holds the still face of its state (Hello happy, Shiny curious, Confused worried, Asleep sleepy, Show-off proud, otherwise none).
+
 ### Regenerating
 
-Edit the bird in `scripts/brand/build.py` (the only copy of its shapes), then run `python3 scripts/brand/build.py`. It rewrites every file above, centres the bird by its measured bounding box, and fails if an icon is off-centre, the maskable bird leaves the safe zone or `logo.svg` reaches 6 KB. It needs Pillow, fontTools, Playwright with Chromium and Poppins Bold on the developer machine (see the script header); none of these are app dependencies. After changing colours in `tokens.css`, run `python3 scripts/brand/contrast.py` (standard library only) and update the contrast table below.
+The shapes come from the design canvas (`docs/design/gen.py`, `BIRD_CORE`); the app's component (`app/src/components/bird.tsx`) and `scripts/brand/build.py` each carry a copy, so change all three together. Then run `python3 scripts/brand/build.py`. It rewrites every file above, centres the bird by its measured bounding box, and fails if an icon is off-centre, the maskable bird leaves the safe zone, the bird fills less than 12 px of the 16 px favicon or `logo.svg` reaches 6 KB. It needs Pillow, fontTools, Playwright with Chromium and Poppins Bold on the developer machine (see the script header); none of these are app dependencies. After changing colours in `tokens.css`, run `python3 scripts/brand/contrast.py` (standard library only) and update the contrast table below.
 
 ## Palette
 
@@ -117,6 +152,6 @@ Spacing is a 4 px grid: `--space-1` 4, `--space-2` 8, `--space-3` 12, `--space-4
 
 - Do put the mark on white, slate or navy; don't put it on teal, amber or a photo.
 - Do use navy text on teal and amber fills; don't use teal or amber as text on a light background.
-- Do keep the bird facing right, flat and in its own colours; don't rotate, mirror, outline, add gradients or recolour it.
+- Do keep the bird facing right, flat and in its own colours; don't rotate, mirror (except when an animation turns it round), outline, add gradients or recolour it.
 - Do use the navy-square favicon or app icons below 24 px; don't shrink the bare mark or the wordmark below their minimum sizes.
 - Do say "Bower" in text with a capital B; don't set the name in the wordmark font inside running text.
