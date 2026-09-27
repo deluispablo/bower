@@ -10,12 +10,14 @@
  *   opened from the top bar's menu button. Shows a title row with a close
  *   button; following any link inside closes it.
  *
- * The filter field opens the quick switcher (#142): the drawer's is a
- * button styled like a field (the drawer closes first, then the switcher
- * opens as a sheet); the sidebar's is a button with a `Ctrl K` hint (spec
- * §5.2). The hidden-files footer button toggles the `showAppFiles`
- * preference (spec §5.3), the same one Settings › Advanced has its own
- * switch for.
+ * The filter field differs per variant (spec §14): the drawer's is a real
+ * text field that narrows the tree in place (`Tree`'s `filter` prop, pure
+ * logic in `navigation.ts#filterTree`), so the drawer stays open while
+ * typing; the sidebar's stays a button with a `Ctrl K` hint that opens the
+ * quick switcher (#142) instead — the switcher is one tap away either way,
+ * from Home's search button and `Ctrl/Cmd+K`. The hidden-files footer
+ * button toggles the `showAppFiles` preference (spec §5.3), the same one
+ * Settings › Advanced has its own switch for.
  */
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -99,6 +101,9 @@ export function Explorer({
   const [showAppFiles, setShowAppFiles] = useState(() =>
     getPref('showAppFiles'),
   );
+  // Drawer only: the live filter text (spec §14); the sidebar has no field
+  // of its own to hold, its button opens the switcher instead.
+  const [filter, setFilter] = useState('');
 
   function toggleSort(): void {
     const next: ExplorerSortPref = sort === 'name' ? 'modified' : 'name';
@@ -140,22 +145,35 @@ export function Explorer({
           <span class="brand-word">Bower</span>
         </a>
       )}
-      <button
-        type="button"
-        class="explorer-filter"
-        onClick={() => {
-          if (variant === 'drawer') onClose?.();
-          openSwitcher();
-        }}
-      >
-        <IconSearch />
-        <span class="explorer-filter-label">Search or jump to a note</span>
-        {variant === 'sidebar' && (
+      {variant === 'drawer' ? (
+        <div class="explorer-filter">
+          <IconSearch />
+          <input
+            type="text"
+            class="explorer-filter-input"
+            placeholder="Filter your notes"
+            aria-label="Filter your notes"
+            value={filter}
+            onInput={(event) => {
+              setFilter((event.target as HTMLInputElement).value);
+            }}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          class="explorer-filter"
+          onClick={() => {
+            openSwitcher();
+          }}
+        >
+          <IconSearch />
+          <span class="explorer-filter-label">Search or jump to a note</span>
           <span class="explorer-filter-kbd" aria-hidden="true">
             Ctrl K
           </span>
-        )}
-      </button>
+        </button>
+      )}
       <div class="explorer-rows">
         {nav}
         <a
@@ -181,6 +199,7 @@ export function Explorer({
             index={index}
             sort={sort}
             collapseKey={collapseKey}
+            filter={variant === 'drawer' ? filter : undefined}
             onNavigate={onClose}
             showAppFiles={showAppFiles}
           />

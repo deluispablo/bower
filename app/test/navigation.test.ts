@@ -6,6 +6,7 @@ import {
   appFileGroup,
   breadcrumb,
   buildTree,
+  filterTree,
   folderCounts,
   nextFocusIndex,
   pendingCount,
@@ -217,6 +218,73 @@ describe('buildTree', () => {
     expect(tree.notes).toEqual([]);
     const inbox = tree.folders.find((f) => f.name === '0-Inbox');
     expect(inbox?.notes.map((n) => n.name)).toEqual(['note.md']);
+  });
+});
+
+describe('filterTree', () => {
+  it('returns the tree unchanged for a blank query', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      entry('1-Projects/Garden.md'),
+    ]);
+    const tree = buildTree(index);
+    expect(filterTree(tree, '  ')).toBe(tree);
+  });
+
+  it('keeps a matching note and drops the rest, case-insensitively', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      entry('1-Projects/Garden.md'),
+      entry('1-Projects/Car insurance.md'),
+    ]);
+    const tree = buildTree(index);
+    const filtered = filterTree(tree, 'GARDEN');
+    const projects = filtered.folders[0];
+    expect(projects?.name).toBe('1-Projects');
+    expect(projects?.notes.map((n) => n.name)).toEqual(['Garden.md']);
+  });
+
+  it('keeps the parent chain of a deep match and drops sibling folders', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Garden'),
+      dir('2-Areas'),
+      entry('1-Projects/Garden/Seed List.md'),
+      entry('2-Areas/Health.md'),
+    ]);
+    const tree = buildTree(index);
+    const filtered = filterTree(tree, 'seed');
+    expect(filtered.folders.map((f) => f.name)).toEqual(['1-Projects']);
+    const garden = filtered.folders[0]?.folders[0];
+    expect(garden?.name).toBe('Garden');
+    expect(garden?.notes.map((n) => n.name)).toEqual(['Seed List.md']);
+  });
+
+  it('keeps a whole subtree once a folder name itself matches', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Garden'),
+      entry('1-Projects/Garden/Amendments.md'),
+      entry('1-Projects/Garden/Seed List.md'),
+    ]);
+    const tree = buildTree(index);
+    const filtered = filterTree(tree, 'garden');
+    const garden = filtered.folders[0]?.folders[0];
+    expect(garden?.notes.map((n) => n.name)).toEqual([
+      'Amendments.md',
+      'Seed List.md',
+    ]);
+  });
+
+  it('returns an empty tree when nothing matches', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      entry('1-Projects/Garden.md'),
+    ]);
+    const tree = buildTree(index);
+    const filtered = filterTree(tree, 'nope');
+    expect(filtered.folders).toEqual([]);
+    expect(filtered.notes).toEqual([]);
   });
 });
 

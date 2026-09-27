@@ -2,11 +2,14 @@
  * The quick switcher (#142, spec §5.1/§5.2): one field that jumps to a note
  * or runs a command. `role="dialog"`, a sheet under the phone's top bar or
  * a centred dialog on desktop (same markup, `styles/switcher.css` tells
- * them apart per breakpoint). Replaces the old top-bar search
- * (`search.tsx`, removed): every opener — the drawer's filter field, the
- * desktop sidebar's switcher button, `Ctrl/Cmd + K` in `app.tsx`, and the
- * `/search` route — goes through `openSwitcher()` (`switcher-store.ts`), so
- * #143's Home pill can call it too.
+ * them apart per breakpoint). Replaces the old top-bar search (`search.tsx`,
+ * removed): every opener — Home's search button, the desktop sidebar's
+ * filter button, `Ctrl/Cmd + K` in `app.tsx`, and the `/search` route — goes
+ * through `openSwitcher()` (`switcher-store.ts`), so #143's Home pill can
+ * call it too. The drawer's filter field is not among them (spec §14): it
+ * narrows the tree in place instead (`components/tree.tsx`'s `filter`
+ * prop), so the switcher stays one tap away rather than replacing the
+ * drawer.
  *
  * Notes: the same debounced Drive full-text search as the old search box
  * (`search.ts#filterToIndex`, the 2-character minimum, recent searches when
