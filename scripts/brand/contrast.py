@@ -2,7 +2,7 @@
 """Check WCAG 2.1 contrast of the colour tokens in app/src/styles/tokens.css.
 
 Reads the light tokens from the first `:root` block and the dark overrides from the
-`:root[data-theme="dark"]` block, then checks each text/background pair against AA
+`:root[data-theme='dark']` block, then checks each text/background pair against AA
 (4.5:1 for text, 3:1 for control outlines). Prints a table and exits non-zero on failure.
 Standard library only.
 
@@ -18,8 +18,9 @@ TOKENS = Path(__file__).resolve().parents[2] / "app/src/styles/tokens.css"
 
 # (foreground, background, minimum ratio)
 PAIRS = [
-    ("text", "bg", 4.5), ("text", "surface", 4.5),
+    ("text", "bg", 4.5), ("text", "surface", 4.5), ("text", "sidebar", 4.5),
     ("text-muted", "bg", 4.5), ("text-muted", "surface", 4.5),
+    ("text-muted", "sidebar", 4.5),
     ("link", "bg", 4.5), ("link", "surface", 4.5),
     ("danger", "bg", 4.5), ("success", "bg", 4.5),
     ("on-brand", "brand", 4.5), ("on-accent", "accent", 4.5),
@@ -56,7 +57,7 @@ def resolve(tokens: dict[str, str], name: str) -> str:
 def main() -> None:
     css = re.sub(r"/\*.*?\*/", "", TOKENS.read_text(), flags=re.S)
     light = block(css, ":root")
-    themes = {"light": light, "dark": {**light, **block(css, ':root[data-theme="dark"]')}}
+    themes = {"light": light, "dark": {**light, **block(css, ":root[data-theme='dark']")}}
     failed = False
     print(f"{'pair':32} {'light':>7} {'dark':>7}")
     for fg, bg, need in PAIRS:
