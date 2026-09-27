@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { LocationProvider, Route, Router } from 'preact-iso';
+import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import { registerSW } from 'virtual:pwa-register';
 
 import { Layout } from './components/layout.js';
@@ -19,6 +19,7 @@ import { Terms } from './routes/terms.js';
 import { RunProvider } from './run-store.js';
 import { ShellSlotsProvider } from './components/shell-slots.js';
 import { SessionProvider, useSession } from './session.js';
+import { usesShell } from './shell-routes.js';
 import { openSwitcher } from './switcher-store.js';
 import { VaultProvider } from './vault-store.js';
 
@@ -34,6 +35,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
 function AppRoutes() {
   const { status } = useSession();
+  const { path } = useLocation();
 
   // Ctrl/Cmd+K opens the quick switcher from anywhere (#142).
   useEffect(() => {
@@ -56,25 +58,32 @@ function AppRoutes() {
     return <p class="app-loading">Loading…</p>;
   }
 
+  const routes = (
+    <Router>
+      <Route path="/" component={Home} />
+      <Route path="/login" component={Login} />
+      <Route path="/not-invited" component={NotInvited} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/note/:id" component={Note} />
+      <Route path="/add" component={Add} />
+      <Route path="/tell" component={Tell} />
+      <Route path="/search" component={SearchRedirect} />
+      <Route path="/settings" component={Settings} />
+      <Route path="/lint" component={Health} />
+      <Route path="/onboarding" component={Onboarding} />
+      {/* #207 adds the intro route here, also outside Layout (shell-routes.ts). */}
+      <Route default component={NotFound} />
+    </Router>
+  );
+
   return (
     <ShellSlotsProvider>
-      <Layout>
-        <Router>
-          <Route path="/" component={Home} />
-          <Route path="/login" component={Login} />
-          <Route path="/not-invited" component={NotInvited} />
-          <Route path="/privacy" component={Privacy} />
-          <Route path="/terms" component={Terms} />
-          <Route path="/note/:id" component={Note} />
-          <Route path="/add" component={Add} />
-          <Route path="/tell" component={Tell} />
-          <Route path="/search" component={SearchRedirect} />
-          <Route path="/settings" component={Settings} />
-          <Route path="/lint" component={Health} />
-          <Route path="/onboarding" component={Onboarding} />
-          <Route default component={NotFound} />
-        </Router>
-      </Layout>
+      {usesShell(path) ? (
+        <Layout>{routes}</Layout>
+      ) : (
+        <main class="page page-bare">{routes}</main>
+      )}
     </ShellSlotsProvider>
   );
 }

@@ -5,6 +5,7 @@ import { useLocation } from 'preact-iso';
 import { Bird } from '../components/bird.js';
 import { useFocusTrap } from '../components/use-focus-trap.js';
 import { IconClock, IconClose } from '../components/icons.js';
+import { useShellSlot } from '../components/shell-slots.js';
 import { TellComposer } from '../components/tell-composer.js';
 import { createTextFile } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
@@ -23,6 +24,10 @@ import type { RunSnapshot, SentItem } from '../tell.js';
 /** The bird's opening line (spec §6, Tell Bower row). */
 const OPENING_LINE =
   "A rule, a task or a question. I'll put it in your inbox and get to it on the next tidy-up.";
+
+/** The phone top bar's title (spec §14): a stable element, so it never
+ * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
+const CRUMB = <h1 class="topbar-title">Tell Bower</h1>;
 
 interface TellHistoryProps {
   sent: SentItem[];
@@ -99,6 +104,8 @@ export function Tell() {
   const [sent, setSent] = useState<SentItem[]>(() => loadSent());
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  useShellSlot('crumb', CRUMB);
+
   const runSnapshot: RunSnapshot = { phase, run };
   const canSend =
     text.trim() !== '' && !sending && inboxFolderId !== null && online;
@@ -138,7 +145,7 @@ export function Tell() {
   return (
     <section class="tell-screen">
       <div class="tell-head">
-        <h1>Tell Bower</h1>
+        <h1 class="screen-title">Tell Bower</h1>
         <button
           type="button"
           class="icon-button"

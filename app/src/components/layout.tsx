@@ -1,14 +1,18 @@
 /**
- * The shell every screen sits in (spec §5.1, §5.2).
+ * The shell every screen that needs it sits in (spec §5.1, §5.2, §14). The
+ * sign-in, Not invited, Privacy, Terms and the onboarding render outside it
+ * instead, in a bare `<main>` (`app.tsx`).
  *
- * Phone: a top bar (the bird and the wordmark, the Tidy up pill, the menu
- * button that opens the explorer drawer) and a bottom nav (Home, Add,
- * Tell, Settings). Health is reached from the explorer's Health row. On a
- * note screen the wordmark is replaced by the back link (the `crumb` slot),
- * and the `actions` slot next to the pill holds Open in Drive (#144).
+ * Phone: a top bar (spec §14 order) — the menu button that opens the
+ * explorer drawer, then the wordmark (Home) or the screen title (Add, Tell
+ * Bower, Settings, the `crumb` slot) or the back link (a note, also the
+ * `crumb` slot), then the `actions` slot (Open in Drive on a note, #144),
+ * then the Tidy up pill flush to the right edge — and a bottom nav (Home,
+ * Add, Tell, Settings). Health is reached from the explorer's Health row.
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
- * header row over the content (breadcrumb slot, theme toggle, the pill),
+ * header row over the content (breadcrumb slot, theme toggle, the pill —
+ * the menu button, the phone title and the actions slot are phone-only),
  * and on note screens a third column, filled through the `aside` shell slot
  * (#144, `shell-slots.ts` — the note screen sits inside `children`, so it
  * cannot reach these any other way).
@@ -165,21 +169,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       </nav>
       <div class="shell-main">
         <header class="topbar">
-          {crumb === null ? (
-            <a href="/" class="brand topbar-brand" aria-label="Bower home">
-              <Bird state="looking" size={32} />
-              <span class="brand-word">Bower</span>
-            </a>
-          ) : (
-            <div class="topbar-crumb">{crumb}</div>
-          )}
-          <ThemeToggle />
-          <div class="topbar-slot" data-slot="process">
-            <ProcessButton />
-          </div>
-          <div class="topbar-slot topbar-actions" data-slot="actions">
-            {actions}
-          </div>
           <button
             type="button"
             class="icon-button menu-button"
@@ -192,6 +181,21 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           >
             <IconMenu />
           </button>
+          {crumb === null ? (
+            <a href="/" class="brand topbar-brand" aria-label="Bower home">
+              <Bird state="looking" size={32} />
+              <span class="brand-word">Bower</span>
+            </a>
+          ) : (
+            <div class="topbar-crumb">{crumb}</div>
+          )}
+          <ThemeToggle />
+          <div class="topbar-slot topbar-actions" data-slot="actions">
+            {actions}
+          </div>
+          <div class="topbar-slot topbar-pill" data-slot="process">
+            <ProcessButton />
+          </div>
         </header>
         <OfflineBanner />
         {me?.needsReauth === true && (
