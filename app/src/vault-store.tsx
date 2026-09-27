@@ -31,6 +31,7 @@ import {
 } from './cache.js';
 import {
   appendToFile,
+  createFolder,
   createTextFile,
   deleteFile,
   DriveError,
@@ -43,6 +44,8 @@ import {
   updateFileText,
 } from './drive.js';
 import type { DriveFile, SaveOptions } from './drive.js';
+import { interviewToFiles } from './interview.js';
+import type { InterviewAnswers } from './interview.js';
 import {
   clearPinned,
   folderNoteName,
@@ -126,6 +129,16 @@ export interface Vault extends VaultState {
    * lines.
    */
   updateRules: () => Promise<RulesUpdate>;
+  /**
+   * The first-run interview (#198): writes `answers` into `About-Me.md` and
+   * `Rules.md` (each conflict-checked, only their own `## From the
+   * interview` section touched, created when either file is missing) and
+   * creates a `_<Area>.md` folder note under `2-Areas/` for every answered
+   * area that does not already have a folder there. Safe to call again
+   * (Settings › Advanced, replay): an existing area is left exactly as it
+   * is, and the two sections are replaced, not duplicated.
+   */
+  submitInterview: (answers: InterviewAnswers) => Promise<InterviewOutcome>;
 }
 
 /** What `updateRules` did. */
@@ -136,6 +149,15 @@ export interface RulesUpdate {
   to: number;
   /** How many of the owner's lines moved to `Rules.md` (blank lines not counted). */
   moved: number;
+}
+
+/** What `submitInterview` did. */
+export interface InterviewOutcome {
+  /** Area names whose folder note was created. */
+  areasCreated: readonly string[];
+  /** Area names left alone because a folder of that name already existed
+   * under `2-Areas/`. */
+  areasSkipped: readonly string[];
 }
 
 export interface PinnedNote {
@@ -297,6 +319,10 @@ async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
 const RULEBOOK_PATH = 'CLAUDE.md';
 /** The owner's rules, next to it. */
 const RULES_PATH = 'Rules.md';
+/** The owner's profile, also next to it. */
+const ABOUT_ME_PATH = 'About-Me.md';
+/** Where the interview's area folder notes go. */
+const AREAS_PATH = '2-Areas';
 
 /**
  * The vault's `bower_rules_version` (#197), from the cached `CLAUDE.md`
@@ -428,6 +454,132 @@ export async function runRulesUpdate(
     rulebook: saved,
     rules,
     createdRules,
+  };
+}
+
+export interface InterviewInput {
+  /** The Bower folder, where a missing `About-Me.md` or `Rules.md` is created. */
+  folderId: string;
+  /** `About-Me.md` as listed, when the folder has one. */
+  aboutFile: DriveFile | undefined;
+  /** `Rules.md` as listed, when the folder has one. */
+  rulesFile: DriveFile | undefined;
+  /** `2-Areas`'s own id, where an area's folder is created. */
+  areasFolderId: string;
+  /** Names of the folders `2-Areas` already has (case as Drive has them),
+   * so an area the owner already started is left alone. */
+  existingAreaNames: ReadonlySet<string>;
+  answers: InterviewAnswers;
+}
+
+/** One area's folder note, once created. */
+export interface CreatedArea {
+  name: string;
+  folder: DriveFile;
+  note: DriveFile;
+}
+
+/** What `runInterview` wrote, for the caller to patch its cache with. */
+export interface InterviewWrites {
+  result: InterviewOutcome;
+  /** `About-Me.md` after the write, or `null` when its text did not change. */
+  aboutMe: { text: string; file: DriveFile } | null;
+  /** Whether `About-Me.md` was created (it is not in any listing yet). */
+  createdAbout: boolean;
+  /** `Rules.md` after the write, or `null` when its text did not change. */
+  rules: { text: string; file: DriveFile } | null;
+  /** Whether `Rules.md` was created (it is not in any listing yet). */
+  createdRules: boolean;
+  createdAreas: CreatedArea[];
+}
+
+/**
+ * The first-run interview (#198), through Drive: `interviewToFiles` computes
+ * `About-Me.md`'s and `Rules.md`'s new text from the answers and what each
+ * file already holds (creating either from an empty note when the folder
+ * has none yet), and each write only goes out when its text actually
+ * changed, conflict-checked against the `modifiedTime` read just before it.
+ * Every area answered gets its own folder under `2-Areas/` and a
+ * `_<name>.md` note inside it, except one whose folder is already there
+ * (`existingAreaNames`) — running this again after a partial failure never
+ * creates the same area twice, and an area the owner has since filled with
+ * real notes is never touched.
+ */
+export async function runInterview(
+  input: InterviewInput,
+): Promise<InterviewWrites> {
+  const {
+    folderId,
+    aboutFile,
+    rulesFile,
+    areasFolderId,
+    existingAreaNames,
+    answers,
+  } = input;
+
+  const aboutBefore =
+    aboutFile !== undefined ? await readNoteForEdit(aboutFile.id) : null;
+  const rulesBefore =
+    rulesFile !== undefined ? await readNoteForEdit(rulesFile.id) : null;
+
+  const files = interviewToFiles(answers, {
+    aboutMe: aboutBefore?.text ?? '',
+    rules: rulesBefore?.text ?? '',
+  });
+
+  let aboutMe: InterviewWrites['aboutMe'] = null;
+  let createdAbout = false;
+  if (files.aboutMe !== (aboutBefore?.text ?? '')) {
+    if (aboutFile === undefined) {
+      const created = await createTextFile(
+        folderId,
+        ABOUT_ME_PATH,
+        files.aboutMe,
+      );
+      aboutMe = { text: files.aboutMe, file: created };
+      createdAbout = true;
+    } else if (aboutBefore !== null) {
+      aboutMe = await saveNoteText(aboutFile, files.aboutMe, {
+        baseModifiedTime: aboutBefore.modifiedTime,
+      });
+    }
+  }
+
+  let rules: InterviewWrites['rules'] = null;
+  let createdRules = false;
+  if (files.rules !== (rulesBefore?.text ?? '')) {
+    if (rulesFile === undefined) {
+      const created = await createTextFile(folderId, RULES_PATH, files.rules);
+      rules = { text: files.rules, file: created };
+      createdRules = true;
+    } else if (rulesBefore !== null) {
+      rules = await saveNoteText(rulesFile, files.rules, {
+        baseModifiedTime: rulesBefore.modifiedTime,
+      });
+    }
+  }
+
+  const createdAreas: CreatedArea[] = [];
+  const areasCreated: string[] = [];
+  const areasSkipped: string[] = [];
+  for (const area of files.areas) {
+    if (existingAreaNames.has(area.name)) {
+      areasSkipped.push(area.name);
+      continue;
+    }
+    const folder = await createFolder(areasFolderId, area.name);
+    const note = await createTextFile(folder.id, `_${area.name}.md`, area.note);
+    createdAreas.push({ name: area.name, folder, note });
+    areasCreated.push(area.name);
+  }
+
+  return {
+    result: { areasCreated, areasSkipped },
+    aboutMe,
+    createdAbout,
+    rules,
+    createdRules,
+    createdAreas,
   };
 }
 
@@ -841,6 +993,67 @@ export function VaultProvider({ children }: VaultProviderProps) {
     return writes.result;
   }, [folderId, recordNote, load]);
 
+  const submitInterview = useCallback(
+    async (answers: InterviewAnswers): Promise<InterviewOutcome> => {
+      if (folderId === null) throw new Error('No Bower folder yet.');
+      // The interview runs right after the folder is created, before this
+      // provider's own listing may have caught up: make sure it has.
+      await refresh();
+      const index = stateRef.current.index;
+      if (index === null) throw new Error('Vault not loaded.');
+      const areasFolder = index.byPath.get(AREAS_PATH);
+      if (areasFolder === undefined) {
+        throw new Error('No 2-Areas folder in the vault.');
+      }
+
+      const prefix = `${AREAS_PATH}/`;
+      const existingAreaNames = new Set(
+        index.folders
+          .filter(
+            (f) =>
+              f.path.startsWith(prefix) &&
+              !f.path.slice(prefix.length).includes('/'),
+          )
+          .map((f) => f.name),
+      );
+
+      const writes = await runInterview({
+        folderId,
+        aboutFile: index.byPath.get(ABOUT_ME_PATH),
+        rulesFile: index.byPath.get(RULES_PATH),
+        areasFolderId: areasFolder.id,
+        existingAreaNames,
+        answers,
+      });
+
+      if (
+        writes.createdAbout ||
+        writes.createdRules ||
+        writes.createdAreas.length > 0
+      ) {
+        // A new file or folder is not in the listing yet: list it again.
+        await load('refresh');
+      } else {
+        if (writes.aboutMe !== null) {
+          await recordNote(
+            writes.aboutMe.file.id,
+            writes.aboutMe.text,
+            writes.aboutMe.file,
+          );
+        }
+        if (writes.rules !== null) {
+          await recordNote(
+            writes.rules.file.id,
+            writes.rules.text,
+            writes.rules.file,
+          );
+        }
+      }
+      return writes.result;
+    },
+    [folderId, refresh, recordNote, load],
+  );
+
   const value: Vault = {
     ...state,
     refresh,
@@ -853,6 +1066,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
     pinFolder,
     unpinFolder,
     updateRules,
+    submitInterview,
   };
 
   return (
