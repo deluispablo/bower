@@ -215,7 +215,7 @@ new_state() {
   mkdir -p "$REPO/scripts" "$REPO/api" "$REPO/app" "$REPO/agent/workflows" "$REPO/agent/prompts"
   cp "$SRC/scripts/deploy.sh" "$SRC/scripts/deploy-api.sh" "$SRC/scripts/new-instance.sh" "$REPO/scripts/"
   cp "$SRC/api/wrangler.toml" "$REPO/api/"
-  cp "$SRC/agent/run.sh" "$REPO/agent/"
+  cp "$SRC/agent/run.sh" "$SRC/agent/claude-settings.json" "$REPO/agent/"
   cp "$SRC"/agent/workflows/*.yml "$REPO/agent/workflows/"
   cp "$SRC"/agent/prompts/*.md "$REPO/agent/prompts/"
 }
@@ -310,7 +310,7 @@ expect_eq "$(wrangler_secret SESSION_SECRET)" "$GENERATED" 'SESSION_SECRET value
 # Instance repo
 expect_eq "$(count '^gh repo create alex/bower-home --private$')" 1 'repo create'
 files=$(git --git-dir="$STATE/gh/remote.git" ls-tree -r --name-only main)
-for f in .github/workflows/ingest.yml .github/workflows/lint.yml agent/run.sh agent/prompts/ingest.md agent/prompts/lint.md; do
+for f in .github/workflows/ingest.yml .github/workflows/lint.yml agent/run.sh agent/claude-settings.json agent/prompts/ingest.md agent/prompts/lint.md; do
   printf '%s\n' "$files" | grep -qx "$f" || die "instance repo lacks $f"
 done
 expect_eq "$(gh_secret BOWER_API_KEY)" "$(wrangler_secret BOWER_API_KEY)" 'BOWER_API_KEY same in Worker and repo'
