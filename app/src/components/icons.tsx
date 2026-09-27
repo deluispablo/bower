@@ -286,3 +286,12 @@ export function IconEdit(): JSX.Element {
     </Svg>
   );
 }
+
+/** The sparkle on the Tidy up button (Phone-Home and Phone-Add boards). */
+export function IconSparkle(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" />
+    </Svg>
+  );
+}

@@ -64,6 +64,11 @@ vi.mock('../src/share-target.js', () => ({ takeSharedFiles }));
 // worth of uploads). Mocked the same way sibling suites do
 // (`layout.test.ts`, `settings-demo.test.ts`): no real VaultProvider
 // needed for a plain UI check.
+// Add's hint carries the Tidy up button (#320), which reads the run store.
+vi.mock('../src/run-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/run-store.js')>()),
+  useRun: () => ({ phase: 'idle', tidyUp: vi.fn(), openSheet: vi.fn() }),
+}));
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => ({ refresh: vi.fn() }),

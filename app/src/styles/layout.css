@@ -262,16 +262,6 @@ button.page-bare-back {
   display: flex;
 }
 
-/* Flush to the right edge (spec §14), after the actions slot whether or not
-   it holds anything. */
-.topbar-pill {
-  margin-left: auto;
-}
-
-.topbar .process-offline-reason {
-  max-width: 10rem;
-}
-
 .theme-toggle {
   display: none;
 }
