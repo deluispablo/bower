@@ -176,15 +176,6 @@ export function IconSun(): JSX.Element {
   );
 }
 
-export function IconInbox(): JSX.Element {
-  return (
-    <Svg>
-      <path d="M3 13l2-8h14l2 8v6H3z" />
-      <path d="M3 13h5l1.5 2h5L16 13h5" />
-    </Svg>
-  );
-}
-
 export function IconClock(): JSX.Element {
   return (
     <Svg>
