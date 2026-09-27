@@ -7,7 +7,7 @@
   gap: var(--space-2) var(--space-4);
   margin: var(--space-4) 0;
   padding: var(--space-2) var(--space-4);
-  background: rgb(251 191 36 / 0.15); /* --bower-amber tint */
+  background: rgb(240 182 79 / 0.15); /* --bower-amber tint */
   border: 1px solid var(--color-accent);
   border-radius: var(--radius-sm);
   color: var(--color-text);

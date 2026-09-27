@@ -100,7 +100,7 @@
 }
 .b .tw {
   fill: none;
-  stroke: #fbbf24;
+  stroke: #f0b64f;
   stroke-width: 2.6;
   stroke-linecap: round;
 }
@@ -137,7 +137,7 @@
   font-size: 12px;
 }
 .b .sp {
-  fill: #fbbf24;
+  fill: #f0b64f;
   transform-box: fill-box;
   transform-origin: center;
 }
