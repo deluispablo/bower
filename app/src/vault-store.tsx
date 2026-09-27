@@ -31,15 +31,27 @@ import {
 } from './cache.js';
 import {
   appendToFile,
+  createTextFile,
+  deleteFile,
   DriveError,
   getText,
   listVault,
+  modifiedTimeOf,
   readNoteForEdit,
+  SaveError,
   saveNoteText,
+  updateFileText,
 } from './drive.js';
 import type { DriveFile, SaveOptions } from './drive.js';
+import {
+  clearPinned,
+  folderNoteName,
+  pinnedOf,
+  setPinned,
+  sortPinned,
+} from './pins.js';
 import { useSession } from './session.js';
-import { buildVaultIndex } from './vault-index.js';
+import { buildVaultIndex, withPinnedAt } from './vault-index.js';
 import type { VaultIndex } from './vault-index.js';
 
 export type VaultStatus =
@@ -79,6 +91,56 @@ export interface Vault extends VaultState {
     text: string,
     options: SaveOptions,
   ) => Promise<EditableNote>;
+  /** Pins a note: sets `pinned` in its frontmatter to now, conflict-checked
+   * against the editor's own save, one retry. */
+  pinNote: (id: string) => Promise<void>;
+  /** Unpins a note: removes `pinned` from its frontmatter. */
+  unpinNote: (id: string) => Promise<void>;
+  /**
+   * Pins a folder: sets `pinned` on its folder note (`_<Folder>.md`),
+   * creating it with frontmatter only when the folder has none yet.
+   */
+  pinFolder: (path: string) => Promise<void>;
+  /**
+   * Unpins a folder: removes `pinned` from its folder note, deleting the
+   * note only when nothing else is left in it.
+   */
+  unpinFolder: (path: string) => Promise<void>;
+}
+
+export interface PinnedNote {
+  kind: 'note';
+  file: DriveFile;
+  pinnedAt: string;
+}
+
+export interface PinnedFolder {
+  kind: 'folder';
+  path: string;
+  file: DriveFile;
+  pinnedAt: string;
+}
+
+export type PinnedItem = PinnedNote | PinnedFolder;
+
+/**
+ * Notes and folders with a `pinned` timestamp, newest first (spec §14).
+ * Pure: reads only what `index`'s `notePinnedAt`/`folderPinnedAt` already
+ * carry — filled in by `VaultProvider`'s load pipeline, not here.
+ */
+export function pinned(index: VaultIndex): PinnedItem[] {
+  const items: PinnedItem[] = [];
+  for (const [id, pinnedAt] of index.notePinnedAt) {
+    const file = index.byId.get(id);
+    if (file !== undefined) items.push({ kind: 'note', file, pinnedAt });
+  }
+  for (const [path, pinnedAt] of index.folderPinnedAt) {
+    const file = index.folderNotes.get(path);
+    if (file !== undefined) {
+      items.push({ kind: 'folder', path, file, pinnedAt });
+    }
+  }
+  return sortPinned(items);
 }
 
 export interface EditableNote {
@@ -146,6 +208,65 @@ function noteFile(state: VaultState, id: string): DriveFile {
   return file;
 }
 
+/** Lazy fetches per `hydratePinnedAt` call: a vault with many pins still
+ * costs at most this many requests per load; the rest catch up on a later
+ * load, or as soon as their note is opened normally. */
+const PINNED_HYDRATION_FETCH_CAP = 12;
+
+interface PinnedMaps {
+  notePinnedAt: Map<string, string>;
+  folderPinnedAt: Map<string, string>;
+}
+
+/**
+ * `pinned` timestamps for every note and folder note in `index`: read from
+ * the cached text when present (no network), otherwise fetched from Drive up
+ * to `PINNED_HYDRATION_FETCH_CAP` times. `buildVaultIndex` is pure and never
+ * reads frontmatter, so this is the one place that does.
+ */
+async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
+  const notePinnedAt = new Map<string, string>();
+  const folderPinnedAt = new Map<string, string>();
+  let fetches = 0;
+
+  const resolve = async (
+    id: string,
+    modifiedTime: string | undefined,
+  ): Promise<string | null> => {
+    const cached = await loadNote(id);
+    if (cached !== undefined && cached.modifiedTime === (modifiedTime ?? '')) {
+      return pinnedOf(cached.text);
+    }
+    if (fetches >= PINNED_HYDRATION_FETCH_CAP) {
+      return cached !== undefined ? pinnedOf(cached.text) : null;
+    }
+    fetches++;
+    try {
+      const text = await getText(id);
+      await saveNote(id, text, modifiedTime ?? '', new Date().toISOString());
+      return pinnedOf(text);
+    } catch (err) {
+      console.error(err);
+      return cached !== undefined ? pinnedOf(cached.text) : null;
+    }
+  };
+
+  for (const note of index.notes) {
+    const pinnedAt = await resolve(note.id, note.modifiedTime);
+    if (pinnedAt !== null) notePinnedAt.set(note.id, pinnedAt);
+  }
+  for (const [path, file] of index.folderNotes) {
+    const pinnedAt = await resolve(file.id, file.modifiedTime);
+    if (pinnedAt !== null) folderPinnedAt.set(path, pinnedAt);
+  }
+
+  return { notePinnedAt, folderPinnedAt };
+}
+
+/** Attempts per note or folder-note pin write: the first one plus one retry
+ * after a conflict, same as `appendToFile`. */
+const PIN_ATTEMPTS = 2;
+
 const VaultContext = createContext<Vault | undefined>(undefined);
 
 interface VaultProviderProps {
@@ -182,8 +303,11 @@ export function VaultProvider({ children }: VaultProviderProps) {
         }
         const fetchedAt = new Date().toISOString();
         await saveIndex(fresh, fetchedAt);
+        const builtIndex = buildVaultIndex(fresh);
+        const { notePinnedAt, folderPinnedAt } =
+          await hydratePinnedAt(builtIndex);
         setState({
-          index: buildVaultIndex(fresh),
+          index: withPinnedAt(builtIndex, notePinnedAt, folderPinnedAt),
           files: fresh,
           fetchedAt,
           status: 'idle',
@@ -220,12 +344,33 @@ export function VaultProvider({ children }: VaultProviderProps) {
     loadIndex()
       .then((cached) => {
         if (cancelled || cached === undefined) return;
+        const builtIndex = buildVaultIndex(cached.files);
         setState({
-          index: buildVaultIndex(cached.files),
+          index: builtIndex,
           files: cached.files,
           fetchedAt: cached.fetchedAt,
           status: 'idle',
         });
+        // Pinned state lags a beat behind the instant cached paint above
+        // (this file's own opening comment): fill it in as soon as it is
+        // ready, unless `load('initial')` already replaced this index.
+        void hydratePinnedAt(builtIndex).then(
+          ({ notePinnedAt, folderPinnedAt }) => {
+            if (cancelled) return;
+            setState((prev) =>
+              prev.index === builtIndex
+                ? {
+                    ...prev,
+                    index: withPinnedAt(
+                      builtIndex,
+                      notePinnedAt,
+                      folderPinnedAt,
+                    ),
+                  }
+                : prev,
+            );
+          },
+        );
       })
       .catch((err: unknown) => {
         console.error(err);
@@ -294,11 +439,20 @@ export function VaultProvider({ children }: VaultProviderProps) {
           : f,
       );
       const fetchedAt = stateRef.current.fetchedAt ?? now;
-      setState((prev) => ({
-        ...prev,
-        files,
-        index: buildVaultIndex(files),
-      }));
+      const builtIndex = buildVaultIndex(files);
+      // `buildVaultIndex` starts `notePinnedAt` empty; carry the rest of it
+      // over, refreshed for this one note from the text just saved (its
+      // `pinned` may be new, changed or gone).
+      const notePinnedAt = new Map(stateRef.current.index?.notePinnedAt ?? []);
+      const iso = pinnedOf(text);
+      if (iso === null) notePinnedAt.delete(id);
+      else notePinnedAt.set(id, iso);
+      const index = withPinnedAt(
+        builtIndex,
+        notePinnedAt,
+        stateRef.current.index?.folderPinnedAt ?? new Map<string, string>(),
+      );
+      setState((prev) => ({ ...prev, files, index }));
       try {
         await saveIndex(files, fetchedAt);
       } catch (err) {
@@ -351,6 +505,144 @@ export function VaultProvider({ children }: VaultProviderProps) {
     [recordNote],
   );
 
+  const updateNotePin = useCallback(
+    async (id: string, compute: (text: string) => string): Promise<void> => {
+      const target = noteFile(stateRef.current, id);
+      for (let attempt = 1; ; attempt++) {
+        const fresh = await readNoteForEdit(id);
+        try {
+          const result = await saveNoteText(target, compute(fresh.text), {
+            baseModifiedTime: fresh.modifiedTime,
+          });
+          await recordNote(id, result.text, result.file);
+          return;
+        } catch (err) {
+          const retry =
+            err instanceof SaveError &&
+            err.code === 'conflict' &&
+            attempt < PIN_ATTEMPTS;
+          if (!retry) throw err;
+        }
+      }
+    },
+    [recordNote],
+  );
+
+  const pinNote = useCallback(
+    (id: string): Promise<void> =>
+      updateNotePin(id, (text) => setPinned(text, new Date().toISOString())),
+    [updateNotePin],
+  );
+
+  const unpinNote = useCallback(
+    (id: string): Promise<void> => updateNotePin(id, clearPinned),
+    [updateNotePin],
+  );
+
+  /**
+   * Patches one folder note into the cached listing and index after it was
+   * created, rewritten or trashed (`file: null`), mirroring `recordNote` for
+   * a file that `buildVaultIndex` keeps out of `files`/`byId` on purpose
+   * (folder notes are hidden, `vault-index.ts`). `pinnedAt: null` clears the
+   * folder's pin.
+   */
+  const recordFolderNote = useCallback(
+    async (
+      path: string,
+      file: DriveFile | null,
+      pinnedAt: string | null,
+    ): Promise<void> => {
+      const previous = stateRef.current.index?.folderNotes.get(path);
+      const files = stateRef.current.files.filter((f) => f.id !== previous?.id);
+      if (file !== null) files.push(file);
+      const fetchedAt = stateRef.current.fetchedAt ?? new Date().toISOString();
+      const builtIndex = buildVaultIndex(files);
+      const folderPinnedAt = new Map(
+        stateRef.current.index?.folderPinnedAt ?? [],
+      );
+      if (pinnedAt === null) folderPinnedAt.delete(path);
+      else folderPinnedAt.set(path, pinnedAt);
+      const index = withPinnedAt(
+        builtIndex,
+        stateRef.current.index?.notePinnedAt ?? new Map<string, string>(),
+        folderPinnedAt,
+      );
+      setState((prev) => ({ ...prev, files, index }));
+      try {
+        await saveIndex(files, fetchedAt);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    [],
+  );
+
+  const pinFolder = useCallback(
+    async (path: string): Promise<void> => {
+      const folder = stateRef.current.index?.byPath.get(path);
+      if (folder === undefined) throw new Error('Folder not in the index.');
+      const iso = new Date().toISOString();
+      const existing = stateRef.current.index?.folderNotes.get(path);
+
+      if (existing === undefined) {
+        const created = await createTextFile(
+          folder.id,
+          folderNoteName(path),
+          setPinned('', iso),
+        );
+        await recordFolderNote(path, created, iso);
+        return;
+      }
+
+      for (let attempt = 1; ; attempt++) {
+        const fresh = await readNoteForEdit(existing.id);
+        if ((await modifiedTimeOf(existing.id)) !== fresh.modifiedTime) {
+          if (attempt < PIN_ATTEMPTS) continue;
+          throw new SaveError(
+            'conflict',
+            'The folder note changed while saving.',
+          );
+        }
+        const updated = await updateFileText(
+          existing.id,
+          setPinned(fresh.text, iso),
+        );
+        await recordFolderNote(path, updated, iso);
+        return;
+      }
+    },
+    [recordFolderNote],
+  );
+
+  const unpinFolder = useCallback(
+    async (path: string): Promise<void> => {
+      const existing = stateRef.current.index?.folderNotes.get(path);
+      if (existing === undefined) return; // Nothing pinned.
+
+      for (let attempt = 1; ; attempt++) {
+        const fresh = await readNoteForEdit(existing.id);
+        if ((await modifiedTimeOf(existing.id)) !== fresh.modifiedTime) {
+          if (attempt < PIN_ATTEMPTS) continue;
+          throw new SaveError(
+            'conflict',
+            'The folder note changed while saving.',
+          );
+        }
+        const next = clearPinned(fresh.text);
+        if (next.trim() === '') {
+          // Nothing else was in it: the folder note was pinning's own.
+          await deleteFile(existing.id);
+          await recordFolderNote(path, null, null);
+        } else {
+          const updated = await updateFileText(existing.id, next);
+          await recordFolderNote(path, updated, null);
+        }
+        return;
+      }
+    },
+    [recordFolderNote],
+  );
+
   const value: Vault = {
     ...state,
     refresh,
@@ -358,6 +650,10 @@ export function VaultProvider({ children }: VaultProviderProps) {
     appendToNote,
     openNoteForEdit,
     saveEditedNote,
+    pinNote,
+    unpinNote,
+    pinFolder,
+    unpinFolder,
   };
 
   return (
