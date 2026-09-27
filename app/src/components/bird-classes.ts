@@ -19,6 +19,12 @@ export type BirdState =
   | 'offline'
   | 'done';
 
+/**
+ * A still face (`e-*` in `styles/bird.css`). Since drawing v8.2 the lids carry
+ * the mood: happy and proud raise the lower lid, worried lowers the upper
+ * lid, sleepy closes both over the eye; curious widens the eye itself. The
+ * head, jaw, wing and tail add the rest.
+ */
 export type BirdFace = 'happy' | 'curious' | 'worried' | 'sleepy' | 'proud';
 
 /** The pose class of each state; the names match `docs/design/gen.py`. */
