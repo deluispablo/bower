@@ -36,6 +36,7 @@
 import type { JSX, RefCallback } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import type { DriveFile } from '../drive.js';
 import { driveViewUrl } from '../markdown/embeds.js';
 import {
   appFileGroup,
@@ -61,6 +62,7 @@ import {
 } from './icons.js';
 import { PinSheet } from './pin-sheet.js';
 import { useLongPress } from './use-long-press.js';
+import { useNoteTitles } from './use-note-titles.js';
 
 interface Row extends TreeRow {
   name: string;
@@ -178,6 +180,15 @@ export function Tree({
     flatten(displayTree, 0, displayExpanded, out);
     return out;
   }, [displayTree, displayExpanded]);
+  const noteFiles = useMemo(
+    () =>
+      rows
+        .filter((row) => row.kind === 'note' && row.id !== undefined)
+        .map((row) => index.byId.get(row.id ?? ''))
+        .filter((file): file is DriveFile => file !== undefined),
+    [rows, index],
+  );
+  const titles = useNoteTitles(noteFiles);
 
   function toggle(path: string): void {
     setExpanded((prev) => {
@@ -258,10 +269,15 @@ export function Tree({
     }
   }
 
-  /** The row's own title (`noteTitle`, no note's `.md`), for the sheet's
-   * dialog name and its "Ask Bower" wording. */
+  /** A note row's resolved title (`useNoteTitles`, falling back to
+   * `noteTitle`'s file-name reading while the cache hasn't answered yet),
+   * or a folder's own name. Used for the sheet's dialog name and its "Ask
+   * Bower" wording, and for the row's own label. */
   function displayName(row: Row): string {
-    return row.kind === 'note' ? noteTitle(row) : row.name;
+    if (row.kind !== 'note') return row.name;
+    return (
+      (row.id !== undefined ? titles.get(row.id) : undefined) ?? noteTitle(row)
+    );
   }
 
   function pinSheetFor(row: Row): JSX.Element {
@@ -439,7 +455,7 @@ export function Tree({
                       onFocus={() => setFocusIndex(i)}
                     >
                       <IconNote />
-                      <span class="tree-name">{noteTitle(row)}</span>
+                      <span class="tree-name">{displayName(row)}</span>
                     </a>
                     <button
                       type="button"
@@ -477,7 +493,7 @@ export function Tree({
                     onContextMenu={longPress.onContextMenu}
                   >
                     <IconNote />
-                    <span class="tree-name">{noteTitle(row)}</span>
+                    <span class="tree-name">{displayName(row)}</span>
                   </a>
                 )}
                 {!linkFolders && sheetOpen && pinSheetFor(row)}

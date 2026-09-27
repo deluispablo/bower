@@ -10,10 +10,12 @@
 
 import type { JSX } from 'preact';
 
+import type { DriveFile } from '../drive.js';
 import { folderHref } from '../navigation.js';
 import { noteTitle } from '../note-title.js';
 import type { PinnedItem } from '../vault-store.js';
 import { IconFolder, IconNote } from './icons.js';
+import { useNoteTitles } from './use-note-titles.js';
 
 const ROW_LIMIT = 5;
 
@@ -24,6 +26,15 @@ export interface PinnedSidebarProps {
 export function PinnedSidebar({
   items,
 }: PinnedSidebarProps): JSX.Element | null {
+  const shown = items.slice(0, ROW_LIMIT);
+  const noteFiles: DriveFile[] = shown
+    .filter(
+      (item): item is Extract<PinnedItem, { kind: 'note' }> =>
+        item.kind === 'note',
+    )
+    .map((item) => item.file);
+  const titles = useNoteTitles(noteFiles);
+
   if (items.length === 0) return null;
 
   return (
@@ -32,7 +43,7 @@ export function PinnedSidebar({
         <h2 class="explorer-label">Pinned</h2>
       </div>
       <div class="explorer-rows">
-        {items.slice(0, ROW_LIMIT).map((item) =>
+        {shown.map((item) =>
           item.kind === 'note' ? (
             <a
               key={item.file.id}
@@ -40,7 +51,9 @@ export function PinnedSidebar({
               class="explorer-row"
             >
               <IconNote />
-              <span class="explorer-row-label">{noteTitle(item.file)}</span>
+              <span class="explorer-row-label">
+                {titles.get(item.file.id) ?? noteTitle(item.file)}
+              </span>
             </a>
           ) : (
             <a

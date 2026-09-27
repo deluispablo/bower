@@ -27,6 +27,7 @@ import {
 import { PinnedSection } from '../components/pinned-section.js';
 import { TellComposer } from '../components/tell-composer.js';
 import { Tour } from '../components/tour.js';
+import { useNoteTitles } from '../components/use-note-titles.js';
 import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
 import { findReport, isReportNew } from '../health-report.js';
 import {
@@ -257,6 +258,7 @@ export function Home() {
 
   const showAppFiles = getPref('showAppFiles');
   const recent = index === null ? [] : recentNotes(index, 20, showAppFiles);
+  const recentTitles = useNoteTitles(recent);
   const pending = pendingCount(files);
   const noteCounts =
     index === null ? new Map<string, number>() : folderCounts(index);
@@ -429,7 +431,9 @@ export function Home() {
                       <IconNote />
                     </span>
                     <span class="home-note-text">
-                      <b class="home-note-title">{noteTitle(note)}</b>
+                      <b class="home-note-title">
+                        {recentTitles.get(note.id) ?? noteTitle(note)}
+                      </b>
                       <span class="home-note-meta">
                         {recentMeta(note.path, note.modifiedTime, now)}
                       </span>

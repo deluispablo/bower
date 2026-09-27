@@ -32,6 +32,7 @@ import {
   IconPin,
 } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
 import {
   breadcrumb,
@@ -113,6 +114,7 @@ function FolderBody({
 }: FolderBodyProps): JSX.Element {
   const tellHref = `/tell?text=${encodeURIComponent(`${contents.name} `)}`;
   const now = Date.now();
+  const titles = useNoteTitles(contents.notes);
 
   return (
     <section class="folder-view">
@@ -192,7 +194,9 @@ function FolderBody({
               <li key={note.id}>
                 <a class="folder-row" href={`/note/${note.id}`}>
                   <IconNote />
-                  <span class="folder-row-name">{noteTitle(note)}</span>
+                  <span class="folder-row-name">
+                    {titles.get(note.id) ?? noteTitle(note)}
+                  </span>
                   {note.modifiedTime !== undefined && (
                     <span class="folder-row-meta">
                       {relativeTime(note.modifiedTime, now)}
