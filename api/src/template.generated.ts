@@ -130,6 +130,7 @@ Bower's answers to questions sent as instructions. One note per question, dated.
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-27
+bower_rules_version: 2
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -286,6 +287,8 @@ When a project is done or dropped: set \`status: archived\`, move its folder to 
 Your own rules live in \`Rules.md\`; Bower reads both. Where they disagree, \`Rules.md\` wins, except for the rules below.
 @Rules.md
 
+Three files, three owners: this \`CLAUDE.md\` is Bower's own and is replaced whole when Bower's rules are updated (\`bower_rules_version\` above); \`Rules.md\` holds the owner's rules and \`About-Me.md\` the owner's profile, and an update never touches either. Read \`CLAUDE.md\`, then \`Rules.md\`, then \`About-Me.md\`.
+
 - Never edit this \`CLAUDE.md\`, \`README.md\` or anything under \`.claude/\`; the owner's rules go to \`Rules.md\`. Write only inside the folders above and to \`Rules.md\`, \`About-Me.md\`, \`index.md\`, \`log.md\` and \`Lint Report.md\`: in unattended runs anything else is undone after the run.
 - Never touch \`.obsidian/\`. In unattended runs this is absolute; if a rule would need it (e.g. a graph colour for a new tag), write the pending change to \`log.md\` instead.
 - Never delete notes or originals. Archive or move to \`Processed/\`.
@@ -309,7 +312,15 @@ Default folder of the Obsidian Web Clipper. Treated exactly like \`0-Inbox\`.
   },
   {
     path: 'Rules.md',
-    content: `# Rules
+    content: `---
+tags: [meta, personal]
+created: 2026-09-27
+updated: 2026-09-27
+---
+
+# Rules
+
+Your own rules for Bower. Where they disagree with Bower's rulebook (\`CLAUDE.md\`), these win.
 `,
   },
   {
