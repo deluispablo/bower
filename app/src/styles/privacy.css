@@ -1,0 +1,15 @@
+/*
+ * Privacy (spec §6): a plain reading page, restyled in #148 — the reading
+ * measure (720 px, same as a note on desktop) and a little top breathing
+ * room. The copy itself is `docs/privacy.md`, untouched here.
+ */
+
+.privacy {
+  max-width: 720px;
+  margin: 0 auto;
+  padding-top: var(--space-4);
+}
+
+.privacy .markdown h1:first-child {
+  margin-top: 0;
+}
