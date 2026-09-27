@@ -29,10 +29,14 @@ Brand colours: teal `#2dd4bf`, deep navy `#0b1220`, amber `#fbbf24`. Neutrals ar
 
 | Token | Role | Light | Dark |
 | --- | --- | --- | --- |
+| `--color-sidebar` | Explorer, bottom nav, drawer | `#f5f7fa` | `#070c16` |
 | `--color-bg` | Page background | `#ffffff` | `#0b1220` |
 | `--color-surface` | Cards, sheets, inputs | `#f1f5f9` | `#162033` |
-| `--color-text` | Body text, headings | `#0b1220` | `#f1f5f9` |
+| `--color-surface-hover` | Hover, active rows | `#e8edf3` | `#1c2942` |
+| `--color-text` | Body text | `#0b1220` | `#e6ebf2` |
+| `--color-heading` | Headings | `#0b1220` | `#f1f5f9` |
 | `--color-text-muted` | Secondary text, captions | `#475569` | `#94a3b8` |
+| `--color-brand-tint` | Selection, callouts, tag pills | `rgb(45 212 191 / .16)` | `rgb(45 212 191 / .16)` |
 | `--color-link` | Links, text buttons | `#0f766e` | `#2dd4bf` |
 | `--color-brand` | Primary button fill, highlights | `#2dd4bf` | `#2dd4bf` |
 | `--color-on-brand` | Text on `--color-brand` | `#0b1220` | `#0b1220` |
@@ -50,10 +54,12 @@ Contrast (WCAG 2.1; AA needs 4.5:1 for body text, 3:1 for control outlines):
 
 | Pair | Light | Dark |
 | --- | --- | --- |
-| text on bg | 18.72 | 17.09 |
-| text on surface | 17.09 | 14.88 |
+| text on bg | 18.72 | 15.63 |
+| text on surface | 17.09 | 13.60 |
+| text on sidebar | 17.45 | 16.33 |
 | text-muted on bg | 7.58 | 7.30 |
 | text-muted on surface | 6.92 | 6.36 |
+| text-muted on sidebar | 7.06 | 7.63 |
 | link on bg | 5.47 | 10.06 |
 | link on surface | 5.00 | 8.76 |
 | danger on bg | 6.47 | 6.77 |
@@ -69,7 +75,15 @@ The theme follows the system. The root element may carry `data-theme="light"` or
 
 ## Type
 
-UI text uses the system sans-serif stack (`--font-sans`, Inter first when installed); no web font is downloaded. Code and file names use `--font-mono`.
+Three self-hosted web fonts, subset to Latin, `woff2`, `font-display: swap`, precached by the service worker with the shell (files and licence in `app/public/fonts/README.md`):
+
+| Token | Family | Weights | Use |
+| --- | --- | --- | --- |
+| `--font-display` | Poppins | 600, 700 | Page titles, section titles, the wordmark, headings |
+| `--font-sans` | Source Sans 3 | 400, 600 | Body, UI, notes |
+| `--font-mono` | JetBrains Mono | 400 | Paths, file names, keyboard hints |
+
+Each falls back to the system sans-serif (or monospace) stack while its face loads or if it fails to load. No Google Fonts request ships in production.
 
 | Token | Size | Use |
 | --- | --- | --- |
@@ -81,7 +95,19 @@ UI text uses the system sans-serif stack (`--font-sans`, Inter first when instal
 | `--text-2xl` | 32 px | Page titles on desktop |
 | `--text-3xl` | 40 px | Empty states, the welcome screen |
 
-Weights: 400 body, 500 labels and buttons, 700 headings. Headings use line height 1.2.
+Weights: 400 body, 500 labels and buttons, 600/700 headings (`--font-display`). Headings use line height 1.2.
+
+## Motion
+
+Three durations, two easings, transform and opacity only:
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--motion-fast` | 120 ms | Hover, press, focus ring |
+| `--motion-base` | 200 ms | Panels, sheets, drawer, toasts |
+| `--motion-bird` | 320 ms | The bird's entrances and reactions |
+
+`--ease-out` for entrances, `--ease-in-out` for loops. Under `prefers-reduced-motion: reduce` nothing loops: the bird holds a pose and one dot pulses where progress is shown.
 
 ## Spacing and shape
 
