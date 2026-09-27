@@ -29,7 +29,7 @@ No secret value is ever printed to the terminal.
 ### Left to do by hand (once)
 
 1. **App custom domain.** Wrangler cannot set it. Cloudflare dashboard → Workers & Pages → your Pages project (`bower-app`) → Custom domains → Set up a custom domain → add `app.example.com` (your real app domain).
-2. **Google OAuth client.** Check the authorized redirect URI (`https://api.example.com/auth/callback`) and the privacy policy URL (`https://app.example.com/privacy`) the script printed.
+2. **Google OAuth client.** Check the authorized redirect URI (`https://api.example.com/auth/callback`), the privacy policy URL (`https://app.example.com/privacy`) and the terms of service URL (`https://app.example.com/terms`) the script printed.
 3. **Smoke check:** `curl https://api.example.com/health` (your real `API_ORIGIN`) should answer 200.
 4. **Invite the first user:** see section 5 below; `ADMIN_KEY` is in `api/.prod.secrets`.
 
@@ -54,7 +54,7 @@ To update only the Worker: `bash scripts/deploy-api.sh` (or `pnpm -C api deploy`
 2. Under **APIs & Services → OAuth consent screen**: user type **External**. Scopes: `openid`, `email`, `https://www.googleapis.com/auth/drive`.
    - While the screen is left in **Testing**, only test users you list by hand can sign in, and their refresh tokens expire after **7 days** — the runner then fails every run for that user until they sign in again (see Troubleshooting). This is fine for the local sign-in test (appendix) but breaks a real instance.
    - **Publish** the app instead (Publish app button). Because the client asks for full `drive` scope and is not verified (see `ARCHITECTURE.md`, "Why not X"), Google keeps it **unverified**: every user sees a one-time "unverified app" warning on first sign-in, and the client is capped at **100 users**. Verification (a paid security assessment) is out of scope. Publishing lifts the Testing-only restrictions above.
-   - Google requires a public privacy page to publish. The app serves `docs/privacy.md` at `/privacy`, so give Google `<APP_ORIGIN>/privacy` — your real `APP_ORIGIN` — as the privacy policy URL.
+   - Google requires a public privacy page and a public terms of service page to publish. The app serves `docs/privacy.md` at `/privacy` and `docs/terms.md` at `/terms`, so give Google `<APP_ORIGIN>/privacy` and `<APP_ORIGIN>/terms` — your real `APP_ORIGIN` — as the privacy policy URL and the terms of service URL. For brand verification, Google also checks that the app's homepage links to both: the Login screen does.
 3. Under **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**: Authorized redirect URI is `<API_ORIGIN>/auth/callback` — your real `API_ORIGIN`, for example `https://api.example.com/auth/callback`. Copy the client id and secret; they become `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in step 3 below.
 4. **Optional: the Google Picker**, for the "Choose a folder" button on onboarding (without it, onboarding falls back to pasting the folder link).
    - Under **APIs & Services → Library**, enable the **Google Picker API**.

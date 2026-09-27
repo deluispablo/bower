@@ -24,7 +24,7 @@
 #    VITE_GOOGLE_API_KEY for the onboarding folder picker, and deploys it to
 #    Cloudflare Pages, creating the project the first time.
 # 7. Prints what is left to do by hand: the Pages custom domain, the Google
-#    redirect URI and privacy URL.
+#    redirect URI, and the privacy and terms of service URLs.
 #
 # Idempotent: a rerun updates what exists (repo, KV, Worker, Pages) and
 # skips secrets that are already set. --rotate sets every secret again,
@@ -129,6 +129,7 @@ print_next_steps() {
   log "     -> Custom domains -> Set up a custom domain, and add $app_host."
   log "  2. Google OAuth client. Authorized redirect URI: $api_origin/auth/callback"
   log "     Privacy policy URL on the OAuth consent screen: $app_origin/privacy"
+  log "     Terms of service URL on the OAuth consent screen: $app_origin/terms"
   if [ -f "$PROD_SECRETS" ]; then
     log "  3. Invite the first user (docs/runbook.md, \"Invite someone\"). The admin key is in api/.prod.secrets."
   else
