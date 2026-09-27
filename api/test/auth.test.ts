@@ -1,10 +1,11 @@
 import { env as testEnv } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { OAUTH_COOKIE } from '../src/auth.js';
+import { NOT_INVITED_COOKIE, OAUTH_COOKIE } from '../src/auth.js';
 import {
   base64UrlEncodeString,
   decrypt,
+  encrypt,
   importEncryptionKey,
 } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
@@ -23,6 +24,7 @@ import {
   signSession,
   signToken,
   verifySession,
+  verifyToken,
 } from '../src/session.js';
 import {
   findUserByEmail,
@@ -198,6 +200,22 @@ describe('GET /auth/login', () => {
       ]),
     );
   });
+  it('asks Google to pick an account only for prompt=select_account', async () => {
+    const app = createApp();
+    const promptFor = async (query: string): Promise<string | null> => {
+      const response = await app.request(`${API}/auth/login${query}`, {}, env);
+      expect(response.status).toBe(302);
+      return new URL(response.headers.get('location') ?? '').searchParams.get(
+        'prompt',
+      );
+    };
+
+    expect(await promptFor('?prompt=select_account')).toBe(
+      'consent select_account',
+    );
+    expect(await promptFor('?prompt=none')).toBe('consent');
+    expect(await promptFor('?prompt=select_account%20none')).toBe('consent');
+  });
 });
 
 describe('GET /auth/callback', () => {
@@ -333,7 +351,7 @@ describe('GET /auth/callback', () => {
     }
   });
 
-  it('shows the 403 page and writes nothing for an account not invited', async () => {
+  it('redirects an account not invited to the app, with only an encrypted cookie', async () => {
     const app = createApp({ fetchImpl: googleStub().fetchImpl });
     const { cookie, state } = await login(app);
 
@@ -343,15 +361,34 @@ describe('GET /auth/callback', () => {
       cookie,
     );
 
-    expect(response.status).toBe(403);
-    expect(response.headers.get('content-type')).toContain('text/html');
-    const html = await response.text();
-    expect(html).toContain('<title>Not invited</title>');
-    expect(html).toContain('You have not been invited to this Bower.');
-    expect(html).not.toMatch(/<(script|link)\b/);
+    expect(response.status).toBe(302);
+    const location = response.headers.get('location') ?? '';
+    expect(location).toBe(`${env.APP_ORIGIN}/not-invited`);
+    expect(location).not.toContain(EMAIL);
+    expect(await response.text()).not.toContain(EMAIL);
+
+    const notInvited = cookieNamed(response, NOT_INVITED_COOKIE);
+    expect(notInvited.split('; ').slice(1)).toEqual(
+      expect.arrayContaining([
+        'HttpOnly',
+        'Secure',
+        'SameSite=Lax',
+        'Path=/',
+        'Max-Age=300',
+      ]),
+    );
+    // Signed, and the address inside is encrypted: never readable as is.
+    const value = cookieValue(notInvited);
+    expect(value).not.toContain(EMAIL);
+    const claims = await verifyToken(value, env.SESSION_SECRET);
+    expect(claims.purpose).toBe('not_invited');
+    expect(JSON.stringify(claims)).not.toContain(EMAIL);
+
     expect(setCookies(response).some((c) => c.startsWith(SESSION_COOKIE))).toBe(
       false,
     );
+    const cleared = cookieNamed(response, OAUTH_COOKIE);
+    expect(cleared).toContain('Max-Age=0');
     expect(await stateKeys()).toEqual([]);
   });
 
@@ -450,6 +487,64 @@ describe('GET /me', () => {
       needsReauth: false,
       hasApiKey: false,
     });
+  });
+
+  it('answers once with the address of an account not invited, then clears it', async () => {
+    const app = createApp({ fetchImpl: googleStub().fetchImpl });
+    const { cookie, state } = await login(app);
+    const rejected = await callback(
+      app,
+      `code=test-code&state=${state}`,
+      cookie,
+    );
+    const token = cookieValue(cookieNamed(rejected, NOT_INVITED_COOKIE));
+
+    const response = await me(`${NOT_INVITED_COOKIE}=${token}`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ notInvited: true, email: EMAIL });
+    const cleared = cookieNamed(response, NOT_INVITED_COOKIE);
+    expect(cookieValue(cleared)).toBe('');
+    expect(cleared.split('; ').slice(1)).toEqual(
+      expect.arrayContaining(['HttpOnly', 'Secure', 'Path=/', 'Max-Age=0']),
+    );
+  });
+
+  it('ignores a tampered, expired or foreign not-invited cookie', async () => {
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    const email = await encrypt(EMAIL, key);
+    const valid = await signToken(
+      { purpose: 'not_invited', email },
+      env.SESSION_SECRET,
+      300,
+    );
+    const [header, , signature] = valid.split('.');
+    const forged = `${header}.${base64UrlEncodeString(
+      JSON.stringify({ purpose: 'not_invited', email, exp: 9999999999 }),
+    )}.${signature}`;
+    const expired = await signToken(
+      { purpose: 'not_invited', email },
+      env.SESSION_SECRET,
+      300,
+      Date.now() - 60 * 60 * 1000,
+    );
+    const otherPurpose = await signToken(
+      { purpose: 'oauth', email },
+      env.SESSION_SECRET,
+      300,
+    );
+    const plaintext = await signToken(
+      { purpose: 'not_invited', email: EMAIL },
+      env.SESSION_SECRET,
+      300,
+    );
+
+    for (const token of [forged, expired, otherPurpose, plaintext]) {
+      const response = await me(`${NOT_INVITED_COOKIE}=${token}`);
+      expect(response.status).toBe(401);
+      const body = await response.json<{ error: { code: string } }>();
+      expect(body.error.code).toBe('unauthenticated');
+    }
   });
 
   it('answers 401 for a tampered session cookie', async () => {

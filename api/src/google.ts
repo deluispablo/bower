@@ -57,12 +57,15 @@ export async function codeChallenge(verifier: string): Promise<string> {
 /**
  * The Google consent URL. `access_type=offline` plus `prompt=consent` make
  * Google issue a refresh token on every sign-in, not only the first.
+ * `selectAccount` adds `select_account`, so Google shows its account picker
+ * instead of reusing the account already signed in to the browser.
  */
 export function buildAuthUrl(params: {
   clientId: string;
   redirectUri: string;
   state: string;
   codeChallenge: string;
+  selectAccount?: boolean;
 }): string {
   const query = new URLSearchParams({
     client_id: params.clientId,
@@ -70,7 +73,8 @@ export function buildAuthUrl(params: {
     response_type: 'code',
     scope: GOOGLE_SCOPE,
     access_type: 'offline',
-    prompt: 'consent',
+    prompt:
+      params.selectAccount === true ? 'consent select_account' : 'consent',
     state: params.state,
     code_challenge: params.codeChallenge,
     code_challenge_method: 'S256',
