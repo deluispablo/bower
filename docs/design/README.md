@@ -20,4 +20,22 @@ The other 30 boards (the intro pages, the Folder screen, the pin sheets, Add fro
 
 ## The bird for the README and GitHub
 
-`python3 docs/design/assets.py` writes `docs/assets/logo.svg`, `hero.svg`, `why.svg`, `how-it-works.svg` and `social-preview.svg` from the same drawing, each with its animation inside the SVG so GitHub plays it in an `<img>`. Text in them uses the system sans-serif (an SVG in an `<img>` cannot load a web font). The app's own icons (`app/public/`) come from `scripts/brand/build.py`, which holds the same drawing without its props. The static PNG logo for Google's consent screen (`docs/assets/logo-120.png`) is rendered from `app/public/logo.svg` (#213).
+`python3 docs/design/assets.py` writes `docs/assets/logo.svg`, `hero.svg`, `why.svg`, `how-it-works.svg`, `use-case.svg`, `window.svg` and `social-preview.svg` from the same drawing, each with its animation inside the SVG so GitHub plays it in an `<img>`. Text in them uses the system sans-serif (an SVG in an `<img>` cannot load a web font). No packages needed for this part; a plain `python3 docs/design/assets.py` writes every SVG.
+
+The app's own icons (`app/public/`) come from `scripts/brand/build.py`, which holds the same drawing without its props.
+
+### The static PNG logos
+
+`docs/assets/logo-512.png`, `logo-120.png` (both transparent) and `logo-120-white.png` (a white silhouette, for dark backgrounds) are rendered from `app/public/logo.svg` for Google's OAuth consent screen and the app stores. Rendering an SVG to PNG needs a headless browser, so this step only runs when Playwright and Pillow are importable; the same `python3 docs/design/assets.py` skips it otherwise (with a one-line notice) and still writes every SVG above.
+
+To regenerate the PNGs, install those two packages in a throwaway virtualenv, run the script through it, then delete the venv — nothing here becomes an app or CI dependency:
+
+```bash
+python3 -m venv /tmp/bower-logo-venv
+/tmp/bower-logo-venv/bin/pip install playwright pillow
+/tmp/bower-logo-venv/bin/python -m playwright install chromium
+/tmp/bower-logo-venv/bin/python docs/design/assets.py
+rm -rf /tmp/bower-logo-venv
+```
+
+The script asserts each PNG is square and under 1 MB before it prints its size; `logo-120.png` is what Google's consent screen form checks.
