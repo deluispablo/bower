@@ -47,7 +47,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: 'tidy',
     label: '2 of 3 · Tidy up',
     title: "When you're ready, tap Tidy up.",
-    body: 'Nothing happens until you tap; there is no schedule. Then I carry each thing from your inbox to the right folder, give it a title and tags, and leave a short note about what I did.',
+    body: 'Nothing happens until you tap; there is no schedule. Add a pile first: I do better work with ten things than with one.',
     bird: 'tidying',
     birdOnTarget: false,
   },
