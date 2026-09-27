@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '../src/env.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
-import { RATE_LIMIT_PER_MINUTE } from '../src/security.js';
+import {
+  GENERIC_RATE_LIMIT_PER_MINUTE,
+  MAX_BODY_BYTES,
+  RATE_LIMIT_PER_MINUTE,
+} from '../src/security.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { keys, putUser } from '../src/store.js';
 
@@ -302,6 +306,213 @@ describe('rate limit', () => {
     expect(limited.status).toBe(429);
     expect((await limited.json<ErrorBody>()).error.code).toBe('rate_limited');
     expect(limited.headers.get('retry-after')).toBe('50');
+  });
+});
+
+describe('input limits', () => {
+  function postVault(
+    headers: Record<string, string>,
+    body: BodyInit,
+  ): Promise<Response> {
+    return Promise.resolve(
+      createApp().request(
+        `${API}/vault`,
+        {
+          method: 'POST',
+          headers: { origin: env.APP_ORIGIN, ...headers },
+          body,
+        },
+        env,
+      ),
+    );
+  }
+
+  /** A JSON body of exactly `bytes` bytes. */
+  function jsonOfSize(bytes: number): string {
+    const frame = JSON.stringify({ mode: '' });
+    return JSON.stringify({ mode: 'x'.repeat(bytes - frame.length) });
+  }
+
+  it('answers 413 when Content-Length is over 64 KB, before the handler', async () => {
+    const body = jsonOfSize(MAX_BODY_BYTES + 1);
+
+    const response = await postVault(
+      {
+        'content-type': 'application/json',
+        'content-length': String(body.length),
+      },
+      body,
+    );
+
+    expect(response.status).toBe(413);
+    expect(await response.json<ErrorBody>()).toEqual({
+      error: { code: 'payload_too_large', message: 'Request body too large' },
+    });
+    expectSecurityHeaders(response);
+  });
+
+  it('answers 413 on a streamed body over 64 KB (no Content-Length)', async () => {
+    const bytes = new TextEncoder().encode(jsonOfSize(MAX_BODY_BYTES + 1));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 0; i < bytes.length; i += 4096) {
+          controller.enqueue(bytes.slice(i, i + 4096));
+        }
+        controller.close();
+      },
+    });
+
+    const response = await postVault(
+      { 'content-type': 'application/json' },
+      stream,
+    );
+
+    expect(response.status).toBe(413);
+    expect((await response.json<ErrorBody>()).error.code).toBe(
+      'payload_too_large',
+    );
+  });
+
+  it('lets a 64 KB body through to the handler', async () => {
+    // No session cookie: the handler's 401 proves the limits let it pass.
+    const response = await postVault(
+      { 'content-type': 'application/json' },
+      jsonOfSize(MAX_BODY_BYTES),
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it('answers 415 on a write whose body is not JSON', async () => {
+    const response = await postVault(
+      { 'content-type': 'text/plain' },
+      JSON.stringify({ mode: 'create' }),
+    );
+
+    expect(response.status).toBe(415);
+    expect(await response.json<ErrorBody>()).toEqual({
+      error: {
+        code: 'unsupported_media_type',
+        message: 'Send the request body as application/json',
+      },
+    });
+
+    const untyped = await createApp().request(
+      `${API}/runner/vaults/${USER_ID}/status`,
+      {
+        method: 'POST',
+        headers: { authorization: `Bearer ${env.BOWER_API_KEY}` },
+        body: new Blob([JSON.stringify({ state: 'running' })]),
+      },
+      env,
+    );
+    expect(untyped.status).toBe(415);
+  });
+
+  it('accepts application/json with a charset parameter', async () => {
+    const response = await createApp().request(
+      `${API}/admin/allow`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${env.ADMIN_KEY}`,
+          'content-type': 'Application/JSON; charset=utf-8',
+        },
+        body: JSON.stringify({ email: 'you@example.com' }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(204);
+  });
+
+  it('does not require a content type on a write without a body', async () => {
+    const response = await createApp().request(
+      `${API}/auth/logout`,
+      { method: 'POST', headers: { origin: env.APP_ORIGIN } },
+      env,
+    );
+
+    expect(response.status).toBe(204);
+  });
+});
+
+describe('generic rate limit', () => {
+  async function getRoute(
+    path: string,
+    ip: string,
+    kvOverride?: KVNamespace,
+  ): Promise<Response> {
+    return createApp().request(
+      `${API}${path}`,
+      { headers: { cookie: await sessionCookie(), 'cf-connecting-ip': ip } },
+      kvOverride === undefined ? env : { ...env, BOWER_KV: kvOverride },
+    );
+  }
+
+  it('answers 429 with Retry-After past 120 cookie requests from one IP in a minute, across routes', async () => {
+    for (let i = 0; i < GENERIC_RATE_LIMIT_PER_MINUTE - 1; i += 1) {
+      expect((await getRoute('/status', IP)).status).toBe(200);
+    }
+    expect((await getRoute('/me', IP)).status).toBe(200);
+
+    const limited = await getRoute('/status', IP);
+
+    expect(limited.status).toBe(429);
+    expect((await limited.json<ErrorBody>()).error).toEqual({
+      code: 'rate_limited',
+      message: 'Too many requests, slow down',
+    });
+    expect(limited.headers.get('retry-after')).toBe('50');
+    expectSecurityHeaders(limited);
+
+    expect((await getRoute('/status', OTHER_IP)).status).toBe(200);
+    // Public routes are not counted.
+    expect((await getRoute('/health', IP)).status).toBe(200);
+
+    const minute = Math.floor(NOW.getTime() / 60_000);
+    expect(await kv.get(keys.rate('generic', IP, minute), 'text')).toBe(
+      String(GENERIC_RATE_LIMIT_PER_MINUTE),
+    );
+
+    vi.setSystemTime(new Date(NOW.getTime() + 60_000));
+    expect((await getRoute('/status', IP)).status).toBe(200);
+  });
+
+  it('counts the strict routes too, without changing their own limit', async () => {
+    const github = githubStub();
+    const headers = { origin: env.APP_ORIGIN, 'cf-connecting-ip': IP };
+    for (let i = 0; i < RATE_LIMIT_PER_MINUTE; i += 1) {
+      expect((await postProcess(github.fetchImpl, headers)).status).toBe(202);
+    }
+
+    const minute = Math.floor(NOW.getTime() / 60_000);
+    expect(await kv.get(keys.rate('generic', IP, minute), 'text')).toBe(
+      String(RATE_LIMIT_PER_MINUTE),
+    );
+    expect((await postProcess(github.fetchImpl, headers)).status).toBe(429);
+  });
+
+  it('lets the request through, logged, when KV refuses the window write', async () => {
+    const failingKv = new Proxy(kv, {
+      get(target, prop): unknown {
+        if (prop === 'put') {
+          return (): Promise<never> =>
+            Promise.reject(new Error('KV PUT failed: 429 Too Many Requests'));
+        }
+        const value: unknown = Reflect.get(target, prop);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await getRoute('/status', IP, failingKv);
+
+    expect(response.status).toBe(200);
+    expect(logged).toHaveBeenCalledWith(
+      expect.stringContaining('generic rate window unavailable: Error'),
+    );
+    logged.mockRestore();
   });
 });
 
