@@ -324,6 +324,7 @@ expect_contains 'redirect uri' 'https://api.bower-home.test/auth/callback'
 expect_contains 'privacy url' 'https://app.bower-home.test/privacy'
 expect_contains 'pages custom domain' 'Custom domains'
 expect_contains 'pages custom domain host' 'app.bower-home.test'
+expect_contains 'hardening pointer' 'Hardening your instance'
 echo "ok first run creates everything"
 
 # --- second run: updates, skips what exists ------------------------------------

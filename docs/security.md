@@ -30,6 +30,7 @@ The session cookie stays `SameSite=Lax`, so the app and the Worker **must share 
 - [x] Secret hygiene: `api/test/log-hygiene.test.ts` fails if any `console.*` call in `api/src/` passes or interpolates a variable named like a token, secret, key, email, refresh token or cookie. No violation was found when it was added.
 - [x] CI supply chain: every `uses:` in `.github/workflows/ci.yml` and the instance workflows (`agent/workflows/ingest.yml`, `lint.yml`) pinned to a full commit SHA, version in a comment; `pull_request` and `push` runs gated by a `supply-chain` job (`pnpm audit --audit-level=high`, gitleaks); `permissions: contents: read` at the top of `ci.yml`, widened per job only where needed (the `supply-chain` job's PR comments); Dependabot (`.github/dependabot.yml`) weekly for npm (grouped minor/patch) and GitHub Actions.
 - [x] Note rendering (#188): see below.
+- [x] Key rotation: `SESSION_SECRET` supports a grace window through the optional `SESSION_SECRET_PREVIOUS` secret — `verifySession` (`api/src/session.ts`) tries the current secret, then the previous one, so a rotation doesn't have to sign every user out at once; tokens are always signed with the current secret only. Cadence and the step-by-step procedure for this and the other Worker secrets are in `docs/runbook.md`, "Hardening your instance".
 - [x] This threat model.
 
 ## Note rendering

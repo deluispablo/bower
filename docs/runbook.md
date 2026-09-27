@@ -32,6 +32,7 @@ No secret value is ever printed to the terminal.
 2. **Google OAuth client.** Check the authorized redirect URI (`https://api.example.com/auth/callback`), the privacy policy URL (`https://app.example.com/privacy`) and the terms of service URL (`https://app.example.com/terms`) the script printed.
 3. **Smoke check:** `curl https://api.example.com/health` (your real `API_ORIGIN`) should answer 200.
 4. **Invite the first user:** see section 5 below; `ADMIN_KEY` is in `api/.prod.secrets`.
+5. **Harden your instance:** see section 9 below, once you're ready to invite people beyond yourself.
 
 ### Rerunning and updating
 
@@ -115,6 +116,7 @@ routes = [{ pattern = "api.example.com", custom_domain = true }]
 | `BOWER_API_KEY` | Secret | Generate: `openssl rand -base64 32`; set the same value here and in the instance repo (step 4) | `replace-me` |
 | `GITHUB_TOKEN` | Secret | GitHub → Settings → Developer settings → Fine-grained token, `contents: write` on the instance repo only | `github_pat_replace-me` |
 | `ADMIN_KEY` | Secret | Generate: `openssl rand -base64 32`; bearer key for the admin endpoints | `replace-me` |
+| `SESSION_SECRET_PREVIOUS` | Secret (optional) | Only set during a `SESSION_SECRET` rotation, so old session cookies keep verifying for a while — see "Hardening your instance" § Rotating `SESSION_SECRET` without signing everyone out | `replace-me` |
 | `VAPID_PUBLIC_KEY` | Secret | `pnpm -C api gen-vapid`, once per instance: base64url of the raw 65-byte P-256 public key. Keep it — a new pair invalidates every browser's push subscription | `replace-me` |
 | `VAPID_PRIVATE_KEY` | Secret | Same `gen-vapid` run as above: base64url of the 32-byte private key | `replace-me` |
 | `APP_ORIGIN` | Var | The app's deployed origin (Cloudflare Pages) | `https://app.example.com` |
@@ -211,7 +213,7 @@ Each Worker secret is rotated the same way — pipe the new value into `wrangler
 | Secret | What rotating it breaks, until |
 | --- | --- |
 | `TOKEN_ENC_KEY` | Invalidates **every** stored refresh token at once (they were encrypted with the old key): every user sees `needsReauth: true` and must sign in again before their next run or Drive access. |
-| `SESSION_SECRET` | Every existing session cookie stops verifying: every signed-in user is signed out immediately and must sign in again (no data loss — just a fresh sign-in). |
+| `SESSION_SECRET` | Every existing session cookie stops verifying: every signed-in user is signed out immediately and must sign in again (no data loss — just a fresh sign-in) — unless you rotate it with a grace window instead: "Hardening your instance" § Rotating `SESSION_SECRET` without signing everyone out. |
 | `BOWER_API_KEY` | The runner's calls to `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status` start answering `401` until the **same** new value is also set as the instance repo's `BOWER_API_KEY` secret (`gh secret set BOWER_API_KEY`, step 4) — rotate both together, or every run fails in between. |
 | `GITHUB_TOKEN`, `ADMIN_KEY`, `VAPID_*` | No user-facing disruption: `GITHUB_TOKEN` and `ADMIN_KEY` are only used server-to-server on the next call; a new `VAPID_*` pair invalidates existing push subscriptions (already noted in the variable table) but sign-in and tidying up are unaffected. |
 
@@ -277,6 +279,57 @@ In order:
 | Everyone is signed out again after 7 days | The Google OAuth consent screen is still in **Testing** — refresh tokens issued to test users expire after 7 days there | Publish the app (step 2) |
 | Pasting a link into Add saves a note but doesn't summarise it | Expected: the link becomes `Link - <host> <date> <time>.md` in the inbox right away, and the agent reads the page during the next Tidy up run, not when the note is saved | Run Tidy up to have Bower read it |
 | A Tidy up run's log or a note the agent wrote suggests the model tried to reach the Drive API, the Worker, or read `BOWER_API_KEY`/an access token, and couldn't | By design: `claude -p` runs under `env -i` with an explicit allow-list (`agent/run.sh`), so the model's own process never has the Drive token, `BOWER_API_KEY` or any other `BOWER_*`/`RCLONE_CONFIG_*` value, even though the surrounding shell does the sync down/up and the status report. A prompt-injected note (untrusted text in `0-Inbox/` or `Clippings/`) asking the model to use one of those must fail | Nothing to fix; this is the runner's minimal-environment guarantee (`docs/security.md` §6) |
+
+## 9. Hardening your instance
+
+Optional, but recommended once your instance is running (sections 1–5) and before you invite anyone beyond yourself. Nothing below is automated: every step is a setting in someone else's dashboard (Cloudflare, GitHub, Google), not something a script can safely click for you — `scripts/deploy.sh` only prints a pointer to this section at the end of a run.
+
+### Cloudflare zone
+
+These live in the Cloudflare dashboard, under the domain (the "zone") that `APP_ORIGIN` and `API_ORIGIN` are subdomains of, for example `example.com`.
+
+1. **DNSSEC.** Zone → DNS → Settings → enable DNSSEC, then add the DS record it shows you at your domain registrar (wherever you bought the domain). Why: it cryptographically signs your DNS answers, so an attacker on the network can't quietly redirect `app.example.com` or `api.example.com` to a server of their own. If you skip it: nothing about your instance changes day to day, but that particular protection is missing — safe to leave for later, but it costs nothing to turn on now.
+2. **Managed WAF rules (free).** Zone → Security → WAF → Managed rules → turn on the free Cloudflare Managed Ruleset. Why: it blocks known attack patterns (SQL injection strings, common exploit payloads, known bad actors) at Cloudflare's edge, before they ever reach your Worker. If you skip it: the Worker's own code is the only thing standing between it and that traffic.
+3. **Bot Fight Mode.** Zone → Security → Bots → turn on Bot Fight Mode (included in the free plan). Why: it challenges obvious bots before they can hammer `/auth/*` or otherwise run up your Cloudflare and GitHub Actions usage. If you skip it: only the Worker's own rate limiting (below, and `docs/security.md`) stands between your instance and bot traffic.
+4. **A rate-limiting rule on `/auth/*`.** Zone → Security → WAF → Rate limiting rules → Create rule. Match: hostname equals your `API_ORIGIN`'s host (e.g. `api.example.com`) **and** URI path starts with `/auth`. Action: Block (or Challenge), threshold around 30 requests per minute from the same IP — the same number the Worker already enforces on `/auth/callback` (`docs/security.md`), so this adds a second line of defence rather than a stricter one. Why: a flood is stopped at Cloudflare's edge instead of costing you a Worker invocation for every request. If you skip it: the Worker's own per-IP limit (`rateLimit` in `api/src/security.ts`) still applies, just one layer later.
+
+### GitHub
+
+On the **instance repo** (never this public template — see `ARCHITECTURE.md`, "Two repositories per deployment"):
+
+5. **Confirm it's private.** Instance repo → Settings → General: it should already say "Private" (`scripts/new-instance.sh` creates it that way) — check nobody made it public since. Why: the Actions logs it keeps (`bower-logs`, see § Reading logs above) are only safe to keep because the repo is private.
+6. **Actions permissions, read-only by default.** Instance repo → Settings → Actions → General → "Workflow permissions": choose **Read repository contents permission** (not "Read and write"), and leave "Allow GitHub Actions to create and approve pull requests" unchecked. Why: the agent's workflows read the vault from Drive and report status to the Worker; they never need to push anything back to this repo, so the least access GitHub Actions itself is given, the less a compromised workflow or dependency could do. If you skip it: the default "Read and write" setting hands every workflow run more power than it uses.
+7. **A secret rotation cadence.** Put a reminder (a calendar entry is enough) to rotate `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`, `BOWER_API_KEY` and `GITHUB_TOKEN` every few months, and immediately if anyone who had access to your Cloudflare, GitHub or Google accounts stops being trusted with them. "Rotate the Claude token" and "Rotate keys" above cover the mechanics; for `SESSION_SECRET` specifically, see below.
+
+### Google Cloud
+
+8. **Restrict the OAuth client to the real redirect URI and origins.** Google Cloud Console → APIs & Services → Credentials → your OAuth client:
+   - **Authorized redirect URIs**: only `https://api.example.com/auth/callback` (your real `API_ORIGIN`) should be listed. Remove the `http://localhost:8787/auth/callback` from the local sign-in test (appendix) once you no longer need it, and remove any other URI you don't recognise.
+   - **Authorized JavaScript origins**: only `https://app.example.com` (your real `APP_ORIGIN`).
+   Why: Google only ever sends a completed sign-in back to a URI on this list; a stale extra one — especially a `localhost` one — is a door nobody is watching any more. If you skip it: sign-in still works, but the client accepts redirects to addresses it no longer needs to.
+9. **Consent screen published, not left in Testing.** The OAuth consent screen page should read **In production** (done in "Google OAuth client" above, step 2, "Publish"). If it still says "Testing", fix it now: refresh tokens for test users expire after 7 days, which is the single most common cause of "everyone signed out again" (§ Troubleshooting).
+
+### Rotating `SESSION_SECRET` without signing everyone out
+
+Every session cookie is signed with `SESSION_SECRET`, so replacing it the ordinary way (`wrangler secret put SESSION_SECRET`, or `scripts/deploy.sh --rotate`) invalidates every cookie at once: everyone is signed out immediately and has to sign in again (see "Rotate keys" above). `SESSION_SECRET_PREVIOUS` is an optional Worker secret that avoids that: while it's set, a session cookie signed with the *previous* secret still verifies, so people who are already signed in stay signed in for the rest of the grace window instead of being dropped the instant you rotate. New sign-ins are always signed with the current secret only — `SESSION_SECRET_PREVIOUS` is only ever checked, never signed with.
+
+**Cloudflare secrets can only be written, never read back** — `wrangler secret put` has no matching "get". So this only works if you kept your own copy of the value you're about to replace. From now on, every time you set `SESSION_SECRET` by hand, save the value somewhere private (a password manager) before you overwrite it — `scripts/deploy.sh`'s own generation deliberately never shows or saves it ("No secret value is ever printed to the terminal", above), so this is the one secret worth keeping your own note of. If you don't already have the current value saved, you cannot grace-rotate this time: fall back to the ordinary rotation and start saving it from here on.
+
+With the old value at hand as `$OLD_SESSION_SECRET`, from `api/`:
+
+```bash
+NEW=$(openssl rand -base64 32)
+printf '%s' "$OLD_SESSION_SECRET" | wrangler secret put SESSION_SECRET_PREVIOUS -c wrangler.local.toml
+printf '%s' "$NEW" | wrangler secret put SESSION_SECRET -c wrangler.local.toml
+```
+
+Save `$NEW` the same way, for next time. After **24 hours** — long enough for anyone who opened the app in that window to have quietly picked up a cookie signed with the new secret — close the window:
+
+```bash
+wrangler secret delete SESSION_SECRET_PREVIOUS -c wrangler.local.toml
+```
+
+Anyone who hasn't opened the app in those 24 hours is signed out at that point and has to sign in again — the same outcome as an ordinary rotation, just for a smaller, slower group instead of everyone at once. Leaving `SESSION_SECRET_PREVIOUS` set indefinitely keeps a retired secret able to sign people in forever, so don't skip the delete step.
 
 ## What the app hides
 
