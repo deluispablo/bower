@@ -1,0 +1,254 @@
+/*
+ * Add screen (spec §6, the Add row; `docs/design/gen.py`'s Phone-Add):
+ * the drop zone with the bird peeking over its top edge, the paste-a-link
+ * field, the upload queue as cards, and the "Tidy up right after adding"
+ * toggle. Motion is transform/opacity only, on the motion tokens, and
+ * turned off under `prefers-reduced-motion` below.
+ */
+
+.add-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 12rem;
+  margin: var(--space-6) 0 var(--space-3);
+  padding: var(--space-8) var(--space-4) var(--space-4);
+  border: 2px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  text-align: center;
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.add-dropzone-active {
+  background: var(--color-surface);
+  border-color: var(--color-focus);
+}
+
+/* The bird sits half over the drop zone's own top edge. */
+.add-dropzone-bird {
+  position: absolute;
+  top: -1.25rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.add-dropzone-title {
+  margin: 0;
+  font-weight: var(--weight-medium);
+  font-size: var(--text-lg);
+  color: var(--color-heading);
+}
+
+.add-dropzone-hint {
+  max-width: 26rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* An outline twin of `.button` (`styles/layout.css`), for a screen's second
+ * action: Photo next to Choose files, Save next to the link field. */
+.button-secondary {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+}
+
+.button-secondary:hover {
+  background: var(--color-surface);
+  filter: none;
+}
+
+.add-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-3) 0;
+}
+
+.add-field-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.add-field-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.add-field-row input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.add-field-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.add-queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.add-queue-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+}
+
+.add-queue-card-waiting {
+  opacity: 0.7;
+}
+
+.add-queue-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--color-text-muted);
+}
+
+.add-queue-check {
+  font-size: var(--text-lg);
+  color: var(--color-success);
+}
+
+.add-queue-check-failed {
+  color: var(--color-danger);
+}
+
+.add-queue-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.add-queue-name {
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-queue-status {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.add-queue-bar {
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.add-queue-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-brand);
+  transition: width var(--motion-base) var(--ease-out);
+}
+
+.add-message {
+  color: var(--color-success);
+}
+
+/* The restyled "Tidy up right after adding" switch: a real checkbox, visually
+ * hidden, driving a track and thumb next to its own label text. */
+.add-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  margin-top: var(--space-2);
+  cursor: pointer;
+}
+
+.add-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.add-toggle-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.add-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.add-toggle input:checked + .add-toggle-track {
+  background: var(--color-brand);
+}
+
+.add-toggle input:checked + .add-toggle-track .add-toggle-thumb {
+  transform: translateX(16px);
+}
+
+.add-toggle input:focus-visible + .add-toggle-track {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .add-dropzone,
+  .add-queue-bar-fill,
+  .add-toggle-track,
+  .add-toggle-thumb {
+    transition: none;
+  }
+}

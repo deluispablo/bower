@@ -2,23 +2,33 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
-import { listFolder, upload } from '../drive.js';
+import { linkNoteName } from '../add.js';
+import { Bird } from '../components/bird.js';
+import { IconNote } from '../components/icons.js';
+import { createTextFile, listFolder, upload } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
-import { getPref } from '../prefs.js';
+import { getPref, setPref } from '../prefs.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
 
-type FileStatus = 'waiting' | 'uploading' | 'done' | 'failed';
+import '../styles/add.css';
 
-interface SelectedFile {
+type QueueStatus = 'waiting' | 'uploading' | 'done' | 'failed';
+
+interface QueueItem {
   id: string;
-  file: File;
+  /** A picked/dropped/shared file, or a pasted link's note. */
+  kind: 'file' | 'link';
+  /** Set for `kind: 'file'`. */
+  file?: File;
+  /** The pasted URL, kept for `kind: 'link'` so a failed save can retry. */
+  url?: string;
   /** Possibly renamed to stay unique in the inbox. */
   name: string;
-  status: FileStatus;
-  /** 0–100. */
+  status: QueueStatus;
+  /** 0–100; always 100 once `done` (a link note has no progress of its own). */
   progress: number;
   error?: string;
 }
@@ -43,18 +53,23 @@ export function Add() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const filesRef = useRef<SelectedFile[]>([]);
+  const queueRef = useRef<QueueItem[]>([]);
   const sharedHandledRef = useRef(false);
 
-  const [files, setFiles] = useState<SelectedFile[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [autoProcess, setAutoProcess] = useState(() =>
+    getPref('autoProcessOnAdd'),
+  );
 
   useEffect(() => {
-    filesRef.current = files;
-  }, [files]);
+    queueRef.current = queue;
+  }, [queue]);
 
   // The current inbox listing, so new names are made unique against it.
   // `listFolder` is a single, non-recursive call (unlike `listVault`).
@@ -87,7 +102,7 @@ export function Add() {
       .then((shared) => {
         if (shared.length === 0) return;
         const created = addFiles(shared);
-        void processFiles(created);
+        void runQueue(created);
       })
       .catch((err: unknown) => {
         console.error(err);
@@ -95,83 +110,86 @@ export function Add() {
     // Runs once, right after mount.
   }, []);
 
-  function addFiles(newFiles: File[]): SelectedFile[] {
-    const names = new Set(existingNames);
-    const created: SelectedFile[] = newFiles.map((file) => {
-      const name = uniqueName(file.name, names);
-      names.add(name);
-      return {
-        id: crypto.randomUUID(),
-        file,
-        name,
-        status: 'waiting',
-        progress: 0,
-      };
-    });
-    setExistingNames(names);
-    setFiles((prev) => [...prev, ...created]);
+  function claimName(preferred: string): string {
+    const unique = uniqueName(preferred, existingNames);
+    setExistingNames((prev) => new Set(prev).add(unique));
+    return unique;
+  }
+
+  function addFiles(newFiles: File[]): QueueItem[] {
+    const created: QueueItem[] = newFiles.map((file) => ({
+      id: crypto.randomUUID(),
+      kind: 'file',
+      file,
+      name: claimName(file.name),
+      status: 'waiting',
+      progress: 0,
+    }));
+    setQueue((prev) => [...prev, ...created]);
     return created;
   }
 
-  function updateFile(id: string, patch: Partial<SelectedFile>): void {
-    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+  function updateItem(id: string, patch: Partial<QueueItem>): void {
+    setQueue((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, ...patch } : it)),
+    );
   }
 
-  async function uploadOne(
-    entry: SelectedFile,
-    folderId: string,
-  ): Promise<boolean> {
-    updateFile(entry.id, {
-      status: 'uploading',
-      progress: 0,
-      error: undefined,
-    });
+  async function runOne(item: QueueItem, folderId: string): Promise<boolean> {
+    updateItem(item.id, { status: 'uploading', progress: 0, error: undefined });
     try {
-      await upload(
-        folderId,
-        withName(entry.file, entry.name),
-        (sent, total) => {
-          updateFile(entry.id, {
-            progress: total > 0 ? Math.round((sent / total) * 100) : 100,
-          });
-        },
-      );
-      updateFile(entry.id, { status: 'done', progress: 100 });
+      if (item.kind === 'file' && item.file) {
+        await upload(
+          folderId,
+          withName(item.file, item.name),
+          (sent, total) => {
+            updateItem(item.id, {
+              progress: total > 0 ? Math.round((sent / total) * 100) : 100,
+            });
+          },
+        );
+      } else if (item.kind === 'link' && item.url !== undefined) {
+        await createTextFile(folderId, item.name, item.url);
+      }
+      updateItem(item.id, { status: 'done', progress: 100 });
       return true;
     } catch (err) {
       console.error(err);
-      updateFile(entry.id, {
+      updateItem(item.id, {
         status: 'failed',
-        error: 'Could not upload this file.',
+        error:
+          item.kind === 'link'
+            ? 'Could not save this link.'
+            : 'Could not upload this file.',
       });
       return false;
     }
   }
 
-  /** After a run's worth of uploads: process (unless disabled) and go home.
+  /** After a batch's worth of uploads: process (unless disabled) and go home.
    * The run itself (queued, done, quota, failed…) is the header button's
-   * job from here; this screen only reports the upload. */
+   * job from here; this screen only reports the add. */
   function finish(): void {
     if (getPref('autoProcessOnAdd')) {
       void process();
     }
-    setMessage('Files added. Tidying up.');
+    setMessage('Added to your inbox. Tidying up.');
     setTimeout(() => route('/'), 900);
   }
 
-  /** Uploads whatever in `list` is not already `done`, then `finish()`s if,
-   * across every file added so far, all of them now are. */
-  async function processFiles(list: SelectedFile[]): Promise<void> {
+  /** Runs whatever in `list` is not already `done`, then `finish()`s if,
+   * across the whole queue added so far, all of it now is. */
+  async function runQueue(list: QueueItem[]): Promise<void> {
     if (inboxFolderId === null || list.length === 0) return;
     setBusy(true);
     setMessage(null);
-    for (const entry of list) {
-      if (entry.status === 'done') continue;
-      await uploadOne(entry, inboxFolderId);
+    for (const item of list) {
+      if (item.status === 'done') continue;
+      await runOne(item, inboxFolderId);
     }
     setBusy(false);
-    if (filesRef.current.length === 0) return;
-    if (!filesRef.current.every((f) => f.status === 'done')) return;
+    if (queueRef.current.length === 0) return;
+    if (!queueRef.current.every((it) => it.status === 'done')) return;
     finish();
   }
 
@@ -194,12 +212,33 @@ export function Add() {
     setDragOver(true);
   }
 
+  function onSaveLink(): void {
+    const trimmed = linkUrl.trim();
+    const name = linkNoteName(trimmed, new Date());
+    if (name === null) {
+      setLinkError('Enter a link starting with http:// or https://.');
+      return;
+    }
+    setLinkError(null);
+    const item: QueueItem = {
+      id: crypto.randomUUID(),
+      kind: 'link',
+      url: trimmed,
+      name: claimName(name),
+      status: 'waiting',
+      progress: 0,
+    };
+    setQueue((prev) => [...prev, item]);
+    setLinkUrl('');
+    void runQueue([item]);
+  }
+
   const touch = isTouchDevice();
+  const linkDisabled = inboxFolderId === null || !online;
 
   return (
     <section class="add-screen">
       <h1>Add</h1>
-      <p>Bring something in from your device.</p>
 
       <input
         ref={fileInputRef}
@@ -217,53 +256,107 @@ export function Add() {
         onChange={onFileInputChange}
       />
 
-      <div class="add-actions">
-        <button
-          type="button"
-          class="button"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          Choose files
-        </button>
-        {touch && (
+      <div
+        class={`add-dropzone${dragOver ? ' add-dropzone-active' : ''}`}
+        onDragOver={onDragOver}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+      >
+        <div class="add-dropzone-bird">
+          <Bird state={dragOver ? 'shiny' : 'peeking'} size={64} />
+        </div>
+        <p class="add-dropzone-title">Drop anything here</p>
+        <p class="add-dropzone-hint">
+          Photos, PDFs, screenshots, voice memos, links. Or share to Bower from
+          any app.
+        </p>
+        <div class="add-actions">
           <button
             type="button"
             class="button"
-            onClick={() => cameraInputRef.current?.click()}
+            onClick={() => fileInputRef.current?.click()}
           >
-            Take a photo
+            Choose files
           </button>
-        )}
+          {touch && (
+            <button
+              type="button"
+              class="button button-secondary"
+              onClick={() => cameraInputRef.current?.click()}
+            >
+              Photo
+            </button>
+          )}
+        </div>
       </div>
 
-      {!touch && (
-        <div
-          class={`add-dropzone${dragOver ? ' add-dropzone-active' : ''}`}
-          onDragOver={onDragOver}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-        >
-          Drop files here
+      <div class="add-field">
+        <label for="add-link">Or paste a link</label>
+        <div class="add-field-row">
+          <input
+            id="add-link"
+            type="url"
+            placeholder="https://"
+            value={linkUrl}
+            disabled={linkDisabled}
+            onInput={(e) => setLinkUrl(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSaveLink();
+            }}
+          />
+          <button
+            type="button"
+            class="button button-secondary"
+            disabled={linkDisabled || linkUrl.trim() === ''}
+            onClick={onSaveLink}
+          >
+            Save
+          </button>
         </div>
-      )}
+        {linkError !== null && <p class="add-field-error">{linkError}</p>}
+      </div>
 
-      {files.length > 0 && (
-        <ul class="add-file-list">
-          {files.map((entry) => (
-            <li key={entry.id} class="add-file-row">
-              <span class="add-file-name">{entry.name}</span>
-              <span class="add-file-status">
-                {entry.status === 'waiting' && 'Waiting'}
-                {entry.status === 'uploading' &&
-                  `Uploading ${entry.progress} %`}
-                {entry.status === 'done' && 'Done'}
-                {entry.status === 'failed' && (entry.error ?? 'Failed')}
+      {queue.length > 0 && (
+        <ul class="add-queue">
+          {queue.map((item) => (
+            <li
+              key={item.id}
+              class={`add-queue-card${item.status === 'waiting' ? ' add-queue-card-waiting' : ''}`}
+            >
+              <span class="add-queue-icon" aria-hidden="true">
+                {item.status === 'done' && (
+                  <span class="add-queue-check">✓</span>
+                )}
+                {item.status === 'uploading' && (
+                  <Bird state="tidying" size={30} />
+                )}
+                {item.status === 'waiting' && <IconNote />}
+                {item.status === 'failed' && (
+                  <span class="add-queue-check add-queue-check-failed">!</span>
+                )}
               </span>
-              {entry.status === 'failed' && (
+              <span class="add-queue-body">
+                <span class="add-queue-name">{item.name}</span>
+                {item.status === 'uploading' && (
+                  <span class="add-queue-bar">
+                    <span
+                      class="add-queue-bar-fill"
+                      style={{ width: `${item.progress}%` }}
+                    />
+                  </span>
+                )}
+                <span class="add-queue-status">
+                  {item.status === 'waiting' && 'Waiting'}
+                  {item.status === 'uploading' && `${item.progress} %`}
+                  {item.status === 'done' && 'Added to your inbox'}
+                  {item.status === 'failed' && (item.error ?? 'Failed')}
+                </span>
+              </span>
+              {item.status === 'failed' && (
                 <button
                   type="button"
                   class="button-link"
-                  onClick={() => void processFiles([entry])}
+                  onClick={() => void runQueue([item])}
                 >
                   Retry
                 </button>
@@ -281,15 +374,31 @@ export function Add() {
         type="button"
         class="button"
         disabled={
-          busy || inboxFolderId === null || files.length === 0 || !online
+          busy || inboxFolderId === null || queue.length === 0 || !online
         }
         aria-disabled={
-          busy || inboxFolderId === null || files.length === 0 || !online
+          busy || inboxFolderId === null || queue.length === 0 || !online
         }
-        onClick={() => void processFiles(files)}
+        onClick={() => void runQueue(queue)}
       >
         {busy ? 'Adding…' : 'Add to Bower'}
       </button>
+
+      <label class="add-toggle">
+        <input
+          type="checkbox"
+          checked={autoProcess}
+          onChange={(e) => {
+            const checked = e.currentTarget.checked;
+            setAutoProcess(checked);
+            setPref('autoProcessOnAdd', checked);
+          }}
+        />
+        <span class="add-toggle-track" aria-hidden="true">
+          <span class="add-toggle-thumb" />
+        </span>
+        Tidy up right after adding
+      </label>
     </section>
   );
 }
