@@ -86,6 +86,20 @@ describe('instructionNote', () => {
     const note = instructionNote('  hello  \n', NOW);
     expect(note.endsWith('\nhello\n')).toBe(true);
   });
+
+  it('adds kind after via when given (the Bower tab writes request)', () => {
+    const note = instructionNote('Which flat first?', NOW, 'request');
+    expect(note).toBe(
+      '---\n' +
+        'tags: [instruction]\n' +
+        `date: ${NOW.toISOString()}\n` +
+        'via: app\n' +
+        'kind: request\n' +
+        '---\n' +
+        '\n' +
+        'Which flat first?\n',
+    );
+  });
 });
 
 // --- sentItem helpers, with a stubbed localStorage --------------------

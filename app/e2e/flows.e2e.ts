@@ -259,26 +259,58 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   await expect(sheet).toBeHidden();
 });
 
-test('Tell Bower sends a question to the inbox', async ({ page }, testInfo) => {
+test('the Bower tab sends a request that waits for the next tidy-up', async ({
+  page,
+}, testInfo) => {
   await openHome(page);
   await navigate(page, /^Bower$/);
   await expect(page).toHaveURL(/\/bower$/);
   await expect(
-    page.getByText("A rule, a task or a question. I'll put it in your inbox"),
+    page.getByText('Tell me what you want, in your words.'),
   ).toBeVisible();
+  // One box, no Rule/Task/Question selector (#340).
+  for (const label of ['A rule', 'A task', 'A question']) {
+    await expect(page.getByRole('button', { name: label })).toHaveCount(0);
+  }
+  await expect(page.getByRole('tab')).toHaveText([
+    'Rules',
+    'Requests',
+    'Activity',
+  ]);
 
-  await page.getByRole('button', { name: 'A question' }).click();
-  const message = page.getByRole('textbox', { name: 'Message' });
-  await expect(message).toHaveValue(
-    'What did I save about trip planning last month?',
+  // The demo already has a question waiting, so the tip starts closed.
+  await page.getByRole('button', { name: 'Things you can ask' }).click();
+  await page
+    .getByRole('button', {
+      name: 'How much did I spend on the kitchen this year?',
+    })
+    .click();
+  const box = page.getByRole('textbox', {
+    name: 'Tell Bower what to do, or ask it something',
+  });
+  await expect(box).toHaveValue(
+    'How much did I spend on the kitchen this year?',
   );
   await page.getByRole('button', { name: 'Send' }).click();
 
-  await expect(message).toHaveValue('');
-  await expect(
-    page.getByText('What did I save about trip planning last month?'),
-  ).toBeVisible();
+  await expect(box).toHaveValue('');
+  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  const row = requests
+    .getByRole('listitem')
+    .filter({ hasText: 'How much did I spend on the kitchen this year?' });
+  await expect(row).toBeVisible();
+  await expect(row.getByText('Waiting', { exact: true })).toBeVisible();
   await shot(page, testInfo, 'tell');
+
+  // No run started: no working sheet, and the note waits in the inbox
+  // with the other three.
+  await expect(
+    page.getByRole('dialog', { name: 'Tidying up status' }),
+  ).toHaveCount(0);
+  await navigate(page, /^Home$/);
+  await expect(
+    visible(page.getByRole('button', { name: 'Tidy up (4)' })),
+  ).toBeVisible();
 });
 
 test('Settings switches the theme to dark, and it sticks', async ({
@@ -442,9 +474,11 @@ test('an old /tell link opens the Bower tab with its text', async ({
     dispatchEvent(new PopStateEvent('popstate'));
   });
   await expect(page).toHaveURL(/\/bower\?text=Hello(\+|%20)Bower$/);
-  await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue(
-    'Hello Bower',
-  );
+  await expect(
+    page.getByRole('textbox', {
+      name: 'Tell Bower what to do, or ask it something',
+    }),
+  ).toHaveValue('Hello Bower');
 });
 
 test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({

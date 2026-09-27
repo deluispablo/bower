@@ -315,7 +315,17 @@ export function IconEdit(): JSX.Element {
   );
 }
 
-/** The sparkle on the Tidy up button (Phone-Home and Phone-Add boards). */
+/** The Bower tab's Rules segment (#340): a shield. */
+export function IconShield(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+    </Svg>
+  );
+}
+
+/** The sparkle on the Tidy up button (Phone-Home and Phone-Add boards),
+ * and next to each example under the Bower tab's box (#340). */
 export function IconSparkle(): JSX.Element {
   return (
     <Svg>
