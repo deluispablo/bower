@@ -10,18 +10,26 @@
  * The card is a `role="dialog"` with focus trapped; Escape and "Skip tour"
  * skip, "Next" moves on and "Let's go" on the last step finishes. The tour
  * only reports how it ended (`onEnd`); saving `tourSeenAt` is the caller's.
+ *
+ * In a demo build (spec §5, #195) the same three steps run with copy that
+ * names Alex's sample notes, plus a fourth step pointing at the persistent
+ * demo banner (`data-tour="banner"`, `components/demo-banner.tsx`) whose
+ * card ends "This is a demo; run your own" with a button to the Run your
+ * own Bower route instead of "Let's go" (`TourStep.cta`). `isDemo()` picks
+ * the array; nothing else about the tour changes.
  */
 
 import type { JSX } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
+import { isDemo } from '../api.js';
 import { Bird } from './bird.js';
 import type { BirdState } from './bird-classes.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
 import '../styles/tour.css';
 
-export type TourTarget = 'add' | 'tidy' | 'tell';
+export type TourTarget = 'add' | 'tidy' | 'tell' | 'banner';
 
 export interface TourStep {
   /** The `data-tour` value of the control this step points at. */
@@ -32,6 +40,12 @@ export interface TourStep {
   bird: BirdState;
   /** Stand the bird on the target when there is room (the phone's tabs). */
   birdOnTarget: boolean;
+  /**
+   * Replaces "Let's go" with a link styled as the same button: the demo's
+   * last step, which ends the tour by leaving Home for another route
+   * rather than staying on it.
+   */
+  cta?: { label: string; href: string };
 }
 
 export const TOUR_STEPS: readonly TourStep[] = [
@@ -58,6 +72,48 @@ export const TOUR_STEPS: readonly TourStep[] = [
     body: 'Give me a rule, a task or a question. I remember rules for good and answer questions in a note under Answers.',
     bird: 'singing',
     birdOnTarget: true,
+  },
+];
+
+/**
+ * The demo's tour (#195): the same three steps, worded for Alex's sample
+ * notes, plus a fourth pointing at the demo banner and ending on "Run your
+ * own Bower" (`routes/run-your-own.tsx`, `/login` in a demo build) instead
+ * of dismissing the tour on Home.
+ */
+const DEMO_TOUR_STEPS: readonly TourStep[] = [
+  {
+    target: 'add',
+    label: '1 of 4 · Add',
+    title: 'Drop anything here.',
+    body: "These are Alex's notes, a sample folder. Photos, PDFs, links, screenshots, voice memos: drop anything in and Bower reads it, same as it would with your own.",
+    bird: 'shiny',
+    birdOnTarget: true,
+  },
+  {
+    target: 'tidy',
+    label: '2 of 4 · Tidy up',
+    title: "When you're ready, tap Tidy up.",
+    body: "Nothing happens until you tap; there is no schedule. Alex's inbox already has a few things waiting, so you can watch them get filed for real.",
+    bird: 'tidying',
+    birdOnTarget: false,
+  },
+  {
+    target: 'tell',
+    label: '3 of 4 · Tell Bower',
+    title: 'Talk to me like a person.',
+    body: "Give me a rule, a task or a question about Alex's notes. I remember rules for good and answer questions in a note under Answers.",
+    bird: 'singing',
+    birdOnTarget: true,
+  },
+  {
+    target: 'banner',
+    label: '4 of 4 · This is a demo',
+    title: 'This is a demo; run your own.',
+    body: "Alex's notes are just a sample, so nothing you do here is saved. Run your own Bower and it keeps your own notes tidy in your own Google Drive instead.",
+    bird: 'hello',
+    birdOnTarget: false,
+    cta: { label: 'Run your own Bower', href: '/login' },
   },
 ];
 
@@ -228,10 +284,12 @@ export function Tour({ onEnd }: TourProps): JSX.Element {
   }));
   const card = useRef<HTMLDivElement>(null);
   const next = useRef<HTMLButtonElement>(null);
+  const ctaLink = useRef<HTMLAnchorElement>(null);
 
-  const step = TOUR_STEPS[index] ?? TOUR_STEPS[0];
+  const steps = isDemo() ? DEMO_TOUR_STEPS : TOUR_STEPS;
+  const step = steps[index] ?? steps[0];
   if (step === undefined) throw new Error('The tour has no steps');
-  const last = index === TOUR_STEPS.length - 1;
+  const last = index === steps.length - 1;
 
   const skip = (): void => {
     onEnd(false);
@@ -256,9 +314,9 @@ export function Tour({ onEnd }: TourProps): JSX.Element {
     };
   }, [step.target]);
 
-  // Every step starts with the main button focused.
+  // Every step starts with the main button (or the demo's final link) focused.
   useEffect(() => {
-    next.current?.focus();
+    (next.current ?? ctaLink.current)?.focus();
   }, [index]);
 
   const place = placeCoach(
@@ -314,17 +372,28 @@ export function Tour({ onEnd }: TourProps): JSX.Element {
           <button type="button" class="button-link" onClick={skip}>
             Skip tour
           </button>
-          <button
-            ref={next}
-            type="button"
-            class="button"
-            onClick={() => {
-              if (last) onEnd(true);
-              else setIndex(index + 1);
-            }}
-          >
-            {last ? "Let's go" : 'Next'}
-          </button>
+          {step.cta !== undefined ? (
+            <a
+              ref={ctaLink}
+              class="button"
+              href={step.cta.href}
+              onClick={() => onEnd(true)}
+            >
+              {step.cta.label}
+            </a>
+          ) : (
+            <button
+              ref={next}
+              type="button"
+              class="button"
+              onClick={() => {
+                if (last) onEnd(true);
+                else setIndex(index + 1);
+              }}
+            >
+              {last ? "Let's go" : 'Next'}
+            </button>
+          )}
         </div>
       </div>
     </div>
