@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import {
+  appFileGroup,
   breadcrumb,
   buildTree,
   folderCounts,
@@ -89,6 +90,18 @@ describe('recentNotes', () => {
       'no-time.md',
     ]);
   });
+
+  it('skips app files unless asked', () => {
+    const index = buildVaultIndex([
+      entry('CLAUDE.md', 'text/markdown', '2026-01-05T00:00:00.000Z'),
+      entry('Notes.md', 'text/markdown', '2026-01-01T00:00:00.000Z'),
+    ]);
+    expect(recentNotes(index).map((f) => f.name)).toEqual(['Notes.md']);
+    expect(recentNotes(index, 20, true).map((f) => f.name)).toEqual([
+      'CLAUDE.md',
+      'Notes.md',
+    ]);
+  });
 });
 
 describe('pendingCount', () => {
@@ -110,6 +123,15 @@ describe('pendingCount', () => {
   it('is zero for an empty inbox', () => {
     expect(pendingCount([dir('0-Inbox')])).toBe(0);
   });
+
+  it('still counts an instruction note in 0-Inbox/, even though the tree hides it', () => {
+    const files = [
+      dir('0-Inbox'),
+      entry('0-Inbox/note.md'),
+      entry('0-Inbox/Bower - 2026-09-26 1405 Receipts.md'),
+    ];
+    expect(pendingCount(files)).toBe(2);
+  });
 });
 
 describe('buildTree', () => {
@@ -120,10 +142,10 @@ describe('buildTree', () => {
       dir('1-Projects/Attic'),
       entry('1-Projects/_Projects.md'),
       entry('1-Projects/Garden/Seed List.md'),
-      entry('index.md'),
+      entry('Notes.md'),
     ]);
     const tree = buildTree(index);
-    expect(tree.notes.map((n) => n.name)).toEqual(['index.md']);
+    expect(tree.notes.map((n) => n.name)).toEqual(['Notes.md']);
     expect(tree.folders.map((f) => f.name)).toEqual(['1-Projects']);
     const projects = tree.folders[0];
     expect(projects?.folders.map((f) => f.name)).toEqual(['Attic', 'Garden']);
@@ -183,6 +205,19 @@ describe('buildTree', () => {
     expect(tree.folders).toEqual([]);
     expect(tree.notes).toEqual([]);
   });
+
+  it("never nests Bower's own files inside a real folder", () => {
+    const index = buildVaultIndex([
+      dir('0-Inbox'),
+      entry('CLAUDE.md'),
+      entry('0-Inbox/Bower - 2026-09-26 1405 Receipts.md'),
+      entry('0-Inbox/note.md'),
+    ]);
+    const tree = buildTree(index);
+    expect(tree.notes).toEqual([]);
+    const inbox = tree.folders.find((f) => f.name === '0-Inbox');
+    expect(inbox?.notes.map((n) => n.name)).toEqual(['note.md']);
+  });
 });
 
 describe('folderCounts', () => {
@@ -208,6 +243,39 @@ describe('folderCounts', () => {
 
   it('is empty for an empty vault', () => {
     expect(folderCounts(buildVaultIndex([])).size).toBe(0);
+  });
+
+  it("excludes an instruction note from its folder's count", () => {
+    const index = buildVaultIndex([
+      dir('0-Inbox'),
+      entry('0-Inbox/note.md'),
+      entry('0-Inbox/Bower - 2026-09-26 1405 Receipts.md'),
+    ]);
+    expect(folderCounts(index).get('0-Inbox')).toBe(1);
+  });
+});
+
+describe('appFileGroup', () => {
+  it('labels top-level app files and counts instruction notes separately', () => {
+    const index = buildVaultIndex([
+      dir('0-Inbox'),
+      entry('CLAUDE.md'),
+      entry('index.md'),
+      entry('0-Inbox/Bower - 2026-09-26 1405 Receipts.md'),
+      entry('0-Inbox/Bower - 2026-09-27 0900 Notes.md'),
+      entry('0-Inbox/note.md'),
+    ]);
+    const group = appFileGroup(index);
+    expect(group.files.map((f) => f.label)).toEqual(['Catalogue', 'Rulebook']);
+    expect(group.instructionNotesCount).toBe(2);
+  });
+
+  it('is empty when the vault has no app files', () => {
+    const index = buildVaultIndex([entry('Notes.md')]);
+    expect(appFileGroup(index)).toEqual({
+      files: [],
+      instructionNotesCount: 0,
+    });
   });
 });
 
