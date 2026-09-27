@@ -9,6 +9,7 @@
 import rulebook from '../../vault-template/CLAUDE.md?raw';
 import rules from '../../vault-template/Rules.md?raw';
 
+import { RETIRED_RULEBOOK_LINES } from './rulebook-retired.js';
 import { rulesVersionOf } from './rulebook.js';
 
 /** Line endings as the Worker writes them (`api/scripts/bundle-template.mjs`). */
@@ -21,6 +22,9 @@ export const TEMPLATE_RULEBOOK: string = lf(rulebook);
 
 /** `vault-template/Rules.md`, for a folder from before `Rules.md` existed. */
 export const TEMPLATE_RULES: string = lf(rules);
+
+/** Lines earlier versions of the template had and this one does not. */
+export const TEMPLATE_RETIRED_LINES: readonly string[] = RETIRED_RULEBOOK_LINES;
 
 /** The template rulebook's `bower_rules_version`. */
 export const TEMPLATE_RULES_VERSION: number = rulesVersionOf(TEMPLATE_RULEBOOK);

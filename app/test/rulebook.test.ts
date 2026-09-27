@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import legacyRulebook from './fixtures/rulebook-v1.md?raw';
 import {
+  TEMPLATE_RETIRED_LINES,
   TEMPLATE_RULEBOOK,
   TEMPLATE_RULES,
   TEMPLATE_RULES_VERSION,
@@ -9,6 +10,7 @@ import {
 import {
   countRuleLines,
   isRulebookBehind,
+  migrationBlock,
   rulesSectionLines,
   rulesVersionOf,
   rulesWithUserLines,
@@ -68,12 +70,42 @@ describe('rulesSectionLines', () => {
   });
 });
 
+const TAGS_V1 =
+  '`personal`, `career`, `finance`, `legal`, `health`, `home`, `travel`, `learning`, `hobby`';
+const TAGS_OWN = `${TAGS_V1}, \`cooking\`, \`garden\``;
+const RECIPES = [
+  '### Recipes (owner’s request, 2026-09-21)',
+  '1. File each recipe under `3-Resources/Cooking/`, one note per dish.',
+  '2. Capture: servings, time, ingredients (table), steps.',
+  '',
+  '   Link it from the `Cooking` hub note.',
+];
+
+/** The v1 fixture with a custom workflow before Query and two domain tags. */
+function v1Customised(): string {
+  return V1.replace(TAGS_V1, TAGS_OWN).replace(
+    '### Query\n',
+    `${RECIPES.join('\n')}\n\n### Query\n`,
+  );
+}
+
+function split(old: string): ReturnType<typeof splitLegacyRules> {
+  return splitLegacyRules(old, TEMPLATE_RULEBOOK, TEMPLATE_RETIRED_LINES);
+}
+
 describe('splitLegacyRules', () => {
-  it('finds no owner lines in the unchanged v1 template', () => {
-    expect(splitLegacyRules(V1, TEMPLATE_RULEBOOK)).toEqual({ userRules: [] });
+  it('finds nothing of the owner in the unchanged v1 template', () => {
+    expect(split(V1)).toEqual({ userRules: [], migrated: [] });
   });
 
-  it("keeps the owner's lines from a v1 rulebook, byte for byte", () => {
+  it('needs the retired lines: without them, old template wording looks like the owner’s', () => {
+    const { migrated } = splitLegacyRules(V1, TEMPLATE_RULEBOOK);
+    expect(migrated).toContain(
+      '### Instructions (only a file directly in `0-Inbox/` named `Bower - <date> <time> <title>.md` with frontmatter `tags: [instruction]` and `via: app` — how the app writes them)',
+    );
+  });
+
+  it("keeps the owner's Rules lines from a v1 rulebook, byte for byte", () => {
     const own = [
       "- Invoices go to `2-Areas/Finance/` (owner's request, 2026-09-20).",
       '',
@@ -81,9 +113,41 @@ describe('splitLegacyRules', () => {
       '  - Compare salary *and* commute; flag anything under €40k.',
     ];
     const old = v1With('', ...own, '', '');
-    expect(splitLegacyRules(old, TEMPLATE_RULEBOOK)).toEqual({
-      userRules: own,
+    expect(split(old)).toEqual({ userRules: own, migrated: [] });
+  });
+
+  it('migrates a custom workflow whole and the domain tags the template lacks', () => {
+    expect(split(v1Customised())).toEqual({
+      userRules: [],
+      migrated: ['## Tags', TAGS_OWN, '', ...RECIPES],
     });
+  });
+
+  it('copies a whole new level-two section with its subsections', () => {
+    const old = V1.replace(
+      '## Language\n',
+      '## Household\n- Bins go out on Tuesday.\n\n### Plants\n- Water on Sunday.\n\n## Language\n',
+    );
+    expect(split(old).migrated).toEqual([
+      '## Household',
+      '- Bins go out on Tuesday.',
+      '',
+      '### Plants',
+      '- Water on Sunday.',
+    ]);
+  });
+
+  it('ignores headings inside a code fence', () => {
+    const old = V1.replace(
+      '## Language\n',
+      '## Snippets\n```\n## Not a heading\n```\n\n## Language\n',
+    );
+    expect(split(old).migrated).toEqual([
+      '## Snippets',
+      '```',
+      '## Not a heading',
+      '```',
+    ]);
   });
 
   it('treats an edited template line as the owner’s', () => {
@@ -91,48 +155,66 @@ describe('splitLegacyRules', () => {
       '- Never delete notes or originals. Archive or move to `Processed/`.',
       '- Never delete notes or originals, except screenshots (owner’s request).',
     );
-    expect(splitLegacyRules(old, TEMPLATE_RULEBOOK).userRules).toEqual([
+    expect(split(old).userRules).toEqual([
       '- Never delete notes or originals, except screenshots (owner’s request).',
     ]);
   });
 
   it('ignores CRLF line endings when matching template lines', () => {
     const old = v1With('- Mine.').replace(/\n/g, '\r\n');
-    expect(splitLegacyRules(old, TEMPLATE_RULEBOOK).userRules).toEqual([
-      '- Mine.',
-    ]);
+    expect(split(old)).toEqual({ userRules: ['- Mine.'], migrated: [] });
   });
 
   it('is a no-op for an already split rulebook', () => {
-    expect(splitLegacyRules(TEMPLATE_RULEBOOK, TEMPLATE_RULEBOOK)).toEqual({
-      userRules: [],
-    });
-    // Even if something was added under its Rules heading: at version 2
-    // the owner's rules already live in Rules.md.
+    expect(split(TEMPLATE_RULEBOOK)).toEqual({ userRules: [], migrated: [] });
+    // Even with something added: at version 2 the owner's rules already
+    // live in Rules.md.
     const edited = `${TEMPLATE_RULEBOOK.replace(/\n+$/, '')}\n- Stray.\n`;
-    expect(splitLegacyRules(edited, TEMPLATE_RULEBOOK)).toEqual({
+    expect(split(edited)).toEqual({ userRules: [], migrated: [] });
+  });
+
+  it('has no Rules lines for a rulebook with no Rules section', () => {
+    const old = v1Customised();
+    expect(split(old.slice(0, old.indexOf('## Rules')))).toEqual({
       userRules: [],
+      migrated: ['## Tags', TAGS_OWN, '', ...RECIPES],
     });
   });
 
-  it('is a no-op for a rulebook with no Rules section', () => {
-    const old = V1.slice(0, V1.indexOf('## Rules'));
-    expect(splitLegacyRules(old, TEMPLATE_RULEBOOK)).toEqual({
-      userRules: [],
-    });
-  });
-
-  it('drops the pointer lines of an unversioned rulebook from after the Rules.md split', () => {
+  it('finds nothing in an unversioned rulebook from after the Rules.md split', () => {
     // Between #180 and #197 the template already pointed at Rules.md but
-    // had no version field; its Rules lines are all still the template's.
+    // had no version field; every line of it is still the template's.
     const unversioned = TEMPLATE_RULEBOOK.replace(
       /^bower_rules_version: \d+\n/m,
       '',
     );
     expect(rulesVersionOf(unversioned)).toBe(1);
-    expect(splitLegacyRules(unversioned, TEMPLATE_RULEBOOK)).toEqual({
-      userRules: [],
-    });
+    expect(split(unversioned)).toEqual({ userRules: [], migrated: [] });
+  });
+});
+
+describe('migrationBlock', () => {
+  it('puts the rest under a heading naming the old version, after the Rules lines', () => {
+    expect(
+      migrationBlock({ userRules: ['- a'], migrated: ['## Tags', 'x'] }, 1),
+    ).toEqual([
+      '- a',
+      '',
+      '## Migrated from your old rulebook (v1)',
+      '',
+      '## Tags',
+      'x',
+    ]);
+  });
+
+  it('has no heading when only Rules lines moved, and nothing for nothing', () => {
+    expect(migrationBlock({ userRules: ['- a'], migrated: [] }, 1)).toEqual([
+      '- a',
+    ]);
+    expect(migrationBlock({ userRules: [], migrated: [] }, 1)).toEqual([]);
+    expect(migrationBlock({ userRules: [], migrated: ['x'] }, 1)[0]).toBe(
+      '## Migrated from your old rulebook (v1)',
+    );
   });
 });
 
@@ -159,14 +241,27 @@ describe('rulesWithUserLines', () => {
 });
 
 describe('the v1 update end to end (pure part)', () => {
-  it('ends with the current rulebook and the owner rules in Rules.md', () => {
-    const old = v1With('- Mine (owner’s request, 2026-09-20).');
-    const { userRules } = splitLegacyRules(old, TEMPLATE_RULEBOOK);
-    const rules = rulesWithUserLines(TEMPLATE_RULES, userRules);
-    expect(rules.startsWith(TEMPLATE_RULES.replace(/\n+$/, ''))).toBe(true);
-    expect(rules.endsWith('\n- Mine (owner’s request, 2026-09-20).\n')).toBe(
-      true,
+  it('ends with the current rulebook and every owner addition in Rules.md, once', () => {
+    const old = `${v1Customised().replace(/\n+$/, '')}\n- Mine (owner’s request, 2026-09-20).\n`;
+    const block = migrationBlock(split(old), rulesVersionOf(old));
+    const rules = rulesWithUserLines(TEMPLATE_RULES, block);
+    expect(rules).toBe(
+      [
+        TEMPLATE_RULES.replace(/\n+$/, ''),
+        '',
+        '- Mine (owner’s request, 2026-09-20).',
+        '',
+        '## Migrated from your old rulebook (v1)',
+        '',
+        '## Tags',
+        TAGS_OWN,
+        '',
+        ...RECIPES,
+        '',
+      ].join('\n'),
     );
+    // Running it again (say the rulebook write failed) adds nothing.
+    expect(rulesWithUserLines(rules, block)).toBe(rules);
     // The new rulebook is the template itself, at the template's version.
     expect(rulesVersionOf(TEMPLATE_RULEBOOK)).toBe(TEMPLATE_RULES_VERSION);
   });

@@ -52,6 +52,7 @@ import {
 } from './pins.js';
 import {
   countRuleLines,
+  migrationBlock,
   rulesVersionOf,
   rulesWithUserLines,
   splitLegacyRules,
@@ -118,7 +119,7 @@ export interface Vault extends VaultState {
   unpinFolder: (path: string) => Promise<void>;
   /**
    * "Update Bower's rules" (Settings › Advanced, #197): appends the owner's
-   * own lines from the old rulebook's `## Rules` section to `Rules.md`
+   * own additions to the old rulebook (`splitLegacyRules`) to `Rules.md`
    * (creating it from the template when missing), then replaces `CLAUDE.md`
    * with the template compiled into the app. Both writes are
    * conflict-checked; running it again after a failure never duplicates
@@ -339,6 +340,8 @@ export interface RulebookTemplate {
   rules: string;
   /** Its `bower_rules_version`. */
   version: number;
+  /** Lines only earlier versions of it had (`rulebook-retired.ts`). */
+  retired: readonly string[];
 }
 
 export interface RulesUpdateInput {
@@ -365,7 +368,7 @@ export interface RulesUpdateWrites {
 /**
  * The rulebook update (#197), through Drive: reads `CLAUDE.md` fresh; when
  * its `bower_rules_version` is behind the template's, appends the owner's
- * lines from its old `## Rules` section to `Rules.md` (creating it from the
+ * additions to it (`splitLegacyRules`, `migrationBlock`) to `Rules.md` (creating it from the
  * template when missing), then replaces `CLAUDE.md` with the template, the
  * one write the protected-note guard lets through (`forceProtected`). The
  * owner's lines go first, so should the rulebook write fail they are
@@ -391,7 +394,8 @@ export async function runRulesUpdate(
     };
   }
 
-  const { userRules } = splitLegacyRules(old.text, template.text);
+  const legacy = splitLegacyRules(old.text, template.text, template.retired);
+  const userRules = migrationBlock(legacy, from);
   let rules: RulesUpdateWrites['rules'] = null;
   let createdRules = false;
   if (rulesFile === undefined) {
@@ -416,7 +420,11 @@ export async function runRulesUpdate(
     forceProtected: true,
   });
   return {
-    result: { from, to: template.version, moved: countRuleLines(userRules) },
+    result: {
+      from,
+      to: template.version,
+      moved: countRuleLines(legacy.userRules) + countRuleLines(legacy.migrated),
+    },
     rulebook: saved,
     rules,
     createdRules,
@@ -811,13 +819,14 @@ export function VaultProvider({ children }: VaultProviderProps) {
       TEMPLATE_RULEBOOK: text,
       TEMPLATE_RULES: rules,
       TEMPLATE_RULES_VERSION: version,
+      TEMPLATE_RETIRED_LINES: retired,
     } = await import('./rulebook-template.js');
 
     const writes = await runRulesUpdate({
       folderId,
       rulebook,
       rulesFile: stateRef.current.index?.byPath.get(RULES_PATH),
-      template: { text, rules, version },
+      template: { text, rules, version, retired },
     });
     if (writes.rules !== null) {
       await recordNote(

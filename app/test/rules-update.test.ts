@@ -19,6 +19,7 @@ import type { DriveClient, DriveFile } from '../src/drive.js';
 import { createDemo } from '../src/demo/index.js';
 import { ROOT_ID } from '../src/demo/vault.js';
 import {
+  TEMPLATE_RETIRED_LINES,
   TEMPLATE_RULEBOOK,
   TEMPLATE_RULES,
   TEMPLATE_RULES_VERSION,
@@ -30,6 +31,7 @@ const TEMPLATE: RulebookTemplate = {
   text: TEMPLATE_RULEBOOK,
   rules: TEMPLATE_RULES,
   version: TEMPLATE_RULES_VERSION,
+  retired: TEMPLATE_RETIRED_LINES,
 };
 
 const OWN =
@@ -82,6 +84,46 @@ describe('runRulesUpdate', () => {
     );
     expect(writes.rules?.text).toBe(await getText(rulesFile.id));
     expect(writes.createdRules).toBe(false);
+  });
+
+  it('moves additions outside the Rules section under the migrated heading', async () => {
+    const rulebook = await mustFileAt('CLAUDE.md');
+    const rulesFile = await mustFileAt('Rules.md');
+    const tags =
+      '`personal`, `career`, `finance`, `legal`, `health`, `home`, `travel`, `learning`, `hobby`';
+    const recipes =
+      '### Recipes\n1. One note per dish under `3-Resources/Cooking/`.';
+    const old = V1_WITH_OWN.replace(
+      tags,
+      `${tags}, \`cooking\`, \`garden\``,
+    ).replace('### Query\n', `${recipes}\n\n### Query\n`);
+    await updateFileText(rulebook.id, old);
+    const rulesBefore = await getText(rulesFile.id);
+
+    const writes = await runRulesUpdate({
+      folderId: ROOT_ID,
+      rulebook,
+      rulesFile,
+      template: TEMPLATE,
+    });
+
+    expect(writes.result.moved).toBe(5);
+    expect(await getText(rulesFile.id)).toBe(
+      [
+        rulesBefore.replace(/\n+$/, ''),
+        '',
+        OWN,
+        '',
+        '## Migrated from your old rulebook (v1)',
+        '',
+        '## Tags',
+        `${tags}, \`cooking\`, \`garden\``,
+        '',
+        recipes,
+        '',
+      ].join('\n'),
+    );
+    expect(await getText(rulebook.id)).toBe(TEMPLATE_RULEBOOK);
   });
 
   it('creates Rules.md from the template when a v1 folder has none', async () => {

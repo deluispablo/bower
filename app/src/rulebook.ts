@@ -70,43 +70,148 @@ function isBlank(line: string): boolean {
   return line.trim() === '';
 }
 
-/**
- * The owner's own lines in an old rulebook's `## Rules` section: every line
- * there that is not one of the template's own (compared with trailing
- * whitespace ignored), kept as written, with leading, trailing and doubled
- * blank lines dropped. A rulebook already at version 2 or later has none by
- * construction (its owner's rules live in `Rules.md`), and neither has one
- * with no `## Rules` section.
- */
-export function splitLegacyRules(
-  oldText: string,
-  templateText: string,
-): { userRules: string[] } {
-  if (rulesVersionOf(oldText) > LEGACY_RULES_VERSION) return { userRules: [] };
-  const old = rulesSectionLines(oldText);
-  if (old === null) return { userRules: [] };
-
-  const own = new Set(
-    (rulesSectionLines(templateText) ?? [])
-      .filter((line) => !isBlank(line))
-      .map((line) => line.trimEnd()),
-  );
-
+/** Drops leading, trailing and doubled blank lines; keeps the rest as is. */
+function tidyBlanks(lines: readonly string[]): string[] {
   const kept: string[] = [];
-  for (const line of old) {
-    if (own.has(line.trimEnd())) continue;
+  for (const line of lines) {
     if (isBlank(line) && (kept.length === 0 || isBlank(kept.at(-1) ?? ''))) {
       continue;
     }
     kept.push(line);
   }
   while (kept.length > 0 && isBlank(kept.at(-1) ?? '')) kept.pop();
-  return { userRules: kept };
+  return kept;
+}
+
+interface Section {
+  /** The heading line as written (`## Tags`, `### Recipes`). */
+  heading: string;
+  level: 2 | 3;
+  /** Everything up to the next `##`/`###` heading. */
+  lines: string[];
+}
+
+const SUBSECTION_HEADING = /^(#{2,3}) \S/;
+
+/**
+ * `text` cut at every `##` and `###` heading outside a code fence, `\r`
+ * dropped. What comes before the first one (frontmatter, title, intro) is
+ * not a section and is left out.
+ */
+function sectionsOf(text: string): Section[] {
+  const sections: Section[] = [];
+  let inFence = false;
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    const match = inFence ? null : SUBSECTION_HEADING.exec(line);
+    if (FENCE.test(line)) inFence = !inFence;
+    if (match !== null) {
+      sections.push({
+        heading: line,
+        level: match[1] === '##' ? 2 : 3,
+        lines: [],
+      });
+    } else {
+      sections.at(-1)?.lines.push(line);
+    }
+  }
+  return sections;
+}
+
+/** What an old rulebook holds that is the owner's, not Bower's. */
+export interface LegacyRules {
+  /** The owner's lines from its `## Rules` section. */
+  userRules: string[];
+  /**
+   * The owner's additions anywhere else, in document order: every section
+   * Bower's rulebook has no heading for, whole; and, for a section it does
+   * have (`## Tags`, say), that section's heading followed by the lines it
+   * lacks. Chunks are separated by one blank line.
+   */
+  migrated: string[];
 }
 
 /**
- * `rulesText` with `userRules` appended as one block, byte for byte, after
- * exactly one blank line. Unchanged when there is nothing to add or the
+ * Splits an old rulebook (#197) into what is Bower's and what the owner
+ * added. A line is Bower's when the template (`templateText`) has it, or
+ * an earlier version of the template had it (`retiredLines`), compared
+ * with trailing whitespace ignored; everything else is the owner's, kept
+ * as written:
+ *
+ * - `userRules`: the lines of the `## Rules` section (up to the next `## `
+ *   heading) that are not Bower's, with leading, trailing and doubled
+ *   blank lines dropped.
+ * - `migrated`: see `LegacyRules`. Frontmatter, title and intro (before the
+ *   first `##`) are Bower's.
+ *
+ * A rulebook already at version 2 or later has neither by construction (its
+ * owner's rules live in `Rules.md`), and the `## Rules` part is empty for
+ * one with no such section.
+ */
+export function splitLegacyRules(
+  oldText: string,
+  templateText: string,
+  retiredLines: readonly string[] = [],
+): LegacyRules {
+  if (rulesVersionOf(oldText) > LEGACY_RULES_VERSION) {
+    return { userRules: [], migrated: [] };
+  }
+
+  const own = new Set(
+    [...templateText.split('\n'), ...retiredLines]
+      .map((line) => line.replace(/\r$/, '').trimEnd())
+      .filter((line) => line !== ''),
+  );
+  const isOwn = (line: string): boolean => own.has(line.trimEnd());
+
+  const rules = rulesSectionLines(oldText) ?? [];
+  const userRules = tidyBlanks(rules.filter((line) => !isOwn(line)));
+
+  const chunks: string[][] = [];
+  let inRules = false;
+  for (const section of sectionsOf(oldText)) {
+    if (section.level === 2) inRules = RULES_HEADING.test(section.heading);
+    if (inRules) continue;
+    if (!isOwn(section.heading)) {
+      chunks.push(tidyBlanks([section.heading, ...section.lines]));
+      continue;
+    }
+    const added = section.lines.filter(
+      (line) => !isBlank(line) && !isOwn(line),
+    );
+    if (added.length > 0) chunks.push([section.heading, ...added]);
+  }
+  const migrated = chunks.flatMap((chunk, i) =>
+    i === 0 ? chunk : ['', ...chunk],
+  );
+
+  return { userRules, migrated };
+}
+
+/**
+ * The block `Rules.md` gets from an old rulebook: the owner's `## Rules`
+ * lines, then, when there is anything, a `## Migrated from your old
+ * rulebook (vN)` heading and the rest of their additions, all byte for
+ * byte. Empty when there is nothing to move.
+ */
+export function migrationBlock(
+  legacy: LegacyRules,
+  fromVersion: number,
+): string[] {
+  if (legacy.migrated.length === 0) return legacy.userRules;
+  const heading = [
+    `## Migrated from your old rulebook (v${fromVersion})`,
+    '',
+    ...legacy.migrated,
+  ];
+  return legacy.userRules.length === 0
+    ? heading
+    : [...legacy.userRules, '', ...heading];
+}
+
+/**
+ * `rulesText` with `userRules` (a `migrationBlock`) appended as one block,
+ * byte for byte, after exactly one blank line. Unchanged when there is nothing to add or the
  * block is already there, so running an interrupted update again never
  * adds the same lines twice.
  */
