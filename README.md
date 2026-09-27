@@ -30,9 +30,38 @@ That is the job Bower does for your notes. It collects what you throw at it (pho
 
 1. **Add something.** From your phone or your PC: drop a file, share from any app, paste a link, or just type.
 2. **Tap Tidy up.** Nothing runs on a schedule. When you tap, the bird wakes up in the background and you carry on.
-3. **It gets filed.** Summarised, given a title and tags, organised with PARA (Projects, Areas, Resources, Archives), linked to what you already have, with a short note about what was done and why.
-4. **Read it anywhere.** In the app, with a quick switcher and a real file explorer, or in Obsidian on the same folder.
-5. **Tell Bower how you like things.** A rule ("file receipts under Finance"), a task ("compare my last three phone plans"), a question ("when does my passport expire?"). Rules are kept for good; questions get answered in a note.
+3. **It reads and understands it.** Every word, the photos too; it pulls out the numbers, dates and names that matter.
+4. **It files it.** In the folder you told it to use, or, where you said nothing, where PARA says: a project if it has an end, an area if it is ongoing, a resource if it is reference, the archive when it is done. It writes why into the note.
+5. **It looks things up and writes the note.** What the thing left out (the walk to the station, the company behind the ad), then a note per thing and one that sums up, linked to what you already have.
+6. **It remembers and connects.** Ask once and it becomes a rule in your rulebook. Everything it keeps for you is one more thing it can join to the next: the job ad gets a commute from the flat you shortlisted.
+7. **Read it anywhere.** In the app, or in Obsidian on the same folder.
+
+## What the bird does with your files
+
+Filing is the half you see. The other half is that Bower **reads** what you save, **files** it where it belongs, **looks up** what it does not say, **writes** the note you would have written with a free afternoon, **remembers** how you like it done, and **connects** it to everything else it keeps for you.
+
+<p align="center"><img src="docs/assets/use-case.svg" alt="Three acts: you save a flat listing, Bower works through reads, files, looks up, writes and remembers, you get a note that ranks your options" width="900"></p>
+
+| You save | Bower works | You get |
+| --- | --- | --- |
+| Three rental listings, as you find them: a link, a screenshot, a photo of a sign. | 68 m², 2 bed. Filed: Flat hunt / Camden. Tube 6 min, 10 % under the area. 14 min by bike from your interview. | A note per flat, filed by district, and one that ranks them with a checklist for the visit. |
+
+**One case per letter of PARA.** A **project**: flat hunting, every listing ranked and every job ad measured against the flats. An **area**: your health, each lab report filed and one table that shows what changed over the year. A **resource**: six articles on sourdough become one digest that says where they disagree. The **archive**: a finished trip filed away with what to remember, nothing deleted.
+
+**It remembers.** Ask once, in plain English, and it becomes a rule in your rulebook. **It joins the dots.** It tells you what you would not have noticed, and never what you already know.
+
+## What Bower is not
+
+<p align="center"><img src="docs/assets/window.svg" alt="The app view slides aside to show the same folder open in Google Drive" width="900"></p>
+
+Bower is a window onto one folder of your own Google Drive. Everything else follows from that.
+
+| | |
+| --- | --- |
+| **Not an editor** | It reads, files and writes notes for you. To write yourself, open the folder in Obsidian or any text editor; it is plain Markdown, and Bower picks up your changes on the next tidy-up. |
+| **Not a place your things are stored** | Nothing of yours lives on a Bower server: the Worker keeps your sign-in and a pointer to the folder, never a note. The tidy-up runs on a temporary copy that is deleted when it ends. |
+| **Not the only way in** | The folder is plain Markdown in your Drive, so open it with anything: Obsidian as a vault, Google Docs, a file manager, your phone's Files app. They can add their own dot-folders (`.obsidian`, `.trash`); Bower hides those and never touches them, and reads your edits at the next tidy-up. |
+| **Not another app to move your life into** | No import, no export. It points at a folder in the Drive you already have. Delete the app and the folder, the notes and the rules are still there. |
 
 ## What makes it different
 
