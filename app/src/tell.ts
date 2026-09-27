@@ -90,6 +90,7 @@ export function loadSent(): SentItem[] {
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter(isSentItem) : [];
   } catch {
+    // Storage blocked or the value is corrupt: treat it as an empty list.
     return [];
   }
 }

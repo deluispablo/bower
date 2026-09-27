@@ -57,6 +57,7 @@ export function getPref<K extends keyof Prefs>(key: K): Prefs[K] {
     if (raw === null) return DEFAULTS[key];
     return JSON.parse(raw) as Prefs[K];
   } catch {
+    // Storage blocked or the value is corrupt: fall back to the default.
     return DEFAULTS[key];
   }
 }
