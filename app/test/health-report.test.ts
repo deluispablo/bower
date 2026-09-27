@@ -90,22 +90,20 @@ describe('summarise', () => {
     });
   });
 
-  it('is all zeros for a report with no frontmatter yet', () => {
+  it('is undefined for a report with no frontmatter yet — hide the figures, never show zeros as fact', () => {
     const report = parseFrontmatter('Nothing to report.');
 
-    expect(summarise(report)).toEqual({
-      notes: 0,
-      findings: 0,
-      brokenLinks: 0,
-    });
+    expect(summarise(report)).toBeUndefined();
   });
 
-  it('is all zeros for an empty report', () => {
-    expect(summarise(parseFrontmatter(''))).toEqual({
-      notes: 0,
-      findings: 0,
-      brokenLinks: 0,
-    });
+  it('is undefined for an empty report', () => {
+    expect(summarise(parseFrontmatter(''))).toBeUndefined();
+  });
+
+  it('is undefined when the frontmatter has other keys but none of the three', () => {
+    const report = parseFrontmatter('---\ntags: [meta]\n---\nBody.');
+
+    expect(summarise(report)).toBeUndefined();
   });
 
   it('never returns a negative or non-finite count', () => {
@@ -153,12 +151,14 @@ describe('findingsIn', () => {
 });
 
 describe('reportDateLabel', () => {
-  it('formats a valid Drive timestamp', () => {
-    // Component parts, not a literal string: the exact rendering depends on
-    // the runner's locale, so only check it produced something non-empty.
-    expect(reportDateLabel('2026-06-07T06:30:00.000Z').length).toBeGreaterThan(
-      0,
-    );
+  it('formats a valid Drive timestamp in English, regardless of locale', () => {
+    expect(reportDateLabel('2026-06-07T06:30:00.000Z')).toBe('Jun 7');
+  });
+
+  it('never falls back to the device locale for the month name', () => {
+    // December: the month most likely to differ from an English label if
+    // this ever regresses to `toLocaleDateString`.
+    expect(reportDateLabel('2026-12-25T00:00:00.000Z')).toBe('Dec 25');
   });
 
   it('is empty for an unreadable date', () => {

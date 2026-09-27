@@ -47,19 +47,25 @@ export interface HealthCounts {
   brokenLinks: number;
 }
 
-/** A whole, non-negative count, or `0` for anything else (missing, text, negative). */
+/** A whole, non-negative count, or `0` for a present-but-invalid value (missing, text, negative). */
 function toCount(value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : 0;
 }
 
+const COUNT_KEYS = ['notes', 'findings', 'brokenLinks'] as const;
+
 /**
  * The three headline figures (spec §6, Health check row) from a parsed
  * report: `notes`, `findings` and `brokenLinks`, read from its frontmatter.
- * A report with no frontmatter yet — none written, or unreadable — gives
- * zeros, same as an empty report.
+ * `undefined` when none of the three keys is present at all — a report from
+ * before the runner started writing them (#295) — so the screen hides the
+ * figures instead of showing zeros as fact (issue #305). A key that is
+ * present but not a valid count (text, negative) still reads as zero.
  */
-export function summarise(report: Frontmatter): HealthCounts {
+export function summarise(report: Frontmatter): HealthCounts | undefined {
+  const written = COUNT_KEYS.some((key) => report.data[key] !== undefined);
+  if (!written) return undefined;
   return {
     notes: toCount(report.data.notes),
     findings: toCount(report.data.findings),
@@ -99,11 +105,19 @@ export function findingsIn(body: string): HealthFinding[] {
   return findings;
 }
 
+// The app's copy is English-only (`CLAUDE.md`); `toLocaleDateString` would
+// follow the device's language instead, so this is the one formatter dates
+// go through (issue #305).
+const ENGLISH_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const; // prettier-ignore
+
 /** "Jun 7": the report's Drive-modified date, for the bubble and `fixMessage`. `''` for an unreadable date. */
 export function reportDateLabel(modifiedTime: string): string {
   const date = new Date(modifiedTime);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return `${ENGLISH_MONTHS[date.getMonth()]} ${date.getDate()}`;
 }
 
 /**

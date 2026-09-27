@@ -10,8 +10,9 @@ import {
   reportDateLabel,
   summarise,
 } from '../health-report.js';
-import type { HealthCounts, HealthFinding } from '../health-report.js';
+import type { HealthCounts } from '../health-report.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
+import { renderInline } from '../markdown/render.js';
 import { setPref } from '../prefs.js';
 import {
   findProposals,
@@ -23,11 +24,32 @@ import type { Proposal, ProposalDecision, ProposalKind } from '../proposals.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import '../styles/health.css';
 
+/** One rendered finding: Markdown already turned into sanitized HTML
+ * (`renderInline`, the note renderer's sanitiser profile) so `**bold**`,
+ * backticks and wikilinks show as formatted HTML, never literal source. */
+interface RenderedFinding {
+  titleHtml: string;
+  detailHtml?: string;
+}
+
 type ReportLoad =
   | { status: 'loading' }
-  | { status: 'ready'; counts: HealthCounts; findings: HealthFinding[] }
+  | {
+      status: 'ready';
+      counts: HealthCounts | undefined;
+      findings: RenderedFinding[];
+    }
   | { status: 'offline' }
   | { status: 'error'; message: string };
+
+/**
+ * The paragraph explaining what Health does and does not do, shown at the
+ * top whatever else is loading (handover C.5). The design board's own copy
+ * for this differs from the handover text ("Every Sunday Bower looks over
+ * your folder…"); this issue asks for the handover's wording specifically.
+ */
+const EXPLAINER =
+  'Every Sunday Bower reads through your notes and lists what it would fix: broken links, notes without a home, things that contradict each other. It never changes anything here; you decide.';
 
 /** "Your notes are in good shape, four small things to fix." / "…, one small thing to fix." / all clear. */
 function bubbleText(dateLabel: string, findings: number): string {
@@ -257,7 +279,13 @@ export function Health() {
         setLoad({
           status: 'ready',
           counts: summarise(report),
-          findings: findingsIn(report.body),
+          findings: findingsIn(report.body).map((finding) => ({
+            titleHtml: renderInline(finding.text, index),
+            detailHtml:
+              finding.detail === undefined
+                ? undefined
+                : renderInline(finding.detail, index),
+          })),
         });
       })
       .catch((err: unknown) => {
@@ -295,6 +323,7 @@ export function Health() {
     return (
       <section class="health">
         <h1>Health check</h1>
+        <p class="health-explainer">{EXPLAINER}</p>
         <p>No health check yet. Runs every Sunday.</p>
         <Proposals />
       </section>
@@ -319,7 +348,7 @@ export function Health() {
           </a>
         )}
       </div>
-      <p class="health-cadence">Runs every Sunday.</p>
+      <p class="health-explainer">{EXPLAINER}</p>
 
       {load.status === 'loading' && <p>Loading…</p>}
       {load.status === 'offline' && (
@@ -331,11 +360,11 @@ export function Health() {
           <div class="health-bubble-row">
             <Bird state="done" size={72} />
             <p class="health-bubble">
-              {bubbleText(dateLabel, load.counts.findings)}
+              {bubbleText(dateLabel, load.findings.length)}
             </p>
           </div>
 
-          <Figures counts={load.counts} />
+          {load.counts !== undefined && <Figures counts={load.counts} />}
 
           {load.findings.length > 0 && (
             <div class="health-findings">
@@ -343,9 +372,17 @@ export function Health() {
               <ul class="health-findings-list">
                 {load.findings.map((finding, i) => (
                   <li key={i} class="health-finding">
-                    <p class="health-finding-text">{finding.text}</p>
-                    {finding.detail !== undefined && (
-                      <p class="health-finding-detail">{finding.detail}</p>
+                    <p
+                      class="health-finding-text"
+                      dangerouslySetInnerHTML={{ __html: finding.titleHtml }}
+                    />
+                    {finding.detailHtml !== undefined && (
+                      <p
+                        class="health-finding-detail"
+                        dangerouslySetInnerHTML={{
+                          __html: finding.detailHtml,
+                        }}
+                      />
                     )}
                   </li>
                 ))}

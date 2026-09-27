@@ -357,6 +357,20 @@ export function renderPlainMarkdown(text: string): string {
 }
 
 /**
+ * Renders one line of Markdown inline — `**bold**`, backticks, wikilinks,
+ * `==highlight==` — to sanitized HTML, with no block elements or embeds.
+ * For short strings outside a note body: the health check's findings
+ * (`routes/health.tsx`, issue #305), each checked against `index` so a
+ * wikilink resolves to a link or shows the same missing-link style as
+ * inside a note. Needs a DOM (`window`) for the sanitizer.
+ */
+export function renderInline(text: string, index: VaultIndex): string {
+  return sanitizeHtml(
+    createMarked(index, {}).parseInline(text, { async: false }),
+  );
+}
+
+/**
  * Renders a note to sanitized HTML. Needs a DOM (`window`) for the sanitizer.
  */
 export function renderNote(
