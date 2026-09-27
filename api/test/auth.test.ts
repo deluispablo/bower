@@ -500,7 +500,7 @@ function expectSessionCleared(response: Response): void {
 }
 
 describe('POST /auth/logout-all', () => {
-  function logoutAll(
+  async function logoutAll(
     cookie?: string,
     origin = env.APP_ORIGIN,
   ): Promise<Response> {
@@ -514,7 +514,7 @@ describe('POST /auth/logout-all', () => {
     );
   }
 
-  function status(cookie: string): Promise<Response> {
+  async function status(cookie: string): Promise<Response> {
     return createApp().request(`${API}/status`, { headers: { cookie } }, env);
   }
 
