@@ -162,7 +162,7 @@ describe('NoteMenu', () => {
     mount(true);
     const ask = rowByText('Ask Bower about this note');
     expect(ask.getAttribute('href')).toBe(
-      `/tell?text=${encodeURIComponent('[[Shopping list]] ')}`,
+      `/bower?text=${encodeURIComponent('[[Shopping list]] ')}`,
     );
   });
 
@@ -170,7 +170,7 @@ describe('NoteMenu', () => {
     mount(true);
     const misfiled = rowByText('This was misfiled');
     expect(misfiled.getAttribute('href')).toBe(
-      `/tell?text=${encodeURIComponent(
+      `/bower?text=${encodeURIComponent(
         '"Shopping list.md" was misfiled. It should go to: ',
       )}`,
     );

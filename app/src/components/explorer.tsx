@@ -1,7 +1,7 @@
 /**
  * The explorer (spec §5.1, §5.2): the user's notes as a tree, with the
  * search field, the Health row, the hidden-files footer and the account.
- * One component, two homes:
+ * One component, three homes:
  *
  * - `variant="sidebar"`: the desktop column (`layout.tsx` wraps it in a
  *   `<nav aria-label="Your notes">` landmark, always open). Shows the mark
@@ -9,6 +9,9 @@
  * - `variant="drawer"`: inside `ExplorerDrawer`, the phone's modal dialog
  *   opened from the top bar's menu button. Shows a title row with a close
  *   button; following any link inside closes it.
+ * - `variant="page"`: the Notes tab (`routes/notes.tsx`, #317). No title row
+ *   of its own (the top bar carries "Notes"), the drawer's live filter field
+ *   and the sidebar's section header with the tree tools.
  *
  * The filter field differs per variant (spec §14): the drawer's is a real
  * text field that narrows the tree in place (`Tree`'s `filter` prop, pure
@@ -26,6 +29,7 @@ import { useLocation } from 'preact-iso';
 
 import { getPref, setPref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
+import { findReport, isReportNew } from '../health-report.js';
 import { useSession } from '../session.js';
 import { openSwitcher } from '../switcher-store.js';
 import { pinned, useVault } from '../vault-store.js';
@@ -44,11 +48,27 @@ import { useFocusTrap } from './use-focus-trap.js';
 
 export const HEALTH_PATH = '/health';
 
+/**
+ * Whether the latest health report has not been opened yet, for the Health
+ * row's "New" badge. Re-read on every render: the Health screen updates the
+ * pref, and a route change re-renders the caller. No badge while on that
+ * screen.
+ */
+export function useHealthIsNew(): boolean {
+  const { index } = useVault();
+  const { path } = useLocation();
+  const reportTime =
+    index === null ? undefined : findReport(index)?.modifiedTime;
+  return (
+    path !== HEALTH_PATH && isReportNew(reportTime, getPref('healthSeenAt'))
+  );
+}
+
 export interface ExplorerProps {
-  variant: 'sidebar' | 'drawer';
+  variant: 'sidebar' | 'drawer' | 'page';
   /** The latest health report has not been opened yet: show "New". */
   healthIsNew: boolean;
-  /** Primary links, shown under the search field (desktop sidebar). */
+  /** Primary links, shown under the search field (desktop sidebar, drawer). */
   nav?: ComponentChildren;
   /** Drawer only: close it (close button, a followed link, sign out). */
   onClose?: () => void;
@@ -128,7 +148,7 @@ export function Explorer({
 
   return (
     <div class={`explorer explorer-${variant}`}>
-      {variant === 'drawer' ? (
+      {variant === 'drawer' && (
         <div class="explorer-head">
           <h2 class="explorer-title">Your notes</h2>
           {tools}
@@ -141,12 +161,13 @@ export function Explorer({
             <IconClose />
           </button>
         </div>
-      ) : (
+      )}
+      {variant === 'sidebar' && (
         <a href="/" class="brand explorer-brand" aria-label="Bower home">
           <span class="brand-word">Bower</span>
         </a>
       )}
-      {variant === 'drawer' ? (
+      {variant !== 'sidebar' ? (
         <div class="explorer-filter">
           <IconSearch />
           <input
@@ -191,7 +212,7 @@ export function Explorer({
       {variant === 'sidebar' && index !== null && (
         <PinnedSidebar items={pinned(index)} />
       )}
-      {variant === 'sidebar' && (
+      {variant !== 'drawer' && (
         <div class="explorer-section">
           <h2 class="explorer-label">Your notes</h2>
           {tools}
@@ -203,10 +224,10 @@ export function Explorer({
             index={index}
             sort={sort}
             collapseKey={collapseKey}
-            filter={variant === 'drawer' ? filter : undefined}
+            filter={variant === 'sidebar' ? undefined : filter}
             onNavigate={onClose}
             showAppFiles={showAppFiles}
-            linkFolders={variant === 'sidebar'}
+            linkFolders={variant !== 'drawer'}
           />
         )}
       </div>
@@ -242,6 +263,8 @@ export function Explorer({
 
 interface ExplorerDrawerProps {
   healthIsNew: boolean;
+  /** Extra rows above Health (the Settings row, #317). */
+  nav?: ComponentChildren;
   onClose: () => void;
 }
 
@@ -252,6 +275,7 @@ interface ExplorerDrawerProps {
  */
 export function ExplorerDrawer({
   healthIsNew,
+  nav,
   onClose,
 }: ExplorerDrawerProps): JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -270,6 +294,7 @@ export function ExplorerDrawer({
         <Explorer
           variant="drawer"
           healthIsNew={healthIsNew}
+          nav={nav}
           onClose={onClose}
         />
       </div>

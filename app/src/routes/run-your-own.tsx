@@ -86,7 +86,7 @@ export function RunYourOwnCta() {
 /** The full screen: `/login` in a demo build, and `/not-invited`'s fallback. */
 export function RunYourOwn() {
   return (
-    <section class="auth-screen">
+    <section class="auth-screen auth-screen--login">
       <div class="auth-bird auth-bird--ground">
         <Bird state="hello" size={96} />
       </div>

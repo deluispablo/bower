@@ -7,8 +7,10 @@
  * explorer drawer, then the wordmark (Home) or the screen title (Add, Tell
  * Bower, Settings, the `crumb` slot) or the back link (a note, also the
  * `crumb` slot), then the `actions` slot (Open in Drive on a note, #144),
- * then the Tidy up pill flush to the right edge — and a bottom nav (Home,
- * Add, Tell, Settings). Health is reached from the explorer's Health row.
+ * then the Tidy up pill flush to the right edge — and four tabs at the
+ * bottom (#317): Home, Notes, Add, Bower. Health is reached from the
+ * explorer's Health row; Settings from a row in the drawer (phone) and the
+ * sidebar (desktop).
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
  * header row over the content (breadcrumb slot, theme toggle, the pill —
@@ -26,16 +28,15 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
-import { findReport, isReportNew } from '../health-report.js';
-import { getPref } from '../prefs.js';
 import { useSession } from '../session.js';
+import { BOWER_PATH } from '../shell-routes.js';
 import { effectiveTheme, setTheme } from '../theme.js';
-import { useVault } from '../vault-store.js';
 import { DemoBanner } from './demo-banner.js';
-import { Explorer, ExplorerDrawer, HEALTH_PATH } from './explorer.js';
+import { Explorer, ExplorerDrawer, useHealthIsNew } from './explorer.js';
 import { useShellSlots } from './shell-slots.js';
 import {
   IconChat,
+  IconFolder,
   IconHome,
   IconMenu,
   IconMoon,
@@ -50,32 +51,39 @@ import { Toast } from './toast.js';
 
 interface NavLink {
   href: string;
-  /** Bottom nav label (phone). */
-  short: string;
-  /** Sidebar label (desktop). */
   label: string;
   Icon: () => JSX.Element;
   /** The first-run tour's anchor (`components/tour.tsx`). */
   tour?: 'add' | 'tell';
 }
 
-const NAV_LINKS: readonly NavLink[] = [
-  { href: '/', short: 'Home', label: 'Home', Icon: IconHome },
-  { href: '/add', short: 'Add', label: 'Add', Icon: IconPlus, tour: 'add' },
-  {
-    href: '/tell',
-    short: 'Tell',
-    label: 'Tell Bower',
-    Icon: IconChat,
-    tour: 'tell',
-  },
-  {
-    href: '/settings',
-    short: 'Settings',
-    label: 'Settings',
-    Icon: IconSliders,
-  },
-];
+const HOME: NavLink = { href: '/', label: 'Home', Icon: IconHome };
+const NOTES: NavLink = { href: '/notes', label: 'Notes', Icon: IconFolder };
+const ADD: NavLink = {
+  href: '/add',
+  label: 'Add',
+  Icon: IconPlus,
+  tour: 'add',
+};
+/** The Bower tab (#317): the old Tell Bower screen lives here until #340. */
+const BOWER: NavLink = {
+  href: BOWER_PATH,
+  label: 'Bower',
+  Icon: IconChat,
+  tour: 'tell',
+};
+const SETTINGS: NavLink = {
+  href: '/settings',
+  label: 'Settings',
+  Icon: IconSliders,
+};
+
+/** The four tabs at the bottom of the phone (#317, Phone-Home board). */
+const TABS: readonly NavLink[] = [HOME, NOTES, ADD, BOWER];
+
+/** The desktop sidebar's links (Desktop-Home board): the tree below them
+ * is the Notes tab there. Settings stays a row until the avatar (#318). */
+const SIDEBAR_LINKS: readonly NavLink[] = [HOME, ADD, BOWER, SETTINGS];
 
 const DESKTOP_QUERY = '(min-width: 900px)';
 
@@ -109,7 +117,6 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
-  const { index } = useVault();
   const { path } = useLocation();
   const { crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -134,12 +141,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
     return () => observer.disconnect();
   }, []);
 
-  // Re-read on every render: the health screen updates the pref, and a
-  // route change re-renders the layout. No badge while on that screen.
-  const reportTime =
-    index === null ? undefined : findReport(index)?.modifiedTime;
-  const healthIsNew =
-    path !== HEALTH_PATH && isReportNew(reportTime, getPref('healthSeenAt'));
+  const healthIsNew = useHealthIsNew();
 
   const closeDrawer = (): void => {
     setDrawerOpen(false);
@@ -164,7 +166,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
 
   const sidebarNav = (
     <nav class="explorer-nav" aria-label="Primary">
-      {NAV_LINKS.map(({ href, label, Icon, tour }) => (
+      {SIDEBAR_LINKS.map(({ href, label, Icon, tour }) => (
         <a
           key={href}
           href={href}
@@ -177,6 +179,20 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         </a>
       ))}
     </nav>
+  );
+
+  // Phone: Settings left the bottom row (#317); until the avatar in the top
+  // bar opens it (#318), the drawer carries it as a row.
+  const drawerNav = (
+    <a
+      href={SETTINGS.href}
+      class="explorer-row"
+      aria-current={currentFor(SETTINGS.href, path)}
+      onClick={closeDrawer}
+    >
+      <SETTINGS.Icon />
+      <span class="explorer-row-label">{SETTINGS.label}</span>
+    </a>
   );
 
   return (
@@ -235,7 +251,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         </aside>
       )}
       <nav class="bottom-nav" aria-label="Primary">
-        {NAV_LINKS.map(({ href, short, Icon, tour }) => (
+        {TABS.map(({ href, label, Icon, tour }) => (
           <a
             key={href}
             href={href}
@@ -243,12 +259,16 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             data-tour={tour}
           >
             <Icon />
-            <span>{short}</span>
+            <span>{label}</span>
           </a>
         ))}
       </nav>
       {drawerOpen && (
-        <ExplorerDrawer healthIsNew={healthIsNew} onClose={closeDrawer} />
+        <ExplorerDrawer
+          healthIsNew={healthIsNew}
+          nav={drawerNav}
+          onClose={closeDrawer}
+        />
       )}
       <Switcher />
       {/* The one toast (`toast-store.ts`): a pin, a finished run. */}

@@ -7,7 +7,15 @@
  * by-product for the README and the CI artifacts, never compared.
  */
 
-import { expect, navigate, openHome, shot, test, visible } from './demo.js';
+import {
+  expect,
+  navigate,
+  openHome,
+  openSettings,
+  shot,
+  test,
+  visible,
+} from './demo.js';
 
 test.describe('open Home', () => {
   test.use({ introSeen: false });
@@ -73,6 +81,7 @@ test.describe('open Home', () => {
       page.getByRole('heading', { name: 'Bower', level: 1 }),
     ).toBeVisible();
     await expect(page.getByText('This is a demo: sample notes')).toBeVisible();
+    await shot(page, testInfo, 'login');
 
     // Back on Home from a fresh load: the demo forgets everything on reload,
     // so the tour is offered again.
@@ -231,7 +240,8 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
 
 test('Tell Bower sends a question to the inbox', async ({ page }, testInfo) => {
   await openHome(page);
-  await navigate(page, /^Tell( Bower)?$/);
+  await navigate(page, /^Bower$/);
+  await expect(page).toHaveURL(/\/bower$/);
   await expect(
     page.getByText("A rule, a task or a question. I'll put it in your inbox"),
   ).toBeVisible();
@@ -254,7 +264,7 @@ test('Settings switches the theme to dark, and it sticks', async ({
   page,
 }, testInfo) => {
   await openHome(page);
-  await navigate(page, /^Settings$/);
+  await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
   await page.getByRole('radio', { name: 'Dark' }).check();
@@ -269,7 +279,7 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
   page,
 }) => {
   await openHome(page);
-  await navigate(page, /^Settings$/);
+  await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
   // Account · Tidying up · Look · Bower · Advanced, in that order (scoped
@@ -301,4 +311,73 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
   await expect(
     settings.getByText('Not in the demo: run your own Bower to use this.'),
   ).toHaveCount(3);
+});
+
+test.describe('/login never redirects to the intro (#313)', () => {
+  test.use({ introSeen: false });
+
+  test('a first-time visitor who goes straight to /login sees sign-in, not the intro', async ({
+    page,
+  }) => {
+    // In the demo build a signed-in-as-Alex visitor at /login sees "Run
+    // your own Bower" (app.tsx), never the sign-in form — but either way
+    // it must never bounce to /welcome just because the intro is unseen.
+    await page.goto('/login');
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(
+      page.getByRole('heading', { name: 'Bower', level: 1 }),
+    ).toBeVisible();
+  });
+});
+
+test('Terms and Privacy Back go to /login when signed out, back through history otherwise (#313)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await openSettings(page);
+  await visible(page.getByRole('link', { name: 'Terms' })).click();
+  await expect(page).toHaveURL(/\/terms$/);
+
+  // Signed in (the demo is always signed in as Alex): Back steps through
+  // history to Settings, not to /login.
+  await visible(page.getByRole('button', { name: 'Back' })).click();
+  await expect(page).toHaveURL(/\/settings$/);
+});
+
+test('four tabs on the phone, the sidebar instead on desktop', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  const tabs = page.locator('nav.bottom-nav');
+  if (testInfo.project.name === 'desktop') {
+    await expect(tabs).toBeHidden();
+    return;
+  }
+  await expect(tabs).toBeVisible();
+  const links = tabs.getByRole('link');
+  await expect(links).toHaveText(['Home', 'Notes', 'Add', 'Bower']);
+  await expect(links.first()).toHaveAttribute('aria-current', 'page');
+
+  await tabs.getByRole('link', { name: 'Notes' }).click();
+  await expect(page).toHaveURL(/\/notes$/);
+  await expect(links.nth(1)).toHaveAttribute('aria-current', 'page');
+  await expect(
+    page.getByRole('textbox', { name: 'Filter your notes' }),
+  ).toBeVisible();
+  await expect(page.getByRole('tree').first()).toBeVisible();
+  await shot(page, testInfo, 'tabs-notes');
+});
+
+test('an old /tell link opens the Bower tab with its text', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.evaluate(() => {
+    history.pushState(null, '', '/tell?text=Hello%20Bower');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page).toHaveURL(/\/bower\?text=Hello(\+|%20)Bower$/);
+  await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue(
+    'Hello Bower',
+  );
 });

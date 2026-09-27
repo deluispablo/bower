@@ -65,3 +65,16 @@
 .auth-legal-links {
   margin-top: var(--space-4);
 }
+
+/*
+ * Sign in only (#331): on desktop the block sits in the middle of the
+ * viewport instead of the top, by letting the flex column's auto margins
+ * (`.page-bare`, layout.css) absorb the space above and below it. The
+ * phone keeps `.auth-screen`'s own top margin, unchanged.
+ */
+@media (min-width: 900px) {
+  .auth-screen--login {
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+}

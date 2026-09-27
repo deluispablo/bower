@@ -17,7 +17,7 @@ function note(id: string, path: string): DriveFile {
 const COMMANDS: Command[] = [
   { id: 'tidy-up', label: 'Tidy up the inbox' },
   { id: 'add', label: 'Add a file or photo', href: '/add' },
-  { id: 'tell', label: 'Tell Bower something', href: '/tell' },
+  { id: 'tell', label: 'Tell Bower something', href: '/bower' },
   { id: 'theme', label: 'Switch to dark theme' },
 ];
 
@@ -225,7 +225,7 @@ describe('commandsFor', () => {
     expect(commands[2]).toEqual({
       id: 'tell',
       label: 'Tell Bower something',
-      href: '/tell',
+      href: '/bower',
     });
   });
 });

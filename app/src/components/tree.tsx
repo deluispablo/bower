@@ -300,7 +300,7 @@ export function Tree({
         openHref={folderHref(
           row.kind === 'note' ? folderOf(row.path) : row.path,
         )}
-        tellHref={`/tell?text=${encodeURIComponent(
+        tellHref={`/bower?text=${encodeURIComponent(
           row.kind === 'note' ? `[[${name}]] ` : `${name} `,
         )}`}
         driveHref={driveHref}
