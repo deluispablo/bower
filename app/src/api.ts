@@ -123,6 +123,8 @@ export interface Vault {
 
 export interface Me {
   email: string;
+  /** The Worker does not send one today; never invented client-side. */
+  name?: string;
   vault: Vault | null;
   quota: { used: number; limit: number };
   needsReauth: boolean;
