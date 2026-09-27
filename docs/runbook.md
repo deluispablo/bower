@@ -228,6 +228,12 @@ The instance repo's `lint.yml` runs on its own every Sunday at 06:17 UTC: a firs
 - **Worker**: `pnpm -C api exec wrangler tail -c wrangler.local.toml` streams live requests (method, path, status, exceptions) — nothing here includes note content or credentials (see `CLAUDE.md`'s logging rule and `api/test/log-hygiene.test.ts`).
 - **Agent runs**: the instance repo's **Actions** tab lists every `ingest` / `lint` run, with step names, timestamps and counts only. A failed run's reason is in `GET /status`'s `error` (for the weekly health check, in the `error` of the `lintrun:<id>` KV value instead); the full stderr and rclone output are the `bower-logs` artifact (`bower-logs-<n>` for each failed folder of the weekly health check), uploaded only `if: failure()`, kept 3 days (`agent/README.md`) — safe only because the instance repo is private.
 
+### Security headers check
+
+After deploying (`scripts/deploy.sh`, or any change to `app/public/_headers` or `api/src/security.ts`), check both origins at [securityheaders.com](https://securityheaders.com): enter `APP_ORIGIN`, then separately `API_ORIGIN`. Target **A** on the app. The Worker only ever serves JSON and the one "Not invited" HTML page, so the site's own scale doesn't quite apply to it; just confirm `Strict-Transport-Security` and `Content-Security-Policy: frame-ancestors 'none'` show up on its report.
+
+A grade below A on the app usually means `app/public/_headers` didn't ship with the deploy — check the build actually generated it: `grep -n "" app/dist/_headers` (`pnpm -C app build` writes it from `VITE_API_URL` and, if set, `VITE_GOOGLE_API_KEY`; without `VITE_API_URL` it warns and falls back to `connect-src 'self'` alone, but a value that's set and not a URL fails the build outright rather than shipping a placeholder).
+
 ### Costs to watch
 
 - **Cloudflare free tier**: Workers requests, KV reads/writes and Pages builds all have a free monthly allowance; the dashboard's Analytics tab for the Worker and the KV namespace shows current usage against it.

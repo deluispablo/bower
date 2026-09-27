@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/check-size.mjs",
+    "build": "vite build && node scripts/generate-headers.mjs && node scripts/check-size.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p .",
     "test": "pnpm exec vitest run --passWithNoTests",
