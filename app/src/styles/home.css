@@ -1,8 +1,9 @@
 /*
- * Home (spec §6, Home row): the greeting with the bird and its speech
- * bubble, the search pill (phone only — desktop already has one in the
- * sidebar, `explorer.tsx`), the count cards, and Recent. Desktop adds the
- * Health and Notes cards and an inline Tell Bower composer next to Recent.
+ * Home (#321, the Phone-Home boards): the greeting with the bird and its
+ * speech bubble, the search row (phone only — desktop already has one in
+ * the sidebar, `explorer.tsx`), the Inbox and Last tidy-up cards, the
+ * first day's tip, Pinned and Recent. Desktop adds the Health and Notes
+ * cards.
  *
  * Phone-first; `.home-desktop-only` pieces and the desktop-sized greeting
  * only show from 900 px, the same breakpoint as the shell (layout.css).
@@ -44,6 +45,18 @@
   border: 1px solid var(--color-border);
   font-size: var(--text-base);
   line-height: var(--leading-body);
+}
+
+/* The bubble's Tidy up and Try again: links in the sentence, buttons
+   underneath since they act rather than go somewhere. */
+.home-bubble-link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .home-search {
@@ -105,6 +118,36 @@
   height: 18px;
 }
 
+/* Waiting and Running: the card that wants a look is outlined in teal;
+   after a failure, in the danger colour (Phone-Home, -Running, -Failed). */
+.home-card-active {
+  border-color: var(--color-brand);
+}
+
+.home-card-failed {
+  border-color: var(--color-danger);
+}
+
+/* Running: the line under the count opens the working sheet. */
+.home-card-running {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-link);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The Last tidy-up card's "2 h ago", smaller than a count. */
+.home-card-when {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  line-height: 1.2;
+}
+
 .home-card-count {
   margin: 0;
   font-size: var(--text-2xl);
@@ -130,6 +173,33 @@
   background: var(--color-surface);
 }
 
+/* The first day's tip (Phone-Home-Empty): three things to start with. */
+.home-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.home-tip > .icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--color-accent);
+}
+
+.home-tip p {
+  margin: 0;
+}
+
+.home-tip b {
+  color: var(--color-text);
+}
+
 .home-desktop-only {
   display: none;
 }
@@ -147,8 +217,7 @@
   font-size: var(--text-lg);
 }
 
-.home-recent-head span {
-  color: var(--color-text-muted);
+.home-recent-head a {
   font-size: var(--text-sm);
 }
 
@@ -192,6 +261,10 @@
   color: var(--color-text-muted);
 }
 
+.home-note-icon[data-type='answer'] {
+  color: var(--color-type-answer);
+}
+
 .home-note-icon .icon {
   width: 18px;
   height: 18px;
@@ -220,25 +293,10 @@
   white-space: nowrap;
 }
 
-.home-tell h2 {
-  margin: 0 0 var(--space-3);
-  font-size: var(--text-lg);
-}
-
-.home-tell-last {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.home-tell-last p {
-  margin: 0;
-  font-size: var(--text-sm);
+.home-note-time {
+  flex-shrink: 0;
   color: var(--color-text-muted);
+  font-size: var(--text-xs);
 }
 
 @media (min-width: 900px) {
@@ -260,12 +318,5 @@
 
   .home-desktop-only {
     display: flex;
-  }
-
-  .home-columns {
-    display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    gap: var(--space-6);
-    align-items: start;
   }
 }

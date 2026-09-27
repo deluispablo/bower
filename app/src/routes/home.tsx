@@ -1,12 +1,16 @@
 /**
- * Home (spec §6, Home row): a greeting with the bird and a speech bubble
- * stating the situation (`greetingFor`/`bubbleFor`, `home.ts`), the search
- * pill (opens the quick switcher, #142 — same as the drawer's filter field
- * and the desktop sidebar's button), the Inbox and Answers count cards, and
- * Recent. Desktop adds the Health and Notes cards and an inline Tell Bower
- * composer next to Recent, reusing `TellComposer` (#146) exactly as
- * `routes/tell.tsx` does. The first-run tour (#330, `components/help-sheet.tsx`)
- * opens over it once per account, or when Settings asks for a replay.
+ * Home (#321, handover C.4, the Phone-Home boards): the greeting with the
+ * bird and its speech bubble, the Inbox card, the Last tidy-up card,
+ * Pinned and Recent. Home knows about the run: `homeStateFor` (`home.ts`)
+ * picks one of Waiting, Empty (the first day), Running, Done and Failed,
+ * and the bird, the bubble and the two cards follow it; editing the pins
+ * shortens the bubble and hides Recent (Phone-Home-Pins).
+ *
+ * There is no Tell Bower here: asking lives on the Bower tab (C.2). The
+ * phone keeps the search row that opens the quick switcher (#142); desktop
+ * adds the Health and Notes cards. The first-run tour (#330,
+ * `components/help-sheet.tsx`) opens over Home once per account, or when
+ * Settings asks for a replay.
  */
 
 import type { JSX } from 'preact';
@@ -19,27 +23,33 @@ import type { BirdState } from '../components/bird-classes.js';
 import { HEALTH_PATH } from '../components/explorer.js';
 import {
   IconChat,
+  IconClock,
   IconHeart,
   IconInbox,
   IconNote,
   IconSearch,
+  IconSparkle,
 } from '../components/icons.js';
 import { PinnedSection } from '../components/pinned-section.js';
 import { ProcessButton } from '../components/process-button.js';
-import { TellComposer } from '../components/tell-composer.js';
 import { Tour } from '../components/help-sheet.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
-import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
+import { startedAgo } from '../components/working-sheet.js';
 import { findReport, isReportNew } from '../health-report.js';
 import {
   ANSWERS_FOLDER,
   birdStateFor,
   bubbleFor,
   greetingFor,
+  homeStateFor,
+  inboxLine,
+  lastTidyUpLine,
+  restingBird,
+  tidyUpAgo,
 } from '../home.js';
+import type { BubblePart, HomeState } from '../home.js';
 import {
   folderCounts,
-  folderHref,
   folderOf,
   pendingCount,
   recentNotes,
@@ -47,23 +57,13 @@ import {
 } from '../navigation.js';
 import { noteTitle } from '../note-title.js';
 import { shouldShowTour } from '../onboarding.js';
-import { offlineReason, useOnline } from '../online.js';
+import { useOnline } from '../online.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
-import { findProposals, openProposals } from '../proposals.js';
-import type { RunPhase } from '../run-store.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
+import { BOWER_PATH } from '../shell-routes.js';
 import { openSwitcher } from '../switcher-store.js';
-import {
-  addSent,
-  firstLine,
-  instructionFileName,
-  instructionNote,
-  loadSent,
-  statusLineFor,
-} from '../tell.js';
-import type { RunSnapshot, SentItem } from '../tell.js';
 import {
   endTour,
   markTourSeen,
@@ -71,126 +71,47 @@ import {
   useTour,
 } from '../tour-store.js';
 import { isAppFile } from '../vault-index.js';
-import { formatAgo, OfflineError, pinned, useVault } from '../vault-store.js';
-import type { Vault } from '../vault-store.js';
+import { pinned, useVault } from '../vault-store.js';
 import '../styles/home.css';
 
 const MINUTE_MS = 60_000;
 
-/**
- * How many open suggestions Bower's proposals file holds (#199), read only
- * when the file changed since Health last showed them; 0 otherwise, while
- * it loads, or when it cannot be read (logged, never shown: Health says so).
- */
-function useNewProposals(
-  index: Vault['index'],
-  getNoteText: Vault['getNoteText'],
-): number {
-  const [count, setCount] = useState(0);
-  const file = index === null ? undefined : findProposals(index);
-  const isNew = isReportNew(file?.modifiedTime, getPref('proposalsSeenAt'));
-  useEffect(() => {
-    if (file === undefined || !isNew) {
-      setCount(0);
-      return;
-    }
-    let cancelled = false;
-    getNoteText(file.id)
-      .then((text) => {
-        if (!cancelled) setCount(openProposals(text).length);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        if (!(err instanceof OfflineError)) console.error(err);
-        setCount(0);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [file, isNew, getNoteText]);
-  return count;
+/** Recent shows this many rows (C.4); "All" opens Notes for the rest. */
+const RECENT_ROWS = 5;
+
+interface BubbleProps {
+  parts: readonly BubblePart[];
+  onTidyUp: () => void;
+  onFailure: () => void;
 }
 
-interface DesktopTellProps {
-  inboxFolderId: string | null;
-  online: boolean;
-  phase: RunPhase;
-  run: Run | null;
-  process: () => Promise<void>;
-}
-
-/** Desktop's inline Tell Bower composer (spec §6, Home row): posts the same
- * instruction note as the Bower tab (`/bower`) and shows the last message's status. */
-function DesktopTell({
-  inboxFolderId,
-  online,
-  phase,
-  run,
-  process,
-}: DesktopTellProps): JSX.Element {
-  const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [last, setLast] = useState<SentItem | null>(
-    () => loadSent()[0] ?? null,
-  );
-
-  const runSnapshot: RunSnapshot = { phase, run };
-  const canSend =
-    text.trim() !== '' && !sending && inboxFolderId !== null && online;
-
-  async function handleSend(): Promise<void> {
-    const trimmed = text.trim();
-    if (trimmed === '' || sending || inboxFolderId === null || !online) return;
-
-    setSending(true);
-    setError(null);
-
-    const now = new Date();
-    const name = instructionFileName(trimmed, '', now);
-    const content = instructionNote(trimmed, now);
-
-    try {
-      await createTextFile(inboxFolderId, name, content, {
-        appProperties: INSTRUCTION_APP_PROPERTIES,
-      });
-    } catch (err) {
-      console.error(err);
-      setError('Could not send that. Try again.');
-      setSending(false);
-      return;
-    }
-
-    void process();
-    const item: SentItem = { name, text: trimmed, sentAt: now.toISOString() };
-    addSent(item);
-    setLast(item);
-    setText('');
-    setSending(false);
-  }
-
+/** The bubble's text, its links wired: Tidy up and Try again act here,
+ * See what I did goes to the Bower tab. */
+function BubbleText({ parts, onTidyUp, onFailure }: BubbleProps): JSX.Element {
   return (
-    <div class="home-tell home-desktop-only">
-      <h2>Tell Bower</h2>
-      {error !== null && <p class="auth-error">{error}</p>}
-      {!online && <p class="offline-reason">{offlineReason('tell')}</p>}
-      <TellComposer
-        value={text}
-        onChange={setText}
-        onSubmit={() => void handleSend()}
-        disabled={!canSend}
-        sending={sending}
-      />
-      {last !== null && (
-        <div class="home-tell-last">
-          <Bird state="idle" face="happy" size={40} />
-          <p>
-            Last one: &ldquo;{firstLine(last.text)}&rdquo;.{' '}
-            {statusLineFor(last, runSnapshot)}
-          </p>
-        </div>
-      )}
-    </div>
+    <p class="home-bubble">
+      {parts.map((part, i) => {
+        if (typeof part === 'string') return part;
+        if (part.link === 'activity') {
+          return (
+            <a key={i} href={BOWER_PATH}>
+              {part.text}
+            </a>
+          );
+        }
+        return (
+          <button
+            key={i}
+            type="button"
+            class="home-bubble-link"
+            aria-haspopup={part.link === 'failure' ? 'dialog' : undefined}
+            onClick={part.link === 'tidy-up' ? onTidyUp : onFailure}
+          >
+            {part.text}
+          </button>
+        );
+      })}
+    </p>
   );
 }
 
@@ -199,7 +120,7 @@ interface GreetingProps {
   size: number;
   state: BirdState;
   greeting: string;
-  bubble: string;
+  bubble: BubbleProps;
   onDone: () => void;
 }
 
@@ -216,41 +137,122 @@ function Greeting({
       <Bird state={state} size={size} onDone={onDone} />
       <div class="home-greeting-text">
         <h1 class="home-h1">{greeting}</h1>
-        <p class="home-bubble">{bubble}</p>
+        <BubbleText {...bubble} />
       </div>
     </div>
   );
 }
 
-/** A Recent row's second line: "folder · time", either half left out when
- * the note is top-level or its time is unknown (spec: relative times). */
-function recentMeta(
-  path: string,
-  modifiedTime: string | undefined,
-  now: number,
-): string {
-  const folder = folderOf(path);
-  const label = folder === '' ? '' : folder.split('/').join(' / ');
-  const time =
-    modifiedTime === undefined ? '' : relativeTime(modifiedTime, now);
-  if (label !== '' && time !== '') return `${label} · ${time}`;
-  return label || time;
+interface InboxCardProps {
+  state: HomeState;
+  pending: number;
+  run: Run | null;
+  now: number;
+  onOpenSheet: () => void;
 }
 
-export function Home() {
+/** The Inbox card (C.4): the count, a line, and Tidy up or Try again. */
+function InboxCard({
+  state,
+  pending,
+  run,
+  now,
+  onOpenSheet,
+}: InboxCardProps): JSX.Element {
+  const head = (
+    <>
+      <h2>
+        <IconInbox />
+        Inbox
+      </h2>
+      <p class="home-card-count">{pending}</p>
+    </>
+  );
+
+  if (state === 'running') {
+    const started =
+      run === null
+        ? ''
+        : ` ${startedAgo(run.startedAt ?? run.requestedAt, now).toLowerCase()}`;
+    return (
+      <div class="home-card home-card-active">
+        {head}
+        <button
+          type="button"
+          class="home-card-running"
+          aria-haspopup="dialog"
+          onClick={onOpenSheet}
+        >
+          {`${inboxLine(state, pending)}${started}`}
+        </button>
+      </div>
+    );
+  }
+
+  if (state !== 'failed' && pending === 0) {
+    return (
+      <a class="home-card home-card-link" href="/add">
+        {head}
+        <p class="home-card-sub">{inboxLine(state, pending)}</p>
+      </a>
+    );
+  }
+
+  return (
+    <div
+      class={
+        state === 'failed'
+          ? 'home-card home-card-failed'
+          : 'home-card home-card-active'
+      }
+    >
+      {head}
+      <p class="home-card-sub">{inboxLine(state, pending)}</p>
+      <ProcessButton />
+    </div>
+  );
+}
+
+/** The Last tidy-up card (C.4): when, and what it did, or "No tidy-up yet". */
+function LastTidyUpCard({
+  run,
+  now,
+}: {
+  run: Run | null;
+  now: number;
+}): JSX.Element {
+  const head = (
+    <h2>
+      <IconClock />
+      Last tidy-up
+    </h2>
+  );
+  if (run === null) {
+    return (
+      <div class="home-card">
+        {head}
+        <p class="home-card-sub">No tidy-up yet</p>
+      </div>
+    );
+  }
+  return (
+    <a class="home-card home-card-link" href={BOWER_PATH}>
+      {head}
+      <p class="home-card-when">
+        {tidyUpAgo(run.finishedAt ?? run.requestedAt, now)}
+      </p>
+      <p class="home-card-sub">{lastTidyUpLine(run)}</p>
+    </a>
+  );
+}
+
+export function Home(): JSX.Element {
   const { me } = useSession();
-  const {
-    index,
-    files,
-    fetchedAt,
-    status,
-    unpinNote,
-    unpinFolder,
-    getNoteText,
-  } = useVault();
-  const { phase, run, process } = useRun();
+  const { index, files, status, unpinNote, unpinFolder } = useVault();
+  const { phase, run, lastFinished, tidyUp, openSheet } = useRun();
   const online = useOnline();
   const [now, setNow] = useState(() => Date.now());
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), MINUTE_MS);
@@ -258,13 +260,14 @@ export function Home() {
   }, []);
 
   const showAppFiles = getPref('showAppFiles');
-  const recent = index === null ? [] : recentNotes(index, 20, showAppFiles);
+  const recent =
+    index === null ? [] : recentNotes(index, RECENT_ROWS, showAppFiles);
   const recentTitles = useNoteTitles(recent);
   const pending = pendingCount(files);
   const noteCounts =
     index === null ? new Map<string, number>() : folderCounts(index);
   const pinnedItems = index === null ? [] : pinned(index);
-  const answers = noteCounts.get(ANSWERS_FOLDER) ?? 0;
+  const editingPins = editing && pinnedItems.length > 0;
   const noteCount =
     index === null
       ? 0
@@ -274,39 +277,22 @@ export function Home() {
 
   const reportTime =
     index === null ? undefined : findReport(index)?.modifiedTime;
-  const newHealthReport = isReportNew(reportTime, getPref('healthSeenAt'));
-  const newProposals = useNewProposals(index, getNoteText);
   const healthHint =
     reportTime === undefined
       ? 'No check yet'
-      : newHealthReport
+      : isReportNew(reportTime, getPref('healthSeenAt'))
         ? 'New'
         : `Checked ${relativeTime(reportTime, now)}`;
 
   const offline = !online;
-  const error = status === 'error';
-  const justDone = phase === 'done';
-  const done = justDone
-    ? {
-        processed: run?.processed?.length ?? 0,
-        quarantined: run?.quarantined?.length,
-        refused: run?.refused?.length,
-      }
-    : undefined;
+  const state = homeStateFor({ phase, pending, lastFinished });
 
+  // A play-once pose (the first day's hello, the dance after a run) plays
+  // once per change of pose, then rests.
   const idealBird = birdStateFor({
+    state,
     offline,
-    justDone,
-    pending,
-    newHealthReport,
-    newProposals,
-  });
-  const settledBird = birdStateFor({
-    offline,
-    justDone: false,
-    pending,
-    newHealthReport,
-    newProposals,
+    justDone: phase === 'done',
   });
   const play = useRef({ state: idealBird, id: 0 });
   if (play.current.state !== idealBird) {
@@ -316,17 +302,21 @@ export function Home() {
   const [restedPlay, setRestedPlay] = useState(-1);
   const birdState =
     restedPlay === playId && ONCE_STATES.includes(idealBird)
-      ? settledBird
+      ? restingBird(idealBird)
       : idealBird;
 
-  const bubble = bubbleFor({
-    offline,
-    error,
-    done,
-    newHealthReport,
-    newProposals,
-    pending,
-  });
+  const bubble: BubbleProps = {
+    parts: bubbleFor({
+      state,
+      pending,
+      offline,
+      error: status === 'error',
+      editingPins,
+      lastFinished,
+    }),
+    onTidyUp: tidyUp,
+    onFailure: openSheet,
+  };
   const greeting = greetingFor(new Date(now), me?.name);
 
   // The first-run tour (#149): once per account, or again from Settings.
@@ -338,7 +328,7 @@ export function Home() {
   const onDone = tour.showoff ? showoffPlayed : () => setRestedPlay(playId);
 
   return (
-    <section class="home">
+    <section class="home" data-state={state}>
       <Greeting
         variant="phone"
         size={88}
@@ -368,23 +358,14 @@ export function Home() {
       </button>
 
       <div class="home-cards">
-        <div class="home-card">
-          <h2>
-            <IconInbox />
-            Inbox
-          </h2>
-          <p class="home-card-count">{pending}</p>
-          <p>{pending > 0 ? 'waiting to be tidied' : 'nothing waiting'}</p>
-          <ProcessButton />
-        </div>
-        <a class="home-card home-card-link" href={folderHref(ANSWERS_FOLDER)}>
-          <h2>
-            <IconChat />
-            Answers
-          </h2>
-          <p class="home-card-count">{answers}</p>
-          <p>things Bower answered</p>
-        </a>
+        <InboxCard
+          state={state}
+          pending={pending}
+          run={run}
+          now={now}
+          onOpenSheet={openSheet}
+        />
+        <LastTidyUpCard run={lastFinished} now={now} />
         <a
           class="home-card home-card-link home-desktop-only"
           href={HEALTH_PATH}
@@ -402,9 +383,20 @@ export function Home() {
             Notes
           </h2>
           <p class="home-card-count">{noteCount}</p>
-          <p>in your notes</p>
+          <p class="home-card-sub">in your notes</p>
         </div>
       </div>
+
+      {state === 'empty' && (
+        <div class="home-tip">
+          <IconSparkle />
+          <p>
+            <b>Not sure where to start?</b> Add the thing that has been sitting
+            in your downloads for a month. Or the last three receipts. Or a
+            photo of a letter.
+          </p>
+        </div>
+      )}
 
       <PinnedSection
         items={pinnedItems}
@@ -412,48 +404,51 @@ export function Home() {
         onUnpinNote={unpinNote}
         onUnpinFolder={unpinFolder}
         runUnpin={(unpin) => runPinAction(unpin, 'Unpinned')}
+        editing={editingPins}
+        onEditingChange={setEditing}
       />
 
-      <div class="home-columns">
+      {!editingPins && recent.length > 0 && (
         <div class="home-recent">
           <div class="home-recent-head">
             <h2>Recent</h2>
-            {fetchedAt !== null && (
-              <span>Updated {formatAgo(fetchedAt, now)}</span>
-            )}
+            <a href="/notes">All</a>
           </div>
-          {recent.length === 0 ? (
-            <p>Nothing here yet.</p>
-          ) : (
-            <ul class="home-notes">
-              {recent.map((note) => (
+          <ul class="home-notes">
+            {recent.map((note) => {
+              const answer = note.path.startsWith(`${ANSWERS_FOLDER}/`);
+              const folder = folderOf(note.path);
+              return (
                 <li key={note.id}>
                   <a class="home-note-row" href={`/note/${note.id}`}>
-                    <span class="home-note-icon">
-                      <IconNote />
+                    <span
+                      class="home-note-icon"
+                      data-type={answer ? 'answer' : 'note'}
+                    >
+                      {answer ? <IconChat /> : <IconNote />}
                     </span>
                     <span class="home-note-text">
                       <b class="home-note-title">
                         {recentTitles.get(note.id) ?? noteTitle(note)}
                       </b>
-                      <span class="home-note-meta">
-                        {recentMeta(note.path, note.modifiedTime, now)}
-                      </span>
+                      {folder !== '' && (
+                        <span class="home-note-meta">
+                          {folder.split('/').join(' / ')}
+                        </span>
+                      )}
                     </span>
+                    {note.modifiedTime !== undefined && (
+                      <span class="home-note-time">
+                        {relativeTime(note.modifiedTime, now)}
+                      </span>
+                    )}
                   </a>
                 </li>
-              ))}
-            </ul>
-          )}
+              );
+            })}
+          </ul>
         </div>
-        <DesktopTell
-          inboxFolderId={me?.vault?.inboxFolderId ?? null}
-          online={online}
-          phase={phase}
-          run={run}
-          process={process}
-        />
-      </div>
+      )}
       {showTour && (
         <Tour
           onEnd={(finished) => {

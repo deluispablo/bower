@@ -84,6 +84,13 @@ export interface PinnedSectionProps {
    * whether it succeeded. Injected so this stays free of the toast import
    * and easy to mount in a smoke test with a plain fixture. */
   runUnpin: (unpin: () => Promise<void>) => Promise<boolean>;
+  /**
+   * Edit mode, when the screen needs to know about it too (Home shortens
+   * its bubble and hides Recent while pins are edited, #321). Left out,
+   * the section keeps it to itself.
+   */
+  editing?: boolean;
+  onEditingChange?: (editing: boolean) => void;
 }
 
 export function PinnedSection({
@@ -92,8 +99,15 @@ export function PinnedSection({
   onUnpinNote,
   onUnpinFolder,
   runUnpin,
+  editing: editingProp,
+  onEditingChange,
 }: PinnedSectionProps): JSX.Element | null {
-  const [editing, setEditing] = useState(false);
+  const [editingState, setEditingState] = useState(false);
+  const editing = editingProp ?? editingState;
+  function setEditing(value: boolean): void {
+    setEditingState(value);
+    onEditingChange?.(value);
+  }
   // The tile that just finished unpinning: kept on screen, showing the
   // bird's `done` pose, even once `items` itself has already dropped it.
   const [pending, setPending] = useState<Tile | null>(null);
@@ -129,7 +143,7 @@ export function PinnedSection({
         <button
           type="button"
           class="home-pinned-edit"
-          onClick={() => setEditing((value) => !value)}
+          onClick={() => setEditing(!editing)}
         >
           {editing ? 'Done' : 'Edit'}
         </button>

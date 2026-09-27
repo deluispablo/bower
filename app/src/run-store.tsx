@@ -168,6 +168,20 @@ function afterDone(state: RunState): RunState {
   return { ...state, phase: 'idle', sheetOpen: false };
 }
 
+/**
+ * The last finished run once `run` is known: `run` itself when it ended
+ * (`done` or `failed`), otherwise the one kept from before (a run in
+ * flight has not finished yet).
+ */
+export function lastFinishedRun(
+  previous: Run | null,
+  run: Run | null,
+): Run | null {
+  if (run === null) return previous;
+  if (run.state === 'done' || run.state === 'failed') return run;
+  return previous;
+}
+
 /** The state machine, pure: every transition the store can make. */
 export function reduce(state: RunState, event: RunEvent): RunState {
   const sheet = { sheetOpen: state.sheetOpen, sheetRunId: state.sheetRunId };
@@ -292,6 +306,12 @@ export interface RunStore extends RunState {
    * after it already faded).
    */
   sheetReopenKey: number;
+  /**
+   * The most recent run this session saw finish, `done` or `failed`
+   * (`lastFinishedRun`): Home's Last tidy-up card (#321). It stays put while
+   * the next run goes, so the card can still say how the one before went.
+   */
+  lastFinished: Run | null;
   /** Closes the working sheet; a `done` run goes back to `idle` with it. */
   dismissSheet: () => void;
 }
@@ -456,6 +476,11 @@ export function RunProvider({ children }: RunProviderProps) {
 
   const [sheetReopenKey, setSheetReopenKey] = useState(0);
 
+  const [lastFinished, setLastFinished] = useState<Run | null>(null);
+  useEffect(() => {
+    setLastFinished((previous) => lastFinishedRun(previous, state.run));
+  }, [state.run]);
+
   const openSheet = useCallback((): void => {
     apply({ type: 'sheet-opened' });
     setSheetReopenKey((key) => key + 1);
@@ -478,6 +503,7 @@ export function RunProvider({ children }: RunProviderProps) {
     tidyUp,
     openSheet,
     sheetReopenKey,
+    lastFinished,
     dismissSheet,
   };
 
