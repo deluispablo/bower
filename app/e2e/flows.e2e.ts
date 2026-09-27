@@ -345,3 +345,53 @@ test('an old /tell link opens the Bower tab with its text', async ({
     'Hello Bower',
   );
 });
+
+test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  const bar = page.locator('header.topbar');
+  const help = bar.getByRole('button', { name: 'About this screen' });
+  await expect(help).toBeVisible();
+  if (testInfo.project.name === 'phone') {
+    await expect(
+      bar.getByRole('button', { name: 'Your folders' }),
+    ).toBeVisible();
+    await expect(bar.getByText('Bower', { exact: true })).toBeVisible();
+    await expect(bar.getByRole('link', { name: 'Settings' })).toHaveText('A');
+    await shot(page, testInfo, 'bar-home');
+  }
+
+  // "?" opens the tour at the step for this tab, until the help sheets.
+  await help.click();
+  const tour = page.getByRole('dialog');
+  await expect(tour.getByText(/^1 of 4 · Add$/)).toBeVisible();
+  await tour.getByRole('button', { name: 'Skip tour' }).click();
+  await expect(tour).toBeHidden();
+
+  await visible(page.getByRole('link', { name: /^Bower$/ })).click();
+  await help.click();
+  await expect(tour.getByText(/^3 of 4 · Tell Bower$/)).toBeVisible();
+  await tour.getByRole('button', { name: 'Skip tour' }).click();
+
+  if (testInfo.project.name !== 'phone') return;
+  await page.goto('/');
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Skip tour' })
+    .click();
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('Lisbon');
+  await switcher
+    .getByRole('option', { name: /Lisbon Trip/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/note\//);
+  await expect(bar.getByRole('button', { name: 'Your folders' })).toBeHidden();
+  await expect(bar.getByRole('link', { name: /^Back to / })).toBeVisible();
+  await expect(bar.locator('.topbar-title')).toHaveText('Lisbon Trip');
+  await shot(page, testInfo, 'bar-note');
+});

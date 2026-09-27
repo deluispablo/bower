@@ -110,6 +110,16 @@ export function IconInbox(): JSX.Element {
   );
 }
 
+/** The top bar's "?" (#318): a question mark in a circle. */
+export function IconHelp(): JSX.Element {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01" />
+    </Svg>
+  );
+}
+
 export function IconMenu(): JSX.Element {
   return (
     <Svg>

@@ -5,7 +5,8 @@ import { useRoute } from 'preact-iso';
 import { AboutPanel } from '../components/about-panel.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
-import { IconChevronRight, IconMore } from '../components/icons.js';
+import { BackLink } from '../components/back-link.js';
+import { IconMore } from '../components/icons.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
 import { NoteMenu } from '../components/note-menu.js';
@@ -33,28 +34,30 @@ import '../styles/markdown.css';
 
 interface CrumbProps {
   crumbs: BreadcrumbSegment[];
+  title: string;
+}
+
+/** The phone top bar's Back (#318): the immediate parent folder, or Home
+ * for a top-level note. */
+function Back({ crumbs }: { crumbs: BreadcrumbSegment[] }): JSX.Element {
+  const parent = crumbs[crumbs.length - 1];
+  return parent === undefined ? (
+    <BackLink href="/" label="Home" />
+  ) : (
+    <BackLink href={folderHref(parent.path)} label={parent.name} />
+  );
 }
 
 /**
- * The shell header's `crumb` slot content (spec §6 row Note, issue #144):
- * the phone back link (the immediate parent folder, or Home for a
- * top-level note) and the desktop breadcrumb, both always in the markup —
- * `layout.css` shows only the one that fits the breakpoint, the same way
- * it already does for the wordmark and the theme toggle.
+ * The shell header's `crumb` slot content (spec §6 row Note, issues #144,
+ * #318): the phone title (the note's) and the desktop breadcrumb, both
+ * always in the markup — `layout.css` shows only the one that fits the
+ * breakpoint, the same way it already does for the theme toggle.
  */
-function Crumb({ crumbs }: CrumbProps): JSX.Element {
-  const parent = crumbs[crumbs.length - 1];
+function Crumb({ crumbs, title }: CrumbProps): JSX.Element {
   return (
     <>
-      <a
-        class="topbar-back"
-        href={parent === undefined ? '/' : folderHref(parent.path)}
-      >
-        <IconChevronRight />
-        <span class="topbar-back-label">
-          {parent === undefined ? 'Home' : parent.name}
-        </span>
-      </a>
+      <span class="topbar-title">{title}</span>
       {crumbs.length > 0 && (
         <nav class="breadcrumb" aria-label="Folder">
           {crumbs.map((crumb) => (
@@ -200,10 +203,25 @@ export function Note() {
   // render (Rules of Hooks), before `index`/`file` are known to exist,
   // hence the guards inside; all are memoized so an unrelated re-render
   // (typing in the append form, say) does not refill a slot every time.
+  const backContent = useMemo(() => {
+    if (file === undefined) return null;
+    return <Back crumbs={breadcrumb(file.path)} />;
+  }, [file]);
+  useShellSlot('back', backContent);
+
+  // The bar's title is the note's title (#380's `noteTitle`), once its text
+  // is here to read a frontmatter title or heading from.
+  const readyText =
+    load.status === 'ready' && load.id === id ? load.text : undefined;
   const crumbContent = useMemo(() => {
     if (file === undefined) return null;
-    return <Crumb crumbs={breadcrumb(file.path)} />;
-  }, [file]);
+    return (
+      <Crumb
+        crumbs={breadcrumb(file.path)}
+        title={computeNoteTitle(file, readyText)}
+      />
+    );
+  }, [file, readyText]);
   useShellSlot('crumb', crumbContent);
 
   const actionsContent = useMemo(() => {

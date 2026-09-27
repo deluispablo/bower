@@ -3,18 +3,19 @@
  * sign-in, Not invited, Privacy, Terms and the onboarding render outside it
  * instead, in a bare `<main>` (`app.tsx`).
  *
- * Phone: a top bar (spec §14 order) — the menu button that opens the
- * explorer drawer, then the wordmark (Home) or the screen title (Add, Tell
- * Bower, Settings, the `crumb` slot) or the back link (a note, also the
- * `crumb` slot), then the `actions` slot (Open in Drive on a note, #144),
- * then the Tidy up pill flush to the right edge — and four tabs at the
- * bottom (#317): Home, Notes, Add, Bower. Health is reached from the
- * explorer's Health row; Settings from a row in the drawer (phone) and the
- * sidebar (desktop).
+ * Phone: a top bar (#318, Phone-Home and Phone-Note boards) — on a tab,
+ * the folder menu button that opens the explorer drawer; on an inner screen
+ * (`isInnerScreen`), Back instead (the `back` slot, or Back to Home); then
+ * the title (the wordmark as text on Home, the screen's own title from the
+ * `crumb` slot elsewhere), the `actions` slot (a note's More, #144), the
+ * Tidy up pill until #320 moves it, "?" (About this screen) and the avatar
+ * that opens Settings — and four tabs at the bottom (#317): Home, Notes,
+ * Add, Bower. Health is reached from the explorer's Health row.
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
- * header row over the content (breadcrumb slot, theme toggle, the pill —
- * the menu button, the phone title and the actions slot are phone-only),
+ * header row over the content (breadcrumb slot, theme toggle, the pill,
+ * "?" — the menu button, Back, the phone title, the actions slot and the
+ * avatar are phone-only; Settings is a sidebar row there),
  * and on note screens a third column, filled through the `aside` shell slot
  * (#144, `shell-slots.ts` — the note screen sits inside `children`, so it
  * cannot reach these any other way).
@@ -29,14 +30,16 @@ import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
 import { useSession } from '../session.js';
-import { BOWER_PATH } from '../shell-routes.js';
+import { BOWER_PATH, helpStepFor, isInnerScreen } from '../shell-routes.js';
 import { effectiveTheme, setTheme } from '../theme.js';
+import { BackLink } from './back-link.js';
 import { DemoBanner } from './demo-banner.js';
 import { Explorer, ExplorerDrawer, useHealthIsNew } from './explorer.js';
 import { useShellSlots } from './shell-slots.js';
 import {
   IconChat,
   IconFolder,
+  IconHelp,
   IconHome,
   IconMenu,
   IconMoon,
@@ -48,6 +51,7 @@ import { OfflineBanner } from './offline-banner.js';
 import { ProcessButton } from './process-button.js';
 import { Switcher } from './switcher.js';
 import { Toast } from './toast.js';
+import { Tour } from './tour.js';
 
 interface NavLink {
   href: string;
@@ -82,7 +86,7 @@ const SETTINGS: NavLink = {
 const TABS: readonly NavLink[] = [HOME, NOTES, ADD, BOWER];
 
 /** The desktop sidebar's links (Desktop-Home board): the tree below them
- * is the Notes tab there. Settings stays a row until the avatar (#318). */
+ * is the Notes tab there. Settings is a row here; the phone has the avatar. */
 const SIDEBAR_LINKS: readonly NavLink[] = [HOME, ADD, BOWER, SETTINGS];
 
 const DESKTOP_QUERY = '(min-width: 900px)';
@@ -111,6 +115,14 @@ function ThemeToggle(): JSX.Element {
   );
 }
 
+/** The avatar's letter: the first letter of the account's email. */
+export function avatarInitial(email: string | undefined): string {
+  const first = email?.trim().charAt(0) ?? '';
+  return first === '' ? '?' : first.toUpperCase();
+}
+
+const HOME_BACK = <BackLink href="/" label="Home" />;
+
 interface LayoutProps {
   children: ComponentChildren;
 }
@@ -118,8 +130,12 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
   const { path } = useLocation();
-  const { crumb, actions, aside } = useShellSlots();
+  const { back, crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // "?" (About this screen): the tour, at the step for this tab, until
+  // each tab has its own help sheet (#330).
+  const [helpOpen, setHelpOpen] = useState(false);
+  const inner = isInnerScreen(path);
   const headRef = useRef<HTMLDivElement>(null);
   // The quick switcher's own top offset (spec §14, `switcher.css`'s
   // `--switcher-top`): the live bottom edge of the header *and* whichever
@@ -152,6 +168,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   // the explorer is always on screen.
   useEffect(() => {
     setDrawerOpen(false);
+    setHelpOpen(false);
   }, [path]);
 
   useEffect(() => {
@@ -181,20 +198,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
     </nav>
   );
 
-  // Phone: Settings left the bottom row (#317); until the avatar in the top
-  // bar opens it (#318), the drawer carries it as a row.
-  const drawerNav = (
-    <a
-      href={SETTINGS.href}
-      class="explorer-row"
-      aria-current={currentFor(SETTINGS.href, path)}
-      onClick={closeDrawer}
-    >
-      <SETTINGS.Icon />
-      <span class="explorer-row-label">{SETTINGS.label}</span>
-    </a>
-  );
-
   return (
     <div class={aside === null ? 'shell' : 'shell shell-with-aside'}>
       <nav class="shell-sidebar" aria-label="Your notes">
@@ -207,25 +210,25 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       <div class="shell-main">
         <div ref={headRef}>
           <header class="topbar">
-            <button
-              type="button"
-              class="icon-button menu-button"
-              aria-label="Your notes"
-              aria-haspopup="dialog"
-              aria-expanded={drawerOpen}
-              onClick={() => {
-                setDrawerOpen(true);
-              }}
-            >
-              <IconMenu />
-            </button>
-            {crumb === null ? (
-              <a href="/" class="brand topbar-brand" aria-label="Bower home">
-                <span class="brand-word">Bower</span>
-              </a>
+            {inner ? (
+              (back ?? HOME_BACK)
             ) : (
-              <div class="topbar-crumb">{crumb}</div>
+              <button
+                type="button"
+                class="icon-button menu-button"
+                aria-label="Your folders"
+                aria-haspopup="dialog"
+                aria-expanded={drawerOpen}
+                onClick={() => {
+                  setDrawerOpen(true);
+                }}
+              >
+                <IconMenu />
+              </button>
             )}
+            <div class="topbar-crumb">
+              {crumb ?? <span class="topbar-title">Bower</span>}
+            </div>
             <ThemeToggle />
             <div class="topbar-slot topbar-actions" data-slot="actions">
               {actions}
@@ -233,6 +236,20 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             <div class="topbar-slot topbar-pill" data-slot="process">
               <ProcessButton />
             </div>
+            <button
+              type="button"
+              class="icon-button topbar-help"
+              aria-label="About this screen"
+              aria-haspopup="dialog"
+              onClick={() => {
+                setHelpOpen(true);
+              }}
+            >
+              <IconHelp />
+            </button>
+            <a href={SETTINGS.href} class="topbar-avatar" aria-label="Settings">
+              <span aria-hidden="true">{avatarInitial(me?.email)}</span>
+            </a>
           </header>
           <DemoBanner />
           <OfflineBanner />
@@ -264,10 +281,14 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         ))}
       </nav>
       {drawerOpen && (
-        <ExplorerDrawer
-          healthIsNew={healthIsNew}
-          nav={drawerNav}
-          onClose={closeDrawer}
+        <ExplorerDrawer healthIsNew={healthIsNew} onClose={closeDrawer} />
+      )}
+      {helpOpen && (
+        <Tour
+          startAt={helpStepFor(path)}
+          onEnd={() => {
+            setHelpOpen(false);
+          }}
         />
       )}
       <Switcher />
