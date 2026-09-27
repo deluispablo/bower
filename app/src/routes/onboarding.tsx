@@ -1,5 +1,6 @@
 /**
- * First run (spec §7, #149): three screens in one route, with local state.
+ * First run (spec §7, #149; the Drive step of #219): four screens in one
+ * route, with local state.
  *
  * 1. Welcome: the bird says hello. "Show me around" and "Skip the tour"
  *    both go on to the folder; skipping also records that the tour was
@@ -8,8 +9,14 @@
  *    person already has, through the Drive picker or a pasted link.
  * 3. Building your bower: while `POST /vault` runs the bird builds, the six
  *    folders appear as chips and a progress bar runs; "Continue" appears
- *    once the folder exists and goes to Home, where the tour starts. On an
- *    error the bird is confused and the message says what to do.
+ *    once the folder exists. On an error the bird is confused and the
+ *    message says what to do.
+ * 4. Start with what you have (only with `VITE_GOOGLE_API_KEY` set, spec
+ *    §14 "Add from your Drive"): the same Picker and copy-or-export-into-
+ *    inbox path as Add's "From your Drive" button (#218: a Doc, Sheet or
+ *    Slides file is exported first). "Later" and, once any pick settles,
+ *    "Continue" both go to Home, where the tour starts. Without the key
+ *    Building's Continue goes straight there instead, as before.
  */
 
 import type { JSX } from 'preact';
@@ -22,24 +29,33 @@ import { Bird } from '../components/bird.js';
 import type { BirdState } from '../components/bird-classes.js';
 import {
   IconChat,
+  IconChevronRight,
   IconFolder,
   IconInbox,
   IconPlus,
 } from '../components/icons.js';
-import { getToken } from '../drive.js';
+import { copyOrExportIntoInbox, exportPlanFor, getToken } from '../drive.js';
 import { parseFolderId } from '../onboarding.js';
 import {
+  filesFromPickerResponse,
   folderIdFromPickerResponse,
   loadPicker,
+  openFilePicker,
   openFolderPicker,
+  type PickedItem,
 } from '../picker.js';
 import { useSession } from '../session.js';
 import { endTour, markTourSeen } from '../tour-store.js';
+import { expandPicks } from './add.js';
 import '../styles/onboarding.css';
 
 const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
 
-type Step = 'welcome' | 'folder' | 'building';
+/** The fourth screen only exists with a Picker key; otherwise Building goes
+ * straight to Home, as it always has. */
+const HAS_DRIVE_STEP = GOOGLE_API_KEY !== '';
+
+type Step = 'welcome' | 'folder' | 'building' | 'drive';
 
 type Mode = 'create' | 'select';
 
@@ -50,7 +66,45 @@ type ErrorState =
   | { kind: 'reauth'; text: string }
   | { kind: 'message'; text: string };
 
-const STEPS: readonly Step[] = ['welcome', 'folder', 'building'];
+const STEPS: readonly Step[] = HAS_DRIVE_STEP
+  ? ['welcome', 'folder', 'building', 'drive']
+  : ['welcome', 'folder', 'building'];
+
+/** Dots for this route's own steps plus the three-step tour that follows
+ * (never rendered here): six without the Drive step, seven with it. */
+const DOT_COUNT = HAS_DRIVE_STEP ? 7 : 6;
+
+type DriveItemStatus = 'copying' | 'done' | 'failed';
+
+interface DriveQueueItem {
+  id: string;
+  driveId: string;
+  name: string;
+  /** Decides whether the copy is exported first (`exportPlanFor`, #218). */
+  mimeType: string;
+  status: DriveItemStatus;
+  error?: string;
+}
+
+/** The queue card's status line, once done or while it is copying or
+ * exporting: the same wording as Add's own `driveStatusText` (#218). */
+function driveStatusText(mimeType: string, done: boolean): string {
+  const plan = exportPlanFor(mimeType);
+  if (plan.action !== 'export') {
+    return done
+      ? 'Copied from your Drive · the original stays where it was'
+      : 'Copying from your Drive…';
+  }
+  const savedAs =
+    plan.extension === '.md'
+      ? 'Markdown'
+      : plan.extension === '.csv'
+        ? 'a table'
+        : 'a PDF';
+  return done
+    ? `Saved as ${savedAs} from your Drive · the original stays where it was`
+    : `Saving as ${savedAs}…`;
+}
 
 /** The six folders of a new Bower folder, as the Building screen shows them. */
 const FOLDERS: readonly { name: string; Icon: () => JSX.Element }[] = [
@@ -62,12 +116,12 @@ const FOLDERS: readonly { name: string; Icon: () => JSX.Element }[] = [
   { name: 'Answers', Icon: IconChat },
 ];
 
-/** Where the person is: three first-run screens, then the three tour steps. */
+/** Where the person is: this route's own steps, then the three tour steps. */
 function Dots({ step }: { step: Step }): JSX.Element {
   const at = STEPS.indexOf(step);
   return (
     <div class="onb-dots" aria-hidden="true">
-      {[0, 1, 2, 3, 4, 5].map((i) => (
+      {Array.from({ length: DOT_COUNT }, (_, i) => (
         <span key={i} class={i === at ? 'is-on' : undefined} />
       ))}
     </div>
@@ -87,8 +141,12 @@ export function Onboarding(): JSX.Element {
   const [busy, setBusy] = useState<Busy>(null);
   // No key configured: skip straight to the paste-a-link fallback.
   const [pickerFallback, setPickerFallback] = useState(GOOGLE_API_KEY === '');
+  const [driveQueue, setDriveQueue] = useState<DriveQueueItem[]>([]);
+  const [drivePickerOpening, setDrivePickerOpening] = useState(false);
+  const [driveNotes, setDriveNotes] = useState<string[]>([]);
   const heading = useRef<HTMLHeadingElement>(null);
   const continueButton = useRef<HTMLButtonElement>(null);
+  const driveContinueButton = useRef<HTMLButtonElement>(null);
 
   // A new screen: move focus to its heading, so keyboard and screen reader
   // users start at the top of it. Not on the first screen, which the page
@@ -105,6 +163,13 @@ export function Onboarding(): JSX.Element {
   useEffect(() => {
     if (vault !== null) continueButton.current?.focus();
   }, [vault]);
+
+  const driveQueueIdle =
+    driveQueue.length > 0 &&
+    driveQueue.every((item) => item.status !== 'copying');
+  useEffect(() => {
+    if (driveQueueIdle) driveContinueButton.current?.focus();
+  }, [driveQueueIdle]);
 
   function goToFolder(): void {
     setError(null);
@@ -216,6 +281,104 @@ export function Onboarding(): JSX.Element {
       });
     } finally {
       setBusy(null);
+    }
+  }
+
+  /** Building's Continue: on to the Drive step when there is a Picker key,
+   * straight to Home otherwise (unchanged behaviour without the key). */
+  function continueFromBuilding(): void {
+    if (HAS_DRIVE_STEP) {
+      setStep('drive');
+    } else {
+      route('/');
+    }
+  }
+
+  async function copyDriveItem(item: DriveQueueItem): Promise<void> {
+    const inboxFolderId = vault?.inboxFolderId;
+    if (inboxFolderId === undefined) return;
+    try {
+      await copyOrExportIntoInbox(
+        { id: item.driveId, name: item.name, mimeType: item.mimeType },
+        inboxFolderId,
+      );
+      setDriveQueue((prev) =>
+        prev.map((it) => (it.id === item.id ? { ...it, status: 'done' } : it)),
+      );
+    } catch (err) {
+      console.error(err);
+      setDriveQueue((prev) =>
+        prev.map((it) =>
+          it.id === item.id
+            ? {
+                ...it,
+                status: 'failed',
+                error: 'Could not copy this file from your Drive.',
+              }
+            : it,
+        ),
+      );
+    }
+  }
+
+  /** Same copy-or-export path as Add's "From your Drive" (#218): picks land
+   * in the inbox one at a time, each as its own queue card; the Bower
+   * folder is left out by `filesFromPickerResponse`, as it is there, a
+   * picked folder is expanded into its own files by `expandPicks`, same as
+   * Add, and a Drawing or Form (no format to save it as) is left out with
+   * a sentence. */
+  async function onDrivePicked(
+    data: google.picker.ResponseObject,
+  ): Promise<void> {
+    if (data.action !== 'picked') return;
+    const { items, excluded } = filesFromPickerResponse(
+      data,
+      vault?.folderId ?? null,
+    );
+    const notes: string[] = [];
+    if (excluded > 0) {
+      notes.push(
+        'Your Bower folder was left out: what is in it is already in Bower.',
+      );
+    }
+    const expanded = await expandPicks(items, notes);
+    const files = expanded.filter((item: PickedItem) => {
+      if (exportPlanFor(item.mimeType).action !== 'skip') return true;
+      notes.push(
+        `${item.name} is a Google Drawing or Form: there is no format to save it as, so it was left out.`,
+      );
+      return false;
+    });
+    setDriveNotes(notes);
+    if (files.length === 0) return;
+    const created: DriveQueueItem[] = files.map((item) => ({
+      id: crypto.randomUUID(),
+      driveId: item.id,
+      name: item.name,
+      mimeType: item.mimeType,
+      status: 'copying',
+    }));
+    setDriveQueue((prev) => [...prev, ...created]);
+    for (const item of created) {
+      await copyDriveItem(item);
+    }
+  }
+
+  /** Loads the Picker (only now, never before the button is pressed) and
+   * opens it over the user's Drive, exactly as Add's button does. */
+  async function onPickFromDrive(): Promise<void> {
+    setDriveNotes([]);
+    setDrivePickerOpening(true);
+    try {
+      const [token, picker] = await Promise.all([getToken(), loadPicker()]);
+      openFilePicker(picker, token.accessToken, GOOGLE_API_KEY, (data) => {
+        void onDrivePicked(data);
+      });
+    } catch (err) {
+      console.error(err);
+      setDriveNotes(['Could not open your Drive. Try again in a moment.']);
+    } finally {
+      setDrivePickerOpening(false);
     }
   }
 
@@ -340,6 +503,104 @@ export function Onboarding(): JSX.Element {
     );
   }
 
+  if (step === 'drive') {
+    return (
+      <section class="onb onb-folder onb-drive">
+        <div class="onb-ask">
+          <Bird state="looking" size={64} />
+          <p class="onb-bubble">
+            Anything already in your Drive you want me to look at?
+          </p>
+        </div>
+        <h1 ref={heading} tabIndex={-1} class="onb-title">
+          Start with what you have
+        </h1>
+        <p class="onb-lead">
+          Bower only ever sees its own folder. Pick files from anywhere else in
+          your Drive and copies land in your inbox; the originals stay where
+          they are. You can do this any time from Add.
+        </p>
+
+        <button
+          type="button"
+          class="onb-card onb-card--recommended"
+          disabled={drivePickerOpening}
+          onClick={() => void onPickFromDrive()}
+        >
+          <IconFolder />
+          <span class="onb-card-text">
+            <span class="onb-card-title">Pick files from my Drive</span>
+            <span class="onb-card-hint">
+              Recent, My Drive, Shared with me. Docs become Markdown, Sheets a
+              table, Slides a PDF; everything else is copied as it is.
+            </span>
+          </span>
+        </button>
+
+        <button type="button" class="onb-card" onClick={() => route('/')}>
+          <IconChevronRight />
+          <span class="onb-card-text">
+            <span class="onb-card-title">Later</span>
+            <span class="onb-card-hint">
+              Start empty and add things as they come.
+            </span>
+          </span>
+        </button>
+
+        {driveNotes.map((note) => (
+          <p key={note} class="onb-note">
+            {note}
+          </p>
+        ))}
+
+        {driveQueue.length > 0 && (
+          <ul class="onb-drive-queue">
+            {driveQueue.map((item) => (
+              <li key={item.id} class="onb-drive-queue-card">
+                <span class="onb-drive-queue-icon" aria-hidden="true">
+                  {item.status === 'copying' && (
+                    <Bird state="tidying" size={30} />
+                  )}
+                  {item.status === 'done' && (
+                    <span class="onb-drive-queue-check">✓</span>
+                  )}
+                  {item.status === 'failed' && (
+                    <span class="onb-drive-queue-check onb-drive-queue-check-failed">
+                      !
+                    </span>
+                  )}
+                </span>
+                <span class="onb-drive-queue-body">
+                  <span class="onb-drive-queue-name">{item.name}</span>
+                  <span class="onb-drive-queue-status">
+                    {item.status !== 'failed' &&
+                      driveStatusText(item.mimeType, item.status === 'done')}
+                    {item.status === 'failed' && (item.error ?? 'Failed')}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {driveQueueIdle && (
+          <div class="auth-actions">
+            <button
+              ref={driveContinueButton}
+              type="button"
+              class="button onb-primary"
+              onClick={() => route('/')}
+            >
+              Continue
+            </button>
+          </div>
+        )}
+
+        <Dots step={step} />
+      </section>
+    );
+  }
+
   const ready = vault !== null;
   const birdState: BirdState =
     error !== null ? 'confused' : ready ? 'done' : 'building';
@@ -418,7 +679,7 @@ export function Onboarding(): JSX.Element {
             ref={continueButton}
             type="button"
             class="button onb-primary"
-            onClick={() => route('/')}
+            onClick={continueFromBuilding}
           >
             Continue
           </button>

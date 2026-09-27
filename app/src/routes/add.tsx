@@ -40,6 +40,48 @@ const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
 /** Files copied from one picked Drive folder, at most. */
 export const MAX_FOLDER_FILES = 50;
 
+/**
+ * The picks from one Picker response as files to copy: a picked folder
+ * gives its own files (not its subfolders), at most `MAX_FOLDER_FILES`,
+ * with a sentence in `notes` when there are more. Shared with onboarding's
+ * "Start with what you have" step (#219), so it lives at module scope
+ * rather than inside `Add()`.
+ */
+export async function expandPicks(
+  picked: PickedItem[],
+  notes: string[],
+): Promise<PickedItem[]> {
+  const files: PickedItem[] = [];
+  for (const item of picked) {
+    if (!item.isFolder) {
+      files.push(item);
+      continue;
+    }
+    try {
+      const children = (await listFolder(item.id)).filter(
+        (child) => child.mimeType !== FOLDER_MIME,
+      );
+      if (children.length > MAX_FOLDER_FILES) {
+        notes.push(
+          `${item.name} has more than ${MAX_FOLDER_FILES} files: the first ${MAX_FOLDER_FILES} were added. Pick the rest from inside the folder.`,
+        );
+      }
+      for (const child of children.slice(0, MAX_FOLDER_FILES)) {
+        files.push({
+          id: child.id,
+          name: child.name,
+          mimeType: child.mimeType,
+          isFolder: false,
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      notes.push(`Could not open the folder ${item.name}.`);
+    }
+  }
+  return files;
+}
+
 type QueueStatus = 'waiting' | 'uploading' | 'done' | 'failed';
 
 interface QueueItem {
@@ -268,43 +310,6 @@ export function Add() {
     if (queueRef.current.length === 0) return;
     if (!queueRef.current.every((it) => it.status === 'done')) return;
     finish();
-  }
-
-  /** The picks from one Picker response as files to copy: a picked folder
-   * gives its own files (not its subfolders), at most `MAX_FOLDER_FILES`. */
-  async function expandPicks(
-    picked: PickedItem[],
-    notes: string[],
-  ): Promise<PickedItem[]> {
-    const files: PickedItem[] = [];
-    for (const item of picked) {
-      if (!item.isFolder) {
-        files.push(item);
-        continue;
-      }
-      try {
-        const children = (await listFolder(item.id)).filter(
-          (child) => child.mimeType !== FOLDER_MIME,
-        );
-        if (children.length > MAX_FOLDER_FILES) {
-          notes.push(
-            `${item.name} has more than ${MAX_FOLDER_FILES} files: the first ${MAX_FOLDER_FILES} were added. Pick the rest from inside the folder.`,
-          );
-        }
-        for (const child of children.slice(0, MAX_FOLDER_FILES)) {
-          files.push({
-            id: child.id,
-            name: child.name,
-            mimeType: child.mimeType,
-            isFolder: false,
-          });
-        }
-      } catch (err) {
-        console.error(err);
-        notes.push(`Could not open the folder ${item.name}.`);
-      }
-    }
-    return files;
   }
 
   async function onDrivePicked(
