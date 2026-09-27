@@ -27,6 +27,7 @@ import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
 import { findReport, isReportNew } from '../health-report.js';
+import { usePinToastState } from '../pin-toast.js';
 import { getPref } from '../prefs.js';
 import { useSession } from '../session.js';
 import { effectiveTheme, setTheme } from '../theme.js';
@@ -45,6 +46,7 @@ import {
 import { OfflineBanner } from './offline-banner.js';
 import { ProcessButton } from './process-button.js';
 import { Switcher } from './switcher.js';
+import { Toast } from './toast.js';
 
 interface NavLink {
   href: string;
@@ -112,6 +114,11 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const { crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const headRef = useRef<HTMLDivElement>(null);
+  // The shared "Pinned to Home" / "Unpinned" toast (issue #216): mounted
+  // once here so every pin entry point — the note menu, a drawer row's held
+  // sheet, a tree row's hover pin and its right-click menu, the Folder
+  // screen's chip — can show it without owning one of its own.
+  const pinToast = usePinToastState();
 
   // The quick switcher's own top offset (spec §14, `switcher.css`'s
   // `--switcher-top`): the live bottom edge of the header *and* whichever
@@ -249,6 +256,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         <ExplorerDrawer healthIsNew={healthIsNew} onClose={closeDrawer} />
       )}
       <Switcher />
+      <Toast message={pinToast.message} messageKey={pinToast.key} />
     </div>
   );
 }

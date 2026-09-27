@@ -33,7 +33,9 @@ let opener: HTMLButtonElement;
 function mount(
   canEdit: boolean,
   onEdit = vi.fn(),
-): { onEdit: () => void; onClose: () => void } {
+  pinned = false,
+  onTogglePin = vi.fn(),
+): { onEdit: () => void; onTogglePin: () => void; onClose: () => void } {
   const onClose = vi.fn();
 
   function Harness() {
@@ -43,6 +45,8 @@ function mount(
       file: NOTE,
       noteName: 'Shopping list',
       canEdit,
+      pinned,
+      onTogglePin,
       onEdit,
       onClose: () => {
         onClose();
@@ -59,7 +63,7 @@ function mount(
   void act(() => {
     render(h(Harness, {}), root);
   });
-  return { onEdit, onClose };
+  return { onEdit, onTogglePin, onClose };
 }
 
 function rows(): HTMLElement[] {
@@ -96,21 +100,36 @@ afterEach(() => {
 });
 
 describe('NoteMenu', () => {
-  it('lists the four rows for a normal note (Pin hidden until #216)', () => {
+  it('lists five rows for a normal note, Pin first', () => {
     mount(true);
-    expect(rows()).toHaveLength(4);
+    expect(rows()).toHaveLength(5);
+    expect(rowByText('Pin to Home')).toBeDefined();
     expect(rowByText('Ask Bower about this note')).toBeDefined();
     expect(rowByText('Open in Drive')).toBeDefined();
     expect(rowByText('Copy link')).toBeDefined();
     expect(rowByText('Edit the text')).toBeDefined();
+    expect(rows()[0]?.textContent).toContain('Pin to Home');
   });
 
-  it('lists three rows, Edit left out, for a protected note', () => {
+  it('lists four rows, Edit left out, for a protected note', () => {
     mount(false);
-    expect(rows()).toHaveLength(3);
+    expect(rows()).toHaveLength(4);
     expect(rows().some((r) => r.textContent?.includes('Edit the text'))).toBe(
       false,
     );
+  });
+
+  it('says Unpin from Home when the note is already pinned', () => {
+    mount(true, vi.fn(), true);
+    expect(rowByText('Unpin from Home')).toBeDefined();
+    expect(root.textContent).not.toContain('Pin to Home');
+  });
+
+  it('closes and calls onTogglePin when the Pin row is activated', () => {
+    const { onTogglePin, onClose } = mount(true);
+    click(rowByText('Pin to Home'));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onTogglePin).toHaveBeenCalledOnce();
   });
 
   it('prefills Tell Bower with a wikilink to the note, and a space', () => {
