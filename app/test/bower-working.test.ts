@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  INDETERMINATE_FILL,
-  nestFill,
-  sceneFor,
+  workingBird,
+  workingClasses,
+  workingLabel,
 } from '../src/components/bower-working.js';
 import {
   SHEET_LINGER_MS,
@@ -11,77 +11,33 @@ import {
   workingStateFor,
 } from '../src/components/working-sheet.js';
 
-describe('nestFill', () => {
-  it('passes values between 0 and 1 through', () => {
-    expect(nestFill(0)).toBe(0);
-    expect(nestFill(0.4)).toBe(0.4);
-    expect(nestFill(1)).toBe(1);
-  });
-
-  it('clamps out-of-range values', () => {
-    expect(nestFill(-0.5)).toBe(0);
-    expect(nestFill(1.7)).toBe(1);
-    expect(nestFill(Number.POSITIVE_INFINITY)).toBe(1);
-    expect(nestFill(Number.NEGATIVE_INFINITY)).toBe(0);
-  });
-
-  it('treats NaN as empty', () => {
-    expect(nestFill(Number.NaN)).toBe(0);
+describe('workingBird', () => {
+  it('tidies while queued or running, shows off when done, is confused when failed', () => {
+    expect(workingBird('queued')).toBe('tidying');
+    expect(workingBird('running')).toBe('tidying');
+    expect(workingBird('done')).toBe('showoff');
+    expect(workingBird('failed')).toBe('confused');
   });
 });
 
-describe('sceneFor', () => {
-  it('queued: empty nest, bobbing on the rim', () => {
-    expect(sceneFor('queued')).toEqual({
-      className: 'bw bw--queued',
-      label: 'Tidying up…',
-      fill: 0,
-      indeterminate: false,
-    });
+describe('workingLabel', () => {
+  it('keeps the texts under the animation', () => {
+    expect(workingLabel('queued')).toBe('Tidying up…');
+    expect(workingLabel('running')).toBe('Tidying up…');
+    expect(workingLabel('done')).toBe('Done');
+    expect(workingLabel('failed')).toBe('Something went wrong');
+  });
+});
+
+describe('workingClasses', () => {
+  it('names the state', () => {
+    expect(workingClasses('running', false)).toBe('bw bw--running');
+    expect(workingClasses('failed', false)).toBe('bw bw--failed');
   });
 
-  it('running without progress: slow indeterminate fill', () => {
-    expect(sceneFor('running')).toEqual({
-      className: 'bw bw--running bw--indeterminate',
-      label: 'Tidying up…',
-      fill: INDETERMINATE_FILL,
-      indeterminate: true,
-    });
-  });
-
-  it('running with progress: the nest fills proportionally, clamped', () => {
-    const scene = sceneFor('running', 0.25);
-    expect(scene.fill).toBe(0.25);
-    expect(scene.indeterminate).toBe(false);
-    expect(scene.className).toBe('bw bw--running');
-    expect(sceneFor('running', 3).fill).toBe(1);
-  });
-
-  it('done: full nest and "Done"', () => {
-    expect(sceneFor('done', 0.2)).toEqual({
-      className: 'bw bw--done',
-      label: 'Done',
-      fill: 1,
-      indeterminate: false,
-    });
-  });
-
-  it('failed: "Something went wrong", nest as far as it got', () => {
-    expect(sceneFor('failed')).toMatchObject({
-      className: 'bw bw--failed',
-      label: 'Something went wrong',
-      fill: 0,
-    });
-    expect(sceneFor('failed', 0.6).fill).toBe(0.6);
-  });
-
-  it('reduced motion: still class, no indeterminate animation, same texts', () => {
-    const scene = sceneFor('running', undefined, true);
-    expect(scene.className).toBe('bw bw--running bw--still');
-    expect(scene.indeterminate).toBe(false);
-    expect(scene.fill).toBe(INDETERMINATE_FILL);
-    expect(scene.label).toBe(sceneFor('running').label);
-    expect(sceneFor('done', undefined, true).label).toBe('Done');
+  it('reduced motion: the still class, which shows the pulsing dot', () => {
+    expect(workingClasses('running', true)).toBe('bw bw--running bw--still');
+    expect(workingClasses('queued', true)).toBe('bw bw--queued bw--still');
   });
 });
 
