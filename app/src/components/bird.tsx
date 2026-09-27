@@ -4,10 +4,14 @@
  * names; `birdClasses` (`bird-classes.ts`) picks the pose and face classes and
  * `styles/bird.css` does all the moving, so no JavaScript timer runs.
  *
- * Every part is always in the markup, props included; CSS hides the ones a
- * state does not show. `scene` adds the inbox tray, the nest and the walls
- * that `tidying` and `building` use (drawn outside the 100 x 100 box, so
- * leave room around the bird).
+ * The drawing is v8.2 (spec §4.1): round body and belly, a head on a neck,
+ * one eye with an upper and a lower lid (the lids carry the mood), a pill
+ * beak with a jaw, one wing hinged at the shoulder, three tail feathers and
+ * two feet. Every part is always in the markup, props included; CSS hides
+ * the ones a state does not show. `scene` adds the inbox tray and nest of
+ * `tidying`, the twig pile and growing nest of `building`, the sleeping nest
+ * of `asleep` and the gem of `shiny` (partly drawn outside the 100 x 100
+ * box, so leave room around the bird).
  *
  * `hello`, `showoff` and `done` play once: when the `rig`'s own animation
  * ends the component calls `onDone`, and the caller switches to `looking`.
@@ -37,7 +41,7 @@ export interface BirdProps {
   flip?: boolean;
   /** Forces the still bird; `prefers-reduced-motion: reduce` does too. */
   reducedMotion?: boolean;
-  /** Draws the tray, nest and walls of `tidying` and `building`. */
+  /** Draws the scene: tray, nests, twig pile and gem (see above). */
   scene?: boolean;
   /** Called once when a plays-once state (`hello`, `showoff`, `done`) ends. */
   onDone?: () => void;
@@ -52,13 +56,20 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-/** The inbox tray and paper, the nest and its pile, the walls, the gem. */
+/**
+ * The scene of `tidying`, `building` and `shiny`: the inbox tray and its
+ * paper, the nest and its pile, the twig pile and the growing nest, the gem.
+ * Drawn outside the bird's rig, so it stays put while the bird moves.
+ */
 function Scene(): JSX.Element {
   return (
     <g>
       <path class="x tray" d="M-46 78H-6L-10 92H-42Z" />
       <rect class="x traypaper" x="-36" y="70" width="18" height="12" rx="1" />
-      <path class="x nest" d="M104 84C106 96 142 96 144 84Z" />
+      <path
+        class="x nest"
+        d="M104 84C108 96 140 96 144 84M108 90L140 86M112 94L136 90M110 86L142 92M106 88L120 84M128 84L142 88"
+      />
       <rect
         class="x nestpile np1"
         x="112"
@@ -68,17 +79,22 @@ function Scene(): JSX.Element {
         rx="1"
       />
       <path class="x tw np2" d="M116 82L134 72" />
-      <path class="x wall" d="M8 92l2-18" />
-      <path class="x wall w2" d="M16 92l1-19" />
-      <path class="x wall w3" d="M24 92l-1-18" />
-      <path class="x wall w4" d="M76 92l2-18" />
-      <path class="x wall w5" d="M84 92l1-19" />
-      <path class="x wall w6" d="M92 92l-1-18" />
-      <circle class="x sgem" cx="118" cy="26" r="7" />
-      <circle class="x sgemhl" cx="115.5" cy="23.5" r="2.2" />
+      <path class="x bp bp1" d="M6 92L28 86" />
+      <path class="x bp bp2" d="M10 94L30 90" />
+      <path class="x bp bp3" d="M14 90L34 88" />
+      <path class="x bn" d="M64 84C68 96 102 96 106 84M70 90L100 86" />
+      <path class="x bn bt1" d="M72 87L98 91" />
+      <path class="x bn bt2" d="M68 83L90 87" />
+      <path class="x bn bt3" d="M80 82L104 88" />
+      <circle class="x sgem" cx="108" cy="30" r="7" />
+      <circle class="x sgemhl" cx="105.5" cy="27.5" r="2.2" />
       <path
         class="x sp sspark"
-        d="M130 10l1.6 3.4 3.4 1.6-3.4 1.6-1.6 3.4-1.6-3.4-3.4-1.6 3.4-1.6z"
+        d="M120 14l1.6 3.4 3.4 1.6-3.4 1.6-1.6 3.4-1.6-3.4-3.4-1.6 3.4-1.6z"
+      />
+      <path
+        class="x sp sspark s2"
+        d="M98 44l1.2 2.6 2.6 1.2-2.6 1.2-1.2 2.6-1.2-2.6-2.6-1.2 2.6-1.2z"
       />
     </g>
   );
@@ -139,39 +155,87 @@ export function Bird({
       <g class="rig" ref={rig}>
         <g class="turn">
           <g class="tl">
-            <path class="tf" d="M29 56C21 47 14 40 6 35C11 43 18 52 31 62Z" />
+            <rect
+              class="tf"
+              x="6"
+              y="71"
+              width="24"
+              height="5.5"
+              rx="2.75"
+              transform="rotate(-54 30 74)"
+            />
+            <rect
+              class="tf"
+              x="4"
+              y="73"
+              width="26"
+              height="5.5"
+              rx="2.75"
+              transform="rotate(-36 30 76)"
+            />
+            <rect
+              class="tf"
+              x="6"
+              y="75"
+              width="24"
+              height="5.5"
+              rx="2.75"
+              transform="rotate(-18 30 78)"
+            />
           </g>
           <g class="ft">
-            <path class="lg" d="M40 84L39 91M35 91h8" />
-            <path class="lg" d="M53 85L53 91M49 91h8" />
+            <path class="lg" d="M40 84V91" />
+            <rect class="fo" x="34" y="89" width="13" height="4.5" rx="2.25" />
+            <path class="lg" d="M53 85V91" />
+            <rect class="fo" x="47" y="89" width="13" height="4.5" rx="2.25" />
           </g>
           <circle class="bd" cx="46" cy="62" r="24" />
-          <g class="wg">
-            <path class="wp" d="M44 50C57 49 65 59 60 72C49 72 39 64 44 50Z" />
-          </g>
+          <ellipse class="ch" cx="52" cy="72" rx="13" ry="10" />
           <g class="hd">
+            <rect class="nk" x="52" y="34" width="16" height="38" rx="8" />
             <circle class="hc" cx="62" cy="40" r="19" />
-            <circle class="ch" cx="72" cy="46" r="3.2" />
+            <circle class="ck" cx="72" cy="47" r="3.2" />
             <g class="ey">
               <circle class="ec" cx="68" cy="37" r="5.2" />
               <circle class="eh" cx="70" cy="35" r="1.9" />
               <circle class="eh" cx="66.4" cy="39.2" r=".9" />
             </g>
-            <path class="bk" d="M80 38L92 42L80 45Z" />
+            <circle class="ld" cx="68" cy="24.5" r="6.5" />
+            <circle class="lb" cx="68" cy="49" r="6.5" />
+            <rect class="bk" x="79" y="35" width="13" height="6" rx="3" />
             <g class="jw">
-              <path class="bj" d="M80 43.5L90 42.5L80 47.5Z" />
+              <rect
+                class="bj"
+                x="79"
+                y="40"
+                width="10"
+                height="4.5"
+                rx="2.25"
+              />
             </g>
-            <path class="x ctwig tw" d="M86 42L100 26M96 32L102 30" />
+            <path class="x ctwig tw" d="M86 39L100 24M96 28L103 27" />
             <rect
               class="x cpaper pp"
               x="86"
-              y="36"
-              width="14"
-              height="18"
+              y="34"
+              width="13"
+              height="17"
               rx="1"
-              transform="rotate(14 93 45)"
+              transform="rotate(14 92 42)"
+            />
+            <text class="x ex" x="74" y="16">
+              !
+            </text>
+          </g>
+          <g class="wg">
+            <path
+              class="wp"
+              d="M54 56C64 58 65 68 58 74C44 78 28 78 18 72C28 64 42 56 54 56Z"
             />
           </g>
+          <circle class="x dd d1" cx="50" cy="20" r="1.6" />
+          <circle class="x dd d2" cx="56" cy="16" r="1.6" />
+          <circle class="x dd d3" cx="62" cy="14" r="1.6" />
           <text class="x nt" x="82" y="22">
             ♪
           </text>
@@ -196,12 +260,24 @@ export function Bird({
           />
           <path
             class="x sp sp2"
-            d="M10 24l1.4 3 3 1.4-3 1.4L10 33l-1.4-3-3-1.4 3-1.4z"
+            d="M8 26l1.4 3 3 1.4-3 1.4L8 35l-1.4-3-3-1.4 3-1.4z"
           />
           <path
             class="x cl"
-            d="M24 18h16a5 5 0 0 0-.6-10 7 7 0 0 0-13 2A4 4 0 0 0 24 18z"
+            d="M50 6h18a5 5 0 0 0-.6-10 7 7 0 0 0-13 2A4 4 0 0 0 50 6z"
           />
+          <path class="x rn r1" d="M52 9v5" />
+          <path class="x rn r2" d="M58 10v5" />
+          <path class="x rn r3" d="M64 9v5" />
+          <path class="x rn r4" d="M70 10v5" />
+          {/* The sleeping nest is part of the scene, but it sits in the rig
+              (as in the canvas) so it breathes with the bird. */}
+          {scene && (
+            <path
+              class="x nest2"
+              d="M22 82C26 94 68 94 72 82M26 88L68 84M30 92L64 88M28 84L70 90M24 86L40 82M54 82L70 86"
+            />
+          )}
         </g>
       </g>
     </svg>

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -41,6 +43,36 @@ const STILL_FACES: Record<BirdState, BirdFace | undefined> = {
 
 function classList(value: string): string[] {
   return value.split(' ');
+}
+
+// bird.css parsed with a regex (no CSS engine), read from disk relative to
+// the app package root (vitest's working directory; `?raw` is empty for CSS
+// under vitest). Types for `node:fs` come from ./node-fs.d.ts.
+const BIRD_CSS = readFileSync('src/styles/bird.css', 'utf8').replace(
+  /\/\*[\s\S]*?\*\//g,
+  '',
+);
+
+/** The declarations of every rule whose selector list includes `selector`. */
+function declarations(selector: string): string {
+  const bodies: string[] = [];
+  for (const match of BIRD_CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectors = (match[1] ?? '').split(',').map((part) => part.trim());
+    if (selectors.includes(selector)) bodies.push(match[2] ?? '');
+  }
+  return bodies.join(';');
+}
+
+/** Every rule selector in bird.css that starts with `prefix`. */
+function selectorsStartingWith(prefix: string): string[] {
+  const found: string[] = [];
+  for (const match of BIRD_CSS.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+    for (const part of (match[1] ?? '').split(',')) {
+      const selector = part.trim();
+      if (selector.startsWith(prefix)) found.push(selector);
+    }
+  }
+  return found;
 }
 
 describe('BIRD_STATES', () => {
@@ -110,5 +142,59 @@ describe('birdClasses', () => {
       'e-proud',
       'flip',
     ]);
+  });
+});
+
+describe('bird.css faces (v8.2: the lids carry the mood)', () => {
+  it('worried and sleepy lower the upper lid and leave the eye alone', () => {
+    for (const face of ['worried', 'sleepy']) {
+      expect(declarations(`.e-${face} .ld`)).toMatch(/transform:\s*translateY/);
+      expect(selectorsStartingWith(`.e-${face} .ey`)).toEqual([]);
+    }
+  });
+
+  it('sleepy, happy and proud raise the lower lid', () => {
+    for (const face of ['sleepy', 'happy', 'proud']) {
+      expect(declarations(`.e-${face} .lb`)).toMatch(
+        /transform:\s*translateY\(-/,
+      );
+    }
+  });
+
+  it('asleep shuts the eye with the lids, not by squashing it', () => {
+    expect(declarations('.p-sleep .ld')).toMatch(/transform:\s*translateY/);
+    expect(selectorsStartingWith('.p-sleep .ey')).toEqual([]);
+  });
+});
+
+describe('bird.css joints', () => {
+  // Spec §4.1 and #161: every joint pivots in drawing units, so no
+  // rotation can detach a part.
+  const JOINTS: Record<string, string> = {
+    tl: '30px 76px',
+    hd: '60px 64px',
+    wg: '54px 57px',
+    ft: '47px 84px',
+  };
+  for (const [part, origin] of Object.entries(JOINTS)) {
+    it(`${part} pivots at ${origin} of the view box`, () => {
+      const body = declarations(`.b .${part}`);
+      expect(body).toMatch(/transform-box:\s*view-box/);
+      expect(body).toContain(`transform-origin: ${origin}`);
+    });
+  }
+});
+
+describe('bird.css plays-once states', () => {
+  for (const pose of ['p-hello', 'p-dance', 'p-done']) {
+    it(`${pose} never loops forever`, () => {
+      for (const selector of selectorsStartingWith(`.${pose} `)) {
+        expect(declarations(selector)).not.toContain('infinite');
+      }
+    });
+  }
+
+  it('done lasts 2 s (spec §4.3)', () => {
+    expect(declarations('.p-done .rig')).toMatch(/animation:\s*hopwink 2s/);
   });
 });
