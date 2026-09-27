@@ -24,4 +24,5 @@ export const RETIRED_RULEBOOK_LINES: readonly string[] = [
   'Clippings/          # Web clipper default folder. Treat exactly like 0-Inbox.',
   '### Instructions (any file in the inbox whose name starts with `Bower`)',
   'The owner is talking to you. Read the whole note, decide which of the three it is, act, log it, then move the note to `0-Inbox/Processed/`.',
+  '- **Profile:** anything lasting about the owner goes to `About-Me.md` (Ingest step 7).',
 ];

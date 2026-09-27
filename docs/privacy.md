@@ -25,6 +25,8 @@ If you sign in with an address that is not on the invite list, nothing is stored
 
 The first-run questions the bird asks (what you will keep here, your notes' languages, a few areas to start with, how you like titles and tags) go straight into your own Bower folder in your Drive — `About-Me.md`, `Rules.md` and a folder note per area — the same as anything else you tell the app. This instance's own database never sees your answers; you can change them any time from **Settings → Advanced → "Tell Bower about yourself again"**, or by editing those files directly.
 
+Bower keeps learning after that first conversation, the same way: it can notice your preferences, which kinds of document keep coming up, and words or names you use often, and write those into `About-Me.md` or `Rules.md` in your own Bower folder — never into this instance's own database. It only ever writes things you would say about yourself; it never copies in a password or other credential, an account or document number, a health or financial detail, or anything about someone else, even when a note it reads holds one. The weekly health check looks over `Rules.md` for you and flags anything like that it finds, so you can fix it.
+
 ## What leaves where
 
 - When you tap Tidy up, a temporary job reads the files waiting in your Bower folder in your Google Drive and sends their text to Anthropic's API (the company that makes Claude) so it can organise them for you. Nothing else leaves your Drive, and nothing is sent anywhere else.

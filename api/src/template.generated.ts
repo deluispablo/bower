@@ -130,7 +130,7 @@ Bower's answers to questions sent as instructions. One note per question, dated.
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-27
-bower_rules_version: 3
+bower_rules_version: 4
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -278,7 +278,9 @@ Write the result to \`Lint Report.md\` at the vault root.
 When a project is done or dropped: set \`status: archived\`, move its folder to \`4-Archives/\`, update \`index.md\` and \`log.md\`.
 
 ## Self-learning
-- **Profile:** anything lasting about the owner goes to \`About-Me.md\` (Ingest step 7).
+- **Profile:** \`About-Me.md\` holds lasting facts the owner would say about themselves — role, goals, preferences, active projects, people who matter to them — never something merely found inside a note about someone or something else. Update it when Ingest step 7 turns one up.
+- **May learn:** the owner's own preferences (tone, formats, how they like things filed and titled), which kinds of document keep recurring (job offers, rental listings, invoices, medical reports…), and vocabulary that keeps coming up (terms, project names, new domain tags).
+- **May never record:** credentials or secrets, identifiers (account, policy, tax, passport numbers and the like), health or financial details found inside a note, or anything about a third party. A note may hold these; \`About-Me.md\`, \`Rules.md\` and this \`CLAUDE.md\` never do.
 - **Patterns:** when the same kind of document has been ingested three times (job offers, rental listings, invoices, medical reports…), append a proposal to \`log.md\` under \`Proposal:\` describing a dedicated workflow (fields to capture, where it goes, what to compare it against) and mention it in the next notification summary. Create the workflow only when the owner says yes, through an instruction note.
 - **Domain tags:** a new domain tag is noted in \`log.md\` the first time it is used; it goes into \`Rules.md\` only when the owner asks for it through an instruction note (in any other run the runner undoes a change to \`Rules.md\`).
 - **Never** change rules on your own initiative. Rules change only through the Instructions workflow.
