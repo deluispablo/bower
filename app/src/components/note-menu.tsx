@@ -13,7 +13,7 @@
  * `pin-action.ts`'s shared toast.
  *
  * "This was misfiled" (#200) opens Tell Bower prefilled with the note's
- * path and nothing else from the note, the same `/tell?text=` mechanism
+ * path and nothing else from the note, the same `/bower?text=` mechanism
  * as "Ask Bower about this note"; the owner fills in the right folder and
  * sends it as an instruction note.
  *
@@ -138,7 +138,7 @@ export function NoteMenu({
         <a
           role="menuitem"
           class="note-menu-row"
-          href={`/tell?text=${encodeURIComponent(`[[${noteName}]] `)}`}
+          href={`/bower?text=${encodeURIComponent(`[[${noteName}]] `)}`}
           onClick={onClose}
         >
           <IconChat />
@@ -152,7 +152,7 @@ export function NoteMenu({
         <a
           role="menuitem"
           class="note-menu-row"
-          href={`/tell?text=${encodeURIComponent(
+          href={`/bower?text=${encodeURIComponent(
             `"${file.path}" was misfiled. It should go to: `,
           )}`}
           onClick={onClose}

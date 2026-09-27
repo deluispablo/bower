@@ -11,7 +11,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
-import { expect, navigate, openHome, test, visible } from './demo.js';
+import { expect, openHome, openSettings, test, visible } from './demo.js';
 
 async function expectNoNameViolations(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page })
@@ -44,7 +44,7 @@ test('Settings has no button-name or link-name violations', async ({
   page,
 }) => {
   await openHome(page);
-  await navigate(page, /^Settings$/);
+  await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expectNoNameViolations(page);
 });

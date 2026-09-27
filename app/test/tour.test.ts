@@ -56,7 +56,7 @@ beforeEach(() => {
   targets.innerHTML =
     '<a href="/add" data-tour="add">Add</a>' +
     '<button type="button" data-tour="tidy">Tidy up</button>' +
-    '<a href="/tell" data-tour="tell">Tell</a>' +
+    '<a href="/bower" data-tour="tell">Bower</a>' +
     '<div role="status" data-tour="banner">These are sample notes.</div>';
   document.body.append(targets);
   root = document.createElement('div');

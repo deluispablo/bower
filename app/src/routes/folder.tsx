@@ -112,7 +112,7 @@ function FolderBody({
   justChanged,
   onDoneShown,
 }: FolderBodyProps): JSX.Element {
-  const tellHref = `/tell?text=${encodeURIComponent(`${contents.name} `)}`;
+  const tellHref = `/bower?text=${encodeURIComponent(`${contents.name} `)}`;
   const now = Date.now();
   const titles = useNoteTitles(contents.notes);
 

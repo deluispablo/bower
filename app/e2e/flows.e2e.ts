@@ -7,7 +7,15 @@
  * by-product for the README and the CI artifacts, never compared.
  */
 
-import { expect, navigate, openHome, shot, test, visible } from './demo.js';
+import {
+  expect,
+  navigate,
+  openHome,
+  openSettings,
+  shot,
+  test,
+  visible,
+} from './demo.js';
 
 test.describe('open Home', () => {
   test.use({ introSeen: false });
@@ -196,7 +204,8 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
 
 test('Tell Bower sends a question to the inbox', async ({ page }, testInfo) => {
   await openHome(page);
-  await navigate(page, /^Tell( Bower)?$/);
+  await navigate(page, /^Bower$/);
+  await expect(page).toHaveURL(/\/bower$/);
   await expect(
     page.getByText("A rule, a task or a question. I'll put it in your inbox"),
   ).toBeVisible();
@@ -219,7 +228,7 @@ test('Settings switches the theme to dark, and it sticks', async ({
   page,
 }, testInfo) => {
   await openHome(page);
-  await navigate(page, /^Settings$/);
+  await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
   await page.getByRole('radio', { name: 'Dark' }).check();
@@ -234,7 +243,7 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
   page,
 }) => {
   await openHome(page);
-  await navigate(page, /^Settings$/);
+  await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
   // Account · Tidying up · Look · Bower · Advanced, in that order (scoped
@@ -289,7 +298,7 @@ test('Terms and Privacy Back go to /login when signed out, back through history 
   page,
 }) => {
   await openHome(page);
-  await navigate(page, /^Settings$/);
+  await openSettings(page);
   await visible(page.getByRole('link', { name: 'Terms' })).click();
   await expect(page).toHaveURL(/\/terms$/);
 
@@ -297,4 +306,42 @@ test('Terms and Privacy Back go to /login when signed out, back through history 
   // history to Settings, not to /login.
   await visible(page.getByRole('button', { name: 'Back' })).click();
   await expect(page).toHaveURL(/\/settings$/);
+});
+
+test('four tabs on the phone, the sidebar instead on desktop', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  const tabs = page.locator('nav.bottom-nav');
+  if (testInfo.project.name === 'desktop') {
+    await expect(tabs).toBeHidden();
+    return;
+  }
+  await expect(tabs).toBeVisible();
+  const links = tabs.getByRole('link');
+  await expect(links).toHaveText(['Home', 'Notes', 'Add', 'Bower']);
+  await expect(links.first()).toHaveAttribute('aria-current', 'page');
+
+  await tabs.getByRole('link', { name: 'Notes' }).click();
+  await expect(page).toHaveURL(/\/notes$/);
+  await expect(links.nth(1)).toHaveAttribute('aria-current', 'page');
+  await expect(
+    page.getByRole('textbox', { name: 'Filter your notes' }),
+  ).toBeVisible();
+  await expect(page.getByRole('tree').first()).toBeVisible();
+  await shot(page, testInfo, 'tabs-notes');
+});
+
+test('an old /tell link opens the Bower tab with its text', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.evaluate(() => {
+    history.pushState(null, '', '/tell?text=Hello%20Bower');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page).toHaveURL(/\/bower\?text=Hello(\+|%20)Bower$/);
+  await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue(
+    'Hello Bower',
+  );
 });

@@ -351,7 +351,7 @@ export function Health() {
                 ))}
               </ul>
               <a
-                href={`/tell?text=${encodeURIComponent(fixMessage(dateLabel))}`}
+                href={`/bower?text=${encodeURIComponent(fixMessage(dateLabel))}`}
                 class="health-fix-button"
               >
                 Ask Bower to fix these

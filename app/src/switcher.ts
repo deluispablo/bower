@@ -163,7 +163,7 @@ export function commandsFor(state: SwitcherState): Command[] {
           : 'Tidy up the inbox',
     },
     { id: 'add', label: 'Add a file or photo', href: '/add' },
-    { id: 'tell', label: 'Tell Bower something', href: '/tell' },
+    { id: 'tell', label: 'Tell Bower something', href: '/bower' },
     {
       id: 'theme',
       label:

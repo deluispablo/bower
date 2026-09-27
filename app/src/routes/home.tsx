@@ -119,7 +119,7 @@ interface DesktopTellProps {
 }
 
 /** Desktop's inline Tell Bower composer (spec §6, Home row): posts the same
- * instruction note as `/tell` and shows the last message's status. */
+ * instruction note as the Bower tab (`/bower`) and shows the last message's status. */
 function DesktopTell({
   inboxFolderId,
   online,
