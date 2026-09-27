@@ -14,8 +14,6 @@ export type ExplorerSortPref = 'name' | 'modified';
 export interface Prefs {
   /** Notify me when Bower finishes. Read by the push subscription added in #39. */
   notifyOnFinish: boolean;
-  /** Process automatically after adding. Read by #35. */
-  autoProcessOnAdd: boolean;
   /** The push permission prompt (#39) has been shown once already. */
   pushPromptShown: boolean;
   /** Manual override of the light/dark theme; `'system'` follows the OS. */
@@ -37,7 +35,6 @@ export interface Prefs {
 
 const DEFAULTS: Prefs = {
   notifyOnFinish: false,
-  autoProcessOnAdd: true,
   pushPromptShown: false,
   theme: 'system',
   healthSeenAt: '',
@@ -68,7 +65,6 @@ export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
 /** Every preference except `theme`, which is a device setting, not a user one. */
 const PER_USER_PREFS: ReadonlyArray<Exclude<keyof Prefs, 'theme'>> = [
   'notifyOnFinish',
-  'autoProcessOnAdd',
   'pushPromptShown',
   'explorerSort',
   'showAppFiles',

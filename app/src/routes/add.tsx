@@ -8,13 +8,12 @@ import { IconNote } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { createTextFile, listFolder, upload } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
-import { getPref, setPref } from '../prefs.js';
-import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
 
 import '../styles/add.css';
+import '../styles/app-file-banner.css';
 
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
@@ -51,7 +50,6 @@ function withName(file: File, name: string): File {
 
 export function Add() {
   const { me } = useSession();
-  const { process } = useRun();
   const { route } = useLocation();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
@@ -68,9 +66,6 @@ export function Add() {
   const [message, setMessage] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
-  const [autoProcess, setAutoProcess] = useState(() =>
-    getPref('autoProcessOnAdd'),
-  );
 
   useShellSlot('crumb', CRUMB);
 
@@ -173,14 +168,11 @@ export function Add() {
     }
   }
 
-  /** After a batch's worth of uploads: process (unless disabled) and go home.
-   * The run itself (queued, done, quota, failed…) is the header button's
-   * job from here; this screen only reports the add. */
+  /** After a batch's worth of uploads: report the add and go home. Add only
+   * ever fills the inbox; the run itself is started by the Tidy up pill or
+   * the switcher command, never from here. */
   function finish(): void {
-    if (getPref('autoProcessOnAdd')) {
-      void process();
-    }
-    setMessage('Added to your inbox. Tidying up.');
+    setMessage('Added to your inbox.');
     setTimeout(() => route('/'), 900);
   }
 
@@ -373,6 +365,14 @@ export function Add() {
         </ul>
       )}
 
+      <div class="app-file-banner" role="note">
+        <p>
+          <strong>This only fills your inbox.</strong> Add as much as you like,
+          then tap Tidy up once: Bower does better work with a pile than with
+          one thing at a time.
+        </p>
+      </div>
+
       {message !== null && <p class="add-message">{message}</p>}
 
       {!online && <p class="offline-reason">{offlineReason('add')}</p>}
@@ -390,22 +390,6 @@ export function Add() {
       >
         {busy ? 'Adding…' : 'Add to Bower'}
       </button>
-
-      <label class="add-toggle">
-        <input
-          type="checkbox"
-          checked={autoProcess}
-          onChange={(e) => {
-            const checked = e.currentTarget.checked;
-            setAutoProcess(checked);
-            setPref('autoProcessOnAdd', checked);
-          }}
-        />
-        <span class="add-toggle-track" aria-hidden="true">
-          <span class="add-toggle-thumb" />
-        </span>
-        Tidy up right after adding
-      </label>
     </section>
   );
 }

@@ -363,9 +363,6 @@ function DangerZone() {
 
 export function Settings() {
   const { me, signOut } = useSession();
-  const [autoProcess, setAutoProcess] = useState(() =>
-    getPref('autoProcessOnAdd'),
-  );
 
   useShellSlot('crumb', CRUMB);
 
@@ -401,15 +398,6 @@ export function Settings() {
 
       <div class="settings-section">
         <h2>Tidying up</h2>
-        <Toggle
-          label="Tidy up right after adding"
-          hint="One run per batch of files"
-          checked={autoProcess}
-          onChange={(checked) => {
-            setAutoProcess(checked);
-            setPref('autoProcessOnAdd', checked);
-          }}
-        />
         <NotificationsToggle />
         <div class="settings-static-row">
           <span class="settings-row-label">Weekly health check</span>

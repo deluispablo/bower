@@ -1,9 +1,10 @@
 /*
  * Add screen (spec §6, the Add row; `docs/design/gen.py`'s Phone-Add):
  * the drop zone with the bird peeking over its top edge, the paste-a-link
- * field, the upload queue as cards, and the "Tidy up right after adding"
- * toggle. Motion is transform/opacity only, on the motion tokens, and
- * turned off under `prefers-reduced-motion` below.
+ * field and the upload queue as cards. The amber "this only fills your
+ * inbox" card reuses `.app-file-banner` (`styles/app-file-banner.css`).
+ * Motion is transform/opacity only, on the motion tokens, and turned off
+ * under `prefers-reduced-motion` below.
  */
 
 .add-dropzone {
@@ -190,65 +191,9 @@
   color: var(--color-success);
 }
 
-/* The restyled "Tidy up right after adding" switch: a real checkbox, visually
- * hidden, driving a track and thumb next to its own label text. */
-.add-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 44px;
-  margin-top: var(--space-2);
-  cursor: pointer;
-}
-
-.add-toggle input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.add-toggle-track {
-  position: relative;
-  flex-shrink: 0;
-  width: 40px;
-  height: 24px;
-  border-radius: var(--radius-full);
-  background: var(--color-border-strong);
-  transition: background var(--motion-fast) var(--ease-out);
-}
-
-.add-toggle-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-full);
-  background: var(--color-bg);
-  transition: transform var(--motion-fast) var(--ease-out);
-}
-
-.add-toggle input:checked + .add-toggle-track {
-  background: var(--color-brand);
-}
-
-.add-toggle input:checked + .add-toggle-track .add-toggle-thumb {
-  transform: translateX(16px);
-}
-
-.add-toggle input:focus-visible + .add-toggle-track {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .add-dropzone,
-  .add-queue-bar-fill,
-  .add-toggle-track,
-  .add-toggle-thumb {
+  .add-queue-bar-fill {
     transition: none;
   }
 }

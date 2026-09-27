@@ -28,7 +28,6 @@ describe('prefs', () => {
     stubLocalStorage();
 
     expect(getPref('notifyOnFinish')).toBe(false);
-    expect(getPref('autoProcessOnAdd')).toBe(true);
     expect(getPref('theme')).toBe('system');
     expect(getPref('healthSeenAt')).toBe('');
     expect(getPref('showAppFiles')).toBe(false);
@@ -70,11 +69,11 @@ describe('prefs', () => {
     const store = stubLocalStorage();
 
     setPref('notifyOnFinish', true);
-    setPref('autoProcessOnAdd', true);
+    setPref('pushPromptShown', true);
 
     expect(store.size).toBe(2);
     expect(getPref('notifyOnFinish')).toBe(true);
-    expect(getPref('autoProcessOnAdd')).toBe(true);
+    expect(getPref('pushPromptShown')).toBe(true);
   });
 
   it('falls back to the default when localStorage throws', () => {
@@ -103,7 +102,6 @@ describe('prefs', () => {
   it('resetPrefs drops per-user prefs but keeps theme', () => {
     stubLocalStorage();
     setPref('notifyOnFinish', true);
-    setPref('autoProcessOnAdd', false);
     setPref('pushPromptShown', true);
     setPref('showAppFiles', true);
     setPref('theme', 'dark');
@@ -111,7 +109,6 @@ describe('prefs', () => {
     resetPrefs();
 
     expect(getPref('notifyOnFinish')).toBe(false);
-    expect(getPref('autoProcessOnAdd')).toBe(true);
     expect(getPref('pushPromptShown')).toBe(false);
     expect(getPref('showAppFiles')).toBe(false);
     expect(getPref('theme')).toBe('dark');
