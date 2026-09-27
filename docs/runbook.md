@@ -370,6 +370,20 @@ wrangler secret delete SESSION_SECRET_PREVIOUS -c wrangler.local.toml
 
 Anyone who hasn't opened the app in those 24 hours is signed out at that point and has to sign in again — the same outcome as an ordinary rotation, just for a smaller, slower group instead of everyone at once. Leaving `SESSION_SECRET_PREVIOUS` set indefinitely keeps a retired secret able to sign people in forever, so don't skip the delete step.
 
+## 10. Demo
+
+The public demo (`https://bower-demo.pages.dev`, linked from the README) is the same app built with `VITE_DEMO=1`: a scripted, in-memory fixture vault (an invented person, "Alex"), no Worker, no Drive, no Claude — every action it performs and every note it shows resets the moment the tab is reloaded. It holds no data and needs no account, so there is nothing here to back up, rotate or tear down.
+
+Deploy or redeploy it with:
+
+```bash
+scripts/deploy-demo.sh
+```
+
+This builds the app (`pnpm -C app build:demo`) and pushes `app/dist` to its own Cloudflare Pages project, `bower-demo` (pass `--project NAME` to use a different one, e.g. for a staging copy). It reads `VITE_ABOUT_URL` from the environment when set, so the demo's "Run your own Bower" screen can link to the "what is Bower" site page; nothing else needs to be set. It creates the Pages project the first time, the same way `scripts/deploy.sh` does for the real app's `bower-app` project — and, like that script, it never touches the Worker, KV or any secret, since the demo has no backend of its own.
+
+A real instance's build (`pnpm -C app build`) adds `<meta name="robots" content="noindex">` to `index.html` so search engines skip it; the demo build leaves it out, so it stays indexable.
+
 ## What the app hides
 
 The explorer, Recent, search and the switcher never show: any dot-folder at any depth (`.obsidian`, `.claude`, `.trash`, whatever another editor adds), anything under a `Processed/` folder, folder notes (`_*.md`) and dot-files (`.hidden.md`-style) — one rule, `isHidden` in `app/src/vault-index.ts`. Opening the folder in Obsidian, or any other editor, never changes what the app shows. With "Show Bower's own files" on, `.claude` alone reappears in the explorer's "Bower's files" group as "Agent settings" (read-only, opens in Drive); every other dot-folder stays hidden regardless of that setting.
