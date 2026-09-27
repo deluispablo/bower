@@ -382,7 +382,7 @@ function AdvancedSection({ me }: { me: Me }) {
       >
         <span class="settings-row-text">
           <span class="settings-row-label">Show me around again</span>
-          <span class="toggle-hint">Replay the three-step tour</span>
+          <span class="toggle-hint">Replay the tour</span>
         </span>
       </button>
 
