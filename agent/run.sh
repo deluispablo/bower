@@ -148,22 +148,7 @@ else
   LOG_DIR="$WORK_DIR/logs"
 fi
 readonly WORK_DIR LOG_DIR
-# The local copy of the vault gets a directory of its own, VAULT_HOME, which
-# holds nothing else: `..` from the vault, where the agent runs, leads to no
-# work file, log or setting of this run. It lives under /var/tmp because
-# claude-settings.json denies the agent every read under /tmp, /home (where
-# RUNNER_TEMP is on GitHub's runners) and the other system roots, and a deny
-# rule matches the vault's own files by their absolute path too. Without a
-# writable /var/tmp it falls back to the system temp dir, where the agent
-# could not read the vault.
-if [ -d /var/tmp ] && [ -w /var/tmp ]; then
-  VAULT_HOME=$(mktemp -d /var/tmp/bower-vault.XXXXXX)
-else
-  log 'warning: /var/tmp is not writable, the local copy goes to the temp dir'
-  VAULT_HOME=$(mktemp -d)
-fi
-readonly VAULT_HOME
-readonly VAULT_DIR="$VAULT_HOME/vault"
+readonly VAULT_DIR="$WORK_DIR/vault"
 readonly VAULT_JSON="$WORK_DIR/vault.json"
 readonly PENDING_FILE="$WORK_DIR/pending.txt"
 readonly MANIFEST_BEFORE="$WORK_DIR/manifest-before.txt"
@@ -205,7 +190,7 @@ on_exit() {
     log "failed at $STEP"
     rc=2
   fi
-  rm -rf "$WORK_DIR" "$VAULT_HOME"
+  rm -rf "$WORK_DIR"
   exit "$rc"
 }
 trap on_exit EXIT

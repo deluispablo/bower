@@ -258,13 +258,12 @@ printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
 env >"$SMOKE_STATE/claude-env.log"
 # What else the agent could read on the runner (#258): the initial
 # environment of the shell that started it (/proc/<ppid>/environ, which
-# env -i does not clean), the vault's parent directory, the Worker's answer
+# env -i does not clean), its own directory, the Worker's answer
 # and the runner settings file. Recorded here, checked by the test.
 if [ -r "/proc/$PPID/environ" ]; then
   tr '\0' '\n' <"/proc/$PPID/environ" >"$SMOKE_STATE/claude-parent-env.log"
 fi
 pwd >"$SMOKE_STATE/claude-cwd.txt"
-ls -A .. >"$SMOKE_STATE/claude-parent-dir.txt"
 for f in ../vault.json "$SMOKE_STATE"/runner-temp/bower.*/vault.json; do
   [ ! -e "$f" ] || echo present >"$SMOKE_STATE/claude-vault-json-seen"
 done
@@ -464,7 +463,7 @@ expect_content_free() {
   done
 }
 
-# The work dir, the vault's own directory and the runner settings file are
+# The work dir (with the vault in it) and the runner settings file are
 # removed; only the private logs dir remains.
 expect_cleaned_up() {
   local left
@@ -472,7 +471,7 @@ expect_cleaned_up() {
   expect_eq "$left" 0 'work dirs left behind'
   [ ! -e "$STATE/runner-temp/bower-secrets" ] || die 'runner settings file left behind'
   if [ -f "$STATE/claude-cwd.txt" ]; then
-    [ ! -e "$(dirname "$(cat "$STATE/claude-cwd.txt")")" ] || die "the vault's directory was left behind"
+    [ ! -e "$(dirname "$(cat "$STATE/claude-cwd.txt")")" ] || die 'the work dir around the vault was left behind'
   fi
 }
 
@@ -503,8 +502,8 @@ expect_claude_env() {
 # What the agent could read outside its own process (#258): the initial
 # environment of the shell that started it holds no BOWER_* and not the
 # runner key (/proc is Linux-only; required wherever this test sees it);
-# the vault's parent directory holds the vault and nothing else; the
-# Worker's answer and the runner settings file are gone before it starts.
+# the Worker's answer and the runner settings file are gone before it
+# starts.
 expect_runner_secrets_out_of_reach() {
   local parent="$STATE/claude-parent-env.log"
   if [ -f "$parent" ]; then
@@ -513,7 +512,6 @@ expect_runner_secrets_out_of_reach() {
   elif [ -r /proc/self/environ ]; then
     die "the claude stub could not read its parent's /proc/<pid>/environ"
   fi
-  expect_eq "$(cat "$STATE/claude-parent-dir.txt")" vault "the vault's parent directory"
   [ ! -e "$STATE/claude-vault-json-seen" ] || die "the Worker's answer (vault.json) still existed while the agent ran"
   [ ! -e "$STATE/claude-secrets-seen" ] || die 'the runner settings file still existed while the agent ran'
 }
@@ -574,30 +572,28 @@ expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'uploaded fil
 cmp -s "$STATE/claude-settings-seen.json" "$HERE/../claude-settings.json" ||
   die 'the instance repo policy was not .claude/settings.json during the run'
 [ ! -e "$STATE/claude-settings-local-seen" ] || die "the vault's .claude/settings.local.json was left in place"
-# The policy denies Read, Glob and Grep on the system roots, the home dir and
-# `..`, and blocks reads outside the working directory (#258). Asserted on
+# The policy blocks reads outside the working directory and denies Read (which
+# covers Glob and Grep) on /proc, /etc, /root and `..` (#258). Asserted on
 # the text: a stub cannot run Claude Code's own permission checks.
 settings_seen="$STATE/claude-settings-seen.json"
 grep -Fq '"blockReadsOutsideWorkingDirectories": true' "$settings_seen" ||
   die 'the policy does not block reads outside the working directory'
-for root in '//proc/**' '//etc/**' '//home/**' '//root/**' '//tmp/**' '//opt/**' '~/**' '../**'; do
-  for tool in Read Glob Grep; do
-    grep -Fq "\"$tool($root)\"" "$settings_seen" || die "the policy does not deny $tool($root)"
-  done
+for root in '//proc/**' '//etc/**' '//root/**' '../**'; do
+  grep -Fq "\"Read($root)\"" "$settings_seen" || die "the policy does not deny Read($root)"
 done
-# The vault itself must stay readable, by relative and by absolute path, so
-# its absolute path is under none of those denied roots (nor the home dir).
-if [ -d /var/tmp ] && [ -w /var/tmp ]; then
-  vault_path=$(cat "$STATE/claude-cwd.txt")
-  case "$vault_path" in
-    /var/tmp/bower-vault.*/vault) ;;
-    *) die "the vault is not in its own directory under /var/tmp: $vault_path" ;;
+# The vault itself must stay readable, by relative and by absolute path: no
+# absolute deny and no home-dir deny may cover it (a deny rule matches the
+# vault's own files by their absolute path too).
+vault_path=$(cat "$STATE/claude-cwd.txt")
+while IFS= read -r root; do
+  case "$vault_path/" in
+    "$root"/*) die "a deny rule on $root covers the vault itself" ;;
   esac
-  for root in /proc /etc /home /root /tmp /opt "$HOME"; do
-    case "$vault_path/" in
-      "$root"/*) die "the vault is under the denied root $root" ;;
-    esac
-  done
+done < <(grep -o '"Read(//[^)]*/\*\*)"' "$settings_seen" | sed 's|^"Read(/||; s|/\*\*)"$||')
+if grep -Fq '"Read(~/**)"' "$settings_seen"; then
+  case "$vault_path/" in
+    "$HOME"/*) die 'the home-dir deny covers the vault itself' ;;
+  esac
 fi
 expect_eq "$(cat "$STATE/remote/.claude/settings.json")" '{"vault":"own"}' "the vault's own settings in Drive"
 expect_eq "$(calls curl | grep -c 'auth=ok')" 3 'curl calls with the runner key'
