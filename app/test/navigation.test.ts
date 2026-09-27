@@ -135,6 +135,17 @@ describe('pendingCount', () => {
     ];
     expect(pendingCount(files)).toBe(2);
   });
+
+  it('does not count a file quarantined by the pre-scan (issue #264)', () => {
+    const files = [
+      dir('0-Inbox'),
+      entry('0-Inbox/note.md'),
+      dir('0-Inbox/Quarantine'),
+      entry('0-Inbox/Quarantine/injected.md'),
+      entry('0-Inbox/Quarantine/Clippings/article.html', 'text/html'),
+    ];
+    expect(pendingCount(files)).toBe(1);
+  });
 });
 
 describe('buildTree', () => {
