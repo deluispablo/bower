@@ -266,10 +266,22 @@ export const httpWorkerClient: WorkerClient = {
 let worker: WorkerClient = httpWorkerClient;
 
 /**
+ * Whether this is a demo build (`VITE_DEMO=1`): a build-time constant, so
+ * every call site (the UI's "Run your own Bower" screens, #193, included)
+ * folds to a plain `false` and drops out of a production bundle.
+ */
+export function isDemo(): boolean {
+  return import.meta.env.VITE_DEMO === '1';
+}
+
+/**
  * The demo switch, decided at build time: with `VITE_DEMO=1` the demo
  * module (its own chunk) is loaded and installs its in-memory clients
  * before any call goes out; otherwise this is `null` and the whole branch,
- * the dynamic import included, is dropped from the bundle.
+ * the dynamic import included, is dropped from the bundle. Checked inline
+ * (not via `isDemo()`) so the constant-folds-to-`false` case stays a
+ * literal esbuild can dead-code-eliminate the `import()` for, rather than
+ * a call it would have to inline first.
  */
 const demoReady: Promise<void> | null =
   import.meta.env.VITE_DEMO === '1'

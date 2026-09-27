@@ -8,6 +8,9 @@ interface ImportMetaEnv {
   readonly VITE_GOOGLE_API_KEY?: string;
   /** `'1'` builds the demo: no backend, Alex's sample notes (`src/demo/`). */
   readonly VITE_DEMO?: string;
+  /** The "what is Bower" site page, linked from "Run your own Bower"
+   * (#193). Unset hides that link rather than pointing nowhere. */
+  readonly VITE_ABOUT_URL?: string;
 }
 
 interface ImportMeta {
