@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Generate the Bower logo, wordmarks, favicons and PWA icons.
 
-Writes app/public/logo*.svg and app/public/icons/*. The bird is defined once below on a
-64 x 64 grid; every output places it by its measured bounding box, so it is centred in
-each icon. After rendering, the script checks centring and the maskable safe zone and
-exits non-zero if either fails.
+Writes app/public/logo*.svg, app/public/icons/* and docs/assets/logo.svg. The bird is
+defined once below on a 100 x 100 grid (the drawing of docs/design/gen.py, BIRD_CORE,
+without its props); every output places it by its measured bounding box, so it is
+centred in each icon. After rendering, the script checks centring, the maskable safe
+zone, how much of the 16 px favicon the bird fills and the size of logo.svg, and exits
+non-zero if any check fails.
 
 Requirements (developer machine only, not app dependencies): Python 3.10+, Pillow,
 fontTools, Playwright for Python with Chromium (`python3 -m playwright install chromium`),
@@ -31,19 +33,34 @@ ROOT = Path(__file__).resolve().parents[2]
 PUBLIC = ROOT / "app/public"
 ICONS = PUBLIC / "icons"
 
-TEAL, TEAL_DARK, NAVY, AMBER, INK_DARK = "#2dd4bf", "#0f766e", "#0b1220", "#fbbf24", "#f1f5f9"
+DOCS_LOGO = ROOT / "docs/assets/logo.svg"
 
-# The bird on a 64 x 64 grid, facing right: body with a cocked tail, wing, eye, beak, twig.
+TEAL, TEAL_DARK, CHEEK, NAVY, AMBER, AMBER_DARK, WHITE, INK_DARK = (
+    "#2dd4bf", "#0f766e", "#99f6e4", "#0b1220", "#fbbf24", "#d97706", "#ffffff", "#f1f5f9")
+
+# The bird on a 100 x 100 grid, facing right, feet on y = 91: cocked tail, feet, round
+# body, leaf wing, round head with cheek, eye with two highlights, beak and jaw. Same
+# paths as BIRD_CORE in docs/design/gen.py (and the app's components/bird.tsx), without
+# the props it only holds while a state shows them.
+GRID = 100
+FEET = f'fill="none" stroke="{AMBER_DARK}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"'
 BIRD = [
-    f'<path fill="{TEAL}" d="M51.6 18A10 10 0 0 0 32.4 18C31.5 22.5 28 25.5 23 27.5L10.5 21.5Q6.5 20 6.5 24'
-    f'L7.5 27Q10.5 31 15.5 33.5C14.5 44.5 22.5 52 34 52C45 52 51.5 45.5 52 37.5C52.3 33 51.3 29.5 50 27.5'
-    f'L51.4 24.4Z"/>',
-    f'<path fill="{TEAL_DARK}" d="M44 35C41 29.5 30 28.5 18.5 32.5C25 41 37 42 44 35Z"/>',
-    f'<circle fill="{NAVY}" cx="45" cy="19.5" r="2.4"/>',
-    f'<path fill="{AMBER}" d="M51 16.5L60.5 21L51 24.5Z"/>',
-    f'<path fill="none" stroke="{AMBER}" stroke-width="2.4" stroke-linecap="round" '
-    f'd="M54.4 28.5L59.4 11.5M57.8 17L61.9 14.7"/>',
+    f'<path fill="{TEAL_DARK}" d="M29 56C21 47 14 40 6 35C11 43 18 52 31 62Z"/>',
+    f'<path {FEET} d="M40 84L39 91M35 91h8"/>',
+    f'<path {FEET} d="M53 85L53 91M49 91h8"/>',
+    f'<circle fill="{TEAL}" cx="46" cy="62" r="24"/>',
+    f'<path fill="{TEAL_DARK}" d="M44 50C57 49 65 59 60 72C49 72 39 64 44 50Z"/>',
+    f'<circle fill="{TEAL}" cx="62" cy="40" r="19"/>',
+    f'<circle fill="{CHEEK}" fill-opacity=".8" cx="72" cy="46" r="3.2"/>',
+    f'<circle fill="{NAVY}" cx="68" cy="37" r="5.2"/>',
+    f'<circle fill="{WHITE}" cx="70" cy="35" r="1.9"/>',
+    f'<circle fill="{WHITE}" cx="66.4" cy="39.2" r=".9"/>',
+    f'<path fill="{AMBER}" d="M80 38L92 42L80 45Z"/>',
+    f'<path fill="{AMBER_DARK}" d="M80 43.5L90 42.5L80 47.5Z"/>',
 ]
+
+# At 16 px the bird's longer side must cover at least this many pixels of the favicon.
+FAVICON_16_MIN_SPAN = 12
 
 FONT_CANDIDATES = [
     os.environ.get("BOWER_WORDMARK_FONT", ""),
@@ -85,7 +102,7 @@ class Geometry:
 
     def __init__(self, browser: Browser) -> None:
         scale = 16
-        img = render(browser, svg("0 0 64 64", bird()), 64 * scale)
+        img = render(browser, svg(f"0 0 {GRID} {GRID}", bird()), GRID * scale)
         x0, y0, x1, y1 = img.getchannel("A").point(lambda a: 255 if a > 8 else 0).getbbox()
         self.x0, self.y0, self.x1, self.y1 = x0 / scale, y0 / scale, x1 / scale, y1 / scale
         self.cx, self.cy = (self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2
@@ -128,14 +145,21 @@ def word_path(text: str, size: float, x0: float, baseline: float, tracking: floa
     return "".join(parts), x - tracking, font["OS/2"].sCapHeight * k
 
 
-def mark_bbox(img: Image.Image, bg: tuple[int, int, int] | None) -> tuple[int, int, int, int]:
-    """Bounding box of pixels that are neither transparent nor the background colour."""
+def write(path: Path, text: str) -> None:
+    """Writes with LF line endings on every platform, as the repository stores them."""
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def mark_bbox(img: Image.Image, bg: tuple[int, int, int] | None,
+              alpha_min: int = 8) -> tuple[int, int, int, int]:
+    """Bounding box of pixels that are neither transparent (alpha up to `alpha_min`) nor the
+    background colour."""
     px = img.load()
     xs, ys = [], []
     for y in range(img.height):
         for x in range(img.width):
             r, g, b, a = px[x, y]
-            if a > 8 and (bg is None or abs(r - bg[0]) + abs(g - bg[1]) + abs(b - bg[2]) > 24):
+            if a > alpha_min and (bg is None or abs(r - bg[0]) + abs(g - bg[1]) + abs(b - bg[2]) > 24):
                 xs.append(x)
                 ys.append(y)
     return min(xs), min(ys), max(xs) + 1, max(ys) + 1
@@ -151,19 +175,24 @@ def main() -> None:
         g = Geometry(browser)
         print(f"bird bbox x {g.x0:.2f}..{g.x1:.2f} y {g.y0:.2f}..{g.y1:.2f}, radius {g.radius:.2f}")
 
-        # Mark only, transparent, centred on the 64 grid.
-        (PUBLIC / "logo.svg").write_text(svg("0 0 64 64", g.placed(64, 1), label=True))
+        # Mark only, transparent, centred on the grid; docs/assets/logo.svg is the same file.
+        logo = svg(f"0 0 {GRID} {GRID}", g.placed(GRID, 1), label=True)
+        write(PUBLIC / "logo.svg", logo)
+        write(DOCS_LOGO, logo)
 
-        # Wordmarks: bird flush left, word outlined, caps centred on the bird's vertical centre.
-        pad = 1.0
-        size = 38
-        d, end, cap = word_path("Bower", size, g.w + 8, 0, -0.4)
+        # Wordmarks: bird flush left, word outlined, caps centred on the bird's vertical
+        # centre. Word size, gap and tracking scale with the bird's height.
+        pad = GRID / 64
+        size = 0.91 * g.h
+        gap = 0.19 * g.h
+        tracking = -0.4 * size / 38
+        d, end, cap = word_path("Bower", size, g.w + gap, 0, tracking)
         baseline = g.h / 2 + cap / 2
-        d, end, cap = word_path("Bower", size, g.w + 8, baseline, -0.4)
+        d, end, cap = word_path("Bower", size, g.w + gap, baseline, tracking)
         body = f'<g transform="translate({-g.x0:.4g} {-g.y0:.4g})">\n    {bird()}\n  </g>'
-        box = f"{-pad:g} {-pad:g} {end + 2 * pad:.4g} {g.h + 2 * pad:.4g}"
+        box = f"{-pad:.4g} {-pad:.4g} {end + 2 * pad:.4g} {g.h + 2 * pad:.4g}"
         for name, colour in (("logo-wordmark.svg", NAVY), ("logo-wordmark-dark.svg", INK_DARK)):
-            (PUBLIC / name).write_text(svg(box, body, f'<path fill="{colour}" d="{d}"/>', label=True))
+            write(PUBLIC / name, svg(box, body, f'<path fill="{colour}" d="{d}"/>', label=True))
 
         # Icons on a 512 grid.
         rounded = f'<rect width="512" height="512" rx="112" fill="{NAVY}"/>'
@@ -178,7 +207,7 @@ def main() -> None:
         }
         favicon = svg("0 0 64 64", f'<rect width="64" height="64" rx="14" fill="{NAVY}"/>',
                       g.placed(64, 0.84 * 64 / side))
-        (ICONS / "favicon.svg").write_text(favicon)
+        write(ICONS / "favicon.svg", favicon)
 
         for name, (markup, px, transparent) in icons.items():
             img = render(browser, markup, px, transparent)
@@ -202,6 +231,12 @@ def main() -> None:
             img.save(ICONS / name, optimize=True)
 
         frames = [render(browser, favicon, px) for px in (16, 32, 48)]
+        # Opaque pixels only: the rounded corners' faint edge is not the bird.
+        x0, y0, x1, y1 = mark_bbox(frames[0], navy_rgb, alpha_min=128)
+        span = max(x1 - x0, y1 - y0)
+        print(f"favicon 16 px: bird spans {span} px")
+        if span < FAVICON_16_MIN_SPAN:
+            failures.append(f"favicon at 16 px: the bird spans {span} px, under {FAVICON_16_MIN_SPAN}")
         frames[2].save(ICONS / "favicon.ico", format="ICO", sizes=[(16, 16), (32, 32), (48, 48)],
                        append_images=frames[:2])
         browser.close()

@@ -1,9 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bower">
-  <g transform="translate(-2.812 0.875)">
-    <path fill="#2dd4bf" d="M51.6 18A10 10 0 0 0 32.4 18C31.5 22.5 28 25.5 23 27.5L10.5 21.5Q6.5 20 6.5 24L7.5 27Q10.5 31 15.5 33.5C14.5 44.5 22.5 52 34 52C45 52 51.5 45.5 52 37.5C52.3 33 51.3 29.5 50 27.5L51.4 24.4Z"/>
-    <path fill="#0f766e" d="M44 35C41 29.5 30 28.5 18.5 32.5C25 41 37 42 44 35Z"/>
-    <circle fill="#0b1220" cx="45" cy="19.5" r="2.4"/>
-    <path fill="#fbbf24" d="M51 16.5L60.5 21L51 24.5Z"/>
-    <path fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-linecap="round" d="M54.4 28.5L59.4 11.5M57.8 17L61.9 14.7"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Bower">
+  <g transform="translate(1 -6.656)">
+    <path fill="#0f766e" d="M29 56C21 47 14 40 6 35C11 43 18 52 31 62Z"/>
+    <path fill="none" stroke="#d97706" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M40 84L39 91M35 91h8"/>
+    <path fill="none" stroke="#d97706" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M53 85L53 91M49 91h8"/>
+    <circle fill="#2dd4bf" cx="46" cy="62" r="24"/>
+    <path fill="#0f766e" d="M44 50C57 49 65 59 60 72C49 72 39 64 44 50Z"/>
+    <circle fill="#2dd4bf" cx="62" cy="40" r="19"/>
+    <circle fill="#99f6e4" fill-opacity=".8" cx="72" cy="46" r="3.2"/>
+    <circle fill="#0b1220" cx="68" cy="37" r="5.2"/>
+    <circle fill="#ffffff" cx="70" cy="35" r="1.9"/>
+    <circle fill="#ffffff" cx="66.4" cy="39.2" r=".9"/>
+    <path fill="#fbbf24" d="M80 38L92 42L80 45Z"/>
+    <path fill="#d97706" d="M80 43.5L90 42.5L80 47.5Z"/>
   </g>
 </svg>
