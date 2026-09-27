@@ -125,6 +125,19 @@ summary:focus-visible {
   transform: rotate(180deg);
 }
 
+/* Privacy and Terms (#313): a plain `<button>` when signed in (steps back
+   through history instead of linking to /login), so it needs the usual
+   button resets on top of `.page-bare-back`'s own look. */
+button.page-bare-back {
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
 .icon {
   width: 22px;
   height: 22px;

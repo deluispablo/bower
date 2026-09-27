@@ -266,3 +266,34 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
     settings.getByText('Not in the demo: run your own Bower to use this.'),
   ).toHaveCount(3);
 });
+
+test.describe('/login never redirects to the intro (#313)', () => {
+  test.use({ introSeen: false });
+
+  test('a first-time visitor who goes straight to /login sees sign-in, not the intro', async ({
+    page,
+  }) => {
+    // In the demo build a signed-in-as-Alex visitor at /login sees "Run
+    // your own Bower" (app.tsx), never the sign-in form — but either way
+    // it must never bounce to /welcome just because the intro is unseen.
+    await page.goto('/login');
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(
+      page.getByRole('heading', { name: 'Bower', level: 1 }),
+    ).toBeVisible();
+  });
+});
+
+test('Terms and Privacy Back go to /login when signed out, back through history otherwise (#313)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await navigate(page, /^Settings$/);
+  await visible(page.getByRole('link', { name: 'Terms' })).click();
+  await expect(page).toHaveURL(/\/terms$/);
+
+  // Signed in (the demo is always signed in as Alex): Back steps through
+  // history to Settings, not to /login.
+  await visible(page.getByRole('button', { name: 'Back' })).click();
+  await expect(page).toHaveURL(/\/settings$/);
+});
