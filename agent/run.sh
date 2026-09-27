@@ -24,8 +24,6 @@
 #                            WebFetch, anything else (the default) denies them
 #   BOWER_MAX_CHANGES        optional; the most files one run may add or
 #                            change (default 200); above it nothing is saved
-#   BOWER_REPORT_REFUSED     optional; 1 adds the audit's `refused` list to the
-#                            status report (off until the Worker accepts it)
 #   RUNNER_TEMP              optional; set by GitHub Actions
 #
 # Requires bash, curl, jq, rclone, pandoc and claude on PATH.
@@ -86,11 +84,6 @@ for name in BOWER_API_URL BOWER_API_KEY; do
   fi
 done
 
-# The Worker validates status reports strictly and rejects unknown fields
-# until it learns `refused` (#182), so the field stays out of the report
-# unless BOWER_REPORT_REFUSED=1 (the smoke test turns it on). #182 drops
-# this switch and always sends it.
-REPORT_REFUSED=${BOWER_REPORT_REFUSED:-0}
 MAX_CHANGES=${BOWER_MAX_CHANGES:-200}
 case "$MAX_CHANGES" in
   '' | *[!0-9]*)
@@ -98,7 +91,7 @@ case "$MAX_CHANGES" in
     exit 2
     ;;
 esac
-readonly REPORT_REFUSED MAX_CHANGES
+readonly MAX_CHANGES
 
 AGENT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly AGENT_DIR
@@ -163,9 +156,7 @@ report() {
   [ -n "$error" ] && args+=(--arg error "$error")
   [ -n "${PROCESSED_JSON:-}" ] && args+=(--argjson processed "$PROCESSED_JSON")
   [ -n "${SUMMARY:-}" ] && args+=(--arg summary "$SUMMARY")
-  if [ "$REPORT_REFUSED" = 1 ] && [ -n "$REFUSED_JSON" ]; then
-    args+=(--argjson refused "$REFUSED_JSON")
-  fi
+  [ -n "$REFUSED_JSON" ] && args+=(--argjson refused "$REFUSED_JSON")
   jq -cn "${args[@]}" '$ARGS.named' |
     curl -fsS -X POST \
       -H "Authorization: Bearer $BOWER_API_KEY" \

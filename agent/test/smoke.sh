@@ -638,7 +638,7 @@ remote="$STATE/remote"
 expect_eq "$(cat "$remote/3-Resources/app.md")" 'v2 from the app' 'note edited in the app during the run'
 expect_eq "$(cat "$remote/3-Resources/agent.md")" 'v2 from the agent' 'note the agent changed'
 expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '0-Inbox/Processed/a.pdf 3-Resources/agent.md ' 'uploaded files'
-expect_eq "$(post 2 'p.refused === undefined')" true 'refused stays out of the report by default'
+expect_eq "$(post 2 p.refused)" '[]' 'refused is always in the report now (#182), empty when nothing was refused'
 [ -f "$remote/0-Inbox/Processed/a.pdf" ] || die 'processed original missing from 0-Inbox/Processed/ in Drive'
 [ ! -e "$remote/0-Inbox/a.pdf" ] || die 'processed original still in 0-Inbox/ in Drive'
 expect_claude_env unset test-oauth-token
