@@ -28,3 +28,19 @@ export function setTheme(theme: ThemePref): void {
   setPref('theme', theme);
   applyTheme(theme, document.documentElement);
 }
+
+/**
+ * The theme actually shown right now: the remembered light/dark override,
+ * or (for `'system'`) whatever `prefers-color-scheme` currently says. Used
+ * by the header's theme toggle and the switcher's theme command, which both
+ * need to show and flip the theme the user is looking at, not the raw
+ * `'system' | 'light' | 'dark'` preference.
+ */
+export function effectiveTheme(): 'light' | 'dark' {
+  const pref = getPref('theme');
+  if (pref !== 'system') return pref;
+  const dark =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return dark ? 'dark' : 'light';
+}

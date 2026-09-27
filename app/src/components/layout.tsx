@@ -21,7 +21,7 @@ import { loginUrl } from '../api.js';
 import { findReport, isReportNew } from '../health-report.js';
 import { getPref } from '../prefs.js';
 import { useSession } from '../session.js';
-import { setTheme } from '../theme.js';
+import { effectiveTheme, setTheme } from '../theme.js';
 import { useVault } from '../vault-store.js';
 import { Bird } from './bird.js';
 import { Explorer, ExplorerDrawer, HEALTH_PATH } from './explorer.js';
@@ -64,21 +64,10 @@ function currentFor(href: string, path: string): 'page' | undefined {
   return href === path ? 'page' : undefined;
 }
 
-type Theme = 'light' | 'dark';
-
-function effectiveTheme(): Theme {
-  const pref = getPref('theme');
-  if (pref !== 'system') return pref;
-  const dark =
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches;
-  return dark ? 'dark' : 'light';
-}
-
 /** Desktop header: flips between light and dark (Settings keeps "system"). */
 function ThemeToggle(): JSX.Element {
-  const [theme, setThemeState] = useState<Theme>(effectiveTheme);
-  const next: Theme = theme === 'dark' ? 'light' : 'dark';
+  const [theme, setThemeState] = useState(effectiveTheme);
+  const next = theme === 'dark' ? 'light' : 'dark';
   return (
     <button
       type="button"
