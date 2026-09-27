@@ -245,13 +245,14 @@ describe('Layout', () => {
 });
 
 describe('usesShell', () => {
-  it('is false for sign-in, Not invited, Privacy, Terms and onboarding', () => {
+  it('is false for sign-in, Not invited, Privacy, Terms, onboarding and the intro', () => {
     for (const path of [
       '/login',
       '/not-invited',
       '/privacy',
       '/terms',
       '/onboarding',
+      '/welcome',
     ]) {
       expect(usesShell(path)).toBe(false);
     }

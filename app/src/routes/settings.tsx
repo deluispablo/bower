@@ -286,6 +286,17 @@ function AdvancedSection({ me }: { me: Me }) {
         </span>
       </button>
 
+      <button
+        type="button"
+        class="settings-row"
+        onClick={() => route('/welcome?from=settings')}
+      >
+        <span class="settings-row-text">
+          <span class="settings-row-label">What is Bower</span>
+          <span class="toggle-hint">The four-page intro, again</span>
+        </span>
+      </button>
+
       <Toggle
         label="Show Bower's own files"
         hint="Rulebook, catalogue, journal, instruction notes, health reports and dot-folders (.obsidian, .claude), grouped at the bottom of your notes."

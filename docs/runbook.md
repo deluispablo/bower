@@ -159,6 +159,8 @@ gh variable set BOWER_API_URL --body "https://api.example.com"
 
 ## 5. First user, and inviting others
 
+**Before any of this**, a signed-out visitor on `/` or `/login` who has never seen it on this device lands on **What is Bower** (`/welcome`): four swipeable pages (drop it and Bower files it, six things it does, a window onto your own Drive, what people use it for), Skip or the last page's Sign in with Google both moving on to the sign-in and remembering `bower:intro:seen` in that browser's `localStorage`, so later visits go straight there. It never interrupts a deep link (a shared note link, Privacy, Terms, Not invited) and never shows again to someone already signed in on this device. It is reachable again any time from Settings → Advanced → What is Bower and from the "What is Bower?" link on the sign-in, both opening `/welcome?from=settings` with Close and Done instead of Skip and Sign in.
+
 Add an email to the allowlist (case-insensitive; the Worker lower-cases it). The `--remote` flag is required for a production write — without it, `wrangler kv key put` writes to the local dev store instead, and nobody can sign in:
 
 ```bash

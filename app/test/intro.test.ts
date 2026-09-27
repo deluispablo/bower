@@ -1,0 +1,135 @@
+// @vitest-environment jsdom
+
+import { h, render } from 'preact';
+import { act } from 'preact/test-utils';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { introSeen, markIntroSeen } from '../src/intro.js';
+
+describe('introSeen', () => {
+  it('is false on a first visit (nothing stored yet)', () => {
+    expect(introSeen(makeStorage())).toBe(false);
+  });
+
+  it('is true once markIntroSeen has run (e.g. after Skip)', () => {
+    const storage = makeStorage();
+    markIntroSeen(storage);
+    expect(introSeen(storage)).toBe(true);
+  });
+
+  it('is false when the storage throws, so the intro shows rather than hides for good', () => {
+    expect(introSeen(throwingStorage())).toBe(false);
+  });
+});
+
+describe('markIntroSeen', () => {
+  it('does not throw when the storage throws (best effort)', () => {
+    expect(() => markIntroSeen(throwingStorage())).not.toThrow();
+  });
+});
+
+/** A minimal in-memory `Storage`, without needing jsdom's real one. */
+function makeStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      data.set(key, value);
+    },
+    removeItem: (key: string) => {
+      data.delete(key);
+    },
+    clear: () => data.clear(),
+    key: () => null,
+    get length() {
+      return data.size;
+    },
+  };
+}
+
+/** A `Storage` whose every method throws, as a blocked storage would. */
+function throwingStorage(): Storage {
+  return {
+    getItem: () => {
+      throw new Error('blocked');
+    },
+    setItem: () => {
+      throw new Error('blocked');
+    },
+    removeItem: () => {
+      throw new Error('blocked');
+    },
+    clear: () => {
+      throw new Error('blocked');
+    },
+    key: () => {
+      throw new Error('blocked');
+    },
+    get length(): number {
+      throw new Error('blocked');
+    },
+  };
+}
+
+// Smoke test for the four pages (UI smoke only, as cheap as it gets: no
+// interaction, just that each page's heading is on the page). `preact-iso`
+// is mocked the same way `test/layout.test.ts` mocks it, so the component
+// does not need a real Router/LocationProvider.
+const location = {
+  path: '/welcome',
+  query: {} as Record<string, string>,
+  route: vi.fn(),
+};
+
+vi.mock('preact-iso', () => ({
+  useLocation: () => location,
+}));
+
+const { Intro } = await import('../src/routes/intro.js');
+const { INTRO_PAGES } = await import('../src/intro.js');
+
+let root: HTMLDivElement;
+
+function mount(): void {
+  root = document.createElement('div');
+  document.body.append(root);
+  void act(() => {
+    render(h(Intro, null), root);
+  });
+}
+
+describe('Intro', () => {
+  afterEach(() => {
+    void act(() => {
+      render(null, root);
+    });
+    document.body.replaceChildren();
+    location.query = {};
+  });
+
+  it('renders all four pages, each with its heading', () => {
+    mount();
+    const headings = Array.from(root.querySelectorAll('.intro-heading')).map(
+      (el) => el.textContent,
+    );
+    expect(headings).toEqual(INTRO_PAGES.map((page) => page.heading));
+  });
+
+  it('shows Skip and Sign in with Google on a first visit', () => {
+    mount();
+    expect(root.querySelector('.intro-skip')?.textContent).toBe('Skip');
+    expect(root.querySelector('.intro-icon-button')).toBeNull();
+    expect(root.querySelector('.intro-cta')?.textContent).toBe(
+      'Sign in with Google',
+    );
+  });
+
+  it('shows Close and Done when opened from Settings', () => {
+    location.query = { from: 'settings' };
+    mount();
+    expect(
+      root.querySelector('.intro-icon-button')?.getAttribute('aria-label'),
+    ).toBe('Close');
+    expect(root.querySelector('.intro-cta')?.textContent).toBe('Done');
+  });
+});
