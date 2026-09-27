@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'preact/hooks';
-import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
 import type { Me } from '../api.js';
@@ -11,6 +10,7 @@ import {
   logoutAll,
   updateSettings,
 } from '../api.js';
+import { IconExternalLink } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { Toggle } from '../components/toggle.js';
 import { getPref, setPref } from '../prefs.js';
@@ -53,25 +53,6 @@ function accountInitial(me: Me): string {
   const source =
     me.name !== undefined && me.name.trim() !== '' ? me.name : me.email;
   return source.charAt(0).toUpperCase();
-}
-
-/** External link, kept local: the icon set (`components/icons.tsx`) is owned by #144 in parallel. */
-function ExternalIcon(): JSX.Element {
-  return (
-    <svg
-      class="icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5" />
-    </svg>
-  );
 }
 
 interface ApiKeySectionProps {
@@ -592,7 +573,7 @@ export function Settings() {
               target="_blank"
               rel="noopener"
             >
-              <ExternalIcon /> Drive
+              <IconExternalLink /> Drive
             </a>
           )}
           <a href={loginUrl()}>Reconnect Google</a>
