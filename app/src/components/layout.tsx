@@ -36,6 +36,7 @@ import {
 } from './icons.js';
 import { OfflineBanner } from './offline-banner.js';
 import { ProcessButton } from './process-button.js';
+import { Switcher } from './switcher.js';
 
 interface NavLink {
   href: string;
@@ -200,6 +201,7 @@ export function Layout({ children, crumb, aside }: LayoutProps): JSX.Element {
       {drawerOpen && (
         <ExplorerDrawer healthIsNew={healthIsNew} onClose={closeDrawer} />
       )}
+      <Switcher />
     </div>
   );
 }

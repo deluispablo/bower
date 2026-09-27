@@ -10,10 +10,12 @@
  *   opened from the top bar's menu button. Shows a title row with a close
  *   button; following any link inside closes it.
  *
- * The filter field is the existing search box until the quick switcher
- * (#142) replaces it. The hidden-files footer button toggles the
- * `showAppFiles` preference (spec §5.3), the same one Settings › Advanced
- * has its own switch for.
+ * The filter field opens the quick switcher (#142): the drawer's is a
+ * button styled like a field (the drawer closes first, then the switcher
+ * opens as a sheet); the sidebar's is a button with a `Ctrl K` hint (spec
+ * §5.2). The hidden-files footer button toggles the `showAppFiles`
+ * preference (spec §5.3), the same one Settings › Advanced has its own
+ * switch for.
  */
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -23,6 +25,7 @@ import { useLocation } from 'preact-iso';
 import { getPref, setPref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
 import { useSession } from '../session.js';
+import { openSwitcher } from '../switcher-store.js';
 import { useVault } from '../vault-store.js';
 import { Bird } from './bird.js';
 import {
@@ -34,7 +37,6 @@ import {
   IconSearch,
   IconSort,
 } from './icons.js';
-import { Search } from './search.js';
 import { Tree } from './tree.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
@@ -140,10 +142,22 @@ export function Explorer({
           <span class="brand-word">Bower</span>
         </a>
       )}
-      <div class="explorer-filter">
+      <button
+        type="button"
+        class="explorer-filter"
+        onClick={() => {
+          if (variant === 'drawer') onClose?.();
+          openSwitcher();
+        }}
+      >
         <IconSearch />
-        <Search />
-      </div>
+        <span class="explorer-filter-label">Search or jump to a note</span>
+        {variant === 'sidebar' && (
+          <span class="explorer-filter-kbd" aria-hidden="true">
+            Ctrl K
+          </span>
+        )}
+      </button>
       <div class="explorer-rows">
         {nav}
         <a
