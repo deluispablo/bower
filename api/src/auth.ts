@@ -192,17 +192,18 @@ export const requireSession: MiddlewareHandler<
 };
 
 /** Reads and checks the `bower_oauth` cookie; 400 `oauth_state` on any failure. */
-async function readOAuthCookie<E extends AppEnv>(
-  c: Context<E>,
+async function readOAuthCookie(
+  cookieHeader: string | undefined,
+  secret: string,
   state: string,
 ): Promise<{ verifier: string }> {
-  const token = readCookie(c.req.header('cookie'), OAUTH_COOKIE);
+  const token = readCookie(cookieHeader, OAUTH_COOKIE);
   if (token === undefined) {
     throw new HttpError(400, 'oauth_state', 'Sign-in expired, try again');
   }
   let claims: Record<string, unknown>;
   try {
-    claims = await verifyToken(token, c.get('env').SESSION_SECRET);
+    claims = await verifyToken(token, secret);
   } catch (err) {
     throw new HttpError(400, 'oauth_state', 'Sign-in expired, try again', {
       cause: err,
@@ -242,7 +243,11 @@ const checkOAuthCallback: MiddlewareHandler<CallbackEnv> = async (c, next) => {
   if (code === undefined || code === '' || state === undefined) {
     throw new HttpError(400, 'oauth_state', 'Sign-in could not be verified');
   }
-  const { verifier } = await readOAuthCookie(c, state);
+  const { verifier } = await readOAuthCookie(
+    c.req.header('cookie'),
+    c.get('env').SESSION_SECRET,
+    state,
+  );
   c.set('oauthCode', code);
   c.set('oauthVerifier', verifier);
   await limitCallback(c, next);
