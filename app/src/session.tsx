@@ -37,7 +37,7 @@ export interface Session extends SessionState {
 }
 
 /** Reachable regardless of session status; never redirected away from. */
-const PUBLIC_PATHS = new Set(['/not-invited', '/privacy']);
+const PUBLIC_PATHS = new Set(['/not-invited', '/privacy', '/terms']);
 
 /**
  * Whether `getMe()` has already answered once for this browser tab.

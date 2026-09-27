@@ -1,7 +1,7 @@
 /**
  * Sign in (spec §6, Login row): the bird saying hello on a ground line, the
  * wordmark, a one-line promise, the Google button, the invited-only note,
- * and Privacy.
+ * and links to Privacy and Terms.
  */
 
 import { loginUrl } from '../api.js';
@@ -33,9 +33,15 @@ export function Login() {
         Only people the person running this Bower has invited can sign in. Bower
         reads and writes one folder in your Drive and nothing else.
       </p>
-      <a href="/privacy" class="button-link auth-privacy">
-        Privacy
-      </a>
+      <p class="auth-legal-links">
+        <a href="/privacy" class="button-link">
+          Privacy
+        </a>
+        {' · '}
+        <a href="/terms" class="button-link">
+          Terms
+        </a>
+      </p>
     </section>
   );
 }

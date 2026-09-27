@@ -425,7 +425,9 @@ export function Settings() {
         >
           Source code
         </a>
-        <a href="/privacy">Privacy</a>
+        <p>
+          <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
+        </p>
       </div>
     </section>
   );

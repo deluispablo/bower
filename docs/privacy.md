@@ -44,3 +44,5 @@ Doing both removes every trace of you from this instance and cuts off its access
 ## How to contact the operator
 
 If you have a question about your data or this instance, ask the person who invited you.
+
+See also the [Terms of Service](/terms).

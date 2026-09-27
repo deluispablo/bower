@@ -15,6 +15,7 @@ import { Privacy } from './routes/privacy.js';
 import { SearchRedirect } from './routes/search.js';
 import { Settings } from './routes/settings.js';
 import { Tell } from './routes/tell.js';
+import { Terms } from './routes/terms.js';
 import { RunProvider } from './run-store.js';
 import { ShellSlotsProvider } from './components/shell-slots.js';
 import { SessionProvider, useSession } from './session.js';
@@ -63,6 +64,7 @@ function AppRoutes() {
           <Route path="/login" component={Login} />
           <Route path="/not-invited" component={NotInvited} />
           <Route path="/privacy" component={Privacy} />
+          <Route path="/terms" component={Terms} />
           <Route path="/note/:id" component={Note} />
           <Route path="/add" component={Add} />
           <Route path="/tell" component={Tell} />
