@@ -157,3 +157,20 @@ export function IconSun(): JSX.Element {
     </Svg>
   );
 }
+
+export function IconClock(): JSX.Element {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4l3 2" />
+    </Svg>
+  );
+}
+
+export function IconSend(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M4 12l16-8-6 16-2-6z" />
+    </Svg>
+  );
+}
