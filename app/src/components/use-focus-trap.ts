@@ -4,6 +4,10 @@
  * panel's first control on mount, Tab and Shift+Tab wrap at its edges,
  * Escape calls `onEscape`, and on unmount focus goes back to whatever had
  * it before (the menu button that opened the drawer).
+ *
+ * Traps nest: a pin sheet opened from a row of the folder menu traps focus
+ * inside the menu's own trap. Only the innermost open trap answers a key,
+ * so Escape closes the sheet alone and Tab wraps inside the sheet.
  */
 
 import type { RefObject } from 'preact';
@@ -19,6 +23,9 @@ const FOCUSABLE = [
 ]
   .map((selector) => `${selector}:not([tabindex="-1"])`)
   .join(',');
+
+/** Every open trap's container, the innermost last. */
+const openTraps: HTMLElement[] = [];
 
 function focusables(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE));
@@ -39,8 +46,10 @@ export function useFocusTrap(
         ? document.activeElement
         : null;
     (focusables(container)[0] ?? container).focus();
+    openTraps.push(container);
 
     function onKeyDown(event: KeyboardEvent): void {
+      if (openTraps[openTraps.length - 1] !== container) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         onEscapeRef.current();
@@ -68,6 +77,8 @@ export function useFocusTrap(
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      const at = openTraps.lastIndexOf(container);
+      if (at !== -1) openTraps.splice(at, 1);
       previous?.focus();
     };
   }, [ref]);
