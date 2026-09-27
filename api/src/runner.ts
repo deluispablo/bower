@@ -221,7 +221,7 @@ function applyReport(
 
 /**
  * The notification for a finished run. An ingest (or a run without `kind`)
- * says how many files were processed (`done`), that there was nothing to
+ * says how many files were tidied up (`done`), that there was nothing to
  * do (`done` with none), or that the run failed, and opens `/`. A lint says
  * the health check is ready or failed, and opens `/lint`. Never a file name
  * or the summary.
@@ -242,8 +242,8 @@ export function runPushPayload(run: Run): PushPayload {
     const count = run.processed?.length ?? 0;
     body =
       count === 0
-        ? 'Nothing new to process'
-        : `${count} ${count === 1 ? 'file' : 'files'} processed`;
+        ? 'Nothing new to tidy up'
+        : `${count} ${count === 1 ? 'file' : 'files'} tidied up`;
   }
   return { title: 'Bower', body, url: '/' };
 }

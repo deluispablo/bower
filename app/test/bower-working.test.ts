@@ -34,7 +34,7 @@ describe('sceneFor', () => {
   it('queued: empty nest, bobbing on the rim', () => {
     expect(sceneFor('queued')).toEqual({
       className: 'bw bw--queued',
-      label: 'Queued…',
+      label: 'Tidying up…',
       fill: 0,
       indeterminate: false,
     });
@@ -43,7 +43,7 @@ describe('sceneFor', () => {
   it('running without progress: slow indeterminate fill', () => {
     expect(sceneFor('running')).toEqual({
       className: 'bw bw--running bw--indeterminate',
-      label: 'Working…',
+      label: 'Tidying up…',
       fill: INDETERMINATE_FILL,
       indeterminate: true,
     });

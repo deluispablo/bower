@@ -22,14 +22,13 @@ import { PushPrompt } from './push-prompt.js';
 import { Toast } from './toast.js';
 import { WorkingSheet } from './working-sheet.js';
 
-function labelFor(phase: RunPhase, pending: number): string {
+export function labelFor(phase: RunPhase, pending: number): string {
   switch (phase) {
     case 'idle':
-      return pending > 0 ? `Process (${pending})` : 'Process';
+      return pending > 0 ? `Tidy up (${pending})` : 'Tidy up';
     case 'queued':
-      return 'Queued…';
     case 'running':
-      return 'Working…';
+      return 'Tidying up…';
     case 'done':
       return 'Done ✓';
     case 'failed':

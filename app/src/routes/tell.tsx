@@ -32,7 +32,7 @@ const EXAMPLES: Example[] = [
   },
 ];
 
-const SENT_MESSAGE = 'Sent. Bower is on it.';
+const SENT_MESSAGE = 'Sent. Tidying up.';
 
 /** The first line of `text`, shortened if it runs long. */
 function firstLine(text: string): string {

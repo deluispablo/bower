@@ -155,7 +155,7 @@ export function Add() {
     if (getPref('autoProcessOnAdd')) {
       void process();
     }
-    setMessage('Files added. Bower is on it.');
+    setMessage('Files added. Tidying up.');
     setTimeout(() => route('/'), 900);
   }
 

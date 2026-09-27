@@ -13,7 +13,7 @@ When you sign in and use the app, it keeps, in its own database:
 - Your email address, so it knows who you are.
 - An encrypted copy of the Google refresh token your sign-in produced, so it can act on your behalf with Google Drive without asking you to sign in every time.
 - The id of the Google Drive folder that holds your notes.
-- The status of your most recent run (queued, running, done or failed) and a short summary of it, such as how many files were processed.
+- The status of your most recent run (queued, running, done or failed) and a short summary of it, such as how many files it tidied up.
 - If you turn on notifications, the push subscription your browser created, so it can tell your device when a run finishes.
 
 ## What this instance never stores
@@ -22,7 +22,7 @@ Your notes and files are never copied into this instance's own storage. They liv
 
 ## What leaves where
 
-- When you press Process, a temporary job reads the files waiting in your Bower folder in your Google Drive and sends their text to Anthropic's API (the company that makes Claude) so it can organise them for you. Nothing else leaves your Drive, and nothing is sent anywhere else.
+- When you tap Tidy up, a temporary job reads the files waiting in your Bower folder in your Google Drive and sends their text to Anthropic's API (the company that makes Claude) so it can organise them for you. Nothing else leaves your Drive, and nothing is sent anywhere else.
 - That job has no web access by default: it cannot look things up or open links, so text inside a clipped page or a forwarded file cannot make it send your notes anywhere. The operator can turn web lookups on for this instance; if they do, they should tell you, and the sites it visits see those requests.
 - Everything else — signing in, browsing your notes, adding files — happens directly between your browser and your own Google Drive, or between your browser and this instance's server for the parts described above.
 

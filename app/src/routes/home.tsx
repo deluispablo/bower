@@ -52,7 +52,7 @@ export function Home() {
         <p class="home-card-count">{pending}</p>
         <p>
           {pending > 0
-            ? 'Press Process in the top bar to file them.'
+            ? "Tap Tidy up and I'll file them."
             : 'Nothing waiting to be filed.'}
         </p>
       </div>
