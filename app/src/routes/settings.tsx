@@ -408,7 +408,7 @@ function BowerSection() {
       >
         <span class="settings-row-text">
           <span class="settings-row-label">What is Bower</span>
-          <span class="toggle-hint">The four-page intro, again</span>
+          <span class="toggle-hint">The whole story, in nine screens</span>
         </span>
       </button>
     </div>

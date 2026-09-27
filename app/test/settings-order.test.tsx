@@ -146,6 +146,13 @@ describe('Settings copy fixes', () => {
       ),
     ).toBe(true);
   });
+
+  it('describes What is Bower as the whole story, in nine screens (#329)', () => {
+    mount(baseMe);
+    const hints = textsOf('.toggle-hint');
+    expect(hints).toContain('The whole story, in nine screens');
+    expect(hints).not.toContain('The four-page intro, again');
+  });
 });
 
 describe('Reconnect Google', () => {
