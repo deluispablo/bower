@@ -27,7 +27,6 @@ import type { ExplorerSortPref } from '../prefs.js';
 import { useSession } from '../session.js';
 import { openSwitcher } from '../switcher-store.js';
 import { useVault } from '../vault-store.js';
-import { Bird } from './bird.js';
 import {
   IconClose,
   IconCollapse,
@@ -138,7 +137,6 @@ export function Explorer({
         </div>
       ) : (
         <a href="/" class="brand explorer-brand" aria-label="Bower home">
-          <Bird state="looking" size={30} />
           <span class="brand-word">Bower</span>
         </a>
       )}
