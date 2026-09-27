@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DriveFile } from '../src/drive.js';
-import { commandsFor, folderPath, mergeResults } from '../src/switcher.js';
+import {
+  commandsFor,
+  folderPath,
+  mergeResults,
+  rankNotes,
+} from '../src/switcher.js';
 import type { Command, SwitcherNote } from '../src/switcher.js';
 
 function note(id: string, path: string): DriveFile {
@@ -15,6 +20,82 @@ const COMMANDS: Command[] = [
   { id: 'tell', label: 'Tell Bower something', href: '/tell' },
   { id: 'theme', label: 'Switch to dark theme' },
 ];
+
+describe('rankNotes', () => {
+  it('ranks a name-prefix match before a path match, before full text (#308)', () => {
+    const prefixMatch = note('a', '2-Areas/Lisbon Trip.md');
+    const pathMatch = note('b', '1-Projects/Lisbon/Flights.md');
+    const fullTextOnly = note('c', '2-Areas/Cooking/Sourdough starter.md');
+
+    const ranked = rankNotes(
+      [prefixMatch, pathMatch],
+      [
+        { file: fullTextOnly, snippet: '…a trip to Lisbon next spring…' },
+        { file: pathMatch, snippet: null },
+        { file: prefixMatch, snippet: null },
+      ],
+      'lisbon',
+    );
+
+    expect(ranked.map((entry) => entry.file.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('ranks a fragment matched mid-name as a path match, still before full text', () => {
+    // Not a prefix match ("lisbon" does not start "Notes on Lisbon.md"),
+    // but the fragment is in the name, which is always part of the path.
+    const midName = note('a', 'Notes on Lisbon.md');
+    const fullTextOnly = note('b', 'Weeknight curry.md');
+
+    const ranked = rankNotes(
+      [midName],
+      [{ file: fullTextOnly, snippet: null }],
+      'lisbon',
+    );
+
+    expect(ranked.map((entry) => entry.file.id)).toEqual(['a', 'b']);
+  });
+
+  it('shows a note found in both sources once, keeping the full-text snippet', () => {
+    const file = note('a', '2-Areas/Lisbon Trip.md');
+
+    const ranked = rankNotes(
+      [file],
+      [{ file, snippet: '…a trip to Lisbon next spring…' }],
+      'lisbon',
+    );
+
+    expect(ranked).toEqual([
+      { file, snippet: '…a trip to Lisbon next spring…' },
+    ]);
+  });
+
+  it('returns nothing for a blank query', () => {
+    const file = note('a', 'Lisbon Trip.md');
+
+    expect(rankNotes([file], [], '')).toEqual([]);
+    expect(rankNotes([file], [], '   ')).toEqual([]);
+  });
+
+  it('is case-insensitive on both the name and the path', () => {
+    const file = note('a', 'LISBON Trip.md');
+
+    const ranked = rankNotes([file], [], 'lisbon');
+
+    expect(ranked.map((entry) => entry.file.id)).toEqual(['a']);
+  });
+
+  it('does not repeat a note that only matches by full text', () => {
+    const file = note('a', 'Weeknight curry.md');
+
+    const ranked = rankNotes(
+      [],
+      [{ file, snippet: '…serve with sourdough…' }],
+      'sourdough',
+    );
+
+    expect(ranked).toEqual([{ file, snippet: '…serve with sourdough…' }]);
+  });
+});
 
 describe('mergeResults', () => {
   it('orders notes first, then commands, unchanged', () => {
