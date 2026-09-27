@@ -228,21 +228,11 @@ export async function verifyToken(
   return claims;
 }
 
-/**
- * Verifies a token from `signSession` and returns its claims. Checks, in
- * order: three non-empty base64url parts and a JSON header (`malformed`),
- * `alg` is exactly HS256 (`unsupported_alg`, so `none` never passes), the
- * HMAC signature (`bad_signature`), a JSON payload with a non-empty string
- * `userId`, an integer `iat`, a non-negative integer `gen` when present, and
- * an integer `exp` (`malformed`), then `exp` still in the future and `iat`
- * no older than 30 days, the absolute lifetime (`expired`). Throws
- * `SessionError` on any failure. Whether `gen` is still current is the
- * caller's check: it needs the user record.
- */
-export async function verifySession(
+/** The shared body of `verifySession`, run against one candidate secret. */
+async function verifySessionWith(
   token: string,
   secret: string,
-  now: number = Date.now(),
+  now: number,
 ): Promise<SessionClaims> {
   const claims = await verifySignedPayload(token, secret);
   const { userId, iat, gen = 0 } = claims;
@@ -260,6 +250,46 @@ export async function verifySession(
     throw new SessionError('expired', 'Session is older than its lifetime');
   }
   return { userId, gen, iat, exp };
+}
+
+/**
+ * Verifies a token from `signSession` and returns its claims. Checks, in
+ * order: three non-empty base64url parts and a JSON header (`malformed`),
+ * `alg` is exactly HS256 (`unsupported_alg`, so `none` never passes), the
+ * HMAC signature (`bad_signature`), a JSON payload with a non-empty string
+ * `userId`, an integer `iat`, a non-negative integer `gen` when present, and
+ * an integer `exp` (`malformed`), then `exp` still in the future and `iat`
+ * no older than 30 days, the absolute lifetime (`expired`). Throws
+ * `SessionError` on any failure. Whether `gen` is still current is the
+ * caller's check: it needs the user record.
+ *
+ * `previousSecret` gives a `SESSION_SECRET` rotation a grace window
+ * (`SESSION_SECRET_PREVIOUS`, docs/runbook.md "Hardening your instance"):
+ * when `secret` alone rejects the token with `bad_signature`, it is retried
+ * once against `previousSecret`. Every other rejection (malformed shape,
+ * unsupported algorithm, expired, absolute lifetime) is not retried, since
+ * a different secret cannot fix any of those. Tokens are always signed with
+ * `secret` (the current one); `previousSecret` is only ever checked, never
+ * signed with.
+ */
+export async function verifySession(
+  token: string,
+  secret: string,
+  now: number = Date.now(),
+  previousSecret?: string,
+): Promise<SessionClaims> {
+  try {
+    return await verifySessionWith(token, secret, now);
+  } catch (err) {
+    if (
+      previousSecret !== undefined &&
+      err instanceof SessionError &&
+      err.code === 'bad_signature'
+    ) {
+      return await verifySessionWith(token, previousSecret, now);
+    }
+    throw err;
+  }
 }
 
 /**

@@ -7,6 +7,11 @@ binding = "BOWER_KV"
 id = "KV_NAMESPACE_ID"
 
 [vars]
+# Secrets (SESSION_SECRET, SESSION_SECRET_PREVIOUS, TOKEN_ENC_KEY, ...) are
+# never set in this file: `wrangler secret put`, or scripts/deploy.sh, only.
+# SESSION_SECRET_PREVIOUS is optional and unset by default; see
+# docs/runbook.md, "Hardening your instance" -> "Rotating SESSION_SECRET
+# without signing everyone out".
 APP_ORIGIN = "https://app.example.com"
 API_ORIGIN = "https://api.example.com"
 APP_VERSION = "0.1.0"

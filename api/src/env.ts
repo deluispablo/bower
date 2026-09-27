@@ -20,6 +20,14 @@ export interface Env {
   ADMIN_KEY: string;
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
+  /**
+   * Optional: when set, `verifySession` also accepts a session cookie
+   * signed with this value, giving a `SESSION_SECRET` rotation a grace
+   * window instead of signing everyone out at once (docs/runbook.md,
+   * "Hardening your instance"). Absent on an instance that has never
+   * rotated `SESSION_SECRET` this way.
+   */
+  SESSION_SECRET_PREVIOUS?: string;
 
   // Vars without a default: required, but not secret.
   APP_ORIGIN: string;
@@ -90,6 +98,21 @@ function requireString(source: UnvalidatedEnv, key: keyof Env): string {
     missing(key);
   }
   return value;
+}
+
+/**
+ * Like `requireString`, but the key may be entirely absent (an unset
+ * Cloudflare secret): returns `undefined` then, instead of failing. A
+ * present-but-empty value still fails loudly, same as a required secret —
+ * an operator piping an empty value into `wrangler secret put` gets the
+ * same clear error either way.
+ */
+function optionalString(
+  source: UnvalidatedEnv,
+  key: keyof Env,
+): string | undefined {
+  if (source[key] === undefined) return undefined;
+  return requireString(source, key);
 }
 
 /** Decodes base64 and returns the byte length, or `null` if it isn't valid base64. */
@@ -177,6 +200,7 @@ export function assertEnv(env: unknown): Env {
     ADMIN_KEY: requireString(source, 'ADMIN_KEY'),
     VAPID_PUBLIC_KEY: requireString(source, 'VAPID_PUBLIC_KEY'),
     VAPID_PRIVATE_KEY: requireString(source, 'VAPID_PRIVATE_KEY'),
+    SESSION_SECRET_PREVIOUS: optionalString(source, 'SESSION_SECRET_PREVIOUS'),
 
     APP_ORIGIN: requireString(source, 'APP_ORIGIN'),
     API_ORIGIN: requireString(source, 'API_ORIGIN'),
