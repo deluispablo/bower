@@ -276,7 +276,7 @@ function AdvancedSection({ me }: { me: Me }) {
 
       <Toggle
         label="Show Bower's own files"
-        hint="Rulebook, catalogue, journal, instruction notes and health reports, grouped at the bottom of your notes."
+        hint="Rulebook, catalogue, journal, instruction notes, health reports and dot-folders (.obsidian, .claude), grouped at the bottom of your notes."
         checked={showAppFiles}
         onChange={(checked) => {
           setShowAppFiles(checked);
