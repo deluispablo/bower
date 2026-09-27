@@ -24,7 +24,8 @@
 #    VITE_GOOGLE_API_KEY for the onboarding folder picker, and deploys it to
 #    Cloudflare Pages, creating the project the first time.
 # 7. Prints what is left to do by hand: the Pages custom domain, the Google
-#    redirect URI, and the privacy and terms of service URLs.
+#    redirect URI, the privacy and terms of service URLs, and a pointer to
+#    docs/runbook.md's "Hardening your instance".
 #
 # Idempotent: a rerun updates what exists (repo, KV, Worker, Pages) and
 # skips secrets that are already set. --rotate sets every secret again,
@@ -135,6 +136,7 @@ print_next_steps() {
   else
     log "  3. Invite the first user (docs/runbook.md, \"Invite someone\")."
   fi
+  log "  4. Harden your instance (docs/runbook.md, \"Hardening your instance\"): Cloudflare, GitHub and Google settings, and key rotation."
 }
 
 deploy_main() {

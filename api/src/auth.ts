@@ -143,7 +143,12 @@ async function authenticate(
   if (token === undefined) throw unauthenticated();
   let claims: SessionClaims;
   try {
-    claims = await verifySession(token, env.SESSION_SECRET);
+    claims = await verifySession(
+      token,
+      env.SESSION_SECRET,
+      undefined,
+      env.SESSION_SECRET_PREVIOUS,
+    );
   } catch (err) {
     if (err instanceof SessionError && err.code === 'expired') {
       throw sessionExpired(err);
