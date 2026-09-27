@@ -230,6 +230,24 @@
   color: var(--color-on-danger);
 }
 
+/* Delete my Bower account: a red text link at the very bottom, not a
+   button — the least prominent control on the screen (#309). */
+
+.settings-link-danger {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.settings-link-danger:hover {
+  filter: brightness(0.9);
+}
+
 .settings-confirm {
   display: flex;
   flex-direction: column;

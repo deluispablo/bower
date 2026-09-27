@@ -108,8 +108,7 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
     <div class="settings-field">
       <label for="api-key">Use my own Claude API key</label>
       <p class="settings-hint">
-        Runs Bower on your own Anthropic billing instead of the person who runs
-        it.
+        Runs Bower on your own Anthropic billing instead of the operator's.
       </p>
       {me.hasApiKey && <p class="settings-note">A key is saved.</p>}
       <input
@@ -246,7 +245,7 @@ function NotificationsToggle() {
         hint={
           support === 'needs-install'
             ? 'Add Bower to your Home Screen first to get notifications.'
-            : 'Notifications on this phone'
+            : 'Notifications on this device'
         }
         checked={state === 'on'}
         disabled={busy || support !== 'ready'}
@@ -254,6 +253,25 @@ function NotificationsToggle() {
       />
       {error && <p class="settings-error">{error}</p>}
     </>
+  );
+}
+
+/**
+ * "Let Bower look things up on the web" (#309): drawn per the board, but
+ * left off and disabled until the lookup itself ships (#374) — a switch
+ * that cannot do anything yet would only confuse.
+ */
+function WebLookupToggle() {
+  return (
+    <Toggle
+      label="Let Bower look things up on the web"
+      hint="Off, Bower only reads what you gave it. On, it may search the web to fill in what a document leaves out. Coming soon."
+      checked={false}
+      disabled
+      onChange={() => {
+        /* disabled until #374 */
+      }}
+    />
   );
 }
 
@@ -337,22 +355,19 @@ function UpdateRulesRow() {
 }
 
 /**
- * Settings › Advanced (spec §6): the own Claude API key form, "Show me
- * around again" (replays the first-run tour on Home through a one-shot flag
- * in memory, `tour-store.ts`; `tourSeenAt` is left alone) and the same
- * `showAppFiles` pref as the explorer's footer button.
+ * Settings › Bower (spec C.8, and the board's own grouping — #379 review):
+ * the rulebook update row, "Tell Bower about yourself again", "Show me
+ * around again" (replays the first-run tour on Home through a one-shot
+ * flag in memory, `tour-store.ts`; `tourSeenAt` is left alone) and "What is
+ * Bower". "Show Bower's own files" lives in Advanced instead, next to the
+ * other real per-account controls (the board's order, not the C.8 text).
  */
-function AdvancedSection({ me }: { me: Me }) {
+function BowerSection() {
   const { route } = useLocation();
-  const [showAppFiles, setShowAppFiles] = useState(() =>
-    getPref('showAppFiles'),
-  );
 
   return (
     <div class="settings-section">
-      <h2>Advanced</h2>
-
-      <ApiKeySection me={me} />
+      <h2>Bower</h2>
 
       <UpdateRulesRow />
 
@@ -396,30 +411,29 @@ function AdvancedSection({ me }: { me: Me }) {
           <span class="toggle-hint">The four-page intro, again</span>
         </span>
       </button>
-
-      <Toggle
-        label="Show Bower's own files"
-        hint="Rulebook, your rules, about me, catalogue, journal, instruction notes, health reports and dot-folders (.obsidian, .claude), grouped at the bottom of your notes."
-        checked={showAppFiles}
-        onChange={(checked) => {
-          setShowAppFiles(checked);
-          setPref('showAppFiles', checked);
-        }}
-      />
     </div>
   );
 }
 
 /**
- * Sign out on this device, or everywhere: "Sign out everywhere" ends every
- * session of the account on the Worker first, then signs this device out
- * the ordinary way. A 401 means this session had already ended, so the
- * device is signed out all the same.
+ * "Sign out everywhere": ends every session of the account on the Worker
+ * first, then signs this device out the ordinary way. A 401 means this
+ * session had already ended, so the device is signed out all the same.
+ * Lives under Advanced (#309, spec C.8) with one sentence, not beside the
+ * plain "Sign out" button.
  */
-function SignOutSection() {
+function SignOutEverywhereRow() {
   const { signOut } = useSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (isDemo()) {
+    return (
+      <div class="settings-field">
+        <p class="settings-note">{NOT_IN_DEMO}</p>
+      </div>
+    );
+  }
 
   const signOutEverywhere = async (): Promise<void> => {
     setBusy(true);
@@ -438,30 +452,71 @@ function SignOutSection() {
   };
 
   return (
-    <div class="settings-section">
-      <div class="settings-actions">
-        <button
-          type="button"
-          class="settings-button settings-button-secondary"
-          disabled={busy}
-          onClick={() => void signOut()}
-        >
-          Sign out
-        </button>
-        {isDemo() ? (
-          <p class="settings-note">{NOT_IN_DEMO}</p>
-        ) : (
-          <button
-            type="button"
-            class="settings-button settings-button-secondary"
-            disabled={busy}
-            onClick={() => void signOutEverywhere()}
-          >
-            Sign out everywhere
-          </button>
-        )}
-      </div>
+    <>
+      <button
+        type="button"
+        class="settings-row"
+        disabled={busy}
+        onClick={() => void signOutEverywhere()}
+      >
+        <span class="settings-row-text">
+          <span class="settings-row-label">Sign out everywhere</span>
+          <span class="toggle-hint">
+            Ends every browser and device signed in to this account.
+          </span>
+        </span>
+      </button>
       {error && <p class="settings-error">{error}</p>}
+    </>
+  );
+}
+
+/**
+ * Settings › Advanced (spec C.8, board order — #379 review): the own
+ * Claude API key form, "Show Bower's own files" (the same `showAppFiles`
+ * pref as the explorer's footer button) and "Sign out everywhere" — real
+ * per-account controls, kept apart from the "Bower" section above.
+ */
+function AdvancedSection({ me }: { me: Me }) {
+  const [showAppFiles, setShowAppFiles] = useState(() =>
+    getPref('showAppFiles'),
+  );
+
+  return (
+    <div class="settings-section">
+      <h2>Advanced</h2>
+
+      <ApiKeySection me={me} />
+
+      <Toggle
+        label="Show Bower's own files"
+        hint="Rulebook, your rules, about me, catalogue, journal, instruction notes, health reports and dot-folders (.obsidian, .claude), grouped at the bottom of your notes."
+        checked={showAppFiles}
+        onChange={(checked) => {
+          setShowAppFiles(checked);
+          setPref('showAppFiles', checked);
+        }}
+      />
+
+      <SignOutEverywhereRow />
+    </div>
+  );
+}
+
+/** Sign out of this device only — a plain button on its own, apart from
+ * "Sign out everywhere" (moved under Advanced, #309). */
+function SignOutSection() {
+  const { signOut } = useSession();
+
+  return (
+    <div class="settings-section">
+      <button
+        type="button"
+        class="settings-button settings-button-secondary"
+        onClick={() => void signOut()}
+      >
+        Sign out
+      </button>
     </div>
   );
 }
@@ -501,12 +556,12 @@ function DangerZone() {
       {!confirming && (
         <button
           type="button"
-          class="settings-button settings-button-danger"
+          class="settings-link-danger"
           onClick={() => {
             setConfirming(true);
           }}
         >
-          Delete my Bower account
+          Delete my Bower account (your Drive folder stays)
         </button>
       )}
       {confirming && (
@@ -576,16 +631,24 @@ export function Settings() {
               <IconExternalLink /> Drive
             </a>
           )}
-          <a href={loginUrl()}>Reconnect Google</a>
+          {me.needsReauth && (
+            <p class="settings-hint">
+              Google access needs to be renewed.{' '}
+              <a href={loginUrl()}>Reconnect Google</a>
+            </p>
+          )}
         </div>
       </div>
 
       <div class="settings-section">
         <h2>Tidying up</h2>
         <NotificationsToggle />
+        <WebLookupToggle />
       </div>
 
       <AppearanceSection />
+
+      <BowerSection />
 
       <AdvancedSection me={me} />
 
