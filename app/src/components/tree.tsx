@@ -6,18 +6,23 @@
  * (or, once a folder can't expand/collapse further, move to its first
  * child / its parent), Enter opens a note or toggles a folder.
  *
- * Icons are generic (folder / note): a per-type icon from the first
- * frontmatter tag was in scope, but the index built in `vault-index.ts` has
- * no note text, only Drive metadata, so no tag is available here. Left out;
- * see the PR.
+ * Each folder row shows its note count (`folderCounts`, subfolders
+ * included). The explorer (`explorer.tsx`) passes the order (`sort`) and a
+ * `collapseKey` that collapses every folder whenever it changes.
+ *
+ * Icons are generic (folder / note, from `icons.tsx`): a per-type icon
+ * from the first frontmatter tag was in scope, but the index built in
+ * `vault-index.ts` has no note text, only Drive metadata, so no tag is
+ * available here. Left out; see the PR.
  */
 
 import type { JSX, RefCallback } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
-import { buildTree, nextFocusIndex } from '../navigation.js';
-import type { TreeNode, TreeRow } from '../navigation.js';
+import { buildTree, folderCounts, nextFocusIndex } from '../navigation.js';
+import type { TreeNode, TreeRow, TreeSort } from '../navigation.js';
 import type { VaultIndex } from '../vault-index.js';
+import { IconChevronRight, IconFolder, IconNote } from './icons.js';
 
 interface Row extends TreeRow {
   name: string;
@@ -60,54 +65,38 @@ function folderFromHash(): string | null {
   return match?.[1] === undefined ? null : decodeURIComponent(match[1]);
 }
 
-function FolderIcon(): JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <path
-        d="M3 6a1 1 0 0 1 1-1h4.5l1.5 2H20a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6Z"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linejoin="round"
-      />
-    </svg>
-  );
-}
-
-function NoteIcon(): JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <path
-        d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linejoin="round"
-      />
-      <path
-        d="M9 12h6M9 16h6"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-      />
-    </svg>
-  );
-}
-
 interface TreeProps {
   index: VaultIndex;
   /** Called when a note link is activated, e.g. to close the mobile drawer. */
   onNavigate?: () => void;
+  /** The explorer's order; by name when left out. */
+  sort?: TreeSort;
+  /** Every change collapses all folders (the explorer's Collapse all). */
+  collapseKey?: number;
 }
 
-export function Tree({ index, onNavigate }: TreeProps) {
-  const tree = useMemo(() => buildTree(index), [index]);
+export function Tree({
+  index,
+  onNavigate,
+  sort = 'name',
+  collapseKey = 0,
+}: TreeProps): JSX.Element {
+  const tree = useMemo(() => buildTree(index, sort), [index, sort]);
+  const counts = useMemo(() => folderCounts(index), [index]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set<string>(),
   );
   const [focusIndex, setFocusIndex] = useState(0);
   const rowRefs = useRef<Array<HTMLElement | null>>([]);
   const revealedHash = useRef(false);
+  const lastCollapseKey = useRef(collapseKey);
+
+  useEffect(() => {
+    if (collapseKey === lastCollapseKey.current) return;
+    lastCollapseKey.current = collapseKey;
+    setExpanded(new Set<string>());
+    setFocusIndex(0);
+  }, [collapseKey]);
 
   const rows = useMemo(() => {
     const out: Row[] = [];
@@ -206,7 +195,7 @@ export function Tree({ index, onNavigate }: TreeProps) {
                 type="button"
                 ref={setRef}
                 class="tree-row tree-folder"
-                style={{ paddingLeft: `${row.depth * 16 + 8}px` }}
+                style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
                 tabIndex={tabIndex}
                 onClick={() => {
                   toggle(row.path);
@@ -215,21 +204,27 @@ export function Tree({ index, onNavigate }: TreeProps) {
                 onKeyDown={(event) => onRowKeyDown(event, i)}
                 onFocus={() => setFocusIndex(i)}
               >
-                <FolderIcon />
+                <span
+                  class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
+                >
+                  <IconChevronRight />
+                </span>
+                <IconFolder />
                 <span class="tree-name">{row.name}</span>
+                <span class="tree-count">{counts.get(row.path) ?? 0}</span>
               </button>
             ) : (
               <a
                 href={`/note/${row.id ?? ''}`}
                 ref={setRef}
                 class="tree-row tree-note"
-                style={{ paddingLeft: `${row.depth * 16 + 8}px` }}
+                style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
                 tabIndex={tabIndex}
                 onClick={() => onNavigate?.()}
                 onKeyDown={(event) => onRowKeyDown(event, i)}
                 onFocus={() => setFocusIndex(i)}
               >
-                <NoteIcon />
+                <IconNote />
                 <span class="tree-name">{row.name}</span>
               </a>
             )}
