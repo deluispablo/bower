@@ -11,6 +11,11 @@
  * The Pin row (#216) toggles `pinned`/`onTogglePin`, which `routes/note.tsx`
  * wires to `useVault()`'s `pinNote`/`unpinNote` (#215) through
  * `pin-action.ts`'s shared toast.
+ *
+ * "This was misfiled" (#200) opens Tell Bower prefilled with the note's
+ * path and nothing else from the note, the same `/tell?text=` mechanism
+ * as "Ask Bower about this note"; the owner fills in the right folder and
+ * sends it as an instruction note.
  */
 
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -23,6 +28,7 @@ import {
   IconCopy,
   IconEdit,
   IconExternalLink,
+  IconFolder,
   IconPin,
 } from './icons.js';
 import { useFocusTrap } from './use-focus-trap.js';
@@ -128,6 +134,22 @@ export function NoteMenu({
             <span class="note-menu-row-label">Ask Bower about this note</span>
             <span class="note-menu-row-hint">
               Opens Tell Bower with the note attached
+            </span>
+          </span>
+        </a>
+        <a
+          role="menuitem"
+          class="note-menu-row"
+          href={`/tell?text=${encodeURIComponent(
+            `"${file.path}" was misfiled. It should go to: `,
+          )}`}
+          onClick={onClose}
+        >
+          <IconFolder />
+          <span class="note-menu-row-text">
+            <span class="note-menu-row-label">This was misfiled</span>
+            <span class="note-menu-row-hint">
+              Opens Tell Bower to say where it should go
             </span>
           </span>
         </a>

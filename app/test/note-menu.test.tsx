@@ -100,20 +100,21 @@ afterEach(() => {
 });
 
 describe('NoteMenu', () => {
-  it('lists five rows for a normal note, Pin first', () => {
+  it('lists six rows for a normal note, Pin first', () => {
     mount(true);
-    expect(rows()).toHaveLength(5);
+    expect(rows()).toHaveLength(6);
     expect(rowByText('Pin to Home')).toBeDefined();
     expect(rowByText('Ask Bower about this note')).toBeDefined();
+    expect(rowByText('This was misfiled')).toBeDefined();
     expect(rowByText('Open in Drive')).toBeDefined();
     expect(rowByText('Copy link')).toBeDefined();
     expect(rowByText('Edit the text')).toBeDefined();
     expect(rows()[0]?.textContent).toContain('Pin to Home');
   });
 
-  it('lists four rows, Edit left out, for a protected note', () => {
+  it('lists five rows, Edit left out, for a protected note', () => {
     mount(false);
-    expect(rows()).toHaveLength(4);
+    expect(rows()).toHaveLength(5);
     expect(rows().some((r) => r.textContent?.includes('Edit the text'))).toBe(
       false,
     );
@@ -137,6 +138,16 @@ describe('NoteMenu', () => {
     const ask = rowByText('Ask Bower about this note');
     expect(ask.getAttribute('href')).toBe(
       `/tell?text=${encodeURIComponent('[[Shopping list]] ')}`,
+    );
+  });
+
+  it('prefills Tell Bower with the note path and nothing else, for This was misfiled', () => {
+    mount(true);
+    const misfiled = rowByText('This was misfiled');
+    expect(misfiled.getAttribute('href')).toBe(
+      `/tell?text=${encodeURIComponent(
+        '"Shopping list.md" was misfiled. It should go to: ',
+      )}`,
     );
   });
 
