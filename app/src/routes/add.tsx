@@ -7,8 +7,9 @@ import { Bird } from '../components/bird.js';
 import { IconNote } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import {
-  copyIntoInbox,
+  copyOrExportIntoInbox,
   createTextFile,
+  exportPlanFor,
   FOLDER_MIME,
   getToken,
   listFolder,
@@ -50,6 +51,9 @@ interface QueueItem {
   file?: File;
   /** The original's Drive id, set for `kind: 'drive'`. */
   driveId?: string;
+  /** The original's MIME type, set for `kind: 'drive'`: decides whether it
+   * is copied as it is or exported first (`exportPlanFor`, #218). */
+  driveMimeType?: string;
   /** The pasted URL, kept for `kind: 'link'` so a failed save can retry. */
   url?: string;
   /** Possibly renamed to stay unique in the inbox. */
@@ -69,6 +73,26 @@ function withName(file: File, name: string): File {
   return name === file.name
     ? file
     : new File([file], name, { type: file.type });
+}
+
+/** The queue card's status line for a `kind: 'drive'` item, once done or
+ * while it is being copied or exported (#218). */
+function driveStatusText(mimeType: string | undefined, done: boolean): string {
+  const plan = exportPlanFor(mimeType ?? '');
+  if (plan.action !== 'export') {
+    return done
+      ? 'Copied from your Drive · the original stays where it was'
+      : 'Copying from your Drive…';
+  }
+  const savedAs =
+    plan.extension === '.md'
+      ? 'Markdown'
+      : plan.extension === '.csv'
+        ? 'a table'
+        : 'a PDF';
+  return done
+    ? `Saved as ${savedAs} from your Drive · the original stays where it was`
+    : `Saving as ${savedAs}…`;
 }
 
 export function Add() {
@@ -163,6 +187,7 @@ export function Add() {
       id: crypto.randomUUID(),
       kind: 'drive',
       driveId: item.id,
+      driveMimeType: item.mimeType,
       name: claimName(item.name),
       status: 'waiting',
       progress: 0,
@@ -193,7 +218,14 @@ export function Add() {
       } else if (item.kind === 'link' && item.url !== undefined) {
         await createTextFile(folderId, item.name, item.url);
       } else if (item.kind === 'drive' && item.driveId !== undefined) {
-        await copyIntoInbox(item.driveId, item.name, folderId);
+        await copyOrExportIntoInbox(
+          {
+            id: item.driveId,
+            name: item.name,
+            mimeType: item.driveMimeType ?? '',
+          },
+          folderId,
+        );
       }
       updateItem(item.id, { status: 'done', progress: 100 });
       return true;
@@ -286,7 +318,14 @@ export function Add() {
         'Your Bower folder was left out: what is in it is already in Bower.',
       );
     }
-    const files = await expandPicks(items, notes);
+    const expanded = await expandPicks(items, notes);
+    const files = expanded.filter((item) => {
+      if (exportPlanFor(item.mimeType).action !== 'skip') return true;
+      notes.push(
+        `${item.name} is a Google Drawing or Form: there is no format to save it as, so it was left out.`,
+      );
+      return false;
+    });
     driveNotesRef.current = notes;
     setDriveNotes(notes);
     if (files.length === 0) return;
@@ -419,6 +458,12 @@ export function Add() {
             </button>
           )}
         </div>
+        {GOOGLE_API_KEY !== '' && (
+          <p class="add-drive-note">
+            Docs become Markdown, Sheets a table, Slides a PDF. Everything else
+            is copied as it is.
+          </p>
+        )}
       </div>
 
       <div class="add-field">
@@ -480,11 +525,11 @@ export function Add() {
                   {item.status === 'waiting' && 'Waiting'}
                   {item.status === 'uploading' &&
                     (item.kind === 'drive'
-                      ? 'Copying from your Drive…'
+                      ? driveStatusText(item.driveMimeType, false)
                       : `${item.progress} %`)}
                   {item.status === 'done' &&
                     (item.kind === 'drive'
-                      ? 'Copied from your Drive · the original stays where it was'
+                      ? driveStatusText(item.driveMimeType, true)
                       : 'Added to your inbox')}
                   {item.status === 'failed' && (item.error ?? 'Failed')}
                 </span>

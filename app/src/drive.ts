@@ -4,7 +4,8 @@
  * module keeps that token in memory, retries once with a fresh token when
  * Drive answers 401, and wraps the few endpoints the app needs: recursive
  * listing of the Bower folder, file download, uploads, copies into the
- * inbox, appending to a note and saving an edited note.
+ * inbox (a Google Doc, Sheet or Slides file exported first, #218), appending
+ * to a note and saving an edited note.
  *
  * Tokens are never logged. Failures surface as `DriveError` (Drive itself)
  * or `ApiError` (the Worker, including code `reauth` when Google access has
@@ -536,8 +537,10 @@ export function createTextFile(
 
 /**
  * Copies the Drive file `id` into the inbox folder `inboxId` as `name`
- * (`files.copy`). The original keeps its id, its parent and its content;
- * a Google Doc, Sheet or Slides file is copied as it is, not converted.
+ * (`files.copy`), unconditionally: the original keeps its id, its parent
+ * and its content. Used directly for a plain copy; a Google Doc, Sheet or
+ * Slides pick goes through `copyOrExportIntoInbox` instead, which exports
+ * it first (#218).
  */
 export async function copyIntoInbox(
   id: string,
@@ -553,6 +556,125 @@ export async function copyIntoInbox(
     },
   );
   return parseFile(await readJson(response), name);
+}
+
+// --- Export on the way into the inbox (#218) --------------------------
+
+const GOOGLE_DOC_MIME = 'application/vnd.google-apps.document';
+const GOOGLE_SHEET_MIME = 'application/vnd.google-apps.spreadsheet';
+const GOOGLE_SLIDES_MIME = 'application/vnd.google-apps.presentation';
+const GOOGLE_DRAWING_MIME = 'application/vnd.google-apps.drawing';
+const GOOGLE_FORM_MIME = 'application/vnd.google-apps.form';
+
+export type ExportPlan =
+  | { action: 'copy' }
+  | { action: 'skip' }
+  | {
+      action: 'export';
+      /** MIME type requested from `files.export`. */
+      mimeType: string;
+      /** Extension `name` gets instead of any it already has. */
+      extension: string;
+      /** Retried once, on a 400 or 403 for `mimeType`. Docs only. */
+      fallbackMimeType?: string;
+    };
+
+/**
+ * What a picked Drive item's MIME type means for "Add from your Drive"
+ * (#218): a Google Doc is exported as Markdown (falling back to plain text
+ * if Drive refuses the Markdown export), a Sheet as CSV (its first sheet),
+ * Slides as a PDF; a Drawing or a Form has no format that fits, so it is
+ * skipped; anything else (a PDF, a photo, an already-plain file) is copied
+ * as it is. Pure: no Drive, no fetch, unit-tested directly.
+ */
+export function exportPlanFor(mimeType: string): ExportPlan {
+  switch (mimeType) {
+    case GOOGLE_DOC_MIME:
+      return {
+        action: 'export',
+        mimeType: 'text/markdown',
+        fallbackMimeType: 'text/plain',
+        extension: '.md',
+      };
+    case GOOGLE_SHEET_MIME:
+      return { action: 'export', mimeType: 'text/csv', extension: '.csv' };
+    case GOOGLE_SLIDES_MIME:
+      return {
+        action: 'export',
+        mimeType: 'application/pdf',
+        extension: '.pdf',
+      };
+    case GOOGLE_DRAWING_MIME:
+    case GOOGLE_FORM_MIME:
+      return { action: 'skip' };
+    default:
+      return { action: 'copy' };
+  }
+}
+
+/** `name` with `extension` in place of any it already has. */
+function withExtension(name: string, extension: string): string {
+  return `${name.replace(/\.[^./]+$/, '')}${extension}`;
+}
+
+/**
+ * `files.export`'s bytes for `id` as `mimeType`. On a 400 or 403 with
+ * `fallbackMimeType` given, retries once with that instead (Drive refusing
+ * the Markdown export of a Doc it can't render that way); any other error,
+ * or a second failure, throws `DriveError`.
+ */
+async function exportBlob(
+  id: string,
+  mimeType: string,
+  fallbackMimeType?: string,
+): Promise<{ blob: Blob; mimeType: string }> {
+  const path = (type: string): string =>
+    `/drive/v3/files/${encodeURIComponent(id)}/export?mimeType=${encodeURIComponent(type)}`;
+  try {
+    return { blob: await (await driveFetch(path(mimeType))).blob(), mimeType };
+  } catch (err) {
+    const canFallBack =
+      fallbackMimeType !== undefined &&
+      err instanceof DriveError &&
+      (err.status === 400 || err.status === 403);
+    if (!canFallBack) throw err;
+    return {
+      blob: await (await driveFetch(path(fallbackMimeType))).blob(),
+      mimeType: fallbackMimeType,
+    };
+  }
+}
+
+/**
+ * Adds a picked Drive item to the inbox, converting it first when
+ * `exportPlanFor` says to: a Google Doc, Sheet or Slides file is exported
+ * (Markdown, CSV or PDF) and the bytes uploaded through the existing
+ * `upload` path, so the queue, the size cap and its errors are the same as
+ * any other upload; anything else is copied as it is with `copyIntoInbox`.
+ * The original is never changed either way. Callers filter out a `skip`
+ * plan (a Drawing or a Form) themselves, with their own sentence; calling
+ * this for one anyway throws.
+ */
+export async function copyOrExportIntoInbox(
+  pick: { id: string; name: string; mimeType: string },
+  inboxId: string,
+): Promise<DriveFile> {
+  const plan = exportPlanFor(pick.mimeType);
+  if (plan.action === 'copy') {
+    return copyIntoInbox(pick.id, pick.name, inboxId);
+  }
+  if (plan.action === 'skip') {
+    throw new DriveError(0, 'This file has no format to save it as.');
+  }
+  const { blob, mimeType } = await exportBlob(
+    pick.id,
+    plan.mimeType,
+    plan.fallbackMimeType,
+  );
+  const file = new File([blob], withExtension(pick.name, plan.extension), {
+    type: mimeType,
+  });
+  return upload(inboxId, file);
 }
 
 // --- Update and append -------------------------------------------------
