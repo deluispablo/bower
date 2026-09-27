@@ -232,7 +232,7 @@ The instance repo's `lint.yml` runs on its own every Sunday at 06:17 UTC: a firs
 
 After deploying (`scripts/deploy.sh`, or any change to `app/public/_headers` or `api/src/security.ts`), check both origins at [securityheaders.com](https://securityheaders.com): enter `APP_ORIGIN`, then separately `API_ORIGIN`. Target **A** on the app. The Worker only ever serves JSON and the one "Not invited" HTML page, so the site's own scale doesn't quite apply to it; just confirm `Strict-Transport-Security` and `Content-Security-Policy: frame-ancestors 'none'` show up on its report.
 
-A grade below A on the app usually means `app/public/_headers` didn't ship with the deploy — check the build actually generated it: `grep -n "" app/dist/_headers` (`pnpm -C app build` writes it from `VITE_API_URL` and, if set, `VITE_GOOGLE_API_KEY`; a missing or unparsable `VITE_API_URL` fails that build outright rather than shipping a placeholder).
+A grade below A on the app usually means `app/public/_headers` didn't ship with the deploy — check the build actually generated it: `grep -n "" app/dist/_headers` (`pnpm -C app build` writes it from `VITE_API_URL` and, if set, `VITE_GOOGLE_API_KEY`; without `VITE_API_URL` it warns and falls back to `connect-src 'self'` alone, but a value that's set and not a URL fails the build outright rather than shipping a placeholder).
 
 ### Costs to watch
 
