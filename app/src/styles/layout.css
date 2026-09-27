@@ -1,5 +1,19 @@
 @import './tokens.css';
 
+/*
+ * Breakpoints (spec §14 "Breakpoints"). Three named widths, repeated as
+ * literals everywhere a width rule lives (custom media isn't supported by
+ * our target browsers) — keep the three numbers in sync by hand:
+ *   - 600 px: the phone layout's content column becomes a centred 640 px
+ *     measure (Home, Add, Tell, Settings, a note, a folder); the top bar's
+ *     side padding grows to 24 px and stays there from here on.
+ *   - 900 px: the sidebar layout (explorer as a left column, four home
+ *     cards instead of two).
+ *   - 1200 px: the About panel (`shell-with-aside`'s third column). Below
+ *     it, on a note screen, Outline and In this folder fold under the note
+ *     body instead.
+ */
+
 *,
 *::before,
 *::after {
@@ -59,7 +73,9 @@ summary:focus-visible {
 /*
  * The shell (components/layout.tsx). Phone first: a top bar, the content,
  * a fixed bottom nav, and the explorer in a drawer. From 900 px: the
- * explorer as a left column, a header row, and an optional third column.
+ * explorer as a left column and a header row; the optional third column
+ * (the About panel) only from 1200 px — between 900 and 1200 it folds
+ * under the note body instead (see the `.shell-aside` rules below).
  */
 .shell {
   display: flex;
@@ -562,14 +578,30 @@ summary:focus-visible {
   }
 }
 
+/*
+ * From 600 px: the phone layout keeps its bar and bottom nav, but the
+ * content column reads better centred instead of stretched (Home, Add,
+ * Tell, Settings, a note, a folder — every screen through `.content`).
+ * Gone again at 900 px, where the sidebar layout takes over.
+ */
+@media (min-width: 600px) and (max-width: 899px) {
+  .content {
+    max-width: 640px;
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 600px) {
+  .topbar {
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+  }
+}
+
 @media (min-width: 900px) {
   .shell {
     display: grid;
     grid-template-columns: 264px minmax(0, 1fr);
-  }
-
-  .shell-with-aside {
-    grid-template-columns: 264px minmax(0, 1fr) 280px;
   }
 
   .shell-sidebar,
@@ -631,6 +663,30 @@ summary:focus-visible {
 
   .content {
     padding: var(--space-6);
+  }
+}
+
+/*
+ * Between 900 and 1200 px: no third column yet. `.shell-with-aside` stays
+ * on the plain two-column `.shell` grid, and the About panel folds under
+ * the note body — same column as `.shell-main`, next row down — instead
+ * of sitting beside it.
+ */
+@media (min-width: 900px) and (max-width: 1199px) {
+  .shell-aside {
+    grid-column: 2;
+    grid-row: 2;
+    position: static;
+    height: auto;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+/* From 1200 px: the About panel gets its own third column again. */
+@media (min-width: 1200px) {
+  .shell-with-aside {
+    grid-template-columns: 264px minmax(0, 1fr) 280px;
   }
 }
 
