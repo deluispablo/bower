@@ -14,6 +14,7 @@ import { useLocation } from 'preact-iso';
 import { ApiError, getMe, isNotInvited, logout } from './api.js';
 import type { Me, NotInvitedMe } from './api.js';
 import forgetDevice from './forget.js';
+import { introSeen } from './intro.js';
 
 export type SessionStatus = 'loading' | 'signed-out' | 'signed-in';
 
@@ -84,16 +85,31 @@ function clearHadSessionMarker(): void {
 
 /**
  * Where the app should navigate given the session and the current path, or
- * `null` to stay put. Pure so the four states are unit-testable without
+ * `null` to stay put. Pure so the states are unit-testable without
  * rendering anything.
+ *
+ * `introHasBeenSeen` (#207) defaults to `true` so every existing call site
+ * and test keeps its old behaviour unless it opts in; `SessionProvider`
+ * below always passes the real `introSeen()` reading. `/welcome` itself is
+ * always left alone: it is reachable signed out (the first-run intro) and
+ * signed in (reopened from Settings), and never auto-redirected to for a
+ * signed-in visitor — only the signed-out first visit sends someone there.
  */
 export function decideRedirect(
   status: SessionStatus,
   hasVault: boolean,
   currentPath: string,
+  introHasBeenSeen = true,
 ): string | null {
   if (status === 'loading' || PUBLIC_PATHS.has(currentPath)) return null;
+  if (currentPath === '/welcome') return null;
   if (status === 'signed-out') {
+    if (
+      !introHasBeenSeen &&
+      (currentPath === '/' || currentPath === '/login')
+    ) {
+      return '/welcome';
+    }
     return currentPath === '/login' ? null : '/login';
   }
   if (!hasVault) {
@@ -143,7 +159,12 @@ export function SessionProvider({ children }: SessionProviderProps) {
   }, []);
 
   useEffect(() => {
-    const target = decideRedirect(state.status, state.me?.vault != null, path);
+    const target = decideRedirect(
+      state.status,
+      state.me?.vault != null,
+      path,
+      introSeen(localStorage),
+    );
     if (target !== null) route(target);
   }, [state.status, state.me, path, route]);
 
