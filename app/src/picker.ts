@@ -130,7 +130,9 @@ export function openFilePicker(
   onResult: (data: google.picker.ResponseObject) => void,
 ): void {
   const view = (): google.picker.DocsView =>
-    new pickerApi.DocsView().setIncludeFolders(true).setSelectFolderEnabled(true);
+    new pickerApi.DocsView()
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(true);
   new pickerApi.PickerBuilder()
     // Recent first: the plain view lists everything, newest first.
     .addView(view())
