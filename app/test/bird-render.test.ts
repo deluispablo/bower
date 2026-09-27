@@ -33,21 +33,50 @@ describe('Bird', () => {
     expect(svg.getAttribute('aria-hidden')).toBe('true');
     expect(svg.getAttribute('class')).toBe('b p-look');
     expect(svg.getAttribute('width')).toBe('32');
+    // The v8.2 drawing (docs/design/gen.py, BIRD_CORE): joints, then the
+    // parts that only some states move (neck, lids, cheek, feet).
     for (const part of ['rig', 'turn', 'hd', 'ey', 'jw', 'wg', 'tl', 'ft']) {
       expect(svg.querySelector(`.${part}`)).not.toBeNull();
     }
-    for (const prop of ['tw', 'pp', 'nt', 'qm', 'zz', 'sp', 'cl']) {
+    for (const part of ['nk', 'hc', 'ld', 'lb', 'ck', 'fo', 'tf', 'lg']) {
+      expect(svg.querySelector(`.${part}`)).not.toBeNull();
+    }
+    for (const prop of [
+      'tw',
+      'pp',
+      'nt',
+      'qm',
+      'zz',
+      'sp',
+      'cl',
+      'dd',
+      'ex',
+      'rn',
+    ]) {
       expect(svg.querySelector(`.${prop}`)).not.toBeNull();
     }
-    expect(svg.querySelector('.tray')).toBeNull();
+    // One wing, three tail feathers, two feet.
+    expect(svg.querySelectorAll('.wg').length).toBe(1);
+    expect(svg.querySelectorAll('.tf').length).toBe(3);
+    expect(svg.querySelectorAll('.fo').length).toBe(2);
+    for (const part of ['tray', 'nest', 'nest2', 'bp', 'bn']) {
+      expect(svg.querySelector(`.${part}`)).toBeNull();
+    }
   });
 
   it('adds the scene only when asked', () => {
     const svg = mount({ state: 'tidying', scene: true, size: 104 });
-    for (const part of ['tray', 'nest', 'wall']) {
+    for (const part of ['tray', 'traypaper', 'nest', 'nest2', 'bp', 'bn']) {
       expect(svg.querySelector(`.${part}`)).not.toBeNull();
     }
+    expect(svg.querySelector('.wall')).toBeNull();
     expect(svg.getAttribute('width')).toBe('104');
+  });
+
+  it('keeps the sleeping nest inside the rig, so it breathes with the bird', () => {
+    const svg = mount({ state: 'asleep', scene: true });
+    expect(svg.querySelector('.rig .turn .nest2')).not.toBeNull();
+    expect(svg.querySelector('.rig .bp')).toBeNull();
   });
 
   it('calls onDone once when the rig of a plays-once state ends', () => {
