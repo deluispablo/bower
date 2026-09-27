@@ -12,8 +12,10 @@
  * Add, Bower. Health is reached from the explorer's Health row.
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
- * header row over the content (breadcrumb slot, theme toggle, "?" — the menu button, Back, the phone title, the actions slot and the
- * avatar are phone-only; Settings is a sidebar row there),
+ * header row over the content (breadcrumb slot, "?" — the menu button,
+ * Back, the phone title, the actions slot and the avatar are phone-only;
+ * Settings is a sidebar row there; the theme control lives only in
+ * Settings › Look, #324),
  * and on note screens a third column, filled through the `aside` shell slot
  * (#144, `shell-slots.ts` — the note screen sits inside `children`, so it
  * cannot reach these any other way).
@@ -31,7 +33,6 @@ import { useLocation } from 'preact-iso';
 import { loginUrl } from '../api.js';
 import { useSession } from '../session.js';
 import { BOWER_PATH, helpScreenFor, isInnerScreen } from '../shell-routes.js';
-import { effectiveTheme, setTheme } from '../theme.js';
 import { replayTour } from '../tour-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
@@ -45,10 +46,8 @@ import {
   IconHelp,
   IconHome,
   IconMenu,
-  IconMoon,
   IconPlus,
   IconSliders,
-  IconSun,
 } from './icons.js';
 import { OfflineBanner } from './offline-banner.js';
 import { RunSheets } from './run-sheets.js';
@@ -105,26 +104,6 @@ const DESKTOP_QUERY = '(min-width: 900px)';
 
 function currentFor(href: string, path: string): 'page' | undefined {
   return href === path ? 'page' : undefined;
-}
-
-/** Desktop header: flips between light and dark (Settings keeps "system"). */
-function ThemeToggle(): JSX.Element {
-  const [theme, setThemeState] = useState(effectiveTheme);
-  const next = theme === 'dark' ? 'light' : 'dark';
-  return (
-    <button
-      type="button"
-      class="icon-button theme-toggle"
-      aria-label="Switch theme"
-      title="Switch theme"
-      onClick={() => {
-        setTheme(next);
-        setThemeState(next);
-      }}
-    >
-      {theme === 'dark' ? <IconSun /> : <IconMoon />}
-    </button>
-  );
 }
 
 /** The avatar's letter: the first letter of the account's email. */
@@ -240,7 +219,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             <div class="topbar-crumb">
               {crumb ?? <span class="topbar-title">Bower</span>}
             </div>
-            <ThemeToggle />
             <div class="topbar-slot topbar-actions" data-slot="actions">
               {actions}
             </div>
