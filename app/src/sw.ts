@@ -15,7 +15,11 @@ import { createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { NetworkFirst } from 'workbox-strategies';
 
-import { filesFromFormData, storeSharedFiles } from './share-target.js';
+import {
+  filesFromFormData,
+  isTrustedShareRequest,
+  storeSharedFiles,
+} from './share-target.js';
 import './sw-push.js';
 import { isApiStatusRequest } from './sw-routes.js';
 
@@ -28,13 +32,23 @@ precacheAndRoute(self.__WB_MANIFEST);
 const SHARE_TARGET_PATH = '/add';
 
 async function handleShareTarget(request: Request): Promise<Response> {
+  // A cross-site page can POST its own `FormData` to this origin's share
+  // target exactly like the OS share sheet does; only the share sheet (and
+  // other navigations with no triggering document) is `Sec-Fetch-Site:
+  // none` (#262/M3). Refuse anything else: nothing stored, nothing shared.
+  if (!isTrustedShareRequest(request.headers)) {
+    return Response.redirect(SHARE_TARGET_PATH, 303);
+  }
   try {
     const formData = await request.formData();
     await storeSharedFiles(filesFromFormData(formData));
-  } catch {
-    // Nothing usable came through; the app just shows nothing shared.
+  } catch (err) {
+    // Errors are never swallowed (CLAUDE.md): logged here, and reported to
+    // the page as one sentence (#134) since the worker has no UI of its own.
+    console.error(err);
+    return Response.redirect(`${SHARE_TARGET_PATH}?shared=failed`, 303);
   }
-  return Response.redirect('/add?shared=1', 303);
+  return Response.redirect(`${SHARE_TARGET_PATH}?shared=1`, 303);
 }
 
 self.addEventListener('fetch', (event) => {

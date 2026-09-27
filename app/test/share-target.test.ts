@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   filesFromFormData,
+  isTrustedShareRequest,
   SHARE_CACHE_NAME,
   SHARE_INDEX_KEY,
   storeSharedFiles,
@@ -57,6 +58,33 @@ function stubCaches(): {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('isTrustedShareRequest', () => {
+  it('trusts a request with Sec-Fetch-Site: none (the OS share sheet)', () => {
+    expect(
+      isTrustedShareRequest(new Headers({ 'Sec-Fetch-Site': 'none' })),
+    ).toBe(true);
+  });
+
+  it('refuses a cross-site request (a page posting to the share target itself)', () => {
+    expect(
+      isTrustedShareRequest(new Headers({ 'Sec-Fetch-Site': 'cross-site' })),
+    ).toBe(false);
+  });
+
+  it('refuses same-origin and same-site requests too: only `none` is a share', () => {
+    expect(
+      isTrustedShareRequest(new Headers({ 'Sec-Fetch-Site': 'same-origin' })),
+    ).toBe(false);
+    expect(
+      isTrustedShareRequest(new Headers({ 'Sec-Fetch-Site': 'same-site' })),
+    ).toBe(false);
+  });
+
+  it('refuses a request with no Sec-Fetch-Site header at all: fails safe', () => {
+    expect(isTrustedShareRequest(new Headers())).toBe(false);
+  });
 });
 
 describe('filesFromFormData', () => {

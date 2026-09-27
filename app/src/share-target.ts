@@ -11,6 +11,18 @@
 export const SHARE_CACHE_NAME = 'bower-share';
 export const SHARE_INDEX_KEY = '/share/index';
 
+/**
+ * True for a genuine OS share: the share sheet, a bookmark, a typed URL —
+ * any navigation with no triggering document — carries `Sec-Fetch-Site:
+ * none`. A cross-site page posting its own `FormData` to this origin's
+ * share target is `cross-site` instead (#262/M3), and a browser without
+ * Fetch Metadata support sends no header at all — treated as untrusted so
+ * the check fails safe rather than open.
+ */
+export function isTrustedShareRequest(headers: Headers): boolean {
+  return headers.get('Sec-Fetch-Site') === 'none';
+}
+
 export interface ShareIndex {
   names: string[];
 }
