@@ -1,40 +1,39 @@
 .process {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
 }
 
 .process-offline-reason {
   margin-top: var(--space-1);
   color: var(--color-text-muted);
   font-size: var(--text-xs);
-  text-align: center;
 }
 
-/* The action pill (spec §5.1): top bar on phone, content header on desktop. */
+/* The Tidy up button (#320, Phone-Home and Phone-Add boards): a small teal
+   button on the Inbox card and in Add's hint, never in the bar. */
 .process-button {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  margin-top: var(--space-1);
   padding: 0 14px;
   background: var(--color-brand);
   color: var(--color-on-brand);
   border: none;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   font: inherit;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
 }
 
-@media (min-width: 900px) and (pointer: fine) {
-  .process-button {
-    min-height: 36px;
-    border-radius: var(--radius-md);
-  }
+.process-button .icon {
+  width: 16px;
+  height: 16px;
 }
 
 .process-button:hover:not(:disabled) {
@@ -43,6 +42,7 @@
 
 .process-button:disabled {
   cursor: default;
+  opacity: 0.6;
 }
 
 .process-button[data-phase='failed'],
@@ -54,11 +54,6 @@
 .process-button[data-phase='quota'] {
   background: var(--color-accent);
   color: var(--color-on-accent);
-}
-
-.process-button[data-phase='done'] {
-  background: var(--color-success);
-  color: var(--color-on-success);
 }
 
 .process-spinner {
@@ -79,5 +74,11 @@
   50% {
     opacity: 1;
     transform: scale(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .process-spinner {
+    animation: none;
   }
 }

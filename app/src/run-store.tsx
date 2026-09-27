@@ -278,8 +278,20 @@ export function pendingCount(files: DriveFile[]): number {
 
 export interface RunStore extends RunState {
   process: () => Promise<void>;
-  /** Opens the working sheet (a tap on the pill during or after a run). */
+  /**
+   * What every Tidy up control calls (the Inbox card, Add's hint, the
+   * switcher command, #320). The one place the "Is that everything?"
+   * confirmation (#337) will go; until it lands, it starts the run directly.
+   */
+  tidyUp: () => void;
+  /** Opens the working sheet (a tap during or after a run). */
   openSheet: () => void;
+  /**
+   * Bumped on every `openSheet`, so the sheet measures its linger window
+   * again even when the phase itself has not changed (a failure reopened
+   * after it already faded).
+   */
+  sheetReopenKey: number;
   /** Closes the working sheet; a `done` run goes back to `idle` with it. */
   dismissSheet: () => void;
 }
@@ -442,15 +454,32 @@ export function RunProvider({ children }: RunProviderProps) {
     }
   }, [apply]);
 
+  const [sheetReopenKey, setSheetReopenKey] = useState(0);
+
   const openSheet = useCallback((): void => {
     apply({ type: 'sheet-opened' });
+    setSheetReopenKey((key) => key + 1);
   }, [apply]);
 
   const dismissSheet = useCallback((): void => {
     apply({ type: 'sheet-dismissed' });
   }, [apply]);
 
-  const value: RunStore = { ...state, process, openSheet, dismissSheet };
+  // Opening the sheet first means a run that cannot start (the day's limit,
+  // an error) still shows its reason in the sheet.
+  const tidyUp = useCallback((): void => {
+    openSheet();
+    void process();
+  }, [openSheet, process]);
+
+  const value: RunStore = {
+    ...state,
+    process,
+    tidyUp,
+    openSheet,
+    sheetReopenKey,
+    dismissSheet,
+  };
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>;
 }

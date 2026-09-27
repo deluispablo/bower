@@ -1,7 +1,7 @@
 /**
  * The one-time bottom sheet asking for push permission, shown right after
  * the first `done` (#39; restyled as a sheet with the bird singing in
- * #148). Mounted from `process-button.tsx`. On iOS before the PWA is
+ * #148). Mounted once in the shell (`run-sheets.tsx`). On iOS before the PWA is
  * installed, push isn't possible yet ("needs-install"), so this shows the
  * install hint instead of the permission buttons.
  */

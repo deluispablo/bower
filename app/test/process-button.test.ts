@@ -1,22 +1,36 @@
 import { describe, expect, it } from 'vitest';
 
-import { labelFor } from '../src/components/process-button.js';
+import { labelFor, startsRun } from '../src/components/process-button.js';
 
 describe('labelFor', () => {
-  it('idle: "Tidy up", or with a pending count', () => {
-    expect(labelFor('idle', 0)).toBe('Tidy up');
-    expect(labelFor('idle', 3)).toBe('Tidy up (3)');
+  it('idle and done: "Tidy up", with no count (the card carries it)', () => {
+    expect(labelFor('idle')).toBe('Tidy up');
+    expect(labelFor('done')).toBe('Tidy up');
   });
 
   it('queued and running: "Tidying up…"', () => {
-    expect(labelFor('queued', 0)).toBe('Tidying up…');
-    expect(labelFor('running', 0)).toBe('Tidying up…');
+    expect(labelFor('queued')).toBe('Tidying up…');
+    expect(labelFor('running')).toBe('Tidying up…');
   });
 
-  it('done, failed, stale and quota: unchanged', () => {
-    expect(labelFor('done', 0)).toBe('Done ✓');
-    expect(labelFor('failed', 0)).toBe('Failed');
-    expect(labelFor('stale', 0)).toBe('Failed');
-    expect(labelFor('quota', 0)).toBe('Limit reached');
+  it('failed and stale: "Try again"; quota: "Limit reached"', () => {
+    expect(labelFor('failed')).toBe('Try again');
+    expect(labelFor('stale')).toBe('Try again');
+    expect(labelFor('quota')).toBe('Limit reached');
+  });
+});
+
+describe('startsRun', () => {
+  it('starts a run when idle, done or after a failure', () => {
+    expect(startsRun('idle')).toBe(true);
+    expect(startsRun('done')).toBe(true);
+    expect(startsRun('failed')).toBe(true);
+    expect(startsRun('stale')).toBe(true);
+  });
+
+  it('reopens the sheet instead during a run and once the limit is reached', () => {
+    expect(startsRun('queued')).toBe(false);
+    expect(startsRun('running')).toBe(false);
+    expect(startsRun('quota')).toBe(false);
   });
 });

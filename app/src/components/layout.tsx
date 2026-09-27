@@ -7,21 +7,21 @@
  * the folder menu button that opens the explorer drawer; on an inner screen
  * (`isInnerScreen`), Back instead (the `back` slot, or Back to Home); then
  * the title (the wordmark as text on Home, the screen's own title from the
- * `crumb` slot elsewhere), the `actions` slot (a note's More, #144), the
- * Tidy up pill until #320 moves it, "?" (About this screen) and the avatar
- * that opens Settings — and four tabs at the bottom (#317): Home, Notes,
+ * `crumb` slot elsewhere), the `actions` slot (a note's More, #144), "?"
+ * (About this screen) and the avatar that opens Settings — and four tabs at the bottom (#317): Home, Notes,
  * Add, Bower. Health is reached from the explorer's Health row.
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
- * header row over the content (breadcrumb slot, theme toggle, the pill,
- * "?" — the menu button, Back, the phone title, the actions slot and the
+ * header row over the content (breadcrumb slot, theme toggle, "?" — the menu button, Back, the phone title, the actions slot and the
  * avatar are phone-only; Settings is a sidebar row there),
  * and on note screens a third column, filled through the `aside` shell slot
  * (#144, `shell-slots.ts` — the note screen sits inside `children`, so it
  * cannot reach these any other way).
  *
- * The header is one element restyled per breakpoint, so the pill (which
- * owns the working sheet and its toasts) is only ever mounted once.
+ * There is no Tidy up in the bar (#320): the button lives on Home's Inbox
+ * card and in Add's hint, and the bar shows nothing while a run goes. The
+ * working sheet and the notifications prompt are mounted once, here
+ * (`RunSheets`), whichever screen the run was started from.
  */
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -48,7 +48,7 @@ import {
   IconSun,
 } from './icons.js';
 import { OfflineBanner } from './offline-banner.js';
-import { ProcessButton } from './process-button.js';
+import { RunSheets } from './run-sheets.js';
 import { Switcher } from './switcher.js';
 import { Toast } from './toast.js';
 import { Tour } from './tour.js';
@@ -233,9 +233,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             <div class="topbar-slot topbar-actions" data-slot="actions">
               {actions}
             </div>
-            <div class="topbar-slot topbar-pill" data-slot="process">
-              <ProcessButton />
-            </div>
             <button
               type="button"
               class="icon-button topbar-help"
@@ -292,6 +289,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         />
       )}
       <Switcher />
+      <RunSheets />
       {/* The one toast (`toast-store.ts`): a pin, a finished run. */}
       <Toast />
     </div>
