@@ -357,6 +357,8 @@ A note is pinned when its frontmatter has `pinned: <ISO 8601 time>` — the time
 
 This means a `pinned` line can show up if you open a note straight in Obsidian or another editor — it's expected, not a stray field, and the agent's `CLAUDE.md` tells it to leave `pinned` as it is when it rewrites a note. Removing the line by hand unpins the note the same way the app would.
 
+The UI (issue #216): Home shows a Pinned section above Recent, hidden while there is nothing pinned — up to 8 tiles, "All pinned" past that, an Edit toggle turning tiles into rows with an unpin button. The desktop sidebar shows the same items as a Pinned group above the tree, up to 5. Four entry points pin or unpin: the note's own menu (More → Pin to Home), holding a row in the phone drawer for half a second (a sheet: Pin to Home, Open the folder, Ask Bower about it, Open in Drive, Cancel), a tree row's hover pin button on desktop with the same items on right-click or the keyboard's Menu key, and the Folder screen's Pinned chip. Every one of them shows the same toast, "Pinned to Home" or "Unpinned"; a failure shows one sentence instead and changes nothing. The quick switcher has no filter mode of its own yet, so "All pinned" opens it with `pinned:` already typed in the field rather than actually narrowing the list — a real filter is left for a later issue.
+
 ## Extensions
 
 Optional modules an operator can add on top of their own instance, kept out of the core deploy: `docs/extensions/email-in.md` (a Gmail-fed inbox), not built, design only.
