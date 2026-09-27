@@ -139,7 +139,15 @@ cat >"$STUBS/claude" <<'STUB'
 # claude stub: records its flags and credentials, prints a summary, moves
 # the inbox file to Processed/ like the real agent would. Meanwhile a file
 # lands in each inbox folder of the fake Drive, as an Add from the app would.
+#
+# run.sh starts the real claude under env -i, so this stub cannot rely on
+# SMOKE_STATE/SMOKE_SCENARIO reaching it as environment variables (that is
+# the behaviour under test): it finds its own state through two marker
+# files next to it instead, written by run_case() before each scenario.
 set -euo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SMOKE_STATE=$(cat "$HERE/../current-state")
+SMOKE_SCENARIO=$(cat "$HERE/../current-scenario")
 turns='' tools='' denied='' prompt=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -153,7 +161,10 @@ done
 echo "claude max-turns=$turns rulebook=$([ -f CLAUDE.md ] && echo yes || echo no) prompt=$([ -n "$prompt" ] && echo yes || echo no)" >>"$SMOKE_STATE/calls.log"
 printf '%s' "$tools" >"$SMOKE_STATE/claude-tools.txt"
 printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
-echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-unset} CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-unset}" >"$SMOKE_STATE/claude-env.log"
+# The model's own environment, exactly as run.sh's env -i allow-list built
+# it: the test greps this for the Drive token, the runner key, BOWER_* and
+# the model credential, never the console output (that stays content-free).
+env >"$SMOKE_STATE/claude-env.log"
 echo "STDERR-MARKER while reading 0-Inbox/a.pdf" >&2
 echo late >"$SMOKE_STATE/remote/0-Inbox/late.pdf"
 echo late >"$SMOKE_STATE/remote/Clippings/late.md"
@@ -243,6 +254,8 @@ run_case() {
   shift
   STATE="$ROOT/$CASE"
   mkdir -p "$STATE/runner-temp"
+  printf '%s' "$STATE" >"$ROOT/current-state"
+  printf '%s' "$CASE" >"$ROOT/current-scenario"
   : >"$STATE/calls.log"
   : >"$STATE/posts.log"
   set +e
@@ -293,6 +306,29 @@ expect_cleaned_up() {
   local left
   left=$(find "$STATE/runner-temp" -mindepth 1 -maxdepth 1 -name 'bower.*' | wc -l | tr -d ' ')
   expect_eq "$left" 0 'work dirs left behind'
+}
+
+# The claude stub's own environment (env -i's allow-list) must carry none of
+# the Drive token, the runner key, folder ids or any RCLONE_CONFIG_*, and
+# exactly the expected model credential. want_key/want_oauth are the
+# expected ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN value, or 'unset'.
+expect_claude_env() {
+  local want_key=$1 want_oauth=$2
+  local log="$STATE/claude-env.log"
+  for pattern in '^RCLONE_' '^BOWER_' '^ACCESS_TOKEN=' '^FOLDER_ID='; do
+    grep -Eq "$pattern" "$log" && die "claude process env still has $pattern"
+  done
+  if [ "$want_key" = unset ]; then
+    grep -q '^ANTHROPIC_API_KEY=' "$log" && die 'ANTHROPIC_API_KEY leaked into claude env'
+  else
+    grep -q "^ANTHROPIC_API_KEY=$want_key\$" "$log" || die 'ANTHROPIC_API_KEY missing from claude env'
+  fi
+  if [ "$want_oauth" = unset ]; then
+    grep -q '^CLAUDE_CODE_OAUTH_TOKEN=' "$log" && die 'CLAUDE_CODE_OAUTH_TOKEN leaked into claude env'
+  else
+    grep -q "^CLAUDE_CODE_OAUTH_TOKEN=$want_oauth\$" "$log" || die 'CLAUDE_CODE_OAUTH_TOKEN missing from claude env'
+  fi
+  grep -q '^PATH=' "$log" || die 'PATH missing from claude env (its own tools would fail to run)'
 }
 
 # --- scenarios --------------------------------------------------------------
@@ -363,6 +399,7 @@ expect_eq "$(node -e '
   process.stdout.write([t.access_token, t.token_type, t.expiry].join(" "));
 ' <"$STATE/rclone-token.json")" "$DRIVE_TOKEN Bearer 2030-01-01T00:00:00.000Z" 'rclone token'
 grep -q STDERR-MARKER "$STATE/runner-temp/bower-logs/agent.err" || die 'agent stderr not kept in the logs dir'
+expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok happy path"
@@ -397,6 +434,7 @@ expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive after a failure'
 expect_eq "$(cat "$STATE/remote/Wiki/app.md")" 'v2 from the app' 'note edited in the app during a failed run'
 expect_eq "$(cat "$STATE/remote/Wiki/agent.md")" 'v2 from the agent' 'note the agent changed before failing'
+expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok agent failure"
@@ -416,8 +454,7 @@ echo "ok missing CLAUDE.md"
 # 5. The user's own API key replaces the operator's OAuth token.
 run_case apikey
 expect_eq "$RC" 0 'exit code'
-expect_eq "$(cat "$STATE/claude-env.log")" \
-  "ANTHROPIC_API_KEY=$USER_API_KEY CLAUDE_CODE_OAUTH_TOKEN=unset" 'claude credentials'
+expect_claude_env "$USER_API_KEY" unset
 expect_content_free
 expect_cleaned_up
 echo "ok user API key"
@@ -448,6 +485,7 @@ expect_eq "$(post 2 'p.summary.split("\n")[4]')" 'SUMMARY-MARKER 5' 'summary end
 expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 1 'rclone deletefile calls'
 [ ! -e "$STATE/remote/0-Inbox/a.pdf" ] || die 'original back in 0-Inbox/ in Drive'
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive'
+expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok original removed from Drive mid-run"
@@ -467,6 +505,7 @@ expect_eq "$(post 2 p.kind)" lint 'second kind'
 expect_eq "$(post 2 'p.processed === undefined')" true 'lint has no processed'
 expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
 expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
+expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok lint"
@@ -479,6 +518,7 @@ expect_eq "$(cat "$STATE/claude-tools.txt")" \
   'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),Bash(cp:*),Bash(pandoc:*),WebSearch,WebFetch' \
   'allowed tools (web opted in)'
 expect_eq "$(cat "$STATE/claude-denied.txt")" 'Bash(curl:*),Bash(wget:*)' 'disallowed tools (web opted in)'
+expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok web opt-in"
@@ -495,6 +535,7 @@ expect_eq "$(cat "$remote/Wiki/app.md")" 'v2 from the app' 'note edited in the a
 expect_eq "$(cat "$remote/Wiki/agent.md")" 'v2 from the agent' 'note the agent changed'
 [ -f "$remote/0-Inbox/Processed/a.pdf" ] || die 'processed original missing from 0-Inbox/Processed/ in Drive'
 [ ! -e "$remote/0-Inbox/a.pdf" ] || die 'processed original still in 0-Inbox/ in Drive'
+expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok note edited in the app during a run"

@@ -264,6 +264,7 @@ In order:
 | Push notifications never arrive | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` unset (falls out as `500 config`, same as any missing secret) or the user is on iOS without having installed the app to the home screen (iOS only delivers web push to an installed PWA) | Set the VAPID secrets (step 3.4–3.5); on iOS, tell the user to add the app to their home screen first |
 | Everyone is signed out again after 7 days | The Google OAuth consent screen is still in **Testing** — refresh tokens issued to test users expire after 7 days there | Publish the app (step 2) |
 | Pasting a link into Add saves a note but doesn't summarise it | Expected: the link becomes `Link - <host> <date> <time>.md` in the inbox right away, and the agent reads the page during the next Tidy up run, not when the note is saved | Run Tidy up (or leave "Tidy up right after adding" on) to have Bower read it |
+| A Tidy up run's log or a note the agent wrote suggests the model tried to reach the Drive API, the Worker, or read `BOWER_API_KEY`/an access token, and couldn't | By design: `claude -p` runs under `env -i` with an explicit allow-list (`agent/run.sh`), so the model's own process never has the Drive token, `BOWER_API_KEY` or any other `BOWER_*`/`RCLONE_CONFIG_*` value, even though the surrounding shell does the sync down/up and the status report. A prompt-injected note (untrusted text in `0-Inbox/` or `Clippings/`) asking the model to use one of those must fail | Nothing to fix; this is the runner's minimal-environment guarantee (`docs/security.md` §6) |
 
 ## Extensions
 

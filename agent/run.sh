@@ -22,6 +22,10 @@
 #
 # Requires bash, curl, jq, rclone and claude on PATH.
 #
+# `claude` itself runs under `env -i` with its own, smaller allow-list (see
+# the comment above the agent run step): the Drive token, the runner key and
+# every BOWER_*/RCLONE_CONFIG_* value stay in this shell only.
+#
 # The log carries timestamps, step names and counts only: never a file name,
 # a path inside the vault, the agent's output or a credential. The agent's
 # stdout stays in the work dir; its stderr and rclone's output go to private
@@ -296,6 +300,35 @@ if ! manifest >"$MANIFEST_BEFORE"; then
   fail "$STEP: listing the local copy failed"
 fi
 
+# Claude itself runs under `env -i` with an explicit allow-list, so an
+# instruction that reaches the model despite the tool allow/deny list above
+# still finds no Drive token, no runner key and no BOWER_* value in its own
+# process; only the shell around it (sync down, sync up, the status report)
+# keeps those. Allowed through:
+#   HOME, PATH        to run at all, including the tools in $ALLOWED_TOOLS
+#                      (mv, mkdir, ls, cp, pandoc)
+#   LANG, LC_ALL       stable text encoding while the agent reads vault files
+#   TMPDIR             Claude Code's own scratch space
+#   TERM               non-interactive output formatting
+#   CI, GITHUB_ACTIONS Claude Code's own environment detection; passed
+#                      through only when the workflow set them
+#   ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN
+#                      the model credential (never both, see above)
+# Checked against `claude --help` and the strings in the installed binary:
+# nothing else is documented or discoverable as required for a
+# non-interactive `-p` run. RCLONE_CONFIG_*, BOWER_*, FOLDER_ID and
+# ACCESS_TOKEN are deliberately left out.
+readonly CLAUDE_ENV_ALLOWLIST=(
+  HOME PATH LANG LC_ALL TMPDIR TERM CI GITHUB_ACTIONS
+  ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN
+)
+claude_env=()
+for name in "${CLAUDE_ENV_ALLOWLIST[@]}"; do
+  if [ -n "${!name:-}" ]; then
+    claude_env+=("$name=${!name}")
+  fi
+done
+
 STEP='agent run'
 log "$STEP"
 PROMPT=$(cat "$PROMPT_FILE")
@@ -303,8 +336,9 @@ RUN_STARTED=1
 set +e
 (
   cd "$VAULT_DIR"
-  claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format text \
-    --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
+  env -i "${claude_env[@]}" \
+    claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format text \
+      --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
 ) >"$AGENT_OUT" 2>"$AGENT_ERR"
 agent_rc=$?
 set -e
