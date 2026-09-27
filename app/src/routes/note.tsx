@@ -5,11 +5,12 @@ import { useRoute } from 'preact-iso';
 import { AboutPanel } from '../components/about-panel.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
+import { IconChevronRight, IconExternalLink } from '../components/icons.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { isProtectedNote } from '../drive.js';
-import type { SaveOptions } from '../drive.js';
+import type { DriveFile, SaveOptions } from '../drive.js';
 import { driveViewUrl } from '../markdown/embeds.js';
 import { propertiesFor } from '../markdown/frontmatter.js';
 import { renderNote } from '../markdown/render.js';
@@ -21,23 +22,65 @@ import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
 import '../styles/markdown.css';
 
-interface BreadcrumbProps {
+interface CrumbProps {
   crumbs: BreadcrumbSegment[];
 }
 
-/** The breadcrumb, filled into the shell's header `crumb` slot. */
-function Breadcrumb({ crumbs }: BreadcrumbProps): JSX.Element {
+/**
+ * The shell header's `crumb` slot content (spec §6 row Note, issue #144):
+ * the phone back link (the immediate parent folder, or Home for a
+ * top-level note) and the desktop breadcrumb, both always in the markup —
+ * `layout.css` shows only the one that fits the breakpoint, the same way
+ * it already does for the wordmark and the theme toggle.
+ */
+function Crumb({ crumbs }: CrumbProps): JSX.Element {
+  const parent = crumbs[crumbs.length - 1];
   return (
-    <nav class="breadcrumb" aria-label="Folder">
-      {crumbs.map((crumb) => (
-        <span key={crumb.path}>
-          <a href={`/#folder=${encodeURIComponent(crumb.path)}`}>
-            {crumb.name}
-          </a>
-          <span aria-hidden="true"> / </span>
+    <>
+      <a
+        class="topbar-back"
+        href={
+          parent === undefined
+            ? '/'
+            : `/#folder=${encodeURIComponent(parent.path)}`
+        }
+      >
+        <IconChevronRight />
+        <span class="topbar-back-label">
+          {parent === undefined ? 'Home' : parent.name}
         </span>
-      ))}
-    </nav>
+      </a>
+      {crumbs.length > 0 && (
+        <nav class="breadcrumb" aria-label="Folder">
+          {crumbs.map((crumb) => (
+            <span key={crumb.path}>
+              <a href={`/#folder=${encodeURIComponent(crumb.path)}`}>
+                {crumb.name}
+              </a>
+              <span aria-hidden="true"> / </span>
+            </span>
+          ))}
+        </nav>
+      )}
+    </>
+  );
+}
+
+/** The shell header's `actions` slot content on a phone (issue #144): the
+ * desktop screen already has "Open in Drive" next to the title, so this is
+ * hidden there (`layout.css`) rather than shown twice. */
+function TopbarActions({ file }: { file: DriveFile }): JSX.Element {
+  return (
+    <a
+      class="icon-button"
+      aria-label="Open in Drive"
+      title="Open in Drive"
+      href={driveViewUrl(file)}
+      target="_blank"
+      rel="noopener"
+    >
+      <IconExternalLink />
+    </a>
   );
 }
 
@@ -105,17 +148,22 @@ export function Note() {
     // file it resolves to) becomes available on a cold-start deep link.
   }, [id, index, file, getNoteText]);
 
-  // Fills the shell's header breadcrumb and "About this note" column
-  // (#144, shell-slots.ts). Both hooks run on every render (Rules of
-  // Hooks), before `index`/`file` are known to exist, hence the guards
-  // inside; both are memoized so an unrelated re-render (typing in the
-  // append form, say) does not refill the slot every time.
+  // Fills the shell's header crumb and actions slots and the "About this
+  // note" column (#144, shell-slots.ts). All three hooks run on every
+  // render (Rules of Hooks), before `index`/`file` are known to exist,
+  // hence the guards inside; all are memoized so an unrelated re-render
+  // (typing in the append form, say) does not refill a slot every time.
   const crumbContent = useMemo(() => {
     if (file === undefined) return null;
-    const crumbs = breadcrumb(file.path);
-    return crumbs.length > 0 ? <Breadcrumb crumbs={crumbs} /> : null;
+    return <Crumb crumbs={breadcrumb(file.path)} />;
   }, [file]);
   useShellSlot('crumb', crumbContent);
+
+  const actionsContent = useMemo(() => {
+    if (file === undefined) return null;
+    return <TopbarActions file={file} />;
+  }, [file]);
+  useShellSlot('actions', actionsContent);
 
   const aboutContent = useMemo(() => {
     if (index === null || file === undefined || load.status !== 'ready') {

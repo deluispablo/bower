@@ -3,7 +3,9 @@
  *
  * Phone: a top bar (the bird and the wordmark, the Tidy up pill, the menu
  * button that opens the explorer drawer) and a bottom nav (Home, Add,
- * Tell, Settings). Health is reached from the explorer's Health row.
+ * Tell, Settings). Health is reached from the explorer's Health row. On a
+ * note screen the wordmark is replaced by the back link (the `crumb` slot),
+ * and the `actions` slot next to the pill holds Open in Drive (#144).
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
  * header row over the content (breadcrumb slot, theme toggle, the pill),
@@ -96,7 +98,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
   const { index } = useVault();
   const { path } = useLocation();
-  const { crumb, aside } = useShellSlots();
+  const { crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Re-read on every render: the health screen updates the pref, and a
@@ -154,14 +156,20 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       </nav>
       <div class="shell-main">
         <header class="topbar">
-          <a href="/" class="brand topbar-brand" aria-label="Bower home">
-            <Bird state="looking" size={32} />
-            <span class="brand-word">Bower</span>
-          </a>
-          <div class="topbar-crumb">{crumb}</div>
+          {crumb === null ? (
+            <a href="/" class="brand topbar-brand" aria-label="Bower home">
+              <Bird state="looking" size={32} />
+              <span class="brand-word">Bower</span>
+            </a>
+          ) : (
+            <div class="topbar-crumb">{crumb}</div>
+          )}
           <ThemeToggle />
           <div class="topbar-slot" data-slot="process">
             <ProcessButton />
+          </div>
+          <div class="topbar-slot topbar-actions" data-slot="actions">
+            {actions}
           </div>
           <button
             type="button"

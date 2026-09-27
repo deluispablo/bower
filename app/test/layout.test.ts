@@ -5,6 +5,10 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me } from '../src/api.js';
+import {
+  ShellSlotsProvider,
+  useShellSlot,
+} from '../src/components/shell-slots.js';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import { buildVaultIndex } from '../src/vault-index.js';
@@ -200,5 +204,28 @@ describe('Layout', () => {
       query('nav[aria-label="Your notes"] button[aria-label="Collapse all"]'),
     );
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
+  });
+
+  it('renders content from the actions shell slot next to the pill', () => {
+    // A stable VNode, created once: useShellSlot refills the slot whenever
+    // its `content` argument is a new reference, so passing a fresh one on
+    // every render (as an inline h(...) call here would) never settles.
+    const actionButton = h('button', { type: 'button' }, 'Open in Drive');
+    function FillActions() {
+      useShellSlot('actions', actionButton);
+      return null;
+    }
+
+    root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(
+        h(ShellSlotsProvider, null, h(Layout, null, h(FillActions, null))),
+        root,
+      );
+    });
+
+    const slot = query('[data-slot="actions"]');
+    expect(slot.querySelector('button')?.textContent).toBe('Open in Drive');
   });
 });

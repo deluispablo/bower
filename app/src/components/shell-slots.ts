@@ -1,11 +1,13 @@
 /**
- * Lets the note screen fill two places in the shell (#144): the desktop
- * header's breadcrumb and the "About this note" third column. `Layout`
- * wraps `Router` (`app.tsx`), so it renders before, and above, the route
- * that has the content for those places — a route cannot pass `Layout`
- * props the ordinary way. `ShellSlotsProvider`, placed around both in
- * `app.tsx`, holds the current content instead; `Layout` reads it with
- * `useShellSlots`, a route sets it with `useShellSlot`.
+ * Lets the note screen fill three places in the shell (#144): the header's
+ * breadcrumb (the desktop breadcrumb, or the phone back link, in place of
+ * the wordmark), the header's `actions` slot next to the Tidy up pill (the
+ * phone "Open in Drive" icon button), and the "About this note" third
+ * column. `Layout` wraps `Router` (`app.tsx`), so it renders before, and
+ * above, the route that has the content for those places — a route cannot
+ * pass `Layout` props the ordinary way. `ShellSlotsProvider`, placed around
+ * both in `app.tsx`, holds the current content instead; `Layout` reads it
+ * with `useShellSlots`, a route sets it with `useShellSlot`.
  *
  * Memoize what you pass to `useShellSlot` (`useMemo`, keyed on the data
  * behind it, not on a value that changes every render). A plain JSX element
@@ -22,17 +24,19 @@ import { createContext, h } from 'preact';
 import type { ComponentChildren, JSX } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
 
-export type ShellSlot = 'crumb' | 'aside';
+export type ShellSlot = 'crumb' | 'actions' | 'aside';
 
 interface ShellSlotsState {
   crumb: ComponentChildren;
+  actions: ComponentChildren;
   aside: ComponentChildren;
 }
 
-interface ShellSlotsApi extends ShellSlotsState {
-  setCrumb: (value: ComponentChildren) => void;
-  setAside: (value: ComponentChildren) => void;
-}
+type ShellSlotsSetters = {
+  [K in ShellSlot as `set${Capitalize<K>}`]: (value: ComponentChildren) => void;
+};
+
+interface ShellSlotsApi extends ShellSlotsState, ShellSlotsSetters {}
 
 function noop(): void {
   // No provider above: filling a slot does nothing.
@@ -40,8 +44,10 @@ function noop(): void {
 
 const DEFAULT_API: ShellSlotsApi = {
   crumb: null,
+  actions: null,
   aside: null,
   setCrumb: noop,
+  setActions: noop,
   setAside: noop,
 };
 
@@ -55,19 +61,26 @@ export function ShellSlotsProvider({
   children,
 }: ShellSlotsProviderProps): JSX.Element {
   const [crumb, setCrumb] = useState<ComponentChildren>(null);
+  const [actions, setActions] = useState<ComponentChildren>(null);
   const [aside, setAside] = useState<ComponentChildren>(null);
   return h(
     ShellSlotsContext.Provider,
-    { value: { crumb, aside, setCrumb, setAside } },
+    { value: { crumb, actions, aside, setCrumb, setActions, setAside } },
     children,
   );
 }
 
 /** `Layout`: the slots' current content. */
 export function useShellSlots(): ShellSlotsState {
-  const { crumb, aside } = useContext(ShellSlotsContext);
-  return { crumb, aside };
+  const { crumb, actions, aside } = useContext(ShellSlotsContext);
+  return { crumb, actions, aside };
 }
+
+const SETTERS: Record<ShellSlot, keyof ShellSlotsSetters> = {
+  crumb: 'setCrumb',
+  actions: 'setActions',
+  aside: 'setAside',
+};
 
 /**
  * A route: fills `slot` with `content` while mounted, clears it (back to
@@ -78,8 +91,8 @@ export function useShellSlot(
   slot: ShellSlot,
   content: ComponentChildren,
 ): void {
-  const { setCrumb, setAside } = useContext(ShellSlotsContext);
-  const set = slot === 'crumb' ? setCrumb : setAside;
+  const api = useContext(ShellSlotsContext);
+  const set = api[SETTERS[slot]];
   useEffect(() => {
     set(content);
     return () => {
