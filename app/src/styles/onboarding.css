@@ -147,6 +147,67 @@
   color: var(--color-text-muted);
 }
 
+/* Start with what you have (spec §14 "Add from your Drive"): the queue
+ * cards mirror Add's own (`add.css` `.add-queue*`) in wording and shape,
+ * kept as their own classes so the two routes stay independent. */
+
+.onb-drive-queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onb-drive-queue-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+}
+
+.onb-drive-queue-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--color-text-muted);
+}
+
+.onb-drive-queue-check {
+  font-size: var(--text-lg);
+  color: var(--color-success);
+}
+
+.onb-drive-queue-check-failed {
+  color: var(--color-danger);
+}
+
+.onb-drive-queue-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.onb-drive-queue-name {
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onb-drive-queue-status {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 /* Building your bower */
 
 .onb-build-bird {
