@@ -650,16 +650,46 @@ button.page-bare-back {
  * Gone again at 900 px, where the sidebar layout takes over.
  */
 @media (min-width: 600px) and (max-width: 899px) {
+  /*
+   * `.content`, `.topbar` and `.bottom-nav` are all flex items of
+   * `.shell-main`'s column layout; an auto-margin on the cross axis
+   * (`margin-inline: auto`, needed to centre them) turns off the flex
+   * default stretch and shrink-wraps the item to its own content instead
+   * (spec: cross-axis auto margins absorb the free space rather than
+   * stretch applying). `width: 100%` alongside `max-width` keeps all
+   * three a reliable, identical 640 px band — the bar, the bottom nav
+   * and the content column all share the same left edge and width
+   * instead of drifting with whatever a given screen's content happens
+   * to need (#311).
+   */
   .content {
+    width: 100%;
     max-width: 640px;
     margin-inline: auto;
   }
-}
 
-@media (min-width: 600px) {
+  /*
+   * #311: the bar and the bottom nav align with the content column
+   * instead of hugging the viewport edges (the bar sat at a fixed 24 px
+   * while the content started at 64 px) or spanning it (the bottom nav,
+   * `position: fixed; left: 0; right: 0`, spread its four items across
+   * the full viewport). Both become the same centred, 640 px box as
+   * `.content`, with the same space-4 edge padding the content itself
+   * has, so a note's title, the bar's title and the nav's icons all sit
+   * on one vertical line.
+   */
   .topbar {
-    padding-left: var(--space-6);
-    padding-right: var(--space-6);
+    width: 100%;
+    max-width: 640px;
+    margin-inline: auto;
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .bottom-nav {
+    width: 100%;
+    max-width: 640px;
+    margin-inline: auto;
   }
 }
 
