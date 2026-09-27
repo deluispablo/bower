@@ -216,6 +216,13 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       # The owner's own rules, which only a run given an instruction note
       # the app wrote may change (issue #263).
       rules | rulesok | listfail) echo '# my rules' >"$remote/Rules.md" ;;
+      # A Rules.md with a contradiction (two rules for the same subject
+      # that disagree) and a credential-shaped line, for the memory hygiene
+      # lint check (issue #201).
+      hygiene)
+        printf -- '# Rules\n\n## Invoices\n- Always file invoices under 2-Areas/Finance/.\n- Never file invoices under 2-Areas/Finance/; keep them in 3-Resources/Documents/ instead.\n\n## Login\npassword: hunter2\n' \
+          >"$remote/Rules.md"
+        ;;
       # A CLAUDE.md the owner keeps in an area: the agent may not change it.
       nested)
         mkdir -p "$remote/2-Areas/Home"
@@ -385,6 +392,13 @@ case "$SMOKE_SCENARIO" in
   # A run given an instruction note the app wrote adds the rule it asks for.
   rulesok)
     echo 'Tidy the notes every week' >>Rules.md
+    ;;
+  # A lint run over a Rules.md with a contradiction and a credential-shaped
+  # line: the stubbed report counts and lists both findings (memory hygiene,
+  # issue #201).
+  hygiene)
+    printf -- '---\ntags: [meta]\nnotes: 3\nfindings: 2\nbrokenLinks: 0\n---\n\n# Lint Report\n\n- [ ] Contradiction: Rules.md gives two conflicting rules for invoices\n- [ ] Forbidden content: Rules.md has a credential-shaped line\n' \
+      >'Lint Report.md'
     ;;
   # A prompt-injected run plants a CLAUDE.md in a known root, moves a
   # pending original onto one, and edits the owner's own nested one, next
@@ -1291,3 +1305,24 @@ expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok a CLAUDE.md at any depth reverted"
+
+# 26. Memory hygiene (#201, #173): a lint run over a Rules.md with a
+# contradiction and a credential-shaped line writes a report whose
+# frontmatter counts both as findings and whose checklist names each.
+MODE=lint
+run_case hygiene
+MODE=ingest
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+remote="$STATE/remote"
+report="$remote/Lint Report.md"
+[ -f "$report" ] || die 'Lint Report.md not uploaded to Drive'
+grep -q '^findings: 2$' "$report" || die 'report frontmatter does not count both findings'
+expect_eq "$(grep -c '^- \[ \]' "$report")" 2 'findings listed in the report checklist'
+grep -q 'Contradiction' "$report" || die 'report does not flag the contradiction'
+grep -q 'credential' "$report" || die 'report does not flag the credential-shaped line'
+grep -Fxq 'Lint Report.md' "$STATE/uploaded.txt" || die 'Lint Report.md not uploaded'
+expect_claude_env unset test-oauth-token
+expect_content_free
+expect_cleaned_up
+echo "ok memory hygiene lint findings"
