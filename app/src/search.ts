@@ -6,17 +6,26 @@
  */
 
 import type { DriveFile } from './drive.js';
+import { isAppFile } from './vault-index.js';
 import type { VaultIndex } from './vault-index.js';
 
 /**
  * `results` (Drive's full-text search, not scoped to any folder) narrowed to
- * the files that are actually in the vault index — order preserved.
+ * the files that are actually in the vault index — order preserved. Bower's
+ * own files are left out unless `showAppFiles` is on, checked against the
+ * indexed file's real path (a bare search result carries no folder
+ * nesting), same rule as the tree and Recent.
  */
 export function filterToIndex(
   results: DriveFile[],
   index: VaultIndex,
+  showAppFiles = false,
 ): DriveFile[] {
-  return results.filter((file) => index.byId.has(file.id));
+  return results.filter((file) => {
+    const indexed = index.byId.get(file.id);
+    if (indexed === undefined) return false;
+    return showAppFiles || !isAppFile(indexed.path, indexed.name);
+  });
 }
 
 /**

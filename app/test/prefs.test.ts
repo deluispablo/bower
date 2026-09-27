@@ -31,6 +31,7 @@ describe('prefs', () => {
     expect(getPref('autoProcessOnAdd')).toBe(true);
     expect(getPref('theme')).toBe('system');
     expect(getPref('healthSeenAt')).toBe('');
+    expect(getPref('showAppFiles')).toBe(false);
   });
 
   it('round-trips the time the health check was last opened', () => {
@@ -104,6 +105,7 @@ describe('prefs', () => {
     setPref('notifyOnFinish', true);
     setPref('autoProcessOnAdd', false);
     setPref('pushPromptShown', true);
+    setPref('showAppFiles', true);
     setPref('theme', 'dark');
 
     resetPrefs();
@@ -111,6 +113,7 @@ describe('prefs', () => {
     expect(getPref('notifyOnFinish')).toBe(false);
     expect(getPref('autoProcessOnAdd')).toBe(true);
     expect(getPref('pushPromptShown')).toBe(false);
+    expect(getPref('showAppFiles')).toBe(false);
     expect(getPref('theme')).toBe('dark');
   });
 

@@ -20,6 +20,7 @@ import { useLocation } from 'preact-iso';
 import { loadIndex, loadNote } from '../cache.js';
 import { searchFullText } from '../drive.js';
 import type { DriveFile } from '../drive.js';
+import { getPref } from '../prefs.js';
 import {
   filterToIndex,
   loadRecentSearches,
@@ -77,7 +78,9 @@ export function Search() {
       .then(async (found) => {
         if (id !== requestIdRef.current) return;
         const index = indexRef.current;
-        const matched = index ? filterToIndex(found, index) : [];
+        const matched = index
+          ? filterToIndex(found, index, getPref('showAppFiles'))
+          : [];
         const withSnippets = await Promise.all(
           matched.map(async (file): Promise<Result> => {
             const cached = await loadNote(file.id).catch(() => undefined);

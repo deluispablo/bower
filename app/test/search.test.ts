@@ -64,6 +64,29 @@ describe('filterToIndex', () => {
 
     expect(filterToIndex([note('x', 'x.md')], index)).toEqual([]);
   });
+
+  it('leaves out an app file unless asked, checked against its real path', () => {
+    const claude = note('c', 'CLAUDE.md');
+    const instruction = note(
+      'i',
+      '0-Inbox/Bower - 2026-09-26 1405 Receipts.md',
+    );
+    const plain = note('p', 'Plan.md');
+    const index = buildVaultIndex([claude, instruction, plain]);
+    // A bare search result carries the file name only, no folder nesting.
+    const results = [
+      note('c', 'CLAUDE.md'),
+      note('i', 'Bower - 2026-09-26 1405 Receipts.md'),
+      note('p', 'Plan.md'),
+    ];
+
+    expect(filterToIndex(results, index).map((f) => f.id)).toEqual(['p']);
+    expect(filterToIndex(results, index, true).map((f) => f.id)).toEqual([
+      'c',
+      'i',
+      'p',
+    ]);
+  });
 });
 
 describe('snippet', () => {

@@ -1,0 +1,21 @@
+/* The amber "one of Bower's own files" banner (spec §5.3, note.tsx). */
+
+.app-file-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-4) 0;
+  padding: var(--space-2) var(--space-4);
+  background: rgb(251 191 36 / 0.15); /* --bower-amber tint */
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.app-file-banner p {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+}

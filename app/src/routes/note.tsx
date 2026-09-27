@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
+import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
@@ -9,6 +10,7 @@ import type { SaveOptions } from '../drive.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
 import { breadcrumb, siblings } from '../navigation.js';
+import { isAppFile } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
 import '../styles/markdown.css';
@@ -171,6 +173,8 @@ export function Note() {
           {editError}
         </p>
       )}
+
+      {isAppFile(file.path, file.name) && <AppFileBanner file={file} />}
 
       {isEditing && (
         <NoteEditor

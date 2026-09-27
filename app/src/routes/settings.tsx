@@ -224,6 +224,35 @@ function NotificationsSection() {
   );
 }
 
+/** Settings › Advanced (spec §5.3): the same `showAppFiles` pref as the explorer's footer button. */
+function AdvancedSection() {
+  const [showAppFiles, setShowAppFiles] = useState(() =>
+    getPref('showAppFiles'),
+  );
+
+  return (
+    <div class="settings-section">
+      <h2>Advanced</h2>
+      <label class="settings-toggle">
+        <input
+          type="checkbox"
+          checked={showAppFiles}
+          onChange={(e) => {
+            const checked = e.currentTarget.checked;
+            setShowAppFiles(checked);
+            setPref('showAppFiles', checked);
+          }}
+        />
+        Show Bower's own files
+      </label>
+      <p class="settings-hint">
+        Rulebook, catalogue, journal, instruction notes and health reports,
+        grouped at the bottom of your notes.
+      </p>
+    </div>
+  );
+}
+
 function DangerZone() {
   const { signOut } = useSession();
   const [confirming, setConfirming] = useState(false);
@@ -340,6 +369,8 @@ export function Settings() {
           Tidy up right after adding
         </label>
       </div>
+
+      <AdvancedSection />
 
       <div class="settings-section">
         <button

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { pendingCount, recentNotes, relativeTime } from '../navigation.js';
+import { getPref } from '../prefs.js';
 import { formatAgo, useVault } from '../vault-store.js';
 
 const MINUTE_MS = 60_000;
@@ -16,7 +17,8 @@ export function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  const recent = index === null ? [] : recentNotes(index);
+  const recent =
+    index === null ? [] : recentNotes(index, 20, getPref('showAppFiles'));
   const pending = pendingCount(files);
   const refreshing = status === 'refreshing';
 

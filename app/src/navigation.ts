@@ -6,7 +6,7 @@
 
 import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
-import { basenameKey } from './vault-index.js';
+import { appFileLabel, basenameKey, isAppFile } from './vault-index.js';
 import type { VaultIndex } from './vault-index.js';
 
 const INBOX_FOLDERS = new Set(['0-Inbox', 'Clippings']);
@@ -44,9 +44,20 @@ export function relativeTime(iso: string, now: number | Date): string {
   return `${years} year${years === 1 ? '' : 's'} ago`;
 }
 
-/** Top 20 (by default) notes by `modifiedTime` descending. Missing times sort last. */
-export function recentNotes(index: VaultIndex, n = 20): DriveFile[] {
-  return [...index.notes]
+/**
+ * Top 20 (by default) notes by `modifiedTime` descending. Missing times sort
+ * last. Bower's own files (`isAppFile`) are left out unless `showAppFiles`
+ * is on (the `showAppFiles` preference, spec §5.3).
+ */
+export function recentNotes(
+  index: VaultIndex,
+  n = 20,
+  showAppFiles = false,
+): DriveFile[] {
+  const notes = showAppFiles
+    ? index.notes
+    : index.notes.filter((note) => !isAppFile(note.path, note.name));
+  return [...notes]
     .sort((a, b) => (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''))
     .slice(0, n);
 }
@@ -120,8 +131,11 @@ function sortByModified(node: TreeNode): string {
 /**
  * Nests the index's visible folders and notes into a tree. Folder notes
  * (`_Folder.md`) never appear: `buildVaultIndex` already excludes them from
- * `index.notes`. A "hub" note is identified by basename only (its name
- * matches its folder's name) — frontmatter tags (`hub`, `moc`) are not
+ * `index.notes`. Bower's own files (`isAppFile`) never appear here either —
+ * they never belong in their real folder position; the explorer renders
+ * them separately, as the "Bower's files" group (`appFileGroup`), only when
+ * `showAppFiles` is on. A "hub" note is identified by basename only (its
+ * name matches its folder's name) — frontmatter tags (`hub`, `moc`) are not
  * available here, since the index holds no note text. `sort` is the
  * explorer's order (`explorerSort` pref); by name unless asked otherwise.
  */
@@ -145,7 +159,10 @@ export function buildTree(
   }
 
   for (const folder of index.folders) ensure(folder.path);
-  for (const note of index.notes) ensure(folderOf(note.path)).notes.push(note);
+  for (const note of index.notes) {
+    if (isAppFile(note.path, note.name)) continue;
+    ensure(folderOf(note.path)).notes.push(note);
+  }
 
   if (sort === 'modified') sortByModified(root);
   else sortByName(root);
@@ -156,12 +173,16 @@ export function buildTree(
  * How many notes each folder holds, subfolders included, keyed by folder
  * path (the tree's per-folder counts). Every visible folder has an entry,
  * empty ones at 0; the root ('') has none. Folder notes are already left
- * out of `index.notes`, so they never count.
+ * out of `index.notes`, so they never count; Bower's own files (`isAppFile`)
+ * never count either, so a folder's number always matches what `buildTree`
+ * shows for it (they never appear inside a real folder, `showAppFiles` on
+ * or off).
  */
 export function folderCounts(index: VaultIndex): Map<string, number> {
   const counts = new Map<string, number>();
   for (const folder of index.folders) counts.set(folder.path, 0);
   for (const note of index.notes) {
+    if (isAppFile(note.path, note.name)) continue;
     let folder = folderOf(note.path);
     while (folder !== '') {
       counts.set(folder, (counts.get(folder) ?? 0) + 1);
@@ -169,6 +190,40 @@ export function folderCounts(index: VaultIndex): Map<string, number> {
     }
   }
   return counts;
+}
+
+export interface AppFileEntry {
+  file: DriveFile;
+  /** Friendly name (`appFileLabel`), what the "Bower's files" group shows. */
+  label: string;
+}
+
+export interface AppFileGroup {
+  /** Top-level named files (Rulebook, Catalogue, …), sorted by label. */
+  files: AppFileEntry[];
+  /** How many `Bower - *.md` instruction notes exist, at any depth. */
+  instructionNotesCount: number;
+}
+
+/**
+ * Bower's own files, gathered for the explorer's "Bower's files" group
+ * (shown only when `showAppFiles` is on): the top-level named files with
+ * their friendly labels, and a count of instruction notes (shown as one
+ * "Instruction notes (n)" row rather than individually).
+ */
+export function appFileGroup(index: VaultIndex): AppFileGroup {
+  const files: AppFileEntry[] = [];
+  let instructionNotesCount = 0;
+  for (const note of index.notes) {
+    if (!isAppFile(note.path, note.name)) continue;
+    if (note.name.startsWith('Bower - ')) {
+      instructionNotesCount++;
+      continue;
+    }
+    files.push({ file: note, label: appFileLabel(note.name) });
+  }
+  files.sort((a, b) => compareNames(a.label, b.label));
+  return { files, instructionNotesCount };
 }
 
 export interface BreadcrumbSegment {

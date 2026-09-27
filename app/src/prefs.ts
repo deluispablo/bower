@@ -27,6 +27,12 @@ export interface Prefs {
   healthSeenAt: string;
   /** The explorer tree's order: by name, or most recently modified first. */
   explorerSort: ExplorerSortPref;
+  /**
+   * Show Bower's own files (rulebook, catalogue, journal, instruction
+   * notes, …) in the tree, Recent, search and the switcher, grouped
+   * separately (spec §5.3). Off by default: users see only their notes.
+   */
+  showAppFiles: boolean;
 }
 
 const DEFAULTS: Prefs = {
@@ -36,6 +42,7 @@ const DEFAULTS: Prefs = {
   theme: 'system',
   healthSeenAt: '',
   explorerSort: 'name',
+  showAppFiles: false,
 };
 
 const STORAGE_PREFIX = 'bower:pref:';
@@ -64,6 +71,7 @@ const PER_USER_PREFS: ReadonlyArray<Exclude<keyof Prefs, 'theme'>> = [
   'autoProcessOnAdd',
   'pushPromptShown',
   'explorerSort',
+  'showAppFiles',
 ];
 
 /**
