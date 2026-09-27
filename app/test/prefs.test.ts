@@ -41,6 +41,14 @@ describe('prefs', () => {
     expect(getPref('healthSeenAt')).toBe('2026-06-07T09:00:00.000Z');
   });
 
+  it('sorts the explorer by name until told otherwise', () => {
+    stubLocalStorage();
+
+    expect(getPref('explorerSort')).toBe('name');
+    setPref('explorerSort', 'modified');
+    expect(getPref('explorerSort')).toBe('modified');
+  });
+
   it('round-trips a value written with setPref', () => {
     stubLocalStorage();
 

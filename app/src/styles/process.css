@@ -12,19 +12,29 @@
   text-align: center;
 }
 
+/* The action pill (spec §5.1): top bar on phone, content header on desktop. */
 .process-button {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   min-height: 44px;
-  padding: var(--space-2) var(--space-4);
+  padding: 0 14px;
   background: var(--color-brand);
   color: var(--color-on-brand);
   border: none;
   border-radius: var(--radius-full);
   font: inherit;
-  font-weight: var(--weight-medium);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+@media (min-width: 900px) and (pointer: fine) {
+  .process-button {
+    min-height: 36px;
+    border-radius: var(--radius-md);
+  }
 }
 
 .process-button:hover:not(:disabled) {

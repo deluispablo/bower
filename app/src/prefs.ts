@@ -8,6 +8,9 @@
 /** Light/dark, or follow the operating system (see `theme.ts`). */
 export type ThemePref = 'system' | 'light' | 'dark';
 
+/** The explorer tree's order (`navigation.ts#buildTree`). */
+export type ExplorerSortPref = 'name' | 'modified';
+
 export interface Prefs {
   /** Notify me when Bower finishes. Read by the push subscription added in #39. */
   notifyOnFinish: boolean;
@@ -22,6 +25,8 @@ export interface Prefs {
    * first time. Drives the "new report" badge (`health-report.ts`).
    */
   healthSeenAt: string;
+  /** The explorer tree's order: by name, or most recently modified first. */
+  explorerSort: ExplorerSortPref;
 }
 
 const DEFAULTS: Prefs = {
@@ -30,6 +35,7 @@ const DEFAULTS: Prefs = {
   pushPromptShown: false,
   theme: 'system',
   healthSeenAt: '',
+  explorerSort: 'name',
 };
 
 const STORAGE_PREFIX = 'bower:pref:';
@@ -57,6 +63,7 @@ const PER_USER_PREFS: ReadonlyArray<Exclude<keyof Prefs, 'theme'>> = [
   'notifyOnFinish',
   'autoProcessOnAdd',
   'pushPromptShown',
+  'explorerSort',
 ];
 
 /**
