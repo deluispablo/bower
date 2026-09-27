@@ -255,7 +255,8 @@ describe('DELETE /admin/allow/:email', () => {
     expect(remaining.some((k) => k.startsWith('allow:'))).toBe(false);
 
     const cb = await callback(googleStub().fetchImpl);
-    expect(cb.status).toBe(403);
+    expect(cb.status).toBe(302);
+    expect(cb.headers.get('location')).toBe(`${env.APP_ORIGIN}/not-invited`);
   });
 
   it('still deletes and answers 204 when the revoke call fails', async () => {
