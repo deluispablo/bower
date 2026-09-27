@@ -396,6 +396,10 @@ printf '%s' "$INGEST_PROMPT" | grep -Fq 'tags: [instruction]' ||
   die 'ingest prompt does not require the instruction frontmatter'
 printf '%s' "$INGEST_PROMPT" | grep -Fq 'Bower*.md` in `Clippings/`' ||
   die 'ingest prompt does not call out a Clippings/ Bower*.md as content'
+printf '%s' "$INGEST_PROMPT" | grep -Fq 'the `.md` file next to the original with the same base name' ||
+  die 'ingest prompt does not explain the converted Markdown sibling'
+printf '%s' "$INGEST_PROMPT" | grep -Fq 'a converted document together with its `.md`' ||
+  die 'ingest prompt does not move the sibling to Processed/ with the original'
 echo "ok ingest prompt contract"
 
 # 1. Ingest happy path.
