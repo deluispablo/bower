@@ -112,6 +112,58 @@ describe('bubbleFor', () => {
       "Sunday's health check is ready. Want to see it?",
     );
   });
+
+  it('quarantined beats refused, done, a new report and pending', () => {
+    expect(
+      bubbleFor({
+        offline: false,
+        error: false,
+        done: { processed: 3, quarantined: 2, refused: 1 },
+        newHealthReport: true,
+        pending: 5,
+      }),
+    ).toBe(
+      'Bower set aside 2 files that contained instructions. Look at them in Drive and move them back if they are fine.',
+    );
+  });
+
+  it('quarantined with one file is singular', () => {
+    expect(
+      bubbleFor({ ...allTidy, done: { processed: 0, quarantined: 1 } }),
+    ).toBe(
+      'Bower set aside 1 file that contained instructions. Look at them in Drive and move them back if they are fine.',
+    );
+  });
+
+  it('refused beats done when there is no quarantined', () => {
+    expect(
+      bubbleFor({
+        offline: false,
+        error: false,
+        done: { processed: 3, refused: 2 },
+        newHealthReport: true,
+        pending: 5,
+      }),
+    ).toBe('2 changes were refused; nothing was lost.');
+  });
+
+  it('refused with one change is singular', () => {
+    expect(bubbleFor({ ...allTidy, done: { processed: 0, refused: 1 } })).toBe(
+      '1 change was refused; nothing was lost.',
+    );
+  });
+
+  it('done with quarantined/refused absent or zero falls back to the plain done message', () => {
+    expect(
+      bubbleFor({
+        ...allTidy,
+        done: { processed: 3, quarantined: 0, refused: 0 },
+      }),
+    ).toBe('All tidy. 3 things filed.');
+    expect(bubbleFor({ ...allTidy, done: { processed: 3 } })).toBe(
+      'All tidy. 3 things filed.',
+    );
+  });
 });
 
 describe('birdStateFor', () => {

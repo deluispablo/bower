@@ -233,6 +233,10 @@ export interface Run {
   finishedAt?: string;
   summary?: string;
   processed?: string[];
+  /** Paths the pre-scan set aside under `0-Inbox/Quarantine/` this run. */
+  quarantined?: string[];
+  /** Paths (or `"*"` for the whole run) the post-run audit refused. */
+  refused?: string[];
   error?: string;
   runId?: string;
 }

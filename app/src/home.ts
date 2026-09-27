@@ -31,10 +31,15 @@ export function greetingFor(date: Date, name?: string): string {
     : `${greeting}, ${name}`;
 }
 
-/** How a finished run is reported in the bubble: how many things it filed. */
+/** How a finished run is reported in the bubble: how many things it filed,
+ * set aside or had refused. */
 export interface DoneResult {
   /** `run.processed?.length` (run-store.tsx): items the run picked up. */
   processed: number;
+  /** `run.quarantined?.length`: files the pre-scan set aside this run. */
+  quarantined?: number;
+  /** `run.refused?.length`: changes the post-run audit refused this run. */
+  refused?: number;
 }
 
 /**
@@ -66,20 +71,51 @@ function doneMessage(result: DoneResult): string {
 }
 
 /**
+ * "Bower set aside 2 files that contained instructions…" (spec A.5):
+ * files the pre-scan moved to `0-Inbox/Quarantine/` this run.
+ */
+export function quarantinedMessage(n: number): string {
+  return (
+    `Bower set aside ${n} ${plural(n, 'file')} that contained instructions. ` +
+    'Look at them in Drive and move them back if they are fine.'
+  );
+}
+
+/**
+ * "1 change was refused; nothing was lost." (spec A.3): changes the
+ * post-run audit reverted this run.
+ */
+export function refusedMessage(n: number): string {
+  const was = n === 1 ? 'was' : 'were';
+  return `${n} ${plural(n, 'change')} ${was} refused; nothing was lost.`;
+}
+
+/**
  * The bird's speech bubble on Home (spec §6, Home row): one sentence for
  * whatever is most worth saying right now, highest precedence first:
  *
  * 1. `offline` — no signal, nothing else below applies.
  * 2. `error` — the listing failed to load (and there was nothing cached).
- * 3. `done` — a run just finished; report what it did.
- * 4. `newHealthReport` — a fresh health report hasn't been opened yet.
- * 5. `pending > 0` — n things waiting in the inbox.
- * 6. otherwise — nothing waiting, nothing new: "All tidy."
+ * 3. `done.quarantined` — files the pre-scan set aside this run.
+ * 4. `done.refused` — changes the post-run audit refused this run.
+ * 5. `done` — a run just finished; report what it did.
+ * 6. `newHealthReport` — a fresh health report hasn't been opened yet.
+ * 7. `pending > 0` — n things waiting in the inbox.
+ * 8. otherwise — nothing waiting, nothing new: "All tidy."
  */
 export function bubbleFor(state: BubbleState): string {
   if (state.offline) return "No signal here. I'll keep an eye out.";
   if (state.error) return 'Could not load your notes.';
-  if (state.done !== undefined) return doneMessage(state.done);
+  if (state.done !== undefined) {
+    const { quarantined, refused } = state.done;
+    if (quarantined !== undefined && quarantined > 0) {
+      return quarantinedMessage(quarantined);
+    }
+    if (refused !== undefined && refused > 0) {
+      return refusedMessage(refused);
+    }
+    return doneMessage(state.done);
+  }
   if (state.newHealthReport) {
     return "Sunday's health check is ready. Want to see it?";
   }
