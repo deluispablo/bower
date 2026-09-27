@@ -141,6 +141,15 @@ export function IconEyeOff(): JSX.Element {
   );
 }
 
+export function IconEye(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </Svg>
+  );
+}
+
 export function IconMoon(): JSX.Element {
   return (
     <Svg>

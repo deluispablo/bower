@@ -11,8 +11,9 @@
  *   button; following any link inside closes it.
  *
  * The filter field is the existing search box until the quick switcher
- * (#142) replaces it. The hidden-files footer only says Bower's own files
- * are hidden; the switch behind it comes with #141.
+ * (#142) replaces it. The hidden-files footer button toggles the
+ * `showAppFiles` preference (spec §5.3), the same one Settings › Advanced
+ * has its own switch for.
  */
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -27,6 +28,7 @@ import { Bird } from './bird.js';
 import {
   IconClose,
   IconCollapse,
+  IconEye,
   IconEyeOff,
   IconHeart,
   IconSearch,
@@ -93,11 +95,20 @@ export function Explorer({
     getPref('explorerSort'),
   );
   const [collapseKey, setCollapseKey] = useState(0);
+  const [showAppFiles, setShowAppFiles] = useState(() =>
+    getPref('showAppFiles'),
+  );
 
   function toggleSort(): void {
     const next: ExplorerSortPref = sort === 'name' ? 'modified' : 'name';
     setPref('explorerSort', next);
     setSort(next);
+  }
+
+  function toggleAppFiles(): void {
+    const next = !showAppFiles;
+    setPref('showAppFiles', next);
+    setShowAppFiles(next);
   }
 
   function collapseAll(): void {
@@ -159,12 +170,18 @@ export function Explorer({
             sort={sort}
             collapseKey={collapseKey}
             onNavigate={onClose}
+            showAppFiles={showAppFiles}
           />
         )}
       </div>
-      <button type="button" class="explorer-hidden" aria-disabled="true">
-        <IconEyeOff />
-        <span>Bower's own files: hidden</span>
+      <button
+        type="button"
+        class="explorer-hidden"
+        aria-pressed={showAppFiles}
+        onClick={toggleAppFiles}
+      >
+        {showAppFiles ? <IconEye /> : <IconEyeOff />}
+        <span>Bower's own files: {showAppFiles ? 'shown' : 'hidden'}</span>
       </button>
       {me !== undefined && (
         <div class="explorer-account">

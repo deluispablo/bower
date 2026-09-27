@@ -19,7 +19,12 @@
 import type { JSX, RefCallback } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
-import { buildTree, folderCounts, nextFocusIndex } from '../navigation.js';
+import {
+  appFileGroup,
+  buildTree,
+  folderCounts,
+  nextFocusIndex,
+} from '../navigation.js';
 import type { TreeNode, TreeRow, TreeSort } from '../navigation.js';
 import type { VaultIndex } from '../vault-index.js';
 import { IconChevronRight, IconFolder, IconNote } from './icons.js';
@@ -73,6 +78,11 @@ interface TreeProps {
   sort?: TreeSort;
   /** Every change collapses all folders (the explorer's Collapse all). */
   collapseKey?: number;
+  /**
+   * Show the "Bower's files" group after the tree (the `showAppFiles`
+   * preference). Off by default: the tree is the user's notes only.
+   */
+  showAppFiles?: boolean;
 }
 
 export function Tree({
@@ -80,9 +90,11 @@ export function Tree({
   onNavigate,
   sort = 'name',
   collapseKey = 0,
+  showAppFiles = false,
 }: TreeProps): JSX.Element {
   const tree = useMemo(() => buildTree(index, sort), [index, sort]);
   const counts = useMemo(() => folderCounts(index), [index]);
+  const group = useMemo(() => appFileGroup(index), [index]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set<string>(),
   );
@@ -172,65 +184,105 @@ export function Tree({
     focusAt(nextFocusIndex(rows, i, event.key));
   }
 
-  if (rows.length === 0) {
+  const showGroup =
+    showAppFiles && (group.files.length > 0 || group.instructionNotesCount > 0);
+
+  if (rows.length === 0 && !showGroup) {
     return <p class="tree-empty">Nothing here yet.</p>;
   }
 
   return (
-    <ul class="tree" role="tree">
-      {rows.map((row, i) => {
-        const setRef: RefCallback<HTMLElement> = (el) => {
-          rowRefs.current[i] = el;
-        };
-        const tabIndex = i === focusIndex ? 0 : -1;
-        return (
-          <li
-            key={row.path}
-            role="treeitem"
-            aria-level={row.depth + 1}
-            aria-expanded={row.kind === 'folder' ? row.expanded : undefined}
-          >
-            {row.kind === 'folder' ? (
-              <button
-                type="button"
-                ref={setRef}
-                class="tree-row tree-folder"
-                style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
-                tabIndex={tabIndex}
-                onClick={() => {
-                  toggle(row.path);
-                  setFocusIndex(i);
-                }}
-                onKeyDown={(event) => onRowKeyDown(event, i)}
-                onFocus={() => setFocusIndex(i)}
+    <>
+      {rows.length === 0 ? (
+        <p class="tree-empty">Nothing here yet.</p>
+      ) : (
+        <ul class="tree" role="tree">
+          {rows.map((row, i) => {
+            const setRef: RefCallback<HTMLElement> = (el) => {
+              rowRefs.current[i] = el;
+            };
+            const tabIndex = i === focusIndex ? 0 : -1;
+            return (
+              <li
+                key={row.path}
+                role="treeitem"
+                aria-level={row.depth + 1}
+                aria-expanded={row.kind === 'folder' ? row.expanded : undefined}
               >
-                <span
-                  class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
+                {row.kind === 'folder' ? (
+                  <button
+                    type="button"
+                    ref={setRef}
+                    class="tree-row tree-folder"
+                    style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
+                    tabIndex={tabIndex}
+                    onClick={() => {
+                      toggle(row.path);
+                      setFocusIndex(i);
+                    }}
+                    onKeyDown={(event) => onRowKeyDown(event, i)}
+                    onFocus={() => setFocusIndex(i)}
+                  >
+                    <span
+                      class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
+                    >
+                      <IconChevronRight />
+                    </span>
+                    <IconFolder />
+                    <span class="tree-name">{row.name}</span>
+                    <span class="tree-count">{counts.get(row.path) ?? 0}</span>
+                  </button>
+                ) : (
+                  <a
+                    href={`/note/${row.id ?? ''}`}
+                    ref={setRef}
+                    class="tree-row tree-note"
+                    style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
+                    tabIndex={tabIndex}
+                    onClick={() => onNavigate?.()}
+                    onKeyDown={(event) => onRowKeyDown(event, i)}
+                    onFocus={() => setFocusIndex(i)}
+                  >
+                    <IconNote />
+                    <span class="tree-name">{row.name}</span>
+                  </a>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {showGroup && (
+        <>
+          <div class="tree-app-divider" aria-hidden="true" />
+          <ul class="tree tree-app-group" aria-label="Bower's files">
+            {group.files.map(({ file, label }) => (
+              <li key={file.id}>
+                <a
+                  href={`/note/${file.id}`}
+                  class="tree-row tree-note tree-app"
+                  onClick={() => onNavigate?.()}
                 >
-                  <IconChevronRight />
+                  <IconNote />
+                  <span class="tree-name">{label}</span>
+                  <span class="tag-app">app</span>
+                </a>
+              </li>
+            ))}
+            {group.instructionNotesCount > 0 && (
+              <li>
+                <span class="tree-row tree-app-summary">
+                  <IconNote />
+                  <span class="tree-name">
+                    Instruction notes ({group.instructionNotesCount})
+                  </span>
+                  <span class="tag-app">app</span>
                 </span>
-                <IconFolder />
-                <span class="tree-name">{row.name}</span>
-                <span class="tree-count">{counts.get(row.path) ?? 0}</span>
-              </button>
-            ) : (
-              <a
-                href={`/note/${row.id ?? ''}`}
-                ref={setRef}
-                class="tree-row tree-note"
-                style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
-                tabIndex={tabIndex}
-                onClick={() => onNavigate?.()}
-                onKeyDown={(event) => onRowKeyDown(event, i)}
-                onFocus={() => setFocusIndex(i)}
-              >
-                <IconNote />
-                <span class="tree-name">{row.name}</span>
-              </a>
+              </li>
             )}
-          </li>
-        );
-      })}
-    </ul>
+          </ul>
+        </>
+      )}
+    </>
   );
 }

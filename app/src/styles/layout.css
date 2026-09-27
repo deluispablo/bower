@@ -342,7 +342,16 @@ summary:focus-visible {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   text-align: left;
-  cursor: default;
+  cursor: pointer;
+}
+
+.explorer-hidden:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-heading);
+}
+
+.explorer-hidden[aria-pressed='true'] {
+  border-style: solid;
 }
 
 .explorer-hidden .icon {
@@ -958,6 +967,32 @@ summary:focus-visible {
   flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: var(--text-xs);
+}
+
+/* The "Bower's files" group (spec §5.3): shown only when `showAppFiles` is
+   on, after a dashed divider, each row tagged "app". */
+.tree-app-divider {
+  margin: var(--space-2) 10px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.tree-app-group {
+  margin-top: var(--space-1);
+}
+
+.tree-app-summary {
+  cursor: default;
+}
+
+.tag-app {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 @media (prefers-reduced-motion: reduce) {
