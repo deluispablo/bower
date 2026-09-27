@@ -236,6 +236,10 @@ After deploying (`scripts/deploy.sh`, or any change to `app/public/_headers` or 
 
 A grade below A on the app usually means `app/public/_headers` didn't ship with the deploy — check the build actually generated it: `grep -n "" app/dist/_headers` (`pnpm -C app build` writes it from `VITE_API_URL` and, if set, `VITE_GOOGLE_API_KEY`; without `VITE_API_URL` it warns and falls back to `connect-src 'self'` alone, but a value that's set and not a URL fails the build outright rather than shipping a placeholder).
 
+### Dynamic scan (ZAP baseline)
+
+After deploying, or every so often after that: instance repo → **Actions → ZAP baseline → Run workflow**, and give it `app_url` and `api_url` (both `https://`, e.g. `https://app.example.com` and `https://api.example.com`). It runs the OWASP ZAP baseline scan against each in turn and uploads a report artifact per target; it fails if ZAP finds anything not already allowlisted in `.github/zap-rules.tsv`. See `docs/security.md` § Dynamic scan for what to do with a failure and the date of the last run.
+
 ### Costs to watch
 
 - **Cloudflare free tier**: Workers requests, KV reads/writes and Pages builds all have a free monthly allowance; the dashboard's Analytics tab for the Worker and the KV namespace shows current usage against it.

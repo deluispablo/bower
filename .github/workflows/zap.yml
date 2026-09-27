@@ -1,0 +1,52 @@
+name: ZAP baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: 'Deployed app origin, e.g. https://app.example.com'
+        required: true
+      api_url:
+        description: 'Deployed Worker (API) origin, e.g. https://api.example.com'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Require https:// URLs
+        run: |
+          for url in "${{ inputs.app_url }}" "${{ inputs.api_url }}"; do
+            case "$url" in
+              https://*) ;;
+              *)
+                echo "::error::'$url' must start with https://"
+                exit 1
+                ;;
+            esac
+          done
+
+      - name: ZAP baseline scan - app
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: ${{ inputs.app_url }}
+          rules_file_name: '.github/zap-rules.tsv'
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: zap-baseline-app
+
+      - name: ZAP baseline scan - API
+        if: always()
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: ${{ inputs.api_url }}
+          rules_file_name: '.github/zap-rules.tsv'
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: zap-baseline-api

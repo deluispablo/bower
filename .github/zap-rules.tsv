@@ -1,0 +1,13 @@
+# Known-acceptable findings for the ZAP baseline scan (issue #189).
+#
+# This is a SPA (client-side routed, no server-rendered pages or forms) in front
+# of a JSON API, with the response headers docs/security.md already checks off.
+# Each row below is a finding the baseline scan is expected to raise against that
+# shape on every run, not a defect. New rows need a reason here, same format;
+# anything else the scan reports should be fixed, not allowlisted.
+#
+# id	IGNORE	(reason)
+10109	IGNORE	(Modern Web Application: the app is a client-side routed SPA with no server-rendered links or forms for the crawler to follow; ZAP flags this on every SPA.)
+10112	IGNORE	(Session Management Response Identified: the Worker's own signed, HttpOnly, Secure session cookie is exactly the session management this informs about, not a leak.)
+10096	IGNORE	(Timestamp Disclosure - Unix: the API's JSON responses legitimately carry Unix timestamps, e.g. the last run time; none of it is sensitive.)
+10049	IGNORE	(Non-Storable Content: the API sends Cache-Control: no-store on every response on purpose, per docs/security.md's checklist; ZAP flags exactly the caching it is not supposed to allow.)

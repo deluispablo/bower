@@ -41,3 +41,14 @@ Instead, `pnpm.overrides.sharp` in the root `package.json` forces `sharp` to `>=
 | Advisory | Path | Fix |
 | --- | --- | --- |
 | `GHSA-g89c-p67h-r497`, `GHSA-2jg2-4ch7-h545` (sharp, libheif, `<0.35.4`) — registered as `GHSA-rgj7-g3m4-5g8c` | `api > @cloudflare/vitest-pool-workers@0.22.0 > miniflare (alpha) > sharp@0.35.2` | `sharp@0.35.4` was already present in the lockfile for another consumer; the override just makes every consumer, including `miniflare`'s, resolve to that one already-patched version instead of carrying a second, vulnerable copy. Full `pnpm test` (218 API tests, exercising the Worker's `vitest-pool-workers` sandbox) passes unchanged on `sharp@0.35.4`. Safe to drop once `@cloudflare/vitest-pool-workers` itself pins a patched `miniflare`/`sharp` and the override becomes redundant. |
+
+## Dynamic scan (ZAP baseline)
+
+`.github/workflows/zap.yml` is a manually dispatched workflow (**Actions → ZAP baseline → Run workflow**) that runs the [OWASP ZAP](https://www.zaproxy.org/) baseline scan against a deployed instance, on demand: it is not part of CI and never runs on a push or a PR. Give it the two URLs to scan (`app_url`, the app's origin; `api_url`, the Worker's origin), both `https://`; a first step in the workflow rejects anything else. It then runs the scan twice, app first, then API (`zaproxy/action-baseline`, pinned by commit SHA), and uploads each run's report as a workflow artifact (`zap-baseline-app`, `zap-baseline-api`) — nothing is posted back to the repo as an issue.
+
+`.github/zap-rules.tsv` allowlists findings that are expected given this app's shape (a client-routed SPA in front of a JSON API) rather than defects; each row carries a one-line reason. A scan fails the workflow (`fail_action: true`) on anything not in that file. When a run fails:
+
+- **Real finding** — fix it (open an issue if it needs its own PR).
+- **Expected given the architecture, not a defect** — add a row to `.github/zap-rules.tsv` with a reason, same format as the existing rows.
+
+Last run: not yet.
