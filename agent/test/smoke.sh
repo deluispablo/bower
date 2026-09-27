@@ -904,3 +904,31 @@ expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok a failed Drive listing quarantines every instruction note"
+
+# 18. The run after a file was quarantined must not see it again: with no
+# exclusion in the pending list, a file sitting in 0-Inbox/Quarantine/ is not
+# scanned (agent/scan.sh skips that folder) so it can never be re-flagged,
+# yet it would come back as an ordinary pending file and get reported as
+# processed once the agent's turn was done (issue #264 / finding M5). Reuses
+# the "quarantine" scenario's fake Drive (same CASE, so run_case's STATE
+# directory, and the remote under it, persist) for a second run.sh call.
+# Meanwhile the first run's claude stub already dropped one new file in each
+# inbox folder (0-Inbox/late.pdf, Clippings/late.md), so this second run has
+# its own, unrelated, pending files alongside the quarantined one.
+run_case quarantine
+expect_eq "$RC" 0 'second run: exit code'
+expect_eq "$(post 2 p.state)" done 'second run: second state'
+expect_eq "$(post 2 p.quarantined)" '[]' 'second run: nothing newly quarantined'
+expect_eq "$(post 2 p.processed)" \
+  '["0-Inbox/late.pdf","Clippings/Bower trick.md","Clippings/b.md","Clippings/late.md"]' \
+  'second run: processed excludes the already-quarantined file'
+grep -q ' 4 files pending$' "$STATE/out.log" ||
+  die 'second run: pending count still counts the quarantined file'
+remote="$STATE/remote"
+[ -f "$remote/0-Inbox/Quarantine/evil.md" ] ||
+  die 'quarantined file missing from Drive after a second run'
+grep -Fxq '0-Inbox/Quarantine/evil.md' "$STATE/uploaded.txt" &&
+  die 'quarantined file re-uploaded on a second run'
+expect_content_free
+expect_cleaned_up
+echo "ok quarantined file stays out of the pending list on the next run"

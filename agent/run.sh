@@ -408,7 +408,10 @@ fi
 
 # --- pending files ----------------------------------------------------------
 # Everything in 0-Inbox/ and Clippings/ except processed originals, the
-# folder notes (_*.md) and .gitkeep. Paths are relative to the vault.
+# folder notes (_*.md), .gitkeep and anything already under
+# 0-Inbox/Quarantine/ (a file quarantined in an earlier run: reported once,
+# the run that flagged it, never pending again; issue #264). Paths are
+# relative to the vault.
 STEP='list pending'
 (
   cd "$VAULT_DIR"
@@ -418,7 +421,8 @@ STEP='list pending'
   done
   if [ "${#dirs[@]}" -gt 0 ]; then
     find "${dirs[@]}" -type f \
-      ! -path '0-Inbox/Processed/*' ! -name '_*.md' ! -name '.gitkeep' |
+      ! -path '0-Inbox/Processed/*' ! -path '0-Inbox/Quarantine/*' \
+      ! -name '_*.md' ! -name '.gitkeep' |
       LC_ALL=C sort
   fi
 ) >"$PENDING_FILE"
