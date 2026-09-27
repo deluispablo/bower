@@ -1,8 +1,8 @@
 /**
  * Home (spec §6, Home row): a greeting with the bird and a speech bubble
  * stating the situation (`greetingFor`/`bubbleFor`, `home.ts`), the search
- * pill (opens the same search as the drawer's filter field — the switcher
- * itself, #142, hasn't landed), the Inbox and Answers count cards, and
+ * pill (opens the quick switcher, #142 — same as the drawer's filter field
+ * and the desktop sidebar's button), the Inbox and Answers count cards, and
  * Recent. Desktop adds the Health and Notes cards and an inline Tell Bower
  * composer next to Recent, reusing `TellComposer` (#146) exactly as
  * `routes/tell.tsx` does.
@@ -23,7 +23,6 @@ import {
   IconNote,
   IconSearch,
 } from '../components/icons.js';
-import { Search } from '../components/search.js';
 import { TellComposer } from '../components/tell-composer.js';
 import { createTextFile } from '../drive.js';
 import { findReport, isReportNew } from '../health-report.js';
@@ -39,6 +38,7 @@ import { getPref } from '../prefs.js';
 import type { RunPhase } from '../run-store.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
+import { openSwitcher } from '../switcher-store.js';
 import {
   addSent,
   firstLine,
@@ -176,16 +176,6 @@ export function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // "Search for it" on Not found (`/#search`) focuses this pill once; no
-  // route of its own, same minimal spirit as the "Answers" shortcut
-  // (`#folder=`, `components/tree.tsx`).
-  useEffect(() => {
-    if (window.location.hash !== '#search') return;
-    document
-      .querySelector<HTMLInputElement>('.home-search .search-input')
-      ?.focus();
-  }, []);
-
   const showAppFiles = getPref('showAppFiles');
   const recent = index === null ? [] : recentNotes(index, 20, showAppFiles);
   const pending = pendingCount(files);
@@ -261,10 +251,16 @@ export function Home() {
         onDone={onDone}
       />
 
-      <div class="home-search">
+      <button
+        type="button"
+        class="home-search"
+        onClick={() => {
+          openSwitcher();
+        }}
+      >
         <IconSearch />
-        <Search />
-      </div>
+        <span>Search or jump to a note</span>
+      </button>
 
       <div class="home-cards">
         <div class="home-card">

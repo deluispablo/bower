@@ -1,8 +1,9 @@
 /**
- * Pure helpers for the search box (`components/search.tsx`): narrowing a
- * Drive full-text search to the vault, pulling a snippet out of cached note
- * text, and a small localStorage-backed list of recent searches (same style
- * as `prefs.ts`: never throws, falls back to empty).
+ * Pure helpers behind the quick switcher's Notes search
+ * (`components/switcher.tsx`, #142): narrowing a Drive full-text search to
+ * the vault, pulling a snippet out of cached note text, and a small
+ * localStorage-backed list of recent searches (same style as `prefs.ts`:
+ * never throws, falls back to empty).
  */
 
 import type { DriveFile } from './drive.js';

@@ -1,7 +1,8 @@
 /**
  * Not found (spec §6, default row): the bird confused, one sentence, and
- * two ways out — search, or home. "Search for it" opens the same search as
- * Home's search pill (`#search`, read once on mount there; see home.tsx).
+ * two ways out — search, or home. "Search for it" is the `/search` route
+ * (`routes/search.tsx`): it opens the quick switcher (#142) and replaces
+ * itself with Home.
  */
 
 import { Bird } from '../components/bird.js';
@@ -21,7 +22,7 @@ export function NotFound() {
         </p>
       </div>
       <div class="auth-actions">
-        <a href="/#search" class="button">
+        <a href="/search" class="button">
           Search for it
         </a>
         <a href="/" class="button-link">

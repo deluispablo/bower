@@ -12,14 +12,43 @@ import { NotFound } from './routes/not-found.js';
 import { NotInvited } from './routes/not-invited.js';
 import { Onboarding } from './routes/onboarding.js';
 import { Privacy } from './routes/privacy.js';
+import { SearchRedirect } from './routes/search.js';
 import { Settings } from './routes/settings.js';
 import { Tell } from './routes/tell.js';
 import { RunProvider } from './run-store.js';
 import { SessionProvider, useSession } from './session.js';
+import { openSwitcher } from './switcher-store.js';
 import { VaultProvider } from './vault-store.js';
+
+/** Whether `target` is a field the user is typing in — Ctrl/Cmd+K is ignored there. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.isContentEditable
+  );
+}
 
 function AppRoutes() {
   const { status } = useSession();
+
+  // Ctrl/Cmd+K opens the quick switcher from anywhere (#142).
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.key.toLowerCase() !== 'k'
+      ) {
+        return;
+      }
+      if (isTypingTarget(event.target)) return;
+      event.preventDefault();
+      openSwitcher();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   if (status === 'loading') {
     return <p class="app-loading">Loading…</p>;
@@ -35,6 +64,7 @@ function AppRoutes() {
         <Route path="/note/:id" component={Note} />
         <Route path="/add" component={Add} />
         <Route path="/tell" component={Tell} />
+        <Route path="/search" component={SearchRedirect} />
         <Route path="/settings" component={Settings} />
         <Route path="/lint" component={Health} />
         <Route path="/onboarding" component={Onboarding} />
