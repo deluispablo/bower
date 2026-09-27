@@ -11,6 +11,7 @@
  *
  * `hello`, `showoff` and `done` play once: when the `rig`'s own animation
  * ends the component calls `onDone`, and the caller switches to `looking`.
+ * With reduced motion nothing plays, so `onDone` is called right away.
  *
  * The bird is decoration (`aria-hidden`); the text next to it carries the
  * meaning.
@@ -93,7 +94,20 @@ export function Bird({
   onDone,
 }: BirdProps): JSX.Element {
   const still = reducedMotion || prefersReducedMotion();
-  const playsOnce = !still && ONCE_STATES.includes(state);
+  const once = ONCE_STATES.includes(state);
+  const playsOnce = !still && once;
+
+  // The latest `onDone`, so a new callback on every render does not count
+  // as a new play.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  // With motion off nothing plays, so a plays-once state is over at once:
+  // report it as soon as the state is shown (once per state change).
+  const endsAtOnce = still && once;
+  useEffect(() => {
+    if (endsAtOnce) onDoneRef.current?.();
+  }, [endsAtOnce, state]);
 
   // `animationend` is attached by hand rather than through `onAnimationEnd`,
   // so it is the same event name wherever the element lacks the handler

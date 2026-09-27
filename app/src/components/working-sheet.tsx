@@ -67,7 +67,6 @@ export interface WorkingSheetProps {
   message?: string;
   open: boolean;
   onDismiss: () => void;
-  progress?: number;
   /**
    * Bumped by the caller each time the button is tapped to bring the sheet
    * back during `done` / `failed` / `stale`. Without this, a tap after the
@@ -82,7 +81,6 @@ export function WorkingSheet({
   message,
   open,
   onDismiss,
-  progress,
   reopenKey = 0,
 }: WorkingSheetProps): JSX.Element | null {
   // When the sheet should measure the linger window from, updated during
@@ -138,7 +136,7 @@ export function WorkingSheet({
       >
         ×
       </button>
-      <BowerWorking state={state} progress={progress} />
+      <BowerWorking state={state} />
       {detail !== undefined && <p class="working-sheet-detail">{detail}</p>}
     </div>
   );

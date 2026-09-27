@@ -12,7 +12,7 @@
  */
 
 import type { JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 
 import { ONCE_STATES } from './bird-classes.js';
 import type { BirdState } from './bird-classes.js';
@@ -24,11 +24,6 @@ export type WorkingState = 'queued' | 'running' | 'done' | 'failed';
 
 export interface BowerWorkingProps {
   state: WorkingState;
-  /**
-   * 0 to 1 when known. Accepted so callers need not change; the bird's
-   * scene fills the nest on its own loop and does not show it.
-   */
-  progress?: number;
   /** Forces the still variant; the CSS media query covers the system setting. */
   reducedMotion?: boolean;
 }
@@ -76,15 +71,19 @@ export function BowerWorking({
   reducedMotion = false,
 }: BowerWorkingProps): JSX.Element {
   // Show-off plays once; then the bird goes back to looking around until
-  // the run state changes again.
-  const [rested, setRested] = useState(false);
-  useEffect(() => {
-    setRested(false);
-  }, [state]);
+  // the run state changes again. Each state change is a new play, counted
+  // during render so a play that ends at once (reduced motion) is not
+  // undone by a later reset.
+  const play = useRef({ state, id: 0 });
+  if (play.current.state !== state) {
+    play.current = { state, id: play.current.id + 1 };
+  }
+  const playId = play.current.id;
+  const [restedPlay, setRestedPlay] = useState(-1);
 
   const played = workingBird(state);
   const bird: BirdState =
-    rested && ONCE_STATES.includes(played) ? 'looking' : played;
+    restedPlay === playId && ONCE_STATES.includes(played) ? 'looking' : played;
 
   return (
     <figure class={workingClasses(state, reducedMotion)}>
@@ -94,7 +93,7 @@ export function BowerWorking({
           size={WORKING_BIRD_SIZE}
           scene={bird === 'tidying'}
           reducedMotion={reducedMotion}
-          onDone={() => setRested(true)}
+          onDone={() => setRestedPlay(playId)}
         />
       </div>
       <span class="bw-dot" aria-hidden="true" />

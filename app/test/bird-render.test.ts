@@ -4,6 +4,7 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { BowerWorking } from '../src/components/bower-working.js';
 import { Bird } from '../src/components/bird.js';
 import type { BirdProps } from '../src/components/bird.js';
 
@@ -70,6 +71,22 @@ describe('Bird', () => {
     expect(onDone).not.toHaveBeenCalled();
   });
 
+  it('with reduced motion, calls onDone for a plays-once state right away', () => {
+    const onDone = vi.fn();
+    const svg = mount({ state: 'done', reducedMotion: true, onDone });
+    expect(onDone).toHaveBeenCalledTimes(1);
+    const rig = svg.querySelector('.rig');
+    if (rig === null) throw new Error('rig missing');
+    animationEnd(rig);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('with reduced motion, never calls onDone for a looping state', () => {
+    const onDone = vi.fn();
+    mount({ state: 'tidying', reducedMotion: true, onDone });
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
   it('holds still when the system asks for reduced motion', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: query === '(prefers-reduced-motion: reduce)',
@@ -81,5 +98,17 @@ describe('Bird', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('BowerWorking', () => {
+  it('with reduced motion, goes from show-off to looking when a run is done', () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(h(BowerWorking, { state: 'done', reducedMotion: true }), root);
+    });
+    // Looking has no still face; show-off would hold the proud one.
+    expect(root.querySelector('svg')?.getAttribute('class')).toBe('b');
   });
 });

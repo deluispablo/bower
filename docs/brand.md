@@ -52,7 +52,7 @@ Props (twig `tw`, paper `pp`, notes `nt`, question mark `qm`, z `zz`, sparkles `
 | Offline | Offline banner, note not on this device | Puffed, desaturated, cloud above, slow blink | Still |
 | Done | Small wins: upload done, message sent, settings saved | One hop, wink, chirp | Once, 2 s |
 
-Five still faces from the same dials (jaw, eye, head): happy, curious, worried, sleepy, proud (`face` prop). Plays-once states call `onDone` when the `rig`'s animation ends; the caller switches back to Looking. Under `prefers-reduced-motion: reduce` (or `reducedMotion`) no state plays: the bird holds the still face of its state (Hello happy, Shiny curious, Confused worried, Asleep sleepy, Show-off proud, otherwise none).
+Five still faces from the same dials (jaw, eye, head): happy, curious, worried, sleepy, proud (`face` prop). Plays-once states call `onDone` when the `rig`'s animation ends (right away with reduced motion); the caller switches back to Looking. Under `prefers-reduced-motion: reduce` (or `reducedMotion`) no state plays: the bird holds the still face of its state (Hello happy, Shiny curious, Confused worried, Asleep sleepy, Show-off proud, otherwise none).
 
 ### Regenerating
 
