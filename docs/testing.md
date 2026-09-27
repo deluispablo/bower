@@ -92,6 +92,12 @@ curl -X POST "https://api.example.com/admin/allow" \
 - **Add** puts files in the inbox; the next Tidy up files them under `3-Resources/`.
 - **Settings** changes are kept in memory; deleting the account and turning on notifications answer with error code `demo`; signing out only clears the device.
 
+The UI around the demo (#193):
+
+- A banner, "These are sample notes. Nothing here is real.", under the top bar on every screen that has one (sign-in and the intro do not).
+- **Sign out**, then **Sign in with Google**'s place: `/login` and the "What is Bower" intro's last page (`/welcome`) both show **Run your own Bower** instead — what it is, what you need (a Google account, free Cloudflare and GitHub accounts, a Claude subscription or API key, about an hour), links to the repository and the runbook (and a "What is Bower" link only when `VITE_ABOUT_URL` is set), and **Explore the demo**, which signs back in as Alex. `/not-invited` shows the same screen rather than its usual content — the demo has no allowlist to be turned away from.
+- **Settings**: the own API key field, **Sign out everywhere** and **Delete my Bower account** each show "Not in the demo: run your own Bower to use this." instead of a working form or button. Plain **Sign out** still works.
+
 The same flows run in CI without a network: `app/test/demo-flows.test.ts` stubs `fetch` to fail on any call, and `app/test/demo-contract.test.ts` runs one set of assertions against the real clients (over a mocked `fetch`) and the demo ones, so the demo cannot drift from what the app expects. A production build must not contain the demo: `pnpm -C app build` lists no `demo-*.js` chunk and `check-size` stays where it was.
 
 ## Where to look
