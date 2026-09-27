@@ -83,6 +83,19 @@ describe('Settings section order', () => {
     expect(headings()).toEqual(['Tidying up', 'Look', 'Bower', 'Advanced']);
   });
 
+  it('puts Show Bower’s own files in Advanced, next to the API key (#379 review)', () => {
+    mount(baseMe);
+    const sections = Array.from(root.querySelectorAll('.settings-section'));
+    const advanced = sections.find(
+      (el) => el.querySelector('h2')?.textContent === 'Advanced',
+    );
+    const bower = sections.find(
+      (el) => el.querySelector('h2')?.textContent === 'Bower',
+    );
+    expect(advanced?.textContent).toContain("Show Bower's own files");
+    expect(bower?.textContent).not.toContain("Show Bower's own files");
+  });
+
   it('keeps Sign out on its own, apart from Sign out everywhere', () => {
     mount(baseMe);
     expect(textsOf('.settings-button-secondary')).toContain('Sign out');

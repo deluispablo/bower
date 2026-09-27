@@ -355,17 +355,15 @@ function UpdateRulesRow() {
 }
 
 /**
- * Settings › Bower (spec C.8): the rulebook update row, "Tell Bower about
- * yourself again", "Show me around again" (replays the first-run tour on
- * Home through a one-shot flag in memory, `tour-store.ts`; `tourSeenAt` is
- * left alone), "What is Bower" and the same `showAppFiles` pref as the
- * explorer's footer button.
+ * Settings › Bower (spec C.8, and the board's own grouping — #379 review):
+ * the rulebook update row, "Tell Bower about yourself again", "Show me
+ * around again" (replays the first-run tour on Home through a one-shot
+ * flag in memory, `tour-store.ts`; `tourSeenAt` is left alone) and "What is
+ * Bower". "Show Bower's own files" lives in Advanced instead, next to the
+ * other real per-account controls (the board's order, not the C.8 text).
  */
 function BowerSection() {
   const { route } = useLocation();
-  const [showAppFiles, setShowAppFiles] = useState(() =>
-    getPref('showAppFiles'),
-  );
 
   return (
     <div class="settings-section">
@@ -413,16 +411,6 @@ function BowerSection() {
           <span class="toggle-hint">The four-page intro, again</span>
         </span>
       </button>
-
-      <Toggle
-        label="Show Bower's own files"
-        hint="Rulebook, your rules, about me, catalogue, journal, instruction notes, health reports and dot-folders (.obsidian, .claude), grouped at the bottom of your notes."
-        checked={showAppFiles}
-        onChange={(checked) => {
-          setShowAppFiles(checked);
-          setPref('showAppFiles', checked);
-        }}
-      />
     </div>
   );
 }
@@ -484,16 +472,31 @@ function SignOutEverywhereRow() {
 }
 
 /**
- * Settings › Advanced (spec C.8): the own Claude API key form and "Sign out
- * everywhere" — real per-account and security controls, kept apart from the
- * "Bower" section above.
+ * Settings › Advanced (spec C.8, board order — #379 review): the own
+ * Claude API key form, "Show Bower's own files" (the same `showAppFiles`
+ * pref as the explorer's footer button) and "Sign out everywhere" — real
+ * per-account controls, kept apart from the "Bower" section above.
  */
 function AdvancedSection({ me }: { me: Me }) {
+  const [showAppFiles, setShowAppFiles] = useState(() =>
+    getPref('showAppFiles'),
+  );
+
   return (
     <div class="settings-section">
       <h2>Advanced</h2>
 
       <ApiKeySection me={me} />
+
+      <Toggle
+        label="Show Bower's own files"
+        hint="Rulebook, your rules, about me, catalogue, journal, instruction notes, health reports and dot-folders (.obsidian, .claude), grouped at the bottom of your notes."
+        checked={showAppFiles}
+        onChange={(checked) => {
+          setShowAppFiles(checked);
+          setPref('showAppFiles', checked);
+        }}
+      />
 
       <SignOutEverywhereRow />
     </div>
