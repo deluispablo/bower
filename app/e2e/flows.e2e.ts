@@ -20,14 +20,36 @@ test.describe('open Home', () => {
     await expect(
       page.getByRole('heading', { name: /Bower files it/ }),
     ).toBeInViewport();
-    // One "Next" per page; the desktop's side arrows are extra.
+    // Nine pages, one "Next" on each of the first eight; the desktop's side
+    // arrows are extra.
+    const headings = [
+      'Where does it go?',
+      'Ask, and it does more',
+      'A window onto your own Drive',
+      'A project: flat hunting',
+      'An area: your health',
+      'A resource: what you read',
+      'The archive: finished, kept',
+      'What will you start with?',
+    ];
     const next = page.getByRole('button', { name: 'Next', exact: true });
-    for (let i = 0; i < 3; i += 1) {
-      await next.nth(i).click();
+    await expect(next).toHaveCount(8);
+    // Each page's resting frame, for the PR and the CI artifact (not the
+    // README, so not through `shot`).
+    const intro = async (n: number): Promise<void> => {
+      const { testDir, name: project } = testInfo.project;
+      await page.screenshot({
+        animations: 'disabled',
+        caret: 'hide',
+        path: `${testDir}/screenshots/${project}/intro-${n}.png`,
+      });
+    };
+    await intro(1);
+    for (const [index, name] of headings.entries()) {
+      await next.nth(index).click();
+      await expect(page.getByRole('heading', { name })).toBeInViewport();
+      await intro(index + 2);
     }
-    await expect(
-      page.getByRole('heading', { name: 'What people use it for' }),
-    ).toBeInViewport();
     await page.getByRole('button', { name: 'Explore the demo' }).click();
 
     const tour = page.getByRole('dialog');
@@ -66,6 +88,20 @@ test.describe('open Home', () => {
       ),
     ).toBeVisible();
     await shot(page, testInfo, 'home');
+  });
+});
+
+test.describe('first visit, Skip', () => {
+  test.use({ introSeen: false });
+
+  test('Skip on the intro lands on the sign-in', async ({ page }) => {
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/welcome$/);
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(
+      page.getByRole('heading', { name: 'Bower', level: 1 }),
+    ).toBeVisible();
   });
 });
 
