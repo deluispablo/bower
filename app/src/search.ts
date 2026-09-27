@@ -65,6 +65,7 @@ export function loadRecentSearches(): string[] {
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((entry): entry is string => typeof entry === 'string');
   } catch {
+    // Storage blocked or the value is corrupt: treat it as an empty list.
     return [];
   }
 }
