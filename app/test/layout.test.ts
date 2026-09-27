@@ -13,7 +13,11 @@ import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import { BackLink } from '../src/components/back-link.js';
 import { bowerUrlFor } from '../src/routes/tell-redirect.js';
-import { helpStepFor, isInnerScreen, usesShell } from '../src/shell-routes.js';
+import {
+  helpScreenFor,
+  isInnerScreen,
+  usesShell,
+} from '../src/shell-routes.js';
 import type { RunPhase } from '../src/run-store.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
@@ -250,13 +254,31 @@ describe('Layout', () => {
     expect(back.getAttribute('href')).toBe('/folder/2-Areas');
   });
 
-  it('opens the tour at the step for the tab on "?"', () => {
+  it('opens the help sheet for the tab on "?"', () => {
     location.path = '/bower';
     mount();
     click(query('.topbar-help'));
     const dialog = query('[role="dialog"]');
-    expect(dialog.textContent).toContain('Tell Bower');
-    expect(dialog.textContent).not.toContain('Drop anything here.');
+    expect(dialog.textContent).toContain('About this screen');
+    expect(dialog.querySelector('h2')?.textContent).toBe('Bower');
+    // jsdom lays nothing out, so the first Bower link (the sidebar's) wins.
+    expect(query('[data-tour="bower"]').classList.contains('help-tab-on')).toBe(
+      true,
+    );
+  });
+
+  it('"Show me around" on the help sheet closes it and goes Home for the tour', () => {
+    location.path = '/notes';
+    location.route.mockClear();
+    mount();
+    click(query('.topbar-help'));
+    const showMe = Array.from(root.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Show me around',
+    );
+    if (showMe === undefined) throw new Error('Show me around missing');
+    click(showMe);
+    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(location.route).toHaveBeenCalledWith('/');
   });
 
   it('shows the explorer as a desktop landmark, not a dialog', () => {
@@ -413,12 +435,15 @@ describe('isInnerScreen', () => {
   });
 });
 
-describe('helpStepFor', () => {
-  it('points "?" at the step for the tab on screen', () => {
-    expect(helpStepFor('/add')).toBe('add');
-    expect(helpStepFor('/bower')).toBe('tell');
-    expect(helpStepFor('/')).toBeUndefined();
-    expect(helpStepFor('/notes')).toBeUndefined();
+describe('helpScreenFor', () => {
+  it('points "?" at the sheet for the screen on show', () => {
+    expect(helpScreenFor('/')).toBe('home');
+    expect(helpScreenFor('/notes')).toBe('notes');
+    expect(helpScreenFor('/add')).toBe('add');
+    expect(helpScreenFor('/bower')).toBe('bower');
+    expect(helpScreenFor('/folder/2-Areas/Cooking')).toBe('folder');
+    expect(helpScreenFor('/note/id-1')).toBe('notes');
+    expect(helpScreenFor('/settings')).toBe('home');
   });
 });
 

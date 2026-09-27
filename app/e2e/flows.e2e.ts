@@ -2,7 +2,8 @@
  * The six main flows (#196, spec §5) against the demo build: Alex's sample
  * notes, three items waiting in the inbox and a scripted Tidy up run
  * (`src/demo/`). Each flow skips the first-run tour first, except "Open
- * Home", which walks it from the "What is Bower" intro to the end.
+ * Home", which walks it (four sheets, one per tab) from the "What is Bower"
+ * intro to the end.
  * Assertions are on the text a person reads; the screenshots are a
  * by-product for the README and the CI artifacts, never compared.
  */
@@ -60,23 +61,36 @@ test.describe('open Home', () => {
     }
     await page.getByRole('button', { name: 'Explore the demo' }).click();
 
+    // The tour: four sheets, one per tab, each over its highlighted tab.
     const tour = page.getByRole('dialog');
-    const steps = [
-      ['1 of 4 · Add', 'Drop anything here.'],
-      ['2 of 4 · Tidy up', "When you're ready, tap Tidy up."],
-      ['3 of 4 · Tell Bower', 'Talk to me like a person.'],
-      ['4 of 4 · This is a demo', 'This is a demo; run your own.'],
+    const sheets = [
+      ['Home', 'Next: Notes'],
+      ['Notes', 'Next: Add'],
+      ['Add', 'Next: Bower'],
+      ['Bower', "Let's go"],
     ] as const;
-    for (const [index, [label, title]] of steps.entries()) {
-      await expect(tour.getByText(label)).toBeVisible();
+    for (const [index, [title, next]] of sheets.entries()) {
+      await expect(tour.getByText(`Tour · ${index + 1} of 4`)).toBeVisible();
       await expect(tour.getByRole('heading', { name: title })).toBeVisible();
-      if (index < steps.length - 1) {
-        await tour.getByRole('button', { name: 'Next' }).click();
+      await expect(tour.getByRole('button', { name: 'Skip' })).toBeVisible();
+      await expect(
+        visible(page.locator(`[data-tour="${title.toLowerCase()}"]`)),
+      ).toHaveClass(/help-tab-on/);
+      if (index === 0) {
+        await expect(
+          tour.getByText("These are Alex's things, a sample."),
+        ).toBeVisible();
       }
+      if (testInfo.project.name === 'phone') {
+        await shot(page, testInfo, `tour-${index + 1}`);
+      }
+      await tour.getByRole('button', { name: next }).click();
     }
-    await tour.getByRole('link', { name: 'Run your own Bower' }).click();
     await expect(tour).toBeHidden();
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/$/);
+
+    // Run your own Bower is the demo's sign-in.
+    await page.goto('/login');
     await expect(
       page.getByRole('heading', { name: 'Bower', level: 1 }),
     ).toBeVisible();
@@ -90,7 +104,7 @@ test.describe('open Home', () => {
       page.getByRole('heading', { name: 'Good morning, Alex' }),
     ).toBeVisible();
     await expect(page.getByText('These are sample notes.')).toBeVisible();
-    await page.getByRole('button', { name: 'Skip tour' }).click();
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(
       visible(
         page.getByRole('link', { name: /Answers\s+1\s+things Bower answered/ }),
@@ -405,24 +419,35 @@ test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
     await shot(page, testInfo, 'bar-home');
   }
 
-  // "?" opens the tour at the step for this tab, until the help sheets.
+  // "?" opens the help sheet for this tab: About this screen, no counter.
   await help.click();
-  const tour = page.getByRole('dialog');
-  await expect(tour.getByText(/^1 of 4 · Add$/)).toBeVisible();
-  await tour.getByRole('button', { name: 'Skip tour' }).click();
-  await expect(tour).toBeHidden();
+  const sheet = page.getByRole('dialog', { name: 'Home' });
+  await expect(sheet.getByText('About this screen')).toBeVisible();
+  await expect(sheet.getByText('Tour ·')).toHaveCount(0);
+  await expect(
+    sheet.getByRole('link', { name: 'What is Bower, from the start' }),
+  ).toBeVisible();
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
 
   await visible(page.getByRole('link', { name: /^Bower$/ })).click();
   await help.click();
-  await expect(tour.getByText(/^3 of 4 · Tell Bower$/)).toBeVisible();
-  await tour.getByRole('button', { name: 'Skip tour' }).click();
+  const bower = page.getByRole('dialog', { name: 'Bower' });
+  await expect(bower.getByText('About this screen')).toBeVisible();
+  if (testInfo.project.name === 'phone') {
+    await shot(page, testInfo, 'help-bower');
+  }
+  // "Show me around" goes Home and runs the tour from its first sheet.
+  await bower.getByRole('button', { name: 'Show me around' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  const tour = page.getByRole('dialog', { name: 'Home' });
+  await expect(tour.getByText('Tour · 1 of 4')).toBeVisible();
+  await tour.getByRole('button', { name: 'Skip' }).click();
+  await expect(tour).toBeHidden();
 
   if (testInfo.project.name !== 'phone') return;
   await page.goto('/');
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Skip tour' })
-    .click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Skip' }).click();
   await visible(
     page.getByRole('button', { name: /Search or jump to a note/ }),
   ).click();
