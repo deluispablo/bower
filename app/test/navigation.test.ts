@@ -7,7 +7,9 @@ import {
   breadcrumb,
   buildTree,
   filterTree,
+  folderContents,
   folderCounts,
+  folderHref,
   nextFocusIndex,
   pendingCount,
   recentNotes,
@@ -320,6 +322,100 @@ describe('folderCounts', () => {
       entry('0-Inbox/Bower - 2026-09-26 1405 Receipts.md'),
     ]);
     expect(folderCounts(index).get('0-Inbox')).toBe(1);
+  });
+});
+
+describe('folderContents', () => {
+  it('lists direct subfolders (with counts) and this folder’s own notes', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      dir('1-Projects/Flat hunt/Camden'),
+      dir('1-Projects/Flat hunt/Shoreditch'),
+      entry('1-Projects/Flat hunt/Budget.md'),
+      entry('1-Projects/Flat hunt/Camden/Listing.md'),
+      entry('1-Projects/Flat hunt/Shoreditch/Listing.md'),
+      entry('1-Projects/Flat hunt/Shoreditch/Notes.md'),
+    ]);
+    const contents = folderContents(index, '1-Projects/Flat hunt');
+    expect(contents?.name).toBe('Flat hunt');
+    expect(contents?.path).toBe('1-Projects/Flat hunt');
+    expect(contents?.subfolders).toEqual([
+      { path: '1-Projects/Flat hunt/Camden', name: 'Camden', count: 1 },
+      {
+        path: '1-Projects/Flat hunt/Shoreditch',
+        name: 'Shoreditch',
+        count: 2,
+      },
+    ]);
+    expect(contents?.notes.map((n) => n.name)).toEqual(['Budget.md']);
+    expect(contents?.noteCount).toBe(4);
+  });
+
+  it('sorts its own notes newest first regardless of `sort`', () => {
+    const index = buildVaultIndex([
+      dir('2-Areas'),
+      entry('2-Areas/Old.md', 'text/markdown', '2026-01-01T00:00:00.000Z'),
+      entry('2-Areas/New.md', 'text/markdown', '2026-03-01T00:00:00.000Z'),
+      entry('2-Areas/Mid.md', 'text/markdown', '2026-02-01T00:00:00.000Z'),
+    ]);
+    // 'name' would put these alphabetically (Mid, New, Old) in the tree;
+    // the folder screen always wants newest first regardless.
+    expect(
+      folderContents(index, '2-Areas', 'name')?.notes.map((n) => n.name),
+    ).toEqual(['New.md', 'Mid.md', 'Old.md']);
+  });
+
+  it('orders subfolders by `sort`, same as the tree', () => {
+    const index = buildVaultIndex([
+      dir('Alpha'),
+      dir('Beta'),
+      entry('Alpha/Old.md', 'text/markdown', '2026-01-01T00:00:00.000Z'),
+      entry('Beta/New.md', 'text/markdown', '2026-03-01T00:00:00.000Z'),
+    ]);
+    expect(
+      folderContents(index, '', 'name')?.subfolders.map((f) => f.name),
+    ).toEqual(['Alpha', 'Beta']);
+    expect(
+      folderContents(index, '', 'modified')?.subfolders.map((f) => f.name),
+    ).toEqual(['Beta', 'Alpha']);
+  });
+
+  it('excludes a folder note and an instruction note', () => {
+    const index = buildVaultIndex([
+      dir('0-Inbox'),
+      entry('0-Inbox/note.md'),
+      entry('0-Inbox/_Inbox.md'),
+      entry('0-Inbox/Bower - 2026-09-26 1405 Receipts.md'),
+    ]);
+    const contents = folderContents(index, '0-Inbox');
+    expect(contents?.notes.map((n) => n.name)).toEqual(['note.md']);
+    expect(contents?.noteCount).toBe(1);
+  });
+
+  it('returns null for a path that does not resolve to a visible folder', () => {
+    const index = buildVaultIndex([dir('1-Projects')]);
+    expect(folderContents(index, '1-Projects/Nope')).toBeNull();
+    expect(folderContents(index, '.hidden')).toBeNull();
+  });
+
+  it('is the root for the empty path', () => {
+    const index = buildVaultIndex([dir('1-Projects'), entry('index.md')]);
+    const contents = folderContents(index, '');
+    expect(contents?.path).toBe('');
+    expect(contents?.subfolders.map((f) => f.name)).toEqual(['1-Projects']);
+  });
+});
+
+describe('folderHref', () => {
+  it('percent-encodes each path segment on its own', () => {
+    expect(folderHref('1-Projects/Flat hunt')).toBe(
+      '/folder/1-Projects/Flat%20hunt',
+    );
+  });
+
+  it('escapes a segment holding a "/"-like character safely', () => {
+    expect(folderHref('A & B')).toBe('/folder/A%20%26%20B');
   });
 });
 

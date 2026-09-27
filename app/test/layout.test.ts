@@ -209,10 +209,12 @@ describe('Layout', () => {
   it('collapses every folder with Collapse all', () => {
     mount();
     const sidebar = query('nav[aria-label="Your notes"]');
-    const folder = query<HTMLButtonElement>(
-      'nav[aria-label="Your notes"] .tree-folder',
+    // The sidebar tree links a folder's name to `/folder/<path>` (#214); its
+    // chevron is still the toggle.
+    const chevron = query<HTMLButtonElement>(
+      'nav[aria-label="Your notes"] .tree-folder .tree-chevron',
     );
-    click(folder);
+    click(chevron);
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(1);
     click(
       query('nav[aria-label="Your notes"] button[aria-label="Collapse all"]'),

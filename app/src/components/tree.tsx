@@ -4,7 +4,10 @@
  * tab order) driven by `nextFocusIndex` (pure, in `navigation.ts`): arrow
  * up/down move between visible rows, right/left expand/collapse a folder
  * (or, once a folder can't expand/collapse further, move to its first
- * child / its parent), Enter opens a note or toggles a folder.
+ * child / its parent). A note row's Enter opens it; a folder row's Enter
+ * either toggles it (the phone drawer) or opens `/folder/<path>` (the
+ * desktop sidebar, `linkFolders` — issue #214), matching what its click
+ * already does.
  *
  * Each folder row shows its note count (`folderCounts`, subfolders
  * included). The explorer (`explorer.tsx`) passes the order (`sort`) and a
@@ -27,8 +30,10 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   appFileGroup,
   buildTree,
+  driveFolderUrl,
   filterTree,
   folderCounts,
+  folderHref,
   nextFocusIndex,
 } from '../navigation.js';
 import type { TreeNode, TreeRow, TreeSort } from '../navigation.js';
@@ -39,13 +44,6 @@ import {
   IconFolder,
   IconNote,
 } from './icons.js';
-
-/** `webViewLink` should always be set (`FILE_FIELDS` requests it), but falls back to the folder's own Drive URL just in case. */
-function driveFolderUrl(file: { id: string; webViewLink?: string }): string {
-  return (
-    file.webViewLink ?? `https://drive.google.com/drive/folders/${file.id}`
-  );
-}
 
 interface Row extends TreeRow {
   name: string;
@@ -81,13 +79,6 @@ function flatten(
   }
 }
 
-/** `#folder=<path>` from a Home shortcut (e.g. "Answers"); expand and reveal it once. */
-function folderFromHash(): string | null {
-  if (typeof window === 'undefined') return null;
-  const match = /^#folder=(.+)$/.exec(window.location.hash);
-  return match?.[1] === undefined ? null : decodeURIComponent(match[1]);
-}
-
 /** Every folder path in `node`, so a filtered tree can be shown fully open. */
 function allFolderPaths(node: TreeNode, out: Set<string>): void {
   for (const folder of node.folders) {
@@ -115,6 +106,13 @@ interface TreeProps {
    * behaves as before, with its own expand/collapse state.
    */
   filter?: string;
+  /**
+   * Desktop sidebar only (issue #214): a folder row's name opens
+   * `/folder/<path>` (the chevron still toggles, click or Enter). The
+   * phone drawer keeps the whole row as a toggle — it is for browsing to a
+   * note, not a navigation destination of its own.
+   */
+  linkFolders?: boolean;
 }
 
 export function Tree({
@@ -124,6 +122,7 @@ export function Tree({
   collapseKey = 0,
   showAppFiles = false,
   filter = '',
+  linkFolders = false,
 }: TreeProps): JSX.Element {
   const tree = useMemo(() => buildTree(index, sort), [index, sort]);
   const counts = useMemo(() => folderCounts(index), [index]);
@@ -145,7 +144,6 @@ export function Tree({
   }, [filtering, displayTree, expanded]);
   const [focusIndex, setFocusIndex] = useState(0);
   const rowRefs = useRef<Array<HTMLElement | null>>([]);
-  const revealedHash = useRef(false);
   const lastCollapseKey = useRef(collapseKey);
 
   useEffect(() => {
@@ -160,21 +158,6 @@ export function Tree({
     flatten(displayTree, 0, displayExpanded, out);
     return out;
   }, [displayTree, displayExpanded]);
-
-  // Deep-link from Home's "Answers" shortcut: expand that top-level folder
-  // once notes have loaded, no route of its own (kept minimal, see the PR).
-  useEffect(() => {
-    if (revealedHash.current || rows.length === 0) return;
-    const folder = folderFromHash();
-    if (folder === null) return;
-    if (!expanded.has(folder)) {
-      setExpanded((prev) => new Set(prev).add(folder));
-      return;
-    }
-    revealedHash.current = true;
-    const at = rows.findIndex((row) => row.path === folder);
-    rowRefs.current[at]?.scrollIntoView({ block: 'center' });
-  }, [rows, expanded]);
 
   function toggle(path: string): void {
     setExpanded((prev) => {
@@ -196,7 +179,10 @@ export function Tree({
   ): void {
     const row = rows[i];
     if (row === undefined) return;
-    if (event.key === 'Enter' && row.kind === 'folder') {
+    // `linkFolders`: the row is a link now (`/folder/<path>`), so Enter's
+    // default action already opens it, same as a note row; only the phone
+    // drawer still toggles on Enter.
+    if (event.key === 'Enter' && row.kind === 'folder' && !linkFolders) {
       event.preventDefault();
       toggle(row.path);
       return;
@@ -259,7 +245,37 @@ export function Tree({
                 aria-level={row.depth + 1}
                 aria-expanded={row.kind === 'folder' ? row.expanded : undefined}
               >
-                {row.kind === 'folder' ? (
+                {row.kind === 'folder' && linkFolders ? (
+                  <span
+                    class="tree-row tree-folder"
+                    style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
+                  >
+                    <button
+                      type="button"
+                      class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      onClick={() => toggle(row.path)}
+                    >
+                      <IconChevronRight />
+                    </button>
+                    <a
+                      href={folderHref(row.path)}
+                      ref={setRef}
+                      class="tree-folder-link"
+                      tabIndex={tabIndex}
+                      onClick={() => onNavigate?.()}
+                      onKeyDown={(event) => onRowKeyDown(event, i)}
+                      onFocus={() => setFocusIndex(i)}
+                    >
+                      <IconFolder />
+                      <span class="tree-name">{row.name}</span>
+                      <span class="tree-count">
+                        {counts.get(row.path) ?? 0}
+                      </span>
+                    </a>
+                  </span>
+                ) : row.kind === 'folder' ? (
                   <button
                     type="button"
                     ref={setRef}

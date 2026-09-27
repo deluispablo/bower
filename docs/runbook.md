@@ -342,6 +342,10 @@ Anyone who hasn't opened the app in those 24 hours is signed out at that point a
 
 The explorer, Recent, search and the switcher never show: any dot-folder at any depth (`.obsidian`, `.claude`, `.trash`, whatever another editor adds), anything under a `Processed/` folder, folder notes (`_*.md`) and dot-files (`.hidden.md`-style) — one rule, `isHidden` in `app/src/vault-index.ts`. Opening the folder in Obsidian, or any other editor, never changes what the app shows. With "Show Bower's own files" on, `.claude` alone reappears in the explorer's "Bower's files" group as "Agent settings" (read-only, opens in Drive); every other dot-folder stays hidden regardless of that setting.
 
+## Folder screen
+
+A folder opens at `/folder/<path>` (issue #214) — the path relative to the Bower folder, each segment percent-encoded on its own so a name with a `/`-unsafe character still round-trips (`app/src/navigation.ts#folderHref`, `app/src/routes/folder.tsx`). Reached from the Home Answers card, a note's breadcrumb, the desktop sidebar's tree (a folder's name opens it; the chevron still only expands or collapses it) and another Folder screen's own subfolder rows. The old `#folder=` hash, which only the tree understood, is gone.
+
 ## Extensions
 
 Optional modules an operator can add on top of their own instance, kept out of the core deploy: `docs/extensions/email-in.md` (a Gmail-fed inbox), not built, design only.

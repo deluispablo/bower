@@ -15,7 +15,7 @@ import type { SaveOptions } from '../drive.js';
 import { propertiesFor } from '../markdown/frontmatter.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
-import { breadcrumb, siblings } from '../navigation.js';
+import { breadcrumb, folderHref, siblings } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
 import { isAppFile } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
@@ -39,11 +39,7 @@ function Crumb({ crumbs }: CrumbProps): JSX.Element {
     <>
       <a
         class="topbar-back"
-        href={
-          parent === undefined
-            ? '/'
-            : `/#folder=${encodeURIComponent(parent.path)}`
-        }
+        href={parent === undefined ? '/' : folderHref(parent.path)}
       >
         <IconChevronRight />
         <span class="topbar-back-label">
@@ -54,9 +50,7 @@ function Crumb({ crumbs }: CrumbProps): JSX.Element {
         <nav class="breadcrumb" aria-label="Folder">
           {crumbs.map((crumb) => (
             <span key={crumb.path}>
-              <a href={`/#folder=${encodeURIComponent(crumb.path)}`}>
-                {crumb.name}
-              </a>
+              <a href={folderHref(crumb.path)}>{crumb.name}</a>
               <span aria-hidden="true"> / </span>
             </span>
           ))}

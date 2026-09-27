@@ -202,6 +202,7 @@ export function Explorer({
             filter={variant === 'drawer' ? filter : undefined}
             onNavigate={onClose}
             showAppFiles={showAppFiles}
+            linkFolders={variant === 'sidebar'}
           />
         )}
       </div>

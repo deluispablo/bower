@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 
 import { Layout } from './components/layout.js';
 import { Add } from './routes/add.js';
+import { Folder } from './routes/folder.js';
 import { Health } from './routes/health.js';
 import { Home } from './routes/home.js';
 import { Intro } from './routes/intro.js';
@@ -68,6 +69,7 @@ function AppRoutes() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/note/:id" component={Note} />
+      <Route path="/folder/:path*" component={Folder} />
       <Route path="/add" component={Add} />
       <Route path="/tell" component={Tell} />
       <Route path="/search" component={SearchRedirect} />

@@ -293,6 +293,95 @@ export function breadcrumb(path: string): BreadcrumbSegment[] {
   return result;
 }
 
+/**
+ * `/folder/<path>` for a folder screen link (issue #214), each segment
+ * percent-encoded on its own — `preact-iso`'s `:path*` route decodes every
+ * segment individually before rejoining them with `/`, so a folder name
+ * holding a `/`-unsafe character (`#`, `?`, `%`, …) only round-trips when
+ * encoded this way rather than as one escaped string.
+ */
+export function folderHref(path: string): string {
+  return `/folder/${path.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+/** Where a folder opens in Google Drive: its `webViewLink`, else its own Drive URL. */
+export function driveFolderUrl(file: {
+  id: string;
+  webViewLink?: string;
+}): string {
+  return (
+    file.webViewLink ?? `https://drive.google.com/drive/folders/${file.id}`
+  );
+}
+
+function findNode(node: TreeNode, path: string): TreeNode | null {
+  if (node.path === path) return node;
+  for (const folder of node.folders) {
+    const found = findNode(folder, path);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+export interface FolderSubfolder {
+  path: string;
+  name: string;
+  /** Notes inside, subfolders included (`folderCounts`). */
+  count: number;
+}
+
+export interface FolderContents {
+  path: string;
+  name: string;
+  /** Direct subfolders, by `sort` (the explorer's order preference). */
+  subfolders: FolderSubfolder[];
+  /** This folder's own notes (not its subfolders'), newest first. */
+  notes: DriveFile[];
+  /** Notes anywhere under this folder, subfolders included (the header count). */
+  noteCount: number;
+}
+
+/**
+ * A folder's contents for the Folder screen (issue #214): its direct
+ * subfolders (each with its own recursive note count, `folderCounts`) and
+ * its own notes, always newest first regardless of `sort` — unlike the
+ * tree, where "by name" also puts a hub note first. `sort` only orders the
+ * subfolders, the same preference as the explorer's tree (`explorerSort`).
+ * `null` when `path` does not resolve to a visible folder (deleted, or
+ * never existed): the route shows a not-found message.
+ *
+ * Bower's own files never appear (`buildTree` already excludes them, spec
+ * §5.3 — the explorer's separate "Bower's files" group is a tree-only
+ * concept, not part of any real folder's contents); hidden files and
+ * folders are already out of the index (`vault-index.ts`).
+ */
+export function folderContents(
+  index: VaultIndex,
+  path: string,
+  sort: TreeSort = 'name',
+): FolderContents | null {
+  const node = findNode(buildTree(index, sort), path);
+  if (node === null) return null;
+  const counts = folderCounts(index);
+  const subfolders: FolderSubfolder[] = node.folders.map((folder) => ({
+    path: folder.path,
+    name: folder.name,
+    count: counts.get(folder.path) ?? 0,
+  }));
+  const notes = [...node.notes].sort(
+    (a, b) =>
+      (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
+      compareNames(a.name, b.name),
+  );
+  return {
+    path: node.path,
+    name: node.name,
+    subfolders,
+    notes,
+    noteCount: counts.get(path) ?? 0,
+  };
+}
+
 export interface Siblings {
   prev: DriveFile | null;
   next: DriveFile | null;
