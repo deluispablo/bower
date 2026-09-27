@@ -346,6 +346,12 @@ The explorer, Recent, search and the switcher never show: any dot-folder at any 
 
 A folder opens at `/folder/<path>` (issue #214) — the path relative to the Bower folder, each segment percent-encoded on its own so a name with a `/`-unsafe character still round-trips (`app/src/navigation.ts#folderHref`, `app/src/routes/folder.tsx`). Reached from the Home Answers card, a note's breadcrumb, the desktop sidebar's tree (a folder's name opens it; the chevron still only expands or collapses it) and another Folder screen's own subfolder rows. The old `#folder=` hash, which only the tree understood, is gone.
 
+## Pins
+
+A note is pinned when its frontmatter has `pinned: <ISO 8601 time>` — the time it was pinned, not a boolean. A folder is pinned the same way, through its own folder note (`_<Folder>.md`, created with frontmatter only if the folder had none yet, and already hidden from the tree above); unpinning removes the key and deletes that note again if pinning was the only reason it existed. Order everywhere is pin time, newest first; there is no manual reorder.
+
+This means a `pinned` line can show up if you open a note straight in Obsidian or another editor — it's expected, not a stray field, and the agent's `CLAUDE.md` tells it to leave `pinned` as it is when it rewrites a note. Removing the line by hand unpins the note the same way the app would.
+
 ## Extensions
 
 Optional modules an operator can add on top of their own instance, kept out of the core deploy: `docs/extensions/email-in.md` (a Gmail-fed inbox), not built, design only.
