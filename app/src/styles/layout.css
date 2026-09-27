@@ -262,10 +262,6 @@ button.page-bare-back {
   display: flex;
 }
 
-.theme-toggle {
-  display: none;
-}
-
 /* The avatar (#318): the account's initial in a teal-tinted circle; it
    opens Settings. Phone only: the desktop sidebar has a Settings row. */
 .topbar-avatar {
@@ -742,10 +738,6 @@ button.page-bare-back {
     display: block;
   }
 
-  .theme-toggle {
-    display: inline-flex;
-  }
-
   .content {
     padding: var(--space-6);
   }
@@ -789,16 +781,6 @@ button.page-bare-back {
   .explorer-tool .icon {
     width: 16px;
     height: 16px;
-  }
-
-  .theme-toggle {
-    width: 36px;
-    height: 36px;
-  }
-
-  .theme-toggle .icon {
-    width: 18px;
-    height: 18px;
   }
 
   .explorer-filter {
