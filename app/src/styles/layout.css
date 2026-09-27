@@ -948,6 +948,15 @@ summary:focus-visible {
   background: var(--color-border);
 }
 
+.chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.chip:disabled:hover {
+  background: var(--color-surface);
+}
+
 .tell-composer {
   display: flex;
   flex-direction: column;
@@ -1119,6 +1128,11 @@ summary:focus-visible {
 .tree-chevron {
   display: inline-flex;
   flex-shrink: 0;
+  padding: var(--space-1);
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
   transition: transform var(--motion-fast) var(--ease-out);
 }
 
@@ -1143,6 +1157,25 @@ summary:focus-visible {
   flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: var(--text-xs);
+}
+
+/* The desktop sidebar's folder row (issue #214): the chevron (`.tree-chevron`,
+   above) is its own button, out of the tab order (arrow keys toggle it for a
+   keyboard user, same as before); `.tree-folder-link` is the rest of the row,
+   a real link to `/folder/<path>` and the row's one roving-tabindex stop. */
+.tree-folder-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tree-folder-link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
 }
 
 /* The "Bower's files" group (spec §5.3): shown only when `showAppFiles` is
@@ -1198,6 +1231,13 @@ summary:focus-visible {
 
 .breadcrumb a {
   color: inherit;
+}
+
+/* The folder screen's own breadcrumb (issue #214) ends in the folder
+   itself, unlinked — a plain `<span>`, so `.breadcrumb a` above never
+   matches it; a touch less muted than the ancestors, to read as "here". */
+.breadcrumb-current {
+  color: var(--color-text);
 }
 
 .note-siblings {

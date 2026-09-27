@@ -36,6 +36,7 @@ import {
 } from '../home.js';
 import {
   folderCounts,
+  folderHref,
   pendingCount,
   recentNotes,
   relativeTime,
@@ -291,7 +292,7 @@ export function Home() {
           <p class="home-card-count">{pending}</p>
           <p>{pending > 0 ? 'waiting to be tidied' : 'nothing waiting'}</p>
         </div>
-        <a class="home-card home-card-link" href={`/#folder=${ANSWERS_FOLDER}`}>
+        <a class="home-card home-card-link" href={folderHref(ANSWERS_FOLDER)}>
           <h2>
             <IconChat />
             Answers

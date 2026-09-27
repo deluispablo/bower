@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import { ANSWERS_FOLDER } from '../home.js';
+import { folderHref } from '../navigation.js';
 import { offlineReason, useOnline } from '../online.js';
 import '../styles/process.css';
 import { pendingCount, useRun } from '../run-store.js';
@@ -123,7 +124,7 @@ export function ProcessButton() {
       <Toast
         message={toastMessage}
         messageKey={toastKey}
-        linkHref={`/#folder=${ANSWERS_FOLDER}`}
+        linkHref={folderHref(ANSWERS_FOLDER)}
       />
       <PushPrompt />
       <WorkingSheet

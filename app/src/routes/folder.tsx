@@ -1,0 +1,241 @@
+/**
+ * Folder screen (issue #214, spec §14 "Folder screen"): `/folder/:path*`,
+ * one screen for a folder wherever it is reached from — the Home Answers
+ * card, a note's breadcrumb, the desktop tree's folder name, or another
+ * Folder screen's own subfolder rows. Shows the folder's icon and name, its
+ * counts, a chip row (Pinned, Ask Bower about it, Open in Drive), its
+ * subfolders (with their own counts) and its own notes, newest first.
+ *
+ * The chips share `styles/layout.css`'s generic `.chip` (already used by
+ * `tell-composer.tsx`). Pinned is rendered disabled — pinning a folder needs
+ * its own frontmatter helper (#215, #216), which does not exist yet; see the
+ * PR's "Left out".
+ *
+ * The header's `crumb` slot (`shell-slots.ts`) works exactly like a note's
+ * (`routes/note.tsx#Crumb`, #144): the phone back link (the parent folder,
+ * or Home for a top-level one) and the desktop breadcrumb, both always in
+ * the markup, `layout.css` showing only the one that fits — except the
+ * breadcrumb here also ends in the folder's own name (not a link), since,
+ * unlike a note, the folder itself is a valid breadcrumb segment.
+ */
+
+import type { JSX } from 'preact';
+import { useMemo } from 'preact/hooks';
+import { useRoute } from 'preact-iso';
+
+import { Bird } from '../components/bird.js';
+import {
+  IconChat,
+  IconChevronRight,
+  IconExternalLink,
+  IconFolder,
+  IconNote,
+  IconPin,
+} from '../components/icons.js';
+import { useShellSlot } from '../components/shell-slots.js';
+import type { DriveFile } from '../drive.js';
+import {
+  breadcrumb,
+  driveFolderUrl,
+  folderContents,
+  folderHref,
+  relativeTime,
+} from '../navigation.js';
+import type { BreadcrumbSegment, FolderContents } from '../navigation.js';
+import { getPref } from '../prefs.js';
+import { useVault } from '../vault-store.js';
+import '../styles/folder.css';
+
+/** "1 note" / "3 notes", "1 folder" / "2 folders" — the header's count line. */
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+interface FolderCrumbProps {
+  /** This folder's ancestors only (`breadcrumb`), nearest last. */
+  ancestors: BreadcrumbSegment[];
+  /** This folder's own name — the breadcrumb's last, unlinked segment. */
+  name: string;
+}
+
+/** The shell header's `crumb` slot content, folder version of #144's `Crumb`. */
+function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
+  const parent = ancestors[ancestors.length - 1];
+  return (
+    <>
+      <a
+        class="topbar-back"
+        href={parent === undefined ? '/' : folderHref(parent.path)}
+      >
+        <IconChevronRight />
+        <span class="topbar-back-label">
+          {parent === undefined ? 'Home' : parent.name}
+        </span>
+      </a>
+      <nav class="breadcrumb" aria-label="Folder">
+        {ancestors.map((crumb) => (
+          <span key={crumb.path}>
+            <a href={folderHref(crumb.path)}>{crumb.name}</a>
+            <span aria-hidden="true"> / </span>
+          </span>
+        ))}
+        <span class="breadcrumb-current">{name}</span>
+      </nav>
+    </>
+  );
+}
+
+interface FolderBodyProps {
+  contents: FolderContents;
+  parentName: string | null;
+  /** The folder's own Drive file, for "Open in Drive"; always set in
+   * practice (`contents` only exists for a folder the index already has). */
+  file: DriveFile | undefined;
+}
+
+function FolderBody({
+  contents,
+  parentName,
+  file,
+}: FolderBodyProps): JSX.Element {
+  const tellHref = `/tell?text=${encodeURIComponent(`${contents.name} `)}`;
+  const now = Date.now();
+
+  return (
+    <section class="folder-view">
+      <div class="folder-head">
+        <IconFolder />
+        <div class="folder-head-text">
+          <h1>{contents.name}</h1>
+          <p class="folder-meta">
+            {parentName !== null ? `${parentName} · ` : ''}
+            {plural(contents.noteCount, 'note')} ·{' '}
+            {plural(contents.subfolders.length, 'folder')}
+          </p>
+        </div>
+      </div>
+
+      <div class="folder-chips">
+        <button
+          type="button"
+          class="chip"
+          disabled
+          aria-disabled="true"
+          title="Pinned folders are coming (#215, #216)"
+        >
+          <IconPin />
+          Pinned
+        </button>
+        <a class="chip" href={tellHref}>
+          <IconChat />
+          Ask Bower about it
+        </a>
+        {file !== undefined && (
+          <a
+            class="chip"
+            href={driveFolderUrl(file)}
+            target="_blank"
+            rel="noopener"
+          >
+            <IconExternalLink />
+            Open in Drive
+          </a>
+        )}
+      </div>
+
+      {contents.subfolders.length > 0 && (
+        <div class="folder-section">
+          <h2 class="folder-label">Folders</h2>
+          <ul class="folder-list">
+            {contents.subfolders.map((folder) => (
+              <li key={folder.path}>
+                <a class="folder-row" href={folderHref(folder.path)}>
+                  <IconFolder />
+                  <span class="folder-row-name">{folder.name}</span>
+                  <span class="folder-row-count">{folder.count}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div class="folder-section">
+        <h2 class="folder-label">Notes · newest first</h2>
+        {contents.notes.length === 0 ? (
+          <div class="folder-empty">
+            <Bird state="idle" size={40} />
+            <p>Nothing here yet.</p>
+            <a class="button" href="/add">
+              Add
+            </a>
+          </div>
+        ) : (
+          <ul class="folder-list">
+            {contents.notes.map((note) => (
+              <li key={note.id}>
+                <a class="folder-row" href={`/note/${note.id}`}>
+                  <IconNote />
+                  <span class="folder-row-name">
+                    {note.name.replace(/\.md$/i, '')}
+                  </span>
+                  {note.modifiedTime !== undefined && (
+                    <span class="folder-row-meta">
+                      {relativeTime(note.modifiedTime, now)}
+                    </span>
+                  )}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export function Folder(): JSX.Element {
+  const { params } = useRoute();
+  const path = params.path ?? '';
+  const { index } = useVault();
+
+  const contents = useMemo(
+    () =>
+      index === null
+        ? null
+        : folderContents(index, path, getPref('explorerSort')),
+    [index, path],
+  );
+  const ancestors = useMemo(() => breadcrumb(path), [path]);
+  const parent = ancestors[ancestors.length - 1];
+
+  const crumbContent = useMemo(() => {
+    if (contents === null) return null;
+    return <FolderCrumb ancestors={ancestors} name={contents.name} />;
+  }, [contents, ancestors]);
+  useShellSlot('crumb', crumbContent);
+
+  if (index === null) {
+    return (
+      <section>
+        <p>Loading…</p>
+      </section>
+    );
+  }
+
+  if (contents === null) {
+    return (
+      <section>
+        <p>This folder is not in your notes.</p>
+      </section>
+    );
+  }
+
+  return (
+    <FolderBody
+      contents={contents}
+      parentName={parent === undefined ? null : parent.name}
+      file={index.byPath.get(contents.path)}
+    />
+  );
+}

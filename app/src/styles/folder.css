@@ -1,0 +1,143 @@
+/*
+ * Folder screen (issue #214): the folder's icon and name, its counts, a
+ * chip row, its subfolders and its own notes. One column, phone-first;
+ * nothing here changes above 900 px — the shell (layout.css) already
+ * widens the content column and swaps the header's crumb slot for the
+ * desktop breadcrumb.
+ */
+
+.folder-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.folder-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.folder-head > .icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  color: var(--color-accent);
+}
+
+.folder-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.folder-head-text h1 {
+  margin: 0;
+}
+
+.folder-meta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.folder-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.folder-chips .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.folder-chips .chip .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.folder-label {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+.folder-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.folder-row:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.folder-row .icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-muted);
+}
+
+.folder-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-row-meta {
+  flex-shrink: 0;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-row-count {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.folder-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.folder-empty p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
