@@ -147,6 +147,37 @@ describe('blobs', () => {
     expect(await loadBlob('b')).toBeUndefined();
     expect(await loadBlob('c')).toBe(big);
   });
+
+  it('keeps every blob in the LRU when several are saved at once (#133)', async () => {
+    const blob = new Blob(['x']);
+    await Promise.all([
+      saveBlob('one', blob),
+      saveBlob('two', blob),
+      saveBlob('three', blob),
+      loadBlob('one'),
+    ]);
+
+    const lru = store.get('blob-lru') as { id: string }[];
+    expect(lru.map((entry) => entry.id).sort()).toEqual([
+      'one',
+      'three',
+      'two',
+    ]);
+  });
+
+  it('evicts blobs saved at once, so the cap holds (#133)', async () => {
+    const chunk = new Blob([new Uint8Array(BLOB_CACHE_CAP_BYTES / 2 + 1)]);
+    await Promise.all([
+      saveBlob('a', chunk),
+      saveBlob('b', chunk),
+      saveBlob('c', chunk),
+    ]);
+
+    const kept = [...store.keys()].filter((key) => key.startsWith('blob:'));
+    expect(kept).toHaveLength(1);
+    const lru = store.get('blob-lru') as { id: string }[];
+    expect(lru.map((entry) => `blob:${entry.id}`)).toEqual(kept);
+  });
 });
 
 describe('clearAll', () => {

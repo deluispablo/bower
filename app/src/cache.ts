@@ -9,7 +9,9 @@
  *
  * Blobs are capped at `BLOB_CACHE_CAP_BYTES` total; `saveBlob` evicts the
  * least recently used entries first. `evictPlan` is the pure decision so it
- * can be unit-tested without IndexedDB.
+ * can be unit-tested without IndexedDB. Every read-modify-write of
+ * `blob-lru` runs through one queue (`withLru`): a note loads its images
+ * concurrently, and unserialised updates would overwrite each other (#133).
  */
 
 import { clear, del, get, set } from 'idb-keyval';
@@ -120,34 +122,56 @@ export function evictPlan(entries: BlobLruEntry[], cap: number): string[] {
   return evict;
 }
 
+/**
+ * Tail of the queue that serialises every `blob-lru` update in this tab.
+ * Never rejects, so one failed update does not block the next.
+ */
+let lruQueue: Promise<void> = Promise.resolve();
+
+/** Runs `task` once every earlier LRU update has settled. */
+function withLru<T>(task: () => Promise<T>): Promise<T> {
+  const run = lruQueue.then(task);
+  lruQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 export async function loadBlob(id: string): Promise<Blob | undefined> {
   const entry = await get<BlobCacheEntry>(blobKey(id));
   if (entry === undefined) return undefined;
 
-  const lru = (await loadLru()).filter((e) => e.id !== id);
-  lru.push({ id, size: entry.size, lastUsed: Date.now() });
-  await saveLru(lru);
+  await withLru(async () => {
+    const lru = (await loadLru()).filter((e) => e.id !== id);
+    lru.push({ id, size: entry.size, lastUsed: Date.now() });
+    await saveLru(lru);
+  });
 
   return entry.blob;
 }
 
 export async function saveBlob(id: string, blob: Blob): Promise<void> {
   const size = blob.size;
-  const lastUsed = Date.now();
-  const entry: BlobCacheEntry = { blob, size, lastUsed };
-  await set(blobKey(id), entry);
+  // The blob is written inside the queue too, so an eviction running for
+  // another save can never delete it between its write and its LRU entry.
+  await withLru(async () => {
+    const lastUsed = Date.now();
+    const entry: BlobCacheEntry = { blob, size, lastUsed };
+    await set(blobKey(id), entry);
 
-  const lru = (await loadLru()).filter((e) => e.id !== id);
-  lru.push({ id, size, lastUsed });
+    const lru = (await loadLru()).filter((e) => e.id !== id);
+    lru.push({ id, size, lastUsed });
 
-  const toEvict = evictPlan(lru, BLOB_CACHE_CAP_BYTES);
-  if (toEvict.length > 0) {
-    const dropped = new Set(toEvict);
-    await Promise.all(toEvict.map((evictId) => del(blobKey(evictId))));
-    await saveLru(lru.filter((e) => !dropped.has(e.id)));
-  } else {
-    await saveLru(lru);
-  }
+    const toEvict = evictPlan(lru, BLOB_CACHE_CAP_BYTES);
+    if (toEvict.length > 0) {
+      const dropped = new Set(toEvict);
+      await Promise.all(toEvict.map((evictId) => del(blobKey(evictId))));
+      await saveLru(lru.filter((e) => !dropped.has(e.id)));
+    } else {
+      await saveLru(lru);
+    }
+  });
 }
 
 /** Drops every cached index, note and blob. */
