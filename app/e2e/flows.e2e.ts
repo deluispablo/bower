@@ -69,15 +69,10 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await visible(
     page.getByRole('button', { name: /Search or jump to a note/ }),
   ).click();
-  // The switcher sits inside an `aria-hidden` backdrop, so its roles are
-  // only reachable with `includeHidden`.
-  const switcher = page.getByRole('dialog', {
-    name: 'Quick switcher',
-    includeHidden: true,
-  });
-  await switcher.getByRole('combobox', { includeHidden: true }).fill('Lisbon');
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('Lisbon');
   await switcher
-    .getByRole('option', { name: /Lisbon Trip/, includeHidden: true })
+    .getByRole('option', { name: /Lisbon Trip/ })
     .first()
     .click();
 

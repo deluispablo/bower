@@ -368,16 +368,18 @@ function SwitcherPanel({
       : `${notes.length} note${notes.length === 1 ? '' : 's'}.`;
 
   return (
-    <div class="switcher-backdrop" aria-hidden="true" onClick={closeSwitcher}>
+    <>
+      <div
+        class="switcher-backdrop"
+        aria-hidden="true"
+        onClick={closeSwitcher}
+      />
       <div
         ref={panelRef}
         class="switcher-panel"
         role="dialog"
         aria-modal="true"
         aria-label="Quick switcher"
-        onClick={(event) => {
-          event.stopPropagation();
-        }}
       >
         <div class="switcher-field">
           <IconSearch />
@@ -498,7 +500,7 @@ function SwitcherPanel({
           </ul>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
