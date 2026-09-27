@@ -6,8 +6,10 @@ import {
   AppendError,
   appendToFile,
   copyIntoInbox,
+  copyOrExportIntoInbox,
   createTextFile,
   DriveError,
+  exportPlanFor,
   FOLDER_MIME,
   getBlob,
   getText,
@@ -621,6 +623,185 @@ describe('copyIntoInbox', () => {
     await expect(
       copyIntoInbox('FILE_ID', 'a.pdf', 'INBOX_ID'),
     ).rejects.toMatchObject({ name: 'DriveError', status: 403 });
+  });
+});
+
+describe('exportPlanFor', () => {
+  it('exports a Google Doc as Markdown, falling back to plain text', () => {
+    expect(exportPlanFor('application/vnd.google-apps.document')).toEqual({
+      action: 'export',
+      mimeType: 'text/markdown',
+      fallbackMimeType: 'text/plain',
+      extension: '.md',
+    });
+  });
+
+  it('exports a Google Sheet as CSV', () => {
+    expect(exportPlanFor('application/vnd.google-apps.spreadsheet')).toEqual({
+      action: 'export',
+      mimeType: 'text/csv',
+      extension: '.csv',
+    });
+  });
+
+  it('exports Google Slides as a PDF', () => {
+    expect(exportPlanFor('application/vnd.google-apps.presentation')).toEqual({
+      action: 'export',
+      mimeType: 'application/pdf',
+      extension: '.pdf',
+    });
+  });
+
+  it('skips a Google Drawing', () => {
+    expect(exportPlanFor('application/vnd.google-apps.drawing')).toEqual({
+      action: 'skip',
+    });
+  });
+
+  it('skips a Google Form', () => {
+    expect(exportPlanFor('application/vnd.google-apps.form')).toEqual({
+      action: 'skip',
+    });
+  });
+
+  it('copies anything else, e.g. a PDF, as it is', () => {
+    expect(exportPlanFor('application/pdf')).toEqual({ action: 'copy' });
+  });
+});
+
+describe('copyOrExportIntoInbox', () => {
+  it('copies a non-Workspace pick with files.copy', async () => {
+    let url = new URL('https://www.googleapis.com');
+    stubFetch((u) => {
+      url = u;
+      return jsonResponse(200, {
+        id: 'COPY_ID',
+        name: 'a.pdf',
+        mimeType: 'application/pdf',
+        parents: ['INBOX_ID'],
+      });
+    });
+
+    const result = await copyOrExportIntoInbox(
+      { id: 'FILE_ID', name: 'a.pdf', mimeType: 'application/pdf' },
+      'INBOX_ID',
+    );
+
+    expect(url.pathname).toBe('/drive/v3/files/FILE_ID/copy');
+    expect(result).toMatchObject({ id: 'COPY_ID' });
+  });
+
+  it('exports a Google Doc as Markdown and uploads it', async () => {
+    const requests: URL[] = [];
+    stubFetch((url) => {
+      requests.push(url);
+      if (url.pathname === '/drive/v3/files/DOC_ID/export') {
+        expect(url.searchParams.get('mimeType')).toBe('text/markdown');
+        return new Response('# Notes', {
+          headers: { 'content-type': 'text/markdown' },
+        });
+      }
+      expect(url.pathname).toBe('/upload/drive/v3/files');
+      return jsonResponse(200, {
+        id: 'MD_ID',
+        name: 'Notes.md',
+        mimeType: 'text/markdown',
+        parents: ['INBOX_ID'],
+      });
+    });
+
+    const result = await copyOrExportIntoInbox(
+      {
+        id: 'DOC_ID',
+        name: 'Notes',
+        mimeType: 'application/vnd.google-apps.document',
+      },
+      'INBOX_ID',
+    );
+
+    expect(result).toMatchObject({ id: 'MD_ID', path: 'Notes.md' });
+    expect(
+      requests.some((u) => u.pathname === '/drive/v3/files/DOC_ID/export'),
+    ).toBe(true);
+  });
+
+  it('retries the Markdown export once as plain text on a 400', async () => {
+    let tries = 0;
+    stubFetch((url) => {
+      if (url.pathname === '/drive/v3/files/DOC_ID/export') {
+        tries++;
+        if (url.searchParams.get('mimeType') === 'text/markdown') {
+          return jsonResponse(400, { error: { message: 'No Markdown.' } });
+        }
+        expect(url.searchParams.get('mimeType')).toBe('text/plain');
+        return new Response('Notes', {
+          headers: { 'content-type': 'text/plain' },
+        });
+      }
+      return jsonResponse(200, {
+        id: 'TXT_ID',
+        name: 'Notes.md',
+        mimeType: 'text/plain',
+        parents: ['INBOX_ID'],
+      });
+    });
+
+    const result = await copyOrExportIntoInbox(
+      {
+        id: 'DOC_ID',
+        name: 'Notes',
+        mimeType: 'application/vnd.google-apps.document',
+      },
+      'INBOX_ID',
+    );
+
+    expect(tries).toBe(2);
+    expect(result).toMatchObject({ id: 'TXT_ID' });
+  });
+
+  it('exports a Sheet as CSV named <name>.csv', async () => {
+    stubFetch((url) => {
+      if (url.pathname === '/drive/v3/files/SHEET_ID/export') {
+        expect(url.searchParams.get('mimeType')).toBe('text/csv');
+        return new Response('a,b\n1,2', {
+          headers: { 'content-type': 'text/csv' },
+        });
+      }
+      return jsonResponse(200, {
+        id: 'CSV_ID',
+        name: 'Budget.csv',
+        mimeType: 'text/csv',
+        parents: ['INBOX_ID'],
+      });
+    });
+
+    const result = await copyOrExportIntoInbox(
+      {
+        id: 'SHEET_ID',
+        name: 'Budget',
+        mimeType: 'application/vnd.google-apps.spreadsheet',
+      },
+      'INBOX_ID',
+    );
+
+    expect(result).toMatchObject({ path: 'Budget.csv' });
+  });
+
+  it('throws without a request for a Drawing or a Form', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      copyOrExportIntoInbox(
+        {
+          id: 'DRAW_ID',
+          name: 'Sketch',
+          mimeType: 'application/vnd.google-apps.drawing',
+        },
+        'INBOX_ID',
+      ),
+    ).rejects.toMatchObject({ name: 'DriveError' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

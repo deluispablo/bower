@@ -6,10 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me } from '../src/api.js';
 import type { DriveFile, DriveToken } from '../src/drive.js';
+import type * as DriveModule from '../src/drive.js';
 import type * as PickerModule from '../src/picker.js';
 
-// #217: Add's "From your Drive" button. The Picker library, Drive and the
-// session are faked; `filesFromPickerResponse` and, unless a test says
+// #217: Add's "From your Drive" button. #218: Docs, Sheets and Slides are
+// exported instead of copied. The Picker library, Drive and the session are
+// faked; `filesFromPickerResponse`, `exportPlanFor` and, unless a test says
 // otherwise, `loadPicker` are the real ones.
 
 const FOLDER = 'application/vnd.google-apps.folder';
@@ -31,9 +33,12 @@ const getToken = vi.fn(() => Promise.resolve(token));
 const listFolder = vi.fn<(folderId: string) => Promise<DriveFile[]>>(() =>
   Promise.resolve([]),
 );
-const copyIntoInbox = vi.fn<
-  (id: string, name: string, inboxId: string) => Promise<DriveFile>
->((id, name) => Promise.resolve(driveFile(`${id}_COPY`, name, 'x')));
+const copyOrExportIntoInbox = vi.fn<
+  (
+    pick: { id: string; name: string; mimeType: string },
+    inboxId: string,
+  ) => Promise<DriveFile>
+>((pick) => Promise.resolve(driveFile(`${pick.id}_COPY`, pick.name, 'x')));
 const openFilePicker =
   vi.fn<
     (
@@ -61,14 +66,18 @@ vi.mock('../src/online.js', () => ({
   useOnline: () => state.online,
   offlineReason: () => 'You are offline.',
 }));
-vi.mock('../src/drive.js', () => ({
-  FOLDER_MIME: 'application/vnd.google-apps.folder',
-  copyIntoInbox,
-  createTextFile: vi.fn(),
-  getToken,
-  listFolder,
-  upload: vi.fn(),
-}));
+vi.mock('../src/drive.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof DriveModule>();
+  return {
+    FOLDER_MIME: 'application/vnd.google-apps.folder',
+    exportPlanFor: actual.exportPlanFor,
+    copyOrExportIntoInbox,
+    createTextFile: vi.fn(),
+    getToken,
+    listFolder,
+    upload: vi.fn(),
+  };
+});
 vi.mock('../src/picker.js', async (importOriginal) => {
   const actual = await importOriginal<typeof PickerModule>();
   realLoadPicker = actual.loadPicker;
@@ -162,12 +171,18 @@ describe('Add from your Drive', () => {
         { id: 'C_ID', name: 'IMG_1.jpg', mimeType: 'image/jpeg' },
       ],
     });
-    await waitFor(() => copyIntoInbox.mock.calls.length === 3);
+    await waitFor(() => copyOrExportIntoInbox.mock.calls.length === 3);
 
-    expect(copyIntoInbox.mock.calls).toEqual([
-      ['A_ID', 'Lease.pdf', 'INBOX_ID'],
-      ['B_ID', 'Warranty.pdf', 'INBOX_ID'],
-      ['C_ID', 'IMG_1.jpg', 'INBOX_ID'],
+    expect(copyOrExportIntoInbox.mock.calls).toEqual([
+      [
+        { id: 'A_ID', name: 'Lease.pdf', mimeType: 'application/pdf' },
+        'INBOX_ID',
+      ],
+      [
+        { id: 'B_ID', name: 'Warranty.pdf', mimeType: 'application/pdf' },
+        'INBOX_ID',
+      ],
+      [{ id: 'C_ID', name: 'IMG_1.jpg', mimeType: 'image/jpeg' }, 'INBOX_ID'],
     ]);
     await waitFor(
       () =>
@@ -194,10 +209,12 @@ describe('Add from your Drive', () => {
       action: 'picked',
       docs: [{ id: 'DIR_ID', name: 'Tax 2025', mimeType: FOLDER }],
     });
-    await waitFor(() => copyIntoInbox.mock.calls.length === 50, 200);
+    await waitFor(() => copyOrExportIntoInbox.mock.calls.length === 50, 200);
 
     expect(listFolder).toHaveBeenCalledWith('DIR_ID');
-    expect(copyIntoInbox.mock.calls.map(([id]) => id)).not.toContain('SUB_ID');
+    expect(
+      copyOrExportIntoInbox.mock.calls.map(([pick]) => pick.id),
+    ).not.toContain('SUB_ID');
     expect(root.textContent).toContain(
       'Tax 2025 has more than 50 files: the first 50 were added.',
     );
@@ -213,11 +230,11 @@ describe('Add from your Drive', () => {
       (root.textContent ?? '').includes('Your Bower folder was left out'),
     );
     expect(listFolder).not.toHaveBeenCalledWith('FOLDER_ID');
-    expect(copyIntoInbox).not.toHaveBeenCalled();
+    expect(copyOrExportIntoInbox).not.toHaveBeenCalled();
   });
 
   it('shows one sentence for a failed copy and copies the rest', async () => {
-    copyIntoInbox.mockRejectedValueOnce(new Error('Drive said no.'));
+    copyOrExportIntoInbox.mockRejectedValueOnce(new Error('Drive said no.'));
     const consoleError = vi
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
@@ -229,7 +246,7 @@ describe('Add from your Drive', () => {
         { id: 'B_ID', name: 'b.pdf', mimeType: 'application/pdf' },
       ],
     });
-    await waitFor(() => copyIntoInbox.mock.calls.length === 2);
+    await waitFor(() => copyOrExportIntoInbox.mock.calls.length === 2);
     await waitFor(() =>
       (root.textContent ?? '').includes(
         'Could not copy this file from your Drive.',
@@ -237,5 +254,95 @@ describe('Add from your Drive', () => {
     );
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  it('exports a Doc, a Sheet and Slides, saying so once each is done (#218)', async () => {
+    await mountAdd('test-key');
+    await pick({
+      action: 'picked',
+      docs: [
+        {
+          id: 'DOC_ID',
+          name: 'Notes',
+          mimeType: 'application/vnd.google-apps.document',
+        },
+        {
+          id: 'SHEET_ID',
+          name: 'Budget',
+          mimeType: 'application/vnd.google-apps.spreadsheet',
+        },
+        {
+          id: 'SLIDES_ID',
+          name: 'Deck',
+          mimeType: 'application/vnd.google-apps.presentation',
+        },
+      ],
+    });
+    await waitFor(() => copyOrExportIntoInbox.mock.calls.length === 3);
+
+    expect(copyOrExportIntoInbox.mock.calls).toEqual([
+      [
+        {
+          id: 'DOC_ID',
+          name: 'Notes',
+          mimeType: 'application/vnd.google-apps.document',
+        },
+        'INBOX_ID',
+      ],
+      [
+        {
+          id: 'SHEET_ID',
+          name: 'Budget',
+          mimeType: 'application/vnd.google-apps.spreadsheet',
+        },
+        'INBOX_ID',
+      ],
+      [
+        {
+          id: 'SLIDES_ID',
+          name: 'Deck',
+          mimeType: 'application/vnd.google-apps.presentation',
+        },
+        'INBOX_ID',
+      ],
+    ]);
+    await waitFor(() => {
+      const text = root.textContent ?? '';
+      return (
+        text.includes('Saved as Markdown from your Drive') &&
+        text.includes('Saved as a table from your Drive') &&
+        text.includes('Saved as a PDF from your Drive')
+      );
+    });
+  });
+
+  it('leaves out a Drawing or a Form with a sentence (#218)', async () => {
+    await mountAdd('test-key');
+    await pick({
+      action: 'picked',
+      docs: [
+        {
+          id: 'DRAWING_ID',
+          name: 'Sketch',
+          mimeType: 'application/vnd.google-apps.drawing',
+        },
+        { id: 'PDF_ID', name: 'a.pdf', mimeType: 'application/pdf' },
+      ],
+    });
+    await waitFor(() =>
+      (root.textContent ?? '').includes(
+        'Sketch is a Google Drawing or Form: there is no format to save it as, so it was left out.',
+      ),
+    );
+    expect(copyOrExportIntoInbox.mock.calls.map(([pick]) => pick.id)).toEqual([
+      'PDF_ID',
+    ]);
+  });
+
+  it('shows the footer sentence about conversions', async () => {
+    await mountAdd('test-key');
+    expect(root.textContent).toContain(
+      'Docs become Markdown, Sheets a table, Slides a PDF. Everything else is copied as it is.',
+    );
   });
 });
