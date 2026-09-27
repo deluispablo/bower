@@ -7,7 +7,9 @@
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
  * header row over the content (breadcrumb slot, theme toggle, the pill),
- * and on note screens a third column, filled through `aside` (#144).
+ * and on note screens a third column, filled through the `aside` shell slot
+ * (#144, `shell-slots.ts` — the note screen sits inside `children`, so it
+ * cannot reach these any other way).
  *
  * The header is one element restyled per breakpoint, so the pill (which
  * owns the working sheet and its toasts) is only ever mounted once.
@@ -25,6 +27,7 @@ import { effectiveTheme, setTheme } from '../theme.js';
 import { useVault } from '../vault-store.js';
 import { Bird } from './bird.js';
 import { Explorer, ExplorerDrawer, HEALTH_PATH } from './explorer.js';
+import { useShellSlots } from './shell-slots.js';
 import {
   IconChat,
   IconHome,
@@ -87,16 +90,13 @@ function ThemeToggle(): JSX.Element {
 
 interface LayoutProps {
   children: ComponentChildren;
-  /** Desktop header's breadcrumb; empty until the Note screen fills it (#144). */
-  crumb?: ComponentChildren;
-  /** Desktop third column, "About this note" (#144); nothing renders there yet. */
-  aside?: ComponentChildren;
 }
 
-export function Layout({ children, crumb, aside }: LayoutProps): JSX.Element {
+export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
   const { index } = useVault();
   const { path } = useLocation();
+  const { crumb, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Re-read on every render: the health screen updates the pref, and a
@@ -144,7 +144,7 @@ export function Layout({ children, crumb, aside }: LayoutProps): JSX.Element {
   );
 
   return (
-    <div class={aside === undefined ? 'shell' : 'shell shell-with-aside'}>
+    <div class={aside === null ? 'shell' : 'shell shell-with-aside'}>
       <nav class="shell-sidebar" aria-label="Your notes">
         <Explorer
           variant="sidebar"
@@ -185,7 +185,7 @@ export function Layout({ children, crumb, aside }: LayoutProps): JSX.Element {
         )}
         <main class="content">{children}</main>
       </div>
-      {aside !== undefined && (
+      {aside !== null && (
         <aside class="shell-aside" aria-label="About this note">
           {aside}
         </aside>
