@@ -7,7 +7,7 @@ import { useFocusTrap } from '../components/use-focus-trap.js';
 import { IconClock, IconClose } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { TellComposer } from '../components/tell-composer.js';
-import { createTextFile } from '../drive.js';
+import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
@@ -124,7 +124,9 @@ export function Tell() {
     const content = instructionNote(trimmed, now);
 
     try {
-      await createTextFile(inboxFolderId, name, content);
+      await createTextFile(inboxFolderId, name, content, {
+        appProperties: INSTRUCTION_APP_PROPERTIES,
+      });
     } catch (err) {
       console.error(err);
       setError('Could not send that. Try again.');

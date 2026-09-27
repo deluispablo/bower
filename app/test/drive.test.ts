@@ -8,6 +8,7 @@ import {
   copyIntoInbox,
   copyOrExportIntoInbox,
   createTextFile,
+  INSTRUCTION_APP_PROPERTIES,
   deleteFile,
   DriveError,
   exportPlanFor,
@@ -578,6 +579,34 @@ describe('createTextFile', () => {
       }),
     );
     expect(content).toBe('Content-Type: text/markdown\r\n\r\n# Tidy up\n');
+    expect(meta).not.toContain('appProperties');
+  });
+
+  it('sets appProperties on files.create only when given', async () => {
+    let init: RequestInit = {};
+    stubFetch((_url, i) => {
+      init = i;
+      return jsonResponse(200, {
+        id: 'MD_ID',
+        name: 'Bower - tidy up.md',
+        mimeType: 'text/markdown',
+        parents: ['INBOX_ID'],
+      });
+    });
+
+    await createTextFile('INBOX_ID', 'Bower - tidy up.md', '# Tidy up\n', {
+      appProperties: INSTRUCTION_APP_PROPERTIES,
+    });
+
+    const [meta] = await multipartParts(init);
+    expect(meta).toContain(
+      JSON.stringify({
+        name: 'Bower - tidy up.md',
+        parents: ['INBOX_ID'],
+        mimeType: 'text/markdown',
+        appProperties: { bower: 'instruction' },
+      }),
+    );
   });
 });
 
@@ -638,9 +667,11 @@ describe('copyIntoInbox', () => {
     expect(new Headers(init.headers).get('Content-Type')).toBe(
       'application/json',
     );
+    // The copy never keeps its source's instruction-note property.
     expect(JSON.parse(init.body as string)).toEqual({
       name: 'Lease agreement.pdf',
       parents: ['INBOX_ID'],
+      appProperties: { bower: null },
     });
     expect(authHeader(init)).toBe('Bearer token-1');
     expect(copied).toMatchObject({ id: 'COPY_ID', parents: ['INBOX_ID'] });

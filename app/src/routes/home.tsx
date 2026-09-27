@@ -26,7 +26,7 @@ import {
 } from '../components/icons.js';
 import { TellComposer } from '../components/tell-composer.js';
 import { Tour } from '../components/tour.js';
-import { createTextFile } from '../drive.js';
+import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
 import { findReport, isReportNew } from '../health-report.js';
 import {
   ANSWERS_FOLDER,
@@ -109,7 +109,9 @@ function DesktopTell({
     const content = instructionNote(trimmed, now);
 
     try {
-      await createTextFile(inboxFolderId, name, content);
+      await createTextFile(inboxFolderId, name, content, {
+        appProperties: INSTRUCTION_APP_PROPERTIES,
+      });
     } catch (err) {
       console.error(err);
       setError('Could not send that. Try again.');
