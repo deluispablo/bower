@@ -37,6 +37,7 @@ Notes:
 | `encApiKey` | `string` | optional; AES-GCM envelope (`crypto.ts`); never plaintext |
 | `needsReauth` | `boolean` | optional |
 | `tourSeenAt` | `string` | optional; ISO-8601, when the user finished or skipped the first-run tour. Set through `PATCH /settings`, returned by `GET /me`, never in `GET /admin/users` |
+| `sessionGeneration` | `number` | optional, absent reads as 0; bumped by `POST /auth/logout-all`. Sessions signed with a lower generation are rejected |
 
 ## `Run`
 
@@ -68,6 +69,30 @@ Notes:
 | `keys.p256dh` | `string` | base64url, the browser's P-256 public key (65 bytes) |
 | `keys.auth` | `string` | base64url, the browser's 16-byte auth secret |
 | `createdAt` | `string` | ISO-8601 |
+
+## Sessions
+
+`GET /auth/callback` signs a new session on every sign-in and sets it as the `bower_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`, 30 days). Its claims are `userId`, `gen` (the user's `sessionGeneration`; a cookie without one reads as 0), `sid` (random, so no two sign-ins share a token), `iat` and `exp`. Every route that takes the cookie, `GET /me` included, loads the user and answers:
+
+| Status | `code` | When |
+| --- | --- | --- |
+| 401 | `unauthenticated` | No cookie, a bad signature or malformed token, or the user no longer exists (the account was deleted) |
+| 401 | `session_expired` | The session is more than 30 days old (`iat`; never extended), or `gen` is below the user's `sessionGeneration` (signed out everywhere) |
+
+A rejected cookie is also cleared (`Max-Age=0`). The app treats any 401 from `GET /me` as signed out and shows the sign-in screen.
+
+### `POST /auth/logout`
+
+Same origin (see `docs/security.md`). Clears the cookie on this browser only. Response: 204.
+
+### `POST /auth/logout-all`
+
+"Sign out everywhere". Same origin, and requires a valid session cookie. Increments the user's `sessionGeneration`, so every session signed so far, on every device, is rejected from then on, and clears this browser's cookie. The next sign-in signs with the new generation. Response: 204.
+
+| Status | `code` | When |
+| --- | --- | --- |
+| 401 | `unauthenticated`, `session_expired` | As above |
+| 403 | `forbidden` | `Origin` (or `Referer`) is not `APP_ORIGIN` |
 
 ## `POST /vault`
 
