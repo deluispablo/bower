@@ -1,0 +1,297 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Brand.dc.html": {
+      "h": 760,
+      "title": "Brand sheet",
+      "w": 1280,
+      "x": 0,
+      "y": 0
+    },
+    "Login.dc.html": {
+      "x": 0,
+      "y": 1280,
+      "w": 390,
+      "h": 844,
+      "title": "Sign in",
+      "is_interactive": true
+    },
+    "Not-Invited.dc.html": {
+      "x": 470,
+      "y": 1280,
+      "w": 390,
+      "h": 844,
+      "title": "Not invited",
+      "is_interactive": true
+    },
+    "Onb-Welcome.dc.html": {
+      "x": 940,
+      "y": 1280,
+      "w": 390,
+      "h": 844,
+      "title": "1 · Welcome",
+      "is_interactive": true
+    },
+    "Onb-Folder.dc.html": {
+      "x": 1410,
+      "y": 1280,
+      "w": 390,
+      "h": 844,
+      "title": "2 · Choose folder",
+      "is_interactive": true
+    },
+    "Onb-Building.dc.html": {
+      "x": 1880,
+      "y": 1280,
+      "w": 390,
+      "h": 844,
+      "title": "3 · Building",
+      "is_interactive": true
+    },
+    "Onb-Add.dc.html": {
+      "x": 2350,
+      "y": 1280,
+      "w": 390,
+      "h": 844,
+      "title": "4 · Tour: Add",
+      "is_interactive": true
+    },
+    "Onb-Tidy.dc.html": {
+      "x": 2820,
+      "y": 1280,
+      "w": 390,
+      "h": 844,
+      "title": "5 · Tour: Tidy up",
+      "is_interactive": true
+    },
+    "Onb-Tell.dc.html": {
+      "x": 3290,
+      "y": 1280,
+      "w": 390,
+      "h": 844,
+      "title": "6 · Tour: Tell",
+      "is_interactive": true
+    },
+    "Phone-Home.dc.html": {
+      "x": 0,
+      "y": 2504,
+      "w": 390,
+      "h": 844,
+      "title": "Home",
+      "is_interactive": true
+    },
+    "Phone-Switcher.dc.html": {
+      "x": 470,
+      "y": 2504,
+      "w": 390,
+      "h": 844,
+      "title": "Quick switcher",
+      "is_interactive": true
+    },
+    "Phone-Note.dc.html": {
+      "x": 940,
+      "y": 2504,
+      "w": 390,
+      "h": 844,
+      "title": "Note",
+      "is_interactive": true
+    },
+    "Phone-Add.dc.html": {
+      "x": 1410,
+      "y": 2504,
+      "w": 390,
+      "h": 844,
+      "title": "Add",
+      "is_interactive": true
+    },
+    "Phone-Tell.dc.html": {
+      "x": 1880,
+      "y": 2504,
+      "w": 390,
+      "h": 844,
+      "title": "Tell Bower",
+      "is_interactive": true
+    },
+    "Phone-Working.dc.html": {
+      "x": 2350,
+      "y": 2504,
+      "w": 390,
+      "h": 844,
+      "title": "Tidying up (sheet)"
+    },
+    "Phone-Offline.dc.html": {
+      "x": 2820,
+      "y": 2504,
+      "w": 390,
+      "h": 844,
+      "title": "Home · offline"
+    },
+    "Phone-Done.dc.html": {
+      "x": 3290,
+      "y": 2504,
+      "w": 390,
+      "h": 844,
+      "title": "Home · done"
+    },
+    "Phone-Settings.dc.html": {
+      "x": 0,
+      "y": 3728,
+      "w": 390,
+      "h": 844,
+      "title": "Settings"
+    },
+    "Phone-Health.dc.html": {
+      "x": 470,
+      "y": 3728,
+      "w": 390,
+      "h": 844,
+      "title": "Health check",
+      "is_interactive": true
+    },
+    "Phone-Privacy.dc.html": {
+      "x": 940,
+      "y": 3728,
+      "w": 390,
+      "h": 844,
+      "title": "Privacy",
+      "is_interactive": true
+    },
+    "Phone-NotFound.dc.html": {
+      "x": 1410,
+      "y": 3728,
+      "w": 390,
+      "h": 844,
+      "title": "Not found",
+      "is_interactive": true
+    },
+    "Phone-Push.dc.html": {
+      "x": 1880,
+      "y": 3728,
+      "w": 390,
+      "h": 844,
+      "title": "Notifications",
+      "is_interactive": true
+    },
+    "Desktop-Note.dc.html": {
+      "x": 1360,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · reading a note",
+      "is_interactive": true
+    },
+    "Desktop-Home.dc.html": {
+      "x": 2880,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · home",
+      "is_interactive": true
+    },
+    "Desktop-Files.dc.html": {
+      "x": 4400,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Desktop · Bower's files shown",
+      "is_interactive": true
+    },
+    "Phone-Files.dc.html": {
+      "x": 3760,
+      "y": 2504,
+      "w": 390,
+      "h": 844,
+      "title": "Your notes (drawer)",
+      "is_interactive": true
+    },
+    "Mascot.dc.html": {
+      "x": 0,
+      "y": 4952,
+      "w": 1440,
+      "h": 1180,
+      "title": "Mascot · faces and twelve states"
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-27T12:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "t1": {
+      "x": 0,
+      "y": -260,
+      "text": "1 · Identidad, escritorio",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 5840
+    },
+    "t2": {
+      "x": 0,
+      "y": 1040,
+      "text": "2 · Entrar por primera vez (Play desde Sign in)",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 3680
+    },
+    "t3": {
+      "x": 0,
+      "y": 2264,
+      "text": "3 · El día a día (Play desde Home)",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 4150
+    },
+    "t4": {
+      "x": 0,
+      "y": 3488,
+      "text": "4 · Ajustes, salud y estados límite",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 2270
+    },
+    "t5": {
+      "x": 0,
+      "y": 4712,
+      "text": "5 · La mascota",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 1440
+    }
+  },
+  "order": [
+    "Brand.dc.html",
+    "Login.dc.html",
+    "Not-Invited.dc.html",
+    "Onb-Welcome.dc.html",
+    "Onb-Folder.dc.html",
+    "Onb-Building.dc.html",
+    "Onb-Add.dc.html",
+    "Onb-Tidy.dc.html",
+    "Onb-Tell.dc.html",
+    "Phone-Home.dc.html",
+    "Phone-Switcher.dc.html",
+    "Phone-Note.dc.html",
+    "Phone-Add.dc.html",
+    "Phone-Tell.dc.html",
+    "Phone-Working.dc.html",
+    "Phone-Offline.dc.html",
+    "Phone-Done.dc.html",
+    "Phone-Settings.dc.html",
+    "Phone-Health.dc.html",
+    "Phone-Privacy.dc.html",
+    "Phone-NotFound.dc.html",
+    "Phone-Push.dc.html",
+    "Desktop-Note.dc.html",
+    "Desktop-Home.dc.html",
+    "Desktop-Files.dc.html",
+    "Phone-Files.dc.html",
+    "Mascot.dc.html"
+  ],
+  "pages": [],
+  "title": "Bower Redesign"
+}
