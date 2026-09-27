@@ -105,10 +105,16 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
   await page.getByRole('button', { name: 'Add to Bower' }).click();
 
-  await expect(
-    page.getByRole('listitem').filter({ hasText: 'Garden centre receipt.txt' }),
-  ).toContainText('Added to your inbox');
+  await expect(page.getByText('Added to your inbox.')).toBeVisible();
   await shot(page, testInfo, 'add');
+
+  // Back on Home once the upload finishes: the Tidy up count and the Inbox
+  // card read the new total right away (#289), not after the next
+  // background refresh.
+  await expect(page).toHaveURL('/');
+  await expect(
+    visible(page.getByRole('button', { name: 'Tidy up (4)' })),
+  ).toBeVisible();
 });
 
 test('Tidy up files the inbox and says so', async ({ page }, testInfo) => {
