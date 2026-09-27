@@ -1,5 +1,6 @@
 {
   "permissions": {
+    "blockReadsOutsideWorkingDirectories": true,
     "deny": [
       "Write(CLAUDE.md)",
       "Edit(CLAUDE.md)",
@@ -13,7 +14,31 @@
       "Write(.obsidian/**)",
       "Edit(.obsidian/**)",
       "MultiEdit(.obsidian/**)",
-      "Bash(*://*)"
+      "Bash(*://*)",
+      "Read(//proc/**)",
+      "Glob(//proc/**)",
+      "Grep(//proc/**)",
+      "Read(//etc/**)",
+      "Glob(//etc/**)",
+      "Grep(//etc/**)",
+      "Read(//home/**)",
+      "Glob(//home/**)",
+      "Grep(//home/**)",
+      "Read(//root/**)",
+      "Glob(//root/**)",
+      "Grep(//root/**)",
+      "Read(//tmp/**)",
+      "Glob(//tmp/**)",
+      "Grep(//tmp/**)",
+      "Read(//opt/**)",
+      "Glob(//opt/**)",
+      "Grep(//opt/**)",
+      "Read(~/**)",
+      "Glob(~/**)",
+      "Grep(~/**)",
+      "Read(../**)",
+      "Glob(../**)",
+      "Grep(../**)"
     ]
   }
 }
