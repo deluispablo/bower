@@ -101,6 +101,15 @@ export function IconHeart(): JSX.Element {
   );
 }
 
+export function IconInbox(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M3 13l2-8h14l2 8v6H3z" />
+      <path d="M3 13h5l1.5 2h5L16 13h5" />
+    </Svg>
+  );
+}
+
 export function IconMenu(): JSX.Element {
   return (
     <Svg>
@@ -181,5 +190,35 @@ export function IconSend(): JSX.Element {
     <Svg>
       <path d="M4 12l16-8-6 16-2-6z" />
     </Svg>
+  );
+}
+
+/** Google's own mark, brand colours (never `currentColor`): the sign-in button. */
+export function IconGoogle(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.7h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7.1z"
+        fill="#4285f4"
+      />
+      <path
+        d="M12 21c2.6 0 4.8-.9 6.3-2.3l-3.1-2.4c-.9.6-2 .9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5A9 9 0 0 0 12 21z"
+        fill="#34a853"
+      />
+      <path
+        d="M6.7 13.3a5.4 5.4 0 0 1 0-3.4V7.4H3.5a9 9 0 0 0 0 8.1l3.2-2.2z"
+        fill="#fbbc05"
+      />
+      <path
+        d="M12 6.6c1.4 0 2.7.5 3.7 1.4l2.7-2.7A9 9 0 0 0 3.5 7.4l3.2 2.5C7.4 7.7 9.5 6.6 12 6.6z"
+        fill="#ea4335"
+      />
+    </svg>
   );
 }

@@ -1,0 +1,67 @@
+/*
+ * Sign in, Not invited and Not found (spec §6): all three share the
+ * `.auth-screen` centred column (layout.css, also used by onboarding.tsx),
+ * the bird, a heading and one or two actions.
+ */
+
+.auth-bird {
+  display: flex;
+  justify-content: center;
+}
+
+/* Login only: the bird stands on a thin ground line, as the design shows. */
+.auth-bird--ground {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.auth-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.auth-wordmark {
+  margin: 0;
+  font-size: var(--text-3xl);
+  letter-spacing: -0.02em;
+}
+
+.auth-promise,
+.auth-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.auth-address {
+  color: var(--color-text);
+}
+
+.auth-google {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  background: #ffffff;
+  color: #1f1f1f;
+  border: 1px solid var(--color-border);
+}
+
+.auth-google:hover {
+  filter: none;
+  background: var(--color-surface);
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.auth-privacy {
+  margin-top: var(--space-4);
+}
