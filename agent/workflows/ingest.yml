@@ -35,11 +35,11 @@ jobs:
       CLAUDE_CODE_VERSION: '2.1.283'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Cache rclone
         id: cache-rclone
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/rclone-bin
           key: rclone-${{ runner.os }}-${{ env.BOWER_RCLONE_VERSION }}
@@ -70,13 +70,13 @@ jobs:
           sudo apt-get install -y pandoc
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
       - name: Cache Claude Code CLI
         id: cache-claude-cli
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/claude-cli
           key: claude-code-${{ runner.os }}-${{ env.CLAUDE_CODE_VERSION }}
@@ -111,7 +111,7 @@ jobs:
       # private and the retention is short.
       - name: Upload logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: bower-logs
           path: ${{ runner.temp }}/bower-logs/
