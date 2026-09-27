@@ -78,17 +78,33 @@ export async function signToken(
   return `${signingInput}.${base64UrlEncode(new Uint8Array(signature))}`;
 }
 
+/** What a verified session cookie carries. */
+export interface SessionClaims {
+  userId: string;
+  /**
+   * The user's `sessionGeneration` when the session was signed. Cookies
+   * signed before generations existed have none and read as 0.
+   */
+  gen: number;
+  /** Seconds since epoch; when the session was signed (at sign-in). */
+  iat: number;
+  exp: number;
+}
+
 /**
  * Signs a session for `payload.userId` with `SESSION_SECRET`: a `signToken`
- * whose payload is `{"userId","iat","exp"}`, with `exp = iat + 30 days`.
+ * whose payload is `{"userId","gen","sid","iat","exp"}`, with
+ * `exp = iat + 30 days`. `gen` is the user's session generation (default 0);
+ * `sid` is a fresh random id, so every sign-in yields a new session even
+ * within the same second.
  */
 export async function signSession(
-  payload: { userId: string },
+  payload: { userId: string; gen?: number },
   secret: string,
   now: number = Date.now(),
 ): Promise<string> {
   return signToken(
-    { userId: payload.userId },
+    { userId: payload.userId, gen: payload.gen ?? 0, sid: crypto.randomUUID() },
     secret,
     SESSION_TTL_SECONDS,
     now,
@@ -217,21 +233,33 @@ export async function verifyToken(
  * order: three non-empty base64url parts and a JSON header (`malformed`),
  * `alg` is exactly HS256 (`unsupported_alg`, so `none` never passes), the
  * HMAC signature (`bad_signature`), a JSON payload with a non-empty string
- * `userId` and integer `exp` (`malformed`), and `exp` still in the future
- * (`expired`). Throws `SessionError` on any failure.
+ * `userId`, an integer `iat`, a non-negative integer `gen` when present, and
+ * an integer `exp` (`malformed`), then `exp` still in the future and `iat`
+ * no older than 30 days, the absolute lifetime (`expired`). Throws
+ * `SessionError` on any failure. Whether `gen` is still current is the
+ * caller's check: it needs the user record.
  */
 export async function verifySession(
   token: string,
   secret: string,
   now: number = Date.now(),
-): Promise<{ userId: string; exp: number }> {
+): Promise<SessionClaims> {
   const claims = await verifySignedPayload(token, secret);
-  const { userId } = claims;
+  const { userId, iat, gen = 0 } = claims;
   if (typeof userId !== 'string' || userId.length === 0) {
     throw new SessionError('malformed', 'Session token has no valid userId');
   }
+  if (typeof iat !== 'number' || !Number.isInteger(iat)) {
+    throw new SessionError('malformed', 'Session token has no valid iat');
+  }
+  if (typeof gen !== 'number' || !Number.isInteger(gen) || gen < 0) {
+    throw new SessionError('malformed', 'Session token has no valid gen');
+  }
   const exp = checkExpiry(claims, now);
-  return { userId, exp };
+  if (now / 1000 - iat >= SESSION_TTL_SECONDS) {
+    throw new SessionError('expired', 'Session is older than its lifetime');
+  }
+  return { userId, gen, iat, exp };
 }
 
 /**

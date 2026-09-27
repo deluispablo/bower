@@ -26,6 +26,11 @@ export interface User {
   needsReauth?: boolean;
   /** ISO-8601; when the user finished or skipped the first-run tour. */
   tourSeenAt?: string;
+  /**
+   * Bumped by "Sign out everywhere" (`POST /auth/logout-all`); a session
+   * cookie signed with a lower generation is rejected. Absent reads as 0.
+   */
+  sessionGeneration?: number;
 }
 
 export type RunState = 'queued' | 'running' | 'done' | 'failed';
