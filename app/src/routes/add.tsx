@@ -25,6 +25,7 @@ import {
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
+import { useVault } from '../vault-store.js';
 
 import '../styles/add.css';
 import '../styles/app-file-banner.css';
@@ -140,6 +141,7 @@ function driveStatusText(mimeType: string | undefined, done: boolean): string {
 export function Add() {
   const { me } = useSession();
   const { route } = useLocation();
+  const { refresh } = useVault();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const bowerFolderId = me?.vault?.folderId ?? null;
@@ -162,10 +164,6 @@ export function Add() {
   const [shareError, setShareError] = useState<string | null>(null);
 
   useShellSlot('crumb', CRUMB);
-
-  useEffect(() => {
-    queueRef.current = queue;
-  }, [queue]);
 
   // The current inbox listing, so new names are made unique against it.
   // `listFolder` is a single, non-recursive call (unlike `listVault`).
@@ -220,6 +218,19 @@ export function Add() {
     return unique;
   }
 
+  // The single writer for `queue`: keeps `queueRef.current` exactly in
+  // step with every change, rather than catching up on the next render (a
+  // plain `useEffect` used to do that, one render behind). `runQueue`
+  // reads `queueRef.current` right after its last `await`, in the same
+  // tick as the last item's final status change, so a render behind was
+  // exactly one render too many -- the demo's uploads settle over a plain
+  // microtask with no real I/O, so that render never caught up in time and
+  // `finish()` (the vault refresh included) never ran (#289).
+  function setQueueSynced(next: QueueItem[]): void {
+    queueRef.current = next;
+    setQueue(next);
+  }
+
   function addFiles(newFiles: File[]): QueueItem[] {
     const created: QueueItem[] = newFiles.map((file) => ({
       id: crypto.randomUUID(),
@@ -229,7 +240,7 @@ export function Add() {
       status: 'waiting',
       progress: 0,
     }));
-    setQueue((prev) => [...prev, ...created]);
+    setQueueSynced([...queueRef.current, ...created]);
     return created;
   }
 
@@ -243,13 +254,13 @@ export function Add() {
       status: 'waiting',
       progress: 0,
     }));
-    setQueue((prev) => [...prev, ...created]);
+    setQueueSynced([...queueRef.current, ...created]);
     return created;
   }
 
   function updateItem(id: string, patch: Partial<QueueItem>): void {
-    setQueue((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, ...patch } : it)),
+    setQueueSynced(
+      queueRef.current.map((it) => (it.id === id ? { ...it, ...patch } : it)),
     );
   }
 
@@ -300,6 +311,10 @@ export function Add() {
    * the switcher command, never from here. */
   function finish(): void {
     setMessage('Added to your inbox.');
+    // The vault index otherwise only catches up on its next background
+    // revalidation, so the "Tidy up (n)" count and Home's Inbox card would
+    // read stale until then (#289).
+    void refresh();
     // A sentence about the last Drive pick stays on screen to be read.
     if (driveNotesRef.current.length > 0) return;
     setTimeout(() => route('/'), 900);
@@ -400,7 +415,7 @@ export function Add() {
       status: 'waiting',
       progress: 0,
     };
-    setQueue((prev) => [...prev, item]);
+    setQueueSynced([...queueRef.current, item]);
     setLinkUrl('');
     void runQueue([item]);
   }
