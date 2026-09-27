@@ -5,6 +5,8 @@ import type { DriveFile } from '../src/drive.js';
 import {
   appFileLabel,
   buildVaultIndex,
+  fileKind,
+  fileTitle,
   isAppFile,
   isHidden,
   withRulesVersion,
@@ -218,5 +220,42 @@ describe('bowerRulesVersion', () => {
     expect(versioned.bowerRulesVersion).toBe(2);
     expect(versioned.byPath).toBe(index.byPath);
     expect(index.bowerRulesVersion).toBeNull();
+  });
+});
+
+describe('files', () => {
+  it('lists every visible file that is not a note, apart from the notes', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      entry('1-Projects/Plan.md'),
+      entry('1-Projects/Lease.pdf', 'application/pdf'),
+      entry('1-Projects/Processed/Old.pdf', 'application/pdf'),
+      entry('.obsidian/app.json', 'application/json'),
+    ]);
+    expect(index.files.map((f) => f.path)).toEqual(['1-Projects/Lease.pdf']);
+    expect(index.notes.map((f) => f.path)).toEqual(['1-Projects/Plan.md']);
+  });
+});
+
+describe('fileKind', () => {
+  it('tells a file’s kind from its name and type', () => {
+    const kind = (name: string, mimeType: string): string =>
+      fileKind({ name, mimeType });
+    expect(kind('a.md', 'text/markdown')).toBe('note');
+    expect(kind('a.pdf', 'application/pdf')).toBe('pdf');
+    expect(kind('a.jpg', 'image/jpeg')).toBe('photo');
+    expect(kind('a.svg', 'image/svg+xml')).toBe('image');
+    expect(kind('a', 'application/vnd.google-apps.document')).toBe('doc');
+    expect(kind('a', 'application/vnd.google-apps.spreadsheet')).toBe('sheet');
+    expect(kind('a.m4a', 'audio/mp4')).toBe('audio');
+    expect(kind('a.zip', 'application/zip')).toBe('file');
+  });
+});
+
+describe('fileTitle', () => {
+  it('drops the extension only', () => {
+    expect(fileTitle('Lease agreement 2026.pdf')).toBe('Lease agreement 2026');
+    expect(fileTitle('Budget')).toBe('Budget');
+    expect(fileTitle('.env')).toBe('.env');
   });
 });

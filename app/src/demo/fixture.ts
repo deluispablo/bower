@@ -35,6 +35,8 @@ export interface FixtureFile {
   /** Defaults to `text/markdown`. */
   mimeType?: string;
   modifiedTime: string;
+  /** Drive app properties the file carries (`bowerOrigin`, `file-origin.ts`). */
+  appProperties?: Readonly<Record<string, string>>;
 }
 
 /** `2026-09-<day>` at `hhmm`, UTC: the fixture's dates, all in one month. */
@@ -78,6 +80,28 @@ trailer << /Root 1 0 R >>
 %%EOF
 `;
 
+/** The fitter's quote, filed in Kitchen Refresh: a one-page PDF stub. */
+const FITTER_QUOTE_PDF = `%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj
+trailer << /Root 1 0 R >>
+%%EOF
+`;
+
+/** A photo of the paint test patch: a 1 × 1 PNG, enough to be a photo.
+ * Hex rather than base64, which the sanitised-repo check would read as a
+ * Drive folder id. */
+const TEST_PATCH_PNG =
+  '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6364f8cf500f00038601805a347d6b0000000049454e44ae426082';
+
+function pngBlob(hex: string): Blob {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return new Blob([bytes], { type: 'image/png' });
+}
+
 /** Where Tidy up files each inbox item (`run.ts`). */
 export const INBOX_PLAN: ReadonlyMap<string, string> = new Map([
   ['0-Inbox/Tomato seedlings.md', '2-Areas/Garden/Tomato seedlings.md'],
@@ -105,6 +129,7 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
 ## Projects
 - [[Lisbon Trip]]: a week in Lisbon in October
 - [[Kitchen Refresh]]: paint, shelves and a new tap
+- [[1-Projects/Kitchen Refresh/Sage green test patch.png]] · Photo · filed by Bower
 - [[Half Marathon]]: race day in November
 
 ## Areas
@@ -275,6 +300,21 @@ Part of [[Kitchen Refresh]].`,
 
 The second one is cheaper but after the trip. Part of [[Kitchen Refresh]].`,
   ),
+  // Who filed these two is known two ways (`file-origin.ts`): the PDF
+  // carries it as a Drive app property, the photo has a row in `index.md`.
+  {
+    path: '1-Projects/Kitchen Refresh/Shelves and tap quote.pdf',
+    mimeType: 'application/pdf',
+    modifiedTime: at(25, '1730'),
+    content: new Blob([FITTER_QUOTE_PDF], { type: 'application/pdf' }),
+    appProperties: { bowerOrigin: 'filed' },
+  },
+  {
+    path: '1-Projects/Kitchen Refresh/Sage green test patch.png',
+    mimeType: 'image/png',
+    modifiedTime: at(26, '1015'),
+    content: pngBlob(TEST_PATCH_PNG),
+  },
   note(
     '1-Projects/Half Marathon/Half Marathon.md',
     20,

@@ -175,3 +175,56 @@
   margin: 0;
   color: var(--color-text-muted);
 }
+
+/* Notes and files together (#349, Phone-Folder-Project board): a taller
+   row with the type icon in a small tile, the title over who put it there,
+   and the age on the right. */
+.folder-item {
+  min-height: 54px;
+}
+
+.folder-row-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.folder-row .folder-row-icon .icon {
+  width: 18px;
+  height: 18px;
+  color: inherit;
+}
+
+.folder-row-icon.tone-note {
+  color: var(--color-text-muted);
+}
+
+.folder-row-icon.tone-pdf {
+  color: var(--color-danger);
+}
+
+.folder-row-icon.tone-image,
+.folder-row-icon.tone-drive {
+  color: var(--color-info);
+}
+
+.folder-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.folder-row-detail {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

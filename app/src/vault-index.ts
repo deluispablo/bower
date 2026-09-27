@@ -21,6 +21,12 @@ export interface VaultIndex {
   /** Markdown files only. */
   notes: DriveFile[];
   /**
+   * Every other visible file: PDFs, photos, Google Docs and the rest, each
+   * with its Drive `mimeType` (its type, `fileKind`) and `modifiedTime`. A
+   * folder screen lists them next to the notes (#349).
+   */
+  files: DriveFile[];
+  /**
    * The top-level `.claude` folder, set aside so the explorer's "Bower's
    * files" group can list it as "Agent settings" when `showAppFiles` is on
    * (spec §14). Every other dot-folder stays hidden regardless of that
@@ -148,6 +154,73 @@ export function appFileLabel(name: string): string {
   return base;
 }
 
+/** What a file is, for its icon and its type word on a folder screen. */
+export type FileKind =
+  | 'note'
+  | 'pdf'
+  | 'photo'
+  | 'image'
+  | 'doc'
+  | 'sheet'
+  | 'slides'
+  | 'audio'
+  | 'video'
+  | 'file';
+
+const GOOGLE_KINDS: Readonly<Record<string, FileKind>> = {
+  'application/vnd.google-apps.document': 'doc',
+  'application/vnd.google-apps.spreadsheet': 'sheet',
+  'application/vnd.google-apps.presentation': 'slides',
+};
+
+/** Raster formats a phone or camera produces: labelled "Photo". Any other
+ * image (a drawing, an icon) is just an "Image". */
+const PHOTO_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/heic',
+  'image/heif',
+  'image/webp',
+]);
+
+/** `file`'s kind from its name (`.md` is a note) and its Drive `mimeType`. */
+export function fileKind(file: Pick<DriveFile, 'name' | 'mimeType'>): FileKind {
+  if (isMarkdown(file.name)) return 'note';
+  const mime = file.mimeType.toLowerCase();
+  const google = GOOGLE_KINDS[mime];
+  if (google !== undefined) return google;
+  if (mime === 'application/pdf') return 'pdf';
+  if (PHOTO_MIMES.has(mime)) return 'photo';
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('audio/')) return 'audio';
+  if (mime.startsWith('video/')) return 'video';
+  return 'file';
+}
+
+/** The type word a folder row shows ("PDF · filed by Bower"). */
+export const FILE_KIND_LABELS: Readonly<Record<FileKind, string>> = {
+  note: 'Note',
+  pdf: 'PDF',
+  photo: 'Photo',
+  image: 'Image',
+  doc: 'Google Doc',
+  sheet: 'Google Sheet',
+  slides: 'Google Slides',
+  audio: 'Audio',
+  video: 'Video',
+  file: 'File',
+};
+
+/**
+ * A file's title: its name without the extension (`Lease 2026.pdf` →
+ * `Lease 2026`). Extensions never show outside the Add queue; a note's title
+ * comes from `noteTitle` instead.
+ */
+export function fileTitle(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
 export function buildVaultIndex(files: DriveFile[]): VaultIndex {
   const index: VaultIndex = {
     byId: new Map(),
@@ -155,6 +228,7 @@ export function buildVaultIndex(files: DriveFile[]): VaultIndex {
     byBasename: new Map(),
     folders: [],
     notes: [],
+    files: [],
     folderNotes: new Map(),
     notePinnedAt: new Map(),
     folderPinnedAt: new Map(),
@@ -181,6 +255,7 @@ export function buildVaultIndex(files: DriveFile[]): VaultIndex {
     if (same === undefined) index.byBasename.set(key, [file]);
     else same.push(file);
     if (isMarkdown(file.name)) index.notes.push(file);
+    else index.files.push(file);
   }
 
   return index;

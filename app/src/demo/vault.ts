@@ -20,6 +20,8 @@ export interface Entry {
   modifiedTime: string;
   /** `undefined` for a folder. */
   content?: string | Blob;
+  /** Drive app properties, when the fixture gives any. */
+  appProperties?: Readonly<Record<string, string>>;
 }
 
 export class DemoVault {
@@ -48,6 +50,9 @@ export class DemoVault {
         parentId,
         modifiedTime: file.modifiedTime,
         content: file.content,
+        ...(file.appProperties !== undefined && {
+          appProperties: file.appProperties,
+        }),
       });
     }
   }
@@ -172,6 +177,9 @@ export class DemoVault {
       modifiedTime: entry.modifiedTime,
       path,
     };
+    if (entry.appProperties !== undefined) {
+      file.appProperties = entry.appProperties;
+    }
     if (entry.content !== undefined) {
       file.size =
         typeof entry.content === 'string'

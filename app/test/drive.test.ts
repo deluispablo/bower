@@ -296,9 +296,37 @@ describe('listVault', () => {
       "'it\\'s' in parents and trashed = false",
     );
     expect(url?.searchParams.get('fields')).toBe(
-      'nextPageToken,files(id,name,mimeType,parents,modifiedTime,size,webViewLink)',
+      'nextPageToken,files(id,name,mimeType,parents,modifiedTime,size,webViewLink,appProperties)',
     );
     expect(url?.searchParams.get('pageSize')).toBe('1000');
+  });
+
+  it("keeps a file's string app properties and drops anything else", async () => {
+    stubFetch(() =>
+      jsonResponse(200, {
+        files: [
+          {
+            id: 'p1',
+            name: 'Lease.pdf',
+            mimeType: 'application/pdf',
+            parents: ['ROOT'],
+            appProperties: { bowerOrigin: 'filed', count: 3 },
+          },
+          {
+            id: 'p2',
+            name: 'Plain.pdf',
+            mimeType: 'application/pdf',
+            parents: ['ROOT'],
+            appProperties: { count: 3 },
+          },
+        ],
+      }),
+    );
+
+    const files = await listVault('ROOT');
+
+    expect(files[0]?.appProperties).toEqual({ bowerOrigin: 'filed' });
+    expect(files[1]?.appProperties).toBeUndefined();
   });
 
   it('walks subfolders and builds relative paths', async () => {
