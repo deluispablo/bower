@@ -23,6 +23,12 @@ export interface Prefs {
    * first time. Drives the "new report" badge (`health-report.ts`).
    */
   healthSeenAt: string;
+  /**
+   * ISO time Bower's suggestions (`Answers/Bower - Proposals.md`, #199)
+   * were last shown in Health; `''` before the first time. Home mentions
+   * open suggestions only when the file changed after this.
+   */
+  proposalsSeenAt: string;
   /** The explorer tree's order: by name, or most recently modified first. */
   explorerSort: ExplorerSortPref;
   /**
@@ -38,6 +44,7 @@ const DEFAULTS: Prefs = {
   pushPromptShown: false,
   theme: 'system',
   healthSeenAt: '',
+  proposalsSeenAt: '',
   explorerSort: 'name',
   showAppFiles: false,
 };

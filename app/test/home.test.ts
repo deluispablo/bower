@@ -113,6 +113,21 @@ describe('bubbleFor', () => {
     );
   });
 
+  it('new suggestions come after a new report and before pending', () => {
+    expect(bubbleFor({ ...allTidy, newProposals: 2, pending: 4 })).toBe(
+      'I have 2 suggestions for your rules. They are in Health.',
+    );
+    expect(bubbleFor({ ...allTidy, newProposals: 1 })).toBe(
+      'I have 1 suggestion for your rules. They are in Health.',
+    );
+    expect(
+      bubbleFor({ ...allTidy, newHealthReport: true, newProposals: 2 }),
+    ).toBe("Sunday's health check is ready. Want to see it?");
+    expect(bubbleFor({ ...allTidy, newProposals: 0, pending: 4 })).toBe(
+      '4 new things in your inbox. Shall I tidy up?',
+    );
+  });
+
   it('quarantined beats refused, done, a new report and pending', () => {
     expect(
       bubbleFor({
@@ -184,6 +199,10 @@ describe('birdStateFor', () => {
 
   it('stays looking when a report is new even with nothing pending', () => {
     expect(birdStateFor({ ...settled, newHealthReport: true })).toBe('looking');
+  });
+
+  it('stays looking when there are new suggestions', () => {
+    expect(birdStateFor({ ...settled, newProposals: 1 })).toBe('looking');
   });
 
   it('shows off right after a run finishes', () => {

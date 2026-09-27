@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { Bird } from '../components/bird.js';
+import { SaveError } from '../drive.js';
 import {
   findReport,
   findingsIn,
@@ -12,6 +13,13 @@ import {
 import type { HealthCounts, HealthFinding } from '../health-report.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
 import { setPref } from '../prefs.js';
+import {
+  findProposals,
+  openProposals,
+  plainText,
+  ProposalError,
+} from '../proposals.js';
+import type { Proposal, ProposalDecision, ProposalKind } from '../proposals.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import '../styles/health.css';
 
@@ -75,12 +83,169 @@ function Figures({ counts }: FiguresProps) {
   );
 }
 
+type ProposalsLoad =
+  | { status: 'loading' }
+  | { status: 'ready'; open: Proposal[] }
+  | { status: 'offline' }
+  | { status: 'error' };
+
+const KIND_LABELS: Record<ProposalKind, string> = {
+  rule: 'New rule',
+  workflow: 'New way to file something',
+  tag: 'New tag',
+};
+
+/** One short sentence for a decision that could not be saved. */
+function decisionError(err: unknown): string {
+  if (err instanceof ProposalError) return err.message;
+  if (err instanceof SaveError && err.code === 'conflict') {
+    return 'Your notes changed meanwhile. Try again.';
+  }
+  return 'Could not save your answer. Try again.';
+}
+
+/**
+ * Bower's open suggestions (`Answers/Bower - Proposals.md`, #199), under the
+ * report: each with Accept (the rule goes into your rules) and Dismiss.
+ * Nothing at all when there is no such file or nothing is open. Showing
+ * the list records the time, so Home stops mentioning the suggestions.
+ */
+function Proposals() {
+  const { index, getNoteText, decideProposal } = useVault();
+  const [load, setLoad] = useState<ProposalsLoad>({ status: 'loading' });
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const file = index === null ? undefined : findProposals(index);
+  const modifiedTime = file?.modifiedTime;
+
+  // Seen now, or at the file's own time if the device clock lags behind
+  // Drive's, same as the report's badge.
+  useEffect(() => {
+    if (load.status !== 'ready' || modifiedTime === undefined) return;
+    const now = new Date().toISOString();
+    setPref(
+      'proposalsSeenAt',
+      Date.parse(modifiedTime) > Date.parse(now) ? modifiedTime : now,
+    );
+  }, [load.status, modifiedTime]);
+
+  useEffect(() => {
+    if (file === undefined) return;
+    let cancelled = false;
+    getNoteText(file.id)
+      .then((text) => {
+        if (!cancelled) setLoad({ status: 'ready', open: openProposals(text) });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof OfflineError) {
+          setLoad({ status: 'offline' });
+          return;
+        }
+        console.error(err);
+        setLoad({ status: 'error' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [file, getNoteText]);
+
+  if (file === undefined || load.status === 'loading') return null;
+  if (load.status === 'offline') {
+    return (
+      <p class="health-proposals-note">
+        Offline: Bower's suggestions are not saved on this device yet.
+      </p>
+    );
+  }
+  if (load.status === 'error') {
+    return (
+      <p class="health-proposals-note">Could not load Bower's suggestions.</p>
+    );
+  }
+  if (load.open.length === 0 && message === null) return null;
+
+  const decide = async (
+    proposal: Proposal,
+    decision: ProposalDecision,
+  ): Promise<void> => {
+    setBusy(proposal.id);
+    setMessage(null);
+    try {
+      await decideProposal(proposal.id, decision);
+      setMessage(
+        decision === 'accepted'
+          ? `Added to your rules: ${proposal.title}.`
+          : `Dismissed: ${proposal.title}.`,
+      );
+    } catch (err) {
+      console.error(err);
+      setMessage(decisionError(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div class="health-proposals">
+      <h2>Suggestions from Bower</h2>
+      {load.open.length > 0 && (
+        <>
+          <p class="health-proposals-intro">
+            Accept one and Bower follows it from now on: it goes into your
+            rules.
+          </p>
+          <ul class="health-proposals-list">
+            {load.open.map((proposal) => (
+              <li key={proposal.id} class="health-proposal">
+                <p class="health-proposal-kind">{KIND_LABELS[proposal.kind]}</p>
+                <p class="health-proposal-title">{proposal.title}</p>
+                <p class="health-proposal-text">{plainText(proposal.text)}</p>
+                {proposal.evidence !== '' && (
+                  <p class="health-proposal-evidence">
+                    {plainText(proposal.evidence)}
+                  </p>
+                )}
+                <div class="health-proposal-actions">
+                  <button
+                    type="button"
+                    class="health-proposal-accept"
+                    disabled={busy !== null}
+                    onClick={() => void decide(proposal, 'accepted')}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    class="health-proposal-dismiss"
+                    disabled={busy !== null}
+                    onClick={() => void decide(proposal, 'dismissed')}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {message !== null && (
+        <p class="health-proposals-note" role="status">
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /**
  * The weekly health check (`Lint Report.md`): the bird done with a bubble
  * summarising the report's date and count, the three headline figures
  * (`summarise`), the findings list (`findingsIn`), a button that opens Tell
  * Bower with the fix request prefilled, and the report itself in Drive.
  * Opening it records the time, which clears the badge in the navigation.
+ * Bower's open suggestions follow the report (`Proposals`).
  */
 export function Health() {
   const { index, status, error, getNoteText } = useVault();
@@ -150,6 +315,7 @@ export function Health() {
       <section class="health">
         <h1>Health check</h1>
         <p>No health check yet. Runs every Sunday.</p>
+        <Proposals />
       </section>
     );
   }
@@ -213,6 +379,8 @@ export function Health() {
           )}
         </>
       )}
+
+      <Proposals />
     </section>
   );
 }
