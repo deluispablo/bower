@@ -1,0 +1,210 @@
+/*
+ * Home (spec §6, Home row): the greeting with the bird and its speech
+ * bubble, the search pill (phone only — desktop already has one in the
+ * sidebar, `explorer.tsx`), the count cards, and Recent. Desktop adds the
+ * Health and Notes cards and an inline Tell Bower composer next to Recent.
+ *
+ * Phone-first; `.home-desktop-only` pieces and the desktop-sized greeting
+ * only show from 900 px, the same breakpoint as the shell (layout.css).
+ */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.home-greeting {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.home-greeting--desktop {
+  display: none;
+}
+
+.home-greeting-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.home-h1 {
+  margin: 0;
+}
+
+.home-bubble {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+}
+
+.home-search {
+  position: relative;
+}
+
+.home-search > .icon {
+  position: absolute;
+  top: 13px;
+  left: var(--space-3);
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.home-search .search-input {
+  padding-left: calc(var(--space-3) + 18px + var(--space-2));
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+}
+
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.home-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.home-card h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.home-card h2 .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.home-card-count {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+}
+
+.home-card p:last-child {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.home-card-link:hover {
+  background: var(--color-surface);
+}
+
+.home-desktop-only {
+  display: none;
+}
+
+.home-recent-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+}
+
+.home-recent-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.home-recent-head span {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.home-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-notes li {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.home-note-meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.home-tell h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.home-tell-last {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.home-tell-last p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+@media (min-width: 900px) {
+  .home-greeting--phone {
+    display: none;
+  }
+
+  .home-greeting--desktop {
+    display: flex;
+  }
+
+  .home-search {
+    display: none;
+  }
+
+  .home-cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .home-desktop-only {
+    display: flex;
+  }
+
+  .home-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: var(--space-6);
+    align-items: start;
+  }
+}
