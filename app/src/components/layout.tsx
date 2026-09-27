@@ -31,7 +31,6 @@ import { getPref } from '../prefs.js';
 import { useSession } from '../session.js';
 import { effectiveTheme, setTheme } from '../theme.js';
 import { useVault } from '../vault-store.js';
-import { Bird } from './bird.js';
 import { Explorer, ExplorerDrawer, HEALTH_PATH } from './explorer.js';
 import { useShellSlots } from './shell-slots.js';
 import {
@@ -183,7 +182,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           </button>
           {crumb === null ? (
             <a href="/" class="brand topbar-brand" aria-label="Bower home">
-              <Bird state="looking" size={32} />
               <span class="brand-word">Bower</span>
             </a>
           ) : (

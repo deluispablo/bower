@@ -11,6 +11,7 @@ import type { BirdFace, BirdState } from '../src/components/bird-classes.js';
 
 /** The pose class each state plays, as named in docs/design/gen.py. */
 const POSES: Record<BirdState, string> = {
+  idle: 'p-idle',
   looking: 'p-look',
   hello: 'p-hello',
   shiny: 'p-shiny',
@@ -27,6 +28,7 @@ const POSES: Record<BirdState, string> = {
 
 /** The still face each state falls back to when motion is off. */
 const STILL_FACES: Record<BirdState, BirdFace | undefined> = {
+  idle: undefined,
   looking: undefined,
   hello: 'happy',
   shiny: 'curious',
@@ -76,7 +78,7 @@ function selectorsStartingWith(prefix: string): string[] {
 }
 
 describe('BIRD_STATES', () => {
-  it('lists the twelve states once each', () => {
+  it('lists the thirteen states once each', () => {
     expect([...BIRD_STATES].sort()).toEqual(Object.keys(POSES).sort());
   });
 });

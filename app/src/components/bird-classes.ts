@@ -6,6 +6,7 @@
  */
 
 export type BirdState =
+  | 'idle'
   | 'looking'
   | 'hello'
   | 'shiny'
@@ -29,6 +30,7 @@ export type BirdFace = 'happy' | 'curious' | 'worried' | 'sleepy' | 'proud';
 
 /** The pose class of each state; the names match `docs/design/gen.py`. */
 const POSES: Record<BirdState, string> = {
+  idle: 'p-idle',
   looking: 'p-look',
   hello: 'p-hello',
   shiny: 'p-shiny',
@@ -52,7 +54,12 @@ const STILL_FACES: Partial<Record<BirdState, BirdFace>> = {
   showoff: 'proud',
 };
 
-/** Every state, in the order of the spec's table. */
+/**
+ * Every state: the spec's table (§4.3), plus `idle` (§14 finding 13) — the
+ * same breathe and blink as `looking`, without the loop that turns the
+ * whole bird round and hunts with the head. Bars and cards use it; `looking`
+ * stays for Home and the sign-in.
+ */
 export const BIRD_STATES: readonly BirdState[] = Object.keys(
   POSES,
 ) as BirdState[];

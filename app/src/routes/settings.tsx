@@ -4,7 +4,6 @@ import { useLocation } from 'preact-iso';
 
 import type { Me } from '../api.js';
 import { ApiError, deleteAccount, loginUrl, updateSettings } from '../api.js';
-import { Bird } from '../components/bird.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { Toggle } from '../components/toggle.js';
 import { getPref, setPref } from '../prefs.js';
@@ -33,6 +32,14 @@ function toMessage(err: unknown): string {
 
 function driveUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
+}
+
+/** The account card's initial disc (spec §14): the name's first letter, or
+ * the address's when there is no name. */
+function accountInitial(me: Me): string {
+  const source =
+    me.name !== undefined && me.name.trim() !== '' ? me.name : me.email;
+  return source.charAt(0).toUpperCase();
 }
 
 /** External link, kept local: the icon set (`components/icons.tsx`) is owned by #144 in parallel. */
@@ -375,7 +382,9 @@ export function Settings() {
       <h1 class="screen-title">Settings</h1>
 
       <div class="settings-section settings-account">
-        <Bird state="looking" size={48} />
+        <span class="settings-account-avatar" aria-hidden="true">
+          {accountInitial(me)}
+        </span>
         <div class="settings-account-info">
           {me.name !== undefined && (
             <p class="settings-account-name">{me.name}</p>

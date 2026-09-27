@@ -22,13 +22,28 @@
   font-size: var(--text-lg);
 }
 
-/* Account card: the bird, the name/email, the Drive link. */
+/* Account card: the initial disc, the name/email, the Drive link. */
 
 .settings-account {
   flex-direction: row;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
+}
+
+.settings-account-avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-surface-hover);
+  color: var(--color-link);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
 }
 
 .settings-account-info {
