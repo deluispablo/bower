@@ -130,7 +130,7 @@ Bower's answers to questions sent as instructions. One note per question, dated.
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-27
-bower_rules_version: 2
+bower_rules_version: 3
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -179,7 +179,7 @@ Every note gets at least one **type** tag and one **domain** tag in frontmatter.
 **Type tags** (what kind of note):
 \`project\`, \`area\`, \`hub\`, \`summary\`, \`document\`, \`reference\`, \`note\`, \`guide\`, \`inventory\`, \`answer\`, \`instruction\`, \`meta\`
 
-**Domain tags** (what topic; add new ones organically, then list them in \`Rules.md\`):
+**Domain tags** (what topic; add new ones organically, and note each new one in \`log.md\`):
 \`personal\`, \`career\`, \`finance\`, \`legal\`, \`health\`, \`home\`, \`travel\`, \`learning\`, \`hobby\`
 
 Example: \`tags: [summary, finance]\`
@@ -280,7 +280,7 @@ When a project is done or dropped: set \`status: archived\`, move its folder to 
 ## Self-learning
 - **Profile:** anything lasting about the owner goes to \`About-Me.md\` (Ingest step 7).
 - **Patterns:** when the same kind of document has been ingested three times (job offers, rental listings, invoices, medical reports…), append a proposal to \`log.md\` under \`Proposal:\` describing a dedicated workflow (fields to capture, where it goes, what to compare it against) and mention it in the next notification summary. Create the workflow only when the owner says yes, through an instruction note.
-- **Domain tags:** new domain tags are added to \`Rules.md\` the first time they are used.
+- **Domain tags:** a new domain tag is noted in \`log.md\` the first time it is used; it goes into \`Rules.md\` only when the owner asks for it through an instruction note (in any other run the runner undoes a change to \`Rules.md\`).
 - **Never** change rules on your own initiative. Rules change only through the Instructions workflow.
 
 ## Rules

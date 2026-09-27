@@ -3,8 +3,11 @@
     "blockReadsOutsideWorkingDirectories": true,
     "deny": [
       "Write(CLAUDE.md)",
+      "Write(**/CLAUDE.md)",
       "Edit(CLAUDE.md)",
+      "Edit(**/CLAUDE.md)",
       "MultiEdit(CLAUDE.md)",
+      "MultiEdit(**/CLAUDE.md)",
       "Write(README.md)",
       "Edit(README.md)",
       "MultiEdit(README.md)",

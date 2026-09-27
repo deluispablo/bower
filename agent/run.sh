@@ -185,6 +185,7 @@ RUN_STARTED=0  # 1 once the agent may have changed the local copy
 REFUSED_JSON=''      # the audit's refused paths, a JSON array, once it ran
 QUARANTINED_JSON=''  # the pre-scan's quarantined paths, a JSON array, once it ran
 TOO_MANY_CHANGES=0   # 1 when the audit refused the whole run
+RULES_WRITABLE=0     # 1 once an instruction note the app wrote reaches the agent
 
 on_exit() {
   local rc=$?
@@ -248,13 +249,31 @@ in_known_root() {
   return 1
 }
 
-# Before the run: keep a copy of every file outside the known roots
-# (CLAUDE.md and README.md among them), so the audit can put back one the
-# agent changed.
+# Whether the agent may add or change this path: inside the known roots, but
+# never a CLAUDE.md at any depth (Claude Code loads a nested one as memory in
+# every later run), and Rules.md, which the rulebook includes with the last
+# word, only in a run whose agent was given an instruction note the app wrote
+# (RULES_WRITABLE, set after the pre-scan). Otherwise one injected note could
+# plant a standing "rule" in an ordinary ingest (issue #263).
+may_write() {
+  case "$1" in
+    CLAUDE.md | */CLAUDE.md) return 1 ;;
+    Rules.md) [ "$RULES_WRITABLE" -eq 1 ] || return 1 ;;
+  esac
+  in_known_root "$1"
+}
+
+# Before the run: keep a copy of every file the audit may have to put back:
+# those outside the known roots (CLAUDE.md and README.md among them),
+# Rules.md and any nested CLAUDE.md. Whether Rules.md may change is not
+# known yet at this point, so it is always kept.
 keep_pre_run_copy() {
   local path
   while IFS= read -r path; do
-    in_known_root "$path" && continue
+    case "$path" in
+      Rules.md | */CLAUDE.md) ;;
+      *) in_known_root "$path" && continue ;;
+    esac
     mkdir -p "$PRE_RUN_DIR/$(dirname "$path")" &&
       cp -p "$VAULT_DIR/$path" "$PRE_RUN_DIR/$path" || return 1
   done < <(cut -d ' ' -f 3- "$MANIFEST_BEFORE")
@@ -263,9 +282,11 @@ keep_pre_run_copy() {
 # Post-run audit. Lists the files that are new or changed since
 # MANIFEST_BEFORE was taken and decides what may be uploaded:
 # - more than MAX_CHANGES of them: nothing is (refused ["*"]);
-# - otherwise each one outside the known roots is refused and reverted in the
-#   local copy (put back from the pre-run copy, or removed when it is new),
-#   and the rest is accepted.
+# - otherwise each one the agent may not write (may_write above: outside the
+#   known roots, a CLAUDE.md at any depth, or Rules.md in a run without an
+#   instruction note) is refused and reverted in the local copy (put back
+#   from the pre-run copy, or removed when it is new), and the rest is
+#   accepted.
 # Writes the accepted paths to CHANGED_FILE, sets REFUSED_JSON and
 # TOO_MANY_CHANGES. Logs counts only.
 audit() {
@@ -285,7 +306,7 @@ audit() {
   fi
   while IFS= read -r path; do
     [ -n "$path" ] || continue
-    if in_known_root "$path"; then
+    if may_write "$path"; then
       printf '%s\n' "$path" >>"$CHANGED_FILE"
       continue
     fi
@@ -448,8 +469,9 @@ fi
 # claude-settings.json replaces the vault's own .claude/settings.json, and
 # .claude/settings.local.json (which Claude Code would rank above it) is
 # removed from the local copy. It denies writes to the protected paths
-# (CLAUDE.md, README.md, .claude/, .obsidian/) and Bash commands that name a
-# URL. .claude/ is left out of the manifest, so none of this is uploaded.
+# (CLAUDE.md at any depth, README.md, .claude/, .obsidian/) and Bash
+# commands that name a URL. .claude/ is left out of the manifest, so none of
+# this is uploaded.
 STEP='permission policy'
 if [ ! -f "$SETTINGS_FILE" ]; then
   fail "$STEP: claude-settings.json missing next to run.sh"
@@ -645,6 +667,18 @@ if [ "$MODE" = ingest ] && [ "$flagged_count" -gt 0 ]; then
   PROCESSED_JSON=$(jq -Rn '[inputs]' <"$WORK_DIR/pending-after-scan.txt")
 fi
 
+# The instruction allow-list: the instruction-shaped notes still at their
+# pending path, that is listed by Drive as written by the app and not
+# flagged by the pre-scan. Only an ingest runs the Instructions workflow,
+# and only a run with at least one such note may change Rules.md; in any
+# other run the audit reverts a change to it (may_write above, issue #263).
+if [ "$MODE" = ingest ] && [ "$candidate_count" -gt 0 ]; then
+  allowed_count=$(LC_ALL=C comm -23 "$CANDIDATES_FILE" "$FLAGGED_FILE" | grep -c . || true)
+  if [ "$allowed_count" -gt 0 ]; then
+    RULES_WRITABLE=1
+  fi
+fi
+
 # Claude itself runs under `env -i` with an explicit allow-list, so an
 # instruction that reaches the model despite the tool allow/deny list above
 # still finds no Drive token, no runner key and no BOWER_* value in its own
@@ -693,7 +727,8 @@ fi
 
 # --- post-run audit and sync up -------------------------------------------
 # The audit (see audit() above) reverts what the agent may not change: the
-# protected paths, anything outside the known roots, or, past MAX_CHANGES
+# protected paths, anything outside the known roots, a CLAUDE.md at any
+# depth, Rules.md in a run without an instruction note, or, past MAX_CHANGES
 # files, the whole run. Only the accepted files the agent added or changed
 # are copied, and copy never deletes: a file added or edited in Drive during
 # the run keeps its content. Then each file that was pending at the start,
