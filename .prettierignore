@@ -7,3 +7,6 @@ dist
 
 # Generated design screens (docs/design/gen.py); not hand-edited
 docs/design/screens/
+
+# Exported design boards (the v3 canvas); not hand-edited
+docs/design/v3/boards/
