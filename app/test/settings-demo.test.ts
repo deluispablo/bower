@@ -40,6 +40,14 @@ vi.mock('../src/session.js', () => ({
   useSession: () => ({ me, setMe: vi.fn(), signOut }),
 }));
 
+// #197 added a `useVault()` call to Settings (the rulebook update row).
+// Mocked the same way sibling suites do (see layout.test.ts): an empty
+// vault so the row has nothing to show, and no real VaultProvider needed.
+vi.mock('../src/vault-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/vault-store.js')>()),
+  useVault: () => ({ index: undefined, files: [], updateRules: vi.fn() }),
+}));
+
 const { Settings } = await import('../src/routes/settings.js');
 
 const NOT_IN_DEMO = 'Not in the demo: run your own Bower to use this.';
