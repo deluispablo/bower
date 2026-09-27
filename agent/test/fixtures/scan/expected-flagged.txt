@@ -1,0 +1,10 @@
+should-flag/as-an-ai-claim.txt
+should-flag/base64-blob.csv
+should-flag/hidden-html-comment.htm
+should-flag/ignore-previous-instructions.md
+should-flag/invisible-characters.md
+should-flag/role-marker-assistant-line.eml
+should-flag/role-marker-im-start.txt
+should-flag/role-marker-instruction-heading.md
+should-flag/system-prompt-request.json
+should-flag/you-are-now.md
