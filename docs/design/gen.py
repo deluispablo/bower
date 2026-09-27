@@ -1,7 +1,7 @@
-# Generates every artboard of the app redesign into ./screens/ (the Design
-# canvas the lead reviewed; each file also opens on its own in a browser,
-# minus the {{holes}} of Mascot.dc.html). One bird drawing, one stylesheet,
-# many screens. Run: python3 docs/design/gen.py
+# Generates every screen of the app redesign into ./project/ (the canvas the
+# lead reviews) or ./screens/ in the repo. One bird drawing (BIRD_CORE, v8.2),
+# one stylesheet (CSS: every pose as keyframes), one function per screen.
+# Python 3, no packages. Run: python3 gen.py
 import json, os, re
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'screens')
@@ -15,33 +15,39 @@ FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">\n'
 # that overlaps it and turns on the neck, one big eye, a small beak with a
 # jaw, a leaf wing that starts at the shoulder, a short cocked tail, feet.
 BIRD_CORE = (
-    '<g class="tl"><path class="tf" d="M29 56C21 47 14 40 6 35C11 43 18 52 31 62Z"></path></g>'
-    '<g class="ft"><path class="lg" d="M40 84L39 91M35 91h8"></path><path class="lg" d="M53 85L53 91M49 91h8"></path></g>'
+    '<g class="tl"><rect class="tf" x="6" y="71" width="24" height="5.5" rx="2.75" transform="rotate(-54 30 74)"></rect><rect class="tf" x="4" y="73" width="26" height="5.5" rx="2.75" transform="rotate(-36 30 76)"></rect><rect class="tf" x="6" y="75" width="24" height="5.5" rx="2.75" transform="rotate(-18 30 78)"></rect></g>'
+    '<g class="ft"><path class="lg" d="M40 84V91"></path><rect class="fo" x="34" y="89" width="13" height="4.5" rx="2.25"></rect><path class="lg" d="M53 85V91"></path><rect class="fo" x="47" y="89" width="13" height="4.5" rx="2.25"></rect></g>'
     '<circle class="bd" cx="46" cy="62" r="24"></circle>'
-    '<g class="wg"><path class="wp" d="M44 50C57 49 65 59 60 72C49 72 39 64 44 50Z"></path></g>'
-    '<g class="hd"><circle class="hc" cx="62" cy="40" r="19"></circle>'
-    '<circle class="ch" cx="72" cy="46" r="3.2"></circle>'
+    '<ellipse class="ch" cx="52" cy="72" rx="13" ry="10"></ellipse>'
+    '<g class="hd">'
+    '<rect class="nk" x="52" y="34" width="16" height="38" rx="8"></rect>'
+    '<circle class="hc" cx="62" cy="40" r="19"></circle>'
+    '<circle class="ck" cx="72" cy="47" r="3.2"></circle>'
     '<g class="ey"><circle class="ec" cx="68" cy="37" r="5.2"></circle><circle class="eh" cx="70" cy="35" r="1.9"></circle><circle class="eh" cx="66.4" cy="39.2" r=".9"></circle></g>'
-    '<path class="bk" d="M80 38L92 42L80 45Z"></path><g class="jw"><path class="bj" d="M80 43.5L90 42.5L80 47.5Z"></path></g>'
-    '<path class="x ctwig tw" d="M86 42L100 26M96 32L102 30"></path>'
-    '<rect class="x cpaper pp" x="86" y="36" width="14" height="18" rx="1" transform="rotate(14 93 45)"></rect>'
+    '<circle class="ld" cx="68" cy="24.5" r="6.5"></circle><circle class="lb" cx="68" cy="49" r="6.5"></circle>'
+    '<rect class="bk" x="79" y="35" width="13" height="6" rx="3"></rect><g class="jw"><rect class="bj" x="79" y="40" width="10" height="4.5" rx="2.25"></rect></g>'
+    '<path class="x ctwig tw" d="M86 39L100 24M96 28L103 27"></path>'
+    '<rect class="x cpaper pp" x="86" y="34" width="13" height="17" rx="1" transform="rotate(14 92 42)"></rect>'
+    '<text class="x ex" x="74" y="16">!</text>'
     '</g>'
+    '<g class="wg"><path class="wp" d="M54 56C64 58 65 68 58 74C44 78 28 78 18 72C28 64 42 56 54 56Z"></path></g>'
+    '<circle class="x dd d1" cx="50" cy="20" r="1.6"></circle><circle class="x dd d2" cx="56" cy="16" r="1.6"></circle><circle class="x dd d3" cx="62" cy="14" r="1.6"></circle>'
     '<text class="x nt" x="82" y="22">♪</text><text class="x nt n2" x="90" y="14">♪</text><text class="x nt n3" x="76" y="8">♪</text>'
     '<text class="x qm" x="80" y="18">?</text>'
     '<text class="x zz" x="74" y="22">z</text><text class="x zz z2" x="82" y="12">z</text>'
-    '<path class="x sp" d="M90 8l1.8 3.8 3.8 1.8-3.8 1.8L90 19l-1.8-3.8-3.8-1.8 3.8-1.8z"></path><path class="x sp sp2" d="M10 24l1.4 3 3 1.4-3 1.4L10 33l-1.4-3-3-1.4 3-1.4z"></path>'
-    '<path class="x cl" d="M24 18h16a5 5 0 0 0-.6-10 7 7 0 0 0-13 2A4 4 0 0 0 24 18z"></path>'
+    '<path class="x sp" d="M90 8l1.8 3.8 3.8 1.8-3.8 1.8L90 19l-1.8-3.8-3.8-1.8 3.8-1.8z"></path><path class="x sp sp2" d="M8 26l1.4 3 3 1.4-3 1.4L8 35l-1.4-3-3-1.4 3-1.4z"></path>'
+    '<path class="x cl" d="M50 6h18a5 5 0 0 0-.6-10 7 7 0 0 0-13 2A4 4 0 0 0 50 6z"></path><path class="x rn r1" d="M52 9v5"></path><path class="x rn r2" d="M58 10v5"></path><path class="x rn r3" d="M64 9v5"></path><path class="x rn r4" d="M70 10v5"></path><path class="x nest2" d="M22 82C26 94 68 94 72 82M26 88L68 84M30 92L64 88M28 84L70 90M24 86L40 82M54 82L70 86"></path>'
 )
 SCENE = (
     '<g><path class="x tray" d="M-46 78H-6L-10 92H-42Z"></path>'
     '<rect class="x traypaper" x="-36" y="70" width="18" height="12" rx="1" style="fill:#fff;stroke:#94a3b8;stroke-width:1;transform:rotate(-6deg);transform-box:fill-box;transform-origin:center"></rect>'
-    '<path class="x nest" d="M104 84C106 96 142 96 144 84Z"></path>'
+    '<path class="x nest" d="M104 84C108 96 140 96 144 84M108 90L140 86M112 94L136 90M110 86L142 92M106 88L120 84M128 84L142 88"></path>'
     '<rect class="x nestpile np1" x="112" y="76" width="16" height="10" rx="1"></rect>'
     '<path class="x tw np2" d="M116 82L134 72"></path>'
-    '<path class="x wall" d="M8 92l2-18"></path><path class="x wall w2" d="M16 92l1-19"></path><path class="x wall w3" d="M24 92l-1-18"></path>'
-    '<path class="x wall w4" d="M76 92l2-18"></path><path class="x wall w5" d="M84 92l1-19"></path><path class="x wall w6" d="M92 92l-1-18"></path>'
-    '<circle class="x sgem" cx="118" cy="26" r="7"></circle><circle class="x sgemhl" cx="115.5" cy="23.5" r="2.2"></circle>'
-    '<path class="x sp sspark" d="M130 10l1.6 3.4 3.4 1.6-3.4 1.6-1.6 3.4-1.6-3.4-3.4-1.6 3.4-1.6z"></path></g>'
+    '<path class="x bp bp1" d="M6 92L28 86"></path><path class="x bp bp2" d="M10 94L30 90"></path><path class="x bp bp3" d="M14 90L34 88"></path>'
+    '<path class="x bn" d="M64 84C68 96 102 96 106 84M70 90L100 86"></path><path class="x bn bt1" d="M72 87L98 91"></path><path class="x bn bt2" d="M68 83L90 87"></path><path class="x bn bt3" d="M80 82L104 88"></path>'
+    '<circle class="x sgem" cx="108" cy="30" r="7"></circle><circle class="x sgemhl" cx="105.5" cy="27.5" r="2.2"></circle>'
+    '<path class="x sp sspark" d="M120 14l1.6 3.4 3.4 1.6-3.4 1.6-1.6 3.4-1.6-3.4-3.4-1.6 3.4-1.6z"></path><path class="x sp sspark s2" d="M98 44l1.2 2.6 2.6 1.2-2.6 1.2-1.2 2.6-1.2-2.6-2.6-1.2 2.6-1.2z"></path></g>'
 )
 
 def bird(pose='', size=64, style='', scene=False):
@@ -52,59 +58,59 @@ CSS = r"""
 body{margin:0;font-family:'Source Sans 3',system-ui,sans-serif;background:#0b1220;color:#e6ebf2}
 a{color:#2dd4bf}a:hover{color:#5eead4}
 .b{overflow:visible;display:block;flex-shrink:0}
-.b .bd,.b .hc{fill:#2dd4bf}.b .wp,.b .tf{fill:#0f766e}.b .ch{fill:#99f6e4;opacity:.8}
-.b .ec{fill:#0b1220}.b .eh{fill:#fff}.b .bk{fill:#fbbf24}.b .bj{fill:#d97706}
-.b .lg{fill:none;stroke:#d97706;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.b .bd,.b .hc,.b .nk,.b .ld,.b .lb{fill:#5fcfbc}.b .wp,.b .tf{fill:#2f9c8d}.b .ch{fill:#b9ece2;opacity:.9}.b .ck{fill:#b9ece2;opacity:.8}.b .ec{fill:#1b2233}.b .eh{fill:#fff}.b .fo{fill:#f0b64f}.b .dd{fill:#9fabbf}.b .rn{fill:none;stroke:#7d8aa3;stroke-width:1.6;stroke-linecap:round}.b .nest2{fill:none;stroke:#8a5a3b;stroke-width:2.4;stroke-linecap:round}.b .ex{font-family:Poppins,sans-serif;font-weight:700;font-size:16px;fill:#f0b64f}.b .ld,.b .lb{transform-box:fill-box;transform-origin:center}.b .tu{transform-box:fill-box;transform-origin:95% 60%}.b .nest{fill:none;stroke:#8a5a3b;stroke-width:2.4;stroke-linecap:round}
+.b .bk{fill:#f0b64f}.b .bj{fill:#d9952e}
+.b .lg{fill:none;stroke:#f0b64f;stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round}
 .b .tw{fill:none;stroke:#fbbf24;stroke-width:2.6;stroke-linecap:round}
 .b .pp,.b .nestpile{fill:#fff;stroke:#94a3b8;stroke-width:1}
 .b .nt{font-family:Poppins,sans-serif;font-weight:700;font-size:13px;fill:#5eead4}
 .b .qm,.b .zz{font-family:Poppins,sans-serif;font-weight:700;fill:#e6ebf2}.b .qm{font-size:18px}.b .zz{font-size:12px}
 .b .sp{fill:#fbbf24;transform-box:fill-box;transform-origin:center}
 .b .cl{fill:none;stroke:#64748b;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.b .wall{fill:none;stroke:#92400e;stroke-width:2.6;stroke-linecap:round}
-.b .tray{fill:#334155}.b .nest{fill:#92400e}.b .sgem{fill:#38bdf8}.b .sgemhl{fill:#e0f2fe}
+.b .bp,.b .bn{fill:none;stroke:#8a5a3b;stroke-width:2.4;stroke-linecap:round}.b .bp{stroke:#f0b64f}
+.b .tray{fill:#334155}.b .sgem{fill:#38bdf8}.b .sgemhl{fill:#e0f2fe}
 .b .rig,.b .turn{transform-box:fill-box;transform-origin:50% 100%}
-.b .hd{transform-box:fill-box;transform-origin:22% 87%}
+.b .hd{transform-box:view-box;transform-origin:60px 64px}
 .b .jw{transform-box:fill-box;transform-origin:0% 15%}
-.b .wg{transform-box:fill-box;transform-origin:25% 5%}
-.b .tl{transform-box:fill-box;transform-origin:92% 75%}
-.b .ft{transform-box:fill-box;transform-origin:50% 0%}
+.b .wg{transform-box:view-box;transform-origin:54px 57px}
+.b .tl{transform-box:view-box;transform-origin:30px 76px}
+.b .ft{transform-box:view-box;transform-origin:47px 84px}
 .b .ey{transform-box:fill-box;transform-origin:center}
 .b .x{opacity:0}
 .p-idle .rig{animation:breathe 3.2s ease-in-out infinite}.p-idle .ey{animation:blink 4.5s infinite}
-.p-look .rig{animation:breathe 3.2s ease-in-out infinite}.p-look .turn{animation:turnaround 11s ease-in-out infinite}.p-look .hd{animation:idlelook 11s ease-in-out infinite}.p-look .tl{animation:tailflick 11s ease-in-out infinite}.p-look .ey{animation:blink 4.5s infinite}
-.p-hello .rig{animation:arrive 4.5s ease-out infinite}.p-hello .wg{animation:arrivewing 4.5s linear infinite}.p-hello .ft{animation:tuck 4.5s linear infinite}.p-hello .jw{animation:chirp 4.5s linear infinite}.p-hello .hd{animation:landlook 4.5s ease-out infinite}.p-hello .ey{animation:blink 4.5s infinite}.p-hello .tl{animation:tailsettle 4.5s ease-out infinite}
-.p-shiny .rig{animation:excite 3s ease-in-out infinite}.p-shiny .hd{animation:lean 3s ease-in-out infinite}.p-shiny .ey{animation:dilate 3s ease-in-out infinite}.p-shiny .wg{animation:flutter .16s linear infinite alternate}.p-shiny .tl{animation:tailwag .5s ease-in-out infinite alternate}.p-shiny .sgem,.p-shiny .sgemhl{opacity:1}.p-shiny .sspark{opacity:1;animation:twinkle 1s ease-in-out infinite}
-.p-sing .rig{animation:bounce 1s ease-in-out infinite}.p-sing .hd{animation:singhead 2s ease-in-out infinite}.p-sing .jw{animation:sing .45s ease-in-out infinite alternate}.p-sing .tl{animation:tailwag .25s ease-in-out infinite alternate}.p-sing .nt{opacity:1;animation:notes 2.4s ease-out infinite}.p-sing .n2{animation-delay:.8s}.p-sing .n3{animation-delay:1.6s}.p-sing .ey{animation:blink 4.5s infinite}
-.p-tidy .rig{animation:ferry 6s ease-in-out infinite}.p-tidy .turn{animation:ferryturn 6s linear infinite}.p-tidy .wg{animation:flap .2s ease-in-out infinite alternate}.p-tidy .ft{transform:scaleY(.4)}.p-tidy .tl{animation:tailstream 6s linear infinite}.p-tidy .cpaper{animation:cpaper 6s linear infinite}.p-tidy .ctwig{animation:ctwig 6s linear infinite}.p-tidy .tray,.p-tidy .nest,.p-tidy .traypaper{opacity:1}.p-tidy .np1{animation:np1 6s linear infinite}.p-tidy .np2{animation:np2 6s linear infinite}
-.p-fly .rig{animation:bob .5s ease-in-out infinite alternate}.p-fly .wg{animation:flap .2s ease-in-out infinite alternate}.p-fly .ft{transform:scaleY(.4)}.p-fly .tl{transform:rotate(-16deg)}.p-fly .cpaper{opacity:1}
-.p-dance .rig{animation:strut 3.6s ease-in-out infinite}.p-dance .wg{animation:wingspread 3.6s ease-in-out infinite}.p-dance .tl{animation:tailfan 3.6s ease-in-out infinite}.p-dance .hd{animation:proudhead 3.6s ease-in-out infinite}.p-dance .jw{transform:rotate(10deg)}.p-dance .sp{opacity:1;animation:twinkle 1.2s ease-in-out infinite}.p-dance .sp2{animation-delay:.5s}
-.p-confused .rig{animation:breathe 3.2s ease-in-out infinite}.p-confused .hd{animation:puzzle 3.2s ease-in-out infinite}.p-confused .wg{animation:shrug 3.2s ease-in-out infinite}.p-confused .qm{opacity:1;animation:rise 3.2s ease-in-out infinite}.p-confused .ey{animation:blink 4.5s infinite}
-.p-build .rig{animation:buildhop 4.8s ease-in-out infinite}.p-build .ctwig{opacity:1}.p-build .wall{opacity:1;stroke-dasharray:40;stroke-dashoffset:40;animation:draw 4.8s linear infinite}.p-build .w2{animation-delay:.6s}.p-build .w3{animation-delay:1.2s}.p-build .w4{animation-delay:1.8s}.p-build .w5{animation-delay:2.4s}.p-build .w6{animation-delay:3s}.p-build .ey{animation:blink 4.5s infinite}.p-build .tl{animation:tailflick 4.8s ease-in-out infinite}
-.p-sleep .rig{animation:breathe 4.8s ease-in-out infinite}.p-sleep .ey{transform:scaleY(.12)}.p-sleep .hd{transform:translate(-3px,5px) rotate(12deg)}.p-sleep .zz{opacity:1;animation:drift 3s ease-in-out infinite}.p-sleep .z2{animation-delay:1.2s}
+.p-look .rig{animation:breathe 3.2s ease-in-out infinite}.p-look .turn{animation:turnaround 11s ease-in-out infinite}.p-look .hd{animation:idlelook 11s ease-in-out infinite}.p-look .tl{animation:tailflick 11s ease-in-out infinite}.p-look .ey{animation:blink 4.5s infinite}.p-look .ft{animation:shift 11s ease-in-out infinite}.p-look .dd{animation:dots 11s infinite}.p-look .d2{animation-delay:.25s}.p-look .d3{animation-delay:.5s}
+.p-hello .rig{animation:arrive 4.5s ease-out infinite}.p-hello .wg{animation:arrivewing 4.5s linear infinite}.p-hello .ft{animation:landlegs 4.5s ease-out infinite}.p-hello .jw{animation:chirp 4.5s linear infinite}.p-hello .hd{animation:landlook 4.5s ease-out infinite}.p-hello .tu{animation:tuftpop 4.5s ease-out infinite}.p-hello .lb{animation:smile 4.5s ease-out infinite}.p-hello .ey{animation:blink 4.5s infinite}.p-hello .tl{animation:tailsettle 4.5s ease-out infinite}
+.p-shiny .rig{animation:excite 3s ease-in-out infinite}.p-shiny .hd{animation:reach 3s ease-in-out infinite}.p-shiny .tu{transform:rotate(-55deg)}.p-shiny .ex{animation:bang 3s ease-out infinite}.p-shiny .s2{animation-delay:.5s}.p-shiny .ey{animation:dilate 3s ease-in-out infinite}.p-shiny .ft{animation:shinylegs 3s ease-in-out infinite}.p-shiny .wg{animation:flutter .16s linear infinite alternate}.p-shiny .tl{animation:tailwag .5s ease-in-out infinite alternate}.p-shiny .sgem,.p-shiny .sgemhl{opacity:1}.p-shiny .sspark{opacity:1;animation:twinkle 1s ease-in-out infinite}
+.p-sing .rig{animation:bounce 1s ease-in-out infinite}.p-sing .hd{animation:singhead 2s ease-in-out infinite}.p-sing .lb{transform:translateY(-6px)}.p-sing .tu{transform:rotate(-40deg)}.p-sing .wg{animation:sway 1s ease-in-out infinite alternate}.p-sing .jw{animation:sing .45s ease-in-out infinite alternate}.p-sing .tl{animation:tailwag .25s ease-in-out infinite alternate}.p-sing .nt{opacity:1;animation:notes 2.4s ease-out infinite}.p-sing .n2{animation-delay:.8s}.p-sing .n3{animation-delay:1.6s}.p-sing .ey{animation:blink 4.5s infinite}
+.p-tidy .rig{animation:ferry 6s ease-in-out infinite}.p-tidy .turn{animation:ferryturn 6s linear infinite}.p-tidy .wg{animation:flap .2s ease-in-out infinite alternate}.p-tidy .ft{transform:scaleY(.4)}.p-tidy .lb{transform:translateY(-6px)}.p-tidy .tu{transform:rotate(-45deg)}.p-tidy .tl{animation:tailstream 6s linear infinite}.p-tidy .cpaper{animation:cpaper 6s linear infinite}.p-tidy .ctwig{animation:ctwig 6s linear infinite}.p-tidy .tray,.p-tidy .nest,.p-tidy .traypaper{opacity:1}.p-tidy .np1{animation:np1 6s linear infinite}.p-tidy .np2{animation:np2 6s linear infinite}
+.p-fly .rig{animation:bob .5s ease-in-out infinite alternate}.p-fly .wg{animation:flap .2s ease-in-out infinite alternate}.p-fly .ft{transform:scaleY(.4)}.p-fly .lb{transform:translateY(-6px)}.p-fly .tl{transform:rotate(-16deg)}.p-fly .cpaper{opacity:1}
+.p-dance .rig{animation:strut 3.6s ease-in-out infinite}.p-dance .wg{animation:wingspread 3.6s ease-in-out infinite}.p-dance .tl{animation:tailfan 3.6s ease-in-out infinite}.p-dance .hd{animation:proudhead 3.6s ease-in-out infinite}.p-dance .jw{transform:rotate(10deg)}.p-dance .ft{animation:steps .45s ease-in-out infinite alternate}.p-dance .lb{transform:translateY(-6px)}.p-dance .tu{animation:tuftdance 3.6s ease-in-out infinite}.p-dance .sp{opacity:1;animation:twinkle 1.2s ease-in-out infinite}.p-dance .sp2{animation-delay:.5s}
+.p-confused .rig{animation:breathe 3.2s ease-in-out infinite}.p-confused .hd{animation:puzzle 3.2s ease-in-out infinite}.p-confused .wg{animation:shrug 3.2s ease-in-out infinite}.p-confused .tu{transform:rotate(18deg) translateY(2px)}.p-confused .ld{transform:translateY(3px)}.p-confused .qm{opacity:1;animation:rise 3.2s ease-in-out infinite}.p-confused .ey{animation:blink 4.5s infinite}
+.p-build .rig{animation:build 7.2s ease-in-out infinite}.p-build .hd{animation:buildhead 7.2s ease-in-out infinite}.p-build .ctwig{animation:buildtwig 7.2s linear infinite}.p-build .ft{animation:buildlegs2 7.2s ease-in-out infinite}.p-build .wg{animation:buildwing 7.2s ease-in-out infinite}.p-build .lb{transform:translateY(-5px)}.p-build .bn{opacity:1}.p-build .bp{opacity:1}.p-build .bp1{animation:bp1 7.2s linear infinite}.p-build .bp2{animation:bp2 7.2s linear infinite}.p-build .bp3{animation:bp3 7.2s linear infinite}.p-build .bt1{animation:bt1 7.2s linear infinite}.p-build .bt2{animation:bt2 7.2s linear infinite}.p-build .bt3{animation:bt3 7.2s linear infinite}.p-build .ey{animation:blink 4.5s infinite}
+.p-sleep .rig{--rest:5px;animation:breathe 4.8s ease-in-out infinite}.p-sleep .nest2{opacity:1}.p-sleep .ft{transform:scaleY(0)}.p-sleep .wg{transform:rotate(-8deg)}.p-sleep .ld{transform:translateY(10px)}.p-sleep .lb{transform:translateY(-5px)}.p-sleep .hd{transform:translate(-2px,8px) rotate(12deg)}.p-sleep .zz{opacity:1;animation:drift 3s ease-in-out infinite}.p-sleep .z2{animation-delay:1.2s}
 .p-peek .hd{animation:peekup 4s ease-in-out infinite}.p-peek .ey{animation:look 3s ease-in-out infinite}
-.p-offline .rig{transform:scale(1.1,1.05);filter:saturate(.3) brightness(.85)}.p-offline .tl{transform:scale(1.2)}.p-offline .cl{opacity:1}.p-offline .ey{animation:blink 6s infinite}
-.p-done .rig{animation:hopwink 3s ease-in-out infinite}.p-done .ey{animation:wink 3s linear infinite}.p-done .jw{transform:rotate(12deg)}.p-done .tl{animation:tailwag .5s ease-in-out infinite alternate}
-.e-happy .jw{transform:rotate(16deg)}.e-happy .hd{transform:rotate(-6deg)}
-.e-curious .ey{transform:scale(1.25)}.e-curious .hd{transform:rotate(-12deg) translate(2px,-3px)}
-.e-worried .ey{transform:scaleY(.6)}.e-worried .hd{transform:rotate(10deg) translateY(2px)}
-.e-sleepy .ey{transform:scaleY(.12)}.e-sleepy .hd{transform:translate(-3px,5px) rotate(12deg)}
-.e-proud .hd{transform:rotate(-14deg) translateY(-3px)}.e-proud .tl{transform:scale(1.3) rotate(-12deg)}.e-proud .wg{transform:rotate(-30deg)}.e-proud .jw{transform:rotate(8deg)}
+.p-offline .rig{filter:saturate(.35) brightness(.85)}.p-offline .cl{opacity:1}.p-offline .rn{opacity:1;animation:rain 1s linear infinite}.p-offline .r2{animation-delay:.25s}.p-offline .r3{animation-delay:.5s}.p-offline .r4{animation-delay:.75s}.p-offline .ld{transform:translateY(5px)}.p-offline .hd{transform:rotate(8deg) translateY(3px)}.p-offline .wg{transform:rotate(112deg)}.p-offline .ft{transform:scaleY(.8)}.p-offline .ey{animation:blink 6s infinite}
+.p-done .rig{animation:hopwink 3s ease-in-out infinite}.p-done .ey{animation:wink 3s linear infinite}.p-done .jw{transform:rotate(12deg)}.p-done .lb{transform:translateY(-6px)}.p-done .wg{animation:cheer 3s ease-in-out infinite}.p-done .ft{animation:crouch 3s ease-in-out infinite}.p-done .hd{animation:cheerhead 3s ease-in-out infinite}.p-done .tl{animation:tailwag .5s ease-in-out infinite alternate}
+.e-happy .jw{transform:rotate(16deg)}.e-happy .hd{transform:rotate(-6deg) translateY(-3px)}.e-happy .lb{transform:translateY(-6px)}.e-happy .tu{transform:rotate(-30deg)}
+.e-curious .ey{transform:scale(1.35)}.e-curious .hd{transform:rotate(-14deg) translate(3px,-9px)}.e-curious .tu{transform:rotate(-50deg)}
+.e-worried .ld{transform:translateY(5px)}.e-worried .hd{transform:rotate(12deg) translateY(4px)}.e-worried .tu{transform:rotate(16deg) translateY(2px)}
+.e-sleepy .ld{transform:translateY(10px)}.e-sleepy .lb{transform:translateY(-5px)}.e-sleepy .hd{transform:translate(-2px,8px) rotate(12deg)}
+.e-proud .hd{transform:rotate(-16deg) translateY(-8px)}.e-proud .tl{transform:scale(1.2) rotate(-14deg)}.e-proud .wg{transform:rotate(-70deg)}.e-proud .jw{transform:rotate(8deg)}.e-proud .lb{transform:translateY(-6px)}.e-proud .tu{transform:rotate(-60deg)}
 .flip .turn{transform:scaleX(-1)}
-@keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)}}
+@keyframes breathe{0%,100%{transform:translateY(var(--rest,0px))}50%{transform:translateY(calc(var(--rest,0px) - 1.5px))}}
 @keyframes blink{0%,91%,97%,100%{transform:scaleY(1)}94%{transform:scaleY(.1)}}
 @keyframes turnaround{0%,60%{transform:scaleX(1)}63%,86%{transform:scaleX(-1)}89%,100%{transform:scaleX(1)}}
-@keyframes idlelook{0%,10%,100%{transform:rotate(0)}16%,28%{transform:rotate(-14deg) translate(-1px,-2px)}34%,40%{transform:rotate(0)}44%,52%{transform:rotate(10deg) translate(1px,2px)}56%{transform:rotate(0)}66%,80%{transform:rotate(-9deg)}88%{transform:rotate(3deg)}}
+@keyframes idlelook{0%,10%,100%{transform:rotate(0) translateY(0)}16%,28%{transform:rotate(-16deg) translateY(-7px)}34%,40%{transform:rotate(0) translateY(0)}44%,52%{transform:rotate(14deg) translateY(3px)}56%{transform:rotate(0) translateY(0)}66%,80%{transform:rotate(-8deg) translateY(-9px)}88%{transform:rotate(4deg) translateY(0)}}
 @keyframes tailflick{0%,38%,46%,100%{transform:rotate(0)}40%{transform:rotate(-18deg)}43%{transform:rotate(8deg)}}
 @keyframes arrive{0%{transform:translate(-150px,-60px) rotate(-8deg)}26%{transform:translate(-8px,-6px) rotate(0)}30%{transform:translate(0,0) scale(1.14,.84)}38%{transform:scale(.97,1.04)}44%{transform:scale(1)}58%{transform:scaleY(.9)}64%{transform:translateY(-14px) scaleY(1.06)}72%{transform:translateY(0) scale(1.08,.92)}78%,100%{transform:scale(1)}}
-@keyframes arrivewing{0%{transform:rotate(-44deg)}2%{transform:rotate(18deg)}4%{transform:rotate(-44deg)}6%{transform:rotate(18deg)}8%{transform:rotate(-44deg)}10%{transform:rotate(18deg)}12%{transform:rotate(-44deg)}14%{transform:rotate(18deg)}16%{transform:rotate(-44deg)}18%{transform:rotate(18deg)}20%{transform:rotate(-44deg)}22%{transform:rotate(18deg)}24%{transform:rotate(-44deg)}26%{transform:rotate(18deg)}28%{transform:rotate(-44deg)}30%,100%{transform:rotate(0)}}
+@keyframes arrivewing{0%{transform:rotate(44deg)}2%{transform:rotate(-18deg)}4%{transform:rotate(44deg)}6%{transform:rotate(-18deg)}8%{transform:rotate(44deg)}10%{transform:rotate(-18deg)}12%{transform:rotate(44deg)}14%{transform:rotate(-18deg)}16%{transform:rotate(44deg)}18%{transform:rotate(-18deg)}20%{transform:rotate(44deg)}22%{transform:rotate(-18deg)}24%{transform:rotate(44deg)}26%{transform:rotate(-18deg)}28%{transform:rotate(44deg)}30%,100%{transform:rotate(0)}}
 @keyframes tuck{0%,26%{transform:scaleY(.3)}30%,100%{transform:scaleY(1)}}
 @keyframes chirp{0%,44%,56%,100%{transform:rotate(0)}47%,53%{transform:rotate(24deg)}50%{transform:rotate(4deg)}}
 @keyframes landlook{0%,28%{transform:rotate(6deg)}34%,48%{transform:rotate(-12deg)}56%,100%{transform:rotate(0)}}
-@keyframes excite{0%,100%{transform:rotate(6deg) translateY(0)}20%{transform:rotate(6deg) translateY(-4px)}30%{transform:rotate(6deg) translateY(0)}40%{transform:rotate(6deg) translateY(-3px)}50%,70%{transform:rotate(8deg) translate(4px,0)}}
+@keyframes excite{0%,18%{transform:translateX(0) scale(1)}22%{transform:scale(1.06,.9)}30%{transform:translateY(-10px) scale(.96,1.08)}36%{transform:translateX(6px) scale(1.08,.92)}42%{transform:translateX(6px) scale(1)}56%{transform:translateX(6px) scale(1.06,.9)}64%{transform:translate(12px,-10px) scale(.96,1.08)}70%{transform:translateX(18px) scale(1.08,.92)}76%,100%{transform:translateX(18px) scale(1)}}
 @keyframes lean{0%,100%{transform:rotate(-12deg) translate(2px,-3px)}50%{transform:rotate(-16deg) translate(4px,-4px)}}
 @keyframes dilate{0%,100%{transform:scale(1.2)}50%{transform:scale(1.4)}}
-@keyframes flutter{from{transform:rotate(0)}to{transform:rotate(-22deg)}}
+@keyframes flutter{from{transform:rotate(10deg)}to{transform:rotate(45deg)}}
 @keyframes tailwag{from{transform:rotate(-10deg)}to{transform:rotate(10deg)}}
 @keyframes bounce{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-4px) scale(1.02,.98)}}
 @keyframes singhead{0%,100%{transform:rotate(-16deg) translateY(-2px)}50%{transform:rotate(-22deg) translateY(-3px)}}
@@ -112,26 +118,46 @@ a{color:#2dd4bf}a:hover{color:#5eead4}
 @keyframes notes{0%{opacity:0;transform:translate(0,4px)}15%{opacity:1}100%{opacity:0;transform:translate(10px,-30px) rotate(12deg)}}
 @keyframes ferry{0%,4%{transform:translateX(34px)}16%{transform:translateX(-34px) translateY(-14px)}20%{transform:translateX(-34px) scale(1.08,.92)}26%{transform:translateX(-34px)}42%{transform:translateX(34px) translateY(-16px)}46%{transform:translateX(34px) scale(1.08,.92)}52%{transform:translateX(34px)}64%{transform:translateX(-34px) translateY(-14px)}68%{transform:translateX(-34px) scale(1.08,.92)}74%{transform:translateX(-34px)}90%{transform:translateX(34px) translateY(-16px)}94%{transform:translateX(34px) scale(1.08,.92)}100%{transform:translateX(34px)}}
 @keyframes ferryturn{0%,24%{transform:scaleX(-1)}26%,50%{transform:scaleX(1)}52%,72%{transform:scaleX(-1)}74%,100%{transform:scaleX(1)}}
-@keyframes flap{from{transform:rotate(-44deg)}to{transform:rotate(18deg)}}
+@keyframes flap{from{transform:rotate(60deg)}to{transform:rotate(-10deg)}}
 @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-3px)}}
 @keyframes cpaper{0%,24%{opacity:0}26%,46%{opacity:1}48%,100%{opacity:0}}
 @keyframes ctwig{0%,72%{opacity:0}74%,94%{opacity:1}96%,100%{opacity:0}}
 @keyframes np1{0%,46%{opacity:0}48%,100%{opacity:1}}
 @keyframes np2{0%,94%{opacity:0}96%,100%{opacity:1}}
 @keyframes strut{0%,100%{transform:translateX(0) rotate(0)}10%{transform:translateX(-10px) rotate(-5deg)}20%{transform:translateX(10px) rotate(5deg)}30%{transform:translateX(-10px) rotate(-5deg)}40%{transform:translateX(0) rotate(0)}52%,68%{transform:rotate(24deg)}80%{transform:rotate(0) translateY(-10px)}88%{transform:translateY(0) scale(1.08,.92)}94%{transform:scale(1)}}
-@keyframes wingspread{0%,44%,100%{transform:rotate(0) scale(1)}50%,66%{transform:rotate(-60deg) scale(1.25,1.1)}}
+@keyframes wingspread{0%,44%,100%{transform:rotate(0) scale(1)}50%,66%{transform:rotate(75deg) scale(1.15,1.1)}}
 @keyframes tailfan{0%,44%,100%{transform:scale(1)}50%,70%{transform:scale(1.35) rotate(-14deg)}}
 @keyframes proudhead{0%,44%,100%{transform:rotate(0)}50%,70%{transform:rotate(-14deg) translateY(-2px)}}
 @keyframes twinkle{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1.15)}}
 @keyframes puzzle{0%,100%{transform:rotate(-14deg) translateY(1px)}45%,55%{transform:rotate(16deg) translateY(2px)}}
-@keyframes shrug{0%,30%,70%,100%{transform:rotate(0) translateY(0)}40%,60%{transform:rotate(-30deg) translateY(-6px)}}
+@keyframes shrug{0%,30%,70%,100%{transform:rotate(0) translateY(0)}40%,60%{transform:rotate(30deg) translateY(-6px)}}
 @keyframes rise{0%,25%{opacity:0;transform:translateY(4px)}45%,80%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-4px)}}
 @keyframes buildhop{0%,100%{transform:translateX(-22px)}12%{transform:translateX(-22px) translateY(-10px)}25%{transform:translateX(22px) scale(1.06,.94)}30%{transform:translateX(22px) scale(1)}37%{transform:translateX(22px) translateY(-10px)}50%{transform:translateX(-22px) scale(1.06,.94)}55%{transform:translateX(-22px) scale(1)}62%{transform:translateX(-22px) translateY(-10px)}75%{transform:translateX(22px) scale(1.06,.94)}80%{transform:translateX(22px) scale(1)}87%{transform:translateX(22px) translateY(-10px)}}
 @keyframes draw{0%{stroke-dashoffset:40}20%,88%{stroke-dashoffset:0}92%,100%{stroke-dashoffset:40}}
 @keyframes drift{0%{opacity:0;transform:translate(0,4px)}30%{opacity:1}100%{opacity:0;transform:translate(6px,-18px)}}
-@keyframes peekup{0%,70%,100%{transform:translateY(0) rotate(0)}78%,90%{transform:translateY(-8px) rotate(-8deg)}}
-@keyframes tailsettle{0%,28%{transform:rotate(-24deg)}31%{transform:rotate(16deg)}35%{transform:rotate(-10deg)}39%{transform:rotate(5deg)}43%,100%{transform:rotate(0)}}@keyframes tailstream{0%,4%,26%,52%,74%,100%{transform:rotate(0)}8%,22%,30%,48%,56%,70%,78%,96%{transform:rotate(-20deg)}}@keyframes look{0%,100%{transform:translateX(-2px)}50%{transform:translateX(2px)}}
-@keyframes hopwink{0%,100%{transform:translateY(0)}20%{transform:scaleY(.9)}32%{transform:translateY(-14px) scaleY(1.05)}44%{transform:translateY(0) scale(1.08,.92)}52%{transform:scale(1)}}
+@keyframes peekup{0%,60%,100%{transform:translateY(0) rotate(0)}68%,74%{transform:translateY(-14px) rotate(-10deg)}80%,88%{transform:translateY(-14px) rotate(12deg)}}
+@keyframes tailsettle{0%,28%{transform:rotate(-24deg)}31%{transform:rotate(16deg)}35%{transform:rotate(-10deg)}39%{transform:rotate(5deg)}43%,100%{transform:rotate(0)}}@keyframes tailstream{0%,4%,26%,52%,74%,100%{transform:rotate(0)}8%,22%,30%,48%,56%,70%,78%,96%{transform:rotate(-20deg)}}@keyframes pump{0%,20%,60%,100%{transform:rotate(0)}30%,50%{transform:rotate(-80deg)}}
+@keyframes buildlegs{0%,4%,16%,29%,41%,54%,66%,79%,91%,100%{transform:scaleY(1)}8%,33%,58%,83%{transform:scaleY(.65)}12%,37%,62%,87%{transform:scaleY(1.2)}}
+@keyframes crouch{0%,60%,100%{transform:scaleY(1)}20%{transform:scaleY(.65)}32%{transform:scaleY(1.2)}44%{transform:scaleY(.7)}52%{transform:scaleY(1)}}
+@keyframes cheer{0%,12%{transform:rotate(0)}22%,70%{transform:rotate(105deg)}30%,46%,62%{transform:rotate(120deg)}38%,54%{transform:rotate(95deg)}82%,100%{transform:rotate(0)}}
+@keyframes cheerhead{0%,12%,82%,100%{transform:rotate(0) translateY(0)}22%,70%{transform:rotate(-12deg) translateY(-4px)}}
+@keyframes rain{0%{opacity:0;transform:translateY(0)}20%{opacity:1}100%{opacity:0;transform:translateY(12px)}}
+@keyframes steps{from{transform:skewX(-14deg)}to{transform:skewX(14deg)}}
+@keyframes shift{0%,58%,66%,100%{transform:skewX(0)}60%{transform:skewX(-10deg)}63%{transform:skewX(8deg)}}
+@keyframes landlegs{0%,26%{transform:scaleY(.3)}30%{transform:scaleY(.7)}38%{transform:scaleY(1.05)}44%,56%{transform:scaleY(1)}60%{transform:scaleY(.7)}66%{transform:scaleY(1.15)}72%{transform:scaleY(.75)}78%,100%{transform:scaleY(1)}}
+@keyframes shinylegs{0%,18%,42%,76%,100%{transform:scaleY(1)}22%,56%{transform:scaleY(.65)}30%,64%{transform:scaleY(1.2)}36%,70%{transform:scaleY(.75)}}
+@keyframes build{0.00%{transform:translateX(14px)}2.00%{transform:translateX(14px) scale(1.06,.92)}4.67%{transform:translateX(-14px) translateY(-16px)}7.33%{transform:translateX(-44px) scale(1.08,.92)}8.67%{transform:translateX(-44px)}16.67%{transform:translateX(-44px)}18.67%{transform:translateX(-44px) scale(1.06,.92)}21.33%{transform:translateX(-14px) translateY(-16px)}24.00%{transform:translateX(14px) scale(1.08,.92)}25.33%{transform:translateX(14px)}33.30%{transform:translateX(14px)}33.33%{transform:translateX(14px)}35.33%{transform:translateX(14px) scale(1.06,.92)}38.00%{transform:translateX(-14px) translateY(-16px)}40.67%{transform:translateX(-44px) scale(1.08,.92)}42.00%{transform:translateX(-44px)}50.00%{transform:translateX(-44px)}52.00%{transform:translateX(-44px) scale(1.06,.92)}54.67%{transform:translateX(-14px) translateY(-16px)}57.33%{transform:translateX(14px) scale(1.08,.92)}58.67%{transform:translateX(14px)}66.63%{transform:translateX(14px)}66.67%{transform:translateX(14px)}68.67%{transform:translateX(14px) scale(1.06,.92)}71.33%{transform:translateX(-14px) translateY(-16px)}74.00%{transform:translateX(-44px) scale(1.08,.92)}75.33%{transform:translateX(-44px)}83.33%{transform:translateX(-44px)}85.33%{transform:translateX(-44px) scale(1.06,.92)}88.00%{transform:translateX(-14px) translateY(-16px)}90.67%{transform:translateX(14px) scale(1.08,.92)}92.00%{transform:translateX(14px)}99.97%{transform:translateX(14px)}}@keyframes buildhead{0.00%{transform:rotate(0) translate(0,0)}9.33%{transform:rotate(0) translate(0,0)}12.00%{transform:rotate(34deg) translate(2px,4px)}14.67%{transform:rotate(34deg) translate(2px,4px)}16.67%{transform:rotate(-6deg) translate(0,-3px)}25.33%{transform:rotate(-6deg) translate(0,-3px)}28.00%{transform:rotate(30deg) translate(2px,4px)}30.67%{transform:rotate(30deg) translate(2px,4px)}33.30%{transform:rotate(0) translate(0,0)}33.33%{transform:rotate(0) translate(0,0)}42.67%{transform:rotate(0) translate(0,0)}45.33%{transform:rotate(34deg) translate(2px,4px)}48.00%{transform:rotate(34deg) translate(2px,4px)}50.00%{transform:rotate(-6deg) translate(0,-3px)}58.67%{transform:rotate(-6deg) translate(0,-3px)}61.33%{transform:rotate(30deg) translate(2px,4px)}64.00%{transform:rotate(30deg) translate(2px,4px)}66.63%{transform:rotate(0) translate(0,0)}66.67%{transform:rotate(0) translate(0,0)}76.00%{transform:rotate(0) translate(0,0)}78.67%{transform:rotate(34deg) translate(2px,4px)}81.33%{transform:rotate(34deg) translate(2px,4px)}83.33%{transform:rotate(-6deg) translate(0,-3px)}92.00%{transform:rotate(-6deg) translate(0,-3px)}94.67%{transform:rotate(30deg) translate(2px,4px)}97.33%{transform:rotate(30deg) translate(2px,4px)}99.97%{transform:rotate(0) translate(0,0)}}@keyframes buildtwig{0.00%{opacity:0}13.00%{opacity:0}13.33%{opacity:1}29.33%{opacity:1}29.67%{opacity:0}33.30%{opacity:0}33.33%{opacity:0}46.33%{opacity:0}46.67%{opacity:1}62.67%{opacity:1}63.00%{opacity:0}66.63%{opacity:0}66.67%{opacity:0}79.67%{opacity:0}80.00%{opacity:1}96.00%{opacity:1}96.33%{opacity:0}99.97%{opacity:0}}@keyframes buildlegs2{0.00%{transform:scaleY(1)}2.00%{transform:scaleY(.65)}4.67%{transform:scaleY(1.2)}7.33%{transform:scaleY(.7)}10.00%{transform:scaleY(1)}16.67%{transform:scaleY(1)}18.67%{transform:scaleY(.65)}21.33%{transform:scaleY(1.2)}24.00%{transform:scaleY(.7)}26.67%{transform:scaleY(1)}33.30%{transform:scaleY(1)}33.33%{transform:scaleY(1)}35.33%{transform:scaleY(.65)}38.00%{transform:scaleY(1.2)}40.67%{transform:scaleY(.7)}43.33%{transform:scaleY(1)}50.00%{transform:scaleY(1)}52.00%{transform:scaleY(.65)}54.67%{transform:scaleY(1.2)}57.33%{transform:scaleY(.7)}60.00%{transform:scaleY(1)}66.63%{transform:scaleY(1)}66.67%{transform:scaleY(1)}68.67%{transform:scaleY(.65)}71.33%{transform:scaleY(1.2)}74.00%{transform:scaleY(.7)}76.67%{transform:scaleY(1)}83.33%{transform:scaleY(1)}85.33%{transform:scaleY(.65)}88.00%{transform:scaleY(1.2)}90.67%{transform:scaleY(.7)}93.33%{transform:scaleY(1)}99.97%{transform:scaleY(1)}}@keyframes buildwing{0.00%{transform:rotate(0)}2.67%{transform:rotate(50deg)}4.67%{transform:rotate(-8deg)}6.67%{transform:rotate(40deg)}8.67%{transform:rotate(0)}18.67%{transform:rotate(0)}20.00%{transform:rotate(50deg)}21.33%{transform:rotate(-8deg)}23.33%{transform:rotate(40deg)}25.33%{transform:rotate(0)}33.30%{transform:rotate(0)}33.33%{transform:rotate(0)}36.00%{transform:rotate(50deg)}38.00%{transform:rotate(-8deg)}40.00%{transform:rotate(40deg)}42.00%{transform:rotate(0)}52.00%{transform:rotate(0)}53.33%{transform:rotate(50deg)}54.67%{transform:rotate(-8deg)}56.67%{transform:rotate(40deg)}58.67%{transform:rotate(0)}66.63%{transform:rotate(0)}66.67%{transform:rotate(0)}69.33%{transform:rotate(50deg)}71.33%{transform:rotate(-8deg)}73.33%{transform:rotate(40deg)}75.33%{transform:rotate(0)}85.33%{transform:rotate(0)}86.67%{transform:rotate(50deg)}88.00%{transform:rotate(-8deg)}90.00%{transform:rotate(40deg)}92.00%{transform:rotate(0)}99.97%{transform:rotate(0)}}@keyframes bp1{0%{opacity:1}12.99%{opacity:1}13.00%{opacity:0}100%{opacity:0}}@keyframes bp2{0%{opacity:1}46.32%{opacity:1}46.33%{opacity:0}100%{opacity:0}}@keyframes bp3{0%{opacity:1}79.66%{opacity:1}79.67%{opacity:0}100%{opacity:0}}@keyframes bt1{0%{opacity:0}29.49%{opacity:0}29.50%{opacity:1}100%{opacity:1}}@keyframes bt2{0%{opacity:0}62.82%{opacity:0}62.83%{opacity:1}100%{opacity:1}}@keyframes bt3{0%{opacity:0}96.16%{opacity:0}96.17%{opacity:1}100%{opacity:1}}
+@keyframes dots{0%,12%,100%{opacity:0}16%,26%{opacity:1}30%,64%{opacity:0}68%,78%{opacity:1}82%{opacity:0}}
+@keyframes reach{0%,14%{transform:rotate(0) translate(0,0)}22%,100%{transform:rotate(-18deg) translate(4px,-12px)}}
+@keyframes bang{0%,10%{opacity:0;transform:scale(.4)}16%,40%{opacity:1;transform:scale(1)}50%,100%{opacity:0}}
+@keyframes tuftpop{0%,30%{transform:rotate(0)}36%,60%{transform:rotate(-55deg)}72%,100%{transform:rotate(0)}}
+@keyframes smile{0%,30%{transform:translateY(0)}36%,100%{transform:translateY(-6px)}}
+@keyframes sway{from{transform:rotate(-10deg)}to{transform:rotate(-40deg)}}
+@keyframes tuftdance{0%,40%,100%{transform:rotate(-20deg)}52%,80%{transform:rotate(-65deg)}}
+@keyframes twigset{0%,26%,50%,76%,100%{transform:rotate(0)}34%,42%{transform:rotate(30deg) translate(2px,3px)}84%,92%{transform:rotate(30deg) translate(2px,3px)}}
+@keyframes peck{0%,26%,50%,76%,100%{transform:rotate(0) translate(0,0)}34%,42%{transform:rotate(26deg) translate(3px,5px)}84%,92%{transform:rotate(26deg) translate(3px,5px)}}
+@keyframes look{0%,100%{transform:translateX(-2px)}50%{transform:translateX(2px)}}
+@keyframes hopwink{0%,100%{transform:translateY(0)}20%{transform:scale(1.08,.88)}32%{transform:translateY(-16px) scale(.95,1.08)}44%{transform:translateY(0) scale(1.12,.88)}52%{transform:scale(1)}}
 @keyframes wink{0%,50%,62%,100%{transform:scaleY(1)}53%,59%{transform:scaleY(.1)}}
 .ring{animation:ring 2s ease-out infinite}
 @keyframes ring{0%{box-shadow:0 0 0 0 rgba(45,212,191,.6)}100%{box-shadow:0 0 0 14px rgba(45,212,191,0)}}
@@ -572,7 +598,7 @@ add('Desktop-Note.dc.html', 'Desktop · reading a note', page('Desktop, reading 
     '<div><div class="k" style="margin-bottom:8px">Linked mentions</div><div style="display:flex;flex-direction:column;gap:8px">'
     '<a href="#top" class="card" style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;text-decoration:none"><span style="font-size:14px;font-weight:600;color:#f1f5f9">Weeknight curry</span><span style="font-size:13px;color:#94a3b8;line-height:1.4">…serve with flatbread from the <span style="color:#5eead4">[[Sourdough starter]]</span> discard.</span></a>'
     '<a href="#top" class="card" style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;text-decoration:none"><span style="font-size:14px;font-weight:600;color:#f1f5f9">Shopping list</span><span style="font-size:13px;color:#94a3b8;line-height:1.4">Rye flour, 1 kg, for the <span style="color:#5eead4">[[Sourdough starter]]</span>.</span></a></div></div>'
-    '<div><div class="k" style="margin-bottom:8px">In this folder</div><div style="display:flex;flex-direction:column;gap:2px"><a class="trow" href="#top">Flour types</a><a class="trow" href="#top" style="color:#2dd4bf">Sourdough starter</a><a class="trow" href="#top">Weeknight curry</a></div></div></aside></div>', 1440, 900, extra_css=DESK_CSS), 1440, 900, 1360, Y1, True, 'Desktop · reading a note')
+    '<div><div class="k" style="margin-bottom:8px">In this folder</div><div style="display:flex;flex-direction:column;gap:2px"><a class="trow" href="#top">Flour types</a><a class="trow" href="#top" style="color:#2dd4bf">Sourdough starter</a><a class="trow" href="#top">Weeknight curry</a></div></div></aside></div>', 1440, 900, extra_css=DESK_CSS), 1440, 900, 2880, Y1, True, 'Desktop · reading a note')
 
 add('Desktop-Home.dc.html', 'Desktop · home', page('Desktop, home',
     '<div style="width:1440px;height:900px;box-sizing:border-box;display:grid;grid-template-columns:264px minmax(0,1fr);background:#0b1220;overflow:hidden">' + sidebar('Home') +
@@ -586,7 +612,7 @@ add('Desktop-Home.dc.html', 'Desktop · home', page('Desktop, home',
     + ''.join('<a class="row" href="Desktop-Note.dc.html">%s<span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:16px;font-weight:600">%s</span><span style="font-size:13px;color:#94a3b8">%s</span></span></a>' % (ico('note', 'color:#94a3b8'), n, m) for n, m in [('Sourdough starter', '2-Areas / Cooking · 2 h'), ('Trip to Lisbon', '1-Projects · yesterday'), ('Car insurance renewal', '2-Areas / Finance · 3 d'), ('What did I save about trip planning?', 'Answers · 5 d'), ('Kitchen hygiene', '3-Resources · 1 w')]) + '</div>'
     '<div style="display:flex;flex-direction:column;gap:12px"><h2 class="h2" style="padding-bottom:0">Tell Bower</h2>'
     '<div class="card" style="display:flex;flex-direction:column;gap:10px"><textarea placeholder="A rule, a task or a question" aria-label="Message" style="min-height:84px;padding:10px 12px;border-radius:10px;border:1px solid #263349;background:#0b1220;color:#e6ebf2;font:15px/1.4 \'Source Sans 3\',sans-serif;resize:none"></textarea><div style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;gap:6px"><button type="button" class="chip">A rule</button><button type="button" class="chip">A task</button></div><button type="button" class="btn" style="min-height:38px">Send</button></div></div>'
-    '<div class="card" style="display:flex;align-items:center;gap:12px">' + bird('p-idle e-happy', 40) + '<div style="font-size:14px;line-height:1.45;color:#cbd5e1">Last one: <span style="color:#f1f5f9">"File recipes under Cooking"</span>. Kept as a rule.</div></div></div></div></div></div></main></div>', 1440, 900, extra_css=DESK_CSS), 1440, 900, 2880, Y1, True, 'Desktop · home')
+    '<div class="card" style="display:flex;align-items:center;gap:12px">' + bird('p-idle e-happy', 40) + '<div style="font-size:14px;line-height:1.45;color:#cbd5e1">Last one: <span style="color:#f1f5f9">"File recipes under Cooking"</span>. Kept as a rule.</div></div></div></div></div></div></main></div>', 1440, 900, extra_css=DESK_CSS), 1440, 900, 4400, Y1, True, 'Desktop · home')
 
 add('Desktop-Files.dc.html', 'Desktop · Bower\'s files shown', page('Desktop, the rulebook, Bower files shown',
     '<div style="width:1440px;height:900px;box-sizing:border-box;display:grid;grid-template-columns:264px minmax(0,1fr);background:#0b1220;overflow:hidden">' + sidebar('files', True) +
@@ -597,7 +623,7 @@ add('Desktop-Files.dc.html', 'Desktop · Bower\'s files shown', page('Desktop, t
     '<div class="dp"><p>How Bower files what you add. Plain sentences; add your own at the end.</p>'
     '<h2>Folders</h2><ul style="margin:0 0 16px;padding-left:22px"><li><span class="wl">1-Projects</span>: things with an end date.</li><li><span class="wl">2-Areas</span>: ongoing parts of life. Cooking, Finance, Home, Health.</li><li><span class="wl">3-Resources</span>: reference you may want again.</li><li><span class="wl">4-Archive</span>: done or no longer relevant.</li></ul>'
     '<h2>Your rules</h2><ul style="margin:0 0 16px;padding-left:22px"><li>File recipes under Cooking and tag them #recipe. <span style="color:#64748b">(added 26 Sep from Tell Bower)</span></li><li>Receipts go to Finance, named by shop and date.</li></ul>'
-    '<h2>Naming</h2><p>Title case, no dates in titles, one note per idea. Link to related notes with double brackets.</p></div></div></article></main></div>', 1440, 900, extra_css=DESK_CSS), 1440, 900, 4400, Y1, True, 'Desktop · Bower\'s files shown')
+    '<h2>Naming</h2><p>Title case, no dates in titles, one note per idea. Link to related notes with double brackets.</p></div></div></article></main></div>', 1440, 900, extra_css=DESK_CSS), 1440, 900, 5920, Y1, True, 'Desktop · Bower\'s files shown')
 
 TREE = [(0, 'folder', '1-Projects', '4', False), (0, 'folder', '2-Areas', '12', True), (1, 'folder', 'Cooking', '3', True), (2, 'note', 'Flour types', '', False), (2, 'note', 'Sourdough starter', '', False), (2, 'note', 'Weeknight curry', '', False), (1, 'folder', 'Finance', '5', False), (1, 'folder', 'Health', '2', False), (1, 'folder', 'Home', '2', False), (0, 'folder', '3-Resources', '9', False), (0, 'folder', '4-Archive', '31', False), (0, 'folder', 'Answers', '6', False), (0, 'folder', 'Clippings', '8', False)]
 prow = ''.join('<a class="prow" href="%s" style="padding-left:%dpx">%s%s<span style="flex-grow:1">%s</span>%s</a>' % ('Phone-Note.dc.html' if k == 'note' else '#top', 10 + d * 22, ('' if k == 'note' else ico('next', 'width:16px;height:16px;color:#64748b' + (';transform:rotate(90deg)' if st else ''))), ico(k, 'color:#94a3b8'), n, ('<span style="font-size:12px;color:#64748b">%s</span>' % c) if c else '') for d, k, n, c, st in TREE)
@@ -622,16 +648,16 @@ POSES = [
  ('p-dance', 'Show-off', 'Run finished, tour finished, first note ever filed.', 'The bower dance: strut, deep bow with the wing spread and tail fanned, sparkles. Plays once, then Looking.'),
  ('p-confused', 'Confused', 'Run failed, note not found, not invited, 404.', 'Head tilts both ways, one wing shrugs, a question mark rises. Honest, not sad.'),
  ('p-build', 'Building', 'Onboarding while your folder is created; long first loads.', 'Twig in the beak, hops between the two walls as they go up stick by stick. Progress you can watch.'),
- ('p-sleep', 'Asleep', 'Empty inbox at night, nothing sent yet, nothing new.', 'Head tucked into the shoulder, eye shut, slow breath, two z letters drift up.'),
+ ('p-sleep', 'Asleep', 'Empty inbox at night, nothing sent yet, nothing new.', 'Curled up in its nest, legs tucked, eyes shut, slow breath, two z letters drift up.'),
  ('p-peek', 'Peeking', 'Behind the drop zone on Add; behind the search box before you type.', 'Only the top of the head shows; the eye follows the caret, the head pops up now and then.'),
- ('p-offline', 'Offline', 'Offline banner, a note not saved on this device.', 'Puffed up against the cold, tail ruffled, colours dimmed, a cloud above. Slow blink, no loop.'),
- ('p-done', 'Done', 'Small wins: a file uploaded, a message sent, settings saved.', 'One hop, a wink and a chirp. Two seconds, then Looking. The big dance is only for big wins.'),
+ ('p-offline', 'Offline', 'Offline banner, a note not saved on this device.', 'A cloud rains over its head; it shelters under its own wing, colours dimmed, lid half down. Sad, waiting for the signal.'),
+ ('p-done', 'Done', 'Small wins: a file uploaded, a message sent, settings saved.', 'Wing thrown up in celebration, a jump with a crouch first, a wink, a chirp. Two seconds, then Looking. The big dance is only for big wins.'),
 ]
 FACES = [('e-happy', 'Happy', 'jaw open · head up'), ('e-curious', 'Curious', 'eye wide · lean in'), ('e-worried', 'Worried', 'eye narrow · head down'), ('e-sleepy', 'Sleepy', 'eye shut · head tucked'), ('e-proud', 'Proud', 'chest out · tail fanned')]
 
 mascot = ('<div style="width:1440px;height:1180px;box-sizing:border-box;padding:32px 40px;display:flex;flex-direction:column;gap:18px;background:#0b1220;overflow:hidden">'
   '<div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;padding:16px 18px;border-radius:16px;background:#162033;border:1px solid #263349">'
-  '<div style="display:flex;flex-direction:column;gap:6px"><div style="font-family:Poppins,sans-serif;font-weight:700;font-size:22px;color:#f1f5f9">The bird</div><div style="font-size:13.5px;line-height:1.45;color:#94a3b8">The logo\'s shapes, made to move: a head that turns on the neck, a wing that grows out of the shoulder, a short cocked tail, one big eye. Round everywhere. It only holds a twig when it carries one.</div></div>'
+  '<div style="display:flex;flex-direction:column;gap:6px"><div style="font-family:Poppins,sans-serif;font-weight:700;font-size:22px;color:#f1f5f9">The bird</div><div style="font-size:13.5px;line-height:1.45;color:#94a3b8">The bird from the first review, kept: round body, a head that turns on a neck, one big eye with two highlights, the wing hinged at the shoulder. Refined today: a pill beak, three tail feathers, one long wing that lies along the body and lifts from the shoulder, a neck that stretches, an upper and a lower eyelid for mood (lower lid up = happy, upper lid down = worried or sleepy), a twig nest, softer colours.</div></div>'
   '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px">' + ''.join('<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:10px;background:#0b1220"><div class="%s" style="height:110px;display:flex;align-items:flex-end">%s</div><div style="font-size:13px;font-weight:600;color:#f1f5f9">%s</div><div style="font-size:11.5px;color:#94a3b8;text-align:center">%s</div></div>' % (c, bird('', 100), n, d) for c, n, d in FACES) + '</div></div>'
   '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:14px;flex-grow:1;min-height:0">'
   + ''.join('<div style="display:flex;flex-direction:column;gap:6px;padding:12px;background:#162033;border:1px solid #263349;border-radius:14px;min-height:0">'
@@ -643,32 +669,128 @@ mascot = ('<div style="width:1440px;height:1180px;box-sizing:border-box;padding:
 add('Mascot.dc.html', 'Mascot', page('Bower mascot, character and states', mascot, 1440, 1180,
     extra_css='.v{font-size:13px;line-height:1.4;color:#cbd5e1}.lbl{position:absolute;bottom:8px;font-size:11px;color:#64748b;letter-spacing:.04em}'), 1440, 1180, 0, Y5, False, 'Mascot · faces and twelve states')
 
-# ---- Brand sheet: swap the old logo for the bird, add the faces ----------
-bp = os.path.join(OUT, 'Brand.dc.html')
-b = open(bp, encoding='utf-8').read()
-b = re.sub(r'<svg class="bird" viewBox="0 0 64 64" width="80".*?</svg>', bird('p-look', 96), b, count=1, flags=re.S)
-b = re.sub(r'<svg class="bird" viewBox="0 0 64 64" width="40".*?</svg>', bird('', 46), b, flags=re.S)
-b = b.replace('</style>', CSS + '</style>', 1)
-b = b.replace('White, slate, navy. Never on teal, amber or a photo. Facing right, flat, no outline.', 'The mascot is the mark: same drawing in the icon, the header and every screen. White, slate or navy behind it, facing right, flat, no outline.')
-b = b.replace('<div class="lbl">Voice</div>', '<div class="lbl">Faces</div><div style="display:flex;gap:6px">' + ''.join('<div class="%s" style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">%s<span style="font-size:11px;color:#64748b">%s</span></div>' % (c, bird('', 54), n) for c, n, d in FACES) + '</div><div class="lbl" style="margin-top:6px">Voice</div>')
-boards['Brand.dc.html'] = b
 
+# ---- Brand, logo and README boards ----------------------------------------
+WORDMARK = '<span style="font-family:Poppins,sans-serif;font-weight:700;letter-spacing:-.03em;line-height:1;color:%s;font-size:%dpx">Bower</span>'
+MONO_CSS = ('.mono .b .bd,.mono .b .hc,.mono .b .nk,.mono .b .ld,.mono .b .lb,.mono .b .wp,.mono .b .tf,.mono .b .bk,.mono .b .bj,.mono .b .fo,.mono .b .eh{fill:var(--m)}'
+            '.mono .b .lg{stroke:var(--m)}.mono .b .ec{fill:var(--g)}.mono .b .ch,.mono .b .ck{opacity:0}')
+
+def tile(bg, border, inner, size=88, radius=20):
+    return '<div style="width:%dpx;height:%dpx;border-radius:%dpx;background:%s;border:1px solid %s;display:flex;align-items:center;justify-content:center;flex-shrink:0">%s</div>' % (size, size, radius, bg, border, inner)
+
+brand = ('<div style="width:1440px;height:900px;box-sizing:border-box;padding:44px 48px;display:grid;grid-template-columns:430px minmax(0,1fr);gap:44px;background:#0b1220;overflow:hidden">'
+  '<div style="display:flex;flex-direction:column;gap:22px">'
+  '<div style="display:flex;align-items:flex-end;gap:14px">' + bird('p-look', 128, 'margin-bottom:-12px') + WORDMARK % ('#f1f5f9', 56) + '</div>'
+  '<p style="margin:0;font-size:16px;line-height:1.55;color:#cbd5e1">Named after the bowerbird: twenty species, found only in Australia and New Guinea. The male builds a bower of twigs and decorates it with everything bright he can find, sorted by colour and size, to impress a visiting female. Rivals steal from each other\'s bowers.</p>'
+  '<p style="margin:0;font-size:16px;line-height:1.55;color:#cbd5e1">Bower does the same with what you drop: collects it, files it with care, and shows it off to you.</p>'
+  '<div style="display:flex;flex-direction:column;gap:10px"><div class="k">The mark on its grounds</div><div style="display:flex;gap:12px">'
+  + tile('#ffffff', '#e3e0da', bird('', 52)) + tile('#f1efeb', '#e3e0da', bird('', 52)) + tile('#162033', '#263349', bird('', 52)) + tile('#0b1220', '#263349', bird('', 52)) +
+  '</div><div style="font-size:13px;color:#64748b">White, warm light, slate or navy behind it. Never on teal, amber or a photo. Facing right, flat, no outline. The mascot and the mark are the same drawing.</div></div>'
+  '<div style="display:flex;flex-direction:column;gap:10px"><div class="k">Faces</div><div style="display:flex;gap:6px">' + ''.join('<div class="%s" style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">%s<span style="font-size:11px;color:#64748b">%s</span></div>' % (c, bird('', 58), n) for c, n, d in FACES) + '</div></div>'
+  '<div style="display:flex;flex-direction:column;gap:8px"><div class="k">Voice</div><div style="font-size:14px;line-height:1.45;color:#cbd5e1">"Your notes", "your Bower folder", never "vault". The bird speaks in first person, one short warm sentence. Errors say what to do next.</div></div>'
+  '</div>'
+  '<div style="display:flex;flex-direction:column;gap:22px;min-width:0">'
+  '<div style="display:flex;flex-direction:column;gap:10px"><div class="k">Surfaces: dark (default) and warm light</div><div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px">'
+  + ''.join('<div class="sw"><div style="background:%s%s"></div><span>%s<br><code>%s</code></span></div>' % (h, ';border:1px solid #e3e0da' if light else '', n, h) for n, h, light in [
+      ('Sidebar', '#0b1120', 0), ('Page', '#111a2b', 0), ('Card, input', '#1a2538', 0), ('Hover, active', '#233049', 0), ('Border', '#2c3a54', 0), ('Text', '#dfe5ee', 0),
+      ('Sidebar', '#f1efeb', 1), ('Page', '#faf9f6', 1), ('Card, input', '#ffffff', 1), ('Hover, active', '#ebe8e2', 1), ('Border', '#e3e0da', 1), ('Text', '#1c2333', 1)]) + '</div></div>'
+  '<div style="display:flex;flex-direction:column;gap:10px"><div class="k">Accents, softened</div><div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px">'
+  + ''.join('<div class="sw"><div style="background:%s"></div><span>%s<br><code>%s</code></span></div>' % (h, n, h) for n, h in [('Teal, primary', '#5fcfbc'), ('Deep teal, links on light', '#2f9c8d'), ('Amber, badges, beak, feet', '#f0b64f'), ('Success', '#7ed3a1'), ('Danger', '#ef8a8a'), ('Nest brown', '#8a5a3b')]) + '</div></div>'
+  '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px">'
+  '<div style="display:flex;flex-direction:column;gap:10px"><div class="k">Type</div><div style="display:flex;flex-direction:column;gap:8px;padding:16px;background:#162033;border-radius:12px">'
+  '<div style="font-family:Poppins,sans-serif;font-weight:700;font-size:28px;line-height:1.2;color:#f1f5f9">Sourdough starter</div><div style="font-size:12px;color:#64748b">Poppins 700, titles and the wordmark</div>'
+  '<div style="font-size:16px;line-height:1.55;color:#e6ebf2;margin-top:4px">Feed it every twelve hours until it doubles. Keep the jar at room temperature and away from the window.</div><div style="font-size:12px;color:#64748b">Source Sans 3 400, body and UI</div>'
+  '<div style="font-family:\'JetBrains Mono\',monospace;font-size:13px;color:#94a3b8;margin-top:4px">2-Areas/Cooking/Sourdough starter.md</div><div style="font-size:12px;color:#64748b">JetBrains Mono, paths and code</div></div></div>'
+  '<div style="display:flex;flex-direction:column;gap:10px"><div class="k">Controls and motion</div><div style="display:flex;flex-direction:column;gap:12px;padding:16px;background:#162033;border-radius:12px">'
+  '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="button" class="pill" style="min-height:40px">Tidy up (3)</button><button type="button" class="btn2" style="min-height:40px">Refresh</button><button type="button" class="chip">A rule</button><span style="padding:2px 8px;border-radius:999px;background:#fbbf24;color:#0b1220;font-size:12px;font-weight:600">New</span></div>'
+  '<div style="display:flex;align-items:center;gap:10px;min-height:40px;padding:0 12px;border-radius:10px;background:#0b1220;border:1px solid #263349;color:#64748b;font-size:15px">' + ico('search') + '<span style="flex-grow:1">Search or jump to a note</span><span class="kbd">Ctrl K</span></div>'
+  '<div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">#recipe</span><span class="tag">#bread</span><a href="#top" class="wl" style="font-size:15px">[[Flour types]]</a></div>'
+  '<div style="display:flex;gap:10px;font-size:13px;color:#94a3b8"><div style="padding:6px 10px;border:1px solid #263349;border-radius:8px"><b style="color:#e6ebf2">120 ms</b> hover, press</div><div style="padding:6px 10px;border:1px solid #263349;border-radius:8px"><b style="color:#e6ebf2">200 ms</b> panels, sheets</div><div style="padding:6px 10px;border:1px solid #263349;border-radius:8px"><b style="color:#e6ebf2">320 ms</b> the bird</div></div>'
+  '<div style="font-size:12px;color:#64748b">Ease-out in, ease-in-out for loops. Transform and opacity only. Reduced motion: the bird holds a pose.</div></div></div></div></div></div>')
+add('Brand.dc.html', 'Brand sheet', page('Bower brand sheet', brand, 1440, 900, extra_css='.sw{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#94a3b8}.sw div:first-child{height:40px;border-radius:8px}code{font-family:\'JetBrains Mono\',monospace;font-size:12px;color:#94a3b8}'), 1440, 900, 0, Y1, False, 'Brand sheet')
+
+def lockup(bg, fg, border, w, h, inner, label):
+    return ('<div style="display:flex;flex-direction:column;gap:8px"><div style="width:%dpx;height:%dpx;border-radius:16px;background:%s;border:1px solid %s;display:flex;align-items:center;justify-content:center">%s</div><div style="font-size:12px;color:#94a3b8">%s</div></div>' % (w, h, bg, border, inner, label))
+
+logo = ('<div style="width:1280px;height:760px;box-sizing:border-box;padding:40px 48px;display:flex;flex-direction:column;gap:22px;background:#0b1220;overflow:hidden">'
+  '<div style="display:flex;align-items:baseline;gap:16px"><div style="font-family:Poppins,sans-serif;font-weight:700;font-size:26px;color:#f1f5f9">Logo</div><div style="font-size:15px;color:#94a3b8">The bird is the mark. The wordmark is Poppins Bold, letter-spacing -3 %, outlined in the SVG files so no font loads. Clear space: a quarter of the mark\'s height. Minimum: 24 px bare mark, 16 px on a navy square, 96 px wordmark.</div></div>'
+  '<div style="display:flex;gap:22px;align-items:flex-start">'
+  + lockup('#0b1220', '', '#263349', 380, 150, '<div style="display:flex;align-items:center;gap:14px">' + bird('', 84) + WORDMARK % ('#f1f5f9', 52) + '</div>', 'Primary lockup, dark')
+  + lockup('#faf9f6', '', '#e3e0da', 380, 150, '<div style="display:flex;align-items:center;gap:14px">' + bird('', 84) + WORDMARK % ('#0b1220', 52) + '</div>', 'Primary lockup, light')
+  + lockup('#0b1220', '', '#263349', 190, 150, '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">' + bird('', 74) + WORDMARK % ('#f1f5f9', 26) + '</div>', 'Stacked, for square spaces')
+  + lockup('#0b1220', '', '#263349', 150, 150, bird('', 96), 'Mark alone')
+  + '</div>'
+  '<div style="display:flex;gap:22px;align-items:flex-start">'
+  + lockup('transparent', '', 'transparent', 300, 150, '<div style="display:flex;align-items:center;gap:14px">' + tile('#0b1220', '#263349', bird('', 74), 120, 28) + tile('#f1efeb', '#e3e0da', bird('', 74), 120, 28) + '</div>', 'App icon, PWA and home screen: navy or warm light, 22 % radius')
+  + lockup('transparent', '', 'transparent', 240, 150, '<div style="display:flex;align-items:flex-end;gap:14px">' + tile('#0b1220', '#263349', bird('', 40), 64, 14) + tile('#0b1220', '#263349', bird('', 22), 32, 7) + tile('#0b1220', '#263349', bird('', 11), 16, 4) + '</div>', 'Favicon 64, 32, 16 px')
+  + lockup('transparent', '', 'transparent', 300, 150, '<div style="display:flex;align-items:center;gap:14px"><div class="mono" style="--m:#dfe5ee;--g:#0b1220">' + tile('#0b1220', '#263349', bird('', 74), 120, 28) + '</div><div class="mono" style="--m:#0b1220;--g:#faf9f6">' + tile('#faf9f6', '#e3e0da', bird('', 74), 120, 28) + '</div></div>', 'One colour: print, stamps, embroidery')
+  + lockup('transparent', '', 'transparent', 220, 150, '<div style="position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center;border:1px dashed #5fcfbc;border-radius:8px"><div style="position:absolute;inset:26px;border:1px dashed #64748b;border-radius:4px"></div>' + bird('', 98) + '</div>', 'Clear space: ¼ of the height on every side')
+  + '</div>'
+  '<div style="display:flex;flex-direction:column;gap:10px"><div class="k">Don\'t</div><div style="display:flex;gap:22px">'
+  + ''.join('<div style="display:flex;flex-direction:column;gap:8px"><div style="width:150px;height:110px;border-radius:14px;background:%s;border:1px solid %s;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">%s<span style="position:absolute;left:8px;top:6px;font-size:11px;font-weight:600;color:#ef8a8a">NO</span></div><div style="font-size:12px;color:#94a3b8">%s</div></div>' % (bg, bd, inner, lbl) for bg, bd, inner, lbl in [
+      ('#5fcfbc', '#5fcfbc', bird('', 64), 'On teal or amber'),
+      ('#0b1220', '#263349', bird('', 64, 'transform:rotate(-24deg)'), 'Rotated or tilted'),
+      ('#0b1220', '#263349', '<div class="flip">' + bird('', 64) + '</div>', 'Mirrored (except when it turns round in an animation)'),
+      ('#0b1220', '#263349', bird('', 64, 'filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff)'), 'Outlined, shadowed, gradient'),
+      ('#0b1220', '#263349', bird('', 64, 'filter:hue-rotate(120deg)'), 'Recoloured')]) + '</div></div></div>')
+add('Logo.dc.html', 'Logo', page('Bower logo sheet', logo, 1280, 760, extra_css=MONO_CSS), 1280, 760, 1520, Y1, False, 'Logo: lockups, icon, favicon, one colour, clear space')
+
+# The README, as GitHub will show it: hero, why a bowerbird, how it works,
+# what makes it different, screens, engineers. The animated parts become SVG
+# files (docs/design/assets.py) so GitHub plays them inside <img>.
+def gh_h2(t):
+    return '<h2 style="margin:36px 0 12px;padding-bottom:6px;border-bottom:1px solid #263349;font-family:Poppins,sans-serif;font-weight:600;font-size:22px;color:#f1f5f9">%s</h2>' % t
+def badge(l, r, c):
+    return '<span style="display:inline-flex;font-size:11px;font-weight:600;border-radius:4px;overflow:hidden;font-family:\'Source Sans 3\',sans-serif"><span style="padding:2px 6px;background:#3b4a66;color:#fff">%s</span><span style="padding:2px 6px;background:%s;color:#0b1220">%s</span></span>' % (l, c, r)
+def panel(b, title, bird_line, app_line):
+    return ('<div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 14px;border-radius:14px;background:#162033;border:1px solid #263349;text-align:center">'
+            '<div style="height:120px;display:flex;align-items:flex-end;justify-content:center">%s</div><div style="font-family:Poppins,sans-serif;font-weight:600;font-size:16px;color:#f1f5f9">%s</div>'
+            '<div style="font-size:14px;line-height:1.45;color:#94a3b8">%s</div><div style="font-size:14px;line-height:1.45;color:#5eead4">%s</div></div>' % (b, title, bird_line, app_line))
+readme = ('<div style="width:1280px;box-sizing:border-box;padding:40px 0 60px;background:#0b1220;display:flex;justify-content:center">'
+  '<div style="width:900px;display:flex;flex-direction:column;font-size:16px;line-height:1.6;color:#dfe5ee">'
+  '<div style="font-size:12px;color:#64748b;margin-bottom:12px">docs/assets/hero.svg (animated: the bird looks around)</div>'
+  '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:28px 0 8px;text-align:center">' + bird('p-look', 150) + WORDMARK % ('#f1f5f9', 58) +
+  '<div style="font-size:20px;color:#cbd5e1;margin-top:6px"><b style="color:#f1f5f9">A second brain that files itself.</b></div>'
+  '<div style="font-size:16px;color:#94a3b8;max-width:640px">Drop a file, tap Tidy up, get a note. Your Google Drive, your notes; a Claude agent does the filing. Self-hosted, zero servers, 0 € a month.</div>'
+  '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:12px">' + badge('CI', 'passing', '#7ed3a1') + badge('cost', '0 €', '#7ed3a1') + badge('agent', 'Claude Code', '#c4b5fd') + badge('runs on', 'GitHub Actions', '#93c5fd') + badge('hosted on', 'Cloudflare', '#fdba74') + badge('license', 'MIT', '#fde68a') + '</div></div>'
+  + gh_h2('Why a bowerbird') +
+  '<p style="margin:0 0 14px">The bowerbird lives only in Australia and New Guinea. The male spends his days collecting bright things, arranging them in front of his bower of twigs, sorted by colour and size, and then showing the whole thing off. It is the tidiest animal there is. That is the job Bower does for your notes.</p>'
+  '<div style="font-size:12px;color:#64748b;margin-bottom:8px">docs/assets/why.svg (animated, three panels)</div>'
+  '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">'
+  + panel(bird('p-shiny', 110, '', scene=True), 'Collects', 'Anything bright: shells, feathers, a blue bottle cap.', 'You drop photos, PDFs, links, voice memos, thoughts. From any app, any device.')
+  + panel(bird('p-tidy', 110, '', scene=True), 'Arranges', 'Every piece in its place, by colour and size, so it reads well from the entrance.', 'Tap Tidy up: each thing gets a title, tags, a folder, links to what you already have, and a note about why.')
+  + panel(bird('p-dance', 110), 'Shows off', 'A dance in front of the bower, wings out.', 'Read it in the app or in Obsidian, ask questions, get answers filed under Answers.')
+  + '</div>'
+  + gh_h2('How it works') +
+  '<div style="font-size:12px;color:#64748b;margin-bottom:8px">docs/assets/how-it-works.svg (animated: inbox to nest)</div>'
+  '<div style="position:relative;height:200px;border-radius:14px;background:#162033;border:1px solid #263349;overflow:hidden"><div style="position:absolute;left:40px;right:40px;bottom:52px;height:2px;background:#2c3a54"></div>'
+  '<div style="position:absolute;left:60px;bottom:22px;font-size:13px;color:#94a3b8">Your inbox</div><div style="position:absolute;right:48px;bottom:22px;font-size:13px;color:#94a3b8">Cooking · Finance · Answers</div>'
+  '<div style="position:absolute;left:50%;bottom:40px;transform:translateX(-50%)">' + bird('p-tidy', 140, '', scene=True) + '</div></div>'
+  '<ol style="margin:14px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:6px"><li><b>Add something.</b> Drop a file, share from any app, paste a link, or type.</li><li><b>Tap Tidy up.</b> Nothing runs on a schedule. The bird wakes up in the background; you carry on.</li><li><b>It gets filed.</b> Title, tags, PARA folder, links, and a short note about what was done.</li><li><b>Read it anywhere.</b> In the app, or in Obsidian on the same folder.</li><li><b>Tell Bower how you like things.</b> Rules are kept for good; questions get answered in a note.</li></ol>'
+  + gh_h2('What makes it different') +
+  '<div style="display:grid;grid-template-columns:200px minmax(0,1fr);gap:8px 16px;font-size:15px">'
+  + ''.join('<div style="font-weight:600;color:#f1f5f9">%s</div><div style="color:#cbd5e1">%s</div>' % kv for kv in [('Your data, your account', 'Plain Markdown in your Drive. Delete the app and the notes stay.'), ('One button', 'Add things all week, tap once.'), ('A rulebook you can read', 'The agent follows a CLAUDE.md in your folder, in plain English, with every rule you gave it, dated.'), ('Talk to it', 'Rules, tasks and questions go through the same inbox as everything else.'), ('Works offline', 'A PWA: notes cached, adding waits for signal.'), ('0 € to run', 'Cloudflare and GitHub free tiers; you bring Claude and a Drive.'), ('A bird with a job', 'It looks around when idle, peeks over the drop zone, sings while you type, carries papers to the nest while it works, and dances when it is done.')]) + '</div>'
+  + gh_h2('The app') +
+  '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">' + ''.join('<div style="display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:12px;background:#162033;border:1px solid #263349"><div style="height:64px;display:flex;align-items:flex-end">%s</div><div style="font-weight:600;color:#f1f5f9">%s</div><div style="font-size:13px;color:#94a3b8;line-height:1.4">%s</div></div>' % (bird(p, 56), t, d) for p, t, d in [('p-look', 'Home', 'The bird tells you what is waiting.'), ('p-peek', 'Add', 'It peeks over the drop zone.'), ('p-sing', 'Tell Bower', 'It sings while you type.'), ('p-build', 'First run', 'It builds your folder in front of you, then shows you around.')]) + '</div>'
+  '<p style="margin:12px 0 0;font-size:14px;color:#94a3b8">Then: architecture diagrams, cost, deploy, status and credits, as today.</p></div></div>')
+add('Readme.dc.html', 'README', page('The README, as designed', readme, 1280, 1700), 1280, 1700, 0, 6372, False, 'README: hero, why a bowerbird, how it works')
+layout['Readme.dc.html']['expand'] = 'fill'
 # ---------------------------------------------------------------- write
 for name, html in boards.items():
     with open(os.path.join(OUT, name), 'w', encoding='utf-8', newline='\n') as f:
         f.write(html)
 
 idx_path = os.path.join(OUT, 'canvas.json')
-idx = json.load(open(idx_path, encoding='utf-8'))
-keep = {'Brand.dc.html': idx['boards']['Brand.dc.html']}
-idx['boards'] = dict(keep, **layout)
-idx['order'] = ['Brand.dc.html'] + list(layout.keys())
+idx = json.load(open(idx_path, encoding='utf-8')) if os.path.exists(idx_path) else {'v': 3, 'createdOnFiles': {'v': 1, 'at': '2026-09-27T12:00:00Z'}, 'title': 'Bower Redesign', 'launch': {'view': 'canvas'}, 'pages': [], 'designSystems': []}
+idx['boards'] = dict(layout)
+idx['order'] = list(layout.keys())
 idx['notes'] = {
-  't1': {'x': 0, 'y': -260, 'text': '1 · Identidad, escritorio', 'kind': 'title1', 'w': 240, 'maxW': 5840},
+  't1': {'x': 0, 'y': -260, 'text': '1 · Identidad, logo, escritorio', 'kind': 'title1', 'w': 240, 'maxW': 7360},
   't2': {'x': 0, 'y': Y2 - 240, 'text': '2 · Entrar por primera vez (Play desde Sign in)', 'kind': 'title1', 'w': 240, 'maxW': 3680},
   't3': {'x': 0, 'y': Y3 - 240, 'text': '3 · El día a día (Play desde Home)', 'kind': 'title1', 'w': 240, 'maxW': 4150},
   't4': {'x': 0, 'y': Y4 - 240, 'text': '4 · Ajustes, salud y estados límite', 'kind': 'title1', 'w': 240, 'maxW': 2270},
   't5': {'x': 0, 'y': Y5 - 240, 'text': '5 · La mascota', 'kind': 'title1', 'w': 240, 'maxW': 1440},
+  't6': {'x': 0, 'y': 6132, 'text': '6 · El README', 'kind': 'title1', 'w': 240, 'maxW': 1280},
 }
 with open(idx_path, 'w', encoding='utf-8', newline='\n') as f:
     json.dump(idx, f, ensure_ascii=False, indent=2)

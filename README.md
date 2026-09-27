@@ -1,11 +1,8 @@
 <p align="center">
-  <img src="docs/assets/bird-hero.svg" alt="Bower's bird, looking around for something bright" width="200">
+  <img src="docs/assets/hero.svg" alt="Bower: a second brain that files itself. The bird looks around for something bright." width="640">
 </p>
 
-<h1 align="center">Bower</h1>
-
-<p align="center"><strong>A second brain that files itself.</strong><br>
-Drop a file, tap <em>Tidy up</em>, get a note. Your Google Drive, your notes; a Claude agent does the filing.<br>
+<p align="center">Drop a file, tap <em>Tidy up</em>, get a note. Your Google Drive, your notes; a Claude agent does the filing.<br>
 Self-hosted, zero servers, 0 € a month.</p>
 
 <p align="center">
@@ -19,11 +16,17 @@ Self-hosted, zero servers, 0 € a month.</p>
 
 ---
 
-Bower is named after the bowerbird, which collects bright things and arranges them with care in its bower. This one collects what you throw at it (photos, PDFs, links, voice memos, half-thoughts) and keeps it as tidy Markdown notes in a folder of **your own Google Drive**. You read them in the app, or in Obsidian pointed at the same folder. Nothing leaves your account; the people who run the instance never see a note.
+## Why a bowerbird
+
+The bowerbird lives only in Australia and New Guinea. The male spends his days collecting bright things (shells, feathers, flowers, the odd blue bottle cap), arranging them in front of his bower of twigs, sorted by colour and size, and then showing the whole thing off. Rivals steal from each other's collections. It is the tidiest animal there is, and it does all of it to impress.
+
+That is the job Bower does for your notes. It collects what you throw at it (photos, PDFs, links, voice memos, half-thoughts) and keeps it as tidy Markdown in a folder of **your own Google Drive**. You read it in the app, or in Obsidian pointed at the same folder. Nothing leaves your account; the people who run the instance never see a note.
+
+<p align="center"><img src="docs/assets/why.svg" alt="Three panels: the bird collects a bright thing, arranges papers and twigs in its nest, and shows off with its wing open" width="900"></p>
 
 ## How it works
 
-<p align="center"><img src="docs/assets/bird-tidy.svg" alt="The bird carrying a paper and a twig from the inbox to the nest" width="400"></p>
+<p align="center"><img src="docs/assets/how-it-works.svg" alt="The bird carrying a paper and a twig from your inbox to the nest, labelled with your folders" width="600"></p>
 
 1. **Add something.** From your phone or your PC: drop a file, share from any app, paste a link, or just type.
 2. **Tap Tidy up.** Nothing runs on a schedule. When you tap, the bird wakes up in the background and you carry on.
@@ -172,4 +175,4 @@ Why things are built this way: [`docs/decisions.md`](docs/decisions.md). What an
 
 ## Credits
 
-Built by [Pablo de Luis](https://github.com/deluispablo), with Claude Code doing the typing. MIT licensed. The bird is drawn from a satin bowerbird, which really does steal blue things for its nest.
+Built by [Pablo de Luis](https://github.com/deluispablo), with Claude Code doing the typing. MIT licensed. The bird is drawn from the bowerbird, which really does collect, sort and show off; the brand, the logo lockups and every screen are in [`docs/design/`](docs/design/).

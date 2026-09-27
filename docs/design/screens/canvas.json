@@ -2,13 +2,6 @@
   "v": 3,
   "attachments": {},
   "boards": {
-    "Brand.dc.html": {
-      "h": 760,
-      "title": "Brand sheet",
-      "w": 1280,
-      "x": 0,
-      "y": 0
-    },
     "Login.dc.html": {
       "x": 0,
       "y": 1280,
@@ -174,7 +167,7 @@
       "is_interactive": true
     },
     "Desktop-Note.dc.html": {
-      "x": 1360,
+      "x": 2880,
       "y": 0,
       "w": 1440,
       "h": 900,
@@ -182,7 +175,7 @@
       "is_interactive": true
     },
     "Desktop-Home.dc.html": {
-      "x": 2880,
+      "x": 4400,
       "y": 0,
       "w": 1440,
       "h": 900,
@@ -190,7 +183,7 @@
       "is_interactive": true
     },
     "Desktop-Files.dc.html": {
-      "x": 4400,
+      "x": 5920,
       "y": 0,
       "w": 1440,
       "h": 900,
@@ -211,6 +204,28 @@
       "w": 1440,
       "h": 1180,
       "title": "Mascot · faces and twelve states"
+    },
+    "Brand.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Brand sheet"
+    },
+    "Logo.dc.html": {
+      "x": 1520,
+      "y": 0,
+      "w": 1280,
+      "h": 760,
+      "title": "Logo: lockups, icon, favicon, one colour, clear space"
+    },
+    "Readme.dc.html": {
+      "x": 0,
+      "y": 6372,
+      "w": 1280,
+      "h": 1700,
+      "title": "README: hero, why a bowerbird, how it works",
+      "expand": "fill"
     }
   },
   "createdOnFiles": {
@@ -225,10 +240,10 @@
     "t1": {
       "x": 0,
       "y": -260,
-      "text": "1 · Identidad, escritorio",
+      "text": "1 · Identidad, logo, escritorio",
       "kind": "title1",
       "w": 240,
-      "maxW": 5840
+      "maxW": 7360
     },
     "t2": {
       "x": 0,
@@ -261,10 +276,17 @@
       "kind": "title1",
       "w": 240,
       "maxW": 1440
+    },
+    "t6": {
+      "x": 0,
+      "y": 6132,
+      "text": "6 · El README",
+      "kind": "title1",
+      "w": 240,
+      "maxW": 1280
     }
   },
   "order": [
-    "Brand.dc.html",
     "Login.dc.html",
     "Not-Invited.dc.html",
     "Onb-Welcome.dc.html",
@@ -290,7 +312,10 @@
     "Desktop-Home.dc.html",
     "Desktop-Files.dc.html",
     "Phone-Files.dc.html",
-    "Mascot.dc.html"
+    "Mascot.dc.html",
+    "Brand.dc.html",
+    "Logo.dc.html",
+    "Readme.dc.html"
   ],
   "pages": [],
   "title": "Bower Redesign"
