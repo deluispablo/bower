@@ -1,9 +1,10 @@
 /**
  * `POST /process`: starts one agent run for the signed-in user's vault by
  * dispatching `ingest` to the instance repo, with at most one active run
- * per user and a daily quota (`DAILY_RUN_LIMIT`).
+ * per user and a daily quota (`DAILY_RUN_LIMIT`). Each run gets its own
+ * ticket (`run-ticket.ts`), the only credential its runner job holds.
  *
- * Nothing here logs file names, vault content or tokens.
+ * Nothing here logs file names, vault content, tokens or tickets.
  */
 
 import { Hono } from 'hono';
@@ -14,8 +15,16 @@ import type { AppEnv } from './env.js';
 import { HttpError } from './errors.js';
 import { dispatchIngest } from './github.js';
 import type { FetchLike } from './google.js';
+import { issueRunTicket } from './run-ticket.js';
 import { rateLimit, requireSameOrigin } from './security.js';
-import { getQuota, getRun, getUser, incrQuota, putRun } from './store.js';
+import {
+  deleteRunTicket,
+  getQuota,
+  getRun,
+  getUser,
+  incrQuota,
+  putRun,
+} from './store.js';
 import type { Run } from './types.js';
 
 /**
@@ -29,6 +38,13 @@ export const QUEUED_STALE_MS = 25 * 60 * 1000;
  * died mid-run, and the Process button unblocks.
  */
 export const RUNNING_STALE_MS = 30 * 60 * 1000;
+
+/**
+ * How long a run ticket lives: long enough for a run that waits its whole
+ * queued window and then runs its whole running window, and no longer. A
+ * run past both is stale anyway.
+ */
+export const RUN_TICKET_TTL_MS = QUEUED_STALE_MS + RUNNING_STALE_MS;
 
 /** Where a run stands relative to its staleness window at a given time. */
 export interface RunStaleness {
@@ -155,12 +171,32 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
         );
       }
 
-      // A failed dispatch throws a 502 here, before anything is stored or
-      // counted, so it does not use up the user's quota.
-      await dispatchIngest(
-        { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, vaultId: userId },
-        fetchImpl,
+      // The ticket's hash is stored before the dispatch, so the runner can
+      // never ask before it exists; it replaces any older run's ticket. A
+      // failed dispatch throws a 502 here, after retiring that ticket and
+      // before the run is stored or counted, so it does not use up the
+      // user's quota.
+      const ticket = await issueRunTicket(
+        kv,
+        userId,
+        'ingest',
+        now,
+        RUN_TICKET_TTL_MS,
       );
+      try {
+        await dispatchIngest(
+          {
+            repo: env.GITHUB_REPO,
+            token: env.GITHUB_TOKEN,
+            vaultId: userId,
+            ticket,
+          },
+          fetchImpl,
+        );
+      } catch (err) {
+        await deleteRunTicket(kv, userId, 'ingest');
+        throw err;
+      }
 
       const run: Run = {
         state: 'queued',

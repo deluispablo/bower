@@ -1,9 +1,26 @@
 /**
- * The endpoints the GitHub Actions runner calls, authenticated with the
- * single operator key `BOWER_API_KEY` (never a per-user secret):
+ * The endpoints the GitHub Actions runner calls. Two credentials:
  *
- * - `GET /runner/vaults`: the id of every user with a vault, for the
- *   scheduled lint; ids only, never an email or a token.
+ * - A run ticket (`run-ticket.ts`): minted for one run of one vault when
+ *   the Worker dispatches it, sent in the `repository_dispatch` payload,
+ *   and the only Worker credential a job that runs the agent holds. Good
+ *   for `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status` of
+ *   that vault and that run's kind, until the run reports `done` or
+ *   `failed` or the ticket expires.
+ * - The operator key `BOWER_API_KEY`: only for `POST /runner/lint/dispatch`,
+ *   called by the weekly lint's `dispatch` job, which never runs the agent.
+ *   While `RUNNER_ACCEPT_LEGACY_KEY` is `1` (a transition flag, off by
+ *   default) it is also accepted where a ticket is, and by
+ *   `GET /runner/vaults`, so an instance repo with the old workflows keeps
+ *   working until it is updated.
+ *
+ * Routes:
+ *
+ * - `POST /runner/lint/dispatch`: starts one lint run per vault (or for the
+ *   one `vaultId` in the body), each with its own ticket, through one
+ *   `repository_dispatch` (`bower-lint`) per vault.
+ * - `GET /runner/vaults` (legacy flag only): the id of every user with a
+ *   vault; ids only, never an email or a token.
  * - `GET /runner/vaults/:id`: what one run needs — the vault's folder ids,
  *   a 1 h Drive access token (never the refresh token), `maxTurns`, and the
  *   user's own Claude API key when they set one.
@@ -13,23 +30,32 @@
  *   lint under `lintrun:<id>`, so a lint never shows up in `GET /status`
  *   or blocks `POST /process`.
  *
- * `:id` is the user id, as `POST /process` dispatches it (`vault_id`).
- * Nothing here logs the operator key, a token, the API key, file names or
- * run summaries.
+ * `:id` is the user id, as the dispatch sends it (`vault_id`). Nothing here
+ * logs the operator key, a ticket, a token, the API key, file names or run
+ * summaries.
  */
 
 import { Hono } from 'hono';
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 
 import type { AuthDeps } from './auth.js';
 import { decrypt, importEncryptionKey, timingSafeEqual } from './crypto.js';
 import { getAccessToken } from './drive.js';
-import type { AppEnv } from './env.js';
+import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
+import { dispatchLint } from './github.js';
 import type { FetchLike } from './google.js';
+import { RUN_TICKET_TTL_MS } from './process.js';
 import { sendPush } from './push.js';
 import type { PushPayload } from './push.js';
-import { getRun, getUser, listVaultIds, putRun } from './store.js';
+import { checkRunTicket, issueRunTicket } from './run-ticket.js';
+import {
+  deleteRunTicket,
+  getRun,
+  getUser,
+  listVaultIds,
+  putRun,
+} from './store.js';
 import type { DriveToken, Run, RunKind, User } from './types.js';
 
 /**
@@ -55,16 +81,72 @@ function unauthorized(): HttpError {
  * 401 `unauthorized`; the key itself is never logged.
  */
 export const requireRunnerKey: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const header = c.req.header('authorization') ?? '';
-  const [scheme, key] = header.split(' ');
-  if (scheme !== 'Bearer' || key === undefined || key === '') {
-    throw unauthorized();
-  }
-  if (!timingSafeEqual(key, c.get('env').BOWER_API_KEY)) {
+  if (!isOperatorKey(bearer(c), c.get('env'))) {
     throw unauthorized();
   }
   await next();
 };
+
+/**
+ * The credential of `Authorization: Bearer <credential>`. A missing header,
+ * another scheme or an empty credential is a 401 `unauthorized`.
+ */
+function bearer(c: Context<AppEnv>): string {
+  const header = c.req.header('authorization') ?? '';
+  const [scheme, credential] = header.split(' ');
+  if (scheme !== 'Bearer' || credential === undefined || credential === '') {
+    throw unauthorized();
+  }
+  return credential;
+}
+
+/** Whether `credential` is the operator key, compared in constant time. */
+function isOperatorKey(credential: string, env: Env): boolean {
+  return timingSafeEqual(credential, env.BOWER_API_KEY);
+}
+
+/** Whether the transition flag lets the operator key stand in for a ticket. */
+function acceptsLegacyKey(env: Env): boolean {
+  return env.RUNNER_ACCEPT_LEGACY_KEY === '1';
+}
+
+/**
+ * `requireRunnerKey`, and only while `RUNNER_ACCEPT_LEGACY_KEY` is `1`: for
+ * `GET /runner/vaults`, which only the old lint workflow calls.
+ */
+const requireLegacyRunnerKey: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const env = c.get('env');
+  if (!acceptsLegacyKey(env) || !isOperatorKey(bearer(c), env)) {
+    throw unauthorized();
+  }
+  await next();
+};
+
+/**
+ * What the request's credential may do for vault `id`: the kind of run
+ * whose live ticket it is (an ingest's is checked first, then a lint's),
+ * or `legacy` for the operator key while the transition flag is on.
+ * Anything else (no credential, a ticket for another vault, a retired or
+ * expired ticket, the operator key with the flag off) is a 401
+ * `unauthorized`.
+ */
+async function authorizeRun(
+  c: Context<AppEnv>,
+  id: string,
+): Promise<RunKind | 'legacy'> {
+  const env = c.get('env');
+  const credential = bearer(c);
+  if (acceptsLegacyKey(env) && isOperatorKey(credential, env)) {
+    return 'legacy';
+  }
+  const now = new Date();
+  for (const kind of ['ingest', 'lint'] as const) {
+    if (await checkRunTicket(env.BOWER_KV, id, kind, credential, now)) {
+      return kind;
+    }
+  }
+  throw unauthorized();
+}
 
 /** What `GET /runner/vaults` answers: one entry per user with a vault. */
 export interface RunnerVaultList {
@@ -84,6 +166,32 @@ export interface RunnerVault {
 }
 
 type ReportState = 'running' | 'done' | 'failed';
+
+/** What `POST /runner/lint/dispatch` answers: how many lint runs started. */
+export interface LintDispatchResult {
+  dispatched: number;
+}
+
+/**
+ * The optional `POST /runner/lint/dispatch` body: absent or `{}` for every
+ * vault, `{ vaultId }` for one. Anything else is a 400 `bad_request`.
+ */
+function parseLintDispatch(body: unknown): string | undefined {
+  if (body === undefined) return undefined;
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    throw badRequest('Body must be a JSON object');
+  }
+  const record = body as Record<string, unknown>;
+  for (const field of Object.keys(record)) {
+    if (field !== 'vaultId') throw badRequest(`Unknown field ${field}`);
+  }
+  const vaultId = record.vaultId;
+  if (vaultId === undefined) return undefined;
+  if (typeof vaultId !== 'string' || vaultId.length === 0) {
+    throw badRequest('vaultId must be a non-empty string');
+  }
+  return vaultId;
+}
 
 /** A validated `POST /runner/vaults/:id/status` body. */
 interface StatusReport {
@@ -299,8 +407,6 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     deps.fetchImpl ?? ((input, init) => fetch(input, init));
   const runner = new Hono<AppEnv>();
 
-  runner.use('/runner/*', requireRunnerKey);
-
   /** The user behind `:id`, with a vault; a 404 `not_found` otherwise. */
   async function loadVaultUser(
     kv: KVNamespace,
@@ -313,7 +419,76 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     return user;
   }
 
-  runner.get('/runner/vaults', async (c) => {
+  runner.post('/runner/lint/dispatch', requireRunnerKey, async (c) => {
+    const env = c.get('env');
+    const kv = env.BOWER_KV;
+    const text = await c.req.text();
+    let body: unknown;
+    if (text.trim() !== '') {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        throw badRequest('Body must be a JSON object');
+      }
+    }
+    const only = parseLintDispatch(body);
+    const ids =
+      only === undefined
+        ? await listVaultIds(kv)
+        : [(await loadVaultUser(kv, only)).id];
+
+    // One vault's failed dispatch does not stop the others; the answer is
+    // a 502 when any failed, so the calling job shows it.
+    let dispatched = 0;
+    for (const id of ids) {
+      const now = new Date();
+      // Stored before the dispatch, so the runner never asks before it
+      // exists; retired again when the dispatch fails.
+      const ticket = await issueRunTicket(
+        kv,
+        id,
+        'lint',
+        now,
+        RUN_TICKET_TTL_MS,
+      );
+      try {
+        await dispatchLint(
+          {
+            repo: env.GITHUB_REPO,
+            token: env.GITHUB_TOKEN,
+            vaultId: id,
+            ticket,
+          },
+          fetchImpl,
+        );
+      } catch (err) {
+        await deleteRunTicket(kv, id, 'lint');
+        // `dispatchLint` has logged GitHub's status; anything but its own
+        // 502 is unexpected and ends the request.
+        if (!(err instanceof HttpError)) throw err;
+        continue;
+      }
+      const run: Run = {
+        state: 'queued',
+        kind: 'lint',
+        requestedAt: now.toISOString(),
+        runId: crypto.randomUUID(),
+      };
+      await putRun(kv, id, run, 'lint');
+      dispatched += 1;
+    }
+    if (dispatched < ids.length) {
+      throw new HttpError(
+        502,
+        'dispatch',
+        `Could not start ${ids.length - dispatched} of ${ids.length} health checks`,
+      );
+    }
+    const result: LintDispatchResult = { dispatched };
+    return c.json(result);
+  });
+
+  runner.get('/runner/vaults', requireLegacyRunnerKey, async (c) => {
     const ids = await listVaultIds(c.get('env').BOWER_KV);
     const body: RunnerVaultList = { vaults: ids.map((id) => ({ id })) };
     return c.json(body);
@@ -321,7 +496,9 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
   runner.get('/runner/vaults/:id', async (c) => {
     const env = c.get('env');
-    const user = await loadVaultUser(env.BOWER_KV, c.req.param('id'));
+    const id = c.req.param('id');
+    await authorizeRun(c, id);
+    const user = await loadVaultUser(env.BOWER_KV, id);
 
     let token: DriveToken;
     try {
@@ -358,9 +535,16 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   runner.post('/runner/vaults/:id/status', async (c) => {
     const env = c.get('env');
     const kv = env.BOWER_KV;
-    const user = await loadVaultUser(kv, c.req.param('id'));
+    const id = c.req.param('id');
+    const allowed = await authorizeRun(c, id);
+    const user = await loadVaultUser(kv, id);
     const body: unknown = await c.req.json().catch(() => undefined);
     const report = parseStatusReport(body);
+    // A ticket reports on its own run only: an ingest's ticket cannot
+    // write the lint run, nor the other way round.
+    if (allowed !== 'legacy' && allowed !== report.kind) {
+      throw unauthorized();
+    }
 
     // Each kind has its own key: a lint report never reads or writes the
     // ingest run that `GET /status` and `POST /process` look at.
@@ -369,6 +553,11 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     await putRun(kv, user.id, run, report.kind);
 
     if (run.state === 'done' || run.state === 'failed') {
+      // The run is over: its ticket is retired, so nothing can fetch a
+      // Drive token or report again with it.
+      if (allowed !== 'legacy') {
+        await deleteRunTicket(kv, user.id, allowed);
+      }
       await sendPush(env, user.id, runPushPayload(run), fetchImpl);
     }
     return c.json({ run });
