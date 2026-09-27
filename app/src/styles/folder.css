@@ -59,6 +59,18 @@
   height: 16px;
 }
 
+/* Pinned (#216): the chip's own toggled state, same accent as an active
+   nav row (`--color-brand`); its `.b` briefly replaces the pin icon with
+   the bird's `done` pose right after a successful toggle. */
+.folder-chips .chip[aria-pressed='true'] {
+  border-color: var(--color-brand);
+  color: var(--color-link);
+}
+
+.folder-chips .chip .b {
+  flex-shrink: 0;
+}
+
 .folder-label {
   margin: 0 0 var(--space-2);
   color: var(--color-text-muted);
