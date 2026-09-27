@@ -1,5 +1,6 @@
 {
   "permissions": {
+    "blockReadsOutsideWorkingDirectories": true,
     "deny": [
       "Write(CLAUDE.md)",
       "Edit(CLAUDE.md)",
@@ -13,7 +14,11 @@
       "Write(.obsidian/**)",
       "Edit(.obsidian/**)",
       "MultiEdit(.obsidian/**)",
-      "Bash(*://*)"
+      "Bash(*://*)",
+      "Read(//proc/**)",
+      "Read(//etc/**)",
+      "Read(//root/**)",
+      "Read(../**)"
     ]
   }
 }

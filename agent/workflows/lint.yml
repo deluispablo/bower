@@ -130,18 +130,38 @@ jobs:
       - name: Add Claude Code to PATH
         run: echo "$HOME/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
-      # run.sh's own log carries timestamps, step names and counts only and
-      # never prints a credential, so no ::add-mask:: is needed here.
-      - name: Run lint
+      # The runner key and settings reach run.sh through a file, not the Run
+      # step's environment: a process's initial environment stays readable in
+      # /proc/<pid>/environ for its whole life, and the agent runs as a child
+      # of run.sh's shell. printf is a shell builtin, so no value shows up in
+      # a process list either. run.sh reads the file into shell variables and
+      # deletes it before anything else (agent/README.md, "Runner settings").
+      - name: Hand the runner settings to run.sh
         env:
           BOWER_API_URL: ${{ vars.BOWER_API_URL }}
           BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Unset by default: the agent gets no web tools (see run.sh).
           BOWER_ALLOW_WEB: ${{ vars.BOWER_ALLOW_WEB }}
           # Unset by default: run.sh falls back to the API's own maxTurns.
           BOWER_MAX_TURNS: ${{ vars.BOWER_MAX_TURNS }}
+        run: |
+          umask 077
+          {
+            printf 'BOWER_API_URL=%s\n' "$BOWER_API_URL"
+            printf 'BOWER_API_KEY=%s\n' "$BOWER_API_KEY"
+            printf 'BOWER_ALLOW_WEB=%s\n' "$BOWER_ALLOW_WEB"
+            printf 'BOWER_MAX_TURNS=%s\n' "$BOWER_MAX_TURNS"
+          } >"$RUNNER_TEMP/bower-secrets"
+          chmod 600 "$RUNNER_TEMP/bower-secrets"
+
+      # Only the model credential is in this step's environment: the agent
+      # needs it, so it can read it (docs/security.md, "What the runner
+      # sees"). run.sh's own log carries timestamps, step names and counts
+      # only and never prints a credential, so no ::add-mask:: is needed here.
+      - name: Run lint
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: bash agent/run.sh "$VAULT_ID" lint
 
       # rclone's log and the agent's stderr, kept out of the job log itself

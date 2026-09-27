@@ -18,16 +18,20 @@
 # pending originals the agent moved to an accepted place, and reports the
 # outcome to the API.
 #
-# Environment:
+# Settings, read from $RUNNER_TEMP/bower-secrets when that file exists (the
+# instance workflows write it; see "runner settings" below), otherwise from
+# the environment:
 #   BOWER_API_URL            the Worker's origin, e.g. https://api.example.com
 #   BOWER_API_KEY            the runner key (Authorization: Bearer)
-#   CLAUDE_CODE_OAUTH_TOKEN  or ANTHROPIC_API_KEY; not needed when the API
-#                            returns the user's own apiKey
 #   BOWER_MAX_TURNS          optional; defaults to the API's maxTurns
 #   BOWER_ALLOW_WEB          optional; 1 lets the agent use WebSearch and
 #                            WebFetch, anything else (the default) denies them
 #   BOWER_MAX_CHANGES        optional; the most files one run may add or
 #                            change (default 200); above it nothing is saved
+#
+# Environment:
+#   CLAUDE_CODE_OAUTH_TOKEN  or ANTHROPIC_API_KEY; not needed when the API
+#                            returns the user's own apiKey
 #   RUNNER_TEMP              optional; set by GitHub Actions
 #
 # Requires bash, curl, jq, rclone, pandoc and claude on PATH.
@@ -44,6 +48,38 @@
 # Exit codes: 0 done, 2 failed (reported to the API when it is reachable).
 
 set -euo pipefail
+
+log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
+
+# --- runner settings --------------------------------------------------------
+# A process's initial environment stays readable in /proc/<pid>/environ for
+# its whole life, by anything running as the same user: the agent too, as a
+# child of this shell. So the instance workflows do not put the runner key
+# (or any BOWER_* value) in this step's environment. A step before this one
+# writes them to $RUNNER_TEMP/bower-secrets (mode 600, one NAME=value per
+# line); they are read here into plain shell variables, never exported, and
+# the file is deleted before anything else runs. Only the settings listed
+# above are taken; any other line is ignored. Without the file (a local run,
+# or an instance repo whose workflows predate it) the same names come from
+# the environment, with a warning: the runner key then sits in this shell's
+# /proc entry for the whole run.
+secrets_file="${RUNNER_TEMP:-}/bower-secrets"
+if [ -n "${RUNNER_TEMP:-}" ] && [ -f "$secrets_file" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "${line%%=*}" in
+      BOWER_API_URL | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES)
+        printf -v "${line%%=*}" '%s' "${line#*=}"
+        ;;
+    esac
+  done <"$secrets_file"
+  if ! rm -f "$secrets_file"; then
+    log 'could not delete the runner settings file'
+    exit 2
+  fi
+else
+  log 'warning: no runner settings file, BOWER_* settings come from the environment'
+fi
+unset secrets_file line
 
 # Everything in 0-Inbox/ and Clippings/ is untrusted text (clipped web pages,
 # forwarded files), so by default the agent gets no tool that reaches the
@@ -66,8 +102,6 @@ else
   readonly DISALLOWED_TOOLS="$WEB_TOOLS,$NETWORK_COMMANDS"
 fi
 
-log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
-
 usage() {
   printf 'usage: run.sh <vault_id> <ingest|lint>\n' >&2
   exit 2
@@ -83,7 +117,7 @@ esac
 
 for name in BOWER_API_URL BOWER_API_KEY; do
   if [ -z "${!name:-}" ]; then
-    log "missing environment variable $name"
+    log "missing setting $name"
     exit 2
   fi
 done
@@ -350,6 +384,12 @@ ACCESS_TOKEN=$(field driveAccessToken)
 EXPIRES_AT=$(field expiresAt)
 API_MAX_TURNS=$(field maxTurns)
 USER_API_KEY=$(field apiKey)
+# The answer holds the Drive token and the user's API key: from here on they
+# live in shell variables only, and the file is gone long before the agent
+# starts.
+if ! rm -f "$VAULT_JSON"; then
+  fail "$STEP: could not delete the answer"
+fi
 if [ -z "$FOLDER_ID" ] || [ -z "$ACCESS_TOKEN" ] || [ -z "$EXPIRES_AT" ]; then
   fail "$STEP: incomplete answer"
 fi

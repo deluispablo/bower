@@ -20,6 +20,10 @@ readonly API_URL='https://api.example.com'
 readonly RUNNER_KEY='test-runner-key'
 readonly DRIVE_TOKEN='test-drive-token-value'
 readonly USER_API_KEY='test-user-api-key-value'
+mkdir -p "$ROOT/values"
+printf '%s' "$RUNNER_KEY" >"$ROOT/values/runner-key"
+printf '%s' "$DRIVE_TOKEN" >"$ROOT/values/drive-token"
+printf '%s' "$USER_API_KEY" >"$ROOT/values/user-api-key"
 
 # --- stubs ------------------------------------------------------------------
 
@@ -29,6 +33,12 @@ cat >"$STUBS/curl" <<'STUB'
 # to Drive's files.list (the instruction-origin listing) records its query
 # and answers per scenario.
 set -euo pipefail
+# The runner key and the tokens the fake Worker hands out come from files,
+# not from this stub's environment: that environment is run.sh's own, which
+# the claude stub checks for the runner key.
+SMOKE_RUNNER_KEY=$(cat "$SMOKE_STATE/../values/runner-key")
+SMOKE_DRIVE_TOKEN=$(cat "$SMOKE_STATE/../values/drive-token")
+SMOKE_USER_API_KEY=$(cat "$SMOKE_STATE/../values/user-api-key")
 out='' fmt='' method=GET data='' url='' auth=bad
 params=()
 while [ "$#" -gt 0 ]; do
@@ -246,6 +256,18 @@ printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
 # it: the test greps this for the Drive token, the runner key, BOWER_* and
 # the model credential, never the console output (that stays content-free).
 env >"$SMOKE_STATE/claude-env.log"
+# What else the agent could read on the runner (#258): the initial
+# environment of the shell that started it (/proc/<ppid>/environ, which
+# env -i does not clean), its own directory, the Worker's answer
+# and the runner settings file. Recorded here, checked by the test.
+if [ -r "/proc/$PPID/environ" ]; then
+  tr '\0' '\n' <"/proc/$PPID/environ" >"$SMOKE_STATE/claude-parent-env.log"
+fi
+pwd >"$SMOKE_STATE/claude-cwd.txt"
+for f in ../vault.json "$SMOKE_STATE"/runner-temp/bower.*/vault.json; do
+  [ ! -e "$f" ] || echo present >"$SMOKE_STATE/claude-vault-json-seen"
+done
+[ ! -e "$SMOKE_STATE/runner-temp/bower-secrets" ] || echo present >"$SMOKE_STATE/claude-secrets-seen"
 # The permission policy in force during the run.
 cp .claude/settings.json "$SMOKE_STATE/claude-settings-seen.json"
 [ ! -e .claude/settings.local.json ] || echo present >"$SMOKE_STATE/claude-settings-local-seen"
@@ -368,9 +390,14 @@ die() {
 }
 
 # run_case <scenario> [NAME=value ...]: runs run.sh in $MODE (ingest unless
-# the scenario sets it) with the stubs first on PATH; extra assignments are
-# passed to env.
+# the scenario sets it) with the stubs first on PATH. As the instance
+# workflows do (#258), the runner settings (BOWER_API_URL, BOWER_API_KEY and
+# any BOWER_* assignment given) go to $RUNNER_TEMP/bower-secrets, mode 600,
+# and only the model credential is in run.sh's environment; other
+# assignments are passed to env. With SETTINGS_VIA=env (a local run) the
+# settings go to env instead and no file is written.
 MODE=ingest
+SETTINGS_VIA=file
 run_case() {
   CASE=$1
   shift
@@ -381,18 +408,27 @@ run_case() {
   : >"$STATE/calls.log"
   : >"$STATE/posts.log"
   : >"$STATE/uploaded.txt"
+  local settings=("BOWER_API_URL=$API_URL" "BOWER_API_KEY=$RUNNER_KEY") extra=() arg
+  for arg in "$@"; do
+    case "$arg" in
+      BOWER_*=*) settings+=("$arg") ;;
+      *) extra+=("$arg") ;;
+    esac
+  done
+  if [ "$SETTINGS_VIA" = file ]; then
+    (umask 077 && printf '%s\n' "${settings[@]}" >"$STATE/runner-temp/bower-secrets")
+  else
+    extra+=("${settings[@]}")
+  fi
   set +e
   env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GITHUB_RUN_ID \
-    -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB -u BOWER_MAX_CHANGES -u BOWER_REPORT_REFUSED \
+    -u BOWER_API_URL -u BOWER_API_KEY -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB \
+    -u BOWER_MAX_CHANGES -u BOWER_REPORT_REFUSED \
     PATH="$STUBS:$PATH" \
     RUNNER_TEMP="$STATE/runner-temp" \
-    BOWER_API_URL="$API_URL" \
-    BOWER_API_KEY="$RUNNER_KEY" \
     CLAUDE_CODE_OAUTH_TOKEN='test-oauth-token' \
     SMOKE_SCENARIO="$CASE" SMOKE_STATE="$STATE" \
-    SMOKE_RUNNER_KEY="$RUNNER_KEY" SMOKE_DRIVE_TOKEN="$DRIVE_TOKEN" \
-    SMOKE_USER_API_KEY="$USER_API_KEY" \
-    "$@" bash "$RUN_SH" vault-1 "$MODE" >"$STATE/out.log" 2>&1
+    ${extra[@]+"${extra[@]}"} bash "$RUN_SH" vault-1 "$MODE" >"$STATE/out.log" 2>&1
   RC=$?
   set -e
 }
@@ -427,11 +463,16 @@ expect_content_free() {
   done
 }
 
-# The work dir is removed at exit; only the private logs dir remains.
+# The work dir (with the vault in it) and the runner settings file are
+# removed; only the private logs dir remains.
 expect_cleaned_up() {
   local left
   left=$(find "$STATE/runner-temp" -mindepth 1 -maxdepth 1 -name 'bower.*' | wc -l | tr -d ' ')
   expect_eq "$left" 0 'work dirs left behind'
+  [ ! -e "$STATE/runner-temp/bower-secrets" ] || die 'runner settings file left behind'
+  if [ -f "$STATE/claude-cwd.txt" ]; then
+    [ ! -e "$(dirname "$(cat "$STATE/claude-cwd.txt")")" ] || die 'the work dir around the vault was left behind'
+  fi
 }
 
 # The claude stub's own environment (env -i's allow-list) must carry none of
@@ -455,6 +496,24 @@ expect_claude_env() {
     grep -q "^CLAUDE_CODE_OAUTH_TOKEN=$want_oauth\$" "$log" || die 'CLAUDE_CODE_OAUTH_TOKEN missing from claude env'
   fi
   grep -q '^PATH=' "$log" || die 'PATH missing from claude env (its own tools would fail to run)'
+  expect_runner_secrets_out_of_reach
+}
+
+# What the agent could read outside its own process (#258): the initial
+# environment of the shell that started it holds no BOWER_* and not the
+# runner key (/proc is Linux-only; required wherever this test sees it);
+# the Worker's answer and the runner settings file are gone before it
+# starts.
+expect_runner_secrets_out_of_reach() {
+  local parent="$STATE/claude-parent-env.log"
+  if [ -f "$parent" ]; then
+    grep -q '^BOWER_' "$parent" && die "the agent's parent shell has BOWER_* in /proc/<pid>/environ"
+    grep -qF -- "$RUNNER_KEY" "$parent" && die "the agent's parent shell has the runner key in /proc/<pid>/environ"
+  elif [ -r /proc/self/environ ]; then
+    die "the claude stub could not read its parent's /proc/<pid>/environ"
+  fi
+  [ ! -e "$STATE/claude-vault-json-seen" ] || die "the Worker's answer (vault.json) still existed while the agent ran"
+  [ ! -e "$STATE/claude-secrets-seen" ] || die 'the runner settings file still existed while the agent ran'
 }
 
 # The agent gets neither pandoc (a URL as input is a way out) nor cp (it can
@@ -513,6 +572,29 @@ expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'uploaded fil
 cmp -s "$STATE/claude-settings-seen.json" "$HERE/../claude-settings.json" ||
   die 'the instance repo policy was not .claude/settings.json during the run'
 [ ! -e "$STATE/claude-settings-local-seen" ] || die "the vault's .claude/settings.local.json was left in place"
+# The policy blocks reads outside the working directory and denies Read (which
+# covers Glob and Grep) on /proc, /etc, /root and `..` (#258). Asserted on
+# the text: a stub cannot run Claude Code's own permission checks.
+settings_seen="$STATE/claude-settings-seen.json"
+grep -Fq '"blockReadsOutsideWorkingDirectories": true' "$settings_seen" ||
+  die 'the policy does not block reads outside the working directory'
+for root in '//proc/**' '//etc/**' '//root/**' '../**'; do
+  grep -Fq "\"Read($root)\"" "$settings_seen" || die "the policy does not deny Read($root)"
+done
+# The vault itself must stay readable, by relative and by absolute path: no
+# absolute deny and no home-dir deny may cover it (a deny rule matches the
+# vault's own files by their absolute path too).
+vault_path=$(cat "$STATE/claude-cwd.txt")
+while IFS= read -r root; do
+  case "$vault_path/" in
+    "$root"/*) die "a deny rule on $root covers the vault itself" ;;
+  esac
+done < <(grep -o '"Read(//[^)]*/\*\*)"' "$settings_seen" | sed 's|^"Read(/||; s|/\*\*)"$||')
+if grep -Fq '"Read(~/**)"' "$settings_seen"; then
+  case "$vault_path/" in
+    "$HOME"/*) die 'the home-dir deny covers the vault itself' ;;
+  esac
+fi
 expect_eq "$(cat "$STATE/remote/.claude/settings.json")" '{"vault":"own"}' "the vault's own settings in Drive"
 expect_eq "$(calls curl | grep -c 'auth=ok')" 3 'curl calls with the runner key'
 expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request'
@@ -562,6 +644,9 @@ expect_eq "$(node -e '
   process.stdout.write([t.access_token, t.token_type, t.expiry].join(" "));
 ' <"$STATE/rclone-token.json")" "$DRIVE_TOKEN Bearer 2030-01-01T00:00:00.000Z" 'rclone token'
 grep -q STDERR-MARKER "$STATE/runner-temp/bower-logs/agent.err" || die 'agent stderr not kept in the logs dir'
+if grep -q 'no runner settings file' "$STATE/out.log"; then
+  die 'warned about a missing runner settings file that was there'
+fi
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -932,3 +1017,19 @@ grep -Fxq '0-Inbox/Quarantine/evil.md' "$STATE/uploaded.txt" &&
 expect_content_free
 expect_cleaned_up
 echo "ok quarantined file stays out of the pending list on the next run"
+
+# 19. A local run, or an instance repo whose workflows predate #258: no
+# runner settings file, the settings come from the environment. The run
+# still works, the log warns, and the model's own process still gets no
+# BOWER_* value (env -i).
+SETTINGS_VIA=env
+run_case local
+SETTINGS_VIA=file
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+grep -q ' warning: no runner settings file, BOWER_\* settings come from the environment$' "$STATE/out.log" ||
+  die 'no warning without the runner settings file'
+grep -q '^BOWER_' "$STATE/claude-env.log" && die 'BOWER_* reached the claude process env'
+expect_content_free
+expect_cleaned_up
+echo "ok settings from the environment when there is no settings file"
