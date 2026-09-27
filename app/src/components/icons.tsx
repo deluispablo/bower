@@ -231,3 +231,12 @@ export function IconExternalLink(): JSX.Element {
     </Svg>
   );
 }
+
+export function IconWifi(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M3 9a14 14 0 0 1 18 0M6.5 12.5a9 9 0 0 1 11 0M10 16a4 4 0 0 1 4 0" />
+      <circle cx="12" cy="19" r="1" />
+    </Svg>
+  );
+}
