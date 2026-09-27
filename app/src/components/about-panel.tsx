@@ -14,6 +14,7 @@ import type { JSX } from 'preact';
 import type { DriveFile } from '../drive.js';
 import { outlineOf } from '../markdown/frontmatter.js';
 import type { NoteProperties } from '../markdown/frontmatter.js';
+import { noteTitle } from '../note-title.js';
 import { isAppFile } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
 import { hasNoteProperties, NotePropertiesList } from './note-properties.js';
@@ -27,10 +28,6 @@ function folderOf(path: string): string {
 
 function compareNames(a: string, b: string): number {
   return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
-}
-
-function titleOf(name: string): string {
-  return name.replace(/\.md$/i, '');
 }
 
 /**
@@ -117,7 +114,7 @@ export function AboutPanel({
                 href={`/note/${note.id}`}
                 class="about-row about-link-row"
               >
-                {titleOf(note.name)}
+                {noteTitle(note)}
               </a>
             ))}
           </nav>
@@ -135,7 +132,7 @@ export function AboutPanel({
                 class="about-row about-folder-row"
                 aria-current={note.id === file.id ? 'page' : undefined}
               >
-                {titleOf(note.name)}
+                {noteTitle(note)}
               </a>
             ))}
           </nav>

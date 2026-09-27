@@ -27,6 +27,7 @@ import {
 import { PinnedSection } from '../components/pinned-section.js';
 import { TellComposer } from '../components/tell-composer.js';
 import { Tour } from '../components/tour.js';
+import { useNoteTitles } from '../components/use-note-titles.js';
 import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
 import { findReport, isReportNew } from '../health-report.js';
 import {
@@ -38,10 +39,12 @@ import {
 import {
   folderCounts,
   folderHref,
+  folderOf,
   pendingCount,
   recentNotes,
   relativeTime,
 } from '../navigation.js';
+import { noteTitle } from '../note-title.js';
 import { shouldShowTour } from '../onboarding.js';
 import { offlineReason, useOnline } from '../online.js';
 import { runPinAction } from '../pin-action.js';
@@ -218,6 +221,21 @@ function Greeting({
   );
 }
 
+/** A Recent row's second line: "folder · time", either half left out when
+ * the note is top-level or its time is unknown (spec: relative times). */
+function recentMeta(
+  path: string,
+  modifiedTime: string | undefined,
+  now: number,
+): string {
+  const folder = folderOf(path);
+  const label = folder === '' ? '' : folder.split('/').join(' / ');
+  const time =
+    modifiedTime === undefined ? '' : relativeTime(modifiedTime, now);
+  if (label !== '' && time !== '') return `${label} · ${time}`;
+  return label || time;
+}
+
 export function Home() {
   const { me } = useSession();
   const {
@@ -240,6 +258,7 @@ export function Home() {
 
   const showAppFiles = getPref('showAppFiles');
   const recent = index === null ? [] : recentNotes(index, 20, showAppFiles);
+  const recentTitles = useNoteTitles(recent);
   const pending = pendingCount(files);
   const noteCounts =
     index === null ? new Map<string, number>() : folderCounts(index);
@@ -407,12 +426,19 @@ export function Home() {
             <ul class="home-notes">
               {recent.map((note) => (
                 <li key={note.id}>
-                  <a href={`/note/${note.id}`}>{note.name}</a>
-                  <span class="home-note-meta">
-                    {note.path}
-                    {note.modifiedTime !== undefined &&
-                      ` · ${relativeTime(note.modifiedTime, now)}`}
-                  </span>
+                  <a class="home-note-row" href={`/note/${note.id}`}>
+                    <span class="home-note-icon">
+                      <IconNote />
+                    </span>
+                    <span class="home-note-text">
+                      <b class="home-note-title">
+                        {recentTitles.get(note.id) ?? noteTitle(note)}
+                      </b>
+                      <span class="home-note-meta">
+                        {recentMeta(note.path, note.modifiedTime, now)}
+                      </span>
+                    </span>
+                  </a>
                 </li>
               ))}
             </ul>

@@ -48,10 +48,11 @@ export interface RenderOptions {
   transclude?: boolean;
   /**
    * The note's own title, as its header already shows it (`routes/note.tsx`,
-   * `file.name` without `.md`). When the body's very first block is a
-   * heading whose text equals it (case-insensitive, ignoring emphasis
-   * markers), that heading is dropped so the title never appears twice
-   * (issue #307). Left undefined, no heading is ever dropped.
+   * `noteTitle(file, text)` — #306: frontmatter `title`, else the first
+   * `# ` heading, else `file.name` without `.md`). When the body's very
+   * first block is a heading whose text equals it (case-insensitive,
+   * ignoring emphasis markers), that heading is dropped so the title never
+   * appears twice (issue #307). Left undefined, no heading is ever dropped.
    */
   title?: string;
 }

@@ -32,6 +32,7 @@ import {
   IconPin,
 } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
 import {
   breadcrumb,
@@ -41,6 +42,7 @@ import {
   relativeTime,
 } from '../navigation.js';
 import type { BreadcrumbSegment, FolderContents } from '../navigation.js';
+import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { useVault } from '../vault-store.js';
@@ -112,6 +114,7 @@ function FolderBody({
 }: FolderBodyProps): JSX.Element {
   const tellHref = `/tell?text=${encodeURIComponent(`${contents.name} `)}`;
   const now = Date.now();
+  const titles = useNoteTitles(contents.notes);
 
   return (
     <section class="folder-view">
@@ -192,7 +195,7 @@ function FolderBody({
                 <a class="folder-row" href={`/note/${note.id}`}>
                   <IconNote />
                   <span class="folder-row-name">
-                    {note.name.replace(/\.md$/i, '')}
+                    {titles.get(note.id) ?? noteTitle(note)}
                   </span>
                   {note.modifiedTime !== undefined && (
                     <span class="folder-row-meta">

@@ -9,6 +9,7 @@ import {
   quotaMessage,
   reduce,
   resultMessage,
+  runKey,
 } from '../src/run-store.js';
 import type { RunState } from '../src/run-store.js';
 import type { Run } from '../src/api.js';
@@ -128,27 +129,57 @@ describe('pendingCount', () => {
   });
 });
 
+describe('runKey', () => {
+  it("uses the runner's id when there is one, else the request time", () => {
+    expect(runKey({ state: 'queued', requestedAt: 'T1', runId: 'run-1' })).toBe(
+      'run-1',
+    );
+    expect(runKey({ state: 'queued', requestedAt: 'T1' })).toBe('T1');
+  });
+});
+
 describe('reduce', () => {
-  const idle: RunState = { phase: 'idle', run: null };
+  const closed = { sheetOpen: false, sheetRunId: null };
+  const idle: RunState = { phase: 'idle', run: null, ...closed };
   const queuedRun: Run = {
     state: 'queued',
     requestedAt: '2026-01-01T00:00:00.000Z',
   };
+  const runningRun: Run = { ...queuedRun, state: 'running' };
+  const doneRun: Run = {
+    ...queuedRun,
+    state: 'done',
+    processed: ['a.md', 'b.md'],
+  };
+  const openFor = { sheetOpen: true, sheetRunId: queuedRun.requestedAt };
 
-  it('process-started moves to queued (or running) with the new run', () => {
+  it('process-started moves to queued (or running) and opens the sheet', () => {
     expect(reduce(idle, { type: 'process-started', run: queuedRun })).toEqual({
       phase: 'queued',
       run: queuedRun,
+      ...openFor,
     });
-    const runningRun: Run = { ...queuedRun, state: 'running' };
     expect(reduce(idle, { type: 'process-started', run: runningRun })).toEqual({
       phase: 'running',
       run: runningRun,
+      ...openFor,
     });
   });
 
+  it('process-started for the run already in flight keeps a closed sheet closed', () => {
+    const state: RunState = {
+      phase: 'running',
+      run: runningRun,
+      sheetOpen: false,
+      sheetRunId: queuedRun.requestedAt,
+    };
+    expect(
+      reduce(state, { type: 'process-started', run: runningRun }).sheetOpen,
+    ).toBe(false);
+  });
+
   it('process-quota sets the message and retryAfter, keeping the prior run', () => {
-    const state: RunState = { phase: 'queued', run: queuedRun };
+    const state: RunState = { phase: 'queued', run: queuedRun, ...openFor };
     expect(
       reduce(state, {
         type: 'process-quota',
@@ -160,13 +191,19 @@ describe('reduce', () => {
       run: queuedRun,
       message: 'Daily limit reached. Bower can run again in 1 min.',
       retryAfter: 60,
+      ...openFor,
     });
   });
 
   it('process-failed sets a short message, keeping the prior run', () => {
     expect(
       reduce(idle, { type: 'process-failed', message: 'Could not start.' }),
-    ).toEqual({ phase: 'failed', run: null, message: 'Could not start.' });
+    ).toEqual({
+      phase: 'failed',
+      run: null,
+      message: 'Could not start.',
+      ...closed,
+    });
   });
 
   it('status with stale:true moves to stale regardless of the run state', () => {
@@ -181,24 +218,83 @@ describe('reduce', () => {
       phase: 'stale',
       run: failedRun,
       message: 'Bower did not answer; try again',
+      ...closed,
     });
   });
 
-  it('status with no run goes idle', () => {
+  it('status with no run goes idle and closes the sheet', () => {
     expect(reduce(idle, { type: 'status', run: null, stale: false })).toEqual(
       idle,
     );
+    const state: RunState = { phase: 'running', run: runningRun, ...openFor };
+    expect(reduce(state, { type: 'status', run: null, stale: false })).toEqual({
+      ...idle,
+      sheetRunId: openFor.sheetRunId,
+    });
   });
 
-  it('status with a done run sets the processed-files message', () => {
-    const doneRun: Run = {
-      state: 'done',
-      requestedAt: '2026-01-01T00:00:00.000Z',
-      processed: ['a.md', 'b.md'],
+  it('status with a queued/running run opens the sheet the first time only', () => {
+    const first = reduce(idle, {
+      type: 'status',
+      run: queuedRun,
+      stale: false,
+    });
+    expect(first).toEqual({
+      phase: 'queued',
+      run: queuedRun,
+      message: undefined,
+      ...openFor,
+    });
+
+    const dismissed = reduce(first, { type: 'sheet-dismissed' });
+    expect(dismissed.sheetOpen).toBe(false);
+    const again = reduce(dismissed, {
+      type: 'status',
+      run: runningRun,
+      stale: false,
+    });
+    expect(again.phase).toBe('running');
+    expect(again.sheetOpen).toBe(false);
+  });
+
+  it('status with a new run opens the sheet again', () => {
+    const state: RunState = {
+      phase: 'idle',
+      run: doneRun,
+      sheetOpen: false,
+      sheetRunId: queuedRun.requestedAt,
     };
+    const next: Run = { ...queuedRun, requestedAt: '2026-01-02T00:00:00.000Z' };
+    expect(reduce(state, { type: 'status', run: next, stale: false })).toEqual({
+      phase: 'queued',
+      run: next,
+      message: undefined,
+      sheetOpen: true,
+      sheetRunId: next.requestedAt,
+    });
+  });
+
+  it('status with a done run after running sets the processed-files message', () => {
+    const state: RunState = { phase: 'running', run: runningRun, ...openFor };
+    expect(
+      reduce(state, { type: 'status', run: doneRun, stale: false }),
+    ).toEqual({
+      phase: 'done',
+      run: doneRun,
+      message: '2 files processed',
+      ...openFor,
+    });
+  });
+
+  it('status with a run already done when first heard of goes straight to idle', () => {
     expect(
       reduce(idle, { type: 'status', run: doneRun, stale: false }),
-    ).toEqual({ phase: 'done', run: doneRun, message: '2 files processed' });
+    ).toEqual({
+      phase: 'idle',
+      run: doneRun,
+      message: '2 files processed',
+      ...closed,
+    });
   });
 
   it('status with a failed run uses run.error, falling back to a generic message', () => {
@@ -213,6 +309,7 @@ describe('reduce', () => {
       phase: 'failed',
       run: withError,
       message: 'The runner could not reach Drive.',
+      ...closed,
     });
 
     const withoutError: Run = {
@@ -225,40 +322,92 @@ describe('reduce', () => {
       phase: 'failed',
       run: withoutError,
       message: 'Something went wrong',
+      ...closed,
     });
   });
 
-  it('status with a queued/running run just tracks it, no message', () => {
-    expect(
-      reduce(idle, { type: 'status', run: queuedRun, stale: false }),
-    ).toEqual({ phase: 'queued', run: queuedRun, message: undefined });
-  });
-
   it('poll-timeout moves to stale, keeping the prior run', () => {
-    const state: RunState = { phase: 'running', run: queuedRun };
+    const state: RunState = { phase: 'running', run: queuedRun, ...openFor };
     expect(reduce(state, { type: 'poll-timeout' })).toEqual({
       phase: 'stale',
       run: queuedRun,
       message: 'Bower did not answer; try again',
+      ...openFor,
     });
   });
 
-  it('done-timeout moves done to idle, keeping the message', () => {
+  it('done-timeout moves done to idle and closes the sheet, keeping the message', () => {
     const state: RunState = {
       phase: 'done',
-      run: queuedRun,
-      message: '1 file processed',
+      run: doneRun,
+      message: '2 files processed',
+      ...openFor,
     };
     expect(reduce(state, { type: 'done-timeout' })).toEqual({
       phase: 'idle',
-      run: queuedRun,
-      message: '1 file processed',
+      run: doneRun,
+      message: '2 files processed',
+      sheetOpen: false,
+      sheetRunId: openFor.sheetRunId,
     });
   });
 
   it('done-timeout is a no-op outside the done phase', () => {
-    const state: RunState = { phase: 'running', run: queuedRun };
+    const state: RunState = { phase: 'running', run: queuedRun, ...openFor };
     expect(reduce(state, { type: 'done-timeout' })).toBe(state);
+  });
+
+  it('sheet-dismissed during done goes back to idle at once', () => {
+    const state: RunState = {
+      phase: 'done',
+      run: doneRun,
+      message: '2 files processed',
+      ...openFor,
+    };
+    expect(reduce(state, { type: 'sheet-dismissed' })).toEqual({
+      phase: 'idle',
+      run: doneRun,
+      message: '2 files processed',
+      sheetOpen: false,
+      sheetRunId: openFor.sheetRunId,
+    });
+  });
+
+  it('sheet-dismissed during a run only closes the sheet', () => {
+    const state: RunState = { phase: 'running', run: runningRun, ...openFor };
+    expect(reduce(state, { type: 'sheet-dismissed' })).toEqual({
+      ...state,
+      sheetOpen: false,
+    });
+  });
+
+  it('sheet-opened opens the sheet without touching the run', () => {
+    const state: RunState = {
+      phase: 'running',
+      run: runningRun,
+      sheetOpen: false,
+      sheetRunId: openFor.sheetRunId,
+    };
+    expect(reduce(state, { type: 'sheet-opened' })).toEqual({
+      ...state,
+      sheetOpen: true,
+    });
+  });
+
+  it('a whole run: the sheet opens once, done ends in idle', () => {
+    let state = reduce(idle, { type: 'process-started', run: queuedRun });
+    expect(state.sheetOpen).toBe(true);
+    state = reduce(state, { type: 'sheet-dismissed' });
+    for (const run of [queuedRun, runningRun, runningRun]) {
+      state = reduce(state, { type: 'status', run, stale: false });
+      expect(state.sheetOpen).toBe(false);
+    }
+    state = reduce(state, { type: 'status', run: doneRun, stale: false });
+    expect(state.phase).toBe('done');
+    expect(state.sheetOpen).toBe(false);
+    state = reduce(state, { type: 'done-timeout' });
+    expect(state.phase).toBe('idle');
+    expect(state.message).toBe('2 files processed');
   });
 
   it('reset always goes back to a clean idle state', () => {
@@ -267,6 +416,7 @@ describe('reduce', () => {
       run: queuedRun,
       message: 'Daily limit reached.',
       retryAfter: 60,
+      ...openFor,
     };
     expect(reduce(state, { type: 'reset' })).toEqual(idle);
   });

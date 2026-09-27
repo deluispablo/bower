@@ -27,7 +27,6 @@ import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
 import { findReport, isReportNew } from '../health-report.js';
-import { usePinToastState } from '../pin-toast.js';
 import { getPref } from '../prefs.js';
 import { useSession } from '../session.js';
 import { effectiveTheme, setTheme } from '../theme.js';
@@ -115,12 +114,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const { crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const headRef = useRef<HTMLDivElement>(null);
-  // The shared "Pinned to Home" / "Unpinned" toast (issue #216): mounted
-  // once here so every pin entry point — the note menu, a drawer row's held
-  // sheet, a tree row's hover pin and its right-click menu, the Folder
-  // screen's chip — can show it without owning one of its own.
-  const pinToast = usePinToastState();
-
   // The quick switcher's own top offset (spec §14, `switcher.css`'s
   // `--switcher-top`): the live bottom edge of the header *and* whichever
   // banners are showing under it, so opening the switcher never covers the
@@ -258,7 +251,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         <ExplorerDrawer healthIsNew={healthIsNew} onClose={closeDrawer} />
       )}
       <Switcher />
-      <Toast message={pinToast.message} messageKey={pinToast.key} />
+      {/* The one toast (`toast-store.ts`): a pin, a finished run. */}
+      <Toast />
     </div>
   );
 }
