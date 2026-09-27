@@ -431,3 +431,34 @@ test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
   await expect(bar.locator('.topbar-title')).toHaveText('Lisbon Trip');
   await shot(page, testInfo, 'bar-note');
 });
+
+test('The bar and the bottom nav align with the content column at 768 (#311)', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await openHome(page);
+
+  // Same centred, 640 px box: the bar, the content column and the bottom
+  // nav all share the same left edge and width instead of the bar sitting
+  // at a fixed 24 px, the content starting at 64 px and the nav spanning
+  // the full viewport.
+  const topbar = page.locator('.topbar');
+  const content = page.locator('.content').first();
+  const bottomNav = page.locator('.bottom-nav');
+
+  const [topbarBox, contentBox, navBox] = await Promise.all([
+    topbar.boundingBox(),
+    content.boundingBox(),
+    bottomNav.boundingBox(),
+  ]);
+
+  expect(topbarBox).not.toBeNull();
+  expect(contentBox).not.toBeNull();
+  expect(navBox).not.toBeNull();
+  expect(topbarBox?.x).toBeCloseTo(contentBox?.x ?? NaN, 0);
+  expect(topbarBox?.width).toBeCloseTo(contentBox?.width ?? NaN, 0);
+  expect(navBox?.x).toBeCloseTo(contentBox?.x ?? NaN, 0);
+  expect(navBox?.width).toBeCloseTo(contentBox?.width ?? NaN, 0);
+
+  await shot(page, testInfo, 'tablet-768');
+});
