@@ -1,0 +1,2 @@
+Nothing unusual here - this is a short, ordinary note. The entire
+attack in this fixture is its file name.
