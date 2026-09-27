@@ -29,6 +29,8 @@ A process's initial environment stays readable in `/proc/<pid>/environ` for its 
 
 Without the file (a local run, or an instance repo whose workflows predate this), `run.sh` takes the same names from its environment and logs `warning: no runner settings file, BOWER_* settings come from the environment`: the run works, but the runner key then sits in its shell's `/proc` entry for the whole run. Rerun `scripts/deploy.sh` to copy the current workflows into the instance repo.
 
+Either way, `run.sh` un-exports these names before anything else, so a value never reaches the environment of a process it starts (curl, rclone, jq), even when the name also arrived in its environment, empty or not, next to the file. A value in the file wins over the same name in the environment.
+
 ### Environment
 
 | Name | Required | Notes |
