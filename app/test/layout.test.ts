@@ -11,6 +11,7 @@ import {
 } from '../src/components/shell-slots.js';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
+import { usesShell } from '../src/shell-routes.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 const location = { path: '/', route: vi.fn() };
@@ -147,6 +148,19 @@ describe('Layout', () => {
     expect(pills[0]?.textContent).toBe('Tidy up (1)');
   });
 
+  it('renders the pill after the title, menu button first (spec §14)', () => {
+    mount();
+    const bar = query('.topbar');
+    const order = Array.from(bar.children).map((el) => el.className);
+    const menuIndex = order.findIndex((c) => c.includes('menu-button'));
+    const titleIndex = order.findIndex((c) => c.includes('topbar-brand'));
+    const pillIndex = order.findIndex((c) => c.includes('topbar-pill'));
+    expect(menuIndex).toBe(0);
+    expect(titleIndex).toBeGreaterThan(menuIndex);
+    expect(pillIndex).toBeGreaterThan(titleIndex);
+    expect(pillIndex).toBe(order.length - 1);
+  });
+
   it('shows the explorer as a desktop landmark, not a dialog', () => {
     mount();
     const sidebar = query('nav[aria-label="Your notes"]');
@@ -227,5 +241,25 @@ describe('Layout', () => {
 
     const slot = query('[data-slot="actions"]');
     expect(slot.querySelector('button')?.textContent).toBe('Open in Drive');
+  });
+});
+
+describe('usesShell', () => {
+  it('is false for sign-in, Not invited, Privacy, Terms and onboarding', () => {
+    for (const path of [
+      '/login',
+      '/not-invited',
+      '/privacy',
+      '/terms',
+      '/onboarding',
+    ]) {
+      expect(usesShell(path)).toBe(false);
+    }
+  });
+
+  it('is true for every other route, so those keep the bottom nav', () => {
+    for (const path of ['/', '/add', '/tell', '/settings', '/note/id-1']) {
+      expect(usesShell(path)).toBe(true);
+    }
   });
 });
