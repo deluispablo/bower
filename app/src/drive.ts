@@ -417,6 +417,7 @@ interface Metadata {
   name: string;
   parents: string[];
   mimeType?: string;
+  appProperties?: Record<string, string>;
 }
 
 function metadataFor(parentId: string, name: string, type: string): Metadata {
@@ -523,14 +524,35 @@ export async function upload(
   );
 }
 
+/**
+ * The Drive file property the app sets on an instruction note it writes
+ * (Tell Bower). Drive keeps `appProperties` private to this app's OAuth
+ * client, so a file uploaded through Add, clipped, or dropped into the
+ * folder by hand never carries it; the runner lists the inbox files that
+ * do and quarantines every other `Bower - *.md` before the agent starts
+ * (#255, `agent/run.sh`).
+ */
+export const INSTRUCTION_APP_PROPERTIES: Readonly<Record<string, string>> =
+  Object.freeze({ bower: 'instruction' });
+
+export interface CreateTextFileOptions {
+  /** Set on the new file (`files.create`) only when given. */
+  appProperties?: Readonly<Record<string, string>>;
+}
+
 /** Creates a Markdown file named `name` in `parentId`. */
 export function createTextFile(
   parentId: string,
   name: string,
   content: string,
+  options: CreateTextFileOptions = {},
 ): Promise<DriveFile> {
+  const metadata = metadataFor(parentId, name, 'text/markdown');
+  if (options.appProperties !== undefined) {
+    metadata.appProperties = { ...options.appProperties };
+  }
   return uploadMultipart(
-    metadataFor(parentId, name, 'text/markdown'),
+    metadata,
     new Blob([content], { type: 'text/markdown' }),
   );
 }
@@ -540,7 +562,8 @@ export function createTextFile(
  * (`files.copy`), unconditionally: the original keeps its id, its parent
  * and its content. Used directly for a plain copy; a Google Doc, Sheet or
  * Slides pick goes through `copyOrExportIntoInbox` instead, which exports
- * it first (#218).
+ * it first (#218). Never an instruction note: the copy's `bower` app
+ * property is cleared (#255).
  */
 export async function copyIntoInbox(
   id: string,
@@ -552,7 +575,14 @@ export async function copyIntoInbox(
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, parents: [inboxId] }),
+      // Drive carries a file's appProperties over to its copy; clearing
+      // `bower` keeps a picked file (an old instruction note, or one shared
+      // by another Bower user) from arriving as an instruction (#255).
+      body: JSON.stringify({
+        name,
+        parents: [inboxId],
+        appProperties: { bower: null },
+      }),
     },
   );
   return parseFile(await readJson(response), name);

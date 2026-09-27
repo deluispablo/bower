@@ -6,9 +6,11 @@
 # Fetches the vault's folder id and a 1 h Drive token from the API, syncs the
 # vault down with rclone (configured only through environment variables),
 # converts pending Office, HTML and EPUB files to Markdown with pandoc (for
-# an ingest), pre-scans the pending text files for injection patterns and
-# quarantines what is flagged (agent/scan.sh, see "pre-scan" below) before
-# Claude ever reads them, runs Claude Code inside it following the vault's
+# an ingest), asks Drive which inbox files the app itself wrote as
+# instruction notes (see "instruction origin" below), pre-scans the pending
+# text files for injection patterns and quarantines what is flagged, together
+# with every instruction-shaped note the app did not write (agent/scan.sh,
+# see "pre-scan" below) before Claude ever reads them, runs Claude Code inside it following the vault's
 # own CLAUDE.md under the permission policy in claude-settings.json (next to
 # this script), audits what the agent changed (see "post-run audit" below), copies back up
 # only the accepted files the agent added or changed (so a note edited in the
@@ -121,12 +123,20 @@ readonly CHANGED_FILE="$WORK_DIR/changed.txt"
 readonly REFUSED_FILE="$WORK_DIR/refused.txt"
 readonly FLAGGED_FILE="$WORK_DIR/flagged.txt"
 readonly QUARANTINED_FILE="$WORK_DIR/quarantined.txt"
+# The instruction-origin step's files: in the work dir, never in the vault,
+# so the model never sees them.
+readonly CANDIDATES_FILE="$WORK_DIR/instruction-candidates.txt"
+readonly DRIVE_LIST_JSON="$WORK_DIR/instruction-listing.json"
+readonly INSTRUCTIONS_FILE="$WORK_DIR/instruction-notes.txt"
+readonly UNLISTED_FILE="$WORK_DIR/instruction-unlisted.txt"
 readonly SAVED_KEYS="$WORK_DIR/saved-keys.txt"
 readonly PRE_RUN_DIR="$WORK_DIR/pre-run"
 readonly AGENT_OUT="$WORK_DIR/agent.out"
 readonly AGENT_ERR="$LOG_DIR/agent.err"
 readonly RCLONE_LOG="$LOG_DIR/rclone.log"
 readonly PANDOC_LOG="$LOG_DIR/pandoc.log"
+readonly DRIVE_LOG="$LOG_DIR/drive.log"
+readonly DRIVE_FILES_URL='https://www.googleapis.com/drive/v3/files'
 mkdir -p "$VAULT_DIR" "$LOG_DIR"
 
 STEP='start'   # the step in progress, named in any failure report
@@ -298,6 +308,29 @@ fail() {
 # Read one string field of the vault info; empty when absent or null.
 field() { jq -r --arg k "$1" '.[$k] // empty' "$VAULT_JSON"; }
 
+# One Drive files.list call, made from this shell with the Drive token (the
+# agent never has it): writes to INSTRUCTIONS_FILE the name of every file
+# directly in the inbox folder that carries the app property the app sets on
+# an instruction note it writes (bower=instruction, app/src/drive.ts). Drive
+# keeps appProperties private to the OAuth client that set them, the one this
+# token belongs to, so nothing uploaded, clipped or dropped into the folder
+# by hand carries it. One page of up to 1000 names: a note past it is
+# unlisted, so quarantined, never trusted. Returns non-zero, having listed
+# nothing, when the inbox id is missing or malformed, the call fails or the
+# answer cannot be read. curl's own messages go to a private log file.
+list_instruction_notes() {
+  : >"$INSTRUCTIONS_FILE"
+  case "$INBOX_ID" in
+    '' | *[!A-Za-z0-9_-]*) return 1 ;;
+  esac
+  local q="'$INBOX_ID' in parents and appProperties has { key='bower' and value='instruction' } and trashed=false"
+  curl -fsS --get -o "$DRIVE_LIST_JSON"     -H "Authorization: Bearer $ACCESS_TOKEN"     --data-urlencode "q=$q"     --data-urlencode 'fields=files(name)'     --data-urlencode 'pageSize=1000'     "$DRIVE_FILES_URL" </dev/null 2>>"$DRIVE_LOG" || return 1
+  if ! jq -r '.files[].name' "$DRIVE_LIST_JSON" >"$INSTRUCTIONS_FILE" 2>>"$DRIVE_LOG"; then
+    : >"$INSTRUCTIONS_FILE"
+    return 1
+  fi
+}
+
 # --- fetch vault info -------------------------------------------------------
 STEP='fetch vault info'
 log "$STEP"
@@ -312,6 +345,7 @@ case "$http_code" in
 esac
 
 FOLDER_ID=$(field folderId)
+INBOX_ID=$(field inboxFolderId)
 ACCESS_TOKEN=$(field driveAccessToken)
 EXPIRES_AT=$(field expiresAt)
 API_MAX_TURNS=$(field maxTurns)
@@ -468,6 +502,41 @@ if [ "$MODE" = ingest ]; then
   fi
 fi
 
+# --- instruction origin -----------------------------------------------------
+# An instruction note's name and frontmatter are not proof of origin: a file
+# uploaded through Add, clipped or dropped into the folder can copy both
+# (red-team fixture 05). So, while this shell still holds the Drive token and
+# before Claude starts, every `Bower - *.md` directly in 0-Inbox/ (any letter
+# case) is checked against Drive's own record of which files the app wrote
+# as instruction notes (list_instruction_notes above); each one not listed
+# joins the pre-scan's flagged list below and is quarantined like any other
+# flagged file. If the listing fails, nothing is listed and every one of
+# them is quarantined: the check fails closed. No Drive call when there is
+# no such file. The log carries counts, never a name.
+STEP='instruction origin'
+: >"$UNLISTED_FILE"
+(
+  cd "$VAULT_DIR"
+  if [ -d 0-Inbox ]; then
+    find 0-Inbox -mindepth 1 -maxdepth 1 -type f -iname 'Bower - *.md' | LC_ALL=C sort
+  fi
+) >"$CANDIDATES_FILE"
+candidate_count=$(grep -c . "$CANDIDATES_FILE" || true)
+if [ "$candidate_count" -gt 0 ]; then
+  if list_instruction_notes; then
+    while IFS= read -r path <&3; do
+      [ -n "$path" ] || continue
+      grep -Fxq -- "${path#0-Inbox/}" "$INSTRUCTIONS_FILE" ||
+        printf '%s
+' "$path" >>"$UNLISTED_FILE"
+    done 3<"$CANDIDATES_FILE"
+  else
+    log "$STEP: listing failed, none trusted"
+    cp "$CANDIDATES_FILE" "$UNLISTED_FILE"
+  fi
+  log "$STEP: $(grep -c . "$UNLISTED_FILE" || true) of $candidate_count not written by the app"
+fi
+
 # --- pre-scan ----------------------------------------------------------
 # Everything pending is untrusted text, so before Claude reads any of it,
 # agent/scan.sh (best-effort, grep/awk, no network) looks over 0-Inbox/
@@ -477,8 +546,10 @@ fi
 # file is moved to 0-Inbox/Quarantine/ (created here if missing, its
 # path under 0-Inbox/ or Clippings/ kept underneath so two files sharing
 # a name never collide) so Claude never sees it, and is dropped from the
-# pending list before `processed` is built. Reported as `quarantined`,
-# names only; the log carries the count, never a name.
+# pending list before `processed` is built. The instruction-shaped notes
+# the app did not write (see "instruction origin" above) are flagged too.
+# Reported as `quarantined`, names only; the log carries the count, never a
+# name.
 STEP='pre-scan'
 (
   cd "$VAULT_DIR"
@@ -487,7 +558,8 @@ STEP='pre-scan'
     [ -d "$d" ] && dirs+=("$d")
   done
   [ "${#dirs[@]}" -eq 0 ] || bash "$AGENT_DIR/scan.sh" "${dirs[@]}"
-) >"$FLAGGED_FILE" 2>>"$AGENT_ERR" || true
+) >"$WORK_DIR/scanned.txt" 2>>"$AGENT_ERR" || true
+LC_ALL=C sort -u "$WORK_DIR/scanned.txt" "$UNLISTED_FILE" | grep -v '^$' >"$FLAGGED_FILE" || true
 flagged_count=$(grep -c . "$FLAGGED_FILE" || true)
 : >"$QUARANTINED_FILE"
 if [ "$flagged_count" -gt 0 ]; then
@@ -529,8 +601,8 @@ fi
 #                      the model credential (never both, see above)
 # Checked against `claude --help` and the strings in the installed binary:
 # nothing else is documented or discoverable as required for a
-# non-interactive `-p` run. RCLONE_CONFIG_*, BOWER_*, FOLDER_ID and
-# ACCESS_TOKEN are deliberately left out.
+# non-interactive `-p` run. RCLONE_CONFIG_*, BOWER_*, FOLDER_ID, INBOX_ID
+# and ACCESS_TOKEN are deliberately left out.
 readonly CLAUDE_ENV_ALLOWLIST=(
   HOME PATH LANG LC_ALL TMPDIR TERM CI GITHUB_ACTIONS
   ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN
