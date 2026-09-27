@@ -3,11 +3,27 @@
  * in the page: `<img data-bower-file>` gets an object URL of the image, and
  * `[data-bower-embed]` is replaced by the other note's body. Data comes from
  * injected loaders, so this has no Drive or cache dependency of its own.
+ *
+ * Caps (#188): transcluded notes nest at most `MAX_TRANSCLUSION_DEPTH`
+ * deep, at most `MAX_TRANSCLUSIONS` per note in all, never a note inside
+ * itself, and never one longer than `MAX_TRANSCLUDED_CHARS`; past a cap
+ * the placeholder keeps its plain link. Images over `MAX_IMAGE_BYTES` are
+ * not loaded (a link to Drive instead), and an object URL is only ever
+ * created with an image MIME type.
  */
 
 import type { DriveFile } from '../drive.js';
 import type { VaultIndex } from '../vault-index.js';
-import { driveViewUrl, embedKind } from './embeds.js';
+import { driveViewUrl, embedKind, imageMimeType } from './embeds.js';
+
+/** How deep transcluded notes nest: the host's embeds are depth 1. */
+export const MAX_TRANSCLUSION_DEPTH = 3;
+/** Transcluded notes per host note, all depths together. */
+export const MAX_TRANSCLUSIONS = 20;
+/** Longest note text, in characters, that is transcluded. */
+export const MAX_TRANSCLUDED_CHARS = 200_000;
+/** Largest image, in bytes, that is loaded inline. */
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export interface EmbedLoaders {
   index: VaultIndex;
@@ -16,10 +32,15 @@ export interface EmbedLoaders {
   /** The Markdown text of a note. */
   loadNoteText: (id: string) => Promise<string>;
   /**
-   * Sanitized HTML of a transcluded note's body. Must not transclude again
-   * (`renderNote(..., { transclude: false })`).
+   * Sanitized HTML of a transcluded note's body. `transclude` says whether
+   * its own embedded notes may become placeholders again
+   * (`renderNote(..., { transclude })`); it is `false` at the depth cap.
    */
-  renderEmbeddedNote: (text: string, file: DriveFile) => string;
+  renderEmbeddedNote: (
+    text: string,
+    file: DriveFile,
+    transclude: boolean,
+  ) => string;
   /** Defaults to `URL.createObjectURL`; injectable for tests. */
   createObjectUrl?: (blob: Blob) => string;
   /** Defaults to `URL.revokeObjectURL`; injectable for tests. */
@@ -42,16 +63,27 @@ export function hydrateEmbeds(
   const urls = new Map<string, Promise<string>>();
   const created: string[] = [];
   let cancelled = false;
+  let transclusions = 0;
 
   function imageUrl(file: DriveFile): Promise<string> {
     let url = urls.get(file.id);
     if (url === undefined) {
-      url = loaders.loadImage(file).then((blob) => {
-        if (cancelled) throw new CancelledError();
-        const objectUrl = createUrl(blob);
-        created.push(objectUrl);
-        return objectUrl;
-      });
+      url =
+        file.size !== undefined && file.size > MAX_IMAGE_BYTES
+          ? Promise.reject(new ImageTooLargeError())
+          : loaders.loadImage(file).then((blob) => {
+              if (cancelled) throw new CancelledError();
+              if (blob.size > MAX_IMAGE_BYTES) throw new ImageTooLargeError();
+              const type = imageMimeType(file, blob.type);
+              if (type === undefined) {
+                throw new Error('Embedded file is not an image type');
+              }
+              const typed =
+                blob.type === type ? blob : new Blob([blob], { type });
+              const objectUrl = createUrl(typed);
+              created.push(objectUrl);
+              return objectUrl;
+            });
       urls.set(file.id, url);
     }
     return url;
@@ -69,28 +101,48 @@ export function hydrateEmbeds(
         })
         .catch((err: unknown) => {
           if (cancelled || err instanceof CancelledError) return;
-          console.error(err);
+          // Too large is a limit, not a failure: nothing to report.
+          if (!(err instanceof ImageTooLargeError)) console.error(err);
           img.replaceWith(failedImageLink(file, img.alt));
         });
     }
   }
 
-  function hydrateTransclusions(): void {
-    for (const placeholder of root.querySelectorAll<HTMLElement>(
+  /**
+   * Transcludes the placeholders under `scope`, which sit `depth` levels
+   * down; `chain` holds the ids of the notes already open around them.
+   */
+  function hydrateTransclusions(
+    scope: HTMLElement,
+    depth: number,
+    chain: ReadonlySet<string>,
+  ): void {
+    for (const placeholder of scope.querySelectorAll<HTMLElement>(
       '[data-bower-embed]',
     )) {
       const file = loaders.index.byId.get(placeholder.dataset.bowerEmbed ?? '');
       if (file === undefined || embedKind(file) !== 'note') continue;
+      // A loop (a note inside itself) or one embed too many: keep the link.
+      if (chain.has(file.id) || transclusions >= MAX_TRANSCLUSIONS) continue;
+      transclusions += 1;
       loaders
         .loadNoteText(file.id)
         .then((text) => {
-          if (cancelled) return;
+          if (cancelled || text.length > MAX_TRANSCLUDED_CHARS) return;
+          const nested = depth < MAX_TRANSCLUSION_DEPTH;
           const section = transclusionSection(
             placeholder,
-            loaders.renderEmbeddedNote(text, file),
+            loaders.renderEmbeddedNote(text, file, nested),
           );
           placeholder.replaceWith(section);
           hydrateImages(section);
+          if (nested) {
+            hydrateTransclusions(
+              section,
+              depth + 1,
+              new Set([...chain, file.id]),
+            );
+          }
         })
         .catch((err: unknown) => {
           // The placeholder already shows a link to the note: keep it.
@@ -99,7 +151,7 @@ export function hydrateEmbeds(
     }
   }
 
-  hydrateTransclusions();
+  hydrateTransclusions(root, 1, new Set());
   hydrateImages(root);
 
   return () => {
@@ -110,6 +162,9 @@ export function hydrateEmbeds(
 }
 
 class CancelledError extends Error {}
+
+/** An image over `MAX_IMAGE_BYTES`: shown as a link to Drive instead. */
+class ImageTooLargeError extends Error {}
 
 /** A link to open an image in Drive, shown when it could not be loaded. */
 function failedImageLink(file: DriveFile, alt: string): HTMLAnchorElement {

@@ -155,7 +155,10 @@ export function wikilinkText(link: Wikilink): string {
 export interface EmbedOptions {
   /** Emit image and transclusion placeholders instead of plain links. */
   placeholders?: boolean;
-  /** Allow note transclusion; `false` inside a transcluded note (no recursion). */
+  /**
+   * Allow note transclusion; `false` inside a transcluded note at the depth
+   * cap (`MAX_TRANSCLUSION_DEPTH` in `hydrate-embeds.ts`).
+   */
   transclude?: boolean;
   /** Path of the note being rendered; it is never transcluded into itself. */
   notePath?: string;

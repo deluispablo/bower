@@ -12,10 +12,19 @@ import { escapeHtml } from './html.js';
 /** A note (shown in the app), an image (shown inline) or any other file. */
 export type EmbedKind = 'note' | 'image' | 'file';
 
-/** Image formats every current browser can show in an `<img>`. */
-const IMAGE_EXTENSIONS = new Set([
-  'apng', 'avif', 'bmp', 'gif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'webp',
-]); // prettier-ignore
+/** Image formats every current browser can show in an `<img>`, by extension. */
+const IMAGE_TYPE_BY_EXTENSION: ReadonlyMap<string, string> = new Map([
+  ['apng', 'image/apng'],
+  ['avif', 'image/avif'],
+  ['bmp', 'image/bmp'],
+  ['gif', 'image/gif'],
+  ['ico', 'image/x-icon'],
+  ['jpeg', 'image/jpeg'],
+  ['jpg', 'image/jpeg'],
+  ['png', 'image/png'],
+  ['svg', 'image/svg+xml'],
+  ['webp', 'image/webp'],
+]);
 
 const IMAGE_MIME_TYPES = new Set([
   'image/apng', 'image/avif', 'image/bmp', 'image/gif', 'image/jpeg',
@@ -33,9 +42,27 @@ export function extensionOf(name: string): string {
 export function embedKind(file: DriveFile): EmbedKind {
   const extension = extensionOf(file.name);
   if (extension === 'md') return 'note';
-  if (IMAGE_EXTENSIONS.has(extension)) return 'image';
+  if (IMAGE_TYPE_BY_EXTENSION.has(extension)) return 'image';
   if (IMAGE_MIME_TYPES.has(file.mimeType.toLowerCase())) return 'image';
   return 'file';
+}
+
+/**
+ * The image MIME type an embedded image's object URL is created with: the
+ * bytes' own type or Drive's, when either is an image type a browser shows,
+ * else the one its extension implies. `undefined` when none is: the bytes
+ * must never become a `blob:` URL of another type (an HTML page named
+ * `photo.png` would otherwise run as a page of the app if opened on its own).
+ */
+export function imageMimeType(
+  file: DriveFile,
+  blobType = '',
+): string | undefined {
+  for (const candidate of [blobType, file.mimeType]) {
+    const type = (candidate.split(';')[0] ?? '').trim().toLowerCase();
+    if (IMAGE_MIME_TYPES.has(type)) return type;
+  }
+  return IMAGE_TYPE_BY_EXTENSION.get(extensionOf(file.name));
 }
 
 /** Where a file opens in Google Drive: its `webViewLink`, else the viewer URL. */

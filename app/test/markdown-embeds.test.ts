@@ -12,7 +12,13 @@ import {
   resolveRelativePath,
   transclusionPlaceholder,
 } from '../src/markdown/embeds.js';
-import { hydrateEmbeds } from '../src/markdown/hydrate-embeds.js';
+import {
+  hydrateEmbeds,
+  MAX_IMAGE_BYTES,
+  MAX_TRANSCLUDED_CHARS,
+  MAX_TRANSCLUSION_DEPTH,
+  MAX_TRANSCLUSIONS,
+} from '../src/markdown/hydrate-embeds.js';
 import type { EmbedLoaders } from '../src/markdown/hydrate-embeds.js';
 import { renderNote } from '../src/markdown/render.js';
 import { buildVaultIndex } from '../src/vault-index.js';
@@ -270,5 +276,169 @@ describe('hydrateEmbeds', () => {
     hydrateEmbeds(root, deps);
     expect(deps.loadImage).not.toHaveBeenCalled();
     expect(deps.loadNoteText).not.toHaveBeenCalled();
+  });
+
+  it('never creates an object URL of a non-image type', async () => {
+    const created: Blob[] = [];
+    const deps = loaders({
+      // An HTML page saved as `photo.png`, served back as what it is.
+      loadImage: () =>
+        Promise.resolve(
+          new Blob(['<script>x()</script>'], { type: 'text/html' }),
+        ),
+      createObjectUrl: (blob) => {
+        created.push(blob);
+        return 'blob:test/typed';
+      },
+    });
+    const root = mount('![[photo.png]]');
+    hydrateEmbeds(root, deps);
+    await vi.waitFor(() => {
+      expect(root.querySelector('img')?.getAttribute('src')).toBe(
+        'blob:test/typed',
+      );
+    });
+    expect(created.map((blob) => blob.type)).toEqual(['image/png']);
+  });
+
+  it('links to Drive instead of loading an image over the size cap', async () => {
+    const big = buildVaultIndex([
+      file('huge', 'huge.png', 'image/png', { size: MAX_IMAGE_BYTES + 1 }),
+      file('sneaky', 'sneaky.png', 'image/png'),
+    ]);
+    const root = document.createElement('div');
+    root.innerHTML = renderNote('![[huge.png]]\n\n![[sneaky.png]]', big).html;
+    const deps = loaders({
+      index: big,
+      // Drive reported no size for `sneaky`, but the bytes are too many.
+      loadImage: vi.fn(() =>
+        Promise.resolve(new Blob([new Uint8Array(MAX_IMAGE_BYTES + 1)])),
+      ),
+    });
+    hydrateEmbeds(root, deps);
+    await vi.waitFor(() => {
+      expect(root.querySelectorAll('a.embed-failed')).toHaveLength(2);
+    });
+    expect(deps.loadImage).toHaveBeenCalledTimes(1);
+    expect(deps.createObjectUrl).not.toHaveBeenCalled();
+    expect(root.querySelector('img')).toBeNull();
+    expect(root.querySelector('a.embed-failed')?.getAttribute('rel')).toBe(
+      'noopener noreferrer',
+    );
+  });
+});
+
+/**
+ * Transclusion caps (#188), with a vault that loops: Host embeds Loop A,
+ * Loop A embeds Loop B and itself, Loop B embeds Loop A back; and a chain
+ * Deep 1 → Deep 2 → ... → Deep 5.
+ */
+describe('transclusion caps', () => {
+  const notes = new Map<string, string>([
+    ['host', 'Host body.'],
+    ['a', 'A body. ![[Loop B]]\n\n![[Loop A]]'],
+    ['b', 'B body. ![[Loop A]]'],
+    ['d1', 'Deep 1 body.\n\n![[Deep 2]]'],
+    ['d2', 'Deep 2 body.\n\n![[Deep 3]]'],
+    ['d3', 'Deep 3 body.\n\n![[Deep 4]]'],
+    ['d4', 'Deep 4 body.\n\n![[Deep 5]]'],
+    ['d5', 'Deep 5 body.'],
+  ]);
+  const files = [
+    file('host', 'Host.md'),
+    file('a', 'Loop A.md'),
+    file('b', 'Loop B.md'),
+    ...[1, 2, 3, 4, 5].map((n) => file(`d${n}`, `Deep ${n}.md`)),
+    ...Array.from({ length: 25 }, (_, n) => file(`many${n}`, `Many ${n}.md`)),
+  ];
+  const index = buildVaultIndex(files);
+
+  function run(markdown: string, text = (id: string) => notes.get(id)) {
+    const root = document.createElement('div');
+    root.innerHTML = renderNote(markdown, index, { path: 'Host.md' }).html;
+    const loadNoteText = vi.fn((id: string) =>
+      Promise.resolve(text(id) ?? `${id} body.`),
+    );
+    const cleanup = hydrateEmbeds(root, {
+      index,
+      loadImage: () => Promise.reject(new Error('no images here')),
+      loadNoteText,
+      renderEmbeddedNote: (body, embedded, transclude) =>
+        renderNote(body, index, { path: embedded.path, transclude }).html,
+    });
+    return { root, loadNoteText, cleanup };
+  }
+
+  /** Nesting depth of every transclusion section, outermost first. */
+  function depths(root: HTMLElement): number[] {
+    return [...root.querySelectorAll('section.transclusion')].map((section) => {
+      let depth = 0;
+      for (let node: Element | null = section; node !== null;) {
+        if (node.matches('section.transclusion')) depth += 1;
+        node = node.parentElement;
+      }
+      return depth;
+    });
+  }
+
+  it('stops a transclusion loop at the first repeat', async () => {
+    const { root, loadNoteText } = run('![[Loop A]]');
+    await vi.waitFor(() => {
+      expect(root.querySelectorAll('section.transclusion')).toHaveLength(2);
+    });
+    // Let any stray load finish before counting.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(depths(root)).toEqual([1, 2]);
+    expect(loadNoteText.mock.calls.map(([id]) => id)).toEqual(['a', 'b']);
+    // Loop B's embed of Loop A, and Loop A's of itself, stay plain links.
+    const links = root.querySelectorAll('a.wikilink-embed[href="/note/a"]');
+    expect(links.length).toBeGreaterThanOrEqual(2);
+    expect(root.textContent).toContain('A body.');
+    expect(root.textContent).toContain('B body.');
+  });
+
+  it(`nests at most ${MAX_TRANSCLUSION_DEPTH} deep`, async () => {
+    const { root } = run('![[Deep 1]]');
+    await vi.waitFor(() => {
+      expect(root.textContent).toContain('Deep 3 body.');
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(depths(root)).toEqual([1, 2, 3]);
+    expect(root.textContent).not.toContain('Deep 4 body.');
+    expect(
+      root.querySelector('a.wikilink-embed[href="/note/d4"]'),
+    ).not.toBeNull();
+    expect(root.querySelector('[data-bower-embed]')).toBeNull();
+  });
+
+  it(`transcludes at most ${MAX_TRANSCLUSIONS} notes per note`, async () => {
+    const markdown = Array.from(
+      { length: 25 },
+      (_, n) => `![[Many ${n}]]`,
+    ).join('\n\n');
+    const { root, loadNoteText } = run(markdown);
+    await vi.waitFor(() => {
+      expect(root.querySelectorAll('section.transclusion')).toHaveLength(
+        MAX_TRANSCLUSIONS,
+      );
+    });
+    expect(loadNoteText).toHaveBeenCalledTimes(MAX_TRANSCLUSIONS);
+    // The rest keep their placeholder with a plain link.
+    const rest = root.querySelectorAll('[data-bower-embed] a.wikilink-embed');
+    expect(rest).toHaveLength(25 - MAX_TRANSCLUSIONS);
+  });
+
+  it('keeps a link to a note too long to transclude', async () => {
+    const { root, loadNoteText } = run('![[Loop B]]', () =>
+      'x'.repeat(MAX_TRANSCLUDED_CHARS + 1),
+    );
+    await vi.waitFor(() => {
+      expect(loadNoteText).toHaveBeenCalled();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(root.querySelector('section.transclusion')).toBeNull();
+    expect(
+      root.querySelector('[data-bower-embed="b"] a')?.getAttribute('href'),
+    ).toBe('/note/b');
   });
 });

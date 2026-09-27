@@ -57,9 +57,8 @@ export function NoteBody({ html }: NoteBodyProps) {
       index: currentIndex,
       loadImage,
       loadNoteText: getNoteText,
-      renderEmbeddedNote: (text, file) =>
-        renderNote(text, currentIndex, { path: file.path, transclude: false })
-          .html,
+      renderEmbeddedNote: (text, file, transclude) =>
+        renderNote(text, currentIndex, { path: file.path, transclude }).html,
     });
   }, [html, getNoteText]);
 
