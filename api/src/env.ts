@@ -40,6 +40,18 @@ export interface Env {
   DEFAULT_MAX_TURNS: string;
   TEMPLATE_FOLDER_NAME: string;
 
+  /**
+   * Optional transition flag (issue #259): `1` lets `GET /runner/vaults`,
+   * `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status` also
+   * accept the operator key `BOWER_API_KEY`, as they did before run
+   * tickets, so an instance repo whose workflows predate them keeps
+   * working until `scripts/new-instance.sh` updates it. Anything else, or
+   * absent (the default), accepts only run tickets on those routes. To be
+   * removed one release after #259 (docs/runbook.md, "Upgrading to run
+   * tickets").
+   */
+  RUNNER_ACCEPT_LEGACY_KEY?: string;
+
   // Pre-existing var (#6), unrelated to this issue's contract; passed
   // through as-is.
   APP_VERSION: string;
@@ -213,5 +225,8 @@ export function assertEnv(env: unknown): Env {
 
     APP_VERSION:
       typeof source.APP_VERSION === 'string' ? source.APP_VERSION : '',
+    ...(typeof source.RUNNER_ACCEPT_LEGACY_KEY === 'string'
+      ? { RUNNER_ACCEPT_LEGACY_KEY: source.RUNNER_ACCEPT_LEGACY_KEY }
+      : {}),
   };
 }

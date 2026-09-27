@@ -3,21 +3,18 @@
 # under agent/workflows/, not .github/workflows/, so CI never picks them up.
 #
 # Starts one run of agent/run.sh over one vault, in ingest mode: the Worker's
-# repository_dispatch after /process, or a manual run for troubleshooting.
+# repository_dispatch after /process. The dispatch carries the vault id and
+# that run's ticket, the only Worker credential this job gets: good for this
+# vault and this run only (issue #259). There is no manual trigger: a manual
+# run would have no ticket. To run one again, press Tidy up in the app.
 name: Ingest
 
 on:
   repository_dispatch:
     types: [ingest]
-  workflow_dispatch:
-    inputs:
-      vault_id:
-        description: Vault to process (the user id from the Worker)
-        required: true
-        type: string
 
 concurrency:
-  group: ingest-${{ github.event.client_payload.vault_id || inputs.vault_id }}
+  group: ingest-${{ github.event.client_payload.vault_id }}
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +24,7 @@ jobs:
     permissions:
       contents: read
     env:
-      VAULT_ID: ${{ github.event.client_payload.vault_id || inputs.vault_id }}
+      VAULT_ID: ${{ github.event.client_payload.vault_id }}
       # Both pinned deliberately; the cache keys below derive from these,
       # so bumping a version here invalidates the matching cache too.
       BOWER_RCLONE_VERSION: '1.75.1'
@@ -92,25 +89,29 @@ jobs:
       - name: Add Claude Code to PATH
         run: echo "$HOME/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
 
-      # The runner key and settings reach run.sh through a file, not the Run
+      # The run ticket and settings reach run.sh through a file, not the Run
       # step's environment: a process's initial environment stays readable in
       # /proc/<pid>/environ for its whole life, and the agent runs as a child
       # of run.sh's shell. printf is a shell builtin, so no value shows up in
       # a process list either. run.sh reads the file into shell variables and
       # deletes it before anything else (agent/README.md, "Runner settings").
+      # The ticket comes from the dispatch, never from a secret: this job
+      # holds no credential that works for another vault (issue #259). It is
+      # masked, so it never shows in the log.
       - name: Hand the runner settings to run.sh
         env:
           BOWER_API_URL: ${{ vars.BOWER_API_URL }}
-          BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}
+          BOWER_RUN_TICKET: ${{ github.event.client_payload.ticket }}
           # Unset by default: the agent gets no web tools (see run.sh).
           BOWER_ALLOW_WEB: ${{ vars.BOWER_ALLOW_WEB }}
           # Unset by default: run.sh falls back to the API's own maxTurns.
           BOWER_MAX_TURNS: ${{ vars.BOWER_MAX_TURNS }}
         run: |
+          echo "::add-mask::$BOWER_RUN_TICKET"
           umask 077
           {
             printf 'BOWER_API_URL=%s\n' "$BOWER_API_URL"
-            printf 'BOWER_API_KEY=%s\n' "$BOWER_API_KEY"
+            printf 'BOWER_RUN_TICKET=%s\n' "$BOWER_RUN_TICKET"
             printf 'BOWER_ALLOW_WEB=%s\n' "$BOWER_ALLOW_WEB"
             printf 'BOWER_MAX_TURNS=%s\n' "$BOWER_MAX_TURNS"
           } >"$RUNNER_TEMP/bower-secrets"

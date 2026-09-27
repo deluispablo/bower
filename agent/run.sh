@@ -22,7 +22,13 @@
 # instance workflows write it; see "runner settings" below), otherwise from
 # the environment:
 #   BOWER_API_URL            the Worker's origin, e.g. https://api.example.com
-#   BOWER_API_KEY            the runner key (Authorization: Bearer)
+#   BOWER_RUN_TICKET         this run's ticket (Authorization: Bearer): the
+#                            Worker minted it for this vault and this run
+#                            only, and sent it in the repository_dispatch
+#   BOWER_API_KEY            only without BOWER_RUN_TICKET: the operator key,
+#                            for a local run or an instance repo whose
+#                            workflows predate run tickets; the Worker takes
+#                            it only while RUNNER_ACCEPT_LEGACY_KEY=1
 #   BOWER_MAX_TURNS          optional; defaults to the API's maxTurns
 #   BOWER_ALLOW_WEB          optional; 1 lets the agent use WebSearch and
 #                            WebFetch, anything else (the default) denies them
@@ -37,7 +43,7 @@
 # Requires bash, curl, jq, rclone, pandoc and claude on PATH.
 #
 # `claude` itself runs under `env -i` with its own, smaller allow-list (see
-# the comment above the agent run step): the Drive token, the runner key and
+# the comment above the agent run step): the Drive token, the run ticket and
 # every BOWER_*/RCLONE_CONFIG_* value stay in this shell only.
 #
 # The log carries timestamps, step names and counts only: never a file name,
@@ -54,26 +60,26 @@ log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
 # --- runner settings --------------------------------------------------------
 # A process's initial environment stays readable in /proc/<pid>/environ for
 # its whole life, by anything running as the same user: the agent too, as a
-# child of this shell. So the instance workflows do not put the runner key
+# child of this shell. So the instance workflows do not put the run ticket
 # (or any BOWER_* value) in this step's environment. A step before this one
 # writes them to $RUNNER_TEMP/bower-secrets (mode 600, one NAME=value per
 # line); they are read here into plain shell variables, never exported, and
 # the file is deleted before anything else runs. Only the settings listed
 # above are taken; any other line is ignored. Without the file (a local run,
 # or an instance repo whose workflows predate it) the same names come from
-# the environment, with a warning: the runner key then sits in this shell's
+# the environment, with a warning: the credential then sits in this shell's
 # /proc entry for the whole run.
 #
 # Whichever way they come, the settings are un-exported first: a name that
 # arrived in the environment (even empty, next to the file) would otherwise
 # stay exported, and printf -v below would hand the file's value to every
 # child's environment (curl, rclone, jq; issue #276).
-export -n BOWER_API_URL BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES
+export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES
 secrets_file="${RUNNER_TEMP:-}/bower-secrets"
 if [ -n "${RUNNER_TEMP:-}" ] && [ -f "$secrets_file" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
-      BOWER_API_URL | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES)
+      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES)
         printf -v "${line%%=*}" '%s' "${line#*=}"
         ;;
     esac
@@ -121,12 +127,24 @@ case "$MODE" in
   *) usage ;;
 esac
 
-for name in BOWER_API_URL BOWER_API_KEY; do
-  if [ -z "${!name:-}" ]; then
-    log "missing setting $name"
-    exit 2
-  fi
-done
+if [ -z "${BOWER_API_URL:-}" ]; then
+  log "missing setting BOWER_API_URL"
+  exit 2
+fi
+# The one credential sent to the Worker: this run's ticket. The operator key
+# is only a fallback for a local run or an old instance repo, and works only
+# while the Worker's transition flag is on.
+if [ -n "${BOWER_RUN_TICKET:-}" ]; then
+  API_CREDENTIAL=$BOWER_RUN_TICKET
+elif [ -n "${BOWER_API_KEY:-}" ]; then
+  log 'warning: no run ticket, using the operator key (needs RUNNER_ACCEPT_LEGACY_KEY=1 on the Worker)'
+  API_CREDENTIAL=$BOWER_API_KEY
+else
+  log "missing setting BOWER_RUN_TICKET"
+  exit 2
+fi
+unset BOWER_RUN_TICKET BOWER_API_KEY
+readonly API_CREDENTIAL
 
 MAX_CHANGES=${BOWER_MAX_CHANGES:-200}
 case "$MAX_CHANGES" in
@@ -216,7 +234,7 @@ report() {
   [ -n "${QUARANTINED_JSON:-}" ] && args+=(--argjson quarantined "$QUARANTINED_JSON")
   jq -cn "${args[@]}" '$ARGS.named' |
     curl -fsS -X POST \
-      -H "Authorization: Bearer $BOWER_API_KEY" \
+      -H "Authorization: Bearer $API_CREDENTIAL" \
       -H 'Content-Type: application/json' \
       --data-binary @- -o /dev/null "$API_BASE/status"
 }
@@ -396,7 +414,7 @@ list_instruction_notes() {
 STEP='fetch vault info'
 log "$STEP"
 if ! http_code=$(curl -sS -o "$VAULT_JSON" -w '%{http_code}' \
-  -H "Authorization: Bearer $BOWER_API_KEY" "$API_BASE"); then
+  -H "Authorization: Bearer $API_CREDENTIAL" "$API_BASE"); then
   fail "$STEP: request failed"
 fi
 case "$http_code" in
@@ -681,7 +699,7 @@ fi
 
 # Claude itself runs under `env -i` with an explicit allow-list, so an
 # instruction that reaches the model despite the tool allow/deny list above
-# still finds no Drive token, no runner key and no BOWER_* value in its own
+# still finds no Drive token, no run ticket and no BOWER_* value in its own
 # process; only the shell around it (sync down, sync up, the status report)
 # keeps those. Allowed through:
 #   HOME, PATH        to run at all, including the tools in $ALLOWED_TOOLS

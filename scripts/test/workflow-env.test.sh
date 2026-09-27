@@ -2,8 +2,10 @@
 # Hermetic check that agent/workflows/ingest.yml and lint.yml pass every
 # instance-repo variable the runbook documents as going to the runner, and
 # that only the model credential goes through the Run step's environment:
-# the runner key and settings go through $RUNNER_TEMP/bower-secrets, written
-# (mode 600) by a step before it (issue #258).
+# the run ticket and settings go through $RUNNER_TEMP/bower-secrets, written
+# (mode 600) by a step before it (issue #258). The ticket comes from the
+# Worker's dispatch, and no job that runs the agent holds BOWER_API_KEY: only
+# lint.yml's `dispatch` job does (issue #259).
 # Plain grep against the tracked workflow files: no network, no GitHub.
 #
 # Prints "ok <case>" per case and exits non-zero on the first failure,
@@ -19,7 +21,7 @@ WORKFLOWS_DIR="$HERE/../../agent/workflows"
 # run.sh must appear in both workflows.
 VARS=(
   BOWER_API_URL
-  BOWER_API_KEY
+  BOWER_RUN_TICKET
   BOWER_MAX_TURNS
   BOWER_ALLOW_WEB
   CLAUDE_CODE_OAUTH_TOKEN
@@ -29,7 +31,7 @@ VARS=(
 # What run.sh reads from the settings file rather than its environment.
 FILE_VARS=(
   BOWER_API_URL
-  BOWER_API_KEY
+  BOWER_RUN_TICKET
   BOWER_MAX_TURNS
   BOWER_ALLOW_WEB
 )
@@ -37,6 +39,13 @@ FILE_VARS=(
 die() {
   echo "FAIL: $1" >&2
   exit 1
+}
+
+# job <file> <job name>: the lines of that job, up to the next job.
+job() {
+  awk -v want="  $2:" '
+    /^  [A-Za-z0-9_-]+:$/ { inside = ($0 == want) }
+    inside { print }' "$1"
 }
 
 # step <file> <step name>: the lines of that step, up to the next step.
@@ -79,6 +88,33 @@ for mode in ingest lint; do
   run_line=$(grep -n "^      - name: Run $mode\$" "$path" | cut -d: -f1)
   [ "$hand_off_line" -lt "$run_line" ] || die "$file: the settings step does not come before the Run step"
   echo "ok $file hands the runner settings over in a private file first"
+
+  printf '%s\n' "$hand_off" |
+    grep -Fq 'BOWER_RUN_TICKET: ${{ github.event.client_payload.ticket }}' ||
+    die "$file: the run ticket does not come from the dispatch"
+  printf '%s\n' "$hand_off" | grep -Fq 'echo "::add-mask::$BOWER_RUN_TICKET"' ||
+    die "$file: the run ticket is not masked"
+  echo "ok $file takes the run ticket from the dispatch, masked"
 done
+
+# No job that runs the agent holds the operator key (issue #259).
+! grep -q 'BOWER_API_KEY' "$WORKFLOWS_DIR/ingest.yml" || die 'ingest.yml: mentions BOWER_API_KEY'
+! grep -q 'workflow_dispatch' "$WORKFLOWS_DIR/ingest.yml" ||
+  die 'ingest.yml: a manual run would have no ticket'
+echo 'ok ingest.yml holds no BOWER_API_KEY'
+lint_job=$(job "$WORKFLOWS_DIR/lint.yml" lint)
+[ -n "$lint_job" ] || die "lint.yml: no 'lint' job"
+! printf '%s\n' "$lint_job" | grep -q 'BOWER_API_KEY' || die "lint.yml: the 'lint' job mentions BOWER_API_KEY"
+printf '%s\n' "$lint_job" | grep -Fq "if: github.event_name == 'repository_dispatch'" ||
+  die "lint.yml: the 'lint' job runs on something other than the Worker's dispatch"
+dispatch_job=$(job "$WORKFLOWS_DIR/lint.yml" dispatch)
+printf '%s\n' "$dispatch_job" | grep -Fq 'BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}' ||
+  die "lint.yml: the 'dispatch' job does not get BOWER_API_KEY"
+printf '%s\n' "$dispatch_job" | grep -Fq '/runner/lint/dispatch' ||
+  die "lint.yml: the 'dispatch' job does not call /runner/lint/dispatch"
+! printf '%s\n' "$dispatch_job" | grep -q 'run.sh' || die "lint.yml: the 'dispatch' job runs the agent"
+[ "$(grep -c 'secrets.BOWER_API_KEY' "$WORKFLOWS_DIR/lint.yml")" = 1 ] ||
+  die 'lint.yml: BOWER_API_KEY is passed somewhere other than the dispatch job'
+echo "ok lint.yml gives BOWER_API_KEY to the 'dispatch' job only"
 
 echo DONE

@@ -7,6 +7,7 @@ import { createApp } from '../src/index.js';
 import {
   QUEUED_STALE_MS,
   RUNNING_STALE_MS,
+  RUN_TICKET_TTL_MS,
   isActiveRun,
   markStale,
   runStaleness,
@@ -17,7 +18,15 @@ import {
   strictWindow,
 } from '../src/security.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
-import { getQuota, getRun, keys, putRun, putUser } from '../src/store.js';
+import { hashTicket } from '../src/run-ticket.js';
+import {
+  getQuota,
+  getRun,
+  getRunTicket,
+  keys,
+  putRun,
+  putUser,
+} from '../src/store.js';
 import type { Run, User } from '../src/types.js';
 
 /**
@@ -267,10 +276,23 @@ describe('POST /process', () => {
     expect(call?.headers.get('accept')).toBe('application/vnd.github+json');
     expect(call?.headers.get('x-github-api-version')).toBe('2022-11-28');
     expect(call?.headers.get('user-agent')).toBe('bower-api');
-    expect(call?.body).toEqual({
+    const sent = call?.body as {
+      event_type: string;
+      client_payload: { vault_id: string; ticket: string };
+    };
+    const { ticket } = sent.client_payload;
+    expect(sent).toEqual({
       event_type: 'ingest',
-      client_payload: { vault_id: USER_ID },
+      client_payload: { vault_id: USER_ID, ticket },
     });
+    // The run's ticket: 32 random bytes, only its hash kept, and it lives
+    // as long as the queued and running windows together.
+    expect(ticket).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const stored = await getRunTicket(kv, USER_ID, 'ingest');
+    expect(stored?.hash).toBe(await hashTicket(ticket));
+    expect(Date.parse(stored?.expiresAt ?? '')).toBeGreaterThan(
+      Date.now() + RUN_TICKET_TTL_MS - 60_000,
+    );
 
     expect(await getRun(kv, USER_ID)).toEqual(run);
     expect(await getQuota(kv, USER_ID, today())).toBe(1);
@@ -371,6 +393,7 @@ describe('POST /process', () => {
       expect(body.error.code).toBe('dispatch');
       expect(github.calls).toHaveLength(1);
       expect(await getRun(kv, USER_ID)).toBeUndefined();
+      expect(await getRunTicket(kv, USER_ID, 'ingest')).toBeUndefined();
       expect(await getQuota(kv, USER_ID, today())).toBe(0);
     },
   );

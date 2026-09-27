@@ -13,6 +13,8 @@ import {
   strictWindow,
 } from '../src/security.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
+import { RUN_TICKET_TTL_MS } from '../src/process.js';
+import { issueRunTicket } from '../src/run-ticket.js';
 import { putUser } from '../src/store.js';
 
 /**
@@ -222,12 +224,19 @@ describe('same-origin check', () => {
   });
 
   it('leaves runner and admin routes (bearer keys) alone', async () => {
+    const ticket = await issueRunTicket(
+      kv,
+      USER_ID,
+      'ingest',
+      new Date(),
+      RUN_TICKET_TTL_MS,
+    );
     const runner = await createApp().request(
       `${API}/runner/vaults/${USER_ID}/status`,
       {
         method: 'POST',
         headers: {
-          authorization: `Bearer ${env.BOWER_API_KEY}`,
+          authorization: `Bearer ${ticket}`,
           'content-type': 'application/json',
           origin: EVIL,
         },
