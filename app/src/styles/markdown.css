@@ -1,6 +1,7 @@
 /*
  * Reading view of a note. Wrap the output of renderNote in an element with
- * class "markdown"; the frontmatter block carries its own class.
+ * class "markdown"; the properties row (routes/note.tsx) carries its own
+ * classes, further down this file.
  */
 
 .markdown {
@@ -219,34 +220,6 @@
   flex-shrink: 0;
   background: url('/icons/favicon.svg') center / contain no-repeat;
   border-radius: var(--radius-sm);
-}
-
-.frontmatter {
-  margin: 0 0 var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-sm);
-}
-
-.frontmatter summary {
-  cursor: pointer;
-  color: var(--color-text-muted);
-}
-
-.frontmatter dl {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--space-1) var(--space-4);
-  margin: var(--space-2) 0 0;
-}
-
-.frontmatter dt {
-  color: var(--color-text-muted);
-}
-
-.frontmatter dd {
-  margin: 0;
 }
 
 .tags {

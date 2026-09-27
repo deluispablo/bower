@@ -85,7 +85,7 @@ describe('renderNote', () => {
     expect(note.html).not.toMatch(/\son\w+=/i);
   });
 
-  it('renders a long note with tables, tasks, links and frontmatter', () => {
+  it('renders a long note with tables, tasks and links', () => {
     const source = longNote();
     expect(source.split('\n')).toHaveLength(200);
     const note = renderNote(source, index);
@@ -130,22 +130,6 @@ describe('renderNote', () => {
       root.querySelector('.callout.callout-warning .callout-title')
         ?.textContent,
     ).toBe('Frost');
-
-    const properties = dom(note.frontmatterHtml);
-    expect(
-      properties.querySelector('details.frontmatter summary'),
-    ).not.toBeNull();
-    expect(
-      [...properties.querySelectorAll('.tags .tag')].map(
-        (tag) => tag.textContent,
-      ),
-    ).toEqual(['#project', '#home']);
-    expect(
-      properties.querySelector('dd a.wikilink')?.getAttribute('href'),
-    ).toBe('/note/seeds');
-    expect(properties.querySelector('dd .wikilink-missing')?.textContent).toBe(
-      'Nowhere',
-    );
   });
 
   it('neutralises raw HTML and dangerous links', () => {
@@ -332,10 +316,9 @@ describe('renderNote', () => {
     );
   });
 
-  it('returns no properties block without frontmatter', () => {
+  it('returns empty frontmatter and tags for a note with none', () => {
     const note = renderNote('Just text.', index);
     expect(note.frontmatter).toEqual({});
-    expect(note.frontmatterHtml).toBe('');
     expect(note.tags).toEqual([]);
   });
 

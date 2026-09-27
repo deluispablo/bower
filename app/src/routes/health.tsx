@@ -97,18 +97,7 @@ export function Health() {
         <p>Offline: the health check is not saved on this device yet.</p>
       )}
       {load.status === 'error' && <p>{load.message}</p>}
-      {load.status === 'ready' && (
-        <>
-          {load.rendered.frontmatterHtml !== '' && (
-            <div
-              dangerouslySetInnerHTML={{
-                __html: load.rendered.frontmatterHtml,
-              }}
-            />
-          )}
-          <NoteBody html={load.rendered.html} />
-        </>
-      )}
+      {load.status === 'ready' && <NoteBody html={load.rendered.html} />}
     </section>
   );
 }
