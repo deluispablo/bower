@@ -18,9 +18,10 @@ import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
-import { loginUrl } from '../api.js';
+import { isDemo, loginUrl } from '../api.js';
 import { Bird } from '../components/bird.js';
 import { IconClose } from '../components/icons.js';
+import { RunYourOwnCta } from './run-your-own.js';
 import {
   INTRO_DRIVE_ROWS,
   INTRO_INBOX_ITEMS,
@@ -128,6 +129,8 @@ function Page4({ fromSettings, onFinish }: Page4Props): JSX.Element {
         <button type="button" class="button intro-cta" onClick={onFinish}>
           Done
         </button>
+      ) : isDemo() ? (
+        <RunYourOwnCta />
       ) : (
         <>
           <a

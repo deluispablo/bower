@@ -3,15 +3,21 @@
  * that signed in (only from the Worker's one-time `/me` answer, kept in
  * session state; after a reload it says "that account"), who to ask,
  * "Try another account" (Google's account picker) and "Sign out".
+ *
+ * Never reached in a demo build: the demo has no allowlist, so it falls
+ * back to "Run your own Bower" (#193) instead.
  */
 
-import { loginUrl } from '../api.js';
+import { isDemo, loginUrl } from '../api.js';
 import { Bird } from '../components/bird.js';
 import { useSession } from '../session.js';
+import { RunYourOwn } from './run-your-own.js';
 import '../styles/auth.css';
 
 export function NotInvited() {
   const { notInvitedEmail, signOut } = useSession();
+
+  if (isDemo()) return <RunYourOwn />;
 
   return (
     <section class="auth-screen">

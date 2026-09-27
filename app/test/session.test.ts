@@ -69,4 +69,34 @@ describe('decideRedirect', () => {
     expect(decideRedirect('signed-in', true, '/welcome')).toBeNull();
     expect(decideRedirect('signed-in', false, '/welcome')).toBeNull();
   });
+
+  // #193: the demo signs in as Alex from the very first load (`getMe()`
+  // always answers signed in, `demo/api.ts`), so without this check a
+  // first-time visitor would skip the intro and "Run your own Bower"
+  // entirely and land straight in the app.
+  describe('in a demo build', () => {
+    it('sends a first-time visitor to /welcome from / or /login even though already signed in', () => {
+      expect(decideRedirect('signed-in', true, '/', false, true)).toBe(
+        '/welcome',
+      );
+      expect(decideRedirect('signed-in', true, '/login', false, true)).toBe(
+        '/welcome',
+      );
+    });
+
+    it('goes home once the intro has been seen (Skip or Explore the demo)', () => {
+      expect(decideRedirect('signed-in', true, '/', true, true)).toBeNull();
+      expect(decideRedirect('signed-in', true, '/login', true, true)).toBe('/');
+    });
+
+    it('never sends a deep link to /welcome, even unseen', () => {
+      expect(
+        decideRedirect('signed-in', true, '/note/id-1', false, true),
+      ).toBeNull();
+    });
+
+    it('does not apply outside a demo build', () => {
+      expect(decideRedirect('signed-in', true, '/', false, false)).toBeNull();
+    });
+  });
 });

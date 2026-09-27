@@ -11,7 +11,7 @@ import type { ComponentChildren } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
-import { ApiError, getMe, isNotInvited, logout } from './api.js';
+import { ApiError, getMe, isDemo, isNotInvited, logout } from './api.js';
 import type { Me, NotInvitedMe } from './api.js';
 import forgetDevice from './forget.js';
 import { introSeen } from './intro.js';
@@ -94,15 +94,31 @@ function clearHadSessionMarker(): void {
  * always left alone: it is reachable signed out (the first-run intro) and
  * signed in (reopened from Settings), and never auto-redirected to for a
  * signed-in visitor — only the signed-out first visit sends someone there.
+ *
+ * `isDemoBuild` (#193) defaults to `isDemo()`, `SessionProvider` passes it
+ * explicitly. The demo's `getMe()` answers as Alex, signed in, from the
+ * very first load (`demo/api.ts`) — with no gate of its own that would
+ * skip a first-time visitor straight past the intro and "Run your own
+ * Bower" into the app. So this checks the intro-seen flag even while
+ * already "signed in", the one case a signed-in visitor is still sent to
+ * `/welcome`.
  */
 export function decideRedirect(
   status: SessionStatus,
   hasVault: boolean,
   currentPath: string,
   introHasBeenSeen = true,
+  isDemoBuild = isDemo(),
 ): string | null {
   if (status === 'loading' || PUBLIC_PATHS.has(currentPath)) return null;
   if (currentPath === '/welcome') return null;
+  if (
+    isDemoBuild &&
+    !introHasBeenSeen &&
+    (currentPath === '/' || currentPath === '/login')
+  ) {
+    return '/welcome';
+  }
   if (status === 'signed-out') {
     if (
       !introHasBeenSeen &&
@@ -164,6 +180,7 @@ export function SessionProvider({ children }: SessionProviderProps) {
       state.me?.vault != null,
       path,
       introSeen(localStorage),
+      isDemo(),
     );
     if (target !== null) route(target);
   }, [state.status, state.me, path, route]);
