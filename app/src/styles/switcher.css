@@ -1,0 +1,205 @@
+/* The quick switcher (#142): a sheet under the phone's top bar by default,
+   a centred dialog from 900 px (`layout.css`'s own breakpoint). */
+
+.switcher-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(7 12 22 / 0.55);
+  animation: switcher-fade var(--motion-base) var(--ease-out);
+}
+
+.switcher-panel {
+  position: fixed;
+  left: var(--space-3);
+  right: var(--space-3);
+  top: 76px;
+  bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  outline: none;
+  animation: switcher-in var(--motion-base) var(--ease-out);
+}
+
+.switcher-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 56px;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.switcher-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  border: none;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  outline: none;
+}
+
+.switcher-bird {
+  position: absolute;
+  right: var(--space-8);
+  top: -46px;
+  pointer-events: none;
+}
+
+.switcher-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  overflow-y: auto;
+}
+
+.switcher-status {
+  margin: 0;
+  padding: var(--space-2) var(--space-2) 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.switcher-recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.switcher-recent button {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.switcher-recent button:hover {
+  background: var(--color-surface);
+}
+
+.switcher-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.switcher-heading {
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.switcher-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.switcher-row:hover,
+.switcher-row[data-highlighted='true'] {
+  background: var(--color-surface);
+}
+
+.switcher-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex-grow: 1;
+  font-size: var(--text-base);
+}
+
+.switcher-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcher-row-path,
+.switcher-row-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.switcher-match {
+  background: none;
+  color: var(--color-link);
+  font-weight: 600;
+}
+
+@keyframes switcher-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes switcher-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switcher-backdrop,
+  .switcher-panel {
+    animation: none;
+  }
+}
+
+@media (min-width: 900px) {
+  .switcher-panel {
+    left: 50%;
+    right: auto;
+    top: 96px;
+    bottom: auto;
+    width: min(560px, calc(100vw - var(--space-8)));
+    max-height: min(560px, calc(100vh - 160px));
+    transform: translateX(-50%);
+  }
+}
