@@ -17,11 +17,15 @@ STUBS="$ROOT/bin"
 mkdir -p "$STUBS"
 
 readonly API_URL='https://api.example.com'
-readonly RUNNER_KEY='test-runner-key'
+# The run's ticket, as the Worker's dispatch hands it to the job, and the
+# operator key, which no job that runs the agent holds any more (#259).
+readonly RUN_TICKET='test-run-ticket'
+readonly OPERATOR_KEY='test-operator-key'
 readonly DRIVE_TOKEN='test-drive-token-value'
 readonly USER_API_KEY='test-user-api-key-value'
 mkdir -p "$ROOT/values"
-printf '%s' "$RUNNER_KEY" >"$ROOT/values/runner-key"
+printf '%s' "$RUN_TICKET" >"$ROOT/values/run-ticket"
+printf '%s' "$OPERATOR_KEY" >"$ROOT/values/operator-key"
 printf '%s' "$DRIVE_TOKEN" >"$ROOT/values/drive-token"
 printf '%s' "$USER_API_KEY" >"$ROOT/values/user-api-key"
 
@@ -31,22 +35,28 @@ cat >"$STUBS/curl" <<'STUB'
 #!/usr/bin/env bash
 # curl stub: GET answers the vault info, POST records the payload, and a GET
 # to Drive's files.list (the instruction-origin listing) records its query
-# and answers per scenario. Like the real Worker, a runner call whose bearer
-# is not exactly the runner key gets a 401 (issue #276): the run fails there
-# instead of carrying on with a key the Worker would refuse.
+# and answers per scenario. Like the real Worker (issue #259), a runner call
+# is accepted with the run's ticket only for its own vault (vault-1) and only
+# until the run has reported done or failed, and with the operator key only
+# while the legacy flag is on (SMOKE_LEGACY_KEY=1, "auth=legacy"); anything
+# else gets a 401 (issue #276): the run fails there instead of carrying on
+# with a credential the Worker would refuse.
 set -euo pipefail
-# run.sh's children must not inherit a BOWER_* setting or the runner key
-# (#258): recorded here, checked by the test.
-if env | grep -q '^BOWER_' || env | grep -qF -- "$(cat "$SMOKE_STATE/../values/runner-key")"; then
+# run.sh's children must not inherit a BOWER_* setting, the run ticket or
+# the operator key (#258): recorded here, checked by the test.
+if env | grep -q '^BOWER_' ||
+  env | grep -qF -- "$(cat "$SMOKE_STATE/../values/run-ticket")" ||
+  env | grep -qF -- "$(cat "$SMOKE_STATE/../values/operator-key")"; then
   echo leak >>"$SMOKE_STATE/curl-env-leak"
 fi
-# The runner key and the tokens the fake Worker hands out come from files,
+# The credentials and the tokens the fake Worker hands out come from files,
 # not from this stub's environment: that environment is run.sh's own, which
-# the claude stub checks for the runner key.
-SMOKE_RUNNER_KEY=$(cat "$SMOKE_STATE/../values/runner-key")
+# the claude stub checks for the run ticket.
+SMOKE_RUN_TICKET=$(cat "$SMOKE_STATE/../values/run-ticket")
+SMOKE_OPERATOR_KEY=$(cat "$SMOKE_STATE/../values/operator-key")
 SMOKE_DRIVE_TOKEN=$(cat "$SMOKE_STATE/../values/drive-token")
 SMOKE_USER_API_KEY=$(cat "$SMOKE_STATE/../values/user-api-key")
-out='' fmt='' method=GET data='' url='' auth=bad
+out='' fmt='' method=GET data='' url='' bearer=''
 params=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -54,8 +64,7 @@ while [ "$#" -gt 0 ]; do
     -w) fmt=$2; shift 2 ;;
     -X) method=$2; shift 2 ;;
     -H)
-      [ "$2" = "Authorization: Bearer $SMOKE_RUNNER_KEY" ] && auth=ok
-      [ "$2" = "Authorization: Bearer $SMOKE_DRIVE_TOKEN" ] && auth=drive
+      case "$2" in 'Authorization: Bearer '*) bearer=${2#Authorization: Bearer } ;; esac
       shift 2
       ;;
     --data-binary) data=$2; shift 2 ;;
@@ -64,6 +73,17 @@ while [ "$#" -gt 0 ]; do
     *) url=$1; shift ;;
   esac
 done
+own_vault=no
+case "$url" in */runner/vaults/vault-1 | */runner/vaults/vault-1/status) own_vault=yes ;; esac
+auth=bad
+if [ "$bearer" = "$SMOKE_DRIVE_TOKEN" ]; then
+  auth=drive
+elif [ "$bearer" = "$SMOKE_RUN_TICKET" ] && [ "$own_vault" = yes ] &&
+  [ ! -e "$SMOKE_STATE/ticket-retired" ]; then
+  auth=ok
+elif [ "$bearer" = "$SMOKE_OPERATOR_KEY" ] && [ "${SMOKE_LEGACY_KEY:-}" = 1 ]; then
+  auth=legacy
+fi
 echo "curl $method $url auth=$auth" >>"$SMOKE_STATE/calls.log"
 if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
   printf '%s\n' "${params[@]}" >>"$SMOKE_STATE/drive-list.log"
@@ -91,7 +111,7 @@ if [ "$SMOKE_SCENARIO" = edge ]; then
   [ "$fmt" != '%{http_code}' ] || printf '403'
   exit 0
 fi
-if [ "$auth" != ok ]; then
+if [ "$auth" != ok ] && [ "$auth" != legacy ]; then
   if [ "$method" = POST ]; then
     echo 'curl: (22) The requested URL returned error: 401' >&2
     exit 22
@@ -104,6 +124,12 @@ if [ "$method" = POST ]; then
   [ "$data" = '@-' ] || { echo "curl stub: expected --data-binary @-" >&2; exit 90; }
   payload=$(cat)
   printf '%s\n' "$payload" >>"$SMOKE_STATE/posts.log"
+  # A final report retires the ticket, as the Worker does.
+  case "$payload" in
+    *'"state":"done"'* | *'"state":"failed"'*)
+      [ "$auth" != ok ] || touch "$SMOKE_STATE/ticket-retired"
+      ;;
+  esac
   exit 0
 fi
 code=200
@@ -294,7 +320,7 @@ echo "claude max-turns=$turns rulebook=$([ -f CLAUDE.md ] && echo yes || echo no
 printf '%s' "$tools" >"$SMOKE_STATE/claude-tools.txt"
 printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
 # The model's own environment, exactly as run.sh's env -i allow-list built
-# it: the test greps this for the Drive token, the runner key, BOWER_* and
+# it: the test greps this for the Drive token, the run ticket, BOWER_* and
 # the model credential, never the console output (that stays content-free).
 env >"$SMOKE_STATE/claude-env.log"
 # What else the agent could read on the runner (#258): the initial
@@ -452,16 +478,18 @@ die() {
 
 # run_case <scenario> [NAME=value ...]: runs run.sh in $MODE (ingest unless
 # the scenario sets it) with the stubs first on PATH. As the instance
-# workflows do (#258), the runner settings (BOWER_API_URL, BOWER_API_KEY and
-# any BOWER_* assignment given) go to $RUNNER_TEMP/bower-secrets, mode 600,
+# workflows do (#258, #259), the runner settings (BOWER_API_URL,
+# BOWER_RUN_TICKET and any BOWER_* assignment given) go to $RUNNER_TEMP/bower-secrets, mode 600,
 # and only the model credential is in run.sh's environment; other
 # assignments are passed to env. A BOWER_* assignment given here is written
 # after the defaults, so it wins (run.sh keeps the last line for a name).
 # env:NAME=value puts NAME=value in run.sh's environment as well as, not
 # instead of, the file. With SETTINGS_VIA=env (a local run) the settings go
-# to env instead and no file is written.
+# to env instead and no file is written. VAULT is the vault run.sh is started
+# for; the ticket is vault-1's.
 MODE=ingest
 SETTINGS_VIA=file
+VAULT=vault-1
 run_case() {
   CASE=$1
   shift
@@ -472,8 +500,8 @@ run_case() {
   : >"$STATE/calls.log"
   : >"$STATE/posts.log"
   : >"$STATE/uploaded.txt"
-  rm -f "$STATE/curl-env-leak"
-  local settings=("BOWER_API_URL=$API_URL" "BOWER_API_KEY=$RUNNER_KEY") extra=() arg
+  rm -f "$STATE/curl-env-leak" "$STATE/ticket-retired"
+  local settings=("BOWER_API_URL=$API_URL" "BOWER_RUN_TICKET=$RUN_TICKET") extra=() arg
   for arg in "$@"; do
     case "$arg" in
       env:*) extra+=("${arg#env:}") ;;
@@ -488,13 +516,13 @@ run_case() {
   fi
   set +e
   env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GITHUB_RUN_ID \
-    -u BOWER_API_URL -u BOWER_API_KEY -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB \
+    -u BOWER_API_URL -u BOWER_RUN_TICKET -u BOWER_API_KEY -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB \
     -u BOWER_MAX_CHANGES -u BOWER_REPORT_REFUSED \
     PATH="$STUBS:$PATH" \
     RUNNER_TEMP="$STATE/runner-temp" \
     CLAUDE_CODE_OAUTH_TOKEN='test-oauth-token' \
     SMOKE_SCENARIO="$CASE" SMOKE_STATE="$STATE" \
-    ${extra[@]+"${extra[@]}"} bash "$RUN_SH" vault-1 "$MODE" >"$STATE/out.log" 2>&1
+    ${extra[@]+"${extra[@]}"} bash "$RUN_SH" "$VAULT" "$MODE" >"$STATE/out.log" 2>&1
   RC=$?
   set -e
 }
@@ -522,7 +550,7 @@ expect_content_free() {
     evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
-    "$DRIVE_TOKEN" "$USER_API_KEY" test-oauth-token; do
+    "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
     fi
@@ -542,7 +570,7 @@ expect_cleaned_up() {
 }
 
 # The claude stub's own environment (env -i's allow-list) must carry none of
-# the Drive token, the runner key, folder ids or any RCLONE_CONFIG_*, and
+# the Drive token, the run ticket, folder ids or any RCLONE_CONFIG_*, and
 # exactly the expected model credential. want_key/want_oauth are the
 # expected ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN value, or 'unset'.
 expect_claude_env() {
@@ -551,6 +579,7 @@ expect_claude_env() {
   for pattern in '^RCLONE_' '^BOWER_' '^ACCESS_TOKEN=' '^FOLDER_ID=' '^INBOX_ID='; do
     grep -Eq "$pattern" "$log" && die "claude process env still has $pattern"
   done
+  grep -qF -- "$RUN_TICKET" "$log" && die 'the run ticket reached the claude process env'
   if [ "$want_key" = unset ]; then
     grep -q '^ANTHROPIC_API_KEY=' "$log" && die 'ANTHROPIC_API_KEY leaked into claude env'
   else
@@ -566,15 +595,17 @@ expect_claude_env() {
 }
 
 # What the agent could read outside its own process (#258): the initial
-# environment of the shell that started it holds no BOWER_* and not the
-# runner key (/proc is Linux-only; required wherever this test sees it);
+# environment of the shell that started it holds no BOWER_*, not the run
+# ticket and not the operator key (/proc is Linux-only; required wherever
+# this test sees it);
 # the Worker's answer and the runner settings file are gone before it
 # starts.
 expect_runner_secrets_out_of_reach() {
   local parent="$STATE/claude-parent-env.log"
   if [ -f "$parent" ]; then
     grep -q '^BOWER_' "$parent" && die "the agent's parent shell has BOWER_* in /proc/<pid>/environ"
-    grep -qF -- "$RUNNER_KEY" "$parent" && die "the agent's parent shell has the runner key in /proc/<pid>/environ"
+    grep -qF -- "$RUN_TICKET" "$parent" && die "the agent's parent shell has the run ticket in /proc/<pid>/environ"
+    grep -qF -- "$OPERATOR_KEY" "$parent" && die "the agent's parent shell has the operator key in /proc/<pid>/environ"
   elif [ -r /proc/self/environ ]; then
     die "the claude stub could not read its parent's /proc/<pid>/environ"
   fi
@@ -582,10 +613,11 @@ expect_runner_secrets_out_of_reach() {
   [ ! -e "$STATE/claude-secrets-seen" ] || die 'the runner settings file still existed while the agent ran'
 }
 
-# run.sh's own children (curl here) got no BOWER_* setting and not the runner
-# key in their environment: run.sh keeps them in unexported shell variables.
+# run.sh's own children (curl here) got no BOWER_* setting and no Worker
+# credential in their environment: run.sh keeps them in unexported shell
+# variables.
 expect_curl_env_clean() {
-  [ ! -e "$STATE/curl-env-leak" ] || die "a BOWER_* setting or the runner key reached curl's environment"
+  [ ! -e "$STATE/curl-env-leak" ] || die "a BOWER_* setting or a Worker credential reached curl's environment"
 }
 
 # The agent gets neither pandoc (a URL as input is a way out) nor cp (it can
@@ -672,7 +704,8 @@ if grep -Fq '"Read(~/**)"' "$settings_seen"; then
   esac
 fi
 expect_eq "$(cat "$STATE/remote/.claude/settings.json")" '{"vault":"own"}' "the vault's own settings in Drive"
-expect_eq "$(calls curl | grep -c 'auth=ok')" 3 'curl calls with the runner key'
+expect_eq "$(calls curl | grep -c 'auth=ok')" 3 'curl calls with the run ticket'
+[ -e "$STATE/ticket-retired" ] || die 'the final report did not reach the stub Worker with the ticket'
 expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request'
 expect_eq "$(calls curl | sed -n 2p)" "curl POST $API_URL/runner/vaults/vault-1/status auth=ok" 'status request'
 expect_curl_env_clean
@@ -1115,46 +1148,83 @@ expect_cleaned_up
 expect_curl_env_clean
 echo "ok settings from the environment when there is no settings file"
 
-# 20. The Run step's environment also carries an empty BOWER_API_KEY (an
+# 20. The Run step's environment also carries an empty BOWER_RUN_TICKET (an
 # instance workflow that still lists it without a value; issue #276): the
-# key from the settings file wins, the Worker gets exactly that bearer on
+# ticket from the settings file wins, the Worker gets exactly that bearer on
 # every call, and the value never reaches a child's environment, even though
 # the name was exported to run.sh.
-run_case envkey env:BOWER_API_KEY=
+run_case envkey env:BOWER_RUN_TICKET=
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
-expect_eq "$(calls curl | grep -c 'auth=ok')" "$(calls curl | grep -vc googleapis)" 'Worker calls all with the exact runner key'
+expect_eq "$(calls curl | grep -c 'auth=ok')" "$(calls curl | grep -vc googleapis)" 'Worker calls all with the exact run ticket'
 expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request'
 grep -q 'warning: no runner settings file' "$STATE/out.log" && die 'the settings file was not used'
 expect_curl_env_clean
 parent="$STATE/claude-parent-env.log"
-[ ! -f "$parent" ] || ! grep -qF -- "$RUNNER_KEY" "$parent" ||
-  die "the agent's parent shell has the runner key in /proc/<pid>/environ"
+[ ! -f "$parent" ] || ! grep -qF -- "$RUN_TICKET" "$parent" ||
+  die "the agent's parent shell has the run ticket in /proc/<pid>/environ"
 grep -q '^BOWER_' "$STATE/claude-env.log" && die 'BOWER_* reached the claude process env'
 expect_content_free
 expect_cleaned_up
-echo "ok an empty BOWER_API_KEY in the environment does not shadow the settings file"
+echo "ok an empty BOWER_RUN_TICKET in the environment does not shadow the settings file"
 
-# 21. A settings file whose key is not the Worker's: the stub Worker answers
-# 401 like the real one, the run stops at the vault info with the status
-# code, and the key is never printed.
-run_case wrongkey BOWER_API_KEY=not-the-runner-key
+# 21. A settings file whose ticket is not the Worker's: the stub Worker
+# answers 401 like the real one, the run stops at the vault info with the
+# status code, and the ticket is never printed.
+run_case wrongkey BOWER_RUN_TICKET=not-the-run-ticket
 expect_eq "$RC" 2 'exit code'
 expect_eq "$(posts_count)" 0 'status posts (the report is refused too)'
 expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=bad" 'vault info request'
 grep -q ' failed: fetch vault info: HTTP 401$' "$STATE/out.log" || die 'failure does not name the 401'
-grep -qF -- 'not-the-runner-key' "$STATE/out.log" && die 'script output contains the key'
+grep -qF -- 'not-the-run-ticket' "$STATE/out.log" && die 'script output contains the ticket'
 expect_eq "$(calls rclone)" '' 'rclone calls'
 expect_content_free
 expect_cleaned_up
-echo "ok a wrong runner key fails at the vault info"
+echo "ok a wrong run ticket fails at the vault info"
+
+# 21b. Vault-1's ticket, used for another vault (#259): the stub Worker
+# refuses it like the real one, and nothing of vault-2 is fetched.
+VAULT=vault-2
+run_case otherticket
+VAULT=vault-1
+expect_eq "$RC" 2 'exit code'
+expect_eq "$(posts_count)" 0 'status posts (the report is refused too)'
+expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-2 auth=bad" 'vault info request'
+grep -q ' failed: fetch vault info: HTTP 401$' "$STATE/out.log" || die 'failure does not name the 401'
+expect_eq "$(calls rclone)" '' 'rclone calls'
+expect_content_free
+expect_cleaned_up
+echo "ok a ticket for another vault is refused"
+
+# 21c. No ticket, only the operator key (an instance repo whose workflows
+# predate run tickets): run.sh warns and sends the key, and the stub Worker,
+# with the legacy flag off, refuses it; the key is never printed.
+run_case legacyoff BOWER_RUN_TICKET= "BOWER_API_KEY=$OPERATOR_KEY"
+expect_eq "$RC" 2 'exit code'
+expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=bad" 'vault info request'
+grep -q ' warning: no run ticket, using the operator key' "$STATE/out.log" || die 'no warning without a ticket'
+grep -q ' failed: fetch vault info: HTTP 401$' "$STATE/out.log" || die 'failure does not name the 401'
+grep -qF -- "$OPERATOR_KEY" "$STATE/out.log" && die 'script output contains the operator key'
+expect_cleaned_up
+echo "ok the operator key is refused while the legacy flag is off"
+
+# 21d. The same with the Worker's legacy flag on: the run goes through, and
+# the key still reaches no child's environment.
+run_case legacyon BOWER_RUN_TICKET= "BOWER_API_KEY=$OPERATOR_KEY" SMOKE_LEGACY_KEY=1
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=legacy" 'vault info request'
+expect_curl_env_clean
+expect_content_free
+expect_cleaned_up
+echo "ok the operator key works while the legacy flag is on"
 
 # 22. Blocked before the Worker (issue #276): a 403 with an HTML page instead
 # of the Worker's JSON error. The failure says the Worker did not answer, so
 # the operator looks at the Cloudflare zone, not at the key.
 run_case edge
 expect_eq "$RC" 2 'exit code'
-expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request with the right key'
+expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request with the right ticket'
 grep -q ' failed: fetch vault info: HTTP 403, not answered by the Worker$' "$STATE/out.log" ||
   die 'failure does not say the Worker did not answer'
 expect_eq "$(calls rclone)" '' 'rclone calls'
