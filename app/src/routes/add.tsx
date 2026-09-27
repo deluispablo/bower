@@ -6,8 +6,21 @@ import { linkNoteName } from '../add.js';
 import { Bird } from '../components/bird.js';
 import { IconNote } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
-import { createTextFile, listFolder, upload } from '../drive.js';
+import {
+  copyIntoInbox,
+  createTextFile,
+  FOLDER_MIME,
+  getToken,
+  listFolder,
+  upload,
+} from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
+import {
+  filesFromPickerResponse,
+  loadPicker,
+  openFilePicker,
+  type PickedItem,
+} from '../picker.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
@@ -19,14 +32,24 @@ import '../styles/app-file-banner.css';
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
 const CRUMB = <h1 class="topbar-title">Add</h1>;
 
+/** Without a Picker key the "From your Drive" button is hidden, as the
+ * onboarding folder picker is. */
+const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
+
+/** Files copied from one picked Drive folder, at most. */
+export const MAX_FOLDER_FILES = 50;
+
 type QueueStatus = 'waiting' | 'uploading' | 'done' | 'failed';
 
 interface QueueItem {
   id: string;
-  /** A picked/dropped/shared file, or a pasted link's note. */
-  kind: 'file' | 'link';
+  /** A picked/dropped/shared file, a pasted link's note, or a file picked
+   * in the user's Drive and copied into the inbox. */
+  kind: 'file' | 'link' | 'drive';
   /** Set for `kind: 'file'`. */
   file?: File;
+  /** The original's Drive id, set for `kind: 'drive'`. */
+  driveId?: string;
   /** The pasted URL, kept for `kind: 'link'` so a failed save can retry. */
   url?: string;
   /** Possibly renamed to stay unique in the inbox. */
@@ -53,11 +76,13 @@ export function Add() {
   const { route } = useLocation();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
+  const bowerFolderId = me?.vault?.folderId ?? null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<QueueItem[]>([]);
   const sharedHandledRef = useRef(false);
+  const driveNotesRef = useRef<string[]>([]);
 
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
@@ -66,6 +91,8 @@ export function Add() {
   const [message, setMessage] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [pickerOpening, setPickerOpening] = useState(false);
+  const [driveNotes, setDriveNotes] = useState<string[]>([]);
 
   useShellSlot('crumb', CRUMB);
 
@@ -131,6 +158,19 @@ export function Add() {
     return created;
   }
 
+  function addDriveItems(picked: PickedItem[]): QueueItem[] {
+    const created: QueueItem[] = picked.map((item) => ({
+      id: crypto.randomUUID(),
+      kind: 'drive',
+      driveId: item.id,
+      name: claimName(item.name),
+      status: 'waiting',
+      progress: 0,
+    }));
+    setQueue((prev) => [...prev, ...created]);
+    return created;
+  }
+
   function updateItem(id: string, patch: Partial<QueueItem>): void {
     setQueue((prev) =>
       prev.map((it) => (it.id === id ? { ...it, ...patch } : it)),
@@ -152,6 +192,8 @@ export function Add() {
         );
       } else if (item.kind === 'link' && item.url !== undefined) {
         await createTextFile(folderId, item.name, item.url);
+      } else if (item.kind === 'drive' && item.driveId !== undefined) {
+        await copyIntoInbox(item.driveId, item.name, folderId);
       }
       updateItem(item.id, { status: 'done', progress: 100 });
       return true;
@@ -162,7 +204,9 @@ export function Add() {
         error:
           item.kind === 'link'
             ? 'Could not save this link.'
-            : 'Could not upload this file.',
+            : item.kind === 'drive'
+              ? 'Could not copy this file from your Drive.'
+              : 'Could not upload this file.',
       });
       return false;
     }
@@ -173,6 +217,8 @@ export function Add() {
    * the switcher command, never from here. */
   function finish(): void {
     setMessage('Added to your inbox.');
+    // A sentence about the last Drive pick stays on screen to be read.
+    if (driveNotesRef.current.length > 0) return;
     setTimeout(() => route('/'), 900);
   }
 
@@ -190,6 +236,80 @@ export function Add() {
     if (queueRef.current.length === 0) return;
     if (!queueRef.current.every((it) => it.status === 'done')) return;
     finish();
+  }
+
+  /** The picks from one Picker response as files to copy: a picked folder
+   * gives its own files (not its subfolders), at most `MAX_FOLDER_FILES`. */
+  async function expandPicks(
+    picked: PickedItem[],
+    notes: string[],
+  ): Promise<PickedItem[]> {
+    const files: PickedItem[] = [];
+    for (const item of picked) {
+      if (!item.isFolder) {
+        files.push(item);
+        continue;
+      }
+      try {
+        const children = (await listFolder(item.id)).filter(
+          (child) => child.mimeType !== FOLDER_MIME,
+        );
+        if (children.length > MAX_FOLDER_FILES) {
+          notes.push(
+            `${item.name} has more than ${MAX_FOLDER_FILES} files: the first ${MAX_FOLDER_FILES} were added. Pick the rest from inside the folder.`,
+          );
+        }
+        for (const child of children.slice(0, MAX_FOLDER_FILES)) {
+          files.push({
+            id: child.id,
+            name: child.name,
+            mimeType: child.mimeType,
+            isFolder: false,
+          });
+        }
+      } catch (err) {
+        console.error(err);
+        notes.push(`Could not open the folder ${item.name}.`);
+      }
+    }
+    return files;
+  }
+
+  async function onDrivePicked(
+    data: google.picker.ResponseObject,
+  ): Promise<void> {
+    if (data.action !== 'picked') return;
+    const { items, excluded } = filesFromPickerResponse(data, bowerFolderId);
+    const notes: string[] = [];
+    if (excluded > 0) {
+      notes.push(
+        'Your Bower folder was left out: what is in it is already in Bower.',
+      );
+    }
+    const files = await expandPicks(items, notes);
+    driveNotesRef.current = notes;
+    setDriveNotes(notes);
+    if (files.length === 0) return;
+    await runQueue(addDriveItems(files));
+  }
+
+  /** Loads the Picker (only now, never before the button is pressed) and
+   * opens it over the user's Drive. */
+  async function onFromDrive(): Promise<void> {
+    driveNotesRef.current = [];
+    setDriveNotes([]);
+    setPickerOpening(true);
+    try {
+      const [token, picker] = await Promise.all([getToken(), loadPicker()]);
+      openFilePicker(picker, token.accessToken, GOOGLE_API_KEY, (data) => {
+        void onDrivePicked(data);
+      });
+    } catch (err) {
+      console.error(err);
+      setDriveNotes(['Could not open your Drive. Try again in a moment.']);
+    } finally {
+      setPickerOpening(false);
+    }
   }
 
   function onFileInputChange(event: JSX.TargetedEvent<HTMLInputElement>): void {
@@ -234,6 +354,7 @@ export function Add() {
 
   const touch = isTouchDevice();
   const linkDisabled = inboxFolderId === null || !online;
+  const driveDisabled = inboxFolderId === null || !online || pickerOpening;
 
   return (
     <section class="add-screen">
@@ -286,6 +407,17 @@ export function Add() {
               Photo
             </button>
           )}
+          {GOOGLE_API_KEY !== '' && (
+            <button
+              type="button"
+              class="button button-secondary"
+              disabled={driveDisabled}
+              aria-disabled={driveDisabled}
+              onClick={() => void onFromDrive()}
+            >
+              From your Drive
+            </button>
+          )}
         </div>
       </div>
 
@@ -336,7 +468,7 @@ export function Add() {
               </span>
               <span class="add-queue-body">
                 <span class="add-queue-name">{item.name}</span>
-                {item.status === 'uploading' && (
+                {item.status === 'uploading' && item.kind !== 'drive' && (
                   <span class="add-queue-bar">
                     <span
                       class="add-queue-bar-fill"
@@ -346,8 +478,14 @@ export function Add() {
                 )}
                 <span class="add-queue-status">
                   {item.status === 'waiting' && 'Waiting'}
-                  {item.status === 'uploading' && `${item.progress} %`}
-                  {item.status === 'done' && 'Added to your inbox'}
+                  {item.status === 'uploading' &&
+                    (item.kind === 'drive'
+                      ? 'Copying from your Drive…'
+                      : `${item.progress} %`)}
+                  {item.status === 'done' &&
+                    (item.kind === 'drive'
+                      ? 'Copied from your Drive · the original stays where it was'
+                      : 'Added to your inbox')}
                   {item.status === 'failed' && (item.error ?? 'Failed')}
                 </span>
               </span>
@@ -364,6 +502,12 @@ export function Add() {
           ))}
         </ul>
       )}
+
+      {driveNotes.map((note) => (
+        <p key={note} class="add-drive-note">
+          {note}
+        </p>
+      ))}
 
       <div class="app-file-banner" role="note">
         <p>

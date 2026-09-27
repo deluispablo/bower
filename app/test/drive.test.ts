@@ -5,6 +5,7 @@ import {
   appendedText,
   AppendError,
   appendToFile,
+  copyIntoInbox,
   createTextFile,
   DriveError,
   FOLDER_MIME,
@@ -574,6 +575,52 @@ describe('createTextFile', () => {
       }),
     );
     expect(content).toBe('Content-Type: text/markdown\r\n\r\n# Tidy up\n');
+  });
+});
+
+describe('copyIntoInbox', () => {
+  it('copies the file into the inbox with files.copy under the given name', async () => {
+    let url = new URL('https://www.googleapis.com');
+    let init: RequestInit = {};
+    stubFetch((u, i) => {
+      url = u;
+      init = i;
+      return jsonResponse(200, {
+        id: 'COPY_ID',
+        name: 'Lease agreement.pdf',
+        mimeType: 'application/pdf',
+        parents: ['INBOX_ID'],
+      });
+    });
+
+    const copied = await copyIntoInbox(
+      'FILE_ID',
+      'Lease agreement.pdf',
+      'INBOX_ID',
+    );
+
+    expect(init.method).toBe('POST');
+    expect(url.pathname).toBe('/drive/v3/files/FILE_ID/copy');
+    expect(url.searchParams.get('fields')).toContain('parents');
+    expect(new Headers(init.headers).get('Content-Type')).toBe(
+      'application/json',
+    );
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: 'Lease agreement.pdf',
+      parents: ['INBOX_ID'],
+    });
+    expect(authHeader(init)).toBe('Bearer token-1');
+    expect(copied).toMatchObject({ id: 'COPY_ID', parents: ['INBOX_ID'] });
+  });
+
+  it('throws a DriveError when Drive refuses the copy', async () => {
+    stubFetch(() =>
+      jsonResponse(403, { error: { message: 'Copying is disabled.' } }),
+    );
+
+    await expect(
+      copyIntoInbox('FILE_ID', 'a.pdf', 'INBOX_ID'),
+    ).rejects.toMatchObject({ name: 'DriveError', status: 403 });
   });
 });
 

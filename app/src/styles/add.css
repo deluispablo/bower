@@ -187,6 +187,12 @@
   transition: width var(--motion-base) var(--ease-out);
 }
 
+.add-drive-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .add-message {
   color: var(--color-success);
 }

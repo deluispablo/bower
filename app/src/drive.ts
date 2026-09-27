@@ -3,8 +3,8 @@
  * the short-lived access token from the Worker's `GET /drive/token`; this
  * module keeps that token in memory, retries once with a fresh token when
  * Drive answers 401, and wraps the few endpoints the app needs: recursive
- * listing of the Bower folder, file download, uploads, appending to a note
- * and saving an edited note.
+ * listing of the Bower folder, file download, uploads, copies into the
+ * inbox, appending to a note and saving an edited note.
  *
  * Tokens are never logged. Failures surface as `DriveError` (Drive itself)
  * or `ApiError` (the Worker, including code `reauth` when Google access has
@@ -532,6 +532,27 @@ export function createTextFile(
     metadataFor(parentId, name, 'text/markdown'),
     new Blob([content], { type: 'text/markdown' }),
   );
+}
+
+/**
+ * Copies the Drive file `id` into the inbox folder `inboxId` as `name`
+ * (`files.copy`). The original keeps its id, its parent and its content;
+ * a Google Doc, Sheet or Slides file is copied as it is, not converted.
+ */
+export async function copyIntoInbox(
+  id: string,
+  name: string,
+  inboxId: string,
+): Promise<DriveFile> {
+  const response = await driveFetch(
+    `/drive/v3/files/${encodeURIComponent(id)}/copy?fields=${FILE_FIELDS}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, parents: [inboxId] }),
+    },
+  );
+  return parseFile(await readJson(response), name);
 }
 
 // --- Update and append -------------------------------------------------
