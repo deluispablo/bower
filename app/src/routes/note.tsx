@@ -17,6 +17,7 @@ import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
 import { breadcrumb, folderHref, siblings } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
+import { runPinAction } from '../pin-action.js';
 import { isAppFile } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
@@ -108,8 +109,15 @@ interface Editing {
 export function Note() {
   const { params } = useRoute();
   const id = params.id ?? '';
-  const { index, getNoteText, appendToNote, openNoteForEdit, saveEditedNote } =
-    useVault();
+  const {
+    index,
+    getNoteText,
+    appendToNote,
+    openNoteForEdit,
+    saveEditedNote,
+    pinNote,
+    unpinNote,
+  } = useVault();
   const [load, setLoad] = useState<NoteLoad>({ status: 'loading' });
   const [editing, setEditing] = useState<Editing | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
@@ -228,6 +236,15 @@ export function Note() {
     showText(await appendToNote(id, text));
   }
 
+  async function handleTogglePin(): Promise<void> {
+    if (file === undefined) return;
+    const pinned = index?.notePinnedAt.has(file.id) ?? false;
+    await runPinAction(
+      () => (pinned ? unpinNote(file.id) : pinNote(file.id)),
+      pinned ? 'Unpinned' : 'Pinned to Home',
+    );
+  }
+
   async function handleEdit(): Promise<void> {
     setEditError(null);
     try {
@@ -273,6 +290,8 @@ export function Note() {
               file={file}
               noteName={noteTitle}
               canEdit={canEdit}
+              pinned={index.notePinnedAt.has(file.id)}
+              onTogglePin={() => void handleTogglePin()}
               onEdit={() => void handleEdit()}
               onClose={() => setMenuOpen(false)}
             />

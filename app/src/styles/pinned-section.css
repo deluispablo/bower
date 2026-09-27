@@ -1,0 +1,132 @@
+/*
+ * Home's Pinned section (spec §14, issue #216): a two-column grid of tiles
+ * above Recent, hidden while empty (`pinned-section.tsx` returns `null`
+ * rather than an empty shell). Edit swaps the grid to a single column of
+ * rows, each with its own unpin button, sized the same as `.home-card`.
+ */
+
+.home-pinned {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.home-pinned-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.home-pinned-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.home-pinned-edit {
+  min-height: 28px;
+  padding: 0 var(--space-1);
+  background: none;
+  border: none;
+  color: var(--color-link);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.home-pinned-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.home-pinned-grid-edit {
+  grid-template-columns: 1fr;
+}
+
+.home-pinned-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 56px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+a.home-pinned-tile:hover {
+  background: var(--color-surface-hover);
+}
+
+.home-pinned-tile > .icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-muted);
+}
+
+.home-pinned-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.home-pinned-tile-name {
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-pinned-tile-meta {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-pinned-unpin {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  cursor: pointer;
+}
+
+.home-pinned-unpin:hover {
+  background: var(--color-surface-hover);
+}
+
+.home-pinned-unpin .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.home-pinned-tile-done {
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.home-pinned-all {
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 0 var(--space-1);
+  background: none;
+  border: none;
+  color: var(--color-link);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}

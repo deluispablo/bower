@@ -28,7 +28,7 @@ import { getPref, setPref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
 import { useSession } from '../session.js';
 import { openSwitcher } from '../switcher-store.js';
-import { useVault } from '../vault-store.js';
+import { pinned, useVault } from '../vault-store.js';
 import {
   IconClose,
   IconCollapse,
@@ -38,6 +38,7 @@ import {
   IconSearch,
   IconSort,
 } from './icons.js';
+import { PinnedSidebar } from './pinned-sidebar.js';
 import { Tree } from './tree.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
@@ -187,6 +188,9 @@ export function Explorer({
           {healthIsNew && <span class="nav-badge">New</span>}
         </a>
       </div>
+      {variant === 'sidebar' && index !== null && (
+        <PinnedSidebar items={pinned(index)} />
+      )}
       {variant === 'sidebar' && (
         <div class="explorer-section">
           <h2 class="explorer-label">Your notes</h2>

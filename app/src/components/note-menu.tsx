@@ -7,6 +7,10 @@
  * open (`use-focus-trap.ts`, the same pattern as the explorer drawer),
  * Escape and a backdrop tap close it and hand focus back to the More
  * button that opened it.
+ *
+ * The Pin row (#216) toggles `pinned`/`onTogglePin`, which `routes/note.tsx`
+ * wires to `useVault()`'s `pinNote`/`unpinNote` (#215) through
+ * `pin-action.ts`'s shared toast.
  */
 
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -24,20 +28,16 @@ import {
 import { useFocusTrap } from './use-focus-trap.js';
 import '../styles/note-menu.css';
 
-/**
- * #216 adds a `pinned` helper (frontmatter `pinned: <ISO time>`, spec §14).
- * It does not exist yet, so there is nothing for this row to read or write:
- * left in the code, behind this constant, rather than improvised — flip it
- * on once that helper lands.
- */
-const PIN_TO_HOME_ENABLED = false;
-
 export interface NoteMenuProps {
   file: DriveFile;
   /** The note's name with its `.md` extension stripped. */
   noteName: string;
   /** False for Bower's own files (spec §14): the Edit row is left out. */
   canEdit: boolean;
+  /** Whether the note currently has a `pinned` timestamp (#215, #216). */
+  pinned: boolean;
+  /** Pins or unpins the note; the row's own label follows `pinned`. */
+  onTogglePin: () => void;
   onEdit: () => void;
   onClose: () => void;
 }
@@ -64,6 +64,8 @@ export function NoteMenu({
   file,
   noteName,
   canEdit,
+  pinned,
+  onTogglePin,
   onEdit,
   onClose,
 }: NoteMenuProps): JSX.Element {
@@ -97,22 +99,24 @@ export function NoteMenu({
         aria-label="Note actions"
         tabIndex={-1}
       >
-        {PIN_TO_HOME_ENABLED && (
-          <button
-            type="button"
-            role="menuitem"
-            class="note-menu-row"
-            onClick={onClose}
-          >
-            <IconPin />
-            <span class="note-menu-row-text">
-              <span class="note-menu-row-label">Pin to Home</span>
-              <span class="note-menu-row-hint">
-                Shows above Recent, on every device
-              </span>
+        <button
+          type="button"
+          role="menuitem"
+          class="note-menu-row"
+          onClick={selectAndClose(onTogglePin)}
+        >
+          <IconPin />
+          <span class="note-menu-row-text">
+            <span class="note-menu-row-label">
+              {pinned ? 'Unpin from Home' : 'Pin to Home'}
             </span>
-          </button>
-        )}
+            <span class="note-menu-row-hint">
+              {pinned
+                ? 'No longer shown on Home'
+                : 'Shows above Recent, on every device'}
+            </span>
+          </span>
+        </button>
         <a
           role="menuitem"
           class="note-menu-row"

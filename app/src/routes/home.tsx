@@ -24,6 +24,7 @@ import {
   IconNote,
   IconSearch,
 } from '../components/icons.js';
+import { PinnedSection } from '../components/pinned-section.js';
 import { TellComposer } from '../components/tell-composer.js';
 import { Tour } from '../components/tour.js';
 import { createTextFile } from '../drive.js';
@@ -43,6 +44,7 @@ import {
 } from '../navigation.js';
 import { shouldShowTour } from '../onboarding.js';
 import { offlineReason, useOnline } from '../online.js';
+import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import type { RunPhase } from '../run-store.js';
 import { useRun } from '../run-store.js';
@@ -64,7 +66,7 @@ import {
   useTour,
 } from '../tour-store.js';
 import { isAppFile } from '../vault-index.js';
-import { formatAgo, useVault } from '../vault-store.js';
+import { formatAgo, pinned, useVault } from '../vault-store.js';
 import '../styles/home.css';
 
 const MINUTE_MS = 60_000;
@@ -180,7 +182,8 @@ function Greeting({
 
 export function Home() {
   const { me } = useSession();
-  const { index, files, fetchedAt, status } = useVault();
+  const { index, files, fetchedAt, status, unpinNote, unpinFolder } =
+    useVault();
   const { phase, run, process } = useRun();
   const online = useOnline();
   const [now, setNow] = useState(() => Date.now());
@@ -193,8 +196,10 @@ export function Home() {
   const showAppFiles = getPref('showAppFiles');
   const recent = index === null ? [] : recentNotes(index, 20, showAppFiles);
   const pending = pendingCount(files);
-  const answers =
-    index === null ? 0 : (folderCounts(index).get(ANSWERS_FOLDER) ?? 0);
+  const noteCounts =
+    index === null ? new Map<string, number>() : folderCounts(index);
+  const pinnedItems = index === null ? [] : pinned(index);
+  const answers = noteCounts.get(ANSWERS_FOLDER) ?? 0;
   const noteCount =
     index === null
       ? 0
@@ -324,6 +329,14 @@ export function Home() {
           <p>in your notes</p>
         </div>
       </div>
+
+      <PinnedSection
+        items={pinnedItems}
+        noteCounts={noteCounts}
+        onUnpinNote={unpinNote}
+        onUnpinFolder={unpinFolder}
+        runUnpin={(unpin) => runPinAction(unpin, 'Unpinned')}
+      />
 
       <div class="home-columns">
         <div class="home-recent">
