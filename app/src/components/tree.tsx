@@ -384,9 +384,9 @@ export function Tree({
                     >
                       <IconFolder />
                       <span class="tree-name">{row.name}</span>
-                      <span class="tree-count">
-                        {counts.get(row.path) ?? 0}
-                      </span>
+                      {(counts.get(row.path) ?? 0) > 0 && (
+                        <span class="tree-count">{counts.get(row.path)}</span>
+                      )}
                     </a>
                     <button
                       type="button"
@@ -431,7 +431,9 @@ export function Tree({
                     </span>
                     <IconFolder />
                     <span class="tree-name">{row.name}</span>
-                    <span class="tree-count">{counts.get(row.path) ?? 0}</span>
+                    {(counts.get(row.path) ?? 0) > 0 && (
+                      <span class="tree-count">{counts.get(row.path)}</span>
+                    )}
                   </button>
                 ) : linkFolders ? (
                   <span

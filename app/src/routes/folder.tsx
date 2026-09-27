@@ -39,6 +39,7 @@ import {
   breadcrumb,
   driveFolderUrl,
   folderContents,
+  folderEmptyState,
   folderHref,
   relativeTime,
 } from '../navigation.js';
@@ -107,6 +108,7 @@ function FolderBody({
   const tellHref = `/bower?text=${encodeURIComponent(`${contents.name} `)}`;
   const now = Date.now();
   const titles = useNoteTitles(contents.notes);
+  const emptyState = folderEmptyState(contents);
 
   return (
     <section class="folder-view">
@@ -173,13 +175,20 @@ function FolderBody({
       <div class="folder-section">
         <h2 class="folder-label">Notes · newest first</h2>
         {contents.notes.length === 0 ? (
-          <div class="folder-empty">
-            <Bird state="idle" size={40} />
-            <p>Nothing here yet.</p>
-            <a class="button" href="/add">
-              Add
-            </a>
-          </div>
+          emptyState.elsewhere !== null ? (
+            <p class="folder-elsewhere">
+              {plural(emptyState.elsewhere.count, 'note')} in{' '}
+              {emptyState.elsewhere.subfolderName}
+            </p>
+          ) : (
+            <div class="folder-empty">
+              <Bird state="idle" size={40} />
+              <p>Nothing here yet.</p>
+              <a class="button" href="/add">
+                Add
+              </a>
+            </div>
+          )
         ) : (
           <ul class="folder-list">
             {contents.notes.map((note) => (
