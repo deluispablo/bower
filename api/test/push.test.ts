@@ -12,6 +12,8 @@ import {
   subscriptionId,
 } from '../src/push.js';
 import type { PushPayload } from '../src/push.js';
+import { RUN_TICKET_TTL_MS } from '../src/process.js';
+import { issueRunTicket } from '../src/run-ticket.js';
 import { runPushPayload } from '../src/runner.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { listPushSubs, putPushSub, putUser } from '../src/store.js';
@@ -489,7 +491,13 @@ describe('runner status report', () => {
       {
         method: 'POST',
         headers: {
-          authorization: `Bearer ${env.BOWER_API_KEY}`,
+          authorization: `Bearer ${await issueRunTicket(
+            kv,
+            userId,
+            (body as { kind?: 'lint' }).kind ?? 'ingest',
+            new Date(),
+            RUN_TICKET_TTL_MS,
+          )}`,
           'content-type': 'application/json',
         },
         body: JSON.stringify(body),

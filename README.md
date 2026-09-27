@@ -142,8 +142,8 @@ sequenceDiagram
     participant Drive as Google Drive
     participant Anthropic
     App->>Worker: POST /process
-    Worker->>Actions: repository_dispatch
-    Actions->>Worker: GET /runner/vaults/:id
+    Worker->>Actions: repository_dispatch (with this run's ticket)
+    Actions->>Worker: GET /runner/vaults/:id (the ticket)
     Actions->>Drive: rclone sync down
     Actions->>Anthropic: claude -p, following the folder's CLAUDE.md
     Anthropic-->>Actions: organised notes

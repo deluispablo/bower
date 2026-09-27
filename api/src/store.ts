@@ -15,6 +15,7 @@ import type {
   PushSubscription,
   Run,
   RunKind,
+  RunTicket,
   User,
 } from './types.js';
 
@@ -30,6 +31,8 @@ export const keys = {
   allow: (email: string): string => `allow:${normalizeEmail(email)}`,
   run: (id: string): string => `run:${id}`,
   lintRun: (id: string): string => `lintrun:${id}`,
+  runTicket: (id: string): string => `runticket:${id}`,
+  lintTicket: (id: string): string => `lintticket:${id}`,
   quota: (userId: string, date: string): string => `quota:${userId}:${date}`,
   quotaPrefix: (userId: string): string => `quota:${userId}:`,
   push: (userId: string, subId: string): string => `push:${userId}:${subId}`,
@@ -284,6 +287,47 @@ export async function putRun(
   await putJson(kv, runKey(id, kind), run);
 }
 
+/** The key a run ticket of `kind` lives under: `runticket:<id>` or `lintticket:<id>`. */
+function ticketKey(id: string, kind: RunKind): string {
+  return kind === 'lint' ? keys.lintTicket(id) : keys.runTicket(id);
+}
+
+/**
+ * Stores the hash of the ticket for the user's current run of `kind`,
+ * replacing any earlier one (so a new run's ticket retires the old run's).
+ * KV drops it after `ttlSeconds` (at least 60, KV's minimum); `expiresAt`
+ * inside it is what the check reads, so it holds even before KV's own
+ * expiry runs.
+ */
+export async function putRunTicket(
+  kv: KVNamespace,
+  id: string,
+  kind: RunKind,
+  ticket: RunTicket,
+  ttlSeconds: number,
+): Promise<void> {
+  await putJson(kv, ticketKey(id, kind), ticket, {
+    expirationTtl: Math.max(60, ttlSeconds),
+  });
+}
+
+export async function getRunTicket(
+  kv: KVNamespace,
+  id: string,
+  kind: RunKind,
+): Promise<RunTicket | undefined> {
+  return getJson<RunTicket>(kv, ticketKey(id, kind));
+}
+
+/** Retires the user's run ticket of `kind`, if any. */
+export async function deleteRunTicket(
+  kv: KVNamespace,
+  id: string,
+  kind: RunKind,
+): Promise<void> {
+  await kv.delete(ticketKey(id, kind));
+}
+
 /**
  * Increments today's (or `date`'s) request count for `userId` and returns
  * the new value. KV has no atomic increment, so this is a read-then-write:
@@ -383,7 +427,7 @@ export async function deleteDriveToken(
 /**
  * Deletes every key belonging to `userId`: `user:`, its `email:` index
  * (looked up from the user record before deleting it), `run:`, `lintrun:`,
- * every `quota:<id>:*`, every `push:<id>:*`, `drivetoken:<id>` and
+ * `runticket:`, `lintticket:`, every `quota:<id>:*`, every `push:<id>:*`, `drivetoken:<id>` and
  * `sessiongen:<id>`. Never touches `allow:<email>` — the allowlist is the
  * operator's, not the user's.
  *
@@ -401,6 +445,8 @@ export async function deleteUserData(
     kv.delete(keys.user(userId)),
     kv.delete(keys.run(userId)),
     kv.delete(keys.lintRun(userId)),
+    kv.delete(keys.runTicket(userId)),
+    kv.delete(keys.lintTicket(userId)),
     kv.delete(keys.driveToken(userId)),
     kv.delete(keys.sessionGen(userId)),
     deleteByPrefix(kv, keys.quotaPrefix(userId)),

@@ -64,6 +64,19 @@ export interface Run {
   runId?: string;
 }
 
+/**
+ * The Worker's copy of a run ticket: the per-run credential the runner of
+ * one run of one vault presents instead of the operator key (see
+ * `run-ticket.ts`). Only the SHA-256 of the ticket is kept, never the
+ * ticket itself.
+ */
+export interface RunTicket {
+  /** Lowercase hex SHA-256 of the ticket. */
+  hash: string;
+  /** ISO-8601; the ticket is refused from then on. */
+  expiresAt: string;
+}
+
 /** A cached Google access token for Drive; plaintext, but lives at most 1 h. */
 export interface DriveToken {
   accessToken: string;

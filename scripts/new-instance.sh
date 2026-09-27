@@ -20,6 +20,13 @@
 #
 # BOWER_API_KEY is not set here: scripts/deploy.sh (or `deploy-api.sh
 # secrets`) generates it and sets it in the Worker and in this repo at once.
+# Only lint.yml's `dispatch` job uses it, to ask the Worker to start the
+# weekly health checks. The jobs that run the agent (ingest.yml, lint.yml's
+# `lint` job) need no secret but the Claude credential: the Worker hands
+# each run its own ticket in the repository_dispatch (issue #259). An
+# instance repo set up before that still has the old workflows, which send
+# BOWER_API_KEY from every run: run this script again after updating Bower
+# (docs/runbook.md, "Upgrading to run tickets").
 #
 # OWNER/NAME and the Worker's origin come from api/wrangler.local.toml when
 # it exists (GITHUB_REPO, API_ORIGIN); otherwise they are asked for.
@@ -169,6 +176,7 @@ new_instance_main() {
   names=$(gh secret list -R "$REPO" --json name -q '.[].name' </dev/null)
   if ! has_line "$names" BOWER_API_KEY; then
     log "BOWER_API_KEY is not set in $REPO yet: scripts/deploy.sh sets it in the Worker and here at once."
+    log "(Only the weekly health check's dispatch job uses it; the runs themselves get a ticket per run.)"
   fi
 }
 

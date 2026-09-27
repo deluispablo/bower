@@ -6,17 +6,24 @@ import type { Env } from '../src/env.js';
 import { GOOGLE_TOKEN_URL } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
+import { RUN_TICKET_TTL_MS } from '../src/process.js';
+import { hashTicket, issueRunTicket } from '../src/run-ticket.js';
 import { MAX_PROCESSED, MAX_TEXT_LENGTH } from '../src/runner.js';
-import type { RunnerVault, RunnerVaultList } from '../src/runner.js';
+import type {
+  LintDispatchResult,
+  RunnerVault,
+  RunnerVaultList,
+} from '../src/runner.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import {
   getRun,
+  getRunTicket,
   getUser,
   putDriveToken,
   putRun,
   putUser,
 } from '../src/store.js';
-import type { Run, User } from '../src/types.js';
+import type { Run, RunKind, User } from '../src/types.js';
 
 /**
  * `Cloudflare.Env` is empty in this repo (no `wrangler types`), so the
@@ -30,33 +37,83 @@ const USER_ID = 'user-1';
 const REFRESH_TOKEN = 'test-refresh-token';
 const ACCESS_TOKEN = 'test-access-token';
 const API_KEY = 'test-claude-api-key';
+/** The operator key: only `POST /runner/lint/dispatch`, or the legacy flag. */
 const RUNNER_AUTH = `Bearer ${env.BOWER_API_KEY}`;
+
+/** The same bindings with the transition flag on. */
+const legacyEnv: Env = { ...env, RUNNER_ACCEPT_LEGACY_KEY: '1' };
 
 interface Call {
   url: string;
+  /** The parsed JSON body of a call to GitHub. */
+  body?: unknown;
+}
+
+/** What a `repository_dispatch` call sends. */
+interface DispatchBody {
+  event_type: string;
+  client_payload: { vault_id: string; ticket: string };
 }
 
 /**
  * A hermetic stand-in for Google's token endpoint and GitHub's dispatch:
  * records every call; the token endpoint answers `tokenResponse()`, GitHub
- * answers 204.
+ * answers `githubStatus` (204 by default).
  */
-function stub(tokenResponse?: () => Response): {
+function stub(
+  tokenResponse?: () => Response,
+  githubStatus = 204,
+): {
   calls: Call[];
   fetchImpl: FetchLike;
 } {
   const calls: Call[] = [];
-  const fetchImpl: FetchLike = (input) => {
-    calls.push({ url: input });
+  const fetchImpl: FetchLike = (input, init) => {
+    const call: Call = { url: input };
+    if (
+      input.startsWith('https://api.github.com/') &&
+      typeof init?.body === 'string'
+    ) {
+      call.body = JSON.parse(init.body) as unknown;
+    }
+    calls.push(call);
     if (input === GOOGLE_TOKEN_URL && tokenResponse !== undefined) {
       return Promise.resolve(tokenResponse());
     }
     if (input.startsWith('https://api.github.com/')) {
-      return Promise.resolve(new Response(null, { status: 204 }));
+      return Promise.resolve(new Response(null, { status: githubStatus }));
     }
     return Promise.reject(new Error(`unexpected fetch in test: ${input}`));
   };
   return { calls, fetchImpl };
+}
+
+/** The dispatches `calls` sent to GitHub, in order. */
+function dispatches(calls: Call[]): DispatchBody[] {
+  return calls
+    .filter((call) => call.url.startsWith('https://api.github.com/'))
+    .map((call) => call.body as DispatchBody);
+}
+
+/**
+ * `Authorization` with a fresh ticket for the run of `kind` on vault `id`,
+ * as a dispatch would mint it (`now` moves it into the past).
+ */
+async function ticketAuth(
+  id = USER_ID,
+  kind: RunKind = 'ingest',
+  now = new Date(),
+): Promise<string> {
+  return `Bearer ${await issueRunTicket(kv, id, kind, now, RUN_TICKET_TTL_MS)}`;
+}
+
+/** The kind a status body reports, as the Worker reads it. */
+function reportedKind(body: unknown): RunKind {
+  return typeof body === 'object' &&
+    body !== null &&
+    (body as Record<string, unknown>).kind === 'lint'
+    ? 'lint'
+    : 'ingest';
 }
 
 /** Stores a user with a vault and a refresh token encrypted with the fixture key. */
@@ -88,35 +145,72 @@ async function seedDriveToken(): Promise<string> {
   return expiresAt;
 }
 
+/**
+ * `GET /runner/vaults/:id`. `authorization` `undefined` (the default) sends
+ * a fresh ingest ticket for `id`; `null` sends no header.
+ */
 async function getVault(
   fetchImpl: FetchLike,
-  authorization: string | null = RUNNER_AUTH,
+  authorization?: string | null,
   id = USER_ID,
+  requestEnv: Env = env,
 ): Promise<Response> {
+  const auth =
+    authorization === undefined ? await ticketAuth(id) : authorization;
   return createApp({ fetchImpl }).request(
     `${API}/runner/vaults/${id}`,
     {
-      headers: authorization === null ? {} : { authorization },
+      headers: auth === null ? {} : { authorization: auth },
     },
-    env,
+    requestEnv,
   );
 }
 
+/**
+ * `POST /runner/vaults/:id/status`. `authorization` `undefined` (the
+ * default) sends a fresh ticket for `id` and the kind `body` reports;
+ * `null` sends no header.
+ */
 async function postStatus(
   body: unknown,
-  authorization: string | null = RUNNER_AUTH,
+  authorization?: string | null,
   id = USER_ID,
+  requestEnv: Env = env,
 ): Promise<Response> {
+  const auth =
+    authorization === undefined
+      ? await ticketAuth(id, reportedKind(body))
+      : authorization;
   const headers: Record<string, string> = {
     'content-type': 'application/json',
   };
-  if (authorization !== null) headers.authorization = authorization;
+  if (auth !== null) headers.authorization = auth;
   return createApp({ fetchImpl: stub().fetchImpl }).request(
     `${API}/runner/vaults/${id}/status`,
     {
       method: 'POST',
       headers,
       body: typeof body === 'string' ? body : JSON.stringify(body),
+    },
+    requestEnv,
+  );
+}
+
+/** `POST /runner/lint/dispatch` with `body` (none when `undefined`). */
+async function postLintDispatch(
+  fetchImpl: FetchLike,
+  body?: unknown,
+  authorization: string | null = RUNNER_AUTH,
+): Promise<Response> {
+  const headers: Record<string, string> = {};
+  if (authorization !== null) headers.authorization = authorization;
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  return createApp({ fetchImpl }).request(
+    `${API}/runner/lint/dispatch`,
+    {
+      method: 'POST',
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     },
     env,
   );
@@ -206,17 +300,299 @@ describe('runner key', () => {
   });
 });
 
+describe('run tickets', () => {
+  it('refuses a ticket for vault A on vault B, on GET and on POST status', async () => {
+    await seedUser();
+    await seedDriveToken();
+    const ticketForOther = await ticketAuth('user-2');
+
+    const vault = await getVault(stub().fetchImpl, ticketForOther);
+    const status = await postStatus({ state: 'running' }, ticketForOther);
+
+    expect(vault.status).toBe(401);
+    expect((await vault.json<ErrorBody>()).error.code).toBe('unauthorized');
+    expect(status.status).toBe(401);
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+  });
+
+  it('refuses a ticket once its run reported done, on GET and on POST status', async () => {
+    await seedUser();
+    await seedDriveToken();
+    const auth = await ticketAuth();
+
+    expect((await getVault(stub().fetchImpl, auth)).status).toBe(200);
+    expect((await postStatus({ state: 'running' }, auth)).status).toBe(200);
+    // Still good while the run is under way.
+    expect((await getVault(stub().fetchImpl, auth)).status).toBe(200);
+    expect((await postStatus({ state: 'done' }, auth)).status).toBe(200);
+
+    expect((await getVault(stub().fetchImpl, auth)).status).toBe(401);
+    expect((await postStatus({ state: 'failed' }, auth)).status).toBe(401);
+    expect((await getRun(kv, USER_ID))?.state).toBe('done');
+    expect(await getRunTicket(kv, USER_ID, 'ingest')).toBeUndefined();
+  });
+
+  it('refuses a ticket once its run reported failed', async () => {
+    await seedUser();
+    await seedDriveToken();
+    const auth = await ticketAuth();
+
+    expect((await postStatus({ state: 'failed' }, auth)).status).toBe(200);
+
+    expect((await getVault(stub().fetchImpl, auth)).status).toBe(401);
+  });
+
+  it('refuses an expired ticket', async () => {
+    await seedUser();
+    await seedDriveToken();
+    const auth = await ticketAuth(
+      USER_ID,
+      'ingest',
+      new Date(Date.now() - RUN_TICKET_TTL_MS - 1000),
+    );
+
+    expect((await getVault(stub().fetchImpl, auth)).status).toBe(401);
+    expect((await postStatus({ state: 'running' }, auth)).status).toBe(401);
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+  });
+
+  it("refuses an older run's ticket once a newer run has one", async () => {
+    await seedUser();
+    await seedDriveToken();
+    const older = await ticketAuth();
+    const newer = await ticketAuth();
+
+    expect((await getVault(stub().fetchImpl, older)).status).toBe(401);
+    expect((await getVault(stub().fetchImpl, newer)).status).toBe(200);
+  });
+
+  it("keeps an ingest's ticket and a lint's ticket to their own run", async () => {
+    await seedUser();
+    const ingest = await ticketAuth(USER_ID, 'ingest');
+    const lint = await ticketAuth(USER_ID, 'lint');
+
+    const crossed = [
+      await postStatus({ state: 'running', kind: 'lint' }, ingest),
+      await postStatus({ state: 'running', kind: 'ingest' }, lint),
+    ];
+
+    expect(crossed.map((response) => response.status)).toEqual([401, 401]);
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+    expect(await getRun(kv, USER_ID, 'lint')).toBeUndefined();
+    // Retiring one leaves the other alone.
+    expect((await postStatus({ state: 'done' }, ingest)).status).toBe(200);
+    expect(
+      (await postStatus({ state: 'done', kind: 'lint' }, lint)).status,
+    ).toBe(200);
+  });
+
+  it('refuses the operator key on GET and POST status when the legacy flag is off', async () => {
+    await seedUser();
+    await seedDriveToken();
+
+    const vault = await getVault(stub().fetchImpl, RUNNER_AUTH);
+    const status = await postStatus({ state: 'running' }, RUNNER_AUTH);
+
+    expect(vault.status).toBe(401);
+    expect(status.status).toBe(401);
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+  });
+
+  it('accepts the operator key on GET and POST status while the legacy flag is 1', async () => {
+    await seedUser();
+    await seedDriveToken();
+
+    const vault = await getVault(
+      stub().fetchImpl,
+      RUNNER_AUTH,
+      USER_ID,
+      legacyEnv,
+    );
+    const status = await postStatus(
+      { state: 'done' },
+      RUNNER_AUTH,
+      USER_ID,
+      legacyEnv,
+    );
+
+    expect(vault.status).toBe(200);
+    expect(status.status).toBe(200);
+  });
+
+  it('stores only the hash of a ticket', async () => {
+    const ticket = await issueRunTicket(
+      kv,
+      USER_ID,
+      'ingest',
+      new Date(),
+      RUN_TICKET_TTL_MS,
+    );
+
+    const stored = await getRunTicket(kv, USER_ID, 'ingest');
+    expect(stored?.hash).toBe(await hashTicket(ticket));
+    const listed = await kv.list({});
+    for (const entry of listed.keys) {
+      expect(entry.name).not.toContain(ticket);
+      expect(await kv.get(entry.name)).not.toContain(ticket);
+    }
+  });
+});
+
+describe('POST /runner/lint/dispatch', () => {
+  async function seedSecondVault(): Promise<void> {
+    await putUser(kv, {
+      id: 'user-2',
+      email: 'alex@example.com',
+      createdAt: '2026-01-02T00:00:00.000Z',
+      encRefreshToken: 'unused',
+      vault: {
+        folderId: 'FOLDER_ID',
+        inboxFolderId: 'INBOX_FOLDER_ID',
+        name: 'Bower',
+      },
+    });
+  }
+
+  it('dispatches one ticketed bower-lint per vault, each ticket good for its own vault only', async () => {
+    await seedUser();
+    await seedDriveToken();
+    await seedSecondVault();
+    await putUser(kv, {
+      id: 'user-3',
+      email: 'no-vault@example.com',
+      createdAt: '2026-01-03T00:00:00.000Z',
+      encRefreshToken: 'unused',
+    });
+    const github = stub();
+
+    const response = await postLintDispatch(github.fetchImpl);
+
+    expect(response.status).toBe(200);
+    expect(await response.json<LintDispatchResult>()).toEqual({
+      dispatched: 2,
+    });
+    const sent = dispatches(github.calls);
+    expect(sent.map((body) => body.event_type)).toEqual([
+      'bower-lint',
+      'bower-lint',
+    ]);
+    expect(sent.map((body) => body.client_payload.vault_id).sort()).toEqual([
+      USER_ID,
+      'user-2',
+    ]);
+    const [first, second] = sent;
+    expect(first?.client_payload.ticket).not.toBe(
+      second?.client_payload.ticket,
+    );
+    expect((await getRun(kv, USER_ID, 'lint'))?.state).toBe('queued');
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+
+    const mine = sent.find((body) => body.client_payload.vault_id === USER_ID);
+    const theirs = sent.find(
+      (body) => body.client_payload.vault_id === 'user-2',
+    );
+    const mineAuth = `Bearer ${mine?.client_payload.ticket ?? ''}`;
+    const theirsAuth = `Bearer ${theirs?.client_payload.ticket ?? ''}`;
+    expect((await getVault(stub().fetchImpl, mineAuth)).status).toBe(200);
+    expect((await getVault(stub().fetchImpl, theirsAuth)).status).toBe(401);
+    const report = await postStatus({ state: 'done', kind: 'lint' }, mineAuth);
+    expect(report.status).toBe(200);
+    expect((await report.json<RunBody>()).run.kind).toBe('lint');
+  });
+
+  it('dispatches for the one vaultId in the body', async () => {
+    await seedUser();
+    await seedSecondVault();
+    const github = stub();
+
+    const response = await postLintDispatch(github.fetchImpl, {
+      vaultId: 'user-2',
+    });
+
+    expect(response.status).toBe(200);
+    expect(
+      dispatches(github.calls).map((body) => body.client_payload.vault_id),
+    ).toEqual(['user-2']);
+  });
+
+  it('answers 404 not_found for a vaultId without a vault', async () => {
+    const github = stub();
+
+    const response = await postLintDispatch(github.fetchImpl, {
+      vaultId: 'nobody',
+    });
+
+    expect(response.status).toBe(404);
+    expect(github.calls).toEqual([]);
+  });
+
+  it('answers 400 bad_request for an unknown field', async () => {
+    const response = await postLintDispatch(stub().fetchImpl, { all: true });
+
+    expect(response.status).toBe(400);
+  });
+
+  it.each([
+    ['missing', null],
+    ['wrong', 'Bearer not-the-key'],
+    ['admin', `Bearer ${env.ADMIN_KEY}`],
+  ])('answers 401 unauthorized with a %s key', async (_, auth) => {
+    await seedUser();
+    const github = stub();
+
+    const response = await postLintDispatch(github.fetchImpl, undefined, auth);
+
+    expect(response.status).toBe(401);
+    expect(github.calls).toEqual([]);
+  });
+
+  it('answers 401 unauthorized with a run ticket', async () => {
+    await seedUser();
+    const github = stub();
+
+    const response = await postLintDispatch(
+      github.fetchImpl,
+      undefined,
+      await ticketAuth(USER_ID, 'lint'),
+    );
+
+    expect(response.status).toBe(401);
+    expect(github.calls).toEqual([]);
+  });
+
+  it('answers 502 dispatch and retires the ticket when GitHub refuses', async () => {
+    await seedUser();
+
+    const response = await postLintDispatch(stub(undefined, 500).fetchImpl);
+
+    expect(response.status).toBe(502);
+    expect((await response.json<ErrorBody>()).error.code).toBe('dispatch');
+    expect(await getRunTicket(kv, USER_ID, 'lint')).toBeUndefined();
+    expect(await getRun(kv, USER_ID, 'lint')).toBeUndefined();
+  });
+});
+
+/** `GET /runner/vaults`, with the legacy flag on unless `requestEnv` says otherwise. */
 async function listVaults(
   authorization: string | null = RUNNER_AUTH,
+  requestEnv: Env = legacyEnv,
 ): Promise<Response> {
   return createApp({ fetchImpl: stub().fetchImpl }).request(
     `${API}/runner/vaults`,
     { headers: authorization === null ? {} : { authorization } },
-    env,
+    requestEnv,
   );
 }
 
-describe('GET /runner/vaults', () => {
+describe('GET /runner/vaults (legacy flag)', () => {
+  it('answers 401 unauthorized to the operator key when the legacy flag is off', async () => {
+    await seedUser();
+
+    const response = await listVaults(RUNNER_AUTH, env);
+
+    expect(response.status).toBe(401);
+  });
+
   it('lists the id of every user with a vault, and nothing else', async () => {
     await seedUser();
     await putUser(kv, {
@@ -337,7 +713,7 @@ describe('GET /runner/vaults/:id', () => {
   });
 
   it('answers 404 not_found for an unknown id', async () => {
-    const response = await getVault(stub().fetchImpl, RUNNER_AUTH, 'nobody');
+    const response = await getVault(stub().fetchImpl, undefined, 'nobody');
 
     expect(response.status).toBe(404);
     expect((await response.json<ErrorBody>()).error.code).toBe('not_found');
@@ -361,8 +737,12 @@ describe('POST /runner/vaults/:id/status', () => {
 
     const queued = await (await postProcess(github.fetchImpl)).json<RunBody>();
     expect(queued.run.state).toBe('queued');
+    // The runner reports with the ticket the dispatch carried, nothing else.
+    const [dispatch] = dispatches(github.calls);
+    expect(dispatch?.client_payload.vault_id).toBe(USER_ID);
+    const auth = `Bearer ${dispatch?.client_payload.ticket ?? ''}`;
 
-    const runningResponse = await postStatus({ state: 'running' });
+    const runningResponse = await postStatus({ state: 'running' }, auth);
     expect(runningResponse.status).toBe(200);
     const running = (await runningResponse.json<RunBody>()).run;
     expect(running.state).toBe('running');
@@ -380,15 +760,18 @@ describe('POST /runner/vaults/:id/status', () => {
 
     // A second `running` report keeps the original startedAt.
     const again = (
-      await (await postStatus({ state: 'running' })).json<RunBody>()
+      await (await postStatus({ state: 'running' }, auth)).json<RunBody>()
     ).run;
     expect(again.startedAt).toBe(running.startedAt);
 
-    const doneResponse = await postStatus({
-      state: 'done',
-      summary: 'Filed two notes.',
-      processed: ['a.md', 'b.md'],
-    });
+    const doneResponse = await postStatus(
+      {
+        state: 'done',
+        summary: 'Filed two notes.',
+        processed: ['a.md', 'b.md'],
+      },
+      auth,
+    );
     expect(doneResponse.status).toBe(200);
     const done = (await doneResponse.json<RunBody>()).run;
     expect(done).toMatchObject({
@@ -402,6 +785,8 @@ describe('POST /runner/vaults/:id/status', () => {
     expect(Date.parse(done.finishedAt ?? '')).not.toBeNaN();
     expect(done.error).toBeUndefined();
     expect(await getRun(kv, USER_ID)).toEqual(done);
+    // The run is over, and so is its ticket.
+    expect((await getVault(stub().fetchImpl, auth)).status).toBe(401);
 
     // After done, a press starts a new run.
     const next = await postProcess(github.fetchImpl);
@@ -629,7 +1014,7 @@ describe('POST /runner/vaults/:id/status', () => {
   it('answers 404 not_found for an unknown id', async () => {
     const response = await postStatus(
       { state: 'running' },
-      RUNNER_AUTH,
+      undefined,
       'nobody',
     );
 
