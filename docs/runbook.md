@@ -267,9 +267,20 @@ After deploying, or every so often after that: instance repo → **Actions → Z
 
 ### Costs to watch
 
-- **Cloudflare free tier**: Workers requests, KV reads/writes and Pages builds all have a free monthly allowance; the dashboard's Analytics tab for the Worker and the KV namespace shows current usage against it.
+- **Cloudflare free tier**: Workers requests, KV reads/writes and Pages builds all have a free allowance; the dashboard's Analytics tab for the Worker and the KV namespace shows current usage against it. KV writes are the tightest one: see the next section.
 - **GitHub Actions minutes**: 2,000 free minutes a month on a private repo; each run is capped at 20 minutes (`timeout-minutes` in the workflows), and the weekly health check adds one run per user every Sunday — the Actions tab's usage view (or **Settings → Billing** on the account owning the instance repo) shows the month's total.
 - **Anthropic usage**: a Claude subscription's own usage limits, or an API key's billed usage in the Claude Console — whichever the instance repo's `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` draws on.
+
+### KV write budget
+
+Workers KV's free tier allows **1,000 writes a day per Cloudflare account** (every namespace and every Worker of the account together; deletes and lists have their own 1,000 a day), reset at 00:00 UTC. Past it, every KV write fails until then: sign-ins, Bower folder setup, Tidy up, run status reports and settings all answer errors, for every user. What still writes:
+
+- **Sign-in**: the user record and its email index (2 writes).
+- **Tidy up** (`POST /process`): the run and the day's counter (2), plus 1 when a stale run is first recorded as failed; then one write per status report from the runner (a few per run), and the same for the weekly health check, per user.
+- **Drive access**: the cached Drive token, about one write per hour a user has the app open.
+- **Settings and account**: a settings save that changes something, Bower folder setup, a push subscription per device, "Sign out everywhere" (1 each); deleting an account spends deletes, not writes.
+
+Nothing else writes: the rate limits (the strict ones on `GET /auth/callback` and `POST /process` included) are counted in memory, and a request without a valid session or sign-in cookie writes nothing. A household of a few people uses well under a tenth of the budget. If the namespace's metrics (dashboard → Storage & Databases → KV → the namespace → Metrics) show writes climbing towards 1,000, look for a user or client stuck in a loop before anything else; Workers Paid lifts the limit if the instance outgrows it.
 
 ## 7. Pause and teardown
 

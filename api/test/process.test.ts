@@ -1,5 +1,5 @@
 import { env as testEnv } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../src/env.js';
 import type { FetchLike } from '../src/google.js';
@@ -11,6 +11,11 @@ import {
   markStale,
   runStaleness,
 } from '../src/process.js';
+import {
+  genericWindow,
+  RATE_LIMIT_PER_MINUTE,
+  strictWindow,
+} from '../src/security.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { getQuota, getRun, keys, putRun, putUser } from '../src/store.js';
 import type { Run, User } from '../src/types.js';
@@ -108,6 +113,12 @@ interface ErrorBody {
 beforeEach(async () => {
   const listed = await kv.list({});
   await Promise.all(listed.keys.map((entry) => kv.delete(entry.name)));
+  strictWindow.clear();
+  genericWindow.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('runStaleness', () => {
@@ -381,6 +392,38 @@ describe('POST /process', () => {
     const response = await postProcess(github.fetchImpl);
 
     expect(response.status).toBe(401);
+    expect(github.calls).toHaveLength(0);
+  });
+
+  it('writes nothing to KV and is never rate limited without a session or from another site', async () => {
+    const github = githubStub();
+    const forged = `${SESSION_COOKIE}=${await signSession(
+      { userId: USER_ID },
+      'not-the-session-secret',
+    )}`;
+    const put = vi.spyOn(kv, 'put');
+
+    // Well past the strict limit: none of these is counted.
+    for (let i = 0; i <= RATE_LIMIT_PER_MINUTE; i += 1) {
+      expect((await postProcess(github.fetchImpl)).status).toBe(401);
+      expect((await postProcess(github.fetchImpl, forged)).status).toBe(401);
+      const crossSite = await createApp({
+        fetchImpl: github.fetchImpl,
+      }).request(
+        `${API}/process`,
+        {
+          method: 'POST',
+          headers: {
+            origin: 'https://evil.example',
+            cookie: await sessionCookie(),
+          },
+        },
+        env,
+      );
+      expect(crossSite.status).toBe(403);
+    }
+
+    expect(put).not.toHaveBeenCalled();
     expect(github.calls).toHaveLength(0);
   });
 });

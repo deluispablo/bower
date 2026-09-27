@@ -104,9 +104,14 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
   routes.post(
     '/process',
-    rateLimit('process'),
     requireSameOrigin,
     requireSession,
+    // After the session check, keyed by user: a request without a valid
+    // session is refused before it is counted. A burst guard only; the
+    // daily quota below is the real limit.
+    rateLimit<AppEnv & { Variables: { userId: string } }>('process', (c) =>
+      c.get('userId'),
+    ),
     async (c) => {
       const env = c.get('env');
       const kv = env.BOWER_KV;

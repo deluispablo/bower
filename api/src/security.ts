@@ -2,7 +2,7 @@
  * Request hardening shared by every route: CORS for the app's origin only,
  * security headers on every response, a bounded request id, input limits
  * (body size, JSON content type), the same-origin (CSRF) check for
- * state-changing session routes, and per-IP rate limits.
+ * state-changing session routes, and the rate limits.
  *
  * See `docs/security.md` for the threat model these serve.
  */
@@ -13,7 +13,6 @@ import type { Context, MiddlewareHandler } from 'hono';
 
 import type { AppEnv } from './env.js';
 import { HttpError } from './errors.js';
-import { hitRateWindow } from './store.js';
 
 /**
  * CORS for `APP_ORIGIN` only, read from the validated env on each request
@@ -157,8 +156,8 @@ export const requireSameOrigin: MiddlewareHandler<AppEnv> = async (c, next) => {
 };
 
 /**
- * Requests allowed per client IP, per minute, on each of the two strict
- * routes (`GET /auth/callback`, `POST /process`).
+ * Requests allowed per minute on each of the two strict routes: per client
+ * IP on `GET /auth/callback`, per signed-in user on `POST /process`.
  */
 export const RATE_LIMIT_PER_MINUTE = 30;
 
@@ -187,46 +186,12 @@ export const COOKIE_ROUTES: readonly string[] = [
  * first `x-forwarded-for` entry, else `unknown` (every such request then
  * shares one bucket).
  */
-export function clientIp(c: Context<AppEnv>): string {
+export function clientIp<E extends AppEnv>(c: Context<E>): string {
   const cf = c.req.header('cf-connecting-ip')?.trim();
   if (cf !== undefined && cf !== '') return cf;
   const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
   if (forwarded !== undefined && forwarded !== '') return forwarded;
   return 'unknown';
-}
-
-/**
- * Fixed-window rate limit per client IP for `route`: at most
- * `RATE_LIMIT_PER_MINUTE` requests in each calendar minute, counted in KV
- * (`rate:<route>:<ip>:<minute>`, see `hitRateWindow`). Over the limit, a
- * 429 `rate_limited` with `Retry-After` set to the seconds left in the
- * minute.
- *
- * KV has no atomic increment, so the count is read-then-write: requests
- * racing in the same window can undercount and let a few extra through.
- * Accepted: this slows abuse down, it is not an exact quota.
- */
-export function rateLimit(route: string): MiddlewareHandler<AppEnv> {
-  return async (c, next) => {
-    const now = Date.now();
-    const minute = Math.floor(now / 60_000);
-    const count = await hitRateWindow(
-      c.get('env').BOWER_KV,
-      route,
-      clientIp(c),
-      minute,
-      RATE_LIMIT_PER_MINUTE,
-    );
-    if (count > RATE_LIMIT_PER_MINUTE) {
-      const retryAfter = Math.max(
-        1,
-        Math.ceil(((minute + 1) * 60_000 - now) / 1000),
-      );
-      c.header('Retry-After', String(retryAfter));
-      throw new HttpError(429, 'rate_limited', 'Too many requests, slow down');
-    }
-    await next();
-  };
 }
 
 /** Most client IPs the generic limit tracks at once, per isolate. */
@@ -314,7 +279,8 @@ export const genericWindow: SlidingWindow = createSlidingWindow(
  * In memory (`genericWindow`), not KV: it costs no KV write, so normal use
  * never eats the free tier's daily writes. Best-effort per isolate: each
  * Cloudflare isolate counts on its own and forgets on eviction, so a client
- * spread across isolates gets more. The strict limits stay on KV.
+ * spread across isolates gets more. The strict limits (`rateLimit`) work the
+ * same way.
  */
 export const genericRateLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
   const retryAfter = genericWindow.hit(clientIp(c), Date.now());
@@ -324,3 +290,39 @@ export const genericRateLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
   }
   await next();
 };
+
+/** Most keys the strict limits track at once, per isolate, both routes together. */
+export const STRICT_RATE_LIMIT_MAX_KEYS = 10_000;
+
+/** The strict limits' window, one per isolate (module scope), keyed per route. */
+export const strictWindow: SlidingWindow = createSlidingWindow(
+  RATE_LIMIT_PER_MINUTE,
+  60_000,
+  STRICT_RATE_LIMIT_MAX_KEYS,
+);
+
+/**
+ * The strict limit for `route`: at most `RATE_LIMIT_PER_MINUTE` requests per
+ * key in any 60 seconds, the key being `keyOf(c)` (the client IP by
+ * default). Over the limit, a 429 `rate_limited` with `Retry-After` set to
+ * the seconds until the oldest counted request leaves the window.
+ *
+ * In memory (`strictWindow`), like the generic limit: it costs no KV write,
+ * so a flood of requests cannot spend the free tier's daily KV writes
+ * (finding M1 of the 2026-09-28 security review). Mount it only after the
+ * checks that write nothing (the OAuth cookie on the callback, the session on
+ * `POST /process`), so only requests that could be legitimate are counted.
+ */
+export function rateLimit<E extends AppEnv = AppEnv>(
+  route: string,
+  keyOf: (c: Context<E>) => string = clientIp,
+): MiddlewareHandler<E> {
+  return async (c, next) => {
+    const retryAfter = strictWindow.hit(`${route}:${keyOf(c)}`, Date.now());
+    if (retryAfter > 0) {
+      c.header('Retry-After', String(retryAfter));
+      throw new HttpError(429, 'rate_limited', 'Too many requests, slow down');
+    }
+    await next();
+  };
+}

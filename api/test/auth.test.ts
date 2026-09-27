@@ -1,5 +1,5 @@
 import { env as testEnv } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NOT_INVITED_COOKIE, OAUTH_COOKIE } from '../src/auth.js';
 import {
@@ -18,6 +18,11 @@ import {
 } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
+import {
+  genericWindow,
+  RATE_LIMIT_PER_MINUTE,
+  strictWindow,
+} from '../src/security.js';
 import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
@@ -156,16 +161,14 @@ async function allKeys(): Promise<string[]> {
   return listed.keys.map((entry) => entry.name);
 }
 
-/**
- * Every key but the per-IP rate-limit counters (`rate:`), which every
- * callback writes: what a callback stored about the person signing in.
- */
-async function stateKeys(): Promise<string[]> {
-  return (await allKeys()).filter((name) => !name.startsWith('rate:'));
-}
-
 beforeEach(async () => {
   for (const name of await allKeys()) await kv.delete(name);
+  strictWindow.clear();
+  genericWindow.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('GET /auth/login', () => {
@@ -351,7 +354,7 @@ describe('GET /auth/callback', () => {
     expect(response.status).toBe(400);
     const body = await response.json<{ error: { code: string } }>();
     expect(body.error.code).toBe('oauth_state');
-    expect(await stateKeys()).toEqual([keys.allow(EMAIL)]);
+    expect(await allKeys()).toEqual([keys.allow(EMAIL)]);
   });
 
   it('rejects a missing cookie, a missing state, an expired cookie and an error param', async () => {
@@ -420,7 +423,7 @@ describe('GET /auth/callback', () => {
     );
     const cleared = cookieNamed(response, OAUTH_COOKIE);
     expect(cleared).toContain('Max-Age=0');
-    expect(await stateKeys()).toEqual([]);
+    expect(await allKeys()).toEqual([]);
   });
 
   it('answers 502 google_error when the token endpoint fails', async () => {
@@ -439,7 +442,47 @@ describe('GET /auth/callback', () => {
     expect(response.status).toBe(502);
     const body = await response.json<{ error: { code: string } }>();
     expect(body.error.code).toBe('google_error');
-    expect(await stateKeys()).toEqual([keys.allow(EMAIL)]);
+    expect(await allKeys()).toEqual([keys.allow(EMAIL)]);
+  });
+  it('writes nothing to KV and is never rate limited without a valid OAuth cookie', async () => {
+    await allow(EMAIL);
+    const app = createApp({ fetchImpl: googleStub().fetchImpl });
+    const { state } = await login(app);
+    const forged = `${OAUTH_COOKIE}=${await signToken(
+      { state, verifier: 'forged-verifier' },
+      'not-the-session-secret',
+      600,
+    )}`;
+    const put = vi.spyOn(kv, 'put');
+
+    // Well past the strict limit: none of these is counted.
+    for (let i = 0; i <= RATE_LIMIT_PER_MINUTE; i += 1) {
+      const query = `code=test-code&state=${state}`;
+      expect((await callback(app, query)).status).toBe(400);
+      expect((await callback(app, query, forged)).status).toBe(400);
+    }
+
+    expect(put).not.toHaveBeenCalled();
+    expect(await allKeys()).toEqual([keys.allow(EMAIL)]);
+  });
+
+  it('answers 429 rate_limited past the strict limit with a valid OAuth cookie', async () => {
+    const app = createApp({
+      fetchImpl: googleStub({ tokenStatus: 400 }).fetchImpl,
+    });
+    const { cookie, state } = await login(app);
+    const query = `code=test-code&state=${state}`;
+
+    for (let i = 0; i < RATE_LIMIT_PER_MINUTE; i += 1) {
+      expect((await callback(app, query, cookie)).status).toBe(502);
+    }
+    const limited = await callback(app, query, cookie);
+
+    expect(limited.status).toBe(429);
+    expect((await limited.json<{ error: { code: string } }>()).error.code).toBe(
+      'rate_limited',
+    );
+    expect(limited.headers.get('retry-after')).not.toBeNull();
   });
 });
 

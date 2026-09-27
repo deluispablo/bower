@@ -14,7 +14,6 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
 | `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` (deleted by `deletePushSub`, `DELETE /push/subscribe`, and `sendPush` on a 404/410) |
 | `drivetoken:<id>` | `DriveToken` (cached Drive access token) | token lifetime − 60 s, at least 60 s (set by `drive.ts`) | `putDriveToken` | `getDriveToken` |
-| `rate:<route>:<ip>:<minute>` | request count (string) | 120 s | `hitRateWindow` | `hitRateWindow` |
 
 Notes:
 
@@ -22,7 +21,6 @@ Notes:
 - `<email>` is lower-cased and trimmed before use as a key, so lookups are case-insensitive.
 - `quota` has no atomic increment in KV: `incrQuota` reads, increments and writes back. Two requests racing on the same user and date can undercount by one. Accepted as a soft per-user daily limit, not a billing figure.
 - `deleteUserData` removes every `user:`, `run:`, `lintrun:`, `quota:<id>:*`, `push:<id>:*` and `drivetoken:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user.
-- `rate` keys are the per-IP rate limits (`api/src/security.ts`): `<route>` is `callback` or `process`, `<ip>` the client IP (`cf-connecting-ip`, else the first `x-forwarded-for` entry, else `unknown`), `<minute>` the minutes since the Unix epoch. Read-then-write like `quota`, so racing requests can undercount; accepted, the limit only slows abuse down. A full window is not written again.
 - `deleteDriveToken` also drops `drivetoken:<id>` on its own, used by `GET /drive/token?fresh=1` (see below) to force a fresh mint.
 
 ## `User`
@@ -101,7 +99,7 @@ These apply before any route's own checks, in this order (`api/src/index.ts`, mi
 1. **Request id.** A client `x-request-id` of 1 to 64 characters from `A-Z a-z 0-9 . _ -` is kept; anything else (or none) is replaced by a fresh UUID. The id is echoed in the `x-request-id` response header and prefixes every log line; a rejected value is never echoed or logged.
 2. **Body size.** A body over 64 KB answers 413 `payload_too_large` before any handler parses it: checked on `Content-Length` when sent, else counted while the body streams in.
 3. **Content type.** A `POST`, `PUT`, `PATCH` or `DELETE` that carries a body must send `Content-Type: application/json` (a `charset` parameter is fine), else 415 `unsupported_media_type`. The writes that take no body (`POST /auth/logout`, `POST /auth/logout-all`, `POST /process`, `DELETE /me`, `DELETE /admin/allow/:email`) send none and are not checked.
-4. **Generic rate limit.** At most 120 requests per client IP in any 60 seconds across every cookie route (`/auth/*`, `/me`, `/drive/token`, `/settings`, `/vault`, `/process`, `/status`, `/push/subscribe`), else 429 `rate_limited` with `Retry-After` (seconds until the oldest counted request leaves the window). Counted in memory, not KV: a sliding window per Cloudflare isolate (at most 10,000 IPs tracked), so it is best-effort and costs no KV write. It runs ahead of the strict 30 per minute on `GET /auth/callback` and `POST /process`, which stay on KV. Not counted: `/health`, `GET /push/public-key`, `/runner/*`, `/admin/*` and unknown paths.
+4. **Generic rate limit.** At most 120 requests per client IP in any 60 seconds across every cookie route (`/auth/*`, `/me`, `/drive/token`, `/settings`, `/vault`, `/process`, `/status`, `/push/subscribe`), else 429 `rate_limited` with `Retry-After` (seconds until the oldest counted request leaves the window). Counted in memory, not KV: a sliding window per Cloudflare isolate (at most 10,000 IPs tracked), so it is best-effort and costs no KV write. It runs ahead of the strict 30 in any 60 seconds on `GET /auth/callback` (per client IP, counted only once the `bower_oauth` cookie verifies) and `POST /process` (per user, counted only after the same-origin and session checks), which are counted in memory the same way. Not counted: `/health`, `GET /push/public-key`, `/runner/*`, `/admin/*` and unknown paths.
 
 | Status | `error.code` | When |
 | --- | --- | --- |
