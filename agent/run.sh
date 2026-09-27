@@ -63,6 +63,12 @@ log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
 # or an instance repo whose workflows predate it) the same names come from
 # the environment, with a warning: the runner key then sits in this shell's
 # /proc entry for the whole run.
+#
+# Whichever way they come, the settings are un-exported first: a name that
+# arrived in the environment (even empty, next to the file) would otherwise
+# stay exported, and printf -v below would hand the file's value to every
+# child's environment (curl, rclone, jq; issue #276).
+export -n BOWER_API_URL BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES
 secrets_file="${RUNNER_TEMP:-}/bower-secrets"
 if [ -n "${RUNNER_TEMP:-}" ] && [ -f "$secrets_file" ]; then
   while IFS= read -r line || [ -n "$line" ]; do

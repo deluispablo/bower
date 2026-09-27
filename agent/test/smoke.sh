@@ -31,8 +31,15 @@ cat >"$STUBS/curl" <<'STUB'
 #!/usr/bin/env bash
 # curl stub: GET answers the vault info, POST records the payload, and a GET
 # to Drive's files.list (the instruction-origin listing) records its query
-# and answers per scenario.
+# and answers per scenario. Like the real Worker, a runner call whose bearer
+# is not exactly the runner key gets a 401 (issue #276): the run fails there
+# instead of carrying on with a key the Worker would refuse.
 set -euo pipefail
+# run.sh's children must not inherit a BOWER_* setting or the runner key
+# (#258): recorded here, checked by the test.
+if env | grep -q '^BOWER_' || env | grep -qF -- "$(cat "$SMOKE_STATE/../values/runner-key")"; then
+  echo leak >>"$SMOKE_STATE/curl-env-leak"
+fi
 # The runner key and the tokens the fake Worker hands out come from files,
 # not from this stub's environment: that environment is run.sh's own, which
 # the claude stub checks for the runner key.
@@ -68,6 +75,15 @@ if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
   [ "$SMOKE_SCENARIO" != instruction ] ||
     body='{"files":[{"name":"Bower - 2026-01-15 0900 Tidy up.md"}]}'
   printf '%s' "$body" >"$out"
+  exit 0
+fi
+if [ "$auth" != ok ]; then
+  if [ "$method" = POST ]; then
+    echo 'curl: (22) The requested URL returned error: 401' >&2
+    exit 22
+  fi
+  [ -z "$out" ] || printf '%s' '{"error":{"code":"unauthorized","message":"Missing or invalid runner key"}}' >"$out"
+  [ "$fmt" != '%{http_code}' ] || printf '401'
   exit 0
 fi
 if [ "$method" = POST ]; then
@@ -394,8 +410,11 @@ die() {
 # workflows do (#258), the runner settings (BOWER_API_URL, BOWER_API_KEY and
 # any BOWER_* assignment given) go to $RUNNER_TEMP/bower-secrets, mode 600,
 # and only the model credential is in run.sh's environment; other
-# assignments are passed to env. With SETTINGS_VIA=env (a local run) the
-# settings go to env instead and no file is written.
+# assignments are passed to env. A BOWER_* assignment given here is written
+# after the defaults, so it wins (run.sh keeps the last line for a name).
+# env:NAME=value puts NAME=value in run.sh's environment as well as, not
+# instead of, the file. With SETTINGS_VIA=env (a local run) the settings go
+# to env instead and no file is written.
 MODE=ingest
 SETTINGS_VIA=file
 run_case() {
@@ -408,9 +427,11 @@ run_case() {
   : >"$STATE/calls.log"
   : >"$STATE/posts.log"
   : >"$STATE/uploaded.txt"
+  rm -f "$STATE/curl-env-leak"
   local settings=("BOWER_API_URL=$API_URL" "BOWER_API_KEY=$RUNNER_KEY") extra=() arg
   for arg in "$@"; do
     case "$arg" in
+      env:*) extra+=("${arg#env:}") ;;
       BOWER_*=*) settings+=("$arg") ;;
       *) extra+=("$arg") ;;
     esac
@@ -516,6 +537,12 @@ expect_runner_secrets_out_of_reach() {
   [ ! -e "$STATE/claude-secrets-seen" ] || die 'the runner settings file still existed while the agent ran'
 }
 
+# run.sh's own children (curl here) got no BOWER_* setting and not the runner
+# key in their environment: run.sh keeps them in unexported shell variables.
+expect_curl_env_clean() {
+  [ ! -e "$STATE/curl-env-leak" ] || die "a BOWER_* setting or the runner key reached curl's environment"
+}
+
 # The agent gets neither pandoc (a URL as input is a way out) nor cp (it can
 # copy any file on the runner into the vault), whatever the web setting.
 expect_no_copy_or_convert_tool() {
@@ -599,6 +626,7 @@ expect_eq "$(cat "$STATE/remote/.claude/settings.json")" '{"vault":"own"}' "the 
 expect_eq "$(calls curl | grep -c 'auth=ok')" 3 'curl calls with the runner key'
 expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request'
 expect_eq "$(calls curl | sed -n 2p)" "curl POST $API_URL/runner/vaults/vault-1/status auth=ok" 'status request'
+expect_curl_env_clean
 # A Bower*.md in Clippings/ is not instruction-shaped: no Drive listing.
 expect_eq "$(calls curl | grep -c googleapis || true)" 0 'Drive listing calls with no instruction note pending'
 rclone_calls=$(calls rclone)
@@ -1032,4 +1060,40 @@ grep -q ' warning: no runner settings file, BOWER_\* settings come from the envi
 grep -q '^BOWER_' "$STATE/claude-env.log" && die 'BOWER_* reached the claude process env'
 expect_content_free
 expect_cleaned_up
+expect_curl_env_clean
 echo "ok settings from the environment when there is no settings file"
+
+# 20. The Run step's environment also carries an empty BOWER_API_KEY (an
+# instance workflow that still lists it without a value; issue #276): the
+# key from the settings file wins, the Worker gets exactly that bearer on
+# every call, and the value never reaches a child's environment, even though
+# the name was exported to run.sh.
+run_case envkey env:BOWER_API_KEY=
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(calls curl | grep -c 'auth=ok')" "$(calls curl | grep -vc googleapis)" 'Worker calls all with the exact runner key'
+expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request'
+grep -q 'warning: no runner settings file' "$STATE/out.log" && die 'the settings file was not used'
+expect_curl_env_clean
+parent="$STATE/claude-parent-env.log"
+[ ! -f "$parent" ] || ! grep -qF -- "$RUNNER_KEY" "$parent" ||
+  die "the agent's parent shell has the runner key in /proc/<pid>/environ"
+grep -q '^BOWER_' "$STATE/claude-env.log" && die 'BOWER_* reached the claude process env'
+expect_content_free
+expect_cleaned_up
+echo "ok an empty BOWER_API_KEY in the environment does not shadow the settings file"
+
+# 21. A settings file whose key is not the Worker's: the stub Worker answers
+# 401 like the real one, the run stops at the vault info with the status
+# code, and the key is never printed.
+run_case wrongkey BOWER_API_KEY=not-the-runner-key
+expect_eq "$RC" 2 'exit code'
+expect_eq "$(posts_count)" 0 'status posts (the report is refused too)'
+expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=bad" 'vault info request'
+grep -q ' failed: fetch vault info: HTTP 401$' "$STATE/out.log" || die 'failure does not name the 401'
+grep -qF -- 'not-the-runner-key' "$STATE/out.log" && die 'script output contains the key'
+expect_eq "$(calls rclone)" '' 'rclone calls'
+expect_content_free
+expect_cleaned_up
+echo "ok a wrong runner key fails at the vault info"
+
