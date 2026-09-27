@@ -1,16 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Bower">
-  <g transform="translate(1 -6.656)">
-    <path fill="#0f766e" d="M29 56C21 47 14 40 6 35C11 43 18 52 31 62Z"/>
-    <path fill="none" stroke="#d97706" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M40 84L39 91M35 91h8"/>
-    <path fill="none" stroke="#d97706" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M53 85L53 91M49 91h8"/>
-    <circle fill="#2dd4bf" cx="46" cy="62" r="24"/>
-    <path fill="#0f766e" d="M44 50C57 49 65 59 60 72C49 72 39 64 44 50Z"/>
-    <circle fill="#2dd4bf" cx="62" cy="40" r="19"/>
-    <circle fill="#99f6e4" fill-opacity=".8" cx="72" cy="46" r="3.2"/>
-    <circle fill="#0b1220" cx="68" cy="37" r="5.2"/>
+  <g transform="translate(0.5312 -5.906)">
+    <rect fill="#2f9c8d" x="6" y="71" width="24" height="5.5" rx="2.75" transform="rotate(-54 30 74)"/>
+    <rect fill="#2f9c8d" x="4" y="73" width="26" height="5.5" rx="2.75" transform="rotate(-36 30 76)"/>
+    <rect fill="#2f9c8d" x="6" y="75" width="24" height="5.5" rx="2.75" transform="rotate(-18 30 78)"/>
+    <path fill="none" stroke="#f0b64f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M40 84V91"/>
+    <rect fill="#f0b64f" x="34" y="89" width="13" height="4.5" rx="2.25"/>
+    <path fill="none" stroke="#f0b64f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M53 85V91"/>
+    <rect fill="#f0b64f" x="47" y="89" width="13" height="4.5" rx="2.25"/>
+    <circle fill="#5fcfbc" cx="46" cy="62" r="24"/>
+    <ellipse fill="#b9ece2" fill-opacity=".9" cx="52" cy="72" rx="13" ry="10"/>
+    <rect fill="#5fcfbc" x="52" y="34" width="16" height="38" rx="8"/>
+    <circle fill="#5fcfbc" cx="62" cy="40" r="19"/>
+    <circle fill="#b9ece2" fill-opacity=".8" cx="72" cy="47" r="3.2"/>
+    <circle fill="#1b2233" cx="68" cy="37" r="5.2"/>
     <circle fill="#ffffff" cx="70" cy="35" r="1.9"/>
     <circle fill="#ffffff" cx="66.4" cy="39.2" r=".9"/>
-    <path fill="#fbbf24" d="M80 38L92 42L80 45Z"/>
-    <path fill="#d97706" d="M80 43.5L90 42.5L80 47.5Z"/>
+    <circle fill="#5fcfbc" cx="68" cy="24.5" r="6.5"/>
+    <circle fill="#5fcfbc" cx="68" cy="49" r="6.5"/>
+    <rect fill="#f0b64f" x="79" y="35" width="13" height="6" rx="3"/>
+    <rect fill="#d9952e" x="79" y="40" width="10" height="4.5" rx="2.25"/>
+    <path fill="#2f9c8d" d="M54 56C64 58 65 68 58 74C44 78 28 78 18 72C28 64 42 56 54 56Z"/>
   </g>
 </svg>

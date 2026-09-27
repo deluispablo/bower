@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Generate the Bower logo, wordmarks, favicons and PWA icons.
 
-Writes app/public/logo*.svg, app/public/icons/* and docs/assets/logo.svg. The bird is
-defined once below on a 100 x 100 grid (the drawing of docs/design/gen.py, BIRD_CORE,
-without its props); every output places it by its measured bounding box, so it is
-centred in each icon. After rendering, the script checks centring, the maskable safe
-zone, how much of the 16 px favicon the bird fills and the size of logo.svg, and exits
-non-zero if any check fails.
+Writes app/public/logo.svg, the two wordmarks and app/public/icons/*. (docs/assets/logo.svg
+is written by docs/design/assets.py.) The bird is defined once below on a 100 x 100 grid
+(drawing v8.2 of docs/design/gen.py, BIRD_CORE, still and without its props); every icon
+places it by its measured bounding box, so it is centred in each icon. After rendering,
+the script checks centring, the maskable safe zone, how much of the 16 px favicon the bird
+fills and the size of logo.svg, and exits non-zero if any check fails.
 
 Requirements (developer machine only, not app dependencies): Python 3.10+, Pillow,
 fontTools, Playwright for Python with Chromium (`python3 -m playwright install chromium`),
-and Poppins Bold (SIL OFL 1.1) for the wordmark outlines. Point BOWER_WORDMARK_FONT at the
-.ttf if it is not in a standard location.
+and Poppins Bold (SIL OFL 1.1) for the wordmark outlines: a system Poppins-Bold.ttf, else the
+app's own app/public/fonts/poppins-700.woff2 (fontTools needs brotli for woff2). Point
+BOWER_WORDMARK_FONT at another file to override.
 
 usage: python3 scripts/brand/build.py
 """
@@ -33,31 +34,50 @@ ROOT = Path(__file__).resolve().parents[2]
 PUBLIC = ROOT / "app/public"
 ICONS = PUBLIC / "icons"
 
-DOCS_LOGO = ROOT / "docs/assets/logo.svg"
+# The v8.2 colours (docs/design/gen.py, CSS): head and body, wing and tail, belly and
+# cheek, eye, beak and feet, jaw, highlights; navy behind the icons and for the word on
+# light backgrounds, and the word on dark backgrounds.
+TEAL, TEAL_DARK, BELLY, EYE, AMBER, AMBER_DARK, WHITE = (
+    "#5fcfbc", "#2f9c8d", "#b9ece2", "#1b2233", "#f0b64f", "#d9952e", "#ffffff")
+NAVY, INK_DARK = "#0b1220", "#f1f5f9"
 
-TEAL, TEAL_DARK, CHEEK, NAVY, AMBER, AMBER_DARK, WHITE, INK_DARK = (
-    "#2dd4bf", "#0f766e", "#99f6e4", "#0b1220", "#fbbf24", "#d97706", "#ffffff", "#f1f5f9")
-
-# The bird on a 100 x 100 grid, facing right, feet on y = 91: cocked tail, feet, round
-# body, leaf wing, round head with cheek, eye with two highlights, beak and jaw. Same
-# paths as BIRD_CORE in docs/design/gen.py (and the app's components/bird.tsx), without
-# the props it only holds while a state shows them.
+# The bird on a 100 x 100 grid, facing right, feet on y = 91: three tail feathers, legs
+# and pill feet, round body with a lighter belly, neck and round head, cheek, eye with
+# two highlights, upper and lower lids at rest, pill beak and jaw, the leaf wing. Same
+# shapes and order as BIRD_CORE in docs/design/gen.py (and the app's
+# components/bird.tsx), without the props it only holds while a state shows them.
 GRID = 100
-FEET = f'fill="none" stroke="{AMBER_DARK}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"'
+LEG = f'fill="none" stroke="{AMBER}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"'
 BIRD = [
-    f'<path fill="{TEAL_DARK}" d="M29 56C21 47 14 40 6 35C11 43 18 52 31 62Z"/>',
-    f'<path {FEET} d="M40 84L39 91M35 91h8"/>',
-    f'<path {FEET} d="M53 85L53 91M49 91h8"/>',
+    f'<rect fill="{TEAL_DARK}" x="6" y="71" width="24" height="5.5" rx="2.75" transform="rotate(-54 30 74)"/>',
+    f'<rect fill="{TEAL_DARK}" x="4" y="73" width="26" height="5.5" rx="2.75" transform="rotate(-36 30 76)"/>',
+    f'<rect fill="{TEAL_DARK}" x="6" y="75" width="24" height="5.5" rx="2.75" transform="rotate(-18 30 78)"/>',
+    f'<path {LEG} d="M40 84V91"/>',
+    f'<rect fill="{AMBER}" x="34" y="89" width="13" height="4.5" rx="2.25"/>',
+    f'<path {LEG} d="M53 85V91"/>',
+    f'<rect fill="{AMBER}" x="47" y="89" width="13" height="4.5" rx="2.25"/>',
     f'<circle fill="{TEAL}" cx="46" cy="62" r="24"/>',
-    f'<path fill="{TEAL_DARK}" d="M44 50C57 49 65 59 60 72C49 72 39 64 44 50Z"/>',
+    f'<ellipse fill="{BELLY}" fill-opacity=".9" cx="52" cy="72" rx="13" ry="10"/>',
+    f'<rect fill="{TEAL}" x="52" y="34" width="16" height="38" rx="8"/>',
     f'<circle fill="{TEAL}" cx="62" cy="40" r="19"/>',
-    f'<circle fill="{CHEEK}" fill-opacity=".8" cx="72" cy="46" r="3.2"/>',
-    f'<circle fill="{NAVY}" cx="68" cy="37" r="5.2"/>',
+    f'<circle fill="{BELLY}" fill-opacity=".8" cx="72" cy="47" r="3.2"/>',
+    f'<circle fill="{EYE}" cx="68" cy="37" r="5.2"/>',
     f'<circle fill="{WHITE}" cx="70" cy="35" r="1.9"/>',
     f'<circle fill="{WHITE}" cx="66.4" cy="39.2" r=".9"/>',
-    f'<path fill="{AMBER}" d="M80 38L92 42L80 45Z"/>',
-    f'<path fill="{AMBER_DARK}" d="M80 43.5L90 42.5L80 47.5Z"/>',
+    f'<circle fill="{TEAL}" cx="68" cy="24.5" r="6.5"/>',
+    f'<circle fill="{TEAL}" cx="68" cy="49" r="6.5"/>',
+    f'<rect fill="{AMBER}" x="79" y="35" width="13" height="6" rx="3"/>',
+    f'<rect fill="{AMBER_DARK}" x="79" y="40" width="10" height="4.5" rx="2.25"/>',
+    f'<path fill="{TEAL_DARK}" d="M54 56C64 58 65 68 58 74C44 78 28 78 18 72C28 64 42 56 54 56Z"/>',
 ]
+
+# The wordmark as drawn in docs/design/screens/Logo.dc.html (primary lockup): an 84 px
+# bird box, a 14 px gap, then "Bower" in Poppins Bold at 52 px with letter-spacing -3 %
+# and line-height 1, centred on the bird box. Kept as ratios of the bird box (grid units).
+LOCKUP_PX = 84
+WORD_SIZE = 52 / LOCKUP_PX * GRID
+WORD_GAP = 14 / LOCKUP_PX * GRID
+WORD_TRACKING = -0.03
 
 # At 16 px the bird's longer side must cover at least this many pixels of the favicon.
 FAVICON_16_MIN_SPAN = 12
@@ -70,6 +90,8 @@ FONT_CANDIDATES = [
     str(Path.home() / "Library/Fonts/Poppins-Bold.ttf"),
     "/Library/Fonts/Poppins-Bold.ttf",
     "C:/Windows/Fonts/Poppins-Bold.ttf",
+    # The app's self-hosted Latin subset (needs brotli for fontTools to read woff2).
+    str(ROOT / "app/public/fonts/poppins-700.woff2"),
 ]
 
 
@@ -127,8 +149,11 @@ def fmt(n: float) -> str:
     return "0" if s == "-0" else s
 
 
-def word_path(text: str, size: float, x0: float, baseline: float, tracking: float) -> tuple[str, float, float]:
-    """Outline `text` as one SVG path. Returns (d, end x, cap height)."""
+def word_path(text: str, size: float, x0: float, baseline: float,
+              tracking: float) -> tuple[str, float, float, float]:
+    """Outline `text` as one SVG path. Returns (d, end x, cap height, and the baseline's
+    offset from the top of a line box as tall as the font size, as CSS lays out
+    `line-height: 1`)."""
     font_path = next((p for p in FONT_CANDIDATES if p and Path(p).is_file()), None)
     if font_path is None:
         sys.exit("Poppins-Bold.ttf not found; set BOWER_WORDMARK_FONT to its path.")
@@ -142,7 +167,10 @@ def word_path(text: str, size: float, x0: float, baseline: float, tracking: floa
         glyphs[name].draw(TransformPen(pen, (k, 0, 0, -k, x, baseline)))
         parts.append(pen.getCommands())
         x += glyphs[name].width * k + tracking
-    return "".join(parts), x - tracking, font["OS/2"].sCapHeight * k
+    hhea = font["hhea"]
+    content = (hhea.ascent - hhea.descent) * k
+    offset = (size - content) / 2 + hhea.ascent * k
+    return "".join(parts), x - tracking, font["OS/2"].sCapHeight * k, offset
 
 
 def write(path: Path, text: str) -> None:
@@ -175,22 +203,22 @@ def main() -> None:
         g = Geometry(browser)
         print(f"bird bbox x {g.x0:.2f}..{g.x1:.2f} y {g.y0:.2f}..{g.y1:.2f}, radius {g.radius:.2f}")
 
-        # Mark only, transparent, centred on the grid; docs/assets/logo.svg is the same file.
+        # Mark only, transparent, centred on the grid.
         logo = svg(f"0 0 {GRID} {GRID}", g.placed(GRID, 1), label=True)
         write(PUBLIC / "logo.svg", logo)
-        write(DOCS_LOGO, logo)
 
-        # Wordmarks: bird flush left, word outlined, caps centred on the bird's vertical
-        # centre. Word size, gap and tracking scale with the bird's height.
+        # Wordmarks: the bird where it is on its grid, the word outlined and placed as in
+        # the lockup of Logo.dc.html (gap after the grid box, line box centred on it),
+        # then cropped to both with a small pad.
         pad = GRID / 64
-        size = 0.91 * g.h
-        gap = 0.19 * g.h
-        tracking = -0.4 * size / 38
-        d, end, cap = word_path("Bower", size, g.w + gap, 0, tracking)
-        baseline = g.h / 2 + cap / 2
-        d, end, cap = word_path("Bower", size, g.w + gap, baseline, tracking)
-        body = f'<g transform="translate({-g.x0:.4g} {-g.y0:.4g})">\n    {bird()}\n  </g>'
-        box = f"{-pad:.4g} {-pad:.4g} {end + 2 * pad:.4g} {g.h + 2 * pad:.4g}"
+        tracking = WORD_TRACKING * WORD_SIZE
+        x_word = GRID + WORD_GAP
+        offset = word_path("Bower", WORD_SIZE, x_word, 0, tracking)[3]
+        baseline = (GRID - WORD_SIZE) / 2 + offset
+        d, end, cap, _ = word_path("Bower", WORD_SIZE, x_word, baseline, tracking)
+        top, bottom = min(g.y0, baseline - cap), max(g.y1, baseline)
+        body = bird("  ")
+        box = f"{g.x0 - pad:.4g} {top - pad:.4g} {end - g.x0 + 2 * pad:.4g} {bottom - top + 2 * pad:.4g}"
         for name, colour in (("logo-wordmark.svg", NAVY), ("logo-wordmark-dark.svg", INK_DARK)):
             write(PUBLIC / name, svg(box, body, f'<path fill="{colour}" d="{d}"/>', label=True))
 
