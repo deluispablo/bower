@@ -111,7 +111,7 @@
 }
 
 .bw-pile {
-  transition: transform 600ms ease-out;
+  transition: transform var(--motion-bird) var(--ease-out);
 }
 
 .bw-carry,
@@ -345,7 +345,7 @@
   border-top: 1px solid var(--color-border);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-md);
-  animation: working-sheet-in 200ms ease-out;
+  animation: working-sheet-in var(--motion-base) var(--ease-out);
 }
 
 .working-sheet-close {

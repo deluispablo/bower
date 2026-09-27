@@ -4,6 +4,51 @@
  * carries data-theme="light" or data-theme="dark".
  */
 
+/*
+ * Self-hosted, Latin-subset fonts (spec §3.2, app/public/fonts/README.md).
+ * `font-display: swap`; the system stack in --font-display/--font-sans/
+ * --font-mono below stays as the fallback while a face loads.
+ */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/poppins-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/poppins-700.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/source-sans-3-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/source-sans-3-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-400.woff2') format('woff2');
+}
+
 :root {
   color-scheme: light;
 
@@ -13,16 +58,20 @@
   --bower-amber: #fbbf24;
 
   /* Colour roles: light theme */
+  --color-sidebar: #f5f7fa;
   --color-bg: #ffffff;
   --color-surface: #f1f5f9;
+  --color-surface-hover: #e8edf3;
+  --color-border: #e2e8f0;
   --color-text: #0b1220;
+  --color-heading: #0b1220;
   --color-text-muted: #475569;
+  --color-brand-tint: rgb(45 212 191 / 0.16);
   --color-link: #0f766e;
   --color-brand: var(--bower-teal);
   --color-on-brand: #0b1220;
   --color-accent: var(--bower-amber);
   --color-on-accent: #0b1220;
-  --color-border: #e2e8f0;
   --color-border-strong: #64748b;
   --color-focus: #0f766e;
   --color-danger: #b91c1c;
@@ -31,11 +80,15 @@
   --color-on-success: #ffffff;
 
   /* Typography */
+  --font-display:
+    Poppins, Inter, 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica,
+    Arial, sans-serif;
   --font-sans:
-    Inter, 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial,
-    sans-serif;
+    'Source Sans 3', Inter, 'Segoe UI', system-ui, -apple-system, Roboto,
+    Helvetica, Arial, sans-serif;
   --font-mono:
-    ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+    'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas,
+    monospace;
   --text-xs: 0.75rem; /* 12px */
   --text-sm: 0.875rem; /* 14px */
   --text-base: 1rem; /* 16px, body */
@@ -66,17 +119,28 @@
   --radius-full: 9999px;
   --shadow-sm: 0 1px 2px rgb(11 18 32 / 0.08);
   --shadow-md: 0 4px 16px rgb(11 18 32 / 0.12);
+
+  /* Motion: transform and opacity only, same in both themes */
+  --motion-fast: 120ms; /* hover, press, focus ring */
+  --motion-base: 200ms; /* panels, sheets, drawer, toasts */
+  --motion-bird: 320ms; /* the bird's entrances and reactions */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
+    --color-sidebar: #070c16;
     --color-bg: #0b1220;
     --color-surface: #162033;
-    --color-text: #f1f5f9;
-    --color-text-muted: #94a3b8;
-    --color-link: #2dd4bf;
+    --color-surface-hover: #1c2942;
     --color-border: #263349;
+    --color-text: #e6ebf2;
+    --color-heading: #f1f5f9;
+    --color-text-muted: #94a3b8;
+    --color-brand-tint: rgb(45 212 191 / 0.16);
+    --color-link: #2dd4bf;
     --color-border-strong: #64748b;
     --color-focus: #2dd4bf;
     --color-danger: #f87171;
@@ -85,17 +149,26 @@
     --color-on-success: #0b1220;
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
+    --motion-fast: 120ms;
+    --motion-base: 200ms;
+    --motion-bird: 320ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
+  --color-sidebar: #070c16;
   --color-bg: #0b1220;
   --color-surface: #162033;
-  --color-text: #f1f5f9;
-  --color-text-muted: #94a3b8;
-  --color-link: #2dd4bf;
+  --color-surface-hover: #1c2942;
   --color-border: #263349;
+  --color-text: #e6ebf2;
+  --color-heading: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-brand-tint: rgb(45 212 191 / 0.16);
+  --color-link: #2dd4bf;
   --color-border-strong: #64748b;
   --color-focus: #2dd4bf;
   --color-danger: #f87171;
@@ -104,4 +177,9 @@
   --color-on-success: #0b1220;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-bird: 320ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }

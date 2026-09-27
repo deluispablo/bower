@@ -23,6 +23,8 @@ body {
 h1,
 h2,
 h3 {
+  color: var(--color-heading);
+  font-family: var(--font-display);
   line-height: var(--leading-heading);
   font-weight: var(--weight-bold);
 }
