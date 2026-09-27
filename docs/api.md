@@ -22,7 +22,7 @@ Notes:
 - `<email>` is lower-cased and trimmed before use as a key, so lookups are case-insensitive.
 - `quota` has no atomic increment in KV: `incrQuota` reads, increments and writes back. Two requests racing on the same user and date can undercount by one. Accepted as a soft per-user daily limit, not a billing figure.
 - `deleteUserData` removes every `user:`, `run:`, `lintrun:`, `quota:<id>:*`, `push:<id>:*` and `drivetoken:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user.
-- `rate` keys are the per-IP rate limit (`api/src/security.ts`): `<route>` is `callback` or `process`, `<ip>` the client IP (`cf-connecting-ip`, else the first `x-forwarded-for` entry, else `unknown`), `<minute>` the minutes since the Unix epoch. Read-then-write like `quota`, so racing requests can undercount; accepted, the limit only slows abuse down. A full window is not written again.
+- `rate` keys are the per-IP rate limits (`api/src/security.ts`): `<route>` is `callback` or `process` for the two strict limits, or `generic` for the window shared by every cookie route (see [Every request](#every-request)), `<ip>` the client IP (`cf-connecting-ip`, else the first `x-forwarded-for` entry, else `unknown`), `<minute>` the minutes since the Unix epoch. Read-then-write like `quota`, so racing requests can undercount; accepted, the limit only slows abuse down. A full window is not written again.
 - `deleteDriveToken` also drops `drivetoken:<id>` on its own, used by `GET /drive/token?fresh=1` (see below) to force a fresh mint.
 
 ## `User`
@@ -94,6 +94,21 @@ Same origin (see `docs/security.md`). Clears the cookie on this browser only. Re
 | 401 | `unauthenticated`, `session_expired` | As above |
 | 403 | `forbidden` | `Origin` (or `Referer`) is not `APP_ORIGIN` |
 
+## Every request
+
+These apply before any route's own checks, in this order (`api/src/index.ts`, middleware in `api/src/security.ts`):
+
+1. **Request id.** A client `x-request-id` of 1 to 64 characters from `A-Z a-z 0-9 . _ -` is kept; anything else (or none) is replaced by a fresh UUID. The id is echoed in the `x-request-id` response header and prefixes every log line; a rejected value is never echoed or logged.
+2. **Body size.** A body over 64 KB answers 413 `payload_too_large` before any handler parses it: checked on `Content-Length` when sent, else counted while the body streams in.
+3. **Content type.** A `POST`, `PUT`, `PATCH` or `DELETE` that carries a body must send `Content-Type: application/json` (a `charset` parameter is fine), else 415 `unsupported_media_type`. The writes that take no body (`POST /auth/logout`, `POST /process`, `DELETE /me`, `DELETE /admin/allow/:email`) send none and are not checked.
+4. **Generic rate limit.** At most 120 requests per minute per client IP across every cookie route (`/auth/*`, `/me`, `/drive/token`, `/settings`, `/vault`, `/process`, `/status`, `/push/subscribe`), else 429 `rate_limited` with `Retry-After` (seconds left in the minute). Counted in `rate:generic:<ip>:<minute>`, ahead of the strict 30 per minute on `GET /auth/callback` and `POST /process`. Not counted: `/health`, `GET /push/public-key`, `/runner/*`, `/admin/*` and unknown paths. If KV refuses the count (for example its one-write-per-second-per-key limit when the app sends a few requests at once), the request goes on and the failure is logged with the request id only.
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 413 | `payload_too_large` | The body is over 64 KB |
+| 415 | `unsupported_media_type` | A write carries a body that is not `application/json` |
+| 429 | `rate_limited` | More than 120 requests this minute from the same IP on the cookie routes |
+
 ## `POST /vault`
 
 Gives the signed-in user a vault in their own Drive. Requires the session cookie. Nothing in Drive is ever overwritten or deleted.
@@ -141,7 +156,7 @@ Response: `{ "run": Run }`, status 202, both for a new run and for the run alrea
 | 401 | `unauthenticated` | No valid session cookie, or the user no longer exists |
 | 403 | `forbidden` | `Origin` (or, without it, the `Referer`'s origin) is not `APP_ORIGIN`. Checked before the session, on every state-changing session route (see `docs/security.md`) |
 | 409 | `no_vault` | The user has not set up their Bower folder yet (`POST /vault`) |
-| 429 | `rate_limited` | More than 30 requests this minute from the same IP (also on `GET /auth/callback`). `Retry-After` gives the seconds left in the minute |
+| 429 | `rate_limited` | More than 30 requests this minute from the same IP (also on `GET /auth/callback`), or more than 120 across the cookie routes (see [Every request](#every-request)). `Retry-After` gives the seconds left in the minute |
 | 429 | `quota` | `DAILY_RUN_LIMIT` runs were already started today (UTC). The body also carries `retryAfter`, the seconds until the next midnight UTC, also sent as the `Retry-After` header |
 | 502 | `dispatch` | GitHub did not accept the dispatch (any status but 204, or unreachable). Only GitHub's status and request id are logged, never the token |
 
