@@ -462,3 +462,45 @@ test('The bar and the bottom nav align with the content column at 768 (#311)', a
 
   await shot(page, testInfo, 'tablet-768');
 });
+
+test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  // Projects (the demo fixture) has no notes of its own — Lisbon Trip,
+  // Kitchen Refresh and Half Marathon hold all of them — a real instance
+  // of 1.9: the header's count is the whole subtree, the empty state used
+  // to say "Nothing here yet" regardless.
+  await page.goto('/folder/1-Projects');
+  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+  await expect(page.getByText('Nothing here yet.')).toBeHidden();
+  await expect(page.getByText(/notes in /)).toBeVisible();
+  await shot(page, testInfo, 'folder-notes-elsewhere');
+});
+
+test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+
+  // Chips: Pin to Home / Ask Bower about it / Open in Drive, at 13 px,
+  // fit the phone's 343 px content width in one row (2.14) instead of
+  // wrapping to two.
+  await page.goto('/folder/1-Projects/Lisbon%20Trip');
+  await expect(
+    page.getByRole('heading', { name: 'Lisbon Trip' }),
+  ).toBeVisible();
+  const chips = page.locator('.folder-chips .chip');
+  const ys = await chips.evaluateAll((els) =>
+    els.map((el) => el.getBoundingClientRect().y),
+  );
+  expect(new Set(ys).size).toBe(1);
+  await shot(page, testInfo, 'folder-chips');
+
+  // The tree shows a count only above zero (3.6): no folder row reads "0".
+  const menuButton = page.getByRole('button', { name: 'Your folders' });
+  if (await menuButton.isVisible()) await menuButton.click();
+  const counts = await page.locator('.tree-count').allTextContents();
+  expect(counts.length).toBeGreaterThan(0);
+  expect(counts).not.toContain('0');
+});

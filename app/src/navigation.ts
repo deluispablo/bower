@@ -389,6 +389,42 @@ export function folderContents(
   };
 }
 
+export interface FolderEmptyState {
+  /** The whole subtree — this folder and every subfolder — has no notes. */
+  empty: boolean;
+  /**
+   * Set when this folder's own note list is empty (`notes.length === 0`)
+   * but the subtree is not (`empty` false): the total note count and the
+   * subfolder that holds them, for "n notes in <Subfolder>" (#310, 1.9) in
+   * place of "Nothing here yet" — that message is for an empty subtree,
+   * not a folder whose notes just live one level down.
+   */
+  elsewhere: { count: number; subfolderName: string } | null;
+}
+
+/**
+ * What the Folder screen's notes section should say when this folder has
+ * no notes of its own (#310, 1.9, 2.14): `folderContents.noteCount` counts
+ * the whole subtree, `notes` only this folder's own children, so a folder
+ * with notes only in a subfolder had both zero direct notes and a
+ * misleading "Nothing here yet" together with a real count in the header.
+ * The subfolder named is the first with any notes in its own subtree
+ * (`FolderSubfolder.count`, itself recursive) — with more than one such
+ * subfolder the name is a "for instance", not a claim every note is there.
+ */
+export function folderEmptyState(contents: FolderContents): FolderEmptyState {
+  if (contents.notes.length > 0) return { empty: false, elsewhere: null };
+  if (contents.noteCount === 0) return { empty: true, elsewhere: null };
+  const holder = contents.subfolders.find((folder) => folder.count > 0);
+  return {
+    empty: false,
+    elsewhere: {
+      count: contents.noteCount,
+      subfolderName: holder?.name ?? contents.subfolders[0]?.name ?? '',
+    },
+  };
+}
+
 export interface Siblings {
   prev: DriveFile | null;
   next: DriveFile | null;

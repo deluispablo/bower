@@ -218,6 +218,11 @@ export function Explorer({
           {tools}
         </div>
       )}
+      {variant === 'drawer' && (
+        <div class="explorer-section">
+          <h2 class="explorer-label">Your notes</h2>
+        </div>
+      )}
       <div class="explorer-tree">
         {index !== null && (
           <Tree

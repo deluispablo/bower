@@ -9,6 +9,7 @@ import {
   filterTree,
   folderContents,
   folderCounts,
+  folderEmptyState,
   folderHref,
   nextFocusIndex,
   pendingCount,
@@ -415,6 +416,79 @@ describe('folderContents', () => {
     const contents = folderContents(index, '');
     expect(contents?.path).toBe('');
     expect(contents?.subfolders.map((f) => f.name)).toEqual(['1-Projects']);
+  });
+});
+
+describe('folderEmptyState', () => {
+  it('is empty when the whole subtree has no notes', () => {
+    const index = buildVaultIndex([dir('1-Projects'), dir('1-Projects/Idea')]);
+    const contents = folderContents(index, '1-Projects');
+    expect(contents).not.toBeNull();
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: true,
+      elsewhere: null,
+    });
+  });
+
+  it('is not empty when this folder has its own notes', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      entry('1-Projects/Budget.md'),
+    ]);
+    const contents = folderContents(index, '1-Projects');
+    expect(contents).not.toBeNull();
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: null,
+    });
+  });
+
+  it('names the subfolder when notes exist only there (#310, 1.9)', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      entry('1-Projects/Flat hunt/Budget.md'),
+      entry('1-Projects/Flat hunt/Listing.md'),
+    ]);
+    const contents = folderContents(index, '1-Projects');
+    expect(contents?.notes).toEqual([]);
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: { count: 2, subfolderName: 'Flat hunt' },
+    });
+  });
+
+  it('names the subfolder whose notes go two levels down', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      dir('1-Projects/Flat hunt/Camden'),
+      entry('1-Projects/Flat hunt/Camden/Listing.md'),
+    ]);
+    const contents = folderContents(index, '1-Projects');
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: { count: 1, subfolderName: 'Flat hunt' },
+    });
+  });
+
+  it('picks a subfolder that actually has notes when more than one exists', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Empty idea'),
+      dir('1-Projects/Flat hunt'),
+      entry('1-Projects/Flat hunt/Budget.md'),
+    ]);
+    const contents = folderContents(index, '1-Projects', 'name');
+    // 'Empty idea' sorts first by name but holds nothing.
+    expect(contents?.subfolders.map((f) => f.name)).toEqual([
+      'Empty idea',
+      'Flat hunt',
+    ]);
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: { count: 1, subfolderName: 'Flat hunt' },
+    });
   });
 });
 

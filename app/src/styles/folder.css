@@ -45,18 +45,31 @@
 .folder-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
+/*
+ * 13 px, not the shared `.chip`'s 14 (`--text-sm`), with tighter padding,
+ * icon-to-label gap and inter-chip gap than the default: at 375 px the
+ * three chips (Pinned/Pin to Home, Ask Bower about it, Open in Drive)
+ * measure 328–340 px across depending on the pin state, fitting the
+ * phone's 343 px content width in one row instead of wrapping to two
+ * (#310, 2.14). `min-height: 44px` (`.chip`) keeps the touch target full
+ * size regardless of the tighter padding. Scoped to the Folder screen's
+ * own chips; `.chip` itself is shared with Tell Bower's composer and
+ * stays at its own size there.
+ */
 .folder-chips .chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
+  padding: var(--space-1);
+  font-size: 13px;
 }
 
 .folder-chips .chip .icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 /* Pinned (#216): the chip's own toggled state, same accent as an active
@@ -150,6 +163,15 @@
 }
 
 .folder-empty p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* This folder's own list is empty, but its subtree is not (#310, 1.9):
+   a plain note pointing at the subfolder instead of "Nothing here yet"
+   and an Add button, which would be misleading — there is something
+   here, just one level down. */
+.folder-elsewhere {
   margin: 0;
   color: var(--color-text-muted);
 }
