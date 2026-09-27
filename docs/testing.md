@@ -94,9 +94,10 @@ curl -X POST "https://api.example.com/admin/allow" \
 
 The UI around the demo (#193):
 
-- A banner, "These are sample notes. Nothing here is real.", under the top bar on every screen that has one (sign-in and the intro do not).
+- A banner, "These are sample notes. Nothing here is real.", under the top bar on every screen that has one (sign-in and the intro do not), with a "Show me around" link that replays the tour.
 - **Sign out**, then **Sign in with Google**'s place: `/login` and the "What is Bower" intro's last page (`/welcome`) both show **Run your own Bower** instead — what it is, what you need (a Google account, free Cloudflare and GitHub accounts, a Claude subscription or API key, about an hour), links to the repository and the runbook (and a "What is Bower" link only when `VITE_ABOUT_URL` is set), and **Explore the demo**, which signs back in as Alex. `/not-invited` shows the same screen rather than its usual content — the demo has no allowlist to be turned away from.
 - **Settings**: the own API key field, **Sign out everywhere** and **Delete my Bower account** each show "Not in the demo: run your own Bower to use this." instead of a working form or button. Plain **Sign out** still works.
+- [ ] **The demo tour (#195).** `VITE_DEMO=1 pnpm -C app dev`, then "Explore the demo". Expected on Home: the same three-step tour as a real build (#149), each step's copy naming Alex's sample notes, then a fourth card, "4 of 4 · This is a demo" ("This is a demo; run your own."), ringing the sample-notes banner instead of a shell control. Its button, "Run your own Bower" (a link, not "Let's go"), takes focus and goes to **Run your own Bower** (`/login`) when clicked; "Skip tour" and Escape still skip from any step. Look: the banner's "Show me around" link brings the tour back from step 1 at any time, including after "Run your own Bower" and back with "Explore the demo" again.
 
 The same flows run in CI without a network: `app/test/demo-flows.test.ts` stubs `fetch` to fail on any call, and `app/test/demo-contract.test.ts` runs one set of assertions against the real clients (over a mocked `fetch`) and the demo ones, so the demo cannot drift from what the app expects. A production build must not contain the demo: `pnpm -C app build` lists no `demo-*.js` chunk and `check-size` stays where it was.
 

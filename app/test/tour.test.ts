@@ -4,7 +4,15 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TOUR_STEPS, Tour, placeCoach } from '../src/components/tour.js';
+const state = vi.hoisted(() => ({ demo: false }));
+
+vi.mock('../src/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/api.js')>()),
+  isDemo: () => state.demo,
+}));
+
+const { TOUR_STEPS, Tour, placeCoach } =
+  await import('../src/components/tour.js');
 
 let root: HTMLElement;
 let targets: HTMLElement;
@@ -29,6 +37,14 @@ function button(label: string): HTMLButtonElement {
   return found;
 }
 
+function link(label: string): HTMLAnchorElement {
+  const found = Array.from(root.querySelectorAll('a')).find(
+    (a) => a.textContent === label,
+  );
+  if (found === undefined) throw new Error(`link ${label} missing`);
+  return found;
+}
+
 function mount(onEnd: (finished: boolean) => void): void {
   void act(() => {
     render(h(Tour, { onEnd }), root);
@@ -40,7 +56,8 @@ beforeEach(() => {
   targets.innerHTML =
     '<a href="/add" data-tour="add">Add</a>' +
     '<button type="button" data-tour="tidy">Tidy up</button>' +
-    '<a href="/tell" data-tour="tell">Tell</a>';
+    '<a href="/tell" data-tour="tell">Tell</a>' +
+    '<div role="status" data-tour="banner">These are sample notes.</div>';
   document.body.append(targets);
   root = document.createElement('div');
   document.body.append(root);
@@ -52,6 +69,7 @@ afterEach(() => {
   });
   root.remove();
   targets.remove();
+  state.demo = false;
 });
 
 describe('Tour', () => {
@@ -113,6 +131,44 @@ describe('Tour', () => {
       render(null, root);
     });
     expect(target('add').classList.contains('tour-ring')).toBe(false);
+  });
+});
+
+describe('Tour in a demo build', () => {
+  beforeEach(() => {
+    state.demo = true;
+  });
+
+  it('adds a fourth step on the demo banner, naming the sample notes, ending on Run your own Bower', () => {
+    const onEnd = vi.fn();
+    mount(onEnd);
+
+    expect(dialog().textContent).toContain("Alex's notes");
+
+    for (let i = 0; i < 3; i++) void act(() => button('Next').click());
+
+    expect(dialog().getAttribute('aria-modal')).toBe('true');
+    expect(dialog().textContent).toContain('This is a demo; run your own.');
+    expect(target('banner').classList.contains('tour-ring')).toBe(true);
+    expect(onEnd).not.toHaveBeenCalled();
+
+    // The last step ends on a link to Run your own Bower, not "Let's go".
+    expect(() => button("Let's go")).toThrow();
+    const cta = link('Run your own Bower');
+    expect(cta.getAttribute('href')).toBe('/login');
+    expect(document.activeElement).toBe(cta);
+
+    void act(() => cta.click());
+    expect(onEnd).toHaveBeenCalledWith(true);
+  });
+
+  it('still offers Skip tour on the fourth step', () => {
+    const onEnd = vi.fn();
+    mount(onEnd);
+    for (let i = 0; i < 3; i++) void act(() => button('Next').click());
+
+    void act(() => button('Skip tour').click());
+    expect(onEnd).toHaveBeenCalledWith(false);
   });
 });
 
