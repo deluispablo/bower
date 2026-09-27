@@ -102,6 +102,11 @@ function clearHadSessionMarker(): void {
  * Bower" into the app. So this checks the intro-seen flag even while
  * already "signed in", the one case a signed-in visitor is still sent to
  * `/welcome`.
+ *
+ * `/login` itself is never redirected to the intro (#313, 6.3.2): only `/`
+ * does, so a sign-in link or a reload of the sign-in page always lands on
+ * the sign-in form (or, in a demo build, "Run your own Bower"), never on
+ * the four-page intro — `/login` is the way out of it.
  */
 export function decideRedirect(
   status: SessionStatus,
@@ -112,18 +117,11 @@ export function decideRedirect(
 ): string | null {
   if (status === 'loading' || PUBLIC_PATHS.has(currentPath)) return null;
   if (currentPath === '/welcome') return null;
-  if (
-    isDemoBuild &&
-    !introHasBeenSeen &&
-    (currentPath === '/' || currentPath === '/login')
-  ) {
+  if (isDemoBuild && !introHasBeenSeen && currentPath === '/') {
     return '/welcome';
   }
   if (status === 'signed-out') {
-    if (
-      !introHasBeenSeen &&
-      (currentPath === '/' || currentPath === '/login')
-    ) {
+    if (!introHasBeenSeen && currentPath === '/') {
       return '/welcome';
     }
     return currentPath === '/login' ? null : '/login';

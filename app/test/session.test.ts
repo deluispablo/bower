@@ -42,13 +42,18 @@ describe('decideRedirect', () => {
   });
 
   // #207: a signed-out visitor who has never seen the intro lands on
-  // /welcome from / or /login, but not from a deep link, and /welcome is
-  // never redirected away from either way.
-  it('sends a signed-out visitor who has not seen the intro to /welcome from / or /login', () => {
+  // /welcome from /, but not from a deep link, and /welcome is never
+  // redirected away from either way.
+  it('sends a signed-out visitor who has not seen the intro to /welcome from /', () => {
     expect(decideRedirect('signed-out', false, '/', false)).toBe('/welcome');
-    expect(decideRedirect('signed-out', false, '/login', false)).toBe(
-      '/welcome',
-    );
+  });
+
+  // #313, 6.3.2: /login is the way out of the intro, never a way in — a
+  // sign-in link or a reload of the sign-in page must never show the
+  // intro instead of the sign-in form.
+  it('never redirects /login to the intro, seen or not', () => {
+    expect(decideRedirect('signed-out', false, '/login', false)).toBeNull();
+    expect(decideRedirect('signed-out', false, '/login', true)).toBeNull();
   });
 
   it('never sends a deep link to /welcome, even unseen', () => {
@@ -75,13 +80,18 @@ describe('decideRedirect', () => {
   // first-time visitor would skip the intro and "Run your own Bower"
   // entirely and land straight in the app.
   describe('in a demo build', () => {
-    it('sends a first-time visitor to /welcome from / or /login even though already signed in', () => {
+    it('sends a first-time visitor to /welcome from / even though already signed in', () => {
       expect(decideRedirect('signed-in', true, '/', false, true)).toBe(
         '/welcome',
       );
-      expect(decideRedirect('signed-in', true, '/login', false, true)).toBe(
-        '/welcome',
-      );
+    });
+
+    // #313: /login never redirects to the intro, in the demo either — it
+    // renders "Run your own Bower" there instead (`app.tsx`).
+    it('never redirects /login to the intro, even unseen', () => {
+      expect(
+        decideRedirect('signed-in', true, '/login', false, true),
+      ).toBeNull();
     });
 
     it('goes home once the intro has been seen (Skip or Explore the demo)', () => {
