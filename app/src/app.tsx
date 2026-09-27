@@ -6,6 +6,7 @@ import { Layout } from './components/layout.js';
 import { Add } from './routes/add.js';
 import { Health } from './routes/health.js';
 import { Home } from './routes/home.js';
+import { Intro } from './routes/intro.js';
 import { Login } from './routes/login.js';
 import { Note } from './routes/note.js';
 import { NotFound } from './routes/not-found.js';
@@ -72,7 +73,7 @@ function AppRoutes() {
       <Route path="/settings" component={Settings} />
       <Route path="/lint" component={Health} />
       <Route path="/onboarding" component={Onboarding} />
-      {/* #207 adds the intro route here, also outside Layout (shell-routes.ts). */}
+      <Route path="/welcome" component={Intro} />
       <Route default component={NotFound} />
     </Router>
   );
