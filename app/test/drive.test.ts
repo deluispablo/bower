@@ -605,7 +605,7 @@ describe('copyIntoInbox', () => {
     expect(new Headers(init.headers).get('Content-Type')).toBe(
       'application/json',
     );
-    expect(JSON.parse(String(init.body))).toEqual({
+    expect(JSON.parse(init.body as string)).toEqual({
       name: 'Lease agreement.pdf',
       parents: ['INBOX_ID'],
     });
