@@ -1,0 +1,169 @@
+/**
+ * The six main flows (#196, spec §5) against the demo build: Alex's sample
+ * notes, three items waiting in the inbox and a scripted Tidy up run
+ * (`src/demo/`). Each flow skips the first-run tour first, except "Open
+ * Home", which walks it from the "What is Bower" intro to the end.
+ * Assertions are on the text a person reads; the screenshots are a
+ * by-product for the README and the CI artifacts, never compared.
+ */
+
+import { expect, navigate, openHome, shot, test, visible } from './demo.js';
+
+test.describe('open Home', () => {
+  test.use({ introSeen: false });
+
+  test('a first visit walks the intro and the tour, then lands on Home', async ({
+    page,
+  }, testInfo) => {
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/welcome$/);
+    await expect(
+      page.getByRole('heading', { name: /Bower files it/ }),
+    ).toBeInViewport();
+    // One "Next" per page; the desktop's side arrows are extra.
+    const next = page.getByRole('button', { name: 'Next', exact: true });
+    for (let i = 0; i < 3; i += 1) {
+      await next.nth(i).click();
+    }
+    await expect(
+      page.getByRole('heading', { name: 'What people use it for' }),
+    ).toBeInViewport();
+    await page.getByRole('button', { name: 'Explore the demo' }).click();
+
+    const tour = page.getByRole('dialog');
+    const steps = [
+      ['1 of 4 · Add', 'Drop anything here.'],
+      ['2 of 4 · Tidy up', "When you're ready, tap Tidy up."],
+      ['3 of 4 · Tell Bower', 'Talk to me like a person.'],
+      ['4 of 4 · This is a demo', 'This is a demo; run your own.'],
+    ] as const;
+    for (const [index, [label, title]] of steps.entries()) {
+      await expect(tour.getByText(label)).toBeVisible();
+      await expect(tour.getByRole('heading', { name: title })).toBeVisible();
+      if (index < steps.length - 1) {
+        await tour.getByRole('button', { name: 'Next' }).click();
+      }
+    }
+    await tour.getByRole('link', { name: 'Run your own Bower' }).click();
+    await expect(tour).toBeHidden();
+
+    // Back on Home from a fresh load: the demo forgets everything on reload,
+    // so the tour is offered again.
+    await page.goto('/');
+    await expect(
+      page.getByRole('heading', { name: 'Good morning, Alex' }),
+    ).toBeVisible();
+    await expect(page.getByText('These are sample notes.')).toBeVisible();
+    await page.getByRole('button', { name: 'Skip tour' }).click();
+    await expect(
+      visible(
+        page.getByRole('link', { name: /Answers\s+1\s+things Bower answered/ }),
+      ),
+    ).toBeVisible();
+    await shot(page, testInfo, 'home');
+  });
+});
+
+test('the quick switcher opens a note', async ({ page }, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  // The switcher sits inside an `aria-hidden` backdrop, so its roles are
+  // only reachable with `includeHidden`.
+  const switcher = page.getByRole('dialog', {
+    name: 'Quick switcher',
+    includeHidden: true,
+  });
+  await switcher.getByRole('combobox', { includeHidden: true }).fill('Lisbon');
+  await switcher
+    .getByRole('option', { name: /Lisbon Trip/, includeHidden: true })
+    .first()
+    .click();
+
+  await expect(page).toHaveURL(/\/note\//);
+  await expect(
+    page.getByRole('heading', { name: 'Lisbon Trip', level: 1 }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText('A week in Lisbon, 14 to 21 October.'),
+  ).toBeVisible();
+  await shot(page, testInfo, 'note');
+});
+
+test('Add puts a file in the inbox', async ({ page }, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+  await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible();
+
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+
+  await expect(
+    page.getByRole('listitem').filter({ hasText: 'Garden centre receipt.txt' }),
+  ).toContainText('Added to your inbox');
+  await shot(page, testInfo, 'add');
+});
+
+test('Tidy up files the inbox and says so', async ({ page }, testInfo) => {
+  await openHome(page);
+  await expect(page.getByText('waiting to be tidied')).toBeVisible();
+  await visible(page.getByRole('button', { name: 'Tidy up (3)' })).click();
+
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(
+    sheet.getByRole('heading', { name: 'Tidying up' }),
+  ).toBeVisible();
+  await expect(
+    visible(page.getByRole('button', { name: 'Tidying up…' })),
+  ).toBeVisible();
+  // The scripted run files the three items over eight seconds
+  // (`src/demo/server.ts`) and the app polls every five.
+  await expect(sheet.getByText('3 files processed')).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByText('nothing waiting')).toBeVisible();
+  await shot(page, testInfo, 'tidy-up');
+});
+
+test('Tell Bower sends a question to the inbox', async ({ page }, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Tell( Bower)?$/);
+  await expect(
+    page.getByText("A rule, a task or a question. I'll put it in your inbox"),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'A question' }).click();
+  const message = page.getByRole('textbox', { name: 'Message' });
+  await expect(message).toHaveValue(
+    'What did I save about trip planning last month?',
+  );
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(message).toHaveValue('');
+  await expect(
+    page.getByText('What did I save about trip planning last month?'),
+  ).toBeVisible();
+  await shot(page, testInfo, 'tell');
+});
+
+test('Settings switches the theme to dark, and it sticks', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Settings$/);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+
+  await page.getByRole('radio', { name: 'Dark' }).check();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.reload();
+  await expect(page.getByRole('radio', { name: 'Dark' })).toBeChecked();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await shot(page, testInfo, 'settings');
+});

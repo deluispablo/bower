@@ -101,6 +101,34 @@ The UI around the demo (#193):
 
 The same flows run in CI without a network: `app/test/demo-flows.test.ts` stubs `fetch` to fail on any call, and `app/test/demo-contract.test.ts` runs one set of assertions against the real clients (over a mocked `fetch`) and the demo ones, so the demo cannot drift from what the app expects. A production build must not contain the demo: `pnpm -C app build` lists no `demo-*.js` chunk and `check-size` stays where it was.
 
+## End-to-end tests
+
+`pnpm -C app e2e` drives the demo build in a real browser with [Playwright](https://playwright.dev) (#196): hermetic like the demo itself, no network, no Google, no Claude. The config (`app/playwright.config.ts`) builds the demo (`pnpm build:demo`) and serves it with `vite preview` on port 4196; locally a preview already running on that port is reused, so rebuild after changing the app. Chromium only, in two projects: `phone` (375 × 812, a phone's user agent and touch) and `desktop` (1280 × 800). The whole run takes well under a minute.
+
+The six flows live in `app/e2e/flows.e2e.ts`, one test each, run in both projects:
+
+- **Open Home**: a first visit goes to the "What is Bower" intro, pages through it, "Explore the demo", walks the four-step demo tour and ends on Home, greeted as Alex.
+- **Quick switcher**: search for "Lisbon", pick the note, read it.
+- **Add**: choose a file (`app/e2e/files/`), "Add to Bower", see it added to the inbox.
+- **Tidy up**: the scripted run from "Tidy up (3)" to "3 files processed", the inbox empty.
+- **Tell Bower**: an example chip, Send, the message in the sent list.
+- **Settings**: the dark theme, still dark after a reload.
+
+Every flow but the first sets the intro-seen flag before the page loads and skips the tour, which the demo offers on every load. The page clock starts at Sunday 27 September 2026, 10:30 (London), the day the fixture is written for, so dates and the greeting read the same on every run. Assertions are on the text a person reads; screenshots are never compared.
+
+Each flow saves a screenshot to `app/e2e/screenshots/<project>/` (git-ignored); traces of failed tests go to `app/e2e/results/`. In CI the `e2e` job uploads both as the `e2e` artifact, on success and failure.
+
+Running it locally:
+
+```bash
+pnpm -C app exec playwright install chromium   # once per Playwright version
+pnpm -C app e2e                                 # both projects
+pnpm -C app e2e --project=desktop --headed      # watch one project
+pnpm -C app exec playwright show-trace e2e/results/<test>/trace.zip
+```
+
+**README screenshots.** `pnpm -C app e2e:shots` runs the desktop project and also writes its six screenshots to `docs/assets/screenshots/`, which the README shows under the demo link. Run it and commit the PNGs when a screen changes visibly; they only ever show the demo's sample notes. The Tidy up one differs by a few pixels between runs, the others are identical.
+
 ## Where to look
 
 - **Cloudflare `wrangler tail`** (`pnpm -C api exec wrangler tail`, or the dashboard for a deployed instance): what the Worker logs — request ids and `error.code` values, never a token, a refresh token or an email.

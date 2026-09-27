@@ -16,6 +16,21 @@ Self-hosted, zero servers, 0 € a month.</p>
 
 <p align="center"><strong><a href="https://bower-demo.pages.dev">Try the demo</a></strong> — sample notes, no sign-up, nothing saved.</p>
 
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/assets/screenshots/home.png" alt="Home: the bird greets Alex, three things waiting in the inbox, pinned and recent notes." width="260"><br><sub>Home</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/note.png" alt="A note opened from the quick switcher: Lisbon Trip." width="260"><br><sub>A note</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/add.png" alt="Add: a file dropped into the inbox." width="260"><br><sub>Add</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/screenshots/tidy-up.png" alt="Tidying up, done: three files processed and the inbox empty." width="260"><br><sub>Tidy up</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/tell.png" alt="Tell Bower: a question sent, waiting for the next tidy-up." width="260"><br><sub>Tell Bower</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/settings.png" alt="Settings in the dark theme." width="260"><br><sub>Settings, dark</sub></td>
+  </tr>
+</table>
+
+<p align="center"><sub>Screenshots of the demo, taken by the end-to-end tests (<code>pnpm -C app e2e:shots</code>).</sub></p>
+
 ---
 
 ## Why a bowerbird
@@ -79,7 +94,7 @@ Bower is a window onto one folder of your own Google Drive. Everything else foll
 
 ## The app
 
-A redesign is under way ([milestones M6 to M10](../../milestones)): an Obsidian-like look, a file explorer that hides the app's own files, a quick switcher, and the bird on every screen. The screens are designed and committed under [`docs/design/screens/`](docs/design/screens/); open any of them in a browser. Real screenshots land with [#152](../../issues/152).
+A redesign is under way ([milestones M6 to M10](../../milestones)): an Obsidian-like look, a file explorer that hides the app's own files, a quick switcher, and the bird on every screen. The screens are designed and committed under [`docs/design/screens/`](docs/design/screens/); open any of them in a browser. The screenshots at the top are the real app, running the demo.
 
 | Screen | What you see |
 | --- | --- |
