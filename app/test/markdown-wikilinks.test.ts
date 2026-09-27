@@ -134,7 +134,7 @@ describe('renderWikilink', () => {
     expect(renderWikilink('![[Seed List.png]]', index, true)).toBe(
       '<a class="wikilink wikilink-file wikilink-embed" ' +
         'href="https://drive.google.com/file/d/seed-photo/view" ' +
-        'target="_blank" rel="noopener">Seed List.png</a>',
+        'target="_blank" rel="noopener noreferrer">Seed List.png</a>',
     );
     expect(renderWikilink('![[gone.png]]', index, true)).toBe(
       '<span class="wikilink-missing wikilink-embed">gone.png</span>',
@@ -145,7 +145,7 @@ describe('renderWikilink', () => {
     expect(renderWikilink('[[scan.pdf]]', index)).toBe(
       '<a class="wikilink wikilink-file" ' +
         'href="https://drive.google.com/file/d/scan/view" ' +
-        'target="_blank" rel="noopener">scan.pdf</a>',
+        'target="_blank" rel="noopener noreferrer">scan.pdf</a>',
     );
   });
 
