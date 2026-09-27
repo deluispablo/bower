@@ -2,6 +2,11 @@
    accent instead of the plain surface so it never reads as an error. */
 
 .demo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin: var(--space-2) var(--space-4) 0;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);

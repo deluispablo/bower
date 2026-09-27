@@ -1,10 +1,40 @@
 import preact from '@preact/preset-vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import pkg from './package.json' with { type: 'json' };
 
 // https://vite.dev/config/
+
+// No `@types/node` in this repo (see CLAUDE.md); `process` is a real
+// Node global at runtime (this file is never bundled, only run by the
+// Vite CLI), so it's declared locally rather than pulling in the package.
+declare const process: { env: Record<string, string | undefined> };
+
+/**
+ * Injects `<meta name="robots" content="noindex">` into `index.html`
+ * unless this is the demo build (`VITE_DEMO=1`, `app/package.json`'s
+ * `build:demo`): a real instance should never be indexed, the public demo
+ * should (#194). Reads `process.env` directly (this runs in Node, at
+ * build time), the same value `cross-env` sets for the `build:demo`
+ * script.
+ */
+function noindexPlugin(): Plugin {
+  return {
+    name: 'bower-noindex',
+    transformIndexHtml() {
+      if (process.env.VITE_DEMO === '1') return [];
+      return [
+        {
+          tag: 'meta',
+          attrs: { name: 'robots', content: 'noindex' },
+          injectTo: 'head',
+        },
+      ];
+    },
+  };
+}
+
 export default defineConfig({
   define: {
     // Fallback app version for the settings screen footer, used when
@@ -13,6 +43,7 @@ export default defineConfig({
   },
   plugins: [
     preact(),
+    noindexPlugin(),
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
