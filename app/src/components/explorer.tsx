@@ -68,7 +68,7 @@ export interface ExplorerProps {
   variant: 'sidebar' | 'drawer' | 'page';
   /** The latest health report has not been opened yet: show "New". */
   healthIsNew: boolean;
-  /** Primary links, shown under the search field (desktop sidebar, drawer). */
+  /** Primary links, shown under the search field (desktop sidebar). */
   nav?: ComponentChildren;
   /** Drawer only: close it (close button, a followed link, sign out). */
   onClose?: () => void;
@@ -263,8 +263,6 @@ export function Explorer({
 
 interface ExplorerDrawerProps {
   healthIsNew: boolean;
-  /** Extra rows above Health (the Settings row, #317). */
-  nav?: ComponentChildren;
   onClose: () => void;
 }
 
@@ -275,7 +273,6 @@ interface ExplorerDrawerProps {
  */
 export function ExplorerDrawer({
   healthIsNew,
-  nav,
   onClose,
 }: ExplorerDrawerProps): JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -294,7 +291,6 @@ export function ExplorerDrawer({
         <Explorer
           variant="drawer"
           healthIsNew={healthIsNew}
-          nav={nav}
           onClose={onClose}
         />
       </div>

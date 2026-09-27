@@ -61,11 +61,9 @@ export async function navigate(page: Page, name: RegExp): Promise<void> {
   await visible(page.getByRole('link', { name })).click();
 }
 
-/** Opens Settings: a sidebar row on desktop; on the phone, a row in the
- * drawer behind the menu button (#317). */
+/** Opens Settings: the avatar in the top bar on the phone, a sidebar row
+ * on desktop (#318); both are links named "Settings". */
 export async function openSettings(page: Page): Promise<void> {
-  const menu = page.getByRole('button', { name: 'Your notes' });
-  if (await menu.isVisible()) await menu.click();
   await navigate(page, /^Settings$/);
 }
 

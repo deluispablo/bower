@@ -120,6 +120,21 @@ const DEMO_TOUR_STEPS: readonly TourStep[] = [
 export interface TourProps {
   /** `true` after "Let's go"; `false` after "Skip tour" or Escape. */
   onEnd: (finished: boolean) => void;
+  /**
+   * Start at the step pointing at this control instead of the first: the
+   * top bar's "?" opens the step for the tab on screen (#318), until each
+   * tab has a help sheet of its own (#330).
+   */
+  startAt?: TourTarget;
+}
+
+/** The index of the step pointing at `target`, or 0 when there is none. */
+export function tourStartIndex(
+  steps: readonly TourStep[],
+  target: TourTarget | undefined,
+): number {
+  const found = steps.findIndex((step) => step.target === target);
+  return found === -1 ? 0 : found;
 }
 
 interface Box {
@@ -275,8 +290,10 @@ function TellExamples(): JSX.Element {
   );
 }
 
-export function Tour({ onEnd }: TourProps): JSX.Element {
-  const [index, setIndex] = useState(0);
+export function Tour({ onEnd, startAt }: TourProps): JSX.Element {
+  const [index, setIndex] = useState(() =>
+    tourStartIndex(isDemo() ? DEMO_TOUR_STEPS : TOUR_STEPS, startAt),
+  );
   const [box, setBox] = useState<Box | null>(null);
   const [viewport, setViewport] = useState(() => ({
     width: window.innerWidth,

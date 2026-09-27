@@ -1,5 +1,7 @@
 /**
- * Lets the note screen fill three places in the shell (#144): the header's
+ * Lets a screen fill four places in the shell (#144, #318): the top bar's
+ * Back link (`back`, in place of the folder menu button on an inner screen;
+ * `Layout` falls back to Back to Home when a screen leaves it empty), the header's
  * breadcrumb (the desktop breadcrumb, or the phone back link, in place of
  * the wordmark), the header's `actions` slot next to the Tidy up pill (the
  * phone "Open in Drive" icon button), and the "About this note" third
@@ -24,9 +26,10 @@ import { createContext, h } from 'preact';
 import type { ComponentChildren, JSX } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
 
-export type ShellSlot = 'crumb' | 'actions' | 'aside';
+export type ShellSlot = 'back' | 'crumb' | 'actions' | 'aside';
 
 interface ShellSlotsState {
+  back: ComponentChildren;
   crumb: ComponentChildren;
   actions: ComponentChildren;
   aside: ComponentChildren;
@@ -43,9 +46,11 @@ function noop(): void {
 }
 
 const DEFAULT_API: ShellSlotsApi = {
+  back: null,
   crumb: null,
   actions: null,
   aside: null,
+  setBack: noop,
   setCrumb: noop,
   setActions: noop,
   setAside: noop,
@@ -60,23 +65,36 @@ export interface ShellSlotsProviderProps {
 export function ShellSlotsProvider({
   children,
 }: ShellSlotsProviderProps): JSX.Element {
+  const [back, setBack] = useState<ComponentChildren>(null);
   const [crumb, setCrumb] = useState<ComponentChildren>(null);
   const [actions, setActions] = useState<ComponentChildren>(null);
   const [aside, setAside] = useState<ComponentChildren>(null);
   return h(
     ShellSlotsContext.Provider,
-    { value: { crumb, actions, aside, setCrumb, setActions, setAside } },
+    {
+      value: {
+        back,
+        crumb,
+        actions,
+        aside,
+        setBack,
+        setCrumb,
+        setActions,
+        setAside,
+      },
+    },
     children,
   );
 }
 
 /** `Layout`: the slots' current content. */
 export function useShellSlots(): ShellSlotsState {
-  const { crumb, actions, aside } = useContext(ShellSlotsContext);
-  return { crumb, actions, aside };
+  const { back, crumb, actions, aside } = useContext(ShellSlotsContext);
+  return { back, crumb, actions, aside };
 }
 
 const SETTERS: Record<ShellSlot, keyof ShellSlotsSetters> = {
+  back: 'setBack',
   crumb: 'setCrumb',
   actions: 'setActions',
   aside: 'setAside',

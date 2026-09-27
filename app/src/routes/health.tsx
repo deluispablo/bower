@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
 
+import { BackLink } from '../components/back-link.js';
 import { Bird } from '../components/bird.js';
 import { IconExternalLink } from '../components/icons.js';
+import { useShellSlot } from '../components/shell-slots.js';
 import { SaveError } from '../drive.js';
 import {
   findReport,
@@ -228,7 +230,15 @@ function Proposals() {
  * Opening it records the time, which clears the badge in the navigation.
  * Bower's open suggestions follow the report (`Proposals`).
  */
+/** The phone top bar (#318, Phone-Health board): Back to the Notes tab,
+ * where the Health row lives, and the screen's title. Stable elements, so
+ * they never refill the shell's slots on a re-render (`shell-slots.ts`). */
+const BACK = <BackLink href="/notes" label="Notes" />;
+const CRUMB = <span class="topbar-title">Health check</span>;
+
 export function Health() {
+  useShellSlot('back', BACK);
+  useShellSlot('crumb', CRUMB);
   const { index, status, error, getNoteText } = useVault();
   const [load, setLoad] = useState<ReportLoad>({ status: 'loading' });
 

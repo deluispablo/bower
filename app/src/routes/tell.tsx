@@ -27,7 +27,7 @@ const OPENING_LINE =
 
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
-const CRUMB = <h1 class="topbar-title">Tell Bower</h1>;
+const CRUMB = <h1 class="topbar-title">Bower</h1>;
 
 interface TellHistoryProps {
   sent: SentItem[];

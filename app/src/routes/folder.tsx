@@ -10,10 +10,11 @@
  * `tell-composer.tsx`). Pinned toggles the folder's own pin (#215, #216:
  * `pinFolder`/`unpinFolder`, through `pin-action.ts`'s shared toast).
  *
- * The header's `crumb` slot (`shell-slots.ts`) works exactly like a note's
- * (`routes/note.tsx#Crumb`, #144): the phone back link (the parent folder,
- * or Home for a top-level one) and the desktop breadcrumb, both always in
- * the markup, `layout.css` showing only the one that fits — except the
+ * The header's `back` and `crumb` slots (`shell-slots.ts`) work exactly
+ * like a note's (`routes/note.tsx#Crumb`, #144, #318): Back to the parent
+ * folder (or Home for a top-level one), then the phone title and the
+ * desktop breadcrumb, both always in the markup, `layout.css` showing only
+ * the one that fits — except the
  * breadcrumb here also ends in the folder's own name (not a link), since,
  * unlike a note, the folder itself is a valid breadcrumb segment.
  */
@@ -25,12 +26,12 @@ import { useRoute } from 'preact-iso';
 import { Bird } from '../components/bird.js';
 import {
   IconChat,
-  IconChevronRight,
   IconExternalLink,
   IconFolder,
   IconNote,
   IconPin,
 } from '../components/icons.js';
+import { BackLink } from '../components/back-link.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
@@ -62,18 +63,9 @@ interface FolderCrumbProps {
 
 /** The shell header's `crumb` slot content, folder version of #144's `Crumb`. */
 function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
-  const parent = ancestors[ancestors.length - 1];
   return (
     <>
-      <a
-        class="topbar-back"
-        href={parent === undefined ? '/' : folderHref(parent.path)}
-      >
-        <IconChevronRight />
-        <span class="topbar-back-label">
-          {parent === undefined ? 'Home' : parent.name}
-        </span>
-      </a>
+      <span class="topbar-title">{name}</span>
       <nav class="breadcrumb" aria-label="Folder">
         {ancestors.map((crumb) => (
           <span key={crumb.path}>
@@ -227,6 +219,19 @@ export function Folder(): JSX.Element {
   );
   const ancestors = useMemo(() => breadcrumb(path), [path]);
   const parent = ancestors[ancestors.length - 1];
+
+  // The phone top bar's Back (#318): the parent folder, or Home for a
+  // top-level one.
+  const backContent = useMemo(
+    () =>
+      parent === undefined ? (
+        <BackLink href="/" label="Home" />
+      ) : (
+        <BackLink href={folderHref(parent.path)} label={parent.name} />
+      ),
+    [parent],
+  );
+  useShellSlot('back', backContent);
 
   const crumbContent = useMemo(() => {
     if (contents === null) return null;

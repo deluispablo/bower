@@ -188,23 +188,20 @@ button.page-bare-back {
   padding: var(--space-2) var(--space-3) 0;
 }
 
+/* `auto`, not `0`, as the basis: the title keeps its own width while Back's
+   label shrinks first (see `.topbar-back`), then grows to push "?" and the
+   avatar to the right edge. */
 .topbar-crumb {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-/* The wordmark grows to fill the bar so the pill lands flush right instead
-   of bunching up next to it on the left (Audit finding 5). */
-.topbar-brand {
-  flex: 1;
-  min-width: 0;
-}
-
-/* The screen title (Add, Tell Bower, Settings), phone only: the crumb slot
-   content in place of the wordmark. Desktop shows nothing here (unchanged);
+/* The screen title, phone only (#318): the crumb slot's content, or the
+   wordmark as text on Home. Desktop shows nothing here (unchanged);
    the route's own `.screen-title` heading in the content column covers it
    there instead. */
 .topbar-title {
+  display: block;
   margin: 0;
   padding-left: var(--space-1);
   overflow: hidden;
@@ -230,12 +227,19 @@ button.page-bare-back {
   display: none;
 }
 
+/* Back on an inner screen (#318, `back-link.tsx`): it shrinks a thousand
+   times faster than the title, so its label gives way (down to the bare
+   arrow) before the title starts to truncate. */
 .topbar-back {
   display: flex;
+  flex: 0 1000 auto;
   align-items: center;
-  gap: var(--space-1);
+  /* 11 + 22 (the arrow) + 11 = 44: at its narrowest the link is exactly
+     the arrow's tap target, with no sliver of the label left showing. */
+  gap: 11px;
+  min-width: 44px;
   min-height: 44px;
-  padding-left: var(--space-1);
+  padding-left: 11px;
   overflow: hidden;
   color: var(--color-heading);
   font-family: var(--font-display);
@@ -270,6 +274,29 @@ button.page-bare-back {
 
 .theme-toggle {
   display: none;
+}
+
+/* The avatar (#318): the account's initial in a teal-tinted circle; it
+   opens Settings. Phone only: the desktop sidebar has a Settings row. */
+.topbar-avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand-tint);
+  color: var(--color-link);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+}
+
+.topbar-help {
+  flex-shrink: 0;
 }
 
 .nav-badge {
@@ -436,7 +463,7 @@ button.page-bare-back {
 .explorer-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   min-height: 44px;
   padding: 0 10px;
   border-radius: var(--radius-sm);
@@ -675,7 +702,7 @@ button.page-bare-back {
     border-bottom: 1px solid var(--color-border);
   }
 
-  .topbar-brand,
+  .topbar-avatar,
   .topbar-back,
   .topbar-title,
   .topbar-actions,
