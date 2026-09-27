@@ -52,7 +52,8 @@ vi.mock('../src/session.js', () => ({
   useSession: () => ({ status: 'signed-in', me, signOut }),
 }));
 
-vi.mock('../src/vault-store.js', () => ({
+vi.mock('../src/vault-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => ({ index: buildVaultIndex(files), files }),
 }));
 
