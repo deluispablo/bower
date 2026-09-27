@@ -165,19 +165,22 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await expect(page.getByText('Added to your inbox.')).toBeVisible();
   await shot(page, testInfo, 'add');
 
-  // Back on Home once the upload finishes: the Tidy up count and the Inbox
-  // card read the new total right away (#289), not after the next
-  // background refresh.
+  // Back on Home once the upload finishes: the Inbox card reads the new
+  // total right away (#289), not after the next background refresh.
   await expect(page).toHaveURL('/');
   await expect(
-    visible(page.getByRole('button', { name: 'Tidy up (4)' })),
-  ).toBeVisible();
+    visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
+      '.home-card-count',
+    ),
+  ).toHaveText('4');
 });
 
 test('Tidy up files the inbox and says so', async ({ page }, testInfo) => {
   await openHome(page);
   await expect(page.getByText('waiting to be tidied')).toBeVisible();
-  await visible(page.getByRole('button', { name: 'Tidy up (3)' })).click();
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
 
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(
@@ -199,7 +202,9 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   page,
 }, testInfo) => {
   await openHome(page);
-  await visible(page.getByRole('button', { name: 'Tidy up (3)' })).click();
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
 
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet).toBeVisible();
@@ -218,9 +223,11 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
     visible(page.getByRole('button', { name: 'Tidying up…' })),
   ).toBeVisible();
   await expect(sheet).toBeHidden();
+  // The bar shows nothing while the run goes; Home's Inbox card does (#320).
+  await expect(page.locator('header.topbar')).not.toContainText('Tidy');
 
   // Done is announced once, in a toast that closes; the sheet stays closed
-  // and the pill reads Tidy up again within seconds, not "Done ✓" for good.
+  // and the Inbox card's button reads Tidy up again within seconds.
   const toast = page.getByRole('status').filter({
     hasText: '3 files processed',
   });
@@ -233,7 +240,7 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   await page.keyboard.press('Enter');
   await expect(toast).toBeHidden();
   await expect(
-    visible(page.getByRole('button', { name: /^Tidy up/ })),
+    visible(page.getByRole('button', { name: 'Tidy up', exact: true })),
   ).toBeVisible({ timeout: 10_000 });
   await expect(sheet).toBeHidden();
 });

@@ -14,6 +14,7 @@ import type { DriveFile } from '../src/drive.js';
 import { BackLink } from '../src/components/back-link.js';
 import { bowerUrlFor } from '../src/routes/tell-redirect.js';
 import { helpStepFor, isInnerScreen, usesShell } from '../src/shell-routes.js';
+import type { RunPhase } from '../src/run-store.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 const location = { path: '/', route: vi.fn() };
@@ -59,9 +60,22 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
   useVault: () => ({ index: buildVaultIndex(files), files }),
 }));
 
+const runState: { phase: RunPhase; sheetOpen: boolean } = {
+  phase: 'idle',
+  sheetOpen: false,
+};
+
 vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
-  useRun: () => ({ phase: 'idle', process: vi.fn() }),
+  useRun: () => ({
+    ...runState,
+    run: null,
+    sheetReopenKey: 0,
+    process: vi.fn(),
+    tidyUp: vi.fn(),
+    openSheet: vi.fn(),
+    dismissSheet: vi.fn(),
+  }),
 }));
 
 vi.mock('../src/cache.js', () => ({
@@ -110,6 +124,8 @@ function openDrawer(): HTMLButtonElement {
 
 beforeEach(() => {
   location.path = '/';
+  runState.phase = 'idle';
+  runState.sheetOpen = false;
   localStorage.clear();
 });
 
@@ -150,25 +166,39 @@ describe('Layout', () => {
     }
   });
 
-  it('renders the Tidy up pill once, with the pending count', () => {
+  it('has no Tidy up in the bar, idle or during a run (#320)', () => {
     mount();
-    const pills = root.querySelectorAll('.process-button');
-    expect(pills).toHaveLength(1);
-    expect(pills[0]?.textContent).toBe('Tidy up (1)');
+    expect(root.querySelector('.process-button')).toBeNull();
+    expect(query('.topbar').textContent).not.toContain('Tidy');
+    void act(() => {
+      render(null, root);
+    });
+
+    runState.phase = 'running';
+    mount();
+    expect(root.querySelector('.process-button')).toBeNull();
+    expect(query('.topbar').textContent).not.toContain('Tidying');
   });
 
-  it('orders the bar: folder menu, title, pill, "?", avatar (#318)', () => {
+  it('mounts the working sheet once, outside the bar, during a run (#320)', () => {
+    runState.phase = 'running';
+    runState.sheetOpen = true;
+    mount();
+    const sheets = root.querySelectorAll('[aria-label="Tidying up status"]');
+    expect(sheets).toHaveLength(1);
+    expect(query('.topbar').contains(sheets[0] ?? null)).toBe(false);
+  });
+
+  it('orders the bar: folder menu, title, "?", avatar (#318)', () => {
     mount();
     const bar = query('.topbar');
     const order = Array.from(bar.children).map((el) => el.className);
     const menuIndex = order.findIndex((c) => c.includes('menu-button'));
     const titleIndex = order.findIndex((c) => c.includes('topbar-crumb'));
-    const pillIndex = order.findIndex((c) => c.includes('topbar-pill'));
     const helpIndex = order.findIndex((c) => c.includes('topbar-help'));
     expect(menuIndex).toBe(0);
     expect(titleIndex).toBeGreaterThan(menuIndex);
-    expect(pillIndex).toBeGreaterThan(titleIndex);
-    expect(helpIndex).toBeGreaterThan(pillIndex);
+    expect(helpIndex).toBeGreaterThan(titleIndex);
     expect(order[order.length - 1]).toBe('topbar-avatar');
 
     expect(query('.menu-button').getAttribute('aria-label')).toBe(
@@ -301,7 +331,7 @@ describe('Layout', () => {
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
   });
 
-  it('renders content from the actions shell slot next to the pill', () => {
+  it('renders content from the actions shell slot in the bar', () => {
     // A stable VNode, created once: useShellSlot refills the slot whenever
     // its `content` argument is a new reference, so passing a fresh one on
     // every render (as an inline h(...) call here would) never settles.
