@@ -197,7 +197,7 @@ export function Bower(): JSX.Element {
 
     // No run starts here: the note waits in the inbox for the next tidy-up.
     // The listing catches up now rather than on its next background
-    // revalidation, so the "Tidy up (n)" count includes it, as after Add
+    // revalidation, so Home's Inbox count includes it, as after Add
     // (#289); until it does, `justSent` keeps the row under Requests.
     void refresh();
     const item: SentItem = { name, text: trimmed, sentAt: now.toISOString() };

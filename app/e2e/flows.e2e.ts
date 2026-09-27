@@ -305,14 +305,16 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
   await shot(page, testInfo, 'tell');
 
   // No run started: no working sheet, and the note waits in the inbox
-  // with the other three.
+  // with the other three (the Inbox card reads the refreshed listing).
   await expect(
     page.getByRole('dialog', { name: 'Tidying up status' }),
   ).toHaveCount(0);
   await navigate(page, /^Home$/);
   await expect(
-    visible(page.getByRole('button', { name: 'Tidy up (4)' })),
-  ).toBeVisible();
+    visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
+      '.home-card-count',
+    ),
+  ).toHaveText('4');
 });
 
 test('Settings switches the theme to dark, and it sticks', async ({

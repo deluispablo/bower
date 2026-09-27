@@ -205,7 +205,8 @@ export function IconFile(): JSX.Element {
   );
 }
 
-/** A shield: Rules on the Bower help sheet (#330). */
+/** A shield: Rules on the Bower help sheet (#330) and the Bower tab's
+ * Rules segment (#340). */
 export function IconShield(): JSX.Element {
   return (
     <Svg>
@@ -311,15 +312,6 @@ export function IconEdit(): JSX.Element {
     <Svg>
       <path d="M4 20l4-1 11-11-3-3L5 16z" />
       <path d="M13 7l3 3" />
-    </Svg>
-  );
-}
-
-/** The Bower tab's Rules segment (#340): a shield. */
-export function IconShield(): JSX.Element {
-  return (
-    <Svg>
-      <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
     </Svg>
   );
 }
