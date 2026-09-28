@@ -306,8 +306,8 @@ export interface HelpSheetProps {
   /** "Show me around": the caller starts the tour. */
   onShowMeAround: () => void;
   /**
-   * Where the Ideas button goes. Left out, there is no Ideas button: the
-   * Ideas screen (#332) passes its path once it exists.
+   * Where the Ideas button goes (`IDEAS_PATH`, #332); left out, there is
+   * no Ideas button. `layout.tsx` passes it on every screen.
    */
   ideasHref?: string;
 }

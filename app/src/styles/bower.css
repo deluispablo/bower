@@ -133,6 +133,14 @@
   color: var(--color-link);
 }
 
+.bower-more-ideas {
+  display: inline-block;
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  color: var(--color-link);
+  font-weight: var(--weight-medium);
+}
+
 .bower-tip-toggle:focus-visible,
 .bower-example:focus-visible,
 .bower-segment:focus-visible {
