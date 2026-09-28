@@ -482,7 +482,6 @@ button.page-bare-back {
   margin: 0 0 var(--space-2);
 }
 
-.explorer-page .explorer-rows,
 .explorer-page .explorer-tree {
   padding: 0;
 }
@@ -522,6 +521,56 @@ button.page-bare-back {
 .explorer-hidden .icon {
   width: 18px;
   height: 18px;
+}
+
+/* The Notes tab's own bottom group (#353, C.5): the Health row and the
+   hidden-files line together, right after the tree — the sidebar's own
+   Health row stays a plain `.explorer-row` near the top instead (#326). */
+.explorer-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+}
+
+.explorer-health-row {
+  align-items: flex-start;
+  min-height: 54px;
+}
+
+.explorer-health-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+}
+
+.explorer-health-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.explorer-health-text b {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-heading);
+  font-weight: 600;
+}
+
+.explorer-health-subtitle {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .explorer-account {
@@ -1188,6 +1237,24 @@ button.page-bare-back {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The Notes tab's root folders only (#353, C.5): the meaning line under
+   the name, from `folder-meanings.ts` via `Tree`'s `rootMeanings` prop. */
+.tree-name-group {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.tree-meaning {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

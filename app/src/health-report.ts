@@ -130,3 +130,18 @@ export function fixMessage(dateLabel: string): string {
     ? 'Fix what the health check found'
     : `Fix what the health check from ${dateLabel} found`;
 }
+
+/**
+ * The Notes tab's compact Health row subtitle (#353, C.5): "Sunday · 2
+ * small things to fix". Always "Sunday" — the day it runs — unlike the
+ * full Health screen's own bubble (`bubbleText`), which names the report's
+ * actual date once one exists; this row only ever needs the schedule.
+ * `undefined` findings: no report parsed yet (loading, offline, or none
+ * written), so the row names the day without a claim about its contents.
+ */
+export function healthRowSubtitle(findings: number | undefined): string {
+  if (findings === undefined) return 'Sunday · not checked yet';
+  if (findings === 0) return 'Sunday · your notes are in good shape';
+  const count = findings === 1 ? 'one small thing' : `${findings} small things`;
+  return `Sunday · ${count} to fix`;
+}

@@ -6,6 +6,7 @@ import {
   findReport,
   findingsIn,
   fixMessage,
+  healthRowSubtitle,
   isReportNew,
   reportDateLabel,
   summarise,
@@ -175,5 +176,23 @@ describe('fixMessage', () => {
 
   it('falls back when there is no date to name', () => {
     expect(fixMessage('')).toBe('Fix what the health check found');
+  });
+});
+
+describe('healthRowSubtitle', () => {
+  it('names the day and the count, plural', () => {
+    expect(healthRowSubtitle(2)).toBe('Sunday · 2 small things to fix');
+  });
+
+  it('singular for one', () => {
+    expect(healthRowSubtitle(1)).toBe('Sunday · one small thing to fix');
+  });
+
+  it('says the notes are in good shape at zero', () => {
+    expect(healthRowSubtitle(0)).toBe('Sunday · your notes are in good shape');
+  });
+
+  it('never claims a count before the report has loaded', () => {
+    expect(healthRowSubtitle(undefined)).toBe('Sunday · not checked yet');
   });
 });

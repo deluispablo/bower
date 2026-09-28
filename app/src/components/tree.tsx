@@ -12,7 +12,8 @@
  * Each folder row shows its note count (`folderCounts`, subfolders
  * included). The explorer (`explorer.tsx`) passes the order (`sort`) and a
  * `collapseKey`/`expandKey` pair (its one Expand/Collapse all toggle,
- * #326) that collapses, or expands, every folder whenever either changes.
+ * #326, #353) that collapses, or expands, every folder whenever either
+ * changes.
  *
  * A non-blank `filter` (the drawer's live filter, spec §14) swaps in
  * `filterTree`'s result and force-expands every folder it kept, so a match
@@ -38,6 +39,7 @@ import type { JSX, RefCallback } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import type { DriveFile } from '../drive.js';
+import { folderMeaning } from '../folder-meanings.js';
 import { driveViewUrl } from '../markdown/embeds.js';
 import {
   appFileGroup,
@@ -135,6 +137,13 @@ interface TreeProps {
    * note, not a navigation destination of its own.
    */
   linkFolders?: boolean;
+  /**
+   * The Notes tab only (#353, C.5): a root folder's row also shows its
+   * one-line meaning from `folder-meanings.ts` (the same table the folder
+   * menu and the intro read), under its name. Off by default: the desktop
+   * sidebar's tree stays name and count only.
+   */
+  rootMeanings?: boolean;
 }
 
 export function Tree({
@@ -146,6 +155,7 @@ export function Tree({
   showAppFiles = false,
   filter = '',
   linkFolders = false,
+  rootMeanings = false,
 }: TreeProps): JSX.Element {
   const { pinNote, unpinNote, pinFolder, unpinFolder } = useVault();
   // The one row (folder or note) whose pin sheet/menu is open, or `null`.
@@ -359,6 +369,19 @@ export function Tree({
             const tabIndex = i === focusIndex ? 0 : -1;
             const pinLabel = `${isPinned(row) ? 'Unpin' : 'Pin'} ${displayName(row)}`;
             const sheetOpen = openRow?.path === row.path;
+            const meaning =
+              rootMeanings && row.kind === 'folder' && row.depth === 0
+                ? folderMeaning(row.path)
+                : undefined;
+            const nameEl =
+              meaning === undefined ? (
+                <span class="tree-name">{row.name}</span>
+              ) : (
+                <span class="tree-name-group">
+                  <span class="tree-name">{row.name}</span>
+                  <span class="tree-meaning">{meaning}</span>
+                </span>
+              );
             return (
               <li
                 key={row.path}
@@ -397,7 +420,7 @@ export function Tree({
                       onFocus={() => setFocusIndex(i)}
                     >
                       <IconFolder />
-                      <span class="tree-name">{row.name}</span>
+                      {nameEl}
                       {(counts.get(row.path) ?? 0) > 0 && (
                         <span class="tree-count">{counts.get(row.path)}</span>
                       )}
@@ -444,7 +467,7 @@ export function Tree({
                       <IconChevronRight />
                     </span>
                     <IconFolder />
-                    <span class="tree-name">{row.name}</span>
+                    {nameEl}
                     {(counts.get(row.path) ?? 0) > 0 && (
                       <span class="tree-count">{counts.get(row.path)}</span>
                     )}
