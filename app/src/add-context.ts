@@ -10,12 +10,18 @@
  * leaving Add (`routes/add.tsx`). Either way the box is cleared and the
  * files it named are remembered, so a later note only names what was
  * added after it.
+ *
+ * A sentence in the box that starts "From now on", "Always", "Never" or
+ * "Every time" (#435) also goes to `Rules.md` through the Bower tab's rule
+ * write path (`keepRule`, #343), just before the note is written, so it is
+ * a rule before the tidy-up starts; the note keeps the whole text.
  */
 
 import { useEffect, useState } from 'preact/hooks';
 
 import { contextNote, contextNoteName } from './add.js';
 import { getQueue } from './add-queue-store.js';
+import { ruleSentences } from './bower-tab.js';
 import { createTextFile, INSTRUCTION_APP_PROPERTIES } from './drive.js';
 import { showToast } from './toast-store.js';
 
@@ -52,16 +58,22 @@ export function resetContext(): void {
   setContextText('');
 }
 
+/** The vault's `keepRule` (#343): one rule sentence into `Rules.md`. */
+export type KeepRule = (sentence: string) => Promise<unknown>;
+
 /**
  * Writes the context note for the current batch — the queue's rows now in
  * the inbox and not yet named in a note — when the box has text and there
  * is such a row; otherwise does nothing. Resolves `true` when a note was
  * written. Never rejects: a failed write is logged, the text goes back in
  * the box, and the person gets one sentence, so a tidy-up waiting on this
- * still starts.
+ * still starts. With `keepRule`, each rule sentence in the text is kept
+ * first (`ruleSentences`); a rule that cannot be kept is logged and said
+ * once, and the note is written anyway (it still carries the sentence).
  */
 export async function writeContextNote(
   inboxFolderId: string | null,
+  keepRule?: KeepRule,
   now: Date = new Date(),
 ): Promise<boolean> {
   const trimmed = text.trim();
@@ -75,6 +87,16 @@ export async function writeContextNote(
   // tidy-up starting while Add unmounts) never writes the same note twice.
   for (const item of batch) covered.add(item.id);
   setContextText('');
+  if (keepRule !== undefined) {
+    for (const sentence of ruleSentences(trimmed)) {
+      try {
+        await keepRule(sentence);
+      } catch (err) {
+        console.error(err);
+        showToast('Could not add your rule yet. Bower still reads it.');
+      }
+    }
+  }
   try {
     await createTextFile(
       inboxFolderId,

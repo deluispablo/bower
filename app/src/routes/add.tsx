@@ -141,7 +141,7 @@ function driveStateText(mimeType: string | undefined): string {
 export function Add() {
   const { me } = useSession();
   const { route } = useLocation();
-  const { index, files, refresh } = useVault();
+  const { index, files, refresh, keepRule } = useVault();
   const online = useOnline();
   const hasCamera = useHasCamera();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
@@ -183,12 +183,16 @@ export function Add() {
   // Tidy up comes next (a tidy-up started from Add writes it first,
   // `run-store.tsx`). The listing catches up afterwards, as after an add.
   const contextText = useContextText();
-  const leaveRef = useRef({ inboxFolderId, refresh });
-  leaveRef.current = { inboxFolderId, refresh };
+  const leaveRef = useRef({ inboxFolderId, refresh, keepRule });
+  leaveRef.current = { inboxFolderId, refresh, keepRule };
   useEffect(
     () => () => {
-      const { inboxFolderId: inbox, refresh: refreshVault } = leaveRef.current;
-      void writeContextNote(inbox).then((written) => {
+      const {
+        inboxFolderId: inbox,
+        refresh: refreshVault,
+        keepRule: keep,
+      } = leaveRef.current;
+      void writeContextNote(inbox, keep).then((written) => {
         if (written) void refreshVault();
       });
     },
