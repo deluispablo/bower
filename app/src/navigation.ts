@@ -6,7 +6,14 @@
 
 import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
-import { appFileLabel, basenameKey, isAppFile } from './vault-index.js';
+import { noteTitle } from './note-title.js';
+import {
+  appFileLabel,
+  basenameKey,
+  fileKind,
+  fileTitle,
+  isAppFile,
+} from './vault-index.js';
 import type { VaultIndex } from './vault-index.js';
 
 const INBOX_FOLDERS = new Set(['0-Inbox', 'Clippings']);
@@ -160,22 +167,40 @@ export interface TreeNode {
   path: string;
   name: string;
   folders: TreeNode[];
-  /** Hub notes (basename === folder name) first, then alphabetical. */
+  /** Hub notes (basename === folder name) first, then by title. */
   notes: DriveFile[];
+  /** Every other visible file (PDFs, photos, Google Docs...), by title. */
+  files: DriveFile[];
+  /**
+   * `notes` and `files` together, the rows a folder shows under its
+   * subfolders: hub notes first, then by display title (by name) or newest
+   * first (by modified).
+   */
+  items: DriveFile[];
 }
 
 /** How the explorer orders the tree: by name, or most recently modified first. */
 export type TreeSort = 'name' | 'modified';
 
+/** The title a leaf row is ordered by: a note's title, a file's name without its extension. */
+function leafTitle(file: DriveFile): string {
+  return fileKind(file) === 'note' ? noteTitle(file) : fileTitle(file.name);
+}
+
 function sortByName(node: TreeNode): void {
   node.folders.sort((a, b) => compareNames(a.name, b.name));
   const hubKey = node.path === '' ? '' : basenameKey(node.name);
-  node.notes.sort((a, b) => {
-    const aHub = hubKey !== '' && basenameKey(a.name) === hubKey;
-    const bHub = hubKey !== '' && basenameKey(b.name) === hubKey;
-    if (aHub !== bHub) return aHub ? -1 : 1;
-    return compareNames(a.name, b.name);
-  });
+  const isHub = (file: DriveFile): boolean =>
+    hubKey !== '' &&
+    fileKind(file) === 'note' &&
+    basenameKey(file.name) === hubKey;
+  const byTitle = (a: DriveFile, b: DriveFile): number =>
+    (isHub(a) === isHub(b) ? 0 : isHub(a) ? -1 : 1) ||
+    compareNames(leafTitle(a), leafTitle(b)) ||
+    compareNames(a.name, b.name);
+  node.notes.sort(byTitle);
+  node.files.sort(byTitle);
+  node.items = [...node.notes, ...node.files].sort(byTitle);
   for (const child of node.folders) sortByName(child);
 }
 
@@ -192,12 +217,13 @@ function sortByModified(node: TreeNode): string {
       (newest.get(b) ?? '').localeCompare(newest.get(a) ?? '') ||
       compareNames(a.name, b.name),
   );
-  node.notes.sort(
-    (a, b) =>
-      (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
-      compareNames(a.name, b.name),
-  );
-  let latest = node.notes[0]?.modifiedTime ?? '';
+  const newestFirst = (a: DriveFile, b: DriveFile): number =>
+    (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
+    compareNames(a.name, b.name);
+  node.notes.sort(newestFirst);
+  node.files.sort(newestFirst);
+  node.items = [...node.notes, ...node.files].sort(newestFirst);
+  let latest = node.items[0]?.modifiedTime ?? '';
   for (const time of newest.values()) if (time > latest) latest = time;
   return latest;
 }
@@ -218,7 +244,14 @@ export function buildTree(
   sort: TreeSort = 'name',
 ): TreeNode {
   const byPath = new Map<string, TreeNode>();
-  const root: TreeNode = { path: '', name: '', folders: [], notes: [] };
+  const root: TreeNode = {
+    path: '',
+    name: '',
+    folders: [],
+    notes: [],
+    files: [],
+    items: [],
+  };
   byPath.set('', root);
 
   function ensure(path: string): TreeNode {
@@ -226,7 +259,14 @@ export function buildTree(
     if (existing !== undefined) return existing;
     const name = path.slice(path.lastIndexOf('/') + 1);
     const parent = ensure(folderOf(path));
-    const node: TreeNode = { path, name, folders: [], notes: [] };
+    const node: TreeNode = {
+      path,
+      name,
+      folders: [],
+      notes: [],
+      files: [],
+      items: [],
+    };
     parent.folders.push(node);
     byPath.set(path, node);
     return node;
@@ -237,9 +277,21 @@ export function buildTree(
     if (isAppFile(note.path, note.name)) continue;
     ensure(folderOf(note.path)).notes.push(note);
   }
+  for (const file of index.files) {
+    ensure(folderOf(file.path)).files.push(file);
+  }
 
   if (sort === 'modified') sortByModified(root);
   else sortByName(root);
+  // R-SYS-3: the five landmarks first in their fixed order, on every sort;
+  // the other top folders follow in the chosen order.
+  const landmarks = orderTopFolders(
+    root.folders.filter((folder) => paraKindOf(folder.name) !== null),
+  );
+  root.folders = [
+    ...landmarks,
+    ...root.folders.filter((folder) => paraKindOf(folder.name) === null),
+  ];
   return root;
 }
 
@@ -301,13 +353,19 @@ function nodeMatches(name: string, query: string): boolean {
 function filterNode(node: TreeNode, query: string): TreeNode | null {
   if (node.path !== '' && nodeMatches(node.name, query)) return node;
   const notes = node.notes.filter((note) => nodeMatches(note.name, query));
+  const files = node.files.filter((file) => nodeMatches(file.name, query));
   const folders: TreeNode[] = [];
   for (const folder of node.folders) {
     const filtered = filterNode(folder, query);
     if (filtered !== null) folders.push(filtered);
   }
-  if (notes.length === 0 && folders.length === 0) return null;
-  return { ...node, folders, notes };
+  if (notes.length === 0 && files.length === 0 && folders.length === 0) {
+    return null;
+  }
+  const items = node.items.filter(
+    (item) => notes.includes(item) || files.includes(item),
+  );
+  return { ...node, folders, notes, files, items };
 }
 
 /**
@@ -320,7 +378,15 @@ function filterNode(node: TreeNode, query: string): TreeNode | null {
 export function filterTree(tree: TreeNode, query: string): TreeNode {
   const trimmed = query.trim().toLowerCase();
   if (trimmed === '') return tree;
-  return filterNode(tree, trimmed) ?? { ...tree, folders: [], notes: [] };
+  return (
+    filterNode(tree, trimmed) ?? {
+      ...tree,
+      folders: [],
+      notes: [],
+      files: [],
+      items: [],
+    }
+  );
 }
 
 export interface AppFileEntry {
@@ -642,7 +708,7 @@ export function siblings(
  * folder row.
  */
 export interface TreeRow {
-  kind: 'folder' | 'note';
+  kind: 'folder' | 'note' | 'file';
   path: string;
   depth: number;
   expanded?: boolean;
