@@ -105,7 +105,11 @@ const vaultIndex: {
 
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ refresh: vi.fn(), index: vaultIndex.current }),
+  useVault: () => ({
+    files: [],
+    refresh: vi.fn(),
+    index: vaultIndex.current,
+  }),
 }));
 
 let root: HTMLElement;

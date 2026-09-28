@@ -5,9 +5,16 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me, Vault } from '../src/api.js';
-import { linkNoteName } from '../src/add.js';
+import { addHintLead, linkNoteName } from '../src/add.js';
 import { setQueue } from '../src/add-queue-store.js';
 import type { DriveFile } from '../src/drive.js';
+
+describe('addHintLead', () => {
+  it('counts the things waiting, singular for one', () => {
+    expect(addHintLead(1)).toBe('1 thing waiting.');
+    expect(addHintLead(3)).toBe('3 things waiting.');
+  });
+});
 
 describe('linkNoteName', () => {
   it('names the note after the host and the given date and time', () => {
@@ -108,6 +115,7 @@ vi.mock('../src/online.js', () => ({
   offlineReason: () => '',
 }));
 vi.mock('../src/drive.js', () => ({
+  FOLDER_MIME: 'application/vnd.google-apps.folder',
   listFolder,
   upload,
   createTextFile,
@@ -125,9 +133,26 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
     openSheet: vi.fn(),
   }),
 }));
+// The raw file list the hint counts (#336): three things waiting in the
+// inbox unless a test empties it before rendering.
+function inboxFile(name: string): DriveFile {
+  return {
+    id: `ID_${name}`,
+    name,
+    mimeType: 'application/pdf',
+    parents: ['FOLDER_ID'],
+    path: `0-Inbox/${name}`,
+  };
+}
+const THREE_WAITING = [
+  inboxFile('a.pdf'),
+  inboxFile('b.pdf'),
+  inboxFile('c.pdf'),
+];
+let vaultFiles: DriveFile[] = THREE_WAITING;
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ refresh: vi.fn() }),
+  useVault: () => ({ files: vaultFiles, refresh: vi.fn() }),
 }));
 
 const { Add } = await import('../src/routes/add.js');
@@ -185,11 +210,12 @@ describe('Add', () => {
     expect(root.textContent).not.toContain('Tidy up right after adding');
   });
 
-  it('shows the amber card saying Add only fills the inbox', () => {
-    const banner = root.querySelector('.app-file-banner');
-    expect(banner?.textContent).toContain('This only fills your inbox.');
-    expect(banner?.textContent).toContain(
-      'Bower does better work with a pile than with one thing at a time.',
+  // #336: the hint, copy word for word from the Phone-Add board.
+  it('shows the hint with the inbox count and the board copy', () => {
+    const hint = root.querySelector('.add-hint');
+    expect(hint?.querySelector('b')?.textContent).toBe('3 things waiting.');
+    expect(hint?.textContent).toContain(
+      'Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.',
     );
   });
 
@@ -264,11 +290,27 @@ describe('Add', () => {
 
   it('carries the Tidy up button in the hint, which asks the run store (#320)', () => {
     const button = root.querySelector<HTMLButtonElement>(
-      '.app-file-banner .process-button',
+      '.add-hint .process-button',
     );
     expect(button?.textContent).toBe('Tidy up');
     void act(() => button?.click());
     expect(tidyUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the hint when the inbox is empty (#336)', () => {
+    vaultFiles = [];
+    try {
+      void act(() => {
+        render(null, root);
+      });
+      void act(() => {
+        render(h(Add, {}), root);
+      });
+      expect(root.querySelector('.add-hint')).toBeNull();
+      expect(root.querySelector('.process-button')).toBeNull();
+    } finally {
+      vaultFiles = THREE_WAITING;
+    }
   });
 
   // #334 (issue 21.2): the queue's own heading, its type icon, and the
