@@ -53,6 +53,10 @@ const createTextFile = vi.fn<CreateTextFile>((_parent, name) =>
 );
 
 const refresh = vi.fn(() => Promise.resolve());
+// Stable across renders, as the vault's own callbacks are.
+const getNoteText = vi.fn(() => Promise.resolve(''));
+const editRule = vi.fn(() => Promise.resolve());
+const decideProposal = vi.fn(() => Promise.resolve());
 
 vi.mock('../src/drive.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/drive.js')>()),
@@ -67,12 +71,16 @@ vi.mock('../src/session.js', () => ({
   useSession: () => ({ me, setMe: vi.fn(), signOut: vi.fn() }),
 }));
 
-vi.mock('../src/vault-store.js', () => ({
+vi.mock('../src/vault-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => ({
     index: null,
     files: state.files,
     fetchedAt: state.fetchedAt,
     refresh,
+    getNoteText,
+    editRule,
+    decideProposal,
   }),
 }));
 
@@ -163,7 +171,6 @@ describe('the Bower tab', () => {
       },
     ];
     await mount();
-    expect(root.textContent).not.toContain('Nothing yet');
     const toggle = buttonNamed('Things you can ask');
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
     await act(() => {

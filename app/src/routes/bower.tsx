@@ -6,9 +6,12 @@
  * Send writes an instruction note (`kind: request`) into the inbox through
  * the same writer as before (`tell.ts`, `createTextFile`) and starts no
  * run (Part A 6.2.5): it waits for the next tidy-up like anything else in
- * the inbox, and shows under Requests as Waiting. Rules and Activity hold
- * one sentence each until their own screens land (#342, #345); Requests
- * gets its full states in #344.
+ * the inbox, and shows under Requests as Waiting. Rules is its own
+ * screen (#342, `rules-panel.tsx`): a rule's Change it fills the box and
+ * Send then rewrites that rule in `Rules.md` instead of sending a note;
+ * Apply it sends the job note "Apply this rule to what is already filed".
+ * Activity holds one sentence until its screen lands (#345); Requests gets
+ * its full states in #344.
  */
 
 import { useRef, useState } from 'preact/hooks';
@@ -26,11 +29,13 @@ import {
   IconShield,
   IconSparkle,
 } from '../components/icons.js';
+import { RulesPanel, writeError } from '../components/rules-panel.js';
 import { useShellSlot } from '../components/shell-slots.js';
-import { SuggestedRules } from '../components/suggested-rules.js';
 import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
 import { useSession } from '../session.js';
+import { applyToFiledRequest } from '../rules.js';
+import type { Rule, RuleRef } from '../rules.js';
 import { IDEAS_PATH } from '../shell-routes.js';
 import {
   addSent,
@@ -147,7 +152,7 @@ function RequestsList({
 
 export function Bower(): JSX.Element {
   const { me } = useSession();
-  const { files, fetchedAt, refresh } = useVault();
+  const { files, fetchedAt, refresh, editRule } = useVault();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const { query } = useLocation();
@@ -164,6 +169,9 @@ export function Bower(): JSX.Element {
   const [examples] = useState(() => examplesFor(visits++));
   // `null` until the person toggles it: open the first time, closed after.
   const [tipOpen, setTipOpen] = useState<boolean | null>(null);
+  // The rule Change it put in the box: Send rewrites it in place.
+  const [changing, setChanging] = useState<RuleRef | null>(null);
+  const [rulesMessage, setRulesMessage] = useState<string | null>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
   useShellSlot('crumb', CRUMB);
@@ -175,18 +183,18 @@ export function Bower(): JSX.Element {
     fetchedAt !== null && waiting.length === 0 && sent.length === 0;
   const showTip = tipOpen ?? firstTime;
   const canSend =
-    text.trim() !== '' && !sending && inboxFolderId !== null && online;
+    text.trim() !== '' &&
+    !sending &&
+    (changing !== null || inboxFolderId !== null) &&
+    online;
 
-  async function handleSend(): Promise<void> {
-    const trimmed = text.trim();
-    if (trimmed === '' || sending || inboxFolderId === null || !online) return;
-
-    setSending(true);
-    setError(null);
-
+  /** Writes `request` as an instruction note in the inbox and lists it
+   * under Requests; `false` when it did not go through. */
+  async function sendRequest(request: string): Promise<boolean> {
+    if (inboxFolderId === null) return false;
     const now = new Date();
-    const name = instructionFileName(trimmed, '', now);
-    const content = instructionNote(trimmed, now, 'request');
+    const name = instructionFileName(request, '', now);
+    const content = instructionNote(request, now, 'request');
 
     try {
       await createTextFile(inboxFolderId, name, content, {
@@ -194,9 +202,7 @@ export function Bower(): JSX.Element {
       });
     } catch (err) {
       console.error(err);
-      setError('Could not send that. Try again.');
-      setSending(false);
-      return;
+      return false;
     }
 
     // No run starts here: the note waits in the inbox for the next tidy-up.
@@ -204,11 +210,73 @@ export function Bower(): JSX.Element {
     // revalidation, so Home's Inbox count includes it, as after Add
     // (#289); until it does, `justSent` keeps the row under Requests.
     void refresh();
-    const item: SentItem = { name, text: trimmed, sentAt: now.toISOString() };
+    const item: SentItem = { name, text: request, sentAt: now.toISOString() };
     setSent(addSent(item));
     setJustSent((list) => [item, ...list]);
-    setText('');
     setSegment('requests');
+    return true;
+  }
+
+  /** Send with a rule in the box (Change it): that rule's line rewritten
+   * in `Rules.md` through `rules.ts`, no note, no run. */
+  async function saveChange(rule: RuleRef, changed: string): Promise<void> {
+    try {
+      await editRule({ kind: 'change', rule, text: changed });
+    } catch (err) {
+      console.error(err);
+      setError(writeError(err));
+      return;
+    }
+    setChanging(null);
+    setText('');
+    setRulesMessage(`Changed: ${changed}`);
+    setSegment('rules');
+  }
+
+  async function handleSend(): Promise<void> {
+    const trimmed = text.trim();
+    if (!canSend) return;
+
+    setSending(true);
+    setError(null);
+    if (changing !== null) {
+      await saveChange(changing, trimmed);
+    } else if (await sendRequest(trimmed)) {
+      setText('');
+    } else {
+      setError('Could not send that. Try again.');
+    }
+    setSending(false);
+  }
+
+  function changeRule(rule: Rule): void {
+    setChanging({ line: rule.line, raw: rule.raw });
+    setText(rule.text);
+    setError(null);
+    setRulesMessage(null);
+    // After the sheet has closed and handed focus back to the rule.
+    window.setTimeout(() => {
+      boxRef.current?.focus();
+    }, 0);
+  }
+
+  function cancelChange(): void {
+    setChanging(null);
+    setText('');
+    setError(null);
+  }
+
+  async function applyRule(rule: Rule): Promise<void> {
+    if (!online) {
+      setRulesMessage(offlineReason('tell'));
+      return;
+    }
+    if (sending) return;
+    setSending(true);
+    setRulesMessage(null);
+    if (!(await sendRequest(applyToFiledRequest(rule.text)))) {
+      setRulesMessage('Could not send that. Try again.');
+    }
     setSending(false);
   }
 
@@ -283,6 +351,18 @@ export function Bower(): JSX.Element {
             <IconSend />
           </button>
         </div>
+        {changing !== null && (
+          <p class="bower-changing">
+            <span>Changing a rule: Send saves it in its place.</span>
+            <button
+              type="button"
+              class="bower-changing-cancel"
+              onClick={cancelChange}
+            >
+              Cancel
+            </button>
+          </p>
+        )}
         {error !== null && <p class="auth-error">{error}</p>}
         {!online && <p class="offline-reason">{offlineReason('tell')}</p>}
       </div>
@@ -329,21 +409,12 @@ export function Bower(): JSX.Element {
         class="bower-panel"
         hidden={segment !== 'rules'}
       >
-        <SuggestedRules />
-        {firstTime ? (
-          <div class="bower-first">
-            <Bird state="looking" size={84} />
-            <h2>Nothing yet</h2>
-            <p>
-              Bower files things its own way until you tell it yours. Write one
-              above, in your words.
-            </p>
-          </div>
-        ) : (
-          <p class="bower-panel-note">
-            Your rules will show here, grouped by topic.
-          </p>
-        )}
+        <RulesPanel
+          message={rulesMessage}
+          onMessage={setRulesMessage}
+          onChange={changeRule}
+          onApply={(rule) => void applyRule(rule)}
+        />
       </div>
 
       <div

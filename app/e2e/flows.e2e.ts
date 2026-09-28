@@ -617,6 +617,40 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
   ).toHaveText('4');
 });
 
+test('Rules: the explanation on top, groups with counts, pause a rule and see the chip (#342)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  const rules = page.getByRole('tabpanel', { name: 'Rules' });
+  await expect(
+    rules.getByText('Rules are yours and start at once.'),
+  ).toBeVisible();
+  // Alex's groups, each with its count; only the first is open.
+  const money = rules.getByRole('button', { name: /^Money\s*4$/ });
+  await expect(money).toHaveAttribute('aria-expanded', 'true');
+  await expect(
+    rules.getByRole('button', { name: /^Travel\s*1$/ }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  // Bower's two open suggestions sit on top, with Accept and Dismiss.
+  await expect(
+    rules.getByRole('region', { name: /^Suggested/ }).getByRole('button', {
+      name: 'Accept',
+    }),
+  ).toHaveCount(2);
+  await shot(page, testInfo, 'bower-rules');
+
+  const rule = rules.getByRole('button', { name: /Never archive Money/ });
+  await expect(rule.getByText('Paused', { exact: true })).toHaveCount(0);
+  await rule.click();
+  const sheet = page.getByRole('dialog', { name: 'Never archive Money' });
+  await expect(sheet).toBeVisible();
+  await shot(page, testInfo, 'bower-rule-menu');
+  await sheet.getByRole('button', { name: /Pause it/ }).click();
+  await expect(sheet).toBeHidden();
+  await expect(rule.getByText('Paused', { exact: true })).toBeVisible();
+});
+
 test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({
   page,
 }, testInfo) => {
