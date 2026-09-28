@@ -23,6 +23,7 @@ import {
 } from './fixture.js';
 import { instructionText, replyTo } from './replies.js';
 import type { Reply } from './replies.js';
+import { demoTourSeenAt, setDemoTourSeenAt } from './store.js';
 import { DemoVault, ROOT_ID } from './vault.js';
 
 export const QUEUED_MS = 1_500;
@@ -74,7 +75,11 @@ export class DemoServer {
   private active: ActiveRun | null = null;
   private last: Run | null = null;
 
-  constructor(private readonly now: () => number = () => Date.now()) {
+  constructor(
+    private readonly now: () => number = () => Date.now(),
+    /** `null` in tests: `tourSeenAt` then starts unset and is never persisted. */
+    private readonly storage: Storage | null = null,
+  ) {
     this.vault = new DemoVault(FIXTURE_FILES, now);
     const inbox = this.vault.byPath('0-Inbox');
     this.me = {
@@ -89,7 +94,15 @@ export class DemoServer {
       needsReauth: false,
       hasApiKey: false,
       allowWeb: false,
+      tourSeenAt:
+        this.storage === null ? undefined : demoTourSeenAt(this.storage),
     };
+  }
+
+  /** Sets `tourSeenAt` and persists it (`updateSettings`, `store.ts`). */
+  setTourSeenAt(seenAt: string): void {
+    this.me.tourSeenAt = seenAt;
+    if (this.storage !== null) setDemoTourSeenAt(this.storage, seenAt);
   }
 
   private iso(ms: number): string {
