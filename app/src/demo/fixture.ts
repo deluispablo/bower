@@ -557,9 +557,16 @@ Done in August: new chain, brake pads and a tune-up. Kept for the receipts.`,
     'answer, finance',
     `# Which subscriptions renew this autumn?
 
-Home insurance on 3 November, and the streaming service every month until you cancel it. Broadband runs until January. From [[Bills and renewals]].
+## Bower's note
+- ✅ Broadband runs until January, so nothing to do this autumn.
+- ⚠️ Home insurance renews on 3 November; no note says what it cost last year.
+- ❌ The streaming service renews every month until you cancel it.
 
-Missing: no note says what the insurance cost last year.`,
+## Why
+Home insurance on 3 November, and the streaming service every month until you cancel it. Broadband runs until January.
+
+## What Bower used
+- [[Bills and renewals]] (from your notes)`,
   ),
 ];
 

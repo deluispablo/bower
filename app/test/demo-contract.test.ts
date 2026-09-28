@@ -291,6 +291,13 @@ describe.each(IMPLEMENTATIONS)('the Drive contract: %s', (_, setup) => {
     await expect(clients.drive.getText(created.id)).resolves.toBe('two');
   });
 
+  it('answers null for the thumbnail of a file Drive has no picture of', async () => {
+    const clients = setup();
+    const inbox = await inboxOf(clients);
+    const created = await clients.drive.createTextFile(inbox, 'T.md', 'x');
+    await expect(clients.drive.thumbnailLinkOf(created.id)).resolves.toBe(null);
+  });
+
   it('uploads a file into the inbox and reports progress', async () => {
     const clients = setup();
     const inbox = await inboxOf(clients);

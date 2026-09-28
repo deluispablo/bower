@@ -6,8 +6,8 @@
  * counts, a chip row (Pinned, Ask Bower about it, Open in Drive), its
  * subfolders (with their own counts) and its own notes and files together,
  * newest first (#349): each row with the type icon, the title and who put
- * it there (`file-origin.ts`). A note opens in the app; any other file
- * opens in Google Drive for now.
+ * it there (`file-origin.ts`). A note opens in the app, any other file on
+ * its own screen (`routes/file.tsx`, #350).
  *
  * The chips share `styles/layout.css`'s generic `.chip` (already used by
  * `tell-composer.tsx`). Pinned toggles the folder's own pin (#215, #216:
@@ -23,7 +23,7 @@
  */
 
 import type { JSX } from 'preact';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
 import { Bird } from '../components/bird.js';
@@ -39,18 +39,13 @@ import {
 } from '../components/icons.js';
 import { BackLink } from '../components/back-link.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
-import {
-  CATALOGUE_PATH,
-  originLine,
-  originOf,
-  parseCatalogueOrigins,
-} from '../file-origin.js';
+import { CATALOGUE_PATH, originLine, originOf } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import {
   breadcrumb,
-  driveFileUrl,
   driveFolderUrl,
   folderContents,
   folderEmptyState,
@@ -87,45 +82,6 @@ function metaLine(
   }
   if (pinned) parts.push('pinned');
   return parts.join(' · ');
-}
-
-/**
- * The origins `index.md` states (`parseCatalogueOrigins`), read once per
- * version of the catalogue through the vault's note cache. Empty until the
- * text arrives, and when there is no catalogue or it cannot be read (the
- * rows then fall back to their app properties or "in this folder").
- */
-function useCatalogueOrigins(
-  catalogue: DriveFile | undefined,
-  getNoteText: (id: string) => Promise<string>,
-): ReadonlyMap<string, Origin> {
-  const [origins, setOrigins] = useState<ReadonlyMap<string, Origin>>(
-    () => new Map(),
-  );
-  const id = catalogue?.id;
-  const version = catalogue?.modifiedTime;
-
-  useEffect(() => {
-    if (id === undefined) {
-      setOrigins(new Map());
-      return;
-    }
-    let cancelled = false;
-    getNoteText(id).then(
-      (text) => {
-        if (!cancelled) setOrigins(parseCatalogueOrigins(text));
-      },
-      (err: unknown) => {
-        console.error(err);
-        if (!cancelled) setOrigins(new Map());
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [id, version, getNoteText]);
-
-  return origins;
 }
 
 /** A row's type icon, coloured by kind (`folder.css`). A note copied from
@@ -303,16 +259,10 @@ function FolderBody({
               const title = isNote
                 ? (titles.get(item.id) ?? noteTitle(item))
                 : fileTitle(item.name);
-              const link = isNote
-                ? { href: `/note/${item.id}` }
-                : {
-                    href: driveFileUrl(item),
-                    target: '_blank',
-                    rel: 'noopener',
-                  };
+              const href = isNote ? `/note/${item.id}` : `/file/${item.id}`;
               return (
                 <li key={item.id}>
-                  <a class="folder-row folder-item" {...link}>
+                  <a class="folder-row folder-item" href={href}>
                     <KindIcon file={item} origin={origin} />
                     <span class="folder-row-text">
                       <span class="folder-row-name">{title}</span>

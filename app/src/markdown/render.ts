@@ -2,6 +2,8 @@
  * Renders a note like Obsidian's reading view: GitHub-flavoured Markdown
  * (tables, read-only task lists, code, blockquotes), wikilinks resolved
  * against the vault index, `==highlight==`, callouts and heading anchors.
+ * A note Bower wrote when asked shows `## Bower's note` as the conclusions
+ * box and `## What Bower used` as the sources list (`bower-note.ts`).
  * Attachments: links to files other than notes open in Drive; embedded
  * images and notes become placeholders (`embeds.ts`) that the note view
  * fills in after rendering, so this stays synchronous and needs no network.
@@ -14,6 +16,7 @@ import { Marked } from 'marked';
 import type { Tokens, TokenizerAndRendererExtension } from 'marked';
 
 import type { VaultIndex } from '../vault-index.js';
+import { bowerNoteExtensions, transformBowerSections } from './bower-note.js';
 import { parseFrontmatter } from './frontmatter.js';
 import { embedKind, imagePlaceholder } from './embeds.js';
 import { escapeHtml, slugify } from './html.js';
@@ -275,7 +278,16 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
 
   const marked = new Marked({ gfm: true, breaks: true });
   marked.use({
-    extensions: [embedBlock, wikilink, highlight, callout],
+    extensions: [
+      embedBlock,
+      wikilink,
+      highlight,
+      callout,
+      ...bowerNoteExtensions,
+    ],
+    hooks: {
+      processAllTokens: (tokens) => transformBowerSections(tokens),
+    },
     renderer: {
       // Links into the Bower folder: notes open in the app, other files in
       // Drive, `[](photo.png)` with no text shows the image. URLs and

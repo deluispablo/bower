@@ -855,6 +855,23 @@ async function modifiedTimeOfHttp(id: string): Promise<string> {
   return body.modifiedTime;
 }
 
+/**
+ * A file's `thumbnailLink`, freshly read: Drive's short-lived link to a
+ * small picture of the file (a PDF's first page, say), or `null` when Drive
+ * has none for it. Read on demand, never cached with the listing, because
+ * the link expires within hours (#350).
+ */
+async function thumbnailLinkOfHttp(id: string): Promise<string | null> {
+  const body = await readJson(
+    await driveFetch(
+      `/drive/v3/files/${encodeURIComponent(id)}?fields=thumbnailLink`,
+    ),
+  );
+  return typeof body.thumbnailLink === 'string' && body.thumbnailLink !== ''
+    ? body.thumbnailLink
+    : null;
+}
+
 function conflict(): AppendError {
   return new AppendError('conflict', 'The note changed while saving.');
 }
@@ -1054,6 +1071,7 @@ export interface DriveClient {
   ): Promise<DriveFile>;
   deleteFile(id: string): Promise<void>;
   modifiedTimeOf(id: string): Promise<string>;
+  thumbnailLinkOf(id: string): Promise<string | null>;
 }
 
 /** The real Drive client: Google's API, with the Worker's token. */
@@ -1071,6 +1089,7 @@ export const httpDriveClient: DriveClient = {
   updateFileText: updateFileTextHttp,
   deleteFile: deleteFileHttp,
   modifiedTimeOf: modifiedTimeOfHttp,
+  thumbnailLinkOf: thumbnailLinkOfHttp,
 };
 
 let drive: DriveClient = httpDriveClient;
@@ -1179,4 +1198,9 @@ export function deleteFile(id: string): Promise<void> {
 /** A file's current `modifiedTime`, freshly read; see `modifiedTimeOfHttp`. */
 export function modifiedTimeOf(id: string): Promise<string> {
   return withDrive((c) => c.modifiedTimeOf(id));
+}
+
+/** A file's thumbnail link, or `null`; see `thumbnailLinkOfHttp`. */
+export function thumbnailLinkOf(id: string): Promise<string | null> {
+  return withDrive((c) => c.thumbnailLinkOf(id));
 }
