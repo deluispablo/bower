@@ -100,6 +100,7 @@ describe('HELP_ROWS', () => {
     ]);
     expect(HELP_ROWS.add.rows.map((r) => r.lead)).toEqual([
       'Photo, files, your Drive, a link',
+      'Share from any app',
       'What is this?',
       'Tidy up',
     ]);
@@ -122,7 +123,7 @@ describe('HELP_ROWS', () => {
     expect(helpSheet('home', true).lede).toContain("Alex's things");
     const tidy = helpSheet('add', true).rows.find((r) => r.lead === 'Tidy up');
     expect(tidy?.text).toContain('recording');
-    expect(helpSheet('add', true).rows).toHaveLength(3);
+    expect(helpSheet('add', true).rows).toHaveLength(4);
     expect(helpSheet('bower', true)).toBe(HELP_ROWS.bower);
   });
 

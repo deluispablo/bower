@@ -14,25 +14,17 @@ import {
   useAddQueue,
   type QueueItem,
 } from '../add-queue-store.js';
-import {
-  ADD_HINT_TEXT,
-  CONTEXT_PLACEHOLDER,
-  DEMO_ADD_HINT_TEXT,
-  addHintLead,
-  linkDisplayTitle,
-  linkNoteName,
-} from '../add.js';
+import { linkDisplayTitle, linkNoteName } from '../add.js';
 import { isDemo } from '../api.js';
 import { Bird } from '../components/bird.js';
 import {
   IconCamera,
-  IconChevronRight,
   IconDrive,
   IconFile,
-  IconImage,
-  IconInbox,
+  IconSparkle,
 } from '../components/icons.js';
-import { ProcessButton } from '../components/process-button.js';
+import { KindBadge } from '../components/kind-badge.js';
+import { labelFor, startsRun } from '../components/process-button.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import {
   copyOrExportIntoInbox,
@@ -50,13 +42,16 @@ import {
   openFilePicker,
   type PickedItem,
 } from '../picker.js';
+import { formatPolicy } from '../formats.js';
 import { pendingCount, runKey, useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
+import { fileKind, type FileKind } from '../vault-index.js';
 import { useVault } from '../vault-store.js';
 
 import '../styles/add.css';
+import '../styles/process.css';
 
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
@@ -74,11 +69,8 @@ const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
  * existing `NOT_IN_DEMO`, rather than a cross-route import. */
 const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
 
-/** The other two doors' subtitles in the demo (#489, `Demo-Add` board):
- * both still work in the page, but the copy says so and drops "voice
- * memos" (never true of a photo or drag-and-drop in the demo). */
-const DEMO_TAKE_PHOTO_SUBTITLE = 'In the demo it stays in the page';
-const DEMO_CHOOSE_FILES_SUBTITLE = 'Photos, PDFs, screenshots';
+/** The "What is this?" box's placeholder (`Flow-03-Add` board). */
+const CONTEXT_PLACEHOLDER = 'Flats for November.';
 
 /** Files copied from one picked Drive folder, at most. */
 export const MAX_FOLDER_FILES = 50;
@@ -125,11 +117,28 @@ export async function expandPicks(
   return files;
 }
 
-/** The Added queue's type icon (#334): a picture, or a plain file for
- * everything else — the row's name after any renaming still ends in the
- * same extension, so this reads it straight off `item.name`. */
-function isImageName(name: string): boolean {
-  return /\.(?:jpe?g|png|gif|webp|heic|heif|bmp|svg)$/i.test(name);
+/** The kind a queue row's badge and kept-not-read line come from: a pasted
+ * link reads as a link (`doc` carries the `LINK` badge), anything else by
+ * its name and MIME type, as the rest of the app does (`fileKind`). */
+function queueKind(item: QueueItem): FileKind {
+  if (item.kind === 'link') return 'doc';
+  return fileKind({
+    name: item.name,
+    mimeType: item.file?.type ?? item.driveMimeType ?? '',
+  });
+}
+
+/** The sources present in the queue, in the order the boards list them. */
+function queueSources(queue: readonly QueueItem[], desktop: boolean): string {
+  const parts: string[] = [];
+  if (queue.some((it) => it.kind === 'file')) {
+    parts.push(desktop ? 'drop' : 'Files');
+  }
+  if (queue.some((it) => it.kind === 'drive')) parts.push('Drive');
+  if (queue.some((it) => it.kind === 'link')) parts.push('a link');
+  if (!desktop) return `Shared from ${parts.join(', ')}`;
+  const last = parts.pop();
+  return `From ${parts.length > 0 ? `${parts.join(', ')} and ` : ''}${last ?? ''}`;
 }
 
 /** `file` renamed to `name`, or `file` itself when the name did not change. */
@@ -199,7 +208,12 @@ export function Add() {
   // single source of truth for which run this queue has already caught up
   // with, so this fires safely even if Add was not mounted when the run
   // actually finished.
-  const { lastFinished } = useRun();
+  const { lastFinished, phase, tidyUp, openSheet } = useRun();
+  // `tidyUp` closes over the vault listing of its own render; after the
+  // waiting files upload, the button waits for the next render's copy so the
+  // "Is that everything?" sheet counts them.
+  const tidyUpRef = useRef(tidyUp);
+  tidyUpRef.current = tidyUp;
   useEffect(() => {
     if (lastFinished === null || lastFinished.state !== 'done') return;
     if (clearFiledAfterRun(runKey(lastFinished))) setMessage(null);
@@ -473,11 +487,38 @@ export function Add() {
     void runQueue([item]);
   }
 
-  const pending = pendingCount(files);
+  const waiting = queue.filter((item) => item.status === 'waiting');
+  // The inbox's own count plus what is chosen but not yet uploaded: the same
+  // number the "Is that everything?" sheet shows once the pile is in.
+  const total = pendingCount(files) + waiting.length;
   const linkDisabled = inboxFolderId === null || !online;
   const driveShown = GOOGLE_API_KEY !== '' || isDemo();
   const driveDisabled =
     isDemo() || inboxFolderId === null || !online || pickerOpening;
+
+  /** The one button: uploads what is still waiting, then asks the run store
+   * for the "Is that everything?" confirmation (or reopens the working sheet
+   * while a run is going). */
+  async function onTidyUp(): Promise<void> {
+    if (!startsRun(phase)) {
+      openSheet();
+      return;
+    }
+    if (waiting.length > 0) {
+      await runQueue(waiting);
+      if (getQueue().some((item) => item.status !== 'done')) return;
+      await refresh();
+      // Let the render that carries the refreshed listing land first.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
+    tidyUpRef.current();
+  }
+  const tidyDisabled = busy || phase === 'starting' || !online;
+  const tidyLabel = busy
+    ? 'Adding…'
+    : startsRun(phase)
+      ? `Tidy up ${total} ${total === 1 ? 'thing' : 'things'}`
+      : labelFor(phase);
 
   return (
     <section class="add-screen">
@@ -501,73 +542,50 @@ export function Add() {
         onChange={onFileInputChange}
       />
 
-      {/* Phone: a list of doors, no drop square (spec C.6). Desktop hides
-       * this list and shows the drop zone below instead
+      {/* Phone: three doors in one row, no drop square (spec R-ADD-1).
+       * Desktop hides them and shows the drop zone below instead
        * (`add.css`'s 900 px breakpoint, the same one `layout.css` uses for
        * the sidebar). Both live in the DOM at once so neither needs its own
-       * copy of the file inputs or the disabled/online rules. */}
+       * copy of the file inputs or the disabled/online rules. The visible
+       * word is short; the accessible name keeps the long one. */}
       <div class="add-doors">
         {hasCamera && (
           <button
             type="button"
             class="add-door"
+            aria-label="Take a photo"
             onClick={() => cameraInputRef.current?.click()}
           >
-            <span class="add-door-icon">
-              <IconCamera />
-            </span>
-            <span class="add-door-text">
-              <b>Take a photo</b>
-              <span>
-                {isDemo()
-                  ? DEMO_TAKE_PHOTO_SUBTITLE
-                  : 'A receipt, a sign, a page of a book'}
-              </span>
-            </span>
-            <IconChevronRight />
+            <IconCamera />
+            <span>Photo</span>
           </button>
         )}
         <button
           type="button"
           class="add-door"
+          aria-label="Choose files"
           onClick={() => fileInputRef.current?.click()}
         >
-          <span class="add-door-icon">
-            <IconFile />
-          </span>
-          <span class="add-door-text">
-            <b>Choose files</b>
-            <span>
-              {isDemo()
-                ? DEMO_CHOOSE_FILES_SUBTITLE
-                : 'Photos, PDFs, screenshots, voice memos'}
-            </span>
-          </span>
-          <IconChevronRight />
+          <IconFile />
+          <span>Files</span>
         </button>
         {driveShown && (
           <button
             type="button"
             class="add-door"
+            aria-label="From your Drive"
             disabled={driveDisabled}
             aria-disabled={driveDisabled}
             onClick={() => void onFromDrive()}
           >
-            <span class="add-door-icon">
-              <IconDrive />
-            </span>
-            <span class="add-door-text">
-              <b>From your Drive</b>
-              <span>
-                {isDemo()
-                  ? NOT_IN_DEMO_DRIVE
-                  : 'Copies a file in; the original stays put'}
-              </span>
-            </span>
-            <IconChevronRight />
+            <IconDrive />
+            <span>Drive</span>
           </button>
         )}
       </div>
+      {isDemo() && (
+        <p class="add-drive-note add-doors-note">{NOT_IN_DEMO_DRIVE}</p>
+      )}
 
       <div
         class={`add-dropzone${dragOver ? ' add-dropzone-active' : ''}`}
@@ -578,8 +596,7 @@ export function Add() {
         <div class="add-dropzone-bird">
           <Bird state={dragOver ? 'shiny' : 'peeking'} size={64} />
         </div>
-        <p class="add-dropzone-title">Drop anything here</p>
-        <p class="add-dropzone-hint">Photos, PDFs, screenshots, links.</p>
+        <p class="add-dropzone-title">Drop files here</p>
         <div class="add-actions">
           <button
             type="button"
@@ -610,12 +627,12 @@ export function Add() {
       </div>
 
       <div class="add-field">
-        <label for="add-link">Or paste a link</label>
         <div class="add-field-row">
           <input
             id="add-link"
             type="url"
-            placeholder="https://"
+            placeholder="Paste a link"
+            aria-label="Paste a link"
             value={linkUrl}
             disabled={linkDisabled}
             onInput={(e) => setLinkUrl(e.currentTarget.value)}
@@ -635,25 +652,19 @@ export function Add() {
         {linkError !== null && <p class="add-field-error">{linkError}</p>}
       </div>
 
-      <p class="add-share-line">
-        Or share to Bower from any app: it lands here too.
-      </p>
-
       {queue.length > 0 && (
         <div class="add-queue-section">
-          <h2 class="add-queue-head">Added · {queue.length}</h2>
+          <h2 class="add-queue-head">In your inbox · {queue.length}</h2>
+          <p class="add-queue-sources">
+            <span class="add-sources-phone">{queueSources(queue, false)}</span>
+            <span class="add-sources-desktop">{queueSources(queue, true)}</span>
+          </p>
           <ul class="add-queue">
             {queue.map((item) => (
               <li
                 key={item.id}
                 class={`add-queue-card${item.status === 'waiting' ? ' add-queue-card-waiting' : ''}`}
               >
-                {/* The type icon, not the upload status (#334): a picture,
-                 * or a plain file otherwise, the same one whether the row
-                 * is waiting, copying, done or failed. */}
-                <span class="add-queue-icon" aria-hidden="true">
-                  {isImageName(item.name) ? <IconImage /> : <IconFile />}
-                </span>
                 <span class="add-queue-body">
                   <span class="add-queue-name">
                     {item.kind === 'link' && item.url !== undefined
@@ -677,7 +688,19 @@ export function Add() {
                         : 'In your inbox')}
                     {item.status === 'failed' && (item.error ?? 'Failed')}
                   </span>
+                  {formatPolicy(queueKind(item)).queueLine !== null && (
+                    <span class="add-queue-kept">
+                      {formatPolicy(queueKind(item)).queueLine}
+                    </span>
+                  )}
                 </span>
+                <KindBadge
+                  kind={queueKind(item)}
+                  file={{
+                    name: item.name,
+                    mimeType: item.file?.type ?? item.driveMimeType ?? '',
+                  }}
+                />
                 {item.status === 'failed' && (
                   <button
                     type="button"
@@ -714,45 +737,31 @@ export function Add() {
         </p>
       ))}
 
-      {/* The hint (#336, handover C.6): the inbox's pending count, the
-       * same one Home's Inbox card, the sidebar bubble and the "Is that
-       * everything?" sheet read (`pendingCount`), refreshed after an add
-       * (#300). Hidden when nothing is waiting: there is nothing to tidy. */}
-      {pending > 0 && (
-        <div class="add-hint" role="note">
-          <span class="add-hint-icon" aria-hidden="true">
-            <IconInbox />
-          </span>
-          <div class="add-hint-body">
-            <p>
-              <b>{addHintLead(pending)}</b>{' '}
-              {isDemo() ? DEMO_ADD_HINT_TEXT : ADD_HINT_TEXT}
-            </p>
-            <ProcessButton />
-          </div>
-        </div>
-      )}
-
       {message !== null && <p class="add-message">{message}</p>}
 
       {!online && <p class="offline-reason">{offlineReason('add')}</p>}
 
-      {/* The submit belongs to the queue, not to the empty screen (#333):
-       * a link or a Drive pick already runs itself, so this only shows for
-       * files chosen, dropped or photographed, still `waiting` (#421: a
-       * `queue.length > 0` check alone left it sitting there, doing
-       * nothing but re-finishing an already-done queue, once a link or a
-       * Drive pick had run and settled). */}
-      {(busy || queue.some((item) => item.status === 'waiting')) && (
-        <button
-          type="button"
-          class="button"
-          disabled={busy || inboxFolderId === null || !online}
-          aria-disabled={busy || inboxFolderId === null || !online}
-          onClick={() => void runQueue(queue)}
-        >
-          {busy ? 'Adding…' : 'Add to Bower'}
-        </button>
+      {/* The one button (R-ADD-5): the count in its label, always in the
+       * same place above the tabs. It uploads whatever is still waiting
+       * (chosen, dropped, photographed or shared files), then opens the
+       * "Is that everything?" sheet. Hidden when nothing is waiting: there
+       * is nothing to tidy. */}
+      {total > 0 && (
+        <div class="add-tidy">
+          <button
+            type="button"
+            class="process-button add-tidy-button"
+            data-phase={busy ? 'running' : phase}
+            data-tour="tidy"
+            aria-haspopup={startsRun(phase) ? undefined : 'dialog'}
+            disabled={tidyDisabled}
+            aria-disabled={tidyDisabled}
+            onClick={() => void onTidyUp()}
+          >
+            <IconSparkle />
+            <span aria-live="polite">{tidyLabel}</span>
+          </button>
+        </div>
       )}
     </section>
   );

@@ -614,6 +614,104 @@ move_up() {
     "$MOVED_NEW" "$CHANGED_FILE" >"$UPLOAD_FILE"
 }
 
+# The bookkeeping phase (#596), after the move phase, without AI: for each
+# move Drive did (MOVED_OLD and MOVED_NEW, line by line), the links that
+# name the file are rewritten in every Markdown file the agent may write
+# (index.md's row among them): a link by path ([[<old path>]], and for a
+# note the path without .md) always, a link by name ([[<old name>]], for a
+# note also without .md) when the name changed, keeping what follows the
+# target (an alias after "|", a heading after "#"). Lines inside fenced code
+# blocks (``` or ~~~) are never touched. Then one log.md line per move, all
+# with the same time stamp: a file filed out of 0-Inbox/ gets the line the
+# app's Activity reads ("Filed: <name> → <folder>", ending ", renamed from
+# <old name>" for a rename), any other move "Moved: <old> → <new>". A line
+# already in log.md is not added again, so running the phase twice changes
+# nothing. Every file it changed joins UPLOAD_FILE.
+# Usage: book_moves <vault dir> <old paths file> <new paths file> <stamp>
+book_moves() {
+  local vault=$1 olds=$2 news=$3 stamp=$4
+  local pairs="$WORK_DIR/book-pairs.txt" targets="$WORK_DIR/book-targets.txt"
+  local candidates="$WORK_DIR/book-candidates.txt" lines="$WORK_DIR/book-log.txt"
+  local path tmp count=0
+  paste "$olds" "$news" | awk -F '\t' '$1 != "" && $2 != ""' >"$pairs" || return 1
+  [ -s "$pairs" ] || return 0
+  # "<from><TAB><to>" link targets: by path, then by name when it changed.
+  awk -F '\t' '
+    function base(p) { sub(/.*\//, "", p); return p }
+    function bare(p) { if (p ~ /\.md$/) return substr(p, 1, length(p) - 3); return "" }
+    function add(a, b) { if (a != "" && b != "" && a != b && !(a in seen)) { seen[a] = 1; print a "\t" b } }
+    {
+      add($1, $2); add(bare($1), bare($2))
+      if (base($1) != base($2)) {
+        add(base($1), base($2)); add(bare(base($1)), bare(base($2)))
+      }
+    }' "$pairs" >"$targets" || return 1
+  : >"$candidates"
+  if [ -s "$targets" ]; then
+    (cd "$vault" && cut -f 1 "$targets" | sed 's/^/[[/' |
+      grep -rlF --include='*.md' -f - . 2>/dev/null) | sed 's#^\./##' >"$candidates" || true
+  fi
+  while IFS= read -r path; do
+    [ -n "$path" ] && [ -f "$vault/$path" ] || continue
+    may_write "$path" || continue
+    tmp="$vault/$path.bower-book"
+    awk -F '\t' '
+      FILENAME == ARGV[1] { n++; from[n] = "[[" $1; to[n] = "[[" $2; next }
+      {
+        line = $0
+        if (line ~ /^[ \t]*(```|~~~)/) { fenced = !fenced; print line; next }
+        if (fenced) { print line; next }
+        for (i = 1; i <= n; i++) {
+          out = ""; rest = line; len = length(from[i])
+          while ((at = index(rest, from[i])) > 0) {
+            after = substr(rest, at + len, 2)
+            if (after == "]]" || substr(after, 1, 1) == "|" || substr(after, 1, 1) == "#") {
+              out = out substr(rest, 1, at - 1) to[i]
+            } else {
+              out = out substr(rest, 1, at - 1 + len)
+            }
+            rest = substr(rest, at + len)
+          }
+          line = out rest
+        }
+        print line
+      }' "$targets" "$vault/$path" >"$tmp" || { rm -f "$tmp"; return 1; }
+    if cmp -s "$tmp" "$vault/$path"; then
+      rm -f "$tmp"
+      continue
+    fi
+    cat "$tmp" >"$vault/$path" && rm -f "$tmp" || return 1
+    printf '%s\n' "$path" >>"$UPLOAD_FILE"
+    count=$((count + 1))
+  done <"$candidates"
+  [ "$count" -eq 0 ] || log "links updated in $count notes"
+  # The log.md lines, those not there yet only.
+  STAMP="$stamp" awk -F '\t' '
+    function base(p) { sub(/.*\//, "", p); return p }
+    function dir(p) { if (p !~ /\//) return "."; sub(/\/[^\/]*$/, "", p); return p }
+    {
+      line = "- " ENVIRON["STAMP"] " · "
+      if ($1 ~ /^0-Inbox\// && $2 !~ /^0-Inbox\//) {
+        line = line "Filed: " base($2) " → " dir($2)
+        if (base($1) != base($2)) line = line ", renamed from " base($1)
+      } else line = line "Moved: " $1 " → " $2
+      print line
+    }' "$pairs" >"$lines" || return 1
+  touch "$vault/log.md" || return 1
+  if [ -s "$vault/log.md" ] && [ -n "$(tail -c 1 "$vault/log.md")" ]; then
+    echo >>"$vault/log.md" || return 1
+  fi
+  count=0
+  while IFS= read -r path; do
+    grep -qxF -- "$path" "$vault/log.md" && continue
+    printf '%s\n' "$path" >>"$vault/log.md" || return 1
+    count=$((count + 1))
+  done <"$lines"
+  [ "$count" -eq 0 ] || printf '%s\n' log.md >>"$UPLOAD_FILE"
+  # Each path once, in the order it was listed.
+  awk '!seen[$0]++' "$UPLOAD_FILE" >"$UPLOAD_FILE.tmp" && mv "$UPLOAD_FILE.tmp" "$UPLOAD_FILE"
+}
+
 # Best effort after a failure: upload whatever the agent already added or
 # changed, with copy only (never deletes), so originals stay in the inbox.
 copy_up_after_failure() {
@@ -1150,7 +1248,9 @@ fi
 # files, the whole run. Then the move phase (find_moves and move_up above,
 # #595): each file the agent moved or renamed to an accepted place, found by
 # its unchanged content, is moved in Drive itself, so it keeps its id and
-# leaves no copy at its old path, whatever folder it came from. Then only
+# leaves no copy at its old path, whatever folder it came from. Then the
+# bookkeeping phase (book_moves above, #596) books each of those moves in
+# index.md, in the links that name the file and in log.md. Then only
 # the accepted files the agent added or changed and did not move are
 # copied, and copy never deletes: a file added or edited in Drive during the
 # run keeps its content. Last, the pending-original delete, which now covers
@@ -1171,6 +1271,9 @@ if ! find_moves; then
 fi
 if ! move_up; then
   fail "$STEP: move failed"
+fi
+if ! book_moves "$VAULT_DIR" "$MOVED_OLD" "$MOVED_NEW" "$(date -u '+%F %H:%M')"; then
+  fail "$STEP: bookkeeping failed"
 fi
 if ! copy_up "$UPLOAD_FILE"; then
   fail "$STEP: copy failed" drive_unavailable
