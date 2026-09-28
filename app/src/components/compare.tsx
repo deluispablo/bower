@@ -15,6 +15,7 @@ import {
   applyFilters,
   askHref,
   askTip,
+  bookingsTimeline,
   cellText,
   compareColumns,
   compareKinds,
@@ -29,12 +30,15 @@ import {
   notesOfKind,
   orderedColumnIds,
   phoneExplainer,
+  receiptsByMonth,
+  receiptsExplainer,
   setFrontmatterValue,
   sortNotes,
   statusOptionLabel,
   STATUS_COLUMN,
   statusValue,
   TITLE_COLUMN,
+  timelineExplainer,
 } from '../compare.js';
 import type { CompareColumn, CompareNote, CompareSort } from '../compare.js';
 import { getText, saveNoteText } from '../drive.js';
@@ -138,6 +142,12 @@ export function CompareView({
   }, [folderPath]);
 
   if (kind === undefined) return null;
+  if (kind.compare === 'by-month') {
+    return <MonthsView notes={notesOfKind(notes, kind)} />;
+  }
+  if (kind.compare === 'timeline') {
+    return <TimelineView notes={notesOfKind(notes, kind)} />;
+  }
 
   const current = notesOfKind(notes, kind).map((note) => {
     const override = overrides[note.id];
@@ -560,5 +570,80 @@ function BodyCell({
         <OriginSquare origin={origin} />
       )}
     </td>
+  );
+}
+
+/** Receipts by month (issue #615): one block per month, newest first, with
+ * its total and the receipts under it, and the year so far at the end. */
+function MonthsView({ notes }: { notes: readonly CompareNote[] }): JSX.Element {
+  const { months, year } = receiptsByMonth(notes);
+  return (
+    <section class="compare compare-months" aria-label="Compare">
+      <p class="compare-explainer">{receiptsExplainer(notes.length)}</p>
+      {months.map((month) => (
+        <section class="compare-month" key={month.key}>
+          <h3 class="compare-month-head">
+            <span>{month.label}</span>
+            <span class="compare-month-total">{month.totalText}</span>
+          </h3>
+          <ul class="compare-month-list">
+            {month.receipts.map((receipt) => (
+              <li key={receipt.note.id}>
+                <a class="compare-receipt" href={noteHref(receipt.note)}>
+                  <b class="compare-receipt-shop">{receipt.shop}</b>
+                  <span class="compare-receipt-date">{receipt.date}</span>
+                  <span class="compare-receipt-total">{receipt.total}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      {year !== null && (
+        <p class="compare-year">
+          <span>{`${year.year} so far`}</span>
+          <b>{year.totalText}</b>
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** Bookings as a timeline (issue #615): a vertical line by date and time,
+ * each with where and the reference; the ones already over are faded. */
+function TimelineView({
+  notes,
+}: {
+  notes: readonly CompareNote[];
+}): JSX.Element {
+  const entries = bookingsTimeline(notes);
+  return (
+    <section class="compare compare-timeline" aria-label="Compare">
+      <p class="compare-explainer">{timelineExplainer(notes.length)}</p>
+      <ol class="compare-steps">
+        {entries.map((entry) => (
+          <li
+            key={entry.note.id}
+            class={`compare-step${entry.past ? ' compare-step-past' : ''}`}
+          >
+            <a class="compare-step-link" href={noteHref(entry.note)}>
+              <span class="compare-step-when">
+                {[entry.date, entry.time]
+                  .filter((part) => part !== '')
+                  .join(', ')}
+                {entry.past && <span class="compare-step-tag"> · Past</span>}
+              </span>
+              <b class="compare-step-what">{entry.what}</b>
+              {entry.where !== '' && (
+                <span class="compare-step-where">{entry.where}</span>
+              )}
+              {entry.reference !== '' && (
+                <span class="compare-step-ref">{`Ref ${entry.reference}`}</span>
+              )}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
