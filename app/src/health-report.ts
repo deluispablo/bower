@@ -80,27 +80,60 @@ export interface HealthFinding {
   detail?: string;
 }
 
+/** A `**bold**` run (no nested `**`), for `splitFinding` to skip its colons. */
+const STRONG_RUN = /\*\*(?:[^*]|\*(?!\*))+\*\*/g;
+
+/**
+ * Whether the colon at `item[i]` sits inside a `**bold**` run — punctuation
+ * that belongs to the finding's own markdown, never a title/detail
+ * separator (issue #492: `**Orphan file: <path>.**` used to lose its
+ * closing `**` to a split mid-span).
+ */
+function colonInsideStrongRun(item: string, i: number): boolean {
+  for (const match of item.matchAll(STRONG_RUN)) {
+    if (match.index === undefined) continue;
+    if (i > match.index && i < match.index + match[0].length) return true;
+  }
+  return false;
+}
+
+/** Whether the colon at `item[i]` sits between two digits, an "hh:mm" time (#492: "14:44" used to split into "…14" / "44…"). */
+function colonInsideTime(item: string, i: number): boolean {
+  return /\d/.test(item[i - 1] ?? '') && /\d/.test(item[i + 1] ?? '');
+}
+
+/**
+ * One checklist item's title and detail: the text up to the first colon
+ * that is real title/detail punctuation — not one inside a `**bold**` run
+ * and not one inside an "hh:mm" time — becomes the title, the rest the
+ * detail. An item with no such colon keeps its whole text as the title.
+ * Markdown (`**bold**`, backticks, wikilinks) is left untouched either
+ * way; `routes/health.tsx` renders both fields through the note renderer.
+ */
+function splitFinding(item: string): HealthFinding {
+  for (let i = 0; i < item.length; i++) {
+    if (item[i] !== ':') continue;
+    if (i === 0 || i === item.length - 1) continue;
+    if (colonInsideStrongRun(item, i) || colonInsideTime(item, i)) continue;
+    return {
+      text: item.slice(0, i).trim(),
+      detail: item.slice(i + 1).trim(),
+    };
+  }
+  return { text: item };
+}
+
 /**
  * The report body's `- [ ]` checklist (`agent/prompts/lint.md` step 4) as
- * the findings list `routes/health.tsx` shows. A line with a colon splits
- * into a short title and its detail, same as the design's findings rows;
- * one without a colon keeps its whole text.
+ * the findings list `routes/health.tsx` shows, each parsed as Markdown with
+ * `splitFinding` above.
  */
 export function findingsIn(body: string): HealthFinding[] {
   const findings: HealthFinding[] = [];
   for (const line of body.split(/\r?\n/)) {
     const match = /^-\s*\[[ xX]\]\s*(.+)$/.exec(line.trim());
     if (match === null) continue;
-    const item = (match[1] ?? '').trim();
-    const colon = item.indexOf(':');
-    if (colon > 0 && colon < item.length - 1) {
-      findings.push({
-        text: item.slice(0, colon).trim(),
-        detail: item.slice(colon + 1).trim(),
-      });
-    } else {
-      findings.push({ text: item });
-    }
+    findings.push(splitFinding((match[1] ?? '').trim()));
   }
   return findings;
 }
