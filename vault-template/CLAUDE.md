@@ -2,7 +2,7 @@
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-28
-bower_rules_version: 15
+bower_rules_version: 16
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -106,7 +106,7 @@ Leave sensitive IDs (passport, tax numbers, account numbers) in the original, no
 4. How it applies to the owner
 5. Source
 
-**A note from Bower** (every note you write because the owner asked: the answer to a question in `Answers/<YYYY-MM-DD> <question>.md`, a job's result, what a context note or a rule asked for). The app shows its first section as a box, so it starts exactly like this:
+**A note from Bower** (every note you write because the owner asked: the answer to a question in `Answers/<YYYY-MM-DD> <question>.md`, a job's result, what a context note or a rule asked for). The app shows its first block as a box, so it starts exactly like this:
 ```markdown
 ---
 title: <the question or the job, in one line>
@@ -114,23 +114,20 @@ type: answer
 tags: [answer, <domain>]
 created: YYYY-MM-DD
 ---
-## Bower's note
-- ✅ <what is fine, one line>
-- ⚠️ <what to check, one line>
-- ❌ <a problem, one line>
+> [!bower] Bower's note
+> Rent £2,150 a month, 5 weeks' deposit, available 1 November. (from the file)
+> 14 minutes by bike to your office. (from your notes: [[Offer letter]], [[Cycle to Work]])
+> The listing says "newly refurbished"; the photos show the bathroom is not. (from the file) — Check
 
 ## Why
 <the reasoning, short, with [[wikilinks]] to the notes used; what the notes do not hold, if anything>
 
-## What Bower used
-- [[<note or file>]] (from the file)
-- <a fact from the web> (looked up on the web)
-- <something the owner said in the request> (from what you told me)
-- <a conclusion drawn from the above> (reasoned)
+<the body of the result: a table, a summary, a translation>
 ```
-- `## Bower's note` comes first, as bullets only, each starting with exactly one of ✅ (fine), ⚠️ (check) or ❌ (problem); no other marker or emoji anywhere in it. Use only the markers that apply.
-- `## What Bower used` lists every source, each ending with its origin in brackets: `(from the file)`, `(looked up on the web)`, `(from what you told me)` or `(reasoned)`.
-- The body of the result (a table, a summary, a translation) follows after `## What Bower used`.
+- The top box is `> [!bower] Bower's note`, at most three lines. It comes first, right after the frontmatter. No ✅, ⚠️, ❌ or other marker in it.
+- A section of a long note may open with `> [!bower]- Bower on this section`, at most one per section and only when there is something to say. It follows the same line rules as the top box.
+- Every line of a callout ends with its origin in brackets, exactly one of: `(from the file)`, `(from your notes: [[A]], [[B]])` (name the notes), `(looked up)` or `(from what you told me)`.
+- A line that needs the person to look, decide or confirm ends with ` — Check` after its origin.
 
 ## Workflows
 
@@ -181,7 +178,7 @@ If the note is ambiguous, pick the most likely reading, say so at the top of wha
 ### Query
 1. Read `index.md` to find relevant notes; read them.
 2. Answer with `[[wikilinks]]` to the notes used.
-3. Write the answer as **A note from Bower** (see Note templates) in `Answers/<YYYY-MM-DD> <question>.md`: `type: answer`, `## Bower's note` with only ✅ ⚠️ ❌ bullets, `## Why`, `## What Bower used` with each source's origin in brackets.
+3. Write the answer as **A note from Bower** (see Note templates) in `Answers/<YYYY-MM-DD> <question>.md`: `type: answer`, the `> [!bower] Bower's note` box (at most three lines, each ending with its origin in brackets; `— Check` when it needs the person), then `## Why`.
 
 ### Lint (weekly, or on request)
 1. Orphan notes (not linked from `index.md` or any hub).

@@ -904,7 +904,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toContainText(
     'In the demo the bird plays back a real run in twenty seconds',
   );
-  await expect(sheet).toContainText('Playing back');
+  await expect(sheet).toContainText('playing back');
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed
@@ -958,7 +958,7 @@ test('a filed link reads by its host and path, on the Done sheet and in Recent, 
     hasText: 'example.org',
   });
   await expect(row).toBeVisible();
-  await expect(row).toContainText('3-Resources');
+  await expect(row).toContainText('Resources');
   await expect(sheet.getByText(/^Link - /)).toHaveCount(0);
   await sheet.getByRole('button', { name: 'Close' }).click();
 
@@ -1034,8 +1034,8 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   // line (#363), and the item being read.
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
-  await expect(sheet.getByText(/^[0-3] of 3 filed$/)).toBeVisible();
-  await expect(sheet.getByText('Playing back')).toBeVisible();
+  await expect(sheet.getByText(/^[0-3] of 3 · playing back$/)).toBeVisible();
+  await expect(sheet.getByText(/playing back/)).toBeVisible();
   await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(
@@ -1048,12 +1048,12 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
 
   // The scripted run files one item after another (`src/demo/server.ts`);
   // the app polls every five seconds, so some land before the run ends.
-  await expect(sheet.getByText(/^[12] of 3 filed$/)).toBeVisible({
+  await expect(sheet.getByText(/^[12] of 3 · playing back$/)).toBeVisible({
     timeout: 15_000,
   });
   await expect(
     rows.filter({ hasText: 'Boiler service invoice' }),
-  ).toContainText('filed');
+  ).toContainText('Areas › Home');
   await shot(page, testInfo, 'run-working-rows');
 
   // Done: the listing is read again and the rows name where things went;
@@ -1063,13 +1063,13 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   });
   await expect(
     rows.filter({ hasText: 'Boiler service invoice' }),
-  ).toContainText('→ Home');
+  ).toContainText('Areas › Home');
   await expect(rows.filter({ hasText: 'Tomato seedlings' })).toContainText(
-    '→ Garden',
+    'Areas › Garden',
   );
   await expect(
     rows.filter({ hasText: 'What do I still need for Lisbon' }),
-  ).toContainText('filed');
+  ).toContainText('Inbox › Processed');
   await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(0);
 });
 
