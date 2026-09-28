@@ -43,6 +43,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
+import { tourOnScreen } from '../onboarding.js';
 import { pendingCount } from '../run-store.js';
 import { useSession } from '../session.js';
 import {
@@ -51,7 +52,7 @@ import {
   helpScreenFor,
   isInnerScreen,
 } from '../shell-routes.js';
-import { replayTour } from '../tour-store.js';
+import { replayTour, useTour } from '../tour-store.js';
 import { useVault } from '../vault-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
@@ -142,6 +143,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
   const { files } = useVault();
   const { path, route } = useLocation();
+  const tour = useTour();
   const { back, crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
   // "?" (About this screen): the help sheet for the screen on show (#330).
@@ -308,7 +310,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
                 <span aria-hidden="true">{avatarInitial(me?.email)}</span>
               </a>
             </header>
-            <DemoBanner />
+            <DemoBanner tourOpen={path === '/' && tourOnScreen(me, tour)} />
             <OfflineBanner />
             {me?.needsReauth === true && (
               <div class="reauth-banner">

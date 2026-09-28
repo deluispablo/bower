@@ -56,7 +56,7 @@ import {
   relativeTime,
 } from '../navigation.js';
 import { noteTitle } from '../note-title.js';
-import { shouldShowTour } from '../onboarding.js';
+import { tourOnScreen } from '../onboarding.js';
 import { useOnline } from '../online.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
@@ -357,8 +357,7 @@ export function Home(): JSX.Element {
   // The first-run tour (#149): once per account, or again from Settings.
   // "Let's go" ends it with one show-off on Home.
   const tour = useTour();
-  const showTour =
-    me !== undefined && !tour.dismissed && shouldShowTour(me, tour.replay);
+  const showTour = tourOnScreen(me, tour);
   const greetingBird: BirdState = tour.showoff ? 'showoff' : birdState;
   const onDone = tour.showoff ? showoffPlayed : () => setRestedPlay(playId);
 
@@ -524,7 +523,7 @@ export function Home(): JSX.Element {
           </ul>
         </div>
       )}
-      {showTour && (
+      {showTour && me !== undefined && (
         <Tour
           onEnd={(finished) => {
             endTour(finished);

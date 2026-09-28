@@ -1,16 +1,12 @@
 // @vitest-environment jsdom
 
 /**
- * The demo banner (#193): nothing in a real build, the sample-notes
- * sentence in a demo one. `isDemo()` is mocked directly (rather than
- * stubbing `VITE_DEMO` and re-importing `api.ts`) so the real demo module
- * — its own fixture vault, loaded from `vault-template/` — never boots for
- * a plain UI check.
- *
- * "Show me around" (#195) replays the first-run tour; `tour-store.ts` is
- * mocked the same way `tour-store.test.ts` mocks `api.ts`'s
- * `updateSettings`, so this stays a plain UI check of the banner calling
- * `replayTour`, not of the store itself.
+ * The demo banner (#362): nothing in a real build; in a demo one, one
+ * sentence and "Run your own" to `/login`, and nothing while the tour is
+ * on screen. `isDemo()` is mocked directly (rather than stubbing
+ * `VITE_DEMO` and re-importing `api.ts`) so the real demo module — its own
+ * fixture vault, loaded from `vault-template/` — never boots for a plain UI
+ * check.
  */
 
 import { h, render } from 'preact';
@@ -24,31 +20,17 @@ vi.mock('../src/api.js', async (importOriginal) => ({
   isDemo: () => state.demo,
 }));
 
-const replayTour = vi.fn();
-vi.mock('../src/tour-store.js', () => ({
-  replayTour: () => {
-    replayTour();
-  },
-}));
-
-const { DemoBanner } = await import('../src/components/demo-banner.js');
+const { DemoBanner, DEMO_BANNER_TEXT } =
+  await import('../src/components/demo-banner.js');
 
 let root: HTMLDivElement;
 
-function mount(): void {
+function mount(tourOpen?: boolean): void {
   root = document.createElement('div');
   document.body.append(root);
   void act(() => {
-    render(h(DemoBanner, null), root);
+    render(h(DemoBanner, { tourOpen }), root);
   });
-}
-
-function button(label: string): HTMLButtonElement {
-  const found = Array.from(root.querySelectorAll('button')).find(
-    (b) => b.textContent === label,
-  );
-  if (found === undefined) throw new Error(`button ${label} missing`);
-  return found;
 }
 
 afterEach(() => {
@@ -57,7 +39,6 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   state.demo = false;
-  replayTour.mockReset();
 });
 
 describe('DemoBanner', () => {
@@ -67,18 +48,22 @@ describe('DemoBanner', () => {
     expect(root.textContent).toBe('');
   });
 
-  it('shows the sample-notes sentence in a demo build', () => {
+  it('shows the one sentence and Run your own to /login in a demo build', () => {
     state.demo = true;
     mount();
-    expect(root.textContent).toContain(
-      'These are sample notes. Nothing here is real.',
+    expect(DEMO_BANNER_TEXT).toBe(
+      'This is a demo, not the real thing: sample notes, nothing saved.',
     );
+    expect(root.textContent).toContain(DEMO_BANNER_TEXT);
+    const link = root.querySelector('a');
+    expect(link?.textContent).toBe('Run your own');
+    expect(link?.getAttribute('href')).toBe('/login');
+    expect(root.querySelector('button')).toBeNull();
   });
 
-  it('"Show me around" replays the tour', () => {
+  it('steps aside while the tour is on screen', () => {
     state.demo = true;
-    mount();
-    void act(() => button('Show me around').click());
-    expect(replayTour).toHaveBeenCalledTimes(1);
+    mount(true);
+    expect(root.textContent).toBe('');
   });
 });
