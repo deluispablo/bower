@@ -233,6 +233,9 @@ readonly MOVES_FILE="$WORK_DIR/moves.txt"
 readonly MOVED_OLD="$WORK_DIR/moved-old.txt"
 readonly MOVED_NEW="$WORK_DIR/moved-new.txt"
 readonly UPLOAD_FILE="$WORK_DIR/upload.txt"
+# The map of Drive id to path each run leaves in the vault for the next
+# one's reconcile phase (see reconcile below, #597).
+readonly PATHS_FILE='.bower/paths.json'
 readonly FLAGGED_FILE="$WORK_DIR/flagged.txt"
 readonly QUARANTINED_FILE="$WORK_DIR/quarantined.txt"
 # The instruction-origin step's files: in the work dir, never in the vault,
@@ -279,6 +282,7 @@ REFUSED_JSON=''      # the audit's refused paths, a JSON array, once it ran
 QUARANTINED_JSON=''  # the pre-scan's quarantined paths, a JSON array, once it ran
 TOO_MANY_CHANGES=0   # 1 when the audit refused the whole run
 RULES_WRITABLE=0     # 1 once an instruction note the app wrote reaches the agent
+RECONCILED=0         # 1 once the reconcile phase listed the tree (#597)
 
 on_exit() {
   local rc=$?
@@ -288,6 +292,7 @@ on_exit() {
     copy_up_after_failure
     REASON=unknown
     write_outcome failed "$(failed_sentence)" >/dev/null 2>&1 || true
+    write_paths >/dev/null 2>&1 || true
     PROCESSED_JSON='' SUMMARY='' report_final failed "$STEP: unexpected error" >/dev/null 2>&1 || true
     log "failed at $STEP"
     rc=2
@@ -626,10 +631,13 @@ move_up() {
 # app's Activity reads ("Filed: <name> → <folder>", ending ", renamed from
 # <old name>" for a rename), any other move "Moved: <old> → <new>". A line
 # already in log.md is not added again, so running the phase twice changes
-# nothing. Every file it changed joins UPLOAD_FILE.
-# Usage: book_moves <vault dir> <old paths file> <new paths file> <stamp>
+# nothing. Every file it changed joins UPLOAD_FILE. With a fifth argument
+# `by-you` (the reconcile phase, #597: moves the person made in Drive or
+# Obsidian between runs), only index.md's rows are rewritten, never a link
+# in another note, and each log.md line reads "Moved by you: <old> → <new>".
+# Usage: book_moves <vault dir> <old paths file> <new paths file> <stamp> [by-you]
 book_moves() {
-  local vault=$1 olds=$2 news=$3 stamp=$4
+  local vault=$1 olds=$2 news=$3 stamp=$4 by=${5:-}
   local pairs="$WORK_DIR/book-pairs.txt" targets="$WORK_DIR/book-targets.txt"
   local candidates="$WORK_DIR/book-candidates.txt" lines="$WORK_DIR/book-log.txt"
   local path tmp count=0
@@ -647,7 +655,9 @@ book_moves() {
       }
     }' "$pairs" >"$targets" || return 1
   : >"$candidates"
-  if [ -s "$targets" ]; then
+  if [ "$by" = by-you ]; then
+    [ ! -f "$vault/index.md" ] || printf '%s\n' index.md >"$candidates"
+  elif [ -s "$targets" ]; then
     (cd "$vault" && cut -f 1 "$targets" | sed 's/^/[[/' |
       grep -rlF --include='*.md' -f - . 2>/dev/null) | sed 's#^\./##' >"$candidates" || true
   fi
@@ -686,12 +696,13 @@ book_moves() {
   done <"$candidates"
   [ "$count" -eq 0 ] || log "links updated in $count notes"
   # The log.md lines, those not there yet only.
-  STAMP="$stamp" awk -F '\t' '
+  STAMP="$stamp" BY="$by" awk -F '\t' '
     function base(p) { sub(/.*\//, "", p); return p }
     function dir(p) { if (p !~ /\//) return "."; sub(/\/[^\/]*$/, "", p); return p }
     {
       line = "- " ENVIRON["STAMP"] " · "
-      if ($1 ~ /^0-Inbox\// && $2 !~ /^0-Inbox\//) {
+      if (ENVIRON["BY"] == "by-you") line = line "Moved by you: " $1 " → " $2
+      else if ($1 ~ /^0-Inbox\// && $2 !~ /^0-Inbox\//) {
         line = line "Filed: " base($2) " → " dir($2)
         if (base($1) != base($2)) line = line ", renamed from " base($1)
       } else line = line "Moved: " $1 " → " $2
@@ -710,6 +721,123 @@ book_moves() {
   [ "$count" -eq 0 ] || printf '%s\n' log.md >>"$UPLOAD_FILE"
   # Each path once, in the order it was listed.
   awk '!seen[$0]++' "$UPLOAD_FILE" >"$UPLOAD_FILE.tmp" && mv "$UPLOAD_FILE.tmp" "$UPLOAD_FILE"
+}
+
+# Lists every visible file in Drive with its Drive id (rclone lsjson -R),
+# one "<id><TAB><path>" line per file into file $1: system files, .obsidian/,
+# .claude/ and .bower/ left out, and a path with a tab or a line break
+# skipped (never guessed at). Used by the reconcile phase and write_paths.
+list_ids() {
+  local json="$WORK_DIR/listing.json"
+  rclone lsjson vault: -R --files-only --no-modtime --no-mimetype \
+    --exclude '.obsidian/**' --exclude '.claude/**' --exclude '.bower/**' \
+    "${RCLONE_FILTER[@]}" </dev/null >"$json" 2>>"$RCLONE_LOG" || return 1
+  jq -r "$LISTING_FILTER" "$json" >"$1"
+}
+readonly LISTING_FILTER='.[] | select((.IsDir | not) and (.ID | type) == "string" and ((.ID + .Path) | test("[\t\n]") | not)) | "\(.ID)\t\(.Path)"'
+readonly PATHS_READ_FILTER='to_entries[] | select((.value | type) == "string" and ((.key + .value) | test("[\t\n]") | not)) | "\(.key)\t\(.value)"'
+readonly PATHS_WRITE_FILTER='[inputs | split("\t") | {key: .[0], value: .[1]}] | from_entries'
+
+# Marks each index.md row (a list item) that links to a path listed in file
+# $1 (by path, or for a note by the path without .md) with " (missing)" at
+# its end; a row already marked, and anything in a fenced code block, is
+# left as it is. Rows are never deleted. index.md joins UPLOAD_FILE when it
+# changed. Logs the count only.
+mark_missing() {
+  local index="$VAULT_DIR/index.md" tmp count
+  [ -s "$1" ] && [ -f "$index" ] || return 0
+  tmp="$index.bower-missing"
+  awk -v counted="$WORK_DIR/missing-count.txt" '
+    function add(p) { t["[[" p "]]"] = 1; t["[[" p "|"] = 1; t["[[" p "#"] = 1 }
+    FILENAME == ARGV[1] {
+      if ($0 != "") { add($0); if ($0 ~ /\.md$/) add(substr($0, 1, length($0) - 3)) }
+      next
+    }
+    {
+      line = $0; cr = ""
+      if (sub(/\r$/, "", line)) cr = "\r"
+      if (line ~ /^[ \t]*(```|~~~)/) { fenced = !fenced; print $0; next }
+      if (!fenced && line ~ /^[ \t]*[-*+] / && line !~ /\(missing\)[ \t]*$/) {
+        for (k in t) if (index(line, k)) { line = line " (missing)"; n++; break }
+      }
+      print line cr
+    }
+    END { print n + 0 >counted }' "$1" "$index" >"$tmp" || { rm -f "$tmp"; return 1; }
+  count=$(cat "$WORK_DIR/missing-count.txt")
+  if [ "$count" -eq 0 ]; then
+    rm -f "$tmp"
+    return 0
+  fi
+  cat "$tmp" >"$index" && rm -f "$tmp" || return 1
+  grep -qxF index.md "$UPLOAD_FILE" || printf '%s\n' index.md >>"$UPLOAD_FILE"
+  log "$count index rows marked missing"
+}
+
+# The reconcile phase (#597), before the agent: people move files
+# themselves, in Drive or in Obsidian, and index.md then points at old
+# paths. The tree is listed again with Drive ids and compared with
+# .bower/paths.json, the map of id to path the last run left. An id whose
+# path changed is a move the person made: its index.md row is rewritten to
+# the new path and log.md gets "Moved by you: <old> → <new>" (book_moves,
+# by-you). An id that is gone has its rows marked "(missing)" (mark_missing).
+# Links in other notes are left alone. The changed index.md and log.md go
+# up to Drive at once, before the manifest, so they are never counted as
+# the agent's changes. Without .bower/paths.json (the first run), or with
+# one that cannot be read, nothing is reconciled. Sets RECONCILED=1 once
+# the tree was listed, so write_paths may replace the map at the end.
+reconcile() {
+  local old="$WORK_DIR/paths-old.tsv" olds="$WORK_DIR/reconcile-old.txt"
+  local news="$WORK_DIR/reconcile-new.txt" gone="$WORK_DIR/reconcile-gone.txt"
+  list_ids "$WORK_DIR/listing-before.tsv" || return 1
+  if [ ! -f "$VAULT_DIR/$PATHS_FILE" ]; then
+    log "no paths file yet: nothing to reconcile"
+    RECONCILED=1
+    return 0
+  fi
+  if ! jq -r "$PATHS_READ_FILTER" "$VAULT_DIR/$PATHS_FILE" >"$old" 2>>"$RCLONE_LOG"; then
+    log "paths file unreadable: nothing to reconcile"
+    RECONCILED=1
+    return 0
+  fi
+  : >"$olds"
+  : >"$news"
+  : >"$gone"
+  LC_ALL=C sort -t "$(printf '\t')" -k 2 "$old" |
+    awk -F '\t' -v olds="$olds" -v news="$news" -v gone="$gone" '
+      FILENAME == ARGV[1] { now[$1] = $2; next }
+      $1 == "" || $2 == "" { next }
+      !($1 in now) { print $2 >gone; next }
+      now[$1] != $2 { print $2 >olds; print now[$1] >news }' \
+      "$WORK_DIR/listing-before.tsv" - || return 1
+  : >"$UPLOAD_FILE"
+  local moves
+  moves=$(count_lines "$olds")
+  if [ "$moves" -gt 0 ]; then
+    book_moves "$VAULT_DIR" "$olds" "$news" "$(date -u '+%F %H:%M')" by-you || return 1
+    log "$moves moves by you booked"
+  fi
+  mark_missing "$gone" || return 1
+  copy_up "$UPLOAD_FILE" || return 1
+  RECONCILED=1
+}
+
+# At the end of every run whose tree was listed at the start (RECONCILED):
+# lists the tree with ids again and writes it to .bower/paths.json in Drive,
+# a JSON object of Drive id to path, for the next run's reconcile phase.
+# Best effort: a failure is logged and never fails the run.
+write_paths() {
+  [ "$RECONCILED" -eq 1 ] || return 0
+  local dir="$WORK_DIR/paths-out"
+  if ! {
+    mkdir -p "$dir/.bower" &&
+      list_ids "$WORK_DIR/listing-after.tsv" &&
+      jq -Rn "$PATHS_WRITE_FILTER" <"$WORK_DIR/listing-after.tsv" >"$dir/$PATHS_FILE" &&
+      printf '%s\n' "$PATHS_FILE" >"$dir/files.txt" &&
+      rclone copy "$dir" vault: --files-from-raw "$dir/files.txt" \
+        "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1
+  }; then
+    log "paths file not saved"
+  fi
 }
 
 # Best effort after a failure: upload whatever the agent already added or
@@ -735,6 +863,7 @@ fail() {
   REPORTED=1
   copy_up_after_failure
   write_outcome failed "$(failed_sentence)"
+  write_paths
   PROCESSED_JSON='' SUMMARY='' report_final failed "$error" || log "report failed: API unreachable"
   log "failed: $error"
   exit 2
@@ -940,6 +1069,17 @@ if ! {
   fail "$STEP: copy failed"
 fi
 
+# --- reconcile --------------------------------------------------------------
+# Moves the person made between runs (see reconcile above, #597). Best
+# effort: when the listing or the upload fails, the run goes on without it
+# and the next run reconciles against the same, older map.
+STEP='reconcile'
+log "$STEP"
+if ! reconcile; then
+  RECONCILED=0
+  log "$STEP failed: not reconciled"
+fi
+
 # --- pending files ----------------------------------------------------------
 # Everything in 0-Inbox/ and Clippings/ except processed originals, the
 # folder notes (_*.md), .gitkeep and anything already under
@@ -1026,6 +1166,7 @@ if [ "$MODE" = ingest ] && [ "$PENDING_COUNT" -eq 0 ]; then
   STEP='report done'
   log "$STEP"
   write_outcome done 'Nothing new to tidy up.'
+  write_paths
   if ! report_final done; then
     REPORTED=1
     log "report done failed: API unreachable"
@@ -1322,6 +1463,7 @@ else
   [ -f "$WORK_DIR/pending-after-scan.txt" ] || filed=$(count_lines "$PENDING_FILE")
   write_outcome done "Tidied up $filed $([ "$filed" -eq 1 ] && echo thing || echo things)."
 fi
+write_paths
 if ! report_final done; then
   REPORTED=1
   log "report done failed: API unreachable"
