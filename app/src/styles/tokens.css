@@ -78,6 +78,8 @@
   --color-on-danger: #ffffff;
   --color-success: #2d8250;
   --color-on-success: #ffffff;
+  /* Recent's type icons (handover C.4): an answer Bower wrote is purple. */
+  --color-type-answer: #6d4bc2;
 
   /* Typography */
   --font-display:
@@ -147,6 +149,7 @@
     --color-on-danger: #0b1220;
     --color-success: #7ed3a1;
     --color-on-success: #0b1220;
+    --color-type-answer: #b69cf0;
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
     --motion-fast: 120ms;
@@ -175,6 +178,7 @@
   --color-on-danger: #0b1220;
   --color-success: #7ed3a1;
   --color-on-success: #0b1220;
+  --color-type-answer: #b69cf0;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 16px rgb(0 0 0 / 0.5);
   --motion-fast: 120ms;

@@ -106,10 +106,8 @@ test.describe('open Home', () => {
     await expect(page.getByText('These are sample notes.')).toBeVisible();
     await page.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(
-      visible(
-        page.getByRole('link', { name: /Answers\s+1\s+things Bower answered/ }),
-      ),
-    ).toBeVisible();
+      visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
+    ).toContainText('No tidy-up yet');
     await shot(page, testInfo, 'home');
   });
 });
@@ -189,26 +187,46 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   ).toHaveText('4');
 });
 
-test('Tidy up files the inbox and says so', async ({ page }, testInfo) => {
+test('Home through the scripted run: waiting, running, done (#321)', async ({
+  page,
+}, testInfo) => {
   await openHome(page);
-  await expect(page.getByText('waiting to be tidied')).toBeVisible();
-  await visible(
-    page.getByRole('button', { name: 'Tidy up', exact: true }),
-  ).click();
+  const bubble = visible(page.locator('.home-bubble'));
+  const inbox = visible(page.locator('.home-card', { hasText: 'Inbox' }));
 
+  // Waiting: the count, and Tidy up in the bubble and on the card.
+  await expect(bubble).toHaveText(
+    '3 things in your inbox. Tidy up when you have added everything.',
+  );
+  await expect(inbox).toContainText('waiting to be filed');
+  await inbox.getByRole('button', { name: 'Tidy up', exact: true }).click();
+
+  // Running: the bubble says so; the card has no button, only its line.
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(
     sheet.getByRole('heading', { name: 'Tidying up' }),
   ).toBeVisible();
+  await expect(bubble).toHaveText(
+    "Tidying up 3 things. Takes a few minutes; I'll say when I'm done. You can keep adding.",
+  );
   await expect(
-    visible(page.getByRole('button', { name: 'Tidying up…' })),
+    inbox.getByRole('button', { name: /^Tidying up… started/ }),
   ).toBeVisible();
-  // The scripted run files the three items over eight seconds
-  // (`src/demo/server.ts`) and the app polls every five.
+  await expect(inbox.getByRole('button', { name: 'Tidy up' })).toHaveCount(0);
+
+  // Done: the scripted run files the three items over eight seconds
+  // (`src/demo/server.ts`) and the app polls every five. Two were filed
+  // and one was a question Bower answered.
   await expect(sheet.getByText('3 files processed')).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByText('nothing waiting')).toBeVisible();
+  await expect(bubble).toHaveText(
+    'All tidy. 2 things filed and 1 question answered. See what I did.',
+  );
+  await expect(inbox).toContainText('Nothing waiting. Add something.');
+  await expect(
+    visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
+  ).toContainText('2 filed · 1 answered');
   await shot(page, testInfo, 'tidy-up');
 });
 
@@ -234,14 +252,14 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   await navigate(page, /^Home$/);
   await expect(page).toHaveURL('/');
   await expect(
-    visible(page.getByRole('button', { name: 'Tidying up…' })),
+    visible(page.getByRole('button', { name: /^Tidying up… started/ })),
   ).toBeVisible();
   await expect(sheet).toBeHidden();
   // The bar shows nothing while the run goes; Home's Inbox card does (#320).
   await expect(page.locator('header.topbar')).not.toContainText('Tidy');
 
   // Done is announced once, in a toast that closes; the sheet stays closed
-  // and the Inbox card's button reads Tidy up again within seconds.
+  // and the Inbox card, now empty, points at Add.
   const toast = page.getByRole('status').filter({
     hasText: '3 files processed',
   });
@@ -254,7 +272,9 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   await page.keyboard.press('Enter');
   await expect(toast).toBeHidden();
   await expect(
-    visible(page.getByRole('button', { name: 'Tidy up', exact: true })),
+    visible(
+      page.getByRole('link', { name: /Nothing waiting\. Add something\./ }),
+    ),
   ).toBeVisible({ timeout: 10_000 });
   await expect(sheet).toBeHidden();
 });
