@@ -1,0 +1,146 @@
+/* The v4 marks (spec §5, board System-Folders). Colours are tokens only. */
+
+.folder-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-family: Poppins, sans-serif;
+  font-weight: 700;
+  line-height: 1;
+}
+.folder-mark-40 {
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+}
+.folder-mark-28 {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+}
+.folder-mark-18 {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+.folder-mark .icon {
+  stroke-width: 2;
+  width: 15px;
+  height: 15px;
+}
+.folder-mark-40 .icon {
+  width: 20px;
+  height: 20px;
+}
+.folder-mark-18 .icon {
+  width: 11px;
+  height: 11px;
+}
+.folder-mark-inbox {
+  background: var(--color-para-inbox);
+  color: var(--color-para-inbox-on);
+}
+.folder-mark-projects {
+  background: var(--color-para-projects);
+  color: var(--color-para-projects-on);
+}
+.folder-mark-areas {
+  background: var(--color-para-areas);
+  color: var(--color-para-areas-on);
+}
+.folder-mark-resources {
+  background: var(--color-para-resources);
+  color: var(--color-para-resources-on);
+}
+.folder-mark-archives {
+  background: var(--color-para-archives);
+  color: var(--color-para-archives-on);
+}
+
+.folder-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+.folder-icon-inbox {
+  color: var(--color-para-inbox);
+}
+.folder-icon-projects {
+  color: var(--color-para-projects);
+}
+.folder-icon-areas {
+  color: var(--color-para-areas);
+}
+.folder-icon-resources {
+  color: var(--color-para-resources);
+}
+.folder-icon-archives {
+  color: var(--color-para-archives);
+}
+
+.origin-square {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+}
+.origin-square .icon {
+  width: 12px;
+  height: 12px;
+}
+.origin-square-file {
+  background: var(--color-origin-file-bg);
+  color: var(--color-origin-file);
+}
+.origin-square-notes {
+  background: var(--color-origin-notes-bg);
+  color: var(--color-origin-notes);
+}
+.origin-square-web {
+  background: var(--color-origin-web-bg);
+  color: var(--color-origin-web);
+}
+.origin-square-you {
+  background: var(--color-origin-you-bg);
+  color: var(--color-origin-you);
+}
+
+.kind-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 15px;
+}
+
+.bower-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.new-tag {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--color-new);
+  color: var(--color-new-on);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 17px;
+}
