@@ -288,7 +288,7 @@ describe('NoteMenu', () => {
       root.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     ).toBe('File actions');
     expect(root.querySelector('.note-menu-meta')?.textContent).toBe(
-      'PDF · 1-Projects / Flat hunt',
+      'PDF · Projects / Flat hunt',
     );
     expect(rows().map((r) => r.textContent)).toEqual([
       expect.stringContaining('Ask Bower about this'),
@@ -328,7 +328,7 @@ describe('NoteMenu', () => {
       root.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     ).toBe('Folder actions');
     expect(root.querySelector('.note-menu-meta')?.textContent).toBe(
-      'Folder · 1-Projects',
+      'Folder · Projects',
     );
     expect(rows().map((r) => r.textContent)).toEqual([
       expect.stringContaining('Ask Bower about this'),

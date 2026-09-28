@@ -6,6 +6,8 @@ import {
   appFileGroup,
   breadcrumb,
   buildTree,
+  displayName,
+  displayPath,
   driveFileUrl,
   filterTree,
   folderContents,
@@ -13,6 +15,8 @@ import {
   folderEmptyState,
   folderHref,
   nextFocusIndex,
+  orderTopFolders,
+  paraKindOf,
   pendingCount,
   recentNotes,
   relativeTime,
@@ -317,7 +321,7 @@ describe('folderCounts', () => {
       entry('2-Areas/Cooking/_Cooking.md'),
       entry('index.md'),
     ]);
-    const counts = folderCounts(index);
+    const counts = folderCounts(index, false);
     expect(counts.get('2-Areas')).toBe(3);
     expect(counts.get('2-Areas/Cooking')).toBe(2);
     expect(counts.get('2-Areas/Finance')).toBe(0);
@@ -335,7 +339,7 @@ describe('folderCounts', () => {
       entry('0-Inbox/note.md'),
       entry('0-Inbox/Bower - 2026-09-26 1405 Receipts.md'),
     ]);
-    expect(folderCounts(index).get('0-Inbox')).toBe(1);
+    expect(folderCounts(index, false).get('0-Inbox')).toBe(1);
   });
 
   // #425: the folder menu, the Notes tree and the desktop sidebar count
@@ -362,11 +366,115 @@ describe('folderCounts', () => {
       expect(counts.get('1-Projects/Kitchen Refresh')).toBe(4);
     });
 
-    it('leaves the default (no second argument) notes-only', () => {
+    it('is the default: one rule, notes plus files (R-SYS-7)', () => {
       const counts = folderCounts(index);
-      expect(counts.get('0-Inbox')).toBe(1);
-      expect(counts.get('1-Projects')).toBe(2);
+      expect(counts.get('0-Inbox')).toBe(2);
+      expect(counts.get('1-Projects')).toBe(4);
     });
+
+    it('never counts a system file such as desktop.ini', () => {
+      const withSystem = buildVaultIndex([
+        dir('0-Inbox'),
+        entry('0-Inbox/A quick note.md'),
+        entry('0-Inbox/Receipt.pdf', 'application/pdf'),
+        entry('0-Inbox/desktop.ini', 'text/plain'),
+        entry('0-Inbox/.hidden.txt', 'text/plain'),
+      ]);
+      expect(folderCounts(withSystem).get('0-Inbox')).toBe(
+        withSystem.notes.length + withSystem.files.length,
+      );
+      expect(folderCounts(withSystem).get('0-Inbox')).toBe(2);
+    });
+  });
+});
+
+describe('paraKindOf (R-SYS-2)', () => {
+  it('reads the prefixed names', () => {
+    expect(paraKindOf('0-Inbox')).toBe('inbox');
+    expect(paraKindOf('1-Projects')).toBe('projects');
+    expect(paraKindOf('2-Areas')).toBe('areas');
+    expect(paraKindOf('3-Resources')).toBe('resources');
+    expect(paraKindOf('4-Archives')).toBe('archives');
+  });
+
+  it('reads a PARA folder renamed without its prefix, any case', () => {
+    expect(paraKindOf('Projects')).toBe('projects');
+    expect(paraKindOf('areas')).toBe('areas');
+    expect(paraKindOf('ARCHIVES')).toBe('archives');
+    expect(paraKindOf('Inbox')).toBe('inbox');
+  });
+
+  it('reads the prefix alone when the name was changed', () => {
+    expect(paraKindOf('1-Trips')).toBe('projects');
+    expect(paraKindOf('4-Old things')).toBe('archives');
+  });
+
+  it('leaves everything else neutral', () => {
+    expect(paraKindOf('Answers')).toBeNull();
+    expect(paraKindOf('Clippings')).toBeNull();
+    expect(paraKindOf('Recipes')).toBeNull();
+    expect(paraKindOf('5-Later')).toBeNull();
+  });
+});
+
+describe('displayName and displayPath', () => {
+  it('drops a numeric prefix and nothing else', () => {
+    expect(displayName('2-Areas')).toBe('Areas');
+    expect(displayName('Answers')).toBe('Answers');
+    expect(displayName('Cooking')).toBe('Cooking');
+  });
+
+  it('never leaves a lone prefix', () => {
+    expect(displayName('2-')).toBe('2-');
+  });
+
+  it('spaces the segments of a path', () => {
+    expect(displayPath('2-Areas/Cooking')).toBe('Areas / Cooking');
+    expect(displayPath('2-Areas/Cooking', '/')).toBe('Areas/Cooking');
+    expect(displayPath('')).toBe('');
+  });
+});
+
+describe('orderTopFolders (R-SYS-3)', () => {
+  const names = (list: { name: string }[]): string[] =>
+    list.map((folder) => folder.name);
+
+  it('puts the five landmarks first, in fixed order, then the others by name', () => {
+    const ordered = orderTopFolders([
+      { name: 'Clippings' },
+      { name: '4-Archives' },
+      { name: 'Answers' },
+      { name: '2-Areas' },
+      { name: 'Zoo' },
+      { name: '0-Inbox' },
+      { name: '3-Resources' },
+      { name: '1-Projects' },
+    ]);
+    expect(names(ordered)).toEqual([
+      '0-Inbox',
+      '1-Projects',
+      '2-Areas',
+      '3-Resources',
+      '4-Archives',
+      'Answers',
+      'Clippings',
+      'Zoo',
+    ]);
+  });
+
+  it('keeps a renamed landmark in its slot and a custom folder with the others', () => {
+    const ordered = orderTopFolders([
+      { name: 'Recipes' },
+      { name: 'Archives' },
+      { name: 'Projects' },
+    ]);
+    expect(names(ordered)).toEqual(['Projects', 'Archives', 'Recipes']);
+  });
+
+  it('does not change its input', () => {
+    const input = [{ name: 'Answers' }, { name: '0-Inbox' }];
+    orderTopFolders(input);
+    expect(names(input)).toEqual(['Answers', '0-Inbox']);
   });
 });
 
@@ -710,9 +818,15 @@ describe('appFileGroup', () => {
 describe('breadcrumb', () => {
   it('returns each folder segment with its own full path', () => {
     expect(breadcrumb('1-Projects/Garden/Seed List.md')).toEqual([
-      { name: '1-Projects', path: '1-Projects' },
+      { name: 'Projects', path: '1-Projects' },
       { name: 'Garden', path: '1-Projects/Garden' },
     ]);
+  });
+
+  it('never shows a numeric prefix, so the back label never leads with one', () => {
+    for (const crumb of breadcrumb('2-Areas/Cooking/Bread.md')) {
+      expect(crumb.name).not.toMatch(/^[0-4]-/);
+    }
   });
 
   it('is empty for a top-level note', () => {

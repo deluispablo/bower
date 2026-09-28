@@ -1751,7 +1751,7 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
 
   const tree = page.getByRole('tree').first();
   const inbox = tree.locator('a[href="/folder/0-Inbox"]');
-  await expect(inbox).toContainText('What you added, waiting for a tidy-up');
+  await expect(inbox).toContainText('Waiting for the next tidy-up');
   const answers = tree.locator('a[href="/folder/Answers"]');
   await expect(answers).toContainText('What Bower wrote back to you');
 

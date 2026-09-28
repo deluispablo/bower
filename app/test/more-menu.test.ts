@@ -9,7 +9,10 @@ function prefill(href: string): string | null {
 describe('moreMenuMeta (#352)', () => {
   it('reads "type · folder / subfolder", as the board draws it', () => {
     expect(moreMenuMeta('PDF', '1-Projects/Flat hunt/Lease 2026.pdf')).toBe(
-      'PDF · 1-Projects / Flat hunt',
+      'PDF · Projects / Flat hunt',
+    );
+    expect(moreMenuMeta('Note', '2-Areas/Home/Boiler.md')).not.toMatch(
+      /[0-4]-/,
     );
   });
 

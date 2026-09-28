@@ -21,6 +21,7 @@
 import type { Run, RunItemKind } from './api.js';
 import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
+import { displayPath } from './navigation.js';
 import { failureCopy } from './run-failure.js';
 import { processedKind } from './run-progress.js';
 import { shortDay } from './rules.js';
@@ -216,13 +217,13 @@ function toneOf(name: string): ActivityTone {
 }
 
 /** What people read for a file: a note's title, any other file's name. */
-function displayName(name: string): string {
+function fileDisplayName(name: string): string {
   return /\.md$/i.test(name) ? fileTitle(name) : name;
 }
 
-/** `1-Projects/Flat hunt` as `1-Projects / Flat hunt`. */
+/** `1-Projects/Flat hunt` as `Projects / Flat hunt`. */
 export function folderLabel(folder: string): string {
-  return folder.split('/').filter(Boolean).join(' / ');
+  return displayPath(folder);
 }
 
 /** Letters and digits only, lower-cased: how a title is compared across a
@@ -311,12 +312,12 @@ function fileRow(
         setAside: UNREADABLE_REASON,
       };
     }
-    return { key: path, tone: toneOf(name), title: displayName(name) };
+    return { key: path, tone: toneOf(name), title: fileDisplayName(name) };
   }
   const row: ActivityRow = {
     key: path,
     tone: toneOf(name),
-    title: displayName(name),
+    title: fileDisplayName(name),
     destination: folderLabel(line.folder),
   };
   if (line.renamedFrom === name && line.name !== name) {
