@@ -1165,6 +1165,20 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
   const explainerBox = await explainer.boundingBox();
   const chipsBox = await chips.boundingBox();
   expect((explainerBox?.y ?? 0) < (chipsBox?.y ?? 0)).toBe(true);
+  // The Phone-Folder board's details (#431): the heading without the
+  // numeric prefix, "N projects · N things", a second line on each
+  // subfolder row.
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Projects', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.folder-meta')).toHaveText(
+    /^\d+ projects? · \d+ things?$/,
+  );
+  await expect(
+    page
+      .locator('a.folder-row[href="/folder/1-Projects/Lisbon%20Trip"]')
+      .locator('.folder-row-detail'),
+  ).toHaveText(/^\d+ things? · (updated today|\d+ (d|w|mo|y))$/);
   await shot(page, testInfo, 'folder-root-explained');
 
   // A non-root folder (a project) has no meaning line to show.
