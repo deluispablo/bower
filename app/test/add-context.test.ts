@@ -112,6 +112,39 @@ describe('writeContextNote', () => {
     );
   });
 
+  it('keeps both rule sentences when a box has two, cleanly punctuated (#499)', async () => {
+    createTextFile.mockResolvedValue(written);
+    const keepRule = vi.fn((sentence: string) => Promise.resolve(sentence));
+    setQueue([item('a', 'done')]);
+    setContextText(
+      'From now on, bird articles go to Learning. From now on, nothing goes to Garden.',
+    );
+
+    expect(await writeContextNote('FOLDER_ID', keepRule)).toBe(true);
+    expect(keepRule.mock.calls.map((call) => call[0])).toEqual([
+      'From now on, bird articles go to Learning.',
+      'From now on, nothing goes to Garden.',
+    ]);
+  });
+
+  it('keeps both rule sentences typed back to back with no punctuation between them (#499)', async () => {
+    // The round-4 report's repro: two "From now on" sentences with
+    // neither a period nor a line break between them used to merge into
+    // one blob, so only the second's guessed topic ever showed up.
+    createTextFile.mockResolvedValue(written);
+    const keepRule = vi.fn((sentence: string) => Promise.resolve(sentence));
+    setQueue([item('a', 'done')]);
+    setContextText(
+      'From now on, bird articles go to Learning From now on, nothing goes to Garden.',
+    );
+
+    expect(await writeContextNote('FOLDER_ID', keepRule)).toBe(true);
+    expect(keepRule.mock.calls.map((call) => call[0])).toEqual([
+      'From now on, bird articles go to Learning',
+      'From now on, nothing goes to Garden.',
+    ]);
+  });
+
   it('keeps nothing without a rule sentence, and writes the note when the rule fails', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     createTextFile.mockResolvedValue(written);
