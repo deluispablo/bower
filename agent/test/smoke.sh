@@ -105,6 +105,10 @@ if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
     context)
       body='{"files":[{"name":"Bower - 2026-01-15 0903 Context.md"}]}'
       ;;
+    # "Apply it to what is already filed" from a rule's menu (#372).
+    applyrule)
+      body='{"files":[{"name":"Bower - 2026-01-15 0904 Apply rule.md"}]}'
+      ;;
     # Drive's search has not caught up with the request sent at 09:05 yet.
     midrun)
       body='{"files":[{"name":"Bower - 2026-01-15 0850 Old question.md"},{"name":"Bower - 2026-01-15 0906 Context.md"}]}'
@@ -325,6 +329,20 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         '## Everything else' "- Keep file names short. (owner's request, 2026-01-03)" \
         >"$remote/Rules.md"
       echo jpg >"$remote/0-Inbox/till-slip.jpg"
+    fi
+    if [ "$SMOKE_SCENARIO" = applyrule ]; then
+      # One rule and a folder filed before it existed (issue #372): two
+      # receipts sit in 2-Areas/Finance, the rule wants them in Receipts/;
+      # the job note is what the app sends from the rule's menu.
+      printf -- '%s\n' '# Rules' '' '## Finance' \
+        "- File receipts under 2-Areas/Finance/Receipts. (owner's request, 2026-01-02)" >"$remote/Rules.md"
+      mkdir -p "$remote/2-Areas/Finance"
+      echo '# Finance' >"$remote/2-Areas/Finance/Finance.md"
+      echo jpg >"$remote/2-Areas/Finance/receipt-one.jpg"
+      echo jpg >"$remote/2-Areas/Finance/receipt-two.jpg"
+      printf -- '%s\n' '---' 'tags: [instruction]' 'date: 2026-01-15' 'via: app' 'kind: request' '---' '' \
+        'Apply this rule to what is already filed: File receipts under 2-Areas/Finance/Receipts.' \
+        >"$remote/0-Inbox/Bower - 2026-01-15 0904 Apply rule.md"
     fi
     if [ "$SMOKE_SCENARIO" = rename ]; then
       # A photo whose name says nothing (issue #369).
@@ -582,6 +600,18 @@ case "$SMOKE_SCENARIO" in
     mkdir -p 2-Areas/Finance/Receipts
     mv 0-Inbox/till-slip.jpg 2-Areas/Finance/Receipts/till-slip.jpg
     echo 'Filed: till-slip.jpg → 2-Areas/Finance/Receipts' >>log.md
+    ;;
+  # Apply a rule to what is already filed (issue #372): the two receipts
+  # the rule covers move into its folder, one Correction: line each, and
+  # Rules.md is left alone.
+  applyrule)
+    mkdir -p 2-Areas/Finance/Receipts
+    mv 2-Areas/Finance/receipt-one.jpg 2-Areas/Finance/receipt-two.jpg 2-Areas/Finance/Receipts/
+    printf -- '%s\n' '- [[2-Areas/Finance/Receipts/receipt-one.jpg]] · Photo · filed by Bower' \
+      '- [[2-Areas/Finance/Receipts/receipt-two.jpg]] · Photo · filed by Bower' >>index.md
+    printf -- '%s\n' 'Correction: 2-Areas/Finance -> 2-Areas/Finance/Receipts (2026-01-15)' \
+      'Correction: 2-Areas/Finance -> 2-Areas/Finance/Receipts (2026-01-15)' >>log.md
+    mv '0-Inbox/Bower - 2026-01-15 0904 Apply rule.md' 0-Inbox/Processed/
     ;;
   # A question sent from the app (issue #371): the answer starts with the
   # note-from-Bower block the app renders as a box.
@@ -943,6 +973,14 @@ BOWER_NOTE_TEMPLATE=$(awk '/^\*\*A note from Bower\*\*/ { f = 1 }
   g' <<<"$RULEBOOK")
 [ -n "$BOWER_NOTE_TEMPLATE" ] || die 'the rulebook has no note-from-Bower template (#371)'
 expect_bower_note 'the rulebook template (#371)' "$BOWER_NOTE_TEMPLATE"
+grep -Fq 'So is "Apply this rule to what is already filed: <rule>"' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt does not know the apply-a-rule job (#372)'
+grep -Fq 'a note whose text is `Apply this rule to what is already filed: <rule>`' <<<"$RULEBOOK" ||
+  die 'the rulebook has no apply-a-rule job (#372)'
+grep -Fq 'never touch `Rules.md` for this job' <<<"$RULEBOOK" ||
+  die 'the rulebook lets the apply-a-rule job change Rules.md (#372)'
+grep -Fq 'These lines never count towards a proposal' <<<"$RULEBOOK" ||
+  die 'the rulebook lets the apply-a-rule moves file a proposal (#372)'
 grep -Fq 'is paused: never apply it, never edit it' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not skip a paused rule (#376)'
 grep -Fq '`- ~~<text>~~ (paused YYYY-MM-DD)`. Ignore it completely' <<<"$RULEBOOK" ||
@@ -1925,3 +1963,25 @@ grep -Fxq -- '- ~~File receipts under 4-Archives/Old receipts.~~ (paused 2026-01
 expect_content_free
 expect_cleaned_up
 echo "ok a paused rule is left alone"
+
+# 35. Apply a rule to what is already filed (issue #372): the app's job
+# note makes the agent walk the rule's folder; each receipt it moves is
+# uploaded at its new path with one Correction: line in log.md, and
+# Rules.md, which already holds the rule, is not changed.
+run_case applyrule
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.refused)" '[]' 'refused'
+remote="$STATE/remote"
+for f in 2-Areas/Finance/Receipts/receipt-one.jpg 2-Areas/Finance/Receipts/receipt-two.jpg \
+  '0-Inbox/Processed/Bower - 2026-01-15 0904 Apply rule.md'; do
+  [ -f "$remote/$f" ] || die "not in Drive after the run: $f"
+  grep -Fxq -- "$f" "$STATE/uploaded.txt" || die "not uploaded: $f"
+done
+expect_eq "$(grep -cFx 'Correction: 2-Areas/Finance -> 2-Areas/Finance/Receipts (2026-01-15)' "$remote/log.md")" 2 \
+  'Correction: lines, one per move'
+! grep -Fxq 'Rules.md' "$STATE/uploaded.txt" || die 'the apply-a-rule job changed Rules.md'
+[ ! -e "$remote/Answers/Bower - Proposals.md" ] || die 'the apply-a-rule moves filed a proposal'
+expect_content_free
+expect_cleaned_up
+echo "ok a rule applied to what is already filed moves and logs each file"

@@ -4,6 +4,7 @@ Operator-facing changes, newest first. Entries under **Operator action required*
 
 ## Unreleased
 
+- Apply a rule to what is already filed (#372): the job a rule's menu sends now makes Bower go through the folders the rule names and move or rename what it covers, logging each move as a `Correction:` line. Rerun `scripts/deploy.sh` for the new `prompts/ingest.md`; each user gets the new rulebook (version 12) from **Settings → Advanced → "Update Bower's rules"**.
 - `Rules.md` has a shape Bower and the app share (#376): topic headings, one dated rule per bullet, and a paused rule struck through, which Bower never applies. Rerun `scripts/deploy.sh` for the new `prompts/ingest.md`; each user gets the new rulebook (version 11) from **Settings → Advanced → "Update Bower's rules"**.
 - Context notes (#370): what you type in Add's **What is this?** box now applies to that batch: the files it names are filed and get what it asks (a table, a summary, a translation), and a "from now on" sentence in it becomes a rule. Rerun `scripts/deploy.sh` for the new `prompts/ingest.md`; each user gets the new rulebook (version 10) from **Settings → Advanced → "Update Bower's rules"**.
 - A note from Bower (#371): every note Bower writes because it was asked (an answer, a job's result, what a rule asks for) starts with **Bower's note** (only ✅ ⚠️ ❌ bullets), **Why** and **What Bower used**, with each source's origin. Rerun `scripts/deploy.sh` for the new `prompts/ingest.md`; each user gets the new rulebook (version 9) from **Settings → Advanced → "Update Bower's rules"**.
