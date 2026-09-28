@@ -110,7 +110,8 @@ curl -X POST "https://api.example.com/admin/allow" \
 The UI around the demo (#193):
 
 - A banner, "These are sample notes. Nothing here is real.", under the top bar on every screen that has one (sign-in and the intro do not), with a "Show me around" link that replays the tour.
-- **Sign out**, then **Sign in with Google**'s place: `/login` and the "What is Bower" intro's last page (`/welcome`) both show **Run your own Bower** instead — what it is, what you need (a Google account, free Cloudflare and GitHub accounts, a Claude subscription or API key, about an hour), links to the repository and the runbook (and a "What is Bower" link only when `VITE_ABOUT_URL` is set), and **Explore the demo**, which signs back in as Alex. `/not-invited` shows the same screen rather than its usual content — the demo has no allowlist to be turned away from.
+- **The first visit (#361)**: the "What is Bower" intro (`/welcome`) carries the demo banner under its bar, and its last page says **Try the demo** where a real build says Sign in with Google; it goes Home, where the four-sheet tour starts.
+- **Sign out**, then **Sign in with Google**'s place: `/login` shows **Run your own Bower** instead — what it is, what you need (a Google account, free Cloudflare and GitHub accounts, a Claude subscription or API key, about an hour), links to the repository and the runbook (and a "What is Bower" link only when `VITE_ABOUT_URL` is set), and **Explore the demo**, which signs back in as Alex. `/not-invited` shows the same screen rather than its usual content — the demo has no allowlist to be turned away from.
 - **Settings**: the own API key field, **Sign out everywhere** and **Delete my Bower account** each show "Not in the demo: run your own Bower to use this." instead of a working form or button. Plain **Sign out** still works.
 - [ ] **The demo tour (#330).** `VITE_DEMO=1 pnpm -C app dev`, then "Explore the demo". Expected on Home: the same four sheets as a real build, with the demo's lines: Home says "These are Alex's things, a sample.", Notes names Alex's folder, and Add's Tidy up row says it plays a recording. "Let's go" stays on Home; Skip and Escape still skip from any sheet. Look: the banner's "Show me around" brings the tour back from the first sheet at any time.
 
@@ -122,7 +123,7 @@ The same flows run in CI without a network: `app/test/demo-flows.test.ts` stubs 
 
 The six flows live in `app/e2e/flows.e2e.ts`, one test each, run in both projects:
 
-- **Open Home**: a first visit goes to the "What is Bower" intro, pages through it, "Explore the demo", walks the four-step demo tour and ends on Home, greeted as Alex.
+- **Open Home**: a first visit goes to the "What is Bower" intro, pages through it with the banner on top, "Try the demo", walks the four-step demo tour and ends on Home, greeted as Alex.
 - **Quick switcher**: search for "Lisbon", pick the note, read it.
 - **Add**: choose a file (`app/e2e/files/`), "Add to Bower", see it added to the inbox.
 - **Tidy up**: "Tidy up" → the "Is that everything?" confirmation → "Yes, tidy up" → the scripted run from queued to "3 files processed", the inbox empty.
