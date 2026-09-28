@@ -14,6 +14,7 @@ import type { Run, RunItem, SetAsideItem, SetAsideReason } from './api.js';
 import type { DriveFile } from './drive.js';
 import { formatPolicy } from './formats.js';
 import { runCounts, things } from './home.js';
+import { shortDay } from './rules.js';
 import { displayPath, paraKindOf } from './navigation.js';
 import type { ParaKind } from './components/folder-mark.js';
 import { fileKind, fileTitle } from './vault-index.js';
@@ -131,8 +132,7 @@ function rowOf(item: RunItem & { to: string }, index: VaultIndex | null) {
     name,
     folder: folderLabel(folderOf(item.to)),
     para: paraOf(item.to),
-    notePath:
-      kind === 'note' ? item.to : item.to.replace(/\.[^./]+$/, '.md'),
+    notePath: kind === 'note' ? item.to : item.to.replace(/\.[^./]+$/, '.md'),
   };
   if (item.renamedFrom !== undefined && item.renamedFrom !== name) {
     row.oldName = item.renamedFrom;
@@ -253,15 +253,21 @@ export function unseenIds(
 }
 
 /** "Today, 10:42 · 6 things", plus " · 4 new to you" when `newCount` is given. */
-export function groupHeading(
-  run: Run,
-  now: number,
-  newCount?: number,
-): string {
+export function groupHeading(run: Run, now: number, newCount?: number): string {
   const when = cardWhen(run.finishedAt ?? run.requestedAt, now);
   const parts = [when, things(filedCount(run))];
   if (newCount !== undefined) parts.push(`${String(newCount)} new to you`);
   return parts.join(' · ');
+}
+
+/** "26 Sep, 18:10": an earlier tidy-up is always dated, never "Yesterday"
+ * (board `Desktop-JustFiled`), on this device's clock. */
+export function earlierWhen(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const day = `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `${shortDay(day)}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 /** An earlier tidy-up's line: "26 Sep, 18:10 · 3 things", and for one or two
@@ -273,10 +279,7 @@ export function earlierHeading(
   index: VaultIndex | null,
 ): string {
   const count = filedCount(run);
-  const parts = [
-    cardWhen(run.finishedAt ?? run.requestedAt, now),
-    things(count),
-  ];
+  const parts = [earlierWhen(run.finishedAt ?? run.requestedAt), things(count)];
   if (count > 0 && count <= 2 && hasDestinations(run)) {
     const names = justFiledRows(run, index).map((row) => {
       const comma = row.title.indexOf(',');

@@ -40,7 +40,11 @@ const { WorkingSheet } = await import('../src/components/working-sheet.js');
 
 const NOW = new Date('2026-09-27T10:44:00+01:00').getTime();
 
-function file(id: string, path: string, mimeType = 'application/pdf'): DriveFile {
+function file(
+  id: string,
+  path: string,
+  mimeType = 'application/pdf',
+): DriveFile {
   return {
     id,
     name: path.slice(path.lastIndexOf('/') + 1),
@@ -52,7 +56,11 @@ function file(id: string, path: string, mimeType = 'application/pdf'): DriveFile
 
 const index = buildVaultIndex([
   file('a', '1-Projects/Flat hunt/Arlington Road, 2 bed.pdf'),
-  file('b', '1-Projects/Flat hunt/Arlington Road, window sign.jpg', 'image/jpeg'),
+  file(
+    'b',
+    '1-Projects/Flat hunt/Arlington Road, window sign.jpg',
+    'image/jpeg',
+  ),
   file('c', '3-Resources/Links/Kentish Town photos.md', 'text/markdown'),
   file('d', '1-Projects/Flat hunt/Walk-through.mp4', 'video/mp4'),
 ]);

@@ -68,7 +68,8 @@ function useNoteFacts(
         if (file === undefined) return null;
         try {
           const meta = await loadNoteMeta(file);
-          const kind = meta.kind === undefined ? undefined : kindById(meta.kind);
+          const kind =
+            meta.kind === undefined ? undefined : kindById(meta.kind);
           if (kind === undefined) return null;
           const text = inlineFactsText(keyFactsFor(kind, meta.fields));
           return text === '' ? null : [row.notePath, text];
@@ -79,9 +80,7 @@ function useNoteFacts(
       }),
     ).then((pairs) => {
       if (cancelled) return;
-      setFacts(
-        new Map(pairs.filter((p): p is [string, string] => p !== null)),
-      );
+      setFacts(new Map(pairs.filter((p): p is [string, string] => p !== null)));
     });
     return () => {
       cancelled = true;
@@ -101,9 +100,7 @@ function Where({ row }: { row: JustFiledRow }): JSX.Element {
 }
 
 function Badge({ row }: { row: JustFiledRow }): JSX.Element {
-  return (
-    <KindBadge kind={row.kind} file={{ name: row.name, mimeType: '' }} />
-  );
+  return <KindBadge kind={row.kind} file={{ name: row.name, mimeType: '' }} />;
 }
 
 function Title({
@@ -209,7 +206,11 @@ function DesktopTable({
   );
 }
 
-function AsideGroup({ rows }: { rows: readonly SetAsideRow[] }): JSX.Element | null {
+function AsideGroup({
+  rows,
+}: {
+  rows: readonly SetAsideRow[];
+}): JSX.Element | null {
   if (rows.length === 0) return null;
   return (
     <section class="just-filed-group" aria-label="Set aside">
