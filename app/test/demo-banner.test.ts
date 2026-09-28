@@ -20,9 +20,8 @@ vi.mock('../src/api.js', async (importOriginal) => ({
   isDemo: () => state.demo,
 }));
 
-const { DemoBanner, DEMO_BANNER_TEXT } = await import(
-  '../src/components/demo-banner.js'
-);
+const { DemoBanner, DEMO_BANNER_TEXT } =
+  await import('../src/components/demo-banner.js');
 
 let root: HTMLDivElement;
 

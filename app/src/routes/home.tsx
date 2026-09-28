@@ -523,7 +523,7 @@ export function Home(): JSX.Element {
           </ul>
         </div>
       )}
-      {showTour && (
+      {showTour && me !== undefined && (
         <Tour
           onEnd={(finished) => {
             endTour(finished);
