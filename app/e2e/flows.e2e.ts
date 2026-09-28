@@ -1637,6 +1637,33 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   await shot(page, testInfo, 'tabs-notes');
 });
 
+test('the sidebar account row: Sign out is greyed in the demo, not a real sign-out (#556)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The account row is the desktop sidebar (>=900 px) only.',
+  );
+  await openHome(page);
+  const account = page.locator('.explorer-account');
+  await expect(account).toBeVisible();
+  const signOut = account.getByRole('button', { name: 'Sign out' });
+  await expect(signOut).toBeVisible();
+  await expect(signOut).toBeDisabled();
+  await expect(
+    page.getByText('Not in the demo. Run your own Bower to use it.'),
+  ).toBeVisible();
+
+  // Not just visually disabled: clicking it does nothing (#556's actual
+  // bug — it used to sign the demo out and empty YOUR NOTES).
+  await signOut.click({ force: true });
+  await expect(page).toHaveURL('/');
+  await expect(account).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Your notes' }),
+  ).toBeVisible();
+});
+
 test('the Notes tab: root meanings, Health and hidden-files at the bottom, one Expand/Collapse button (#353)', async ({
   page,
 }, testInfo) => {

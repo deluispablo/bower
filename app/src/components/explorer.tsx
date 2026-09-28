@@ -29,6 +29,7 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
+import { isDemo } from '../api.js';
 import { getPref, setPref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
 import {
@@ -54,6 +55,11 @@ import { PinnedSidebar } from './pinned-sidebar.js';
 import { Tree } from './tree.js';
 
 export const HEALTH_PATH = '/health';
+
+/** #556/#364: Sign out really would sign the demo out and empty the
+ * sidebar, so it is disabled instead, the same sentence as Add's own
+ * greyed Drive door. */
+const NOT_IN_DEMO_SIGN_OUT = 'Not in the demo. Run your own Bower to use it.';
 
 /**
  * Whether the latest health report has not been opened yet, for the Health
@@ -342,6 +348,8 @@ export function Explorer({
           <button
             type="button"
             class="explorer-signout"
+            disabled={isDemo()}
+            aria-disabled={isDemo()}
             onClick={() => {
               void signOut();
             }}
@@ -349,6 +357,9 @@ export function Explorer({
             Sign out
           </button>
         </div>
+      )}
+      {variant === 'sidebar' && me !== undefined && isDemo() && (
+        <p class="explorer-account-note">{NOT_IN_DEMO_SIGN_OUT}</p>
       )}
     </div>
   );

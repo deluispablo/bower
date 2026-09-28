@@ -611,6 +611,28 @@ button.page-bare-back {
   color: var(--color-text);
 }
 
+.explorer-signout:disabled {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  cursor: default;
+  opacity: 0.6;
+}
+
+.explorer-signout:disabled:hover {
+  color: var(--color-text-muted);
+}
+
+/* #556: the sentence under the account row while Sign out is disabled in
+   the demo, same treatment as the folder screen's Drive chip (#555). The
+   account row above already reserves the safe-area inset in its own
+   bottom padding, so this note only adds a small gap under it. */
+.explorer-account-note {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
 /* The phone's folder menu (components/folder-menu.tsx, #319): a modal
    dialog 320 px wide sliding in from the left over the dimmed page. */
 .drawer {
