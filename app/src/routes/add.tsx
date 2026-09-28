@@ -148,11 +148,11 @@ function driveStateText(mimeType: string | undefined): string {
   if (plan.action !== 'export') return 'From your Drive';
   const savedAs =
     plan.extension === '.md'
-      ? 'Markdown'
+      ? 'saved as text'
       : plan.extension === '.csv'
-        ? 'a table'
-        : 'a PDF';
-  return `From your Drive · saved as ${savedAs}`;
+        ? 'saved as a table, first sheet only'
+        : 'saved as a PDF';
+  return `From your Drive · ${savedAs}`;
 }
 
 export function Add() {
