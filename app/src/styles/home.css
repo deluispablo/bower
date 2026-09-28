@@ -313,25 +313,28 @@
   text-decoration: none;
 }
 
-.home-note-icon {
+.home-note-badge {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-hover);
+  min-width: 38px;
+}
+
+/* The title, then New and the Bower tag on the same line (#617). */
+.home-note-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.home-note-facts {
+  overflow: hidden;
   color: var(--color-text-muted);
-}
-
-.home-note-icon[data-type='answer'] {
-  color: var(--color-type-answer);
-}
-
-.home-note-icon .icon {
-  width: 18px;
-  height: 18px;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .home-note-text {
@@ -343,6 +346,7 @@
 }
 
 .home-note-title {
+  min-width: 0;
   overflow: hidden;
   font-weight: var(--weight-medium);
   text-overflow: ellipsis;
