@@ -3,6 +3,8 @@
  * this is unit-tested on its own; `routes/add.tsx` only calls it.
  */
 
+import { instructionFileName, instructionNote } from './tell.js';
+
 /**
  * The name of the note created when a link is pasted into Add:
  * `Link - <host> <YYYY-MM-DD HHMM>.md`, `now`'s local date and time (no
@@ -31,4 +33,45 @@ export function linkNoteName(url: string, now: Date): string | null {
   const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const time = `${pad(now.getHours())}${pad(now.getMinutes())}`;
   return `Link - ${host} ${date} ${time}.md`;
+}
+
+/**
+ * The hint's bold lead on Add (#336, `Phone-Add` board, handover C.6):
+ * "3 things waiting." — `count` is the inbox's pending files, the same
+ * count Home's Inbox card and the "Is that everything?" sheet show. The
+ * caller hides the hint at zero, so this never says "0 things".
+ */
+export function addHintLead(count: number): string {
+  return `${count} ${count === 1 ? 'thing' : 'things'} waiting.`;
+}
+
+/** The rest of the hint's sentence, word for word from the board. */
+export const ADD_HINT_TEXT =
+  'Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.';
+
+/**
+ * The name of the context note Add's "What is this?" box writes (#335,
+ * handover D.2): `Bower - YYYY-MM-DD HHmm Context.md`, `now`'s local date
+ * and time, the same shape as the Bower tab's notes.
+ */
+export function contextNoteName(now: Date): string {
+  return instructionFileName('', 'Context', now);
+}
+
+/**
+ * The context note's Markdown (#335, handover D.2): the instruction
+ * frontmatter (`tags: [instruction]`, `date`, `via: app`, `kind:
+ * context`), the person's text as written, then the names of the files
+ * it applies to, one bullet each, as they are in the inbox. A line break
+ * inside a name would split its bullet, so it becomes a space.
+ */
+export function contextNote(
+  text: string,
+  fileNames: readonly string[],
+  now: Date,
+): string {
+  const list = fileNames
+    .map((name) => `- ${name.replace(/[\r\n]+/g, ' ')}`)
+    .join('\n');
+  return `${instructionNote(text, now, 'context')}\n## Applies to\n\n${list}\n`;
 }

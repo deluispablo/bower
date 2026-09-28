@@ -300,6 +300,76 @@ test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (
   await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
 });
 
+test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  // The demo starts with three things in the inbox.
+  const hint = page.locator('.add-hint');
+  await expect(hint).toContainText(
+    '3 things waiting. Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.',
+  );
+  await shot(page, testInfo, 'add-hint');
+
+  // The Tidy up button opens the "Is that everything?" confirmation (#337).
+  await hint.getByRole('button', { name: 'Tidy up', exact: true }).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Add more first' }).click();
+  await expect(confirm).toBeHidden();
+
+  // After an add the count is the new total (#300), not the old one.
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await expect(page).toHaveURL('/');
+  await navigate(page, /^Add$/);
+  await expect(hint).toContainText('4 things waiting.');
+});
+
+test('Add: What is this? becomes one context note in the inbox (#335)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  const box = page.getByRole('textbox', { name: 'What is this?' });
+  await expect(box).toHaveAttribute('placeholder', /^Just filing is fine\./);
+  await box.fill('Receipts: add them to a table with the shop and the total.');
+  await shot(page, testInfo, 'add-context');
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+
+  // Leaving Add writes the note: the three things, the receipt, the note.
+  await expect(page).toHaveURL('/');
+  await expect(
+    visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
+      '.home-card-count',
+    ),
+  ).toHaveText('5');
+  // It waits in the inbox with the other instruction notes, under the
+  // Bower tab's Requests (the demo resets on a reload, so no `goto`).
+  await navigate(page, /^Bower$/);
+  await page.getByRole('tab', { name: 'Requests' }).click();
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'Requests' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Context' }),
+  ).toHaveCount(1);
+});
+
 test('Home through the scripted run: waiting, running, done (#321)', async ({
   page,
 }, testInfo) => {
@@ -990,6 +1060,30 @@ test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#
   await expect(page.getByText('Nothing here yet.')).toBeHidden();
   await expect(page.getByText(/notes in /)).toBeVisible();
   await shot(page, testInfo, 'folder-notes-elsewhere');
+});
+
+test('A root folder explained: the meaning line, then its subfolders (#348)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await page.goto('/folder/1-Projects');
+  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+  const explainer = page.locator('.folder-explainer');
+  await expect(explainer).toHaveText('Things with an end date');
+  // The meaning line sits between the header and the chip row, above the
+  // subfolders — same words as the folder menu and the intro (#319).
+  const chips = page.locator('.folder-chips');
+  const explainerBox = await explainer.boundingBox();
+  const chipsBox = await chips.boundingBox();
+  expect((explainerBox?.y ?? 0) < (chipsBox?.y ?? 0)).toBe(true);
+  await shot(page, testInfo, 'folder-root-explained');
+
+  // A non-root folder (a project) has no meaning line to show.
+  await page.goto('/folder/1-Projects/Lisbon%20Trip');
+  await expect(
+    page.getByRole('heading', { name: 'Lisbon Trip' }),
+  ).toBeVisible();
+  await expect(page.locator('.folder-explainer')).toHaveCount(0);
 });
 
 test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)', async ({

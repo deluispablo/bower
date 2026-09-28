@@ -6,8 +6,8 @@
  * Choose files/From your Drive pair take over from 900 px, the same
  * breakpoint `layout.css` uses for the sidebar. Both live in the DOM at
  * once, so the queue, the link field and the file inputs never need a
- * second copy. The amber "this only fills your inbox" card reuses
- * `.app-file-banner` (`styles/app-file-banner.css`). Motion is
+ * second copy. The amber hint ("3 things waiting", #336) is
+ * `.add-hint` below. Motion is
  * transform/opacity only, on the motion tokens, and turned off under
  * `prefers-reduced-motion` below.
  */
@@ -194,6 +194,82 @@
   margin: 0;
   color: var(--color-danger);
   font-size: var(--text-sm);
+}
+
+/* The hint (#336, Phone-Add board): an amber-tinted card, the inbox icon
+ * on the left, the sentence and the Tidy up button under it. */
+.add-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: var(--space-4) 0;
+  padding: 10px 12px;
+  background: rgb(240 182 79 / 0.08); /* --bower-amber tint */
+  border: 1px solid rgb(240 182 79 / 0.35);
+  border-radius: 12px;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.add-hint-icon {
+  display: flex;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--color-accent);
+}
+
+.add-hint-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.add-hint-body p {
+  margin: 0;
+}
+
+/* "What is this?" (#335, Phone-Add board): one optional box under the
+ * queue, in its own card. */
+.add-context {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: var(--space-3) 0;
+  padding: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+}
+
+.add-context label {
+  font-weight: 600;
+}
+
+.add-context-optional {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.add-context textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.4;
+  resize: none;
+}
+
+.add-context textarea:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .add-queue-section {
