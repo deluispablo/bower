@@ -306,7 +306,7 @@ function FolderBody({
         )}
       </div>
       {file !== undefined && isDemo() && (
-        <p class="folder-explainer">{NOT_IN_DEMO_DRIVE}</p>
+        <p class="folder-demo-note">{NOT_IN_DEMO_DRIVE}</p>
       )}
 
       {contents.subfolders.length > 0 && (
