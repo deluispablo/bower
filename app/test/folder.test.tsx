@@ -338,6 +338,19 @@ describe('Drive chip and end-of-folder tip (#453, Phone-Folder-Project board)', 
   });
 });
 
+/** The list mode loads on demand: wait for its filter, then for its notes'
+ * frontmatter. */
+async function listReady(): Promise<void> {
+  for (
+    let at = 0;
+    at < 30 && root.querySelector('.folder-seg') === null;
+    at += 1
+  ) {
+    await settle();
+  }
+  await settle();
+}
+
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -377,7 +390,7 @@ describe('Folder list mode (#611)', () => {
   it('draws the path bar, the counts, the origin filter and the date groups', async () => {
     useFlatHuntWithPair();
     mount();
-    await settle();
+    await listReady();
     expect(texts('.folder-path')[0]).toBe('PProjects›Flat hunt');
     expect(root.querySelector('.folder-path b')?.textContent).toBe('Flat hunt');
     expect(root.querySelector('.folder-counts')?.textContent).toBe(
@@ -401,7 +414,7 @@ describe('Folder list mode (#611)', () => {
   it('shows a PDF and its note as one row in All, and one each in Originals and By Bower', async () => {
     useFlatHuntWithPair();
     mount();
-    await settle();
+    await listReady();
     const names = (): (string | undefined)[] => texts('.folder-row-name');
     expect(names().filter((n) => n?.startsWith('Arlington'))).toHaveLength(1);
     expect(root.textContent).toContain('note on the listing');
@@ -432,7 +445,7 @@ describe('Folder list mode (#611)', () => {
       compareColumns: ['rent'],
     });
     mount();
-    await settle();
+    await listReady();
     const pressed = root.querySelector('.folder-seg-btn[aria-pressed="true"]');
     expect(pressed?.textContent).toContain('By Bower');
     const sort = root.querySelector<HTMLSelectElement>(
@@ -465,7 +478,7 @@ describe('Folder list mode (#611)', () => {
     index = buildVaultIndex([...files, ...many]);
     route.params.path = DIR;
     mount();
-    await settle();
+    await listReady();
     for (
       let at = 0;
       at < 20 && root.querySelector('.folder-virtual') === null;
