@@ -12,6 +12,8 @@
  * were.
  */
 
+import { ruleBullet } from './rules.js';
+
 export interface InterviewAnswers {
   /** What the owner will keep here, in their own words or a chip's label. */
   keep: string;
@@ -195,13 +197,15 @@ function areaNotesFor(areas: readonly string[]): AreaNote[] {
 /**
  * `answers` turned into `About-Me.md`'s and `Rules.md`'s new text (only
  * their `## From the interview` section changes, created if missing,
- * replaced on replay) and the area folder notes to create. Pure: no Drive,
- * no Date — `vault-store.tsx`'s `runInterview` does the writing and skips
- * an area whose folder already exists.
+ * replaced on replay) and the area folder notes to create. The rule is
+ * written in `Rules.md`'s shape (`rules.ts`), dated `on` (`YYYY-MM-DD`).
+ * Pure: no Drive, no Date — `vault-store.tsx`'s `runInterview` does the
+ * writing and skips an area whose folder already exists.
  */
 export function interviewToFiles(
   answers: InterviewAnswers,
   existing: InterviewExisting,
+  on: string,
 ): InterviewFiles {
   const areas = answers.areas.map((a) => a.trim()).filter((a) => a !== '');
 
@@ -211,11 +215,9 @@ export function interviewToFiles(
     bulletLine('Areas to start with', areas.join(', ')),
   ]);
 
+  const titles = titleAndTagRule(answers.titleStyle, answers.example);
   const rules = withInterviewSection(existing.rules, [
-    bulletLine(
-      'Titles and tags',
-      titleAndTagRule(answers.titleStyle, answers.example),
-    ),
+    titles === '' ? null : ruleBullet(`Titles and tags: ${titles}`, on),
   ]);
 
   return { aboutMe, rules, areas: areaNotesFor(answers.areas) };
