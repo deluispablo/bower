@@ -92,9 +92,9 @@ Flights and the flat are sorted ([[Flights and stays]]).`,
   return {
     kind: 'answer',
     title,
-    body: `# ${title}
-
-> ${text.replace(/\n/g, '\n> ')}
+    // The note's own first line is the sentence sent, not the short title
+    // in the file name (#465) -- Requests reads it from here.
+    body: `# ${text}
 
 This is the demo, so these notes are samples and Bower only has scripted answers. Try one of the example messages under Things you can ask in the Bower tab to see a full reply; your own Bower reads your notes and answers here.`,
   };

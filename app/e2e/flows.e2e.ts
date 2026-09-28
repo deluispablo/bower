@@ -748,7 +748,8 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
     lisbon.getByText('Waiting · question', { exact: true }),
   ).toBeVisible();
   await expect(lisbon).toContainText('goes with the next tidy-up');
-  const answered = rowWith('Which subscriptions renew this autumn');
+  // The full sentence sent, not the file name's own short title (#465).
+  const answered = rowWith('Which subscriptions renew this autumn?');
   await expect(answered.getByText('Answered', { exact: true })).toBeVisible();
   await expect(
     answered.getByRole('link', { name: 'Read the answer' }),
@@ -804,12 +805,14 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
     hasText: '1 file processed',
   });
   await expect(toast).toBeVisible({ timeout: 20_000 });
-  await expect(
-    rowWith('What do I still need for Lisbon').getByText('Answered', {
-      exact: true,
-    }),
-  ).toBeVisible({ timeout: 10_000 });
-  await expect(edited).toHaveCount(0);
+  // The row keeps the exact sentence sent (the edit) once answered too --
+  // not "What do I still need for Lisbon", the file name's own short title
+  // (#465). Same text as `edited` matched while it was still waiting, now
+  // in the one row this file becomes (no separate waiting row left).
+  await expect(edited).toHaveCount(1);
+  await expect(edited.getByText('Answered', { exact: true })).toBeVisible({
+    timeout: 10_000,
+  });
 });
 
 test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({

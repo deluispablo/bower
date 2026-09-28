@@ -30,6 +30,7 @@ import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
 import {
+  answerNotes,
   dayLabel,
   examplesFor,
   requestRows,
@@ -403,7 +404,10 @@ export function Bower(): JSX.Element {
 
   useShellSlot('crumb', CRUMB);
 
-  const texts = useNoteTexts(waitingNotes(files));
+  // Waiting instructions and answered notes both, so an answered row can
+  // read the question it actually holds, not just the short title in its
+  // file name (#465).
+  const texts = useNoteTexts([...waitingNotes(files), ...answerNotes(files)]);
   const rulesLoad = useFileText(index?.byPath.get(RULES_PATH));
   const inFlight = phase === 'queued' || phase === 'running';
   const rows = requestRows({
