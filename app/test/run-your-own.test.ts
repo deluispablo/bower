@@ -1,31 +1,21 @@
 // @vitest-environment jsdom
 
 /**
- * "Run your own Bower" (#193): the demo's stand-in for sign-in — what it
- * is, the three links (the "what is Bower" one only when `VITE_ABOUT_URL`
- * is set) and "Explore the demo", which refreshes the session (the demo's
- * `getMe()` always answers as Alex, `demo/api.ts`) and goes home.
+ * "Run your own Bower" (#366, board Demo-RunYourOwn): the dancing bird,
+ * the three rows, "Read the runbook on GitHub" (the repo's
+ * `docs/runbook.md`, in a new tab) and "What is Bower, in nine screens",
+ * the intro opened with Close back here.
  */
 
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-const location = { path: '/login', route: vi.fn() };
-const refresh = vi.fn(() => Promise.resolve());
-
-vi.mock('preact-iso', () => ({
-  useLocation: () => location,
-}));
-
-vi.mock('../src/session.js', () => ({
-  useSession: () => ({ refresh }),
-}));
+import { RunYourOwn } from '../src/routes/run-your-own.js';
 
 let root: HTMLDivElement;
 
-async function mount(): Promise<void> {
-  const { RunYourOwn } = await import('../src/routes/run-your-own.js');
+function mount(): void {
   root = document.createElement('div');
   document.body.append(root);
   void act(() => {
@@ -33,10 +23,12 @@ async function mount(): Promise<void> {
   });
 }
 
-function query<T extends Element>(selector: string): T {
-  const el = root.querySelector<T>(selector);
-  if (el === null) throw new Error(`${selector} missing`);
-  return el;
+function link(text: string): HTMLAnchorElement {
+  const found = Array.from(root.querySelectorAll('a')).find(
+    (a) => a.textContent === text,
+  );
+  if (found === undefined) throw new Error(`link ${text} missing`);
+  return found;
 }
 
 afterEach(() => {
@@ -44,54 +36,46 @@ afterEach(() => {
     render(null, root);
   });
   document.body.replaceChildren();
-  location.route.mockClear();
-  refresh.mockClear();
-  vi.unstubAllEnvs();
-  vi.resetModules();
 });
 
 describe('RunYourOwn', () => {
-  it('links to the repository and the runbook, not "what is Bower" when VITE_ABOUT_URL is unset', async () => {
-    vi.stubEnv('VITE_ABOUT_URL', '');
-    vi.resetModules();
-    await mount();
-    const links = Array.from(
-      root.querySelectorAll<HTMLAnchorElement>('.run-your-own-links a'),
-    ).map((a) => [a.textContent?.trim(), a.getAttribute('href')]);
-    expect(links).toEqual([
-      ['Repository', 'https://github.com/deluispablo/bower'],
-      [
-        'Runbook',
-        'https://github.com/deluispablo/bower/blob/main/docs/runbook.md',
-      ],
+  it('shows the dancing bird and the heading', () => {
+    mount();
+    expect(root.querySelector('h1')?.textContent).toBe('Run your own Bower');
+    expect(root.querySelector('svg.p-dance')).not.toBeNull();
+  });
+
+  it('lists the three rows in order', () => {
+    mount();
+    const titles = Array.from(root.querySelectorAll('.run-your-own-row b')).map(
+      (b) => b.textContent,
+    );
+    expect(titles).toEqual([
+      'One folder in your Drive',
+      'Your own keys',
+      'About an hour',
     ]);
   });
 
-  it('adds the "what is Bower" link when VITE_ABOUT_URL is set', async () => {
-    vi.stubEnv('VITE_ABOUT_URL', 'https://bower.example.com/about');
-    vi.resetModules();
-    await mount();
-    const links = Array.from(
-      root.querySelectorAll<HTMLAnchorElement>('.run-your-own-links a'),
+  it("links to the repo's runbook in a new tab", () => {
+    mount();
+    const runbook = link('Read the runbook on GitHub');
+    expect(runbook.href).toBe(
+      'https://github.com/deluispablo/bower/blob/main/docs/runbook.md',
     );
-    expect(links).toHaveLength(3);
-    expect(links[2]?.textContent?.trim()).toBe('What is Bower');
-    expect(links[2]?.getAttribute('href')).toBe(
-      'https://bower.example.com/about',
+    expect(runbook.target).toBe('_blank');
+    expect(runbook.rel).toContain('noopener');
+  });
+
+  it('opens the nine intro pages with Close, back here', () => {
+    mount();
+    expect(link('What is Bower, in nine screens').getAttribute('href')).toBe(
+      '/welcome?from=run-your-own',
     );
   });
 
-  it('"Explore the demo" refreshes the session and goes home', async () => {
-    vi.stubEnv('VITE_ABOUT_URL', '');
-    vi.resetModules();
-    await mount();
-    void act(() => {
-      query<HTMLButtonElement>('.auth-actions button').click();
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(refresh).toHaveBeenCalledOnce();
-    expect(location.route).toHaveBeenCalledWith('/');
+  it('has no Explore the demo button: the tabs are the way back', () => {
+    mount();
+    expect(root.querySelector('button')).toBeNull();
   });
 });

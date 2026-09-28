@@ -116,9 +116,11 @@ test.describe('open Home', () => {
     // Run your own Bower is the demo's sign-in.
     await page.goto('/login');
     await expect(
-      page.getByRole('heading', { name: 'Bower', level: 1 }),
+      page.getByRole('heading', { name: 'Run your own Bower', level: 1 }),
     ).toBeVisible();
-    await expect(page.getByText('This is a demo: sample notes')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Read the runbook on GitHub' }),
+    ).toBeVisible();
     await shot(page, testInfo, 'login');
 
     // Back on Home from a fresh load: the demo forgets everything on reload,
@@ -147,7 +149,7 @@ test.describe('first visit, Skip', () => {
     await page.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(page).toHaveURL(/\/login$/);
     await expect(
-      page.getByRole('heading', { name: 'Bower', level: 1 }),
+      page.getByRole('heading', { name: 'Run your own Bower', level: 1 }),
     ).toBeVisible();
   });
 });
@@ -186,7 +188,60 @@ test('the demo banner carries Run your own on Home, Add and Settings (#362)', as
   // The link is the demo's sign-in: Run your own Bower.
   await runYourOwn.click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByText('This is a demo: sample notes')).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Read the runbook on GitHub' }),
+  ).toBeVisible();
+});
+
+test('Run your own Bower: the rows, the runbook, and the nine screens with Close (#366)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('link', { name: 'Run your own', exact: true }),
+  ).click();
+  await expect(page).toHaveURL(/\/login$/);
+  const heading = page.getByRole('heading', {
+    name: 'Run your own Bower',
+    level: 1,
+  });
+  await expect(heading).toBeVisible();
+  for (const row of [
+    'One folder in your Drive',
+    'Your own keys',
+    'About an hour',
+  ]) {
+    await expect(page.getByText(row, { exact: true })).toBeVisible();
+  }
+  // The runbook opens on GitHub in a new tab; never followed here.
+  const runbook = page.getByRole('link', {
+    name: 'Read the runbook on GitHub',
+  });
+  await expect(runbook).toHaveAttribute(
+    'href',
+    'https://github.com/deluispablo/bower/blob/main/docs/runbook.md',
+  );
+  await expect(runbook).toHaveAttribute('target', '_blank');
+  // Inside the shell, as the board draws it: the tabs are the way back.
+  await expect(
+    visible(page.getByRole('link', { name: /^Home$/ })),
+  ).toBeVisible();
+  await shot(page, testInfo, 'run-your-own');
+
+  // "What is Bower, in nine screens": the intro with Close, back here.
+  await page
+    .getByRole('link', { name: 'What is Bower, in nine screens' })
+    .click();
+  await expect(page).toHaveURL(/\/welcome\?from=run-your-own$/);
+  await expect(
+    page.getByRole('heading', { name: /Bower files it/ }),
+  ).toBeInViewport();
+  await expect(
+    page.getByRole('button', { name: 'Skip', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(heading).toBeVisible();
 });
 
 test('the quick switcher opens a note', async ({ page }, testInfo) => {
@@ -1066,7 +1121,7 @@ test.describe('/login never redirects to the intro (#313)', () => {
     await page.goto('/login');
     await expect(page).toHaveURL(/\/login$/);
     await expect(
-      page.getByRole('heading', { name: 'Bower', level: 1 }),
+      page.getByRole('heading', { name: 'Run your own Bower', level: 1 }),
     ).toBeVisible();
   });
 });

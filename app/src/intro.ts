@@ -510,3 +510,16 @@ export function introRuns(text: string): IntroRun[] {
     .map((part, index) => ({ text: part, bold: index % 2 === 1 }))
     .filter((run) => run.text !== '');
 }
+
+/**
+ * Where the intro's Close and Done go when it was opened from inside the
+ * app (`/welcome?from=…`): `settings` (Settings, the sign-in's "What is
+ * Bower?" and the help sheets) goes back to Settings; `run-your-own` (the
+ * demo's Run your own Bower, #366) back to it at `/login`. `null` for a
+ * first visit, which has Skip and the sign-in instead.
+ */
+export function introReturnPath(from: string | undefined): string | null {
+  if (from === 'settings') return '/settings';
+  if (from === 'run-your-own') return '/login';
+  return null;
+}

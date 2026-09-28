@@ -94,7 +94,7 @@ function AppRoutes() {
 
   return (
     <ShellSlotsProvider>
-      {usesShell(path) ? (
+      {usesShell(path, isDemo()) ? (
         <Layout>{routes}</Layout>
       ) : (
         <main class="page page-bare">{routes}</main>
