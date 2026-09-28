@@ -124,7 +124,7 @@ routes = [{ pattern = "api.example.com", custom_domain = true }]
 | `SESSION_SECRET` | Secret | Generate: `openssl rand -base64 32` | `replace-me` |
 | `TOKEN_ENC_KEY` | Secret | Generate: `openssl rand -base64 32` (must decode to exactly 32 bytes; encrypts stored Google refresh tokens) | `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=` |
 | `BOWER_API_KEY` | Secret | Generate: `openssl rand -base64 32`; set the same value here and in the instance repo (step 4). Only the weekly health check's `dispatch` job uses it (`POST /runner/lint/dispatch`); each run gets its own ticket instead | `replace-me` |
-| `GITHUB_TOKEN` | Secret | GitHub → Settings → Developer settings → Fine-grained token, `contents: write` on the instance repo only | `github_pat_replace-me` |
+| `GITHUB_TOKEN` | Secret | GitHub → Settings → Developer settings → Fine-grained token on the instance repo only: `contents: write` (to start runs) and `actions: read` (to read how a run's job ended when the runner never reported, #315) | `github_pat_replace-me` |
 | `ADMIN_KEY` | Secret | Generate: `openssl rand -base64 32`; bearer key for the admin endpoints | `replace-me` |
 | `SESSION_SECRET_PREVIOUS` | Secret (optional) | Only set during a `SESSION_SECRET` rotation, so old session cookies keep verifying for a while — see "Hardening your instance" § Rotating `SESSION_SECRET` without signing everyone out | `replace-me` |
 | `VAPID_PUBLIC_KEY` | Secret | `pnpm -C api gen-vapid`, once per instance: base64url of the raw 65-byte P-256 public key. Keep it — a new pair invalidates every browser's push subscription | `replace-me` |

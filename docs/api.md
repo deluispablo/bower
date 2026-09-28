@@ -200,6 +200,7 @@ In order:
 
 1. No valid session: 401 `unauthenticated`.
 2. No stored run: `{ "run": null, "stale": false }`.
+2b. The stored run is `running`, its `runId` is a GitHub run id (digits: the runner reports its `GITHUB_RUN_ID`), it started five minutes ago or more (`JOB_CHECK_AFTER_MS`) and GitHub was not asked in the last minute (`jobCheckedAt`): the job-conclusion fallback (#315) reads `GET /repos/{GITHUB_REPO}/actions/runs/{runId}` with `GITHUB_TOKEN`. A `completed` job settles the run from its `conclusion`: `success` is `done`, anything else `failed` with `error: "job <conclusion>"`, `finishedAt` now, and the run's ticket is retired, so a late report from that runner answers 401. A job still going only stamps `jobCheckedAt`. When GitHub cannot tell (no Actions read access on the token, a network failure) the run is left as it is, and the staleness window below still ends it.
 3. The stored run is stale (see the table above): it is stored as `failed` with `error: "stale"` and `finishedAt` set to now, and `{ "run": <that failed run>, "stale": true }` is returned.
 4. Otherwise the stored run is returned as is: `{ "run": Run, "stale": false }`.
 
