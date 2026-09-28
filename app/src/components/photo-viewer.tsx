@@ -39,6 +39,8 @@ export interface PhotoViewerProps {
   folderName: string;
   /** Asks the screen to show the sibling at this position. */
   onNavigate: (index: number) => void;
+  /** The screen's More menu (board `Phone-Photo-Full`): a button top right in full screen; the viewer closes first so the menu is in view. */
+  onMore?: () => void;
 }
 
 /** Two taps closer than this (ms) and this (px) are a double tap. */
@@ -98,6 +100,7 @@ interface FullScreenProps extends PhotoViewerProps {
 function FullScreen(props: FullScreenProps): JSX.Element {
   const { src, title, siblings, index, folderName, onNavigate, onClose } =
     props;
+  const { onMore } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const [doubled, setDoubled] = useState(false);
   const pinch = usePinchScale();
@@ -215,6 +218,46 @@ function FullScreen(props: FullScreenProps): JSX.Element {
         <span class="photo-viewer-counter">
           {counterText(index, total, folderName)}
         </span>
+        {onMore !== undefined && (
+          <button
+            type="button"
+            class="photo-viewer-button"
+            aria-label="More"
+            aria-haspopup="menu"
+            onClick={() => {
+              onClose();
+              onMore();
+            }}
+          >
+            <svg
+              class="photo-viewer-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <circle
+                cx="5"
+                cy="12"
+                r="1.6"
+                fill="currentColor"
+                stroke="none"
+              />
+              <circle
+                cx="12"
+                cy="12"
+                r="1.6"
+                fill="currentColor"
+                stroke="none"
+              />
+              <circle
+                cx="19"
+                cy="12"
+                r="1.6"
+                fill="currentColor"
+                stroke="none"
+              />
+            </svg>
+          </button>
+        )}
       </header>
       <div
         class={`photo-viewer-stage${doubled ? ' is-zoomed' : ''}`}

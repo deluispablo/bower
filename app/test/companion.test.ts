@@ -20,6 +20,7 @@ function file(path: string, id = path): DriveFile {
     name: path.split('/').pop() ?? path,
     path,
     mimeType: path.endsWith('.md') ? 'text/markdown' : 'application/pdf',
+    parents: [],
   };
 }
 
