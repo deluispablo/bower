@@ -25,7 +25,7 @@ export function Privacy() {
   const { status } = useSession();
 
   return (
-    <section class="privacy note-view">
+    <section class="privacy note-view page-column">
       {status === 'signed-in' ? (
         <button
           type="button"

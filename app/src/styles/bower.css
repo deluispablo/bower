@@ -548,3 +548,42 @@
     transition: none;
   }
 }
+
+/*
+ * From 1200 px (#357, Desktop-Bower board): the box spans the top and
+ * Rules · Requests · Activity are three columns instead of segments, each
+ * under a header of the same height, so the three start on one line.
+ */
+@media (min-width: 1200px) {
+  .bower-screen {
+    max-width: none;
+  }
+
+  .bower-columns {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  .bower-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .bower-column-head {
+    display: flex;
+    align-items: flex-end;
+    min-height: 32px;
+    margin: 0 0 var(--space-1);
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--text-lg);
+    white-space: nowrap;
+  }
+
+  .bower-column .bower-panel-note {
+    margin: 0;
+  }
+}

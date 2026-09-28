@@ -9,10 +9,12 @@
  */
 
 import {
+  bowerPart,
   expect,
   navigate,
   openHome,
   openSettings,
+  showBowerPart,
   shot,
   test,
   visible,
@@ -404,14 +406,11 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   // rule sentence is already in Rules, under its own topic.
   await navigate(page, /^Bower$/);
   await expect(
-    page
-      .getByRole('tabpanel', { name: 'Rules' })
-      .getByRole('button', { name: /^Garden\s*1$/ }),
+    bowerPart(page, 'Rules').getByRole('button', { name: /^Garden\s*1$/ }),
   ).toBeVisible();
-  await page.getByRole('tab', { name: 'Requests' }).click();
+  await showBowerPart(page, 'Requests');
   await expect(
-    page
-      .getByRole('tabpanel', { name: 'Requests' })
+    bowerPart(page, 'Requests')
       .getByRole('listitem')
       .filter({ hasText: 'About the files you added' }),
   ).toHaveCount(1);
@@ -619,11 +618,10 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
   for (const label of ['A rule', 'A task', 'A question']) {
     await expect(page.getByRole('button', { name: label })).toHaveCount(0);
   }
-  await expect(page.getByRole('tab')).toHaveText([
-    'Rules',
-    'Requests',
-    'Activity',
-  ]);
+  // Tabs under 1200 px, three headed columns from there (#357).
+  await expect(
+    page.getByRole('tab').or(page.locator('.bower-column-head')),
+  ).toHaveText(['Rules', 'Requests', 'Activity']);
   await shot(page, testInfo, 'bower');
 
   // The demo already has a question waiting, so the tip starts closed.
@@ -642,7 +640,7 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
   await page.getByRole('button', { name: 'Send' }).click();
 
   await expect(box).toHaveValue('');
-  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  const requests = bowerPart(page, 'Requests');
   const row = requests
     .getByRole('listitem')
     .filter({ hasText: 'How much did I spend on the kitchen this year?' });
@@ -671,7 +669,7 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
 }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Bower$/);
-  const rules = page.getByRole('tabpanel', { name: 'Rules' });
+  const rules = bowerPart(page, 'Rules');
   await expect(
     rules.getByText('Rules are yours and start at once.'),
   ).toBeVisible();
@@ -712,7 +710,7 @@ test('a "from now on" sentence is kept at once as a rule, no run (#343)', async 
   await page.getByRole('button', { name: 'Send' }).click();
 
   await expect(box).toHaveValue('');
-  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  const requests = bowerPart(page, 'Requests');
   const row = requests
     .getByRole('listitem')
     .filter({ hasText: 'From now on, receipts go under Finance' });
@@ -722,10 +720,13 @@ test('a "from now on" sentence is kept at once as a rule, no run (#343)', async 
     page.getByRole('dialog', { name: 'Tidying up status' }),
   ).toHaveCount(0);
   await row.getByRole('button', { name: 'In your rules' }).click();
-  await expect(page.getByRole('tab', { name: 'Rules' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  // Under 1200 px it switches to the Rules tab; from 1200 the Rules
+  // column is already on screen (#357).
+  const rulesTab = page.getByRole('tab', { name: 'Rules' });
+  if ((await rulesTab.count()) > 0) {
+    await expect(rulesTab).toHaveAttribute('aria-selected', 'true');
+  }
+  await expect(bowerPart(page, 'Rules')).toBeVisible();
 });
 
 test('Requests: every state, Edit, Remove, and Do it now for the requests only (#344)', async ({
@@ -733,8 +734,8 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
 }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Bower$/);
-  await page.getByRole('tab', { name: 'Requests' }).click();
-  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  await showBowerPart(page, 'Requests');
+  const requests = bowerPart(page, 'Requests');
   const rowWith = (text: string) =>
     requests.getByRole('listitem').filter({ hasText: text });
 
@@ -1192,6 +1193,60 @@ test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
   await shot(page, testInfo, 'bar-note');
 });
 
+test("a note's top bar: the title keeps a readable floor, Back gives way first, and one More menu (#426)", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'the phone top bar only');
+  await openHome(page);
+  const bar = page.locator('header.topbar');
+
+  // Lisbon Trip is its own folder's hub note, so Back points to a name as
+  // long as the title itself -- the exact shape that used to leave both
+  // cut to a few letters (#426).
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('Lisbon');
+  await switcher
+    .getByRole('option', { name: /Lisbon Trip/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/note\//);
+
+  // The title keeps its 130px floor: Back gives way to it, not the other
+  // way round, and the bar itself never grows past the viewport.
+  const crumbBox = await bar.locator('.topbar-crumb').boundingBox();
+  expect(crumbBox?.width ?? 0).toBeGreaterThanOrEqual(130);
+  await expect
+    .poll(async () => page.evaluate(() => document.body.scrollWidth))
+    .toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
+  // Back still works, and its full destination is there for a screen
+  // reader even while its visible label is short (or gone).
+  const back = bar.getByRole('link', { name: 'Back to Lisbon Trip' });
+  await expect(back).toBeVisible();
+
+  // One More menu, not two (#439 already fixed the leftover desktop
+  // trigger; this just guards against it coming back).
+  await expect(bar.getByRole('button', { name: 'More' })).toHaveCount(1);
+
+  // A title far longer than Back's own label still fits the bar with no
+  // horizontal overflow, the same guarantee from the other direction.
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/note\//);
+  await expect
+    .poll(async () => page.evaluate(() => document.body.scrollWidth))
+    .toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
+});
+
 test('The bar and the bottom nav align with the content column at 768 (#311)', async ({
   page,
 }, testInfo) => {
@@ -1309,7 +1364,7 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await shot(page, testInfo, 'container-1920-add');
 
   await navigate(page, /^Bower$/);
-  await expect(page.getByRole('tab', { name: 'Rules' })).toBeVisible();
+  await expect(bowerPart(page, 'Rules')).toBeVisible();
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-bower');
 
@@ -1317,6 +1372,266 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-settings');
+});
+
+test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent in two columns (#356)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The desktop grid; the phone keeps its own Home.',
+  );
+  const cards = page.locator('.home-cards > .home-card');
+  const boxes = async (
+    locator: typeof cards,
+  ): Promise<{ x: number; y: number; width: number }[]> =>
+    await locator.evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width };
+      }),
+    );
+  // Nothing inside Home ends past Home's own right edge (6.1.1: at 1024
+  // the send button was clipped by the viewport).
+  const clipped = async (): Promise<string[]> =>
+    page.locator('.home').evaluate((home) => {
+      const edge = home.getBoundingClientRect().right + 0.5;
+      const found: string[] = [];
+      for (const el of home.querySelectorAll('*')) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.right > edge) found.push(String(el.className));
+      }
+      return found;
+    });
+
+  // 1024: the content column is narrow, so the cards are 2 x 2.
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await openHome(page);
+  await expect(cards).toHaveCount(4);
+  await expect(cards.nth(3)).toBeVisible();
+  let grid = await boxes(cards);
+  expect(new Set(grid.map((b) => Math.round(b.width))).size).toBe(1);
+  expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(2);
+  expect(await clipped()).toEqual([]);
+  // No Tell column on Home (#347).
+  await expect(page.getByRole('textbox', { name: /Tell Bower/ })).toHaveCount(
+    0,
+  );
+  await shot(page, testInfo, 'home-desktop-1024');
+
+  // 1280: four equal cards in one row; the Pinned tiles on the same
+  // columns; Recent in two columns.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  grid = await boxes(cards);
+  expect(new Set(grid.map((b) => Math.round(b.width))).size).toBe(1);
+  expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(1);
+  const tiles = await boxes(page.locator('.home-pinned-grid > *'));
+  expect(tiles.length).toBeGreaterThan(0);
+  tiles.forEach((tile, i) => {
+    expect(tile.x).toBeCloseTo(grid[i % 4]?.x ?? NaN, 0);
+    expect(tile.width).toBeCloseTo(grid[i % 4]?.width ?? NaN, 0);
+  });
+  const recent = await boxes(page.locator('.home-notes > li'));
+  expect(recent.length).toBeGreaterThan(1);
+  expect(new Set(recent.map((b) => Math.round(b.x))).size).toBe(2);
+  expect(await clipped()).toEqual([]);
+  await shot(page, testInfo, 'home-desktop-1280');
+});
+
+test('The Bower tab in three aligned columns from 1200, segments below (#357)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The columns are desktop-only; the phone keeps the segments.',
+  );
+  const heads = page.locator('.bower-column-head');
+  const box = page.locator('.bower-box');
+  const columns = page.locator('.bower-columns');
+
+  for (const width of [1280, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width === 1280) {
+      await openHome(page);
+      await navigate(page, /^Bower$/);
+    }
+    await expect(heads).toHaveText(['Rules', 'Requests', 'Activity']);
+    await expect(page.getByRole('tablist')).toHaveCount(0);
+    // One header height and one top line for the three columns.
+    const rects = await heads.evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { top: r.top, height: r.height, width: r.width };
+      }),
+    );
+    expect(new Set(rects.map((r) => Math.round(r.top))).size).toBe(1);
+    expect(new Set(rects.map((r) => Math.round(r.height))).size).toBe(1);
+    expect(new Set(rects.map((r) => Math.round(r.width))).size).toBe(1);
+    // The box spans the three columns above them.
+    const [boxRect, columnsRect] = await Promise.all([
+      box.boundingBox(),
+      columns.boundingBox(),
+    ]);
+    expect(boxRect?.x).toBeCloseTo(columnsRect?.x ?? NaN, 0);
+    expect(boxRect?.width).toBeCloseTo(columnsRect?.width ?? NaN, 0);
+    expect((boxRect?.y ?? NaN) < (columnsRect?.y ?? NaN)).toBe(true);
+    await shot(page, testInfo, `bower-columns-${String(width)}`);
+  }
+
+  // Under 1200: the segments, as on the phone.
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(page.getByRole('tab')).toHaveText([
+    'Rules',
+    'Requests',
+    'Activity',
+  ]);
+  await expect(columns).toHaveCount(0);
+});
+
+test('At 1920 a note and its About panel are one row next to the measure, centred (#358)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The About panel beside the note is desktop-only.',
+  );
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+  const panel = page.getByRole('complementary', { name: 'About this note' });
+  await expect(panel).toBeVisible();
+
+  const [text, aside, body] = await Promise.all([
+    page.locator('.note-view').boundingBox(),
+    panel.boundingBox(),
+    page.locator('.shell-body').boundingBox(),
+  ]);
+  const textRight = (text?.x ?? NaN) + (text?.width ?? NaN);
+  // The panel starts right after the text column's padding, not on the
+  // far side of the container (6.1.5: 900 px away at 1920).
+  expect((aside?.x ?? NaN) - textRight).toBeLessThanOrEqual(25);
+  expect((aside?.x ?? NaN) - textRight).toBeGreaterThanOrEqual(0);
+  // The row (text column and panel) is centred in the container.
+  const left = (text?.x ?? NaN) - 24 - (body?.x ?? NaN);
+  const right =
+    (body?.x ?? NaN) +
+    (body?.width ?? NaN) -
+    (aside?.x ?? NaN) -
+    (aside?.width ?? NaN);
+  expect(Math.abs(left - right)).toBeLessThanOrEqual(1);
+  await shot(page, testInfo, 'note-measure-1920');
+});
+
+/** The desktop widths every wide screen is drawn and checked at (#359,
+ * Desktop-Responsive board; `docs/testing.md`). */
+const DESKTOP_WIDTHS = [1024, 1280, 1440, 1920] as const;
+
+test('Home, a note, Add, the Bower tab and Settings at 1024, 1280, 1440 and 1920; nothing changes above 1200 (#359)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The four desktop widths; the phone project has its own.',
+  );
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openHome(page);
+
+  // Each screen, reached the way a person would, then read back at every
+  // width (resizing keeps the page and its state).
+  const screens: [string, () => Promise<void>][] = [
+    ['home', () => navigate(page, /^Home$/)],
+    [
+      'note',
+      async () => {
+        await visible(
+          page.getByRole('button', { name: /Search or jump to a note/ }),
+        ).click();
+        const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+        await switcher.getByRole('combobox').fill('subscriptions renew');
+        await switcher
+          .getByRole('option', { name: /subscriptions renew/ })
+          .first()
+          .click();
+        await expect(page.locator('.bower-note')).toBeVisible();
+      },
+    ],
+    ['add', () => navigate(page, /^Add$/)],
+    ['bower', () => navigate(page, /^Bower$/)],
+    ['settings', () => openSettings(page)],
+  ];
+  const container = page.locator('.shell-container');
+  for (const [name, open] of screens) {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await open();
+    await expect(page.locator('main.content')).toBeVisible();
+    const widths: number[] = [];
+    for (const width of DESKTOP_WIDTHS) {
+      await page.setViewportSize({ width, height: 900 });
+      widths.push((await container.boundingBox())?.width ?? NaN);
+      await shot(page, testInfo, `widths-${String(width)}-${name}`);
+    }
+    // No breakpoint above 1200: past the container's own cap, a wider
+    // window only adds margin.
+    if (name !== 'note') expect(widths[3]).toBeCloseTo(widths[2] ?? NaN, 0);
+  }
+});
+
+test('Settings, Health, Ideas, Terms, Privacy and Not found share one centred column (#360)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The shared column is checked on desktop, where it is narrower than the content.',
+  );
+  await openHome(page);
+  const pages: [string, string, RegExp][] = [
+    ['settings', '/settings', /^Settings$/],
+    ['health', '/health', /Health check/],
+    ['ideas', '/ideas', /Ideas/],
+    ['terms', '/terms', /Terms/],
+    ['privacy', '/privacy', /Privacy/],
+    ['not-found', '/note/does-not-exist', /can.t find that note/],
+  ];
+  const widths: number[] = [];
+  for (const [name, path, heading] of pages) {
+    await page.goto(path);
+    await expect(
+      page.getByRole('heading', { name: heading, level: 1 }).first(),
+    ).toBeVisible();
+    const column = page.locator('.page-column');
+    await expect(column).toHaveCount(1);
+    // Measured against the box it sits in: the shell's content column,
+    // or the bare page for Terms and Privacy when they open outside it.
+    const [box, content] = await Promise.all([
+      column.boundingBox(),
+      column.evaluate((el) => {
+        const parent = el.parentElement ?? el;
+        const r = parent.getBoundingClientRect();
+        const style = getComputedStyle(parent);
+        return {
+          left: r.left + parseFloat(style.paddingLeft),
+          right: r.right - parseFloat(style.paddingRight),
+        };
+      }),
+    ]);
+    widths.push(box?.width ?? NaN);
+    // Centred in the content column: the same margin on both sides.
+    const left = (box?.x ?? NaN) - content.left;
+    const right = content.right - (box?.x ?? NaN) - (box?.width ?? NaN);
+    expect(Math.abs(left - right)).toBeLessThanOrEqual(1);
+    await shot(page, testInfo, `single-column-${name}`);
+  }
+  // One width for all six: the Settings column, 640 px on the board.
+  expect(new Set(widths.map((w) => Math.round(w)))).toEqual(new Set([640]));
 });
 
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
@@ -1514,6 +1829,13 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
   await expect(rows.nth(2)).toHaveAttribute('href', /^\/note\//);
   await shot(page, testInfo, 'folder-project');
+
+  // The end-of-folder tip is generic (#464): it used to name "the flats I
+  // saved" and "rent and size" on every project folder, Kitchen Refresh
+  // included, hard-coding the board's own Flat hunt example.
+  await expect(page.locator('.folder-tip')).toHaveText(
+    'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.',
+  );
 
   // The Ask Bower chip opens the Bower tab's box with the folder named,
   // and nothing else from the folder (#354).

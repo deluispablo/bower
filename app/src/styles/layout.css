@@ -7,11 +7,13 @@
  *   - 600 px: the phone layout's content column becomes a centred 640 px
  *     measure (Home, Add, Tell, Settings, a note, a folder); the top bar's
  *     side padding grows to 24 px and stays there from here on.
- *   - 900 px: the sidebar layout (explorer as a left column, four home
- *     cards instead of two).
- *   - 1200 px: the About panel (`shell-with-aside`'s third column). Below
- *     it, on a note screen, Outline and In this folder fold under the note
- *     body instead.
+ *   - 900 px: the sidebar layout (explorer as a left column, the header
+ *     row and one centred container, #355).
+ *   - 1200 px: the About panel beside the note body. Below it, on a note
+ *     screen, Outline and In this folder fold under the note body instead.
+ * Nothing above 1200 (#359, Desktop-Responsive board): a wider window only
+ * adds margin around the container. `max-width: 899px` / `899.98px` and
+ * `1199px` are the same two breakpoints seen from below.
  */
 
 *,
@@ -199,10 +201,17 @@ button.page-bare-back {
 
 /* `auto`, not `0`, as the basis: the title keeps its own width while Back's
    label shrinks first (see `.topbar-back`), then grows to push "?" and the
-   avatar to the right edge. */
+   avatar to the right edge. A 130px floor (#426): on a note whose own
+   title is close in length to wherever Back points (its own folder, say),
+   proportional flex-shrink alone let both give up a slice of the deficit
+   at once, each landing at only a few letters. Below this floor the
+   flexbox algorithm freezes the title and pushes the rest of the deficit
+   onto Back instead, which still has its own 44px floor to fall back on.
+   130px keeps a title readable to around a dozen characters before it
+   has to give any further. */
 .topbar-crumb {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 130px;
 }
 
 /* The screen title, phone only (#318): the crumb slot's content, or the
@@ -743,6 +752,12 @@ button.page-bare-back {
     max-width: 1200px;
   }
 
+  /* The Bower tab: 1100 px, room for its three columns from 1200 px
+     (#357, Desktop-Bower and Desktop-Responsive boards). */
+  .shell-bower .shell-container {
+    max-width: 1100px;
+  }
+
   .shell-aside {
     display: flex;
     flex-direction: column;
@@ -797,14 +812,22 @@ button.page-bare-back {
 }
 
 /* From 1200 px: the About panel beside the note body, inside the same
-   container; it stays in view while the note scrolls. */
+   container; it stays in view while the note scrolls. The note's column
+   is its reading measure (720 px, `.note-view` in markdown.css, plus the
+   content padding) and the two are one row centred in the container
+   (#358), so the panel sits next to the text it describes. */
 @media (min-width: 1200px) {
   .shell-with-aside .shell-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .shell-with-aside .content {
+    flex: 0 1 calc(720px + 2 * var(--space-6));
   }
 
   .shell-aside {
+    flex: 0 0 280px;
     position: sticky;
     top: 0;
     align-self: start;
@@ -878,6 +901,17 @@ button.page-bare-back {
   margin: var(--space-16) auto;
   padding: var(--space-4);
   text-align: center;
+}
+
+/*
+ * The single-column pages (#360): Settings, Health, Ideas, Terms, Privacy
+ * and Not found share one centred column, the Settings column of the
+ * Desktop-Settings board. After `.auth-screen` so it wins for Not found.
+ */
+.page-column {
+  width: 100%;
+  max-width: var(--width-column);
+  margin-inline: auto;
 }
 
 .auth-error {

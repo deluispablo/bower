@@ -11,7 +11,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
-import { expect, openHome, openSettings, test, visible } from './demo.js';
+import {
+  bowerPart,
+  expect,
+  openHome,
+  openSettings,
+  test,
+  visible,
+} from './demo.js';
 
 async function expectNoNameViolations(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page })
@@ -55,6 +62,6 @@ test('the Bower tab has no button-name or link-name violations', async ({
   await openHome(page);
   await visible(page.getByRole('link', { name: /^Bower$/ })).click();
   await page.getByRole('button', { name: 'Things you can ask' }).click();
-  await expect(page.getByRole('tab', { name: 'Rules' })).toBeVisible();
+  await expect(bowerPart(page, 'Rules')).toBeVisible();
   await expectNoNameViolations(page);
 });

@@ -381,11 +381,32 @@
     display: none;
   }
 
+  /* Desktop-Home and Desktop-Responsive boards (#356): the four cards
+     and the Pinned tiles share one grid — two columns while the content
+     column is narrow (1024: 2 x 2), four from 1200. */
   .home-cards {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
   }
 
   .home-desktop-only {
     display: flex;
+  }
+}
+
+@media (min-width: 1200px) {
+  .home-cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /* Recent in two columns (#356); the last row keeps no divider in
+     either column. */
+  .home-notes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-6);
+  }
+
+  .home-notes li:nth-last-child(2):nth-child(odd) {
+    border-bottom: none;
   }
 }

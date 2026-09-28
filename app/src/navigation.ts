@@ -376,10 +376,13 @@ function findNode(node: TreeNode, path: string): TreeNode | null {
 export interface FolderSubfolder {
   path: string;
   name: string;
-  /** Notes inside, subfolders included (`folderCounts`). */
+  /** Notes only, subfolders included (`folderCounts`): `folderEmptyState`'s
+   * own concern (#424), which subfolder holds a folder's notes. */
   count: number;
-  /** Notes and other files inside, subfolders included: a root folder
-   * screen's "6 things" (#431). */
+  /** Notes and other files together, subfolders included: a root folder
+   * screen's "6 things" second line (#431), and — the same definition the
+   * folder menu, the Notes tree and the desktop sidebar use (#425) — a
+   * non-root folder screen's own subfolder-row count (#457). */
   things: number;
   /** The newest `modifiedTime` of anything inside, subfolders included;
    * `undefined` when nothing inside has one (#431). */

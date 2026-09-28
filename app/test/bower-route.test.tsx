@@ -451,3 +451,47 @@ describe('Requests (#344)', () => {
     expect(tidying?.querySelectorAll('button')).toHaveLength(0);
   });
 });
+
+describe('three columns from 1200 px (#357)', () => {
+  function stubWidth(wide: boolean): void {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: wide && query === '(min-width: 1200px)',
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows Rules, Requests and Activity as three headed columns, no tabs', async () => {
+    stubWidth(true);
+    await mount();
+    expect(root.querySelector('[role="tablist"]')).toBeNull();
+    expect(root.querySelector('[role="tabpanel"]')).toBeNull();
+    const heads = [...root.querySelectorAll('.bower-column-head')].map((head) =>
+      head.textContent?.trim(),
+    );
+    expect(heads).toEqual(['Rules', 'Requests', 'Activity']);
+    // Each column is labelled by its own header, and all three show at once.
+    for (const column of root.querySelectorAll('.bower-column')) {
+      const id = column.getAttribute('aria-labelledby') ?? '';
+      expect(root.querySelector(`#${id}`)?.tagName).toBe('H2');
+      expect(column.children.length).toBeGreaterThan(1);
+    }
+    // The box still spans above them.
+    expect(box()).toBeDefined();
+  });
+
+  it('keeps the segments under 1200 px', async () => {
+    stubWidth(false);
+    await mount();
+    expect(root.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(root.querySelector('.bower-columns')).toBeNull();
+  });
+});

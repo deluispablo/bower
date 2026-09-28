@@ -41,6 +41,17 @@ const files: DriveFile[] = [
     'application/pdf',
     '2026-09-28T08:00:00Z',
   ),
+  file('1-Projects/Flat hunt/Viewings', FOLDER_MIME),
+  file(
+    '1-Projects/Flat hunt/Viewings/Notes from the viewing.md',
+    'text/markdown',
+    '2026-09-27T09:00:00Z',
+  ),
+  file(
+    '1-Projects/Flat hunt/Viewings/Floor plan.pdf',
+    'application/pdf',
+    '2026-09-27T09:00:00Z',
+  ),
   file('2-Areas', FOLDER_MIME),
   file('2-Areas/Cooking', FOLDER_MIME),
   file('2-Areas/Cooking/Sourdough.md', 'text/markdown', '2026-09-23T09:00:00Z'),
@@ -173,7 +184,7 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
 
   it('reads "N projects · N things" for 1-Projects', () => {
     mount();
-    expect(meta()).toBe('1 project · 2 things');
+    expect(meta()).toBe('1 project · 4 things');
   });
 
   it('keeps the plain notes and folders line for another root folder', () => {
@@ -188,7 +199,7 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
       'a.folder-row[href="/folder/1-Projects/Flat%20hunt"]',
     );
     expect(row?.querySelector('.folder-row-detail')?.textContent).toBe(
-      '2 things · updated today',
+      '4 things · updated today',
     );
     expect(row?.querySelector('.folder-row-count')).toBeNull();
     route.params.path = '2-Areas';
@@ -199,6 +210,23 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
     expect(cooking?.querySelector('.folder-row-detail')?.textContent).toBe(
       '1 thing · 5 d',
     );
+  });
+});
+
+// #457: the non-root folder screen's own subfolder rows (the plain
+// ".folder-row-count" badge, not the root screen's "N things" line above)
+// used to read `FolderSubfolder.count`, notes only -- the same disagreement
+// #425 already fixed for the folder menu, the Notes tree and the sidebar.
+describe('Subfolder rows on a non-root folder screen count files too (#457)', () => {
+  it('counts files and notes together, matching the folder menu/tree/sidebar definition', () => {
+    route.params.path = '1-Projects/Flat hunt';
+    mount();
+    const row = root.querySelector(
+      'a.folder-row[href="/folder/1-Projects/Flat%20hunt/Viewings"]',
+    );
+    // Viewings holds one note and one file: 2, not 1 (notes only).
+    expect(row?.querySelector('.folder-row-count')?.textContent).toBe('2');
+    expect(row?.querySelector('.folder-row-detail')).toBeNull();
   });
 });
 
@@ -225,12 +253,21 @@ describe('Drive chip and end-of-folder tip (#453, Phone-Folder-Project board)', 
     expect(chip?.textContent).toBe('Drive');
   });
 
-  it('ends the screen with the tip to ask Bower for more', () => {
+  // #464: the copy used to name "the flats I saved" and "rent and size"
+  // regardless of which folder it sat under -- a hard-coded reference to
+  // the board's own Flat hunt example. The two examples are generic now,
+  // so the exact same tip fits a different folder ("Cooking") too.
+  it('ends the screen with a generic tip to ask Bower for more, on any project folder', () => {
     route.params.path = '1-Projects/Flat hunt';
     mount();
-    expect(root.querySelector('.folder-tip')?.textContent).toBe(
-      'Want more from this folder? Ask Bower: “Compare the flats I saved” or “From now on, pull rent and size out of every listing”.',
-    );
+    const tip =
+      'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.';
+    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
+    expect(tip).not.toMatch(/flat|rent|listing/i);
+
+    route.params.path = '2-Areas/Cooking';
+    mount();
+    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
   });
 
   it('has no tip on a root folder', () => {

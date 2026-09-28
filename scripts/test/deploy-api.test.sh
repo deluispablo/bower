@@ -8,6 +8,8 @@
 # Prints "ok <case>" per case and exits non-zero on the first failure.
 
 set -euo pipefail
+# Under pipefail, never pipe into grep -q: it exits at the first match, the
+# writer can then die of SIGPIPE and fail the pipeline (#391). Use <<<"$x".
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SCRIPT_SRC="$HERE/../deploy-api.sh"
@@ -172,7 +174,7 @@ run_case() {
 calls() { cat "$STATE/calls.log" 2>/dev/null || true; }
 expect_eq() { [ "$1" = "$2" ] || die "$3: expected [$2], got [$1]"; }
 expect_contains() {
-  printf '%s' "$OUT" | grep -qiF -- "$2" || die "$1: output does not contain [$2]"
+  grep -qiF -- "$2" <<<"$OUT" || die "$1: output does not contain [$2]"
 }
 # Every wrangler call but whoami must read the local config, never the
 # tracked wrangler.toml.

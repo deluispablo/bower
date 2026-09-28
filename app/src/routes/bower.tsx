@@ -13,7 +13,9 @@
  * `rules-panel.tsx`): a rule's Change it fills the box and Send then
  * rewrites that rule in `Rules.md` instead of sending a note; Apply it
  * sends the job note "Apply this rule to what is already filed".
- * Activity holds one sentence until its screen lands (#345).
+ * Activity holds one sentence until its screen lands (#345). From 1200 px
+ * the three segments are three columns instead (#357, Desktop-Bower
+ * board): the same header height and top line, the box spanning above.
  *
  * Requests (#344, board Phone-Bower-Requests) lists every request with its
  * state, all read from the Bower folder (`requestRows`): Waiting (with
@@ -80,6 +82,7 @@ import {
   rewriteInstruction,
 } from '../tell.js';
 import { OfflineError, useVault } from '../vault-store.js';
+import { useMediaQuery } from '../use-media-query.js';
 import '../styles/bower.css';
 
 /** The phone top bar's title (spec §14): a stable element, so it never
@@ -93,6 +96,9 @@ interface SegmentTab {
   label: string;
   Icon: () => JSX.Element;
 }
+
+/** From 1200 px the three segments are three columns side by side (#357). */
+const WIDE_QUERY = '(min-width: 1200px)';
 
 const SEGMENTS: readonly SegmentTab[] = [
   { id: 'rules', label: 'Rules', Icon: IconShield },
@@ -384,6 +390,7 @@ export function Bower(): JSX.Element {
   // Notes removed from here: gone from the list before the listing knows.
   const [removed, setRemoved] = useState<ReadonlySet<string>>(() => new Set());
   const [segment, setSegment] = useState<Segment>('rules');
+  const wide = useMediaQuery(WIDE_QUERY);
   const [examples] = useState(() => examplesFor(visits++));
   // `null` until the person toggles it: open the first time, closed after.
   const [tipOpen, setTipOpen] = useState<boolean | null>(null);
@@ -658,6 +665,58 @@ export function Bower(): JSX.Element {
 
   const now = Date.now();
 
+  // The three panels' contents: tabs under 1200 px, three columns from
+  // there (#357, Desktop-Bower board).
+  const panels: Record<Segment, JSX.Element> = {
+    rules: (
+      <RulesPanel
+        message={rulesMessage}
+        onMessage={setRulesMessage}
+        onChange={changeRule}
+        onApply={(rule) => void applyRule(rule)}
+      />
+    ),
+    requests: (
+      <>
+        <p class="bower-panel-note">
+          What you asked for, and what came of it. Bower decides what each one
+          is: a rule starts at once; a job or a question waits for the next
+          tidy-up, or runs on its own with &ldquo;Do it now&rdquo;.
+        </p>
+        {requestsMessage !== null && (
+          <p class="auth-error" role="alert">
+            {requestsMessage}
+          </p>
+        )}
+        {rows.length > 0 && (
+          <RequestsList
+            rows={rows}
+            now={now}
+            runStarted={
+              inFlight && run !== null
+                ? (run.startedAt ?? run.requestedAt)
+                : null
+            }
+            canRunNow={!inFlight && online}
+            busy={sending}
+            onRules={() => {
+              selectSegment('rules', true);
+            }}
+            onEdit={(row) => void editRequest(row)}
+            onRemove={(row) => void removeRequest(row)}
+            onRunNow={runNow}
+          />
+        )}
+      </>
+    ),
+    activity: (
+      <p class="bower-panel-note">
+        What each tidy-up did will show here: what went where, and what was set
+        aside.
+      </p>
+    ),
+  };
+
   return (
     <section class="bower-screen">
       <h1 class="screen-title">Bower</h1>
@@ -721,97 +780,63 @@ export function Bower(): JSX.Element {
         onPick={pickExample}
       />
 
-      <div
-        class="bower-segments"
-        role="tablist"
-        aria-label="Rules, requests and activity"
-        onKeyDown={onTabKey}
-      >
-        {SEGMENTS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            id={`bower-tab-${id}`}
-            class="bower-segment"
-            aria-selected={segment === id}
-            aria-controls={`bower-panel-${id}`}
-            tabIndex={segment === id ? 0 : -1}
-            onClick={() => {
-              selectSegment(id, false);
-            }}
+      {wide ? (
+        <div class="bower-columns">
+          {SEGMENTS.map(({ id, label }) => (
+            <section
+              key={id}
+              class="bower-column"
+              aria-labelledby={`bower-column-${id}`}
+            >
+              <h2 class="bower-column-head" id={`bower-column-${id}`}>
+                {label}
+              </h2>
+              {panels[id]}
+            </section>
+          ))}
+        </div>
+      ) : (
+        <>
+          <div
+            class="bower-segments"
+            role="tablist"
+            aria-label="Rules, requests and activity"
+            onKeyDown={onTabKey}
           >
-            <Icon />
-            {label}
-          </button>
-        ))}
-      </div>
+            {SEGMENTS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`bower-tab-${id}`}
+                class="bower-segment"
+                aria-selected={segment === id}
+                aria-controls={`bower-panel-${id}`}
+                tabIndex={segment === id ? 0 : -1}
+                onClick={() => {
+                  selectSegment(id, false);
+                }}
+              >
+                <Icon />
+                {label}
+              </button>
+            ))}
+          </div>
 
-      <div
-        role="tabpanel"
-        id="bower-panel-rules"
-        aria-labelledby="bower-tab-rules"
-        class="bower-panel"
-        hidden={segment !== 'rules'}
-      >
-        <RulesPanel
-          message={rulesMessage}
-          onMessage={setRulesMessage}
-          onChange={changeRule}
-          onApply={(rule) => void applyRule(rule)}
-        />
-      </div>
-
-      <div
-        role="tabpanel"
-        id="bower-panel-requests"
-        aria-labelledby="bower-tab-requests"
-        class="bower-panel"
-        hidden={segment !== 'requests'}
-      >
-        <p class="bower-panel-note">
-          What you asked for, and what came of it. Bower decides what each one
-          is: a rule starts at once; a job or a question waits for the next
-          tidy-up, or runs on its own with &ldquo;Do it now&rdquo;.
-        </p>
-        {requestsMessage !== null && (
-          <p class="auth-error" role="alert">
-            {requestsMessage}
-          </p>
-        )}
-        {rows.length > 0 && (
-          <RequestsList
-            rows={rows}
-            now={now}
-            runStarted={
-              inFlight && run !== null
-                ? (run.startedAt ?? run.requestedAt)
-                : null
-            }
-            canRunNow={!inFlight && online}
-            busy={sending}
-            onRules={() => {
-              selectSegment('rules', true);
-            }}
-            onEdit={(row) => void editRequest(row)}
-            onRemove={(row) => void removeRequest(row)}
-            onRunNow={runNow}
-          />
-        )}
-      </div>
-
-      <div
-        role="tabpanel"
-        id="bower-panel-activity"
-        aria-labelledby="bower-tab-activity"
-        class="bower-panel"
-        hidden={segment !== 'activity'}
-      >
-        <p class="bower-panel-note">
-          What each tidy-up did will show here: what went where, and what was
-          set aside.
-        </p>
-      </div>
+          {SEGMENTS.map(({ id }) => (
+            <div
+              key={id}
+              role="tabpanel"
+              id={`bower-panel-${id}`}
+              aria-labelledby={`bower-tab-${id}`}
+              class="bower-panel"
+              hidden={segment !== id}
+            >
+              {panels[id]}
+            </div>
+          ))}
+        </>
+      )}
     </section>
   );
 }

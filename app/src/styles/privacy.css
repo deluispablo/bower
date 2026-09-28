@@ -1,13 +1,17 @@
 /*
- * Privacy (spec §6): a plain reading page, restyled in #148 — the reading
- * measure (720 px, same as a note on desktop) and a little top breathing
- * room. The copy itself is `docs/privacy.md`, untouched here.
+ * Privacy and Terms (spec §6): plain reading pages, restyled in #148, in
+ * the single-column pages' width (#360, `.page-column` in layout.css) with
+ * a little top breathing room. The copy itself is `docs/privacy.md`,
+ * untouched here. `.privacy.note-view` outranks `.note-view`'s 720 px
+ * reading measure (markdown.css), which these pages borrow for its type.
  */
 
 .privacy {
-  max-width: 720px;
-  margin: 0 auto;
   padding-top: var(--space-4);
+}
+
+.privacy.note-view {
+  max-width: var(--width-column);
 }
 
 .privacy .markdown h1:first-child {

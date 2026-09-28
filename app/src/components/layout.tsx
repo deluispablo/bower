@@ -236,7 +236,16 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   );
 
   return (
-    <div class={aside === null ? 'shell' : 'shell shell-with-aside'}>
+    <div
+      class={[
+        'shell',
+        aside !== null && 'shell-with-aside',
+        // The Bower tab's wider column for its three columns (#357).
+        path === BOWER_PATH && 'shell-bower',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <nav
         class="shell-sidebar"
         aria-label="Your notes"

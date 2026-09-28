@@ -90,3 +90,25 @@ export async function shot(
     });
   }
 }
+
+/**
+ * One of the Bower tab's three parts, Rules, Requests or Activity: a tab
+ * panel under 1200 px, a column (a region named by its header) from there
+ * (#357). The desktop project runs at 1280, so it gets the columns.
+ */
+export function bowerPart(page: Page, name: string): Locator {
+  return page
+    .getByRole('tabpanel', { name, exact: true })
+    .or(page.getByRole('region', { name, exact: true }));
+}
+
+/** Brings a part of the Bower tab on screen: taps its tab under 1200 px;
+ * from 1200 px all three columns already are (#357). */
+export async function showBowerPart(page: Page, name: string): Promise<void> {
+  await expect(
+    page.getByRole('tablist').or(page.locator('.bower-columns')),
+  ).toBeVisible();
+  const tab = page.getByRole('tab', { name, exact: true });
+  if ((await tab.count()) > 0) await tab.click();
+  await expect(bowerPart(page, name)).toBeVisible();
+}
