@@ -563,6 +563,11 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await expect(confirm).toBeVisible();
   await expect(confirm).toContainText('3 things');
+  // The demo's amber line (#363, `Demo-Tidy-Confirm` board, handover
+  // C.10): tidy up here never runs the model.
+  await expect(confirm).toContainText(
+    'Demo: what follows is a recording. Nothing is sent to Claude, nothing is saved.',
+  );
   await shot(page, testInfo, 'tidy-confirm');
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
@@ -579,6 +584,15 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
     inbox.getByRole('button', { name: /^Tidying up… started/ }),
   ).toBeVisible();
   await expect(inbox.getByRole('button', { name: 'Tidy up' })).toHaveCount(0);
+
+  // The demo's own copy under the bar (#363, `Demo-Working` board): the
+  // scripted run is a recording, not a real one, and the progress row's
+  // right-hand badge says so too, instead of "Started n min ago".
+  await expect(sheet).toContainText('A recording.');
+  await expect(sheet).toContainText(
+    'In the demo the bird plays back a real run in twenty seconds',
+  );
+  await expect(sheet).toContainText('Playing back');
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed
@@ -607,15 +621,18 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
 
-  // Running: the scene, the count against the three things waiting, when
-  // it started, the sentence, and the item being read.
+  // Running: the scene, the count against the three things waiting, the
+  // demo's own copy in place of "Started just now" and the reassurance
+  // line (#363), and the item being read.
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
   await expect(sheet.getByText(/^[0-3] of 3 filed$/)).toBeVisible();
-  await expect(sheet.getByText('Started just now')).toBeVisible();
+  await expect(sheet.getByText('Playing back')).toBeVisible();
+  await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(
-      'Usually three to five minutes. Close this and keep going; Home will say when it is done.',
+      'In the demo the bird plays back a real run in twenty seconds',
+      { exact: false },
     ),
   ).toBeVisible();
   const rows = sheet.locator('.working-sheet-row');

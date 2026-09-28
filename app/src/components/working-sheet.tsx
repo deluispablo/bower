@@ -31,6 +31,7 @@ import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Run } from '../api.js';
+import { isDemo } from '../api.js';
 import { doneNotes } from '../home.js';
 import { runKey } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
@@ -125,6 +126,24 @@ export interface WorkingSheetProps {
 /** The sentence under the bar while a run goes (spec C.6). */
 export const REASSURANCE =
   'Usually three to five minutes. Close this and keep going; Home will say when it is done.';
+
+/**
+ * The demo's sentence in the same place (#363, `Demo-Working` board,
+ * handover C.10): tidy up in the demo never runs the model, so this
+ * replaces `REASSURANCE` there. `lead` is set in amber, as the board draws
+ * it; `demo/server.ts`'s scripted run is unchanged, this is copy only.
+ */
+export const DEMO_REASSURANCE_LEAD = 'A recording.';
+export const DEMO_REASSURANCE_REST =
+  'In the demo the bird plays back a real run in twenty seconds; nothing ' +
+  'is sent to Claude, nothing costs anything. In your own Bower this ' +
+  'takes three to five minutes.';
+
+/** The progress row's right-hand label while a run goes: the demo always
+ * plays back the same twenty-second recording, so "Started n min ago"
+ * (meant for a real run that can run long) is replaced with a plain
+ * "Playing back" (`Demo-Working` board). */
+export const DEMO_PLAYING_BACK = 'Playing back';
 
 /** The scene's right-hand label before any destination is known. */
 export const FOLDERS_FALLBACK = 'Your folders';
@@ -229,10 +248,13 @@ export function WorkingSheet({
   const processed = run?.processed;
   const progress = active ? progressFor(runCounts(processed, waiting)) : null;
   const rows = runRows({ processed, waiting, files, active });
-  const started =
-    active && run?.requestedAt !== undefined
-      ? startedAgo(run.requestedAt, Date.now())
-      : undefined;
+  const started = !active
+    ? undefined
+    : isDemo()
+      ? DEMO_PLAYING_BACK
+      : run?.requestedAt !== undefined
+        ? startedAgo(run.requestedAt, Date.now())
+        : undefined;
 
   return (
     <div class="working-sheet" role="dialog" aria-label="Tidying up status">
@@ -288,7 +310,18 @@ export function WorkingSheet({
               />
             )}
           </div>
-          <p class="working-sheet-reassurance">{REASSURANCE}</p>
+          <p class="working-sheet-reassurance">
+            {isDemo() ? (
+              <>
+                <b class="working-sheet-reassurance-lead">
+                  {DEMO_REASSURANCE_LEAD}
+                </b>{' '}
+                {DEMO_REASSURANCE_REST}
+              </>
+            ) : (
+              REASSURANCE
+            )}
+          </p>
         </div>
       )}
       {rows.length > 0 && (

@@ -48,6 +48,19 @@
   line-height: var(--leading-body);
 }
 
+/* The demo's amber recording notice (#363, handover C.10). */
+.tidy-confirm-demo {
+  margin: 0;
+  max-width: 26rem;
+  padding: var(--space-2) var(--space-3);
+  background: rgb(240 182 79 / 0.1); /* --bower-amber tint */
+  border: 1px solid rgb(240 182 79 / 0.35);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
 .tidy-confirm-button {
   display: inline-flex;
   align-items: center;
