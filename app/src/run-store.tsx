@@ -48,15 +48,12 @@ import {
 import { writeContextNote } from './add-context.js';
 import { ApiError, getStatus, startProcess } from './api.js';
 import type { Run, RunScope } from './api.js';
-import { FOLDER_MIME } from './drive.js';
-import type { DriveFile } from './drive.js';
 import { ANSWERS_FOLDER } from './home.js';
 import { folderHref } from './navigation.js';
 import { failureCopy } from './run-failure.js';
-import { isContextNote } from './run-progress.js';
+import { isContextNote, visiblePendingCount } from './run-progress.js';
 import { useSession } from './session.js';
 import { showToast } from './toast-store.js';
-import { isHidden } from './vault-index.js';
 import { invalidateAfterRun, useVault } from './vault-store.js';
 
 export type RunPhase =
@@ -347,21 +344,17 @@ export function reduce(state: RunState, event: RunEvent): RunState {
 }
 
 /**
- * Count of files waiting to be processed: everything under `0-Inbox/` or
- * `Clippings/`, excluding `Processed/`, folder notes (`_*.md`) and folders
- * themselves. Reuses `isHidden` (`vault-index.ts`) for that exclusion so
- * the two never drift apart.
+ * Count of files waiting to be processed, the way a person would count
+ * them (#529): `run-progress.ts#visiblePendingCount`, the same rule
+ * Home and the working sheet use, so the Add hint and the "Is that
+ * everything?" confirmation never run one ahead of them over Add's own
+ * "What is this?" context note (#506) — it is the batch's own scratch
+ * note, not a thing waiting to be filed. Used to be its own, separately
+ * maintained rule here; kept as `pendingCount` since every caller
+ * (`layout.tsx`, `switcher.tsx`, `add.tsx`, `tidyUp`/`doItNow` below)
+ * already imports it by that name.
  */
-const PENDING_ROOTS = new Set(['0-Inbox', 'Clippings']);
-
-export function pendingCount(files: DriveFile[]): number {
-  return files.filter((file) => {
-    if (file.mimeType === FOLDER_MIME) return false;
-    if (isHidden(file)) return false;
-    const root = file.path.split('/')[0];
-    return root !== undefined && PENDING_ROOTS.has(root);
-  }).length;
-}
+export const pendingCount = visiblePendingCount;
 
 export interface RunStore extends RunState {
   /** Starts a run: a whole tidy-up, or `instructions` only (`startProcess`). */
