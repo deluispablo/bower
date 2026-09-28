@@ -18,6 +18,7 @@
     "dompurify": "^3.4.16",
     "idb-keyval": "^6.3.0",
     "marked": "^18.0.14",
+    "minisearch": "^7.2.0",
     "preact": "^10.29.8",
     "preact-iso": "^2.12.2",
     "workbox-expiration": "^7.4.1",
