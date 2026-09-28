@@ -80,6 +80,7 @@ function fakeBackend(): typeof fetch {
     quota: { used: 0, limit: 10 },
     needsReauth: false,
     hasApiKey: false,
+    allowWeb: false,
   };
   let run: { state: 'queued'; requestedAt: string } | null = null;
 
@@ -90,10 +91,12 @@ function fakeBackend(): typeof fetch {
       const input = JSON.parse(init.body as string) as {
         apiKey?: string | null;
         tourSeenAt?: string;
+        allowWeb?: boolean;
       };
       if (input.apiKey !== undefined) me.hasApiKey = input.apiKey !== null;
       if (input.tourSeenAt !== undefined) me.tourSeenAt = input.tourSeenAt;
-      return json(200, { hasApiKey: me.hasApiKey });
+      if (input.allowWeb !== undefined) me.allowWeb = input.allowWeb;
+      return json(200, { hasApiKey: me.hasApiKey, allowWeb: me.allowWeb });
     }
     if (path === '/process' && method === 'POST') {
       run ??= { state: 'queued', requestedAt: new Date().toISOString() };
@@ -211,21 +214,28 @@ describe.each(IMPLEMENTATIONS)('the Worker contract: %s', (_, setup) => {
     expect(me.quota.limit).toBeGreaterThan(me.quota.used);
     expect(me.needsReauth).toBe(false);
     expect(me.hasApiKey).toBe(false);
+    expect(me.allowWeb).toBe(false);
     expect(me.tourSeenAt).toBeUndefined();
   });
 
-  it('keeps settings: the tour seen and an API key', async () => {
+  it('keeps settings: the tour seen, an API key and the web switch', async () => {
     const { worker } = setup();
     const seen = '2026-09-27T10:00:00.000Z';
     await expect(worker.updateSettings({ tourSeenAt: seen })).resolves.toEqual({
       hasApiKey: false,
+      allowWeb: false,
     });
     await expect(
       worker.updateSettings({ apiKey: 'sk-ant-test' }),
-    ).resolves.toEqual({ hasApiKey: true });
+    ).resolves.toEqual({ hasApiKey: true, allowWeb: false });
+    await expect(worker.updateSettings({ allowWeb: true })).resolves.toEqual({
+      hasApiKey: true,
+      allowWeb: true,
+    });
     const me = signedIn(await worker.getMe());
     expect(me.tourSeenAt).toBe(seen);
     expect(me.hasApiKey).toBe(true);
+    expect(me.allowWeb).toBe(true);
   });
 
   it('starts a run and reports it on /status', async () => {
