@@ -6,6 +6,7 @@ import { isDemo } from './api.js';
 import { Layout } from './components/layout.js';
 import { Add } from './routes/add.js';
 import { Bower } from './routes/bower.js';
+import { FileScreen } from './routes/file.js';
 import { Folder } from './routes/folder.js';
 import { Health } from './routes/health.js';
 import { Home } from './routes/home.js';
@@ -73,6 +74,7 @@ function AppRoutes() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/note/:id" component={Note} />
+      <Route path="/file/:id" component={FileScreen} />
       <Route path="/folder/:path*" component={Folder} />
       <Route path="/notes" component={Notes} />
       <Route path="/add" component={Add} />

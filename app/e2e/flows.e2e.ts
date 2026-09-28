@@ -714,12 +714,60 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(1)).toContainText('PDF · filed by Bower');
   await expect(rows.nth(2)).toContainText('Note · in this folder');
 
-  // A file opens in Drive for now; a note opens in the app.
-  await expect(rows.nth(1)).toHaveAttribute(
-    'href',
-    /^https:\/\/drive\.google\.com\/file\/d\//,
-  );
-  await expect(rows.nth(1)).toHaveAttribute('target', '_blank');
+  // A file opens on its own screen; a note opens in the app.
+  await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
   await expect(rows.nth(2)).toHaveAttribute('href', /^\/note\//);
   await shot(page, testInfo, 'folder-project');
+});
+
+test('a file opens on its own screen: the photo inline, the PDF without a preview says so', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await page
+    .locator('.folder-item', { hasText: 'Sage green test patch' })
+    .click();
+  await expect(page).toHaveURL(/\/file\//);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Sage green test patch' }),
+  ).toBeVisible();
+  const props = page.locator('.file-props');
+  await expect(props).toContainText('Photo ·');
+  await expect(
+    props.getByRole('link', { name: '1-Projects / Kitchen Refresh' }),
+  ).toBeVisible();
+  await expect(props).toContainText('Filed by Bower ·');
+  const photo = page.getByRole('img', { name: 'Sage green test patch' });
+  await expect(photo).toBeVisible();
+  await expect(photo).toHaveAttribute('src', /^blob:/);
+  await shot(page, testInfo, 'file-photo');
+
+  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await page
+    .locator('.folder-item', { hasText: 'Shelves and tap quote' })
+    .click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Shelves and tap quote' }),
+  ).toBeVisible();
+  await expect(props).toContainText('PDF ·');
+  // The demo has no Drive thumbnails: one sentence, with the way to Drive.
+  const none = page.getByText('There is no preview for this file');
+  await expect(none).toBeVisible();
+  await expect(
+    none.getByRole('link', { name: 'open it in Drive' }),
+  ).toHaveAttribute('href', /^https:\/\/drive\.google\.com\/file\/d\//);
+  await expect(
+    page.getByRole('link', { name: /Summarise this/ }),
+  ).toHaveAttribute('href', /^\/bower\?text=Summarise/);
+
+  // The More menu, in its file version: Open in Drive, no Pin.
+  await visible(page.getByRole('button', { name: 'More' })).click();
+  const menu = page.getByRole('menu', { name: 'File actions' });
+  await expect(
+    menu.getByRole('menuitem', { name: /Open in Drive/ }),
+  ).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: /Pin to Home/ })).toHaveCount(
+    0,
+  );
+  await shot(page, testInfo, 'file-pdf-menu');
 });

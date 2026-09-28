@@ -227,4 +227,44 @@ describe('NoteMenu', () => {
     expect(fallback.readOnly).toBe(true);
     expect(fallback.value).toBe(location.href);
   });
+
+  it('speaks of "this file", with no Pin row, for a file (#350)', () => {
+    const pdf: DriveFile = {
+      id: 'file-1',
+      name: 'Lease 2026.pdf',
+      mimeType: 'application/pdf',
+      parents: ['FOLDER_ID'],
+      path: '1-Projects/Lease 2026.pdf',
+    };
+    root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(
+        h(NoteMenu, {
+          file: pdf,
+          noteName: pdf.name,
+          noun: 'file',
+          canEdit: false,
+          canAppend: false,
+          pinned: false,
+          onAddParagraph: vi.fn(),
+          onEdit: vi.fn(),
+          onClose: vi.fn(),
+        }),
+        root,
+      );
+    });
+    expect(
+      root.querySelector('[role="menu"]')?.getAttribute('aria-label'),
+    ).toBe('File actions');
+    expect(rows().map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Ask Bower about this file'),
+      expect.stringContaining('This was misfiled'),
+      expect.stringContaining('Open in Drive'),
+      expect.stringContaining('Copy link'),
+    ]);
+    expect(rowByText('Ask Bower about this file').getAttribute('href')).toBe(
+      `/bower?text=${encodeURIComponent('[[Lease 2026.pdf]] ')}`,
+    );
+  });
 });

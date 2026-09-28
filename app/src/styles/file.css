@@ -1,0 +1,124 @@
+/*
+ * A file's own screen (issue #350, the Phone-File board): the title with
+ * the desktop More button, three property lines, the preview on a paper
+ * card, and the tip to ask Bower for a note. One column; the shell
+ * (layout.css) widens it and swaps the crumb slot for the breadcrumb, and
+ * `.note-view` (markdown.css) keeps it to the reading measure on desktop.
+ */
+
+.file-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.file-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.file-head h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.file-props {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.file-props li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.file-props .icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+/* The paper card, light in both themes, as on the board. */
+.file-preview {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: #f5f5f2;
+  color: #1c2333;
+}
+
+.file-preview-picture {
+  display: flex;
+  justify-content: center;
+}
+
+/* Full width, the whole picture in view: a small photo scales up, a tall
+   one is letterboxed; a PDF's first page runs its natural height. */
+.file-preview-picture img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.file-preview-page img {
+  max-height: none;
+}
+
+.file-preview-text {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-4);
+  font-family: Georgia, serif;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.file-preview-note {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-muted);
+}
+
+.file-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.file-tip .icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--color-accent);
+}
+
+.file-tip b {
+  color: var(--color-text);
+}
+
+.file-tip a {
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}

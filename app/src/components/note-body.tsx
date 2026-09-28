@@ -8,8 +8,9 @@ import { hydrateEmbeds } from '../markdown/hydrate-embeds.js';
 import { renderNote } from '../markdown/render.js';
 import { useVault } from '../vault-store.js';
 
-/** An image's bytes: from the on-device cache, else from Drive (then cached). */
-async function loadImage(file: DriveFile): Promise<Blob> {
+/** An image's bytes: from the on-device cache, else from Drive (then cached).
+ * Also a file screen's inline image (#350). */
+export async function loadImage(file: DriveFile): Promise<Blob> {
   const key = blobCacheKey(file);
   try {
     const cached = await loadBlob(key);

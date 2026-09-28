@@ -164,5 +164,13 @@ export function createDemoDrive(server: DemoServer): DriveClient {
       }),
 
     modifiedTimeOf: (id) => reply(() => entry(id).modifiedTime),
+
+    // The demo has no Drive to draw thumbnails: every file answers "none",
+    // so the file screen shows its one sentence instead (#350).
+    thumbnailLinkOf: (id) =>
+      reply(() => {
+        file(id);
+        return null;
+      }),
   };
 }
