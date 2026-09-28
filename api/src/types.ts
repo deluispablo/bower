@@ -88,6 +88,34 @@ export interface RunItem {
   /** The inbox path, as in `processed`. */
   path: string;
   kind: RunItemKind;
+  /**
+   * Report v2 (#598): where the item ended up, its new `/`-joined path from
+   * the top of the folder. Absent when it did not move or from an older
+   * runner.
+   */
+  to?: string;
+  /** Report v2: the file name it had before Bower renamed it. */
+  renamedFrom?: string;
+}
+
+/**
+ * Why a run set an item aside instead of reading it (report v2, #598): a
+ * format Bower only keeps, a file over the size limit, one pandoc could not
+ * convert, or one the pre-scan quarantined.
+ */
+export const SET_ASIDE_REASONS = [
+  'kept-not-read',
+  'too-large',
+  'unconvertible',
+  'quarantined',
+] as const;
+export type SetAsideReason = (typeof SET_ASIDE_REASONS)[number];
+
+/** One item a run set aside (report v2, #598). */
+export interface SetAsideItem {
+  /** Where it was picked up, or where it was kept. */
+  path: string;
+  reason: SetAsideReason;
 }
 
 export interface Run {
@@ -107,6 +135,13 @@ export interface Run {
    * (#345); absent from runners that predate them.
    */
   items?: RunItem[];
+  /**
+   * Report v2 (#598): what the run set aside, each with its reason. A
+   * `quarantined` entry here is the same path as in `quarantined`.
+   */
+  setAside?: SetAsideItem[];
+  /** Report v2: one short clause about what Bower added besides filing. */
+  added?: string;
   /** Paths the pre-scan set aside under `0-Inbox/Quarantine/` this run. */
   quarantined?: string[];
   /** Paths (or `"*"` for the whole run) the post-run audit refused. */
