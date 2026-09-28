@@ -169,7 +169,7 @@ describe('Notes (#353)', () => {
     expect(foot.contains(query('.explorer-hidden'))).toBe(true);
     expect(health.textContent).toContain('Health check');
     expect(health.querySelector('.explorer-health-subtitle')?.textContent).toBe(
-      'Sunday · 2 small things to fix',
+      'Checked Sunday · 2 small things to fix',
     );
     expect(query('.explorer-hidden').textContent).toContain(
       "Bower's own files and dot-folders: hidden",

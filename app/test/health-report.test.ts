@@ -261,7 +261,9 @@ describe('healthRowSubtitle', () => {
   });
 
   it('singular for one', () => {
-    expect(healthRowSubtitle(1)).toBe('Checked Sunday · one small thing to fix');
+    expect(healthRowSubtitle(1)).toBe(
+      'Checked Sunday · one small thing to fix',
+    );
   });
 
   it('says the notes are in good shape at zero', () => {
