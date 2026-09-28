@@ -79,7 +79,7 @@ test('the empty query shows the PARA chips, Opened lately, Filed in the last tid
   await expect(page).toHaveURL(/\/note\//);
   await page.goto('/');
   await expect(
-    page.getByRole('button', { name: /Search or jump to a note/ }),
+    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
   ).toBeVisible();
 
   const dialog = await openSearch(page);
