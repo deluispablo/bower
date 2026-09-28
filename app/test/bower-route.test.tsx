@@ -372,6 +372,14 @@ describe('the confirmation line under the box (#507)', () => {
     return root.querySelector('.bower-send-confirm')?.textContent ?? null;
   }
 
+  it('is a live region present before anything is ever sent (#553)', async () => {
+    await mount();
+    const el = root.querySelector('.bower-send-confirm');
+    expect(el).not.toBeNull();
+    expect(el?.getAttribute('aria-live')).toBe('polite');
+    expect(el?.textContent).toBe('');
+  });
+
   it('says "Kept as a rule" for a new one', async () => {
     await mount();
     await send('From now on, never archive Money notes');
@@ -402,7 +410,8 @@ describe('the confirmation line under the box (#507)', () => {
   it('shows nothing sent idle (the row itself is confirmation enough)', async () => {
     await mount();
     await send('Which flat should I visit first?');
-    expect(confirmLine()).toBeNull();
+    // The live region (#553) stays mounted, just empty — not null.
+    expect(confirmLine()).toBe('');
   });
 
   it('clears on the next Send', async () => {
@@ -410,7 +419,7 @@ describe('the confirmation line under the box (#507)', () => {
     await send('From now on, never archive Money notes');
     expect(confirmLine()).toBe('Kept as a rule');
     await send('Make a packing list for my next trip');
-    expect(confirmLine()).toBeNull();
+    expect(confirmLine()).toBe('');
   });
 });
 
