@@ -160,7 +160,9 @@ describe('findingsIn', () => {
         '- [ ] **Orphan file: 2-Areas/Trips/old-plan.md** nothing links to it',
       ),
     ).toEqual([
-      { text: '**Orphan file: 2-Areas/Trips/old-plan.md** nothing links to it' },
+      {
+        text: '**Orphan file: 2-Areas/Trips/old-plan.md** nothing links to it',
+      },
     ]);
   });
 
