@@ -148,6 +148,38 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'note');
 });
 
+test("a note Bower wrote opens with Bower's note and What Bower used (#351)", async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+
+  const box = page.locator('.bower-note');
+  await expect(box).toBeVisible();
+  await expect(box.locator('.bower-note-title')).toHaveText("Bower's note");
+  // The word is always shown with the colour.
+  await expect(box.locator('.bower-note-word')).toHaveText([
+    'Fine',
+    'Check',
+    'Problem',
+  ]);
+  await expect(
+    page.getByRole('heading', { name: 'What Bower used', level: 2 }),
+  ).toBeVisible();
+  await expect(page.locator('.bower-sources li')).toHaveText([
+    'Bills and renewals (from your notes)',
+  ]);
+  await shot(page, testInfo, 'note-from-bower');
+});
+
 test('a missing note shows Not found', async ({ page }, testInfo) => {
   await openHome(page);
   await page.goto('/note/does-not-exist');
