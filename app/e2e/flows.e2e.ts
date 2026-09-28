@@ -2602,7 +2602,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
     0,
   );
   // The one More menu (#352): the board's header, then Ask Bower first.
-  await expect(menu).toContainText('PDF · 1-Projects / Kitchen Refresh');
+  await expect(menu).toContainText('PDF · Projects / Kitchen Refresh');
   await expect(menu.getByRole('menuitem').first()).toContainText(
     'Ask Bower about this',
   );
@@ -2643,10 +2643,10 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   await expect(cards.nth(0)).toContainText('Today, 07:51 · 3 min');
   await expect(cards.nth(0)).toContainText('Done');
   await expect(rowWith(0, 'Lease agreement 2026.pdf')).toContainText(
-    '→ 1-Projects / Flat hunt',
+    '→ Projects / Flat hunt',
   );
   await expect(rowWith(0, 'IMG_4471.jpg')).toContainText(
-    '→ 1-Projects / Flat hunt, renamed “Arlington Road, window sign”',
+    '→ Projects / Flat hunt, renamed “Arlington Road, window sign”',
   );
   await expect(cards.nth(1)).toContainText('Yesterday, 09:12 · 4 min');
   await expect(cards.nth(1)).toContainText('One thing set aside');
@@ -2680,10 +2680,10 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   await expect(cards).toHaveCount(3);
   await expect(cards.nth(0)).toContainText('Today, 10:30 · 1 min');
   await expect(rowWith(0, 'Boiler service invoice.pdf')).toContainText(
-    '→ 2-Areas / Home',
+    '→ Areas / Home',
   );
   await expect(rowWith(0, 'Tomato seedlings')).toContainText(
-    '→ 2-Areas / Garden',
+    '→ Areas / Garden',
   );
   const question = rowWith(0, 'What do I still need for Lisbon?');
   await expect(question).toContainText('→ Answers, read it');
