@@ -149,12 +149,44 @@ export function waitingNotes(files: readonly DriveFile[]): DriveFile[] {
   );
 }
 
+/**
+ * Every answered note: `YYYY-MM-DD <question>.md`, directly in `Answers/`
+ * (#465). Requests reads each one's own words (`answerQuestion`) once its
+ * text is fetched -- the file name alone, in `<question>`, is the agent's
+ * own short title for the note, not necessarily the sentence sent.
+ */
+export function answerNotes(files: readonly DriveFile[]): DriveFile[] {
+  return files.filter(
+    (file) =>
+      file.mimeType !== FOLDER_MIME &&
+      file.path === `${ANSWERS}/${file.name}` &&
+      ANSWER_NAME.test(file.name),
+  );
+}
+
+const ANSWER_HEADING = /^#\s+(.+?)\s*$/;
+
+/**
+ * An answer note's own question: the `# ` heading its body starts with
+ * (every scripted reply writes one, `demo/replies.ts`), past the
+ * frontmatter. `undefined` for an answer with no heading to read, so the
+ * caller falls back to the file name's own short title.
+ */
+function answerQuestion(note: string): string | undefined {
+  const line = firstLine(instructionBody(note));
+  return ANSWER_HEADING.exec(line)?.[1];
+}
+
 export interface RequestsInput {
   /** The folder listing (`useVault().files`). */
   files: readonly DriveFile[];
   /** When that listing was fetched (ISO-8601), `null` before the first one. */
   fetchedAt: string | null;
-  /** Instruction notes' content, by file id, for those read so far. */
+  /** An instruction or answer note's content, by file id, for those read so
+   * far (`useNoteTexts(waitingNotes(files).concat(answerNotes(files)))`,
+   * itself cache-first, #465): the answer's is its own words, past the
+   * frontmatter -- the file name's `<question>` is the agent's own short
+   * title for the note, not necessarily the sentence sent. */
   texts: ReadonlyMap<string, string>;
   /** Sent from this screen since it opened. */
   justSent: readonly SentRequest[];
@@ -176,6 +208,8 @@ export interface RequestsInput {
  *   was asked for; its words come from the note (`texts`), else from what
  *   this screen sent, else from the title in its name;
  * - a note in `Answers/` named `YYYY-MM-DD <question>.md` is **answered**;
+ *   its words come from the note's own first line (`texts`, #465), else the
+ *   short title in its name;
  * - a rule in `Rules.md` the owner asked for (`owner's request`, not
  *   paused) is **kept**.
  * Anything sent from this screen after the listing was fetched counts as
@@ -242,11 +276,17 @@ export function requestRows({
     const match = ANSWER_NAME.exec(file.name);
     if (match === null) continue;
     const [, year = '', month = '', day = '', question = ''] = match;
+    // The note's own question, its first line past the frontmatter, once
+    // it is read; the file name's own short title (`question`, the regex
+    // above) until then (#465).
+    const note = texts.get(file.id);
+    const text =
+      (note === undefined ? undefined : answerQuestion(note)) ?? question;
     rows.push({
       key: `answer-${file.id}`,
       state: 'answered',
-      text: question,
-      kind: sentenceKind(question),
+      text,
+      kind: sentenceKind(text),
       since: file.modifiedTime ?? localIso(year, month, day) ?? '',
       fileId: file.id,
     });
