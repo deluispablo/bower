@@ -1174,6 +1174,28 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
   await expect(rule.getByText('Paused', { exact: true })).toBeVisible();
 });
 
+test('the Bower box confirmation is a live region that exists before Send (#553)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  const confirm = page.locator('.bower-send-confirm');
+  // Present and wired for announcement before anything was ever sent —
+  // an element only mounted once there is text is too late for a screen
+  // reader to pick up.
+  await expect(confirm).toHaveAttribute('aria-live', 'polite');
+  await expect(confirm).toHaveText('');
+
+  const box = page.getByRole('textbox', {
+    name: 'Tell Bower what to do, or ask it something',
+  });
+  await box.fill('From now on, file every ticket under Travel');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  // Same node, now holding the confirmation text.
+  await expect(confirm).toHaveText('Kept as a rule');
+});
+
 test('a "from now on" sentence is kept at once as a rule, no run (#343)', async ({
   page,
 }, testInfo) => {
