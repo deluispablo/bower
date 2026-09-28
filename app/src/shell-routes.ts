@@ -29,6 +29,9 @@ const DEMO_SHELL_PATHS = new Set(['/login', '/not-invited']);
 
 /** The Bower tab (#317), which replaced `/tell`. */
 export const BOWER_PATH = '/bower';
+/** The Bower tab opened on Activity (#345): Home's Last tidy-up card and
+ * its "See what I did" link land on the last tidy-up's card. */
+export const ACTIVITY_PATH = '/bower?show=activity';
 
 /** The Ideas screen (#332): reached from the Bower tab's tip and every
  * help sheet's Ideas button; Back goes to the Bower tab. */

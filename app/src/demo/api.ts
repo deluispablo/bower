@@ -71,6 +71,7 @@ export function createDemoWorker(
       run: await server.startProcess(scope),
     }),
     getStatus: () => reply(() => server.status()),
+    getRuns: () => reply(() => server.runs()),
     getPushPublicKey: () =>
       reply(() => {
         throw notInDemo('Notifications are not available in the demo.');

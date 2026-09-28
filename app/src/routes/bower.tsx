@@ -13,7 +13,9 @@
  * `rules-panel.tsx`): a rule's Change it fills the box and Send then
  * rewrites that rule in `Rules.md` instead of sending a note; Apply it
  * sends the job note "Apply this rule to what is already filed".
- * Activity holds one sentence until its screen lands (#345). From 1200 px
+ * Activity (#345, board Phone-Bower-Activity, `activity-panel.tsx`) shows
+ * one card per tidy-up, newest first; `/bower?show=activity` (Home's Last
+ * tidy-up card) opens on it. From 1200 px
  * the three segments are three columns instead (#357, Desktop-Bower
  * board): the same header height and top line, the box spanning above.
  *
@@ -45,6 +47,7 @@ import type {
   RequestState,
   SentRequest,
 } from '../bower-tab.js';
+import { ActivityPanel } from '../components/activity-panel.js';
 import { Bird } from '../components/bird.js';
 import {
   IconChat,
@@ -398,7 +401,9 @@ export function Bower(): JSX.Element {
   const [justKept, setJustKept] = useState<KeptSentence[]>([]);
   // Notes removed from here: gone from the list before the listing knows.
   const [removed, setRemoved] = useState<ReadonlySet<string>>(() => new Set());
-  const [segment, setSegment] = useState<Segment>('rules');
+  const [segment, setSegment] = useState<Segment>(() =>
+    query.show === 'activity' ? 'activity' : 'rules',
+  );
   const wide = useMediaQuery(WIDE_QUERY);
   const [examples] = useState(() => examplesFor(visits++));
   // `null` until the person toggles it: open the first time, closed after.
@@ -766,12 +771,8 @@ export function Bower(): JSX.Element {
         )}
       </>
     ),
-    activity: (
-      <p class="bower-panel-note">
-        What each tidy-up did will show here: what went where, and what was set
-        aside.
-      </p>
-    ),
+    // Read only when shown: `GET /runs` is a few KV reads per visit.
+    activity: segment === 'activity' || wide ? <ActivityPanel /> : <></>,
   };
 
   return (

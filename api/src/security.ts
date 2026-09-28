@@ -178,6 +178,7 @@ export const COOKIE_ROUTES: readonly string[] = [
   '/vault',
   '/process',
   '/status',
+  '/runs',
   '/push/subscribe',
 ];
 
