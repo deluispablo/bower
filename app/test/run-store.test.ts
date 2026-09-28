@@ -532,6 +532,11 @@ describe('lastFinishedRun (#321)', () => {
     expect(lastFinishedRun(done, failed)).toBe(failed);
   });
 
+  // #498: this is what keeps the Last tidy-up card showing the previous
+  // run's line while a new one goes -- `LastTidyUpCard`
+  // (`last-tidy-up-card.test.tsx`) only ever reads "No tidy-up yet" for a
+  // `null` run, and this is what stops `lastFinished` from going `null`
+  // just because a new run started.
   it('keeps the one before while the next run goes, or none is known', () => {
     expect(lastFinishedRun(done, running)).toBe(done);
     expect(lastFinishedRun(done, null)).toBe(done);

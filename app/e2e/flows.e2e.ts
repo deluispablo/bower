@@ -154,6 +154,29 @@ test.describe('open Home', () => {
   });
 });
 
+test.describe('intro page 8, the desktop scroll cue (#509)', () => {
+  test.use({ introSeen: false });
+
+  test('the panel fades at the bottom where the case overflows it', async ({
+    page,
+  }, testInfo) => {
+    await page.goto('/welcome');
+    const next = page.getByRole('button', { name: 'Next', exact: true });
+    for (let i = 0; i < 7; i += 1) await next.nth(i).click();
+    await expect(
+      page.getByRole('heading', { name: 'The archive: finished, kept' }),
+    ).toBeInViewport();
+    // Page 8's copy ends as a sentence, not a fragment.
+    await expect(page.getByText('It asks before it archives.')).toBeVisible();
+    const panel = page.locator('.intro-page--8');
+    if (testInfo.project.name === 'desktop') {
+      // The fade only applies from the desktop breakpoint (intro.css).
+      await expect(panel).toHaveCSS('background-image', /gradient/);
+    }
+    await shot(page, testInfo, 'intro-8-scroll-cue');
+  });
+});
+
 test.describe('first visit, Skip', () => {
   test.use({ introSeen: false });
 
@@ -728,6 +751,51 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toBeVisible();
   await sheet.getByRole('button', { name: 'Close' }).click();
   await expect(sheet).toBeHidden();
+});
+
+test('the Last tidy-up card keeps the previous line while the next run goes (#498)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet.getByText('3 files processed')).toBeVisible({
+    timeout: 20_000,
+  });
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  // The one-time push prompt (#39) can slide up over the bottom of the
+  // screen at the same moment as this first `done`; dismiss it so it
+  // never intercepts a later click.
+  const pushPrompt = page.locator('.push-prompt');
+  if (await pushPrompt.isVisible()) {
+    await pushPrompt.getByRole('button', { name: /Not now|Got it/ }).click();
+  }
+
+  const lastCard = visible(
+    page.locator('.home-card', { hasText: 'Last tidy-up' }),
+  );
+  await expect(lastCard).toContainText('2 filed · 1 answered');
+
+  // A second batch, then a second tidy-up: while it goes, the card must
+  // still read the first run's line, not "No tidy-up yet" — the board
+  // (Phone-Home-Running) keeps it on screen the whole time.
+  await navigate(page, /^Add$/);
+  await page.locator('#add-link').fill('https://example.com/second');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
+  await navigate(page, /^Home$/);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(sheet).toBeVisible();
+  await expect(lastCard).toContainText('2 filed · 1 answered');
+  await expect(lastCard).not.toContainText('No tidy-up yet');
+  await shot(page, testInfo, 'last-tidy-up-during-next-run');
 });
 
 test('the working sheet: the bird between Inbox and the folders, the rows as they land (#338)', async ({

@@ -95,7 +95,7 @@ if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
   fi
   body='{"files":[]}'
   case "$SMOKE_SCENARIO" in
-    instruction | rulesok)
+    instruction | rulesok | answer)
       body='{"files":[{"name":"Bower - 2026-01-15 0900 Tidy up.md"}]}'
       ;;
     scope)
@@ -278,7 +278,8 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         ;;
     esac
     if [ "$SMOKE_SCENARIO" = instruction ] || [ "$SMOKE_SCENARIO" = listfail ] ||
-      [ "$SMOKE_SCENARIO" = rulesok ] || [ "$SMOKE_SCENARIO" = scope ]; then
+      [ "$SMOKE_SCENARIO" = rulesok ] || [ "$SMOKE_SCENARIO" = scope ] ||
+      [ "$SMOKE_SCENARIO" = answer ]; then
       # Two instruction-shaped notes directly in 0-Inbox/: one the app wrote
       # from Tell Bower (the Drive listing names it in "instruction"), and a
       # lookalike with the same name shape and frontmatter uploaded some
@@ -529,6 +530,21 @@ case "$SMOKE_SCENARIO" in
   # PARA folders as they are, each with a hub line, an index.md row and a
   # Filed: log line, and no summary note; the clip is the content, so it
   # becomes a note and the raw clip goes to Processed/.
+  # A question sent from the app (issue #371): the answer starts with the
+  # note-from-Bower block the app renders as a box.
+  answer)
+    mkdir -p Answers
+    printf -- '%s\n' '---' 'title: Which flat should I visit first?' 'type: answer' \
+      'tags: [answer, home]' 'created: 2026-01-15' '---' "## Bower's note" \
+      '- ✅ Arlington Road is 10 % under the area average.' \
+      '- ⚠️ The Kingsland Road listing leaves out the deposit.' \
+      '- ❌ The Camden lease asks for five weeks of deposit.' '' '## Why' \
+      'Rent and deposit compared from the two listings.' '' '## What Bower used' \
+      '- [[Lease agreement 2026.pdf]] (from the file)' \
+      '- Camden Town average rent (looked up on the web)' \
+      '- Bike time to the office (reasoned)' >'Answers/2026-01-15 Which flat first.md'
+    mv '0-Inbox/Bower - 2026-01-15 0900 Tidy up.md' 0-Inbox/Processed/
+    ;;
   # A name that says nothing (issue #369): the photo is renamed from its
   # content, indexed with its type and origin, and the rename logged.
   rename)
@@ -715,7 +731,7 @@ expect_content_free() {
     evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
-    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington \
+    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington 'Which flat' \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -794,6 +810,46 @@ expect_no_copy_or_convert_tool() {
   fi
 }
 
+
+# The shape of "A note from Bower" (issue #371): `type: answer` in the
+# frontmatter; `## Bower's note` as the first section, bullets only, each
+# starting with exactly one of the three markers; then `## Why`; then
+# `## What Bower used`, each source bullet ending with its origin in
+# brackets. Later sections (the body of a job's result) are not checked.
+# Usage: expect_bower_note <label> <text>
+expect_bower_note() {
+  local label=$1 text=$2 line section='' seen=''
+  grep -Fxq 'type: answer' <<<"$text" || die "$label: no type: answer"
+  while IFS= read -r line; do
+    case "$line" in
+      '## '*)
+        section=$line
+        seen="$seen|$line"
+        continue
+        ;;
+      '' | '```'*) continue ;;
+    esac
+    case "$section" in
+      "## Bower's note")
+        case "$line" in
+          '- ✅ '* | '- ⚠'* | '- ❌ '*) ;;
+          *) die "$label: a line in Bower's note without one of the three markers" ;;
+        esac
+        ;;
+      '## What Bower used')
+        case "$line" in
+          '- '*' (from the file)' | '- '*' (looked up on the web)' | \
+            '- '*' (from what you told me)' | '- '*' (reasoned)') ;;
+          '- '*) die "$label: a source without its origin in brackets" ;;
+        esac
+        ;;
+    esac
+  done <<<"$text"
+  case "$seen" in
+    "|## Bower's note|## Why|## What Bower used" | "|## Bower's note|## Why|## What Bower used|"*) ;;
+    *) die "$label: sections are not Bower's note, Why, What Bower used" ;;
+  esac
+}
 # --- scenarios --------------------------------------------------------------
 
 # 0. The ingest prompt (verbatim what run.sh passes to `claude -p`) must
@@ -826,6 +882,23 @@ grep -Fq 'at most 60 characters' <<<"$RULEBOOK" ||
   die 'the rulebook does not cap a new file name at 60 characters (#369)'
 grep -Fq "Never put the owner's name or any other person's name in a file name" <<<"$RULEBOOK" ||
   die 'the rulebook lets a person name reach a file name (#369)'
+grep -Fq 'starts with the **A note from Bower** template in `CLAUDE.md`' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt does not point at the note-from-Bower template (#371)'
+BOWER_NOTE_TEMPLATE=$(awk '/^\*\*A note from Bower\*\*/ { f = 1 }
+  f && /^```markdown$/ { g = 1; next }
+  g && /^```$/ { exit }
+  g' <<<"$RULEBOOK")
+[ -n "$BOWER_NOTE_TEMPLATE" ] || die 'the rulebook has no note-from-Bower template (#371)'
+expect_bower_note 'the rulebook template (#371)' "$BOWER_NOTE_TEMPLATE"
+# The shape check itself rejects a fourth marker and a source with no origin.
+if (expect_bower_note 'bad marker' "$(printf -- '%s\n' 'type: answer' "## Bower's note" '- 🟡 Maybe.' '## Why' 'x' '## What Bower used' '- [[a]] (reasoned)')") 2>/dev/null; then
+  die 'the note shape check accepted a marker other than the three'
+fi
+if (expect_bower_note 'no origin' "$(printf -- '%s\n' 'type: answer' "## Bower's note" '- ✅ Fine.' '## Why' 'x' '## What Bower used' '- [[a]]')") 2>/dev/null; then
+  die 'the note shape check accepted a source with no origin'
+fi
+grep -Fq 'no other marker or emoji' <<<"$RULEBOOK" ||
+  die 'the rulebook does not keep Bower'"'"'s note to the three markers (#371)'
 grep -Fq '`0-Inbox/Quarantine/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not tell the agent to leave Quarantine/ alone'
 grep -Fq 'listed by the runner' <<<"$INGEST_PROMPT" ||
@@ -1721,3 +1794,18 @@ grep -q ' 1 requests sent during the run left for the next tidy-up$' "$STATE/out
 expect_content_free
 expect_cleaned_up
 echo "ok a request sent during a run waits for the next tidy-up"
+
+# 32. A note from Bower (issue #371): a question sent from the app is
+# answered with a note that starts with Bower's note (only the three
+# markers), then Why, then What Bower used with each source's origin; it
+# reaches Drive like any other change.
+run_case answer
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+answer_note="$STATE/remote/Answers/2026-01-15 Which flat first.md"
+[ -f "$answer_note" ] || die 'the answer did not reach Drive'
+expect_bower_note 'the stubbed answer' "$(cat "$answer_note")"
+grep -Fxq 'Answers/2026-01-15 Which flat first.md' "$STATE/uploaded.txt" || die 'the answer was not uploaded'
+expect_content_free
+expect_cleaned_up
+echo "ok an answer starts with Bower's note, Why and What Bower used"

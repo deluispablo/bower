@@ -1021,6 +1021,28 @@
 
   .intro-page {
     padding: var(--space-8) 36px 0;
+    /* A scroll cue for the case pages (5-8), which overflow the panel's
+     * fixed height (#509): a bottom fade that only shows while there is
+     * more to scroll to. `background-attachment: local` scrolls the cover
+     * layer with the content so it lands over the true end and cancels
+     * the fade layer (fixed to the box, `scroll`) exactly when nothing is
+     * left below; a page that already fits shows no fade at all. */
+    background-color: var(--color-bg);
+    background-image:
+      linear-gradient(rgba(0, 0, 0, 0), var(--color-bg) 70%),
+      radial-gradient(
+        farthest-side at 50% 100%,
+        rgba(0, 0, 0, 0.16),
+        rgba(0, 0, 0, 0)
+      );
+    background-repeat: no-repeat;
+    background-position:
+      0 100%,
+      0 100%;
+    background-size:
+      100% 40px,
+      100% 14px;
+    background-attachment: local, scroll;
   }
 
   .intro-heading {

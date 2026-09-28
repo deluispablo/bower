@@ -2,7 +2,7 @@
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-28
-bower_rules_version: 8
+bower_rules_version: 9
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -106,10 +106,31 @@ Leave sensitive IDs (passport, tax numbers, account numbers) in the original, no
 4. How it applies to the owner
 5. Source
 
-**Answer** (`Answers/<YYYY-MM-DD> <question>.md`):
-1. The question, as asked
-2. The answer, direct, with `[[wikilinks]]` to the notes used
-3. What is missing from the vault, if anything
+**A note from Bower** (every note you write because the owner asked: the answer to a question in `Answers/<YYYY-MM-DD> <question>.md`, a job's result, what a context note or a rule asked for). The app shows its first section as a box, so it starts exactly like this:
+```markdown
+---
+title: <the question or the job, in one line>
+type: answer
+tags: [answer, <domain>]
+created: YYYY-MM-DD
+---
+## Bower's note
+- ✅ <what is fine, one line>
+- ⚠️ <what to check, one line>
+- ❌ <a problem, one line>
+
+## Why
+<the reasoning, short, with [[wikilinks]] to the notes used; what the notes do not hold, if anything>
+
+## What Bower used
+- [[<note or file>]] (from the file)
+- <a fact from the web> (looked up on the web)
+- <something the owner said in the request> (from what you told me)
+- <a conclusion drawn from the above> (reasoned)
+```
+- `## Bower's note` comes first, as bullets only, each starting with exactly one of ✅ (fine), ⚠️ (check) or ❌ (problem); no other marker or emoji anywhere in it. Use only the markers that apply.
+- `## What Bower used` lists every source, each ending with its origin in brackets: `(from the file)`, `(looked up on the web)`, `(from what you told me)` or `(reasoned)`.
+- The body of the result (a table, a summary, a translation) follows after `## What Bower used`.
 
 ## Workflows
 
@@ -136,7 +157,7 @@ The owner is talking to you through the app. Before you start, the runner checks
    - If the rule describes a repeatable multi-step process (for example how to handle a specific kind of document), write it as a workflow section in `Rules.md`.
    - Append to `log.md`: `Rule added/changed: <one line>`.
 2. **One-off task** ("compare…", "summarise…", "create a table of…", "this was misfiled, move it to…"):
-   - Do it. Put the result where it belongs (a note in the relevant project/area, or `Answers/` if it is analysis). Link it. Log it.
+   - Do it. Put the result where it belongs (a note in the relevant project/area, or `Answers/` if it is analysis), written as **A note from Bower**. Link it. Log it.
    - **Move request** (the owner says a note is misfiled and names the right folder, including one sent from the note's own "This was misfiled" row): move the note there, update `index.md`, and append `Correction: <from folder> -> <to folder> (<YYYY-MM-DD>)` to `log.md` instead of a plain log line. When that same `<from folder> -> <to folder>` pair already appears in an earlier `Correction:` line in `log.md`, also file a proposal (kind `rule`, see Proposals) suggesting notes like this one be filed under `<to folder>` directly, with the two `Correction:` lines as evidence.
 3. **Question** ("what is…", "when did…", "where is…"):
    - Run the Query workflow and write the answer to `Answers/<YYYY-MM-DD> <question>.md`. Log it.
@@ -146,7 +167,7 @@ If the note is ambiguous, pick the most likely reading, say so at the top of wha
 ### Query
 1. Read `index.md` to find relevant notes; read them.
 2. Answer with `[[wikilinks]]` to the notes used.
-3. Substantial, reusable answers become a note in `Answers/`.
+3. Write the answer as **A note from Bower** (see Note templates) in `Answers/<YYYY-MM-DD> <question>.md`: `type: answer`, `## Bower's note` with only ✅ ⚠️ ❌ bullets, `## Why`, `## What Bower used` with each source's origin in brackets.
 
 ### Lint (weekly, or on request)
 1. Orphan notes (not linked from `index.md` or any hub).
