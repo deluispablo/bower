@@ -237,7 +237,7 @@ Bower recognises eight kinds of document. For each, the list gives the `kind` va
 
 **Long documents.**
 - However long the document, the box stays at three lines and the facts go to the frontmatter fields, never into the box.
-- A PDF over 10 pages gets a `## Where to look` list right after the box: the parts the owner is most likely to need, one per line, each starting with a link that opens the PDF at its page, `- [p. <n>](<<file name>#page=<n>>) <what is there>`. Then the short body.
+- A PDF over 10 pages gets a `## Where to look` list right after the box: the parts the owner is most likely to need, one per line, each starting with a link that opens the PDF at its page, `- [[<file name>#page=<n>|p. <n>]]: <what is there>` (a wikilink, which also handles spaces in the name). Then the short body.
 
 Example, the companion note next to `Lease agreement 2026.pdf` (42 pages):
 ```markdown
@@ -260,10 +260,10 @@ notice: Two months, after the first six
 > Break clause after six months, two months' notice. (from the file)
 
 ## Where to look
-- [p. 4](<Lease agreement 2026.pdf#page=4>) Rent, deposit and when it is paid
-- [p. 12](<Lease agreement 2026.pdf#page=12>) The break clause
-- [p. 19](<Lease agreement 2026.pdf#page=19>) Pets: none without written consent
-- [p. 31](<Lease agreement 2026.pdf#page=31>) Who repairs what
+- [[Lease agreement 2026.pdf#page=4|p. 4]]: Rent, deposit and when it is paid
+- [[Lease agreement 2026.pdf#page=12|p. 12]]: The break clause
+- [[Lease agreement 2026.pdf#page=19|p. 19]]: Pets: none without written consent
+- [[Lease agreement 2026.pdf#page=31|p. 31]]: Who repairs what
 
 The lease for [[Arlington Road, 2 bed]], for the [[Flat hunt]].
 ```
