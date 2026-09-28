@@ -41,6 +41,8 @@ test('a note has no button-name or link-name violations', async ({ page }) => {
   await switcher.getByRole('combobox').fill('Lisbon');
   await switcher
     .getByRole('option', { name: /Lisbon Trip/ })
+    // The folder of the same name is listed first (#593): open the note.
+    .filter({ has: page.locator('[data-kind="note"]') })
     .first()
     .click();
   await expect(page).toHaveURL(/\/note\//);

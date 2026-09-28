@@ -340,6 +340,8 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await switcher.getByRole('combobox').fill('Lisbon');
   await switcher
     .getByRole('option', { name: /Lisbon Trip/ })
+    // The folder of the same name is listed first (#593): open the note.
+    .filter({ has: page.locator('[data-kind="note"]') })
     .first()
     .click();
 
@@ -1877,6 +1879,8 @@ test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
   await switcher.getByRole('combobox').fill('Lisbon');
   await switcher
     .getByRole('option', { name: /Lisbon Trip/ })
+    // The folder of the same name is listed first (#593): open the note.
+    .filter({ has: page.locator('[data-kind="note"]') })
     .first()
     .click();
   await expect(page).toHaveURL(/\/note\//);
@@ -1905,6 +1909,8 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
   await switcher.getByRole('combobox').fill('Lisbon');
   await switcher
     .getByRole('option', { name: /Lisbon Trip/ })
+    // The folder of the same name is listed first (#593): open the note.
+    .filter({ has: page.locator('[data-kind="note"]') })
     .first()
     .click();
   await expect(page).toHaveURL(/\/note\//);
