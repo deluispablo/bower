@@ -17,6 +17,7 @@ import { summarise } from '../src/health-report.js';
 import { runCounts } from '../src/home.js';
 import { parseFrontmatter } from '../src/markdown/frontmatter.js';
 import { instructionFileName, instructionNote } from '../src/tell.js';
+import { pinnedOf } from '../src/pins.js';
 import { DONE_MS, QUEUED_MS } from '../src/demo/server.js';
 
 const START = new Date('2026-09-27T10:00:00.000Z');
@@ -119,6 +120,36 @@ describe('demo mode', () => {
 
     const found = await drive.searchFullText('sintra');
     expect(found.map((f) => f.name)).toContain('Things to see in Lisbon.md');
+  });
+
+  it('pins Flat hunt from the fixture (#489, Demo-Home board)', async () => {
+    // A note pin on the hub note itself, not a folder pin: the folder
+    // note map is hydrated after every regular note
+    // (`hydratePinnedAt`, `vault-store.tsx`), capped at
+    // `PINNED_HYDRATION_FETCH_CAP` fetches per load, and this fixture
+    // has around 30 notes — a folder pin would never be reached on a
+    // first, cold-cache visit. Flat hunt sorts 4th by path, well inside
+    // the cap.
+    const flatHuntPin = await drive.getText(
+      (await fileAt('1-Projects/Flat hunt/Flat hunt.md')).id,
+    );
+    expect(pinnedOf(flatHuntPin)).not.toBeNull();
+
+    // Lisbon Trip carried the fixture's only pin before #489; the board
+    // pins Flat hunt instead.
+    const lisbonHub = await drive.getText(
+      (await fileAt('1-Projects/Lisbon Trip/Lisbon Trip.md')).id,
+    );
+    expect(pinnedOf(lisbonHub)).toBeNull();
+
+    // Shopping list (2-Areas/Home) exists per the board, but is not
+    // pinned: it sorts near the middle of the fixture's notes, past the
+    // hydration cap, so pinning it would not reliably show on a first
+    // visit either — see the PR's "Left out".
+    const shoppingList = await drive.getText(
+      (await fileAt('2-Areas/Home/Shopping list.md')).id,
+    );
+    expect(pinnedOf(shoppingList)).toBeNull();
   });
 
   it('plays Tidy up: queued, running filing one by one, done', async () => {

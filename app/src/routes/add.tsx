@@ -14,7 +14,12 @@ import {
   useAddQueue,
   type QueueItem,
 } from '../add-queue-store.js';
-import { ADD_HINT_TEXT, addHintLead, linkNoteName } from '../add.js';
+import {
+  ADD_HINT_TEXT,
+  DEMO_ADD_HINT_TEXT,
+  addHintLead,
+  linkNoteName,
+} from '../add.js';
 import { isDemo } from '../api.js';
 import { Bird } from '../components/bird.js';
 import {
@@ -71,6 +76,12 @@ const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
  * (`routes/settings.tsx`) keeps its own identical constant, same as its
  * existing `NOT_IN_DEMO`, rather than a cross-route import. */
 const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
+
+/** The other two doors' subtitles in the demo (#489, `Demo-Add` board):
+ * both still work in the page, but the copy says so and drops "voice
+ * memos" (never true of a photo or drag-and-drop in the demo). */
+const DEMO_TAKE_PHOTO_SUBTITLE = 'In the demo it stays in the page';
+const DEMO_CHOOSE_FILES_SUBTITLE = 'Photos, PDFs, screenshots';
 
 /** Files copied from one picked Drive folder, at most. */
 export const MAX_FOLDER_FILES = 50;
@@ -510,7 +521,11 @@ export function Add() {
             </span>
             <span class="add-door-text">
               <b>Take a photo</b>
-              <span>A receipt, a sign, a page of a book</span>
+              <span>
+                {isDemo()
+                  ? DEMO_TAKE_PHOTO_SUBTITLE
+                  : 'A receipt, a sign, a page of a book'}
+              </span>
             </span>
             <IconChevronRight />
           </button>
@@ -525,7 +540,11 @@ export function Add() {
           </span>
           <span class="add-door-text">
             <b>Choose files</b>
-            <span>Photos, PDFs, screenshots, voice memos</span>
+            <span>
+              {isDemo()
+                ? DEMO_CHOOSE_FILES_SUBTITLE
+                : 'Photos, PDFs, screenshots, voice memos'}
+            </span>
           </span>
           <IconChevronRight />
         </button>
@@ -705,7 +724,8 @@ export function Add() {
           </span>
           <div class="add-hint-body">
             <p>
-              <b>{addHintLead(pending)}</b> {ADD_HINT_TEXT}
+              <b>{addHintLead(pending)}</b>{' '}
+              {isDemo() ? DEMO_ADD_HINT_TEXT : ADD_HINT_TEXT}
             </p>
             <ProcessButton />
           </div>
