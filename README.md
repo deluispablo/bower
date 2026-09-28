@@ -47,9 +47,9 @@ That is the job Bower does for your notes. It collects what you throw at it (pho
 
 1. **Add something.** From your phone or your PC: drop a file, share from any app, paste a link, or just type.
 2. **Tap Tidy up.** Nothing runs on a schedule. When you tap, the bird wakes up in the background and you carry on.
-3. **It reads and understands it.** Every word, the photos too; it pulls out the numbers, dates and names that matter.
-4. **It files it.** In the folder you told it to use, or, where you said nothing, where PARA says: a project if it has an end, an area if it is ongoing, a resource if it is reference, the archive when it is done. It writes why into the note.
-5. **It looks things up and writes the note.** What the thing left out (the walk to the station, the company behind the ad), then a note per thing and one that sums up, linked to what you already have.
+3. **It reads enough to know what it is.** A receipt, a lease, a photo of a sign, a job offer.
+4. **It files it.** The original itself moves into the folder you told it to use, or, where you said nothing, where PARA says: a project if it has an end, an area if it is ongoing, a resource if it is reference, the archive when it is done. A name that says nothing (`IMG_4471.jpg`) becomes one that does; the folder's page and the index get one line each. No summary, no copy, no translation unless you ask.
+5. **It writes a note when there is something to write.** A web clip or a saved link becomes a note; a Word, OpenDocument, HTML, EPUB or RTF document gets a Markdown copy filed next to the original; and when you say what you want (**What is this?** on Add, or a rule), it does that too: a table, a summary, a translation. With **Let Bower look things up on the web** turned on in Settings, and allowed by whoever runs your Bower, it may search the web to fill in what a document leaves out.
 6. **It remembers and connects.** Ask once and it becomes a rule in your rulebook. Everything it keeps for you is one more thing it can join to the next: the job ad gets a commute from the flat you shortlisted.
 7. **Read it anywhere.** In the app, or in Obsidian on the same folder.
 
