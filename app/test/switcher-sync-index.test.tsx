@@ -80,6 +80,10 @@ vi.mock('../src/drive.js', async (importOriginal) => ({
   searchFullText,
 }));
 vi.mock('../src/cache.js', () => ({ loadNote }));
+vi.mock('../src/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/api.js')>()),
+  getRuns: () => Promise.resolve({ runs: [] }),
+}));
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => ({ index: INDEX, files: FILES }),

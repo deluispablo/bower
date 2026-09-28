@@ -37,6 +37,8 @@ import {
 } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
+import { getRuns } from '../api.js';
+import type { Run } from '../api.js';
 import { loadNote } from '../cache.js';
 import { FOLDER_MIME, searchFullText } from '../drive.js';
 import type { DriveFile } from '../drive.js';
@@ -509,7 +511,11 @@ function SwitcherPanel({
 }): JSX.Element {
   const { path: location, route } = useLocation();
   const { index, files } = useVault();
-  const { tidyUp, lastFinished } = useRun();
+  const { tidyUp, lastFinished: seenRun } = useRun();
+  // A fresh page has seen no run yet: the last tidy-up's report comes from
+  // the Worker's history (`GET /runs`, newest first).
+  const [reportedRun, setReportedRun] = useState<Run | null>(null);
+  const lastFinished = seenRun ?? reportedRun;
 
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState<SearchStatus>('idle');
@@ -524,6 +530,7 @@ function SwitcherPanel({
   );
   const [kindChip, setKindChip] = useState<KindChip>('all');
   const [time, setTime] = useState<TimeKey>('any');
+  const [timeOpen, setTimeOpen] = useState(false);
   // Bumped when the index learns something on its own (a restored copy, note
   // text read from the cache), so the results are worked out again.
   const [indexVersion, setIndexVersion] = useState(0);
@@ -539,6 +546,21 @@ function SwitcherPanel({
   const [now] = useState(() => Date.now());
 
   useFocusTrap(panelRef, closeSwitcher);
+
+  useEffect(() => {
+    if (seenRun !== null) return;
+    let cancelled = false;
+    getRuns()
+      .then(({ runs }) => {
+        if (!cancelled) setReportedRun(runs[0] ?? null);
+      })
+      .catch((error: unknown) => {
+        console.error('The last tidy-up could not be read', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [seenRun]);
 
   // The copy saved on this device, then the note text already cached: each
   // can change what matches, so each bumps the version when it did.
@@ -935,30 +957,39 @@ function SwitcherPanel({
                   {label} <i>{count}</i>
                 </button>
               ))}
-              <label
+              <button
+                type="button"
                 class="switcher-chip switcher-time"
+                aria-expanded={timeOpen}
                 data-active={time !== 'any'}
+                onClick={() => {
+                  setTimeOpen((open) => !open);
+                }}
               >
                 <IconClock />
-                <select
-                  aria-label="Time"
-                  value={time}
-                  onChange={(event) => {
-                    setTime(
-                      (event.target as HTMLSelectElement).value as TimeKey,
-                    );
-                  }}
-                >
-                  {(Object.keys(TIME_LABELS) as TimeKey[]).map((key) => (
-                    <option key={key} value={key}>
-                      {TIME_LABELS[key]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                {TIME_LABELS[time]}
+              </button>
             </>
           )}
         </div>
+        {searching && timeOpen && (
+          <div class="switcher-chips" role="group" aria-label="Time">
+            {(Object.keys(TIME_LABELS) as TimeKey[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                class="switcher-chip"
+                aria-pressed={time === key}
+                onClick={() => {
+                  setTime(key);
+                  setTimeOpen(false);
+                }}
+              >
+                {TIME_LABELS[key]}
+              </button>
+            ))}
+          </div>
+        )}
         <div class="switcher-body">
           {scope !== null && (
             <button
