@@ -8,11 +8,14 @@ import type { Me } from '../src/api.js';
 import type { DriveFile, DriveToken } from '../src/drive.js';
 import type * as DriveModule from '../src/drive.js';
 import type * as PickerModule from '../src/picker.js';
+import type { VaultIndex } from '../src/vault-index.js';
 
 // #217: Add's "From your Drive" button. #218: Docs, Sheets and Slides are
-// exported instead of copied. The Picker library, Drive and the session are
-// faked; `filesFromPickerResponse`, `exportPlanFor` and, unless a test says
-// otherwise, `loadPicker` are the real ones.
+// exported instead of copied. #312: a pick already in the Bower folder, at
+// any depth, or named like a reserved folder, is refused. The Picker
+// library, Drive and the session are faked; `filesFromPickerResponse`,
+// `exportPlanFor` and, unless a test says otherwise, `loadPicker` are the
+// real ones.
 
 const FOLDER = 'application/vnd.google-apps.folder';
 const SCRIPT = 'script[src="https://apis.google.com/js/api.js"]';
@@ -92,9 +95,17 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
   useRun: () => ({ phase: 'idle', tidyUp: vi.fn(), openSheet: vi.fn() }),
 }));
+// `index` is a plain mutable holder, not a `vi.hoisted` state object: this
+// mock factory only runs (lazily) once `mountAdd`'s dynamic `import()`
+// resolves, by which point the whole file, including `vaultIndex`, has
+// already run — the same reason `state.online` above works unhoisted.
+const vaultIndex: {
+  current: Pick<VaultIndex, 'folders' | 'agentSettingsFolder'> | null;
+} = { current: null };
+
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ refresh: vi.fn() }),
+  useVault: () => ({ refresh: vi.fn(), index: vaultIndex.current }),
 }));
 
 let root: HTMLElement;
@@ -148,6 +159,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
   state.online = true;
+  vaultIndex.current = null;
 });
 
 describe('Add from your Drive', () => {
@@ -240,9 +252,57 @@ describe('Add from your Drive', () => {
       docs: [{ id: 'FOLDER_ID', name: 'Bower', mimeType: FOLDER }],
     });
     await waitFor(() =>
-      (root.textContent ?? '').includes('Your Bower folder was left out'),
+      (root.textContent ?? '').includes(
+        'That is already in your Bower folder.',
+      ),
     );
     expect(listFolder).not.toHaveBeenCalledWith('FOLDER_ID');
+    expect(copyOrExportIntoInbox).not.toHaveBeenCalled();
+  });
+
+  it('leaves out a pick from deep inside the Bower folder (#312)', async () => {
+    // "1-Projects/Flat hunt" is a folder the app's own index already knows
+    // about (`index.folders`), two levels under the Bower root: a pick
+    // sitting right inside it is refused the same as one at the root.
+    vaultIndex.current = {
+      folders: [
+        driveFile('PROJECTS_ID', '1-Projects', FOLDER),
+        driveFile('FLAT_HUNT_ID', 'Flat hunt', FOLDER),
+      ],
+    };
+    await mountAdd('test-key');
+    await pick({
+      action: 'picked',
+      docs: [
+        {
+          id: 'LISTING_ID',
+          name: 'rentradar.example',
+          parentId: 'FLAT_HUNT_ID',
+        },
+      ],
+    });
+    await waitFor(() =>
+      (root.textContent ?? '').includes(
+        'That is already in your Bower folder.',
+      ),
+    );
+    expect(copyOrExportIntoInbox).not.toHaveBeenCalled();
+  });
+
+  it('leaves out a dot-folder or a Processed folder by name (#312)', async () => {
+    await mountAdd('test-key');
+    await pick({
+      action: 'picked',
+      docs: [
+        { id: 'DOT_ID', name: '.obsidian', mimeType: FOLDER },
+        { id: 'PROCESSED_ID', name: 'Processed', mimeType: FOLDER },
+      ],
+    });
+    await waitFor(() =>
+      (root.textContent ?? '').includes(
+        'That is already in your Bower folder.',
+      ),
+    );
     expect(copyOrExportIntoInbox).not.toHaveBeenCalled();
   });
 

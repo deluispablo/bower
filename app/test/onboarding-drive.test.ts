@@ -315,7 +315,9 @@ describe('Onboarding: Start with what you have', () => {
       docs: [{ id: 'FOLDER_ID', name: 'Bower', mimeType: 'x' }],
     });
     await waitFor(() =>
-      (root.textContent ?? '').includes('Your Bower folder was left out'),
+      (root.textContent ?? '').includes(
+        'That is already in your Bower folder.',
+      ),
     );
     expect(copyOrExportIntoInbox).not.toHaveBeenCalled();
   });
