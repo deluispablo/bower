@@ -7,6 +7,7 @@
  */
 
 import type { DriveFile } from './drive.js';
+import { splitFrontmatter } from './markdown/frontmatter.js';
 import { isAppFile } from './vault-index.js';
 import type { VaultIndex } from './vault-index.js';
 
@@ -30,10 +31,37 @@ export function filterToIndex(
 }
 
 /**
- * The text around the first case-insensitive match of `query` in `text`,
- * padded `radius` characters either side and marked with `…` where the
- * snippet was cut short of the note's start or end. `null` when `query`
- * does not occur in `text` (or is empty).
+ * `text` (a whole cached note) in plain words, like the note body shows it
+ * (#554): frontmatter dropped, and the Markdown marks around otherwise
+ * plain words — heading `#`s, list and blockquote markers, emphasis,
+ * inline code, and link/image brackets (the visible label kept) — removed.
+ * Not a full renderer (tables, footnotes and the rest are left as written):
+ * just enough that a snippet built from the result reads like prose.
+ */
+function toPlainWords(text: string): string {
+  const { body } = splitFrontmatter(text);
+  return body
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // images: no visible text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // [label](url)
+    .replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2') // [[Note|Label]]
+    .replace(/\[\[([^\]]*)\]\]/g, '$1') // [[Note]]
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/(\*\*\*|___)([^*_]+)\1/g, '$2')
+    .replace(/(\*\*|__)([^*_]+)\1/g, '$2')
+    .replace(/(\*|_)([^*_]+)\1/g, '$2')
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, '') // heading marks
+    .replace(/^[ \t]*>[ \t]?/gm, '') // blockquote marks
+    .replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, '') // list bullets/numbers
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The text around the first case-insensitive match of `query` in `text`
+ * (see `toPlainWords`), padded `radius` characters either side and marked
+ * with `…` where the snippet was cut short of the note's start or end.
+ * `null` when `query` does not occur in the plain text (or is empty).
  */
 export function snippet(
   text: string,
@@ -41,14 +69,15 @@ export function snippet(
   radius = 60,
 ): string | null {
   if (query === '') return null;
-  const at = text.toLowerCase().indexOf(query.toLowerCase());
+  const plain = toPlainWords(text);
+  const at = plain.toLowerCase().indexOf(query.toLowerCase());
   if (at === -1) return null;
 
   const start = Math.max(0, at - radius);
-  const end = Math.min(text.length, at + query.length + radius);
+  const end = Math.min(plain.length, at + query.length + radius);
   const prefix = start > 0 ? '…' : '';
-  const suffix = end < text.length ? '…' : '';
-  return prefix + text.slice(start, end) + suffix;
+  const suffix = end < plain.length ? '…' : '';
+  return prefix + plain.slice(start, end) + suffix;
 }
 
 // --- Recent searches ---------------------------------------------------
