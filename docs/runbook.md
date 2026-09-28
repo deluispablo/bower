@@ -274,6 +274,17 @@ Since rulebook version 7 (#368), Bower only files by default. Each original (a P
 - **The report.** An ingest's summary is six lines: `Processed`, `Filed: <n> files` (originals moved into a folder), `Created` (notes written), `Updated`, `Rules`, `Problems`. A lint keeps five. The runner's log shows the filed count as `<n> originals filed`, a number only.
 - **Upgrading.** Rerun `scripts/deploy.sh` so the instance repo gets the new `prompts/ingest.md` and `run.sh`; each user gets the new rulebook from **Settings → Advanced → "Update Bower's rules"** (version 7). Until they update, their folder's old rulebook still asks for a summary note, and the new prompt defers to it.
 
+### System and sync files
+
+Since rulebook version 13 (#581), system and sync files are never downloaded, uploaded, deleted, read, filed, moved or listed by a run. `agent/run.sh` writes one filter file at the start and passes it (`--filter-from`, case-insensitive) to every rclone call that lists, copies, syncs, moves or deletes; the change manifest and the pending list skip the same names, so even a file that reaches the local copy is never uploaded, deleted or reported. The rulebook says the same to the agent. The patterns:
+
+- `desktop.ini`, `Thumbs.db`, `ehthumbs.db`, `.DS_Store`
+- `Icon` followed by a carriage return (macOS folder icons)
+- `~$*` (Office lock files) and `.~lock.*#` (LibreOffice lock files)
+- `.tmp.driveupload/**` (Drive's upload scratch folder)
+
+They mirror `SYSTEM_FILE_PATTERNS` in `app/src/vault-index.ts`, which the app uses to leave them out of the explorer: change both together. A file like this stays in Drive exactly where it is.
+
 ### The first-run interview
 
 Right after **Building your bower** and before **Start with what you have**, the bird asks four questions in the Tell Bower conversation (#198): what the user will keep here, which languages their notes come in, three areas of their life to start with, and how they like titles and tags written, with an example. Each is a chip or the user's own words.

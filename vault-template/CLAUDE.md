@@ -2,7 +2,7 @@
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-28
-bower_rules_version: 12
+bower_rules_version: 13
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -223,6 +223,7 @@ Three files, three owners: this `CLAUDE.md` is Bower's own and is replaced whole
 
 - Never edit this `CLAUDE.md`, `README.md` or anything under `.claude/`; the owner's rules go to `Rules.md`. Write only inside the folders above and to `Rules.md`, `About-Me.md`, `index.md`, `log.md` and `Lint Report.md`: in unattended runs anything else is undone after the run.
 - Never touch `.obsidian/`. In unattended runs this is absolute; if a rule would need it (e.g. a graph colour for a new tag), write the pending change to `log.md` instead.
+- System and sync files (`desktop.ini`, `Thumbs.db`, `.DS_Store`, `~$` lock files and the like) are never read, filed, moved or listed; if one turns up, leave it where it is.
 - Never delete notes or originals. Archive or move to `Processed/`.
 - Never rewrite a note the owner edited today unless an instruction asks for it; add to it instead.
 - Keep a note's `pinned` frontmatter as it is when you rewrite the note; a folder note (`_<Folder>.md`) is the owner's, never file it or move it.
