@@ -406,8 +406,7 @@ describe('Folder list mode (#611)', () => {
     expect(names().filter((n) => n?.startsWith('Arlington'))).toHaveLength(1);
     expect(root.textContent).toContain('note on the listing');
 
-    const buttons =
-      root.querySelectorAll<HTMLButtonElement>('.folder-seg-btn');
+    const buttons = root.querySelectorAll<HTMLButtonElement>('.folder-seg-btn');
     void act(() => buttons[1]?.click());
     await settle();
     expect(names()).toContain('Arlington Road, 2 bed');
@@ -467,7 +466,11 @@ describe('Folder list mode (#611)', () => {
     route.params.path = DIR;
     mount();
     await settle();
-    for (let at = 0; at < 20 && root.querySelector('.folder-virtual') === null; at += 1) {
+    for (
+      let at = 0;
+      at < 20 && root.querySelector('.folder-virtual') === null;
+      at += 1
+    ) {
       await settle();
     }
     expect(root.querySelector('.folder-virtual')).not.toBeNull();

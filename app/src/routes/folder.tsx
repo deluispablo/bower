@@ -520,7 +520,8 @@ function RowDetail({
     return (
       <>
         <span class="folder-row-detail">
-          <BowerTag /> {inBower ? `answer · ${when}` : 'answer to your question'}
+          <BowerTag />{' '}
+          {inBower ? `answer · ${when}` : 'answer to your question'}
         </span>
         {inBower && firstLine !== undefined && (
           <span class="folder-row-lead">{firstLine}</span>

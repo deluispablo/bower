@@ -37,17 +37,42 @@ function file(
   };
 }
 
-const pdf = file('Arlington Road, 2 bed.pdf', 'application/pdf', '2026-09-27T08:00:00Z');
-const note = file('Arlington Road, 2 bed.md', 'text/markdown', '2026-09-27T09:00:00Z');
-const answer = file('Which flat should we view first.md', 'text/markdown', '2026-09-27T10:00:00Z');
-const photo = file('Arlington Road, window sign.jpg', 'image/jpeg', '2026-09-27T07:00:00Z', {
-  size: 2.4 * 1024 * 1024,
-});
-const lease = file('Lease agreement 2026.pdf', 'application/pdf', '2026-09-27T06:00:00Z');
+const pdf = file(
+  'Arlington Road, 2 bed.pdf',
+  'application/pdf',
+  '2026-09-27T08:00:00Z',
+);
+const note = file(
+  'Arlington Road, 2 bed.md',
+  'text/markdown',
+  '2026-09-27T09:00:00Z',
+);
+const answer = file(
+  'Which flat should we view first.md',
+  'text/markdown',
+  '2026-09-27T10:00:00Z',
+);
+const photo = file(
+  'Arlington Road, window sign.jpg',
+  'image/jpeg',
+  '2026-09-27T07:00:00Z',
+  {
+    size: 2.4 * 1024 * 1024,
+  },
+);
+const lease = file(
+  'Lease agreement 2026.pdf',
+  'application/pdf',
+  '2026-09-27T06:00:00Z',
+);
 const budget = file('Flat budget.csv', 'text/csv', '2026-09-24T09:00:00Z', {
   appProperties: { bowerOrigin: 'drive' },
 });
-const viewing = file('Notes from the viewing.md', 'text/markdown', '2026-09-23T09:00:00Z');
+const viewing = file(
+  'Notes from the viewing.md',
+  'text/markdown',
+  '2026-09-23T09:00:00Z',
+);
 
 const ITEMS = [pdf, note, answer, photo, lease, budget, viewing];
 
@@ -117,7 +142,9 @@ describe('folder model (Flat hunt)', () => {
   });
 
   it('marks the answer, and names what a note is about', () => {
-    const answerRow = rowsFor(model, 'all').find((r) => r.file.id === answer.id);
+    const answerRow = rowsFor(model, 'all').find(
+      (r) => r.file.id === answer.id,
+    );
     expect(answerRow?.answer).toBe(true);
     expect(answerRow?.bower).toBe(true);
     expect(subjectOf(METAS.get(note.id))).toBe('listing');
