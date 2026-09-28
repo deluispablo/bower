@@ -423,17 +423,14 @@ Anyone who hasn't opened the app in those 24 hours is signed out at that point a
 
 ## 10. Demo
 
-The public demo (`https://bower-demo.pages.dev`, linked from the README) is the same app built with `VITE_DEMO=1`: a scripted, in-memory fixture vault (an invented person, "Alex"), no Worker, no Drive, no Claude — every action it performs and every note it shows resets the moment the tab is reloaded. It holds no data and needs no account, so there is nothing here to back up, rotate or tear down.
+The public demo is retired (owner decision, 28 September 2026): the Cloudflare Pages project `bower-demo` was deleted and nothing links to it. The demo build itself stays in the code, because the end-to-end tests run on it: `pnpm -C app build:demo` builds the app with `VITE_DEMO=1`, a scripted, in-memory sample folder (an invented person, "Alex"), with no Worker, no Drive and no Claude.
 
-Deploy or redeploy it with:
+To publish it again one day, build it and push `app/dist` to a Pages project of its own:
 
 ```bash
-scripts/deploy-demo.sh
+pnpm -C app build:demo
+npx wrangler pages deploy app/dist --project-name bower-demo --branch main
 ```
-
-This builds the app (`pnpm -C app build:demo`) and pushes `app/dist` to its own Cloudflare Pages project, `bower-demo` (pass `--project NAME` to use a different one, e.g. for a staging copy). Nothing needs to be set: the demo's "Run your own Bower" screen (the banner's **Run your own**) links to this runbook on GitHub and opens the app's own nine "What is Bower" pages. It creates the Pages project the first time, the same way `scripts/deploy.sh` does for the real app's `bower-app` project — and, like that script, it never touches the Worker, KV or any secret, since the demo has no backend of its own.
-
-A real instance's build (`pnpm -C app build`) adds `<meta name="robots" content="noindex">` to `index.html` so search engines skip it; the demo build leaves it out, so it stays indexable.
 
 ## What the app hides
 
