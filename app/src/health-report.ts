@@ -240,6 +240,20 @@ export function healthRowSubtitle(
   return `${checked} · ${count} to fix`;
 }
 
+/**
+ * Home's Health card line (#584, R-SYS-8): `checked` ("Checked yesterday")
+ * plus " · 3 small things to fix" when the report counted findings; the
+ * bare `checked` when there are none or the count has not loaded.
+ */
+export function healthCardLine(
+  checked: string,
+  findings: number | undefined,
+): string {
+  if (findings === undefined || findings <= 0) return checked;
+  const count = findings === 1 ? 'one small thing' : `${findings} small things`;
+  return `${checked} · ${count} to fix`;
+}
+
 /** "Yesterday" reads "yesterday" after "Checked"; a weekday or a date
  * keeps its capital. */
 function lowerRelative(when: string): string {

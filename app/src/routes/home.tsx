@@ -20,7 +20,7 @@ import type { Run } from '../api.js';
 import { Bird } from '../components/bird.js';
 import { ONCE_STATES } from '../components/bird-classes.js';
 import type { BirdState } from '../components/bird-classes.js';
-import { HEALTH_PATH } from '../components/explorer.js';
+import { HEALTH_PATH, useHealthFindings } from '../components/explorer.js';
 import {
   IconChat,
   IconClock,
@@ -35,7 +35,12 @@ import { ProcessButton } from '../components/process-button.js';
 import { Tour } from '../components/help-sheet.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import { startedAgo } from '../components/working-sheet.js';
-import { findReport, isReportNew, reportDayStart } from '../health-report.js';
+import {
+  findReport,
+  healthCardLine,
+  isReportNew,
+  reportDayStart,
+} from '../health-report.js';
 import {
   ANSWERS_FOLDER,
   birdStateFor,
@@ -312,6 +317,7 @@ export function Home(): JSX.Element {
           (note) => showAppFiles || !isAppFile(note.path, note.name),
         ).length;
 
+  const findings = useHealthFindings(true);
   const reportTime =
     index === null ? undefined : findReport(index)?.modifiedTime;
   const healthHint =
@@ -319,7 +325,10 @@ export function Home(): JSX.Element {
       ? 'Not checked yet'
       : isReportNew(reportTime, getPref('healthSeenAt'))
         ? 'New'
-        : `Checked ${relativeTime(reportDayStart(reportTime), now)}`;
+        : healthCardLine(
+            `Checked ${relativeTime(reportDayStart(reportTime), now)}`,
+            findings,
+          );
 
   const offline = !online;
   // #322: the very first fetch, before the folder index has ever resolved —
