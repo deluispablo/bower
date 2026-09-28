@@ -51,7 +51,7 @@ export interface VirtualListProps<T> {
   as?: 'div' | 'ul';
   rowAs?: 'div' | 'li';
   class?: string;
-  role?: string;
+  role?: JSX.AriaRole;
   'aria-label'?: string;
   /** Receives the imperative handle while mounted. */
   handleRef?: { current: VirtualListHandle | null };
@@ -62,7 +62,7 @@ interface Engine {
   getVirtualItems: () => VirtualItem[];
   getTotalSize: () => number;
   scrollToIndex: (index: number, options?: { align?: 'auto' }) => void;
-  measureElement: (node: Element | null) => void;
+  measureElement: (node: HTMLElement | null) => void;
   /** Pushes the props that change between renders. */
   update: (next: {
     count: number;
@@ -123,36 +123,49 @@ function createEngine<T>(
     },
     onChange,
   };
-  const virtualizer =
-    parent === null
-      ? new Virtualizer<Window, HTMLElement>({
-          ...shared,
-          getScrollElement: () => window,
-          scrollToFn: windowScroll,
-          observeElementRect: observeWindowRect,
-          observeElementOffset: observeWindowOffset,
-          initialRect: { width: window.innerWidth, height: window.innerHeight },
-        })
-      : new Virtualizer<HTMLElement, HTMLElement>({
-          ...shared,
-          getScrollElement: () => parent,
-          scrollToFn: elementScroll,
-          observeElementRect,
-          observeElementOffset,
-        });
-  const stop = virtualizer._didMount();
-  virtualizer._willUpdate();
-  return {
-    getVirtualItems: () => virtualizer.getVirtualItems(),
-    getTotalSize: () => virtualizer.getTotalSize(),
-    scrollToIndex: (index, options) => virtualizer.scrollToIndex(index, options),
-    measureElement: (node) => virtualizer.measureElement(node),
-    update: (next) =>
-      virtualizer.setOptions({ ...virtualizer.options, ...next }),
-    willUpdate: () => virtualizer._willUpdate(),
-    scrollMargin: () => virtualizer.options.scrollMargin,
-    destroy: stop,
+  type Next = Parameters<Engine['update']>[0];
+  const wrap = (
+    virtualizer:
+      Virtualizer<Window, HTMLElement> | Virtualizer<HTMLElement, HTMLElement>,
+    update: (next: Next) => void,
+  ): Engine => {
+    const stop = virtualizer._didMount();
+    virtualizer._willUpdate();
+    return {
+      getVirtualItems: () => virtualizer.getVirtualItems(),
+      getTotalSize: () => virtualizer.getTotalSize(),
+      scrollToIndex: (index, options) =>
+        virtualizer.scrollToIndex(index, options),
+      measureElement: (node) => virtualizer.measureElement(node),
+      update,
+      willUpdate: () => virtualizer._willUpdate(),
+      scrollMargin: () => virtualizer.options.scrollMargin,
+      destroy: stop,
+    };
   };
+  if (parent === null) {
+    const virtualizer = new Virtualizer<Window, HTMLElement>({
+      ...shared,
+      getScrollElement: () => window,
+      scrollToFn: windowScroll,
+      observeElementRect: observeWindowRect,
+      observeElementOffset: observeWindowOffset,
+      initialRect: { width: window.innerWidth, height: window.innerHeight },
+    });
+    return wrap(virtualizer, (next) =>
+      virtualizer.setOptions({ ...virtualizer.options, ...next }),
+    );
+  }
+  const virtualizer = new Virtualizer<HTMLElement, HTMLElement>({
+    ...shared,
+    getScrollElement: () => parent,
+    scrollToFn: elementScroll,
+    observeElementRect,
+    observeElementOffset,
+  });
+  return wrap(virtualizer, (next) =>
+    virtualizer.setOptions({ ...virtualizer.options, ...next }),
+  );
 }
 
 export function VirtualList<T>(props: VirtualListProps<T>): JSX.Element {
@@ -249,6 +262,7 @@ export function VirtualList<T>(props: VirtualListProps<T>): JSX.Element {
                 engineRef.current?.measureElement(node)) as never
             }
             style={{
+              ...(typeof extra.style === 'object' ? extra.style : {}),
               position: 'absolute',
               top: 0,
               left: 0,

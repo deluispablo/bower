@@ -5,8 +5,41 @@ import type { RefObject } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { Tree } from '../src/components/tree.js';
 import { VirtualList } from '../src/components/virtual-list.js';
 import type { VirtualListHandle } from '../src/components/virtual-list.js';
+import { FOLDER_MIME } from '../src/drive.js';
+import type { DriveFile } from '../src/drive.js';
+import { buildVaultIndex } from '../src/vault-index.js';
+
+const saved = vi.hoisted(() => ({
+  state: undefined as { expanded: string[]; scroll: number } | undefined,
+}));
+
+vi.mock('../src/cache.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/cache.js')>()),
+  loadTreeState: () => Promise.resolve(saved.state),
+  saveTreeState: () => Promise.resolve(),
+}));
+
+vi.mock('../src/vault-store.js', () => ({
+  useVault: () => ({
+    pinNote: vi.fn(),
+    unpinNote: vi.fn(),
+    pinFolder: vi.fn(),
+    unpinFolder: vi.fn(),
+  }),
+}));
+
+vi.mock('../src/use-new.js', () => ({
+  useNew: () => ({
+    ids: new Set<string>(),
+    isNew: () => false,
+    newCountIn: () => 0,
+    markSeen: vi.fn(),
+    markAllSeen: vi.fn(),
+  }),
+}));
 
 const ROW = 40;
 const VIEWPORT = 200;
@@ -129,5 +162,53 @@ describe('VirtualList', () => {
     const rows = rendered();
     expect(rows[0]).toBe('Row 0');
     expect(rows).toContain('Row 500');
+  });
+});
+
+function folderWith(notes: number): DriveFile[] {
+  const dir: DriveFile = {
+    id: 'dir',
+    name: '1-Projects',
+    mimeType: FOLDER_MIME,
+    parents: ['PARENT'],
+    path: '1-Projects',
+  };
+  const list = Array.from({ length: notes }, (_, i): DriveFile => ({
+    id: `n${i}`,
+    name: `Note ${String(i).padStart(4, '0')}.md`,
+    mimeType: 'text/markdown',
+    parents: ['dir'],
+    path: `1-Projects/Note ${String(i).padStart(4, '0')}.md`,
+  }));
+  return [dir, ...list];
+}
+
+async function mountTree(notes: number): Promise<void> {
+  saved.state = { expanded: ['1-Projects'], scroll: 0 };
+  await act(async () => {
+    render(h(Tree, { index: buildVaultIndex(folderWith(notes)) }), host);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+}
+
+describe('Tree over VirtualList', () => {
+  it('renders every row, plainly, up to 150 visible rows', async () => {
+    await mountTree(149);
+    // The folder row and its 149 notes: 150 rows, all in the DOM.
+    expect(host.querySelectorAll('[role="treeitem"]')).toHaveLength(150);
+    expect(host.querySelector('[data-index]')).toBeNull();
+    expect(host.querySelector('ul.tree')?.getAttribute('style')).toBeNull();
+  });
+
+  it('renders only the rows in view past 150 visible rows', async () => {
+    await mountTree(400);
+    const items = host.querySelectorAll('[role="treeitem"]');
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.length).toBeLessThan(60);
+    expect(
+      host.querySelector('[data-index="0"]')?.getAttribute('aria-level'),
+    ).toBe('1');
+    // The roving tab stop is rendered: the first row.
+    expect(host.querySelector('a[tabindex="0"]')).not.toBeNull();
   });
 });

@@ -84,6 +84,8 @@ import { KindBadge } from './kind-badge.js';
 import { PinSheet } from './pin-sheet.js';
 import { NewTag } from './tags.js';
 import { useNoteTitles } from './use-note-titles.js';
+import { VirtualList } from './virtual-list.js';
+import type { VirtualListHandle } from './virtual-list.js';
 
 import '../styles/tree.css';
 
@@ -95,6 +97,15 @@ interface Row extends TreeRow {
   /** Set for a file row. */
   file?: DriveFile;
 }
+
+/**
+ * Past this many visible rows the tree renders only the ones in view
+ * (`VirtualList`, #590); below it every row is in the DOM, as before.
+ */
+const VIRTUAL_FROM_ROWS = 150;
+
+/** A row's height in px before it is measured: the 44 px row plus its gap. */
+const ROW_ESTIMATE = 46;
 
 /** How long a scroll must rest before its offset is saved. */
 const SCROLL_SAVE_MS = 250;
@@ -291,6 +302,10 @@ export function Tree({
   }, [filtering, displayTree, expanded]);
   const [focusIndex, setFocusIndex] = useState(0);
   const rowRefs = useRef<Array<HTMLElement | null>>([]);
+  // A row that was off screen when focus was sent to it: focused as soon as
+  // the virtual list has rendered it.
+  const pendingFocus = useRef<number | null>(null);
+  const listHandle = useRef<VirtualListHandle | null>(null);
   const lastCollapseKey = useRef(collapseKey);
   const lastExpandKey = useRef(expandKey);
 
@@ -336,7 +351,24 @@ export function Tree({
 
   function focusAt(i: number): void {
     setFocusIndex(i);
-    rowRefs.current[i]?.focus();
+    const el = rowRefs.current[i];
+    if (el) {
+      el.focus();
+    } else if (listHandle.current !== null) {
+      pendingFocus.current = i;
+      listHandle.current.scrollToIndex(i, { align: 'auto' });
+    }
+  }
+
+  /** The ref of row `i`: keeps it findable and answers a pending focus. */
+  function rowRef(i: number): RefCallback<HTMLElement> {
+    return (el) => {
+      rowRefs.current[i] = el;
+      if (el !== null && pendingFocus.current === i) {
+        pendingFocus.current = null;
+        el.focus();
+      }
+    };
   }
 
   function onRowKeyDown(
@@ -463,9 +495,7 @@ export function Tree({
 
   function folderRow(row: Row, i: number): JSX.Element {
     const name = displayName(row);
-    const setRef: RefCallback<HTMLElement> = (el) => {
-      rowRefs.current[i] = el;
-    };
+    const setRef = rowRef(i);
     const top = row.path.split('/')[0] ?? '';
     const landmark: ParaKind | null = paraKindOf(top);
     const meaning =
@@ -545,9 +575,7 @@ export function Tree({
   function leafRow(row: Row, i: number): JSX.Element {
     const name = displayName(row);
     const isFile = row.kind === 'file';
-    const setRef: RefCallback<HTMLElement> = (el) => {
-      rowRefs.current[i] = el;
-    };
+    const setRef = rowRef(i);
     return (
       <span
         class={`tree-row ${isFile ? 'tree-file' : 'tree-note'}${isFile ? '' : ' tree-row-pinnable'}`}
@@ -602,10 +630,38 @@ export function Tree({
     );
   }
 
+  const virtual = rows.length > VIRTUAL_FROM_ROWS;
+
   return (
     <div class="tree-wrap" ref={wrapRef}>
       {rows.length === 0 ? (
         <p class="tree-empty">{emptyText}</p>
+      ) : virtual ? (
+        <VirtualList
+          as="ul"
+          rowAs="li"
+          class="tree"
+          role="tree"
+          items={rows}
+          estimateSize={() => ROW_ESTIMATE}
+          gap={2}
+          overscan={10}
+          keepIndex={focusIndex}
+          handleRef={listHandle}
+          getKey={(row) => row.path}
+          rowProps={(row, i) => ({
+            role: 'treeitem',
+            'aria-level': row.depth + 1,
+            'aria-expanded': row.kind === 'folder' ? row.expanded : undefined,
+            style:
+              i === dividerBefore
+                ? { borderTop: '1px solid var(--color-border)' }
+                : undefined,
+          })}
+          renderRow={(row, i) =>
+            row.kind === 'folder' ? folderRow(row, i) : leafRow(row, i)
+          }
+        />
       ) : (
         <ul class="tree" role="tree">
           {rows.map((row, i) => (
