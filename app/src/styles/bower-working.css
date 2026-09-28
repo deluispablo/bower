@@ -97,6 +97,12 @@
   gap: var(--space-2);
 }
 
+.working-sheet-subline {
+  margin-right: auto;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .working-sheet-title {
   margin: 0;
   color: var(--color-heading);
@@ -203,25 +209,13 @@
   text-align: center;
 }
 
-/* "n of m filed", started-ago, the bar and the reassurance line — shown
+/* The bar and the reassurance line — shown
    only while a run is queued or running. */
 
 .working-sheet-progress {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-}
-
-.working-sheet-progress-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  font-size: 15px;
-}
-
-.working-sheet-started {
-  color: var(--color-text-muted);
 }
 
 .working-sheet-bar {
@@ -336,9 +330,19 @@
   white-space: nowrap;
 }
 
+.working-sheet-row {
+  flex-wrap: wrap;
+}
+
+/* Under the title, with the folder's mark, "read: …" and "was …". */
 .working-sheet-row-where {
-  flex-shrink: 0;
-  white-space: nowrap;
+  flex-basis: 100%;
+  padding-left: 24px;
+  font-size: 12.5px;
+}
+
+.working-sheet-row-where .folder-mark {
+  vertical-align: middle;
 }
 
 @media (min-width: 900px) {
