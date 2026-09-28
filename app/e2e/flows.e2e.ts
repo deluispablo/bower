@@ -550,6 +550,11 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await expect(confirm).toBeVisible();
   await expect(confirm).toContainText('3 things');
+  // The demo's amber line (#363, `Demo-Tidy-Confirm` board, handover
+  // C.10): tidy up here never runs the model.
+  await expect(confirm).toContainText(
+    'Demo: what follows is a recording. Nothing is sent to Claude, nothing is saved.',
+  );
   await shot(page, testInfo, 'tidy-confirm');
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
@@ -566,6 +571,15 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
     inbox.getByRole('button', { name: /^Tidying up… started/ }),
   ).toBeVisible();
   await expect(inbox.getByRole('button', { name: 'Tidy up' })).toHaveCount(0);
+
+  // The demo's own copy under the bar (#363, `Demo-Working` board): the
+  // scripted run is a recording, not a real one, and the progress row's
+  // right-hand badge says so too, instead of "Started n min ago".
+  await expect(sheet).toContainText('A recording.');
+  await expect(sheet).toContainText(
+    'In the demo the bird plays back a real run in twenty seconds',
+  );
+  await expect(sheet).toContainText('Playing back');
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed
