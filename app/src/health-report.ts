@@ -232,8 +232,18 @@ export function healthRowSubtitle(
   findings: number | undefined,
   when = 'Sunday',
 ): string {
-  if (findings === undefined) return `${when} · not checked yet`;
-  if (findings === 0) return `${when} · your notes are in good shape`;
+  // #584: never a day next to "not checked yet".
+  if (findings === undefined) return 'Not checked yet';
+  const checked = `Checked ${lowerRelative(when)}`;
+  if (findings === 0) return `${checked} · your notes are in good shape`;
   const count = findings === 1 ? 'one small thing' : `${findings} small things`;
-  return `${when} · ${count} to fix`;
+  return `${checked} · ${count} to fix`;
+}
+
+/** "Yesterday" reads "yesterday" after "Checked"; a weekday or a date
+ * keeps its capital. */
+function lowerRelative(when: string): string {
+  return /^(Today|Yesterday|Last )/.test(when)
+    ? `${when.charAt(0).toLowerCase()}${when.slice(1)}`
+    : when;
 }

@@ -171,7 +171,7 @@ async function reachBuilding(): Promise<void> {
  * key). */
 async function passInterview(): Promise<void> {
   await act(() => button('Continue').click());
-  await act(() => button('Skip the interview').click());
+  await act(() => button('Skip').click());
 }
 
 /** Presses the Drive card with a Picker that answers `response` at once. */
@@ -201,7 +201,7 @@ describe('Onboarding: without a Picker key', () => {
     expect(heading()).toBe('Tell Bower about yourself');
     expect(dots()).toBe(7);
 
-    await act(() => button('Skip the interview').click());
+    await act(() => button('Skip').click());
     expect(location.route).toHaveBeenCalledWith('/');
     expect(heading()).not.toBe('Start with what you have');
   });
@@ -223,7 +223,7 @@ describe('Onboarding: Start with what you have', () => {
       atInterview.findIndex((span) => span.classList.contains('is-on')),
     ).toBe(3);
 
-    await act(() => button('Skip the interview').click());
+    await act(() => button('Skip').click());
     expect(heading()).toBe('Start with what you have');
     expect(dots()).toBe(8);
     const atDrive = Array.from(root.querySelectorAll('.onb-dots span'));

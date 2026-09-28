@@ -149,7 +149,7 @@ describe('Onboarding', () => {
     void act(() => button('Continue').click());
     expect(heading()).toBe('Tell Bower about yourself');
 
-    void act(() => button('Skip the interview').click());
+    void act(() => button('Skip').click());
     expect(location.route).toHaveBeenCalledWith('/');
     expect(submitInterview).not.toHaveBeenCalled();
   });
@@ -251,7 +251,7 @@ describe('The first-run interview (#198)', () => {
     expect(heading()).toBe('Tell Bower about yourself');
     expect(root.querySelector('.onb-dots')).toBeNull();
 
-    void act(() => button('Skip the interview').click());
+    void act(() => button('Skip').click());
     expect(location.route).toHaveBeenCalledWith('/settings');
     expect(submitInterview).not.toHaveBeenCalled();
   });

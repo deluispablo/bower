@@ -316,7 +316,7 @@ export function Home(): JSX.Element {
     index === null ? undefined : findReport(index)?.modifiedTime;
   const healthHint =
     reportTime === undefined
-      ? 'No check yet'
+      ? 'Not checked yet'
       : isReportNew(reportTime, getPref('healthSeenAt'))
         ? 'New'
         : `Checked ${relativeTime(reportDayStart(reportTime), now)}`;
