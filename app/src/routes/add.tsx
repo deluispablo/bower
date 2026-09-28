@@ -9,7 +9,7 @@ import {
   useAddQueue,
   type QueueItem,
 } from '../add-queue-store.js';
-import { linkNoteName } from '../add.js';
+import { ADD_HINT_TEXT, addHintLead, linkNoteName } from '../add.js';
 import { Bird } from '../components/bird.js';
 import {
   IconCamera,
@@ -17,6 +17,7 @@ import {
   IconDrive,
   IconFile,
   IconImage,
+  IconInbox,
 } from '../components/icons.js';
 import { ProcessButton } from '../components/process-button.js';
 import { useShellSlot } from '../components/shell-slots.js';
@@ -36,13 +37,13 @@ import {
   openFilePicker,
   type PickedItem,
 } from '../picker.js';
+import { pendingCount } from '../run-store.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
 import { useVault } from '../vault-store.js';
 
 import '../styles/add.css';
-import '../styles/app-file-banner.css';
 
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
@@ -130,7 +131,7 @@ function driveStateText(mimeType: string | undefined): string {
 export function Add() {
   const { me } = useSession();
   const { route } = useLocation();
-  const { index, refresh } = useVault();
+  const { index, files, refresh } = useVault();
   const online = useOnline();
   const hasCamera = useHasCamera();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
@@ -416,6 +417,7 @@ export function Add() {
     void runQueue([item]);
   }
 
+  const pending = pendingCount(files);
   const linkDisabled = inboxFolderId === null || !online;
   const driveDisabled = inboxFolderId === null || !online || pickerOpening;
 
@@ -622,14 +624,23 @@ export function Add() {
         </p>
       ))}
 
-      <div class="app-file-banner" role="note">
-        <p>
-          <strong>This only fills your inbox.</strong> Add as much as you like,
-          then tap Tidy up once: Bower does better work with a pile than with
-          one thing at a time.
-        </p>
-        <ProcessButton />
-      </div>
+      {/* The hint (#336, handover C.6): the inbox's pending count, the
+       * same one Home's Inbox card, the sidebar bubble and the "Is that
+       * everything?" sheet read (`pendingCount`), refreshed after an add
+       * (#300). Hidden when nothing is waiting: there is nothing to tidy. */}
+      {pending > 0 && (
+        <div class="add-hint" role="note">
+          <span class="add-hint-icon" aria-hidden="true">
+            <IconInbox />
+          </span>
+          <div class="add-hint-body">
+            <p>
+              <b>{addHintLead(pending)}</b> {ADD_HINT_TEXT}
+            </p>
+            <ProcessButton />
+          </div>
+        </div>
+      )}
 
       {message !== null && <p class="add-message">{message}</p>}
 

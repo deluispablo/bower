@@ -72,7 +72,7 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
 }));
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ refresh: vi.fn() }),
+  useVault: () => ({ files: [], refresh: vi.fn() }),
 }));
 
 const { Add } = await import('../src/routes/add.js');
