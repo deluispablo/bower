@@ -6,10 +6,13 @@
  * Send writes an instruction note (`kind: request`) into the inbox through
  * the same writer as before (`tell.ts`, `createTextFile`) and starts no
  * run (Part A 6.2.5): it waits for the next tidy-up like anything else in
- * the inbox, and shows under Requests as Waiting. Rules is its own
- * screen (#342, `rules-panel.tsx`): a rule's Change it fills the box and
- * Send then rewrites that rule in `Rules.md` instead of sending a note;
- * Apply it sends the job note "Apply this rule to what is already filed".
+ * the inbox, and shows under Requests as Waiting. A rule sentence ("From
+ * now on…", "Always…", "Never…", "Every time…") is the exception (#343):
+ * it goes straight into `Rules.md`, no note, no run, and shows under
+ * Requests as Rule kept. Rules is its own screen (#342,
+ * `rules-panel.tsx`): a rule's Change it fills the box and Send then
+ * rewrites that rule in `Rules.md` instead of sending a note; Apply it
+ * sends the job note "Apply this rule to what is already filed".
  * Activity holds one sentence until its screen lands (#345); Requests gets
  * its full states in #344.
  */
@@ -18,7 +21,12 @@ import { useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
-import { examplesFor, sinceLabel, waitingRequests } from '../bower-tab.js';
+import {
+  examplesFor,
+  sentenceKind,
+  sinceLabel,
+  waitingRequests,
+} from '../bower-tab.js';
 import type { WaitingRequest } from '../bower-tab.js';
 import { Bird } from '../components/bird.js';
 import {
@@ -31,7 +39,11 @@ import {
 } from '../components/icons.js';
 import { RulesPanel, writeError } from '../components/rules-panel.js';
 import { useShellSlot } from '../components/shell-slots.js';
-import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
+import {
+  INSTRUCTION_APP_PROPERTIES,
+  SaveError,
+  createTextFile,
+} from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
 import { useSession } from '../session.js';
 import { applyToFiledRequest } from '../rules.js';
@@ -95,8 +107,8 @@ function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
         <div id="bower-tip-body" class="bower-tip-body">
           <p>
             A rule (&ldquo;from now on&hellip;&rdquo;), a job (&ldquo;make a
-            document&hellip;&rdquo;) or a question, in your words. Each one
-            waits for the next tidy-up. Tap one:
+            document&hellip;&rdquo;) or a question, in your words. A rule starts
+            at once; a job or a question waits for the next tidy-up. Tap one:
           </p>
           <ul class="bower-examples">
             {examples.map((example) => (
@@ -123,25 +135,55 @@ function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
   );
 }
 
+/** A rule sentence kept at once from this screen (#343). */
+interface KeptRule {
+  text: string;
+  /** ISO-8601. */
+  since: string;
+}
+
+type RequestRow =
+  | ({ kind: 'waiting' } & WaitingRequest)
+  | ({ kind: 'kept'; name: string } & KeptRule);
+
 function RequestsList({
-  waiting,
+  rows,
   now,
+  onRules,
 }: {
-  waiting: WaitingRequest[];
+  rows: RequestRow[];
   now: number;
+  onRules: () => void;
 }): JSX.Element {
   return (
     <ul class="bower-requests">
-      {waiting.map((request) => (
-        <li key={request.name} class="bower-request">
-          <IconChat />
+      {rows.map((row) => (
+        <li key={row.name} class="bower-request">
+          {row.kind === 'kept' ? <IconShield /> : <IconChat />}
           <div class="bower-request-body">
             <p class="bower-request-head">
-              <span class="bower-request-text">{request.text}</span>
-              <span class="bower-state bower-state--waiting">Waiting</span>
+              <span class="bower-request-text">{row.text}</span>
+              {row.kind === 'kept' ? (
+                <span class="bower-state bower-state--kept">Rule kept</span>
+              ) : (
+                <span class="bower-state bower-state--waiting">
+                  Waiting · {sentenceKind(row.text)}
+                </span>
+              )}
             </p>
             <p class="bower-request-meta">
-              {sinceLabel(request.since, now)} · goes with the next tidy-up
+              {sinceLabel(row.since, now)} ·{' '}
+              {row.kind === 'kept' ? (
+                <button
+                  type="button"
+                  class="bower-request-link"
+                  onClick={onRules}
+                >
+                  In your rules
+                </button>
+              ) : (
+                'goes with the next tidy-up'
+              )}
             </p>
           </div>
         </li>
@@ -152,7 +194,7 @@ function RequestsList({
 
 export function Bower(): JSX.Element {
   const { me } = useSession();
-  const { files, fetchedAt, refresh, editRule } = useVault();
+  const { files, fetchedAt, refresh, editRule, keepRule } = useVault();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const { query } = useLocation();
@@ -165,6 +207,7 @@ export function Bower(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<SentItem[]>(() => loadSent());
   const [justSent, setJustSent] = useState<SentItem[]>([]);
+  const [kept, setKept] = useState<KeptRule[]>([]);
   const [segment, setSegment] = useState<Segment>('rules');
   const [examples] = useState(() => examplesFor(visits++));
   // `null` until the person toggles it: open the first time, closed after.
@@ -180,7 +223,10 @@ export function Bower(): JSX.Element {
   // First time: the folder is listed, nothing waits and this device never
   // sent anything (board Phone-Bower-Empty).
   const firstTime =
-    fetchedAt !== null && waiting.length === 0 && sent.length === 0;
+    fetchedAt !== null &&
+    waiting.length === 0 &&
+    sent.length === 0 &&
+    kept.length === 0;
   const showTip = tipOpen ?? firstTime;
   const canSend =
     text.trim() !== '' &&
@@ -233,6 +279,28 @@ export function Bower(): JSX.Element {
     setSegment('rules');
   }
 
+  /** A rule sentence (#343): kept at once in `Rules.md`, no note, no run,
+   * and listed under Requests as Rule kept. */
+  async function keepRuleNow(sentence: string): Promise<void> {
+    try {
+      await keepRule(sentence);
+    } catch (err) {
+      console.error(err);
+      setError(
+        err instanceof SaveError && err.code === 'conflict'
+          ? 'Your notes changed meanwhile. Try again.'
+          : 'Could not keep that rule. Try again.',
+      );
+      return;
+    }
+    setKept((list) => [
+      { text: sentence, since: new Date().toISOString() },
+      ...list,
+    ]);
+    setText('');
+    setSegment('requests');
+  }
+
   async function handleSend(): Promise<void> {
     const trimmed = text.trim();
     if (!canSend) return;
@@ -241,6 +309,8 @@ export function Bower(): JSX.Element {
     setError(null);
     if (changing !== null) {
       await saveChange(changing, trimmed);
+    } else if (sentenceKind(trimmed) === 'rule') {
+      await keepRuleNow(trimmed);
     } else if (await sendRequest(trimmed)) {
       setText('');
     } else {
@@ -316,6 +386,14 @@ export function Bower(): JSX.Element {
   }
 
   const now = Date.now();
+  const rows: RequestRow[] = [
+    ...kept.map((rule, i): RequestRow => ({
+      kind: 'kept',
+      name: `kept-${String(kept.length - i)}`,
+      ...rule,
+    })),
+    ...waiting.map((request): RequestRow => ({ kind: 'waiting', ...request })),
+  ].sort((a, b) => b.since.localeCompare(a.since));
 
   return (
     <section class="bower-screen">
@@ -425,9 +503,18 @@ export function Bower(): JSX.Element {
         hidden={segment !== 'requests'}
       >
         <p class="bower-panel-note">
-          What you send waits here for the next tidy-up.
+          What you asked for, and what came of it. A rule starts at once; a job
+          or a question waits for the next tidy-up.
         </p>
-        {waiting.length > 0 && <RequestsList waiting={waiting} now={now} />}
+        {rows.length > 0 && (
+          <RequestsList
+            rows={rows}
+            now={now}
+            onRules={() => {
+              selectSegment('rules', true);
+            }}
+          />
+        )}
       </div>
 
       <div
