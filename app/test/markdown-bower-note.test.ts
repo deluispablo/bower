@@ -89,6 +89,20 @@ describe('splitOrigin', () => {
       origin: undefined,
     });
   });
+
+  // The rulebook (v9, #371) names four origins: "from the file", "looked
+  // up on the web", "from what you told me", "reasoned" (#529). The other
+  // three are covered above and in the D4_NOTE fixture below; splitOrigin
+  // itself has no allowlist — any trailing `(...)` is an origin — so the
+  // fourth needs no source change, only this to say so.
+  it('splits the fourth origin, "from what you told me", the same way', () => {
+    expect(
+      splitOrigin('Your budget is £1,800/month (from what you told me)'),
+    ).toEqual({
+      source: 'Your budget is £1,800/month',
+      origin: 'from what you told me',
+    });
+  });
 });
 
 describe('renderNote with a note from Bower (D.4)', () => {

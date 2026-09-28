@@ -122,14 +122,10 @@ describe('demo mode', () => {
     expect(found.map((f) => f.name)).toContain('Things to see in Lisbon.md');
   });
 
-  it('pins Flat hunt from the fixture (#489, Demo-Home board)', async () => {
-    // A note pin on the hub note itself, not a folder pin: the folder
-    // note map is hydrated after every regular note
-    // (`hydratePinnedAt`, `vault-store.tsx`), capped at
-    // `PINNED_HYDRATION_FETCH_CAP` fetches per load, and this fixture
-    // has around 30 notes — a folder pin would never be reached on a
-    // first, cold-cache visit. Flat hunt sorts 4th by path, well inside
-    // the cap.
+  it('pins Flat hunt and Shopping list from the fixture (#489, #539, Demo-Home board)', async () => {
+    // A note pin on the hub note itself, not a folder pin (#489): the
+    // folder note map is hydrated after every regular note
+    // (`hydratePinnedAt`, `vault-store.tsx`).
     const flatHuntPin = await drive.getText(
       (await fileAt('1-Projects/Flat hunt/Flat hunt.md')).id,
     );
@@ -142,14 +138,13 @@ describe('demo mode', () => {
     );
     expect(pinnedOf(lisbonHub)).toBeNull();
 
-    // Shopping list (2-Areas/Home) exists per the board, but is not
-    // pinned: it sorts near the middle of the fixture's notes, past the
-    // hydration cap, so pinning it would not reliably show on a first
-    // visit either — see the PR's "Left out".
+    // Shopping list (2-Areas/Home) sorts well past
+    // `PINNED_HYDRATION_FETCH_CAP` by path; pinned now that #539 makes
+    // hydration find it via search first, ahead of the capped walk.
     const shoppingList = await drive.getText(
       (await fileAt('2-Areas/Home/Shopping list.md')).id,
     );
-    expect(pinnedOf(shoppingList)).toBeNull();
+    expect(pinnedOf(shoppingList)).not.toBeNull();
   });
 
   it('plays Tidy up: queued, running filing one by one, done', async () => {

@@ -65,3 +65,25 @@ test('the Bower tab has no button-name or link-name violations', async ({
   await expect(bowerPart(page, 'Rules')).toBeVisible();
   await expectNoNameViolations(page);
 });
+
+test('Ideas has no button-name or link-name violations, and its nine Copy links each get a distinct name (#511)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.goto('/ideas');
+  // `.screen-title` (the h1) is phone-hidden — the crumb slot has the
+  // title there instead (`flows.e2e.ts`'s Ideas test) — so wait on a row
+  // instead of the heading.
+  await expect(
+    page.getByRole('link', { name: /^Copy:/ }).first(),
+  ).toBeVisible();
+  await expectNoNameViolations(page);
+
+  const names = await page
+    .getByRole('link', { name: /^Copy:/ })
+    .evaluateAll((links) =>
+      links.map((link) => link.getAttribute('aria-label')),
+    );
+  expect(names.length).toBeGreaterThan(1);
+  expect(new Set(names).size).toBe(names.length);
+});

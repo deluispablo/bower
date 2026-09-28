@@ -101,6 +101,10 @@ if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
     scope)
       body='{"files":[{"name":"Bower - 2026-01-15 0900 Tidy up.md"},{"name":"Bower - 2026-01-15 0902 Context.md"}]}'
       ;;
+    # Add's context note (#370), written by the app for a batch of files.
+    context)
+      body='{"files":[{"name":"Bower - 2026-01-15 0903 Context.md"}]}'
+      ;;
     # Drive's search has not caught up with the request sent at 09:05 yet.
     midrun)
       body='{"files":[{"name":"Bower - 2026-01-15 0850 Old question.md"},{"name":"Bower - 2026-01-15 0906 Context.md"}]}'
@@ -298,6 +302,18 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       # an instructions-only run leaves it with its files.
       printf -- '---\ntags: [instruction]\nvia: app\nkind: context\n---\n\nFile these as receipts.\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0902 Context.md"
+    fi
+    if [ "$SMOKE_SCENARIO" = context ]; then
+      # Add's context note for a batch of two job offers (issue #370), in
+      # the shape app/src/add.ts writes: the text, then ## Applies to with
+      # the file names, one of them not in the inbox.
+      echo '# my rules' >"$remote/Rules.md"
+      echo pdf >"$remote/0-Inbox/offer-north.pdf"
+      echo pdf >"$remote/0-Inbox/offer-south.pdf"
+      printf -- '%s\n' '---' 'tags: [instruction]' 'date: 2026-01-15' 'via: app' 'kind: context' '---' '' \
+        'Job offers: pull out salary, location and deadline into a table. From now on, file job offers under 1-Projects/Job hunt.' \
+        '' '## Applies to' '' '- offer-north.pdf' '- offer-south.pdf' '- offer-west.pdf' \
+        >"$remote/0-Inbox/Bower - 2026-01-15 0903 Context.md"
     fi
     if [ "$SMOKE_SCENARIO" = rename ]; then
       # A photo whose name says nothing (issue #369).
@@ -530,6 +546,25 @@ case "$SMOKE_SCENARIO" in
   # PARA folders as they are, each with a hub line, an index.md row and a
   # Filed: log line, and no summary note; the clip is the content, so it
   # becomes a note and the raw clip goes to Processed/.
+  # Add's context note (issue #370): both named files are filed and get
+  # the table the text asks for, as one note from Bower; the "from now on"
+  # sentence becomes a rule; the named file missing from the inbox is
+  # logged; the note goes to Processed/.
+  context)
+    mkdir -p '1-Projects/Job hunt'
+    mv 0-Inbox/offer-north.pdf 0-Inbox/offer-south.pdf '1-Projects/Job hunt/'
+    printf -- '%s\n' '---' 'title: Job offers, salary, location and deadline' 'type: answer' \
+      'tags: [answer, career]' 'created: 2026-01-15' '---' "## Bower's note" \
+      '- ✅ Both offers list a salary and a deadline.' '' '## Why' 'Read from the two offers.' '' \
+      '## What Bower used' '- [[offer-north.pdf]] (from the file)' '- [[offer-south.pdf]] (from the file)' \
+      '' '## Table' '| Offer | Salary | Location | Deadline |' '| --- | --- | --- | --- |' \
+      >'1-Projects/Job hunt/Job offers, salary and deadline.md'
+    echo "- File job offers under 1-Projects/Job hunt. (owner's request, 2026-01-15)" >>Rules.md
+    printf -- '%s\n' 'Filed: offer-north.pdf → 1-Projects/Job hunt' 'Filed: offer-south.pdf → 1-Projects/Job hunt' \
+      'Context: offer-west.pdf is not in the inbox' 'Rule added/changed: file job offers under 1-Projects/Job hunt' \
+      'Context: a table of the job offers' >>log.md
+    mv '0-Inbox/Bower - 2026-01-15 0903 Context.md' 0-Inbox/Processed/
+    ;;
   # A question sent from the app (issue #371): the answer starts with the
   # note-from-Bower block the app renders as a box.
   answer)
@@ -731,7 +766,7 @@ expect_content_free() {
     evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
-    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington 'Which flat' \
+    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington 'Which flat' offer- 'Job hunt' \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -890,6 +925,14 @@ BOWER_NOTE_TEMPLATE=$(awk '/^\*\*A note from Bower\*\*/ { f = 1 }
   g' <<<"$RULEBOOK")
 [ -n "$BOWER_NOTE_TEMPLATE" ] || die 'the rulebook has no note-from-Bower template (#371)'
 expect_bower_note 'the rulebook template (#371)' "$BOWER_NOTE_TEMPLATE"
+grep -Fq 'A context note (frontmatter `kind: context`' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt does not handle a context note first (#370)'
+grep -Fq '**Context note** (frontmatter `kind: context`' <<<"$RULEBOOK" ||
+  die 'the rulebook Instructions workflow has no context note (#370)'
+grep -Fq 'starts "from now on", "always" or "every time" is also a permanent rule' <<<"$RULEBOOK" ||
+  die 'the rulebook does not turn a from-now-on sentence in a context note into a rule (#370)'
+grep -Fq 'Context: <file name> is not in the inbox' <<<"$RULEBOOK" ||
+  die 'the rulebook does not log a named file missing from the inbox (#370)'
 # The shape check itself rejects a fourth marker and a source with no origin.
 if (expect_bower_note 'bad marker' "$(printf -- '%s\n' 'type: answer' "## Bower's note" '- 🟡 Maybe.' '## Why' 'x' '## What Bower used' '- [[a]] (reasoned)')") 2>/dev/null; then
   die 'the note shape check accepted a marker other than the three'
@@ -1809,3 +1852,30 @@ grep -Fxq 'Answers/2026-01-15 Which flat first.md' "$STATE/uploaded.txt" || die 
 expect_content_free
 expect_cleaned_up
 echo "ok an answer starts with Bower's note, Why and What Bower used"
+
+# 33. A context note (issue #370): the app-written note from Add's "What is
+# this?" box is an instruction, so the run may change Rules.md; its two
+# files are filed and get one table note (a note from Bower), its "from
+# now on" sentence becomes a rule, the named file that is not in the inbox
+# is logged, and the note itself goes to Processed/.
+run_case context
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.quarantined)" '[]' 'quarantined'
+expect_eq "$(post 2 p.refused)" '[]' 'refused (Rules.md may change with an app-written context note)'
+remote="$STATE/remote"
+for f in '1-Projects/Job hunt/offer-north.pdf' '1-Projects/Job hunt/offer-south.pdf' \
+  '0-Inbox/Processed/Bower - 2026-01-15 0903 Context.md'; do
+  [ -f "$remote/$f" ] || die "not in Drive after the run: $f"
+done
+for f in 0-Inbox/offer-north.pdf 0-Inbox/offer-south.pdf '0-Inbox/Bower - 2026-01-15 0903 Context.md'; do
+  [ ! -e "$remote/$f" ] || die "still in the inbox in Drive: $f"
+done
+expect_bower_note 'the batch table' "$(cat "$remote/1-Projects/Job hunt/Job offers, salary and deadline.md")"
+grep -Fq "File job offers under 1-Projects/Job hunt. (owner's request, 2026-01-15)" "$remote/Rules.md" ||
+  die 'the from-now-on sentence did not become a rule'
+grep -Fxq 'Context: offer-west.pdf is not in the inbox' "$remote/log.md" ||
+  die 'the missing file is not logged'
+expect_content_free
+expect_cleaned_up
+echo "ok a context note files its batch, makes its table and keeps its rule"

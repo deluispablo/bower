@@ -438,6 +438,19 @@ test('an unknown folder and an unknown URL each show Not found with their own se
   await expect(page.getByText("That page doesn't exist")).toBeVisible();
 });
 
+test('a missing file shows Not found with its own sentence, not the generic page one (#529)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.goto('/file/does-not-exist');
+  await expect(
+    page.getByRole('heading', { name: /can.t find that/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("isn't in your Bower folder any more"),
+  ).toBeVisible();
+});
+
 test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
   page,
 }, testInfo) => {
@@ -709,7 +722,7 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   // rule sentence is already in Rules, under its own topic.
   await navigate(page, /^Bower$/);
   await expect(
-    bowerPart(page, 'Rules').getByRole('button', { name: /^Garden\s*1$/ }),
+    bowerPart(page, 'Rules').getByRole('button', { name: 'Garden, 1 rule' }),
   ).toBeVisible();
   await showBowerPart(page, 'Requests');
   await expect(
@@ -717,6 +730,33 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
       .getByRole('listitem')
       .filter({ hasText: 'About the files you added' }),
   ).toHaveCount(1);
+});
+
+test('Add: a link row shows the URL, and the What is this? placeholder fits its box (#508)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  // C.11: titles, not file names — the row must never say
+  // "Link - example.com <date> <time>.md", the note's own saved name.
+  await page
+    .getByLabel('Or paste a link')
+    .fill('https://www.example.com/a/page');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('example.com/a/page')).toBeVisible();
+  await expect(page.getByText(/^Link - /)).toHaveCount(0);
+
+  const box = page.getByRole('textbox', { name: 'What is this?' });
+  await expect(box).toBeVisible();
+  await shot(page, testInfo, 'add-context-placeholder');
+
+  // The placeholder must not overflow the box (it used to run to four
+  // lines in this three-line box at 375 px, cut off mid-sentence).
+  const overflow = await box.evaluate(
+    (el: HTMLTextAreaElement) => el.scrollHeight - el.clientHeight,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
 });
 
 test('Home through the scripted run: waiting, running, done (#321)', async ({
@@ -1090,11 +1130,12 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
   await expect(
     rules.getByText('Rules are yours and start at once.'),
   ).toBeVisible();
-  // Alex's groups, each with its count; only the first is open.
-  const money = rules.getByRole('button', { name: /^Money\s*4$/ });
+  // Alex's groups, each with its count, the name and the count now named
+  // apart (#511: "Money4" read as one glued word); only the first is open.
+  const money = rules.getByRole('button', { name: 'Money, 4 rules' });
   await expect(money).toHaveAttribute('aria-expanded', 'true');
   await expect(
-    rules.getByRole('button', { name: /^Travel\s*1$/ }),
+    rules.getByRole('button', { name: 'Travel, 1 rule' }),
   ).toHaveAttribute('aria-expanded', 'false');
   // Bower's two open suggestions sit on top, with Accept and Dismiss.
   await expect(
@@ -1328,6 +1369,19 @@ test('Settings switches the theme to dark, and it sticks', async ({
   await expect(page.getByRole('radio', { name: 'Dark' })).toBeChecked();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await shot(page, testInfo, 'settings');
+});
+
+test('Settings footer carries the build commit next to the version (#512)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await openSettings(page);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  // The demo build runs from this same git checkout, so a real commit is
+  // always available: no dangling "Bower 0.1.0 ·" with nothing after it.
+  await expect(page.locator('.settings-footer p').first()).toHaveText(
+    /^Bower \d+\.\d+\.\d+ · [0-9a-f]{7}$/,
+  );
 });
 
 test('What is Bower from Settings opens with Close and Done (#329)', async ({
@@ -1870,9 +1924,16 @@ test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent i
   expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(1);
   const tiles = await boxes(page.locator('.home-pinned-grid > *'));
   expect(tiles.length).toBeGreaterThan(0);
-  // Flat hunt, seeded from the fixture (#489, `Demo-Home` board).
+  // Both of the fixture's pins, on this first (cold-cache) load: Flat
+  // hunt (#489) and Shopping list, which sorts past the hydration
+  // fetch cap and only shows because of the search-first fix (#539).
   await expect(
     page.locator('.home-pinned-grid').getByText('Flat hunt', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('.home-pinned-grid')
+      .getByText('Shopping list', { exact: true }),
   ).toBeVisible();
   tiles.forEach((tile, i) => {
     expect(tile.x).toBeCloseTo(grid[i % 4]?.x ?? NaN, 0);

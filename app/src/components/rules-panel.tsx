@@ -125,6 +125,11 @@ function Group({
         class="rules-group-row"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
+        // #511: the count sat right against the name with nothing between
+        // them ("From the interview1"), so a screen reader read them as
+        // one glued word ("From the interview1" rather than "From the
+        // interview, 1 rule"). An explicit label separates them.
+        aria-label={`${group.topic}, ${group.count} ${group.count === 1 ? 'rule' : 'rules'}`}
         onClick={onToggle}
       >
         <span class="rules-group-chevron">
