@@ -608,15 +608,18 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
 
-  // Running: the scene, the count against the three things waiting, when
-  // it started, the sentence, and the item being read.
+  // Running: the scene, the count against the three things waiting, the
+  // demo's own copy in place of "Started just now" and the reassurance
+  // line (#363), and the item being read.
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
   await expect(sheet.getByText(/^[0-3] of 3 filed$/)).toBeVisible();
-  await expect(sheet.getByText('Started just now')).toBeVisible();
+  await expect(sheet.getByText('Playing back')).toBeVisible();
+  await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(
-      'Usually three to five minutes. Close this and keep going; Home will say when it is done.',
+      'In the demo the bird plays back a real run in twenty seconds',
+      { exact: false },
     ),
   ).toBeVisible();
   const rows = sheet.locator('.working-sheet-row');
