@@ -147,6 +147,78 @@ Bower only files, by default: an original lands in its PARA folder as it is, sen
 9. **Duplicates:** the same file again (same name and size, or the same URL) moves to `0-Inbox/Processed/` and is logged; a clip about something the vault already tracks updates the existing note with any new detail instead.
 10. **What you added:** when a run adds something besides filing (a note, a table, new lines in a note the owner keeps), end it by writing one short clause about that, in the first person, as the only line of `.bower/added.txt` ("I added bike times to the flats"), at most 200 characters. When the run only filed, write nothing there. The runner reads the file and removes it.
 
+### Kinds (the documents that get a companion note)
+Bower recognises eight kinds of document. For each, the list gives the `kind` value and its name; the key facts, in order (at most four); the status values, in order (`none` when the kind has none); how the app compares notes of that kind; then its fields, grouped and ordered as the app's Details shows them, each as the frontmatter key, the label the app shows and the type. The app keeps the same list: never invent a kind, and never write a field key the kind does not have unless a rule adds it.
+- Types: `text` plain words; `number` a bare number (`72`); `money` the amount with its currency (`£2,150`, `€38.40`); `date` `YYYY-MM-DD`, or `YYYY-MM` when only the month is known; `link` a web address; `note-link` a `[[wikilink]]` to another note.
+- A field marked `for you` comes from the owner's own notes, never from the document.
+- `rooms` is written `2 bed, 1 bath`: the app shows the part before the comma as the key fact.
+
+**rental-listing** (rental listing)
+- Key facts: `rent`, `rooms`, `available`, `bike_to_office`
+- Status: `new`, `to view`, `viewed`, `applied`, `rejected`
+- Compare: table
+- The place: `address` Address (text); `type` Type (text); `rooms` Rooms (text)
+- Money: `rent` Rent (money); `deposit` Deposit (money); `against_area` Against the area (text)
+- Terms and dates: `available` Available (date); `lease` Lease (text); `listed` Listed (date); `viewing` Viewing (date)
+- For you: `bike_to_office` Bike to the office (text, for you); `fit` Fit (number, for you)
+
+**job-offer** (job offer)
+- Key facts: `salary`, `office`, `starts`, `reply_by`
+- Status: `new`, `applied`, `interview`, `offer`, `declined`
+- Compare: table
+- The role: `role` Role (text); `employer` Employer (text); `office` Office (text); `hours` Hours (text)
+- Money: `salary` Salary (money); `bonus` Bonus (text); `holiday` Holiday (text)
+- Dates: `starts` Starts (date); `reply_by` Reply by (date)
+- For you: `commute` Commute (text, for you)
+
+**bill** (bill or renewal)
+- Key facts: `provider`, `amount`, `renews_on`
+- Status: `active`, `to renew`, `cancelled`
+- Compare: table
+- The service: `provider` Provider (text); `service` What for (text)
+- Money: `amount` Amount (money); `billed` How often (text)
+- Dates: `renews_on` Renews on (date); `since` Since (date); `notice` Notice to cancel (text)
+
+**receipt** (receipt)
+- Key facts: `total`
+- Status: none
+- Compare: by-month
+- The purchase: `shop` Shop (text); `date` Date (date); `items` What you bought (text)
+- Money: `total` Total (money); `paid_with` Paid with (text)
+- Returns: `return_by` Return by (date); `warranty` Warranty (text)
+
+**payslip** (payslip)
+- Key facts: `month`, `net`, `gross`
+- Status: none
+- Compare: table
+- The period: `month` Month (date); `employer` Employer (text); `paid_on` Paid on (date)
+- Pay: `net` Net pay (money); `gross` Gross pay (money)
+- Deductions: `tax` Tax (money); `pension` Pension (money); `other_deductions` Other deductions (money)
+
+**contract** (contract or agreement)
+- Key facts: `value`, `ends`
+- Status: none
+- Compare: rarely
+- The agreement: `with` With (text); `covers` What it covers (text)
+- Money: `value` Value (money); `payments` Payments (text)
+- Dates: `starts` Starts (date); `ends` Ends (date); `notice` Notice to end (text)
+
+**booking** (booking or ticket)
+- Key facts: `when`, `where`, `reference`
+- Status: none
+- Compare: timeline
+- The booking: `what` What (text); `reference` Reference (text); `booking_page` Booking page (link)
+- When and where: `when` When (date); `until` Until (date); `where` Where (text)
+- Money: `price` Price (money); `cancel_by` Cancel by (date)
+- For you: `getting_there` Getting there (text, for you)
+
+**recipe** (recipe)
+- Key facts: `time`, `serves`
+- Status: none
+- Compare: table
+- The dish: `dish` Dish (text); `main_ingredients` Main ingredients (text); `diet` Diet (text); `source` Source (link)
+- Cooking: `time` Time (text); `serves` Serves (number); `difficulty` Difficulty (text)
+
 ### Formats (what Bower reads, what it only keeps)
 - **Read:** notes and text (`.md`, `.txt`, `.csv`, `.json`, `.eml`), PDFs, photos (`.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`), and Word, ODT, RTF, EPUB and web pages (converted to Markdown before the run, see Ingest step 1).
 - **Kept, not read:** iPhone photos (`.heic`), Excel and PowerPoint, audio (`.m4a`, `.mp3`), video (`.mp4`, `.mov`), ZIP and other archives, and any other kind. Never open, convert or unpack one: file it by its name and date alone, in the folder its name, a context note or a rule in `Rules.md` points to (`3-Resources/` when nothing does). Keep a name that says what it is; put the date in front of one that says nothing (`2026-03-14 IMG_4471.heic`). Its `index.md` row gets the type Spreadsheet, Audio, Video or File as usual, and no note is written about it.
