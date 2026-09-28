@@ -269,11 +269,8 @@ describe('renderNote', () => {
     const drive = [...root.querySelectorAll('a.wikilink-file')];
     expect(drive).toHaveLength(3);
     for (const link of drive) {
-      expect(link.getAttribute('href')).toBe(
-        'https://drive.google.com/file/d/scan/view',
-      );
-      expect(link.getAttribute('target')).toBe('_blank');
-      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(link.getAttribute('href')).toBe('/file/scan');
+      expect(link.hasAttribute('target')).toBe(false);
     }
     expect(drive[0]?.textContent).toBe('the scan');
 
@@ -351,8 +348,23 @@ describe('renderNote', () => {
       expect(dom(note.html).querySelector('h1')?.textContent).toBe('Garden');
     });
 
-    it('leaves a matching heading alone when it is not the first block', () => {
-      const note = renderNote('Intro.\n\n# Garden\n\nBody.', index, {
+    it('drops the title heading after a leading paragraph or callout (#609)', () => {
+      const paragraph = renderNote('Intro.\n\n# Garden\n\nBody.', index, {
+        title: 'Garden',
+      });
+      expect(dom(paragraph.html).querySelector('h1')).toBeNull();
+      expect(dom(paragraph.html).textContent).toContain('Intro.');
+      const callout = renderNote(
+        "> [!bower] Bower's note\n> First line. (from the file)\n\n# Garden\n\nBody.",
+        index,
+        { title: 'Garden' },
+      );
+      expect(dom(callout.html).querySelector('h1')).toBeNull();
+      expect(dom(callout.html).querySelector('.bower-note')).not.toBeNull();
+    });
+
+    it('keeps a matching heading that comes after another heading', () => {
+      const note = renderNote('## Intro\n\n# Garden\n\nBody.', index, {
         title: 'Garden',
       });
       expect(dom(note.html).querySelector('h1')?.textContent).toBe('Garden');

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DriveFile } from '../src/drive.js';
 import {
   blobCacheKey,
+  driveFileIdOf,
   driveViewUrl,
   embedKind,
   fileLinkHtml,
@@ -144,12 +145,29 @@ describe('placeholders', () => {
     webViewLink: 'https://drive.google.com/file/d/scan/view',
   });
 
-  it('links other files to Drive in a new tab', () => {
+  it("links other files to the file's screen in the app", () => {
     expect(fileLinkHtml(pdf, 'scan.pdf', true)).toBe(
       '<a class="wikilink wikilink-file wikilink-embed" ' +
-        'href="https://drive.google.com/file/d/scan/view" target="_blank" ' +
-        'rel="noopener noreferrer">scan.pdf</a>',
+        'href="/file/scan">scan.pdf</a>',
     );
+  });
+
+  it('reads the file id out of a Drive or Docs link', () => {
+    expect(
+      driveFileIdOf(
+        'https://drive.google.com/file/d/scan_1-x/view?usp=sharing',
+      ),
+    ).toBe('scan_1-x');
+    expect(
+      driveFileIdOf('https://docs.google.com/document/d/DOC_ID/edit'),
+    ).toBe('DOC_ID');
+    expect(driveFileIdOf('https://drive.google.com/open?id=OPEN_ID')).toBe(
+      'OPEN_ID',
+    );
+    expect(driveFileIdOf('https://example.com/file/d/scan/view')).toBe(
+      undefined,
+    );
+    expect(driveFileIdOf('not a url')).toBe(undefined);
   });
 
   it('escapes image and transclusion placeholders', () => {
@@ -222,8 +240,8 @@ describe('hydrateEmbeds', () => {
     // Same image twice: fetched once, one object URL.
     expect(deps.loadImage).toHaveBeenCalledTimes(1);
     expect(deps.createObjectUrl).toHaveBeenCalledTimes(1);
-    expect(root.querySelector('a.wikilink-file')?.getAttribute('target')).toBe(
-      '_blank',
+    expect(root.querySelector('a.wikilink-file')?.getAttribute('href')).toMatch(
+      /^\/file\//,
     );
 
     cleanup();
@@ -440,5 +458,43 @@ describe('transclusion caps', () => {
     expect(
       root.querySelector('[data-bower-embed="b"] a')?.getAttribute('href'),
     ).toBe('/note/b');
+  });
+});
+
+describe('links to files in the Bower folder (#609)', () => {
+  const index = buildVaultIndex([
+    file('host', 'Host.md'),
+    file('lease', 'Flat hunt/Lease agreement.pdf', 'application/pdf'),
+  ]);
+
+  function linkOf(markdown: string): HTMLAnchorElement | null {
+    const root = document.createElement('div');
+    root.innerHTML = renderNote(markdown, index).html;
+    return root.querySelector('a');
+  }
+
+  it("opens a Drive URL of a file in the index on the file's screen", () => {
+    const link = linkOf(
+      '[the lease](https://drive.google.com/file/d/lease/view?usp=sharing)',
+    );
+    expect(link?.getAttribute('href')).toBe('/file/lease');
+    expect(link?.hasAttribute('target')).toBe(false);
+    expect(link?.textContent).toBe('the lease');
+  });
+
+  it('opens a wikilink to a PDF on its screen', () => {
+    expect(linkOf('See [[Lease agreement.pdf]].')?.getAttribute('href')).toBe(
+      '/file/lease',
+    );
+  });
+
+  it('leaves a Drive URL of a file that is not in the folder alone', () => {
+    const link = linkOf(
+      '[else](https://drive.google.com/file/d/elsewhere/view)',
+    );
+    expect(link?.getAttribute('href')).toBe(
+      'https://drive.google.com/file/d/elsewhere/view',
+    );
+    expect(link?.getAttribute('target')).toBe('_blank');
   });
 });

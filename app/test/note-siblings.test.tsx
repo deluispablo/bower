@@ -15,6 +15,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DriveFile } from '../src/drive.js';
+import { resetPrefs, setPref } from '../src/prefs.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 const FIRST_QUESTION_TEXT =
@@ -71,6 +72,7 @@ const loadNote = vi.fn(
   },
 );
 vi.mock('../src/cache.js', () => ({ loadNote }));
+vi.mock('../src/seen.js', () => ({ markSeen: vi.fn(() => Promise.resolve()) }));
 
 const index = buildVaultIndex([WIFI, SUBSCRIPTIONS, PROPOSALS]);
 const noop = (): Promise<void> => Promise.resolve();
@@ -121,6 +123,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetPrefs();
   void act(() => {
     render(null, root);
   });
@@ -145,6 +148,33 @@ describe('Note: previous/next (#423)', () => {
     );
     const links = Array.from(nav.querySelectorAll('a'));
     expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute('href')).toBe(`/note/${WIFI.id}`);
+  });
+
+  it('says where the note is in the folder, "n of m", in the folder\'s sort (#609)', async () => {
+    await mount();
+    // By name (the default): Wi-Fi, then Subscriptions — this note is 2nd.
+    expect(root.querySelector('.note-siblings-count')?.textContent).toBe(
+      '2 of 2',
+    );
+    await act(() => {
+      render(null, root);
+    });
+    root.remove();
+
+    // Newest first: Subscriptions (this note) leads, Wi-Fi follows it.
+    setPref('explorerSort', 'modified');
+    await mount();
+    expect(root.querySelector('.note-siblings-count')?.textContent).toBe(
+      '1 of 2',
+    );
+    const links = Array.from(root.querySelectorAll('.note-siblings a'));
+    expect(links).toHaveLength(1);
+    await waitFor(
+      () =>
+        root.querySelector('.note-siblings a')?.textContent ===
+        "What's my Wi-Fi password? →",
+    );
     expect(links[0]?.getAttribute('href')).toBe(`/note/${WIFI.id}`);
   });
 });
