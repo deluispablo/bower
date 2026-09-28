@@ -719,6 +719,33 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   ).toHaveCount(1);
 });
 
+test('Add: a link row shows the URL, and the What is this? placeholder fits its box (#508)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  // C.11: titles, not file names — the row must never say
+  // "Link - example.com <date> <time>.md", the note's own saved name.
+  await page
+    .getByLabel('Or paste a link')
+    .fill('https://www.example.com/a/page');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('example.com/a/page')).toBeVisible();
+  await expect(page.getByText(/^Link - /)).toHaveCount(0);
+
+  const box = page.getByRole('textbox', { name: 'What is this?' });
+  await expect(box).toBeVisible();
+  await shot(page, testInfo, 'add-context-placeholder');
+
+  // The placeholder must not overflow the box (it used to run to four
+  // lines in this three-line box at 375 px, cut off mid-sentence).
+  const overflow = await box.evaluate(
+    (el: HTMLTextAreaElement) => el.scrollHeight - el.clientHeight,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
 test('Home through the scripted run: waiting, running, done (#321)', async ({
   page,
 }, testInfo) => {
