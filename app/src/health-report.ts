@@ -121,6 +121,25 @@ export function reportDateLabel(modifiedTime: string): string {
 }
 
 /**
+ * `modifiedTime` rounded down to local midnight, as an ISO string
+ * `navigation.ts`'s `relativeTime` can diff: Home's Health card (#447)
+ * needs "Checked today/yesterday" to agree with this file's own
+ * calendar-day dates (`reportDateLabel`, `bubbleText`) instead of counting
+ * a rolling 24 hours back from the moment the card renders, which still
+ * called Sunday night's report "today" on Monday morning. `''` for an
+ * unreadable date.
+ */
+export function reportDayStart(modifiedTime: string): string {
+  const date = new Date(modifiedTime);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  ).toISOString();
+}
+
+/**
  * The message "Ask Bower to fix these" (`routes/health.tsx`) prefills into
  * Tell Bower, through its `?text=` query parameter. `dateLabel` is
  * `reportDateLabel`'s output; no personal data, only the report's date.

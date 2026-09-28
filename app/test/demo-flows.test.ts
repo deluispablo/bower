@@ -12,7 +12,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ApiModule from '../src/api.js';
 import type * as DriveModule from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
+import { contextNote, contextNoteName } from '../src/add.js';
 import { summarise } from '../src/health-report.js';
+import { runCounts } from '../src/home.js';
 import { parseFrontmatter } from '../src/markdown/frontmatter.js';
 import { instructionFileName, instructionNote } from '../src/tell.js';
 import { DONE_MS, QUEUED_MS } from '../src/demo/server.js';
@@ -202,6 +204,34 @@ describe('demo mode', () => {
     expect(
       (await paths()).filter((p) => /^0-Inbox\/Processed\/Bower - /.test(p)),
     ).toHaveLength(5);
+  });
+
+  it('files the "What is this?" context note without answering it as a question (#444)', async () => {
+    const { inboxFolderId } = await folders();
+    const now = new Date(START.getTime());
+    await drive.createTextFile(
+      inboxFolderId,
+      contextNoteName(now),
+      contextNote('Test receipt from a shop', ['Receipt.txt'], now),
+    );
+
+    const run = await tidyUp();
+
+    // The context note is filed out of the inbox like everything else...
+    expect(run.processed).toContain(`0-Inbox/${contextNoteName(now)}`);
+    expect(
+      (await paths()).some(
+        (p) => p === `0-Inbox/Processed/${contextNoteName(now)}`,
+      ),
+    ).toBe(true);
+    // ...but it is not a question: no answer note for it, and only the
+    // fixture's one real question (`INBOX_QUESTION`) counts as answered.
+    const answers = (await paths()).filter((p) =>
+      p.startsWith('Answers/2026-09-27'),
+    );
+    expect(answers.some((p) => /Context/.test(p))).toBe(false);
+    expect(answers).toHaveLength(1);
+    expect(runCounts(run)).toEqual({ filed: 2, answered: 1 });
   });
 
   it('adds files to the inbox, and the next run files them', async () => {

@@ -61,6 +61,13 @@ function isInstruction(path: string, name: string, text: string): boolean {
   );
 }
 
+/** Add's "What is this?" note (`add.ts`, `tell.ts#InstructionKind`): it
+ * applies to its own batch, so it is never a question (#444) — no answer
+ * note gets written for it. */
+function isContext(text: string): boolean {
+  return /kind:\s*context/.test(text);
+}
+
 export class DemoServer {
   readonly vault: DemoVault;
   readonly me: Me;
@@ -172,7 +179,9 @@ export class DemoServer {
       let destination = INBOX_PLAN.get(path) ?? `3-Resources/${name}`;
       if (isInstruction(path, name, text)) {
         destination = `0-Inbox/Processed/${name}`;
-        replies.push(replyTo(name, instructionText(text), date));
+        if (!isContext(text)) {
+          replies.push(replyTo(name, instructionText(text), date));
+        }
       }
       steps.push({
         at: FIRST_FILED_MS + i * gap,
