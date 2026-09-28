@@ -63,7 +63,13 @@ describe('readFileFacts', () => {
       Promise.resolve(
         id === 'ROOT'
           ? [{ id: 'DOT', name: '.bower', mimeType: FOLDER }]
-          : [{ id: 'F', name: 'file-facts.json', mimeType: 'application/json' }],
+          : [
+              {
+                id: 'F',
+                name: 'file-facts.json',
+                mimeType: 'application/json',
+              },
+            ],
       ),
     );
     getText.mockResolvedValue('{"a.pdf":{"pages":2}}');

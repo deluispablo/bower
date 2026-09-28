@@ -1423,6 +1423,7 @@ if [ "$MODE" = ingest ] && [ "$PENDING_COUNT" -eq 0 ]; then
   STEP='report done'
   log "$STEP"
   write_outcome done 'Nothing new to tidy up.'
+  write_file_facts
   write_paths
   if ! report_final done; then
     REPORTED=1
