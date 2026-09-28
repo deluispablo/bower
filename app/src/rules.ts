@@ -363,9 +363,7 @@ const CLAUSE_PRONOUN = /^(?:you|i|we|it|they|he|she)\b/i;
  * unchanged in either case, or when it has no such lead at all.
  */
 export function dropRuleLead(text: string): string {
-  const match = /^\s*(from now on|always|every time)\b[\s,:;.-]*/i.exec(
-    text,
-  );
+  const match = /^\s*(from now on|always|every time)\b[\s,:;.-]*/i.exec(text);
   if (match === null) return text;
   const rest = text.slice(match[0].length);
   if (rest === '' || CLAUSE_PRONOUN.test(rest)) return text;

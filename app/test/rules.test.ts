@@ -475,7 +475,12 @@ describe('appendRule', () => {
   });
 
   it('still appends at the very end when the file has no Everything else heading', () => {
-    const md = appendRule(SHAPED, 'File bank letters under Finance', 'Post', ON);
+    const md = appendRule(
+      SHAPED,
+      'File bank letters under Finance',
+      'Post',
+      ON,
+    );
     const topics = parseRules(md).groups.map((g) => g.topic);
     expect(topics).toEqual(['Finance', 'Flat hunt', 'Post']);
   });
@@ -555,7 +560,7 @@ describe('dropRuleLead (#558)', () => {
 });
 
 describe('appendRule keeps a rule sentence, not verbatim (#558)', () => {
-  it("reads like the other rules, not the sentence as typed", () => {
+  it('reads like the other rules, not the sentence as typed', () => {
     const out = appendRule(
       '',
       'From now on, job offers go to Job hunt.',

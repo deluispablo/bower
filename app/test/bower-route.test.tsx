@@ -355,7 +355,7 @@ describe('the confirmation line under the box (#507)', () => {
   };
   const RULES_TEXT =
     '# Rules\n\n## Finance\n\n' +
-    "- From now on, receipts go under Finance (owner's request, 2026-09-20)\n";
+    "- Receipts go under Finance (owner's request, 2026-09-20)\n";
 
   async function send(text: string): Promise<void> {
     await act(() => {
