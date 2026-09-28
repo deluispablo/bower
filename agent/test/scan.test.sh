@@ -11,6 +11,8 @@
 # a diff and exits non-zero.
 
 set -euo pipefail
+# Under pipefail, never pipe into grep -q: it exits at the first match, the
+# writer can then die of SIGPIPE and fail the pipeline (#391). Use <<<"$x".
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SCAN_SH="$HERE/../scan.sh"
@@ -37,7 +39,7 @@ fi
 
 # Every flagged path must be under should-flag/: a benign fixture that
 # got caught would show up here as a path under should-not-flag/.
-if printf '%s\n' "$actual" | grep -qv '^should-flag/'; then
+if grep -qv '^should-flag/' <<<"$actual"; then
   echo "FAIL: a should-not-flag/ fixture was flagged" >&2
   printf '%s\n' "$actual" | grep -v '^should-flag/' >&2
   exit 1
