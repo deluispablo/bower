@@ -51,6 +51,9 @@ export interface SentRequest {
   text: string;
   /** ISO-8601. */
   sentAt: string;
+  /** A listing has shown its note since (#491): once that listing no longer
+   * does, the note has gone (processed or removed). */
+  seen?: boolean;
 }
 
 /** A rule sentence kept at once from this screen (#343), in memory: its
@@ -264,7 +267,7 @@ export function requestRows({
 
   const fetchedMs = fetchedAt === null ? null : Date.parse(fetchedAt);
   for (const item of justSent) {
-    if (listed.has(item.name)) continue;
+    if (listed.has(item.name) || item.seen === true) continue;
     // Drive lists a note it has just created only after a while, and a
     // refresh already in flight when the note was written ends after the
     // send without it: only a listing fetched well after the send says the

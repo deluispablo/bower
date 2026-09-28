@@ -255,6 +255,21 @@ describe('requestRows', () => {
     ).toEqual([expect.objectContaining({ state: 'waiting', fileId: note.id })]);
   });
 
+  it('drops a request a listing has shown once that listing no longer does', () => {
+    const done: SentRequest = {
+      name: 'Bower - 2026-09-27 1112 When does the lease end.md',
+      text: 'When does the lease end?',
+      sentAt: '2026-09-27T09:12:00.000Z',
+      seen: true,
+    };
+    const rows = requestRows({
+      ...base,
+      fetchedAt: '2026-09-27T09:12:30.000Z',
+      justSent: [done],
+    });
+    expect(rows.some((row) => row.key === `request-${done.name}`)).toBe(false);
+  });
+
   it('trusts a listing fetched after the send: a processed note is gone', () => {
     const earlier: SentRequest = {
       name: 'Bower - 2026-09-27 0830 Make a packing list.md',
