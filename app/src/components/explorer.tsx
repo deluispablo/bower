@@ -6,7 +6,8 @@
  *
  * - `variant="sidebar"`: the desktop column (`layout.tsx` wraps it in a
  *   `<nav aria-label="Your notes">` landmark, always open). Shows the mark
- *   and the primary links passed as `nav`.
+ *   and the primary links passed as `nav`. One tool only, Expand/Collapse
+ *   all: no sort menu (#326, C.9).
  * - `variant="page"`: the Notes tab (`routes/notes.tsx`, #317). No title row
  *   of its own (the top bar carries "Notes"), a live filter field and the
  *   sidebar's section header with the tree tools.
@@ -69,30 +70,43 @@ export interface ExplorerProps {
 }
 
 interface ToolsProps {
-  sort: ExplorerSortPref;
-  onSort: () => void;
-  onCollapse: () => void;
+  /** Left out for the desktop sidebar (#326): no sort menu there. */
+  sort?: ExplorerSortPref;
+  onSort?: () => void;
+  /** Whether the tree is, as far as the toggle knows, fully expanded: the
+   * button's own label and next action (#326, #353: "Expand/Collapse all"
+   * is one toggle, not two one-way buttons). */
+  expanded: boolean;
+  onToggleExpand: () => void;
 }
 
-function Tools({ sort, onSort, onCollapse }: ToolsProps): JSX.Element {
+function Tools({
+  sort,
+  onSort,
+  expanded,
+  onToggleExpand,
+}: ToolsProps): JSX.Element {
   const sortLabel = sort === 'name' ? 'Sort by last modified' : 'Sort by name';
+  const expandLabel = expanded ? 'Collapse all' : 'Expand all';
   return (
     <div class="explorer-tools">
+      {sort !== undefined && onSort !== undefined && (
+        <button
+          type="button"
+          class="icon-button explorer-tool"
+          aria-label={sortLabel}
+          title={sortLabel}
+          onClick={onSort}
+        >
+          <IconSort />
+        </button>
+      )}
       <button
         type="button"
         class="icon-button explorer-tool"
-        aria-label={sortLabel}
-        title={sortLabel}
-        onClick={onSort}
-      >
-        <IconSort />
-      </button>
-      <button
-        type="button"
-        class="icon-button explorer-tool"
-        aria-label="Collapse all"
-        title="Collapse all"
-        onClick={onCollapse}
+        aria-label={expandLabel}
+        title={expandLabel}
+        onClick={onToggleExpand}
       >
         <IconCollapse />
       </button>
@@ -112,6 +126,11 @@ export function Explorer({
     getPref('explorerSort'),
   );
   const [collapseKey, setCollapseKey] = useState(0);
+  const [expandKey, setExpandKey] = useState(0);
+  // Tracks the toggle's own last action, not the tree's real state (a
+  // folder a person expands or collapses by hand doesn't flip it back):
+  // simple on purpose, same as the old one-way Collapse all it replaces.
+  const [treeExpanded, setTreeExpanded] = useState(false);
   const [showAppFiles, setShowAppFiles] = useState(() =>
     getPref('showAppFiles'),
   );
@@ -131,12 +150,19 @@ export function Explorer({
     setShowAppFiles(next);
   }
 
-  function collapseAll(): void {
-    setCollapseKey((key) => key + 1);
+  function toggleExpandCollapse(): void {
+    if (treeExpanded) setCollapseKey((key) => key + 1);
+    else setExpandKey((key) => key + 1);
+    setTreeExpanded((was) => !was);
   }
 
   const tools = (
-    <Tools sort={sort} onSort={toggleSort} onCollapse={collapseAll} />
+    <Tools
+      sort={variant === 'sidebar' ? undefined : sort}
+      onSort={variant === 'sidebar' ? undefined : toggleSort}
+      expanded={treeExpanded}
+      onToggleExpand={toggleExpandCollapse}
+    />
   );
 
   return (
@@ -200,6 +226,7 @@ export function Explorer({
             index={index}
             sort={sort}
             collapseKey={collapseKey}
+            expandKey={expandKey}
             filter={variant === 'sidebar' ? undefined : filter}
             showAppFiles={showAppFiles}
             linkFolders

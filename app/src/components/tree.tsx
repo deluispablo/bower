@@ -11,7 +11,8 @@
  *
  * Each folder row shows its note count (`folderCounts`, subfolders
  * included). The explorer (`explorer.tsx`) passes the order (`sort`) and a
- * `collapseKey` that collapses every folder whenever it changes.
+ * `collapseKey`/`expandKey` pair (its one Expand/Collapse all toggle,
+ * #326) that collapses, or expands, every folder whenever either changes.
  *
  * A non-blank `filter` (the drawer's live filter, spec §14) swaps in
  * `filterTree`'s result and force-expands every folder it kept, so a match
@@ -112,8 +113,10 @@ interface TreeProps {
   onNavigate?: () => void;
   /** The explorer's order; by name when left out. */
   sort?: TreeSort;
-  /** Every change collapses all folders (the explorer's Collapse all). */
+  /** Every change collapses all folders (the explorer's Expand/Collapse all). */
   collapseKey?: number;
+  /** Every change expands all folders (the explorer's Expand/Collapse all). */
+  expandKey?: number;
   /**
    * Show the "Bower's files" group after the tree (the `showAppFiles`
    * preference). Off by default: the tree is the user's notes only.
@@ -139,6 +142,7 @@ export function Tree({
   onNavigate,
   sort = 'name',
   collapseKey = 0,
+  expandKey = 0,
   showAppFiles = false,
   filter = '',
   linkFolders = false,
@@ -167,6 +171,7 @@ export function Tree({
   const [focusIndex, setFocusIndex] = useState(0);
   const rowRefs = useRef<Array<HTMLElement | null>>([]);
   const lastCollapseKey = useRef(collapseKey);
+  const lastExpandKey = useRef(expandKey);
 
   useEffect(() => {
     if (collapseKey === lastCollapseKey.current) return;
@@ -174,6 +179,15 @@ export function Tree({
     setExpanded(new Set<string>());
     setFocusIndex(0);
   }, [collapseKey]);
+
+  useEffect(() => {
+    if (expandKey === lastExpandKey.current) return;
+    lastExpandKey.current = expandKey;
+    const all = new Set<string>();
+    allFolderPaths(tree, all);
+    setExpanded(all);
+    setFocusIndex(0);
+  }, [expandKey, tree]);
 
   const rows = useMemo(() => {
     const out: Row[] = [];

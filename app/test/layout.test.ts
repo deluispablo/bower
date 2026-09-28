@@ -394,30 +394,44 @@ describe('Layout', () => {
     expect(root.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it('sorts by last modified and remembers it', () => {
-    mount();
-    const sort = query<HTMLButtonElement>(
-      'nav[aria-label="Your notes"] button[aria-label="Sort by last modified"]',
-    );
-    click(sort);
-    expect(sort.getAttribute('aria-label')).toBe('Sort by name');
-    expect(localStorage.getItem('bower:pref:explorerSort')).toBe('"modified"');
-  });
-
-  it('collapses every folder with Collapse all', () => {
+  it('has no sort menu, one Expand/Collapse all toggle (#326)', () => {
     mount();
     const sidebar = query('nav[aria-label="Your notes"]');
-    // The sidebar tree links a folder's name to `/folder/<path>` (#214); its
-    // chevron is still the toggle.
-    const chevron = query<HTMLButtonElement>(
-      'nav[aria-label="Your notes"] .tree-folder .tree-chevron',
+    expect(sidebar.querySelector('[aria-label^="Sort by"]')).toBeNull();
+    expect(sidebar.querySelectorAll('.explorer-tool')).toHaveLength(1);
+  });
+
+  it('the sidebar toggle expands, then collapses, every folder (#326)', () => {
+    mount();
+    const sidebar = query('nav[aria-label="Your notes"]');
+    const toggle = query<HTMLButtonElement>(
+      'nav[aria-label="Your notes"] button.explorer-tool',
     );
-    click(chevron);
-    expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(1);
-    click(
-      query('nav[aria-label="Your notes"] button[aria-label="Collapse all"]'),
-    );
+    expect(toggle.getAttribute('aria-label')).toBe('Expand all');
+
+    // The fixture's three folders: 0-Inbox, 2-Areas, 2-Areas/Cooking.
+    click(toggle);
+    expect(toggle.getAttribute('aria-label')).toBe('Collapse all');
+    expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(3);
+
+    click(toggle);
+    expect(toggle.getAttribute('aria-label')).toBe('Expand all');
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
+  });
+
+  it("shows the waiting count on Home's row, not on Add (#326, C.9)", () => {
+    mount();
+    const sidebar = query('nav[aria-label="Your notes"]');
+    const home = query<HTMLAnchorElement>(
+      'nav[aria-label="Primary"] a[href="/"]',
+    );
+    expect(home.querySelector('.nav-badge')?.textContent).toBe('1');
+    const add = query<HTMLAnchorElement>(
+      'nav[aria-label="Primary"] a[href="/add"]',
+    );
+    expect(add.querySelector('.nav-badge')).toBeNull();
+    // Sanity: the fixture's one pending file is `0-Inbox/Receipt.pdf`.
+    expect(sidebar.textContent).toContain('0-Inbox');
   });
 
   it('renders content from the actions shell slot in the bar', () => {
