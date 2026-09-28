@@ -1446,4 +1446,3 @@ export const SCRIPTED_LISTINGS: readonly RunItem[] = (
 ).filter((item) => /^1-Projects\/Flat hunt\/.*\.pdf$/.test(item.to ?? ''));
 
 export const SCRIPTED_ADDED = 'I added bike times to the flats';
-

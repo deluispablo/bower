@@ -222,6 +222,29 @@ export class DemoServer {
         ? (LAST_FILED_MS - FIRST_FILED_MS) / (pending.length - 1)
         : 0;
 
+    // The flat listings' companion notes (`kind: rental-listing`) are written
+    // again first, so the notes the run files itself stay the newest.
+    const withFiles =
+      scope !== 'instructions' &&
+      pending.some((item) => !isInstruction(item.path, item.name, item.text));
+    if (withFiles) {
+      steps.push({
+        at: FIRST_FILED_MS,
+        apply: () => {
+          for (const item of SCRIPTED_LISTINGS) {
+            const note = (item.to ?? '').replace(/\.pdf$/, '.md');
+            const text = this.textAt(note);
+            if (text !== '')
+              this.vault.write(
+                note,
+                `${text}
+`,
+              );
+          }
+        },
+      });
+    }
+
     for (const [i, { path, name, text }] of pending.entries()) {
       let destination = INBOX_PLAN.get(path) ?? `3-Resources/${name}`;
       // What the runner reports for each item (#345, `agent/run.sh`).
@@ -262,19 +285,18 @@ export class DemoServer {
     steps.push({
       at: DONE_MS,
       apply: () => {
-        // The flat listings and their companion notes (`kind: rental-listing`)
-        // come with the run, so Home and Just filed show what the boards draw.
-        if (scope !== 'instructions' && filed.length > 0) {
+        // The flat listings come with the run, so Home and Just filed show
+        // what the boards draw.
+        if (withFiles) {
           for (const item of SCRIPTED_LISTINGS) {
-            const note = (item.to ?? '').replace(/\.pdf$/, '.md');
-            const text = this.textAt(note);
-            if (text !== '') this.vault.write(note, `${text}
-`);
             run.processed?.push(item.path);
             run.items?.push({ ...item });
             filed.push({
               name: item.path.slice(item.path.lastIndexOf('/') + 1),
-              folder: (item.to ?? '').slice(0, (item.to ?? '').lastIndexOf('/')),
+              folder: (item.to ?? '').slice(
+                0,
+                (item.to ?? '').lastIndexOf('/'),
+              ),
               at: DONE_MS,
             });
           }
