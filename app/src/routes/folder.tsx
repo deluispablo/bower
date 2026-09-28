@@ -3,11 +3,12 @@
  * one screen for a folder wherever it is reached from — the Home Answers
  * card, a note's breadcrumb, the desktop tree's folder name, or another
  * Folder screen's own subfolder rows. Shows the folder's icon and name, its
- * counts, a chip row (Pinned, Ask Bower about it, Open in Drive), its
+ * counts, a chip row (Pinned, Ask Bower about it, Drive), its
  * subfolders (with their own counts) and its own notes and files together,
  * newest first (#349): each row with the type icon, the title and who put
  * it there (`file-origin.ts`). A note opens in the app, any other file on
- * its own screen (`routes/file.tsx`, #350).
+ * its own screen (`routes/file.tsx`, #350). Any folder but a root one ends
+ * with a tip inviting more from Bower (#453, Phone-Folder-Project board).
  *
  * The More menu (#352) is the one a note and a file have
  * (`note-menu.tsx`, `kind="folder"`): its phone trigger in the shell's
@@ -40,6 +41,7 @@ import {
   IconNote,
   IconPdf,
   IconPin,
+  IconSparkle,
 } from '../components/icons.js';
 import { BackLink } from '../components/back-link.js';
 import { MoreButton } from '../components/more-button.js';
@@ -185,7 +187,7 @@ interface FolderBodyProps {
   meaning: string | undefined;
   /** Who put each file there, from `index.md` (`useCatalogueOrigins`). */
   catalogue: ReadonlyMap<string, Origin>;
-  /** The folder's own Drive file, for "Open in Drive"; always set in
+  /** The folder's own Drive file, for the Drive chip; always set in
    * practice (`contents` only exists for a folder the index already has). */
   file: DriveFile | undefined;
   /** Whether the folder has a `pinned` timestamp (#215, #216). */
@@ -283,7 +285,7 @@ function FolderBody({
             rel="noopener"
           >
             <IconExternalLink />
-            Open in Drive
+            Drive
           </a>
         )}
       </div>
@@ -370,6 +372,17 @@ function FolderBody({
           </ul>
         )}
       </div>
+
+      {parentName !== null && (
+        <p class="folder-tip">
+          <IconSparkle />
+          <span>
+            Want more from this folder? Ask Bower: &ldquo;Compare the flats I
+            saved&rdquo; or &ldquo;From now on, pull rent and size out of every
+            listing&rdquo;.
+          </span>
+        </p>
+      )}
     </section>
   );
 }

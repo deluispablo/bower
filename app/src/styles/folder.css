@@ -60,9 +60,10 @@
 /*
  * 13 px, not the shared `.chip`'s 14 (`--text-sm`), with tighter padding,
  * icon-to-label gap and inter-chip gap than the default: at 375 px the
- * three chips (Pinned/Pin to Home, Ask Bower about it, Open in Drive)
- * measure 328–340 px across depending on the pin state, fitting the
- * phone's 343 px content width in one row instead of wrapping to two
+ * three chips (Pinned/Pin to Home, Ask Bower about it, Drive) measure
+ * under 328–340 px across depending on the pin state (less than with the
+ * old "Open in Drive" label, #453), fitting the phone's 343 px content
+ * width in one row instead of wrapping to two
  * (#310, 2.14). `min-height: 44px` (`.chip`) keeps the touch target full
  * size regardless of the tighter padding. Scoped to the Folder screen's
  * own chips; `.chip` itself is shared with Tell Bower's composer and
@@ -242,4 +243,26 @@
    note; `note-menu.css` shows it from 900 px up. */
 .folder-head-actions {
   margin-left: auto;
+}
+
+/* The "want more" tip (#453, Phone-Folder-Project board): any folder but
+   a root one, after the list, inviting more from Bower. Same dashed-card
+   treatment as `home-tip`/`bower-tip`. */
+.folder-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.folder-tip > .icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--color-accent);
 }
