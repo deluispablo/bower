@@ -487,6 +487,14 @@ describe('usesShell', () => {
       expect(usesShell(path)).toBe(true);
     }
   });
+
+  it("puts the demo's Run your own Bower in the shell, and nothing else bare (#366)", () => {
+    expect(usesShell('/login', true)).toBe(true);
+    expect(usesShell('/not-invited', true)).toBe(true);
+    for (const path of ['/privacy', '/terms', '/onboarding', '/welcome']) {
+      expect(usesShell(path, true)).toBe(false);
+    }
+  });
 });
 
 describe('bowerUrlFor', () => {
@@ -515,6 +523,10 @@ describe('isInnerScreen', () => {
     ]) {
       expect(isInnerScreen(path)).toBe(true);
     }
+  });
+
+  it("treats the demo's /login as an inner screen, with Back (#366)", () => {
+    expect(isInnerScreen('/login', true)).toBe(true);
   });
 });
 

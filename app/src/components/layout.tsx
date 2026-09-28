@@ -42,7 +42,7 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
-import { loginUrl } from '../api.js';
+import { isDemo, loginUrl } from '../api.js';
 import { tourOnScreen } from '../onboarding.js';
 import { pendingCount } from '../run-store.js';
 import { useSession } from '../session.js';
@@ -148,7 +148,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // "?" (About this screen): the help sheet for the screen on show (#330).
   const [helpOpen, setHelpOpen] = useState(false);
-  const inner = isInnerScreen(path);
+  const inner = isInnerScreen(path, isDemo());
   const headRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   const wasDrawerOpen = useRef(false);

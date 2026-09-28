@@ -1,99 +1,104 @@
 /**
- * "Run your own Bower" (#193, spec §5): the demo build's stand-in for
- * sign-in. Replaces `routes/login.tsx` at `/login` (`app.tsx`'s route
- * line), and the last "What is Bower" page's sign-in CTA
- * (`routes/intro.tsx`) and `routes/not-invited.tsx` fall back to it too —
- * neither screen makes sense once there is no real account to sign into.
+ * "Run your own Bower" (#366, board Demo-RunYourOwn): the demo build's
+ * stand-in for sign-in. Replaces `routes/login.tsx` at `/login` (`app.tsx`'s
+ * route line), which the demo banner's "Run your own" links to
+ * (`components/demo-banner.tsx`), and `routes/not-invited.tsx` falls back
+ * to it too. In a demo build both render inside the shell (`shell-routes.ts`),
+ * as the board draws it: the demo is always signed in as Alex, so the tabs
+ * are the way back.
  *
- * The demo's `getMe()` always answers as Alex (`demo/api.ts`), so "Explore
- * the demo" only needs to make the session state catch up: `refresh()`
- * re-reads it and the router takes it from there.
+ * The dancing bird, one paragraph, three rows (one folder in your Drive;
+ * your own keys; about an hour), "Read the runbook on GitHub" (the repo's
+ * `docs/runbook.md`) and "What is Bower, in nine screens", the intro opened
+ * with Close, which comes back here (`introReturnPath`, `intro.ts`).
  */
 
-import { useLocation } from 'preact-iso';
+import type { JSX } from 'preact';
 
 import { Bird } from '../components/bird.js';
-import { IconExternalLink } from '../components/icons.js';
-import { markIntroSeen } from '../intro.js';
-import { useSession } from '../session.js';
-import '../styles/auth.css';
+import { IconClock, IconDrive } from '../components/icons.js';
 import '../styles/run-your-own.css';
 
-const WHAT_YOU_NEED = [
-  'A Google account',
-  'Free Cloudflare and GitHub accounts',
-  'A Claude subscription or API key',
-  'About an hour',
-];
+/** The repository's runbook, where running your own Bower is written up. */
+export const RUNBOOK_URL =
+  'https://github.com/deluispablo/bower/blob/main/docs/runbook.md';
 
-/**
- * What it is, what it takes, and the way in — shared by the full screen
- * below and by the intro's last page, which already carries its own
- * heading and bird.
- */
-export function RunYourOwnCta() {
-  const { refresh } = useSession();
-  const { route } = useLocation();
-  const aboutUrl = import.meta.env.VITE_ABOUT_URL;
+/** The nine intro pages with Close, back to this screen. */
+export const INTRO_FROM_RUN_YOUR_OWN_HREF = '/welcome?from=run-your-own';
 
-  const explore = async (): Promise<void> => {
-    markIntroSeen(localStorage);
-    await refresh();
-    route('/');
-  };
-
+/** A key: the board's "Your own keys" row. */
+function IconKey(): JSX.Element {
   return (
-    <>
-      <p class="auth-promise">
-        This is a demo: sample notes, nothing saved. Run your own Bower and it
-        keeps your own notes tidy in your own Google Drive instead.
-      </p>
-      <ul class="run-your-own-needs">
-        {WHAT_YOU_NEED.map((item) => (
-          <li>{item}</li>
-        ))}
-      </ul>
-      <div class="run-your-own-links">
-        <a
-          href="https://github.com/deluispablo/bower"
-          target="_blank"
-          rel="noopener"
-        >
-          <IconExternalLink /> Repository
-        </a>
-        <a
-          href="https://github.com/deluispablo/bower/blob/main/docs/runbook.md"
-          target="_blank"
-          rel="noopener"
-        >
-          <IconExternalLink /> Runbook
-        </a>
-        {aboutUrl !== undefined && aboutUrl !== '' && (
-          <a href={aboutUrl} target="_blank" rel="noopener">
-            <IconExternalLink /> What is Bower
-          </a>
-        )}
-      </div>
-      <div class="auth-actions">
-        <button type="button" class="button" onClick={() => void explore()}>
-          Explore the demo
-        </button>
-      </div>
-    </>
+    <svg
+      class="icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="8" cy="12" r="4" />
+      <path d="M12 12h9M18 12v3M15 12v2" />
+    </svg>
   );
 }
 
-/** The full screen: `/login` in a demo build, and `/not-invited`'s fallback. */
-export function RunYourOwn() {
+const ROWS = [
+  {
+    Icon: IconDrive,
+    title: 'One folder in your Drive',
+    line: 'Plain files; delete the app and it is still there.',
+  },
+  {
+    Icon: IconKey,
+    title: 'Your own keys',
+    line: "Google sign-in, a Claude subscription, GitHub for the bird's workroom.",
+  },
+  {
+    Icon: IconClock,
+    title: 'About an hour',
+    line: 'The runbook walks you through it, step by step.',
+  },
+] as const;
+
+/** `/login` (and `/not-invited`'s fallback) in a demo build. */
+export function RunYourOwn(): JSX.Element {
   return (
-    <section class="auth-screen auth-screen--login">
-      <div class="auth-bird auth-bird--ground">
-        <Bird state="hello" size={96} />
-      </div>
-      <div class="auth-heading">
-        <h1 class="auth-wordmark">Bower</h1>
-      </div>
-      <RunYourOwnCta />
+    <section class="run-your-own">
+      <Bird state="showoff" size={120} />
+      <h1 class="run-your-own-title">Run your own Bower</h1>
+      <p class="run-your-own-lede">
+        The demo shows Alex's things. Yours live in your own Google Drive, and
+        only you can see them. Bower is free, open source, and runs on free
+        tiers; you bring a Google account and a Claude subscription.
+      </p>
+      <ul class="run-your-own-rows">
+        {ROWS.map(({ Icon, title, line }) => (
+          <li class="run-your-own-row">
+            <span class="run-your-own-icon">
+              <Icon />
+            </span>
+            <span class="run-your-own-text">
+              <b>{title}</b>
+              <span>{line}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <a
+        class="button run-your-own-runbook"
+        href={RUNBOOK_URL}
+        target="_blank"
+        rel="noopener"
+      >
+        Read the runbook on GitHub
+      </a>
+      <a class="run-your-own-intro" href={INTRO_FROM_RUN_YOUR_OWN_HREF}>
+        What is Bower, in nine screens
+      </a>
     </section>
   );
 }

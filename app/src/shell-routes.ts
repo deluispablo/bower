@@ -20,6 +20,13 @@ const BARE_PATHS = new Set([
   '/welcome',
 ]);
 
+/**
+ * In a demo build, sign-in's place is Run your own Bower (#366), drawn
+ * inside the shell: the demo is always signed in as Alex, so the tabs are
+ * the way back.
+ */
+const DEMO_SHELL_PATHS = new Set(['/login', '/not-invited']);
+
 /** The Bower tab (#317), which replaced `/tell`. */
 export const BOWER_PATH = '/bower';
 
@@ -35,8 +42,8 @@ const TAB_PATHS = new Set(['/', '/notes', '/add', BOWER_PATH]);
  * Settings, Not found — anything in the shell that is not one of the four
  * tabs. Its top bar shows Back where a tab shows the folder menu button.
  */
-export function isInnerScreen(path: string): boolean {
-  return usesShell(path) && !TAB_PATHS.has(path);
+export function isInnerScreen(path: string, demo = false): boolean {
+  return usesShell(path, demo) && !TAB_PATHS.has(path);
 }
 
 /**
@@ -59,6 +66,7 @@ export function helpScreenFor(path: string): HelpScreen {
   return 'home';
 }
 
-export function usesShell(path: string): boolean {
+export function usesShell(path: string, demo = false): boolean {
+  if (demo && DEMO_SHELL_PATHS.has(path)) return true;
   return !BARE_PATHS.has(path);
 }

@@ -4,7 +4,12 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { introRuns, introSeen, markIntroSeen } from '../src/intro.js';
+import {
+  introReturnPath,
+  introRuns,
+  introSeen,
+  markIntroSeen,
+} from '../src/intro.js';
 
 describe('introSeen', () => {
   it('is false on a first visit (nothing stored yet)', () => {
@@ -19,6 +24,21 @@ describe('introSeen', () => {
 
   it('is false when the storage throws, so the intro shows rather than hides for good', () => {
     expect(introSeen(throwingStorage())).toBe(false);
+  });
+});
+
+describe('introReturnPath', () => {
+  it('goes back to Settings when opened from it', () => {
+    expect(introReturnPath('settings')).toBe('/settings');
+  });
+
+  it("goes back to the demo's Run your own Bower when opened from it (#366)", () => {
+    expect(introReturnPath('run-your-own')).toBe('/login');
+  });
+
+  it('is null on a first visit or an unknown origin', () => {
+    expect(introReturnPath(undefined)).toBeNull();
+    expect(introReturnPath('elsewhere')).toBeNull();
   });
 });
 
