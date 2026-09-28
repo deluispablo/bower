@@ -93,4 +93,28 @@ describe('noteTitle', () => {
       noteTitle({ name: 'Note.md' }, lines('---', 'title: 2026', '---', '')),
     ).toBe('2026');
   });
+
+  it('reads a filed link (#557) by its host and path, not its generated name', () => {
+    const name = 'Link - example.org 2026-09-28 1414.md';
+    expect(noteTitle({ name }, 'https://example.org/offers/job-one')).toBe(
+      'example.org/offers/job-one',
+    );
+    // A trailing newline (as a saved file often has) is trimmed first.
+    expect(noteTitle({ name }, 'https://www.example.org/offers/\n')).toBe(
+      'example.org/offers/',
+    );
+    // The bare host: no path beyond "/".
+    expect(noteTitle({ name }, 'https://example.org/')).toBe('example.org');
+  });
+
+  it('does not treat a note that only mentions a URL as a link note', () => {
+    const text = 'See https://example.org/offers/job-one for the listing.';
+    expect(noteTitle({ name: 'Note.md' }, text)).toBe('Note');
+  });
+
+  it('ignores a non-http(s) bare URL body', () => {
+    expect(noteTitle({ name: 'Note.md' }, 'mailto:you@example.com')).toBe(
+      'Note',
+    );
+  });
 });

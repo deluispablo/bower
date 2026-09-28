@@ -863,6 +863,48 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toBeHidden();
 });
 
+test('a filed link reads by its host and path, on the Done sheet and in Recent, not its generated file name (#557)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+  await page.locator('#add-link').fill('https://example.org/offers/job-one');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('example.org/offers/job-one')).toBeVisible();
+  await expect(page.getByText(/^Link - /)).toHaveCount(0);
+
+  await navigate(page, /^Home$/);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet.getByText('4 files processed')).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // The working sheet only ever has the file name (no cached text, #557):
+  // the host it can read back out of the generated name, not the full
+  // path Add's own row and Recent (below) can read from the URL itself —
+  // still a title, never "Link - example.org 2026-09-28 1414".
+  const row = sheet.locator('.working-sheet-row', {
+    hasText: 'example.org',
+  });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('3-Resources');
+  await expect(sheet.getByText(/^Link - /)).toHaveCount(0);
+  await sheet.getByRole('button', { name: 'Close' }).click();
+
+  // Home's Recent (#306: titles, never file names) reads it the same way.
+  await expect(
+    page.locator('.home-note-title', { hasText: 'example.org/offers/job-one' }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.home-note-title', { hasText: /^Link - / }),
+  ).toHaveCount(0);
+});
+
 test('the Last tidy-up card keeps the previous line while the next run goes (#498)', async ({
   page,
 }, testInfo) => {

@@ -202,6 +202,17 @@ describe('runRows', () => {
     expect(rows[0]?.tone).toBe('note');
   });
 
+  it('a filed link shows its host, not its generated file name (#557)', () => {
+    const link = '0-Inbox/Link - example.org 2026-09-28 1414.md';
+    const rows = runRows({
+      processed: [link],
+      waiting: [link],
+      files: [],
+      active: false,
+    });
+    expect(rows[0]?.title).toBe('example.org');
+  });
+
   it('no row for the "What is this?" context note, filed or being read (#446)', () => {
     const context = '0-Inbox/Bower - 2026-09-27 0815 Context.md';
     const withContext = runRows({
