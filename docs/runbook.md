@@ -158,7 +158,7 @@ Either way, set these under the instance repo's **Settings → Secrets and varia
 | `ANTHROPIC_API_KEY` | Secret (this or `CLAUDE_CODE_OAUTH_TOKEN`) | Claude Console → API keys |
 | `BOWER_API_URL` | Variable | The Worker's deployed origin, same as `API_ORIGIN` | 
 | `BOWER_MAX_TURNS` | Variable (optional) | Overrides the Worker's `DEFAULT_MAX_TURNS` for this instance |
-| `BOWER_ALLOW_WEB` | Variable (optional) | Leave unset (the default): the agent gets no web access, so a clipped page cannot make it send notes anywhere. This variable is the one way a run can reach the network: `1` gives it `WebSearch` and `WebFetch`; only set it if your users' rulebooks need the web, and tell them (`docs/privacy.md`). See "Tools and web access" in `agent/README.md` |
+| `BOWER_ALLOW_WEB` | Variable (optional) | Leave unset (the default): the agent gets no web access, so a clipped page cannot make it send notes anywhere. This variable is the instance's half of the one way a run can reach the network: with `1`, a tidy-up gets `WebSearch` and `WebFetch` only for a user who also turned on **Let Bower look things up on the web** in Settings (stored by the Worker, sent as the dispatch's `allow_web`, #374). Unset, the Settings switch still shows and saves, but no run gets the web. Only set it if your users need the web, and tell them (`docs/privacy.md`). The weekly lint never gets the web tools. See "Tools and web access" in `agent/README.md` |
 
 With the GitHub CLI, from the instance repo's checkout (or add `-R OWNER/bower-home`):
 
