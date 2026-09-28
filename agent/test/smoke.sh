@@ -558,7 +558,7 @@ case "$SMOKE_SCENARIO" in
   # line: the stubbed report counts and lists both findings (memory hygiene,
   # issue #201).
   hygiene)
-    printf -- '---\ntags: [meta]\nnotes: 3\nfindings: 2\nbrokenLinks: 0\n---\n\n# Lint Report\n\n- [ ] Contradiction: Rules.md gives two conflicting rules for invoices\n- [ ] Forbidden content: Rules.md has a credential-shaped line\n' \
+    printf -- '---\ntags: [meta]\nnotes: 3\nfindings: 2\nbrokenLinks: 0\n---\n\n# Lint Report\n\n- [ ] Contradiction: Rules.md gives two conflicting rules for invoices\n- [ ] Urgent: Rules.md has a credential-shaped line\n' \
       >'Lint Report.md'
     ;;
   # A prompt-injected run plants a CLAUDE.md in a known root, moves a
@@ -1021,6 +1021,10 @@ grep -Fq "never change a proposal's \`status\`" <<<"$INGEST_PROMPT" ||
 LINT_PROMPT=$(cat "$HERE/../prompts/lint.md")
 grep -Fq 'more than 30 days before today; never touch an `open` one' <<<"$LINT_PROMPT" ||
   die 'lint prompt does not prune decided proposals after 30 days'
+grep -Fq 'Start the title of each such finding with `Urgent:`' <<<"$LINT_PROMPT" ||
+  die 'lint prompt does not mark forbidden-content findings Urgent: (#524)'
+grep -Fq 'a paused rule (`~~text~~ (paused …)`) is not in force, so skip it here' <<<"$LINT_PROMPT" ||
+  die 'lint prompt does not skip paused rules in the contradiction check (#376)'
 echo "ok ingest prompt contract"
 
 # 1. Ingest happy path, with the refused list reported: a run that stays
