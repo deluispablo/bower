@@ -49,7 +49,7 @@ import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH, originLine, originOf } from '../file-origin.js';
-import { folderMeaning } from '../folder-meanings.js';
+import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
 import type { Origin } from '../file-origin.js';
 import {
   breadcrumb,
@@ -59,7 +59,11 @@ import {
   folderHref,
   shortAge,
 } from '../navigation.js';
-import type { BreadcrumbSegment, FolderContents } from '../navigation.js';
+import type {
+  BreadcrumbSegment,
+  FolderContents,
+  FolderSubfolder,
+} from '../navigation.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
@@ -72,14 +76,24 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
+/** The folder that holds projects, whose screen counts them (#431). */
+const PROJECTS_PATH = '1-Projects';
+
 /** The header's line under the name, as the Phone-Folder-Project board has
  * it: "1-Projects · 4 files · 2 notes · pinned". Files and folders only
- * when there are any; notes always. */
+ * when there are any; notes always. 1-Projects itself reads the way the
+ * Phone-Folder board has it instead: "2 projects · 9 things" (#431). */
 function metaLine(
   contents: FolderContents,
   parentName: string | null,
   pinned: boolean,
 ): string {
+  if (contents.path === PROJECTS_PATH) {
+    return `${plural(contents.subfolders.length, 'project')} · ${plural(
+      contents.noteCount + contents.fileCount,
+      'thing',
+    )}`;
+  }
   const parts: string[] = [];
   if (parentName !== null) parts.push(parentName);
   if (contents.fileCount > 0) parts.push(plural(contents.fileCount, 'file'));
@@ -122,6 +136,15 @@ function KindIcon({
   return <span class={`folder-row-icon tone-${tone}`}>{icon}</span>;
 }
 
+/** A root folder screen's subfolder second line (#431, Phone-Folder
+ * board): "6 things · updated today", "3 things · 5 d". */
+function subfolderLine(folder: FolderSubfolder, now: number): string {
+  const things = plural(folder.things, 'thing');
+  if (folder.updated === undefined) return things;
+  const age = shortAge(folder.updated, now);
+  return `${things} · ${age === 'today' ? 'updated today' : age}`;
+}
+
 interface FolderCrumbProps {
   /** This folder's ancestors only (`breadcrumb`), nearest last. */
   ancestors: BreadcrumbSegment[];
@@ -150,6 +173,9 @@ function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
 interface FolderBodyProps {
   contents: FolderContents;
   parentName: string | null;
+  /** The `<h1>`: a root folder's name without its numeric prefix
+   * ("Projects", #431); any other folder's own name. */
+  heading: string;
   /**
    * A root folder's one-line meaning (#348, C.5), from the one table
    * `folder-meanings.ts` — the same words the folder menu (#319) and the
@@ -178,6 +204,7 @@ interface FolderBodyProps {
 function FolderBody({
   contents,
   parentName,
+  heading,
   meaning,
   catalogue,
   file,
@@ -199,7 +226,7 @@ function FolderBody({
       <div class="folder-head">
         <IconFolder />
         <div class="folder-head-text">
-          <h1>{contents.name}</h1>
+          <h1>{heading}</h1>
           <p class="folder-meta">{metaLine(contents, parentName, pinned)}</p>
         </div>
         {file !== undefined && (
@@ -266,8 +293,19 @@ function FolderBody({
               <li key={folder.path}>
                 <a class="folder-row" href={folderHref(folder.path)}>
                   <IconFolder />
-                  <span class="folder-row-name">{folder.name}</span>
-                  <span class="folder-row-count">{folder.count}</span>
+                  {parentName === null ? (
+                    <span class="folder-row-text">
+                      <span class="folder-row-name">{folder.name}</span>
+                      <span class="folder-row-detail">
+                        {subfolderLine(folder, now)}
+                      </span>
+                    </span>
+                  ) : (
+                    <>
+                      <span class="folder-row-name">{folder.name}</span>
+                      <span class="folder-row-count">{folder.count}</span>
+                    </>
+                  )}
                 </a>
               </li>
             ))}
@@ -421,6 +459,9 @@ export function Folder(): JSX.Element {
     <FolderBody
       contents={contents}
       parentName={parent === undefined ? null : parent.name}
+      heading={
+        parent === undefined ? rootFolderHeading(contents.path) : contents.name
+      }
       meaning={parent === undefined ? folderMeaning(contents.path) : undefined}
       catalogue={catalogue}
       file={index.byPath.get(contents.path)}
