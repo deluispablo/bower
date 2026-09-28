@@ -72,6 +72,7 @@ export function sheetVisible(
 ): boolean {
   if (dismissed) return false;
   switch (phase) {
+    case 'starting':
     case 'queued':
     case 'running':
     case 'done':
@@ -85,9 +86,16 @@ export function sheetVisible(
   }
 }
 
-/** The animation state for a run phase, or `null` when there is none. */
+/**
+ * The animation state for a run phase, or `null` when there is none.
+ * `starting` (#505) has no run yet, so it reuses `queued`'s bird and label
+ * — the sheet's own `starting` detail line (`STARTING_MESSAGE`,
+ * `run-store.tsx`) is what actually tells the two apart.
+ */
 export function workingStateFor(phase: RunPhase): WorkingState | null {
   switch (phase) {
+    case 'starting':
+      return 'queued';
     case 'queued':
     case 'running':
     case 'done':
@@ -305,7 +313,10 @@ export function WorkingSheet({
       ? message
       : undefined;
 
-  const active = state === 'queued' || state === 'running';
+  // Keyed on `phase`, not the mapped `state`: `starting` (#505) borrows
+  // `queued`'s bird and label but has no run yet, so it must not pull in
+  // the run-data-dependent stage/progress/rows below.
+  const active = phase === 'queued' || phase === 'running';
   const notes = state === 'done' ? doneNotes(run) : [];
   const processed = run?.processed;
   const progress = active ? progressFor(runCounts(processed, waiting)) : null;
