@@ -41,7 +41,6 @@ import {
   IconSparkle,
 } from '../components/icons.js';
 import { BackLink } from '../components/back-link.js';
-import { FolderMark } from '../components/folder-mark.js';
 import { MoreButton } from '../components/more-button.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { useShellSlot } from '../components/shell-slots.js';
@@ -54,12 +53,10 @@ import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
 import { askBowerHref } from '../more-menu.js';
 import {
   breadcrumb,
-  displayName,
   driveFolderUrl,
   folderContents,
   folderEmptyState,
   folderHref,
-  paraKindOf,
   shortAge,
 } from '../navigation.js';
 import type {
@@ -149,60 +146,20 @@ function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
   );
 }
 
-/** The path bar (R-FOLDER-1): the PARA mark, each segment a link, the
- * current one bold. */
-function PathBar({ path }: { path: string }): JSX.Element {
-  const segments = path.split('/').filter(Boolean);
-  const para = paraKindOf(segments[0] ?? '');
-  let acc = '';
-  return (
-    <nav class="folder-path" aria-label="You are in">
-      {para !== null && <FolderMark kind={para} size={18} />}
-      {segments.map((segment, at) => {
-        acc = acc === '' ? segment : `${acc}/${segment}`;
-        const last = at === segments.length - 1;
-        return (
-          <span key={acc} class="folder-path-part">
-            {at > 0 && (
-              <span class="folder-path-sep" aria-hidden="true">
-                ›
-              </span>
-            )}
-            {last ? (
-              <b aria-current="page">{displayName(segment)}</b>
-            ) : (
-              <a href={folderHref(acc)}>{displayName(segment)}</a>
-            )}
-          </span>
-        );
-      })}
-    </nav>
-  );
-}
-
 type ItemsModule = typeof import('../components/folder-items.js');
 
-// Loaded when a folder with things in it is first shown, so the list mode
-// (filters, pairing, rows) stays out of the startup chunk (#41's budget).
+// Loaded when a folder is first shown, so the path bar and the list mode
+// (filters, pairing, rows) stay out of the startup chunk (#41's budget).
 let itemsModule: ItemsModule | null = null;
 
-function useFolderItems(wanted: boolean): ItemsModule | null {
+function useFolderItems(): ItemsModule | null {
   const [loaded, setLoaded] = useState<ItemsModule | null>(itemsModule);
   useEffect(() => {
-    if (!wanted || loaded !== null) return;
-    let cancelled = false;
-    void import('../components/folder-items.js')
-      .then((mod) => {
-        itemsModule = mod;
-        if (!cancelled) setLoaded(mod);
-      })
-      .catch((err: unknown) =>
-        console.error('Could not load the folder list', err),
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [wanted, loaded]);
+    import('../components/folder-items.js').then(
+      (mod) => setLoaded((itemsModule = mod)),
+      (err: unknown) => console.error(err),
+    );
+  }, []);
   return loaded;
 }
 
@@ -223,11 +180,6 @@ interface FolderBodyProps {
   /** The folder's own Drive file, for the Drive chip; always set in
    * practice (`contents` only exists for a folder the index already has). */
   file: DriveFile | undefined;
-  /** The vault's notes and files by path, for pairing an original with its
-   * note, and the catalogue's own Drive file (`index.md`). */
-  byPath: ReadonlyMap<string, DriveFile>;
-  catalogueFile: DriveFile | undefined;
-  getNoteText: (id: string) => Promise<string>;
   /** Whether the folder has a `pinned` timestamp (#215, #216). */
   pinned: boolean;
   /** Pins or unpins the folder; the chip's own label follows `pinned`. */
@@ -249,9 +201,6 @@ function FolderBody({
   meaning,
   catalogue,
   file,
-  byPath,
-  catalogueFile,
-  getNoteText,
   pinned,
   onTogglePin,
   justChanged,
@@ -266,14 +215,14 @@ function FolderBody({
   const now = Date.now();
   const titles = useNoteTitles(contents.notes);
   const emptyState = folderEmptyState(contents);
-  const items = useFolderItems(contents.items.length > 0);
+  const items = useFolderItems();
   // The board's header (#611) for a folder with things in it; a root folder
   // and an empty one keep the counts line they have always had.
   const boardHeader = parentName !== null && contents.items.length > 0;
 
   return (
     <section class="folder-view">
-      <PathBar path={contents.path} />
+      {items !== null && <items.PathBar path={contents.path} />}
       <div class="folder-head">
         <IconFolder />
         <div class="folder-head-text">
@@ -404,18 +353,15 @@ function FolderBody({
         items !== null && (
           <items.FolderItems
             contents={contents}
-            byPath={byPath}
-            catalogueFile={catalogueFile}
             titles={titles}
             catalogue={catalogue}
-            getNoteText={getNoteText}
             now={now}
           />
         )
       )}
 
       {parentName !== null && (
-        <p class="folder-tip folder-more-tip">
+        <p class="folder-tip">
           <IconSparkle />
           <span>
             Want more from this folder? Ask Bower: &ldquo;Compare what I saved
@@ -518,9 +464,6 @@ export function Folder(): JSX.Element {
       meaning={parent === undefined ? folderMeaning(contents.path) : undefined}
       catalogue={catalogue}
       file={index.byPath.get(contents.path)}
-      byPath={index.byPath}
-      catalogueFile={index.byPath.get(CATALOGUE_PATH)}
-      getNoteText={getNoteText}
       pinned={pinned}
       onTogglePin={() => void handleTogglePin()}
       justChanged={justChanged}

@@ -257,7 +257,8 @@
 /* The "want more" tip (#453, Phone-Folder-Project board): any folder but
    a root one, after the list, inviting more from Bower. Same dashed-card
    treatment as `home-tip`/`bower-tip`. */
-.folder-tip {
+.folder-tip,
+.folder-list-tip {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);

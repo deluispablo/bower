@@ -324,17 +324,17 @@ describe('Drive chip and end-of-folder tip (#453, Phone-Folder-Project board)', 
     mount();
     const tip =
       'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.';
-    expect(root.querySelector('.folder-more-tip')?.textContent).toBe(tip);
+    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
     expect(tip).not.toMatch(/flat|rent|listing/i);
 
     route.params.path = '2-Areas/Cooking';
     mount();
-    expect(root.querySelector('.folder-more-tip')?.textContent).toBe(tip);
+    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
   });
 
   it('has no tip on a root folder', () => {
     mount();
-    expect(root.querySelector('.folder-more-tip')).toBeNull();
+    expect(root.querySelector('.folder-tip')).toBeNull();
   });
 });
 

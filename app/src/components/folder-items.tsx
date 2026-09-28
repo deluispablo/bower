@@ -15,7 +15,7 @@ import { loadViewSettings, saveViewSettings } from '../cache.js';
 import type { ViewSettings } from '../cache.js';
 import { parseCatalogueFiles } from '../companion.js';
 import type { DriveFile } from '../drive.js';
-import { originOf } from '../file-origin.js';
+import { CATALOGUE_PATH, originOf } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import {
   FOLDER_SORTS,
@@ -40,14 +40,21 @@ import type {
 } from '../folder-view.js';
 import { keyFactsFor, kindById } from '../kinds.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
-import { shortAge } from '../navigation.js';
+import {
+  displayName,
+  folderHref,
+  paraKindOf,
+  shortAge,
+} from '../navigation.js';
 import type { FolderContents } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { useNew } from '../use-new.js';
+import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
+import { FolderMark } from './folder-mark.js';
 import { IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
 import { KeyFacts } from './key-facts.js';
 import { KindBadge } from './kind-badge.js';
@@ -91,6 +98,39 @@ function KindIcon({
     </span>
   );
 }
+
+/** The path bar (R-FOLDER-1): the PARA mark, each segment a link, the
+ * current one bold. */
+export function PathBar({ path }: { path: string }): JSX.Element {
+  const segments = path.split('/').filter(Boolean);
+  const para = paraKindOf(segments[0] ?? '');
+  let acc = '';
+  return (
+    <nav class="folder-path" aria-label="You are in">
+      {para !== null && <FolderMark kind={para} size={18} />}
+      {segments.map((segment, at) => {
+        acc = acc === '' ? segment : `${acc}/${segment}`;
+        const last = at === segments.length - 1;
+        return (
+          <span key={acc} class="folder-path-part">
+            {at > 0 && (
+              <span class="folder-path-sep" aria-hidden="true">
+                ›
+              </span>
+            )}
+            {last ? (
+              <b aria-current="page">{displayName(segment)}</b>
+            ) : (
+              <a href={folderHref(acc)}>{displayName(segment)}</a>
+            )}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
+const NO_FILES: ReadonlyMap<string, DriveFile> = new Map();
 
 /** Past this many rows the list renders only the ones in view (`VirtualList`,
  * #590/#611); below it every row is in the DOM. */
@@ -391,13 +431,8 @@ function RowDetail({
 
 export interface FolderItemsProps {
   contents: FolderContents;
-  /** The vault's notes and files by path, for pairing an original with its
-   * note, and the catalogue's own Drive file (`index.md`). */
-  byPath: ReadonlyMap<string, DriveFile>;
-  catalogueFile: DriveFile | undefined;
   titles: ReadonlyMap<string, string>;
   catalogue: ReadonlyMap<string, Origin>;
-  getNoteText: (id: string) => Promise<string>;
   now: number;
 }
 
@@ -411,14 +446,14 @@ function entryKey(entry: Entry): string {
  * date groups and rows, with pairs as one row. */
 export function FolderItems({
   contents,
-  byPath,
-  catalogueFile,
   titles,
   catalogue,
-  getNoteText,
   now,
 }: FolderItemsProps): JSX.Element {
   const fresh = useNew();
+  const { index, getNoteText } = useVault();
+  const byPath = index?.byPath ?? NO_FILES;
+  const catalogueFile = byPath.get(CATALOGUE_PATH);
   const [view, onView] = useFolderView(contents.path);
   const metas = useNoteMetas(contents.notes);
   const catalogueFiles = useCatalogueFiles(catalogueFile, getNoteText);
@@ -635,7 +670,7 @@ export function FolderItems({
           ))}
         </ul>
       )}
-      <p class="folder-tip folder-list-tip">
+      <p class="folder-list-tip">
         {view.origin === 'bower' ? (
           <span>{TIP_BOWER}</span>
         ) : (
