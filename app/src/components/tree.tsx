@@ -65,6 +65,7 @@ import {
 import type { ParaKind, TreeNode, TreeRow, TreeSort } from '../navigation.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
+import { ancestorsOf, mergeExpanded } from '../reveal.js';
 import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
@@ -112,6 +113,14 @@ let virtualModule: VirtualModule | null = null;
 
 /** A row's height in px before it is measured: the 44 px row plus its gap. */
 const ROW_ESTIMATE = 46;
+
+/** How long the revealed row's highlight lasts (matches `tree.css`). */
+const REVEAL_FLASH_MS = 600;
+
+// The folders open when this tree last changed, kept for the next tree that
+// mounts (the phone's Notes tab mounts a fresh one on every visit) so it
+// paints open at once instead of collapsed until the stored state is read.
+let rememberedExpanded: ReadonlySet<string> | null = null;
 
 /** How long a scroll must rest before its offset is saved. */
 const SCROLL_SAVE_MS = 250;
@@ -207,10 +216,21 @@ interface TreeProps {
    * the short meaning line. Both come from `folder-meanings.ts`.
    */
   rootMeanings?: boolean;
-  /** Reserved for reveal (#591): the folder path to open and scroll to. */
+  /**
+   * Reveal (#591): the vault path of the open note, file or folder. Its
+   * ancestors are added to the open folders (none is ever closed), its row is
+   * marked current, highlighted for a moment and scrolled into view.
+   */
   revealPath?: string;
-  /** Reserved for reveal (#591): the open note or file's id. */
+  /** Reveal (#591): the open note or file's id; left out for a folder. */
   currentId?: string;
+  /** Called with whether any folder is open, whenever that changes. */
+  onOpenChange?: (anyOpen: boolean) => void;
+  /**
+   * The Notes tab (phone): tapping the Notes tab again while on `/notes`
+   * scrolls the tree to the top (R-REVEAL-2).
+   */
+  topOnTabTap?: boolean;
 }
 
 export function Tree({
@@ -222,6 +242,10 @@ export function Tree({
   showAppFiles = false,
   filter = '',
   rootMeanings = false,
+  revealPath,
+  currentId,
+  onOpenChange,
+  topOnTabTap = false,
 }: TreeProps): JSX.Element {
   const { pinNote, unpinNote, pinFolder, unpinFolder } = useVault();
   // The one row (folder or note) whose pin sheet/menu is open, or `null`.
@@ -232,9 +256,15 @@ export function Tree({
   // sidebar (`components/explorer.tsx`) share this one `Tree`.
   const counts = useMemo(() => folderCounts(index, true), [index]);
   const group = useMemo(() => appFileGroup(index), [index]);
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
-    () => new Set<string>(),
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
+    mergeExpanded(
+      rememberedExpanded ?? new Set<string>(),
+      revealPath === undefined ? [] : ancestorsOf(revealPath),
+    ),
   );
+  // The path whose row is still to be scrolled to and highlighted.
+  const pendingReveal = useRef<string | null>(revealPath ?? null);
+  const [flashPath, setFlashPath] = useState<string | null>(null);
   const newState = useNew();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   // Nothing is saved until the stored state has been read, so a fresh mount
@@ -250,8 +280,11 @@ export function Tree({
         if (cancelled) return;
         restored.current = true;
         if (state === undefined) return;
-        setExpanded(new Set(state.expanded));
-        if (state.scroll > 0) {
+        // Union, never replace: a reveal that ran before the stored state
+        // arrived keeps its folders.
+        setExpanded((prev) => mergeExpanded(new Set(state.expanded), [...prev]));
+        // A reveal scrolls to its own row; the stored offset would undo it.
+        if (state.scroll > 0 && revealPath === undefined) {
           requestAnimationFrame(() => {
             const parent = scrollParentOf(wrapRef.current);
             if (parent !== null) parent.scrollTop = state.scroll;
@@ -278,7 +311,38 @@ export function Tree({
     );
   }
 
-  useEffect(persist, [expanded]);
+  useEffect(() => {
+    rememberedExpanded = expanded;
+    persist();
+  }, [expanded]);
+
+  const anyOpen = expanded.size > 0;
+  useEffect(() => {
+    onOpenChange?.(anyOpen);
+  }, [anyOpen]);
+
+  // R-REVEAL-1: a new target opens its ancestors, then waits for its row.
+  useEffect(() => {
+    if (revealPath === undefined) return;
+    pendingReveal.current = revealPath;
+    setExpanded((prev) => mergeExpanded(prev, ancestorsOf(revealPath)));
+  }, [revealPath, currentId]);
+
+  // R-REVEAL-2: the Notes tab tapped again while on it scrolls to the top.
+  useEffect(() => {
+    if (!topOnTabTap) return;
+    const onClick = (event: MouseEvent): void => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('a[href="/notes"]') === null) return;
+      if (window.location.pathname !== '/notes') return;
+      const parent = scrollParentOf(wrapRef.current);
+      if (parent !== null) parent.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0 });
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [topOnTabTap]);
 
   useEffect(() => {
     const parent: HTMLElement | Window =
@@ -363,6 +427,35 @@ export function Tree({
       cancelled = true;
     };
   }, [wantsVirtual, loaded]);
+
+  // Scrolls to the revealed row once it is in the list, and lights it up.
+  useEffect(() => {
+    const target = pendingReveal.current;
+    if (target === null || filtering) return;
+    if (wantsVirtual && loaded === null) return;
+    const at = rows.findIndex((row) =>
+      currentId !== undefined
+        ? row.id === currentId
+        : row.kind === 'folder' && row.path === target,
+    );
+    if (at === -1) return;
+    pendingReveal.current = null;
+    const el = rowRefs.current[at];
+    if (el) {
+      if (typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    } else if (listHandle.current !== null) {
+      listHandle.current.scrollToIndex(at, { align: 'auto' });
+    }
+    setFlashPath(target);
+  }, [rows, currentId, filtering, wantsVirtual, loaded]);
+
+  useEffect(() => {
+    if (flashPath === null) return;
+    const timer = setTimeout(() => setFlashPath(null), REVEAL_FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [flashPath]);
 
   function toggle(path: string): void {
     setExpanded((prev) => {
@@ -517,6 +610,19 @@ export function Tree({
     else if (landmarkSeen && dividerBefore === -1) dividerBefore = i;
   });
 
+  /** Whether `row` is the open note, file or folder. */
+  function isCurrent(row: Row): boolean {
+    if (revealPath === undefined) return false;
+    return currentId !== undefined
+      ? row.id === currentId
+      : row.kind === 'folder' && row.path === revealPath;
+  }
+
+  /** The highlight class while the revealed row's flash lasts. */
+  function revealClass(row: Row): string {
+    return flashPath !== null && isCurrent(row) ? ' tree-row-reveal' : '';
+  }
+
   function folderRow(row: Row, i: number): JSX.Element {
     const name = displayName(row);
     const setRef = rowRef(i);
@@ -539,7 +645,7 @@ export function Tree({
       );
     return (
       <span
-        class="tree-row tree-folder tree-row-pinnable"
+        class={`tree-row tree-folder tree-row-pinnable${revealClass(row)}`}
         style={{
           paddingLeft: `${row.depth * 16 + 4}px`,
           position: 'relative',
@@ -562,6 +668,7 @@ export function Tree({
           href={folderHref(row.path)}
           ref={setRef}
           class="tree-folder-link"
+          aria-current={isCurrent(row) ? 'page' : undefined}
           tabIndex={i === focusIndex ? 0 : -1}
           onClick={() => onNavigate?.()}
           onKeyDown={(event) => onRowKeyDown(event, i)}
@@ -602,7 +709,7 @@ export function Tree({
     const setRef = rowRef(i);
     return (
       <span
-        class={`tree-row ${isFile ? 'tree-file' : 'tree-note'}${isFile ? '' : ' tree-row-pinnable'}`}
+        class={`tree-row ${isFile ? 'tree-file' : 'tree-note'}${isFile ? '' : ' tree-row-pinnable'}${revealClass(row)}`}
         style={{
           paddingLeft: `${row.depth * 16 + 4}px`,
           position: 'relative',
@@ -621,6 +728,7 @@ export function Tree({
           href={`${isFile ? '/file/' : '/note/'}${row.id ?? ''}`}
           ref={setRef}
           class="tree-note-link"
+          aria-current={isCurrent(row) ? 'page' : undefined}
           tabIndex={i === focusIndex ? 0 : -1}
           onClick={() => onNavigate?.()}
           onKeyDown={(event) => onRowKeyDown(event, i)}

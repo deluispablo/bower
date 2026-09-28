@@ -33,6 +33,12 @@ import { useLocation } from 'preact-iso';
 
 import { loadTreeState } from '../cache.js';
 import { getPref, setPref } from '../prefs.js';
+import {
+  lastTarget,
+  rememberTarget,
+  targetFromReveal,
+  targetFromRoute,
+} from '../reveal.js';
 import type { ParaKind } from '../navigation.js';
 import {
   checkWhen,
@@ -143,6 +149,9 @@ export interface ExpandToggle {
   collapseKey: number;
   expandKey: number;
   toggle: () => void;
+  /** The tree says whether any folder is open, e.g. after a reveal opened
+   * some: keeps the label exact ("Collapse all" only when one is open). */
+  syncOpen: (anyOpen: boolean) => void;
 }
 
 /**
@@ -177,6 +186,7 @@ export function useExpandToggle(): ExpandToggle {
     expanded,
     collapseKey,
     expandKey,
+    syncOpen: setExpanded,
     toggle: () => {
       if (expanded) setCollapseKey((key) => key + 1);
       else setExpandKey((key) => key + 1);
@@ -248,7 +258,19 @@ export function Explorer({
 }: ExplorerProps): JSX.Element {
   const { me, signOut } = useSession();
   const { index, status } = useVault();
-  const { path } = useLocation();
+  const { path, query } = useLocation();
+  // Reveal (#591): the desktop sidebar follows the route and keeps the last
+  // target; the Notes tab, opened later, reveals that one (or the one a
+  // "Show in folders" link names).
+  const routeTarget =
+    variant === 'sidebar' ? targetFromRoute(path, index) : null;
+  const target =
+    variant === 'sidebar'
+      ? routeTarget
+      : (targetFromReveal(query.reveal, index) ?? lastTarget());
+  useEffect(() => {
+    rememberTarget(routeTarget);
+  }, [routeTarget?.kind, routeTarget?.path]);
   // The order is the saved preference; no control on this screen changes it.
   const sort = getPref('explorerSort');
   // Sidebar only: its own inline tool (page's Expand/Collapse all lives in
@@ -394,6 +416,12 @@ export function Explorer({
             }
             showAppFiles={showAppFiles}
             rootMeanings={variant !== 'sidebar'}
+            revealPath={target?.path}
+            currentId={target?.id}
+            onOpenChange={
+              variant === 'sidebar' ? sidebarToggle.syncOpen : undefined
+            }
+            topOnTabTap={variant === 'page'}
           />
         )}
       </div>
