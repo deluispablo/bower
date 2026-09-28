@@ -154,6 +154,29 @@ test.describe('open Home', () => {
   });
 });
 
+test.describe('intro page 8, the desktop scroll cue (#509)', () => {
+  test.use({ introSeen: false });
+
+  test('the panel fades at the bottom where the case overflows it', async ({
+    page,
+  }, testInfo) => {
+    await page.goto('/welcome');
+    const next = page.getByRole('button', { name: 'Next', exact: true });
+    for (let i = 0; i < 7; i += 1) await next.nth(i).click();
+    await expect(
+      page.getByRole('heading', { name: 'The archive: finished, kept' }),
+    ).toBeInViewport();
+    // Page 8's copy ends as a sentence, not a fragment.
+    await expect(page.getByText('It asks before it archives.')).toBeVisible();
+    const panel = page.locator('.intro-page--8');
+    if (testInfo.project.name === 'desktop') {
+      // The fade only applies from the desktop breakpoint (intro.css).
+      await expect(panel).toHaveCSS('background-image', /gradient/);
+    }
+    await shot(page, testInfo, 'intro-8-scroll-cue');
+  });
+});
+
 test.describe('first visit, Skip', () => {
   test.use({ introSeen: false });
 

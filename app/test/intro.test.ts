@@ -5,6 +5,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  INTRO_CASES,
   introReturnPath,
   introRuns,
   introSeen,
@@ -45,6 +46,21 @@ describe('introReturnPath', () => {
 describe('markIntroSeen', () => {
   it('does not throw when the storage throws (best effort)', () => {
     expect(() => markIntroSeen(throwingStorage())).not.toThrow();
+  });
+});
+
+describe('page 8 closing line (#509)', () => {
+  it('reads as one sentence, not a designer note, verbatim from the board', () => {
+    // INTRO_CASES[3] is the archive case, page 8 (`Intro-8.dc.html`).
+    const closing = INTRO_CASES[3].closing;
+    expect(closing).toBe(
+      '**It asks before it archives.** "Lisbon looks finished, shall I file it away?" on Home; one tap.',
+    );
+    // Every run's plain text, joined, ends the page on a full stop.
+    const plain = introRuns(closing)
+      .map((run) => run.text)
+      .join('');
+    expect(plain.trim().endsWith('.')).toBe(true);
   });
 });
 
