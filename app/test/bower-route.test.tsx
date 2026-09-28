@@ -69,6 +69,7 @@ vi.mock('../src/session.js', () => ({
 
 vi.mock('../src/vault-store.js', () => ({
   useVault: () => ({
+    index: null,
     files: state.files,
     fetchedAt: state.fetchedAt,
     refresh,

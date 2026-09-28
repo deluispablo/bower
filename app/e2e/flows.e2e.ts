@@ -596,6 +596,39 @@ test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#33
   }
 });
 
+test('Health points to the Suggested group on the Bower tab, where Accept works (#346)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await page.evaluate(() => {
+    history.pushState(null, '', '/health');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  const pointer = page.getByRole('link', {
+    name: '2 suggested rules on the Bower tab',
+  });
+  await expect(pointer).toBeVisible();
+  // The cards themselves live on the Bower tab now.
+  await expect(page.getByRole('button', { name: 'Accept' })).toHaveCount(0);
+  await shot(page, testInfo, 'health');
+
+  await pointer.click();
+  await expect(page).toHaveURL(/\/bower$/);
+  const suggested = page.getByRole('region', { name: /^Suggested/ });
+  await expect(suggested).toBeVisible();
+  const card = suggested
+    .getByRole('listitem')
+    .filter({ hasText: 'Recipes go to Cooking' });
+  await expect(suggested.getByRole('listitem')).toHaveCount(2);
+  await shot(page, testInfo, 'bower-suggested');
+
+  await card.getByRole('button', { name: 'Accept' }).click();
+  await expect(
+    suggested.getByText('Added to your rules: Recipes go to Cooking.'),
+  ).toBeVisible();
+  await expect(suggested.getByRole('listitem')).toHaveCount(1);
+});
+
 test('Settings switches the theme to dark, and it sticks', async ({
   page,
 }, testInfo) => {
