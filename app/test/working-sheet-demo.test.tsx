@@ -70,12 +70,12 @@ afterEach(() => {
 });
 
 describe('WorkingSheet outside the demo', () => {
-  it('shows the plain reassurance line and "Started just now"', () => {
+  it('shows the footer and "started just now" in the header', () => {
     state.demo = false;
     mount();
     expect(root.textContent).toContain(REASSURANCE);
-    expect(root.textContent).toContain('Started just now');
-    expect(root.textContent).not.toContain(DEMO_PLAYING_BACK);
+    expect(root.textContent).toContain('started just now');
+    expect(root.textContent).not.toContain(DEMO_PLAYING_BACK.toLowerCase());
   });
 });
 
@@ -91,14 +91,14 @@ describe('WorkingSheet in a demo build', () => {
   it('replaces the started-ago badge with "Playing back"', () => {
     state.demo = true;
     mount();
-    expect(root.textContent).toContain(DEMO_PLAYING_BACK);
-    expect(root.textContent).not.toContain('Started');
+    expect(root.textContent).toContain(DEMO_PLAYING_BACK.toLowerCase());
+    expect(root.textContent).not.toContain('tarted');
   });
 
   it('leaves the done state alone (no reassurance line at all)', () => {
     state.demo = true;
     mount('done');
     expect(root.textContent).not.toContain(DEMO_REASSURANCE_LEAD);
-    expect(root.textContent).not.toContain(DEMO_PLAYING_BACK);
+    expect(root.textContent).not.toContain(DEMO_PLAYING_BACK.toLowerCase());
   });
 });
