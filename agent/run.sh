@@ -12,11 +12,14 @@
 # with every instruction-shaped note the app did not write (agent/scan.sh,
 # see "pre-scan" below) before Claude ever reads them, runs Claude Code inside it following the vault's
 # own CLAUDE.md under the permission policy in claude-settings.json (next to
-# this script), audits what the agent changed (see "post-run audit" below), copies back up
-# only the accepted files the agent added or changed (so a note edited in the
-# app during the run keeps its newer content), deletes from Drive only the
-# pending originals the agent moved to an accepted place, and reports the
-# outcome to the API.
+# this script), audits what the agent changed (see "post-run audit" below),
+# moves in Drive itself each file the agent moved or renamed to an accepted
+# place (a server-side move: the file keeps its Drive id and no copy stays at
+# its old path), copies back up only the accepted files the agent added or
+# changed and did not move (so a note edited in the app during the run keeps
+# its newer content), deletes from Drive only the pending originals the agent
+# moved to an accepted place that the move phase did not move, and reports
+# the outcome to the API. Nothing else in Drive is ever deleted or moved.
 #
 # Settings, read from $RUNNER_TEMP/bower-secrets when that file exists (the
 # instance workflows write it; see "runner settings" below), otherwise from
@@ -223,6 +226,13 @@ readonly MANIFEST_BEFORE="$WORK_DIR/manifest-before.txt"
 readonly MANIFEST_AFTER="$WORK_DIR/manifest-after.txt"
 readonly CHANGED_FILE="$WORK_DIR/changed.txt"
 readonly REFUSED_FILE="$WORK_DIR/refused.txt"
+# The move phase's files (see find_moves and move_up below): the moves found
+# ("<old path><TAB><new path>"), the old and new paths Drive moved, and what
+# is left to copy up.
+readonly MOVES_FILE="$WORK_DIR/moves.txt"
+readonly MOVED_OLD="$WORK_DIR/moved-old.txt"
+readonly MOVED_NEW="$WORK_DIR/moved-new.txt"
+readonly UPLOAD_FILE="$WORK_DIR/upload.txt"
 readonly FLAGGED_FILE="$WORK_DIR/flagged.txt"
 readonly QUARANTINED_FILE="$WORK_DIR/quarantined.txt"
 # The instruction-origin step's files: in the work dir, never in the vault,
@@ -493,30 +503,115 @@ audit() {
   log "$(grep -c . "$REFUSED_FILE" || true) changes refused"
 }
 
-# Audit, then copy up, never deleting, only the accepted files, so a note
-# edited in Drive during the run (for example from the app) is not
-# overwritten by the older local copy. Also records the "<checksum> <size>"
-# of every file Drive holds after the copy as far as this run knows (the
-# accepted ones plus those nobody changed), for the pending-original deletes;
-# none when the whole run was refused.
+# After the audit: records the "<checksum> <size>" of every file Drive holds
+# after the upload as far as this run knows (the accepted ones plus those
+# nobody changed), for the pending-original deletes; none when the whole run
+# was refused.
+record_saved_keys() {
+  : >"$SAVED_KEYS"
+  [ "$TOO_MANY_CHANGES" -eq 0 ] || return 0
+  {
+    awk 'FILENAME == ARGV[1] { up[$0] = 1; next }
+      { p = $0; sub(/^[^ ]* [^ ]* /, "", p); if (p in up) print $1 " " $2 }' \
+      "$CHANGED_FILE" "$MANIFEST_AFTER" &&
+      LC_ALL=C comm -12 "$MANIFEST_BEFORE" "$MANIFEST_AFTER" | cut -d ' ' -f 1-2
+  } | LC_ALL=C sort -u >"$SAVED_KEYS"
+}
+
+# Copies up, never deleting, the paths listed in file $1, so a note edited in
+# Drive during the run (for example from the app) is not overwritten by the
+# older local copy. --files-from-raw reads each line as a path as is (no
+# comment or whitespace handling).
+copy_up() {
+  [ -s "$1" ] || return 0
+  rclone copy "$VAULT_DIR" vault: --files-from-raw "$1" \
+    "${RCLONE_FILTER[@]}" >>"$RCLONE_LOG" 2>&1
+}
+
+# Audit, then copy up only the accepted files (no move phase: used after a
+# failure, when the originals must stay where they are).
 copy_changed_up() {
   audit || return 1
-  : >"$SAVED_KEYS"
-  if [ "$TOO_MANY_CHANGES" -eq 0 ]; then
-    {
-      awk 'FILENAME == ARGV[1] { up[$0] = 1; next }
-        { p = $0; sub(/^[^ ]* [^ ]* /, "", p); if (p in up) print $1 " " $2 }' \
-        "$CHANGED_FILE" "$MANIFEST_AFTER" &&
-        LC_ALL=C comm -12 "$MANIFEST_BEFORE" "$MANIFEST_AFTER" | cut -d ' ' -f 1-2
-    } | LC_ALL=C sort -u >"$SAVED_KEYS" || return 1
-  fi
-  if [ ! -s "$CHANGED_FILE" ]; then
-    return 0
-  fi
-  # --files-from-raw reads each line as a path as is (no comment or
-  # whitespace handling).
-  rclone copy "$VAULT_DIR" vault: --files-from-raw "$CHANGED_FILE" \
-    "${RCLONE_FILTER[@]}" >>"$RCLONE_LOG" 2>&1
+  record_saved_keys || return 1
+  copy_up "$CHANGED_FILE"
+}
+
+# Move detection (#595), after the audit: a move is a path in MANIFEST_BEFORE
+# that no longer exists locally and an accepted path (CHANGED_FILE) that was
+# not in MANIFEST_BEFORE, with the same "<checksum> <size>"; a rename is a
+# move with a new name. Only unambiguous pairs count: the content must be
+# held by exactly that one path before the run and exactly that one path
+# after it. Anything else with a matching content (the same content twice,
+# for example) is not guessed: it falls back to the copy up and the
+# pending-original delete, and only the count is logged. The old path must
+# be one the agent may write (may_write), so a move never takes a protected
+# file out of its place in Drive. None after a refused run.
+# Writes "<old><TAB><new>" lines to MOVES_FILE.
+find_moves() {
+  : >"$MOVES_FILE"
+  [ "$TOO_MANY_CHANGES" -eq 0 ] || return 0
+  local path gone="$WORK_DIR/gone.txt" ambiguous="$WORK_DIR/moves-ambiguous.txt"
+  : >"$gone"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    [ ! -e "$VAULT_DIR/$path" ] || continue
+    may_write "$path" || continue
+    printf '%s\n' "$path" >>"$gone"
+  done < <(awk 'FILENAME == ARGV[1] { p = $0; sub(/^[^ ]* [^ ]* /, "", p); now[p] = 1; next }
+    { p = $0; sub(/^[^ ]* [^ ]* /, "", p); if (!(p in now)) print p }' \
+    "$MANIFEST_AFTER" "$MANIFEST_BEFORE")
+  awk -v amb="$ambiguous" '
+    function path_of(line) { sub(/^[^ ]* [^ ]* /, "", line); return line }
+    FILENAME == ARGV[1] { k = $1 " " $2; p = path_of($0); before[p] = k; nb[k]++; next }
+    FILENAME == ARGV[2] { k = $1 " " $2; p = path_of($0); after[p] = k; na[k]++; next }
+    FILENAME == ARGV[3] {
+      if ($0 != "" && !($0 in before) && ($0 in after)) { k = after[$0]; nn[k]++; dest[k] = $0 }
+      next
+    }
+    $0 != "" {
+      k = before[$0]
+      if (!(k in nn)) next
+      if (nb[k] == 1 && na[k] == 1 && nn[k] == 1 && index($0, "\t") == 0 && index(dest[k], "\t") == 0)
+        print $0 "\t" dest[k]
+      else n++
+    }
+    END { print n + 0 >amb }' \
+    "$MANIFEST_BEFORE" "$MANIFEST_AFTER" "$CHANGED_FILE" "$gone" |
+    LC_ALL=C sort >"$MOVES_FILE" || return 1
+  local count
+  count=$(cat "$ambiguous")
+  [ "$count" -eq 0 ] || log "$count moves not guessed: the same content twice"
+}
+
+# The move phase (#595): each move in MOVES_FILE is done in Drive itself, as
+# a server-side move (rclone moveto; on Drive that changes the file's parent
+# folder and keeps its id), after creating the new parent folder. So a moved
+# file keeps its id and leaves no copy at its old path. A move Drive could
+# not do (for example: the file was moved or removed in Drive during the
+# run) falls back to the copy up. Writes the paths Drive moved to MOVED_OLD
+# and MOVED_NEW, and the accepted paths left to copy up to UPLOAD_FILE.
+# Logs counts only.
+move_up() {
+  : >"$MOVED_OLD"
+  : >"$MOVED_NEW"
+  local old new dir moved=0 fell_back=0
+  while IFS=$'\t' read -r old new <&3; do
+    [ -n "$old" ] && [ -n "$new" ] || continue
+    dir=$(dirname "$new")
+    if { [ "$dir" = . ] ||
+      rclone mkdir "vault:$dir" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; } &&
+      rclone moveto "vault:$old" "vault:$new" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; then
+      printf '%s\n' "$old" >>"$MOVED_OLD"
+      printf '%s\n' "$new" >>"$MOVED_NEW"
+      moved=$((moved + 1))
+    else
+      fell_back=$((fell_back + 1))
+    fi
+  done 3<"$MOVES_FILE"
+  [ "$moved" -eq 0 ] || log "$moved files moved in Drive"
+  [ "$fell_back" -eq 0 ] || log "$fell_back moves copied up instead"
+  awk 'FILENAME == ARGV[1] { done[$0] = 1; next } !($0 in done)' \
+    "$MOVED_NEW" "$CHANGED_FILE" >"$UPLOAD_FILE"
 }
 
 # Best effort after a failure: upload whatever the agent already added or
@@ -1048,21 +1143,36 @@ if [ "$agent_rc" -ne 0 ]; then
   fail "$STEP: exit $agent_rc" "$(agent_failure_reason "$agent_rc")"
 fi
 
-# --- post-run audit and sync up -------------------------------------------
+# --- post-run audit, move phase and sync up --------------------------------
 # The audit (see audit() above) reverts what the agent may not change: the
 # protected paths, anything outside the known roots, a CLAUDE.md at any
 # depth, Rules.md in a run without an instruction note, or, past MAX_CHANGES
-# files, the whole run. Only the accepted files the agent added or changed
-# are copied, and copy never deletes: a file added or edited in Drive during
-# the run keeps its content. Then each file that was pending at the start,
-# is gone from the local copy and whose content Drive holds under another
-# path (the agent moved it to 0-Inbox/Processed/ or next to its note) is
-# deleted from Drive by its own path, so processed originals leave the
-# inbox; one moved to a refused place, or any after a refused run, stays
-# where it was. Nothing else is removed.
+# files, the whole run. Then the move phase (find_moves and move_up above,
+# #595): each file the agent moved or renamed to an accepted place, found by
+# its unchanged content, is moved in Drive itself, so it keeps its id and
+# leaves no copy at its old path, whatever folder it came from. Then only
+# the accepted files the agent added or changed and did not move are
+# copied, and copy never deletes: a file added or edited in Drive during the
+# run keeps its content. Last, the pending-original delete, which now covers
+# only what the move phase did not: each file that was pending at the
+# start, is gone from the local copy, was not moved in Drive, and whose
+# content Drive holds under another path (a move not guessed because the
+# same content is there twice, or one Drive could not do) is deleted from
+# Drive by its own path, so processed originals leave the inbox; one moved
+# to a refused place, or any after a refused run, stays where it was.
+# Nothing else is removed or moved.
 STEP='sync up'
 log "$STEP"
-if ! copy_changed_up; then
+if ! audit || ! record_saved_keys; then
+  fail "$STEP: copy failed" drive_unavailable
+fi
+if ! find_moves; then
+  fail "$STEP: move failed"
+fi
+if ! move_up; then
+  fail "$STEP: move failed"
+fi
+if ! copy_up "$UPLOAD_FILE"; then
   fail "$STEP: copy failed" drive_unavailable
 fi
 RUN_STARTED=0  # the copy is done; a later failure needs no second copy
@@ -1070,6 +1180,8 @@ kept=0
 while IFS= read -r path <&3; do
   [ -n "$path" ] || continue
   [ ! -e "$VAULT_DIR/$path" ] || continue
+  # Moved in Drive already: nothing is left at its old path.
+  ! grep -qxF -- "$path" "$MOVED_OLD" || continue
   key=$(P="$path" awk '{ p = $0; sub(/^[^ ]* [^ ]* /, "", p)
     if (p == ENVIRON["P"]) { print $1 " " $2; exit } }' "$MANIFEST_BEFORE")
   if [ -z "$key" ] || ! grep -qxF -- "$key" "$SAVED_KEYS"; then

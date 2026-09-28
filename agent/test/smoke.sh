@@ -189,7 +189,9 @@ cat >"$STUBS/rclone" <<'STUB'
 # into the remote (never deleting), or only the paths listed in the file
 # given with --files-from or --files-from-raw (appended to uploaded.txt);
 # "deletefile vault:<path>" removes one remote file and fails with rclone's
-# "file not found" code when absent.
+# "file not found" code when absent; "mkdir vault:<dir>" makes a remote
+# folder; "moveto vault:<old> vault:<new>" moves one remote file in place
+# (appended to moved.txt as "<old> -> <new>").
 set -euo pipefail
 remote="$SMOKE_STATE/remote"
 # The run's outcome (#315) goes through its own work-dir folder, "outcome":
@@ -373,6 +375,17 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       # A photo whose name says nothing (issue #369).
       echo jpg >"$remote/0-Inbox/IMG_4471.jpg"
     fi
+    if [ "$SMOKE_SCENARIO" = moves ]; then
+      # Server-side moves (#595): a note in a PARA folder the agent moves to
+      # a project that is not in Drive yet, one it renames, a pending photo
+      # it files, and two notes with the same content, one of which it
+      # archives (not guessed as a move).
+      echo 'lease notes' >"$remote/3-Resources/lease-notes.md"
+      echo 'rename me' >"$remote/2-Areas/old-name.md"
+      echo scan >"$remote/0-Inbox/scan.jpg"
+      echo twin >"$remote/3-Resources/twin-one.md"
+      echo twin >"$remote/3-Resources/twin-two.md"
+    fi
     if [ "$SMOKE_SCENARIO" = fileonly ]; then
       # A receipt photo next to the PDF and the clip (issue #368).
       echo jpg >"$remote/0-Inbox/receipt.jpg"
@@ -436,6 +449,16 @@ elif [ "$1" = deletefile ]; then
   target="$remote/${2#vault:}"
   [ -f "$target" ] || exit 4
   rm "$target"
+elif [ "$1" = mkdir ]; then
+  mkdir -p "$remote/${2#vault:}"
+elif [ "$1" = moveto ] && [ "${2%%:*}" = vault ] && [ "${3%%:*}" = vault ]; then
+  # A server-side move (#595): the file itself changes place, so on Drive it
+  # keeps its id. Like rclone, it fails when the source is gone, and like
+  # this stub's Drive, the parent folder must exist ("mkdir" first).
+  [ -f "$remote/${2#vault:}" ] || exit 4
+  [ -d "$(dirname "$remote/${3#vault:}")" ] || exit 3
+  mv "$remote/${2#vault:}" "$remote/${3#vault:}"
+  printf '%s -> %s\n' "${2#vault:}" "${3#vault:}" >>"$SMOKE_STATE/moved.txt"
 fi
 echo "rclone stub output naming 0-Inbox/a.pdf"
 STUB
@@ -687,6 +710,18 @@ case "$SMOKE_SCENARIO" in
       >'3-Resources/Clipped trick.md'
     mv Clippings/b.md 0-Inbox/Processed/b.md
     ;;
+  # Moves the runner must do in Drive itself (#595), a move it must not
+  # guess (the same content twice, in 3-Resources/ and in Clippings/), and
+  # an edit that is only copied up.
+  moves)
+    mkdir -p '1-Projects/Flat hunt' 2-Areas/Finance 4-Archives
+    mv 3-Resources/lease-notes.md '1-Projects/Flat hunt/lease-notes.md'
+    mv 2-Areas/old-name.md '2-Areas/New name.md'
+    mv 0-Inbox/scan.jpg 2-Areas/Finance/scan.jpg
+    mv 3-Resources/twin-one.md 4-Archives/twin-one.md
+    mv Clippings/b.md 0-Inbox/Processed/b.md
+    echo v2 >>3-Resources/agent.md
+    ;;
   # More changes than BOWER_MAX_CHANGES=3, all inside the known roots.
   toomany)
     for n in 1 2 3 4; do echo "note $n" >"3-Resources/new-$n.md"; done
@@ -798,6 +833,7 @@ run_case() {
   : >"$STATE/calls.log"
   : >"$STATE/posts.log"
   : >"$STATE/uploaded.txt"
+  : >"$STATE/moved.txt"
   rm -f "$STATE/curl-env-leak" "$STATE/ticket-retired" "$STATE/final-tries"
   # No wait between the final report's tries (#315), unless a case says.
   local settings=("BOWER_API_URL=$API_URL" "BOWER_RUN_TICKET=$RUN_TICKET" BOWER_REPORT_BACKOFF=0) extra=() arg
@@ -2059,3 +2095,57 @@ done
 expect_content_free
 expect_cleaned_up
 echo "ok system and sync files never travel"
+
+# 35. Server-side moves (#595, #560): a note moved between PARA folders, a
+# rename and a pending photo filed are each one Drive move (mkdir of the new
+# parent, then moveto), so each file keeps its Drive id and no copy stays at
+# its old path; none is uploaded or deleted. The stub's Drive keeps files by
+# path, so the id is asserted through the call shape. Two files with the
+# same content are never guessed as a move: they fall back to the copy up
+# (and, for a pending original, its targeted delete), and the log counts
+# them without naming them. An edited note is only copied up.
+run_case moves
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+remote="$STATE/remote"
+expect_eq "$(LC_ALL=C sort "$STATE/moved.txt")" "$(printf '%s\n' \
+  '0-Inbox/a.pdf -> 0-Inbox/Processed/a.pdf' \
+  '0-Inbox/scan.jpg -> 2-Areas/Finance/scan.jpg' \
+  '2-Areas/old-name.md -> 2-Areas/New name.md' \
+  '3-Resources/lease-notes.md -> 1-Projects/Flat hunt/lease-notes.md' | LC_ALL=C sort)" 'moves done in Drive'
+expect_eq "$(calls rclone | grep -c '^rclone moveto ')" 4 'rclone moveto calls'
+grep -Fxq 'rclone mkdir vault:1-Projects/Flat hunt' "$STATE/calls.log" ||
+  die 'the new parent folder was not made before the move'
+awk '/^rclone mkdir vault:1-Projects\/Flat hunt$/ { m = NR }
+  /^rclone moveto vault:3-Resources\/lease-notes.md / { if (!m) exit 1; found = 1 }
+  END { exit !found }' "$STATE/calls.log" || die 'the move ran before its parent folder was made'
+expect_eq "$(LC_ALL=C sort "$STATE/uploaded.txt" | tr '\n' '|')" \
+  '0-Inbox/Processed/b.md|3-Resources/agent.md|4-Archives/twin-one.md|' 'uploaded files (edits and guesses only)'
+expect_eq "$(calls rclone | grep '^rclone deletefile ')" 'rclone deletefile vault:Clippings/b.md' \
+  'targeted deletes (the pending original not guessed as a move only)'
+for f in 3-Resources/lease-notes.md 2-Areas/old-name.md 0-Inbox/scan.jpg 0-Inbox/a.pdf Clippings/b.md; do
+  [ ! -e "$remote/$f" ] || die "a copy stayed at the old path in Drive: $f"
+done
+expect_eq "$(cat "$remote/1-Projects/Flat hunt/lease-notes.md")" 'lease notes' 'moved note in Drive'
+expect_eq "$(cat "$remote/2-Areas/New name.md")" 'rename me' 'renamed note in Drive'
+expect_eq "$(cat "$remote/2-Areas/Finance/scan.jpg")" scan 'filed photo in Drive'
+expect_eq "$(cat "$remote/0-Inbox/Processed/a.pdf")" pdf 'filed PDF in Drive'
+expect_eq "$(cat "$remote/3-Resources/agent.md")" "$(printf 'v1\nv2')" 'edited note copied up'
+# The same content twice: the archived copy is uploaded and, as before, the
+# note is not removed from its old place (only pending originals are).
+for f in 3-Resources/twin-one.md 3-Resources/twin-two.md 4-Archives/twin-one.md \
+  'Clippings/Bower trick.md' 3-Resources/app.md 2-Areas/Insurance.md 0-Inbox/_Inbox.md \
+  0-Inbox/Processed/old.pdf 0-Inbox/late.pdf Clippings/late.md README.md CLAUDE.md; do
+  [ -f "$remote/$f" ] || die "a file that was not moved is gone from Drive: $f"
+done
+grep -q ' 4 files moved in Drive$' "$STATE/out.log" || die 'move count not logged'
+grep -q ' 2 moves not guessed: the same content twice$' "$STATE/out.log" ||
+  die 'moves not guessed not counted in the log'
+for needle in lease-notes old-name 'New name' scan.jpg twin; do
+  if grep -qF -- "$needle" "$STATE/out.log"; then
+    die "script output contains [$needle]"
+  fi
+done
+expect_content_free
+expect_cleaned_up
+echo "ok moves keep the file in Drive and leave no copy"
