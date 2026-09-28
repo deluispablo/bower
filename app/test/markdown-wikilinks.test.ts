@@ -133,19 +133,16 @@ describe('renderWikilink', () => {
   it('marks embeds, resolved or not', () => {
     expect(renderWikilink('![[Seed List.png]]', index, true)).toBe(
       '<a class="wikilink wikilink-file wikilink-embed" ' +
-        'href="https://drive.google.com/file/d/seed-photo/view" ' +
-        'target="_blank" rel="noopener noreferrer">Seed List.png</a>',
+        'href="/file/seed-photo">Seed List.png</a>',
     );
     expect(renderWikilink('![[gone.png]]', index, true)).toBe(
       '<span class="wikilink-missing wikilink-embed">gone.png</span>',
     );
   });
 
-  it('opens other files in Drive instead of the note view', () => {
+  it('opens other files on their screen in the app, not in Drive', () => {
     expect(renderWikilink('[[scan.pdf]]', index)).toBe(
-      '<a class="wikilink wikilink-file" ' +
-        'href="https://drive.google.com/file/d/scan/view" ' +
-        'target="_blank" rel="noopener noreferrer">scan.pdf</a>',
+      '<a class="wikilink wikilink-file" href="/file/scan">scan.pdf</a>',
     );
   });
 

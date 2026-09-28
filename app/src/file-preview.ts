@@ -92,9 +92,9 @@ export function thumbnailUrl(
 
 /** A size in words: "820 bytes", "14 KB", "1.2 MB". */
 export function formatSize(bytes: number): string {
-  if (bytes < 1000) return `${bytes} bytes`;
-  if (bytes < 1_000_000) return `${Math.round(bytes / 1000)} KB`;
-  const mb = bytes / 1_000_000;
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  const mb = bytes / (1024 * 1024);
   return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
 }
 

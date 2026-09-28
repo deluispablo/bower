@@ -2,36 +2,46 @@ import type { JSX } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
-import { AboutPanel } from '../components/about-panel.js';
+import {
+  AboutPanel,
+  originalFileOf,
+  originalSummary,
+} from '../components/about-panel.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
 import { BackLink } from '../components/back-link.js';
+import { Details } from '../components/details.js';
+import { FolderMark } from '../components/folder-mark.js';
+import { KeyFacts } from '../components/key-facts.js';
 import { MoreButton } from '../components/more-button.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
 import { NoteMenu } from '../components/note-menu.js';
-import {
-  NotePropertiesSheet,
-  NotePropertiesTrigger,
-  hasNoteProperties,
-} from '../components/note-properties.js';
 import type { NoteFolderLink } from '../components/note-properties.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { BowerTag } from '../components/tags.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import { isProtectedNote } from '../drive.js';
 import type { DriveFile, SaveOptions } from '../drive.js';
+import { keyFactsFor, kindById } from '../kinds.js';
 import { propertiesFor } from '../markdown/frontmatter.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
-import { breadcrumb, folderHref, folderOf, siblings } from '../navigation.js';
+import { breadcrumb, folderHref, folderOf, paraKindOf } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
+import { noteMetaFrom } from '../note-meta.js';
+import type { NoteMeta } from '../note-meta.js';
 import { noteTitle as computeNoteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
+import type { ExplorerSortPref } from '../prefs.js';
+import { markSeen } from '../seen.js';
 import { isAppFile } from '../vault-index.js';
+import type { VaultIndex } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
 import { NotFound } from './not-found.js';
+import '../styles/about-panel.css';
 import '../styles/markdown.css';
 
 interface CrumbProps {
@@ -84,6 +94,185 @@ function folderLinkFor(path: string): NoteFolderLink | undefined {
   return { name, href: folderHref(parent) };
 }
 
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/** "28 Sep" for an ISO date (`2026-09-28`, with or without a time), the
+ * text as it is for anything else, `''` for nothing. */
+export function shortDay(value: string | undefined): string {
+  if (value === undefined || value === '') return '';
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (match === null) return value;
+  const month = MONTHS[Number(match[2]) - 1];
+  return month === undefined ? value : `${String(Number(match[3]))} ${month}`;
+}
+
+/** Bower wrote this note: it has a kind, an original, origins or is an
+ * answer. */
+export function isBowerNote(meta: NoteMeta): boolean {
+  return (
+    meta.kind !== undefined ||
+    meta.original !== undefined ||
+    meta.type === 'answer' ||
+    Object.keys(meta.bowerOrigins).length > 0
+  );
+}
+
+export interface FolderWalk {
+  prev: DriveFile | null;
+  next: DriveFile | null;
+  /** 1-based place of the note among the folder's notes. */
+  position: number;
+  total: number;
+}
+
+/**
+ * The previous and next note in the note's folder, in the folder's current
+ * sort (`explorerSort`: by name, or newest first), with its place ("n of
+ * m"). The same notes the folder screen lists: Bower's own files stay out
+ * unless `showAppFiles` is on (the current note is always in the walk).
+ */
+export function walkFolder(
+  index: VaultIndex,
+  id: string,
+  showAppFiles: boolean,
+  sort: ExplorerSortPref,
+): FolderWalk {
+  const none: FolderWalk = { prev: null, next: null, position: 0, total: 0 };
+  const file = index.byId.get(id);
+  if (file === undefined) return none;
+  const folder = folderOf(file.path);
+  const inFolder = index.notes
+    .filter(
+      (note) =>
+        folderOf(note.path) === folder &&
+        (showAppFiles || note.id === id || !isAppFile(note.path, note.name)),
+    )
+    .sort((a, b) =>
+      sort === 'modified'
+        ? (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
+          a.name.localeCompare(b.name, undefined, { numeric: true })
+        : a.name.localeCompare(b.name, undefined, {
+            sensitivity: 'base',
+            numeric: true,
+          }),
+    );
+  const at = inFolder.findIndex((note) => note.id === id);
+  if (at === -1) return none;
+  return {
+    prev: at > 0 ? (inFolder[at - 1] ?? null) : null,
+    next: at < inFolder.length - 1 ? (inFolder[at + 1] ?? null) : null,
+    position: at + 1,
+    total: inFolder.length,
+  };
+}
+
+/**
+ * Splits a rendered note at the end of its opening Bower boxes: what comes
+ * first (Bower's note and "Joined from") and the rest (the contents strip
+ * and the body). Key facts and Details sit between the two (board
+ * `Phone-Note-Details`). A note that does not open with a box has an empty
+ * `top`.
+ */
+export function splitOpening(html: string): { top: string; rest: string } {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const top: string[] = [];
+  const children = Array.from(template.content.children);
+  let taken = 0;
+  for (const child of children) {
+    if (
+      !child.classList.contains('bower-note') &&
+      !child.classList.contains('bower-joined')
+    ) {
+      break;
+    }
+    top.push(child.outerHTML);
+    taken += 1;
+  }
+  const rest = children
+    .slice(taken)
+    .map((child) => child.outerHTML)
+    .join('\n');
+  return { top: top.join('\n'), rest };
+}
+
+/** "a rental listing" / "an invoice". */
+function withArticle(name: string): string {
+  return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
+}
+
+function PropsLine({
+  index,
+  file,
+  meta,
+  tags,
+  created,
+  folder,
+}: {
+  index: VaultIndex;
+  file: DriveFile;
+  meta: NoteMeta;
+  tags: string[];
+  created: string | undefined;
+  folder: NoteFolderLink | undefined;
+}): JSX.Element | null {
+  const original = originalFileOf(index, file, meta.original);
+  const summary = originalSummary(meta);
+  const date = shortDay(created ?? file.modifiedTime);
+  const top = file.path.split('/')[0] ?? '';
+  const para = file.path.includes('/') ? paraKindOf(top) : null;
+  const bower = isBowerNote(meta);
+  if (
+    !bower &&
+    tags.length === 0 &&
+    date === '' &&
+    folder === undefined &&
+    meta.original === undefined
+  ) {
+    return null;
+  }
+  return (
+    <p class="note-props">
+      {bower && <BowerTag />}
+      {tags.map((tag) => (
+        <a
+          key={tag}
+          class="tag"
+          href={`/search?q=${encodeURIComponent(`#${tag}`)}`}
+        >
+          #{tag}
+        </a>
+      ))}
+      {date !== '' && <span>{date}</span>}
+      {meta.original !== undefined &&
+        (original === undefined ? (
+          <span>{`Original: ${summary}`}</span>
+        ) : (
+          <a href={`/file/${original.id}`}>{`Original: ${summary}`}</a>
+        ))}
+      {folder !== undefined && (
+        <a class="note-props-folder" href={folder.href}>
+          {para !== null && <FolderMark kind={para} size={18} />}
+          {folder.name}
+        </a>
+      )}
+    </p>
+  );
+}
+
 type NoteLoad =
   | { status: 'loading' }
   // `text` is the note's raw text, kept alongside `rendered` only so the
@@ -116,7 +305,6 @@ export function Note() {
   const [editError, setEditError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [appendOpen, setAppendOpen] = useState(false);
-  const [propertiesOpen, setPropertiesOpen] = useState(false);
 
   // Leaving a note (after confirming, if there were unsaved changes) drops
   // its edit, so coming back shows the note rather than a stale editor.
@@ -125,20 +313,27 @@ export function Note() {
     setEditError(null);
     setMenuOpen(false);
     setAppendOpen(false);
-    setPropertiesOpen(false);
   }, [id]);
 
   const file = index?.byId.get(id);
+
+  // Opening a note marks it seen on this device (#587): the "New" tag goes.
+  useEffect(() => {
+    if (file === undefined) return;
+    markSeen(id).catch((err: unknown) => {
+      console.error(err);
+    });
+  }, [id, file === undefined]);
 
   // The previous/next walk (#423): the same folder listing the folder
   // screen itself shows (Bower's own files hidden unless `showAppFiles` is
   // on), and their real titles (`noteTitle`, #306) resolved from the note
   // cache the same way Home's Recent and Pinned rows do, not the file name
   // with its date prefix.
-  const { prev, next } =
+  const { prev, next, position, total } =
     index === null
-      ? { prev: null, next: null }
-      : siblings(index, id, getPref('showAppFiles'));
+      ? { prev: null, next: null, position: 0, total: 0 }
+      : walkFolder(index, id, getPref('showAppFiles'), getPref('explorerSort'));
   const siblingFiles: DriveFile[] = [prev, next].filter(
     (sibling): sibling is DriveFile => sibling !== null,
   );
@@ -229,6 +424,7 @@ export function Note() {
         html={load.rendered.html}
         properties={propertiesFor(load.rendered.frontmatter)}
         folder={folderLinkFor(file.path)}
+        meta={noteMetaFrom(load.rendered.frontmatter)}
       />
     );
     // Keyed on the rendered html itself, not the whole `load` (which also
@@ -251,8 +447,19 @@ export function Note() {
   const properties =
     load.status === 'ready' ? propertiesFor(load.rendered.frontmatter) : null;
   const folderLink = folderLinkFor(file.path);
-  const hasProperties =
-    properties !== null && hasNoteProperties(folderLink, properties);
+  const meta =
+    load.status === 'ready' && load.id === id
+      ? noteMetaFrom(load.rendered.frontmatter)
+      : null;
+  const kind = meta?.kind === undefined ? undefined : kindById(meta.kind);
+  const facts =
+    kind === undefined || meta === null ? [] : keyFactsFor(kind, meta.fields);
+  const opening =
+    load.status === 'ready' ? splitOpening(load.rendered.html) : null;
+  const question =
+    meta?.type === 'answer' && typeof meta.fields.question === 'string'
+      ? meta.fields.question
+      : undefined;
 
   function showText(text: string): void {
     if (index === null || file === undefined) return;
@@ -347,14 +554,14 @@ export function Note() {
         </p>
       )}
 
-      {hasProperties && properties !== null && (
-        <NotePropertiesTrigger onClick={() => setPropertiesOpen(true)} />
-      )}
-      {propertiesOpen && hasProperties && properties !== null && (
-        <NotePropertiesSheet
+      {!isEditing && meta !== null && properties !== null && (
+        <PropsLine
+          index={index}
+          file={file}
+          meta={meta}
+          tags={properties.tags}
+          created={properties.created}
           folder={folderLink}
-          properties={properties}
-          onClose={() => setPropertiesOpen(false)}
         />
       )}
 
@@ -380,7 +587,29 @@ export function Note() {
       {!isEditing && load.status === 'error' && <p>{load.message}</p>}
       {!isEditing && load.status === 'ready' && (
         <>
-          <NoteBody html={load.rendered.html} />
+          {question !== undefined && (
+            <div class="note-asked">
+              <span class="note-asked-label">
+                {`You asked, ${shortDay(properties?.created ?? file.modifiedTime)}`}
+              </span>
+              <p class="note-asked-text">{question}</p>
+            </div>
+          )}
+          {opening !== null && opening.top !== '' && (
+            <NoteBody html={opening.top} />
+          )}
+          {kind !== undefined && meta !== null && facts.length > 0 && (
+            <>
+              <p class="note-keyfacts-caption">
+                {`Key facts for ${withArticle(kind.name)}: set in your rules, the same for every ${kind.name.split(' ').pop() ?? kind.name}`}
+              </p>
+              <KeyFacts facts={facts} />
+            </>
+          )}
+          {kind !== undefined && meta !== null && (
+            <Details kind={kind} meta={meta} />
+          )}
+          <NoteBody html={opening?.rest ?? ''} />
           {canAppend && appendOpen && (
             <AppendForm key={id} onAppend={handleAppend} />
           )}
@@ -396,10 +625,13 @@ export function Note() {
           ) : (
             <span />
           )}
-          {next !== null && (
+          <span class="note-siblings-count">{`${String(position)} of ${String(total)}`}</span>
+          {next !== null ? (
             <a href={`/note/${next.id}`}>
               {siblingTitles.get(next.id) ?? computeNoteTitle(next)} →
             </a>
+          ) : (
+            <span />
           )}
         </nav>
       )}
