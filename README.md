@@ -14,8 +14,6 @@ Self-hosted, zero servers, 0 € a month.</p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" alt="MIT license"></a>
 </p>
 
-<p align="center"><strong><a href="https://bower-demo.pages.dev">Try the demo</a></strong> — sample notes, no sign-up, nothing saved.</p>
-
 <table align="center">
   <tr>
     <td align="center"><img src="docs/assets/screenshots/home.png" alt="Home: the bird greets Alex, three things waiting in the inbox, pinned and recent notes." width="260"><br><sub>Home</sub></td>
