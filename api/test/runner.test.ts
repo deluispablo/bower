@@ -825,6 +825,30 @@ describe('POST /runner/vaults/:id/status', () => {
     expect(await getRun(kv, USER_ID)).toEqual(run);
   });
 
+  it('stores the reason of a failed run, and GET /status returns it (#375)', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'failed',
+      error: 'sync up: copy failed',
+      reason: 'drive_unavailable',
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.reason).toBe('drive_unavailable');
+    expect((await getRun(kv, USER_ID))?.reason).toBe('drive_unavailable');
+  });
+
+  it('keeps no reason on a done run (#375)', async () => {
+    await seedUser();
+
+    const response = await postStatus({ state: 'done', reason: 'unknown' });
+
+    expect(response.status).toBe(200);
+    expect((await getRun(kv, USER_ID))?.reason).toBeUndefined();
+  });
+
   it('creates a run when none is stored', async () => {
     await seedUser();
 
@@ -987,6 +1011,8 @@ describe('POST /runner/vaults/:id/status', () => {
     ['an unknown field', { state: 'done', extra: 1 }],
     ['a non-string summary', { state: 'done', summary: 1 }],
     ['a non-string error', { state: 'failed', error: {} }],
+    ['an unknown reason', { state: 'failed', reason: 'drive_gone' }],
+    ['a non-string reason', { state: 'failed', reason: 1 }],
     ['an empty runId', { state: 'running', runId: '' }],
     [
       'a processed entry that is not a string',

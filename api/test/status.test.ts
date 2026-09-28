@@ -91,6 +91,25 @@ describe('GET /status', () => {
     expect(await getRun(kv, USER_ID)).toEqual(run);
   });
 
+  it('returns a failed run with its reason for people (#375)', async () => {
+    await seedUser();
+    const run: Run = {
+      state: 'failed',
+      requestedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      finishedAt: new Date(Date.now() - 60 * 1000).toISOString(),
+      error: 'agent run: exit 124',
+      reason: 'timeout',
+      runId: 'run-1',
+    };
+    await putRun(kv, USER_ID, run);
+
+    const response = await getStatus(await sessionCookie());
+
+    expect(response.status).toBe(200);
+    const body = await response.json<StatusResponseBody>();
+    expect(body.run?.reason).toBe('timeout');
+  });
+
   it('marks a stale running run failed, stores it, and reports stale: true', async () => {
     await seedUser();
     const stale: Run = {

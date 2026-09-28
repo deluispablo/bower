@@ -54,7 +54,8 @@ Notes:
 | `finishedAt` | `string` | optional; ISO-8601 |
 | `summary` | `string` | optional |
 | `processed` | `string[]` | optional |
-| `error` | `string` | optional |
+| `error` | `string` | optional; for the operator (names the step), never shown to people |
+| `reason` | `'drive_unavailable' \| 'timeout' \| 'model_unavailable' \| 'vault_changed' \| 'unknown'` | optional; only on a `failed` run whose runner said why (#375). The app turns it into one sentence for people; a failed run without one reads as `unknown` |
 | `runId` | `string` | optional |
 
 ## `DriveToken`
@@ -273,13 +274,14 @@ The runner's progress report. Body, validated strictly (an unknown field, a wron
 | `quarantined` | `string[]` | Optional; paths the pre-scan set aside under `0-Inbox/Quarantine/` this run (spec A.5); same bounds as `processed` |
 | `refused` | `string[]` | Optional; paths (or `"*"` for the whole run) the post-run audit refused (spec A.3/A.4); same bounds as `processed` |
 | `error` | `string` | Optional; cut to 2,000 characters |
+| `reason` | `string` | Optional; one of `drive_unavailable` (Google Drive did not answer, or access to it is gone), `timeout` (the agent ran out of time or turns), `model_unavailable` (Claude could not be reached or refused the credential), `vault_changed` (the Bower folder is not what the run expected), `unknown` (#375). Anything else is a 400. Stored on a `failed` run only |
 
 A report with `quarantined` and/or `refused` but no `processed` is still valid.
 
 The stored run of that kind is updated and takes the report's `kind`: an ingest under `run:<id>`, a lint under `lintrun:<id>`. A lint report never reads or writes `run:<id>`, so `GET /status`, `POST /process` and the app's Process button ignore it. Without a stored run of that kind, one is started with `requestedAt` set to now.
 
 - `running`: `state` and `startedAt` (now) are set. A run that is already `running` keeps its `startedAt`. Outcome fields of an earlier attempt (`finishedAt`, `summary`, `processed`, `quarantined`, `refused`, `error`) are dropped.
-- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed`, `quarantined`, `refused` and `error` become exactly the report's (absent when the report has none). The run's ticket is deleted: it can fetch nothing and report nothing more. Then the user's devices get a push notification (see [Web push](#web-push)). For an ingest: `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. For a lint: `Health check ready`, or `Health check failed` for `failed`, never a count. A push failure never fails the report.
+- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed`, `quarantined`, `refused`, `error` and (for `failed`) `reason` become exactly the report's (absent when the report has none). The run's ticket is deleted: it can fetch nothing and report nothing more. Then the user's devices get a push notification (see [Web push](#web-push)). For an ingest: `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. For a lint: `Health check ready`, or `Health check failed` for `failed`, never a count. A push failure never fails the report.
 
 Response: `{ "run": Run }`, status 200.
 
