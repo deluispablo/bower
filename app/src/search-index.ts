@@ -174,9 +174,9 @@ function fold(term: string): string {
   return term.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 }
 
-/** Typo tolerance: one edit, for terms of four or more letters only. */
+/** Typo tolerance: one edit, for terms of three or more letters ("flat hnt" finds Flat hunt). */
 function fuzzyFor(term: string): number | false {
-  return term.length >= 4 ? 1 : false;
+  return term.length >= 3 ? 1 : false;
 }
 
 const OPTIONS = {
@@ -186,7 +186,7 @@ const OPTIONS = {
   searchOptions: {
     prefix: true,
     fuzzy: fuzzyFor,
-    combineWith: 'OR',
+    combineWith: 'AND',
     boost: { title: 4, path: 1.5, kindWord: 1, text: 0.6 },
   },
 } as const;
