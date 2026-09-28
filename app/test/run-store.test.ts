@@ -8,13 +8,29 @@ import {
   pendingCount,
   POLL_TIMEOUT_MS,
   quotaMessage,
+  readSeenRunKey,
   reduce,
   resultMessage,
   runKey,
   STARTING_MESSAGE,
+  writeSeenRunKey,
 } from '../src/run-store.js';
-import type { RunState } from '../src/run-store.js';
+import type { RunSheetStorage, RunState } from '../src/run-store.js';
 import type { Run } from '../src/api.js';
+
+/** A plain in-memory stand-in for `sessionStorage` (`RunSheetStorage`). */
+function fakeStorage(initial: Record<string, string> = {}): RunSheetStorage {
+  const data = new Map(Object.entries(initial));
+  return {
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => {
+      data.set(key, value);
+    },
+    removeItem: (key) => {
+      data.delete(key);
+    },
+  };
+}
 
 describe('quotaMessage', () => {
   it('renders hours and minutes past an hour', () => {
@@ -155,6 +171,37 @@ describe('runKey', () => {
   });
 });
 
+describe('readSeenRunKey / writeSeenRunKey (#497)', () => {
+  it('round-trips a key through the same storage', () => {
+    const storage = fakeStorage();
+    expect(readSeenRunKey(storage)).toBeNull();
+    writeSeenRunKey(storage, 'run-1');
+    expect(readSeenRunKey(storage)).toBe('run-1');
+  });
+
+  it('a null key clears whatever was stored', () => {
+    const storage = fakeStorage({ 'bower-run-sheet-seen': 'run-1' });
+    writeSeenRunKey(storage, null);
+    expect(readSeenRunKey(storage)).toBeNull();
+  });
+
+  it('fails closed when storage throws (private mode, quota)', () => {
+    const throwing: RunSheetStorage = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+      removeItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    expect(readSeenRunKey(throwing)).toBeNull();
+    expect(() => writeSeenRunKey(throwing, 'run-1')).not.toThrow();
+  });
+});
+
 describe('reduce', () => {
   const closed = { sheetOpen: false, sheetRunId: null };
   const idle: RunState = { phase: 'idle', run: null, ...closed };
@@ -272,6 +319,26 @@ describe('reduce', () => {
     });
     expect(again.phase).toBe('running');
     expect(again.sheetOpen).toBe(false);
+  });
+
+  it('a run already seen (sheetRunId seeded, as after a reload, #497) never reopens', () => {
+    // The provider seeds its initial `sheetRunId` from `sessionStorage`
+    // (`readSeenRunKey`) rather than always starting at `IDLE_STATE`'s
+    // `null` — this is that seeded state, dismissed or not, reached fresh
+    // (as on a reload) with no `process-started` in this session's memory.
+    const seeded: RunState = {
+      phase: 'idle',
+      run: null,
+      sheetOpen: false,
+      sheetRunId: runKey(queuedRun),
+    };
+    const state = reduce(seeded, {
+      type: 'status',
+      run: runningRun,
+      stale: false,
+    });
+    expect(state.phase).toBe('running');
+    expect(state.sheetOpen).toBe(false);
   });
 
   it('status with a new run opens the sheet again', () => {

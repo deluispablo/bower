@@ -897,6 +897,46 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
   ).toHaveText('4');
 });
 
+test('the working sheet dismissed with Escape stays closed after sending a request (#497)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(confirm).toBeHidden();
+
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  // The run is still going, on the Inbox card's own line, not the sheet.
+  await expect(
+    visible(page.locator('.home-card', { hasText: 'Inbox' })).getByRole(
+      'button',
+      { name: /^Tidying up… started/ },
+    ),
+  ).toBeVisible();
+
+  // Sending a request while that run is still in progress (#497): the
+  // sheet used to come back at this point; it must not.
+  await navigate(page, /^Bower$/);
+  const box = page.getByRole('textbox', {
+    name: 'Tell Bower what to do, or ask it something',
+  });
+  await box.fill('What do I still need for the trip?');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(box).toHaveValue('');
+  await expect(sheet).toBeHidden();
+
+  await navigate(page, /^Home$/);
+  await expect(sheet).toBeHidden();
+  await shot(page, testInfo, 'sheet-stays-closed');
+});
+
 test('Rules: the explanation on top, groups with counts, pause a rule and see the chip (#342)', async ({
   page,
 }, testInfo) => {
