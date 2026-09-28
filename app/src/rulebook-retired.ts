@@ -48,4 +48,10 @@ export const RETIRED_RULEBOOK_LINES: readonly string[] = [
   '- **Profile:** `About-Me.md` holds lasting facts the owner would say about themselves — role, goals, preferences, active projects, people who matter to them — never something merely found inside a note about someone or something else. Update it when Ingest step 7 turns one up.',
   '3. Move the original into that folder as it is. Keep its name when the name says what it is; otherwise give it one that does.',
   "4. Add one line to the folder's hub note (`- [[<file name>]] <five-word description>`) and one row to `index.md`, under the folder's section: `- [[<path from the top of the folder>]] · <type> · filed by Bower`, the type in one word (PDF, image, spreadsheet, document, audio…).",
+  '**Answer** (`Answers/<YYYY-MM-DD> <question>.md`):',
+  '1. The question, as asked',
+  '2. The answer, direct, with `[[wikilinks]]` to the notes used',
+  '3. What is missing from the vault, if anything',
+  '   - Do it. Put the result where it belongs (a note in the relevant project/area, or `Answers/` if it is analysis). Link it. Log it.',
+  '3. Substantial, reusable answers become a note in `Answers/`.',
 ];
