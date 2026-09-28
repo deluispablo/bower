@@ -41,6 +41,7 @@ import {
   readNoteForEdit,
   SaveError,
   saveNoteText,
+  searchFullText,
   updateFileText,
 } from './drive.js';
 import type { DriveFile, SaveOptions } from './drive.js';
@@ -298,10 +299,17 @@ function noteFile(state: VaultState, id: string): DriveFile {
   return file;
 }
 
-/** Lazy fetches per `hydratePinnedAt` call: a vault with many pins still
- * costs at most this many requests per load; the rest catch up on a later
- * load, or as soon as their note is opened normally. */
+/** Lazy fetches per `hydratePinnedAt` call, once the search below (or its
+ * fallback) has narrowed things down to pinned candidates: a vault with
+ * many pins still costs at most this many requests per load; the rest
+ * catch up on a later load, or as soon as their note is opened normally. */
 const PINNED_HYDRATION_FETCH_CAP = 12;
+
+/** Drive's own full-text index, narrowed to the `pinned` frontmatter key
+ * (#539): pins are rare, so this reliably finds them all in one request
+ * regardless of vault size, rather than hoping a capped, path-ordered walk
+ * of every note reaches them before the cap runs out. */
+const PINNED_SEARCH_QUERY = 'pinned:';
 
 interface PinnedMaps {
   notePinnedAt: Map<string, string>;
@@ -313,8 +321,16 @@ interface PinnedMaps {
  * the cached text when present (no network), otherwise fetched from Drive up
  * to `PINNED_HYDRATION_FETCH_CAP` times. `buildVaultIndex` is pure and never
  * reads frontmatter, so this is the one place that does.
+ *
+ * Pinned entries are hydrated first (#539): a full-text search for the
+ * frontmatter key finds the (few) actual candidates in one request, spent
+ * ahead of the capped walk below — a large vault's folder pin, or a note
+ * far down the alphabet, no longer has to wait behind everything that
+ * sorts before it. A search failure (offline, no permission, a demo build
+ * whose fixture the search still covers) falls back to the walk alone,
+ * unchanged from before.
  */
-async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
+export async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
   const notePinnedAt = new Map<string, string>();
   const folderPinnedAt = new Map<string, string>();
   let fetches = 0;
@@ -341,11 +357,39 @@ async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
     }
   };
 
+  const folderNoteIdToPath = new Map<string, string>();
+  for (const [path, file] of index.folderNotes) {
+    folderNoteIdToPath.set(file.id, path);
+  }
+
+  try {
+    const hits = await searchFullText(PINNED_SEARCH_QUERY);
+    for (const hit of hits) {
+      const note = index.byId.get(hit.id);
+      if (note !== undefined) {
+        const pinnedAt = await resolve(note.id, note.modifiedTime);
+        if (pinnedAt !== null) notePinnedAt.set(note.id, pinnedAt);
+        continue;
+      }
+      const path = folderNoteIdToPath.get(hit.id);
+      if (path !== undefined) {
+        const pinnedAt = await resolve(hit.id, hit.modifiedTime);
+        if (pinnedAt !== null) folderPinnedAt.set(path, pinnedAt);
+      }
+    }
+  } catch (err) {
+    // Offline, no permission, or any other failure: fall through to the
+    // walk below alone, exactly as if the search had found nothing.
+    console.error(err);
+  }
+
   for (const note of index.notes) {
+    if (notePinnedAt.has(note.id)) continue;
     const pinnedAt = await resolve(note.id, note.modifiedTime);
     if (pinnedAt !== null) notePinnedAt.set(note.id, pinnedAt);
   }
   for (const [path, file] of index.folderNotes) {
+    if (folderPinnedAt.has(path)) continue;
     const pinnedAt = await resolve(file.id, file.modifiedTime);
     if (pinnedAt !== null) folderPinnedAt.set(path, pinnedAt);
   }

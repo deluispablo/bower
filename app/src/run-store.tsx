@@ -396,6 +396,14 @@ export interface RunStore extends RunState {
   confirmTidyUp: () => void;
   /** The confirmation's "Add more first": closes it, no run starts. */
   dismissConfirm: () => void;
+  /**
+   * One shared clock (#513), ticking every minute: Home's Inbox card, the
+   * Last tidy-up card and the working sheet all read elapsed time off this
+   * same value now, rather than each keeping its own — that used to drift
+   * a minute apart at the boundary ("started 3 min ago" on the card,
+   * "Started 4 min ago" on the sheet at the same moment).
+   */
+  now: number;
 }
 
 const RunContext = createContext<RunStore | undefined>(undefined);
@@ -435,6 +443,17 @@ export function RunProvider({ children }: RunProviderProps) {
     if (typeof sessionStorage === 'undefined') return;
     writeSeenRunKey(sessionStorage, state.sheetRunId);
   }, [state.sheetRunId]);
+
+  // #513: one shared clock for every surface that shows elapsed time off a
+  // run (Home's Inbox card, the Last tidy-up card, the working sheet),
+  // instead of each keeping its own `now`/tick state on its own interval —
+  // those used to disagree by a minute right at the boundary, since they
+  // advanced at different moments.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const poll = useCallback(async (): Promise<void> => {
     try {
@@ -648,6 +667,7 @@ export function RunProvider({ children }: RunProviderProps) {
     confirmCount,
     confirmTidyUp,
     dismissConfirm,
+    now,
   };
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>;

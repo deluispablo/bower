@@ -435,8 +435,9 @@ Arlington Road, one bedroom, top floor. Bright kitchen, small garden share. The 
 - [[Shopping list]]
 - Project: [[Kitchen Refresh]]`,
   ),
-  // The board also pins this one ("Shopping list · 2-Areas / Home",
-  // #489, `Demo-Home` board); not pinned here — see the PR's "Left out".
+  // Pinned to Home (#489, `Demo-Home` board: "Shopping list · 2-Areas /
+  // Home"), sorting near the middle of the fixture's notes by path,
+  // exactly the case #539's search-first hydration exists for.
   note(
     '2-Areas/Home/Shopping list.md',
     25,
@@ -449,6 +450,7 @@ Arlington Road, one bedroom, top floor. Bright kitchen, small garden share. The 
 - Bin bags
 
 Part of [[Home]].`,
+    'pinned: 2026-09-25T08:00:00.000Z\n',
   ),
   note(
     '2-Areas/Home/Boiler.md',

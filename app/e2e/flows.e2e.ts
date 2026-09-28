@@ -577,6 +577,36 @@ test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (
   await expect(page.getByRole('button', { name: 'Add to Bower' })).toBeHidden();
 });
 
+test('a fast double-tap on Tidy up leaves the confirmation open, not opened-and-closed (#510)', async ({
+  page,
+}) => {
+  await openHome(page);
+  const tidyBtn = visible(page.getByRole('button', { name: 'Tidy up' }));
+  await expect(tidyBtn).toBeVisible();
+  const box = await tidyBtn.boundingBox();
+  if (box === null) throw new Error('Tidy up button has no box');
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+
+  // Two taps at the same spot, back to back: the first opens the sheet: (its
+  // backdrop now covers that spot); the second, landing on the backdrop
+  // during the slide-up, must not immediately dismiss what it just opened.
+  await page.mouse.click(x, y);
+  await page.mouse.click(x, y);
+  await expect(
+    page.getByRole('dialog', { name: 'Is that everything?' }),
+  ).toBeVisible();
+
+  // A tap on the backdrop still dismisses once the guard window has passed.
+  await page.waitForTimeout(400);
+  await page
+    .locator('.tidy-confirm-backdrop')
+    .click({ position: { x: 5, y: 5 } });
+  await expect(
+    page.getByRole('dialog', { name: 'Is that everything?' }),
+  ).toBeHidden();
+});
+
 test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', async ({
   page,
 }, testInfo) => {
@@ -700,6 +730,33 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
       .getByRole('listitem')
       .filter({ hasText: 'About the files you added' }),
   ).toHaveCount(1);
+});
+
+test('Add: a link row shows the URL, and the What is this? placeholder fits its box (#508)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  // C.11: titles, not file names — the row must never say
+  // "Link - example.com <date> <time>.md", the note's own saved name.
+  await page
+    .getByLabel('Or paste a link')
+    .fill('https://www.example.com/a/page');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('example.com/a/page')).toBeVisible();
+  await expect(page.getByText(/^Link - /)).toHaveCount(0);
+
+  const box = page.getByRole('textbox', { name: 'What is this?' });
+  await expect(box).toBeVisible();
+  await shot(page, testInfo, 'add-context-placeholder');
+
+  // The placeholder must not overflow the box (it used to run to four
+  // lines in this three-line box at 375 px, cut off mid-sentence).
+  const overflow = await box.evaluate(
+    (el: HTMLTextAreaElement) => el.scrollHeight - el.clientHeight,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
 });
 
 test('Home through the scripted run: waiting, running, done (#321)', async ({
@@ -1313,6 +1370,19 @@ test('Settings switches the theme to dark, and it sticks', async ({
   await shot(page, testInfo, 'settings');
 });
 
+test('Settings footer carries the build commit next to the version (#512)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await openSettings(page);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  // The demo build runs from this same git checkout, so a real commit is
+  // always available: no dangling "Bower 0.1.0 ·" with nothing after it.
+  await expect(page.locator('.settings-footer p').first()).toHaveText(
+    /^Bower \d+\.\d+\.\d+ · [0-9a-f]{7}$/,
+  );
+});
+
 test('What is Bower from Settings opens with Close and Done (#329)', async ({
   page,
 }, testInfo) => {
@@ -1853,9 +1923,16 @@ test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent i
   expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(1);
   const tiles = await boxes(page.locator('.home-pinned-grid > *'));
   expect(tiles.length).toBeGreaterThan(0);
-  // Flat hunt, seeded from the fixture (#489, `Demo-Home` board).
+  // Both of the fixture's pins, on this first (cold-cache) load: Flat
+  // hunt (#489) and Shopping list, which sorts past the hydration
+  // fetch cap and only shows because of the search-first fix (#539).
   await expect(
     page.locator('.home-pinned-grid').getByText('Flat hunt', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('.home-pinned-grid')
+      .getByText('Shopping list', { exact: true }),
   ).toBeVisible();
   tiles.forEach((tile, i) => {
     expect(tile.x).toBeCloseTo(grid[i % 4]?.x ?? NaN, 0);

@@ -6,8 +6,8 @@
  */
 
 import type { Run } from './api.js';
+import { sinceLabel } from './bower-tab.js';
 import type { BirdState } from './components/bird-classes.js';
-import { relativeTime } from './navigation.js';
 import { isContextNote } from './run-progress.js';
 import type { RunPhase } from './run-store.js';
 import { failureCopy } from './run-failure.js';
@@ -132,16 +132,13 @@ export function lastTidyUpLine(run: Run): string {
 
 /**
  * When a run finished, for the Last tidy-up card: "just now", "12 min ago",
- * "2 h ago", then "yesterday", "3 days ago" (`relativeTime`).
+ * "2 h ago", then "yesterday", "3 days ago". A thin wrapper over
+ * `sinceLabel` (`bower-tab.ts`, #513) — the one helper behind every "ago"
+ * text a run shows off, so this card, the Inbox card and the working
+ * sheet always read the same elapsed time the same way.
  */
 export function tidyUpAgo(iso: string, now: number): string {
-  const diffMs = Math.max(0, now - Date.parse(iso));
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return relativeTime(iso, now);
+  return sinceLabel(iso, now);
 }
 
 /**

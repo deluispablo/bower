@@ -15,6 +15,7 @@ import { useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { IconClock, IconClose, IconEdit, IconRedo } from './icons.js';
+import { useDismissGuard } from './use-dismiss-guard.js';
 import { useFocusTrap } from './use-focus-trap.js';
 import { ruleSheetLabel } from '../rules.js';
 import type { Rule } from '../rules.js';
@@ -80,10 +81,15 @@ export function RuleSheet({
 }: RuleSheetProps): JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, onClose);
+  const guardedClose = useDismissGuard(onClose);
 
   return (
     <div class="rule-sheet">
-      <div class="rule-sheet-backdrop" aria-hidden="true" onClick={onClose} />
+      <div
+        class="rule-sheet-backdrop"
+        aria-hidden="true"
+        onClick={guardedClose}
+      />
       <div
         ref={panelRef}
         class="rule-sheet-panel"

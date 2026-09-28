@@ -57,6 +57,7 @@ import {
   IconShield,
   IconSparkle,
 } from './icons.js';
+import { useDismissGuard } from './use-dismiss-guard.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
 import '../styles/help-sheet.css';
@@ -246,12 +247,13 @@ function SheetFrame({
   const sheet = useRef<HTMLDivElement>(null);
   useFocusTrap(sheet, onEscape);
   const place = usePlacement(copy.tab);
+  const guardedBackdrop = useDismissGuard(() => onBackdrop?.());
 
   return (
     <div
       class={place.spot === null ? 'help help--no-spot' : 'help'}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onBackdrop?.();
+        if (event.target === event.currentTarget) guardedBackdrop();
       }}
     >
       {place.spot !== null && (
