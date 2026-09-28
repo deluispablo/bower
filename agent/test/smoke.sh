@@ -385,6 +385,15 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       echo scan >"$remote/0-Inbox/scan.jpg"
       echo twin >"$remote/3-Resources/twin-one.md"
       echo twin >"$remote/3-Resources/twin-two.md"
+      # The bookkeeping (#596): index.md rows naming two of them, a note
+      # linking to the renamed one (with an alias, a heading, a longer name
+      # and a fenced code block that must stay as it is), and a log.md.
+      printf -- '%s\n' '# Index' '- [[3-Resources/lease-notes.md]] · Note' \
+        '- [[old-name]]: a note to rename' >"$remote/index.md"
+      printf -- '%s\n' '# Home' '- [[old-name]], [[old-name|the old one]] and [[old-name#Plan]]' \
+        '- [[old-name-two]] and [[2-Areas/old-name]]' '```' '[[old-name]]' '```' \
+        '- [[old-name.md]] again' >"$remote/2-Areas/Home.md"
+      echo '# Log' >"$remote/log.md"
     fi
     if [ "$SMOKE_SCENARIO" = fileonly ]; then
       # A receipt photo next to the PDF and the clip (issue #368).
@@ -637,8 +646,7 @@ case "$SMOKE_SCENARIO" in
       '' '## Table' '| Offer | Salary | Location | Deadline |' '| --- | --- | --- | --- |' \
       >'1-Projects/Job hunt/Job offers, salary and deadline.md'
     echo "- File job offers under 1-Projects/Job hunt. (owner's request, 2026-01-15)" >>Rules.md
-    printf -- '%s\n' 'Filed: offer-north.pdf → 1-Projects/Job hunt' 'Filed: offer-south.pdf → 1-Projects/Job hunt' \
-      'Context: offer-west.pdf is not in the inbox' 'Rule added/changed: file job offers under 1-Projects/Job hunt' \
+    printf -- '%s\n' 'Context: offer-west.pdf is not in the inbox' 'Rule added/changed: file job offers under 1-Projects/Job hunt' \
       'Context: a table of the job offers' >>log.md
     mv '0-Inbox/Bower - 2026-01-15 0903 Context.md' 0-Inbox/Processed/
     ;;
@@ -647,7 +655,6 @@ case "$SMOKE_SCENARIO" in
   paused)
     mkdir -p 2-Areas/Finance/Receipts
     mv 0-Inbox/till-slip.jpg 2-Areas/Finance/Receipts/till-slip.jpg
-    echo 'Filed: till-slip.jpg → 2-Areas/Finance/Receipts' >>log.md
     ;;
   # Apply a rule to what is already filed (issue #372): the two receipts
   # the rule covers move into its folder, one Correction: line each, and
@@ -683,7 +690,6 @@ case "$SMOKE_SCENARIO" in
     mv 0-Inbox/IMG_4471.jpg '1-Projects/Flat hunt/Arlington Road, window sign.jpg'
     echo '- [[Arlington Road, window sign.jpg]] Window sign with the rent' >>'1-Projects/Flat hunt/Flat hunt.md'
     echo '- [[1-Projects/Flat hunt/Arlington Road, window sign.jpg]] · Photo · filed by Bower' >>index.md
-    echo 'Filed: Arlington Road, window sign.jpg → 1-Projects/Flat hunt, renamed from IMG_4471.jpg' >>log.md
     ;;
   # The agent files the PDF, and what it does to the system files (edits
   # one in the inbox and one in the project, removes the lock file) must
@@ -704,8 +710,6 @@ case "$SMOKE_SCENARIO" in
     printf -- '%s\n' '- [[1-Projects/Flat hunt/a.pdf]] · PDF · filed by Bower' \
       '- [[2-Areas/Finance/receipt.jpg]] · image · filed by Bower' \
       '- [[3-Resources/Clipped trick]]' >>index.md
-    printf -- '%s\n' 'Filed: a.pdf → 1-Projects/Flat hunt' \
-      'Filed: receipt.jpg → 2-Areas/Finance' >>log.md
     printf -- '---\ntags: [reference, learning]\nsource: "[[b]]"\n---\nA clipped trick.\n' \
       >'3-Resources/Clipped trick.md'
     mv Clippings/b.md 0-Inbox/Processed/b.md
@@ -1125,7 +1129,7 @@ expect_eq "$(post 2 p.refused)" '[]' 'refused'
 expect_eq "$(post 1 'p.refused === undefined')" true 'running has no refused'
 # The filed original is moved in Drive (#595), not uploaded: nothing else
 # changed.
-expect_eq "$(cat "$STATE/uploaded.txt")" '' 'uploaded files (the manifest diff minus moves)'
+expect_eq "$(cat "$STATE/uploaded.txt")" 'log.md' 'uploaded files (the manifest diff minus moves, and the log.md line for the move, #596)'
 expect_eq "$(cat "$STATE/moved.txt")" '0-Inbox/a.pdf -> 0-Inbox/Processed/a.pdf' 'moved files'
 cmp -s "$STATE/claude-settings-seen.json" "$HERE/../claude-settings.json" ||
   die 'the instance repo policy was not .claude/settings.json during the run'
@@ -1162,13 +1166,16 @@ expect_curl_env_clean
 # A Bower*.md in Clippings/ is not instruction-shaped: no Drive listing.
 expect_eq "$(calls curl | grep -c googleapis || true)" 0 'Drive listing calls with no instruction note pending'
 rclone_calls=$(calls rclone)
-expect_eq "$(printf '%s\n' "$rclone_calls" | wc -l | tr -d ' ')" 3 'rclone calls'
+expect_eq "$(printf '%s\n' "$rclone_calls" | wc -l | tr -d ' ')" 4 'rclone calls'
 printf '%s\n' "$rclone_calls" | sed -n 1p | grep -q "^rclone sync vault: .* --exclude \.obsidian/\*\*$" ||
   die 'first rclone call is not the sync down'
 expect_eq "$(printf '%s\n' "$rclone_calls" | sed -n 2p)" 'rclone mkdir vault:0-Inbox/Processed' \
   'second rclone call makes the parent folder'
 expect_eq "$(printf '%s\n' "$rclone_calls" | sed -n 3p)" \
   'rclone moveto vault:0-Inbox/a.pdf vault:0-Inbox/Processed/a.pdf' 'third rclone call is the server-side move'
+# The fourth copies up log.md, which books the move (#596).
+printf '%s\n' "$rclone_calls" | sed -n 4p | grep -q '^rclone copy .* --files-from-raw ' ||
+  die 'fourth rclone call is not the copy up of the bookkeeping'
 grep -q ' 1 files changed$' "$STATE/out.log" || die 'changed count not logged'
 grep -q ' 1 files moved in Drive$' "$STATE/out.log" || die 'move count not logged'
 remote="$STATE/remote"
@@ -1395,7 +1402,7 @@ grep -q ' 2 files changed$' "$STATE/out.log" || die 'changed count not logged'
 remote="$STATE/remote"
 expect_eq "$(cat "$remote/3-Resources/app.md")" 'v2 from the app' 'note edited in the app during the run'
 expect_eq "$(cat "$remote/3-Resources/agent.md")" 'v2 from the agent' 'note the agent changed'
-expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md ' 'uploaded files (the filed original is moved, #595)'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md log.md ' 'uploaded files (the filed original is moved, #595, and logged, #596)'
 expect_eq "$(post 2 p.refused)" '[]' 'refused is always in the report now (#182), empty when nothing was refused'
 [ -f "$remote/0-Inbox/Processed/a.pdf" ] || die 'processed original missing from 0-Inbox/Processed/ in Drive'
 [ ! -e "$remote/0-Inbox/a.pdf" ] || die 'processed original still in 0-Inbox/ in Drive'
@@ -1473,7 +1480,7 @@ remote="$STATE/remote"
 expect_eq "$(cat "$remote/CLAUDE.md")" '# rules' 'rulebook in Drive'
 [ ! -e "$remote/evil" ] || die 'a file outside the known roots reached Drive'
 [ ! -e "$remote/.claude/skills" ] || die 'a file under .claude/ reached Drive'
-expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md ' 'uploaded files (the filed original is moved, #595)'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md log.md ' 'uploaded files (the filed original is moved, #595, and logged, #596)'
 expect_eq "$(cat "$remote/3-Resources/agent.md")" 'v2 from the agent' 'accepted change'
 grep -q ' 2 changes refused$' "$STATE/out.log" || die 'refused count not logged'
 expect_claude_env unset test-oauth-token
@@ -1534,7 +1541,7 @@ remote="$STATE/remote"
 [ -f "$remote/0-Inbox/Quarantine/evil.md" ] || die 'flagged file missing from 0-Inbox/Quarantine/ in Drive'
 # Both the filed original and the quarantined file are moved in Drive
 # (#595): nothing is uploaded or deleted.
-expect_eq "$(cat "$STATE/uploaded.txt")" '' 'uploaded files'
+expect_eq "$(cat "$STATE/uploaded.txt")" 'log.md' 'uploaded files (the moves are logged, #596)'
 expect_eq "$(LC_ALL=C sort "$STATE/moved.txt" | tr '\n' '|')" \
   '0-Inbox/a.pdf -> 0-Inbox/Processed/a.pdf|0-Inbox/evil.md -> 0-Inbox/Quarantine/evil.md|' 'moved files'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
@@ -1747,7 +1754,7 @@ expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.refused)" '["Rules.md"]' 'refused'
 expect_eq "$(cat "$STATE/remote/Rules.md")" '# my rules' 'Rules.md in Drive'
-expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md ' 'uploaded files (the filed original is moved, #595)'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md log.md ' 'uploaded files (the filed original is moved, #595, and logged, #596)'
 expect_eq "$(cat "$STATE/remote/3-Resources/agent.md")" 'v2 from the agent' 'accepted change'
 grep -q ' 1 changes refused$' "$STATE/out.log" || die 'refused count not logged'
 expect_claude_env unset test-oauth-token
@@ -1918,9 +1925,9 @@ echo "ok an unknown scope is refused"
 # are each one server-side move in Drive (#595); the raw clip, whose content
 # is also in Clippings/Bower trick.md, is not guessed as a move and is one
 # copy up of the new path plus one targeted delete of the inbox path. Each
-# move counts as one change against BOWER_MAX_CHANGES (8 here: two
-# originals, two hub notes, index.md, log.md, the clip's note and the raw
-# clip).
+# move counts as one change against BOWER_MAX_CHANGES (7 here: two
+# originals, two hub notes, index.md, the clip's note and the raw clip;
+# log.md is written by the runner's bookkeeping after the count, #596).
 run_case fileonly
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
@@ -1942,7 +1949,7 @@ expect_eq "$(LC_ALL=C sort "$STATE/moved.txt")" "$(printf '%s\n' \
   LC_ALL=C sort)" 'originals moved in Drive'
 expect_eq "$(calls rclone | grep '^rclone deletefile ')" 'rclone deletefile vault:Clippings/b.md' 'targeted deletes'
 grep -q ' 1 moves not guessed: the same content twice$' "$STATE/out.log" || die 'the raw clip was guessed as a move'
-grep -q ' 8 files changed$' "$STATE/out.log" || die 'a move did not count as one change'
+grep -q ' 7 files changed$' "$STATE/out.log" || die 'a move did not count as one change'
 grep -Fxq -- '- [[2-Areas/Finance/receipt.jpg]] · image · filed by Bower' "$remote/index.md" ||
   die 'the filed receipt has no index.md row with its type'
 expect_content_free
@@ -1968,7 +1975,9 @@ expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile
 if grep -Fq 'window sign.jpg' "$STATE/uploaded.txt"; then die 'the renamed photo was uploaded'; fi
 grep -Fxq -- '- [[1-Projects/Flat hunt/Arlington Road, window sign.jpg]] · Photo · filed by Bower' \
   "$remote/index.md" || die 'the renamed photo has no index.md row with its type and origin'
-grep -Fq ', renamed from IMG_4471.jpg' "$remote/log.md" || die 'the rename is not logged'
+# The runner books the filing (#596), in the format the app's Activity reads.
+grep -Eq '^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} · Filed: Arlington Road, window sign\.jpg → 1-Projects/Flat hunt, renamed from IMG_4471\.jpg$' \
+  "$remote/log.md" || die 'the rename is not logged'
 expect_content_free
 expect_cleaned_up
 echo "ok a photo whose name says nothing is renamed and indexed"
@@ -2149,7 +2158,8 @@ awk '/^rclone mkdir vault:1-Projects\/Flat hunt$/ { m = NR }
   /^rclone moveto vault:3-Resources\/lease-notes.md / { if (!m) exit 1; found = 1 }
   END { exit !found }' "$STATE/calls.log" || die 'the move ran before its parent folder was made'
 expect_eq "$(LC_ALL=C sort "$STATE/uploaded.txt" | tr '\n' '|')" \
-  '0-Inbox/Processed/b.md|3-Resources/agent.md|4-Archives/twin-one.md|' 'uploaded files (edits and guesses only)'
+  '0-Inbox/Processed/b.md|2-Areas/Home.md|3-Resources/agent.md|4-Archives/twin-one.md|index.md|log.md|' \
+  'uploaded files (edits, guesses and the bookkeeping only)'
 expect_eq "$(calls rclone | grep '^rclone deletefile ')" 'rclone deletefile vault:Clippings/b.md' \
   'targeted deletes (the pending original not guessed as a move only)'
 for f in 3-Resources/lease-notes.md 2-Areas/old-name.md 0-Inbox/scan.jpg 0-Inbox/a.pdf Clippings/b.md; do
@@ -2168,6 +2178,24 @@ for f in 3-Resources/twin-one.md 3-Resources/twin-two.md 4-Archives/twin-one.md 
   [ -f "$remote/$f" ] || die "a file that was not moved is gone from Drive: $f"
 done
 grep -q ' 4 files moved in Drive$' "$STATE/out.log" || die 'move count not logged'
+# The bookkeeping (#596): the moved and renamed notes' index.md rows carry
+# the new path and name; links to the renamed note are rewritten by path
+# and by name, aliases and headings kept, a longer name and a fenced code
+# block left alone; one log.md line per move, a filing out of the inbox in
+# the Activity format and any other move as "Moved:".
+expect_eq "$(cat "$remote/index.md")" "$(printf '%s\n' '# Index' \
+  '- [[1-Projects/Flat hunt/lease-notes.md]] · Note' '- [[New name]]: a note to rename')" 'index.md rows'
+expect_eq "$(cat "$remote/2-Areas/Home.md")" "$(printf '%s\n' '# Home' \
+  '- [[New name]], [[New name|the old one]] and [[New name#Plan]]' \
+  '- [[old-name-two]] and [[2-Areas/New name]]' '```' '[[old-name]]' '```' \
+  '- [[New name.md]] again')" 'links to the renamed note'
+expect_eq "$(grep -v 'Tidy-up' "$remote/log.md" | sed 's/^- [0-9]\{4\}-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9] · /- STAMP · /')" \
+  "$(printf '%s\n' '# Log' \
+    '- STAMP · Moved: 0-Inbox/a.pdf → 0-Inbox/Processed/a.pdf' \
+    '- STAMP · Filed: scan.jpg → 2-Areas/Finance' \
+    '- STAMP · Moved: 2-Areas/old-name.md → 2-Areas/New name.md' \
+    '- STAMP · Moved: 3-Resources/lease-notes.md → 1-Projects/Flat hunt/lease-notes.md')" 'log.md lines'
+grep -q ' links updated in 2 notes$' "$STATE/out.log" || die 'link count not logged'
 grep -q ' 2 moves not guessed: the same content twice$' "$STATE/out.log" ||
   die 'moves not guessed not counted in the log'
 for needle in lease-notes old-name 'New name' scan.jpg twin; do
@@ -2178,3 +2206,49 @@ done
 expect_content_free
 expect_cleaned_up
 echo "ok moves keep the file in Drive and leave no copy"
+
+# 36. The bookkeeping phase (#596) run twice on the same moves changes
+# nothing the second time: book_moves, taken from run.sh with the helpers it
+# needs, runs on a local folder, and a second call leaves every file and the
+# upload list as they were. Rules.md, which the agent may not write in this
+# run, and a line only in a code block are never touched.
+CASE=bookkeeping
+STATE="$ROOT/$CASE"
+book="$STATE/vault"
+mkdir -p "$book/2-Areas" "$book/1-Projects/Flat hunt"
+printf -- '%s\n' '# Index' '- [[old-name]]: a note' '- [[0-Inbox/IMG_4471.jpg]] · Photo' >"$book/index.md"
+printf -- '%s\n' '- [[old-name|alias]]' '~~~' '[[old-name]]' '~~~' '![[IMG_4471.jpg]]' >"$book/2-Areas/Home.md"
+echo '- [[old-name]]' >"$book/Rules.md"
+echo '# Log' >"$book/log.md"
+echo 'renamed' >"$book/2-Areas/New name.md"
+echo 'jpg' >"$book/1-Projects/Flat hunt/sign.jpg"
+printf -- '%s\n' 2-Areas/old-name.md 0-Inbox/IMG_4471.jpg >"$STATE/old.txt"
+printf -- '%s\n' '2-Areas/New name.md' '1-Projects/Flat hunt/sign.jpg' >"$STATE/new.txt"
+(
+  set -euo pipefail
+  WORK_DIR="$STATE"
+  UPLOAD_FILE="$STATE/upload.txt"
+  RULES_WRITABLE=0
+  log() { printf '%s\n' "$*" >>"$STATE/out.log"; }
+  eval "$(sed -n '/^in_known_root() {$/,/^}$/p; /^may_write() {$/,/^}$/p; /^book_moves() {$/,/^}$/p' "$RUN_SH")"
+  : >"$UPLOAD_FILE"
+  book_moves "$book" "$STATE/old.txt" "$STATE/new.txt" '2026-01-15 09:30'
+  LC_ALL=C sort "$UPLOAD_FILE" >"$STATE/upload-1.txt"
+  (cd "$book" && find . -type f | LC_ALL=C sort | xargs -d '\n' cat) >"$STATE/after-1.txt"
+  : >"$UPLOAD_FILE"
+  book_moves "$book" "$STATE/old.txt" "$STATE/new.txt" '2026-01-15 09:30'
+  cp "$UPLOAD_FILE" "$STATE/upload-2.txt"
+  (cd "$book" && find . -type f | LC_ALL=C sort | xargs -d '\n' cat) >"$STATE/after-2.txt"
+) || die 'book_moves failed'
+expect_eq "$(tr '\n' '|' <"$STATE/upload-1.txt")" '2-Areas/Home.md|index.md|log.md|' 'first pass uploads'
+expect_eq "$(cat "$book/index.md")" "$(printf '%s\n' '# Index' '- [[New name]]: a note' \
+  '- [[1-Projects/Flat hunt/sign.jpg]] · Photo')" 'index.md rows after the first pass'
+expect_eq "$(cat "$book/2-Areas/Home.md")" "$(printf '%s\n' '- [[New name|alias]]' '~~~' '[[old-name]]' '~~~' \
+  '![[sign.jpg]]')" 'links after the first pass'
+expect_eq "$(cat "$book/Rules.md")" '- [[old-name]]' 'Rules.md untouched'
+expect_eq "$(cat "$book/log.md")" "$(printf '%s\n' '# Log' \
+  '- 2026-01-15 09:30 · Moved: 2-Areas/old-name.md → 2-Areas/New name.md' \
+  '- 2026-01-15 09:30 · Filed: sign.jpg → 1-Projects/Flat hunt, renamed from IMG_4471.jpg')" 'log.md after the first pass'
+cmp -s "$STATE/after-1.txt" "$STATE/after-2.txt" || die 'the second pass changed a file'
+[ ! -s "$STATE/upload-2.txt" ] || die 'the second pass listed files to upload'
+echo "ok the bookkeeping books each move once"
