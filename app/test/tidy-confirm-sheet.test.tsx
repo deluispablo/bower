@@ -5,10 +5,18 @@ import { useState } from 'preact/hooks';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
+const state = vi.hoisted(() => ({ demo: false }));
+
+vi.mock('../src/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/api.js')>()),
+  isDemo: () => state.demo,
+}));
+
+const {
   TidyConfirmSheet,
   confirmSentenceParts,
-} from '../src/components/tidy-confirm-sheet.js';
+  DEMO_RECORDING_NOTICE,
+} = await import('../src/components/tidy-confirm-sheet.js');
 
 let root: HTMLDivElement | undefined;
 
@@ -82,6 +90,7 @@ afterEach(() => {
   }
   document.body.replaceChildren();
   root = undefined;
+  state.demo = false;
 });
 
 describe('confirmSentenceParts', () => {
@@ -162,5 +171,17 @@ describe('TidyConfirmSheet', () => {
     });
     expect(onDismiss).toHaveBeenCalledOnce();
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('no amber recording notice outside the demo', () => {
+    state.demo = false;
+    mount(2);
+    expect(currentRoot().textContent).not.toContain(DEMO_RECORDING_NOTICE);
+  });
+
+  it('shows the amber recording notice in a demo build (#363)', () => {
+    state.demo = true;
+    mount(2);
+    expect(currentRoot().textContent).toContain(DEMO_RECORDING_NOTICE);
   });
 });

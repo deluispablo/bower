@@ -273,6 +273,11 @@
   line-height: 1.5;
 }
 
+/* The demo's "A recording." lead (#363, `Demo-Working` board). */
+.working-sheet-reassurance-lead {
+  color: var(--color-accent);
+}
+
 /* One row per item (`runRows`): its type icon, its title, then where it
    went or "reading…". */
 
