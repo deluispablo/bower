@@ -352,6 +352,58 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await shot(page, testInfo, 'tidy-up');
 });
 
+test('the working sheet: the bird between Inbox and the folders, the rows as they land (#338)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(confirm).toBeHidden();
+
+  // Running: the scene, the count against the three things waiting, when
+  // it started, the sentence, and the item being read.
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
+  await expect(sheet.getByText(/^[0-3] of 3 filed$/)).toBeVisible();
+  await expect(sheet.getByText('Started just now')).toBeVisible();
+  await expect(
+    sheet.getByText(
+      'Usually three to five minutes. Close this and keep going; Home will say when it is done.',
+    ),
+  ).toBeVisible();
+  const rows = sheet.locator('.working-sheet-row');
+  await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(1);
+
+  // The scripted run files one item after another (`src/demo/server.ts`);
+  // the app polls every five seconds, so some land before the run ends.
+  await expect(sheet.getByText(/^[12] of 3 filed$/)).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(
+    rows.filter({ hasText: 'Boiler service invoice' }),
+  ).toContainText('filed');
+  await shot(page, testInfo, 'run-working-rows');
+
+  // Done: the listing is read again and the rows name where things went;
+  // the request went to the processed folder, so it only says filed.
+  await expect(sheet.getByText('3 files processed')).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(
+    rows.filter({ hasText: 'Boiler service invoice' }),
+  ).toContainText('→ Home');
+  await expect(rows.filter({ hasText: 'Tomato seedlings' })).toContainText(
+    '→ Garden',
+  );
+  await expect(
+    rows.filter({ hasText: 'What do I still need for Lisbon' }),
+  ).toContainText('filed');
+  await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(0);
+});
+
 test('the working sheet opens once per run, and the run ends back at Tidy up', async ({
   page,
 }, testInfo) => {

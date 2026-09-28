@@ -1,15 +1,21 @@
 /**
- * The Tidying up sheet's progress bar (spec §6, Tidying up row): "n of m
- * filed" with a determinate bar once a run reports both how many it has
- * filed and how many it expects to file in total, an indeterminate bar
- * otherwise. Pure so it's unit-tested without a real run or a real timer.
+ * What the working sheet shows while a run goes (spec C.6, board
+ * Phone-Working): "n of m filed" with its bar, and one row per item as it
+ * is filed ("Lease agreement 2026 → Flat hunt"). Pure so it is unit-tested
+ * without a real run, a real listing or a real timer.
  *
- * Today's runner (`api/src/runner.ts`) only ever reports the names it has
- * filed, once a run is `done` or `failed` — never a running total while a
- * run is still going. So in practice `progressFor` always returns `null`
- * right now (see the PR's "Left out"); it's written and tested against the
- * full contract so nothing else has to change once a runner reports both.
+ * The counts and rows come from `run.processed`, the inbox paths the run
+ * has filed so far, and the inbox as the listing showed it when the run
+ * began. Today's runner (`agent/run.sh`) reports `processed` only once a
+ * run is `done` or `failed`, so while a real run is going there are no
+ * rows and the bar stays indeterminate; the demo's scripted run reports
+ * each item as it goes. Neither reports where an item went: a row gains its
+ * folder once the listing, re-read when the run ends, shows the file there.
  */
+
+import type { DriveFile } from './drive.js';
+import { pendingCount } from './navigation.js';
+import { fileKind, fileTitle } from './vault-index.js';
 
 /** The counts a run may report, when it reports them at all. */
 export interface RunCounts {
@@ -38,4 +44,148 @@ export function progressFor(counts: RunCounts): RunProgress | null {
     return null;
   }
   return { filed: processed, total, ratio: Math.min(1, processed / total) };
+}
+
+/** The inbox roots a run files from (`agent/run.sh`). */
+const INBOX_ROOTS = new Set(['0-Inbox', 'Clippings']);
+
+/** An instruction note's name (`Bower - YYYY-MM-DD HHmm <title>.md`). */
+const REQUEST_PREFIX = /^Bower - \d{4}-\d{2}-\d{2} \d{4} /;
+
+/**
+ * The paths waiting in the inbox, sorted: the same rule as the Inbox
+ * card's count (`navigation.ts#pendingCount`), one file at a time.
+ */
+export function waitingPaths(files: readonly DriveFile[]): string[] {
+  return files
+    .filter((file) => pendingCount([file]) === 1)
+    .map((file) => file.path)
+    .sort();
+}
+
+/**
+ * The counts for `progressFor`: `processed` only when the run reports it,
+ * and a total only then too, since a total with nothing filed to set
+ * against it would pin the bar at zero for the whole of a real run.
+ * `waiting` is the inbox as the run began; items filed that it did not
+ * list still count.
+ */
+export function runCounts(
+  processed: readonly string[] | undefined,
+  waiting: readonly string[],
+): RunCounts {
+  if (processed === undefined) return {};
+  const all = new Set([...waiting, ...processed]);
+  return { processed: processed.length, total: all.size };
+}
+
+/** A row's icon and colour, as on a folder screen. */
+export type RowTone = 'note' | 'pdf' | 'image' | 'file';
+
+export interface RunRow {
+  /** The inbox path, unique within a run. */
+  path: string;
+  /** What people read: the name without its extension. */
+  title: string;
+  tone: RowTone;
+  /** `filed`, or `reading` for the item the run is on now. */
+  status: 'filed' | 'reading';
+  /** The folder it was filed in ("Flat hunt"), once the listing shows it
+   * there; `null` before, and always for `reading`. */
+  destination: string | null;
+}
+
+function baseName(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|heic|heif|webp|gif)$/i;
+
+function toneOf(name: string, file: DriveFile | undefined): RowTone {
+  if (file === undefined) {
+    if (/\.md$/i.test(name)) return 'note';
+    if (/\.pdf$/i.test(name)) return 'pdf';
+    return IMAGE_EXTENSIONS.test(name) ? 'image' : 'file';
+  }
+  const kind = fileKind(file);
+  if (kind === 'note' || kind === 'pdf') return kind;
+  return kind === 'photo' || kind === 'image' ? 'image' : 'file';
+}
+
+/** The title a row shows: the file's title, and an instruction note's
+ * words without its date and time. */
+function rowTitle(name: string): string {
+  return fileTitle(name).replace(REQUEST_PREFIX, '');
+}
+
+/**
+ * Where `path` went: the folder of a file with the same name outside the
+ * inbox, when the listing has one. `null` while the listing still shows
+ * the file in the inbox (it is only re-read when a run ends), when the run
+ * renamed it, or when it went to `0-Inbox/Processed/` (a request).
+ */
+export function destinationOf(
+  path: string,
+  files: readonly DriveFile[],
+): string | null {
+  const name = baseName(path);
+  for (const file of files) {
+    if (file.name !== name || file.path === path) continue;
+    const segments = file.path.split('/');
+    if (INBOX_ROOTS.has(segments[0] ?? '') || segments.length < 2) continue;
+    return segments[segments.length - 2] ?? null;
+  }
+  return null;
+}
+
+/**
+ * The sheet's rows: one per filed item, in the order the run filed them,
+ * then, while the run is `active`, the next waiting item as `reading`.
+ * None when the run does not report `processed`: the sheet then has
+ * nothing true to say about any one item.
+ */
+export function runRows(input: {
+  processed: readonly string[] | undefined;
+  waiting: readonly string[];
+  files: readonly DriveFile[];
+  active: boolean;
+}): RunRow[] {
+  const { processed, waiting, files, active } = input;
+  if (processed === undefined) return [];
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  const row = (path: string, status: RunRow['status']): RunRow => {
+    const name = baseName(path);
+    const destination = status === 'filed' ? destinationOf(path, files) : null;
+    const file =
+      byPath.get(path) ?? files.find((candidate) => candidate.name === name);
+    return {
+      path,
+      title: rowTitle(name),
+      tone: toneOf(name, file),
+      status,
+      destination,
+    };
+  };
+  const rows = processed.map((path) => row(path, 'filed'));
+  if (active) {
+    const filed = new Set(processed);
+    const next = waiting.find((path) => !filed.has(path));
+    if (next !== undefined) rows.push(row(next, 'reading'));
+  }
+  return rows;
+}
+
+/**
+ * The folder names on the right of the sheet's scene ("Flat hunt ·
+ * Finance"): the rows' destinations, each once, at most three; `null`
+ * when none is known yet.
+ */
+export function destinationsLabel(rows: readonly RunRow[]): string | null {
+  const names: string[] = [];
+  for (const { destination } of rows) {
+    if (destination !== null && !names.includes(destination)) {
+      names.push(destination);
+    }
+  }
+  return names.length === 0 ? null : names.slice(0, 3).join(' · ');
 }

@@ -77,12 +77,15 @@
   bottom: 0;
   left: 0;
   z-index: 40;
-  padding: var(--space-6) var(--space-4)
-    calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--space-4) var(--space-4)
+    calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
   background: var(--color-surface);
   color: var(--color-text);
   border-top: 1px solid var(--color-border);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: 20px 20px 0 0;
   box-shadow: var(--shadow-md);
   animation: working-sheet-in var(--motion-base) var(--ease-out);
 }
@@ -96,7 +99,10 @@
 
 .working-sheet-title {
   margin: 0;
+  color: var(--color-heading);
+  font-family: var(--font-display);
   font-size: var(--text-lg);
+  font-weight: 600;
 }
 
 .working-sheet-close {
@@ -108,10 +114,8 @@
   padding: 0;
   background: none;
   border: none;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   color: var(--color-text-muted);
-  font-size: var(--text-xl);
-  line-height: 1;
   cursor: pointer;
 }
 
@@ -122,6 +126,74 @@
 .working-sheet-close:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+/* The board's scene while a run goes: the bird ferrying between "Inbox" on
+   the left and the folders on the right, above a ground line. */
+
+.working-sheet-stage {
+  position: relative;
+  height: 150px;
+  border-radius: 14px;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.working-sheet-stage-line {
+  position: absolute;
+  right: var(--space-6);
+  bottom: 36px;
+  left: var(--space-6);
+  height: 2px;
+  background: var(--color-border);
+}
+
+.working-sheet-stage-from,
+.working-sheet-stage-to {
+  position: absolute;
+  bottom: 14px;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.working-sheet-stage-from {
+  left: 30px;
+}
+
+.working-sheet-stage-to {
+  right: var(--space-6);
+  max-width: 55%;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.working-sheet-stage .bw {
+  position: absolute;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.working-sheet-stage .bw-stage {
+  padding: 0;
+}
+
+.working-sheet-stage .bw-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+/* The label under the bird repeats the title here: kept for screen readers. */
+.working-sheet-stage .bw-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .working-sheet-detail {
@@ -145,7 +217,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  font-size: var(--text-sm);
+  font-size: 15px;
 }
 
 .working-sheet-started {
@@ -201,32 +273,67 @@
   line-height: 1.5;
 }
 
-/* The names filed so far (`run.processed`); a destination folder joins each
-   row once the runner reports one — it does not today. */
+/* One row per item (`runRows`): its type icon, its title, then where it
+   went or "reading…". */
 
-.working-sheet-files {
+.working-sheet-rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 160px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
-.working-sheet-file {
-  padding: var(--space-1) 0;
-  overflow: hidden;
+.working-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 26px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border-top: 1px solid var(--color-border);
+  font-size: 13.5px;
 }
 
-.working-sheet-file:first-child {
-  border-top: none;
+.working-sheet-row-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.working-sheet-row-icon .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.working-sheet-row-icon.tone-pdf {
+  color: var(--color-danger);
+}
+
+.working-sheet-row-icon.tone-note,
+.working-sheet-row-icon.tone-image {
+  color: var(--color-info);
+}
+
+.working-sheet-row-icon.tone-file {
+  color: var(--color-text-muted);
+}
+
+.working-sheet-row-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.working-sheet-row-where {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 @media (min-width: 900px) {
@@ -236,7 +343,7 @@
     bottom: auto;
     left: auto;
     width: 360px;
-    padding: var(--space-6) var(--space-4) var(--space-4);
+    padding: var(--space-4);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     animation-name: working-card-in;

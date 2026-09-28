@@ -7,13 +7,18 @@
  * running out, unless the user closed it (× or Escape). A non-modal
  * dialog: no focus trap, the rest of the app stays usable.
  *
- * While a run is queued or running it also shows "n of m filed" with a bar
- * (`progressFor`, indeterminate when the run hasn't reported both counts —
- * which is always, today), how long ago it started, a reassurance line, and
- * the names it has filed so far (`run.processed`; a destination folder only
- * once the runner reports one, which it does not yet — see the PR).
+ * While a run is queued or running it shows the board's scene (Phone-Working,
+ * spec C.6, #338): the bird tidying between "Inbox" and the folders things
+ * went to, "n of m filed" with a bar, how long ago the run started, one
+ * sentence on how long it takes, and a row per item as it is filed, then the
+ * one it is reading (`run-progress.ts`). The counts and rows need the run
+ * to report what it has filed (`run.processed`); until it does, the bar is
+ * indeterminate and there are no rows. The inbox the run started from is
+ * the listing as the sheet first saw the run, kept for the whole run.
  *
- * Once done, it also shows what the run set aside or refused (`doneNotes`,
+ * Once done, it shows the bird and the run store's message as before, the
+ * rows with the folders the re-read listing found them in, and what the run
+ * set aside or refused (`doneNotes`,
  * spec A.3/A.5), under the summary: `run.quarantined` and `run.refused`,
  * either, both or neither.
  *
@@ -27,10 +32,20 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Run } from '../api.js';
 import { doneNotes } from '../home.js';
+import { runKey } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
-import { progressFor } from '../run-progress.js';
+import {
+  destinationsLabel,
+  progressFor,
+  runCounts,
+  runRows,
+  waitingPaths,
+} from '../run-progress.js';
+import type { RunRow } from '../run-progress.js';
+import { useVault } from '../vault-store.js';
 import { BowerWorking, workingLabel } from './bower-working.js';
 import type { WorkingState } from './bower-working.js';
+import { IconClose, IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
 
 /** How long the sheet stays up after a run stops without finishing. */
 export const SHEET_LINGER_MS = 3_000;
@@ -107,8 +122,32 @@ export interface WorkingSheetProps {
   reopenKey?: number;
 }
 
-const REASSURANCE =
-  "Usually takes three to five minutes. You can close this; I'll ping you when I'm done.";
+/** The sentence under the bar while a run goes (spec C.6). */
+export const REASSURANCE =
+  'Usually three to five minutes. Close this and keep going; Home will say when it is done.';
+
+/** The scene's right-hand label before any destination is known. */
+export const FOLDERS_FALLBACK = 'Your folders';
+
+function RowIcon({ tone }: { tone: RunRow['tone'] }): JSX.Element {
+  const icon =
+    tone === 'pdf' ? (
+      <IconPdf />
+    ) : tone === 'image' ? (
+      <IconImage />
+    ) : tone === 'note' ? (
+      <IconNote />
+    ) : (
+      <IconDoc />
+    );
+  return <span class={`working-sheet-row-icon tone-${tone}`}>{icon}</span>;
+}
+
+/** What a row says after the title: where it went, or that it is being read. */
+function rowWhere(row: RunRow): string {
+  if (row.status === 'reading') return 'reading…';
+  return row.destination === null ? 'filed' : `→ ${row.destination}`;
+}
 
 export function WorkingSheet({
   phase,
@@ -121,6 +160,19 @@ export function WorkingSheet({
   // When the sheet should measure the linger window from, updated during
   // render so the first render after a phase change (or a deliberate
   // reopen) already measures from the right moment.
+  const { files } = useVault();
+
+  // The inbox as the run began: the listing the first time the sheet sees
+  // this run (and has a listing at all), kept until the next run.
+  const waitingRef = useRef<{ key: string; paths: string[] } | null>(null);
+  if (run !== null && files.length > 0) {
+    const key = runKey(run);
+    if (waitingRef.current?.key !== key) {
+      waitingRef.current = { key, paths: waitingPaths(files) };
+    }
+  }
+  const waiting = waitingRef.current?.paths ?? [];
+
   const phaseRef = useRef(phase);
   const reopenKeyRef = useRef(reopenKey);
   const sinceRef = useRef(Date.now());
@@ -174,8 +226,9 @@ export function WorkingSheet({
 
   const active = state === 'queued' || state === 'running';
   const notes = state === 'done' ? doneNotes(run) : [];
-  const filed = run?.processed;
-  const progress = active ? progressFor({ processed: filed?.length }) : null;
+  const processed = run?.processed;
+  const progress = active ? progressFor(runCounts(processed, waiting)) : null;
+  const rows = runRows({ processed, waiting, files, active });
   const started =
     active && run?.requestedAt !== undefined
       ? startedAgo(run.requestedAt, Date.now())
@@ -191,10 +244,21 @@ export function WorkingSheet({
           aria-label="Close"
           onClick={onDismiss}
         >
-          ×
+          <IconClose />
         </button>
       </div>
-      <BowerWorking state={state} />
+      {active ? (
+        <div class="working-sheet-stage">
+          <span class="working-sheet-stage-line" aria-hidden="true" />
+          <span class="working-sheet-stage-from">Inbox</span>
+          <span class="working-sheet-stage-to">
+            {destinationsLabel(rows) ?? FOLDERS_FALLBACK}
+          </span>
+          <BowerWorking state={state} />
+        </div>
+      ) : (
+        <BowerWorking state={state} />
+      )}
       {detail !== undefined && <p class="working-sheet-detail">{detail}</p>}
       {notes.map((note) => (
         <p key={note} class="working-sheet-detail">
@@ -204,9 +268,11 @@ export function WorkingSheet({
       {active && (
         <div class="working-sheet-progress">
           <div class="working-sheet-progress-row">
-            {progress !== null && (
-              <span>{`${progress.filed} of ${progress.total} filed`}</span>
-            )}
+            <span>
+              {progress !== null
+                ? `${progress.filed} of ${progress.total} filed`
+                : ''}
+            </span>
             {started !== undefined && (
               <span class="working-sheet-started">{started}</span>
             )}
@@ -225,11 +291,17 @@ export function WorkingSheet({
           <p class="working-sheet-reassurance">{REASSURANCE}</p>
         </div>
       )}
-      {filed !== undefined && filed.length > 0 && (
-        <ul class="working-sheet-files">
-          {filed.map((name) => (
-            <li key={name} class="working-sheet-file">
-              {name}
+      {rows.length > 0 && (
+        <ul class="working-sheet-rows">
+          {rows.map((row) => (
+            <li
+              key={row.path}
+              class="working-sheet-row"
+              data-status={row.status}
+            >
+              <RowIcon tone={row.tone} />
+              <span class="working-sheet-row-title">{row.title}</span>
+              <span class="working-sheet-row-where">{rowWhere(row)}</span>
             </li>
           ))}
         </ul>
