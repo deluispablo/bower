@@ -28,6 +28,8 @@ import {
   DEMO_RUNS,
   FIXTURE_FILES,
   FIXTURE_FOLDERS,
+  SCRIPTED_ADDED,
+  SCRIPTED_LISTINGS,
   INBOX_PLAN,
 } from './fixture.js';
 import { instructionText, replyTo } from './replies.js';
@@ -260,6 +262,24 @@ export class DemoServer {
     steps.push({
       at: DONE_MS,
       apply: () => {
+        // The flat listings and their companion notes (`kind: rental-listing`)
+        // come with the run, so Home and Just filed show what the boards draw.
+        if (scope !== 'instructions' && filed.length > 0) {
+          for (const item of SCRIPTED_LISTINGS) {
+            const note = (item.to ?? '').replace(/\.pdf$/, '.md');
+            const text = this.textAt(note);
+            if (text !== '') this.vault.write(note, `${text}
+`);
+            run.processed?.push(item.path);
+            run.items?.push({ ...item });
+            filed.push({
+              name: item.path.slice(item.path.lastIndexOf('/') + 1),
+              folder: (item.to ?? '').slice(0, (item.to ?? '').lastIndexOf('/')),
+              at: DONE_MS,
+            });
+          }
+          run.added = SCRIPTED_ADDED;
+        }
         for (const reply of replies) this.applyReply(reply, date);
         const count = run.processed?.length ?? 0;
         this.appendLog(
