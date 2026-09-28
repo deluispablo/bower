@@ -122,3 +122,108 @@
   font-weight: var(--weight-medium);
   text-decoration: none;
 }
+
+/* The meta line: badge, kind word and facts (#604). */
+.file-props .kind-badge {
+  flex-shrink: 0;
+}
+
+.file-props .folder-mark {
+  flex-shrink: 0;
+}
+
+/* A CSV as a table: scrolls sideways, the header row stays in view. */
+.table-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.table-preview-scroll {
+  max-height: 70vh;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.table-preview table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.table-preview th,
+.table-preview td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table-preview th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-weight: var(--weight-medium);
+}
+
+.table-preview-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Drive's frame, under its label. */
+.drive-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.drive-preview figcaption {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.drive-preview iframe {
+  width: 100%;
+  height: 70vh;
+  min-height: 320px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: #f5f5f2;
+}
+
+/* What Bower did with a kind it cannot read, and the ways on. */
+.file-notice {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.file-notice b {
+  color: var(--color-text);
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.file-button-secondary {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+}
+
+.file-button-secondary:hover {
+  background: var(--color-surface);
+  filter: none;
+}
