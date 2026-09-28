@@ -296,6 +296,50 @@ test('Settings switches the theme to dark, and it sticks', async ({
   await shot(page, testInfo, 'settings');
 });
 
+test('What is Bower from Settings opens with Close and Done (#329)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await openSettings(page);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await expect(
+    page.getByText('The whole story, in nine screens'),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'What is Bower' }).click();
+  await expect(page).toHaveURL(/\/welcome\?from=settings$/);
+  await expect(
+    page.getByRole('heading', { name: /Bower files it/ }),
+  ).toBeInViewport();
+
+  // Close (X), not Skip, when opened from Settings.
+  await expect(
+    page.getByRole('button', { name: 'Skip', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  await shot(page, testInfo, 'intro-from-settings');
+
+  // Closing on page 1 goes straight back to Settings, not the sign-in.
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+
+  // Walking all nine pages ends on Done, not Sign in with Google.
+  await page.getByRole('button', { name: 'What is Bower' }).click();
+  const next = page.getByRole('button', { name: 'Next', exact: true });
+  await expect(next).toHaveCount(8);
+  for (let index = 0; index < 8; index += 1) {
+    await next.nth(index).click();
+  }
+  await expect(
+    page.getByRole('heading', { name: 'What will you start with?' }),
+  ).toBeInViewport();
+  await expect(
+    page.getByRole('link', { name: 'Sign in with Google' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+});
+
 test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', async ({
   page,
 }) => {
