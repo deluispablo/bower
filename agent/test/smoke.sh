@@ -290,6 +290,10 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       printf -- '---\ntags: [instruction]\nvia: app\nkind: context\n---\n\nFile these as receipts.\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0902 Context.md"
     fi
+    if [ "$SMOKE_SCENARIO" = rename ]; then
+      # A photo whose name says nothing (issue #369).
+      echo jpg >"$remote/0-Inbox/IMG_4471.jpg"
+    fi
     if [ "$SMOKE_SCENARIO" = fileonly ]; then
       # A receipt photo next to the PDF and the clip (issue #368).
       echo jpg >"$remote/0-Inbox/receipt.jpg"
@@ -493,6 +497,15 @@ case "$SMOKE_SCENARIO" in
   # PARA folders as they are, each with a hub line, an index.md row and a
   # Filed: log line, and no summary note; the clip is the content, so it
   # becomes a note and the raw clip goes to Processed/.
+  # A name that says nothing (issue #369): the photo is renamed from its
+  # content, indexed with its type and origin, and the rename logged.
+  rename)
+    mkdir -p '1-Projects/Flat hunt'
+    mv 0-Inbox/IMG_4471.jpg '1-Projects/Flat hunt/Arlington Road, window sign.jpg'
+    echo '- [[Arlington Road, window sign.jpg]] Window sign with the rent' >>'1-Projects/Flat hunt/Flat hunt.md'
+    echo '- [[1-Projects/Flat hunt/Arlington Road, window sign.jpg]] · Photo · filed by Bower' >>index.md
+    echo 'Filed: Arlington Road, window sign.jpg → 1-Projects/Flat hunt, renamed from IMG_4471.jpg' >>log.md
+    ;;
   fileonly)
     mkdir -p '1-Projects/Flat hunt' 2-Areas/Finance 3-Resources
     mv 0-Inbox/a.pdf '1-Projects/Flat hunt/a.pdf'
@@ -670,7 +683,7 @@ expect_content_free() {
     evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
-    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' \
+    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -775,6 +788,12 @@ grep -Fq 'Bower only files, by default' <<<"$RULEBOOK" ||
   die 'the rulebook Ingest does not file by default (#368)'
 grep -Fq '· <type> · filed by Bower' <<<"$RULEBOOK" ||
   die 'the rulebook does not index filed originals with their type (#368)'
+grep -Fq '`<where or who>, <what it is>.<ext>`' <<<"$RULEBOOK" ||
+  die 'the rulebook has no naming rule for originals whose name says nothing (#369)'
+grep -Fq 'at most 60 characters' <<<"$RULEBOOK" ||
+  die 'the rulebook does not cap a new file name at 60 characters (#369)'
+grep -Fq "Never put the owner's name or any other person's name in a file name" <<<"$RULEBOOK" ||
+  die 'the rulebook lets a person name reach a file name (#369)'
 grep -Fq '`0-Inbox/Quarantine/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not tell the agent to leave Quarantine/ alone'
 grep -Fq 'listed by the runner' <<<"$INGEST_PROMPT" ||
@@ -1621,3 +1640,21 @@ grep -Fxq -- '- [[2-Areas/Finance/receipt.jpg]] · image · filed by Bower' "$re
 expect_content_free
 expect_cleaned_up
 echo "ok originals filed without a summary note, the clip becomes a note"
+
+# 30. A name that says nothing (issue #369): IMG_4471.jpg is filed under a
+# name from its content, indexed with its type and origin (the row shape
+# app/src/vault-index.ts reads) and the rename is logged.
+run_case rename
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+remote="$STATE/remote"
+[ -f "$remote/1-Projects/Flat hunt/Arlington Road, window sign.jpg" ] ||
+  die 'the renamed photo is not in its folder in Drive'
+[ ! -e "$remote/0-Inbox/IMG_4471.jpg" ] || die 'the photo is still in the inbox in Drive'
+expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/IMG_4471.jpg$')" 1 'targeted delete of the old name'
+grep -Fxq -- '- [[1-Projects/Flat hunt/Arlington Road, window sign.jpg]] · Photo · filed by Bower' \
+  "$remote/index.md" || die 'the renamed photo has no index.md row with its type and origin'
+grep -Fq ', renamed from IMG_4471.jpg' "$remote/log.md" || die 'the rename is not logged'
+expect_content_free
+expect_cleaned_up
+echo "ok a photo whose name says nothing is renamed and indexed"

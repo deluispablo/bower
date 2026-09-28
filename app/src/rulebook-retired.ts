@@ -46,4 +46,6 @@ export const RETIRED_RULEBOOK_LINES: readonly string[] = [
   '9. Update `index.md`; append to `log.md`.',
   '10. **Duplicates:** if the vault already tracks the same item (same URL, same document, same subject), update the existing note with any new detail and move the incoming copy to `Processed/`. Log it.',
   '- **Profile:** `About-Me.md` holds lasting facts the owner would say about themselves — role, goals, preferences, active projects, people who matter to them — never something merely found inside a note about someone or something else. Update it when Ingest step 7 turns one up.',
+  '3. Move the original into that folder as it is. Keep its name when the name says what it is; otherwise give it one that does.',
+  "4. Add one line to the folder's hub note (`- [[<file name>]] <five-word description>`) and one row to `index.md`, under the folder's section: `- [[<path from the top of the folder>]] · <type> · filed by Bower`, the type in one word (PDF, image, spreadsheet, document, audio…).",
 ];
