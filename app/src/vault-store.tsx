@@ -387,7 +387,12 @@ export async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
     console.error(err);
   }
 
-  for (const note of index.notes) {
+  // Newest first, so the notes Home's Recent shows get their text (and
+  // titles) before the fetch cap runs out.
+  const newestFirst = [...index.notes].sort((a, b) =>
+    (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''),
+  );
+  for (const note of newestFirst) {
     if (notePinnedAt.has(note.id)) continue;
     const pinnedAt = await resolve(note.id, note.modifiedTime);
     if (pinnedAt !== null) notePinnedAt.set(note.id, pinnedAt);

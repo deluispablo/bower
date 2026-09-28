@@ -356,18 +356,13 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
 test('/search?q= lands on Home with the switcher open and prefilled (#495)', async ({
   page,
 }) => {
-  await page.goto('/search?q=Marathon');
+  await page.goto('/search?q=Lisbon');
 
   await expect(page).toHaveURL(/\/$/);
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
-  await expect(switcher.getByRole('combobox')).toHaveValue('Marathon');
-  // Half Marathon, not Lisbon Trip: a snippet needs the note's text in the
-  // cache, and the load's capped walk (`PINNED_HYDRATION_FETCH_CAP`) now
-  // ends before it reaches the v4 sample folder's later notes.
-  const option = switcher
-    .getByRole('option', { name: /Half Marathon/ })
-    .first();
+  await expect(switcher.getByRole('combobox')).toHaveValue('Lisbon');
+  const option = switcher.getByRole('option', { name: /Lisbon Trip/ }).first();
   await expect(option).toBeVisible();
   // The snippet reads like the note body, not the raw file (#554): no
   // frontmatter keys, fences or the heading's own "#" mark.
@@ -949,18 +944,7 @@ test('a filed link reads by its host and path, on the Done sheet and in Recent, 
   await expect(sheet.getByText(/^Link - /)).toHaveCount(0);
   await sheet.getByRole('button', { name: 'Close' }).click();
 
-  // Home's Recent (#306: titles, never file names) reads it the same way
-  // once its text is cached: the load's capped walk no longer reaches this
-  // late note, so opening it (from Recent, by its file name) caches it.
-  const pushPrompt = page.locator('.push-prompt');
-  if (await pushPrompt.isVisible()) {
-    await pushPrompt.getByRole('button', { name: /Not now|Got it/ }).click();
-  }
-  await page
-    .locator('.home-note-title', { hasText: /^Link - example\.org/ })
-    .click();
-  await expect(page).toHaveURL(/\/note\//);
-  await page.goBack();
+  // Home's Recent (#306: titles, never file names) reads it the same way.
   await expect(
     page.locator('.home-note-title', { hasText: 'example.org/offers/job-one' }),
   ).toBeVisible();
