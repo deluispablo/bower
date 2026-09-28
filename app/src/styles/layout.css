@@ -199,10 +199,17 @@ button.page-bare-back {
 
 /* `auto`, not `0`, as the basis: the title keeps its own width while Back's
    label shrinks first (see `.topbar-back`), then grows to push "?" and the
-   avatar to the right edge. */
+   avatar to the right edge. A 130px floor (#426): on a note whose own
+   title is close in length to wherever Back points (its own folder, say),
+   proportional flex-shrink alone let both give up a slice of the deficit
+   at once, each landing at only a few letters. Below this floor the
+   flexbox algorithm freezes the title and pushes the rest of the deficit
+   onto Back instead, which still has its own 44px floor to fall back on.
+   130px keeps a title readable to around a dozen characters before it
+   has to give any further. */
 .topbar-crumb {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 130px;
 }
 
 /* The screen title, phone only (#318): the crumb slot's content, or the
