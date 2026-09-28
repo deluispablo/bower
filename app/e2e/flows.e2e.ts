@@ -1883,9 +1883,16 @@ test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent i
   expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(1);
   const tiles = await boxes(page.locator('.home-pinned-grid > *'));
   expect(tiles.length).toBeGreaterThan(0);
-  // Flat hunt, seeded from the fixture (#489, `Demo-Home` board).
+  // Both of the fixture's pins, on this first (cold-cache) load: Flat
+  // hunt (#489) and Shopping list, which sorts past the hydration
+  // fetch cap and only shows because of the search-first fix (#539).
   await expect(
     page.locator('.home-pinned-grid').getByText('Flat hunt', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('.home-pinned-grid')
+      .getByText('Shopping list', { exact: true }),
   ).toBeVisible();
   tiles.forEach((tile, i) => {
     expect(tile.x).toBeCloseTo(grid[i % 4]?.x ?? NaN, 0);
