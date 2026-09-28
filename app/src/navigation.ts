@@ -437,12 +437,15 @@ export interface FolderEmptyState {
   empty: boolean;
   /**
    * Set when this folder's own note list is empty (`notes.length === 0`)
-   * but the subtree is not (`empty` false): the total note count and the
-   * subfolder that holds them, for "n notes in <Subfolder>" (#310, 1.9) in
-   * place of "Nothing here yet" — that message is for an empty subtree,
-   * not a folder whose notes just live one level down.
+   * but the subtree is not (`empty` false): the total note count, for "n
+   * notes in <Subfolder>" (#310, 1.9) in place of "Nothing here yet" —
+   * that message is for an empty subtree, not a folder whose notes just
+   * live one level down. `subfolderName` names the one subfolder that
+   * holds them only when it is the only one that does (#424): naming one
+   * of several would attribute the whole total to it, so `null` instead —
+   * the caller reads "in its folders".
    */
-  elsewhere: { count: number; subfolderName: string } | null;
+  elsewhere: { count: number; subfolderName: string | null } | null;
 }
 
 /**
@@ -451,24 +454,32 @@ export interface FolderEmptyState {
  * the whole subtree, `notes` only this folder's own children, so a folder
  * with notes only in a subfolder had both zero direct notes and a
  * misleading "Nothing here yet" together with a real count in the header.
- * The subfolder named is the first with any notes in its own subtree
- * (`FolderSubfolder.count`, itself recursive) — with more than one such
- * subfolder the name is a "for instance", not a claim every note is there.
+ * `subfolderName` is only the single subfolder that holds every one of
+ * them (`FolderSubfolder.count`, itself recursive); with more than one
+ * such subfolder the total is real but no one of them holds it all, so no
+ * name is picked (#424: "9 notes in Half Marathon" when Half Marathon
+ * itself held only 2 of the 9, spread across three subfolders).
  */
 export function folderEmptyState(contents: FolderContents): FolderEmptyState {
   // Files count too (#349): a folder holding only a PDF is not empty, and
   // one with only files a level down names them ("2 files in …") when it
   // has no notes to name.
   if (contents.items.length > 0) return { empty: false, elsewhere: null };
-  const total =
-    contents.noteCount > 0 ? contents.noteCount : contents.fileCount;
+  const countingNotes = contents.noteCount > 0;
+  const total = countingNotes ? contents.noteCount : contents.fileCount;
   if (total === 0) return { empty: true, elsewhere: null };
-  const holder = contents.subfolders.find((folder) => folder.count > 0);
+  // `FolderSubfolder.count` only ever counts notes (#425's own concern),
+  // so it can single out a holder only while the total counted is itself
+  // a note count; a files-only total falls back to the first subfolder,
+  // same as before #424 (there is normally just one in that case).
+  const holders = countingNotes
+    ? contents.subfolders.filter((folder) => folder.count > 0)
+    : contents.subfolders.slice(0, 1);
   return {
     empty: false,
     elsewhere: {
       count: total,
-      subfolderName: holder?.name ?? contents.subfolders[0]?.name ?? '',
+      subfolderName: holders.length === 1 ? (holders[0]?.name ?? null) : null,
     },
   };
 }

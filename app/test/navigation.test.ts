@@ -553,6 +553,33 @@ describe('folderEmptyState', () => {
       elsewhere: { count: 1, subfolderName: 'Flat hunt' },
     });
   });
+
+  // #424: "9 notes in Half Marathon" attributed the whole subtree total to
+  // the first subfolder that held any, when the notes were actually spread
+  // across three. No single subfolder holds every one, so none is named.
+  it('names no subfolder when the total is spread across more than one', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Half Marathon'),
+      entry('1-Projects/Half Marathon/Half Marathon.md'),
+      entry('1-Projects/Half Marathon/Training plan.md'),
+      dir('1-Projects/Kitchen Refresh'),
+      entry('1-Projects/Kitchen Refresh/Budget.md'),
+      entry('1-Projects/Kitchen Refresh/Tiles.md'),
+      entry('1-Projects/Kitchen Refresh/Paint.md'),
+      dir('1-Projects/Lisbon Trip'),
+      entry('1-Projects/Lisbon Trip/Itinerary.md'),
+      entry('1-Projects/Lisbon Trip/Flights.md'),
+      entry('1-Projects/Lisbon Trip/Hotel.md'),
+      entry('1-Projects/Lisbon Trip/Packing.md'),
+    ]);
+    const contents = folderContents(index, '1-Projects');
+    expect(contents?.notes).toEqual([]);
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: { count: 9, subfolderName: null },
+    });
+  });
 });
 
 describe('folderHref', () => {
