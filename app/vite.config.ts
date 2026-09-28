@@ -1,3 +1,5 @@
+import { execSync } from 'node:child_process';
+
 import preact from '@preact/preset-vite';
 import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -10,6 +12,31 @@ import pkg from './package.json' with { type: 'json' };
 // Node global at runtime (this file is never bundled, only run by the
 // Vite CLI), so it's declared locally rather than pulling in the package.
 declare const process: { env: Record<string, string | undefined> };
+// `execSync`'s own minimal ambient type: `src/node-child-process.d.ts`.
+
+/**
+ * The commit the running build was made from, short form (#512): Cloudflare
+ * Pages sets `CF_PAGES_COMMIT_SHA` (the full SHA) on every deploy, sliced
+ * to match `git rev-parse --short`'s length; a local or CI build without
+ * that var falls back to asking git directly. Neither available (no git
+ * checkout, git missing) is not a build error — `settings.tsx`'s version
+ * line just leaves the commit part off, so this returns `''` rather than
+ * throwing.
+ */
+function resolveCommitSha(): string {
+  const fromPages = process.env.CF_PAGES_COMMIT_SHA;
+  if (fromPages !== undefined && fromPages !== '') {
+    return fromPages.slice(0, 7);
+  }
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
 
 /**
  * Injects `<meta name="robots" content="noindex">` into `index.html`
@@ -40,6 +67,9 @@ export default defineConfig({
     // Fallback app version for the settings screen footer, used when
     // VITE_APP_VERSION isn't set. Kept in sync with the API by convention.
     __APP_VERSION__: JSON.stringify(pkg.version),
+    // The short commit the settings screen footer shows next to the
+    // version (#512); '' when it cannot be determined.
+    __BOWER_COMMIT__: JSON.stringify(resolveCommitSha()),
   },
   plugins: [
     preact(),
