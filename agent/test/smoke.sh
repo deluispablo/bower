@@ -730,10 +730,9 @@ case "$SMOKE_SCENARIO" in
     mkdir -p '1-Projects/Job hunt'
     mv 0-Inbox/offer-north.pdf 0-Inbox/offer-south.pdf '1-Projects/Job hunt/'
     printf -- '%s\n' '---' 'title: Job offers, salary, location and deadline' 'type: answer' \
-      'tags: [answer, career]' 'created: 2026-01-15' '---' "## Bower's note" \
-      '- ✅ Both offers list a salary and a deadline.' '' '## Why' 'Read from the two offers.' '' \
-      '## What Bower used' '- [[offer-north.pdf]] (from the file)' '- [[offer-south.pdf]] (from the file)' \
-      '' '## Table' '| Offer | Salary | Location | Deadline |' '| --- | --- | --- | --- |' \
+      'tags: [answer, career]' 'created: 2026-01-15' '---' "> [!bower] Bower's note" \
+      '> Both offers list a salary and a deadline. (from the file)' '' '## Why' 'Read from the two offers.' '' \
+      '## Table' '| Offer | Salary | Location | Deadline |' '| --- | --- | --- | --- |' \
       >'1-Projects/Job hunt/Job offers, salary and deadline.md'
     echo "- File job offers under 1-Projects/Job hunt. (owner's request, 2026-01-15)" >>Rules.md
     printf -- '%s\n' 'Context: offer-west.pdf is not in the inbox' 'Rule added/changed: file job offers under 1-Projects/Job hunt' \
@@ -763,14 +762,11 @@ case "$SMOKE_SCENARIO" in
   answer)
     mkdir -p Answers
     printf -- '%s\n' '---' 'title: Which flat should I visit first?' 'type: answer' \
-      'tags: [answer, home]' 'created: 2026-01-15' '---' "## Bower's note" \
-      '- ✅ Arlington Road is 10 % under the area average.' \
-      '- ⚠️ The Kingsland Road listing leaves out the deposit.' \
-      '- ❌ The Camden lease asks for five weeks of deposit.' '' '## Why' \
-      'Rent and deposit compared from the two listings.' '' '## What Bower used' \
-      '- [[Lease agreement 2026.pdf]] (from the file)' \
-      '- Camden Town average rent (looked up on the web)' \
-      '- Bike time to the office (reasoned)' >'Answers/2026-01-15 Which flat first.md'
+      'tags: [answer, home]' 'created: 2026-01-15' '---' "> [!bower] Bower's note" \
+      '> Arlington Road is 10 % under the area average. (looked up)' \
+      '> The Kingsland Road listing leaves out the deposit. (from the file) — Check' \
+      '> Bike time to the office is 14 minutes. (from your notes: [[Offer letter]])' '' '## Why' \
+      'Rent and deposit compared from the two listings.' >'Answers/2026-01-15 Which flat first.md'
     mv '0-Inbox/Bower - 2026-01-15 0900 Tidy up.md' 0-Inbox/Processed/
     ;;
   # Report v2 (#598): the agent files the kinds it only keeps and the files
@@ -1098,44 +1094,40 @@ expect_no_copy_or_convert_tool() {
 }
 
 
-# The shape of "A note from Bower" (issue #371): `type: answer` in the
-# frontmatter; `## Bower's note` as the first section, bullets only, each
-# starting with exactly one of the three markers; then `## Why`; then
-# `## What Bower used`, each source bullet ending with its origin in
-# brackets. Later sections (the body of a job's result) are not checked.
+# The shape of "A note from Bower" (issues #371, #599): `type: answer` in
+# the frontmatter; `> [!bower] Bower's note` (or a `> [!bower]- ...` section
+# box) with at most three lines, each ending with one of the four origins and
+# optionally ` — Check`; the box comes before `## Why`. Other sections (the
+# body of a job's result) are not checked.
 # Usage: expect_bower_note <label> <text>
 expect_bower_note() {
-  local label=$1 text=$2 line section='' seen=''
+  local label=$1 text=$2 line inbox='' count=0 seen_box='' seen_why=''
   grep -Fxq 'type: answer' <<<"$text" || die "$label: no type: answer"
   while IFS= read -r line; do
     case "$line" in
-      '## '*)
-        section=$line
-        seen="$seen|$line"
+      "> [!bower] Bower's note" | '> [!bower]- '*)
+        inbox=1
+        count=0
+        seen_box=1
         continue
         ;;
-      '' | '```'*) continue ;;
-    esac
-    case "$section" in
-      "## Bower's note")
-        case "$line" in
-          '- ✅ '* | '- ⚠'* | '- ❌ '*) ;;
-          *) die "$label: a line in Bower's note without one of the three markers" ;;
-        esac
+      '> '*)
+        [ -n "$inbox" ] || continue
+        count=$((count + 1))
+        [ "$count" -le 3 ] || die "$label: more than three lines in a Bower callout"
+        grep -Eq ' \((from the file|from your notes: .+|looked up|from what you told me)\)( — Check)?$' <<<"$line" ||
+          die "$label: a callout line without one of the four origins"
+        continue
         ;;
-      '## What Bower used')
-        case "$line" in
-          '- '*' (from the file)' | '- '*' (looked up on the web)' | \
-            '- '*' (from what you told me)' | '- '*' (reasoned)') ;;
-          '- '*) die "$label: a source without its origin in brackets" ;;
-        esac
+      '## Why')
+        [ -n "$seen_box" ] || die "$label: ## Why before Bower's note"
+        seen_why=1
         ;;
     esac
+    inbox=''
   done <<<"$text"
-  case "$seen" in
-    "|## Bower's note|## Why|## What Bower used" | "|## Bower's note|## Why|## What Bower used|"*) ;;
-    *) die "$label: sections are not Bower's note, Why, What Bower used" ;;
-  esac
+  [ -n "$seen_box" ] || die "$label: no > [!bower] Bower's note box"
+  [ -n "$seen_why" ] || die "$label: no ## Why section"
 }
 # --- scenarios --------------------------------------------------------------
 
@@ -1201,15 +1193,19 @@ grep -Fq 'starts "from now on", "always" or "every time" is also a permanent rul
   die 'the rulebook does not turn a from-now-on sentence in a context note into a rule (#370)'
 grep -Fq 'Context: <file name> is not in the inbox' <<<"$RULEBOOK" ||
   die 'the rulebook does not log a named file missing from the inbox (#370)'
-# The shape check itself rejects a fourth marker and a source with no origin.
-if (expect_bower_note 'bad marker' "$(printf -- '%s\n' 'type: answer' "## Bower's note" '- 🟡 Maybe.' '## Why' 'x' '## What Bower used' '- [[a]] (reasoned)')") 2>/dev/null; then
-  die 'the note shape check accepted a marker other than the three'
+# The shape check itself rejects a verdict marker, a line with no origin
+# and a fourth line.
+if (expect_bower_note 'bad marker' "$(printf -- '%s\n' 'type: answer' "> [!bower] Bower's note" '> ✅ Fine.' '' '## Why' 'x')") 2>/dev/null; then
+  die 'the note shape check accepted a verdict marker'
 fi
-if (expect_bower_note 'no origin' "$(printf -- '%s\n' 'type: answer' "## Bower's note" '- ✅ Fine.' '## Why' 'x' '## What Bower used' '- [[a]]')") 2>/dev/null; then
-  die 'the note shape check accepted a source with no origin'
+if (expect_bower_note 'no origin' "$(printf -- '%s\n' 'type: answer' "> [!bower] Bower's note" '> Fine.' '' '## Why' 'x')") 2>/dev/null; then
+  die 'the note shape check accepted a line with no origin'
 fi
-grep -Fq 'no other marker or emoji' <<<"$RULEBOOK" ||
-  die 'the rulebook does not keep Bower'"'"'s note to the three markers (#371)'
+if (expect_bower_note 'four lines' "$(printf -- '%s\n' 'type: answer' "> [!bower] Bower's note" '> A. (looked up)' '> B. (looked up)' '> C. (looked up)' '> D. (looked up)' '' '## Why' 'x')") 2>/dev/null; then
+  die 'the note shape check accepted four lines'
+fi
+grep -Fq 'at most three lines' <<<"$RULEBOOK" ||
+  die 'the rulebook does not cap Bower'"'"'s note at three lines (#599)'
 grep -Fq '`0-Inbox/Quarantine/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not tell the agent to leave Quarantine/ alone'
 grep -Fq 'listed by the runner' <<<"$INGEST_PROMPT" ||
@@ -1459,7 +1455,10 @@ expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end
 # The server-side move finds nothing (#595), so the original falls back to
 # the copy up and its delete.
 grep -q ' 1 moves copied up instead$' "$STATE/out.log" || die 'the failed move was not counted'
-expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'the failed move is copied up'
+expect_eq "$(cat "$STATE/uploaded.txt")" "$(printf '0-Inbox/Processed/a.pdf\nlog.md')" \
+  'the failed move is copied up, and booked (#643)'
+grep -qE ' · Moved: 0-Inbox/a\.pdf → 0-Inbox/Processed/a\.pdf$' "$STATE/remote/log.md" ||
+  die 'the failed move is not booked in log.md'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 1 'rclone deletefile calls'
 [ ! -e "$STATE/remote/0-Inbox/a.pdf" ] || die 'original back in 0-Inbox/ in Drive'
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive'
@@ -2150,9 +2149,8 @@ expect_cleaned_up
 echo "ok a request sent during a run waits for the next tidy-up"
 
 # 32. A note from Bower (issue #371): a question sent from the app is
-# answered with a note that starts with Bower's note (only the three
-# markers), then Why, then What Bower used with each source's origin; it
-# reaches Drive like any other change.
+# answered with a note that starts with Bower's note (callout lines, each
+# with its origin), then Why; it reaches Drive like any other change.
 run_case answer
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
@@ -2162,7 +2160,7 @@ expect_bower_note 'the stubbed answer' "$(cat "$answer_note")"
 grep -Fxq 'Answers/2026-01-15 Which flat first.md' "$STATE/uploaded.txt" || die 'the answer was not uploaded'
 expect_content_free
 expect_cleaned_up
-echo "ok an answer starts with Bower's note, Why and What Bower used"
+echo "ok an answer starts with Bower's note, then Why"
 
 # 33. A context note (issue #370): the app-written note from Add's "What is
 # this?" box is an instruction, so the run may change Rules.md; its two
