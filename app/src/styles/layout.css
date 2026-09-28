@@ -73,9 +73,10 @@ summary:focus-visible {
 /*
  * The shell (components/layout.tsx). Phone first: a top bar, the content,
  * a fixed bottom nav, and the explorer in a drawer. From 900 px: the
- * explorer as a left column and a header row; the optional third column
- * (the About panel) only from 1200 px — between 900 and 1200 it folds
- * under the note body instead (see the `.shell-aside` rules below).
+ * explorer as a left column and, right of it, one centred container
+ * (#355): the header row, the content and, on a note, the About panel —
+ * beside the note body from 1200 px, folded under it between 900 and
+ * 1200 (see the `.shell-aside` rules below).
  */
 .shell {
   display: flex;
@@ -89,11 +90,19 @@ summary:focus-visible {
   display: none;
 }
 
-.shell-main {
+.shell-main,
+.shell-container,
+.shell-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+/* `width: 100%`: the container is a flex item with auto inline margins
+   from 900 px, which would otherwise shrink-wrap it to its content. */
+.shell-container {
+  width: 100%;
 }
 
 /*
@@ -701,30 +710,43 @@ button.page-bare-back {
 }
 
 @media (min-width: 900px) {
+  /* `--sidebar-width` is also read by the toast (`toast.css`), which
+     centres on the container rather than on the whole window. */
   .shell {
+    --sidebar-width: 264px;
     display: grid;
-    grid-template-columns: 264px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   }
 
-  .shell-sidebar,
-  .shell-aside {
+  .shell-sidebar {
     position: sticky;
     top: 0;
     display: flex;
     flex-direction: column;
     height: 100vh;
-  }
-
-  .shell-sidebar {
     padding-top: var(--space-4);
     background: var(--color-sidebar);
     border-right: 1px solid var(--color-border);
   }
 
+  /*
+   * One centred container (#355, Desktop-Responsive board): 980 px, 1200
+   * on a note with the About panel; the rest of a wide window is margin,
+   * so nothing is ever pinned to the viewport's right edge.
+   */
+  .shell-container {
+    max-width: 980px;
+    margin-inline: auto;
+  }
+
+  .shell-with-aside .shell-container {
+    max-width: 1200px;
+  }
+
   .shell-aside {
+    display: flex;
+    flex-direction: column;
     padding: var(--space-6) var(--space-4);
-    border-left: 1px solid var(--color-border);
-    overflow-y: auto;
   }
 
   .explorer-brand {
@@ -765,26 +787,30 @@ button.page-bare-back {
 }
 
 /*
- * Between 900 and 1200 px: no third column yet. `.shell-with-aside` stays
- * on the plain two-column `.shell` grid, and the About panel folds under
- * the note body — same column as `.shell-main`, next row down — instead
- * of sitting beside it.
+ * Between 900 and 1200 px: no room beside the note body yet, so the About
+ * panel folds under it, next in the container's column.
  */
 @media (min-width: 900px) and (max-width: 1199px) {
   .shell-aside {
-    grid-column: 2;
-    grid-row: 2;
-    position: static;
-    height: auto;
-    border-left: none;
     border-top: 1px solid var(--color-border);
   }
 }
 
-/* From 1200 px: the About panel gets its own third column again. */
+/* From 1200 px: the About panel beside the note body, inside the same
+   container; it stays in view while the note scrolls. */
 @media (min-width: 1200px) {
-  .shell-with-aside {
-    grid-template-columns: 264px minmax(0, 1fr) 280px;
+  .shell-with-aside .shell-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+
+  .shell-aside {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: 100vh;
+    overflow-y: auto;
+    border-left: 1px solid var(--color-border);
   }
 }
 
