@@ -22,10 +22,12 @@ export const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 
 /**
  * Full Drive scope: `drive.file` only sees files the app created itself,
- * which would hide notes written by Obsidian or the Drive app.
+ * which would hide notes written by Obsidian or the Drive app. `profile`
+ * (#323) is what makes the userinfo endpoint hand back a `given_name`, for
+ * the greeting; the consent screen's list gains "your basic profile info".
  */
 export const GOOGLE_SCOPE =
-  'openid email https://www.googleapis.com/auth/drive';
+  'openid email profile https://www.googleapis.com/auth/drive';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -205,6 +207,9 @@ export interface GoogleUserInfo {
   email: string;
   emailVerified: boolean;
   sub: string;
+  /** The profile's first name (#323), for the app's greeting; absent when
+   * Google has none to give (a Workspace admin can withhold it). */
+  givenName?: string;
 }
 
 /**
@@ -222,14 +227,19 @@ export async function fetchUserInfo(
     GOOGLE_USERINFO_URL,
     { headers: { authorization: `Bearer ${accessToken}` } },
   );
-  const { email, sub } = body;
+  const { email, sub, given_name: givenName } = body;
   if (typeof email !== 'string' || email.length === 0) {
     throw new HttpError(502, 'google_error', 'userinfo has no email');
   }
   if (typeof sub !== 'string' || sub.length === 0) {
     throw new HttpError(502, 'google_error', 'userinfo has no subject');
   }
-  return { email, emailVerified: body.email_verified === true, sub };
+  return {
+    email,
+    emailVerified: body.email_verified === true,
+    sub,
+    ...(typeof givenName === 'string' && givenName.length > 0 && { givenName }),
+  };
 }
 
 export interface GoogleAccessToken {

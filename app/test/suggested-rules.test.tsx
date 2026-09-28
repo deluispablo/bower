@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 
 /**
- * Health's list of Bower's suggestions (#199): the fixture proposals file
- * renders its open proposals only, and Accept / Dismiss go through the
- * vault's `decideProposal`. The vault is a stand-in; the Drive side is
- * `proposals-write.test.ts`.
+ * Bower's suggestions (#199) as the Suggested group on the Bower tab's
+ * Rules (#346): the fixture proposals file renders its open proposals
+ * only, and Accept / Dismiss go through the vault's `decideProposal`.
+ * Health keeps one line pointing there. The vault is a stand-in; the
+ * Drive side is `proposals-write.test.ts`.
  */
 
 import { h, render } from 'preact';
+import type { FunctionComponent } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -31,14 +33,18 @@ const getNoteText = vi.fn<(id: string) => Promise<string>>(() =>
   Promise.resolve(fixtureRaw.replace(/\r\n/g, '\n')),
 );
 
+/** The listing: the proposals file, or nothing at all. */
+const listing = vi.hoisted(() => ({ withProposals: true }));
+
 vi.mock('../src/vault-store.js', async (importOriginal) => {
   const original =
     await importOriginal<typeof import('../src/vault-store.js')>();
   const index = { byPath: new Map([[PROPOSALS_PATH, FILE]]) };
+  const empty = { byPath: new Map() };
   return {
     ...original,
     useVault: () => ({
-      index,
+      index: listing.withProposals ? index : empty,
       status: 'idle',
       error: undefined,
       getNoteText,
@@ -47,6 +53,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => {
   };
 });
 
+const { SuggestedRules } = await import('../src/components/suggested-rules.js');
 const { Health } = await import('../src/routes/health.js');
 
 let root: HTMLDivElement;
@@ -57,13 +64,17 @@ async function flush(): Promise<void> {
   });
 }
 
-beforeEach(async () => {
-  root = document.createElement('div');
-  document.body.append(root);
+async function mount(component: FunctionComponent): Promise<void> {
   await act(() => {
-    render(h(Health, {}), root);
+    render(h(component, {}), root);
   });
   await flush();
+}
+
+beforeEach(() => {
+  root = document.createElement('div');
+  document.body.append(root);
+  listing.withProposals = true;
 });
 
 afterEach(() => {
@@ -73,7 +84,7 @@ afterEach(() => {
 });
 
 function cards(): HTMLElement[] {
-  return Array.from(root.querySelectorAll('.health-proposal'));
+  return Array.from(root.querySelectorAll('.suggested-card'));
 }
 
 function button(card: HTMLElement, label: string): HTMLButtonElement {
@@ -84,13 +95,17 @@ function button(card: HTMLElement, label: string): HTMLButtonElement {
   return found;
 }
 
-describe('Health: suggestions from Bower', () => {
+describe('Suggested: Bower suggestions on the Rules segment', () => {
+  beforeEach(async () => {
+    await mount(SuggestedRules);
+  });
+
   it('lists the open proposals of the fixture file, and only those', () => {
-    expect(root.textContent).toContain('Suggestions from Bower');
+    expect(root.querySelector('.suggested-head')?.textContent).toBe(
+      'Suggested2',
+    );
     expect(
-      cards().map(
-        (c) => c.querySelector('.health-proposal-title')?.textContent,
-      ),
+      cards().map((c) => c.querySelector('.suggested-title')?.textContent),
     ).toEqual(['Invoices go to Money', 'A workflow for race results']);
     // Wikilinks shown as plain names.
     expect(cards()[1]?.textContent).toContain(
@@ -143,5 +158,23 @@ describe('Health: suggestions from Bower', () => {
     );
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+describe('Health: one line pointing to the Bower tab', () => {
+  it('says how many suggested rules wait, with a link to the Bower tab', async () => {
+    await mount(Health);
+    const link = root.querySelector<HTMLAnchorElement>('.health-suggested a');
+    expect(link?.textContent).toBe('2 suggested rules on the Bower tab');
+    expect(link?.getAttribute('href')).toBe('/bower');
+    // The cards themselves are no longer on Health.
+    expect(cards()).toHaveLength(0);
+    expect(root.textContent).not.toContain('Accept');
+  });
+
+  it('shows no line when there is no proposals file', async () => {
+    listing.withProposals = false;
+    await mount(Health);
+    expect(root.querySelector('.health-suggested')).toBeNull();
   });
 });

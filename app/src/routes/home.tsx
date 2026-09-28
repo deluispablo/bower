@@ -169,6 +169,20 @@ function InboxCard({
     </>
   );
 
+  // #322: until the folder index resolves, no count is a fact yet.
+  if (state === 'loading') {
+    return (
+      <div class="home-card home-card-loading" aria-hidden="true">
+        <h2>
+          <IconInbox />
+          Inbox
+        </h2>
+        <span class="home-skeleton home-skeleton-count" />
+        <span class="home-skeleton home-skeleton-line" />
+      </div>
+    );
+  }
+
   if (state === 'running') {
     const started =
       run === null
@@ -215,9 +229,11 @@ function InboxCard({
 
 /** The Last tidy-up card (C.4): when, and what it did, or "No tidy-up yet". */
 function LastTidyUpCard({
+  state,
   run,
   now,
 }: {
+  state: HomeState;
   run: Run | null;
   now: number;
 }): JSX.Element {
@@ -227,6 +243,16 @@ function LastTidyUpCard({
       Last tidy-up
     </h2>
   );
+  // #322: until the folder index resolves, "No tidy-up yet" is not a fact.
+  if (state === 'loading') {
+    return (
+      <div class="home-card home-card-loading" aria-hidden="true">
+        {head}
+        <span class="home-skeleton home-skeleton-line" />
+        <span class="home-skeleton home-skeleton-line" />
+      </div>
+    );
+  }
   if (run === null) {
     return (
       <div class="home-card">
@@ -285,7 +311,10 @@ export function Home(): JSX.Element {
         : `Checked ${relativeTime(reportTime, now)}`;
 
   const offline = !online;
-  const state = homeStateFor({ phase, pending, lastFinished });
+  // #322: the very first fetch, before the folder index has ever resolved —
+  // not `refreshing`, which already has a cached index to show.
+  const loading = status === 'loading';
+  const state = homeStateFor({ phase, pending, lastFinished, loading });
 
   // A play-once pose (the first day's hello, the dance after a run) plays
   // once per change of pose, then rests.
@@ -328,7 +357,7 @@ export function Home(): JSX.Element {
   const onDone = tour.showoff ? showoffPlayed : () => setRestedPlay(playId);
 
   return (
-    <section class="home" data-state={state}>
+    <section class="home" data-state={state} aria-busy={loading || undefined}>
       <Greeting
         variant="phone"
         size={88}
@@ -365,24 +394,48 @@ export function Home(): JSX.Element {
           now={now}
           onOpenSheet={openSheet}
         />
-        <LastTidyUpCard run={lastFinished} now={now} />
-        <a
-          class="home-card home-card-link home-desktop-only"
-          href={HEALTH_PATH}
+        <LastTidyUpCard state={state} run={lastFinished} now={now} />
+        {state === 'loading' ? (
+          <div
+            class="home-card home-card-loading home-desktop-only"
+            aria-hidden="true"
+          >
+            <h2>
+              <IconHeart />
+              Health
+            </h2>
+            <span class="home-skeleton home-skeleton-line" />
+          </div>
+        ) : (
+          <a
+            class="home-card home-card-link home-desktop-only"
+            href={HEALTH_PATH}
+          >
+            <h2>
+              <IconHeart />
+              Health
+            </h2>
+            <p class="home-card-sub">{healthHint}</p>
+            <p class="home-card-sub">Runs every Sunday.</p>
+          </a>
+        )}
+        <div
+          class={
+            state === 'loading'
+              ? 'home-card home-card-loading home-desktop-only'
+              : 'home-card home-desktop-only'
+          }
+          aria-hidden={state === 'loading' || undefined}
         >
-          <h2>
-            <IconHeart />
-            Health
-          </h2>
-          <p class="home-card-sub">{healthHint}</p>
-          <p class="home-card-sub">Runs every Sunday.</p>
-        </a>
-        <div class="home-card home-desktop-only">
           <h2>
             <IconNote />
             Notes
           </h2>
-          <p class="home-card-count">{noteCount}</p>
+          {state === 'loading' ? (
+            <span class="home-skeleton home-skeleton-count" />
+          ) : (
+            <p class="home-card-count">{noteCount}</p>
+          )}
           <p class="home-card-sub">in your notes</p>
         </div>
       </div>
@@ -408,7 +461,23 @@ export function Home(): JSX.Element {
         onEditingChange={setEditing}
       />
 
-      {!editingPins && recent.length > 0 && (
+      {!editingPins && state === 'loading' && (
+        <div class="home-recent" aria-hidden="true">
+          <div class="home-recent-head">
+            <h2>Recent</h2>
+          </div>
+          <ul class="home-notes">
+            {Array.from({ length: RECENT_ROWS }).map((_, i) => (
+              <li key={i} class="home-recent-skeleton-row">
+                <span class="home-skeleton home-recent-skeleton-icon" />
+                <span class="home-skeleton home-recent-skeleton-text" />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {!editingPins && state !== 'loading' && recent.length > 0 && (
         <div class="home-recent">
           <div class="home-recent-head">
             <h2>Recent</h2>
