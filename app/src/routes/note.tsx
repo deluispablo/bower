@@ -245,7 +245,7 @@ export function Note() {
   }
 
   if (file === undefined) {
-    return <NotFound />;
+    return <NotFound kind="note" />;
   }
 
   const properties =

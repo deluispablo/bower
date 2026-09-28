@@ -123,6 +123,15 @@ describe('Folder (#348)', () => {
     expect(root.querySelector('.folder-explainer')).toBeNull();
   });
 
+  it('shows the shared Not found screen for a path with no folder (#504)', () => {
+    route.params.path = 'nope';
+    mount();
+    expect(root.querySelector('h1')?.textContent).toBe('I can’t find that');
+    expect(root.querySelector('.auth-note')?.textContent).toBe(
+      "This folder isn't in your Bower folder any more. Maybe it moved, or the link is old.",
+    );
+  });
+
   it('still shows subfolders and files under the meaning line', () => {
     mount();
     const explainer = root.querySelector('.folder-explainer');

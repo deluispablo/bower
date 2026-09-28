@@ -334,16 +334,39 @@ test("previous/next under a note hides Bower's own files and uses titles (#423)"
   await expect(page.locator('.note-siblings')).toHaveCount(0);
 });
 
-test('a missing note shows Not found', async ({ page }, testInfo) => {
+test('a missing note shows Not found (#504)', async ({ page }, testInfo) => {
   await openHome(page);
   await page.goto('/note/does-not-exist');
 
   await expect(
-    page.getByRole('heading', { name: /can.t find that note/ }),
+    page.getByRole('heading', { name: /can.t find that/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("isn't in your Bower folder any more"),
   ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Search for it' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Go home' })).toBeVisible();
   await shot(page, testInfo, 'note-not-found');
+});
+
+test('an unknown folder and an unknown URL each show Not found with their own sentence (#504)', async ({
+  page,
+}) => {
+  await openHome(page);
+
+  await page.goto('/folder/nope');
+  await expect(
+    page.getByRole('heading', { name: /can.t find that/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("This folder isn't in your Bower folder any more"),
+  ).toBeVisible();
+
+  await page.goto('/whatever/deep');
+  await expect(
+    page.getByRole('heading', { name: /can.t find that/ }),
+  ).toBeVisible();
+  await expect(page.getByText("That page doesn't exist")).toBeVisible();
 });
 
 test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
@@ -1805,7 +1828,7 @@ test('Settings, Health, Ideas, Terms, Privacy and Not found share one centred co
     ['ideas', '/ideas', /Ideas/],
     ['terms', '/terms', /Terms/],
     ['privacy', '/privacy', /Privacy/],
-    ['not-found', '/note/does-not-exist', /can.t find that note/],
+    ['not-found', '/note/does-not-exist', /can.t find that/],
   ];
   const widths: number[] = [];
   for (const [name, path, heading] of pages) {
