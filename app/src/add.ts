@@ -50,6 +50,16 @@ export const ADD_HINT_TEXT =
   'Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.';
 
 /**
+ * The demo's own rest of the hint sentence (#489, `Demo-Add` board): a
+ * recorded run, not a real tidy-up, so nothing costs anything. The bold
+ * lead (`addHintLead`) is unchanged — the board uses the same "n things
+ * waiting." for both. `routes/add.tsx` picks this over `ADD_HINT_TEXT`
+ * with `isDemo()`.
+ */
+export const DEMO_ADD_HINT_TEXT =
+  'Tap Tidy up and watch a recorded run: in the demo the bird does not really think, so nothing costs anything.';
+
+/**
  * The name of the context note Add's "What is this?" box writes (#335,
  * handover D.2): `Bower - YYYY-MM-DD HHmm Context.md`, `now`'s local date
  * and time, the same shape as the Bower tab's notes.
