@@ -750,6 +750,12 @@ button.page-bare-back {
     max-width: 1200px;
   }
 
+  /* The Bower tab: 1100 px, room for its three columns from 1200 px
+     (#357, Desktop-Bower and Desktop-Responsive boards). */
+  .shell-bower .shell-container {
+    max-width: 1100px;
+  }
+
   .shell-aside {
     display: flex;
     flex-direction: column;

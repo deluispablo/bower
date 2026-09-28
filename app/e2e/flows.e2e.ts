@@ -9,10 +9,12 @@
  */
 
 import {
+  bowerPart,
   expect,
   navigate,
   openHome,
   openSettings,
+  showBowerPart,
   shot,
   test,
   visible,
@@ -404,14 +406,11 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   // rule sentence is already in Rules, under its own topic.
   await navigate(page, /^Bower$/);
   await expect(
-    page
-      .getByRole('tabpanel', { name: 'Rules' })
-      .getByRole('button', { name: /^Garden\s*1$/ }),
+    bowerPart(page, 'Rules').getByRole('button', { name: /^Garden\s*1$/ }),
   ).toBeVisible();
-  await page.getByRole('tab', { name: 'Requests' }).click();
+  await showBowerPart(page, 'Requests');
   await expect(
-    page
-      .getByRole('tabpanel', { name: 'Requests' })
+    bowerPart(page, 'Requests')
       .getByRole('listitem')
       .filter({ hasText: 'About the files you added' }),
   ).toHaveCount(1);
@@ -619,11 +618,10 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
   for (const label of ['A rule', 'A task', 'A question']) {
     await expect(page.getByRole('button', { name: label })).toHaveCount(0);
   }
-  await expect(page.getByRole('tab')).toHaveText([
-    'Rules',
-    'Requests',
-    'Activity',
-  ]);
+  // Tabs under 1200 px, three headed columns from there (#357).
+  await expect(
+    page.getByRole('tab').or(page.locator('.bower-column-head')),
+  ).toHaveText(['Rules', 'Requests', 'Activity']);
   await shot(page, testInfo, 'bower');
 
   // The demo already has a question waiting, so the tip starts closed.
@@ -642,7 +640,7 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
   await page.getByRole('button', { name: 'Send' }).click();
 
   await expect(box).toHaveValue('');
-  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  const requests = bowerPart(page, 'Requests');
   const row = requests
     .getByRole('listitem')
     .filter({ hasText: 'How much did I spend on the kitchen this year?' });
@@ -671,7 +669,7 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
 }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Bower$/);
-  const rules = page.getByRole('tabpanel', { name: 'Rules' });
+  const rules = bowerPart(page, 'Rules');
   await expect(
     rules.getByText('Rules are yours and start at once.'),
   ).toBeVisible();
@@ -712,7 +710,7 @@ test('a "from now on" sentence is kept at once as a rule, no run (#343)', async 
   await page.getByRole('button', { name: 'Send' }).click();
 
   await expect(box).toHaveValue('');
-  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  const requests = bowerPart(page, 'Requests');
   const row = requests
     .getByRole('listitem')
     .filter({ hasText: 'From now on, receipts go under Finance' });
@@ -722,10 +720,13 @@ test('a "from now on" sentence is kept at once as a rule, no run (#343)', async 
     page.getByRole('dialog', { name: 'Tidying up status' }),
   ).toHaveCount(0);
   await row.getByRole('button', { name: 'In your rules' }).click();
-  await expect(page.getByRole('tab', { name: 'Rules' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  // Under 1200 px it switches to the Rules tab; from 1200 the Rules
+  // column is already on screen (#357).
+  const rulesTab = page.getByRole('tab', { name: 'Rules' });
+  if ((await rulesTab.count()) > 0) {
+    await expect(rulesTab).toHaveAttribute('aria-selected', 'true');
+  }
+  await expect(bowerPart(page, 'Rules')).toBeVisible();
 });
 
 test('Requests: every state, Edit, Remove, and Do it now for the requests only (#344)', async ({
@@ -733,8 +734,8 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
 }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Bower$/);
-  await page.getByRole('tab', { name: 'Requests' }).click();
-  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  await showBowerPart(page, 'Requests');
+  const requests = bowerPart(page, 'Requests');
   const rowWith = (text: string) =>
     requests.getByRole('listitem').filter({ hasText: text });
 
@@ -1360,7 +1361,7 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await shot(page, testInfo, 'container-1920-add');
 
   await navigate(page, /^Bower$/);
-  await expect(page.getByRole('tab', { name: 'Rules' })).toBeVisible();
+  await expect(bowerPart(page, 'Rules')).toBeVisible();
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-bower');
 
@@ -1432,6 +1433,56 @@ test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent i
   expect(new Set(recent.map((b) => Math.round(b.x))).size).toBe(2);
   expect(await clipped()).toEqual([]);
   await shot(page, testInfo, 'home-desktop-1280');
+});
+
+test('The Bower tab in three aligned columns from 1200, segments below (#357)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The columns are desktop-only; the phone keeps the segments.',
+  );
+  const heads = page.locator('.bower-column-head');
+  const box = page.locator('.bower-box');
+  const columns = page.locator('.bower-columns');
+
+  for (const width of [1280, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width === 1280) {
+      await openHome(page);
+      await navigate(page, /^Bower$/);
+    }
+    await expect(heads).toHaveText(['Rules', 'Requests', 'Activity']);
+    await expect(page.getByRole('tablist')).toHaveCount(0);
+    // One header height and one top line for the three columns.
+    const rects = await heads.evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { top: r.top, height: r.height, width: r.width };
+      }),
+    );
+    expect(new Set(rects.map((r) => Math.round(r.top))).size).toBe(1);
+    expect(new Set(rects.map((r) => Math.round(r.height))).size).toBe(1);
+    expect(new Set(rects.map((r) => Math.round(r.width))).size).toBe(1);
+    // The box spans the three columns above them.
+    const [boxRect, columnsRect] = await Promise.all([
+      box.boundingBox(),
+      columns.boundingBox(),
+    ]);
+    expect(boxRect?.x).toBeCloseTo(columnsRect?.x ?? NaN, 0);
+    expect(boxRect?.width).toBeCloseTo(columnsRect?.width ?? NaN, 0);
+    expect((boxRect?.y ?? NaN) < (columnsRect?.y ?? NaN)).toBe(true);
+    await shot(page, testInfo, `bower-columns-${String(width)}`);
+  }
+
+  // Under 1200: the segments, as on the phone.
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(page.getByRole('tab')).toHaveText([
+    'Rules',
+    'Requests',
+    'Activity',
+  ]);
+  await expect(columns).toHaveCount(0);
 });
 
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
