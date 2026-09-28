@@ -88,6 +88,11 @@ export interface Run {
   /** Only on a `failed` run, when the runner said why (#375). */
   reason?: RunFailureReason;
   runId?: string;
+  /**
+   * ISO-8601; when `GET /status` last asked GitHub how this run's job
+   * stands (#315), so it asks at most once a minute.
+   */
+  jobCheckedAt?: string;
 }
 
 /**

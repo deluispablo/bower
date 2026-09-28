@@ -130,7 +130,7 @@ Bower's answers to questions sent as instructions. One note per question, dated.
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-28
-bower_rules_version: 7
+bower_rules_version: 8
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -206,6 +206,12 @@ Omit fields that do not apply. Extra fields are fine when useful.
 - **Keep connections tight:** each note's \`related\` holds only its 2-3 strongest links. Hub notes may link to all their children.
 - Every note must be reachable from \`index.md\` or from a hub note. No orphans.
 
+### File names (originals)
+- Keep a name that already says what the file is (\`Lease agreement 2026.pdf\`), in whatever language it is.
+- A name that says nothing (\`IMG_4471.jpg\`, \`scan0001.pdf\`, \`Document (3).pdf\`, a string of digits) gets one from the content: \`<where or who>, <what it is>.<ext>\` (\`Arlington Road, window sign.jpg\`, \`Corner shop, receipt 2026-03-14.jpg\`), at most 60 characters with the extension, which stays as it was.
+- Never put the owner's name or any other person's name in a file name: say where, or which organisation (a shop, an employer, an agency).
+- A converted document and its \`.md\` keep one base name. When the name is taken in the folder, add \` 2\`, \` 3\` before the extension.
+
 ### Note templates
 **Project hub** (\`1-Projects/<Project>/<Project>.md\`):
 1. Goal (one line, with the end date if known)
@@ -239,8 +245,8 @@ Leave sensitive IDs (passport, tax numbers, account numbers) in the original, no
 Bower only files, by default: an original lands in its PARA folder as it is, sensibly named. No summary note, no converted copy, no analysis, no translation, unless something asks for one (step 6).
 1. Read the item enough to know what it is (a receipt, a lease, a photo of a sign, a job offer). A DOCX, ODT, HTML, EPUB or RTF file arrives already converted: read the \`.md\` next to it with the same base name (\`report.docx\` and \`report.md\`), never the original. One with no such \`.md\` could not be converted: file nothing from it, move it to \`0-Inbox/Processed/\` and mention it in the run's problems.
 2. Decide the PARA destination; create a project/area folder and hub note if needed.
-3. Move the original into that folder as it is. Keep its name when the name says what it is; otherwise give it one that does.
-4. Add one line to the folder's hub note (\`- [[<file name>]] <five-word description>\`) and one row to \`index.md\`, under the folder's section: \`- [[<path from the top of the folder>]] · <type> · filed by Bower\`, the type in one word (PDF, image, spreadsheet, document, audio…).
+3. Move the original into that folder as it is, named as **File names (originals)** above says: a meaningful name is kept, one that says nothing is replaced.
+4. Add one line to the folder's hub note (\`- [[<file name>]] <five-word description>\`) and one row to \`index.md\`, under the folder's section: \`- [[<path from the top of the folder>]] · <type> · filed by Bower\`: the path carries the folder and the extension, the type is one word as the app names it (PDF, Photo, Image, Spreadsheet, Document, Audio, Video, File), and the origin is always \`filed by Bower\` (\`index.md\` lists files as well as notes, so the app can find them).
 5. Append one line per file to \`log.md\`: \`Filed: <file name> → <folder>\`, ending \`, renamed from <old name>\` when you renamed it.
 6. **Exceptions that still produce a note** (use the templates above, link the note from the hub note and \`index.md\`, and translate it to English if needed):
    - A web clip or a saved link: the clip is the content. Write it up as a note and move the raw clip to \`0-Inbox/Processed/\`.
