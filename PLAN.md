@@ -1,166 +1,130 @@
 # PLAN.md
 
-Resume point for the tech lead: the v3 redesign (milestones M18–M26) from the 2026-09-28 design handover (`docs/superpowers/plans/2026-09-28-app-test-findings.md`, boards in `docs/design/v3/boards/`), plus the tester rounds that followed (`docs/testing/`). The lead regenerates it at every milestone change; GitHub issues and PRs are the source of truth for detail.
+Resume point for the tech lead. v4, the explorer and what Bower reads (milestones M27–M33), from the 2026-09-28 design hand-off: spec `docs/superpowers/plans/2026-09-28-explorer-v4-spec.md`, boards `docs/design/v4/boards/` (the board wins over the text; the `Deck-*` boards are not built), ideas and owner answers `docs/superpowers/plans/2026-09-28-explorer-ideas.md` §11–12. GitHub issues are the source of truth for detail; this file holds the order, the process and the state. The v3 plan (M18–M26) is in this file's git history.
 
-## State (2026-09-28, end of day)
+## State (2026-09-28)
 
-Every v3 milestone is closed except M18 (the owner's #427 and the round-5 leftovers #555–#558) and M26 (#560, an owner decision on deleting the old copy of a moved file). Production (Worker, Pages app, demo, the bower-home runner) is at main 2bc2031. Owner items: OAuth verification or `drive.file`; Cloudflare JavaScript Detections off (#427); `GITHUB_TOKEN` in bower-home with `actions: read` (#490); the vault's `CLAUDE.md` update to v12 through the app; remove the seed-phrase-looking test file from the test inbox; #560; Dependabot #473/#474.
+Planned, not started: nothing is dispatched until the owner's OK. PR #576 (the design docs) is merged. M25 and M26 are closed; #560 moved to M29 and closes with #595; #556 closed as not planned (demo retired). Production is at main c7b4926 (app), Worker a6fd7396, runner 2bc2031; the published demo is still up until #585.
 
 ## Milestones
 
-| # | Milestone | Open | Closed | State |
-|---|---|---|---|---|
-| 19 | M18 · After the test: fixes that survive v3 | 5 | 53 | open |
-| 20 | M19 · v3 shell: tabs, bars, the folder menu, Home | 0 | 10 | closed |
-| 21 | M20 · v3 first visit: the intro, the tour, the help sheets | 0 | 6 | closed |
-| 22 | M21 · v3 Add and the tidy-up | 0 | 8 | closed |
-| 23 | M22 · v3 the Bower tab: rules, requests, activity | 0 | 11 | closed |
-| 24 | M23 · v3 notes, folders, files | 0 | 10 | closed |
-| 25 | M24 · v3 desktop: one container, four breakpoints | 0 | 6 | closed |
-| 26 | M25 · v3 demo: the sales door | 0 | 12 | open |
-| 27 | M26 · Agent v6: file only, context, runs | 1 | 10 | open |
+| Milestone | What | Needs |
+|---|---|---|
+| M27 · v4 foundations | Colours and marks, file kinds and formats, system files, kinds contract, data plumbing, the sample folder, New logic, copy fixes, demo retired | Starts at once |
+| M28 · v4 find | Notes tab as the one explorer, files in the tree, reveal, virtual lists, MiniSearch search | M27 |
+| M29 · Agent v7 | Moves by script (#560), bookkeeping, reconcile, report v2, callouts, kinds and companion notes, joining the dots | M27; serial inside |
+| M30 · v4 seeing | Bower's note renderer, key facts and Details, note and file screens, photo viewer, More and Move, file facts | M27; Move needs M28's reveal |
+| M31 · v4 folders | Folder list, grid, quick look, empty state, desktop panes, Compare | M28, M30 |
+| M32 · v4 after a tidy-up | Just filed, Home after a run, Add, the working sheet | M29 report v2, M28, M31 |
+| M33 · v4 ship | Docs, deploy, the tester's walk of every board | All |
 
 ## Issues
 
-| Issue | Title | Milestone | State | PR |
+| Key | Issue | Milestone | Title | Model | Lane | Depends on | Budget | Status |
+|---|---|---|---|---|---|---|---|---|
+| F1 | #577 | M27 | Kinds contract: the eight document kinds, their fields, key facts, Details groups and statuses | opus/high | C | - | 60 tool calls / 45 minutes | pending |
+| F2 | #578 | M27 | System files hidden everywhere, one file-kind table and the formats policy in the index | sonnet/high | B | - | 50 tool calls / 40 minutes | pending |
+| F3 | #579 | M27 | Folder colours and marks: PARA tokens, FolderMark, FolderIcon, KindBadge, BowerTag, NewTag, origin squares | sonnet/medium | A | - | 45 tool calls / 35 minutes | pending |
+| F4 | #580 | M27 | PARA landmarks in the logic: names without prefixes everywhere, fixed order, one count rule, the back label | sonnet/high | B | #578 | 60 tool calls / 45 minutes | pending |
+| F5 | #581 | M29 | Runner and rulebook ignore system files: rclone filters both ways and a rulebook line | sonnet/high | C | #578 | 45 tool calls / 40 minutes | pending |
+| F6 | #582 | M27 | Data plumbing for v4: thumbnails, media metadata, lazy note metadata, per-device stores | sonnet/high | B | - | 55 tool calls / 45 minutes | pending |
+| F7 | #583 | M27 | The v4 sample folder: Alex's flat hunt, work papers and every file kind in the demo fixture and Drive stub | sonnet/high | B | #577 #578 #582 | 70 tool calls / 55 minutes | pending |
+| F8 | #584 | M27 | Home and sign-up copy: one Health line, skeleton counts after sign-in, the interview's tip | sonnet/low | A | - | 30 tool calls / 25 minutes | pending |
+| F9 | #585 | M27 | Retire the published demo: take bower-demo off Pages, remove its links and its deploy script | haiku/low | lead | - | 15 tool calls / 15 minutes | pending |
+| N1 | #586 | M28 | Remove the phone folder menu: the Notes tab is the only explorer (reverses #319) | sonnet/medium | A | #580 | 40 tool calls / 35 minutes | pending |
+| J1 | #587 | M27 | New per device: the seen set, the last run's new ids and a useNew hook every screen reads | sonnet/medium | B | #582 #583 | 35 tool calls / 30 minutes | pending |
+| N2 | #588 | M28 | Tree v4: files as rows, the five landmarks with marks, 44 px chevrons, remembered expansion | sonnet/high | A | #578 #579 #580 #582 #583 #587 | 70 tool calls / 55 minutes | pending |
+| N3 | #589 | M28 | The Notes tab and the desktop sidebar as the one explorer: Pinned, Your folders, first load, Expand all | sonnet/high | A | #586 #588 | 60 tool calls / 50 minutes | pending |
+| N4 | #590 | M28 | Long lists: virtualise the tree past 150 rows with TanStack Virtual (adapter shared with folder lists) | sonnet/high | B | #588 | 55 tool calls / 45 minutes | pending |
+| N5 | #591 | M28 | Reveal: the tree follows what you open, on the desktop sidebar and the phone's Notes tab | sonnet/high | A | #589 #590 | 55 tool calls / 45 minutes | pending |
+| S1 | #592 | M28 | Search index: MiniSearch over every folder, note and file, with typo tolerance and display paths | sonnet/high | B | #578 #580 #582 #583 | 60 tool calls / 50 minutes | pending |
+| S2 | #593 | M28 | Search on the phone: groups, chips, scope, before typing, no results, the bird out of the way | sonnet/high | B | #592 #579 | 60 tool calls / 50 minutes | pending |
+| S3 | #594 | M28 | Desktop search: the two-column overlay with kind chips, scope and a preview of the highlighted result | sonnet/medium | B | #593 | 40 tool calls / 35 minutes | pending |
+| G1 | #595 | M29 | Runner: a move keeps the file's Drive id and leaves no copy (server-side move; resolves #560) | opus/high | C | #581 | 80 tool calls / 70 minutes | pending |
+| G2 | #596 | M29 | Runner books every move without AI: index.md rows, wikilinks and log.md lines | opus/high | C | #595 | 80 tool calls / 70 minutes | pending |
+| G3 | #597 | M29 | Runner reconciles index.md with the Drive tree before every run (moves the person made) | opus/high | C | #596 | 70 tool calls / 60 minutes | pending |
+| G4 | #598 | M29 | Run report v2: where each thing went, its old name, why it was set aside, what Bower added (runner and Worker) | opus/medium | C | #597 #583 | 75 tool calls / 65 minutes | pending |
+| G5 | #599 | M29 | Rulebook: Bower's note as Obsidian callouts, every line with its origin, "Check" when it needs the person | sonnet/high | C | #598 | 35 tool calls / 30 minutes | pending |
+| G6 | #600 | M29 | Rulebook: the eight kinds, companion notes for listed kinds, key facts and "Where to look" for long documents | opus/high | C | #599 #577 | 60 tool calls / 50 minutes | pending |
+| G7 | #601 | M29 | Rulebook: joining the dots from the person's notes, answers that say what to check and ask, suggestions with a reason | sonnet/high | C | #600 | 40 tool calls / 35 minutes | pending |
+| V1 | #602 | M30 | Bower's note renderer: callouts with origin squares, the legend, Check, Joined from, section notes, the Used line | opus/high | A | #579 #583 | 70 tool calls / 60 minutes | pending |
+| V2 | #603 | M30 | Key facts and Details: KeyFacts in one to four cells, grouped Details with origins, Not in the listing, copy as questions | sonnet/high | B | #577 #579 #582 | 60 tool calls / 50 minutes | pending |
+| V3 | #604 | M30 | File screens: the kind word, meta lines, CSV tables, Drive previews for Office and video, no-preview files | sonnet/high | A | #578 #579 #582 #583 | 65 tool calls / 55 minutes | pending |
+| V4 | #605 | M30 | Photo viewer: fitted photo, full screen, native pinch, double tap 2×, zoom badge, next and previous | sonnet/high | B | #583 | 50 tool calls / 45 minutes | pending |
+| V5 | #606 | M30 | File screen: Bower's note on the file, Where to look for long PDFs, the copies notice, previous and next, the photo viewer | sonnet/high | A | #602 #604 #605 #587 | 60 tool calls / 50 minutes | pending |
+| V6 | #607 | M30 | Add from your Drive marks copies with their original, and Add says a Sheet is saved as a table | sonnet/medium | B | #582 | 30 tool calls / 25 minutes | pending |
+| V7 | #608 | M30 | More menu and Move to…: Show in folders, and a folder picker that asks Bower to move it now or at the next tidy-up | sonnet/high | B | #591 #580 | 65 tool calls / 55 minutes | pending |
+| V8 | #609 | M30 | Note screen: props line with the original, answers, previous and next, links to files open in the app, the title once, the About panel | sonnet/high | A | #602 #603 #587 | 65 tool calls / 55 minutes | pending |
+| G8 | #610 | M30 | File facts the boards show and Drive does not: PDF pages, Excel sheets, what a ZIP holds | sonnet/high | C | #604 #598 | 50 tool calls / 45 minutes | pending |
+| D1 | #611 | M31 | Folder screen: path bar, meta line, Originals and By Bower, sort, kind filter, date groups, rows, pairs | sonnet/high | A | #580 #582 #590 #603 #606 #587 | 70 tool calls / 60 minutes | pending |
+| D2 | #612 | M31 | Compare: notes of the same kind side by side, cards on the phone, a sortable table on the desktop | sonnet/high | B | #577 #603 #583 | 70 tool calls / 60 minutes | pending |
+| D3 | #613 | M31 | Folder grid with thumbnails, quick look, the empty state, and the Compare tab on the folder screen | sonnet/high | A | #611 #612 #608 | 65 tool calls / 55 minutes | pending |
+| D4 | #614 | M31 | Desktop three panes at 1200 px and up: tree, folder, preview, and the keyboard shortcuts | sonnet/high | A | #613 #589 | 60 tool calls / 50 minutes | pending |
+| D5 | #615 | M31 | Compare for receipts by month and bookings as a timeline | sonnet/medium | B | #612 | 40 tool calls / 35 minutes | pending |
+| J2 | #616 | M32 | Just filed: what you added and where Bower put each thing, with its entry points in Notes, the sidebar and the Done sheet | sonnet/high | A | #587 #598 #589 #603 #606 | 65 tool calls / 55 minutes | pending |
+| J3 | #617 | M32 | Home after a tidy-up: the bubble says what was filed and links to Just filed, Last tidy-up counts what is new, Recent shows key facts | sonnet/medium | B | #587 #616 #603 | 45 tool calls / 40 minutes | pending |
+| J4 | #618 | M32 | Add: three doors in one row, a pile that says what each thing is, What is this? above one button that carries the count | sonnet/medium | A | #578 #579 #607 | 45 tool calls / 40 minutes | pending |
+| J5 | #619 | M32 | Working sheet: each row says where it went, what Bower read and its old name, and items kept not read | sonnet/medium | B | #598 #577 #606 | 40 tool calls / 35 minutes | pending |
+| Z1 | #620 | M33 | Docs for v4: ARCHITECTURE, runbook and README describe the explorer, the kinds, the formats, moves by script and the report | sonnet/medium | - | #616 #617 #618 #619 #614 #615 #601 #610 | 35 tool calls / 30 minutes | pending |
+| Z2 | #621 | M33 | Walk every v4 board on the phone and the desktop in production and file what differs | sonnet/medium | - | #620 | 120 tool calls / 90 minutes | pending |
+
+## Dispatch queue
+
+At most three agents at once: two app slots (A, B) and the agent slot (C). A round starts when its issues' dependencies are merged, not when the previous round is fully done: a slot takes its next issue as soon as its PR is open and the next issue does not depend on it. Issues sharing a file never run at the same time (hotspots below).
+
+| Round | Slot A | Slot B | Slot C | Batch point |
 |---|---|---|---|---|
-| #304 | Run state: `done` returns to idle, toasts expire, the sheet opens once per run | M18 | closed | #385 |
-| #305 | Health check: counts from the report's frontmatter and the findings rendered as Markdown | M18 | closed | #392 |
-| #306 | Titles, not file names: one `noteTitle` helper for Recent, the tree, the switcher, the note | M18 | closed | #380 |
-| #307 | Note screen: Not found for a missing note, no duplicate heading, properties behind About | M18 | closed | #382 |
-| #308 | Switcher: names and paths first and synchronously, full text second, commands last | M18 | closed | #381 |
-| #309 | Settings: Delete as a red text link at the bottom, Sign out a plain button, sections in the v3 order | M18 | closed | #379 |
-| #310 | Folder and drawer polish: empty state only for an empty subtree, 13 px chips, counts above zero only | M18 | closed | #393 |
-| #311 | Tablet bar alignment at 768 | M18 | closed | #387 |
-| #312 | Picker scope: open on My Drive, never accept the Bower folder, `Processed` or dot-folders | M18 | closed | #403 |
-| #313 | `/login` never redirects to the intro; Terms and Privacy back links go to the sign-in when signed out | M18 | closed | #383 |
-| #314 | Names for the remaining controls: the Settings rows, both switches, the sidebar folder links | M18 | closed | #386 |
-| #315 | A run that fails or never reports: retry the report, outcome in the vault, job conclusion as the fallback, tokens survive a sign-in | M18 | closed | #490 |
-| #316 | Failure sheet in people's words with Try again; the Inbox card offers Try again after a failure | M18 | closed | #525 |
-| #317 | Four tabs at the bottom: Home · Notes · Add · Bower; `/tell` redirects to the Bower tab | M19 | closed | #384 |
-| #318 | The top bar of every tab: folder menu, title, "?", avatar; Back on inner screens | M19 | closed | #389 |
-| #319 | The folder menu: pinned things, the tree, search, one tap to any folder | M19 | closed | #397 |
-| #320 | Remove the pill: Tidy up on the Inbox card and on Add | M19 | closed | #394 |
-| #321 | Home in its six states: the bubble, the bird, the cards | M19 | closed | #401 |
-| #322 | Home loading state: no zeros as fact | M19 | closed | #413 |
-| #323 | Greeting with the given name from the Google profile | M19 | closed | #418 |
-| #324 | Theme lives in Settings only; no toggle in the bar | M19 | closed | #395 |
-| #325 | Offline: the banner without a bird, the sad bird next to the greeting | M19 | closed | #415 |
-| #326 | Desktop sidebar: collapse only, no sort, the Add bubble with the waiting count | M19 | closed | #411 |
-| #327 | What is Bower: nine swipeable pages before the sign-in, Skip, Next, Sign in | M20 | closed | #390 |
-| #328 | The intro's animations: the sort strip, the flying cards, the Drive curtain, the filing tree | M20 | closed | #399 |
-| #329 | What is Bower from Settings: the same pages with Close and Done | M20 | closed | #398 |
-| #330 | Help sheets: one per tab plus Folder, opened by "?"; the tour is the same four sheets in a row | M20 | closed | #396 |
-| #331 | Sign-in screen: centred block, the bird on its ground line, Privacy · Terms · What is Bower? | M20 | closed | #388 |
-| #332 | Ideas: the screen of examples, grouped, each copyable into the box | M20 | closed | #414 |
-| #333 | Add on the phone: three doors, the link field, the share line; the drop zone only on desktop | M21 | closed | #404 |
-| #334 | The Added queue: type icon, the person's file name, the state, no Tidy up until the pile is in | M21 | closed | #405 |
-| #335 | What is this?: the context box, written as one context note per batch | M21 | closed | #434 |
-| #336 | The hint: "Add the whole pile first", with the count and the Tidy up button | M21 | closed | #419 |
-| #337 | Is that everything?: the confirmation sheet before every tidy-up | M21 | closed | #410 |
-| #338 | The working sheet: opens once, the bird between Inbox and the folders, the rows as they land | M21 | closed | #409 |
-| #339 | Take a photo: the camera door on devices with a camera, hidden otherwise | M21 | closed | #406 |
-| #340 | The Bower tab: the box without a selector, the "?" tip with examples, three segments | M22 | closed | #402 |
-| #341 | Rules the app can read and write: `Rules.md` in topic groups, paused rules, the parser | M22 | closed | #412 |
-| #342 | Rules screen: explanation on top, groups with counts, Suggested from proposals, a rule's menu | M22 | closed | #428 |
-| #343 | Rule kept at once: a "from now on" sentence goes to `Rules.md` without a run | M22 | closed | #436 |
-| #344 | Requests: states, Do it now (an instructions-only run), Edit, Remove | M22 | closed | #452 |
-| #345 | Activity: one card per tidy-up, what went where, set aside, in people's words | M22 | closed | #571 |
-| #346 | Proposals move from Health to the Suggested group; Health keeps a pointer | M22 | closed | #417 |
-| #347 | Retire the Tell composer and the conversation feed | M22 | closed | #429 |
-| #348 | A root folder explained: the line at the top, subfolders, files | M23 | closed | #430 |
-| #349 | A project folder: files and notes together, newest first, who put each there | M23 | closed | #400 |
-| #350 | A file, previewed: PDF, image, Google Doc as text; Open in Drive; the More menu | M23 | closed | #408 |
-| #351 | A note from Bower: the conclusions box and What Bower used | M23 | closed | #407 |
-| #352 | One More menu for note, file and folder, with Ask Bower about this | M23 | closed | #439 |
-| #353 | Notes tab: the tree, the Health row, the hidden-files line, no sort | M23 | closed | #416 |
-| #354 | Ask Bower about this folder: the chip that opens the box with the folder named | M23 | closed | #451 |
-| #355 | One centred container: 980 px, 1200 with the About panel, the header row included | M24 | closed | #459 |
-| #356 | Home on desktop: four equal cards on one grid, Pinned tiles, Recent in two columns, no Tell | M24 | closed | #463 |
-| #357 | The Bower tab in three aligned columns above 1200 | M24 | closed | #466 |
-| #358 | The note and its About panel next to the measure | M24 | closed | #468 |
-| #359 | Breakpoints 600 · 900 · 1200 and nothing above; Playwright screenshots at 1024, 1280, 1440, 1920 | M24 | closed | #472 |
-| #360 | Settings and every single-column page share the Settings column | M24 | closed | #475 |
-| #361 | The demo's first visit: the nine intro pages with the banner and Try the demo, then the tour | M25 | closed | #478 |
-| #362 | The banner on every screen: "This is a demo, not the real thing: sample notes, nothing saved · Run your own" | M25 | closed | #477 |
-| #363 | Tidy up in the demo is a recording: the confirmation's amber line, the working sheet's copy, the scripted run | M25 | closed | #484 |
-| #364 | Drive and push greyed with one sentence each; Add's doors in the demo | M25 | closed | #486 |
-| #365 | The demo never talks to anyone: an e2e that fails on any request to another host | M25 | closed | #488 |
-| #366 | Run your own Bower: the screen and the runbook link; "What is Bower, in nine screens" | M25 | closed | #480 |
-| #367 | Fixture "Alex" with originals: a PDF, a photo, a Google Doc, a note from Bower with its box | M25 | closed | #487 |
-| #368 | Ingest files only by default: originals into their PARA folder, no summary note | M26 | closed | #482 |
-| #369 | Sensible names for originals that have none; `index.md` lists files | M26 | closed | #516 |
-| #370 | Context notes: What is this? applies to its batch; "from now on" inside it becomes a rule | M26 | closed | #541 |
-| #371 | A note from Bower: the template with Bower's note, Why, What Bower used and the three markers | M26 | closed | #528 |
-| #372 | Apply a rule to what is already filed: the job, the moves, the log | M26 | closed | #559 |
-| #373 | Instructions-only runs: workflow input `scope`, `run.sh` skips the rest of the inbox | M26 | closed | #479 |
-| #374 | Web lookup per user: the Settings switch, the Worker setting, the workflow input, `run.sh` | M26 | closed | #483 |
-| #375 | Failure reasons for people: the runner classifies, the Worker stores, the app shows | M26 | closed | #485 |
-| #376 | `Rules.md` shape in `CLAUDE.md`: topic headings, paused rules ignored; red-team case | M26 | closed | #548 |
-| #377 | Runbook, vault template and README: file-only filing, originals next to notes, the web switch | M26 | closed | #563 |
-| #420 | Home bubble's Tidy up link says "[object PointerEvent] things are waiting" | M18 | closed | #432 |
-| #421 | Add: saving a link, or the leftover "Add to Bower" button, jumps to Home | M18 | closed | #437 |
-| #422 | Desktop sidebar: the waiting count bubble is on Home, not on Add | M18 | closed | #438 |
-| #423 | Previous/next links under a note show Bower's own files and file names | M18 | closed | #448 |
-| #424 | Root folder says "9 notes in Half Marathon" when the notes are in three subfolders | M18 | closed | #449 |
-| #425 | Folder counts leave out files: the menu says 0-Inbox 1 while the folder holds a file and a note | M18 | closed | #455 |
-| #426 | Note bar on the phone: back label and title both cut to a few letters, two More buttons | M18 | closed | #462 |
-| #427 | Production console: Cloudflare's injected challenge script is blocked by the app's CSP on every page | M18 | open |  |
-| #431 | Root folder screen: heading without the numeric prefix, the subfolder second line, the friendlier meta line | M23 | closed | #442 |
-| #433 | Notes tab: the search row opens the quick switcher, as the Phone-Notes board links it | M23 | closed | #441 |
-| #435 | What is this?: a "From now on" sentence also goes to Rules.md through the rule write path | M21 | closed | #440 |
-| #443 | Rules: pausing and resuming a rule replaces the date it was said on with today | M18 | closed | #450 |
-| #444 | Demo tidy-up answers the What is this? note as a question: a Context answer and one question too many | M18 | closed | #460 |
-| #445 | Demo's fallback answer still sends people to the Tell Bower screen | M18 | closed | #454 |
-| #446 | What is this? shows as "Context" in Requests and the working sheet, not the words the person wrote | M18 | closed | #461 |
-| #447 | Home's Health card says "Checked today" when the last check was Sunday | M18 | closed | #456 |
-| #453 | Project folder screen: the Drive chip reads "Drive" and the tip at the end, as the Phone-Folder-Project board draws | M23 | closed | #458 |
-| #457 | Folder screen: subfolder rows count files too, like the menu, the tree and the sidebar | M18 | closed | #467 |
-| #464 | Project folder tip suggests comparing flats in every project folder | M18 | closed | #470 |
-| #465 | Requests: an answered request shows its first six words, not the sentence sent | M18 | closed | #476 |
-| #481 | chore(app): drop the unused VITE_ABOUT_URL plumbing, a stale test name, and ignore test fixtures in Prettier | M25 | closed | #538 |
-| #489 | Demo copy per the boards: the confirmation sentence, the Add door subtitles, the demo hint sentence, the fixture's pinned tiles | M25 | closed | #535 |
-| #491 | A request sent while a tidy-up is running is lost: no Waiting row, gone after the run | M18 | closed | #522 |
-| #492 | fix(app): the Health findings parser splits on the first colon and on a bold title across lines | M18 | closed | #518 |
-| #493 | fix(app): Add still lists the added items after the run, and Save keeps the link so a second press duplicates it | M18 | closed | #517 |
-| #494 | Demo: the tour replays on every load because tourSeenAt lives in the in-memory Worker | M25 | closed | #520 |
-| #495 | fix(app): /search?q= lands on Home with nothing; the quick switcher never opens | M18 | closed | #519 |
-| #496 | fix(app): the three Health mentions disagree, and the Health wording ("Sep 27's check", "good shape" with an Urgent finding) | M18 | closed | #524 |
-| #497 | fix(app): the working sheet dismissed with Escape reopens on reload and after sending a request | M18 | closed | #530 |
-| #498 | fix(app): the Last tidy-up card blanks to "No tidy-up yet" while a run is in progress | M18 | closed | #531 |
-| #499 | fix(app): only the last "From now on" sentence in a What is this? box becomes a rule | M18 | closed | #547 |
-| #500 | Home greeting on the phone: one line at 24 px with the bird beside it, as the Phone-Home board | M18 | closed | #533 |
-| #501 | Do it now confirmation: its own copy about requests, not the tidy-up's pile of files | M22 | closed | #549 |
-| #502 | Folder rows: "Note · in this folder" says nothing, and a root folder's subfolder rows show "0 things" | M18 | closed | #523 |
-| #503 | fix(app): note body type is 16 px; C.5 says 17 px / 1.6 on the phone | M18 | closed | #536 |
-| #504 | Not found: the board's screen for an unknown folder and any unknown URL | M18 | closed | #527 |
-| #505 | After "Yes, tidy up" show the working sheet at once in a Starting state | M18 | closed | #521 |
-| #506 | The Done sheet stays until dismissed, and its count agrees with Home | M18 | closed | #526 |
-| #507 | Bower box: a one-line confirmation under the box after Send (kept, already in your rules, will go with this tidy-up) | M22 | closed | #546 |
-| #508 | Add queue: a pasted link shows its URL or page title, not Bower's file name; the What is this? placeholder fits its box | M18 | closed | #542 |
-| #509 | Demo intro page 8: rewrite the designer's note as a sentence; a scroll cue on the desktop panel | M25 | closed | #532 |
-| #510 | fix(app): a tap during a sheet's slide-up lands on the page behind it and dismisses it | M18 | closed | #534 |
-| #511 | accessibility: Ideas' nine "Copy" links get distinct names, the Rules group header separates the count from the name, bubble spacing | M18 | closed | #544 |
-| #512 | chore(app): the Settings version line carries the short commit at build time | M18 | closed | #540 |
-| #513 | chore(app): one relative-time helper with one rounding and one ticking for the card, the sheet and the rows | M18 | closed | #537 |
-| #514 | Investigate: a clipboard write fired on a synthetic click on a bottom-nav link in the demo | M18 | closed |  |
-| #529 | fix(app): the Bower's note renderer accepts the fourth origin "(from what you told me)", and the Add hint and confirmation count like Home | M18 | closed | #543 |
-| #539 | Demo: the fixture's folder pin never shows on a cold visit because pinned hydration stops at 12 fetches | M25 | closed | #545 |
-| #551 | Home greeting is cut at 375 px even with a short name | M18 | closed | #561 |
-| #552 | Bower box says "Will go with this tidy-up" but the request waits for the next one | M18 | closed | #562 |
-| #553 | Bower box confirmations are not announced to screen readers | M18 | closed | #566 |
-| #554 | Quick switcher results show the note's frontmatter and Markdown marks | M18 | closed | #568 |
-| #555 | Demo: Drive links on folders and files open Google Drive URLs that do not exist | M18 | open |  |
-| #556 | Demo: the sidebar's Sign out works and empties the folder list | M18 | open |  |
-| #557 | A filed link is shown by its generated file name after the tidy-up | M18 | open |  |
-| #558 | Rules from a What is this? box keep "From now on," and sort after Everything else | M18 | open |  |
-| #560 | Decision: a file the agent moves out of a PARA folder leaves its old copy in Drive ("Never delete" vs. a duplicate) | M26 | open |  |
-| #564 | Home reads .bower/last-run.json when the Worker never heard the run's outcome | M22 | closed | #569 |
+| R1 | F3 #579 | F2 #578 | F1 #577 | F9 (lead, after the owner's OK) |
+| R2 | F4 #580 | F6 #582 | F5 #581 |  |
+| R3 | F7 #583 | F8 #584 | G1 #595 |  |
+| R4 | J1 #587 | N1 #586 | G2 #596 | Batch deploy 1: app (M27) and runner (F5, G1, G2). |
+| R5 | S1 #592 | V2 #603 | G3 #597 |  |
+| R6 | N2 #588 | V1 #602 | G4 #598 | Deploy: Worker then runner (G4). |
+| R7 | N3 #589 | S2 #593 | G5 #599 |  |
+| R8 | N4 #590 | V3 #604 | G6 #600 |  |
+| R9 | N5 #591 | V4 #605 | G7 #601 | Batch deploy 2: app (M28) and runner (M29 rulebook v18). Tester smoke walk 1 (Find). |
+| R10 | S3 #594 | V6 #607 | V8 #609 | Lane C is free from here and takes app issues. |
+| R11 | V5 #606 | V7 #608 | D2 #612 |  |
+| R12 | D1 #611 | J4 #618 | G8 #610 |  |
+| R13 | D3 #613 | J5 #619 | D5 #615 |  |
+| R14 | D4 #614 | J2 #616 |  |  |
+| R15 | J3 #617 |  |  |  |
+| R16 |  |  | Z1 #620 | Batch deploy 3: Worker, runner, app (everything). |
+| R17 |  |  | Z2 #621 | Tester walk of every board (Z2), then fixes. |
+
+Critical path: the agent chain F5 → G1 → G2 → G3 → G4 → G5 → G6 → G7 (one `bower_rules_version` bump per PR: v13 F5, v14 G2, v15 G4, v16 G5, v17 G6, v18 G7). Find comes first among the screens (D4).
+
+## Process for speed (owner's request, 2026-09-28)
+
+- **Agents test narrowly.** While working, an agent runs only typecheck, the unit tests of the files it touches and its own new e2e file (`app/e2e/v4-*.e2e.ts`); the full `pnpm lint && pnpm typecheck && pnpm test` once before the PR; `pnpm build` and the full e2e suite run in CI only. Never pipe tests through `tail`. New e2e tests go in per-issue files, not in `flows.e2e.ts`.
+- **Agents do not wait for CI.** They open the PR and report; the lead watches CI.
+- **The lead reviews and merges in batches.** When the two or three PRs of a round are open, the lead reads their diffs together and merges every green one directly (branch protection is not strict, so no `update-branch` and no second CI wait per PR). After a batch: one CI run on main plus one local `pnpm -C app e2e`; if main breaks, the offending squash is reverted and its issue reopened (never fix forward).
+- **Local re-runs only where they pay:** security-relevant diffs (#602 renderer, the runner chain), resumed branches, reported deviations.
+- **Deploys and tester walks per batch point, not per PR:** three deploys (after R4, R9, R16) in the order Worker, runner, app; two tester walks (Find after R9, everything in #621).
+- **Budgets** are in each issue's Agent profile; an agent at its limit stops with a `wip:` commit and reports `timeout`; the lead resumes it from the branch.
 
 ## Rules of the road
 
-- One issue, one branch (`feat|fix|docs|chore/<n>-<slug>` from `main`), one PR; squash merge; the lead reviews every diff.
-- Merge one PR at a time after `gh pr update-branch` and a fresh green CI (`ci`, `sanitize`, `supply-chain`, `e2e`); wait while GitHub reports mergeability as unknown.
-- Conflict hotspots: `app/e2e/flows.e2e.ts`, `app/src/run-store.tsx`, `app/src/routes/bower.tsx`, `app/src/routes/home.tsx`, `app/src/routes/folder.tsx`, `agent/run.sh`, `agent/test/smoke.sh`, `vault-template/CLAUDE.md` (one `bower_rules_version` bump per PR, strictly serial). Agents rebase; the lead never resolves conflicts by hand.
-- Subagents: a budget in the prompt, a commit per acceptance criterion, a wip commit on any stop, no `git stash` (one list for all worktrees), run `pnpm -C app test` directly (never through a pipe that hides the exit code), verify `gh pr list --head` before reporting.
-- Never remove a worktree before its PR is merged and the agent has reported. Deploy order: Worker, then runner, then app.
+- Hotspots (one in-flight issue at a time): `app/src/components/tree.tsx`, `explorer.tsx`, `layout.tsx` and `layout.css`, `routes/folder.tsx`, `routes/note.tsx`, `routes/file.tsx`, `routes/home.tsx`, `routes/add.tsx`, `components/switcher.tsx`, `app/src/demo/fixture.ts`, `app/e2e/flows.e2e.ts`, `agent/run.sh`, `agent/test/smoke.sh`, `vault-template/CLAUDE.md`, `pnpm-lock.yaml`.
+- Two new dependencies approved by the owner (D3): MiniSearch (#592) and TanStack Virtual core (#590). No other.
+- Commit per acceptance criterion, `wip:` commit on stop, no `git stash`, rebase on main before the PR, never `gh pr merge --delete-branch` while a worktree uses the branch.
+- Commit identity `Pablo de Luis <deluispablo@users.noreply.github.com>`; squash subject "<issue title> (#PR)", body `Closes #N`.
+- Deploy order Worker, runner, app. The owner applies each rulebook update from the app ("Update Bower's rules").
+
+## Lead rulings the owner may override
+
+- Excel files: the file screen says "Bower keeps it, not reads it; editing happens in Drive or Excel." instead of the board's "Bower reads it as it is" (D11 and `System-Formats` say Excel is kept, not read) (#578, #604).
+- The search screen's empty state has four PARA chips, no Inbox, as `Phone-Search-Start` draws (the spec says five) (#593).
+- Move to… never offers Inbox as a destination, as `Phone-Move-Picker` draws (#608).
+- The CSV preview shows up to 200 rows with the board's line "Showing <shown> of <total> rows…"; the board's "5 of 24" is read as sample content (#604).
+- The Compare status "Viewing Sat" comes from a listing's `viewing` date while its status is "to view"; the status list stays the owner's (#577).
+- Answers and Clippings get meaning lines (owner's Q1 answer) although `Main` draws them without (#580).
+- Additions so the boards are built exactly: file facts for pages, sheets and ZIP contents (#610, P2); Compare by month for receipts and as a timeline for bookings, from `System-Kinds` (#615, P2); the working sheet's rows from `Flow-04-Working` (#619).
+
+## Coverage
+
+Every requirement ID of the spec (R-SYS, R-NOTES, R-REVEAL, R-SEARCH, R-FOLDER, R-COMP, R-NOTE, R-FILE, R-PHOTO, R-MOVE, R-JUST, R-ADD, R-DESK, R-ONB, R-PERF, R-AG, R-RUN, R-API, R-DATA) and every non-deck board is named in at least one issue (checked by script on 2026-09-28). R-PERF-3 (Drive changes feed) is deferred by the owner (Q4). The deck (`Deck-*`) is not built (D14). Q5 (take the demo down) is #585.
+
+## Owner items outside v4
+
+#427 (Cloudflare JavaScript Detections), `GITHUB_TOKEN` with `actions: read` in the instance repo (#490), OAuth verification or `drive.file`, the rulebook update to v12 (then v13–v18 as they ship), Dependabot #473 and #474, stale stashes and worktree folders on the owner's machine.
