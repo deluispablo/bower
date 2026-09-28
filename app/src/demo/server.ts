@@ -12,12 +12,20 @@
  */
 
 import { ApiError } from '../api.js';
-import type { Me, Run, RunScope, StatusResponse } from '../api.js';
+import type {
+  Me,
+  Run,
+  RunItemKind,
+  RunScope,
+  RunsResponse,
+  StatusResponse,
+} from '../api.js';
 import { FOLDER_MIME } from '../drive.js';
 import {
   DEMO_EMAIL,
   DEMO_NAME,
   DEMO_QUOTA_LIMIT,
+  DEMO_RUNS,
   FIXTURE_FILES,
   INBOX_PLAN,
 } from './fixture.js';
@@ -30,6 +38,16 @@ export const QUEUED_MS = 1_500;
 export const FIRST_FILED_MS = 2_500;
 export const LAST_FILED_MS = 7_000;
 export const DONE_MS = 8_000;
+
+/** How many finished runs `GET /runs` keeps, as the Worker does. */
+const RUN_HISTORY_LIMIT = 20;
+
+function copyRun(run: Run): Run {
+  const copy: Run = { ...run, processed: [...(run.processed ?? [])] };
+  if (run.items !== undefined)
+    copy.items = run.items.map((item) => ({ ...item }));
+  return copy;
+}
 
 interface Step {
   at: number;
@@ -74,6 +92,9 @@ export class DemoServer {
   readonly me: Me;
   private active: ActiveRun | null = null;
   private last: Run | null = null;
+  /** Finished runs, newest first (`GET /runs`, #345): two earlier
+   * tidy-ups, then every scripted run as it ends. */
+  private history: Run[] = DEMO_RUNS.map(copyRun);
 
   constructor(
     private readonly now: () => number = () => Date.now(),
@@ -146,22 +167,25 @@ export class DemoServer {
       state: 'queued',
       requestedAt: this.iso(startedAt),
       processed: [],
+      items: [],
       runId: `demo-run-${this.me.quota.used}`,
     };
     const steps = await this.plan(run, startedAt, scope);
     this.active = { run, startedAt, steps };
-    return { ...run, processed: [] };
+    return { ...run, processed: [], items: [] };
   }
 
   /** `GET /status`. */
   status(): StatusResponse {
     this.advance();
     const run = this.active?.run ?? this.last;
-    return {
-      run:
-        run === null ? null : { ...run, processed: [...(run.processed ?? [])] },
-      stale: false,
-    };
+    return { run: run === null ? null : copyRun(run), stale: false };
+  }
+
+  /** `GET /runs` (#345): finished runs, newest first. */
+  runs(): RunsResponse {
+    this.advance();
+    return { runs: this.history.map(copyRun) };
   }
 
   /** The run's steps: one per pending item in `scope`, then done with the
@@ -183,6 +207,7 @@ export class DemoServer {
       pending.push({ path, name: entry.name, text });
     }
     const replies: Reply[] = [];
+    const filed: { name: string; folder: string; at: number }[] = [];
     const steps: Step[] = [];
     const gap =
       pending.length > 1
@@ -191,17 +216,29 @@ export class DemoServer {
 
     for (const [i, { path, name, text }] of pending.entries()) {
       let destination = INBOX_PLAN.get(path) ?? `3-Resources/${name}`;
+      // What the runner reports for each item (#345, `agent/run.sh`).
+      let kind: RunItemKind = 'file';
       if (isInstruction(path, name, text)) {
         destination = `0-Inbox/Processed/${name}`;
-        if (!isContext(text)) {
+        kind = isContext(text) ? 'context' : 'request';
+        if (kind === 'request') {
           replies.push(replyTo(name, instructionText(text), date));
         }
       }
+      const at = FIRST_FILED_MS + i * gap;
+      if (kind === 'file') {
+        filed.push({
+          name,
+          folder: destination.slice(0, destination.lastIndexOf('/')),
+          at,
+        });
+      }
       steps.push({
-        at: FIRST_FILED_MS + i * gap,
+        at,
         apply: () => {
           this.vault.move(path, destination);
           run.processed?.push(path);
+          run.items?.push({ path, kind });
         },
       });
     }
@@ -211,13 +248,22 @@ export class DemoServer {
       apply: () => {
         for (const reply of replies) this.applyReply(reply, date);
         const count = run.processed?.length ?? 0;
-        this.appendLog(date, count, replies.length);
+        this.appendLog(
+          filed.map(
+            ({ name, folder, at }) =>
+              `- ${this.stamp(startedAt + at)} · Filed: ${name} → ${folder}`,
+          ),
+        );
         run.state = 'done';
         run.finishedAt = this.iso(startedAt + DONE_MS);
         run.summary =
           count === 0
             ? 'Nothing new to file.'
             : `Filed ${count} ${count === 1 ? 'item' : 'items'}.`;
+        this.history = [copyRun(run), ...this.history].slice(
+          0,
+          RUN_HISTORY_LIMIT,
+        );
       },
     });
     return steps;
@@ -254,8 +300,17 @@ export class DemoServer {
     this.vault.write('Rules.md', rules);
   }
 
-  private appendLog(date: string, filed: number, answered: number): void {
-    const line = `- ${date} · Tidy up · ${filed} filed, ${answered} answered`;
-    this.vault.write('log.md', `${this.textAt('log.md')}\n${line}\n`);
+  /** `YYYY-MM-DD HH:MM` in UTC, as the agent stamps `log.md`. */
+  private stamp(ms: number): string {
+    return this.iso(ms).slice(0, 16).replace('T', ' ');
+  }
+
+  /** One `Filed:` line per file filed, as the agent writes them (#345). */
+  private appendLog(lines: readonly string[]): void {
+    if (lines.length === 0) return;
+    this.vault.write(
+      'log.md',
+      `${this.textAt('log.md')}\n${lines.join('\n')}\n`,
+    );
   }
 }

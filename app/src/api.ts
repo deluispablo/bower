@@ -174,6 +174,16 @@ export interface UpdateSettingsResult {
 
 export type RunState = 'queued' | 'running' | 'done' | 'failed';
 
+/** What one processed inbox item was (#345); mirrors `RunItemKind` in
+ * `api/src/types.ts`. */
+export type RunItemKind = 'file' | 'question' | 'request' | 'context' | 'rule';
+
+/** One processed inbox item with its kind (#345). */
+export interface RunItem {
+  path: string;
+  kind: RunItemKind;
+}
+
 /** Mirrors `Run` in `api/src/types.ts`. */
 export interface Run {
   state: RunState;
@@ -182,6 +192,9 @@ export interface Run {
   finishedAt?: string;
   summary?: string;
   processed?: string[];
+  /** `processed` with each item's kind, from a runner that reports kinds
+   * (#345). */
+  items?: RunItem[];
   /** Paths the pre-scan set aside under `0-Inbox/Quarantine/` this run. */
   quarantined?: string[];
   /** Paths (or `"*"` for the whole run) the post-run audit refused. */
@@ -202,6 +215,11 @@ export type RunScope = 'all' | 'instructions';
 export interface StatusResponse {
   run: Run | null;
   stale: boolean;
+}
+
+/** `GET /runs` (#345): finished tidy-ups, newest first, at most 20. */
+export interface RunsResponse {
+  runs: Run[];
 }
 
 export interface PushPublicKeyResponse {
@@ -226,6 +244,7 @@ export interface WorkerClient {
   deleteAccount(): Promise<void>;
   startProcess(scope?: RunScope): Promise<{ run: Run }>;
   getStatus(): Promise<StatusResponse>;
+  getRuns(): Promise<RunsResponse>;
   getPushPublicKey(): Promise<PushPublicKeyResponse>;
   subscribePush(subscription: PushSubscriptionJSON): Promise<void>;
   unsubscribePush(endpoint: string): Promise<void>;
@@ -265,6 +284,7 @@ export const httpWorkerClient: WorkerClient = {
       scope === undefined ? { method: 'POST' } : sendJson('POST', { scope }),
     ),
   getStatus: () => apiFetch<StatusResponse>('/status'),
+  getRuns: () => apiFetch<RunsResponse>('/runs'),
   getPushPublicKey: () => apiFetch<PushPublicKeyResponse>('/push/public-key'),
   subscribePush: (subscription) => {
     const endpoint = subscription.endpoint;
@@ -395,6 +415,14 @@ export function startProcess(scope?: RunScope): Promise<{ run: Run }> {
  */
 export function getStatus(): Promise<StatusResponse> {
   return withWorker((c) => c.getStatus());
+}
+
+/**
+ * `GET /runs` (#345): the signed-in user's finished tidy-ups, newest first
+ * (the Worker keeps the last 20), for the Bower tab's Activity.
+ */
+export function getRuns(): Promise<RunsResponse> {
+  return whenReady(() => worker.getRuns());
 }
 
 /**

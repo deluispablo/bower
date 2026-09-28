@@ -323,8 +323,11 @@ export function WorkingSheet({
   const active = phase === 'queued' || phase === 'running';
   const notes = state === 'done' ? doneNotes(run) : [];
   const processed = run?.processed;
-  const progress = active ? progressFor(runCounts(processed, waiting)) : null;
-  const rows = runRows({ processed, waiting, files, active });
+  const items = run?.items;
+  const progress = active
+    ? progressFor(runCounts(processed, waiting, items))
+    : null;
+  const rows = runRows({ processed, waiting, files, active, items });
   const started = !active
     ? undefined
     : isDemo()

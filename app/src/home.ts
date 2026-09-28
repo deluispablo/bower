@@ -8,7 +8,7 @@
 import type { Run } from './api.js';
 import { sinceLabel } from './bower-tab.js';
 import type { BirdState } from './components/bird-classes.js';
-import { isContextNote } from './run-progress.js';
+import { processedKind } from './run-progress.js';
 import type { RunPhase } from './run-store.js';
 import { failureCopy } from './run-failure.js';
 
@@ -94,25 +94,21 @@ export interface RunCounts {
   answered: number;
 }
 
-/** The name the app gives a message to Bower (`tell.ts#instructionFileName`). */
-const MESSAGE_PREFIX = 'Bower - ';
-
 /**
- * A run's counts from `run.processed`: a message the app wrote for Bower
- * (a file named "Bower - …", `tell.ts`) counts as answered, everything
- * else as filed, except the "What is this?" context note (#444), which is
- * neither — `isContextNote` (`run-progress.ts`, #506) is the one place
- * that says what it is, shared with the working sheet's own counts so the
- * two never drift apart. The runner reports no finer split yet.
+ * A run's counts from `run.processed`, by each item's kind
+ * (`processedKind`, `run-progress.ts`, #345): a file counts as filed, a
+ * request, question or rule as answered, and the "What is this?" context
+ * note (#444) as neither. The working sheet reads the same kinds, so the
+ * two never drift apart.
  */
 export function runCounts(run: Run): RunCounts {
   let answered = 0;
   let filed = 0;
   for (const path of run.processed ?? []) {
-    if (isContextNote(path)) continue;
-    const name = path.slice(path.lastIndexOf('/') + 1);
-    if (name.startsWith(MESSAGE_PREFIX)) answered += 1;
-    else filed += 1;
+    const kind = processedKind(path, run.items);
+    if (kind === 'context') continue;
+    if (kind === 'file') filed += 1;
+    else answered += 1;
   }
   return { filed, answered };
 }

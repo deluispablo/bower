@@ -13,6 +13,7 @@
  * folder once the listing, re-read when the run ends, shows the file there.
  */
 
+import type { RunItem, RunItemKind } from './api.js';
 import type { DriveFile } from './drive.js';
 import { pendingCount } from './navigation.js';
 import { fileKind, fileTitle } from './vault-index.js';
@@ -70,6 +71,29 @@ export function isContextNote(path: string): boolean {
 }
 
 /**
+ * What a processed item was (#345): the kind the runner reported for
+ * `path` in `items`. A report from a runner that predates kinds (no
+ * `items`) falls back to what the name says, the only thing such a report
+ * has: Add's context note by its title, any other `Bower - ` note in
+ * `0-Inbox/` as a request, everything else a file.
+ */
+export function processedKind(
+  path: string,
+  items: readonly RunItem[] | undefined,
+): RunItemKind {
+  if (items !== undefined) {
+    return items.find((item) => item.path === path)?.kind ?? 'file';
+  }
+  if (isContextNote(path)) return 'context';
+  const top = path.slice(0, path.indexOf('/'));
+  return top === '0-Inbox' &&
+    path === `0-Inbox/${baseName(path)}` &&
+    REQUEST_PREFIX.test(baseName(path))
+    ? 'request'
+    : 'file';
+}
+
+/**
  * The paths waiting in the inbox, sorted: the same rule as the Inbox
  * card's count (`navigation.ts#pendingCount`), one file at a time.
  */
@@ -103,9 +127,12 @@ export function visiblePendingCount(files: readonly DriveFile[]): number {
 export function runCounts(
   processed: readonly string[] | undefined,
   waiting: readonly string[],
+  items?: readonly RunItem[],
 ): RunCounts {
   if (processed === undefined) return {};
-  const filed = processed.filter((path) => !isContextNote(path));
+  const filed = processed.filter(
+    (path) => processedKind(path, items) !== 'context',
+  );
   const stillWaiting = waiting.filter((path) => !isContextNote(path));
   const all = new Set([...stillWaiting, ...filed]);
   return { processed: filed.length, total: all.size };
@@ -177,8 +204,10 @@ export function runRows(input: {
   waiting: readonly string[];
   files: readonly DriveFile[];
   active: boolean;
+  /** The run's `items` (#345), when its runner reported kinds. */
+  items?: readonly RunItem[];
 }): RunRow[] {
-  const { processed, waiting, files, active } = input;
+  const { processed, waiting, files, active, items } = input;
   if (processed === undefined) return [];
   const byPath = new Map(files.map((file) => [file.path, file]));
   const row = (path: string, status: RunRow['status']): RunRow => {
@@ -195,7 +224,7 @@ export function runRows(input: {
     };
   };
   const rows = processed
-    .filter((path) => !isContextNote(path))
+    .filter((path) => processedKind(path, items) !== 'context')
     .map((path) => row(path, 'filed'));
   if (active) {
     const filed = new Set(processed);

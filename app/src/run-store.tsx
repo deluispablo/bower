@@ -51,7 +51,7 @@ import type { Run, RunScope } from './api.js';
 import { ANSWERS_FOLDER } from './home.js';
 import { folderHref } from './navigation.js';
 import { failureCopy } from './run-failure.js';
-import { isContextNote, visiblePendingCount } from './run-progress.js';
+import { processedKind, visiblePendingCount } from './run-progress.js';
 import { useSession } from './session.js';
 import { showToast } from './toast-store.js';
 import { invalidateAfterRun, useVault } from './vault-store.js';
@@ -165,7 +165,7 @@ export function writeSeenRunKey(
  */
 export function resultMessage(run: Run): string {
   const count = (run.processed ?? []).filter(
-    (path) => !isContextNote(path),
+    (path) => processedKind(path, run.items) !== 'context',
   ).length;
   if (count === 0) return 'Nothing new to process';
   return `${count} ${count === 1 ? 'file' : 'files'} processed`;
