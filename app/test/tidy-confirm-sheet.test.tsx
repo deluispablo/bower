@@ -12,8 +12,12 @@ vi.mock('../src/api.js', async (importOriginal) => ({
   isDemo: () => state.demo,
 }));
 
-const { TidyConfirmSheet, confirmSentenceParts, DEMO_RECORDING_NOTICE } =
-  await import('../src/components/tidy-confirm-sheet.js');
+const {
+  TidyConfirmSheet,
+  confirmSentenceParts,
+  demoConfirmSentenceParts,
+  DEMO_RECORDING_NOTICE,
+} = await import('../src/components/tidy-confirm-sheet.js');
 
 let root: HTMLDivElement | undefined;
 
@@ -114,6 +118,26 @@ describe('confirmSentenceParts', () => {
   });
 });
 
+describe('demoConfirmSentenceParts (#489, Demo-Tidy-Confirm board)', () => {
+  it('singular: "1 thing in the inbox…"', () => {
+    expect(demoConfirmSentenceParts(1)).toEqual({
+      lead: '1 thing',
+      rest:
+        'in the inbox. In your own Bower this takes a few minutes and ' +
+        'uses one run of your plan, so once is better than five times.',
+    });
+  });
+
+  it('plural: "3 things in the inbox…"', () => {
+    expect(demoConfirmSentenceParts(3)).toEqual({
+      lead: '3 things',
+      rest:
+        'in the inbox. In your own Bower this takes a few minutes and ' +
+        'uses one run of your plan, so once is better than five times.',
+    });
+  });
+});
+
 describe('TidyConfirmSheet', () => {
   it('shows the bird, the heading, the count and the two buttons, no "Don\'t ask again"', () => {
     mount(3);
@@ -187,5 +211,14 @@ describe('TidyConfirmSheet', () => {
     state.demo = true;
     mount(2);
     expect(currentRoot().textContent).toContain(DEMO_RECORDING_NOTICE);
+  });
+
+  it("the demo build reads the board's own sentence, not the real one (#489)", () => {
+    state.demo = true;
+    mount(3);
+    expect(currentRoot().textContent).toContain('3 things');
+    expect(currentRoot().textContent).toContain('in the inbox');
+    expect(currentRoot().textContent).toContain('In your own Bower');
+    expect(currentRoot().textContent).not.toContain('are waiting');
   });
 });
