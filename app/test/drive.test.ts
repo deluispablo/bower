@@ -954,7 +954,7 @@ describe('copyOrExportIntoInbox', () => {
 
     let copyBody = '';
     stubFetch((_url, init) => {
-      copyBody = String(init.body);
+      copyBody = init.body as string;
       return jsonResponse(200, {
         id: 'COPY_ID',
         name: 'a.pdf',
