@@ -7,7 +7,15 @@ import { QUEUED_STALE_MS, RUNNING_STALE_MS } from '../src/process.js';
 import { issueRunTicket } from '../src/run-ticket.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { JOB_CHECK_AFTER_MS } from '../src/status.js';
-import { getRun, getRunTicket, putRun, putUser } from '../src/store.js';
+import {
+  RUN_HISTORY_LIMIT,
+  deleteUserData,
+  getRun,
+  getRunTicket,
+  keys,
+  putRun,
+  putUser,
+} from '../src/store.js';
 import type { FetchLike } from '../src/google.js';
 import type { Run, User } from '../src/types.js';
 
@@ -283,5 +291,95 @@ describe('GET /status', () => {
       run,
       stale: false,
     });
+  });
+});
+
+describe('GET /runs (#345)', () => {
+  async function getRuns(cookie?: string): Promise<Response> {
+    const headers: Record<string, string> = {};
+    if (cookie !== undefined) headers.cookie = cookie;
+    return createApp().request(`${API}/runs`, { headers }, env);
+  }
+
+  /** A finished ingest requested `minutes` after a fixed start. */
+  function finished(minutes: number, state: 'done' | 'failed' = 'done'): Run {
+    const at = Date.parse('2026-09-27T08:00:00.000Z') + minutes * 60_000;
+    return {
+      state,
+      requestedAt: new Date(at).toISOString(),
+      finishedAt: new Date(at + 180_000).toISOString(),
+      processed: [`0-Inbox/${minutes}.md`],
+      items: [{ path: `0-Inbox/${minutes}.md`, kind: 'file' }],
+    };
+  }
+
+  it('answers 401 without a session', async () => {
+    const response = await getRuns();
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'unauthenticated' },
+    });
+  });
+
+  it('lists finished tidy-ups newest first, the same run once, never a queued one or a lint', async () => {
+    await seedUser();
+    const first = finished(0);
+    const second = finished(60, 'failed');
+    await putRun(kv, USER_ID, {
+      state: 'queued',
+      requestedAt: first.requestedAt,
+    });
+    await putRun(kv, USER_ID, first);
+    // The same run settled again (a late report): replaced, not repeated.
+    await putRun(kv, USER_ID, { ...first, summary: 'Filed one note.' });
+    await putRun(kv, USER_ID, finished(30), 'lint');
+    await putRun(kv, USER_ID, second);
+
+    const response = await getRuns(await sessionCookie());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      runs: [second, { ...first, summary: 'Filed one note.' }],
+    });
+  });
+
+  it('keeps the last RUN_HISTORY_LIMIT runs and drops the older records', async () => {
+    await seedUser();
+    for (let i = 0; i <= RUN_HISTORY_LIMIT; i += 1) {
+      await putRun(kv, USER_ID, finished(i));
+    }
+
+    const response = await getRuns(await sessionCookie());
+    const { runs } = await response.json<{ runs: Run[] }>();
+
+    expect(runs).toHaveLength(RUN_HISTORY_LIMIT);
+    expect(runs[0]).toEqual(finished(RUN_HISTORY_LIMIT));
+    expect(runs.at(-1)).toEqual(finished(1));
+    const records = await kv.list({ prefix: keys.runRecordPrefix(USER_ID) });
+    expect(records.keys).toHaveLength(RUN_HISTORY_LIMIT);
+  });
+
+  it('a stale run settled by GET /status shows up as failed', async () => {
+    await seedUser();
+    const requestedAt = new Date(
+      Date.now() - QUEUED_STALE_MS - 1000,
+    ).toISOString();
+    await putRun(kv, USER_ID, { state: 'queued', requestedAt });
+    await getStatus(await sessionCookie());
+
+    const { runs } = await (
+      await getRuns(await sessionCookie())
+    ).json<{ runs: Run[] }>();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ state: 'failed', error: 'stale' });
+  });
+
+  it('deleting the account deletes the history', async () => {
+    await seedUser();
+    await putRun(kv, USER_ID, finished(0));
+    await deleteUserData(kv, USER_ID);
+    expect(await kv.get(keys.runIndex(USER_ID))).toBeNull();
+    const records = await kv.list({ prefix: keys.runRecordPrefix(USER_ID) });
+    expect(records.keys).toHaveLength(0);
   });
 });

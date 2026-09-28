@@ -57,11 +57,13 @@ import {
   listVaultIds,
   putRun,
 } from './store.js';
-import { RUN_FAILURE_REASONS } from './types.js';
+import { RUN_FAILURE_REASONS, RUN_ITEM_KINDS } from './types.js';
 import type {
   DriveToken,
   Run,
   RunFailureReason,
+  RunItem,
+  RunItemKind,
   RunKind,
   User,
 } from './types.js';
@@ -213,6 +215,7 @@ interface StatusReport {
   runId?: string;
   summary?: string;
   processed?: string[];
+  items?: RunItem[];
   quarantined?: string[];
   refused?: string[];
   error?: string;
@@ -261,7 +264,8 @@ function optionalText(
 /**
  * An optional array-of-strings field: absent, or an array of strings, cut
  * to `MAX_PROCESSED` entries with each entry cut to `MAX_TEXT_LENGTH`
- * characters. Used for `processed`, `quarantined` and `refused` alike.
+ * characters. Used for `quarantined` and `refused` (`processed` may also
+ * carry kinds: `optionalProcessed`).
  */
 function optionalStringArray(
   body: Record<string, unknown>,
@@ -278,6 +282,52 @@ function optionalStringArray(
   return value
     .slice(0, MAX_PROCESSED)
     .map((entry) => entry.slice(0, MAX_TEXT_LENGTH));
+}
+
+function isRunItemKind(value: unknown): value is RunItemKind {
+  return RUN_ITEM_KINDS.some((known) => known === value);
+}
+
+/**
+ * The `processed` field (#345): absent, or an array whose entries are each
+ * a path (runners before #345) or `{ path, kind }` with a known kind. Cut
+ * like `optionalStringArray`. Returns the paths, and the entries that
+ * carried a kind as `items` (absent when none did).
+ */
+function optionalProcessed(
+  body: Record<string, unknown>,
+): { paths: string[]; items?: RunItem[] } | undefined {
+  const value = body.processed;
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw badRequest('processed must be an array');
+  }
+  const paths: string[] = [];
+  const items: RunItem[] = [];
+  for (const entry of value.slice(0, MAX_PROCESSED) as unknown[]) {
+    if (typeof entry === 'string') {
+      paths.push(entry.slice(0, MAX_TEXT_LENGTH));
+      continue;
+    }
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw badRequest('processed entries must be paths or { path, kind }');
+    }
+    const record = entry as Record<string, unknown>;
+    const keys = Object.keys(record);
+    if (
+      typeof record.path !== 'string' ||
+      !isRunItemKind(record.kind) ||
+      keys.some((key) => key !== 'path' && key !== 'kind')
+    ) {
+      throw badRequest(
+        `processed entries must be { path, kind } with kind one of ${RUN_ITEM_KINDS.join(', ')}`,
+      );
+    }
+    const path = record.path.slice(0, MAX_TEXT_LENGTH);
+    paths.push(path);
+    items.push({ path, kind: record.kind });
+  }
+  return items.length > 0 ? { paths, items } : { paths };
 }
 
 /**
@@ -332,8 +382,11 @@ function parseStatusReport(body: unknown): StatusReport {
     report.reason = reason as RunFailureReason;
   }
 
-  const processed = optionalStringArray(record, 'processed');
-  if (processed !== undefined) report.processed = processed;
+  const processed = optionalProcessed(record);
+  if (processed !== undefined) {
+    report.processed = processed.paths;
+    if (processed.items !== undefined) report.items = processed.items;
+  }
   const quarantined = optionalStringArray(record, 'quarantined');
   if (quarantined !== undefined) report.quarantined = quarantined;
   const refused = optionalStringArray(record, 'refused');
@@ -380,6 +433,7 @@ function applyReport(
   run.finishedAt = now;
   if (report.summary !== undefined) run.summary = report.summary;
   if (report.processed !== undefined) run.processed = report.processed;
+  if (report.items !== undefined) run.items = report.items;
   if (report.quarantined !== undefined) run.quarantined = report.quarantined;
   if (report.refused !== undefined) run.refused = report.refused;
   if (report.error !== undefined) run.error = report.error;

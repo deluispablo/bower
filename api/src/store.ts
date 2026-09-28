@@ -31,6 +31,10 @@ export const keys = {
   allow: (email: string): string => `allow:${normalizeEmail(email)}`,
   run: (id: string): string => `run:${id}`,
   lintRun: (id: string): string => `lintrun:${id}`,
+  runIndex: (userId: string): string => `runs:${userId}`,
+  runRecord: (userId: string, recordId: string): string =>
+    `runrec:${userId}:${recordId}`,
+  runRecordPrefix: (userId: string): string => `runrec:${userId}:`,
   runTicket: (id: string): string => `runticket:${id}`,
   lintTicket: (id: string): string => `lintticket:${id}`,
   quota: (userId: string, date: string): string => `quota:${userId}:${date}`,
@@ -280,6 +284,11 @@ export async function getRun(
   return getJson<Run>(kv, runKey(id, kind));
 }
 
+/**
+ * Stores the user's latest run of `kind`. A finished ingest (`done` or
+ * `failed`, however it got there: the runner's report, the job-conclusion
+ * fallback or staleness) is also kept in the run history (`recordRun`).
+ */
 export async function putRun(
   kv: KVNamespace,
   id: string,
@@ -287,6 +296,63 @@ export async function putRun(
   kind: RunKind = 'ingest',
 ): Promise<void> {
   await putJson(kv, runKey(id, kind), run);
+  if (kind === 'ingest' && (run.state === 'done' || run.state === 'failed')) {
+    await recordRun(kv, id, run);
+  }
+}
+
+/**
+ * How many finished ingests the run history keeps per user (#345): the
+ * Bower tab's Activity shows one card per tidy-up, and twenty covers a few
+ * weeks of tidy-ups while `GET /runs` stays at most 21 KV reads.
+ */
+export const RUN_HISTORY_LIMIT = 20;
+
+/**
+ * A run's id in the history: its `requestedAt` in milliseconds, which never
+ * changes while the run goes and is unique per user (one run at a time).
+ */
+function runRecordId(run: Run): string {
+  const ms = Date.parse(run.requestedAt);
+  return Number.isNaN(ms)
+    ? run.requestedAt.replace(/[^\w.-]/g, '')
+    : String(ms);
+}
+
+/**
+ * Keeps a finished run in the user's history: one `runrec:<id>:<run>` key
+ * per run and the `runs:<id>` index of run ids, newest first, at most
+ * `RUN_HISTORY_LIMIT`. The same run recorded again (a report after the job
+ * fallback settled it) replaces its record and keeps its place. The run
+ * dropped off the end loses its record.
+ */
+export async function recordRun(
+  kv: KVNamespace,
+  userId: string,
+  run: Run,
+): Promise<void> {
+  const recordId = runRecordId(run);
+  await putJson(kv, keys.runRecord(userId, recordId), run);
+  const index = (await getJson<string[]>(kv, keys.runIndex(userId))) ?? [];
+  if (index.includes(recordId)) return;
+  const next = [recordId, ...index];
+  const dropped = next.splice(RUN_HISTORY_LIMIT);
+  await putJson(kv, keys.runIndex(userId), next);
+  await Promise.all(
+    dropped.map((old) => kv.delete(keys.runRecord(userId, old))),
+  );
+}
+
+/** The user's finished ingests, newest first (see `recordRun`). */
+export async function listRuns(
+  kv: KVNamespace,
+  userId: string,
+): Promise<Run[]> {
+  const index = (await getJson<string[]>(kv, keys.runIndex(userId))) ?? [];
+  const runs = await Promise.all(
+    index.map((recordId) => getJson<Run>(kv, keys.runRecord(userId, recordId))),
+  );
+  return runs.filter((run): run is Run => run !== undefined);
 }
 
 /** The key a run ticket of `kind` lives under: `runticket:<id>` or `lintticket:<id>`. */
@@ -429,6 +495,7 @@ export async function deleteDriveToken(
 /**
  * Deletes every key belonging to `userId`: `user:`, its `email:` index
  * (looked up from the user record before deleting it), `run:`, `lintrun:`,
+ * the run history (`runs:<id>`, every `runrec:<id>:*`),
  * `runticket:`, `lintticket:`, every `quota:<id>:*`, every `push:<id>:*`, `drivetoken:<id>` and
  * `sessiongen:<id>`. Never touches `allow:<email>` — the allowlist is the
  * operator's, not the user's.
@@ -447,6 +514,8 @@ export async function deleteUserData(
     kv.delete(keys.user(userId)),
     kv.delete(keys.run(userId)),
     kv.delete(keys.lintRun(userId)),
+    kv.delete(keys.runIndex(userId)),
+    deleteByPrefix(kv, keys.runRecordPrefix(userId)),
     kv.delete(keys.runTicket(userId)),
     kv.delete(keys.lintTicket(userId)),
     kv.delete(keys.driveToken(userId)),
