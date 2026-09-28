@@ -257,21 +257,41 @@ function NotificationsToggle() {
 }
 
 /**
- * "Let Bower look things up on the web" (#309): drawn per the board, but
- * left off and disabled until the lookup itself ships (#374) — a switch
- * that cannot do anything yet would only confuse.
+ * "Let Bower look things up on the web" (#374): the user's own switch,
+ * stored by the Worker (`PATCH /settings`) and sent with every run. Off by
+ * default; a run gets the web tools only when the operator's instance
+ * allows them too.
  */
-function WebLookupToggle() {
+function WebLookupToggle({ me }: { me: Me }) {
+  const { setMe } = useSession();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = async (checked: boolean): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { allowWeb } = await updateSettings({ allowWeb: checked });
+      setMe({ ...me, allowWeb: allowWeb === true });
+    } catch (err) {
+      console.error(err);
+      setError('Could not change web lookups.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <Toggle
-      label="Let Bower look things up on the web"
-      hint="Off, Bower only reads what you gave it. On, it may search the web to fill in what a document leaves out. Coming soon."
-      checked={false}
-      disabled
-      onChange={() => {
-        /* disabled until #374 */
-      }}
-    />
+    <>
+      <Toggle
+        label="Let Bower look things up on the web"
+        hint="Off, Bower only reads what you gave it. On, it may search the web to fill in what a document leaves out."
+        checked={me.allowWeb === true}
+        disabled={busy}
+        onChange={(checked) => void toggle(checked)}
+      />
+      {error && <p class="settings-error">{error}</p>}
+    </>
   );
 }
 
@@ -643,7 +663,7 @@ export function Settings() {
       <div class="settings-section">
         <h2>Tidying up</h2>
         <NotificationsToggle />
-        <WebLookupToggle />
+        <WebLookupToggle me={me} />
       </div>
 
       <AppearanceSection />
