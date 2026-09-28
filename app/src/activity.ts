@@ -56,6 +56,16 @@ export type LogEntry =
       from: string;
       to: string;
     }
+  | {
+      type: 'moved';
+      at: LogStamp | null;
+      /** The path it had, in the vault (`1-Projects/Flat hunt/a.md`). */
+      from: string;
+      /** The path it has now. */
+      to: string;
+      /** A move the person made themselves (`Moved by you:`). */
+      byYou: boolean;
+    }
   | { type: 'rule'; at: LogStamp | null; text: string }
   | { type: 'context'; at: LogStamp | null; text: string };
 
@@ -64,6 +74,7 @@ const LINE_PREFIX =
   /^\s*(?:[-*]\s+)?(?:(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2})(?::\d{2})?Z?)?\s*(?:·|-|—)\s*)?/;
 const FILED =
   /^Filed:\s*(.+?)\s*(?:→|->)\s*(.+?)(?:,\s*renamed from\s+(.+?))?\s*\.?$/;
+const MOVED = /^Moved( by you)?:\s*(.+?)\s*(?:→|->)\s*(.+?)\s*\.?$/;
 const CORRECTION =
   /^Correction:\s*(.+?)\s*->\s*(.+?)\s*\((\d{4}-\d{2}-\d{2})\)/;
 const APPLIED_RULE = /^Applied rule:\s*(.+?)\s*$/;
@@ -109,6 +120,21 @@ export function parseLog(text: string): LogEntry[] {
       const old = filed[3];
       if (old !== undefined) entry.renamedFrom = cleanName(old);
       if (entry.name !== '' && entry.folder !== '') entries.push(entry);
+      continue;
+    }
+    const moved = MOVED.exec(rest);
+    if (moved !== null) {
+      const from = cleanFolder(moved[2] ?? '');
+      const to = cleanFolder(moved[3] ?? '');
+      if (from !== '' && to !== '') {
+        entries.push({
+          type: 'moved',
+          at,
+          from,
+          to,
+          byYou: moved[1] !== undefined,
+        });
+      }
       continue;
     }
     const correction = CORRECTION.exec(rest);
@@ -414,6 +440,13 @@ export function activityCard(
         tone: 'move',
         title: `Moved from ${folderLabel(entry.from)}`,
         destination: folderLabel(entry.to),
+      });
+    } else if (entry.type === 'moved') {
+      rows.push({
+        key: `moved:${entry.from}:${entry.to}`,
+        tone: 'move',
+        title: `${entry.byYou ? 'Moved by you' : 'Moved'}: ${displayPath(entry.from)}`,
+        destination: displayPath(entry.to),
       });
     } else if (entry.type === 'rule') {
       rows.push({

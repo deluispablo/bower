@@ -232,6 +232,9 @@ readonly REFUSED_FILE="$WORK_DIR/refused.txt"
 readonly MOVES_FILE="$WORK_DIR/moves.txt"
 readonly MOVED_OLD="$WORK_DIR/moved-old.txt"
 readonly MOVED_NEW="$WORK_DIR/moved-new.txt"
+# Every move to book: those Drive did and those that fell back to a copy up.
+readonly BOOKED_OLD="$WORK_DIR/booked-old.txt"
+readonly BOOKED_NEW="$WORK_DIR/booked-new.txt"
 readonly UPLOAD_FILE="$WORK_DIR/upload.txt"
 # The map of Drive id to path each run leaves in the vault for the next
 # one's reconcile phase (see reconcile below, #597).
@@ -630,15 +633,23 @@ find_moves() {
 # file keeps its id and leaves no copy at its old path. A move Drive could
 # not do (for example: the file was moved or removed in Drive during the
 # run) falls back to the copy up. Writes the paths Drive moved to MOVED_OLD
-# and MOVED_NEW, and the accepted paths left to copy up to UPLOAD_FILE.
+# and MOVED_NEW, every move, fallbacks included, to BOOKED_OLD and BOOKED_NEW
+# (all of them are booked, #643), and the accepted paths left to copy up to
+# UPLOAD_FILE.
 # Logs counts only.
 move_up() {
   : >"$MOVED_OLD"
   : >"$MOVED_NEW"
+  : >"$BOOKED_OLD"
+  : >"$BOOKED_NEW"
   local old new dir moved=0 fell_back=0
   while IFS=$'\t' read -r old new <&3; do
     [ -n "$old" ] && [ -n "$new" ] || continue
     dir=$(dirname "$new")
+    printf '%s
+' "$old" >>"$BOOKED_OLD"
+    printf '%s
+' "$new" >>"$BOOKED_NEW"
     if { [ "$dir" = . ] ||
       rclone mkdir "vault:$dir" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; } &&
       rclone moveto "vault:$old" "vault:$new" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; then
@@ -656,7 +667,7 @@ move_up() {
 }
 
 # The bookkeeping phase (#596), after the move phase, without AI: for each
-# move Drive did (MOVED_OLD and MOVED_NEW, line by line), the links that
+# move (BOOKED_OLD and BOOKED_NEW, line by line: Drive moves and fallbacks), the links that
 # name the file are rewritten in every Markdown file the agent may write
 # (index.md's row among them): a link by path ([[<old path>]], and for a
 # note the path without .md) always, a link by name ([[<old name>]], for a
@@ -1585,7 +1596,7 @@ fi
 if ! move_up; then
   fail "$STEP: move failed"
 fi
-if ! book_moves "$VAULT_DIR" "$MOVED_OLD" "$MOVED_NEW" "$(date -u '+%F %H:%M')"; then
+if ! book_moves "$VAULT_DIR" "$BOOKED_OLD" "$BOOKED_NEW" "$(date -u '+%F %H:%M')"; then
   fail "$STEP: bookkeeping failed"
 fi
 # Report v2 (#598): each processed item that moved carries where it went.

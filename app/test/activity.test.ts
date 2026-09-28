@@ -295,3 +295,48 @@ describe('labels', () => {
     );
   });
 });
+
+describe('Moved lines (#643)', () => {
+  const log = [
+    '- 2026-09-28 17:49 · Moved: 3-Resources/Recipes/soup.md → 2-Areas/Home/Cooking/soup.md',
+    '- 2026-09-28 17:50 · Moved by you: 1-Projects/Flat hunt/plan.pdf → 4-Archives/Flat hunt/plan.pdf',
+  ].join('\n');
+
+  it('parses both line kinds', () => {
+    expect(parseLog(log)).toEqual([
+      {
+        type: 'moved',
+        at: { day: '2026-09-28', time: '17:49' },
+        from: '3-Resources/Recipes/soup.md',
+        to: '2-Areas/Home/Cooking/soup.md',
+        byYou: false,
+      },
+      {
+        type: 'moved',
+        at: { day: '2026-09-28', time: '17:50' },
+        from: '1-Projects/Flat hunt/plan.pdf',
+        to: '4-Archives/Flat hunt/plan.pdf',
+        byYou: true,
+      },
+    ]);
+  });
+
+  it('shows a row per move with display paths, the person own move labelled', () => {
+    const [card] = activityCards({ runs: [TODAY], log, files: [], now: NOW });
+    const moves = card?.rows.filter((row) => row.tone === 'move');
+    expect(moves).toEqual([
+      {
+        key: 'moved:3-Resources/Recipes/soup.md:2-Areas/Home/Cooking/soup.md',
+        tone: 'move',
+        title: 'Moved: Resources / Recipes / soup.md',
+        destination: 'Areas / Home / Cooking / soup.md',
+      },
+      {
+        key: 'moved:1-Projects/Flat hunt/plan.pdf:4-Archives/Flat hunt/plan.pdf',
+        tone: 'move',
+        title: 'Moved by you: Projects / Flat hunt / plan.pdf',
+        destination: 'Archives / Flat hunt / plan.pdf',
+      },
+    ]);
+  });
+});
