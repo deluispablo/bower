@@ -318,3 +318,75 @@ export function applyRuleEdit(md: string, edit: RuleEdit, on: string): string {
   }
   return lines.join(parsed.eol);
 }
+
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+/** `2026-09-26` as the Rules screen shows it, `26 Sep`; anything else as
+ * written. No locale, no clock: the same on every device. */
+export function shortDay(day: string): string {
+  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(day);
+  const month = MONTHS[Number(match?.[1] ?? 0) - 1];
+  if (match === null || month === undefined) return day;
+  return `${String(Number(match[2]))} ${month}`;
+}
+
+/** Who asked for a rule, in the screen's words: `You said it` for the
+ * owner's own request, the tail as written otherwise. */
+function whoSaid(origin: string | null): string | null {
+  if (origin === null) return null;
+  if (origin.toLowerCase() === OWNER_ORIGIN) return 'You said it';
+  return origin.charAt(0).toUpperCase() + origin.slice(1);
+}
+
+/**
+ * The line under a rule on the Rules screen (#342, board Phone-Bower):
+ * `You said it · 26 Sep`; a paused rule, whose chip already says Paused,
+ * `Since 27 Sep`. Empty when the rule has no tail to read it from.
+ */
+export function ruleMeta(
+  rule: Pick<Rule, 'paused' | 'date' | 'origin'>,
+): string {
+  if (rule.paused) {
+    return rule.date === null ? '' : `Since ${shortDay(rule.date)}`;
+  }
+  return [whoSaid(rule.origin), rule.date === null ? null : shortDay(rule.date)]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
+}
+
+/**
+ * The small heading of a tapped rule's sheet (#342, board
+ * Phone-Rule-Menu): its topic, then who asked for it and when,
+ * `Finance · you said it on 26 Sep`, or `Finance · paused on 27 Sep`.
+ */
+export function ruleSheetLabel(
+  topic: string,
+  rule: Pick<Rule, 'paused' | 'date' | 'origin'>,
+): string {
+  if (rule.date === null) return topic;
+  const on = shortDay(rule.date);
+  if (rule.paused) return `${topic} · paused on ${on}`;
+  const who = whoSaid(rule.origin);
+  return who === null
+    ? `${topic} · ${on}`
+    : `${topic} · ${who.charAt(0).toLowerCase()}${who.slice(1)} on ${on}`;
+}
+
+/** The job "Apply it to what is already filed" sends (#342, handover D.2):
+ * the agent walks the folders the rule names and moves or renames (#372). */
+export function applyToFiledRequest(text: string): string {
+  return `Apply this rule to what is already filed: ${oneLine(text)}`;
+}

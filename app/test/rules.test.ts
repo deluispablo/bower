@@ -5,12 +5,16 @@ import rulesTemplate from '../../vault-template/Rules.md?raw';
 import {
   allRules,
   applyRuleEdit,
+  applyToFiledRequest,
   formatRule,
   parseRules,
   RULES_LINE_CAP,
   ruleBullet,
   RuleError,
+  ruleMeta,
+  ruleSheetLabel,
   serialiseRules,
+  shortDay,
   UNGROUPED_TOPIC,
 } from '../src/rules.js';
 import type { Rule, RuleEdit, RuleRef } from '../src/rules.js';
@@ -302,5 +306,59 @@ describe('applyRuleEdit', () => {
         parseRules(SHAPED).lineCount,
       );
     }
+  });
+});
+
+describe('the Rules screen wording', () => {
+  const rule = (line: string): Rule => {
+    const found = allRules(parseRules(line))[0];
+    if (found === undefined) throw new Error('No rule');
+    return found;
+  };
+
+  it('writes a date the way the screen shows it, without the locale', () => {
+    expect(shortDay('2026-09-26')).toBe('26 Sep');
+    expect(shortDay('2026-01-05')).toBe('5 Jan');
+    expect(shortDay('someday')).toBe('someday');
+    expect(shortDay('2026-13-01')).toBe('2026-13-01');
+  });
+
+  it('says who asked for a rule and when, and since when a paused one waits', () => {
+    expect(
+      ruleMeta(rule("- Receipts go to Finance (owner's request, 2026-09-26)")),
+    ).toBe('You said it · 26 Sep');
+    expect(
+      ruleMeta(
+        rule('- Invoices go to Money (accepted suggestion, 2026-09-20)'),
+      ),
+    ).toBe('Accepted suggestion · 20 Sep');
+    expect(
+      ruleMeta(rule('- ~~Never archive Finance~~ (paused 2026-09-27)')),
+    ).toBe('Since 27 Sep');
+    expect(ruleMeta(rule('- A rule with no tail'))).toBe('');
+  });
+
+  it("heads a tapped rule's sheet with its topic, who and when", () => {
+    expect(
+      ruleSheetLabel(
+        'Finance',
+        rule("- Receipts go to Finance (owner's request, 2026-09-26)"),
+      ),
+    ).toBe('Finance · you said it on 26 Sep');
+    expect(
+      ruleSheetLabel(
+        'Finance',
+        rule('- ~~Never archive Finance~~ (paused 2026-09-27)'),
+      ),
+    ).toBe('Finance · paused on 27 Sep');
+    expect(ruleSheetLabel(UNGROUPED_TOPIC, rule('- No tail'))).toBe(
+      UNGROUPED_TOPIC,
+    );
+  });
+
+  it('words the job that applies a rule to what is already filed', () => {
+    expect(applyToFiledRequest('Receipts go to\nFinance ')).toBe(
+      'Apply this rule to what is already filed: Receipts go to Finance',
+    );
   });
 });
