@@ -26,6 +26,10 @@ export interface User {
   needsReauth?: boolean;
   /** ISO-8601; when the user finished or skipped the first-run tour. */
   tourSeenAt?: string;
+  /** The Google profile's first name (#323), for the app's greeting.
+   * Written on every sign-in, from the userinfo endpoint's `given_name`;
+   * absent when Google gave none. */
+  givenName?: string;
   /**
    * Legacy, read only: where "Sign out everywhere" kept the generation
    * before it moved to its own `sessiongen:<id>` key (see `store.ts`).
