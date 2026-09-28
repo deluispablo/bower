@@ -222,3 +222,40 @@ export function interviewToFiles(
 
   return { aboutMe, rules, areas: areaNotesFor(answers.areas) };
 }
+
+/** The interview's copy (#584, board `Flow-01-Welcome`). Kept here, apart
+ * from the component, so a test can scan it for the things Bower never
+ * asks for. */
+export const INTERVIEW_QUESTIONS = [
+  'What will you keep here?',
+  'Which languages do your notes come in?',
+  'Three areas of your life to start with?',
+  'How do you like titles and tags written?',
+] as const;
+
+export const INTERVIEW_TIP =
+  'Bower learns from what you add over time: a contract, a bill, a letter. You never have to hand it anything; add what you want, when you want.';
+
+export const INTERVIEW_KEEP_CHIPS: readonly string[] = [
+  'Home and bills',
+  'Work',
+  'Health',
+  'Money',
+  'Travel',
+  'Studies',
+  'A project',
+];
+
+/** "Hi Alex. Four quick questions so I file things your way. Skip anything
+ * you like." Without a name: "Hi." */
+export function interviewGreeting(name?: string): string {
+  const first = (name ?? '').trim().split(/\s+/)[0] ?? '';
+  const hi = first === '' ? 'Hi.' : `Hi ${first}.`;
+  return `${hi} Four quick questions so I file things your way. Skip anything you like.`;
+}
+
+/** "1 of 4 · What will you keep here?" for the zero-based `index`. */
+export function interviewQuestionLabel(index: number): string {
+  const total = INTERVIEW_QUESTIONS.length;
+  return `${index + 1} of ${total} · ${INTERVIEW_QUESTIONS[index] ?? ''}`;
+}

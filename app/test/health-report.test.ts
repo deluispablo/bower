@@ -8,6 +8,7 @@ import {
   findingsIn,
   fixMessage,
   hasUrgentFinding,
+  healthCardLine,
   healthRowSubtitle,
   isReportNew,
   reportDateLabel,
@@ -257,24 +258,55 @@ describe('fixMessage', () => {
 
 describe('healthRowSubtitle', () => {
   it('names the day and the count, plural', () => {
-    expect(healthRowSubtitle(2)).toBe('Sunday · 2 small things to fix');
+    expect(healthRowSubtitle(2)).toBe('Checked Sunday · 2 small things to fix');
   });
 
   it('singular for one', () => {
-    expect(healthRowSubtitle(1)).toBe('Sunday · one small thing to fix');
+    expect(healthRowSubtitle(1)).toBe(
+      'Checked Sunday · one small thing to fix',
+    );
   });
 
   it('says the notes are in good shape at zero', () => {
-    expect(healthRowSubtitle(0)).toBe('Sunday · your notes are in good shape');
+    expect(healthRowSubtitle(0)).toBe(
+      'Checked Sunday · your notes are in good shape',
+    );
   });
 
   it('never claims a count before the report has loaded', () => {
-    expect(healthRowSubtitle(undefined)).toBe('Sunday · not checked yet');
+    expect(healthRowSubtitle(undefined)).toBe('Not checked yet');
+  });
+
+  it('healthCardLine adds the count, singular for one (#584)', () => {
+    expect(healthCardLine('Checked yesterday', 3)).toBe(
+      'Checked yesterday · 3 small things to fix',
+    );
+    expect(healthCardLine('Checked yesterday', 1)).toBe(
+      'Checked yesterday · one small thing to fix',
+    );
+  });
+
+  it('healthCardLine stays bare at zero or before the count loads (#584)', () => {
+    expect(healthCardLine('Checked yesterday', 0)).toBe('Checked yesterday');
+    expect(healthCardLine('Checked yesterday', undefined)).toBe(
+      'Checked yesterday',
+    );
+  });
+
+  it('never returns a day together with "not checked yet" (#584)', () => {
+    for (const when of ['Today', 'Yesterday', 'Last Wednesday', 'Sep 20']) {
+      const line = healthRowSubtitle(undefined, when);
+      expect(line).toBe('Not checked yet');
+      expect(line).not.toContain(when);
+    }
   });
 
   it('takes the shared "when" label instead of a hardcoded day (#496)', () => {
     expect(healthRowSubtitle(2, 'Last Wednesday')).toBe(
-      'Last Wednesday · 2 small things to fix',
+      'Checked last Wednesday · 2 small things to fix',
+    );
+    expect(healthRowSubtitle(3, 'Yesterday')).toBe(
+      'Checked yesterday · 3 small things to fix',
     );
   });
 });
@@ -323,7 +355,7 @@ describe('the Notes row and the Health bubble read the same "when" (#496)', () =
 
     expect(when).toBe('Yesterday');
     expect(healthRowSubtitle(2, when)).toBe(
-      'Yesterday · 2 small things to fix',
+      'Checked yesterday · 2 small things to fix',
     );
   });
 });

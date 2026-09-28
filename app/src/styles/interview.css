@@ -71,6 +71,19 @@
   transition: background-color var(--motion-fast) var(--ease-out);
 }
 
+.interview-step {
+  margin: 0;
+  font-weight: 600;
+}
+
+.interview-tip {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: 0.5rem;
+  background: var(--color-brand-tint);
+  font-size: 0.875rem;
+}
+
 .interview-dots .is-on {
   background: var(--color-brand);
 }

@@ -13,16 +13,16 @@ import type { Ref } from 'preact';
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 
-import type { InterviewAnswers } from '../interview.js';
+import {
+  INTERVIEW_KEEP_CHIPS,
+  INTERVIEW_TIP,
+  interviewGreeting,
+  interviewQuestionLabel,
+  type InterviewAnswers,
+} from '../interview.js';
+import { useSession } from '../session.js';
 import { Bird } from './bird.js';
 import '../styles/interview.css';
-
-const KEEP_CHIPS = [
-  'Everything I capture',
-  'Mostly work',
-  'Mostly personal',
-  'Both, kept apart',
-];
 
 const LANGUAGE_CHIPS = ['English', 'Spanish', 'English and Spanish'];
 
@@ -98,6 +98,16 @@ function toggleArea(areas: readonly string[], name: string): string[] {
   return [...areas, name];
 }
 
+/** The signed-in person's name, or nothing when there is no session (the
+ * component tests mount the interview bare). */
+function useFirstName(): string | undefined {
+  try {
+    return useSession().me?.name;
+  } catch {
+    return undefined;
+  }
+}
+
 export function Interview({
   onFinish,
   onSkip,
@@ -106,6 +116,7 @@ export function Interview({
   headingRef,
   dots,
 }: InterviewProps): JSX.Element {
+  const firstName = useFirstName();
   const [question, setQuestion] = useState(0);
   const [keep, setKeep] = useState('');
   const [languages, setLanguages] = useState('');
@@ -141,20 +152,17 @@ export function Interview({
     <section class="onb interview">
       <div class="onb-ask">
         <Bird state="looking" size={64} />
-        <p class="onb-bubble">
-          {question === 0 && 'What will you keep here?'}
-          {question === 1 && 'Which languages do your notes come in?'}
-          {question === 2 && 'Three areas of your life to start with?'}
-          {question === 3 && 'How do you like titles and tags written?'}
-        </p>
+        <p class="onb-bubble">{interviewGreeting(firstName)}</p>
       </div>
       <h1 ref={headingRef} tabIndex={-1} class="onb-title">
         Tell Bower about yourself
       </h1>
 
+      <p class="interview-step">{interviewQuestionLabel(question)}</p>
+
       {question === 0 && (
         <div class="interview-question">
-          <ChipRow chips={KEEP_CHIPS} value={keep} onPick={setKeep} />
+          <ChipRow chips={INTERVIEW_KEEP_CHIPS} value={keep} onPick={setKeep} />
           <input
             type="text"
             class="interview-input"
@@ -252,6 +260,8 @@ export function Interview({
         </div>
       )}
 
+      <p class="interview-tip">{INTERVIEW_TIP}</p>
+
       {error !== null && <p class="auth-error">{error}</p>}
 
       <div class="auth-actions">
@@ -280,7 +290,7 @@ export function Interview({
             disabled={busy}
             onClick={onSkip}
           >
-            Skip the interview
+            Skip
           </button>
         </div>
       </div>
