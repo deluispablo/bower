@@ -51,6 +51,9 @@ export interface SentRequest {
   text: string;
   /** ISO-8601. */
   sentAt: string;
+  /** A listing has shown its note since (#491): once that listing no longer
+   * does, the note has gone (processed or removed). */
+  seen?: boolean;
 }
 
 /** A rule sentence kept at once from this screen (#343), in memory: its
@@ -93,6 +96,13 @@ export interface RequestRow {
 export const CONTEXT_TITLE = 'About the files you added';
 
 /** `Bower - YYYY-MM-DD HHmm <title>.md`, as `instructionFileName` builds it. */
+/**
+ * How long Drive may take to list a note the app has just written (#491):
+ * a listing fetched within this of a send that does not show the note yet
+ * is not taken as the note being gone.
+ */
+export const LISTING_CATCH_UP_MS = 2 * 60 * 1000;
+
 const REQUEST_NAME =
   /^Bower - (\d{4})-(\d{2})-(\d{2}) (\d{2})(\d{2}) (.+)\.md$/;
 
@@ -212,8 +222,8 @@ export interface RequestsInput {
  *   short title in its name;
  * - a rule in `Rules.md` the owner asked for (`owner's request`, not
  *   paused) is **kept**.
- * Anything sent from this screen after the listing was fetched counts as
- * waiting until a listing fetched after it says otherwise, and a rule kept
+ * Anything sent from this screen counts as waiting until a listing fetched
+ * well after it (`LISTING_CATCH_UP_MS`) says otherwise, and a rule kept
  * from this screen shows even before `Rules.md` is read again.
  */
 export function requestRows({
@@ -257,8 +267,17 @@ export function requestRows({
 
   const fetchedMs = fetchedAt === null ? null : Date.parse(fetchedAt);
   for (const item of justSent) {
-    if (listed.has(item.name)) continue;
-    if (fetchedMs !== null && Date.parse(item.sentAt) <= fetchedMs) continue;
+    if (listed.has(item.name) || item.seen === true) continue;
+    // Drive lists a note it has just created only after a while, and a
+    // refresh already in flight when the note was written ends after the
+    // send without it: only a listing fetched well after the send says the
+    // note is gone (processed or removed). Until then it is waiting (#491).
+    if (
+      fetchedMs !== null &&
+      fetchedMs - Date.parse(item.sentAt) > LISTING_CATCH_UP_MS
+    ) {
+      continue;
+    }
     listed.add(item.name);
     rows.push({
       key: `request-${item.name}`,

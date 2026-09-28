@@ -408,6 +408,21 @@ export function Bower(): JSX.Element {
   // read the question it actually holds, not just the short title in its
   // file name (#465).
   const texts = useNoteTexts([...waitingNotes(files), ...answerNotes(files)]);
+
+  // A request sent from here counts as seen once a listing shows its note:
+  // from then on the listing alone says whether it is still waiting (#491).
+  useEffect(() => {
+    const names = new Set(waitingNotes(files).map((file) => file.name));
+    setJustSent((list) =>
+      list.some((item) => item.seen !== true && names.has(item.name))
+        ? list.map((item) =>
+            item.seen !== true && names.has(item.name)
+              ? { ...item, seen: true }
+              : item,
+          )
+        : list,
+    );
+  }, [files]);
   const rulesLoad = useFileText(index?.byPath.get(RULES_PATH));
   const inFlight = phase === 'queued' || phase === 'running';
   const rows = requestRows({
@@ -602,6 +617,11 @@ export function Bower(): JSX.Element {
       return;
     }
     setRemoved((set) => new Set(set).add(id));
+    // Sent from this screen: its row must not come back from `justSent`
+    // while the listing catches up (#491).
+    setJustSent((list) =>
+      list.filter((item) => `request-${item.name}` !== row.key),
+    );
     if (editing?.id === id) cancelChange();
     // Home's Inbox count and the listing catch up now.
     void refresh();
