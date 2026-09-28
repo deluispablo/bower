@@ -155,6 +155,15 @@ export function loadOpened(): string[] {
   }
 }
 
+/** Forgets the opened list (sign-out and account deletion). Never throws. */
+export function clearOpened(): void {
+  try {
+    localStorage.removeItem(OPENED_KEY);
+  } catch {
+    // Storage blocked: nothing to remove.
+  }
+}
+
 /** Puts `id` first in the opened list, kept to the last five. */
 export function recordOpened(id: string): void {
   try {

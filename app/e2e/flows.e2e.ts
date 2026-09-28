@@ -2534,9 +2534,14 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
     props.getByRole('link', { name: 'Projects / Kitchen Refresh' }),
   ).toBeVisible();
   await expect(props).toContainText('Filed by Bower ·');
-  const photo = page.getByRole('img', { name: 'Sage green test patch' });
-  await expect(photo).toBeVisible();
-  await expect(photo).toHaveAttribute('src', /^blob:/);
+  // The photo viewer (#605, #606): the photo fitted, tap to see it whole.
+  await expect(
+    page.getByRole('button', { name: /Sage green test patch\. Tap to see/ }),
+  ).toBeVisible();
+  await expect(page.locator('.photo-viewer-fit')).toHaveAttribute(
+    'src',
+    /^blob:/,
+  );
   await shot(page, testInfo, 'file-photo');
 
   await page.goto('/folder/1-Projects/Kitchen%20Refresh');
