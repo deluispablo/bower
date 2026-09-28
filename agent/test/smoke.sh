@@ -101,6 +101,10 @@ if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
     scope)
       body='{"files":[{"name":"Bower - 2026-01-15 0900 Tidy up.md"},{"name":"Bower - 2026-01-15 0902 Context.md"}]}'
       ;;
+    # Drive's search has not caught up with the request sent at 09:05 yet.
+    midrun)
+      body='{"files":[{"name":"Bower - 2026-01-15 0850 Old question.md"},{"name":"Bower - 2026-01-15 0906 Context.md"}]}'
+      ;;
   esac
   printf '%s' "$body" >"$out"
   exit 0
@@ -154,6 +158,10 @@ body='{"folderId":"FOLDER_ID","inboxFolderId":"INBOX_ID","driveAccessToken":"'"$
 case "$SMOKE_SCENARIO" in
   apikey)
     body='{"folderId":"FOLDER_ID","inboxFolderId":"INBOX_ID","driveAccessToken":"'"$SMOKE_DRIVE_TOKEN"'","expiresAt":"2030-01-01T00:00:00.000Z","maxTurns":30,"apiKey":"'"$SMOKE_USER_API_KEY"'"}'
+    ;;
+  midrun)
+    # The run was asked for at 09:00 (#491).
+    body='{"folderId":"FOLDER_ID","inboxFolderId":"INBOX_ID","driveAccessToken":"'"$SMOKE_DRIVE_TOKEN"'","expiresAt":"2030-01-01T00:00:00.000Z","maxTurns":30,"requestedAt":"2026-01-15T09:00:00.000Z"}'
     ;;
   reauth)
     code=409
@@ -298,6 +306,21 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       # A receipt photo next to the PDF and the clip (issue #368).
       echo jpg >"$remote/0-Inbox/receipt.jpg"
     fi
+    if [ "$SMOKE_SCENARIO" = midrun ]; then
+      # A run asked for at 09:00 (#491): a request sent before it, one sent
+      # at 09:05 while the run was queued (in Drive before sync down), and
+      # Add's context note for files added at 09:06, which goes with them.
+      printf -- '---\ntags: [instruction]\nvia: app\n---\n\nWhat is left for Lisbon?\n' \
+        >"$remote/0-Inbox/Bower - 2026-01-15 0850 Old question.md"
+      printf -- '---\ntags: [instruction]\nvia: app\n---\n\nWhen does the lease end?\n' \
+        >"$remote/0-Inbox/Bower - 2026-01-15 0905 Sent during the run.md"
+      printf -- '---\ntags: [instruction]\nvia: app\nkind: context\n---\n\nFile these as receipts.\n' \
+        >"$remote/0-Inbox/Bower - 2026-01-15 0906 Context.md"
+      find "$remote" -exec touch -d '2026-01-15T08:00:00Z' {} +
+      touch -d '2026-01-15T08:50:00Z' "$remote/0-Inbox/Bower - 2026-01-15 0850 Old question.md"
+      touch -d '2026-01-15T09:05:00Z' "$remote/0-Inbox/Bower - 2026-01-15 0905 Sent during the run.md"
+      touch -d '2026-01-15T09:06:00Z' "$remote/0-Inbox/Bower - 2026-01-15 0906 Context.md"
+    fi
     if [ "$SMOKE_SCENARIO" = quarantine ]; then
       # A pending note that reads like an instruction to an assistant:
       # agent/scan.sh must flag it and run.sh must move it to
@@ -306,7 +329,12 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
     fi
   fi
   mkdir -p "$3"
-  cp -R "$remote/." "$3/"
+  # Like rclone, "midrun" keeps each file's modified time from Drive.
+  if [ "$SMOKE_SCENARIO" = midrun ]; then
+    cp -Rp "$remote/." "$3/"
+  else
+    cp -R "$remote/." "$3/"
+  fi
 elif [ "$1" = sync ]; then
   # A mirror up: the remote folder becomes exactly the local one.
   rm -rf "${remote:?}/${3#vault:}"
@@ -426,6 +454,10 @@ if [ "$SMOKE_SCENARIO" = convert ]; then
 fi
 echo late >"$SMOKE_STATE/remote/0-Inbox/late.pdf"
 echo late >"$SMOKE_STATE/remote/Clippings/late.md"
+# "midrun": another request is sent while the agent works (#491).
+[ "$SMOKE_SCENARIO" != midrun ] ||
+  printf -- '---\ntags: [instruction]\nvia: app\n---\n\nAdd milk.\n' \
+    >"$SMOKE_STATE/remote/0-Inbox/Bower - 2026-01-15 0910 Late request.md"
 # "gone": the pending original is removed from Drive while the agent works.
 [ "$SMOKE_SCENARIO" != gone ] || rm "$SMOKE_STATE/remote/0-Inbox/a.pdf"
 # "edited" and "fail": the user edits one note in the app while the agent
@@ -1658,3 +1690,34 @@ grep -Fq ', renamed from IMG_4471.jpg' "$remote/log.md" || die 'the rename is no
 expect_content_free
 expect_cleaned_up
 echo "ok a photo whose name says nothing is renamed and indexed"
+
+# 31. A request sent while a run is queued or running is left for the next
+# tidy-up (#491): the one written at 09:05, after the run was asked for at
+# 09:00 but before sync down, never reaches the agent and is neither
+# quarantined (Drive's search does not list it yet) nor processed nor
+# deleted; the one sent while the agent works, between the listing and the
+# upload, stays too. The request sent before the run and Add's context note
+# (it goes with its files) are processed as usual. The log counts, never
+# names.
+run_case midrun
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.processed)" \
+  '["0-Inbox/Bower - 2026-01-15 0850 Old question.md","0-Inbox/Bower - 2026-01-15 0906 Context.md","0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' \
+  'processed leaves out the request sent during the run'
+expect_eq "$(post 2 p.quarantined)" '[]' 'quarantined'
+saw=$(cat "$STATE/claude-saw.txt")
+grep -Fxq '0-Inbox/Bower - 2026-01-15 0850 Old question.md' <<<"$saw" ||
+  die 'the agent did not find the request sent before the run'
+! grep -Fq 'Sent during the run' <<<"$saw" || die 'the agent saw the request sent during the run'
+for late in '0-Inbox/Bower - 2026-01-15 0905 Sent during the run.md' \
+  '0-Inbox/Bower - 2026-01-15 0910 Late request.md'; do
+  [ -f "$STATE/remote/$late" ] || die "a request sent during the run left 0-Inbox/ in Drive: $late"
+  ! grep -Fxq -- "$late" "$STATE/uploaded.txt" || die "a request sent during the run was uploaded: $late"
+  ! grep -Fq -- "deletefile vault:$late" "$STATE/calls.log" || die "a request sent during the run was deleted: $late"
+done
+grep -q ' 1 requests sent during the run left for the next tidy-up$' "$STATE/out.log" ||
+  die 'held count not logged'
+expect_content_free
+expect_cleaned_up
+echo "ok a request sent during a run waits for the next tidy-up"

@@ -216,6 +216,47 @@ describe('requestRows', () => {
     });
   });
 
+  // #491: sent while a run is in flight, and a listing fetched just after
+  // the send (one already in flight, or Drive not listing the new note yet)
+  // does not show it: the row is still there, Waiting for the next tidy-up.
+  it('keeps a request sent while a run is in flight as waiting', () => {
+    const runSince = '2026-09-27T09:10:00.000Z';
+    const during: SentRequest = {
+      name: 'Bower - 2026-09-27 1112 When does the lease end.md',
+      text: 'When does the lease end?',
+      sentAt: '2026-09-27T09:12:00.000Z',
+    };
+    const rows = requestRows({
+      ...base,
+      fetchedAt: '2026-09-27T09:12:05.000Z',
+      justSent: [during],
+      runSince,
+    });
+    expect(rows.find((row) => row.key === `request-${during.name}`)).toEqual({
+      key: `request-${during.name}`,
+      state: 'waiting',
+      text: 'When does the lease end?',
+      kind: 'question',
+      since: during.sentAt,
+      fileId: null,
+    });
+
+    // Once the listing shows the note, it is the note's row, still waiting.
+    const note = file(`0-Inbox/${during.name}`, during.sentAt);
+    const listed = requestRows({
+      ...base,
+      files: [...files, note],
+      fetchedAt: '2026-09-27T09:13:00.000Z',
+      justSent: [during],
+      runSince,
+    });
+    expect(
+      listed.filter((row) => row.key === `request-${during.name}`),
+    ).toEqual([
+      expect.objectContaining({ state: 'waiting', fileId: note.id }),
+    ]);
+  });
+
   it('trusts a listing fetched after the send: a processed note is gone', () => {
     const earlier: SentRequest = {
       name: 'Bower - 2026-09-27 0830 Make a packing list.md',
