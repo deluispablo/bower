@@ -233,9 +233,18 @@ export const DEMO_RUNS: readonly Run[] = [
       '2-Areas/Home/Bills and renewals.md',
     ),
     filed('0-Inbox/Reading list.md', '3-Resources/Books/Reading list.md'),
-    filed('0-Inbox/Training plan.md', '1-Projects/Half Marathon/Training plan.md'),
-    filed('0-Inbox/Half Marathon.md', '1-Projects/Half Marathon/Half Marathon.md'),
-    filed('0-Inbox/Paint colours.md', '1-Projects/Kitchen Refresh/Paint colours.md'),
+    filed(
+      '0-Inbox/Training plan.md',
+      '1-Projects/Half Marathon/Training plan.md',
+    ),
+    filed(
+      '0-Inbox/Half Marathon.md',
+      '1-Projects/Half Marathon/Half Marathon.md',
+    ),
+    filed(
+      '0-Inbox/Paint colours.md',
+      '1-Projects/Kitchen Refresh/Paint colours.md',
+    ),
     filed(
       '0-Inbox/Quotes from fitters.md',
       '1-Projects/Kitchen Refresh/Quotes from fitters.md',
@@ -247,7 +256,10 @@ export const DEMO_RUNS: readonly Run[] = [
       '0-Inbox/Offer letter, Northwind Data.pdf',
       '2-Areas/Work/Offer letter, Northwind Data.pdf',
     ),
-    filed('0-Inbox/Bike shop receipt.pdf', '2-Areas/Money/Bike shop receipt.pdf'),
+    filed(
+      '0-Inbox/Bike shop receipt.pdf',
+      '2-Areas/Money/Bike shop receipt.pdf',
+    ),
   ]),
 ];
 
@@ -350,8 +362,10 @@ function companion(spec: CompanionSpec): FixtureFile {
   for (const line of spec.callout) lines.push(`> ${line}`);
   lines.push('', spec.body.trim(), '');
   const day = Number(spec.created.slice(8, 10));
+  // Nothing is newer than the e2e clock (27 Sep, 10:30 London), so the
+  // story's files never crowd out what a test adds.
   const modified = spec.created.startsWith('2026-09')
-    ? at(day, '1042')
+    ? at(Math.min(day, 27), '0700')
     : `${spec.created}T09:00:00.000Z`;
   return {
     path: spec.path,
@@ -474,7 +488,7 @@ function listingFiles(): FixtureFile[] {
     files.push({
       path: `1-Projects/Flat hunt/${pdf}`,
       mimeType: 'application/pdf',
-      modifiedTime: at(28, '0942'),
+      modifiedTime: at(27, '0700'),
       content: new Blob([LEASE_PDF], { type: 'application/pdf' }),
       size: (180 + i * 40) * KIB,
       thumbnailLink: thumb(listing.name, '#e8eef7'),
@@ -766,7 +780,7 @@ Six engineers and a product manager, working from the King's Cross office on Tue
   // --- Resources and Answers -------------------------------------------------
   note(
     '3-Resources/Links/Kentish Town photos.md',
-    28,
+    27,
     'link',
     `# Kentish Town photos
 
@@ -777,7 +791,7 @@ Saved from the flat hunt. Part of [[Flat hunt]].`,
   ),
   note(
     '3-Resources/Viewing checklist.md',
-    28,
+    27,
     'guide, housing',
     `# Viewing checklist
 
@@ -791,7 +805,7 @@ Made for [[Flat hunt]].`,
   ),
   {
     path: 'Answers/Which flat should we view first.md',
-    modifiedTime: at(28, '0950'),
+    modifiedTime: at(27, '0705'),
     content: `---
 type: answer
 tags: [answer, housing]

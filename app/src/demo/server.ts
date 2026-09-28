@@ -52,10 +52,6 @@ function copyRun(run: Run): Run {
   return copy;
 }
 
-function emptyRun(): Run {
-  return { state: 'done', requestedAt: new Date(0).toISOString() };
-}
-
 interface Step {
   at: number;
   apply: () => void;
@@ -98,9 +94,10 @@ export class DemoServer {
   readonly vault: DemoVault;
   readonly me: Me;
   private active: ActiveRun | null = null;
-  /** The last finished run (`GET /status`): today's tidy-up, the first of
-   * `DEMO_RUNS`, until a scripted run replaces it (#583). */
-  private last: Run | null = copyRun(DEMO_RUNS[0] ?? emptyRun());
+  /** The last run `GET /status` reports: none until a scripted run ends, so
+   * Home starts on "No tidy-up yet". The story's earlier tidy-ups, today's
+   * included, are in `history` (`GET /runs`, #583). */
+  private last: Run | null = null;
   /** Finished runs, newest first (`GET /runs`, #345): the story's four
    * tidy-ups, then every scripted run as it ends. */
   private history: Run[] = DEMO_RUNS.map(copyRun);

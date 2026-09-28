@@ -184,9 +184,12 @@ describe('the v4 sample folder', () => {
     expect(arlington).toContain("> [!bower] Bower's note");
     const kind = kindById('rental-listing');
     if (kind === undefined) throw new Error('rental-listing is a kind');
-    expect(
-      keyFactsFor(kind, meta.fields).map((fact) => fact.value),
-    ).toEqual(['£2,150', '2 bed', '1 Nov', '14 min']);
+    expect(keyFactsFor(kind, meta.fields).map((fact) => fact.value)).toEqual([
+      '£2,150',
+      '2 bed',
+      '1 Nov',
+      '14 min',
+    ]);
 
     // Every callout line ends with an origin; one line asks for a check.
     const origins = [
@@ -195,17 +198,22 @@ describe('the v4 sample folder', () => {
       /\(looked up\)$/,
       /\(from what you told me\)$/,
     ];
-    const callouts = (await Promise.all(
-      [...files.keys()]
-        .filter((p) => p.startsWith(`${FLAT}/`) && p.endsWith('.md'))
-        .map(text),
-    ))
+    const callouts = (
+      await Promise.all(
+        [...files.keys()]
+          .filter((p) => p.startsWith(`${FLAT}/`) && p.endsWith('.md'))
+          .map(text),
+      )
+    )
       .flatMap((t) => t.split('\n'))
       .filter((l) => l.startsWith('> ') && !l.startsWith('> [!'))
       .map((l) => l.replace(/ — Check$/, ''));
     expect(callouts.length).toBeGreaterThan(8);
     for (const line of callouts) {
-      expect(origins.some((re) => re.test(line)), line).toBe(true);
+      expect(
+        origins.some((re) => re.test(line)),
+        line,
+      ).toBe(true);
     }
     const all = (
       await Promise.all(
@@ -214,7 +222,9 @@ describe('the v4 sample folder', () => {
           .map(text),
       )
     ).join('\n');
-    expect(all).toContain('(from your notes: [[Offer letter, Northwind Data]], [[Cycle to Work agreement]])');
+    expect(all).toContain(
+      '(from your notes: [[Offer letter, Northwind Data]], [[Cycle to Work agreement]])',
+    );
     expect(all).toContain('(looked up)');
     expect(all).toContain('(from what you told me)');
     expect(all).toMatch(/\) — Check$/m);
@@ -226,8 +236,9 @@ describe('the v4 sample folder', () => {
 
     // The June papers: a job offer and a contract.
     const offer = noteMetaFrom(
-      parseFrontmatter(await text('2-Areas/Work/Offer letter, Northwind Data.md'))
-        .data,
+      parseFrontmatter(
+        await text('2-Areas/Work/Offer letter, Northwind Data.md'),
+      ).data,
     );
     expect(offer.kind).toBe('job-offer');
     const contract = noteMetaFrom(
@@ -269,7 +280,11 @@ describe('the v4 sample folder', () => {
 describe('the demo API report v2', () => {
   it('returns the last run and three earlier ones with to, renamedFrom, setAside and added', async () => {
     const d = demo();
-    const { run } = await d.worker.getStatus();
+    // Nothing has run in this session, so Home starts on "No tidy-up yet";
+    // today's tidy-up is the newest of the runs.
+    expect((await d.worker.getStatus()).run).toBeNull();
+    const { runs } = await d.worker.getRuns();
+    const run = runs[0];
     expect(run?.state).toBe('done');
     expect(run?.finishedAt).toBe('2026-09-27T09:42:00.000Z');
     expect(run?.added).toBe('I added bike times to the flats');
@@ -314,7 +329,6 @@ describe('the demo API report v2', () => {
       },
     ]);
 
-    const { runs } = await d.worker.getRuns();
     expect(runs).toHaveLength(4);
     expect(runs.map((r) => r.finishedAt)).toEqual([
       '2026-09-27T09:42:00.000Z',
