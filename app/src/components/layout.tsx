@@ -4,16 +4,19 @@
  * instead, in a bare `<main>` (`app.tsx`).
  *
  * Phone: a top bar (#318, Phone-Home and Phone-Note boards) — on a tab,
- * the folder menu button that opens the explorer drawer; on an inner screen
+ * the folder menu button that opens the folder menu (#319,
+ * `folder-menu.tsx`; the page behind goes inert while it is open); on an inner screen
  * (`isInnerScreen`), Back instead (the `back` slot, or Back to Home); then
  * the title (the wordmark as text on Home, the screen's own title from the
  * `crumb` slot elsewhere), the `actions` slot (a note's More, #144), "?"
  * (About this screen) and the avatar that opens Settings — and four tabs at the bottom (#317): Home, Notes,
- * Add, Bower. Health is reached from the explorer's Health row.
+ * Add, Bower. Health is reached from the Notes tab's Health row.
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
- * header row over the content (breadcrumb slot, theme toggle, "?" — the menu button, Back, the phone title, the actions slot and the
- * avatar are phone-only; Settings is a sidebar row there),
+ * header row over the content (breadcrumb slot, "?" — the menu button,
+ * Back, the phone title, the actions slot and the avatar are phone-only;
+ * Settings is a sidebar row there; the theme control lives only in
+ * Settings › Look, #324),
  * and on note screens a third column, filled through the `aside` shell slot
  * (#144, `shell-slots.ts` — the note screen sits inside `children`, so it
  * cannot reach these any other way).
@@ -31,12 +34,12 @@ import { useLocation } from 'preact-iso';
 import { loginUrl } from '../api.js';
 import { useSession } from '../session.js';
 import { BOWER_PATH, helpScreenFor, isInnerScreen } from '../shell-routes.js';
-import { effectiveTheme, setTheme } from '../theme.js';
 import { replayTour } from '../tour-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
 import { DemoBanner } from './demo-banner.js';
-import { Explorer, ExplorerDrawer, useHealthIsNew } from './explorer.js';
+import { Explorer, useHealthIsNew } from './explorer.js';
+import { FolderMenu } from './folder-menu.js';
 import { HelpSheet } from './help-sheet.js';
 import { useShellSlots } from './shell-slots.js';
 import {
@@ -45,10 +48,8 @@ import {
   IconHelp,
   IconHome,
   IconMenu,
-  IconMoon,
   IconPlus,
   IconSliders,
-  IconSun,
 } from './icons.js';
 import { OfflineBanner } from './offline-banner.js';
 import { RunSheets } from './run-sheets.js';
@@ -107,26 +108,6 @@ function currentFor(href: string, path: string): 'page' | undefined {
   return href === path ? 'page' : undefined;
 }
 
-/** Desktop header: flips between light and dark (Settings keeps "system"). */
-function ThemeToggle(): JSX.Element {
-  const [theme, setThemeState] = useState(effectiveTheme);
-  const next = theme === 'dark' ? 'light' : 'dark';
-  return (
-    <button
-      type="button"
-      class="icon-button theme-toggle"
-      aria-label="Switch theme"
-      title="Switch theme"
-      onClick={() => {
-        setTheme(next);
-        setThemeState(next);
-      }}
-    >
-      {theme === 'dark' ? <IconSun /> : <IconMoon />}
-    </button>
-  );
-}
-
 /** The avatar's letter: the first letter of the account's email. */
 export function avatarInitial(email: string | undefined): string {
   const first = email?.trim().charAt(0) ?? '';
@@ -148,6 +129,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const [helpOpen, setHelpOpen] = useState(false);
   const inner = isInnerScreen(path);
   const headRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLButtonElement>(null);
+  const wasDrawerOpen = useRef(false);
   // The quick switcher's own top offset (spec §14, `switcher.css`'s
   // `--switcher-top`): the live bottom edge of the header *and* whichever
   // banners are showing under it, so opening the switcher never covers the
@@ -182,6 +165,19 @@ export function Layout({ children }: LayoutProps): JSX.Element {
     setHelpOpen(false);
   }, [path]);
 
+  // The folder menu's focus trap hands focus back to the menu button as it
+  // closes, but the button is still inside the inert page at that moment,
+  // so the browser drops it on the body. Once the page is live again, put
+  // it back there, unless something else took it meanwhile (the switcher,
+  // opened from the menu's search row).
+  useEffect(() => {
+    const closed = wasDrawerOpen.current && !drawerOpen;
+    wasDrawerOpen.current = drawerOpen;
+    if (!closed) return;
+    const active = document.activeElement;
+    if (active === null || active === document.body) menuRef.current?.focus();
+  }, [drawerOpen]);
+
   useEffect(() => {
     if (!drawerOpen || typeof window.matchMedia !== 'function') return;
     const query = window.matchMedia(DESKTOP_QUERY);
@@ -211,20 +207,26 @@ export function Layout({ children }: LayoutProps): JSX.Element {
 
   return (
     <div class={aside === null ? 'shell' : 'shell shell-with-aside'}>
-      <nav class="shell-sidebar" aria-label="Your notes" data-tour="notes">
+      <nav
+        class="shell-sidebar"
+        aria-label="Your notes"
+        data-tour="notes"
+        inert={drawerOpen}
+      >
         <Explorer
           variant="sidebar"
           healthIsNew={healthIsNew}
           nav={sidebarNav}
         />
       </nav>
-      <div class="shell-main">
+      <div class="shell-main" inert={drawerOpen}>
         <div ref={headRef}>
           <header class="topbar">
             {inner ? (
               (back ?? HOME_BACK)
             ) : (
               <button
+                ref={menuRef}
                 type="button"
                 class="icon-button menu-button"
                 aria-label="Your folders"
@@ -240,7 +242,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             <div class="topbar-crumb">
               {crumb ?? <span class="topbar-title">Bower</span>}
             </div>
-            <ThemeToggle />
             <div class="topbar-slot topbar-actions" data-slot="actions">
               {actions}
             </div>
@@ -271,11 +272,15 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         <main class="content">{children}</main>
       </div>
       {aside !== null && (
-        <aside class="shell-aside" aria-label="About this note">
+        <aside
+          class="shell-aside"
+          aria-label="About this note"
+          inert={drawerOpen}
+        >
           {aside}
         </aside>
       )}
-      <nav class="bottom-nav" aria-label="Primary">
+      <nav class="bottom-nav" aria-label="Primary" inert={drawerOpen}>
         {TABS.map(({ href, label, Icon, tour }) => (
           <a
             key={href}
@@ -288,9 +293,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           </a>
         ))}
       </nav>
-      {drawerOpen && (
-        <ExplorerDrawer healthIsNew={healthIsNew} onClose={closeDrawer} />
-      )}
+      {drawerOpen && <FolderMenu onClose={closeDrawer} />}
       {helpOpen && (
         <HelpSheet
           screen={helpScreenFor(path)}
