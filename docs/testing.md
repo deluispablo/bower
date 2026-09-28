@@ -121,6 +121,8 @@ The six flows live in `app/e2e/flows.e2e.ts`, one test each, run in both project
 - **Tell Bower**: an example chip, Send, the message in the sent list.
 - **Settings**: the dark theme, still dark after a reload.
 
+`app/e2e/intro.e2e.ts` checks the intro's loops (#328): with reduced motion nothing in the intro moves and each animated page (1, 2, 4 to 8) is screenshotted at rest as `intro-rest-<n>.png`; with motion allowed every loop runs and changes only transform and opacity.
+
 Every flow but the first sets the intro-seen flag before the page loads and skips the tour, which the demo offers on every load. The page clock starts at Sunday 27 September 2026, 10:30 (London), the day the fixture is written for, so dates and the greeting read the same on every run. Assertions are on the text a person reads; screenshots are never compared.
 
 Each flow saves a screenshot to `app/e2e/screenshots/<project>/` (git-ignored); traces of failed tests go to `app/e2e/results/`. In CI the `e2e` job uploads both as the `e2e` artifact, on success and failure.

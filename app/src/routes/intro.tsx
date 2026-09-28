@@ -10,8 +10,9 @@
  *
  * Swiping moves the track on touch; Next, the desktop's side arrows and the
  * arrow keys move it everywhere. Every page is its board's resting frame
- * (`docs/design/v3/boards/Intro-1.dc.html` to `Intro-9`); the loops that
- * animate them are #328. The copy is `intro.ts`'s, verbatim from the boards.
+ * (`docs/design/v3/boards/Intro-1.dc.html` to `Intro-9`); `intro.css` plays
+ * the boards' loops over it (#328) and `prefers-reduced-motion` keeps the
+ * resting frame. The copy is `intro.ts`'s, verbatim from the boards.
  */
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -84,8 +85,32 @@ function Body({ page }: { page: IntroPage }): JSX.Element {
   );
 }
 
+/**
+ * Where each card of the sort strip starts, jumbled, before it flies to its
+ * folder (Intro-1 board), in the strip's reading order: the board's jumble
+ * minus its target, x as a share of the card's width so it scales with the
+ * strip, y in px (the strip is as tall as the board's), and the card's delay.
+ */
+const SORT_JUMBLE: readonly {
+  x: string;
+  y: string;
+  turn: string;
+  delay: string;
+}[] = [
+  { x: '31%', y: '-50px', turn: '14deg', delay: '0.36s' },
+  { x: '144%', y: '-146px', turn: '9deg', delay: '0.12s' },
+  { x: '97%', y: '-58px', turn: '-9deg', delay: '0.48s' },
+  { x: '-131%', y: '-138px', turn: '-12deg', delay: '0s' },
+  { x: '63%', y: '-132px', turn: '-5deg', delay: '0.24s' },
+  { x: '3%', y: '-74px', turn: '6deg', delay: '0.6s' },
+];
+
+/** Custom properties for the stylesheet's loops (`--i`, `--jx`, ...). */
+type LoopVars = Record<`--${string}`, string>;
+
 function Page1(): JSX.Element {
   const page = INTRO_PAGES[0];
+  let cardIndex = 0;
   return (
     <>
       <div class="intro-hero-bird">
@@ -98,12 +123,24 @@ function Page1(): JSX.Element {
         <div class="intro-strip-columns">
           {INTRO_SORT_FOLDERS.map((folder) => (
             <div class="intro-strip-column">
-              {folder.cards.map((card) => (
-                <span class="intro-strip-card">
-                  <IconNote />
-                  <span>{card}</span>
-                </span>
-              ))}
+              {folder.cards.map((card) => {
+                const jumble = SORT_JUMBLE[cardIndex++];
+                const vars: LoopVars | undefined =
+                  jumble === undefined
+                    ? undefined
+                    : {
+                        '--jx': jumble.x,
+                        '--jy': jumble.y,
+                        '--jr': jumble.turn,
+                        '--delay': jumble.delay,
+                      };
+                return (
+                  <span class="intro-strip-card" style={vars}>
+                    <IconNote />
+                    <span>{card}</span>
+                  </span>
+                );
+              })}
               <span class="intro-strip-folder" style={{ color: folder.color }}>
                 {folder.name}
                 <span class="intro-strip-check" />
@@ -111,9 +148,60 @@ function Page1(): JSX.Element {
             </div>
           ))}
         </div>
+        <span class="intro-strip-carrier">
+          <Bird state="flying" size={44} />
+        </span>
       </div>
       <p class="intro-caption">{INTRO_SORT_CAPTION}</p>
     </>
+  );
+}
+
+/**
+ * The Bower folder on page 2. Each highlighted row is where one arrival
+ * lands, in order: in motion a copy of that arrival flies from its tile down
+ * into the row and the row lights up (`--i` staggers the three and picks the
+ * tile, `--row` says how far down the row is); at rest every landing row is
+ * lit and the copies are hidden.
+ */
+function FilingTree(): JSX.Element {
+  let landing = 0;
+  return (
+    <ul class="intro-tree">
+      {INTRO_TREE.map((row, rowIndex) => {
+        const depthClass = `intro-tree-row intro-tree-row--${row.depth}`;
+        if (row.lit !== true) {
+          return (
+            <li class={depthClass}>
+              <IconFolder />
+              <span>{row.name}</span>
+            </li>
+          );
+        }
+        const index = landing++;
+        const arrival = INTRO_ARRIVALS[index];
+        return (
+          <li
+            class={`${depthClass} intro-tree-row--lit`}
+            style={
+              {
+                '--i': String(index),
+                '--row': String(rowIndex),
+              } satisfies LoopVars
+            }
+          >
+            <IconFolder />
+            <b>{row.name}</b>
+            {arrival !== undefined && (
+              <span class="intro-fly" aria-hidden="true">
+                <IconNote />
+                {arrival}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -136,23 +224,13 @@ function Page2(): JSX.Element {
           ))}
         </div>
         <span class="intro-kicker">{INTRO_TREE_TITLE}</span>
-        <ul class="intro-tree">
-          {INTRO_TREE.map((row) => (
-            <li
-              class={
-                row.lit
-                  ? `intro-tree-row intro-tree-row--${row.depth} intro-tree-row--lit`
-                  : `intro-tree-row intro-tree-row--${row.depth}`
-              }
-            >
-              <IconFolder />
-              {row.lit ? <b>{row.name}</b> : <span>{row.name}</span>}
-            </li>
-          ))}
-        </ul>
+        <FilingTree />
       </div>
-      {INTRO_WHYS.map((why) => (
-        <p class={`intro-why intro-why--${why.kind}`}>
+      {INTRO_WHYS.map((why, index) => (
+        <p
+          class={`intro-why intro-why--${why.kind}`}
+          style={{ '--i': String(index) } satisfies LoopVars}
+        >
           <span class="intro-why-mark" aria-hidden="true" />
           <span>
             <Prose text={why.text} />
@@ -204,16 +282,6 @@ function Page4(): JSX.Element {
       <Heading page={page} />
       <Body page={page} />
       <div class="intro-window" aria-hidden="true">
-        <div class="intro-window-layer intro-window-layer--app">
-          <span class="intro-window-title">{INTRO_APP_TITLE}</span>
-          {INTRO_APP_ROWS.map((row) => (
-            <span class="intro-window-row">
-              <WindowRowIcon row={row} />
-              <span class="intro-window-name">{row.name}</span>
-              <span class="intro-window-meta">{row.meta}</span>
-            </span>
-          ))}
-        </div>
         <div class="intro-window-layer intro-window-layer--drive">
           <span class="intro-window-title">{INTRO_DRIVE_TITLE}</span>
           {INTRO_DRIVE_ROWS.map((row) => (
@@ -224,7 +292,26 @@ function Page4(): JSX.Element {
             </span>
           ))}
         </div>
-        <span class="intro-window-handle" />
+        <div class="intro-window-curtain">
+          <div class="intro-window-layer intro-window-layer--app">
+            <span class="intro-window-title">
+              <Bird state="idle" size={22} />
+              {INTRO_APP_TITLE}
+            </span>
+            {INTRO_APP_ROWS.map((row) => (
+              <span class="intro-window-row">
+                <WindowRowIcon row={row} />
+                <span class="intro-window-name">{row.name}</span>
+                <span class="intro-window-meta">{row.meta}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div class="intro-window-slider">
+          <span class="intro-window-handle">
+            <Bird state="flying" size={56} />
+          </span>
+        </div>
         <span class="intro-window-tag intro-window-tag--app">In the app</span>
         <span class="intro-window-tag intro-window-tag--drive">
           In your Drive
@@ -320,6 +407,7 @@ function CasePage({
       <Act step={1}>
         {item.added.map((added) => (
           <div class="intro-raw">
+            <span class="intro-scan" aria-hidden="true" />
             <span class="intro-thumb" aria-hidden="true">
               <IconNote />
             </span>
@@ -333,6 +421,11 @@ function CasePage({
       </Act>
       <Act step={2}>
         <p class="intro-bubble">{item.ask}</p>
+        <div class="intro-workers" aria-hidden="true">
+          <Bird state="shiny" size={44} />
+          <Bird state="flying" size={44} />
+          <Bird state="building" size={44} />
+        </div>
         <p class="intro-ask-line">{INTRO_ASK_LINE}</p>
       </Act>
       <Act step={3}>
@@ -350,8 +443,10 @@ function CasePage({
             <p class="intro-note-subtitle">{note.checklistTitle}</p>
           )}
           <ul class="intro-checklist">
-            {note.checklist.map((line) => (
-              <li>{line}</li>
+            {note.checklist.map((line, index) => (
+              <li style={{ '--i': String(index) } satisfies LoopVars}>
+                {line}
+              </li>
             ))}
           </ul>
           {note.after !== undefined && (
