@@ -16,7 +16,7 @@ declare const process: { env: Record<string, string | undefined> };
  * for (`src/demo/fixture.ts`). The clock runs on from here as real time
  * passes, and a test can jump it forward with `page.clock.fastForward`.
  */
-export const DEMO_NOW = new Date('2026-09-27T10:30:00+01:00');
+export const DEMO_NOW = new Date('2026-09-27T10:44:00+01:00');
 
 /** `localStorage` key of the intro-seen flag (`src/intro.ts`). */
 const INTRO_SEEN_KEY = 'bower:intro:seen';

@@ -6,7 +6,11 @@
  */
 
 import { FOLDER_MIME } from '../drive.js';
-import type { DriveFile } from '../drive.js';
+import type {
+  DriveFile,
+  ImageMediaMetadata,
+  VideoMediaMetadata,
+} from '../drive.js';
 import type { FixtureFile } from './fixture.js';
 
 export const ROOT_ID = 'demo-root';
@@ -22,6 +26,21 @@ export interface Entry {
   content?: string | Blob;
   /** Drive app properties, when the fixture gives any. */
   appProperties?: Readonly<Record<string, string>>;
+  /** The size Drive reports, when it differs from the stub's bytes (a 2.4 MB
+   * photo held as a few bytes). */
+  size?: number;
+  /** A small picture of the file, as Drive's `thumbnailLink`. */
+  thumbnailLink?: string;
+  imageMediaMetadata?: ImageMediaMetadata;
+  videoMediaMetadata?: VideoMediaMetadata;
+  /** Drive shows this file in its own viewer (Office files, video): the
+   * client answers `previewUrlOf`. */
+  preview?: boolean;
+}
+
+/** The address of Drive's embeddable viewer for a file. */
+export function drivePreviewUrl(id: string): string {
+  return `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview`;
 }
 
 export class DemoVault {
@@ -32,6 +51,8 @@ export class DemoVault {
   constructor(
     files: readonly FixtureFile[],
     private readonly now: () => number,
+    /** Folders that exist without a file in them (an empty folder). */
+    folders: readonly string[] = [],
   ) {
     this.entries.set(ROOT_ID, {
       id: ROOT_ID,
@@ -40,6 +61,7 @@ export class DemoVault {
       parentId: null,
       modifiedTime: new Date(0).toISOString(),
     });
+    for (const path of folders) this.ensureFolder(path);
     for (const file of files) {
       const slash = file.path.lastIndexOf('/');
       const parentId =
@@ -53,6 +75,17 @@ export class DemoVault {
         ...(file.appProperties !== undefined && {
           appProperties: file.appProperties,
         }),
+        ...(file.size !== undefined && { size: file.size }),
+        ...(file.thumbnailLink !== undefined && {
+          thumbnailLink: file.thumbnailLink,
+        }),
+        ...(file.imageMediaMetadata !== undefined && {
+          imageMediaMetadata: file.imageMediaMetadata,
+        }),
+        ...(file.videoMediaMetadata !== undefined && {
+          videoMediaMetadata: file.videoMediaMetadata,
+        }),
+        ...(file.preview === true && { preview: true }),
       });
     }
   }
@@ -180,11 +213,25 @@ export class DemoVault {
     if (entry.appProperties !== undefined) {
       file.appProperties = entry.appProperties;
     }
-    if (entry.content !== undefined) {
+    if (entry.size !== undefined) {
+      file.size = entry.size;
+    } else if (entry.content !== undefined) {
       file.size =
         typeof entry.content === 'string'
           ? new Blob([entry.content]).size
           : entry.content.size;
+    }
+    if (entry.mimeType !== FOLDER_MIME) {
+      file.webViewLink = `https://drive.google.com/file/d/${encodeURIComponent(entry.id)}/view`;
+    }
+    if (entry.thumbnailLink !== undefined) {
+      file.thumbnailLink = entry.thumbnailLink;
+    }
+    if (entry.imageMediaMetadata !== undefined) {
+      file.imageMediaMetadata = entry.imageMediaMetadata;
+    }
+    if (entry.videoMediaMetadata !== undefined) {
+      file.videoMediaMetadata = entry.videoMediaMetadata;
     }
     return file;
   }

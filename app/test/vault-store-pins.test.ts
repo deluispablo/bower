@@ -96,6 +96,33 @@ describe('hydratePinnedAt', () => {
     expect(getTextMock).toHaveBeenCalledTimes(12);
   });
 
+  it('spends the fetch cap on the newest notes first', async () => {
+    const files = buildFiles();
+    // The last path is the newest, so path order and newest-first disagree.
+    const flipped = buildVaultIndex(
+      files.map((f, i) => ({
+        ...f,
+        modifiedTime: new Date(Date.UTC(2026, 8, 1, 0, 0, i)).toISOString(),
+      })),
+    );
+    searchFullTextMock.mockResolvedValue([]);
+    getTextMock.mockResolvedValue(UNPINNED);
+
+    await hydratePinnedAt(flipped);
+
+    const expected = [...flipped.notes]
+      .sort((a, b) =>
+        (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''),
+      )
+      .slice(0, 12)
+      .map((n) => n.id);
+    const fetched = getTextMock.mock.calls.map(([id]) => id);
+    expect(fetched.slice(0, 12)).toEqual(expected.slice(0, 12));
+    expect(expected).toContain(
+      flipped.notes.find((n) => n.name === 'Zzz late note.md')?.id,
+    );
+  });
+
   it('falls back to the walk alone when the search fails, unchanged from before', async () => {
     const files = buildFiles();
     const index = buildVaultIndex(files);

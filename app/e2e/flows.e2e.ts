@@ -356,13 +356,17 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
 test('/search?q= lands on Home with the switcher open and prefilled (#495)', async ({
   page,
 }) => {
-  await page.goto('/search?q=Lisbon');
+  await page.goto('/search?q=viewing');
 
   await expect(page).toHaveURL(/\/$/);
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
-  await expect(switcher.getByRole('combobox')).toHaveValue('Lisbon');
-  const option = switcher.getByRole('option', { name: /Lisbon Trip/ }).first();
+  await expect(switcher.getByRole('combobox')).toHaveValue('viewing');
+  // A recent note: a snippet needs the note's text in the cache, and the
+  // load caches the newest notes first, up to a fetch cap.
+  const option = switcher
+    .getByRole('option', { name: /Notes from the viewing/ })
+    .first();
   await expect(option).toBeVisible();
   // The snippet reads like the note body, not the raw file (#554): no
   // frontmatter keys, fences or the heading's own "#" mark.
@@ -410,9 +414,10 @@ test("a note Bower wrote opens with Bower's note and What Bower used (#351)", as
 test("previous/next under a note hides Bower's own files and uses titles (#423)", async ({
   page,
 }) => {
-  // Answers has exactly one real note ("Which subscriptions renew this
-  // autumn?") alongside Bower's own "Bower - Proposals.md" (#420's demo
-  // fixture already has both, matching the issue's own repro).
+  // Answers has two real notes ("Which subscriptions renew this autumn?"
+  // and, from the v4 sample folder, "Which flat should we view first")
+  // alongside Bower's own "Bower - Proposals.md" (#420's demo fixture
+  // already has it, matching the issue's own repro).
   await page.goto('/folder/Answers');
   await page
     .getByRole('link', { name: /Which subscriptions renew this autumn/ })
@@ -424,9 +429,11 @@ test("previous/next under a note hides Bower's own files and uses titles (#423)"
     }),
   ).toBeVisible();
 
-  // No sibling nav at all: the only other file in the folder is Bower's
-  // own, hidden unless "Show Bower's own files" is on.
-  await expect(page.locator('.note-siblings')).toHaveCount(0);
+  // The sibling nav offers the other real answer by its title, and never
+  // Bower's own file, hidden unless "Show Bower's own files" is on.
+  const siblings = page.locator('.note-siblings');
+  await expect(siblings).toContainText('Which flat should we view first');
+  await expect(siblings).not.toContainText('Proposals');
 });
 
 test('a missing note shows Not found (#504)', async ({ page }, testInfo) => {
@@ -1250,12 +1257,12 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
   await expect(
     rules.getByRole('button', { name: 'Travel, 1 rule' }),
   ).toHaveAttribute('aria-expanded', 'false');
-  // Bower's two open suggestions sit on top, with Accept and Dismiss.
+  // Bower's three open suggestions sit on top, with Accept and Dismiss.
   await expect(
     rules.getByRole('region', { name: /^Suggested/ }).getByRole('button', {
       name: 'Accept',
     }),
-  ).toHaveCount(2);
+  ).toHaveCount(3);
   await shot(page, testInfo, 'bower-rules');
 
   const rule = rules.getByRole('button', { name: /Never archive Money/ });
@@ -1509,7 +1516,7 @@ test('Health points to the Suggested group on the Bower tab, where Accept works 
     dispatchEvent(new PopStateEvent('popstate'));
   });
   const pointer = page.getByRole('link', {
-    name: '2 suggested rules on the Bower tab',
+    name: '3 suggested rules on the Bower tab',
   });
   await expect(pointer).toBeVisible();
   // The cards themselves live on the Bower tab now.
@@ -1523,14 +1530,14 @@ test('Health points to the Suggested group on the Bower tab, where Accept works 
   const card = suggested
     .getByRole('listitem')
     .filter({ hasText: 'Recipes go to Cooking' });
-  await expect(suggested.getByRole('listitem')).toHaveCount(2);
+  await expect(suggested.getByRole('listitem')).toHaveCount(3);
   await shot(page, testInfo, 'bower-suggested');
 
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(
     suggested.getByText('Added to your rules: Recipes go to Cooking.'),
   ).toBeVisible();
-  await expect(suggested.getByRole('listitem')).toHaveCount(1);
+  await expect(suggested.getByRole('listitem')).toHaveCount(2);
 });
 
 test('Settings switches the theme to dark, and it sticks', async ({
@@ -2332,10 +2339,10 @@ test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#
   await page.goto('/folder/1-Projects');
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.getByText('Nothing here yet.')).toBeHidden();
-  // #424: the total is real (2 + 3 + 4 + 2 across four subfolders, #367
-  // added Flat hunt), but no single one of them holds all eleven, so none
-  // is named.
-  await expect(page.getByText('11 notes in its folders')).toBeVisible();
+  // #424: the total is real (2 + 3 + 4 + 8 across four subfolders, #367
+  // added Flat hunt, #583 its listings and companion notes), but no single
+  // one of them holds all seventeen, so none is named.
+  await expect(page.getByText('17 notes in its folders')).toBeVisible();
   await shot(page, testInfo, 'folder-notes-elsewhere');
 });
 
@@ -2418,7 +2425,7 @@ test('folder counts add files and notes together, the same total the folder scre
     ).toHaveText('2');
     await expect(
       page.locator('main a[href="/folder/1-Projects"] .tree-count'),
-    ).toHaveText('15');
+    ).toHaveText('28');
   } else {
     const sidebar = page.getByRole('navigation', { name: 'Your notes' });
     await expect(
@@ -2426,7 +2433,7 @@ test('folder counts add files and notes together, the same total the folder scre
     ).toHaveText('2');
     await expect(
       sidebar.locator('a[href="/folder/1-Projects"] .tree-count'),
-    ).toHaveText('15');
+    ).toHaveText('28');
   }
 
   // 0-Inbox: 1 file (the boiler invoice) + 1 note (Tomato seedlings) — the
@@ -2582,22 +2589,11 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   const rowWith = (card: number, text: string) =>
     cards.nth(card).getByRole('listitem').filter({ hasText: text });
 
-  // The demo's two earlier tidy-ups (`DEMO_RUNS`), newest first: the rows
-  // come from the run records and `log.md`'s Filed lines.
-  await expect(cards).toHaveCount(2);
-  await expect(cards.nth(0)).toContainText('Today, 07:51 · 3 min');
+  // The demo's four earlier tidy-ups (`DEMO_RUNS`, the v4 story), newest
+  // first: today's, with the walk-through video set aside, and three older.
+  await expect(cards).toHaveCount(4);
+  await expect(cards.nth(0)).toContainText('Today, 10:42');
   await expect(cards.nth(0)).toContainText('Done');
-  await expect(rowWith(0, 'Lease agreement 2026.pdf')).toContainText(
-    '→ Projects / Flat hunt',
-  );
-  await expect(rowWith(0, 'IMG_4471.jpg')).toContainText(
-    '→ Projects / Flat hunt, renamed “Arlington Road, window sign”',
-  );
-  await expect(cards.nth(1)).toContainText('Yesterday, 09:12 · 4 min');
-  await expect(cards.nth(1)).toContainText('One thing set aside');
-  await expect(rowWith(1, 'Meeting notes.rtf')).toContainText(
-    'set aside: could not be read.',
-  );
   await expect(activity).toContainText('Something in the wrong place?');
   await shot(page, testInfo, 'bower-activity');
 
@@ -2622,8 +2618,8 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   ).click();
   await expect(page).toHaveURL(/\/bower\?show=activity$/);
   await expect(bowerPart(page, 'Activity')).toBeVisible();
-  await expect(cards).toHaveCount(3);
-  await expect(cards.nth(0)).toContainText('Today, 10:30 · 1 min');
+  await expect(cards).toHaveCount(5);
+  await expect(cards.nth(0)).toContainText('Today, 10:44 · 1 min');
   await expect(rowWith(0, 'Boiler service invoice.pdf')).toContainText(
     '→ Areas / Home',
   );

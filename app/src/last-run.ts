@@ -7,6 +7,7 @@
  * Pure: no Drive, no cache; `vault-store.tsx` does the read.
  */
 
+import type { RunItem, SetAsideItem } from './api.js';
 import { failureReason } from './run-failure.js';
 import type { RunFailureReason } from './run-failure.js';
 
@@ -26,6 +27,13 @@ export interface LastRunOutcome {
   processed: number;
   quarantined: number;
   refused: number;
+  /** Report v2 (#583, R-RUN-4): each processed item with where it went
+   * (`to`) and its old name (`renamedFrom`). Absent from an older runner. */
+  items?: RunItem[];
+  /** Report v2: what the run set aside and why. Absent from an older runner. */
+  setAside?: SetAsideItem[];
+  /** Report v2: one short clause about what Bower added. */
+  added?: string;
   /** Only on a failed run; unrecognised or missing reads as `unknown`
    * (`failureReason`, `run-failure.ts`), same as a Worker-reported run. */
   reason?: RunFailureReason;
@@ -41,6 +49,50 @@ function isNonNegativeInt(value: unknown): value is number {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value !== '';
+}
+
+const REASONS: readonly string[] = [
+  'kept-not-read',
+  'too-large',
+  'unconvertible',
+  'quarantined',
+];
+const ITEM_KINDS: readonly string[] = [
+  'file',
+  'question',
+  'request',
+  'context',
+  'rule',
+];
+
+/** The report v2 items, dropping any entry that is not the expected shape. */
+function parseItems(value: unknown): RunItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items: RunItem[] = [];
+  for (const raw of value as unknown[]) {
+    if (!isRecord(raw)) continue;
+    const { path, kind, to, renamedFrom } = raw;
+    if (!isNonEmptyString(path)) continue;
+    if (typeof kind !== 'string' || !ITEM_KINDS.includes(kind)) continue;
+    const item = { path, kind } as RunItem;
+    if (isNonEmptyString(to)) item.to = to;
+    if (isNonEmptyString(renamedFrom)) item.renamedFrom = renamedFrom;
+    items.push(item);
+  }
+  return items;
+}
+
+function parseSetAside(value: unknown): SetAsideItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items: SetAsideItem[] = [];
+  for (const raw of value as unknown[]) {
+    if (!isRecord(raw)) continue;
+    const { path, reason } = raw;
+    if (!isNonEmptyString(path)) continue;
+    if (typeof reason !== 'string' || !REASONS.includes(reason)) continue;
+    items.push({ path, reason } as SetAsideItem);
+  }
+  return items;
 }
 
 /**
@@ -68,6 +120,9 @@ export function parseLastRun(text: string): LastRunOutcome | null {
     quarantined,
     refused,
     reason,
+    items,
+    setAside,
+    added,
   } = data;
   if (state !== 'done' && state !== 'failed') return null;
   if (!isNonEmptyString(kind)) return null;
@@ -88,6 +143,11 @@ export function parseLastRun(text: string): LastRunOutcome | null {
     quarantined,
     refused,
   };
+  const parsedItems = parseItems(items);
+  if (parsedItems !== undefined) outcome.items = parsedItems;
+  const parsedSetAside = parseSetAside(setAside);
+  if (parsedSetAside !== undefined) outcome.setAside = parsedSetAside;
+  if (isNonEmptyString(added)) outcome.added = added;
   if (state === 'failed') outcome.reason = failureReason(reason);
   return outcome;
 }
