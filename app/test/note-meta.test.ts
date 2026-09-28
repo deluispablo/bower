@@ -31,7 +31,10 @@ const NOTE = [
   '---',
   'kind: invoice',
   'status: draft',
-  'bower_origins: [filed, asked]',
+  'bower_origins:',
+  '  rent: file',
+  '  bike_to_office: notes',
+  '  x: bogus',
   'not_stated: [due date]',
   'original: Scan.pdf',
   'type: summary',
@@ -51,7 +54,7 @@ describe('noteMetaFrom', () => {
     const meta = noteMetaFrom({
       kind: 'invoice',
       status: ' draft ',
-      bower_origins: ['filed', 'filed', 'asked'],
+      bower_origins: { rent: 'file', bike: 'notes', x: 'bogus', y: 5 },
       not_stated: 'due date',
       pages: '3',
       total: 120,
@@ -59,7 +62,7 @@ describe('noteMetaFrom', () => {
     expect(meta).toMatchObject({
       kind: 'invoice',
       status: 'draft',
-      bower_origins: ['filed', 'asked'],
+      bowerOrigins: { rent: 'file', bike: 'notes' },
       not_stated: ['due date'],
       pages: 3,
       fields: { total: 120 },
@@ -70,7 +73,7 @@ describe('noteMetaFrom', () => {
   it('gives empty lists when the note has no frontmatter', () => {
     expect(noteMetaFrom({})).toEqual({
       fields: {},
-      bower_origins: [],
+      bowerOrigins: {},
       not_stated: [],
     });
   });
@@ -89,7 +92,7 @@ describe('loadNoteMeta', () => {
     expect(first).toMatchObject({
       kind: 'invoice',
       status: 'draft',
-      bower_origins: ['filed', 'asked'],
+      bowerOrigins: { rent: 'file', bike_to_office: 'notes' },
       not_stated: ['due date'],
       original: 'Scan.pdf',
       type: 'summary',
