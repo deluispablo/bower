@@ -75,7 +75,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.route('/', createAdminRoutes(deps));
   app.route('/', createProcessRoutes(deps));
   app.route('/', createRunnerRoutes(deps));
-  app.route('/', createStatusRoutes());
+  app.route('/', createStatusRoutes(deps));
   app.route('/', createPushRoutes());
 
   return app;

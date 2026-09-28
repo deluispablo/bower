@@ -83,6 +83,7 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
   useRun: () => ({
     ...runState,
     run: null,
+    lastFinished: null,
     sheetReopenKey: 0,
     process: vi.fn(),
     tidyUp: vi.fn(),

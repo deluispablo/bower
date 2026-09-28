@@ -280,6 +280,20 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'note');
 });
 
+test('/search?q= lands on Home with the switcher open and prefilled (#495)', async ({
+  page,
+}) => {
+  await page.goto('/search?q=Lisbon');
+
+  await expect(page).toHaveURL(/\/$/);
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await expect(switcher).toBeVisible();
+  await expect(switcher.getByRole('combobox')).toHaveValue('Lisbon');
+  await expect(
+    switcher.getByRole('option', { name: /Lisbon Trip/ }).first(),
+  ).toBeVisible();
+});
+
 test("a note Bower wrote opens with Bower's note and What Bower used (#351)", async ({
   page,
 }, testInfo) => {
@@ -510,6 +524,34 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
   // through Home needed to see it.
   await expect(page).toHaveURL('/add');
   await expect(hint).toContainText('4 things waiting.');
+});
+
+test('Add: the queue and "Added to your inbox." clear once a tidy-up finishes (#493)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  await page.getByLabel('Or paste a link').fill('https://example.com/page');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
+  await expect(page.getByText('Added to your inbox.')).toBeVisible();
+
+  const hint = page.locator('.add-hint');
+  await hint.getByRole('button', { name: 'Tidy up', exact: true }).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(confirm).toBeHidden();
+
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet.getByText(/processed/)).toBeVisible({ timeout: 20_000 });
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+
+  // Home already says "All tidy" by now (#321); back on Add nothing
+  // should still say the link is queued or freshly added.
+  await expect(page.locator('.add-queue-section')).toBeHidden();
+  await expect(page.getByText('Added to your inbox.')).toBeHidden();
 });
 
 test('Add: What is this? becomes one context note in the inbox (#335)', async ({

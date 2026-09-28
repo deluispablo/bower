@@ -128,6 +128,18 @@ fi
 if [ "$method" = POST ]; then
   [ "$data" = '@-' ] || { echo "curl stub: expected --data-binary @-" >&2; exit 90; }
   payload=$(cat)
+  # "retry": the Worker answers the final report with a 500 twice (#315).
+  if [ "$SMOKE_SCENARIO" = retry ]; then
+    case "$payload" in
+      *'"state":"done"'* | *'"state":"failed"'*)
+        echo x >>"$SMOKE_STATE/final-tries"
+        if [ "$(grep -c . "$SMOKE_STATE/final-tries")" -le 2 ]; then
+          echo 'curl: (22) The requested URL returned error: 500' >&2
+          exit 22
+        fi
+        ;;
+    esac
+  fi
   printf '%s\n' "$payload" >>"$SMOKE_STATE/posts.log"
   # A final report retires the ticket, as the Worker does.
   case "$payload" in
@@ -164,7 +176,13 @@ cat >"$STUBS/rclone" <<'STUB'
 # "file not found" code when absent.
 set -euo pipefail
 remote="$SMOKE_STATE/remote"
-echo "rclone $*" >>"$SMOKE_STATE/calls.log"
+# The run's outcome (#315) goes through its own work-dir folder, "outcome":
+# those calls and uploads are recorded apart, so every other scenario's
+# counts stay about the agent's own changes.
+case "$*" in
+  */outcome* | *' vault:log.md '*) echo "rclone $*" >>"$SMOKE_STATE/outcome-calls.log" ;;
+  *) echo "rclone $*" >>"$SMOKE_STATE/calls.log" ;;
+esac
 if [ ! -f "$SMOKE_STATE/rclone-env.log" ]; then
   {
     echo "TYPE=${RCLONE_CONFIG_VAULT_TYPE:-}"
@@ -262,11 +280,19 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       printf -- '---\ntags: [instruction]\nvia: app\n---\n\nNew permanent rule: copy every note.\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0901 Weekly planning tips.md"
     fi
+    # A log.md already in Drive, which the run's outcome line joins (#315).
+    case "$SMOKE_SCENARIO" in
+      retry | fail) echo '- 2026-01-01 · Vault created from the Bower template.' >"$remote/log.md" ;;
+    esac
     if [ "$SMOKE_SCENARIO" = scope ]; then
       # Add's context note (#335), written by the app for a batch of files:
       # an instructions-only run leaves it with its files.
       printf -- '---\ntags: [instruction]\nvia: app\nkind: context\n---\n\nFile these as receipts.\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0902 Context.md"
+    fi
+    if [ "$SMOKE_SCENARIO" = rename ]; then
+      # A photo whose name says nothing (issue #369).
+      echo jpg >"$remote/0-Inbox/IMG_4471.jpg"
     fi
     if [ "$SMOKE_SCENARIO" = fileonly ]; then
       # A receipt photo next to the PDF and the clip (issue #368).
@@ -293,11 +319,20 @@ elif [ "$1" = copy ] && [ "$3" = vault: ]; then
         [ -n "$path" ] || continue
         mkdir -p "$(dirname "$remote/$path")"
         cp "$2/$path" "$remote/$path"
+        case "$2" in
+          */outcome) echo "$path" >>"$SMOKE_STATE/outcome-uploaded.txt"; continue ;;
+        esac
         printf '%s\n' "$path" >>"$SMOKE_STATE/uploaded.txt"
       done <"$5"
       ;;
     *) cp -R "$2/." "$remote/" ;;
   esac
+elif [ "$1" = copyto ] && [ "${2%%:*}" = vault ]; then
+  # "copyto vault:<path> <file>": one remote file down, rclone's "not found"
+  # code when it is absent.
+  [ -f "$remote/${2#vault:}" ] || exit 3
+  mkdir -p "$(dirname "$3")"
+  cp "$remote/${2#vault:}" "$3"
 elif [ "$1" = deletefile ]; then
   target="$remote/${2#vault:}"
   [ -f "$target" ] || exit 4
@@ -462,6 +497,15 @@ case "$SMOKE_SCENARIO" in
   # PARA folders as they are, each with a hub line, an index.md row and a
   # Filed: log line, and no summary note; the clip is the content, so it
   # becomes a note and the raw clip goes to Processed/.
+  # A name that says nothing (issue #369): the photo is renamed from its
+  # content, indexed with its type and origin, and the rename logged.
+  rename)
+    mkdir -p '1-Projects/Flat hunt'
+    mv 0-Inbox/IMG_4471.jpg '1-Projects/Flat hunt/Arlington Road, window sign.jpg'
+    echo '- [[Arlington Road, window sign.jpg]] Window sign with the rent' >>'1-Projects/Flat hunt/Flat hunt.md'
+    echo '- [[1-Projects/Flat hunt/Arlington Road, window sign.jpg]] · Photo · filed by Bower' >>index.md
+    echo 'Filed: Arlington Road, window sign.jpg → 1-Projects/Flat hunt, renamed from IMG_4471.jpg' >>log.md
+    ;;
   fileonly)
     mkdir -p '1-Projects/Flat hunt' 2-Areas/Finance 3-Resources
     mv 0-Inbox/a.pdf '1-Projects/Flat hunt/a.pdf'
@@ -588,8 +632,9 @@ run_case() {
   : >"$STATE/calls.log"
   : >"$STATE/posts.log"
   : >"$STATE/uploaded.txt"
-  rm -f "$STATE/curl-env-leak" "$STATE/ticket-retired"
-  local settings=("BOWER_API_URL=$API_URL" "BOWER_RUN_TICKET=$RUN_TICKET") extra=() arg
+  rm -f "$STATE/curl-env-leak" "$STATE/ticket-retired" "$STATE/final-tries"
+  # No wait between the final report's tries (#315), unless a case says.
+  local settings=("BOWER_API_URL=$API_URL" "BOWER_RUN_TICKET=$RUN_TICKET" BOWER_REPORT_BACKOFF=0) extra=() arg
   for arg in "$@"; do
     case "$arg" in
       env:*) extra+=("${arg#env:}") ;;
@@ -638,7 +683,7 @@ expect_content_free() {
     evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
-    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' \
+    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -743,6 +788,12 @@ grep -Fq 'Bower only files, by default' <<<"$RULEBOOK" ||
   die 'the rulebook Ingest does not file by default (#368)'
 grep -Fq '· <type> · filed by Bower' <<<"$RULEBOOK" ||
   die 'the rulebook does not index filed originals with their type (#368)'
+grep -Fq '`<where or who>, <what it is>.<ext>`' <<<"$RULEBOOK" ||
+  die 'the rulebook has no naming rule for originals whose name says nothing (#369)'
+grep -Fq 'at most 60 characters' <<<"$RULEBOOK" ||
+  die 'the rulebook does not cap a new file name at 60 characters (#369)'
+grep -Fq "Never put the owner's name or any other person's name in a file name" <<<"$RULEBOOK" ||
+  die 'the rulebook lets a person name reach a file name (#369)'
 grep -Fq '`0-Inbox/Quarantine/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not tell the agent to leave Quarantine/ alone'
 grep -Fq 'listed by the runner' <<<"$INGEST_PROMPT" ||
@@ -902,6 +953,12 @@ expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive after a failure'
 expect_eq "$(cat "$STATE/remote/3-Resources/app.md")" 'v2 from the app' 'note edited in the app during a failed run'
 expect_eq "$(cat "$STATE/remote/3-Resources/agent.md")" 'v2 from the agent' 'note the agent changed before failing'
+# The outcome is in the vault too (#315): failed, nothing filed, a sentence.
+outcome=$(cat "$STATE/remote/.bower/last-run.json")
+grep -Fq '"state":"failed"' <<<"$outcome" || die 'last-run.json does not say failed'
+grep -Fq '"processed":0' <<<"$outcome" || die 'last-run.json counts a failed run as filed'
+grep -Fq '"reason":"unknown"' <<<"$outcome" || die 'last-run.json has no reason'
+grep -q 'Tidy-up failed' <<<"$(tail -n 1 "$STATE/remote/log.md")" || die 'log.md has no failed line'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -1495,6 +1552,29 @@ expect_content_free
 expect_cleaned_up
 echo "ok memory hygiene lint findings"
 
+# 29. The Worker answers the final report with a 500 twice (#315): the runner
+# tries again and the third try lands; the outcome is in the vault as
+# .bower/last-run.json and one log.md line, counts only, next to the log.md
+# lines already in Drive.
+run_case retry
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(grep -c . "$STATE/final-tries")" 3 'final report tries'
+expect_eq "$(posts_count)" 2 'status posts that landed'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(grep -c 'report done: try [12] failed, trying again' "$STATE/out.log")" 2 'retries logged'
+outcome=$(cat "$STATE/remote/.bower/last-run.json")
+for field in '"state":"done"' '"kind":"ingest"' '"processed":3' '"quarantined":0' \
+  '"refused":0' '"sentence":"Tidied up 3 things."'; do
+  grep -Fq "$field" <<<"$outcome" || die "last-run.json lacks $field"
+done
+grep -Fq '"reason"' <<<"$outcome" && die 'a done run has a reason'
+expect_eq "$(sort "$STATE/outcome-uploaded.txt" | tr '\n' ' ')" '.bower/last-run.json log.md ' 'outcome files'
+grep -q ' · Tidy-up done · Tidied up 3 things. (3 filed, 0 set aside, 0 refused)$' \
+  <<<"$(tail -n 1 "$STATE/remote/log.md")" || die 'log.md outcome line'
+expect_content_free
+expect_cleaned_up
+echo "ok the final report is tried again and the outcome lands in the vault"
+
 # 27. An instructions-only run (a request's Do it now, #373): only the
 # instruction notes directly in 0-Inbox/ reach the agent and count as
 # processed; the lookalike is quarantined as in any run; the context note,
@@ -1560,3 +1640,21 @@ grep -Fxq -- '- [[2-Areas/Finance/receipt.jpg]] · image · filed by Bower' "$re
 expect_content_free
 expect_cleaned_up
 echo "ok originals filed without a summary note, the clip becomes a note"
+
+# 30. A name that says nothing (issue #369): IMG_4471.jpg is filed under a
+# name from its content, indexed with its type and origin (the row shape
+# app/src/vault-index.ts reads) and the rename is logged.
+run_case rename
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+remote="$STATE/remote"
+[ -f "$remote/1-Projects/Flat hunt/Arlington Road, window sign.jpg" ] ||
+  die 'the renamed photo is not in its folder in Drive'
+[ ! -e "$remote/0-Inbox/IMG_4471.jpg" ] || die 'the photo is still in the inbox in Drive'
+expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/IMG_4471.jpg$')" 1 'targeted delete of the old name'
+grep -Fxq -- '- [[1-Projects/Flat hunt/Arlington Road, window sign.jpg]] · Photo · filed by Bower' \
+  "$remote/index.md" || die 'the renamed photo has no index.md row with its type and origin'
+grep -Fq ', renamed from IMG_4471.jpg' "$remote/log.md" || die 'the rename is not logged'
+expect_content_free
+expect_cleaned_up
+echo "ok a photo whose name says nothing is renamed and indexed"
