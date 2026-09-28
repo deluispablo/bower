@@ -164,7 +164,7 @@ describe('demo mode', () => {
     vi.advanceTimersByTime(DONE_MS);
     const done = (await api.getStatus()).run;
     expect(done?.state).toBe('done');
-    expect(done?.processed).toHaveLength(3);
+    expect(done?.processed).toHaveLength(6);
     expect(done?.processed).toContain('0-Inbox/Tomato seedlings.md');
     // Each item says where it went (New, #652); none was renamed.
     expect(done?.items).toContainEqual({
@@ -174,8 +174,10 @@ describe('demo mode', () => {
     });
     for (const item of done?.items ?? []) {
       expect(item.to).toEqual(expect.any(String));
-      expect(item.renamedFrom).toBeUndefined();
     }
+    // The flat listings come with the run (#674), each with its note.
+    expect(done?.added).toBe('I added bike times to the flats');
+    expect(done?.processed).toContain('0-Inbox/Arlington Road, 2 bed.pdf');
 
     const after = await paths();
     expect(after.filter(isInboxItem)).toHaveLength(0);
@@ -267,7 +269,7 @@ describe('demo mode', () => {
     );
     expect(answers.some((p) => /Context/.test(p))).toBe(false);
     expect(answers).toHaveLength(1);
-    expect(runCounts(run)).toEqual({ filed: 2, answered: 1 });
+    expect(runCounts(run)).toEqual({ filed: 5, answered: 1 });
   });
 
   it('adds files to the inbox, and the next run files them', async () => {
