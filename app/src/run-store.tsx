@@ -49,12 +49,17 @@ import { writeContextNote } from './add-context.js';
 import { ApiError, getStatus, startProcess } from './api.js';
 import type { Run, RunScope } from './api.js';
 import { ANSWERS_FOLDER } from './home.js';
+import type { LastRunOutcome } from './last-run.js';
 import { folderHref } from './navigation.js';
 import { failureCopy } from './run-failure.js';
 import { isContextNote, visiblePendingCount } from './run-progress.js';
 import { useSession } from './session.js';
 import { showToast } from './toast-store.js';
-import { invalidateAfterRun, useVault } from './vault-store.js';
+import {
+  invalidateAfterRun,
+  readLastRunOutcome,
+  useVault,
+} from './vault-store.js';
 
 export type RunPhase =
   | 'idle'
@@ -84,6 +89,7 @@ export type RunEvent =
   | { type: 'process-failed'; message: string }
   | { type: 'status'; run: Run | null; stale: boolean }
   | { type: 'poll-timeout' }
+  | { type: 'last-run'; outcome: LastRunOutcome | null }
   | { type: 'sheet-opened' }
   | { type: 'sheet-dismissed' }
   | { type: 'reset' };
@@ -329,6 +335,29 @@ export function reduce(state: RunState, event: RunEvent): RunState {
         message: STALE_MESSAGE,
         ...sheet,
       };
+    case 'last-run': {
+      // A race (the phase already moved on) or the file said nothing
+      // usable (missing, or did not parse): stays exactly as it was —
+      // `stale`'s own `STALE_MESSAGE` if nothing else has changed it.
+      if (state.phase !== 'stale' || event.outcome === null) return state;
+      const { outcome } = event;
+      const run: Run = {
+        state: outcome.state,
+        requestedAt: state.run?.requestedAt ?? outcome.finishedAt,
+        finishedAt: outcome.finishedAt,
+        // The runner's own sentence, kept for `lastTidyUpLine` (`home.ts`):
+        // this outcome has no per-file `processed` list, only a count, so
+        // the usual "N filed · M answered" cannot be rebuilt from it.
+        summary: outcome.sentence,
+        runId: outcome.runId,
+        ...(outcome.state === 'failed' ? { reason: outcome.reason } : {}),
+      };
+      const message =
+        outcome.state === 'done'
+          ? outcome.sentence
+          : failureCopy(outcome.reason).sentence;
+      return { phase: outcome.state, run, message, ...sheet };
+    }
     case 'sheet-opened':
       return state.sheetOpen ? state : { ...state, sheetOpen: true };
     case 'sheet-dismissed':
@@ -422,6 +451,7 @@ export function RunProvider({ children }: RunProviderProps) {
   const { me } = useSession();
   const { files, refresh, keepRule } = useVault();
   const hasVault = me?.vault != null;
+  const folderId = me?.vault?.folderId ?? null;
 
   // #497: seeded from `sessionStorage` so a run already seen (its sheet
   // opened, dismissed or not) does not read as new to a provider that
@@ -510,6 +540,25 @@ export function RunProvider({ children }: RunProviderProps) {
     }
     void invalidateAfterRun().then(() => refresh());
   }, [state.phase, state.run, refresh]);
+
+  // On `stale` (#564): the Worker lost track, but the runner may have
+  // written its own outcome straight into the vault before it stopped
+  // answering (`.bower/last-run.json`, `write_outcome` in `agent/run.sh`).
+  // Fetched once per `stale` entry — the ref resets the moment the phase
+  // moves on, so a run that goes `stale` again later (another run,
+  // another timeout) is fetched again fresh.
+  const staleFetchedRef = useRef(false);
+  useEffect(() => {
+    if (state.phase !== 'stale') {
+      staleFetchedRef.current = false;
+      return;
+    }
+    if (staleFetchedRef.current || folderId === null) return;
+    staleFetchedRef.current = true;
+    void readLastRunOutcome(folderId).then((outcome) => {
+      apply({ type: 'last-run', outcome });
+    });
+  }, [state.phase, folderId, apply]);
 
   // Poll every 5 s while queued/running, up to 30 min; pause while hidden,
   // resume on visibilitychange/focus. See `nextPollDelay` for the pure
