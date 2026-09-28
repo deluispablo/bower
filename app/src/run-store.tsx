@@ -18,12 +18,13 @@
  * or goes `stale` after the Worker's timeout, drops the cached vault index
  * and refreshes it, since the vault content may have changed underneath.
  *
- * After a run (#304): `done` goes back to `idle` as soon as the working
- * sheet is dismissed, or after `DONE_LINGER_MS`, whichever comes first; the
- * result message stays on the state for the sheet, and is announced once,
- * in the toast (`toast-store.ts`). A run that was already over when the app
- * first heard of it (a reload hours later) is not announced at all: it goes
- * straight to `idle`.
+ * After a run (#304, #506): `done` stays until the working sheet is
+ * dismissed (Close or Escape) — never on a timer, so there is always time
+ * to read what went where before it closes. The result message stays on
+ * the state for the sheet, and is announced once, in the toast
+ * (`toast-store.ts`). A run that was already over when the app first heard
+ * of it (a reload hours later) is not announced at all: it goes straight
+ * to `idle`.
  *
  * The store also owns whether the working sheet is open, so no component
  * mounting again (a route change) can bring it back: it opens by itself
@@ -86,7 +87,6 @@ export type RunEvent =
   | { type: 'process-failed'; message: string }
   | { type: 'status'; run: Run | null; stale: boolean }
   | { type: 'poll-timeout' }
-  | { type: 'done-timeout' }
   | { type: 'sheet-opened' }
   | { type: 'sheet-dismissed' }
   | { type: 'reset' };
@@ -116,9 +116,6 @@ function phaseForRun(run: Run): RunPhase {
 export function runKey(run: Run): string {
   return run.runId ?? run.requestedAt;
 }
-
-/** How long `done` lasts before going back to `idle` by itself. */
-export const DONE_LINGER_MS = 8_000;
 
 /**
  * "N files processed" / "1 file processed" / "Nothing new to process": the
@@ -292,8 +289,6 @@ export function reduce(state: RunState, event: RunEvent): RunState {
         message: STALE_MESSAGE,
         ...sheet,
       };
-    case 'done-timeout':
-      return state.phase === 'done' ? afterDone(state) : state;
     case 'sheet-opened':
       return state.sheetOpen ? state : { ...state, sheetOpen: true };
     case 'sheet-dismissed':
@@ -404,16 +399,6 @@ export function RunProvider({ children }: RunProviderProps) {
     // Intentionally once per mount / once a vault becomes available: the
     // interval effect below takes over from there.
   }, [hasVault, poll]);
-
-  // `done` lasts `DONE_LINGER_MS` at most, then goes back to idle (closing
-  // the sheet first gets there sooner: `sheet-dismissed`).
-  useEffect(() => {
-    if (state.phase !== 'done') return;
-    const timer = setTimeout(() => {
-      apply({ type: 'done-timeout' });
-    }, DONE_LINGER_MS);
-    return () => clearTimeout(timer);
-  }, [state.phase, apply]);
 
   // A finished run announces itself once, in the toast, with a link to the
   // answers. Keyed on the run so a second `done` for the same run (or this

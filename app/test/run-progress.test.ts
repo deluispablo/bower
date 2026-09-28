@@ -9,6 +9,7 @@ import {
   progressFor,
   runCounts,
   runRows,
+  visiblePendingCount,
   waitingPaths,
 } from '../src/run-progress.js';
 import type { RunRow } from '../src/run-progress.js';
@@ -69,6 +70,24 @@ describe('waitingPaths', () => {
 
   it('is empty for an empty listing', () => {
     expect(waitingPaths([])).toEqual([]);
+  });
+});
+
+describe('visiblePendingCount (#506)', () => {
+  it('agrees with waitingPaths when there is no context note', () => {
+    expect(visiblePendingCount(BEFORE)).toBe(3);
+  });
+
+  it('leaves the context note out, unlike waitingPaths on its own', () => {
+    const withContext: DriveFile[] = [
+      ...BEFORE,
+      file('0-Inbox/Bower - 2026-09-27 0815 Context.md'),
+    ];
+    // The raw inbox listing has four things now; what a person should be
+    // told is being tidied — the same total the working sheet's own
+    // count agrees on — is still three.
+    expect(waitingPaths(withContext)).toHaveLength(4);
+    expect(visiblePendingCount(withContext)).toBe(3);
   });
 });
 

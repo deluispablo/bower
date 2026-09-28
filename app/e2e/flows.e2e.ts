@@ -577,14 +577,16 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   await expect(page.getByText('In your inbox')).toBeVisible();
 
   // The context note is written on leaving Add (#421: no longer automatic
-  // once a batch finishes), so leave for Home ourselves: the three
-  // things, the receipt, the note.
+  // once a batch finishes), so leave for Home ourselves: the three things,
+  // the receipt. The note itself is not one of them (#506): it is Add's
+  // own scratch note for the batch, the same rule the working sheet's own
+  // count already followed.
   await navigate(page, /^Home$/);
   await expect(
     visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
       '.home-card-count',
     ),
-  ).toHaveText('5');
+  ).toHaveText('4');
   // It waits in the inbox with the other instruction notes, under the
   // Bower tab's Requests (the demo resets on a reload, so no `goto`); the
   // rule sentence is already in Rules, under its own topic.
@@ -664,6 +666,13 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
     visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
   ).toContainText('2 filed · 1 answered');
   await shot(page, testInfo, 'tidy-up');
+
+  // #506: Done no longer closes itself on a timer — it used to, within 8 s
+  // — so the rows and where things went stay readable until Close/Escape.
+  await page.waitForTimeout(9_000);
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
 });
 
 test('the working sheet: the bird between Inbox and the folders, the rows as they land (#338)', async ({

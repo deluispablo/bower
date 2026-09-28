@@ -2,10 +2,11 @@
  * The sheet that holds the processing animation (#38, redesigned in #147): a
  * bottom sheet on mobile, a card under the header on desktop
  * (`styles/bower-working.css`). It shows while a run is queued or running,
- * through `done` until the run store goes back to idle (8 s, or sooner when
- * closed), and for 3 s after a failure, a stale run, or the day's quota
- * running out, unless the user closed it (× or Escape). A non-modal
- * dialog: no focus trap, the rest of the app stays usable.
+ * through `done` until closed (× or Escape, #506: never on a timer, so
+ * there is time to read what went where), and for 3 s after a failure, a
+ * stale run, or the day's quota running out, unless the user closed it
+ * first. A non-modal dialog: no focus trap, the rest of the app stays
+ * usable.
  *
  * While a run is queued or running it shows the board's scene (Phone-Working,
  * spec C.6, #338): the bird tidying between "Inbox" and the folders things
