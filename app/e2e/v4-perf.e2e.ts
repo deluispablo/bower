@@ -31,6 +31,8 @@ async function bundle(): Promise<{ js: string; css: string }> {
     build: {
       write: false,
       minify: false,
+      // The tree loads its list module lazily; one script is easier to serve.
+      rollupOptions: { output: { inlineDynamicImports: true } },
       lib: {
         entry: 'e2e/tree-harness.tsx',
         formats: ['iife'],

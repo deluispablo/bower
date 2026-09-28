@@ -202,6 +202,13 @@ describe('Tree over VirtualList', () => {
 
   it('renders only the rows in view past 150 visible rows', async () => {
     await mountTree(400);
+    // Plain until the virtual list's module has loaded, then it takes over.
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expect(host.querySelector('[data-index]')).not.toBeNull();
+    });
     const items = host.querySelectorAll('[role="treeitem"]');
     expect(items.length).toBeGreaterThan(0);
     expect(items.length).toBeLessThan(60);

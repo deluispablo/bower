@@ -84,7 +84,6 @@ import { KindBadge } from './kind-badge.js';
 import { PinSheet } from './pin-sheet.js';
 import { NewTag } from './tags.js';
 import { useNoteTitles } from './use-note-titles.js';
-import { VirtualList } from './virtual-list.js';
 import type { VirtualListHandle } from './virtual-list.js';
 
 import '../styles/tree.css';
@@ -103,6 +102,13 @@ interface Row extends TreeRow {
  * (`VirtualList`, #590); below it every row is in the DOM, as before.
  */
 const VIRTUAL_FROM_ROWS = 150;
+
+type VirtualModule = typeof import('./virtual-list.js');
+
+// Loaded the first time a tree passes the threshold, so the virtualiser and
+// TanStack Virtual stay out of the startup chunk. Until it arrives the plain
+// list renders.
+let virtualModule: VirtualModule | null = null;
 
 /** A row's height in px before it is measured: the 44 px row plus its gap. */
 const ROW_ESTIMATE = 46;
@@ -305,6 +311,7 @@ export function Tree({
   // A row that was off screen when focus was sent to it: focused as soon as
   // the virtual list has rendered it.
   const pendingFocus = useRef<number | null>(null);
+  const [loaded, setLoaded] = useState<VirtualModule | null>(virtualModule);
   const listHandle = useRef<VirtualListHandle | null>(null);
   const lastCollapseKey = useRef(collapseKey);
   const lastExpandKey = useRef(expandKey);
@@ -339,6 +346,23 @@ export function Tree({
     [rows, index],
   );
   const titles = useNoteTitles(noteFiles);
+
+  const wantsVirtual = rows.length > VIRTUAL_FROM_ROWS;
+  useEffect(() => {
+    if (!wantsVirtual || loaded !== null) return;
+    let cancelled = false;
+    void import('./virtual-list.js')
+      .then((mod) => {
+        virtualModule = mod;
+        if (!cancelled) setLoaded(mod);
+      })
+      .catch((err: unknown) =>
+        console.error('Could not load the long-list support', err),
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsVirtual, loaded]);
 
   function toggle(path: string): void {
     setExpanded((prev) => {
@@ -630,13 +654,13 @@ export function Tree({
     );
   }
 
-  const virtual = rows.length > VIRTUAL_FROM_ROWS;
+  const VirtualList = loaded?.VirtualList;
 
   return (
     <div class="tree-wrap" ref={wrapRef}>
       {rows.length === 0 ? (
         <p class="tree-empty">{emptyText}</p>
-      ) : virtual ? (
+      ) : wantsVirtual && VirtualList !== undefined ? (
         <VirtualList
           as="ul"
           rowAs="li"
