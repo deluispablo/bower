@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me, Vault } from '../src/api.js';
 import { linkNoteName } from '../src/add.js';
+import { setQueue } from '../src/add-queue-store.js';
 import type { DriveFile } from '../src/drive.js';
 
 describe('linkNoteName', () => {
@@ -160,6 +161,11 @@ async function waitFor(predicate: () => boolean, tries = 30): Promise<void> {
 
 describe('Add', () => {
   beforeEach(() => {
+    // The queue lives in `add-queue-store.js`, module scope, on purpose
+    // (#334: it survives navigating away and back) -- so each test starts
+    // this suite's own instance of it empty rather than inheriting the
+    // previous test's rows.
+    setQueue([]);
     root = document.createElement('div');
     document.body.append(root);
     void act(() => {
@@ -263,5 +269,68 @@ describe('Add', () => {
     expect(button?.textContent).toBe('Tidy up');
     void act(() => button?.click());
     expect(tidyUp).toHaveBeenCalledTimes(1);
+  });
+
+  // #334 (issue 21.2): the queue's own heading, its type icon, and the
+  // per-row state text.
+  it('heads the queue "Added · n" and shows the picked name', () => {
+    dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
+    const head = root.querySelector('.add-queue-head');
+    expect(head?.textContent).toBe('Added · 1');
+    expect(root.querySelector('.add-queue-name')?.textContent).toBe(
+      'receipt.txt',
+    );
+  });
+
+  it('says "In your inbox" once a plain upload is done', async () => {
+    dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
+    await flush();
+    const addButton = Array.from(root.querySelectorAll('button')).find((b) =>
+      (b.textContent ?? '').includes('Add to Bower'),
+    );
+    if (addButton === undefined) throw new Error('Add to Bower missing');
+    void act(() => addButton.click());
+    await waitFor(
+      () =>
+        (root.querySelector('.add-queue-status')?.textContent ?? '') ===
+        'In your inbox',
+    );
+  });
+
+  it('survives leaving the screen and coming back (#334)', () => {
+    dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
+    expect(root.querySelector('.add-queue-name')?.textContent).toBe(
+      'receipt.txt',
+    );
+
+    // Unmount, as `preact-iso` would on navigating away, then mount a
+    // fresh `Add` the way it would coming back to the tab -- no `setQueue`
+    // reset in between, unlike this suite's own `beforeEach`.
+    void act(() => {
+      render(null, root);
+    });
+    void act(() => {
+      render(h(Add, {}), root);
+    });
+
+    expect(root.querySelector('.add-queue-name')?.textContent).toBe(
+      'receipt.txt',
+    );
+  });
+
+  it('keeps the pasted link in the field after Save, so it never greys out', () => {
+    const input = root.querySelector('#add-link') as HTMLInputElement;
+    const save = Array.from(root.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Save',
+    );
+    if (save === undefined) throw new Error('Save button missing');
+    void act(() => {
+      input.value = 'https://example.com/page';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(save.hasAttribute('disabled')).toBe(false);
+    void act(() => save.click());
+    expect(input.value).toBe('https://example.com/page');
+    expect(save.hasAttribute('disabled')).toBe(false);
   });
 });

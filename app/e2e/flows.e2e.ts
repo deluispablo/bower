@@ -226,6 +226,28 @@ test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
   await shot(page, testInfo, 'add-doors');
 });
 
+test('Add: the camera door opens a capture input (#339)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  // The fake webcam (`playwright.config.ts`'s `--use-fake-device-for-
+  // media-stream`) is what makes the door show up here at all, on the
+  // phone project and every machine alike (issue 21.7's actual rule is
+  // unit-tested in `add-camera.test.ts`).
+  if (testInfo.project.name === 'desktop') {
+    await expect(page.locator('.add-doors')).toBeHidden();
+    return;
+  }
+
+  const door = page
+    .locator('.add-doors')
+    .getByRole('button', { name: /^Take a photo/ });
+  await expect(door).toBeVisible();
+  await expect(page.locator('input[type="file"][capture]')).toHaveCount(1);
+});
+
 test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
@@ -251,6 +273,31 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
       '.home-card-count',
     ),
   ).toHaveText('4');
+});
+
+test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (#334)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
+
+  // Back on Home once the upload finishes, then Add again within the
+  // same session: the row is still there (#334), not an empty screen.
+  await expect(page).toHaveURL('/');
+  await navigate(page, /^Add$/);
+  await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
+  await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
 });
 
 test('Home through the scripted run: waiting, running, done (#321)', async ({
@@ -600,6 +647,18 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   const tabs = page.locator('nav.bottom-nav');
   if (testInfo.project.name === 'desktop') {
     await expect(tabs).toBeHidden();
+
+    // The sidebar (#326, C.9): one Expand/Collapse all tool, no sort menu,
+    // and the waiting-count bubble on Home's row, not Add's (the boards
+    // disagree with the issue's own title and C.9's text, which say Add).
+    const sidebar = page.getByRole('navigation', { name: 'Your notes' });
+    await expect(sidebar.locator('[aria-label^="Sort by"]')).toHaveCount(0);
+    await expect(
+      sidebar.getByRole('button', { name: 'Expand all' }),
+    ).toBeVisible();
+    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveText('3');
+    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveCount(0);
+    await shot(page, testInfo, 'desktop-sidebar');
     return;
   }
   await expect(tabs).toBeVisible();

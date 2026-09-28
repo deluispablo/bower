@@ -16,13 +16,14 @@
  * ```
  *
  * The app lists the open ones in Health; Accept appends the rule to
- * `Rules.md` (`rulesWithAccepted`) and marks the section, Dismiss only
- * marks it (`applyDecision`). The agent never writes `Rules.md` for a
+ * `Rules.md` (`rulesWithAccepted`, in the shape `rules.ts` reads) and marks
+ * the section, Dismiss only marks it (`applyDecision`). The agent never writes `Rules.md` for a
  * proposal. Pure: no Drive, no clock unless a date is not given —
  * `vault-store.tsx`'s `runProposalDecision` does the writing.
  */
 
 import type { DriveFile } from './drive.js';
+import { allRules, parseRules, ruleBullet } from './rules.js';
 import type { VaultIndex } from './vault-index.js';
 
 /** Where the agent files proposals, from the top of the Bower folder. */
@@ -248,28 +249,26 @@ export function applyDecision(
   return next.join('\n');
 }
 
-/** The line `rulesWithAccepted` adds for `proposal`, without the date. */
-function ruleLine(proposal: Proposal): string {
-  return `- ${proposal.text}`;
-}
-
 /**
  * `Rules.md`'s text with `proposal`'s rule appended under
- * `ACCEPTED_HEADING` (created at the end when missing), marked
- * `(accepted suggestion, <on>)`. Unchanged when the rule is already there,
- * so accepting again after a failed write never adds it twice.
+ * `ACCEPTED_HEADING` (created at the end when missing), in `Rules.md`'s
+ * shape (`rules.ts`): `- <text> (owner's request, <on>)`, since the owner
+ * asked for it by accepting. Unchanged when a rule with that text is
+ * already there (dated or not, paused or not, the older `(accepted
+ * suggestion, …)` tail included), so accepting again after a failed write
+ * never adds it twice.
  */
 export function rulesWithAccepted(
   rules: string,
   proposal: Proposal,
   on: string = dayOf(new Date()),
 ): string {
-  const lines = linesOf(rules);
-  const bullet = ruleLine(proposal);
-  if (lines.some((line) => line === bullet || line.startsWith(`${bullet} (`))) {
+  const entry = ruleBullet(proposal.text, on);
+  const wanted = allRules(parseRules(entry))[0]?.text;
+  if (allRules(parseRules(rules)).some((rule) => rule.text === wanted)) {
     return rules;
   }
-  const entry = `${bullet} (accepted suggestion, ${on})`;
+  const lines = linesOf(rules);
 
   const at = lines.findIndex((line) => line.trimEnd() === ACCEPTED_HEADING);
   if (at < 0) {

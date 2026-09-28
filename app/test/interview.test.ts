@@ -4,9 +4,12 @@ import aboutMeTemplate from '../../vault-template/About-Me.md?raw';
 import rulesTemplate from '../../vault-template/Rules.md?raw';
 import { interviewToFiles, replaceSection } from '../src/interview.js';
 import type { InterviewAnswers } from '../src/interview.js';
+import { parseRules } from '../src/rules.js';
 
 const ABOUT_ME = aboutMeTemplate.replace(/\r\n/g, '\n');
 const RULES = rulesTemplate.replace(/\r\n/g, '\n');
+
+const ON = '2026-09-28';
 
 const ANSWERS: InterviewAnswers = {
   keep: 'Everything I capture',
@@ -53,7 +56,11 @@ describe('replaceSection', () => {
 
 describe('interviewToFiles', () => {
   it('adds a "From the interview" section to About-Me.md, template untouched otherwise', () => {
-    const files = interviewToFiles(ANSWERS, { aboutMe: ABOUT_ME, rules: '' });
+    const files = interviewToFiles(
+      ANSWERS,
+      { aboutMe: ABOUT_ME, rules: '' },
+      ON,
+    );
 
     expect(files.aboutMe).toContain('## Who I am');
     expect(files.aboutMe).toContain('## Preferences');
@@ -68,31 +75,48 @@ describe('interviewToFiles', () => {
   });
 
   it('adds a title-and-tag rule to Rules.md', () => {
-    const files = interviewToFiles(ANSWERS, { aboutMe: '', rules: RULES });
+    const files = interviewToFiles(ANSWERS, { aboutMe: '', rules: RULES }, ON);
 
     expect(files.rules).toContain(
-      '## From the interview\n- Titles and tags: Short and plain, e.g. `2026-09-27 Dentist`',
+      "## From the interview\n- Titles and tags: Short and plain, e.g. `2026-09-27 Dentist` (owner's request, 2026-09-28)\n",
     );
+  });
+
+  it('writes the rule in the shape the Bower tab reads', () => {
+    const files = interviewToFiles(ANSWERS, { aboutMe: '', rules: RULES }, ON);
+    const group = parseRules(files.rules).groups.find(
+      (g) => g.topic === 'From the interview',
+    );
+    expect(group?.rules[0]).toMatchObject({
+      text: 'Titles and tags: Short and plain, e.g. `2026-09-27 Dentist`',
+      date: ON,
+      origin: "owner's request",
+      paused: false,
+    });
   });
 
   it('says just the example when the style is blank, and vice versa', () => {
     const styleOnly = interviewToFiles(
       { ...ANSWERS, example: '' },
       { aboutMe: '', rules: '' },
+      ON,
     );
-    expect(styleOnly.rules).toContain('- Titles and tags: Short and plain\n');
+    expect(styleOnly.rules).toContain(
+      "- Titles and tags: Short and plain (owner's request, 2026-09-28)\n",
+    );
 
     const exampleOnly = interviewToFiles(
       { ...ANSWERS, titleStyle: '' },
       { aboutMe: '', rules: '' },
+      ON,
     );
     expect(exampleOnly.rules).toContain(
-      '- Titles and tags: e.g. `2026-09-27 Dentist`\n',
+      "- Titles and tags: e.g. `2026-09-27 Dentist` (owner's request, 2026-09-28)\n",
     );
   });
 
   it('returns one folder note per area, tagged and named after it', () => {
-    const files = interviewToFiles(ANSWERS, { aboutMe: '', rules: '' });
+    const files = interviewToFiles(ANSWERS, { aboutMe: '', rules: '' }, ON);
 
     expect(files.areas.map((a) => a.name)).toEqual([
       'Health',
@@ -107,6 +131,7 @@ describe('interviewToFiles', () => {
     const files = interviewToFiles(
       { ...ANSWERS, areas: ['Health', '  ', 'Health', 'Side/Projects'] },
       { aboutMe: '', rules: '' },
+      ON,
     );
 
     expect(files.areas.map((a) => a.name)).toEqual(['Health', 'Side-Projects']);
@@ -120,7 +145,11 @@ describe('interviewToFiles', () => {
       titleStyle: '',
       example: '',
     };
-    const files = interviewToFiles(blank, { aboutMe: ABOUT_ME, rules: RULES });
+    const files = interviewToFiles(
+      blank,
+      { aboutMe: ABOUT_ME, rules: RULES },
+      ON,
+    );
 
     expect(files.aboutMe).toBe(ABOUT_ME);
     expect(files.rules).toBe(RULES);
@@ -128,13 +157,18 @@ describe('interviewToFiles', () => {
   });
 
   it('replaying with new answers replaces the section, never duplicates it', () => {
-    const first = interviewToFiles(ANSWERS, {
-      aboutMe: ABOUT_ME,
-      rules: RULES,
-    });
+    const first = interviewToFiles(
+      ANSWERS,
+      {
+        aboutMe: ABOUT_ME,
+        rules: RULES,
+      },
+      ON,
+    );
     const second = interviewToFiles(
       { ...ANSWERS, keep: 'Work notes', areas: ['Finance'] },
       { aboutMe: first.aboutMe, rules: first.rules },
+      ON,
     );
 
     expect(second.aboutMe.match(/## From the interview/g)).toHaveLength(1);
