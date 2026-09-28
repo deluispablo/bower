@@ -235,6 +235,39 @@ Bower recognises eight kinds of document. For each, the list gives the `kind` va
 - A rule can add a field to a kind ("For job offers, also note the pension"): write it as one more frontmatter field, a snake_case key (`pension`), after the kind's own fields, with its origin in `bower_origins` as usual. The app shows it in Details, never as a key fact.
 - A rule can add a status value to a kind; the kind's first status value is still the one a new note gets.
 
+**Long documents.**
+- However long the document, the box stays at three lines and the facts go to the frontmatter fields, never into the box.
+- A PDF over 10 pages gets a `## Where to look` list right after the box: the parts the owner is most likely to need, one per line, each starting with a link that opens the PDF at its page, `- [p. <n>](<<file name>#page=<n>>) <what is there>`. Then the short body.
+
+Example, the companion note next to `Lease agreement 2026.pdf` (42 pages):
+```markdown
+---
+kind: contract
+tags: [document, home]
+created: 2026-10-02
+original: "[[Lease agreement 2026.pdf]]"
+pages: 42
+with: The letting agent
+covers: Lease of 14 Arlington Road
+value: £25,800
+payments: £2,150 a month
+starts: 2026-11-01
+ends: 2027-10-31
+notice: Two months, after the first six
+---
+> [!bower] Bower's note
+> Twelve months from 1 November, then month to month. (from the file)
+> Break clause after six months, two months' notice. (from the file)
+
+## Where to look
+- [p. 4](<Lease agreement 2026.pdf#page=4>) Rent, deposit and when it is paid
+- [p. 12](<Lease agreement 2026.pdf#page=12>) The break clause
+- [p. 19](<Lease agreement 2026.pdf#page=19>) Pets: none without written consent
+- [p. 31](<Lease agreement 2026.pdf#page=31>) Who repairs what
+
+The lease for [[Arlington Road, 2 bed]], for the [[Flat hunt]].
+```
+
 Example, the companion note next to `Arlington Road, listing.pdf`:
 ```markdown
 ---
