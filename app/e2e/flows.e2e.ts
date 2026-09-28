@@ -904,7 +904,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toContainText(
     'In the demo the bird plays back a real run in twenty seconds',
   );
-  await expect(sheet).toContainText('Playing back');
+  await expect(sheet).toContainText('playing back');
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed
@@ -1053,7 +1053,7 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   });
   await expect(
     rows.filter({ hasText: 'Boiler service invoice' }),
-  ).toContainText('filed');
+  ).toContainText('Areas › Home');
   await shot(page, testInfo, 'run-working-rows');
 
   // Done: the listing is read again and the rows name where things went;
@@ -1063,13 +1063,13 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   });
   await expect(
     rows.filter({ hasText: 'Boiler service invoice' }),
-  ).toContainText('→ Home');
+  ).toContainText('Areas › Home');
   await expect(rows.filter({ hasText: 'Tomato seedlings' })).toContainText(
-    '→ Garden',
+    'Areas › Garden',
   );
   await expect(
     rows.filter({ hasText: 'What do I still need for Lisbon' }),
-  ).toContainText('filed');
+  ).toContainText('Inbox › Processed');
   await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(0);
 });
 
