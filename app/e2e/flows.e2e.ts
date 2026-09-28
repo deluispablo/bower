@@ -226,6 +226,28 @@ test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
   await shot(page, testInfo, 'add-doors');
 });
 
+test('Add: the camera door opens a capture input (#339)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  // The fake webcam (`playwright.config.ts`'s `--use-fake-device-for-
+  // media-stream`) is what makes the door show up here at all, on the
+  // phone project and every machine alike (issue 21.7's actual rule is
+  // unit-tested in `add-camera.test.ts`).
+  if (testInfo.project.name === 'desktop') {
+    await expect(page.locator('.add-doors')).toBeHidden();
+    return;
+  }
+
+  const door = page
+    .locator('.add-doors')
+    .getByRole('button', { name: /^Take a photo/ });
+  await expect(door).toBeVisible();
+  await expect(page.locator('input[type="file"][capture]')).toHaveCount(1);
+});
+
 test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
