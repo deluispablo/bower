@@ -52,6 +52,23 @@ const INBOX_ROOTS = new Set(['0-Inbox', 'Clippings']);
 /** An instruction note's name (`Bower - YYYY-MM-DD HHmm <title>.md`). */
 const REQUEST_PREFIX = /^Bower - \d{4}-\d{2}-\d{2} \d{4} /;
 
+function baseName(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+/**
+ * Add's "What is this?" note (`add.ts#contextNoteName`): always titled
+ * "Context". It applies to its own batch (#446, #444) — not a thing being
+ * filed — so the working sheet never gives it a row, counts it toward the
+ * bar, or names it in the Done message.
+ */
+const CONTEXT_NOTE = /^Bower - \d{4}-\d{2}-\d{2} \d{4} Context\.md$/;
+
+/** Whether `path` is Add's own "What is this?" note for its batch. */
+export function isContextNote(path: string): boolean {
+  return CONTEXT_NOTE.test(baseName(path));
+}
+
 /**
  * The paths waiting in the inbox, sorted: the same rule as the Inbox
  * card's count (`navigation.ts#pendingCount`), one file at a time.
@@ -68,15 +85,17 @@ export function waitingPaths(files: readonly DriveFile[]): string[] {
  * and a total only then too, since a total with nothing filed to set
  * against it would pin the bar at zero for the whole of a real run.
  * `waiting` is the inbox as the run began; items filed that it did not
- * list still count.
+ * list still count. The context note (#446) counts toward neither.
  */
 export function runCounts(
   processed: readonly string[] | undefined,
   waiting: readonly string[],
 ): RunCounts {
   if (processed === undefined) return {};
-  const all = new Set([...waiting, ...processed]);
-  return { processed: processed.length, total: all.size };
+  const filed = processed.filter((path) => !isContextNote(path));
+  const stillWaiting = waiting.filter((path) => !isContextNote(path));
+  const all = new Set([...stillWaiting, ...filed]);
+  return { processed: filed.length, total: all.size };
 }
 
 /** A row's icon and colour, as on a folder screen. */
@@ -93,10 +112,6 @@ export interface RunRow {
   /** The folder it was filed in ("Flat hunt"), once the listing shows it
    * there; `null` before, and always for `reading`. */
   destination: string | null;
-}
-
-function baseName(path: string): string {
-  return path.slice(path.lastIndexOf('/') + 1);
 }
 
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|heic|heif|webp|gif)$/i;
@@ -166,10 +181,14 @@ export function runRows(input: {
       destination,
     };
   };
-  const rows = processed.map((path) => row(path, 'filed'));
+  const rows = processed
+    .filter((path) => !isContextNote(path))
+    .map((path) => row(path, 'filed'));
   if (active) {
     const filed = new Set(processed);
-    const next = waiting.find((path) => !filed.has(path));
+    const next = waiting.find(
+      (path) => !filed.has(path) && !isContextNote(path),
+    );
     if (next !== undefined) rows.push(row(next, 'reading'));
   }
   return rows;

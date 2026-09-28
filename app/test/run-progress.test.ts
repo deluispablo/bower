@@ -5,6 +5,7 @@ import type { DriveFile } from '../src/drive.js';
 import {
   destinationOf,
   destinationsLabel,
+  isContextNote,
   progressFor,
   runCounts,
   runRows,
@@ -90,6 +91,29 @@ describe('runCounts', () => {
     expect(runCounts(undefined, waitingPaths(BEFORE))).toEqual({});
     expect(progressFor(runCounts(undefined, [LEASE]))).toBeNull();
   });
+
+  it('the "What is this?" context note counts toward neither (#446)', () => {
+    const context = '0-Inbox/Bower - 2026-09-27 0815 Context.md';
+    expect(runCounts([LEASE, context], [LEASE, context])).toEqual({
+      processed: 1,
+      total: 1,
+    });
+  });
+});
+
+describe('isContextNote', () => {
+  it('matches Add\'s "What is this?" note by its fixed title', () => {
+    expect(isContextNote('0-Inbox/Bower - 2026-09-27 0815 Context.md')).toBe(
+      true,
+    );
+  });
+
+  it('is false for a real request or a plain file, even titled similarly', () => {
+    expect(
+      isContextNote('0-Inbox/Bower - 2026-09-27 0815 Compare the two flats.md'),
+    ).toBe(false);
+    expect(isContextNote('0-Inbox/Context.md')).toBe(false);
+  });
 });
 
 describe('runRows', () => {
@@ -157,6 +181,25 @@ describe('runRows', () => {
     });
     expect(rows[0]?.title).toBe('Compare the two flats');
     expect(rows[0]?.tone).toBe('note');
+  });
+
+  it('no row for the "What is this?" context note, filed or being read (#446)', () => {
+    const context = '0-Inbox/Bower - 2026-09-27 0815 Context.md';
+    const withContext = runRows({
+      processed: [context, LEASE],
+      waiting: [context, ...waiting],
+      files: BEFORE,
+      active: true,
+    });
+    expect(withContext.map((row) => row.path)).not.toContain(context);
+
+    const onlyContextLeft = runRows({
+      processed: [],
+      waiting: [context],
+      files: BEFORE,
+      active: true,
+    });
+    expect(onlyContextLeft).toEqual([]);
   });
 
   it('no rows while the run does not report what it filed', () => {
