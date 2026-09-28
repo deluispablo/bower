@@ -102,7 +102,7 @@ export function buildHeaders({ apiUrl, googleApiKey }) {
     [`connect-src 'self'`, apiOrigin, `https://www.googleapis.com`]
       .filter((part) => part !== null)
       .join(' '),
-    `img-src 'self' data: blob: https://lh3.googleusercontent.com`,
+    `img-src 'self' data: blob: https://*.googleusercontent.com`,
     `font-src 'self'`,
     `worker-src 'self'`,
     ...(pickerEnabled

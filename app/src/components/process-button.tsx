@@ -1,11 +1,12 @@
 /**
  * The Tidy up button (#37; moved out of the top bar in #320): it sits on
  * Home's Inbox card and in Add's hint, never in the bar (Phone-Home and
- * Phone-Add boards). A tap goes through the run store's `tidyUp`, the one
- * place the "Is that everything?" confirmation (#337) will open from; until
- * then it starts the run directly. During a run, or once the day's limit is
- * reached, a tap brings the working sheet back instead; after a failure the
- * button says Try again and starts a new run.
+ * Phone-Add boards). A tap goes through the run store's `tidyUp`, which
+ * opens the "Is that everything?" confirmation (#337) first; the run only
+ * starts once that sheet's "Yes, tidy up" is tapped. During a run, or once
+ * the day's limit is reached, a tap brings the working sheet back instead;
+ * after a failure the button says Try again and starts a new run (through
+ * the same confirmation).
  *
  * The working sheet and the notifications prompt no longer live here: they
  * are mounted once in the shell (`run-sheets.tsx`), since this button now
@@ -67,7 +68,7 @@ export function ProcessButton(): JSX.Element | null {
         aria-haspopup={starts ? undefined : 'dialog'}
         disabled={!online}
         aria-disabled={!online}
-        onClick={starts ? tidyUp : openSheet}
+        onClick={starts ? () => tidyUp() : openSheet}
       >
         {phase === 'running' || phase === 'queued' ? (
           <span class="process-spinner" aria-hidden="true" />
