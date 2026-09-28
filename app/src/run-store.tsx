@@ -38,11 +38,12 @@ import {
 
 import { writeContextNote } from './add-context.js';
 import { ApiError, getStatus, startProcess } from './api.js';
-import type { Run } from './api.js';
+import type { Run, RunScope } from './api.js';
 import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { ANSWERS_FOLDER } from './home.js';
 import { folderHref } from './navigation.js';
+import { isContextNote } from './run-progress.js';
 import { useSession } from './session.js';
 import { showToast } from './toast-store.js';
 import { isHidden } from './vault-index.js';
@@ -102,10 +103,14 @@ export const DONE_LINGER_MS = 8_000;
 
 /**
  * "N files processed" / "1 file processed" / "Nothing new to process": the
- * same wording as the push notification body (`api/src/runner.ts`).
+ * same wording as the push notification body (`api/src/runner.ts`). Add's
+ * "What is this?" context note (#446) applies to its own batch, not a
+ * file processed, so it never counts here.
  */
 export function resultMessage(run: Run): string {
-  const count = run.processed?.length ?? 0;
+  const count = (run.processed ?? []).filter(
+    (path) => !isContextNote(path),
+  ).length;
   if (count === 0) return 'Nothing new to process';
   return `${count} ${count === 1 ? 'file' : 'files'} processed`;
 }
@@ -292,16 +297,21 @@ export function pendingCount(files: DriveFile[]): number {
 }
 
 export interface RunStore extends RunState {
-  process: () => Promise<void>;
+  /** Starts a run: a whole tidy-up, or `instructions` only (`startProcess`). */
+  process: (scope?: RunScope) => Promise<void>;
   /**
    * What every Tidy up control calls (the Inbox card, Add's hint, the
    * switcher command, #320). Opens the "Is that everything?" confirmation
-   * (#337) first; only the sheet's "Yes, tidy up" (`confirmTidyUp`) starts
-   * the run. `count`, when given, is the confirmation's own count instead
-   * of the inbox's pending files — for a future requests-only run (#344,
-   * the count of requests rather than files); no caller passes it yet.
+   * (#337) first, counting the inbox's pending files; only the sheet's
+   * "Yes, tidy up" (`confirmTidyUp`) starts the run, a whole tidy-up.
    */
-  tidyUp: (count?: number) => void;
+  tidyUp: () => void;
+  /**
+   * A waiting request's "Do it now" (#344, handover D.2): the same
+   * confirmation, counting `count` requests instead of files, and its
+   * "Yes, tidy up" starts an instructions-only run.
+   */
+  doItNow: (count: number) => void;
   /** Opens the working sheet (a tap during or after a run). */
   openSheet: () => void;
   /**
@@ -464,27 +474,30 @@ export function RunProvider({ children }: RunProviderProps) {
     };
   }, [state.phase, apply, poll]);
 
-  const process = useCallback(async (): Promise<void> => {
-    try {
-      const { run } = await startProcess();
-      apply({ type: 'process-started', run });
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'quota') {
-        const retryAfter = err.retryAfter ?? 0;
+  const process = useCallback(
+    async (scope?: RunScope): Promise<void> => {
+      try {
+        const { run } = await startProcess(scope);
+        apply({ type: 'process-started', run });
+      } catch (err) {
+        if (err instanceof ApiError && err.code === 'quota') {
+          const retryAfter = err.retryAfter ?? 0;
+          apply({
+            type: 'process-quota',
+            retryAfter,
+            message: quotaMessage(retryAfter),
+          });
+          return;
+        }
+        console.error(err);
         apply({
-          type: 'process-quota',
-          retryAfter,
-          message: quotaMessage(retryAfter),
+          type: 'process-failed',
+          message: 'Could not start. Try again.',
         });
-        return;
       }
-      console.error(err);
-      apply({
-        type: 'process-failed',
-        message: 'Could not start. Try again.',
-      });
-    }
-  }, [apply]);
+    },
+    [apply],
+  );
 
   const [sheetReopenKey, setSheetReopenKey] = useState(0);
 
@@ -503,19 +516,25 @@ export function RunProvider({ children }: RunProviderProps) {
   }, [apply]);
 
   // The "Is that everything?" confirmation (#337): every `tidyUp()` opens
-  // this first, showing `count` (the caller's own, or the inbox's pending
-  // files); only `confirmTidyUp` (the sheet's "Yes, tidy up") goes on to
-  // open the working sheet and start the run.
+  // this first, showing the inbox's pending files, and `doItNow(count)`
+  // with its count of requests (#344); only `confirmTidyUp` (the sheet's
+  // "Yes, tidy up") goes on to open the working sheet and start the run,
+  // with the scope the sheet was opened for.
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmCount, setConfirmCount] = useState(0);
+  const [confirmScope, setConfirmScope] = useState<RunScope>('all');
 
-  const tidyUp = useCallback(
-    (count?: number): void => {
-      setConfirmCount(count ?? pendingCount(files));
-      setConfirmOpen(true);
-    },
-    [files],
-  );
+  const tidyUp = useCallback((): void => {
+    setConfirmCount(pendingCount(files));
+    setConfirmScope('all');
+    setConfirmOpen(true);
+  }, [files]);
+
+  const doItNow = useCallback((count: number): void => {
+    setConfirmCount(count);
+    setConfirmScope('instructions');
+    setConfirmOpen(true);
+  }, []);
 
   // Opening the working sheet first means a run that cannot start (the
   // day's limit, an error) still shows its reason in the sheet.
@@ -527,8 +546,10 @@ export function RunProvider({ children }: RunProviderProps) {
   const confirmTidyUp = useCallback((): void => {
     setConfirmOpen(false);
     openSheet();
-    void writeContextNote(inboxFolderId, keepRule).then(() => process());
-  }, [openSheet, process, inboxFolderId, keepRule]);
+    void writeContextNote(inboxFolderId, keepRule).then(() =>
+      process(confirmScope === 'instructions' ? confirmScope : undefined),
+    );
+  }, [openSheet, process, inboxFolderId, keepRule, confirmScope]);
 
   const dismissConfirm = useCallback((): void => {
     setConfirmOpen(false);
@@ -538,6 +559,7 @@ export function RunProvider({ children }: RunProviderProps) {
     ...state,
     process,
     tidyUp,
+    doItNow,
     openSheet,
     sheetReopenKey,
     lastFinished,

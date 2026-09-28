@@ -12,7 +12,7 @@
  */
 
 import { ApiError } from '../api.js';
-import type { Me, Run, StatusResponse } from '../api.js';
+import type { Me, Run, RunScope, StatusResponse } from '../api.js';
 import { FOLDER_MIME } from '../drive.js';
 import {
   DEMO_EMAIL,
@@ -61,6 +61,13 @@ function isInstruction(path: string, name: string, text: string): boolean {
   );
 }
 
+/** Add's "What is this?" note (`add.ts`, `tell.ts#InstructionKind`): it
+ * applies to its own batch, so it is never a question (#444) — no answer
+ * note gets written for it. */
+function isContext(text: string): boolean {
+  return /kind:\s*context/.test(text);
+}
+
 export class DemoServer {
   readonly vault: DemoVault;
   readonly me: Me;
@@ -107,8 +114,12 @@ export class DemoServer {
     }
   }
 
-  /** `POST /process`: the run in flight, or a new scripted one. */
-  async startProcess(): Promise<Run> {
+  /**
+   * `POST /process`: the run in flight, or a new scripted one; `scope`
+   * `instructions` files only the instruction notes and leaves the rest of
+   * the inbox where it is.
+   */
+  async startProcess(scope: RunScope = 'all'): Promise<Run> {
     this.advance();
     if (this.active !== null) return { ...this.active.run };
     if (this.me.quota.used >= this.me.quota.limit) {
@@ -123,7 +134,7 @@ export class DemoServer {
       processed: [],
       runId: `demo-run-${this.me.quota.used}`,
     };
-    const steps = await this.plan(run, startedAt);
+    const steps = await this.plan(run, startedAt, scope);
     this.active = { run, startedAt, steps };
     return { ...run, processed: [] };
   }
@@ -139,10 +150,24 @@ export class DemoServer {
     };
   }
 
-  /** The run's steps: one per pending item, then done with the replies. */
-  private async plan(run: Run, startedAt: number): Promise<Step[]> {
+  /** The run's steps: one per pending item in `scope`, then done with the
+   * replies. */
+  private async plan(
+    run: Run,
+    startedAt: number,
+    scope: RunScope,
+  ): Promise<Step[]> {
     const date = this.iso(startedAt).slice(0, 10);
-    const pending = this.pendingPaths();
+    const pending: { path: string; name: string; text: string }[] = [];
+    for (const path of this.pendingPaths()) {
+      const entry = this.vault.byPath(path);
+      if (entry === undefined) continue;
+      const text = (await this.vault.text(entry.id)) ?? '';
+      if (scope === 'instructions' && !isInstruction(path, entry.name, text)) {
+        continue;
+      }
+      pending.push({ path, name: entry.name, text });
+    }
     const replies: Reply[] = [];
     const steps: Step[] = [];
     const gap =
@@ -150,14 +175,13 @@ export class DemoServer {
         ? (LAST_FILED_MS - FIRST_FILED_MS) / (pending.length - 1)
         : 0;
 
-    for (const [i, path] of pending.entries()) {
-      const entry = this.vault.byPath(path);
-      if (entry === undefined) continue;
-      const text = (await this.vault.text(entry.id)) ?? '';
-      let destination = INBOX_PLAN.get(path) ?? `3-Resources/${entry.name}`;
-      if (isInstruction(path, entry.name, text)) {
-        destination = `0-Inbox/Processed/${entry.name}`;
-        replies.push(replyTo(entry.name, instructionText(text), date));
+    for (const [i, { path, name, text }] of pending.entries()) {
+      let destination = INBOX_PLAN.get(path) ?? `3-Resources/${name}`;
+      if (isInstruction(path, name, text)) {
+        destination = `0-Inbox/Processed/${name}`;
+        if (!isContext(text)) {
+          replies.push(replyTo(name, instructionText(text), date));
+        }
       }
       steps.push({
         at: FIRST_FILED_MS + i * gap,

@@ -104,7 +104,7 @@ These apply before any route's own checks, in this order (`api/src/index.ts`, mi
 
 1. **Request id.** A client `x-request-id` of 1 to 64 characters from `A-Z a-z 0-9 . _ -` is kept; anything else (or none) is replaced by a fresh UUID. The id is echoed in the `x-request-id` response header and prefixes every log line; a rejected value is never echoed or logged.
 2. **Body size.** A body over 64 KB answers 413 `payload_too_large` before any handler parses it: checked on `Content-Length` when sent, else counted while the body streams in.
-3. **Content type.** A `POST`, `PUT`, `PATCH` or `DELETE` that carries a body must send `Content-Type: application/json` (a `charset` parameter is fine), else 415 `unsupported_media_type`. The writes that take no body (`POST /auth/logout`, `POST /auth/logout-all`, `POST /process`, `DELETE /me`, `DELETE /admin/allow/:email`) send none and are not checked.
+3. **Content type.** A `POST`, `PUT`, `PATCH` or `DELETE` that carries a body must send `Content-Type: application/json` (a `charset` parameter is fine), else 415 `unsupported_media_type`. The writes that take no body (`POST /auth/logout`, `POST /auth/logout-all`, `DELETE /me`, `DELETE /admin/allow/:email`) send none and are not checked; neither is `POST /process` when it is sent without its optional body.
 4. **Generic rate limit.** At most 120 requests per client IP in any 60 seconds across every cookie route (`/auth/*`, `/me`, `/drive/token`, `/settings`, `/vault`, `/process`, `/status`, `/push/subscribe`), else 429 `rate_limited` with `Retry-After` (seconds until the oldest counted request leaves the window). Counted in memory, not KV: a sliding window per Cloudflare isolate (at most 10,000 IPs tracked), so it is best-effort and costs no KV write. It runs ahead of the strict 30 in any 60 seconds on `GET /auth/callback` (per client IP, counted only once the `bower_oauth` cookie verifies) and `POST /process` (per user, counted only after the same-origin and session checks), which are counted in memory the same way. Not counted: `/health`, `GET /push/public-key`, `/runner/*`, `/admin/*` and unknown paths.
 
 | Status | `error.code` | When |
@@ -141,9 +141,11 @@ The template is bundled into the Worker at build time: `api/scripts/bundle-templ
 
 ## `POST /process`
 
-Starts one agent run for the signed-in user's vault. Requires the session cookie; no request body. The app calls it after Add and Tell Bower, and when the user presses Process.
+Starts one agent run for the signed-in user's vault. Requires the session cookie. The app calls it from Tidy up (after the "Is that everything?" confirmation), and from a waiting request's Do it now on the Bower tab.
 
-The Worker sends a `repository_dispatch` to the operator's instance repo (`GITHUB_REPO`, authenticated with `GITHUB_TOKEN`) with `event_type: "ingest"` and `client_payload: { "vault_id": "<id>", "ticket": "<ticket>" }`. The `vault_id` is the user's id: each user has one vault, and the runner fetches its credentials with `GET /runner/vaults/:id`. The `ticket` is this run's credential for the runner routes (see [Runner endpoints](#runner-endpoints)): 32 random bytes, base64url. Only its SHA-256 is stored, under `runticket:<id>`, before the dispatch; it replaces the previous run's.
+The body is optional. Without one (or with `{}`), the run is a whole tidy-up. `{ "scope": "instructions" }` asks for an instructions-only run: only the instruction notes in `0-Inbox/`, the rest of the inbox left where it is (Do it now, #344). `{ "scope": "all" }` is the same as no body. Any other `scope`, a body that is not a JSON object, or one that is not JSON is a 400 `bad_request`, checked right after the session and the rate limit, before any run is dispatched, stored or counted.
+
+The Worker sends a `repository_dispatch` to the operator's instance repo (`GITHUB_REPO`, authenticated with `GITHUB_TOKEN`) with `event_type: "ingest"` and `client_payload: { "vault_id": "<id>", "ticket": "<ticket>", "scope": "all" | "instructions" }`. The runner does not honour `scope` yet (#373): until it does, an instructions-only run still tidies up the whole inbox. The `vault_id` is the user's id: each user has one vault, and the runner fetches its credentials with `GET /runner/vaults/:id`. The `ticket` is this run's credential for the runner routes (see [Runner endpoints](#runner-endpoints)): 32 random bytes, base64url. Only its SHA-256 is stored, under `runticket:<id>`, before the dispatch; it replaces the previous run's.
 
 In order:
 
@@ -157,6 +159,7 @@ Response: `{ "run": Run }`, status 202, both for a new run and for the run alrea
 
 | Status | `error.code` | When |
 | --- | --- | --- |
+| 400 | `bad_request` | The body is not JSON, not a JSON object, or its `scope` is neither `"all"` nor `"instructions"` |
 | 401 | `unauthenticated` | No valid session cookie, or the user no longer exists |
 | 403 | `forbidden` | `Origin` (or, without it, the `Referer`'s origin) is not `APP_ORIGIN`. Checked before the session, on every state-changing session route (see `docs/security.md`) |
 | 409 | `no_vault` | The user has not set up their Bower folder yet (`POST /vault`) |

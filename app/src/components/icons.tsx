@@ -389,3 +389,13 @@ export function IconSparkle(): JSX.Element {
     </Svg>
   );
 }
+
+/** A tick: a request answered or kept as a rule (#344, board
+ * Phone-Bower-Requests). */
+export function IconCheck(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M5 12l4 4L19 6" />
+    </Svg>
+  );
+}

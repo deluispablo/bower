@@ -337,6 +337,37 @@ describe('folderCounts', () => {
     ]);
     expect(folderCounts(index).get('0-Inbox')).toBe(1);
   });
+
+  // #425: the folder menu, the Notes tree and the desktop sidebar count
+  // files and notes together, the same total the folder screen itself
+  // lists ("n files · n notes") — Pinned's own "n notes" (`home.tsx`,
+  // `pinned-section.tsx`) keeps the notes-only default above.
+  describe('with includeFiles', () => {
+    const index = buildVaultIndex([
+      dir('0-Inbox'),
+      entry('0-Inbox/Receipt.pdf', 'application/pdf'),
+      entry('0-Inbox/A quick note.md'),
+      dir('1-Projects'),
+      dir('1-Projects/Kitchen Refresh'),
+      entry('1-Projects/Kitchen Refresh/Kitchen Refresh.md'),
+      entry('1-Projects/Kitchen Refresh/Paint colours.md'),
+      entry('1-Projects/Kitchen Refresh/Quote.pdf', 'application/pdf'),
+      entry('1-Projects/Kitchen Refresh/Patch.png', 'image/png'),
+    ]);
+
+    it('adds files to the notes-only total', () => {
+      const counts = folderCounts(index, true);
+      expect(counts.get('0-Inbox')).toBe(2);
+      expect(counts.get('1-Projects')).toBe(4);
+      expect(counts.get('1-Projects/Kitchen Refresh')).toBe(4);
+    });
+
+    it('leaves the default (no second argument) notes-only', () => {
+      const counts = folderCounts(index);
+      expect(counts.get('0-Inbox')).toBe(1);
+      expect(counts.get('1-Projects')).toBe(2);
+    });
+  });
 });
 
 describe('folderContents', () => {
@@ -355,15 +386,56 @@ describe('folderContents', () => {
     expect(contents?.name).toBe('Flat hunt');
     expect(contents?.path).toBe('1-Projects/Flat hunt');
     expect(contents?.subfolders).toEqual([
-      { path: '1-Projects/Flat hunt/Camden', name: 'Camden', count: 1 },
+      {
+        path: '1-Projects/Flat hunt/Camden',
+        name: 'Camden',
+        count: 1,
+        things: 1,
+        updated: undefined,
+      },
       {
         path: '1-Projects/Flat hunt/Shoreditch',
         name: 'Shoreditch',
         count: 2,
+        things: 2,
+        updated: undefined,
       },
     ]);
     expect(contents?.notes.map((n) => n.name)).toEqual(['Budget.md']);
     expect(contents?.noteCount).toBe(4);
+  });
+
+  it("counts a subfolder's things (notes and files) and its newest change (#431)", () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      dir('1-Projects/Flat hunt/Viewings'),
+      entry(
+        '1-Projects/Flat hunt/Budget.md',
+        'text/markdown',
+        '2026-01-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/Viewings/Camden.md',
+        'text/markdown',
+        '2026-02-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/Lease.pdf',
+        'application/pdf',
+        '2026-03-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/_Flat hunt.md',
+        'text/markdown',
+        '2026-04-01T00:00:00.000Z',
+      ),
+    ]);
+    const [flatHunt] = folderContents(index, '1-Projects')?.subfolders ?? [];
+    // Bower's own folder note neither counts nor dates the folder.
+    expect(flatHunt?.count).toBe(2);
+    expect(flatHunt?.things).toBe(3);
+    expect(flatHunt?.updated).toBe('2026-03-01T00:00:00.000Z');
   });
 
   it('sorts its own notes newest first regardless of `sort`', () => {
@@ -553,6 +625,33 @@ describe('folderEmptyState', () => {
       elsewhere: { count: 1, subfolderName: 'Flat hunt' },
     });
   });
+
+  // #424: "9 notes in Half Marathon" attributed the whole subtree total to
+  // the first subfolder that held any, when the notes were actually spread
+  // across three. No single subfolder holds every one, so none is named.
+  it('names no subfolder when the total is spread across more than one', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Half Marathon'),
+      entry('1-Projects/Half Marathon/Half Marathon.md'),
+      entry('1-Projects/Half Marathon/Training plan.md'),
+      dir('1-Projects/Kitchen Refresh'),
+      entry('1-Projects/Kitchen Refresh/Budget.md'),
+      entry('1-Projects/Kitchen Refresh/Tiles.md'),
+      entry('1-Projects/Kitchen Refresh/Paint.md'),
+      dir('1-Projects/Lisbon Trip'),
+      entry('1-Projects/Lisbon Trip/Itinerary.md'),
+      entry('1-Projects/Lisbon Trip/Flights.md'),
+      entry('1-Projects/Lisbon Trip/Hotel.md'),
+      entry('1-Projects/Lisbon Trip/Packing.md'),
+    ]);
+    const contents = folderContents(index, '1-Projects');
+    expect(contents?.notes).toEqual([]);
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: { count: 9, subfolderName: null },
+    });
+  });
 });
 
 describe('folderHref', () => {
@@ -653,6 +752,45 @@ describe('siblings', () => {
     const root = index.byPath.get('index.md');
     const result = siblings(index, root?.id ?? '');
     expect(result).toEqual({ prev: null, next: null });
+  });
+
+  // #423: the folder screen hides Bower's own files unless `showAppFiles`
+  // is on, so the previous/next walk must skip them the same way, rather
+  // than land on one.
+  describe("with one of Bower's own files in the folder", () => {
+    const withAppFile = buildVaultIndex([
+      dir('Answers'),
+      entry('Answers/Bower - Proposals.md'),
+      entry('Answers/Which subscriptions renew this autumn.md'),
+    ]);
+
+    it('skips it by default', () => {
+      const note = withAppFile.byPath.get(
+        'Answers/Which subscriptions renew this autumn.md',
+      );
+      const result = siblings(withAppFile, note?.id ?? '');
+      expect(result).toEqual({ prev: null, next: null });
+    });
+
+    it('walks it when showAppFiles is on', () => {
+      const note = withAppFile.byPath.get(
+        'Answers/Which subscriptions renew this autumn.md',
+      );
+      const result = siblings(withAppFile, note?.id ?? '', true);
+      expect(result.prev?.name).toBe('Bower - Proposals.md');
+      expect(result.next).toBeNull();
+    });
+
+    it("still finds the note even when it is itself one of Bower's own files", () => {
+      // The anchor stays in the walk even though it would otherwise be
+      // filtered out; the real note next to it (by name) is still found.
+      const proposals = withAppFile.byPath.get('Answers/Bower - Proposals.md');
+      const result = siblings(withAppFile, proposals?.id ?? '');
+      expect(result.prev).toBeNull();
+      expect(result.next?.name).toBe(
+        'Which subscriptions renew this autumn.md',
+      );
+    });
   });
 });
 

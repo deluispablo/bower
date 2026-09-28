@@ -65,6 +65,21 @@ describe('resultMessage', () => {
       '2 files processed',
     );
   });
+
+  it('never counts the "What is this?" context note (#446)', () => {
+    expect(
+      resultMessage({
+        ...base,
+        processed: ['a.md', '0-Inbox/Bower - 2026-09-27 0815 Context.md'],
+      }),
+    ).toBe('1 file processed');
+    expect(
+      resultMessage({
+        ...base,
+        processed: ['0-Inbox/Bower - 2026-09-27 0815 Context.md'],
+      }),
+    ).toBe('Nothing new to process');
+  });
 });
 
 describe('nextPollDelay', () => {

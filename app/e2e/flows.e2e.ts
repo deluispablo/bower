@@ -17,6 +17,7 @@ import {
   test,
   visible,
 } from './demo.js';
+import type { Page } from '@playwright/test';
 
 test.describe('open Home', () => {
   test.use({ introSeen: false });
@@ -180,6 +181,28 @@ test("a note Bower wrote opens with Bower's note and What Bower used (#351)", as
   await shot(page, testInfo, 'note-from-bower');
 });
 
+test("previous/next under a note hides Bower's own files and uses titles (#423)", async ({
+  page,
+}) => {
+  // Answers has exactly one real note ("Which subscriptions renew this
+  // autumn?") alongside Bower's own "Bower - Proposals.md" (#420's demo
+  // fixture already has both, matching the issue's own repro).
+  await page.goto('/folder/Answers');
+  await page
+    .getByRole('link', { name: /Which subscriptions renew this autumn/ })
+    .click();
+  await expect(
+    page.getByRole('heading', {
+      level: 1,
+      name: 'Which subscriptions renew this autumn?',
+    }),
+  ).toBeVisible();
+
+  // No sibling nav at all: the only other file in the folder is Bower's
+  // own, hidden unless "Show Bower's own files" is on.
+  await expect(page.locator('.note-siblings')).toHaveCount(0);
+});
+
 test('a missing note shows Not found', async ({ page }, testInfo) => {
   await openHome(page);
   await page.goto('/note/does-not-exist');
@@ -248,7 +271,9 @@ test('Add: the camera door opens a capture input (#339)', async ({
   await expect(page.locator('input[type="file"][capture]')).toHaveCount(1);
 });
 
-test('Add puts a file in the inbox', async ({ page }, testInfo) => {
+test('Add puts a file in the inbox and stays on Add (#421)', async ({
+  page,
+}, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
   await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible();
@@ -265,9 +290,16 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await expect(page.getByText('Added to your inbox.')).toBeVisible();
   await shot(page, testInfo, 'add');
 
-  // Back on Home once the upload finishes: the Inbox card reads the new
-  // total right away (#289), not after the next background refresh.
-  await expect(page).toHaveURL('/');
+  // Adding is meant to take the whole pile before a tidy-up (#421): no
+  // navigation away, and no leftover "Add to Bower" once nothing is
+  // waiting any more.
+  await expect(page).toHaveURL('/add');
+  await expect(page.getByRole('button', { name: 'Add to Bower' })).toBeHidden();
+
+  // The vault index refreshed in place (#289): Home already reads the new
+  // total once we go there ourselves, not after the next background
+  // refresh.
+  await navigate(page, /^Home$/);
   await expect(
     visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
       '.home-card-count',
@@ -292,12 +324,14 @@ test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (
   await page.getByRole('button', { name: 'Add to Bower' }).click();
   await expect(page.getByText('In your inbox')).toBeVisible();
 
-  // Back on Home once the upload finishes, then Add again within the
-  // same session: the row is still there (#334), not an empty screen.
-  await expect(page).toHaveURL('/');
+  // Leave for Home ourselves, then Add again within the same session: the
+  // row is still there (#334), not an empty screen, and no leftover
+  // "Add to Bower" reappears now that nothing is waiting (#421).
+  await navigate(page, /^Home$/);
   await navigate(page, /^Add$/);
   await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
   await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add to Bower' })).toBeHidden();
 });
 
 test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', async ({
@@ -328,8 +362,9 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
       `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
     );
   await page.getByRole('button', { name: 'Add to Bower' }).click();
-  await expect(page).toHaveURL('/');
-  await navigate(page, /^Add$/);
+  // Stays on Add (#421): the new total shows in place, no round trip
+  // through Home needed to see it.
+  await expect(page).toHaveURL('/add');
   await expect(hint).toContainText('4 things waiting.');
 });
 
@@ -353,9 +388,12 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   );
   await shot(page, testInfo, 'add-context');
   await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
 
-  // Leaving Add writes the note: the three things, the receipt, the note.
-  await expect(page).toHaveURL('/');
+  // The context note is written on leaving Add (#421: no longer automatic
+  // once a batch finishes), so leave for Home ourselves: the three
+  // things, the receipt, the note.
+  await navigate(page, /^Home$/);
   await expect(
     visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
       '.home-card-count',
@@ -375,7 +413,7 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
     page
       .getByRole('tabpanel', { name: 'Requests' })
       .getByRole('listitem')
-      .filter({ hasText: 'Context' }),
+      .filter({ hasText: 'About the files you added' }),
   ).toHaveCount(1);
 });
 
@@ -688,6 +726,89 @@ test('a "from now on" sentence is kept at once as a rule, no run (#343)', async 
     'aria-selected',
     'true',
   );
+});
+
+test('Requests: every state, Edit, Remove, and Do it now for the requests only (#344)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  await page.getByRole('tab', { name: 'Requests' }).click();
+  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  const rowWith = (text: string) =>
+    requests.getByRole('listitem').filter({ hasText: text });
+
+  // The demo's folder: a question waiting in the inbox, an answer, and
+  // Alex's own rules.
+  const lisbon = rowWith(
+    'What do I still need to sort out for the Lisbon trip?',
+  );
+  await expect(
+    lisbon.getByText('Waiting · question', { exact: true }),
+  ).toBeVisible();
+  await expect(lisbon).toContainText('goes with the next tidy-up');
+  const answered = rowWith('Which subscriptions renew this autumn');
+  await expect(answered.getByText('Answered', { exact: true })).toBeVisible();
+  await expect(
+    answered.getByRole('link', { name: 'Read the answer' }),
+  ).toBeVisible();
+  const rule = rowWith('Never archive Money');
+  await expect(rule.getByText('Rule kept', { exact: true })).toBeVisible();
+  await expect(
+    rule.getByRole('button', { name: 'In your rules' }),
+  ).toBeVisible();
+  await lisbon.scrollIntoViewIfNeeded();
+  await shot(page, testInfo, 'bower-requests');
+
+  // Edit: the words in the box, Send rewrites the same note.
+  await lisbon.getByRole('button', { name: 'Edit' }).click();
+  const box = page.getByRole('textbox', {
+    name: 'Tell Bower what to do, or ask it something',
+  });
+  await expect(box).toHaveValue(
+    'What do I still need to sort out for the Lisbon trip?',
+  );
+  await box.fill('What do I still need to book for the Lisbon trip?');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(box).toHaveValue('');
+  const edited = rowWith('What do I still need to book for the Lisbon trip?');
+  await expect(
+    edited.getByText('Waiting · question', { exact: true }),
+  ).toBeVisible();
+  await expect(lisbon).toHaveCount(0);
+
+  // Remove: a job sent now goes to the Trash and leaves the list.
+  await box.fill('Make a packing list for my next trip');
+  await page.getByRole('button', { name: 'Send' }).click();
+  const job = rowWith('Make a packing list for my next trip');
+  await expect(job.getByText('Waiting · job', { exact: true })).toBeVisible();
+  await job.getByRole('button', { name: 'Remove' }).click();
+  await expect(job).toHaveCount(0);
+
+  // Do it now: the confirmation counts the requests, and the run files
+  // only them; the rest of the inbox stays for the next tidy-up.
+  await edited.getByRole('button', { name: 'Do it now' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await expect(confirm).toContainText('1 thing is waiting.');
+  await shot(page, testInfo, 'bower-requests-do-it-now');
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(
+    edited.getByText('Tidying up · question', { exact: true }),
+  ).toBeVisible();
+  // One file: the request, not the two other things in the inbox.
+  const toast = page.getByRole('status').filter({
+    hasText: '1 file processed',
+  });
+  await expect(toast).toBeVisible({ timeout: 20_000 });
+  await expect(
+    rowWith('What do I still need for Lisbon').getByText('Answered', {
+      exact: true,
+    }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(edited).toHaveCount(0);
 });
 
 test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({
@@ -1099,6 +1220,102 @@ test('The bar and the bottom nav align with the content column at 768 (#311)', a
   await shot(page, testInfo, 'tablet-768');
 });
 
+/**
+ * Every rendered element whose right edge comes within 40 px of the
+ * viewport's (#355, the Desktop-Responsive board's rule: at 1920 nothing
+ * touches the right edge). The page's own full-width wrappers are skipped:
+ * they span the window by design, and what counts is what sits inside them.
+ */
+async function rightEdgeHuggers(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const limit = document.documentElement.clientWidth - 40;
+    const wrappers = ['#app', '.shell', '.shell-main'];
+    const found: string[] = [];
+    for (const el of document.body.querySelectorAll('*')) {
+      if (wrappers.some((selector) => el.matches(selector))) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width < 1 || box.height < 1) continue;
+      if (!el.checkVisibility({ visibilityProperty: true })) continue;
+      if (box.right > limit) {
+        const name = el.className === '' ? el.tagName : String(el.className);
+        found.push(`${name} ends at ${String(Math.round(box.right))}`);
+      }
+    }
+    return found;
+  });
+}
+
+test('At 1920 the content stays in one centred container, away from the right edge (#355)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The container is the desktop layout; the phone has its own column.',
+  );
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openHome(page);
+
+  const container = page.locator('.shell-container');
+  const content = page.locator('main.content');
+  const width = async (): Promise<number> =>
+    (await container.boundingBox())?.width ?? NaN;
+
+  // Home: 980 px, centred right of the sidebar; the header row inside.
+  await expect(page.getByRole('link', { name: /Inbox/ }).first()).toBeVisible();
+  expect(await width()).toBeCloseTo(980, 0);
+  const [box, main, bar] = await Promise.all([
+    container.boundingBox(),
+    page.locator('.shell-main').boundingBox(),
+    page.locator('.topbar').boundingBox(),
+  ]);
+  const left = (box?.x ?? NaN) - (main?.x ?? NaN);
+  const right =
+    (main?.x ?? NaN) +
+    (main?.width ?? NaN) -
+    (box?.x ?? NaN) -
+    (box?.width ?? NaN);
+  expect(left).toBeCloseTo(right, 0);
+  expect(bar?.x).toBeCloseTo(box?.x ?? NaN, 0);
+  expect(bar?.width).toBeCloseTo(box?.width ?? NaN, 0);
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-home');
+
+  // A note, with its About panel: the container grows to 1200, still centred.
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+  await expect(page.locator('.bower-note')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'About this note' }),
+  ).toBeVisible();
+  expect(await width()).toBeCloseTo(1200, 0);
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-note');
+
+  await navigate(page, /^Add$/);
+  await expect(page).toHaveURL(/\/add$/);
+  await expect(content).toBeVisible();
+  expect(await width()).toBeCloseTo(980, 0);
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-add');
+
+  await navigate(page, /^Bower$/);
+  await expect(page.getByRole('tab', { name: 'Rules' })).toBeVisible();
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-bower');
+
+  await openSettings(page);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-settings');
+});
+
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
   page,
 }, testInfo) => {
@@ -1110,7 +1327,9 @@ test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#
   await page.goto('/folder/1-Projects');
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.getByText('Nothing here yet.')).toBeHidden();
-  await expect(page.getByText(/notes in /)).toBeVisible();
+  // #424: the total is real (2 + 3 + 4 across three subfolders), but no
+  // single one of them holds all nine, so none is named.
+  await expect(page.getByText('9 notes in its folders')).toBeVisible();
   await shot(page, testInfo, 'folder-notes-elsewhere');
 });
 
@@ -1128,6 +1347,20 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
   const explainerBox = await explainer.boundingBox();
   const chipsBox = await chips.boundingBox();
   expect((explainerBox?.y ?? 0) < (chipsBox?.y ?? 0)).toBe(true);
+  // The Phone-Folder board's details (#431): the heading without the
+  // numeric prefix, "N projects · N things", a second line on each
+  // subfolder row.
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Projects', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.folder-meta')).toHaveText(
+    /^\d+ projects? · \d+ things?$/,
+  );
+  await expect(
+    page
+      .locator('a.folder-row[href="/folder/1-Projects/Lisbon%20Trip"]')
+      .locator('.folder-row-detail'),
+  ).toHaveText(/^\d+ things? · (updated today|\d+ (d|w|mo|y))$/);
   await shot(page, testInfo, 'folder-root-explained');
 
   // A non-root folder (a project) has no meaning line to show.
@@ -1219,6 +1452,40 @@ test('the folder menu: open it, tap a folder, land on it (#319)', async ({
   await expect(bar.locator('.topbar-title')).toHaveText('3-Resources');
 });
 
+test('folder counts add files and notes together, the same total the folder screen itself lists (#425)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+
+  if (testInfo.project.name === 'phone') {
+    // The folder menu button only sits on an outer screen's bar (C.2); open
+    // it from Home before navigating into a folder.
+    const bar = page.locator('header.topbar');
+    await bar.getByRole('button', { name: 'Your folders' }).click();
+    const menu = page.getByRole('dialog', { name: 'Your folders' });
+    await expect(
+      menu.getByRole('link', { name: /^0-Inbox.*added\D*2$/ }),
+    ).toBeVisible();
+    await expect(
+      menu.getByRole('link', { name: /^1-Projects.*end date\D*11$/ }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+  } else {
+    const sidebar = page.getByRole('navigation', { name: 'Your notes' });
+    await expect(
+      sidebar.locator('a[href="/folder/0-Inbox"] .tree-count'),
+    ).toHaveText('2');
+    await expect(
+      sidebar.locator('a[href="/folder/1-Projects"] .tree-count'),
+    ).toHaveText('11');
+  }
+
+  // 0-Inbox: 1 file (the boiler invoice) + 1 note (Tomato seedlings) — the
+  // folder screen's own header already says "1 file · 1 note".
+  await page.goto('/folder/0-Inbox');
+  await expect(page.locator('.folder-meta')).toHaveText('1 file · 1 note');
+});
+
 test('a project folder lists its files and notes together, newest first, with who put each there', async ({
   page,
 }, testInfo) => {
@@ -1244,6 +1511,16 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
   await expect(rows.nth(2)).toHaveAttribute('href', /^\/note\//);
   await shot(page, testInfo, 'folder-project');
+
+  // The Ask Bower chip opens the Bower tab's box with the folder named,
+  // and nothing else from the folder (#354).
+  await page.getByRole('link', { name: 'Ask Bower about it' }).click();
+  await expect(page).toHaveURL(/\/bower\?text=/);
+  await expect(
+    page.getByRole('textbox', {
+      name: 'Tell Bower what to do, or ask it something',
+    }),
+  ).toHaveValue('About Kitchen Refresh: ');
 });
 
 test('a file opens on its own screen: the photo inline, the PDF without a preview says so', async ({
@@ -1295,5 +1572,27 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(menu.getByRole('menuitem', { name: /Pin to Home/ })).toHaveCount(
     0,
   );
+  // The one More menu (#352): the board's header, then Ask Bower first.
+  await expect(menu).toContainText('PDF · 1-Projects / Kitchen Refresh');
+  await expect(menu.getByRole('menuitem').first()).toContainText(
+    'Ask Bower about this',
+  );
   await shot(page, testInfo, 'file-pdf-menu');
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+
+  // The same menu on a folder: Pin to Home, no note-only rows.
+  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await visible(page.getByRole('button', { name: 'More' })).click();
+  const folderMenu = page.getByRole('menu', { name: 'Folder actions' });
+  await expect(
+    folderMenu.getByRole('menuitem', { name: /Pin to Home/ }),
+  ).toBeVisible();
+  await expect(
+    folderMenu.getByRole('menuitem', { name: /Ask Bower about this/ }),
+  ).toHaveAttribute('href', '/bower?text=About%20Kitchen%20Refresh%3A%20');
+  await expect(
+    folderMenu.getByRole('menuitem', { name: /Edit the text/ }),
+  ).toHaveCount(0);
+  await shot(page, testInfo, 'folder-more-menu');
 });

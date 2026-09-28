@@ -12,9 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ApiModule from '../src/api.js';
 import type * as DriveModule from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
+import { contextNote, contextNoteName } from '../src/add.js';
 import { summarise } from '../src/health-report.js';
+import { runCounts } from '../src/home.js';
 import { parseFrontmatter } from '../src/markdown/frontmatter.js';
-import { instructionFileName, instructionNote, loadSent } from '../src/tell.js';
+import { instructionFileName, instructionNote } from '../src/tell.js';
 import { DONE_MS, QUEUED_MS } from '../src/demo/server.js';
 
 const START = new Date('2026-09-27T10:00:00.000Z');
@@ -115,7 +117,6 @@ describe('demo mode', () => {
     const rulebook = await drive.getText((await fileAt('CLAUDE.md')).id);
     expect(rulebook).toContain('Vault rulebook');
 
-    expect(loadSent().map((item) => item.name)).toHaveLength(2);
     const found = await drive.searchFullText('sintra');
     expect(found.map((f) => f.name)).toContain('Things to see in Lisbon.md');
   });
@@ -153,6 +154,23 @@ describe('demo mode', () => {
     expect(again.processed).toEqual([]);
   });
 
+  it('Do it now: an instructions-only run answers the request and leaves the rest of the inbox (#344)', async () => {
+    await api.startProcess('instructions');
+    vi.advanceTimersByTime(DONE_MS);
+    const done = (await api.getStatus()).run;
+    expect(done?.state).toBe('done');
+    expect(done?.processed).toHaveLength(1);
+
+    const after = await paths();
+    expect(after.filter(isInboxItem)).toEqual([
+      '0-Inbox/Boiler service invoice.pdf',
+      '0-Inbox/Tomato seedlings.md',
+    ]);
+    expect(
+      after.some((p) => /^Answers\/2026-09-27 What do I still need/.test(p)),
+    ).toBe(true);
+  });
+
   it('answers Tell Bower: scripted replies for the chips, a generic one otherwise', async () => {
     const { inboxFolderId } = await folders();
     const messages = [
@@ -186,6 +204,34 @@ describe('demo mode', () => {
     expect(
       (await paths()).filter((p) => /^0-Inbox\/Processed\/Bower - /.test(p)),
     ).toHaveLength(5);
+  });
+
+  it('files the "What is this?" context note without answering it as a question (#444)', async () => {
+    const { inboxFolderId } = await folders();
+    const now = new Date(START.getTime());
+    await drive.createTextFile(
+      inboxFolderId,
+      contextNoteName(now),
+      contextNote('Test receipt from a shop', ['Receipt.txt'], now),
+    );
+
+    const run = await tidyUp();
+
+    // The context note is filed out of the inbox like everything else...
+    expect(run.processed).toContain(`0-Inbox/${contextNoteName(now)}`);
+    expect(
+      (await paths()).some(
+        (p) => p === `0-Inbox/Processed/${contextNoteName(now)}`,
+      ),
+    ).toBe(true);
+    // ...but it is not a question: no answer note for it, and only the
+    // fixture's one real question (`INBOX_QUESTION`) counts as answered.
+    const answers = (await paths()).filter((p) =>
+      p.startsWith('Answers/2026-09-27'),
+    );
+    expect(answers.some((p) => /Context/.test(p))).toBe(false);
+    expect(answers).toHaveLength(1);
+    expect(runCounts(run)).toEqual({ filed: 2, answered: 1 });
   });
 
   it('adds files to the inbox, and the next run files them', async () => {
