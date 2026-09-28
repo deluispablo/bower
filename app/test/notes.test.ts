@@ -244,7 +244,7 @@ describe('PinnedSidebar (#589)', () => {
         kind: 'folder' as const,
         path: '2-Areas/Cooking',
         file: file('2-Areas/Cooking/_Cooking.md'),
-        pinnedAt: 1,
+        pinnedAt: '2026-09-27T10:00:00Z',
       },
     ];
     void act(() => {
