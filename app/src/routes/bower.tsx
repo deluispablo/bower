@@ -380,7 +380,10 @@ export function Bower(): JSX.Element {
     openNoteForEdit,
     saveEditedNote,
   } = useVault();
-  const { phase, run, doItNow } = useRun();
+  // #513: the run store's shared, minute-ticking clock (#537), so the
+  // Requests rows' relative times agree with Home's cards and the working
+  // sheet instead of each keeping (and rounding) their own.
+  const { phase, run, doItNow, now } = useRun();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const { query } = useLocation();
@@ -716,8 +719,6 @@ export function Bower(): JSX.Element {
     const tab = SEGMENTS[next];
     if (tab !== undefined) selectSegment(tab.id, true);
   }
-
-  const now = Date.now();
 
   // The three panels' contents: tabs under 1200 px, three columns from
   // there (#357, Desktop-Bower board).
