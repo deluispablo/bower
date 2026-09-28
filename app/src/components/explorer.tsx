@@ -17,12 +17,10 @@
  *   button the route itself owns (`collapseKey`/`expandKey` below), since
  *   the actions slot lives in the shell, outside this component.
  *
- * The filter field differs per variant (spec §14): the page's is a real
- * text field that narrows the tree in place (`Tree`'s `filter` prop, pure
- * logic in `navigation.ts#filterTree`); the sidebar's stays a button with a
- * `Ctrl K` hint that opens the
- * quick switcher (#142) instead — the switcher is one tap away either way,
- * from Home's search button and `Ctrl/Cmd+K`. The hidden-files footer
+ * The search row opens the quick switcher (#142) in both variants: the
+ * sidebar's with a `Ctrl K` hint, the page's as the Phone-Notes board
+ * links it to Phone-Switcher (#433), "Search or jump to anything"; closing
+ * the switcher leaves the person where they were. The hidden-files footer
  * button toggles the `showAppFiles` preference (spec §5.3), the same one
  * Settings › Advanced has its own switch for.
  */
@@ -196,9 +194,6 @@ export function Explorer({
   const [showAppFiles, setShowAppFiles] = useState(() =>
     getPref('showAppFiles'),
   );
-  // Page only: the live filter text (spec §14); the sidebar has no field
-  // of its own to hold, its button opens the switcher instead.
-  const [filter, setFilter] = useState('');
   const findings = useHealthFindings(variant !== 'sidebar');
 
   function toggleSort(): void {
@@ -280,35 +275,25 @@ export function Explorer({
           <span class="brand-word">Bower</span>
         </a>
       )}
-      {variant !== 'sidebar' ? (
-        <div class="explorer-filter">
-          <IconSearch />
-          <input
-            type="text"
-            class="explorer-filter-input"
-            placeholder="Filter your notes"
-            aria-label="Filter your notes"
-            value={filter}
-            onInput={(event) => {
-              setFilter((event.target as HTMLInputElement).value);
-            }}
-          />
-        </div>
-      ) : (
-        <button
-          type="button"
-          class="explorer-filter"
-          onClick={() => {
-            openSwitcher();
-          }}
-        >
-          <IconSearch />
-          <span class="explorer-filter-label">Search or jump to a note</span>
-          <span class="explorer-filter-kbd" aria-hidden="true">
-            Ctrl K
-          </span>
-        </button>
-      )}
+      <button
+        type="button"
+        class="explorer-filter"
+        onClick={() => {
+          openSwitcher();
+        }}
+      >
+        <IconSearch />
+        {variant === 'sidebar' ? (
+          <>
+            <span class="explorer-filter-label">Search or jump to a note</span>
+            <span class="explorer-filter-kbd" aria-hidden="true">
+              Ctrl K
+            </span>
+          </>
+        ) : (
+          <span class="explorer-filter-label">Search or jump to anything</span>
+        )}
+      </button>
       {variant === 'sidebar' && (
         <div class="explorer-rows">
           {nav}
@@ -331,7 +316,6 @@ export function Explorer({
             sort={sort}
             collapseKey={variant === 'sidebar' ? collapseKey : pageCollapseKey}
             expandKey={variant === 'sidebar' ? expandKey : pageExpandKey}
-            filter={variant === 'sidebar' ? undefined : filter}
             showAppFiles={showAppFiles}
             rootMeanings={variant !== 'sidebar'}
           />

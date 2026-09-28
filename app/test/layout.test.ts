@@ -419,17 +419,17 @@ describe('Layout', () => {
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
   });
 
-  it("shows the waiting count on Home's row, not on Add (#326, C.9)", () => {
+  it("shows the waiting count on Add's row, not on Home (#422, #326, C.9)", () => {
     mount();
     const sidebar = query('nav[aria-label="Your notes"]');
-    const home = query<HTMLAnchorElement>(
-      'nav[aria-label="Primary"] a[href="/"]',
-    );
-    expect(home.querySelector('.nav-badge')?.textContent).toBe('1');
     const add = query<HTMLAnchorElement>(
       'nav[aria-label="Primary"] a[href="/add"]',
     );
-    expect(add.querySelector('.nav-badge')).toBeNull();
+    expect(add.querySelector('.nav-badge')?.textContent).toBe('1');
+    const home = query<HTMLAnchorElement>(
+      'nav[aria-label="Primary"] a[href="/"]',
+    );
+    expect(home.querySelector('.nav-badge')).toBeNull();
     // Sanity: the fixture's one pending file is `0-Inbox/Receipt.pdf`.
     expect(sidebar.textContent).toContain('0-Inbox');
   });
