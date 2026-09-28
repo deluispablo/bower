@@ -9,6 +9,7 @@ import { Login } from './routes/login.js';
 import { RunProvider } from './run-store.js';
 import { ShellSlotsProvider } from './components/shell-slots.js';
 import { SessionProvider, useSession } from './session.js';
+import { JUST_FILED_PATH } from './just-filed.js';
 import { BOWER_PATH, IDEAS_PATH, usesShell } from './shell-routes.js';
 import { openSwitcher } from './switcher-store.js';
 import { VaultProvider } from './vault-store.js';
@@ -26,6 +27,9 @@ const Ideas = lazy(() => import('./routes/ideas.js').then((m) => m.Ideas));
 const Intro = lazy(() => import('./routes/intro.js').then((m) => m.Intro));
 const LintRedirect = lazy(() =>
   import('./routes/lint-redirect.js').then((m) => m.LintRedirect),
+);
+const JustFiled = lazy(() =>
+  import('./routes/just-filed.js').then((m) => m.JustFiled),
 );
 const Note = lazy(() => import('./routes/note.js').then((m) => m.Note));
 const NotFound = lazy(() =>
@@ -110,6 +114,7 @@ function AppRoutes() {
       <Route path="/add" component={Add} />
       <Route path={BOWER_PATH} component={Bower} />
       <Route path={IDEAS_PATH} component={Ideas} />
+      <Route path={JUST_FILED_PATH} component={JustFiled} />
       <Route path="/tell" component={TellRedirect} />
       <Route path="/search" component={SearchRedirect} />
       <Route path="/settings" component={Settings} />
