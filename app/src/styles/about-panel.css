@@ -75,3 +75,103 @@
     display: block;
   }
 }
+
+/* Key facts, compact Details, Original and the bird on the outline
+   (issue #609, board `Desktop-Note-Details`). */
+.about-details {
+  margin: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.about-detail {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+}
+
+.about-detail dt {
+  color: var(--color-text-muted);
+}
+
+.about-detail dd {
+  margin: 0;
+  text-align: right;
+}
+
+.about-not-stated {
+  margin: var(--space-2) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.about-original {
+  display: block;
+}
+
+.about-outline-bird {
+  display: inline-flex;
+  margin-left: var(--space-1);
+  vertical-align: middle;
+}
+
+/* The note screen's own layout (issue #609, boards `Phone-Note-Details`,
+   `Flow-07-Answer`): the props line under the title, the question box of an
+   answer, the key facts caption and the "n of m" between previous and next. */
+.note-props {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.note-props a {
+  color: inherit;
+}
+
+.note-props .tag {
+  color: var(--color-link);
+}
+
+.note-props-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.note-asked {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.note-asked-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-type-answer);
+}
+
+.note-asked-text {
+  margin: var(--space-1) 0 0;
+  font-weight: 600;
+}
+
+.note-keyfacts-caption {
+  margin: 0 0 var(--space-1);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.note-siblings-count {
+  align-self: center;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
