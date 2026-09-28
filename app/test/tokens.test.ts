@@ -85,7 +85,7 @@ function ratio(a: string, b: string): number {
 }
 
 function valueOf(cssBlock: string, token: string): string {
-  const m = cssBlock.match(new RegExp(`${token}:\s*([^;]+);`));
+  const m = cssBlock.match(new RegExp(`${token}:\\s*([^;]+);`));
   const v = m?.[1];
   if (v === undefined) {
     throw new Error(`token not found: ${token}`);
