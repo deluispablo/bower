@@ -4,17 +4,15 @@
  * instead, in a bare `<main>` (`app.tsx`).
  *
  * Phone: a top bar (#318, Phone-Home and Phone-Note boards) — on a tab,
- * the folder menu button that opens the folder menu (#319,
- * `folder-menu.tsx`; the page behind goes inert while it is open); on an inner screen
- * (`isInnerScreen`), Back instead (the `back` slot, or Back to Home); then
+ * nothing before the title (the Notes tab is the only explorer, #586); on an
+ * inner screen (`isInnerScreen`), Back (the `back` slot, or Back to Home); then
  * the title (the wordmark as text on Home, the screen's own title from the
  * `crumb` slot elsewhere), the `actions` slot (a note's More, #144), "?"
  * (About this screen) and the avatar that opens Settings — and four tabs at the bottom (#317): Home, Notes,
  * Add, Bower. Health is reached from the Notes tab's Health row.
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
- * header row over the content (breadcrumb slot, "?" — the menu button,
- * Back, the phone title, the actions slot and the avatar are phone-only;
+ * header row over the content (breadcrumb slot, "?" — Back, the phone title, the actions slot and the avatar are phone-only;
  * Settings is a sidebar row there; the theme control lives only in
  * Settings › Look, #324),
  * and on note screens the About panel, filled through the `aside` shell slot
@@ -35,7 +33,7 @@
  * Desktop-Add boards both put it on the Home row, not Add — the board
  * wins over the issue's own title and C.9's text, which say Add. Same
  * count as Home's Inbox card and Add's hint (`pendingCount`); hidden at
- * zero, same convention as the folder menu's counts (#319).
+ * zero, same convention as the Notes tree's counts.
  */
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -58,7 +56,6 @@ import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
 import { DemoBanner } from './demo-banner.js';
 import { Explorer, useHealthIsNew } from './explorer.js';
-import { FolderMenu } from './folder-menu.js';
 import { HelpSheet } from './help-sheet.js';
 import { useShellSlots } from './shell-slots.js';
 import {
@@ -66,7 +63,6 @@ import {
   IconFolder,
   IconHelp,
   IconHome,
-  IconMenu,
   IconPlus,
   IconSliders,
 } from './icons.js';
@@ -121,8 +117,6 @@ const TABS: readonly NavLink[] = [HOME, NOTES, ADD, BOWER];
  * is the Notes tab there. Settings is a row here; the phone has the avatar. */
 const SIDEBAR_LINKS: readonly NavLink[] = [HOME, ADD, BOWER, SETTINGS];
 
-const DESKTOP_QUERY = '(min-width: 900px)';
-
 function currentFor(href: string, path: string): 'page' | undefined {
   return href === path ? 'page' : undefined;
 }
@@ -145,13 +139,10 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const { path, route } = useLocation();
   const tour = useTour();
   const { back, crumb, actions, aside } = useShellSlots();
-  const [drawerOpen, setDrawerOpen] = useState(false);
   // "?" (About this screen): the help sheet for the screen on show (#330).
   const [helpOpen, setHelpOpen] = useState(false);
   const inner = isInnerScreen(path, isDemo());
   const headRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLButtonElement>(null);
-  const wasDrawerOpen = useRef(false);
   // The quick switcher's own top offset (spec §14, `switcher.css`'s
   // `--switcher-top`): the live bottom edge of the header *and* whichever
   // banners are showing under it, so opening the switcher never covers the
@@ -175,40 +166,10 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const healthIsNew = useHealthIsNew();
   const pending = pendingCount(files);
 
-  const closeDrawer = (): void => {
-    setDrawerOpen(false);
-  };
-
-  // Any route change (a note opened from the tree or the search) closes
-  // the drawer; so does growing the window into the desktop layout, where
-  // the explorer is always on screen.
+  // Any route change closes the help sheet.
   useEffect(() => {
-    setDrawerOpen(false);
     setHelpOpen(false);
   }, [path]);
-
-  // The folder menu's focus trap hands focus back to the menu button as it
-  // closes, but the button is still inside the inert page at that moment,
-  // so the browser drops it on the body. Once the page is live again, put
-  // it back there, unless something else took it meanwhile (the switcher,
-  // opened from the menu's search row).
-  useEffect(() => {
-    const closed = wasDrawerOpen.current && !drawerOpen;
-    wasDrawerOpen.current = drawerOpen;
-    if (!closed) return;
-    const active = document.activeElement;
-    if (active === null || active === document.body) menuRef.current?.focus();
-  }, [drawerOpen]);
-
-  useEffect(() => {
-    if (!drawerOpen || typeof window.matchMedia !== 'function') return;
-    const query = window.matchMedia(DESKTOP_QUERY);
-    function onChange(): void {
-      if (query.matches) setDrawerOpen(false);
-    }
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  }, [drawerOpen]);
 
   const sidebarNav = (
     <nav class="explorer-nav" aria-label="Primary">
@@ -248,19 +209,14 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         .filter(Boolean)
         .join(' ')}
     >
-      <nav
-        class="shell-sidebar"
-        aria-label="Your notes"
-        data-tour="notes"
-        inert={drawerOpen}
-      >
+      <nav class="shell-sidebar" aria-label="Your notes" data-tour="notes">
         <Explorer
           variant="sidebar"
           healthIsNew={healthIsNew}
           nav={sidebarNav}
         />
       </nav>
-      <div class="shell-main" inert={drawerOpen}>
+      <div class="shell-main">
         {/* The one centred container (#355, Desktop-Responsive board): the
             header row, the banners, the content and, on a note, the About
             panel all sit inside it, so nothing reaches the viewport's right
@@ -268,23 +224,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         <div class="shell-container">
           <div ref={headRef}>
             <header class="topbar">
-              {inner ? (
-                (back ?? HOME_BACK)
-              ) : (
-                <button
-                  ref={menuRef}
-                  type="button"
-                  class="icon-button menu-button"
-                  aria-label="Your folders"
-                  aria-haspopup="dialog"
-                  aria-expanded={drawerOpen}
-                  onClick={() => {
-                    setDrawerOpen(true);
-                  }}
-                >
-                  <IconMenu />
-                </button>
-              )}
+              {inner && (back ?? HOME_BACK)}
               <div class="topbar-crumb">
                 {crumb ?? <span class="topbar-title">Bower</span>}
               </div>
@@ -329,7 +269,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           </div>
         </div>
       </div>
-      <nav class="bottom-nav" aria-label="Primary" inert={drawerOpen}>
+      <nav class="bottom-nav" aria-label="Primary">
         {TABS.map(({ href, label, Icon, tour }) => (
           <a
             key={href}
@@ -342,7 +282,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           </a>
         ))}
       </nav>
-      {drawerOpen && <FolderMenu onClose={closeDrawer} />}
       {helpOpen && (
         <HelpSheet
           screen={helpScreenFor(path)}

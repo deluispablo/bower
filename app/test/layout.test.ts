@@ -19,7 +19,6 @@ import {
   usesShell,
 } from '../src/shell-routes.js';
 import type { RunPhase } from '../src/run-store.js';
-import { closeSwitcher } from '../src/switcher-store.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 const location = { path: '/', route: vi.fn() };
@@ -61,7 +60,7 @@ vi.mock('../src/session.js', () => ({
 }));
 
 // One index for the whole file, as the real store keeps it between renders:
-// the quick switcher (opened from the folder menu's search row) re-reads it
+// the quick switcher (opened from the search) re-reads it
 // in an effect, so a fresh one per render would never settle.
 let index: ReturnType<typeof buildVaultIndex> | undefined;
 
@@ -119,21 +118,6 @@ function click(el: Element): void {
   void act(() => {
     el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   });
-}
-
-function pressEscape(): void {
-  void act(() => {
-    (document.activeElement ?? document.body).dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-    );
-  });
-}
-
-function openDrawer(): HTMLButtonElement {
-  const menu = query<HTMLButtonElement>('.menu-button');
-  menu.focus();
-  click(menu);
-  return menu;
 }
 
 beforeEach(() => {
@@ -203,21 +187,16 @@ describe('Layout', () => {
     expect(query('.topbar').contains(sheets[0] ?? null)).toBe(false);
   });
 
-  it('orders the bar: folder menu, title, "?", avatar (#318)', () => {
+  it('orders the bar: title, "?", avatar, nothing before the title on a tab (#318, #586)', () => {
     mount();
     const bar = query('.topbar');
     const order = Array.from(bar.children).map((el) => el.className);
-    const menuIndex = order.findIndex((c) => c.includes('menu-button'));
     const titleIndex = order.findIndex((c) => c.includes('topbar-crumb'));
     const helpIndex = order.findIndex((c) => c.includes('topbar-help'));
-    expect(menuIndex).toBe(0);
-    expect(titleIndex).toBeGreaterThan(menuIndex);
+    expect(titleIndex).toBe(0);
     expect(helpIndex).toBeGreaterThan(titleIndex);
     expect(order[order.length - 1]).toBe('topbar-avatar');
 
-    expect(query('.menu-button').getAttribute('aria-label')).toBe(
-      'Your folders',
-    );
     expect(query('.topbar-help').getAttribute('aria-label')).toBe(
       'About this screen',
     );
@@ -235,7 +214,7 @@ describe('Layout', () => {
     expect(root.querySelector('.topbar .bird')).toBeNull();
   });
 
-  it('shows Back instead of the folder menu on an inner screen', () => {
+  it('shows Back on an inner screen', () => {
     location.path = '/health';
     mount();
     expect(root.querySelector('.topbar .menu-button')).toBeNull();
@@ -301,100 +280,18 @@ describe('Layout', () => {
     expect(root.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it('keeps Settings as a desktop sidebar row, not in the folder menu', () => {
+  it('keeps Settings as a desktop sidebar row', () => {
     mount();
     expect(
       query('nav[aria-label="Your notes"] a[href="/settings"]').textContent,
     ).toBe('Settings');
-    openDrawer();
-    expect(
-      root.querySelector('[role="dialog"] a[href="/settings"]'),
-    ).toBeNull();
   });
 
-  it('opens the folder menu as a modal dialog over an inert page (#319)', () => {
+  it('has no folder menu on the phone: the Notes tab is the only explorer (#586)', () => {
     mount();
-    const menu = openDrawer();
-    expect(menu.getAttribute('aria-expanded')).toBe('true');
-    const dialog = query('[role="dialog"]');
-    expect(dialog.getAttribute('aria-modal')).toBe('true');
-    const title = query(`#${dialog.getAttribute('aria-labelledby') ?? ''}`);
-    expect(title.textContent).toBe('Your folders');
-    expect(dialog.contains(document.activeElement)).toBe(true);
-    for (const selector of ['.shell-sidebar', '.shell-main', '.bottom-nav']) {
-      expect(query(selector).hasAttribute('inert')).toBe(true);
-    }
-
-    pressEscape();
-    expect(root.querySelector('[role="dialog"]')).toBeNull();
-    expect(query('.shell-main').hasAttribute('inert')).toBe(false);
-    expect(document.activeElement).toBe(menu);
-  });
-
-  it('lists the top-level folders with their meaning line and count', () => {
-    mount();
-    openDrawer();
-    const links = Array.from(
-      root.querySelectorAll<HTMLAnchorElement>(
-        '[role="dialog"] .folder-menu-link',
-      ),
-    );
-    expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '/folder/0-Inbox',
-      '/folder/2-Areas',
-    ]);
-    expect(links[1]?.textContent).toBe(
-      '2-AreasParts of life that go on: home, health, money1',
-    );
-    // #425: files count too, so the inbox's one PDF still shows.
-    expect(links[0]?.querySelector('.folder-menu-count')?.textContent).toBe(
-      '1',
-    );
-    expect(query('[role="dialog"] .folder-menu-foot').textContent).toContain(
-      'Long-press to pin it to Home.',
-    );
-  });
-
-  it("shows a folder's subfolders from its chevron", () => {
-    mount();
-    openDrawer();
-    const chevron = query<HTMLButtonElement>(
-      '[role="dialog"] button[aria-label="Folders in 2-Areas"]',
-    );
-    expect(chevron.getAttribute('aria-expanded')).toBe('false');
-    click(chevron);
-    expect(chevron.getAttribute('aria-expanded')).toBe('true');
-    expect(
-      query('[role="dialog"] a[href="/folder/2-Areas/Cooking"]').textContent,
-    ).toBe('Cooking1');
-  });
-
-  it('closes the menu and opens the switcher from the search row', () => {
-    mount();
-    openDrawer();
-    const search = Array.from(
-      root.querySelectorAll('[role="dialog"] button'),
-    ).find((button) => button.textContent === 'Search or jump to anything');
-    if (search === undefined) throw new Error('search row missing');
-    click(search);
+    expect(root.querySelector('.menu-button')).toBeNull();
     expect(root.querySelector('.drawer')).toBeNull();
-    expect(
-      root.querySelector('[role="dialog"][aria-label="Quick switcher"]'),
-    ).not.toBeNull();
-    void act(() => {
-      closeSwitcher();
-    });
-  });
-
-  it('closes the drawer on a backdrop tap and on the close button', () => {
-    mount();
-    openDrawer();
-    click(query('.drawer-backdrop'));
-    expect(root.querySelector('[role="dialog"]')).toBeNull();
-
-    openDrawer();
-    click(query('[role="dialog"] button[aria-label="Close"]'));
-    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(root.querySelector('button[aria-label="Your folders"]')).toBeNull();
   });
 
   it('has no sort menu, one Expand/Collapse all toggle (#326)', () => {

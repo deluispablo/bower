@@ -43,7 +43,7 @@ const TAB_PATHS = new Set(['/', '/notes', '/add', BOWER_PATH]);
 /**
  * Whether `path` is an inner screen (#318): a note, a folder, Health,
  * Settings, Not found — anything in the shell that is not one of the four
- * tabs. Its top bar shows Back where a tab shows the folder menu button.
+ * tabs. Its top bar shows Back where a tab shows nothing.
  */
 export function isInnerScreen(path: string, demo = false): boolean {
   return usesShell(path, demo) && !TAB_PATHS.has(path);

@@ -389,8 +389,8 @@ describe('Add from your Drive', () => {
     await waitFor(() => {
       const text = root.textContent ?? '';
       return (
-        text.includes('From your Drive · saved as Markdown') &&
-        text.includes('From your Drive · saved as a table') &&
+        text.includes('From your Drive · saved as text') &&
+        text.includes('From your Drive · saved as a table, first sheet only') &&
         text.includes('From your Drive · saved as a PDF')
       );
     });

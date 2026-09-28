@@ -1810,7 +1810,7 @@ test('an old /tell link opens the Bower tab with its text', async ({
   ).toHaveValue('Hello Bower');
 });
 
-test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
+test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -1818,9 +1818,9 @@ test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
   const help = bar.getByRole('button', { name: 'About this screen' });
   await expect(help).toBeVisible();
   if (testInfo.project.name === 'phone') {
-    await expect(
-      bar.getByRole('button', { name: 'Your folders' }),
-    ).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Your folders' })).toHaveCount(
+      0,
+    );
     await expect(bar.getByText('Bower', { exact: true })).toBeVisible();
     await expect(bar.getByRole('link', { name: 'Settings' })).toHaveText('A');
     await shot(page, testInfo, 'bar-home');
@@ -1866,7 +1866,9 @@ test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
     .first()
     .click();
   await expect(page).toHaveURL(/\/note\//);
-  await expect(bar.getByRole('button', { name: 'Your folders' })).toBeHidden();
+  await expect(bar.getByRole('button', { name: 'Your folders' })).toHaveCount(
+    0,
+  );
   await expect(bar.getByRole('link', { name: /^Back to / })).toBeVisible();
   await expect(bar.locator('.topbar-title')).toHaveText('Lisbon Trip');
   await shot(page, testInfo, 'bar-note');
@@ -2353,7 +2355,7 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
   const explainer = page.locator('.folder-explainer');
   await expect(explainer).toHaveText('Things with an end date');
   // The meaning line sits between the header and the chip row, above the
-  // subfolders — same words as the folder menu and the intro (#319).
+  // subfolders — same words as the intro (#319).
   const chips = page.locator('.folder-chips');
   const explainerBox = await explainer.boundingBox();
   const chipsBox = await chips.boundingBox();
@@ -2402,65 +2404,12 @@ test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)'
   await shot(page, testInfo, 'folder-chips');
 
   // The tree shows a count only above zero (3.6): no folder row reads "0".
-  // On the phone the tree lives on the Notes tab (the folder menu lists
-  // only the top-level folders, #319); on desktop it is the sidebar.
+  // On the phone the tree lives on the Notes tab; on desktop it is the
+  // sidebar.
   if (testInfo.project.name === 'phone') await navigate(page, /^Notes$/);
   const counts = await page.locator('.tree-count').allTextContents();
   expect(counts.length).toBeGreaterThan(0);
   expect(counts).not.toContain('0');
-});
-
-test('the folder menu: open it, tap a folder, land on it (#319)', async ({
-  page,
-}, testInfo) => {
-  test.skip(
-    testInfo.project.name !== 'phone',
-    'The folder menu is on the phone bar; desktop keeps the sidebar.',
-  );
-  await openHome(page);
-  const bar = page.locator('header.topbar');
-  const opener = bar.getByRole('button', { name: 'Your folders' });
-  await opener.click();
-  const menu = page.getByRole('dialog', { name: 'Your folders' });
-  await expect(menu).toBeVisible();
-  await expect(
-    menu.getByRole('link', { name: /^1-Projects Things with an end date/ }),
-  ).toBeVisible();
-  // 1-Projects opens with its projects showing, as on the board.
-  await expect(
-    menu.getByRole('link', { name: /^Lisbon Trip \d+$/ }),
-  ).toBeVisible();
-  await expect(
-    menu.getByText('The full tree with search lives on the Notes tab.', {
-      exact: false,
-    }),
-  ).toBeVisible();
-  await shot(page, testInfo, 'folder-menu');
-
-  // Holding a row (here its context menu, what a long press also opens)
-  // offers the pin; Escape closes that sheet alone.
-  await menu
-    .getByRole('link', { name: /^2-Areas Parts of life/ })
-    .click({ button: 'right' });
-  const sheet = page.getByRole('dialog', { name: '2-Areas' });
-  // Focus moves into the sheet once it is open: wait for that before Escape.
-  await expect(
-    sheet.getByRole('menuitem', { name: 'Pin to Home' }),
-  ).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(sheet).toBeHidden();
-  await expect(menu).toBeVisible();
-
-  // Escape closes it and gives focus back to the menu button.
-  await page.keyboard.press('Escape');
-  await expect(menu).toBeHidden();
-  await expect(opener).toBeFocused();
-
-  await opener.click();
-  await menu.getByRole('link', { name: /^3-Resources Things to keep/ }).click();
-  await expect(page).toHaveURL(/\/folder\/3-Resources$/);
-  await expect(menu).toBeHidden();
-  await expect(bar.locator('.topbar-title')).toHaveText('3-Resources');
 });
 
 test('folder counts add files and notes together, the same total the folder screen itself lists (#425)', async ({
@@ -2469,18 +2418,14 @@ test('folder counts add files and notes together, the same total the folder scre
   await openHome(page);
 
   if (testInfo.project.name === 'phone') {
-    // The folder menu button only sits on an outer screen's bar (C.2); open
-    // it from Home before navigating into a folder.
-    const bar = page.locator('header.topbar');
-    await bar.getByRole('button', { name: 'Your folders' }).click();
-    const menu = page.getByRole('dialog', { name: 'Your folders' });
+    // The Notes tab is the phone's only explorer (#586).
+    await navigate(page, /^Notes$/);
     await expect(
-      menu.getByRole('link', { name: /^0-Inbox.*tidy-up\D*2$/ }),
-    ).toBeVisible();
+      page.locator('main a[href="/folder/0-Inbox"] .tree-count'),
+    ).toHaveText('2');
     await expect(
-      menu.getByRole('link', { name: /^1-Projects.*end date\D*28$/ }),
-    ).toBeVisible();
-    await page.keyboard.press('Escape');
+      page.locator('main a[href="/folder/1-Projects"] .tree-count'),
+    ).toHaveText('28');
   } else {
     const sidebar = page.getByRole('navigation', { name: 'Your notes' });
     await expect(
