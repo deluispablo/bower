@@ -56,7 +56,7 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   await expect(pair.locator('.kind-badge')).toHaveText('PDF');
   await expect(
     page.locator('.folder-item', { hasText: 'Flat budget' }),
-  ).toContainText('Spreadsheet (CSV) · copy of your Google Sheet');
+  ).toContainText('Spreadsheet · 3 KB');
   await expect(
     page.locator('.folder-item', { hasText: 'Notes from the viewing' }),
   ).toContainText('Note · written by you');
@@ -132,7 +132,7 @@ test('sort, kind filter and origin filter survive a reload, per folder (#611)', 
   ).toHaveAttribute('aria-pressed', 'true');
 
   // Another folder is not affected.
-  await page.goto('/folder/2-Areas/Cooking');
+  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
   await expect(page.locator('.folder-item').first()).toBeVisible();
   await expect(page.getByLabel('Sort')).toHaveValue('newest');
   await expect(page.getByRole('button', { name: 'All' })).toHaveAttribute(
