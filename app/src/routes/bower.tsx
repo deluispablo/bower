@@ -79,6 +79,7 @@ import { useSession } from '../session.js';
 import {
   allRules,
   applyToFiledRequest,
+  dropRuleLead,
   parseRules,
   ruleBullet,
 } from '../rules.js';
@@ -542,7 +543,7 @@ export function Bower(): JSX.Element {
    * your rules" before the write even starts. */
   function ruleAlreadyKept(sentence: string): boolean {
     if (rulesLoad.status !== 'ready') return false;
-    const bullet = ruleBullet(sentence, dayOf(new Date()));
+    const bullet = ruleBullet(dropRuleLead(sentence), dayOf(new Date()));
     const wanted = allRules(parseRules(bullet))[0]?.text;
     if (wanted === undefined) return false;
     return allRules(parseRules(rulesLoad.text)).some(

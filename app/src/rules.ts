@@ -346,13 +346,41 @@ export function guessTopic(
   return `${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
 }
 
+/** A pronoun that leaves "Every time you…", "Every time it's…" reading as
+ * a clause missing its opener rather than a rule on its own (#558): there
+ * the lead is doing real grammatical work, not just announcing a rule, so
+ * dropping it would read worse. */
+const CLAUSE_PRONOUN = /^(?:you|i|we|it|they|he|she)\b/i;
+
+/**
+ * `text` with its own leading "From now on,", "Always," or "Every time"
+ * dropped, the new first letter capitalised, and a trailing "." dropped
+ * too, when what is left reads like every other rulebook bullet (#558) —
+ * "Kept as a rule" bullets never carry either. Never for "Never": dropping
+ * it would flip the rule's own meaning. Never when the rest starts with a
+ * pronoun (see `CLAUSE_PRONOUN`): "Every time you add a receipt, file it"
+ * has nothing to read as a bullet once "Every time" is gone. `text`
+ * unchanged in either case, or when it has no such lead at all.
+ */
+export function dropRuleLead(text: string): string {
+  const match = /^\s*(from now on|always|every time)\b[\s,:;.-]*/i.exec(text);
+  if (match === null) return text;
+  const rest = text.slice(match[0].length);
+  if (rest === '' || CLAUSE_PRONOUN.test(rest)) return text;
+  const trimmed = rest.replace(/\.\s*$/, '');
+  if (trimmed === '') return text;
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
 /**
  * `md` with `text` appended as a rule under `topic` (#343, a rule kept at
  * once), dated `on`: after the last line of that topic's section, or, for
  * `UNGROUPED_TOPIC` with rules before the first heading, after the last of
- * those; a topic the file does not have gets its `## ` heading at the end.
- * Every other line stays as it was. Returns `md` unchanged when the same
- * rule is already there (a retry adds nothing twice);
+ * those; a topic the file does not have gets its `## ` heading at the end,
+ * before "Everything else" when the file already has that heading (#558).
+ * Every other line stays as it was. `text` reads as a bullet
+ * (`dropRuleLead`, #558), not verbatim as typed. Returns `md` unchanged
+ * when the same rule is already there (a retry adds nothing twice);
  * `RuleError('empty')` for no text.
  */
 export function appendRule(
@@ -364,7 +392,7 @@ export function appendRule(
   if (oneLine(text) === '') {
     throw new RuleError('empty', 'A rule needs some words.');
   }
-  const bullet = ruleBullet(text, on);
+  const bullet = ruleBullet(dropRuleLead(text), on);
   const wanted = allRules(parseRules(bullet))[0]?.text ?? oneLine(text);
   const parsed = parseRules(md);
   if (allRules(parsed).some((rule) => rule.text === wanted)) return md;
@@ -407,10 +435,20 @@ export function appendRule(
     return lines.join(parsed.eol);
   }
 
-  while (lines.length > 0 && (lines.at(-1) ?? '').trim() === '') lines.pop();
-  if (lines.length > 0) lines.push('');
-  lines.push(`## ${name}`, bullet, '');
-  return lines.join(parsed.eol);
+  // #558: a brand new topic's heading goes at the end of the file, except
+  // "Everything else" always reads last — when the file already has that
+  // heading, the new topic is inserted just before it instead of pushed
+  // past it.
+  const everythingElse =
+    key === UNGROUPED_TOPIC.toLowerCase()
+      ? undefined
+      : headings.find((h) => h.key === UNGROUPED_TOPIC.toLowerCase());
+  const insertAt = everythingElse?.line ?? lines.length;
+  const head = lines.slice(0, insertAt);
+  while (head.length > 0 && (head.at(-1) ?? '').trim() === '') head.pop();
+  if (head.length > 0) head.push('');
+  const tail = lines.slice(insertAt);
+  return [...head, `## ${name}`, bullet, '', ...tail].join(parsed.eol);
 }
 
 /**

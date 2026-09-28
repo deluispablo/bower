@@ -165,7 +165,7 @@ describe('runKeepRule', () => {
     expect(kept.createdRules).toBe(true);
     expect(kept.topic).toBe('Cooking');
     expect(kept.rules?.text).toBe(
-      "## Cooking\n- Always file recipes under Cooking (owner's request, 2026-09-29)\n",
+      "## Cooking\n- File recipes under Cooking (owner's request, 2026-09-29)\n",
     );
   });
 });

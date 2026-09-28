@@ -758,6 +758,51 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   ).toHaveCount(1);
 });
 
+test('rules from a What is this? box drop "From now on," and sort before Everything else (#558)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  const box = page.getByRole('textbox', { name: 'What is this?' });
+  await box.fill(
+    'From now on, job offers go to Job hunt. From now on, add the salary to every job offer.',
+  );
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
+  await navigate(page, /^Home$/);
+  await navigate(page, /^Bower$/);
+
+  // guessTopic's own rule (rules.ts): a new topic is one capitalised word
+  // from the sentence ("Job hunt" as typed still guesses "Job").
+  const rules = bowerPart(page, 'Rules');
+  const jobHunt = rules.getByRole('button', { name: 'Job, 2 rules' });
+  await expect(jobHunt).toBeVisible();
+  await jobHunt.click();
+  await expect(rules.getByText('Job offers go to Job hunt')).toBeVisible();
+  await expect(
+    rules.getByText('Add the salary to every job offer'),
+  ).toBeVisible();
+  // Not verbatim, and no full stop either.
+  await expect(rules.getByText(/^From now on,/)).toHaveCount(0);
+  const ruleTexts = await rules.locator('.rules-rule-text').allTextContents();
+  expect(ruleTexts.some((text) => text.endsWith('.'))).toBe(false);
+
+  // The demo's own fixture already ends in Everything else (1 rule); the
+  // new topic reads before it, not after.
+  const groupNames = await rules.locator('.rules-group-name').allTextContents();
+  expect(groupNames.at(-1)).toBe('Everything else');
+  expect(groupNames.indexOf('Job')).toBeLessThan(
+    groupNames.indexOf('Everything else'),
+  );
+});
+
 test('Add: a link row shows the URL, and the What is this? placeholder fits its box (#508)', async ({
   page,
 }, testInfo) => {
