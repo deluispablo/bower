@@ -9,7 +9,8 @@
 
 import { findCompanion } from './companion.js';
 import type { DriveFile } from './drive.js';
-import { CATALOGUE_PATH, originOf } from './file-origin.js';
+import { formatSize } from './file-preview.js';
+import { CATALOGUE_PATH, originLine, originOf } from './file-origin.js';
 import type { Origin } from './file-origin.js';
 import { kindById } from './kinds.js';
 import type { NoteMeta } from './note-meta.js';
@@ -348,4 +349,34 @@ export function subjectOf(meta: NoteMeta | undefined): string {
   const kind = meta?.kind === undefined ? undefined : kindById(meta.kind);
   const word = kind?.name.split(' ').pop();
   return word === undefined || word === '' ? 'original' : word;
+}
+
+/**
+ * The one line under a row the person added or wrote: "Photo · 2.4 MB",
+ * "PDF · 6 pages", "Spreadsheet (CSV) · copy of your Google Sheet", "Note ·
+ * written by you". `pages` is the page count a companion note recorded.
+ */
+export function fileLine(
+  file: DriveFile,
+  origin: Origin | null,
+  pages?: number,
+): string {
+  const kind = fileKind(file);
+  if (kind === 'note') {
+    return origin === 'drive'
+      ? originLine(file, origin)
+      : 'Note · written by you';
+  }
+  const label = FILE_KIND_LABELS[kind];
+  if (origin === 'drive') {
+    return kind === 'csv'
+      ? 'Spreadsheet (CSV) · copy of your Google Sheet'
+      : `${label} · copy from your Drive`;
+  }
+  if (pages !== undefined && pages > 0) {
+    return `${label} · ${pages} ${pages === 1 ? 'page' : 'pages'}`;
+  }
+  return file.size === undefined
+    ? label
+    : `${label} · ${formatSize(file.size)}`;
 }

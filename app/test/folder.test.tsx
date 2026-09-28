@@ -80,6 +80,35 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
   },
 }));
 
+// Per-folder view settings (#582) and lazy frontmatter (#582) in memory.
+const viewStore = new Map<string, Record<string, unknown>>();
+vi.mock('../src/cache.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/cache.js')>()),
+  loadViewSettings: (path: string) => Promise.resolve(viewStore.get(path)),
+  saveViewSettings: (path: string, settings: Record<string, unknown>) => {
+    viewStore.set(path, settings);
+    return Promise.resolve();
+  },
+}));
+const metaStore = new Map<string, Record<string, unknown>>();
+vi.mock('../src/note-meta.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/note-meta.js')>();
+  return {
+    ...real,
+    loadNoteMeta: (file: { id: string }) =>
+      Promise.resolve(real.noteMetaFrom(metaStore.get(file.id) ?? {})),
+  };
+});
+vi.mock('../src/use-new.js', () => ({
+  useNew: () => ({
+    ids: new Set<string>(),
+    isNew: () => false,
+    newCountIn: () => 0,
+    markSeen: () => Promise.resolve(),
+    markAllSeen: () => Promise.resolve(),
+  }),
+}));
+
 const { Folder } = await import('../src/routes/folder.js');
 
 let root: HTMLDivElement;
@@ -93,6 +122,9 @@ function mount(): void {
 }
 
 beforeEach(() => {
+  viewStore.clear();
+  metaStore.clear();
+  index = undefined;
   route.params.path = '1-Projects';
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
@@ -292,16 +324,155 @@ describe('Drive chip and end-of-folder tip (#453, Phone-Folder-Project board)', 
     mount();
     const tip =
       'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.';
-    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
+    expect(root.querySelector('.folder-more-tip')?.textContent).toBe(tip);
     expect(tip).not.toMatch(/flat|rent|listing/i);
 
     route.params.path = '2-Areas/Cooking';
     mount();
-    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
+    expect(root.querySelector('.folder-more-tip')?.textContent).toBe(tip);
   });
 
   it('has no tip on a root folder', () => {
     mount();
-    expect(root.querySelector('.folder-tip')).toBeNull();
+    expect(root.querySelector('.folder-more-tip')).toBeNull();
+  });
+});
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function texts(selector: string): (string | undefined)[] {
+  return [...root.querySelectorAll(selector)].map((el) =>
+    el.textContent?.replace(/\s+/g, ' ').trim(),
+  );
+}
+
+const DIR = '1-Projects/Flat hunt';
+const listingPdf = file(
+  `${DIR}/Arlington Road, 2 bed.pdf`,
+  'application/pdf',
+  '2026-09-27T08:00:00Z',
+);
+const listingNote = file(
+  `${DIR}/Arlington Road, 2 bed.md`,
+  'text/markdown',
+  '2026-09-27T09:00:00Z',
+);
+
+function useFlatHuntWithPair(): void {
+  index = buildVaultIndex([...files, listingPdf, listingNote]);
+  metaStore.set(listingNote.id, {
+    kind: 'rental-listing',
+    original: '[[Arlington Road, 2 bed.pdf]]',
+    address: '12 Arlington Road',
+    rent: { amount: 2150, currency: 'GBP' },
+  });
+  route.params.path = DIR;
+}
+
+describe('Folder list mode (#611)', () => {
+  it('draws the path bar, the counts, the origin filter and the date groups', async () => {
+    useFlatHuntWithPair();
+    mount();
+    await settle();
+    expect(texts('.folder-path')[0]).toBe('PProjects›Flat hunt');
+    expect(root.querySelector('.folder-path b')?.textContent).toBe('Flat hunt');
+    expect(root.querySelector('.folder-counts')?.textContent).toBe(
+      '4 things · 3 originals, 1 by Bower',
+    );
+    expect(root.querySelector('.folder-filed')?.textContent).toBe(
+      'Last filed today',
+    );
+    expect(texts('.folder-seg-btn')).toEqual([
+      'All',
+      'Originals 3',
+      'By Bower 1',
+    ]);
+    expect(texts('.folder-group')).toEqual([
+      'Today',
+      'Yesterday',
+      'Earlier this month',
+    ]);
+  });
+
+  it('shows a PDF and its note as one row in All, and one each in Originals and By Bower', async () => {
+    useFlatHuntWithPair();
+    mount();
+    await settle();
+    const names = (): (string | undefined)[] => texts('.folder-row-name');
+    expect(names().filter((n) => n?.startsWith('Arlington'))).toHaveLength(1);
+    expect(root.textContent).toContain('note on the listing');
+
+    const buttons =
+      root.querySelectorAll<HTMLButtonElement>('.folder-seg-btn');
+    void act(() => buttons[1]?.click());
+    await settle();
+    expect(names()).toContain('Arlington Road, 2 bed');
+    expect(root.querySelector('.kind-badge')?.textContent).toBe('PDF');
+    expect(root.textContent).not.toContain('note on the listing');
+
+    void act(() => buttons[2]?.click());
+    await settle();
+    expect(root.textContent).toContain('note on the listing PDF');
+    expect(root.textContent).toContain(
+      'Only what Bower wrote, with its key facts',
+    );
+  });
+
+  it('remembers the filters per folder and keeps the Compare columns', async () => {
+    useFlatHuntWithPair();
+    viewStore.set(DIR, {
+      sort: 'name',
+      kindFilter: null,
+      originFilter: 'bower',
+      layout: 'list',
+      folderSort: 'oldest',
+      compareColumns: ['rent'],
+    });
+    mount();
+    await settle();
+    const pressed = root.querySelector('.folder-seg-btn[aria-pressed="true"]');
+    expect(pressed?.textContent).toContain('By Bower');
+    const sort = root.querySelector<HTMLSelectElement>(
+      'select[aria-label="Sort"]',
+    );
+    if (sort === null) throw new Error('no sort select');
+    expect(sort.value).toBe('oldest');
+
+    sort.value = 'name';
+    void act(() => {
+      sort.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await settle();
+    expect(viewStore.get(DIR)).toMatchObject({
+      sort: 'name',
+      folderSort: 'name',
+      originFilter: 'bower',
+      compareColumns: ['rent'],
+    });
+  });
+
+  it('renders a 500-item folder through VirtualList', async () => {
+    const many = Array.from({ length: 500 }, (_, at) =>
+      file(
+        `${DIR}/Note ${String(at).padStart(3, '0')}.md`,
+        'text/markdown',
+        '2026-09-20T09:00:00Z',
+      ),
+    );
+    index = buildVaultIndex([...files, ...many]);
+    route.params.path = DIR;
+    mount();
+    await settle();
+    for (let at = 0; at < 20 && root.querySelector('.folder-virtual') === null; at += 1) {
+      await settle();
+    }
+    expect(root.querySelector('.folder-virtual')).not.toBeNull();
+    const rendered = root.querySelectorAll('.folder-item').length;
+    expect(rendered).toBeGreaterThan(0);
+    expect(rendered).toBeLessThan(500);
   });
 });
