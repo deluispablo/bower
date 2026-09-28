@@ -214,26 +214,6 @@
   margin-bottom: 0;
 }
 
-/* The agent's own note (spec §6 row Note): `> [!bower]`, never a "Bower:"
-   paragraph — too easy for a user to trigger by accident (issue #144). The
-   mark is the app's own icon (app/public/icons/favicon.svg), added in CSS
-   so the sanitizer's link/image allowlist (render.ts) never has to widen
-   for it. */
-.markdown .callout-bower .callout-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.markdown .callout-bower .callout-title::before {
-  content: '';
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  background: url('/icons/favicon.svg') center / contain no-repeat;
-  border-radius: var(--radius-sm);
-}
-
 /* Bower's note (spec §6.7 R-NOTE-1/2/3/6; boards Phone-Note-Bower,
    Phone-Note-Long, Flow-06-Dots, Flow-07-Answer): the `> [!bower]` callout
    (or the older `## Bower's note`) becomes this box, one row per line with
