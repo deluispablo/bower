@@ -9,8 +9,10 @@ import {
   healthRowSubtitle,
   isReportNew,
   reportDateLabel,
+  reportDayStart,
   summarise,
 } from '../src/health-report.js';
+import { relativeTime } from '../src/navigation.js';
 import { parseFrontmatter } from '../src/markdown/frontmatter.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
@@ -164,6 +166,37 @@ describe('reportDateLabel', () => {
 
   it('is empty for an unreadable date', () => {
     expect(reportDateLabel('not-a-date')).toBe('');
+  });
+});
+
+describe('reportDayStart', () => {
+  // Built from local `Date` components throughout, never a hardcoded UTC
+  // offset, so these hold regardless of the machine's timezone.
+  it('rounds a Drive timestamp down to local midnight', () => {
+    const modified = new Date(2026, 8, 27, 23, 40).toISOString();
+    expect(reportDayStart(modified)).toBe(new Date(2026, 8, 27).toISOString());
+  });
+
+  it('is empty for an unreadable date', () => {
+    expect(reportDayStart('not-a-date')).toBe('');
+  });
+
+  it('makes a late-Sunday report read "yesterday" on Monday morning, not "today" (#447)', () => {
+    // The report was written late Sunday; Home renders early Monday, well
+    // under 24 rolling hours later — `relativeTime` on the raw timestamp
+    // would say "today" here, which is the bug.
+    const sunday = new Date(2026, 8, 27, 23, 40).toISOString();
+    const mondayMorning = new Date(2026, 8, 28, 7, 0).getTime();
+    expect(relativeTime(sunday, mondayMorning)).toBe('today');
+    expect(relativeTime(reportDayStart(sunday), mondayMorning)).toBe(
+      'yesterday',
+    );
+  });
+
+  it('still reads "today" for a report made earlier the same calendar day', () => {
+    const morning = new Date(2026, 8, 28, 7, 0).toISOString();
+    const evening = new Date(2026, 8, 28, 20, 0).getTime();
+    expect(relativeTime(reportDayStart(morning), evening)).toBe('today');
   });
 });
 

@@ -46,6 +46,10 @@ export interface Rule {
   /** Who asked for it (`owner's request`, `accepted suggestion`), from the
    * tail; `null` for a paused rule's `(paused …)` tail or no tail. */
   origin: string | null;
+  /** For a paused rule whose tail remembers when it was said (`said
+   * <date>, paused <date>`), the said-on date, so Resume can restore it
+   * (#443); `null` when the tail holds no said-on date, paused or not. */
+  saidDate: string | null;
   /** What the parentheses at the end hold, as written, when they end in a
    * date; `null` otherwise. */
   tail: string | null;
@@ -107,7 +111,11 @@ const BULLET = /^([-*+][ \t]+)(.*)$/;
 /** Parentheses at the end whose content ends in a date. */
 const TAIL = /^(.*?)\s*\(([^()]*?(\d{4}-\d{2}-\d{2}))\)\s*$/;
 const STRUCK = /^~~(.+)~~$/;
-const PAUSED_TAIL = /^paused\s+\d{4}-\d{2}-\d{2}$/i;
+/** `paused <date>`, or, when the said-on date survives a pause (#443),
+ * `said <date>, paused <date>`. */
+const PAUSED_TAIL =
+  /^(?:said\s+\d{4}-\d{2}-\d{2},\s*)?paused\s+\d{4}-\d{2}-\d{2}$/i;
+const SAID_TAIL = /^said\s+(\d{4}-\d{2}-\d{2}),\s*paused\s+\d{4}-\d{2}-\d{2}$/i;
 const ORIGIN_TAIL = /^(.+?),\s*\d{4}-\d{2}-\d{2}$/;
 
 function eolOf(md: string): string {
@@ -139,12 +147,15 @@ function ruleOf(line: string, index: number): Rule | null {
   let tail: string | null = null;
   let date: string | null = null;
   let origin: string | null = null;
+  let saidDate: string | null = null;
   const t = TAIL.exec(body);
   if (t !== null && (t[1] ?? '').trim() !== '') {
     body = (t[1] ?? '').trim();
     tail = (t[2] ?? '').trim();
     date = t[3] ?? null;
-    if (!PAUSED_TAIL.test(tail)) {
+    if (PAUSED_TAIL.test(tail)) {
+      saidDate = SAID_TAIL.exec(tail)?.[1] ?? null;
+    } else {
       origin = ORIGIN_TAIL.exec(tail)?.[1]?.trim() ?? null;
     }
   }
@@ -153,7 +164,17 @@ function ruleOf(line: string, index: number): Rule | null {
   const paused = struck !== null;
   const text = (struck?.[1] ?? body).trim();
   if (text === '') return null;
-  return { line: index, raw: line, marker, text, paused, date, origin, tail };
+  return {
+    line: index,
+    raw: line,
+    marker,
+    text,
+    paused,
+    date,
+    origin,
+    saidDate,
+    tail,
+  };
 }
 
 /** Counts lines the way an editor shows them: a final newline does not
@@ -442,7 +463,10 @@ export function applyRuleEdit(md: string, edit: RuleEdit, on: string): string {
       lines[rule.line] = formatRule({
         ...rule,
         paused: true,
-        tail: `paused ${on}`,
+        tail:
+          rule.date === null
+            ? `paused ${on}`
+            : `said ${rule.date}, paused ${on}`,
       });
       break;
     case 'resume':
@@ -450,7 +474,7 @@ export function applyRuleEdit(md: string, edit: RuleEdit, on: string): string {
       lines[rule.line] = formatRule({
         ...rule,
         paused: false,
-        tail: `${OWNER_ORIGIN}, ${on}`,
+        tail: `${OWNER_ORIGIN}, ${rule.saidDate ?? on}`,
       });
       break;
     case 'change': {
@@ -463,7 +487,9 @@ export function applyRuleEdit(md: string, edit: RuleEdit, on: string): string {
         ...rule,
         text,
         tail: rule.paused
-          ? `paused ${rule.date ?? on}`
+          ? rule.saidDate === null
+            ? `paused ${rule.date ?? on}`
+            : `said ${rule.saidDate}, paused ${rule.date ?? on}`
           : `${OWNER_ORIGIN}, ${on}`,
       });
       break;
