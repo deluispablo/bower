@@ -186,7 +186,6 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
 - 2026-09-18 · Filed · Paint colours, Quotes from fitters
 - 2026-09-21 · Answered · Which subscriptions renew this autumn
 - 2026-09-26 · Filed · Running log, Weeknight curry
-- 2026-09-26 · Answered · Which flat should I visit first
 - 2026-09-27 · Filed · Lease agreement 2026, Notes from the viewing`,
   ),
   note(
@@ -642,25 +641,5 @@ Home insurance on 3 November, and the streaming service every month until you ca
 
 ## What Bower used
 - [[Bills and renewals]] (from your notes)`,
-  ),
-  // A second "Bower's note" (#367, handover D.4's own example theme): the
-  // conclusions box citing the new Flat hunt files as its sources.
-  note(
-    'Answers/2026-09-26 Which flat should I visit first.md',
-    26,
-    'answer, home',
-    `# Which flat should I visit first?
-
-## Bower's note
-- ✅ Arlington Road already has a lease ready to sign, and it is the shortest walk to the station.
-- ⚠️ The deposit is the maximum the law allows; ask for the protection scheme certificate before you commit.
-- ❌ Neither the lease nor the viewing notes say who covers the boiler if it breaks again this winter.
-
-## Why
-The lease sets out the rent and the deposit but leaves the boiler question open, and Arlington Road is the only one with a signed lease ready to go.
-
-## What Bower used
-- [[Lease agreement 2026.pdf]] (from the file)
-- [[Notes from the viewing]] (from your notes)`,
   ),
 ];

@@ -1184,7 +1184,12 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
     'the Notes tab is phone-only; desktop keeps the sidebar',
   );
   await openHome(page);
-  await page.getByRole('link', { name: 'Notes' }).click();
+  // Scoped to the bottom nav (#367 added a note titled "Notes from the
+  // viewing", otherwise an ambiguous substring match on Home's own list).
+  await page
+    .locator('nav.bottom-nav')
+    .getByRole('link', { name: 'Notes' })
+    .click();
   await expect(page).toHaveURL(/\/notes$/);
 
   const bar = page.locator('header.topbar');
