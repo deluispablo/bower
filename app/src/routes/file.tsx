@@ -287,7 +287,7 @@ export function FileScreen(): JSX.Element {
     );
   }
 
-  if (file === undefined) return <NotFound />;
+  if (file === undefined) return <NotFound kind="file" />;
 
   const origin = originOf(file, catalogue);
   const folder = folderOf(file.path);

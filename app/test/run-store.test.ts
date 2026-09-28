@@ -160,6 +160,17 @@ describe('pendingCount', () => {
   it('is 0 for an empty listing', () => {
     expect(pendingCount([])).toBe(0);
   });
+
+  // #529: pendingCount used to count Add's own "What is this?" context
+  // note, one ahead of Home and the working sheet's own count
+  // (run-progress.ts#visiblePendingCount, #506) — the same rule now.
+  it("excludes Add's own context note, agreeing with visiblePendingCount", () => {
+    const files = [
+      file('0-Inbox/receipt.pdf'),
+      file('0-Inbox/Bower - 2026-09-28 0900 Context.md'),
+    ];
+    expect(pendingCount(files)).toBe(1);
+  });
 });
 
 describe('runKey', () => {
