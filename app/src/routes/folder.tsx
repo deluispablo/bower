@@ -9,8 +9,8 @@
  * it there (`file-origin.ts`). A note opens in the app, any other file on
  * its own screen (`routes/file.tsx`, #350).
  *
- * The chips share `styles/layout.css`'s generic `.chip` (already used by
- * `tell-composer.tsx`). Pinned toggles the folder's own pin (#215, #216:
+ * The chips share `styles/layout.css`'s generic `.chip` (also used by the
+ * interview's answers). Pinned toggles the folder's own pin (#215, #216:
  * `pinFolder`/`unpinFolder`, through `pin-action.ts`'s shared toast).
  *
  * The header's `back` and `crumb` slots (`shell-slots.ts`) work exactly

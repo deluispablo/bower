@@ -32,3 +32,17 @@ export function linkNoteName(url: string, now: Date): string | null {
   const time = `${pad(now.getHours())}${pad(now.getMinutes())}`;
   return `Link - ${host} ${date} ${time}.md`;
 }
+
+/**
+ * The hint's bold lead on Add (#336, `Phone-Add` board, handover C.6):
+ * "3 things waiting." — `count` is the inbox's pending files, the same
+ * count Home's Inbox card and the "Is that everything?" sheet show. The
+ * caller hides the hint at zero, so this never says "0 things".
+ */
+export function addHintLead(count: number): string {
+  return `${count} ${count === 1 ? 'thing' : 'things'} waiting.`;
+}
+
+/** The rest of the hint's sentence, word for word from the board. */
+export const ADD_HINT_TEXT =
+  'Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.';

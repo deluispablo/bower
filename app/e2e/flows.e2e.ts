@@ -300,6 +300,39 @@ test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (
   await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
 });
 
+test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  // The demo starts with three things in the inbox.
+  const hint = page.locator('.add-hint');
+  await expect(hint).toContainText(
+    '3 things waiting. Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.',
+  );
+  await shot(page, testInfo, 'add-hint');
+
+  // The Tidy up button opens the "Is that everything?" confirmation (#337).
+  await hint.getByRole('button', { name: 'Tidy up', exact: true }).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Add more first' }).click();
+  await expect(confirm).toBeHidden();
+
+  // After an add the count is the new total (#300), not the old one.
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await expect(page).toHaveURL('/');
+  await navigate(page, /^Add$/);
+  await expect(hint).toContainText('4 things waiting.');
+});
+
 test('Home through the scripted run: waiting, running, done (#321)', async ({
   page,
 }, testInfo) => {
