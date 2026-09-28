@@ -178,23 +178,41 @@ export function buildTree(
 
 /**
  * How many notes each folder holds, subfolders included, keyed by folder
- * path (the tree's per-folder counts). Every visible folder has an entry,
- * empty ones at 0; the root ('') has none. Folder notes are already left
- * out of `index.notes`, so they never count; Bower's own files (`isAppFile`)
- * never count either, so a folder's number always matches what `buildTree`
- * shows for it (they never appear inside a real folder, `showAppFiles` on
- * or off).
+ * path (Pinned's own "n notes", `pinned-section.tsx`/`home.tsx`, where the
+ * count is stated as notes and only notes). Every visible folder has an
+ * entry, empty ones at 0; the root ('') has none. Folder notes are already
+ * left out of `index.notes`, so they never count; Bower's own files
+ * (`isAppFile`) never count either, so a folder's number always matches
+ * what `buildTree` shows for it (they never appear inside a real folder,
+ * `showAppFiles` on or off).
+ *
+ * `includeFiles` also walks `index.files` (everything that is not a note
+ * or a folder) into the same totals — what the folder menu, the Notes
+ * tree and the desktop sidebar show (#425: they used to count notes only,
+ * so the same folder read a different number there than on its own
+ * screen, which always counted both, "n files · n notes"). None of
+ * `index.files` can be one of Bower's own files (`isAppFile` only ever
+ * matches a `.md` name), so no extra filtering is needed for it.
  */
-export function folderCounts(index: VaultIndex): Map<string, number> {
+export function folderCounts(
+  index: VaultIndex,
+  includeFiles = false,
+): Map<string, number> {
   const counts = new Map<string, number>();
   for (const folder of index.folders) counts.set(folder.path, 0);
-  for (const note of index.notes) {
-    if (isAppFile(note.path, note.name)) continue;
-    let folder = folderOf(note.path);
+  function addUp(path: string): void {
+    let folder = folderOf(path);
     while (folder !== '') {
       counts.set(folder, (counts.get(folder) ?? 0) + 1);
       folder = folderOf(folder);
     }
+  }
+  for (const note of index.notes) {
+    if (isAppFile(note.path, note.name)) continue;
+    addUp(note.path);
+  }
+  if (includeFiles) {
+    for (const file of index.files) addUp(file.path);
   }
   return counts;
 }

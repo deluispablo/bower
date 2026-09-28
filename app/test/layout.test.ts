@@ -345,8 +345,10 @@ describe('Layout', () => {
     expect(links[1]?.textContent).toBe(
       '2-AreasParts of life that go on: home, health, money1',
     );
-    // No count at zero: the inbox holds only a PDF, not a note.
-    expect(links[0]?.querySelector('.folder-menu-count')).toBeNull();
+    // #425: files count too, so the inbox's one PDF still shows.
+    expect(links[0]?.querySelector('.folder-menu-count')?.textContent).toBe(
+      '1',
+    );
     expect(query('[role="dialog"] .folder-menu-foot').textContent).toContain(
       'Long-press to pin it to Home.',
     );
