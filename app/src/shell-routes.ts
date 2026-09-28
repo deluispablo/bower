@@ -58,6 +58,7 @@ export function helpScreenFor(path: string): HelpScreen {
   if (
     path === '/notes' ||
     path === '/search' ||
+    path === '/just-filed' ||
     path.startsWith('/note/') ||
     path.startsWith('/file/')
   ) {

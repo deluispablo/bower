@@ -33,6 +33,12 @@ import { useLocation } from 'preact-iso';
 
 import { loadTreeState } from '../cache.js';
 import { getPref, setPref } from '../prefs.js';
+import {
+  lastTarget,
+  rememberTarget,
+  targetFromReveal,
+  targetFromRoute,
+} from '../reveal.js';
 import type { ParaKind } from '../navigation.js';
 import {
   checkWhen,
@@ -53,12 +59,18 @@ import {
   IconSearch,
 } from './icons.js';
 import { FolderMark } from './folder-mark.js';
+import { JustFiledRow } from './just-filed-row.js';
 import { PinnedSidebar } from './pinned-sidebar.js';
 import { Tree } from './tree.js';
 
 import '../styles/explorer.css';
 
 export const HEALTH_PATH = '/health';
+
+/** The `?reveal=` value "Show in folders" (#608, `revealHref`) put on `/notes`. */
+function revealParam(): string | undefined {
+  return new URLSearchParams(window.location.search).get('reveal') ?? undefined;
+}
 
 /**
  * Whether the latest health report has not been opened yet, for the Health
@@ -143,6 +155,9 @@ export interface ExpandToggle {
   collapseKey: number;
   expandKey: number;
   toggle: () => void;
+  /** The tree says whether any folder is open, e.g. after a reveal opened
+   * some: keeps the label exact ("Collapse all" only when one is open). */
+  syncOpen: (anyOpen: boolean) => void;
 }
 
 /**
@@ -177,6 +192,7 @@ export function useExpandToggle(): ExpandToggle {
     expanded,
     collapseKey,
     expandKey,
+    syncOpen: setExpanded,
     toggle: () => {
       if (expanded) setCollapseKey((key) => key + 1);
       else setExpandKey((key) => key + 1);
@@ -249,6 +265,18 @@ export function Explorer({
   const { me, signOut } = useSession();
   const { index, status } = useVault();
   const { path } = useLocation();
+  // Reveal (#591): the desktop sidebar follows the route and keeps the last
+  // target; the Notes tab, opened later, reveals that one (or the one a
+  // "Show in folders" link names).
+  const routeTarget =
+    variant === 'sidebar' ? targetFromRoute(path, index) : null;
+  const target =
+    variant === 'sidebar'
+      ? routeTarget
+      : (targetFromReveal(revealParam(), index) ?? lastTarget());
+  useEffect(() => {
+    rememberTarget(routeTarget);
+  }, [routeTarget?.kind, routeTarget?.path]);
   // The order is the saved preference; no control on this screen changes it.
   const sort = getPref('explorerSort');
   // Sidebar only: its own inline tool (page's Expand/Collapse all lives in
@@ -361,7 +389,7 @@ export function Explorer({
         </div>
       )}
       <div class="explorer-just-filed" data-slot="just-filed">
-        {justFiled}
+        {justFiled ?? <JustFiledRow variant={variant} />}
       </div>
       {index !== null && (
         <PinnedSidebar items={pinned(index)} variant={variant} />
@@ -394,6 +422,12 @@ export function Explorer({
             }
             showAppFiles={showAppFiles}
             rootMeanings={variant !== 'sidebar'}
+            revealPath={target?.path}
+            currentId={target?.id}
+            onOpenChange={
+              variant === 'sidebar' ? sidebarToggle.syncOpen : undefined
+            }
+            topOnTabTap={variant === 'page'}
           />
         )}
       </div>

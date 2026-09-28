@@ -274,3 +274,23 @@
     height: 32px;
   }
 }
+
+/* Reveal (#591): the row the tree just opened to fades from a highlight. */
+.tree-row-reveal {
+  animation: tree-reveal 600ms ease-out;
+}
+
+@keyframes tree-reveal {
+  from {
+    background: var(--color-surface-hover);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-row-reveal {
+    animation: none;
+  }
+}

@@ -35,18 +35,22 @@
  */
 
 import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import type { Run } from '../api.js';
 import { isDemo } from '../api.js';
 import { sinceLabel } from '../bower-tab.js';
+import { findCompanion } from '../companion.js';
 import { doneNotes, things } from '../home.js';
 import { failureCopy } from '../run-failure.js';
+import { JUST_FILED_PATH, JUST_SEE_WHERE } from '../just-filed.js';
 import { runKey } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import {
   destinationsLabel,
   progressFor,
+  readingLine,
+  readLabels,
   runCounts,
   runRows,
   waitingPaths,
@@ -55,6 +59,7 @@ import type { RunRow } from '../run-progress.js';
 import { useVault } from '../vault-store.js';
 import { BowerWorking, workingLabel } from './bower-working.js';
 import type { WorkingState } from './bower-working.js';
+import { FolderMark } from './folder-mark.js';
 import { IconClose, IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
 import '../styles/tidy-confirm-sheet.css';
 
@@ -157,7 +162,22 @@ export function nothingLost(n: number): string {
 
 /** The sentence under the bar while a run goes (spec C.6). */
 export const REASSURANCE =
-  'Usually three to five minutes. Close this and keep going; Home will say when it is done.';
+  'You can close this; Bower carries on and tells you when it is done.';
+
+/** The header's second line while a run goes ("4 of 5 · started a minute
+ * ago", board `Flow-04-Working`): the count when the run reports one, then
+ * when it started. */
+export function headerSubline(
+  progress: { filed: number; total: number } | null,
+  started: string | undefined,
+): string {
+  const parts: string[] = [];
+  if (progress !== null) parts.push(`${progress.filed} of ${progress.total}`);
+  if (started !== undefined && started !== '') {
+    parts.push(started.charAt(0).toLowerCase() + started.slice(1));
+  }
+  return parts.join(' · ');
+}
 
 /**
  * The demo's sentence in the same place (#363, `Demo-Working` board,
@@ -194,10 +214,40 @@ function RowIcon({ tone }: { tone: RunRow['tone'] }): JSX.Element {
   return <span class={`working-sheet-row-icon tone-${tone}`}>{icon}</span>;
 }
 
-/** What a row says after the title: where it went, or that it is being read. */
-function rowWhere(row: RunRow): string {
-  if (row.status === 'reading') return 'reading…';
-  return row.destination === null ? 'filed' : `→ ${row.destination}`;
+/** What a row says after the title (board `Flow-04-Working`): the mark and
+ * folder, then "· read: rent, rooms, dates", "· read" and "· was IMG_4471.jpg";
+ * a kept item says so instead; the item in progress says what it is doing. */
+function RowWhere({ row }: { row: RunRow }): JSX.Element {
+  if (row.status === 'reading') {
+    return <span class="working-sheet-row-where">{readingLine(row.path)}</span>;
+  }
+  const bits: string[] = [];
+  if (row.read === 'facts') bits.push(`read: ${row.readLabels.join(', ')}`);
+  else if (row.read === 'plain') bits.push('read');
+  if (row.was !== null) bits.push(`was ${row.was}`);
+  return (
+    <span class="working-sheet-row-where">
+      {row.keptNote !== null ? (
+        row.keptNote
+      ) : (
+        <>
+          {row.folderPath === null ? (
+            row.destination === null ? (
+              'filed'
+            ) : (
+              `→ ${row.destination}`
+            )
+          ) : (
+            <>
+              {row.para !== null && <FolderMark kind={row.para} size={18} />}{' '}
+              {row.folderPath}
+            </>
+          )}
+          {bits.map((bit) => ` · ${bit}`).join('')}
+        </>
+      )}
+    </span>
+  );
 }
 
 export function WorkingSheet({
@@ -225,6 +275,50 @@ export function WorkingSheet({
     }
   }
   const waiting = waitingRef.current?.paths ?? [];
+
+  // The kind of each filed item's companion note, read once per note
+  // (`loadNoteMeta` is cached): "read: rent, rooms, dates" on the row.
+  const [companionLabels, setCompanionLabels] = useState<
+    ReadonlyMap<string, string[]>
+  >(new Map());
+  const filedItems = run?.items;
+  const byPath = useMemo(
+    () => new Map(files.map((file) => [file.path, file])),
+    [files],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    const notes = files.filter((file) => /\.md$/i.test(file.name));
+    for (const item of filedItems ?? []) {
+      const moved = item.to === undefined ? undefined : byPath.get(item.to);
+      if (item.to === undefined || moved === undefined) continue;
+      const companion = findCompanion(moved, {
+        notes,
+        byPath,
+        originals: new Map(),
+        catalogue: new Map(),
+      });
+      if (companion === undefined) continue;
+      const key = item.to;
+      // Loaded on demand: the kinds table and the note reader are not
+      // needed to start the app.
+      Promise.all([import('../note-meta.js'), import('../kinds.js')])
+        .then(async ([noteMeta, kinds]) => {
+          const meta = await noteMeta.loadNoteMeta(companion);
+          const labels = readLabels(
+            meta.kind === undefined ? undefined : kinds.kindById(meta.kind),
+          );
+          if (cancelled) return;
+          setCompanionLabels((previous) => new Map(previous).set(key, labels));
+        })
+        .catch((error: unknown) => {
+          console.error('Could not read a note for the working sheet', error);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [filedItems, files, byPath]);
 
   const phaseRef = useRef(phase);
   const reopenKeyRef = useRef(reopenKey);
@@ -327,7 +421,15 @@ export function WorkingSheet({
   const progress = active
     ? progressFor(runCounts(processed, waiting, items))
     : null;
-  const rows = runRows({ processed, waiting, files, active, items });
+  const rows = runRows({
+    processed,
+    waiting,
+    files,
+    active,
+    items,
+    setAside: run?.setAside,
+    companionLabels,
+  });
   const started = !active
     ? undefined
     : isDemo()
@@ -340,6 +442,11 @@ export function WorkingSheet({
     <div class="working-sheet" role="dialog" aria-label="Tidying up status">
       <div class="working-sheet-head">
         <h2 class="working-sheet-title">Tidying up</h2>
+        {active && headerSubline(progress, started) !== '' && (
+          <span class="working-sheet-subline">
+            {headerSubline(progress, started)}
+          </span>
+        )}
         <button
           type="button"
           class="working-sheet-close"
@@ -367,18 +474,13 @@ export function WorkingSheet({
           {note}
         </p>
       ))}
+      {state === 'done' && (
+        <a class="working-sheet-see" href={JUST_FILED_PATH} onClick={onDismiss}>
+          {JUST_SEE_WHERE}
+        </a>
+      )}
       {active && (
         <div class="working-sheet-progress">
-          <div class="working-sheet-progress-row">
-            <span>
-              {progress !== null
-                ? `${progress.filed} of ${progress.total} filed`
-                : ''}
-            </span>
-            {started !== undefined && (
-              <span class="working-sheet-started">{started}</span>
-            )}
-          </div>
           <div
             class="working-sheet-bar"
             data-indeterminate={progress === null ? '' : undefined}
@@ -414,7 +516,7 @@ export function WorkingSheet({
             >
               <RowIcon tone={row.tone} />
               <span class="working-sheet-row-title">{row.title}</span>
-              <span class="working-sheet-row-where">{rowWhere(row)}</span>
+              <RowWhere row={row} />
             </li>
           ))}
         </ul>

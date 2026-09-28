@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { FOLDER_MIME } from '../src/drive.js';
+import { kindById } from '../src/kinds.js';
+import type { RunItem } from '../src/api.js';
 import type { DriveFile } from '../src/drive.js';
 import {
   destinationOf,
   destinationsLabel,
   isContextNote,
   progressFor,
+  readingLine,
+  readLabels,
   runCounts,
   runRows,
   visiblePendingCount,
@@ -135,6 +139,18 @@ describe('isContextNote', () => {
   });
 });
 
+const BLANK: Omit<
+  RunRow,
+  'path' | 'title' | 'tone' | 'status' | 'destination'
+> = {
+  para: null,
+  folderPath: null,
+  read: null,
+  readLabels: [],
+  was: null,
+  keptNote: null,
+};
+
 describe('runRows', () => {
   const waiting = waitingPaths(BEFORE);
 
@@ -152,6 +168,7 @@ describe('runRows', () => {
         tone: 'pdf',
         status: 'filed',
         destination: null,
+        ...BLANK,
       },
       {
         path: PHOTO,
@@ -159,6 +176,7 @@ describe('runRows', () => {
         tone: 'image',
         status: 'filed',
         destination: null,
+        ...BLANK,
       },
       {
         path: NOTES,
@@ -166,6 +184,7 @@ describe('runRows', () => {
         tone: 'note',
         status: 'reading',
         destination: null,
+        ...BLANK,
       },
     ]);
   });
@@ -279,6 +298,7 @@ describe('destinationsLabel', () => {
       tone: 'file',
       status: 'filed',
       destination,
+      ...BLANK,
     });
     expect(destinationsLabel([])).toBeNull();
     expect(destinationsLabel([row(null)])).toBeNull();
@@ -287,5 +307,92 @@ describe('destinationsLabel', () => {
         ['Flat hunt', 'Finance', 'Flat hunt', 'Answers', 'Garden'].map(row),
       ),
     ).toBe('Flat hunt · Finance · Answers');
+  });
+});
+
+describe('runRows: where it went, what Bower read (board Flow-04-Working)', () => {
+  const to = (name: string): string => `1-Projects/Flat hunt/${name}`;
+  const items: RunItem[] = [
+    {
+      path: '0-Inbox/Arlington Road flat.pdf',
+      kind: 'file',
+      to: to('Arlington Road, 2 bed.pdf'),
+      renamedFrom: 'Arlington Road flat.pdf',
+    },
+    { path: '0-Inbox/Notes.md', kind: 'file', to: to('Notes.md') },
+    {
+      path: '0-Inbox/IMG_4471.jpg',
+      kind: 'file',
+      to: to('Arlington Road, window sign.jpg'),
+      renamedFrom: 'IMG_4471.jpg',
+    },
+  ];
+  const processed = items.map((item) => item.path);
+  const rows = runRows({
+    processed,
+    waiting: [...processed, '0-Inbox/Kentish Town photos.pdf'],
+    files: [],
+    active: true,
+    items,
+    companionLabels: new Map([
+      [to('Arlington Road, 2 bed.pdf'), readLabels(kindById('rental-listing'))],
+    ]),
+  });
+
+  it('a row shows the new title, the mark and the folder path', () => {
+    expect(rows[0]).toMatchObject({
+      title: 'Arlington Road, 2 bed',
+      para: 'projects',
+      folderPath: 'Projects › Flat hunt',
+      destination: 'Flat hunt',
+    });
+  });
+
+  it('"read: ..." carries the first three key-fact labels, lower-case', () => {
+    expect(rows[0]).toMatchObject({ read: 'facts' });
+    expect(rows[0]?.readLabels).toEqual(readLabels(kindById('rental-listing')));
+    expect(rows[0]?.readLabels).toHaveLength(3);
+    const joined = rows[0]?.readLabels.join(',') ?? '';
+    expect(joined).toBe(joined.toLowerCase());
+  });
+
+  it('a note is plain "read"; a photo with no note says nothing of reading', () => {
+    expect(rows[1]).toMatchObject({ read: 'plain', was: null });
+    expect(rows[2]).toMatchObject({ read: null });
+  });
+
+  it('a renamed item says what it was called', () => {
+    expect(rows[0]?.was).toBe('Arlington Road flat.pdf');
+    expect(rows[2]?.was).toBe('IMG_4471.jpg');
+  });
+
+  it('the item in progress says Reading…, a link Reading the page…', () => {
+    expect(rows[3]).toMatchObject({ status: 'reading', read: null });
+    expect(readingLine('0-Inbox/Kentish Town photos.pdf')).toBe('Reading…');
+  });
+
+  it('kept-not-read and over-limit items say so on their row', () => {
+    const set = runRows({
+      processed: ['0-Inbox/Walk-through.mp4'],
+      waiting: [],
+      files: [],
+      active: false,
+      items: [
+        {
+          path: '0-Inbox/Walk-through.mp4',
+          kind: 'file',
+          to: '1-Projects/Flat hunt/Walk-through.mp4',
+        },
+      ],
+      setAside: [
+        { path: '0-Inbox/Walk-through.mp4', reason: 'kept-not-read' },
+        { path: '0-Inbox/Big scan.pdf', reason: 'too-large' },
+        { path: '0-Inbox/Odd.docx', reason: 'quarantined' },
+      ],
+    });
+    expect(set.map((row) => [row.title, row.keptNote, row.read])).toEqual([
+      ['Walk-through', "Kept, not read: Bower can't watch videos", null],
+      ['Big scan', 'Kept, not read: over 50 MB', null],
+    ]);
   });
 });

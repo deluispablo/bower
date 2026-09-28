@@ -14,9 +14,12 @@
  */
 
 import { linkTitleFromFileName } from './add.js';
-import type { RunItem, RunItemKind } from './api.js';
+import type { RunItem, RunItemKind, SetAsideItem } from './api.js';
+import type { ParaKind } from './components/folder-mark.js';
 import type { DriveFile } from './drive.js';
-import { pendingCount } from './navigation.js';
+import { formatPolicy } from './formats.js';
+import type { Kind } from './kinds.js';
+import { displayName, paraKindOf, pendingCount } from './navigation.js';
 import { fileKind, fileTitle } from './vault-index.js';
 
 /** The counts a run may report, when it reports them at all. */
@@ -153,6 +156,55 @@ export interface RunRow {
   /** The folder it was filed in ("Flat hunt"), once the listing shows it
    * there; `null` before, and always for `reading`. */
   destination: string | null;
+  /** The PARA landmark the folder is under (`P Projects › Flat hunt`), or
+   * `null` while the destination is not known or is not a PARA folder. */
+  para: ParaKind | null;
+  /** The folder as the row shows it after the mark: "Projects › Flat hunt";
+   * `null` while the destination is not known. */
+  folderPath: string | null;
+  /** What Bower read (report v2, board `Flow-04-Working`): `facts` when a
+   * companion note of a known kind was written (`readLabels` are its first
+   * three key-fact labels, lower-case), `plain` for a note or text it read,
+   * `null` when nothing is known to have been read. */
+  read: 'facts' | 'plain' | null;
+  readLabels: string[];
+  /** The name the item had before Bower renamed it, or `null`. */
+  was: string | null;
+  /** "Kept, not read: Bower can't watch videos" for an item the run set
+   * aside without reading it, else `null`. */
+  keptNote: string | null;
+}
+
+/** What a link's in-progress row says: the page is fetched, not opened. */
+export const READING_PAGE = 'Reading the page…';
+export const READING = 'Reading…';
+
+/** The words on a row for an item that was kept, not read; `null` for a
+ * reason the sheet does not word (a quarantined file is the Done state's). */
+export function keptNote(
+  aside: Pick<SetAsideItem, 'path' | 'reason'>,
+): string | null {
+  if (aside.reason === 'too-large') return 'Kept, not read: over 50 MB';
+  if (aside.reason !== 'kept-not-read') return null;
+  const line = formatPolicy(
+    fileKind({ name: baseName(aside.path), mimeType: '' }),
+  ).queueLine;
+  return line ?? 'Kept, not read: Bower keeps it by its name';
+}
+
+/** The first three key-fact labels of the kind `kindId`, lower-case ("rent,
+ * rooms, dates"); empty for an unknown kind. */
+export function readLabels(kind: Kind | undefined): string[] {
+  if (kind === undefined) return [];
+  const labels: string[] = [];
+  for (const key of kind.keyFacts) {
+    const field = kind.fields.find((candidate) => candidate.key === key);
+    if (field === undefined) continue;
+    const label = field.label.trim().toLowerCase();
+    if (label !== '' && !labels.includes(label)) labels.push(label);
+    if (labels.length === 3) break;
+  }
+  return labels;
 }
 
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|heic|heif|webp|gif)$/i;
@@ -198,11 +250,18 @@ export function destinationOf(
   return null;
 }
 
+/** The folder of `to` as the row shows it: "Projects › Flat hunt". */
+function folderPathOf(to: string): string | null {
+  const folders = to.split('/').slice(0, -1);
+  return folders.length === 0 ? null : folders.map(displayName).join(' › ');
+}
+
 /**
  * The sheet's rows: one per filed item, in the order the run filed them,
- * then, while the run is `active`, the next waiting item as `reading`.
- * None when the run does not report `processed`: the sheet then has
- * nothing true to say about any one item.
+ * then, while the run is `active`, the next waiting item as `reading`, then
+ * any item the run set aside that no row names yet. None when the run does
+ * not report `processed`: the sheet then has nothing true to say about any
+ * one item.
  */
 export function runRows(input: {
   processed: readonly string[] | undefined;
@@ -211,21 +270,56 @@ export function runRows(input: {
   active: boolean;
   /** The run's `items` (#345), when its runner reported kinds. */
   items?: readonly RunItem[];
+  /** The run's `setAside` (report v2). */
+  setAside?: readonly SetAsideItem[];
+  /** The kind id of each filed item's companion note, keyed by the item's
+   * `to` path, as far as the sheet has read them. */
+  companionLabels?: ReadonlyMap<string, string[]>;
 }): RunRow[] {
-  const { processed, waiting, files, active, items } = input;
+  const { processed, waiting, files, active, items, setAside } = input;
   if (processed === undefined) return [];
   const byPath = new Map(files.map((file) => [file.path, file]));
   const row = (path: string, status: RunRow['status']): RunRow => {
-    const name = baseName(path);
-    const destination = status === 'filed' ? destinationOf(path, files) : null;
+    const item = items?.find((candidate) => candidate.path === path);
+    const to = status === 'filed' ? item?.to : undefined;
+    const name = baseName(to ?? path);
+    const destination =
+      status !== 'filed'
+        ? null
+        : to !== undefined
+          ? (to.split('/').slice(-2, -1)[0] ?? null)
+          : destinationOf(path, files);
     const file =
-      byPath.get(path) ?? files.find((candidate) => candidate.name === name);
+      byPath.get(to ?? path) ??
+      files.find((candidate) => candidate.name === name);
+    const labels =
+      to === undefined ? [] : (input.companionLabels?.get(to) ?? []);
+    const asideNote = setAside?.find((aside) => aside.path === path);
+    const kept = asideNote === undefined ? null : keptNote(asideNote);
+    const isText = /\.(md|txt)$/i.test(name);
+    const top = to?.split('/')[0];
     return {
       path,
       title: rowTitle(name),
       tone: toneOf(name, file),
       status,
       destination,
+      para: top === undefined ? null : paraKindOf(top),
+      folderPath: to === undefined ? null : folderPathOf(to),
+      read:
+        kept !== null || status !== 'filed' || to === undefined
+          ? null
+          : labels.length > 0
+            ? 'facts'
+            : isText || input.companionLabels?.has(to) === true
+              ? 'plain'
+              : null,
+      readLabels: labels,
+      was:
+        item?.renamedFrom !== undefined && item.renamedFrom !== name
+          ? item.renamedFrom
+          : null,
+      keptNote: kept,
     };
   };
   const rows = processed
@@ -238,7 +332,20 @@ export function runRows(input: {
     );
     if (next !== undefined) rows.push(row(next, 'reading'));
   }
+  const known = new Set(rows.map((entry) => entry.path));
+  for (const aside of setAside ?? []) {
+    if (known.has(aside.path) || keptNote(aside) === null) continue;
+    known.add(aside.path);
+    rows.push(row(aside.path, 'filed'));
+  }
   return rows;
+}
+
+/** What the in-progress row says: "Reading the page…" for a link. */
+export function readingLine(path: string): string {
+  return linkTitleFromFileName(baseName(path)) !== null
+    ? READING_PAGE
+    : READING;
 }
 
 /**
