@@ -15,6 +15,7 @@
     "e2e:shots": "cross-env BOWER_README_SHOTS=1 playwright test --project=desktop"
   },
   "dependencies": {
+    "@tanstack/virtual-core": "^3.17.11",
     "dompurify": "^3.4.16",
     "idb-keyval": "^6.3.0",
     "marked": "^18.0.14",
