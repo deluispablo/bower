@@ -787,7 +787,8 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
     lisbon.getByText('Waiting · question', { exact: true }),
   ).toBeVisible();
   await expect(lisbon).toContainText('goes with the next tidy-up');
-  const answered = rowWith('Which subscriptions renew this autumn');
+  // The full sentence sent, not the file name's own short title (#465).
+  const answered = rowWith('Which subscriptions renew this autumn?');
   await expect(answered.getByText('Answered', { exact: true })).toBeVisible();
   await expect(
     answered.getByRole('link', { name: 'Read the answer' }),
@@ -843,12 +844,14 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
     hasText: '1 file processed',
   });
   await expect(toast).toBeVisible({ timeout: 20_000 });
-  await expect(
-    rowWith('What do I still need for Lisbon').getByText('Answered', {
-      exact: true,
-    }),
-  ).toBeVisible({ timeout: 10_000 });
-  await expect(edited).toHaveCount(0);
+  // The row keeps the exact sentence sent (the edit) once answered too --
+  // not "What do I still need for Lisbon", the file name's own short title
+  // (#465). Same text as `edited` matched while it was still waiting, now
+  // in the one row this file becomes (no separate waiting row left).
+  await expect(edited).toHaveCount(1);
+  await expect(edited.getByText('Answered', { exact: true })).toBeVisible({
+    timeout: 10_000,
+  });
 });
 
 test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({
@@ -1564,6 +1567,110 @@ test('At 1920 a note and its About panel are one row next to the measure, centre
     (aside?.width ?? NaN);
   expect(Math.abs(left - right)).toBeLessThanOrEqual(1);
   await shot(page, testInfo, 'note-measure-1920');
+});
+
+/** The desktop widths every wide screen is drawn and checked at (#359,
+ * Desktop-Responsive board; `docs/testing.md`). */
+const DESKTOP_WIDTHS = [1024, 1280, 1440, 1920] as const;
+
+test('Home, a note, Add, the Bower tab and Settings at 1024, 1280, 1440 and 1920; nothing changes above 1200 (#359)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The four desktop widths; the phone project has its own.',
+  );
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openHome(page);
+
+  // Each screen, reached the way a person would, then read back at every
+  // width (resizing keeps the page and its state).
+  const screens: [string, () => Promise<void>][] = [
+    ['home', () => navigate(page, /^Home$/)],
+    [
+      'note',
+      async () => {
+        await visible(
+          page.getByRole('button', { name: /Search or jump to a note/ }),
+        ).click();
+        const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+        await switcher.getByRole('combobox').fill('subscriptions renew');
+        await switcher
+          .getByRole('option', { name: /subscriptions renew/ })
+          .first()
+          .click();
+        await expect(page.locator('.bower-note')).toBeVisible();
+      },
+    ],
+    ['add', () => navigate(page, /^Add$/)],
+    ['bower', () => navigate(page, /^Bower$/)],
+    ['settings', () => openSettings(page)],
+  ];
+  const container = page.locator('.shell-container');
+  for (const [name, open] of screens) {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await open();
+    await expect(page.locator('main.content')).toBeVisible();
+    const widths: number[] = [];
+    for (const width of DESKTOP_WIDTHS) {
+      await page.setViewportSize({ width, height: 900 });
+      widths.push((await container.boundingBox())?.width ?? NaN);
+      await shot(page, testInfo, `widths-${String(width)}-${name}`);
+    }
+    // No breakpoint above 1200: past the container's own cap, a wider
+    // window only adds margin.
+    if (name !== 'note') expect(widths[3]).toBeCloseTo(widths[2] ?? NaN, 0);
+  }
+});
+
+test('Settings, Health, Ideas, Terms, Privacy and Not found share one centred column (#360)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The shared column is checked on desktop, where it is narrower than the content.',
+  );
+  await openHome(page);
+  const pages: [string, string, RegExp][] = [
+    ['settings', '/settings', /^Settings$/],
+    ['health', '/health', /Health check/],
+    ['ideas', '/ideas', /Ideas/],
+    ['terms', '/terms', /Terms/],
+    ['privacy', '/privacy', /Privacy/],
+    ['not-found', '/note/does-not-exist', /can.t find that note/],
+  ];
+  const widths: number[] = [];
+  for (const [name, path, heading] of pages) {
+    await page.goto(path);
+    await expect(
+      page.getByRole('heading', { name: heading, level: 1 }).first(),
+    ).toBeVisible();
+    const column = page.locator('.page-column');
+    await expect(column).toHaveCount(1);
+    // Measured against the box it sits in: the shell's content column,
+    // or the bare page for Terms and Privacy when they open outside it.
+    const [box, content] = await Promise.all([
+      column.boundingBox(),
+      column.evaluate((el) => {
+        const parent = el.parentElement ?? el;
+        const r = parent.getBoundingClientRect();
+        const style = getComputedStyle(parent);
+        return {
+          left: r.left + parseFloat(style.paddingLeft),
+          right: r.right - parseFloat(style.paddingRight),
+        };
+      }),
+    ]);
+    widths.push(box?.width ?? NaN);
+    // Centred in the content column: the same margin on both sides.
+    const left = (box?.x ?? NaN) - content.left;
+    const right = content.right - (box?.x ?? NaN) - (box?.width ?? NaN);
+    expect(Math.abs(left - right)).toBeLessThanOrEqual(1);
+    await shot(page, testInfo, `single-column-${name}`);
+  }
+  // One width for all six: the Settings column, 640 px on the board.
+  expect(new Set(widths.map((w) => Math.round(w)))).toEqual(new Set([640]));
 });
 
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({

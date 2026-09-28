@@ -44,7 +44,7 @@ export function Ideas(): JSX.Element {
   useShellSlot('crumb', CRUMB);
 
   return (
-    <section class="ideas-screen">
+    <section class="ideas-screen page-column">
       <h1 class="screen-title">Ideas</h1>
 
       <div class="ideas-intro">

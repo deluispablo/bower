@@ -166,6 +166,28 @@ describe('requestRows', () => {
     ]);
   });
 
+  // #465: the file name's own short title ("Which subscriptions renew this
+  // autumn", no question mark, read as a job) is not the sentence sent
+  // ("Which subscriptions renew this autumn?", a question) -- an answered
+  // row must read the note's own words once its text is fetched.
+  it("reads an answered row's real question once its note is read", () => {
+    const answerId =
+      'Answers/2026-09-21 Which subscriptions renew this autumn.md';
+    const rows = requestRows({
+      ...base,
+      texts: new Map([
+        ...texts,
+        [
+          answerId,
+          '---\ntags: [answer]\ncreated: 2026-09-21\nupdated: 2026-09-21\n---\n\n# Which subscriptions renew this autumn?\n\nBroadband runs until January.\n',
+        ],
+      ]),
+    });
+    const answered = rows.find((row) => row.fileId === answerId);
+    expect(answered?.text).toBe('Which subscriptions renew this autumn?');
+    expect(answered?.kind).toBe('question');
+  });
+
   it('marks what was waiting before the run in flight as Tidying up', () => {
     const rows = requestRows({
       ...base,

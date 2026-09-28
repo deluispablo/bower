@@ -174,7 +174,7 @@ export function Health() {
 
   if (index === null && (status === 'loading' || status === 'error')) {
     return (
-      <section class="health">
+      <section class="health page-column">
         <h1>Health check</h1>
         <p>
           {status === 'error'
@@ -188,7 +188,7 @@ export function Health() {
   // Also covers a user with no Bower folder yet (no index at all).
   if (file === undefined) {
     return (
-      <section class="health">
+      <section class="health page-column">
         <h1>Health check</h1>
         <p class="health-explainer">{EXPLAINER}</p>
         <p>No health check yet. Runs every Sunday.</p>
@@ -201,7 +201,7 @@ export function Health() {
     modifiedTime === undefined ? '' : reportDateLabel(modifiedTime);
 
   return (
-    <section class="health">
+    <section class="health page-column">
       <div class="health-head">
         <h1>Health check</h1>
         {file.webViewLink !== undefined && (
