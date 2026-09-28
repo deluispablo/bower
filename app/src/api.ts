@@ -178,10 +178,32 @@ export type RunState = 'queued' | 'running' | 'done' | 'failed';
  * `api/src/types.ts`. */
 export type RunItemKind = 'file' | 'question' | 'request' | 'context' | 'rule';
 
-/** One processed inbox item with its kind (#345). */
+/** One processed inbox item with its kind (#345). Report v2 (#583, spec
+ * R-RUN-4; the runner and Worker side is #598) adds where it went and what
+ * it was called before. */
 export interface RunItem {
+  /** The inbox path the item was picked up from, as in `Run.processed`. */
   path: string;
   kind: RunItemKind;
+  /** Where the item ended up: its new `/`-joined path from the top of the
+   * folder. Absent from a run reported before report v2. */
+  to?: string;
+  /** The file name the item had before Bower renamed it (`IMG_4471.jpg`).
+   * Absent when the name did not change. */
+  renamedFrom?: string;
+}
+
+/** Why Bower set an item aside instead of reading it (report v2, R-RUN-4):
+ * a format it keeps but does not read, a file over the size limit, one it
+ * could not convert, or one the pre-scan quarantined. */
+export type SetAsideReason =
+  'kept-not-read' | 'too-large' | 'unconvertible' | 'quarantined';
+
+/** One item a run set aside (report v2). */
+export interface SetAsideItem {
+  /** The item's path: where it was picked up, or where it was kept. */
+  path: string;
+  reason: SetAsideReason;
 }
 
 /** Mirrors `Run` in `api/src/types.ts`. */
@@ -195,6 +217,11 @@ export interface Run {
   /** `processed` with each item's kind, from a runner that reports kinds
    * (#345). */
   items?: RunItem[];
+  /** Items the run set aside, each with its reason (report v2, #583). */
+  setAside?: SetAsideItem[];
+  /** One short clause about what Bower added besides filing ("I added bike
+   * times to the flats"); Home's "All tidy" bubble shows it (report v2). */
+  added?: string;
   /** Paths the pre-scan set aside under `0-Inbox/Quarantine/` this run. */
   quarantined?: string[];
   /** Paths (or `"*"` for the whole run) the post-run audit refused. */
