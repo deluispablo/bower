@@ -1295,6 +1295,16 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
   await expect(rows.nth(2)).toHaveAttribute('href', /^\/note\//);
   await shot(page, testInfo, 'folder-project');
+
+  // The Ask Bower chip opens the Bower tab's box with the folder named,
+  // and nothing else from the folder (#354).
+  await page.getByRole('link', { name: 'Ask Bower about it' }).click();
+  await expect(page).toHaveURL(/\/bower\?text=/);
+  await expect(
+    page.getByRole('textbox', {
+      name: 'Tell Bower what to do, or ask it something',
+    }),
+  ).toHaveValue('About Kitchen Refresh: ');
 });
 
 test('a file opens on its own screen: the photo inline, the PDF without a preview says so', async ({
@@ -1364,7 +1374,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   ).toBeVisible();
   await expect(
     folderMenu.getByRole('menuitem', { name: /Ask Bower about this/ }),
-  ).toHaveAttribute('href', /^\/bower\?text=Kitchen%20Refresh/);
+  ).toHaveAttribute('href', '/bower?text=About%20Kitchen%20Refresh%3A%20');
   await expect(
     folderMenu.getByRole('menuitem', { name: /Edit the text/ }),
   ).toHaveCount(0);
