@@ -49,11 +49,13 @@ describe('buildHeaders', () => {
     expect(headers).not.toMatch(/VITE_API_URL|__API|\{\{|<API/);
   });
 
-  it('keeps the Picker origin out of script-src and frame-src without an API key', () => {
+  it("admits only Drive's preview host in frame-src, and keeps the Picker origin out of script-src, without an API key", () => {
     const headers = buildHeaders({ apiUrl: API_URL, googleApiKey: undefined });
 
     expect(directive(headers, 'script-src')).toBe(`script-src 'self'`);
-    expect(directive(headers, 'frame-src')).toBeUndefined();
+    expect(directive(headers, 'frame-src')).toBe(
+      `frame-src https://drive.google.com`,
+    );
   });
 
   it('adds apis.google.com to script-src, and both the loader and the Picker dialog to frame-src, when a Picker key is set', () => {
@@ -63,7 +65,7 @@ describe('buildHeaders', () => {
       `script-src 'self' https://apis.google.com`,
     );
     expect(directive(headers, 'frame-src')).toBe(
-      `frame-src https://apis.google.com https://docs.google.com`,
+      `frame-src https://drive.google.com https://apis.google.com https://docs.google.com`,
     );
   });
 
