@@ -9,11 +9,9 @@
 #
 # 1. Prerequisites: node 22+, pnpm, wrangler; `wrangler whoami` (Cloudflare)
 #    must be logged in.
-# 2. Builds the app with `pnpm -C app build:demo`. `VITE_ABOUT_URL`, if set
-#    in the environment, is passed through so "Run your own Bower" (#193)
-#    can link to the "what is Bower" site page; no other build-time value
-#    is needed (the demo makes no network calls, and never uses the
-#    Google Picker key).
+# 2. Builds the app with `pnpm -C app build:demo`. No build-time value is
+#    needed (the demo makes no network calls, and never uses the Google
+#    Picker key).
 # 3. Finds or creates the Pages project (`bower-demo` unless --project or
 #    PAGES_PROJECT says otherwise, same as scripts/deploy.sh does for
 #    `bower-app`) and deploys app/dist to it.
@@ -89,11 +87,7 @@ check_prerequisites() {
 
 build_demo() {
   log "Building the demo (pnpm -C app build:demo)..."
-  if [ -n "${VITE_ABOUT_URL:-}" ]; then
-    (cd "$ROOT" && VITE_ABOUT_URL="$VITE_ABOUT_URL" pnpm -C app build:demo </dev/null)
-  else
-    (cd "$ROOT" && pnpm -C app build:demo </dev/null)
-  fi
+  (cd "$ROOT" && pnpm -C app build:demo </dev/null)
   [ -f "$ROOT/app/dist/index.html" ] || die "The demo build did not produce app/dist/index.html."
 }
 

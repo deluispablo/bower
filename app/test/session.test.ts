@@ -94,7 +94,7 @@ describe('decideRedirect', () => {
       ).toBeNull();
     });
 
-    it('goes home once the intro has been seen (Skip or Explore the demo)', () => {
+    it('goes home once the intro has been seen (Skip or Try the demo)', () => {
       expect(decideRedirect('signed-in', true, '/', true, true)).toBeNull();
     });
 
