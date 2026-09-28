@@ -264,6 +264,8 @@ export function Tree({
   );
   // The path whose row is still to be scrolled to and highlighted.
   const pendingReveal = useRef<string | null>(revealPath ?? null);
+  const revealRef = useRef(revealPath);
+  revealRef.current = revealPath;
   const [flashPath, setFlashPath] = useState<string | null>(null);
   const newState = useNew();
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -280,9 +282,15 @@ export function Tree({
         if (cancelled) return;
         restored.current = true;
         if (state === undefined) return;
-        // Union, never replace: a reveal that ran before the stored state
-        // arrived keeps its folders.
-        setExpanded((prev) => mergeExpanded(new Set(state.expanded), [...prev]));
+        // The stored folders, plus the ancestors of what is being revealed:
+        // a reveal that ran before the state arrived keeps its folders.
+        const target = revealRef.current;
+        setExpanded(
+          mergeExpanded(
+            new Set(state.expanded),
+            target === undefined ? [] : ancestorsOf(target),
+          ),
+        );
         // A reveal scrolls to its own row; the stored offset would undo it.
         if (state.scroll > 0 && revealPath === undefined) {
           requestAnimationFrame(() => {

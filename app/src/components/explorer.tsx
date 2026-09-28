@@ -66,6 +66,13 @@ import '../styles/explorer.css';
 
 export const HEALTH_PATH = '/health';
 
+/** The `?reveal=` value "Show in folders" (#608, `revealHref`) put on `/notes`. */
+function revealParam(): string | undefined {
+  return (
+    new URLSearchParams(window.location.search).get('reveal') ?? undefined
+  );
+}
+
 /**
  * Whether the latest health report has not been opened yet, for the Health
  * row's "New" badge. Re-read on every render: the Health screen updates the
@@ -258,7 +265,7 @@ export function Explorer({
 }: ExplorerProps): JSX.Element {
   const { me, signOut } = useSession();
   const { index, status } = useVault();
-  const { path, query } = useLocation();
+  const { path } = useLocation();
   // Reveal (#591): the desktop sidebar follows the route and keeps the last
   // target; the Notes tab, opened later, reveals that one (or the one a
   // "Show in folders" link names).
@@ -267,7 +274,7 @@ export function Explorer({
   const target =
     variant === 'sidebar'
       ? routeTarget
-      : (targetFromReveal(query.reveal, index) ?? lastTarget());
+      : (targetFromReveal(revealParam(), index) ?? lastTarget());
   useEffect(() => {
     rememberTarget(routeTarget);
   }, [routeTarget?.kind, routeTarget?.path]);
