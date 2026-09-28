@@ -17,6 +17,7 @@ import {
   test,
   visible,
 } from './demo.js';
+import type { Page } from '@playwright/test';
 
 test.describe('open Home', () => {
   test.use({ introSeen: false });
@@ -1217,6 +1218,102 @@ test('The bar and the bottom nav align with the content column at 768 (#311)', a
   expect(navBox?.width).toBeCloseTo(contentBox?.width ?? NaN, 0);
 
   await shot(page, testInfo, 'tablet-768');
+});
+
+/**
+ * Every rendered element whose right edge comes within 40 px of the
+ * viewport's (#355, the Desktop-Responsive board's rule: at 1920 nothing
+ * touches the right edge). The page's own full-width wrappers are skipped:
+ * they span the window by design, and what counts is what sits inside them.
+ */
+async function rightEdgeHuggers(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const limit = document.documentElement.clientWidth - 40;
+    const wrappers = ['#app', '.shell', '.shell-main'];
+    const found: string[] = [];
+    for (const el of document.body.querySelectorAll('*')) {
+      if (wrappers.some((selector) => el.matches(selector))) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width < 1 || box.height < 1) continue;
+      if (!el.checkVisibility({ visibilityProperty: true })) continue;
+      if (box.right > limit) {
+        const name = el.className === '' ? el.tagName : String(el.className);
+        found.push(`${name} ends at ${String(Math.round(box.right))}`);
+      }
+    }
+    return found;
+  });
+}
+
+test('At 1920 the content stays in one centred container, away from the right edge (#355)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The container is the desktop layout; the phone has its own column.',
+  );
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openHome(page);
+
+  const container = page.locator('.shell-container');
+  const content = page.locator('main.content');
+  const width = async (): Promise<number> =>
+    (await container.boundingBox())?.width ?? NaN;
+
+  // Home: 980 px, centred right of the sidebar; the header row inside.
+  await expect(page.getByRole('link', { name: /Inbox/ }).first()).toBeVisible();
+  expect(await width()).toBeCloseTo(980, 0);
+  const [box, main, bar] = await Promise.all([
+    container.boundingBox(),
+    page.locator('.shell-main').boundingBox(),
+    page.locator('.topbar').boundingBox(),
+  ]);
+  const left = (box?.x ?? NaN) - (main?.x ?? NaN);
+  const right =
+    (main?.x ?? NaN) +
+    (main?.width ?? NaN) -
+    (box?.x ?? NaN) -
+    (box?.width ?? NaN);
+  expect(left).toBeCloseTo(right, 0);
+  expect(bar?.x).toBeCloseTo(box?.x ?? NaN, 0);
+  expect(bar?.width).toBeCloseTo(box?.width ?? NaN, 0);
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-home');
+
+  // A note, with its About panel: the container grows to 1200, still centred.
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+  await expect(page.locator('.bower-note')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'About this note' }),
+  ).toBeVisible();
+  expect(await width()).toBeCloseTo(1200, 0);
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-note');
+
+  await navigate(page, /^Add$/);
+  await expect(page).toHaveURL(/\/add$/);
+  await expect(content).toBeVisible();
+  expect(await width()).toBeCloseTo(980, 0);
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-add');
+
+  await navigate(page, /^Bower$/);
+  await expect(page.getByRole('tab', { name: 'Rules' })).toBeVisible();
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-bower');
+
+  await openSettings(page);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  expect(await rightEdgeHuggers(page)).toEqual([]);
+  await shot(page, testInfo, 'container-1920-settings');
 });
 
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
