@@ -248,7 +248,9 @@ test('Add: the camera door opens a capture input (#339)', async ({
   await expect(page.locator('input[type="file"][capture]')).toHaveCount(1);
 });
 
-test('Add puts a file in the inbox', async ({ page }, testInfo) => {
+test('Add puts a file in the inbox and stays on Add (#421)', async ({
+  page,
+}, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
   await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible();
@@ -265,9 +267,16 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await expect(page.getByText('Added to your inbox.')).toBeVisible();
   await shot(page, testInfo, 'add');
 
-  // Back on Home once the upload finishes: the Inbox card reads the new
-  // total right away (#289), not after the next background refresh.
-  await expect(page).toHaveURL('/');
+  // Adding is meant to take the whole pile before a tidy-up (#421): no
+  // navigation away, and no leftover "Add to Bower" once nothing is
+  // waiting any more.
+  await expect(page).toHaveURL('/add');
+  await expect(page.getByRole('button', { name: 'Add to Bower' })).toBeHidden();
+
+  // The vault index refreshed in place (#289): Home already reads the new
+  // total once we go there ourselves, not after the next background
+  // refresh.
+  await navigate(page, /^Home$/);
   await expect(
     visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
       '.home-card-count',
@@ -292,12 +301,14 @@ test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (
   await page.getByRole('button', { name: 'Add to Bower' }).click();
   await expect(page.getByText('In your inbox')).toBeVisible();
 
-  // Back on Home once the upload finishes, then Add again within the
-  // same session: the row is still there (#334), not an empty screen.
-  await expect(page).toHaveURL('/');
+  // Leave for Home ourselves, then Add again within the same session: the
+  // row is still there (#334), not an empty screen, and no leftover
+  // "Add to Bower" reappears now that nothing is waiting (#421).
+  await navigate(page, /^Home$/);
   await navigate(page, /^Add$/);
   await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
   await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add to Bower' })).toBeHidden();
 });
 
 test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', async ({
@@ -328,8 +339,9 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
       `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
     );
   await page.getByRole('button', { name: 'Add to Bower' }).click();
-  await expect(page).toHaveURL('/');
-  await navigate(page, /^Add$/);
+  // Stays on Add (#421): the new total shows in place, no round trip
+  // through Home needed to see it.
+  await expect(page).toHaveURL('/add');
   await expect(hint).toContainText('4 things waiting.');
 });
 
@@ -353,9 +365,12 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   );
   await shot(page, testInfo, 'add-context');
   await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
 
-  // Leaving Add writes the note: the three things, the receipt, the note.
-  await expect(page).toHaveURL('/');
+  // The context note is written on leaving Add (#421: no longer automatic
+  // once a batch finishes), so leave for Home ourselves: the three
+  // things, the receipt, the note.
+  await navigate(page, /^Home$/);
   await expect(
     visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
       '.home-card-count',

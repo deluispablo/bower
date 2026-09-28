@@ -334,9 +334,20 @@ describe('Add', () => {
       throw new Error('Add to Bower button missing');
     }
     void act(() => addButton.click());
-    // Every upload resolves and the button goes back to its idle label —
-    // the whole batch settled with nothing throwing and no run started.
-    await waitFor(() => (addButton.textContent ?? '') === 'Add to Bower');
+    // Every upload resolves and settles into "In your inbox" — the whole
+    // batch went through with nothing throwing and no run started. Once
+    // nothing is left waiting the button goes away rather than sit there
+    // as a no-op leftover (#421).
+    await waitFor(() =>
+      Array.from(root.querySelectorAll('.add-queue-status')).every(
+        (el) => el.textContent === 'In your inbox',
+      ),
+    );
+    expect(
+      Array.from(root.querySelectorAll('button')).some((b) =>
+        (b.textContent ?? '').includes('Add to Bower'),
+      ),
+    ).toBe(false);
 
     expect(upload).toHaveBeenCalledTimes(3);
     expect(tidyUp).not.toHaveBeenCalled();
@@ -513,5 +524,37 @@ describe('Add', () => {
     void act(() => save.click());
     expect(input.value).toBe('https://example.com/page');
     expect(save.hasAttribute('disabled')).toBe(false);
+  });
+
+  // #421: Save used to navigate to Home once the link finished uploading,
+  // and coming back to Add (the queue survives navigation, #334) then
+  // showed a leftover "Add to Bower" button that did nothing but re-run
+  // `finish()` and bounce back to Home again.
+  it('saving a link stays on Add, with no leftover Add to Bower button', async () => {
+    const input = root.querySelector('#add-link') as HTMLInputElement;
+    const save = Array.from(root.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Save',
+    );
+    if (save === undefined) throw new Error('Save button missing');
+    void act(() => {
+      input.value = 'https://example.com/page';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    void act(() => save.click());
+    await waitFor(
+      () =>
+        root.querySelector('.add-queue-status')?.textContent ===
+        'In your inbox',
+    );
+
+    expect(root.querySelector('.add-queue-head')?.textContent).toBe(
+      'Added · 1',
+    );
+    expect(
+      Array.from(root.querySelectorAll('button')).some((b) =>
+        (b.textContent ?? '').includes('Add to Bower'),
+      ),
+    ).toBe(false);
+    expect(location.route).not.toHaveBeenCalled();
   });
 });
