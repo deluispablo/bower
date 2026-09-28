@@ -2525,7 +2525,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   const props = page.locator('.file-props');
   await expect(props).toContainText('Photo ·');
   await expect(
-    props.getByRole('link', { name: '1-Projects / Kitchen Refresh' }),
+    props.getByRole('link', { name: 'Projects / Kitchen Refresh' }),
   ).toBeVisible();
   await expect(props).toContainText('Filed by Bower ·');
   const photo = page.getByRole('img', { name: 'Sage green test patch' });
