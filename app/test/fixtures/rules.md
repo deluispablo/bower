@@ -19,12 +19,10 @@ Your own rules for Bower. Where they disagree with Bower's rulebook (`CLAUDE.md`
 
 ```markdown
 - a bullet inside a code block is not a rule
-
 ## Nor is this a heading
 ```
 
 ## From the interview
-
 - Titles and tags: Short and plain, e.g. `2026-09-27 Dentist`
 
 ## From Bower's suggestions
@@ -35,7 +33,7 @@ Your own rules for Bower. Where they disagree with Bower's rulebook (`CLAUDE.md`
 
 Some prose the old rulebook had, kept as it was.
 
-- Tag anything about the garden with garden.
+* Tag anything about the garden with garden.
 
 ## Finance
 
