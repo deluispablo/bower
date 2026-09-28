@@ -1,25 +1,27 @@
 /**
- * The explorer (spec §5.1, §5.2): the user's notes as a tree, with the
- * search field, the Health row and the hidden-files footer. One component,
- * two homes (the phone's top-bar menu opens the folder menu instead,
- * `folder-menu.tsx`, #319):
+ * The explorer (spec §6.2, §6.12; #589): the user's folders as a tree, with
+ * the search field, Pinned, the Health row and the hidden-files footer. One
+ * component, two homes:
  *
  * - `variant="sidebar"`: the desktop column (`layout.tsx` wraps it in a
- *   `<nav aria-label="Your notes">` landmark, always open). Shows the mark,
- *   the primary links passed as `nav`, and the account; self-manages its
- *   own sort + Expand/Collapse all tools (one tool only, no sort menu,
- *   #326, C.9) and keeps the Health row near the top.
- * - `variant="page"`: the Notes tab (`routes/notes.tsx`, #317, #353). No
- *   title row of its own (the top bar carries "Notes"), no account row, no
- *   sort; the tree's root folders carry their one-line meaning
- *   (`Tree`'s `rootMeanings`); the Health row and the hidden-files line
- *   sit together at the bottom. Its Expand/Collapse all is one header-bar
- *   button the route itself owns (`collapseKey`/`expandKey` below), since
- *   the actions slot lives in the shell, outside this component.
+ *   `<nav aria-label="Your notes">` landmark, always open). Search with its
+ *   `Ctrl K` hint, the primary links passed as `nav` (Home, Add, Bower), the
+ *   Just filed slot, Pinned (a pinned folder with what is new in it), "Your
+ *   folders" with the short meaning lines, and the account. Its own
+ *   Expand/Collapse all tool sits on the "Your folders" heading.
+ * - `variant="page"`: the Notes tab (`routes/notes.tsx`). No title row of
+ *   its own (the top bar carries "Notes"), no account row, no sort; search,
+ *   the Just filed slot, Pinned (a pinned folder with its count), "Your
+ *   folders" with the full meaning lines, then the Health row and the
+ *   hidden-files line together. Its Expand/Collapse all is one header-bar
+ *   button the route itself owns (`useExpandToggle`), since the actions slot
+ *   lives in the shell, outside this component.
  *
- * The search row opens the quick switcher (#142) in both variants: the
- * sidebar's with a `Ctrl K` hint, the page's as the Phone-Notes board
- * links it to Phone-Switcher (#433), "Search or jump to anything"; closing
+ * On a device's very first load the five landmarks render at once as
+ * skeletons with a status line (R-NOTES-7); once the index has been cached
+ * the tree paints from the cache and never shows them again.
+ *
+ * The search row opens the quick switcher (#142) in both variants; closing
  * the switcher leaves the person where they were. The hidden-files footer
  * button toggles the `showAppFiles` preference (spec §5.3), the same one
  * Settings › Advanced has its own switch for.
@@ -29,8 +31,9 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
+import { loadTreeState } from '../cache.js';
 import { getPref, setPref } from '../prefs.js';
-import type { ExplorerSortPref } from '../prefs.js';
+import type { ParaKind } from '../navigation.js';
 import {
   checkWhen,
   findReport,
@@ -48,10 +51,12 @@ import {
   IconEyeOff,
   IconHeart,
   IconSearch,
-  IconSort,
 } from './icons.js';
+import { FolderMark } from './folder-mark.js';
 import { PinnedSidebar } from './pinned-sidebar.js';
 import { Tree } from './tree.js';
+
+import '../styles/explorer.css';
 
 export const HEALTH_PATH = '/health';
 
@@ -118,46 +123,108 @@ export interface ExplorerProps {
   /** Primary links, shown under the search field (desktop sidebar). */
   nav?: ComponentChildren;
   /**
-   * Page variant only (#353): the Notes route's own header-bar
-   * Expand/Collapse all toggle drives the tree from outside. Left out
-   * (0) for the sidebar, which keeps its own inline tool instead.
+   * Page variant only: the Notes route's own header-bar Expand/Collapse all
+   * toggle (`useExpandToggle`) drives the tree from outside. Left out (0)
+   * for the sidebar, which keeps its own inline tool instead.
    */
   collapseKey?: number;
   expandKey?: number;
+  /** The "Just filed · N" row (#616) goes here; left out, the slot stays empty. */
+  justFiled?: ComponentChildren;
+}
+
+/** The Expand/Collapse all button's labels (`notes.expand`, `notes.collapse`). */
+export const EXPAND_LABEL = 'Expand all folders';
+export const COLLAPSE_LABEL = 'Collapse all folders';
+
+export interface ExpandToggle {
+  /** Whether the next press collapses (some folder is open, as far as known). */
+  expanded: boolean;
+  collapseKey: number;
+  expandKey: number;
+  toggle: () => void;
+}
+
+/**
+ * The one Expand/Collapse all toggle (R-NOTES-2), for the Notes route's bar
+ * and the sidebar's tool. It tracks its own last action, not the tree's real
+ * state (a folder opened by hand does not flip it back), but starts from the
+ * remembered expansion: any open folder on this device means the first press
+ * collapses.
+ */
+export function useExpandToggle(): ExpandToggle {
+  const [collapseKey, setCollapseKey] = useState(0);
+  const [expandKey, setExpandKey] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadTreeState()
+      .then((state) => {
+        if (!cancelled && state !== undefined && state.expanded.length > 0) {
+          setExpanded(true);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error('Could not read the tree state', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return {
+    expanded,
+    collapseKey,
+    expandKey,
+    toggle: () => {
+      if (expanded) setCollapseKey((key) => key + 1);
+      else setExpandKey((key) => key + 1);
+      setExpanded((was) => !was);
+    },
+  };
+}
+
+const LANDMARKS: readonly { kind: ParaKind; name: string }[] = [
+  { kind: 'inbox', name: 'Inbox' },
+  { kind: 'projects', name: 'Projects' },
+  { kind: 'areas', name: 'Areas' },
+  { kind: 'resources', name: 'Resources' },
+  { kind: 'archives', name: 'Archives' },
+];
+
+/** The five landmarks before the index exists: marks and names, skeleton lines. */
+function LandmarkSkeleton({ markSize }: { markSize: 18 | 28 }): JSX.Element {
+  return (
+    <ul class="explorer-skeleton" aria-hidden="true">
+      {LANDMARKS.map(({ kind, name }) => (
+        <li key={kind} class="explorer-skeleton-row">
+          <span class="explorer-skeleton-chevron" />
+          <FolderMark kind={kind} size={markSize} />
+          <span class="explorer-skeleton-text">
+            <span class="tree-name">{name}</span>
+            {markSize === 28 && (
+              <span class="explorer-skeleton-bar explorer-skeleton-line" />
+            )}
+          </span>
+          <span class="explorer-skeleton-bar explorer-skeleton-count" />
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 interface ToolsProps {
-  /** Left out for the desktop sidebar (#326): no sort menu there. */
-  sort?: ExplorerSortPref;
-  onSort?: () => void;
   /** Whether the tree is, as far as the toggle knows, fully expanded: the
-   * button's own label and next action (#326, #353: "Expand/Collapse all"
-   * is one toggle, not two one-way buttons). */
+   * button's own label and next action (one toggle, not two one-way buttons). */
   expanded: boolean;
   onToggleExpand: () => void;
 }
 
-function Tools({
-  sort,
-  onSort,
-  expanded,
-  onToggleExpand,
-}: ToolsProps): JSX.Element {
-  const sortLabel = sort === 'name' ? 'Sort by last modified' : 'Sort by name';
-  const expandLabel = expanded ? 'Collapse all' : 'Expand all';
+function Tools({ expanded, onToggleExpand }: ToolsProps): JSX.Element {
+  const expandLabel = expanded ? COLLAPSE_LABEL : EXPAND_LABEL;
   return (
     <div class="explorer-tools">
-      {sort !== undefined && onSort !== undefined && (
-        <button
-          type="button"
-          class="icon-button explorer-tool"
-          aria-label={sortLabel}
-          title={sortLabel}
-          onClick={onSort}
-        >
-          <IconSort />
-        </button>
-      )}
       <button
         type="button"
         class="icon-button explorer-tool"
@@ -177,21 +244,16 @@ export function Explorer({
   nav,
   collapseKey: pageCollapseKey = 0,
   expandKey: pageExpandKey = 0,
+  justFiled,
 }: ExplorerProps): JSX.Element {
   const { me, signOut } = useSession();
-  const { index } = useVault();
+  const { index, status } = useVault();
   const { path } = useLocation();
-  const [sort, setSort] = useState<ExplorerSortPref>(() =>
-    getPref('explorerSort'),
-  );
+  // The order is the saved preference; no control on this screen changes it.
+  const sort = getPref('explorerSort');
   // Sidebar only: its own inline tool (page's Expand/Collapse all lives in
   // the header bar instead, driven by the `collapseKey`/`expandKey` props).
-  const [collapseKey, setCollapseKey] = useState(0);
-  const [expandKey, setExpandKey] = useState(0);
-  // Tracks the toggle's own last action, not the tree's real state (a
-  // folder a person expands or collapses by hand doesn't flip it back):
-  // simple on purpose, same as the old one-way Collapse all it replaces.
-  const [treeExpanded, setTreeExpanded] = useState(false);
+  const sidebarToggle = useExpandToggle();
   const [showAppFiles, setShowAppFiles] = useState(() =>
     getPref('showAppFiles'),
   );
@@ -203,32 +265,21 @@ export function Explorer({
   const healthWhen =
     reportTime === undefined ? 'Sunday' : checkWhen(reportTime, Date.now());
 
-  function toggleSort(): void {
-    const next: ExplorerSortPref = sort === 'name' ? 'modified' : 'name';
-    setPref('explorerSort', next);
-    setSort(next);
-  }
-
   function toggleAppFiles(): void {
     const next = !showAppFiles;
     setPref('showAppFiles', next);
     setShowAppFiles(next);
   }
 
-  function toggleExpandCollapse(): void {
-    if (treeExpanded) setCollapseKey((key) => key + 1);
-    else setExpandKey((key) => key + 1);
-    setTreeExpanded((was) => !was);
-  }
-
   const tools = (
     <Tools
-      sort={variant === 'sidebar' ? undefined : sort}
-      onSort={variant === 'sidebar' ? undefined : toggleSort}
-      expanded={treeExpanded}
-      onToggleExpand={toggleExpandCollapse}
+      expanded={sidebarToggle.expanded}
+      onToggleExpand={sidebarToggle.toggle}
     />
   );
+
+  // R-NOTES-7: no index yet and the first listing still on its way.
+  const firstLoad = index === null && status === 'loading';
 
   const hiddenFilesButton = (
     <button
@@ -292,13 +343,15 @@ export function Explorer({
         <IconSearch />
         {variant === 'sidebar' ? (
           <>
-            <span class="explorer-filter-label">Search or jump to a note</span>
+            <span class="explorer-filter-label">Search</span>
             <span class="explorer-filter-kbd" aria-hidden="true">
               Ctrl K
             </span>
           </>
         ) : (
-          <span class="explorer-filter-label">Search or jump to anything</span>
+          <span class="explorer-filter-label">
+            Search folders, notes and files
+          </span>
         )}
       </button>
       {variant === 'sidebar' && (
@@ -307,22 +360,38 @@ export function Explorer({
           {healthRow}
         </div>
       )}
-      {variant === 'sidebar' && index !== null && (
-        <PinnedSidebar items={pinned(index)} />
+      <div class="explorer-just-filed" data-slot="just-filed">
+        {justFiled}
+      </div>
+      {index !== null && (
+        <PinnedSidebar items={pinned(index)} variant={variant} />
       )}
-      {variant === 'sidebar' && (
-        <div class="explorer-section">
-          <h2 class="explorer-label">Your notes</h2>
-          {tools}
-        </div>
+      <div class="explorer-section">
+        <h2 class="explorer-label">Your folders</h2>
+        {variant === 'sidebar' && tools}
+      </div>
+      {firstLoad && variant === 'page' && (
+        <p class="explorer-first-load" role="status">
+          Reading your Bower folder for the first time on this phone. Next time
+          it opens at once.
+        </p>
       )}
       <div class="explorer-tree">
+        {firstLoad && (
+          <LandmarkSkeleton markSize={variant === 'sidebar' ? 18 : 28} />
+        )}
         {index !== null && (
           <Tree
             index={index}
             sort={sort}
-            collapseKey={variant === 'sidebar' ? collapseKey : pageCollapseKey}
-            expandKey={variant === 'sidebar' ? expandKey : pageExpandKey}
+            collapseKey={
+              variant === 'sidebar'
+                ? sidebarToggle.collapseKey
+                : pageCollapseKey
+            }
+            expandKey={
+              variant === 'sidebar' ? sidebarToggle.expandKey : pageExpandKey
+            }
             showAppFiles={showAppFiles}
             rootMeanings={variant !== 'sidebar'}
           />

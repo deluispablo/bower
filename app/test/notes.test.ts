@@ -85,13 +85,15 @@ vi.mock('../src/switcher-store.js', async (importOriginal) => ({
 }));
 
 let index: ReturnType<typeof buildVaultIndex> | undefined;
+let firstLoad = false;
 
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => {
     index ??= buildVaultIndex(files);
     return {
-      index,
+      index: firstLoad ? null : index,
+      status: firstLoad ? 'loading' : 'idle',
       files,
       getNoteText: () => Promise.resolve(REPORT_TEXT),
     };
@@ -99,6 +101,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 }));
 
 const { Notes } = await import('../src/routes/notes.js');
+const { PinnedSidebar } = await import('../src/components/pinned-sidebar.js');
 
 let root: HTMLDivElement;
 
@@ -126,6 +129,7 @@ async function flush(): Promise<void> {
 beforeEach(() => {
   location.path = '/notes';
   openSwitcher.mockClear();
+  firstLoad = false;
 });
 
 afterEach(() => {
@@ -140,7 +144,7 @@ describe('Notes (#353)', () => {
     mount();
     expect(root.querySelector('input')).toBeNull();
     const row = query<HTMLButtonElement>('button.explorer-filter');
-    expect(row.textContent).toBe('Search or jump to anything');
+    expect(row.textContent).toBe('Search folders, notes and files');
     void act(() => {
       row.click();
     });
@@ -150,7 +154,8 @@ describe('Notes (#353)', () => {
   it('has no sort button, only the tree', () => {
     mount();
     expect(root.querySelector('[aria-label^="Sort by"]')).toBeNull();
-    expect(root.querySelector('.explorer-section')).toBeNull();
+    expect(query('.explorer-label').textContent).toBe('Your folders');
+    expect(root.querySelector('.explorer-tool')).toBeNull();
   });
 
   it("shows a root folder's meaning and count, but not a project's", () => {
@@ -193,5 +198,70 @@ describe('Notes (#353)', () => {
   it('has no account row (#353: not on the Phone-Notes board)', () => {
     mount();
     expect(root.querySelector('.explorer-account')).toBeNull();
+  });
+
+  it('puts the Just filed slot between the search row and Your folders (#616 fills it)', () => {
+    mount();
+    const slot = query('[data-slot="just-filed"]');
+    expect(slot.childElementCount).toBe(0);
+    const search = query('button.explorer-filter');
+    const heading = query('.explorer-label');
+    expect(
+      search.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      slot.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('shows the five landmarks as skeletons and a status line on the first load (R-NOTES-7)', () => {
+    firstLoad = true;
+    mount();
+    expect(root.querySelectorAll('.explorer-skeleton-row')).toHaveLength(5);
+    expect(
+      root.querySelectorAll('.explorer-skeleton .folder-mark'),
+    ).toHaveLength(5);
+    expect(query('[role="status"]').textContent).toContain(
+      'Reading your Bower folder for the first time on this phone.',
+    );
+    expect(root.querySelector('[role="tree"]')).toBeNull();
+  });
+
+  it('shows the tree and no status line once the index exists', () => {
+    mount();
+    expect(root.querySelector('.explorer-skeleton')).toBeNull();
+    expect(root.querySelector('[role="status"]')).toBeNull();
+    expect(root.querySelector('[role="tree"]')).not.toBeNull();
+  });
+});
+
+describe('PinnedSidebar (#589)', () => {
+  it('shows a pinned folder with its count on the Notes tab', () => {
+    root = document.createElement('div');
+    document.body.append(root);
+    const items = [
+      {
+        kind: 'folder' as const,
+        path: '2-Areas/Cooking',
+        file: file('2-Areas/Cooking/_Cooking.md'),
+        pinnedAt: 1,
+      },
+    ];
+    void act(() => {
+      render(h(PinnedSidebar, { items, variant: 'page' }), root);
+    });
+    expect(query('.explorer-label').textContent).toBe('Pinned');
+    const row = query('.explorer-row');
+    expect(row.textContent).toBe('Cooking1');
+    expect(row.querySelector('.explorer-pinned-count')?.textContent).toBe('1');
+  });
+
+  it('renders nothing when nothing is pinned', () => {
+    root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(h(PinnedSidebar, { items: [] }), root);
+    });
+    expect(root.querySelector('.explorer-pinned')).toBeNull();
   });
 });

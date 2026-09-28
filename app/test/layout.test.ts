@@ -311,15 +311,15 @@ describe('Layout', () => {
     const toggle = query<HTMLButtonElement>(
       'nav[aria-label="Your notes"] button.explorer-tool',
     );
-    expect(toggle.getAttribute('aria-label')).toBe('Expand all');
+    expect(toggle.getAttribute('aria-label')).toBe('Expand all folders');
 
     // The fixture's three folders: 0-Inbox, 2-Areas, 2-Areas/Cooking.
     click(toggle);
-    expect(toggle.getAttribute('aria-label')).toBe('Collapse all');
+    expect(toggle.getAttribute('aria-label')).toBe('Collapse all folders');
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(3);
 
     click(toggle);
-    expect(toggle.getAttribute('aria-label')).toBe('Expand all');
+    expect(toggle.getAttribute('aria-label')).toBe('Expand all folders');
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
   });
 
