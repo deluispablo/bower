@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import {
+  lastFinishedRun,
   nextPollDelay,
   pendingCount,
   POLL_TIMEOUT_MS,
@@ -419,5 +420,23 @@ describe('reduce', () => {
       ...openFor,
     };
     expect(reduce(state, { type: 'reset' })).toEqual(idle);
+  });
+});
+
+describe('lastFinishedRun (#321)', () => {
+  const at = '2026-09-27T08:00:00Z';
+  const done: Run = { state: 'done', requestedAt: at, processed: ['a'] };
+  const failed: Run = { state: 'failed', requestedAt: at };
+  const running: Run = { state: 'running', requestedAt: at };
+
+  it('takes a run that ended, done or failed', () => {
+    expect(lastFinishedRun(null, done)).toBe(done);
+    expect(lastFinishedRun(done, failed)).toBe(failed);
+  });
+
+  it('keeps the one before while the next run goes, or none is known', () => {
+    expect(lastFinishedRun(done, running)).toBe(done);
+    expect(lastFinishedRun(done, null)).toBe(done);
+    expect(lastFinishedRun(null, running)).toBeNull();
   });
 });

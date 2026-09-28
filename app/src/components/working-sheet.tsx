@@ -26,7 +26,7 @@ import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Run } from '../api.js';
-import { quarantinedMessage, refusedMessage } from '../home.js';
+import { doneNotes } from '../home.js';
 import type { RunPhase } from '../run-store.js';
 import { progressFor } from '../run-progress.js';
 import { BowerWorking, workingLabel } from './bower-working.js';
@@ -87,19 +87,8 @@ export function startedAgo(requestedAt: string, nowMs: number): string {
   return minutes === 0 ? 'Started just now' : `Started ${minutes} min ago`;
 }
 
-/**
- * The extra lines under the Done summary (spec A.3/A.5): what the pre-scan
- * set aside, then what the post-run audit refused, in that order. Both
- * show when both are present; neither shows when both are absent or zero.
- */
-export function doneNotes(run: Run | null): string[] {
-  const notes: string[] = [];
-  const quarantined = run?.quarantined?.length ?? 0;
-  if (quarantined > 0) notes.push(quarantinedMessage(quarantined));
-  const refused = run?.refused?.length ?? 0;
-  if (refused > 0) notes.push(refusedMessage(refused));
-  return notes;
-}
+/** The extra lines under the Done summary (spec A.3/A.5), shared with Home. */
+export { doneNotes };
 
 export interface WorkingSheetProps {
   phase: RunPhase;
