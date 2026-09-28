@@ -750,6 +750,14 @@ export function VaultProvider({ children }: VaultProviderProps) {
       const hadIndex = stateRef.current.index !== null;
       if (mode === 'refresh') {
         setState((prev) => ({ ...prev, status: 'refreshing' }));
+      } else if (!hadIndex) {
+        // #322: `folderId` (from `me`) can arrive after this provider's
+        // first render, which already fixed `status` at `'idle'` — without
+        // this, Home would never see `loading` and would report the first
+        // day before the index has actually resolved. Skipped when a cached
+        // index just painted the screen (`hadIndex`): that already reads as
+        // `idle`, and flipping it back to loading would only flash.
+        setState((prev) => ({ ...prev, status: 'loading' }));
       }
       try {
         const fresh = await listVault(folderId);
