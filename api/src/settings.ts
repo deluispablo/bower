@@ -1,6 +1,7 @@
 /**
  * User-owned settings and account deletion: `PATCH /settings` (BYOK Claude
- * API key, when the first-run tour was seen) and `DELETE /me`.
+ * API key, when the first-run tour was seen, the web lookup switch) and
+ * `DELETE /me`.
  *
  * Nothing here logs or returns an API key or a refresh token.
  */
@@ -69,7 +70,7 @@ export function createSettingsRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       throw new HttpError(400, 'bad_request', 'Body must be a JSON object');
     }
-    const { apiKey, tourSeenAt } = body as Record<string, unknown>;
+    const { apiKey, tourSeenAt, allowWeb } = body as Record<string, unknown>;
 
     // Validate every field before anything is written.
     if (
@@ -90,6 +91,9 @@ export function createSettingsRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
         'tourSeenAt must be an ISO 8601 date-time in UTC',
       );
     }
+    if (allowWeb !== undefined && typeof allowWeb !== 'boolean') {
+      throw new HttpError(400, 'bad_request', 'allowWeb must be a boolean');
+    }
 
     // Missing fields (undefined) leave the stored value untouched, and only
     // the fields sent are written (merged into a fresh read of the record).
@@ -101,13 +105,18 @@ export function createSettingsRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       patch.encApiKey = await encrypt(apiKey, key);
     }
     if (typeof tourSeenAt === 'string') patch.tourSeenAt = tourSeenAt;
+    // Off is stored as no field at all, like a user who never chose.
+    if (typeof allowWeb === 'boolean') patch.allowWeb = allowWeb ? true : null;
     const user =
       Object.keys(patch).length === 0
         ? await getUser(env.BOWER_KV, userId)
         : await updateUser(env.BOWER_KV, userId, patch);
     if (user === undefined) throw unauthenticated();
 
-    return c.json({ hasApiKey: user.encApiKey !== undefined });
+    return c.json({
+      hasApiKey: user.encApiKey !== undefined,
+      allowWeb: user.allowWeb === true,
+    });
   });
 
   settings.delete('/me', requireSameOrigin, requireSession, async (c) => {

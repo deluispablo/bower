@@ -593,7 +593,7 @@ run_case() {
   set +e
   env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GITHUB_RUN_ID \
     -u BOWER_API_URL -u BOWER_RUN_TICKET -u BOWER_API_KEY -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB \
-    -u BOWER_MAX_CHANGES -u BOWER_REPORT_REFUSED -u BOWER_SCOPE \
+    -u BOWER_MAX_CHANGES -u BOWER_REPORT_REFUSED -u BOWER_SCOPE -u BOWER_RUN_ALLOW_WEB \
     PATH="$STUBS:$PATH" \
     RUNNER_TEMP="$STATE/runner-temp" \
     CLAUDE_CODE_OAUTH_TOKEN='test-oauth-token' \
@@ -963,9 +963,10 @@ expect_content_free
 expect_cleaned_up
 echo "ok lint"
 
-# 9. The instance opts in to web access: WebSearch and WebFetch are allowed,
-# network commands in Bash stay denied.
-run_case web BOWER_ALLOW_WEB=1
+# 9. The instance opts in to web access and the user's switch is on (the
+# dispatch's allow_web, #374): WebSearch and WebFetch are allowed, network
+# commands in Bash stay denied.
+run_case web BOWER_ALLOW_WEB=1 BOWER_RUN_ALLOW_WEB=1
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
   'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),WebSearch,WebFetch' \
@@ -976,6 +977,24 @@ expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok web opt-in"
+
+# 9b. Only one of the two switches says yes (#374): the instance allows the
+# web but the user's switch is off, or the user's is on and the instance
+# does not allow it. Either way the web tools stay denied.
+for web_case in 'webuseroff BOWER_ALLOW_WEB=1 BOWER_RUN_ALLOW_WEB=0' \
+  'webinstanceoff BOWER_RUN_ALLOW_WEB=1'; do
+  # shellcheck disable=SC2086 # the case name and its settings, split on purpose
+  run_case $web_case
+  expect_eq "$RC" 0 'exit code'
+  expect_eq "$(cat "$STATE/claude-tools.txt")" \
+    'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*)' \
+    'allowed tools (one switch off)'
+  expect_eq "$(cat "$STATE/claude-denied.txt")" \
+    'WebSearch,WebFetch,Bash(curl:*),Bash(wget:*)' 'disallowed tools (one switch off)'
+  expect_content_free
+  expect_cleaned_up
+done
+echo "ok web tools need both the instance and the user"
 
 # 10. A note is edited in the app while the agent rewrites another one: only
 # what the agent added or changed is uploaded, so the app's edit survives.

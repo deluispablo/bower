@@ -275,7 +275,7 @@ describe('demo mode', () => {
     await api.updateSettings({ tourSeenAt: START.toISOString() });
     await expect(
       api.updateSettings({ apiKey: 'sk-ant-test' }),
-    ).resolves.toEqual({ hasApiKey: true });
+    ).resolves.toEqual({ hasApiKey: true, allowWeb: false });
     const alex = await me();
     expect(alex.tourSeenAt).toBe(START.toISOString());
     expect(alex.hasApiKey).toBe(true);

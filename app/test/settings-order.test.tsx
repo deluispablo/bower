@@ -25,11 +25,16 @@ const baseMe: Me = {
 const state = vi.hoisted(() => ({ me: undefined as Me | undefined }));
 
 const signOut = vi.fn(() => Promise.resolve());
+const setMe = vi.fn();
+const updateSettings = vi.fn((input: { allowWeb?: boolean }) =>
+  Promise.resolve({ hasApiKey: false, allowWeb: input.allowWeb === true }),
+);
 const location = { path: '/settings', route: vi.fn() };
 
 vi.mock('../src/api.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/api.js')>()),
   isDemo: () => false,
+  updateSettings,
 }));
 
 vi.mock('preact-iso', () => ({
@@ -37,7 +42,7 @@ vi.mock('preact-iso', () => ({
 }));
 
 vi.mock('../src/session.js', () => ({
-  useSession: () => ({ me: state.me, setMe: vi.fn(), signOut }),
+  useSession: () => ({ me: state.me, setMe, signOut }),
 }));
 
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
@@ -118,15 +123,39 @@ describe('Settings section order', () => {
     expect(link?.compareDocumentPosition(footer as Node)).toBeTruthy();
   });
 
-  it('shows the disabled web-lookup row under Tidying up, marked Soon', () => {
-    mount(baseMe);
-    const hints = textsOf('.toggle-hint');
-    const webLookupHint = hints.find((t) => t.includes('search the web'));
-    expect(webLookupHint).toContain('Coming soon');
-    const input = Array.from(
+  function webLookupInput(): HTMLInputElement | undefined {
+    return Array.from(
       root.querySelectorAll<HTMLInputElement>('.toggle-input'),
     ).find((el) => el.closest('.toggle-row')?.textContent?.includes('web'));
-    expect(input?.disabled).toBe(true);
+  }
+
+  it('shows the web-lookup row under Tidying up, off by default (#374)', () => {
+    mount(baseMe);
+    const hints = textsOf('.toggle-hint');
+    expect(hints).toContain(
+      'Off, Bower only reads what you gave it. On, it may search the web to fill in what a document leaves out.',
+    );
+    const input = webLookupInput();
+    expect(input?.disabled).toBe(false);
+    expect(input?.checked).toBe(false);
+  });
+
+  it('turns web lookups on through PATCH /settings (#374)', async () => {
+    updateSettings.mockClear();
+    setMe.mockClear();
+    mount(baseMe);
+    const input = webLookupInput();
+    await act(async () => {
+      input?.click();
+      await Promise.resolve();
+    });
+    expect(updateSettings).toHaveBeenCalledWith({ allowWeb: true });
+    expect(setMe).toHaveBeenCalledWith({ ...baseMe, allowWeb: true });
+  });
+
+  it('shows the switch on when the user allowed web lookups', () => {
+    mount({ ...baseMe, allowWeb: true });
+    expect(webLookupInput()?.checked).toBe(true);
   });
 });
 

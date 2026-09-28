@@ -55,7 +55,13 @@ export function createDemoWorker(
         if (input.tourSeenAt !== undefined) {
           server.me.tourSeenAt = input.tourSeenAt;
         }
-        return { hasApiKey: server.me.hasApiKey };
+        if (input.allowWeb !== undefined) {
+          server.me.allowWeb = input.allowWeb;
+        }
+        return {
+          hasApiKey: server.me.hasApiKey,
+          allowWeb: server.me.allowWeb === true,
+        };
       }),
     deleteAccount: () =>
       reply(() => {

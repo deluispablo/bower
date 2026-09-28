@@ -237,6 +237,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
             vaultId: userId,
             ticket,
             scope,
+            allowWeb: user.allowWeb === true,
           },
           fetchImpl,
         );

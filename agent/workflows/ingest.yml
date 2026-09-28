@@ -104,6 +104,9 @@ jobs:
           BOWER_RUN_TICKET: ${{ github.event.client_payload.ticket }}
           # Unset by default: the agent gets no web tools (see run.sh).
           BOWER_ALLOW_WEB: ${{ vars.BOWER_ALLOW_WEB }}
+          # The user's own web switch from the dispatch ("1" or "0", #374):
+          # the web tools need this and BOWER_ALLOW_WEB both.
+          BOWER_RUN_ALLOW_WEB: ${{ github.event.client_payload.allow_web }}
           # Unset by default: run.sh falls back to the API's own maxTurns.
           BOWER_MAX_TURNS: ${{ vars.BOWER_MAX_TURNS }}
           # What the run covers, from the Worker's dispatch: `all` (a
@@ -116,6 +119,7 @@ jobs:
           umask 077
           {
             printf 'BOWER_API_URL=%s\n' "$BOWER_API_URL"
+            printf 'BOWER_RUN_ALLOW_WEB=%s\n' "$BOWER_RUN_ALLOW_WEB"
             printf 'BOWER_RUN_TICKET=%s\n' "$BOWER_RUN_TICKET"
             printf 'BOWER_ALLOW_WEB=%s\n' "$BOWER_ALLOW_WEB"
             printf 'BOWER_MAX_TURNS=%s\n' "$BOWER_MAX_TURNS"

@@ -1116,15 +1116,17 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
     .allTextContents();
   expect(headings).toEqual(['Tidying up', 'Look', 'Bower', 'Advanced']);
 
-  // The web-lookup row is present but disabled until #374 lands.
+  // The web-lookup switch (#374): off by default, and it turns on.
   const webLookup = page
     .locator('.settings')
     .getByRole('switch', { name: 'Let Bower look things up on the web' });
   await expect(webLookup).toBeVisible();
-  await expect(webLookup).toBeDisabled();
-  await expect(
-    page.locator('.settings').getByText('Coming soon.'),
-  ).toBeVisible();
+  await expect(webLookup).toBeEnabled();
+  await expect(webLookup).not.toBeChecked();
+  await webLookup.click();
+  await expect(webLookup).toBeChecked();
+  await webLookup.click();
+  await expect(webLookup).not.toBeChecked();
 
   // Sign out is a plain button, apart from Sign out everywhere; in the
   // demo build, Sign out everywhere and the own API key render nothing of
