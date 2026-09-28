@@ -1,13 +1,17 @@
 /**
- * The PARA tree: collapsible folders, notes linking to `/note/:id`. Desktop
- * keyboard support is a roving `tabindex` (only the focused row is in the
- * tab order) driven by `nextFocusIndex` (pure, in `navigation.ts`): arrow
- * up/down move between visible rows, right/left expand/collapse a folder
- * (or, once a folder can't expand/collapse further, move to its first
- * child / its parent). A note row's Enter opens it; a folder row's Enter
- * either toggles it (the phone drawer) or opens `/folder/<path>` (the
- * desktop sidebar, `linkFolders` — issue #214), matching what its click
- * already does.
+ * The PARA tree: collapsible folders, notes linking to `/note/:id`. Used by
+ * both explorer variants (`explorer.tsx`) — the desktop sidebar and the
+ * Notes tab (#317) — never the phone's own folder menu, which is a
+ * separate component with its own rendering (`folder-menu.tsx`, #397).
+ *
+ * Desktop keyboard support is a roving `tabindex` (only the focused row is
+ * in the tab order) driven by `nextFocusIndex` (pure, in `navigation.ts`):
+ * arrow up/down move between visible rows, right/left expand/collapse a
+ * folder (or, once a folder can't expand/collapse further, move to its
+ * first child / its parent). A note row's Enter opens it; a folder row's
+ * name is a link to `/folder/<path>` (issue #214), so Enter opens that the
+ * same way — the chevron alone still toggles expand/collapse, by its own
+ * click or the arrow keys.
  *
  * Each folder row shows its note count (`folderCounts`, subfolders
  * included). The explorer (`explorer.tsx`) passes the order (`sort`) and a
@@ -15,7 +19,7 @@
  * #326, #353) that collapses, or expands, every folder whenever either
  * changes.
  *
- * A non-blank `filter` (the drawer's live filter, spec §14) swaps in
+ * A non-blank `filter` (the sidebar's live filter, spec §14) swaps in
  * `filterTree`'s result and force-expands every folder it kept, so a match
  * is always visible; the tree's own expand/collapse state underneath is
  * untouched and takes back over once the filter is cleared.
@@ -25,14 +29,9 @@
  * `vault-index.ts` has no note text, only Drive metadata, so no tag is
  * available here. Left out; see the PR.
  *
- * `linkFolders` also gates the desktop-only pin entry points (spec §14,
- * issue #216): a hover pin button on every row plus a `contextmenu`
- * (right-click, or the keyboard's Menu key / Shift+F10) menu with the same
- * items as the drawer's held-row sheet (`pin-sheet.tsx`). The drawer itself
- * (`linkFolders` false) gets that sheet from a long press instead
- * (`use-long-press.ts`) — never both at once, since a phone never has
- * `linkFolders` set and a desktop tree never receives pointer holds long
- * enough to matter.
+ * Pinning (spec §14, issue #216): a hover pin button on every row plus a
+ * `contextmenu` (right-click, or the keyboard's Menu key / Shift+F10) menu
+ * with the same items as the folder menu's held-row sheet (`pin-sheet.tsx`).
  */
 
 import type { JSX, RefCallback } from 'preact';
@@ -64,7 +63,6 @@ import {
   IconPin,
 } from './icons.js';
 import { PinSheet } from './pin-sheet.js';
-import { useLongPress } from './use-long-press.js';
 import { useNoteTitles } from './use-note-titles.js';
 
 interface Row extends TreeRow {
@@ -125,18 +123,11 @@ interface TreeProps {
    */
   showAppFiles?: boolean;
   /**
-   * The drawer's live filter (spec §14): narrows the tree to name matches,
+   * The sidebar's live filter (spec §14): narrows the tree to name matches,
    * force-expanding their parent folders. Blank or left out: the tree
    * behaves as before, with its own expand/collapse state.
    */
   filter?: string;
-  /**
-   * Desktop sidebar only (issue #214): a folder row's name opens
-   * `/folder/<path>` (the chevron still toggles, click or Enter). The
-   * phone drawer keeps the whole row as a toggle — it is for browsing to a
-   * note, not a navigation destination of its own.
-   */
-  linkFolders?: boolean;
   /**
    * The Notes tab only (#353, C.5): a root folder's row also shows its
    * one-line meaning from `folder-meanings.ts` (the same table the folder
@@ -154,7 +145,6 @@ export function Tree({
   expandKey = 0,
   showAppFiles = false,
   filter = '',
-  linkFolders = false,
   rootMeanings = false,
 }: TreeProps): JSX.Element {
   const { pinNote, unpinNote, pinFolder, unpinFolder } = useVault();
@@ -234,14 +224,6 @@ export function Tree({
   ): void {
     const row = rows[i];
     if (row === undefined) return;
-    // `linkFolders`: the row is a link now (`/folder/<path>`), so Enter's
-    // default action already opens it, same as a note row; only the phone
-    // drawer still toggles on Enter.
-    if (event.key === 'Enter' && row.kind === 'folder' && !linkFolders) {
-      event.preventDefault();
-      toggle(row.path);
-      return;
-    }
     if (
       event.key !== 'ArrowDown' &&
       event.key !== 'ArrowUp' &&
@@ -334,16 +316,6 @@ export function Tree({
     );
   }
 
-  // One instance for every drawer row (`useLongPress`'s own doc comment):
-  // resolves the row from the `data-row-path` the pressed element carries,
-  // since calling the hook once per row inside `rows.map` below would break
-  // the Rules of Hooks (rows come and go as folders expand and collapse).
-  const longPress = useLongPress((target) => {
-    const path = target.dataset.rowPath;
-    const found = rows.find((candidate) => candidate.path === path);
-    if (found !== undefined) setOpenRow(found);
-  });
-
   const showGroup =
     showAppFiles &&
     (group.files.length > 0 ||
@@ -389,7 +361,7 @@ export function Tree({
                 aria-level={row.depth + 1}
                 aria-expanded={row.kind === 'folder' ? row.expanded : undefined}
               >
-                {row.kind === 'folder' && linkFolders ? (
+                {row.kind === 'folder' ? (
                   <span
                     class="tree-row tree-folder tree-row-pinnable"
                     style={{
@@ -440,39 +412,7 @@ export function Tree({
                     </button>
                     {sheetOpen && pinSheetFor(row)}
                   </span>
-                ) : row.kind === 'folder' ? (
-                  <button
-                    type="button"
-                    ref={setRef}
-                    class="tree-row tree-folder"
-                    style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
-                    tabIndex={tabIndex}
-                    data-row-path={row.path}
-                    onClick={() => {
-                      if (longPress.consumeLongPress()) return;
-                      toggle(row.path);
-                      setFocusIndex(i);
-                    }}
-                    onKeyDown={(event) => onRowKeyDown(event, i)}
-                    onFocus={() => setFocusIndex(i)}
-                    onPointerDown={longPress.onPointerDown}
-                    onPointerMove={longPress.onPointerMove}
-                    onPointerUp={longPress.onPointerUp}
-                    onPointerCancel={longPress.onPointerCancel}
-                    onContextMenu={longPress.onContextMenu}
-                  >
-                    <span
-                      class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
-                    >
-                      <IconChevronRight />
-                    </span>
-                    <IconFolder />
-                    {nameEl}
-                    {(counts.get(row.path) ?? 0) > 0 && (
-                      <span class="tree-count">{counts.get(row.path)}</span>
-                    )}
-                  </button>
-                ) : linkFolders ? (
+                ) : (
                   <span
                     class="tree-row tree-note tree-row-pinnable"
                     style={{
@@ -508,34 +448,7 @@ export function Tree({
                     </button>
                     {sheetOpen && pinSheetFor(row)}
                   </span>
-                ) : (
-                  <a
-                    href={`/note/${row.id ?? ''}`}
-                    ref={setRef}
-                    class="tree-row tree-note"
-                    style={{ paddingLeft: `${row.depth * 22 + 8}px` }}
-                    tabIndex={tabIndex}
-                    data-row-path={row.path}
-                    onClick={(event) => {
-                      if (longPress.consumeLongPress()) {
-                        event.preventDefault();
-                        return;
-                      }
-                      onNavigate?.();
-                    }}
-                    onKeyDown={(event) => onRowKeyDown(event, i)}
-                    onFocus={() => setFocusIndex(i)}
-                    onPointerDown={longPress.onPointerDown}
-                    onPointerMove={longPress.onPointerMove}
-                    onPointerUp={longPress.onPointerUp}
-                    onPointerCancel={longPress.onPointerCancel}
-                    onContextMenu={longPress.onContextMenu}
-                  >
-                    <IconNote />
-                    <span class="tree-name">{displayName(row)}</span>
-                  </a>
                 )}
-                {!linkFolders && sheetOpen && pinSheetFor(row)}
               </li>
             );
           })}
