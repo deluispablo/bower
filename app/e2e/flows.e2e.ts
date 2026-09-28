@@ -1988,7 +1988,8 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(0)).toContainText('Photo · filed by Bower');
   await expect(rows.nth(1)).toContainText('Shelves and tap quote');
   await expect(rows.nth(1)).toContainText('PDF · filed by Bower');
-  await expect(rows.nth(2)).toContainText('Note · in this folder');
+  // No known origin (#502): just its type, not "in this folder".
+  await expect(rows.nth(2).locator('.folder-row-detail')).toHaveText('Note');
 
   // A file opens on its own screen; a note opens in the app.
   await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
