@@ -26,6 +26,7 @@ import type { JSX } from 'preact';
 import { isDemo } from '../api.js';
 import { Bird } from './bird.js';
 import { IconSparkle } from './icons.js';
+import { useDismissGuard } from './use-dismiss-guard.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
 import '../styles/tidy-confirm-sheet.css';
@@ -93,6 +94,7 @@ export function TidyConfirmSheet({
 }: TidyConfirmSheetProps): JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, onDismiss);
+  const guardedDismiss = useDismissGuard(onDismiss);
 
   const { lead, rest } = isDemo()
     ? demoConfirmSentenceParts(count)
@@ -103,7 +105,7 @@ export function TidyConfirmSheet({
       <div
         class="tidy-confirm-backdrop"
         aria-hidden="true"
-        onClick={onDismiss}
+        onClick={guardedDismiss}
       />
       <div
         ref={panelRef}

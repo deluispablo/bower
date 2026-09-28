@@ -55,6 +55,13 @@ function driveUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
 }
 
+/** The footer's version line (#512): "0.1.0 · a1b2c3d" when the build
+ * knows its commit, "0.1.0" alone (no dangling separator) when it does
+ * not. Pure, unit-tested without rendering anything. */
+export function formatVersion(version: string, commit: string): string {
+  return commit === '' ? version : `${version} · ${commit}`;
+}
+
 /** The account card's initial disc (spec §14): the name's first letter, or
  * the address's when there is no name. */
 function accountInitial(me: Me): string {
@@ -650,6 +657,7 @@ export function Settings() {
   if (!me) return null;
 
   const version = import.meta.env.VITE_APP_VERSION ?? __APP_VERSION__;
+  const versionLine = formatVersion(version, __BOWER_COMMIT__);
 
   return (
     <section class="settings page-column">
@@ -701,7 +709,7 @@ export function Settings() {
       <DangerZone />
 
       <div class="settings-footer">
-        <p>Bower {version}</p>
+        <p>Bower {versionLine}</p>
         <a
           href="https://github.com/deluispablo/bower"
           target="_blank"

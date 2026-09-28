@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Run } from '../src/api.js';
+import { sinceLabel } from '../src/bower-tab.js';
 import {
   workingBird,
   workingClasses,
@@ -14,6 +15,7 @@ import {
   startedAgo,
   workingStateFor,
 } from '../src/components/working-sheet.js';
+import { tidyUpAgo } from '../src/home.js';
 
 describe('workingBird', () => {
   it('tidies while queued or running, shows off when done, is confused when failed or over quota', () => {
@@ -152,5 +154,18 @@ describe('startedAgo', () => {
     expect(startedAgo(requestedAt, nowMs + 5 * 60_000)).toBe(
       'Started 5 min ago',
     );
+  });
+
+  // #513: the Inbox card ("started n min ago"), the Last tidy-up card
+  // ("n min ago") and the sheet ("Started n min ago") all read off the
+  // same `sinceLabel` (`bower-tab.ts`) now, sharing the run store's one
+  // clock -- so for the same instant, none of them can land on a
+  // different minute than the others.
+  it('agrees with sinceLabel and tidyUpAgo for the same instant', () => {
+    const at = nowMs + 3 * 60_000 + 59_000; // 3 min 59 s later
+    const label = sinceLabel(requestedAt, at);
+    expect(label).toBe('3 min ago');
+    expect(startedAgo(requestedAt, at)).toBe(`Started ${label}`);
+    expect(tidyUpAgo(requestedAt, at)).toBe(label);
   });
 });

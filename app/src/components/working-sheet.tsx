@@ -39,6 +39,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Run } from '../api.js';
 import { isDemo } from '../api.js';
+import { sinceLabel } from '../bower-tab.js';
 import { doneNotes, things } from '../home.js';
 import { failureCopy } from '../run-failure.js';
 import { runKey } from '../run-store.js';
@@ -111,13 +112,15 @@ export function workingStateFor(phase: RunPhase): WorkingState | null {
   }
 }
 
-/** "Started n min ago" ("Started just now" under a minute). */
+/**
+ * "Started n min ago" ("Started just now" under a minute): `sinceLabel`
+ * (`bower-tab.ts`, #513) is the one helper behind every "ago" text a run
+ * shows off — the Inbox card's own "started n min ago" (`routes/home.tsx`)
+ * included — so this sheet and that card can never disagree at the same
+ * moment the way two separate implementations used to.
+ */
 export function startedAgo(requestedAt: string, nowMs: number): string {
-  const minutes = Math.max(
-    0,
-    Math.floor((nowMs - Date.parse(requestedAt)) / 60_000),
-  );
-  return minutes === 0 ? 'Started just now' : `Started ${minutes} min ago`;
+  return `Started ${sinceLabel(requestedAt, nowMs)}`;
 }
 
 /** The extra lines under the Done summary (spec A.3/A.5), shared with Home. */
@@ -129,6 +132,10 @@ export interface WorkingSheetProps {
   run: Run | null;
   /** The run store's message ("3 files processed", an error, …). */
   message?: string;
+  /** The run store's shared clock (#513): "Started N min ago" reads off
+   * this, not its own timer, so it never disagrees with the Inbox card's
+   * own "started N min ago" at the same moment. */
+  now: number;
   open: boolean;
   onDismiss: () => void;
   /**
@@ -197,6 +204,7 @@ export function WorkingSheet({
   phase,
   run,
   message,
+  now,
   open,
   onDismiss,
   reopenKey = 0,
@@ -237,14 +245,9 @@ export function WorkingSheet({
     return () => clearTimeout(timer);
   }, [phase, reopenKey]);
 
-  // Re-render once a minute so "Started n min ago" keeps up while a run goes.
-  useEffect(() => {
-    if (phase !== 'queued' && phase !== 'running') return;
-    const timer = setInterval(() => {
-      setTick((tick) => tick + 1);
-    }, 60_000);
-    return () => clearInterval(timer);
-  }, [phase]);
+  // "Started n min ago" keeps up on its own now (#513): `now` is a prop
+  // from the run store's own shared clock, so a change to it re-renders
+  // this component without a timer of its own.
 
   const state = workingStateFor(phase);
   const visible =
@@ -327,7 +330,7 @@ export function WorkingSheet({
     : isDemo()
       ? DEMO_PLAYING_BACK
       : run?.requestedAt !== undefined
-        ? startedAgo(run.requestedAt, Date.now())
+        ? startedAgo(run.requestedAt, now)
         : undefined;
 
   return (
