@@ -59,6 +59,7 @@ import {
   INTRO_VERBS,
   INTRO_WHYS,
   introRuns,
+  introReturnPath,
   markIntroSeen,
   type IntroCase,
   type IntroPage,
@@ -580,7 +581,10 @@ function PageContent({
 
 export function Intro(): JSX.Element {
   const { query, route } = useLocation();
-  const fromSettings = query.from === 'settings';
+  // Opened from inside the app (Settings, or the demo's Run your own):
+  // Close and Done, back to where it came from.
+  const returnTo = introReturnPath(query.from);
+  const fromSettings = returnTo !== null;
   const trackRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
 
@@ -616,7 +620,7 @@ export function Intro(): JSX.Element {
 
   function finish(): void {
     markIntroSeen(localStorage);
-    route(fromSettings ? '/settings' : '/login');
+    route(returnTo ?? '/login');
   }
 
   function onKeyDown(event: JSX.TargetedKeyboardEvent<HTMLElement>): void {

@@ -67,11 +67,6 @@ describe('NotInvited', () => {
     state.demo = true;
     mount();
     expect(root.textContent).not.toContain('open to you yet');
-    expect(root.querySelector('.auth-wordmark')?.textContent).toBe('Bower');
-    expect(
-      Array.from(root.querySelectorAll('button')).some(
-        (b) => b.textContent === 'Explore the demo',
-      ),
-    ).toBe(true);
+    expect(root.querySelector('h1')?.textContent).toBe('Run your own Bower');
   });
 });
