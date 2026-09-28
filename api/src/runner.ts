@@ -57,7 +57,11 @@ import {
   listVaultIds,
   putRun,
 } from './store.js';
-import { RUN_FAILURE_REASONS, RUN_ITEM_KINDS } from './types.js';
+import {
+  RUN_FAILURE_REASONS,
+  RUN_ITEM_KINDS,
+  SET_ASIDE_REASONS,
+} from './types.js';
 import type {
   DriveToken,
   Run,
@@ -65,6 +69,8 @@ import type {
   RunItem,
   RunItemKind,
   RunKind,
+  SetAsideItem,
+  SetAsideReason,
   User,
 } from './types.js';
 
@@ -80,6 +86,12 @@ export const MAX_TEXT_LENGTH = 2000;
  * rest are dropped.
  */
 export const MAX_PROCESSED = 200;
+
+/**
+ * Longest `added` clause kept on a `Run` (report v2, #598): one short
+ * clause for Home's bubble; longer text is cut.
+ */
+export const MAX_ADDED_LENGTH = 200;
 
 function unauthorized(): HttpError {
   return new HttpError(401, 'unauthorized', 'Missing or invalid runner key');
@@ -216,6 +228,8 @@ interface StatusReport {
   summary?: string;
   processed?: string[];
   items?: RunItem[];
+  setAside?: SetAsideItem[];
+  added?: string;
   quarantined?: string[];
   refused?: string[];
   error?: string;
@@ -230,10 +244,20 @@ const REPORT_FIELDS: ReadonlySet<string> = new Set([
   'runId',
   'summary',
   'processed',
+  'setAside',
+  'added',
   'quarantined',
   'refused',
   'error',
   'reason',
+]);
+
+/** Keys a `processed` object entry may carry (#345, report v2 #598). */
+const ITEM_FIELDS: ReadonlySet<string> = new Set([
+  'path',
+  'kind',
+  'to',
+  'renamedFrom',
 ]);
 
 function badRequest(message: string): HttpError {
@@ -252,11 +276,12 @@ function isRunKind(value: unknown): value is RunKind {
 function optionalText(
   body: Record<string, unknown>,
   field: string,
+  label: string = field,
 ): string | undefined {
   const value = body[field];
   if (value === undefined) return undefined;
   if (typeof value !== 'string') {
-    throw badRequest(`${field} must be a string`);
+    throw badRequest(`${label} must be a string`);
   }
   return value.slice(0, MAX_TEXT_LENGTH);
 }
@@ -282,6 +307,46 @@ function optionalStringArray(
   return value
     .slice(0, MAX_PROCESSED)
     .map((entry) => entry.slice(0, MAX_TEXT_LENGTH));
+}
+
+function isSetAsideReason(value: unknown): value is SetAsideReason {
+  return SET_ASIDE_REASONS.some((known) => known === value);
+}
+
+/**
+ * The `setAside` field (report v2, #598): absent, or an array of
+ * `{ path, reason }` with a known reason and no other key. Cut to
+ * `MAX_PROCESSED` entries, each path to `MAX_TEXT_LENGTH` characters.
+ */
+function optionalSetAside(
+  body: Record<string, unknown>,
+): SetAsideItem[] | undefined {
+  const value = body.setAside;
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw badRequest('setAside must be an array');
+  }
+  const items: SetAsideItem[] = [];
+  for (const entry of value.slice(0, MAX_PROCESSED) as unknown[]) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw badRequest('setAside entries must be { path, reason }');
+    }
+    const record = entry as Record<string, unknown>;
+    if (
+      typeof record.path !== 'string' ||
+      !isSetAsideReason(record.reason) ||
+      Object.keys(record).some((key) => key !== 'path' && key !== 'reason')
+    ) {
+      throw badRequest(
+        `setAside entries must be { path, reason } with reason one of ${SET_ASIDE_REASONS.join(', ')}`,
+      );
+    }
+    items.push({
+      path: record.path.slice(0, MAX_TEXT_LENGTH),
+      reason: record.reason,
+    });
+  }
+  return items;
 }
 
 function isRunItemKind(value: unknown): value is RunItemKind {
@@ -317,15 +382,24 @@ function optionalProcessed(
     if (
       typeof record.path !== 'string' ||
       !isRunItemKind(record.kind) ||
-      keys.some((key) => key !== 'path' && key !== 'kind')
+      keys.some((key) => !ITEM_FIELDS.has(key))
     ) {
       throw badRequest(
-        `processed entries must be { path, kind } with kind one of ${RUN_ITEM_KINDS.join(', ')}`,
+        `processed entries must be { path, kind, to?, renamedFrom? } with kind one of ${RUN_ITEM_KINDS.join(', ')}`,
       );
     }
     const path = record.path.slice(0, MAX_TEXT_LENGTH);
     paths.push(path);
-    items.push({ path, kind: record.kind });
+    const item: RunItem = { path, kind: record.kind };
+    const to = optionalText(record, 'to', 'processed[].to');
+    if (to !== undefined) item.to = to;
+    const renamedFrom = optionalText(
+      record,
+      'renamedFrom',
+      'processed[].renamedFrom',
+    );
+    if (renamedFrom !== undefined) item.renamedFrom = renamedFrom;
+    items.push(item);
   }
   return items.length > 0 ? { paths, items } : { paths };
 }
@@ -387,6 +461,10 @@ function parseStatusReport(body: unknown): StatusReport {
     report.processed = processed.paths;
     if (processed.items !== undefined) report.items = processed.items;
   }
+  const setAside = optionalSetAside(record);
+  if (setAside !== undefined) report.setAside = setAside;
+  const added = optionalText(record, 'added');
+  if (added !== undefined) report.added = added.slice(0, MAX_ADDED_LENGTH);
   const quarantined = optionalStringArray(record, 'quarantined');
   if (quarantined !== undefined) report.quarantined = quarantined;
   const refused = optionalStringArray(record, 'refused');
@@ -434,6 +512,8 @@ function applyReport(
   if (report.summary !== undefined) run.summary = report.summary;
   if (report.processed !== undefined) run.processed = report.processed;
   if (report.items !== undefined) run.items = report.items;
+  if (report.setAside !== undefined) run.setAside = report.setAside;
+  if (report.added !== undefined) run.added = report.added;
   if (report.quarantined !== undefined) run.quarantined = report.quarantined;
   if (report.refused !== undefined) run.refused = report.refused;
   if (report.error !== undefined) run.error = report.error;

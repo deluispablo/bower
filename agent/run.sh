@@ -238,6 +238,25 @@ readonly UPLOAD_FILE="$WORK_DIR/upload.txt"
 readonly PATHS_FILE='.bower/paths.json'
 readonly FLAGGED_FILE="$WORK_DIR/flagged.txt"
 readonly QUARANTINED_FILE="$WORK_DIR/quarantined.txt"
+# Report v2 (#598): each pending path with its kind ("<path><TAB><kind>"),
+# the documents pandoc could not convert, and what the run set aside
+# ("<reason><TAB><path>"), all in the work dir.
+readonly KINDS_FILE="$WORK_DIR/kinds.txt"
+readonly UNCONVERTED_FILE="$WORK_DIR/unconverted.txt"
+readonly SET_ASIDE_FILE="$WORK_DIR/set-aside.txt"
+# In the vault: the pending files over the size limit, for the agent to file
+# by name and date without reading them (written before the agent starts),
+# and the one clause the agent may write about what it added besides filing
+# (read after it ends). Neither is ever uploaded: both are removed from the
+# local copy before the audit.
+readonly TOO_LARGE_LIST='.bower/too-large.txt'
+readonly ADDED_NOTE='.bower/added.txt'
+# The size limits (R-SYS-10): a file over 50 MB, or a PDF over 300 pages, is
+# kept, not read.
+readonly MAX_READ_BYTES=$((50 * 1024 * 1024))
+readonly MAX_PDF_PAGES=300
+# Longest `added` clause sent; the Worker keeps as much (MAX_ADDED_LENGTH).
+readonly MAX_ADDED_LENGTH=200
 # The instruction-origin step's files: in the work dir, never in the vault,
 # so the model never sees them.
 readonly CANDIDATES_FILE="$WORK_DIR/instruction-candidates.txt"
@@ -280,6 +299,8 @@ REPORTED=0     # 1 once a final state (done or failed) was reported
 RUN_STARTED=0  # 1 once the agent may have changed the local copy
 REFUSED_JSON=''      # the audit's refused paths, a JSON array, once it ran
 QUARANTINED_JSON=''  # the pre-scan's quarantined paths, a JSON array, once it ran
+SET_ASIDE_JSON=''    # report v2: what the run set aside and why, a JSON array
+ADDED=''             # report v2: the agent's one clause about what it added
 TOO_MANY_CHANGES=0   # 1 when the audit refused the whole run
 RULES_WRITABLE=0     # 1 once an instruction note the app wrote reaches the agent
 RECONCILED=0         # 1 once the reconcile phase listed the tree (#597)
@@ -305,7 +326,8 @@ trap on_exit EXIT
 # POST a status report. Values go into the payload through jq, never through
 # the log. Every report carries the mode as its kind (ingest or lint), so the
 # API keeps a lint apart from the user's ingest runs. Usage: report <state>
-# [error]; reads PROCESSED_JSON and SUMMARY when set.
+# [error]; reads PROCESSED_JSON and SUMMARY when set, and SET_ASIDE_JSON and
+# ADDED on a done report.
 report() {
   local state=$1 error=${2:-}
   local args=(--arg state "$state" --arg kind "$MODE" --arg runId "$RUN_ID")
@@ -315,6 +337,11 @@ report() {
   [ -n "${SUMMARY:-}" ] && args+=(--arg summary "$SUMMARY")
   [ -n "$REFUSED_JSON" ] && args+=(--argjson refused "$REFUSED_JSON")
   [ -n "${QUARANTINED_JSON:-}" ] && args+=(--argjson quarantined "$QUARANTINED_JSON")
+  # Report v2 (#598): only a finished run says what it set aside and added.
+  if [ "$state" = done ]; then
+    [ -n "$SET_ASIDE_JSON" ] && args+=(--argjson setAside "$SET_ASIDE_JSON")
+    [ -n "$ADDED" ] && args+=(--arg added "$ADDED")
+  fi
   jq -cn "${args[@]}" '$ARGS.named' |
     curl -fsS -X POST \
       -H "Authorization: Bearer $API_CREDENTIAL" \
@@ -368,8 +395,12 @@ count_lines() {
 # quarantined, refused, sentence, and reason when failed }) and one line
 # appended to the log.md Drive holds now (fetched afresh, so neither an
 # edit made during the run nor a change the audit refused is overwritten).
-# Counts only, never a name. A failure here is logged and never fails the
-# run. Usage: write_outcome <done|failed> <sentence>.
+# A done run that saved its changes also carries report v2 (#598): `items`
+# (each processed item with its kind, and `to` and `renamedFrom` when it
+# moved), `setAside` ({ path, reason }) and `added`, the same as the status
+# report; these name paths, because the app shows where each thing went.
+# The log.md line carries counts only, never a name. A failure here is
+# logged and never fails the run. Usage: write_outcome <done|failed> <sentence>.
 write_outcome() {
   [ "$MODE" = ingest ] || return 0
   local state=$1 sentence=$2 dir="$WORK_DIR/outcome" processed quarantined refused
@@ -389,6 +420,11 @@ write_outcome() {
     --argjson processed "$processed" --argjson quarantined "$quarantined"
     --argjson refused "$refused")
   [ "$state" != failed ] || args+=(--arg reason "${REASON:-unknown}")
+  if [ "$state" = done ] && [ "$TOO_MANY_CHANGES" -eq 0 ]; then
+    [ -z "${PROCESSED_JSON:-}" ] || args+=(--argjson items "$PROCESSED_JSON")
+    [ -z "$SET_ASIDE_JSON" ] || args+=(--argjson setAside "$SET_ASIDE_JSON")
+    [ -z "$ADDED" ] || args+=(--arg added "$ADDED")
+  fi
   if ! jq -cn "${args[@]}" '$ARGS.named' >"$dir/.bower/last-run.json"; then
     log "outcome not written"
     return 0
@@ -845,6 +881,8 @@ write_paths() {
 copy_up_after_failure() {
   if [ "$RUN_STARTED" -eq 1 ]; then
     log "sync up (copy only)"
+    # The agent's added note and the too-large list are never uploaded (#598).
+    rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST"
     copy_changed_up || log "sync up (copy only) failed"
   fi
 }
@@ -905,8 +943,11 @@ in_instructions_scope() {
 # `context` for Add's context note, `request` for any other instruction note
 # (see in_instructions_scope), `file` for everything else. Whether a request
 # turned out a question, a job or a rule is the agent's call, not known here.
+# The kinds are kept in KINDS_FILE, so the list can be rebuilt with where
+# each item went after the move phase (items_json).
 processed_json() {
   local path kind
+  : >"$KINDS_FILE"
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     kind=file
@@ -917,13 +958,123 @@ processed_json() {
         kind=context
       fi
     fi
-    jq -cn --arg path "$path" --arg kind "$kind" '$ARGS.named'
-  done <"$1" | {
+    printf '%s\t%s\n' "$path" "$kind" >>"$KINDS_FILE"
+  done <"$1"
+  items_json
+}
+
+# The processed list from KINDS_FILE, as a JSON array of { path, kind }.
+# Report v2 (#598): with a moves file ("<old><TAB><new>", MOVES_FILE), an
+# item that moved also carries `to` (its new path) and, when its file name
+# changed, `renamedFrom` (the old name).
+items_json() {
+  local path kind to moves=${1:-} args
+  while IFS=$'\t' read -r path kind; do
+    [ -n "$path" ] || continue
+    args=(--arg path "$path" --arg kind "$kind")
+    if [ -n "$moves" ] && [ -f "$moves" ]; then
+      to=$(P="$path" awk -F '\t' '$1 == ENVIRON["P"] { print $2; exit }' "$moves")
+      if [ -n "$to" ]; then
+        args+=(--arg to "$to")
+        [ "${path##*/}" = "${to##*/}" ] || args+=(--arg renamedFrom "${path##*/}")
+      fi
+    fi
+    jq -cn "${args[@]}" '$ARGS.named'
+  done <"$KINDS_FILE" | {
     local items
     items=$(paste -sd, -)
-    printf '[%s]
-' "$items"
+    printf '[%s]\n' "$items"
   }
+}
+
+# Whether Bower reads this kind of file (System-Formats, R-AG-9): notes and
+# text, PDFs, photos, and the documents pandoc converts. Any other kind
+# (video, audio, Excel, PowerPoint, iPhone photos, archives, anything else)
+# is only kept: filed by name and date, never read.
+reads_kind() {
+  case "${1##*/}" in
+    *.[mM][dD] | *.[tT][xX][tT] | *.[cC][sS][vV] | *.[jJ][sS][oO][nN] | *.[eE][mM][lL]) return 0 ;;
+    *.[pP][dD][fF]) return 0 ;;
+    *.[jJ][pP][gG] | *.[jJ][pP][eE][gG] | *.[pP][nN][gG] | *.[wW][eE][bB][pP] | *.[gG][iI][fF]) return 0 ;;
+    *.[dD][oO][cC][xX] | *.[oO][dD][tT] | *.[rR][tT][fF] | *.[eE][pP][uU][bB] | \
+      *.[hH][tT][mM][lL] | *.[hH][tT][mM]) return 0 ;;
+  esac
+  return 1
+}
+
+# Whether the local file $1 is over the size limits: more than
+# MAX_READ_BYTES, or a PDF with more than MAX_PDF_PAGES pages. The page
+# count is a best-effort count of the PDF's page objects (no PDF tool on the
+# runner): a PDF that hides them in compressed streams counts as short.
+too_large() {
+  local size pages
+  size=$(wc -c <"$1" | tr -d ' ') || return 1
+  [ "$size" -le "$MAX_READ_BYTES" ] || return 0
+  case "$1" in
+    *.[pP][dD][fF])
+      pages=$(LC_ALL=C grep -aoE '/Type[[:space:]]*/Page([^s]|$)' "$1" | grep -c . || true)
+      [ "$pages" -le "$MAX_PDF_PAGES" ] || return 0
+      ;;
+  esac
+  return 1
+}
+
+# The set-aside list (#598), before the agent starts, from the pending files
+# still pending after the pre-scan (file $1): a file over the size limits is
+# `too-large` and listed in TOO_LARGE_LIST for the agent, one of a kind
+# Bower only keeps is `kept-not-read`, a document pandoc could not convert
+# is `unconvertible`; then each quarantined path, `quarantined`. Only files
+# (not instruction or context notes). Writes SET_ASIDE_FILE and
+# TOO_LARGE_LIST; logs counts only.
+set_aside() {
+  local path kind large=0 kept=0
+  : >"$SET_ASIDE_FILE"
+  rm -f "$VAULT_DIR/$TOO_LARGE_LIST"
+  while IFS=$'\t' read -r path kind; do
+    [ -n "$path" ] && [ "$kind" = file ] && [ -f "$VAULT_DIR/$path" ] || continue
+    grep -qxF -- "$path" "$1" || continue
+    if too_large "$VAULT_DIR/$path"; then
+      printf 'too-large\t%s\n' "$path" >>"$SET_ASIDE_FILE"
+      mkdir -p "$VAULT_DIR/.bower" && printf '%s\n' "$path" >>"$VAULT_DIR/$TOO_LARGE_LIST" || return 1
+      large=$((large + 1))
+    elif ! reads_kind "$path"; then
+      printf 'kept-not-read\t%s\n' "$path" >>"$SET_ASIDE_FILE"
+      kept=$((kept + 1))
+    elif grep -qxF -- "$path" "$UNCONVERTED_FILE"; then
+      printf 'unconvertible\t%s\n' "$path" >>"$SET_ASIDE_FILE"
+    fi
+  done <"$KINDS_FILE"
+  while IFS= read -r path; do
+    [ -z "$path" ] || printf 'quarantined\t%s\n' "$path" >>"$SET_ASIDE_FILE"
+  done <"$QUARANTINED_FILE"
+  [ $((large + kept)) -eq 0 ] || log "$large files too large to read, $kept kept without reading"
+}
+
+# SET_ASIDE_FILE as a JSON array of { path, reason }.
+set_aside_json() {
+  local reason path
+  while IFS=$'\t' read -r reason path; do
+    [ -n "$path" ] || continue
+    jq -cn --arg path "$path" --arg reason "$reason" '$ARGS.named'
+  done <"$SET_ASIDE_FILE" | {
+    local items
+    items=$(paste -sd, -)
+    printf '[%s]\n' "$items"
+  }
+}
+
+# The agent's one clause about what it added besides filing (#598), from
+# ADDED_NOTE: its first non-empty line, trimmed and cut to MAX_ADDED_LENGTH
+# characters; empty when it wrote none. The file is removed from the local
+# copy either way, so it is never uploaded, and so is TOO_LARGE_LIST.
+read_added() {
+  local file="$VAULT_DIR/$ADDED_NOTE" line=''
+  if [ -f "$file" ]; then
+    line=$(grep -m 1 -v '^[[:space:]]*$' "$file" | tr -d '\r' |
+      sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+  fi
+  ADDED=${line:0:$MAX_ADDED_LENGTH}
+  rm -f "$file" "$VAULT_DIR/$TOO_LARGE_LIST"
 }
 
 # The reason for people behind a failed agent run: `timeout` when the
@@ -1188,6 +1339,9 @@ fi
 # right after sync down so a run with nothing pending reads no file.
 STEP='manifest'
 log "$STEP"
+# Only this run's agent may say what it added (#598): a stale note in the
+# local copy is dropped before the manifest.
+rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST"
 if ! manifest >"$MANIFEST_BEFORE"; then
   fail "$STEP: listing the local copy failed"
 fi
@@ -1208,6 +1362,7 @@ fi
 # unconvertible; the log counts, never names, and pandoc's own messages go
 # to a private log file.
 STEP='convert documents'
+: >"$UNCONVERTED_FILE"
 if [ "$MODE" = ingest ]; then
   converted=0
   unconverted=0
@@ -1227,6 +1382,7 @@ if [ "$MODE" = ingest ]; then
       converted=$((converted + 1))
     else
       rm -f "$VAULT_DIR/$sibling"
+      printf '%s\n' "$path" >>"$UNCONVERTED_FILE"
       unconverted=$((unconverted + 1))
     fi
   done 3<"$PENDING_FILE"
@@ -1329,6 +1485,21 @@ if [ "$MODE" = ingest ] && [ "$candidate_count" -gt 0 ]; then
   fi
 fi
 
+# --- set aside -------------------------------------------------------------
+# Report v2 (#598): what the agent will only keep (a kind Bower does not
+# read, or a file over the size limits, which the agent finds listed in
+# TOO_LARGE_LIST) and what the run set aside before it started
+# (unconvertible, quarantined). See set_aside above.
+if [ "$MODE" = ingest ]; then
+  STEP='set aside'
+  pending_now="$WORK_DIR/pending-after-scan.txt"
+  [ -f "$pending_now" ] || pending_now=$PENDING_FILE
+  if ! set_aside "$pending_now"; then
+    fail "$STEP: listing failed"
+  fi
+  SET_ASIDE_JSON=$(set_aside_json)
+fi
+
 # Claude itself runs under `env -i` with an explicit allow-list, so an
 # instruction that reaches the model despite the tool allow/deny list above
 # still finds no Drive token, no run ticket and no BOWER_* value in its own
@@ -1404,6 +1575,7 @@ fi
 # Nothing else is removed or moved.
 STEP='sync up'
 log "$STEP"
+read_added
 if ! audit || ! record_saved_keys; then
   fail "$STEP: copy failed" drive_unavailable
 fi
@@ -1415,6 +1587,10 @@ if ! move_up; then
 fi
 if ! book_moves "$VAULT_DIR" "$MOVED_OLD" "$MOVED_NEW" "$(date -u '+%F %H:%M')"; then
   fail "$STEP: bookkeeping failed"
+fi
+# Report v2 (#598): each processed item that moved carries where it went.
+if [ "$MODE" = ingest ] && [ -n "$PROCESSED_JSON" ]; then
+  PROCESSED_JSON=$(items_json "$MOVES_FILE")
 fi
 if ! copy_up "$UPLOAD_FILE"; then
   fail "$STEP: copy failed" drive_unavailable
@@ -1457,6 +1633,8 @@ if [ "$TOO_MANY_CHANGES" -eq 1 ]; then
   # Nothing was saved, so nothing was processed, whatever the agent said.
   SUMMARY="Refused: too many changes (more than $MAX_CHANGES files). Nothing was saved."
   [ -z "$PROCESSED_JSON" ] || PROCESSED_JSON='[]'
+  SET_ASIDE_JSON=''
+  ADDED=''
   write_outcome done 'Nothing was saved: the tidy-up changed too many files.'
 else
   filed=$(count_lines "$WORK_DIR/pending-after-scan.txt")
