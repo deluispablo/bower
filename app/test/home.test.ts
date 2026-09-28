@@ -155,7 +155,12 @@ describe('runCounts and lastTidyUpLine', () => {
   });
 
   it('says Failed for a failed run', () => {
-    expect(lastTidyUpLine(run('failed', ['0-Inbox/a.pdf']))).toBe('Failed');
+    expect(lastTidyUpLine(run('failed', ['0-Inbox/a.pdf']))).toBe(
+      'Failed · Did not finish',
+    );
+    expect(
+      lastTidyUpLine({ ...run('failed', []), reason: 'drive_unavailable' }),
+    ).toBe('Failed · Drive did not answer');
   });
 
   it('counts neither: the "What is this?" context note (#444)', () => {
@@ -256,14 +261,24 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
     );
   });
 
-  it('Failed: nothing was lost, and Try again opens the failure', () => {
-    const parts = bubbleFor({ ...base, state: 'failed' });
+  it('Failed: the reason in words, nothing was lost, and Try again opens the failure (#316)', () => {
+    const parts = bubbleFor({
+      ...base,
+      state: 'failed',
+      lastFinished: {
+        state: 'failed',
+        requestedAt: '2026-01-01T00:00:00.000Z',
+        error: 'sync up: copy failed',
+        reason: 'drive_unavailable',
+      },
+    });
     expect(text(parts)).toBe(
-      "I couldn't finish. Nothing was lost; your 3 things are still in the inbox. Try again.",
+      'Google Drive stopped answering half way through copying things back. Nothing was lost; your 3 things are still in the inbox. Try again.',
     );
+    expect(text(parts)).not.toContain('sync up');
     expect(links(parts)).toEqual(['failure:Try again']);
     expect(text(bubbleFor({ ...base, state: 'failed', pending: 1 }))).toBe(
-      "I couldn't finish. Nothing was lost; your 1 thing is still in the inbox. Try again.",
+      'Something went wrong before Bower could finish. Nothing was lost; your 1 thing is still in the inbox. Try again.',
     );
   });
 
