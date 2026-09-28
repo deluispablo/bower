@@ -333,6 +333,43 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
   await expect(hint).toContainText('4 things waiting.');
 });
 
+test('Add: What is this? becomes one context note in the inbox (#335)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  const box = page.getByRole('textbox', { name: 'What is this?' });
+  await expect(box).toHaveAttribute('placeholder', /^Just filing is fine\./);
+  await box.fill('Receipts: add them to a table with the shop and the total.');
+  await shot(page, testInfo, 'add-context');
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+
+  // Leaving Add writes the note: the three things, the receipt, the note.
+  await expect(page).toHaveURL('/');
+  await expect(
+    visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
+      '.home-card-count',
+    ),
+  ).toHaveText('5');
+  // It waits in the inbox with the other instruction notes, under the
+  // Bower tab's Requests (the demo resets on a reload, so no `goto`).
+  await navigate(page, /^Bower$/);
+  await page.getByRole('tab', { name: 'Requests' }).click();
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'Requests' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Context' }),
+  ).toHaveCount(1);
+});
+
 test('Home through the scripted run: waiting, running, done (#321)', async ({
   page,
 }, testInfo) => {

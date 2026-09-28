@@ -231,6 +231,47 @@
   margin: 0;
 }
 
+/* "What is this?" (#335, Phone-Add board): one optional box under the
+ * queue, in its own card. */
+.add-context {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: var(--space-3) 0;
+  padding: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+}
+
+.add-context label {
+  font-weight: 600;
+}
+
+.add-context-optional {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.add-context textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.4;
+  resize: none;
+}
+
+.add-context textarea:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 .add-queue-section {
   display: flex;
   flex-direction: column;
