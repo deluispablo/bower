@@ -14,7 +14,7 @@
  */
 
 import type { JSX } from 'preact';
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Run } from '../api.js';
 import { Bird } from '../components/bird.js';
@@ -22,7 +22,6 @@ import { ONCE_STATES } from '../components/bird-classes.js';
 import type { BirdState } from '../components/bird-classes.js';
 import { HEALTH_PATH, useHealthFindings } from '../components/explorer.js';
 import {
-  IconChat,
   IconClock,
   IconHeart,
   IconInbox,
@@ -30,9 +29,12 @@ import {
   IconSearch,
   IconSparkle,
 } from '../components/icons.js';
+import { inlineFactsText } from '../components/key-facts.js';
+import { KindBadge } from '../components/kind-badge.js';
 import { PinnedSection } from '../components/pinned-section.js';
 import { ProcessButton } from '../components/process-button.js';
 import { Tour } from '../components/help-sheet.js';
+import { BowerTag, NewTag } from '../components/tags.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import { startedAgo } from '../components/working-sheet.js';
 import {
@@ -42,7 +44,6 @@ import {
   reportDayStart,
 } from '../health-report.js';
 import {
-  ANSWERS_FOLDER,
   birdStateFor,
   bubbleFor,
   greetingFor,
@@ -53,12 +54,15 @@ import {
   tidyUpAgo,
 } from '../home.js';
 import type { BubblePart, HomeState } from '../home.js';
+import { hasDestinations, JUST_FILED_PATH } from '../just-filed.js';
+import { keyFactsFor, kindById } from '../kinds.js';
 import {
   folderCounts,
   folderOf,
   recentNotes,
   relativeTime,
 } from '../navigation.js';
+import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { tourOnScreen } from '../onboarding.js';
 import { useOnline } from '../online.js';
@@ -67,6 +71,7 @@ import { getPref } from '../prefs.js';
 import { visiblePendingCount } from '../run-progress.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
+import type { DriveFile } from '../drive.js';
 import { ACTIVITY_PATH } from '../shell-routes.js';
 import { openSwitcher } from '../switcher-store.js';
 import {
@@ -75,7 +80,10 @@ import {
   showoffPlayed,
   useTour,
 } from '../tour-store.js';
-import { isAppFile } from '../vault-index.js';
+import { useNew } from '../use-new.js';
+import { fileKind, isAppFile } from '../vault-index.js';
+import type { FileKind } from '../vault-index.js';
+import { isBowerNote } from './note.js';
 import { pinned, useVault } from '../vault-store.js';
 import '../styles/home.css';
 
@@ -89,7 +97,7 @@ interface BubbleProps {
 }
 
 /** The bubble's text, its links wired: Tidy up and Try again act here,
- * See what I did goes to the Bower tab. Exported for `home-bubble.test.tsx`
+ * See where they went opens Just filed, See what I did the Bower tab. Exported for `home-bubble.test.tsx`
  * (#420: the button's click event must never reach `onTidyUp`/`onFailure`,
  * which both take no arguments). */
 export function BubbleText({
@@ -101,9 +109,12 @@ export function BubbleText({
     <p class="home-bubble">
       {parts.map((part, i) => {
         if (typeof part === 'string') return part;
-        if (part.link === 'activity') {
+        if (part.link === 'activity' || part.link === 'just-filed') {
           return (
-            <a key={i} href={ACTIVITY_PATH}>
+            <a
+              key={i}
+              href={part.link === 'activity' ? ACTIVITY_PATH : JUST_FILED_PATH}
+            >
               {part.text}
             </a>
           );
@@ -248,10 +259,13 @@ export function LastTidyUpCard({
   state,
   run,
   now,
+  newCount = 0,
 }: {
   state: HomeState;
   run: Run | null;
   now: number;
+  /** How many of the run's things this device has not opened (#617). */
+  newCount?: number;
 }): JSX.Element {
   const head = (
     <h2>
@@ -278,14 +292,84 @@ export function LastTidyUpCard({
     );
   }
   return (
-    <a class="home-card home-card-link" href={ACTIVITY_PATH}>
+    <a
+      class="home-card home-card-link"
+      href={hasDestinations(run) ? JUST_FILED_PATH : ACTIVITY_PATH}
+    >
       {head}
       <p class="home-card-when">
         {tidyUpAgo(run.finishedAt ?? run.requestedAt, now)}
       </p>
-      <p class="home-card-sub">{lastTidyUpLine(run)}</p>
+      <p class="home-card-sub">{lastTidyUpLine(run, newCount)}</p>
     </a>
   );
+}
+
+interface RecentInfo {
+  /** Bower wrote this note (it has a kind, an original or origins). */
+  bower: boolean;
+  /** The badge's kind: the original's, when the note came from a file. */
+  kind: FileKind;
+  badgeFile?: { name: string; mimeType: string };
+  /** "£2,150 · 2 bed · 14 min by bike", `''` when the note has none. */
+  facts: string;
+}
+
+/** What each Recent row shows beyond its title, read from the note's
+ * frontmatter (the cache first, `loadNoteMeta`). A note that cannot be read
+ * keeps the plain row. */
+function useRecentInfo(
+  notes: readonly DriveFile[],
+): ReadonlyMap<string, RecentInfo> {
+  const [info, setInfo] = useState<ReadonlyMap<string, RecentInfo>>(new Map());
+  const key = notes
+    .map((note) => `${note.id}:${note.modifiedTime ?? ''}`)
+    .join();
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      notes.map(async (note): Promise<[string, RecentInfo] | null> => {
+        try {
+          const meta = await loadNoteMeta(note);
+          const kind =
+            meta.kind === undefined ? undefined : kindById(meta.kind);
+          const original = meta.original
+            ?.replace(/^\[\[|\]\]$/g, '')
+            .split('|')[0]
+            ?.trim();
+          const badgeFile =
+            original === undefined || original === ''
+              ? undefined
+              : { name: original, mimeType: '' };
+          return [
+            note.id,
+            {
+              bower: isBowerNote(meta),
+              kind: badgeFile === undefined ? 'note' : fileKind(badgeFile),
+              ...(badgeFile !== undefined && { badgeFile }),
+              facts:
+                kind === undefined
+                  ? ''
+                  : inlineFactsText(keyFactsFor(kind, meta.fields)),
+            },
+          ];
+        } catch (err: unknown) {
+          console.error('Reading a note for Recent failed', err);
+          return null;
+        }
+      }),
+    ).then((pairs) => {
+      if (cancelled) return;
+      setInfo(
+        new Map(pairs.filter((p): p is [string, RecentInfo] => p !== null)),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `key` stands for `notes`, which is a new array on every render.
+  }, [key]);
+  return info;
 }
 
 export function Home(): JSX.Element {
@@ -302,6 +386,8 @@ export function Home(): JSX.Element {
   const recent =
     index === null ? [] : recentNotes(index, RECENT_ROWS, showAppFiles);
   const recentTitles = useNoteTitles(recent);
+  const recentInfo = useRecentInfo(recent);
+  const { ids: newIds, isNew } = useNew();
   // #506: the same total the working sheet counts against, so "N things"
   // here never runs one ahead of it — the context note Add may have left
   // in the inbox is not one of the "things" either place counts.
@@ -413,7 +499,12 @@ export function Home(): JSX.Element {
           now={now}
           onOpenSheet={openSheet}
         />
-        <LastTidyUpCard state={state} run={lastFinished} now={now} />
+        <LastTidyUpCard
+          state={state}
+          run={lastFinished}
+          now={now}
+          newCount={newIds.size}
+        />
         {state === 'loading' ? (
           <div
             class="home-card home-card-loading home-desktop-only"
@@ -504,21 +595,30 @@ export function Home(): JSX.Element {
           </div>
           <ul class="home-notes">
             {recent.map((note) => {
-              const answer = note.path.startsWith(`${ANSWERS_FOLDER}/`);
               const folder = folderOf(note.path);
+              const extra = recentInfo.get(note.id);
               return (
                 <li key={note.id}>
                   <a class="home-note-row" href={`/note/${note.id}`}>
-                    <span
-                      class="home-note-icon"
-                      data-type={answer ? 'answer' : 'note'}
-                    >
-                      {answer ? <IconChat /> : <IconNote />}
+                    <span class="home-note-badge">
+                      <KindBadge
+                        kind={extra?.kind ?? 'note'}
+                        {...(extra?.badgeFile !== undefined && {
+                          file: extra.badgeFile,
+                        })}
+                      />
                     </span>
                     <span class="home-note-text">
-                      <b class="home-note-title">
-                        {recentTitles.get(note.id) ?? noteTitle(note)}
-                      </b>
+                      <span class="home-note-line">
+                        <b class="home-note-title">
+                          {recentTitles.get(note.id) ?? noteTitle(note)}
+                        </b>
+                        {isNew(note.id) && <NewTag />}
+                        {extra?.bower === true && <BowerTag />}
+                      </span>
+                      {extra !== undefined && extra.facts !== '' && (
+                        <span class="home-note-facts">{extra.facts}</span>
+                      )}
                       {folder !== '' && (
                         <span class="home-note-meta">
                           {folder.split('/').join(' / ')}

@@ -8,6 +8,7 @@
 import type { Run } from './api.js';
 import { sinceLabel } from './bower-tab.js';
 import type { BirdState } from './components/bird-classes.js';
+import { hasDestinations } from './just-filed.js';
 import { processedKind } from './run-progress.js';
 import type { RunPhase } from './run-store.js';
 import { failureCopy } from './run-failure.js';
@@ -113,14 +114,15 @@ export function runCounts(run: Run): RunCounts {
   return { filed, answered };
 }
 
-/** The Last tidy-up card's line: "4 filed · 1 answered" (either half left
- * out at zero), "Nothing new" when both are, "Failed · Drive did not answer"
+/** The Last tidy-up card's line: "5 filed · 1 answered · 4 new to you"
+ * (each part left out at zero; `newCount` is what this device has not
+ * opened yet, #617), "Nothing new" when both are, "Failed · Drive did not answer"
  * for a failed run (its reason's short words, #316). A run recovered from
  * `.bower/last-run.json` after the Worker lost track (#564) has no
  * per-file `processed` list, only a count baked into its own `summary`
  * sentence — shown as is, since "N filed · M answered" cannot be rebuilt
  * from a count alone. */
-export function lastTidyUpLine(run: Run): string {
+export function lastTidyUpLine(run: Run, newCount = 0): string {
   if (run.state === 'failed')
     return `Failed · ${failureCopy(run.reason).short}`;
   if (run.processed === undefined && run.summary !== undefined) {
@@ -130,6 +132,7 @@ export function lastTidyUpLine(run: Run): string {
   const parts: string[] = [];
   if (filed > 0) parts.push(`${filed} filed`);
   if (answered > 0) parts.push(`${answered} answered`);
+  if (newCount > 0) parts.push(`${newCount} new to you`);
   return parts.length === 0 ? 'Nothing new' : parts.join(' · ');
 }
 
@@ -170,7 +173,7 @@ export function refusedMessage(n: number): string {
  * the failure (the working sheet, which says what happened).
  */
 export type BubblePart =
-  string | { link: 'tidy-up' | 'activity' | 'failure'; text: string };
+  string | { link: 'tidy-up' | 'activity' | 'just-filed' | 'failure'; text: string };
 
 export interface BubbleInput {
   state: HomeState;
@@ -186,16 +189,24 @@ export interface BubbleInput {
   lastFinished: Run | null;
 }
 
-/** "3 things filed and 1 question answered", either half left out at 0. */
+/**
+ * "5 filed, and I added bike times to the flats" (Flow-05-Home, #617):
+ * what the run filed, then its `added` clause when the report has one
+ * (report v2); "1 question answered" for the questions it answered.
+ * Either half is left out at 0.
+ */
 function doneCounts(run: Run | null): string {
   const { filed, answered } =
     run === null ? { filed: 0, answered: 0 } : runCounts(run);
   const parts: string[] = [];
-  if (filed > 0) parts.push(`${things(filed)} filed`);
+  if (filed > 0) parts.push(`${filed} filed`);
   if (answered > 0) {
     parts.push(`${answered} ${plural(answered, 'question')} answered`);
   }
-  return parts.length === 0 ? 'Nothing new this time' : parts.join(' and ');
+  const counts = parts.join(' and ');
+  const added = run?.added?.trim() ?? '';
+  if (added === '') return counts === '' ? 'Nothing new this time' : counts;
+  return counts === '' ? added : `${counts}, and ${added}`;
 }
 
 /**
@@ -242,9 +253,16 @@ export function bubbleFor(input: BubbleInput): BubblePart[] {
       ];
     case 'done': {
       const notes = doneNotes(lastFinished);
+      // Just filed says where things went; a run with no destinations (only
+      // questions answered) has nothing to list there, so it keeps the
+      // Bower tab's history.
+      const where =
+        lastFinished !== null && hasDestinations(lastFinished)
+          ? ({ link: 'just-filed', text: 'See where they went' } as const)
+          : ({ link: 'activity', text: 'See what I did' } as const);
       return [
         `All tidy. ${doneCounts(lastFinished)}. `,
-        { link: 'activity', text: 'See what I did' },
+        where,
         '.',
         ...notes.map((note) => ` ${note}`),
       ];
