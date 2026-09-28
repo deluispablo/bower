@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   createTextFile: vi.fn(),
   process: vi.fn(),
   refresh: vi.fn(),
-  index: null as unknown,
+  index: null,
 }));
 
 vi.mock('../src/drive.js', async (importOriginal) => ({
