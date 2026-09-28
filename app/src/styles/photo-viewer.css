@@ -1,0 +1,151 @@
+/*
+ * The photo viewer (issue #605, boards `Phone-File-Photo` and
+ * `Phone-Photo-Full`). Fitted photo with a hint; a black full-screen layer
+ * with a bar, the stage and a caption row. No motion of its own.
+ */
+
+.photo-viewer-open {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  cursor: zoom-in;
+}
+
+.photo-viewer-fit {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.photo-viewer-hint {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #f1f5f9;
+  font-size: 0.8125rem;
+}
+
+.photo-viewer-open:focus-visible,
+.photo-viewer-button:focus-visible {
+  outline: 2px solid #5fcfbc;
+  outline-offset: 2px;
+}
+
+.photo-viewer-full {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  color: #f1f5f9;
+}
+
+.photo-viewer-bar,
+.photo-viewer-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 0;
+}
+
+.photo-viewer-foot {
+  justify-content: space-between;
+  padding: 10px 8px 30px;
+}
+
+.photo-viewer-counter {
+  flex-grow: 1;
+  margin-right: 44px;
+  text-align: center;
+  color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
+.photo-viewer-caption {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.photo-viewer-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #f1f5f9;
+  cursor: pointer;
+}
+
+.photo-viewer-button[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.photo-viewer-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.photo-viewer-stage {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  /* Pinch is the browser's; panning is only ours once we are at 2x. */
+  touch-action: pinch-zoom;
+}
+
+.photo-viewer-stage.is-zoomed {
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
+.photo-viewer-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.photo-viewer-img.is-zoomed {
+  max-width: none;
+  max-height: none;
+  width: 200%;
+}
+
+.photo-viewer-badge {
+  position: absolute;
+  top: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #f1f5f9;
+  font-size: 0.78rem;
+  pointer-events: none;
+}
