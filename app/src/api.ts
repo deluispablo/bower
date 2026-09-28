@@ -124,7 +124,8 @@ export interface Vault {
 
 export interface Me {
   email: string;
-  /** The Worker does not send one today; never invented client-side. */
+  /** The Google profile's first name (#323), absent when Google gave none;
+   * never invented client-side. */
   name?: string;
   vault: Vault | null;
   quota: { used: number; limit: number };

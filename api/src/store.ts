@@ -105,6 +105,7 @@ export interface UserPatch {
   encApiKey?: string | null;
   needsReauth?: true | null;
   tourSeenAt?: string | null;
+  givenName?: string | null;
 }
 
 /**

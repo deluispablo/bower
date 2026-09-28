@@ -14,6 +14,24 @@ import { reply } from './api.js';
 import type { DemoServer } from './server.js';
 import type { Entry } from './vault.js';
 
+/**
+ * An e2e-only knob (#322): a Playwright test sets this on `window` before
+ * the app loads (`page.addInitScript`) to hold `listVault`'s answer back a
+ * few seconds, so it can watch Home's loading state. Unset everywhere else,
+ * including every unit test (most run with no `window` at all).
+ */
+declare global {
+  interface Window {
+    __bowerDemoListDelayMs?: number;
+  }
+}
+
+function listDelayMs(): number {
+  return typeof window === 'undefined'
+    ? 0
+    : (window.__bowerDemoListDelayMs ?? 0);
+}
+
 function notFound(): DriveError {
   return new DriveError(404, 'File not found.');
 }
@@ -67,22 +85,31 @@ export function createDemoDrive(server: DemoServer): DriveClient {
   };
 
   return {
-    listVault: (folderId) =>
-      reply(() => {
-        folder(folderId);
-        const files: DriveFile[] = [];
-        const walk = (id: string, prefix: string): void => {
-          for (const child of vault.children(id)) {
-            const path = prefix === '' ? child.name : `${prefix}/${child.name}`;
-            files.push(vault.toFile(child, path));
-            if (child.mimeType === FOLDER_MIME) walk(child.id, path);
-          }
-        };
-        walk(folderId, '');
-        return files.sort((a, b) =>
-          a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
-        );
-      }),
+    listVault: (folderId) => {
+      const answer = (): Promise<DriveFile[]> =>
+        reply(() => {
+          folder(folderId);
+          const files: DriveFile[] = [];
+          const walk = (id: string, prefix: string): void => {
+            for (const child of vault.children(id)) {
+              const path =
+                prefix === '' ? child.name : `${prefix}/${child.name}`;
+              files.push(vault.toFile(child, path));
+              if (child.mimeType === FOLDER_MIME) walk(child.id, path);
+            }
+          };
+          walk(folderId, '');
+          return files.sort((a, b) =>
+            a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+          );
+        });
+      const ms = listDelayMs();
+      return ms <= 0
+        ? answer()
+        : new Promise<DriveFile[]>((resolve) => {
+            setTimeout(() => resolve(answer()), ms);
+          });
+    },
 
     listFolder: (folderId) =>
       reply(() => {

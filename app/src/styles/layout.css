@@ -482,7 +482,6 @@ button.page-bare-back {
   margin: 0 0 var(--space-2);
 }
 
-.explorer-page .explorer-rows,
 .explorer-page .explorer-tree {
   padding: 0;
 }
@@ -522,6 +521,56 @@ button.page-bare-back {
 .explorer-hidden .icon {
   width: 18px;
   height: 18px;
+}
+
+/* The Notes tab's own bottom group (#353, C.5): the Health row and the
+   hidden-files line together, right after the tree — the sidebar's own
+   Health row stays a plain `.explorer-row` near the top instead (#326). */
+.explorer-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+}
+
+.explorer-health-row {
+  align-items: flex-start;
+  min-height: 54px;
+}
+
+.explorer-health-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+}
+
+.explorer-health-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.explorer-health-text b {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-heading);
+  font-weight: 600;
+}
+
+.explorer-health-subtitle {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .explorer-account {
@@ -892,86 +941,8 @@ button.page-bare-back {
   background: var(--color-bg);
 }
 
-/*
- * Tell Bower (spec §6): a conversation with the bird. `.tell-feed` holds
- * the opening line and every sent bubble; `.tell-composer` (components/
- * tell-composer.tsx) holds the example chips, the message box and the send
- * button, reused as-is by the Home inline composer (#143). `.tell-history`
- * is the full sent list, a modal dialog on top of either.
- */
-
-.tell-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-/* Phone: `.screen-title` is hidden (the crumb slot has the title instead),
-   leaving only the sent-history button — keep it at the right edge rather
-   than let `space-between` fall back to flex-start for a single child. */
-.tell-head .icon-button {
-  margin-left: auto;
-}
-
-.tell-feed {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin: var(--space-3) 0;
-}
-
-.tell-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.tell-row--bird {
-  flex-direction: row;
-  align-items: flex-end;
-  gap: var(--space-2);
-}
-
-.tell-row--sent {
-  align-items: flex-end;
-}
-
-.tell-bubble {
-  max-width: 32rem;
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-base);
-  line-height: var(--leading-body);
-}
-
-.tell-bubble--bird {
-  border-bottom-left-radius: var(--space-1);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-}
-
-.tell-bubble--sent {
-  border-bottom-right-radius: var(--space-1);
-  background: var(--color-brand);
-  color: var(--color-on-brand);
-}
-
-.tell-status-line {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.tell-examples {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-2);
-}
-
+/* A small rounded button or link in a row of them (the folder chips, the
+ * interview answers). */
 .chip {
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
@@ -994,121 +965,6 @@ button.page-bare-back {
 
 .chip:disabled:hover {
   background: var(--color-surface);
-}
-
-.tell-composer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  max-width: 32rem;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
-}
-
-.tell-composer-row {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-2);
-}
-
-.tell-textarea {
-  flex-grow: 1;
-  min-height: 3rem;
-  max-height: 8rem;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  font: inherit;
-  color: var(--color-text);
-  background: var(--color-bg);
-  resize: vertical;
-}
-
-.tell-send {
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  padding: 0;
-  border-radius: var(--radius-lg);
-}
-
-/* The full sent list (spec §6): a modal dialog sliding in from the right,
-   the same pattern as the explorer drawer (#140) but not phone-only —
-   the composer's conversation feed already fits the content column at
-   any width, so opening the history is always this dialog, never an
-   always-open desktop panel. */
-.tell-history {
-  position: fixed;
-  inset: 0;
-  z-index: 45;
-}
-
-.tell-history-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgb(7 12 22 / 0.5);
-  animation: drawer-fade var(--motion-base) var(--ease-out);
-}
-
-.tell-history-panel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  width: min(360px, 92vw);
-  padding: var(--space-4);
-  background: var(--color-sidebar);
-  border-left: 1px solid var(--color-border);
-  box-shadow: var(--shadow-md);
-  outline: none;
-  overflow-y: auto;
-  animation: tell-history-in var(--motion-base) var(--ease-out);
-}
-
-.tell-history-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.tell-history-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.tell-history-item {
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-}
-
-.tell-history-text {
-  margin: 0;
-  color: var(--color-text);
-}
-
-@keyframes tell-history-in {
-  from {
-    transform: translateX(100%);
-  }
-
-  to {
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tell-history-backdrop,
-  .tell-history-panel {
-    animation: none;
-  }
 }
 
 /* Add screen: styles/add.css (its own file — see routes/add.tsx).
@@ -1188,6 +1044,24 @@ button.page-bare-back {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The Notes tab's root folders only (#353, C.5): the meaning line under
+   the name, from `folder-meanings.ts` via `Tree`'s `rootMeanings` prop. */
+.tree-name-group {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.tree-meaning {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

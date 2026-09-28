@@ -437,6 +437,38 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(0);
 });
 
+test('Home loading state: dimmed cards and skeleton rows, never Empty (#322)', async ({
+  page,
+}, testInfo) => {
+  // Holds the demo's folder listing back a few seconds (`src/demo/drive.ts`)
+  // so the loading window is long enough to assert against.
+  const DELAY_MS = 3000;
+  await page.addInitScript((ms: number) => {
+    window.__bowerDemoListDelayMs = ms;
+  }, DELAY_MS);
+  await openHome(page);
+
+  const home = page.locator('.home');
+  const bubble = visible(page.locator('.home-bubble'));
+  const inbox = visible(page.locator('.home-card', { hasText: 'Inbox' }));
+
+  await expect(home).toHaveAttribute('data-state', 'loading');
+  await expect(bubble).toHaveText('Looking for what is waiting for you.');
+  await expect(page.getByText('Welcome. Add a few things')).toHaveCount(0);
+  await expect(inbox).toHaveClass(/home-card-loading/);
+  await expect(inbox.locator('.home-card-count')).toHaveCount(0);
+  await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(5);
+  await shot(page, testInfo, 'home-loading');
+
+  // Once the delayed listing resolves, the real numbers replace the
+  // skeleton and the state moves on (Waiting, in the demo fixture).
+  await expect(home).not.toHaveAttribute('data-state', 'loading', {
+    timeout: DELAY_MS + 5_000,
+  });
+  await expect(inbox.locator('.home-card-count')).toBeVisible();
+  await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(0);
+});
+
 test('the working sheet opens once per run, and the run ends back at Tidy up', async ({
   page,
 }, testInfo) => {
@@ -595,6 +627,39 @@ test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#33
     await page.getByRole('link', { name: 'Back to Bower' }).click();
     await expect(page).toHaveURL(/\/bower$/);
   }
+});
+
+test('Health points to the Suggested group on the Bower tab, where Accept works (#346)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await page.evaluate(() => {
+    history.pushState(null, '', '/health');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  const pointer = page.getByRole('link', {
+    name: '2 suggested rules on the Bower tab',
+  });
+  await expect(pointer).toBeVisible();
+  // The cards themselves live on the Bower tab now.
+  await expect(page.getByRole('button', { name: 'Accept' })).toHaveCount(0);
+  await shot(page, testInfo, 'health');
+
+  await pointer.click();
+  await expect(page).toHaveURL(/\/bower$/);
+  const suggested = page.getByRole('region', { name: /^Suggested/ });
+  await expect(suggested).toBeVisible();
+  const card = suggested
+    .getByRole('listitem')
+    .filter({ hasText: 'Recipes go to Cooking' });
+  await expect(suggested.getByRole('listitem')).toHaveCount(2);
+  await shot(page, testInfo, 'bower-suggested');
+
+  await card.getByRole('button', { name: 'Accept' }).click();
+  await expect(
+    suggested.getByText('Added to your rules: Recipes go to Cooking.'),
+  ).toBeVisible();
+  await expect(suggested.getByRole('listitem')).toHaveCount(1);
 });
 
 test('Settings switches the theme to dark, and it sticks', async ({
@@ -759,6 +824,48 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   ).toBeVisible();
   await expect(page.getByRole('tree').first()).toBeVisible();
   await shot(page, testInfo, 'tabs-notes');
+});
+
+test('the Notes tab: root meanings, Health and hidden-files at the bottom, one Expand/Collapse button (#353)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === 'desktop',
+    'the Notes tab is phone-only; desktop keeps the sidebar',
+  );
+  await openHome(page);
+  await page.getByRole('link', { name: 'Notes' }).click();
+  await expect(page).toHaveURL(/\/notes$/);
+
+  const bar = page.locator('header.topbar');
+  await expect(bar.getByRole('button', { name: 'Expand all' })).toBeVisible();
+  await expect(bar.getByRole('button', { name: /^Sort by/ })).toHaveCount(0);
+  // Scoped to the Notes screen itself: the desktop sidebar (always mounted,
+  // just CSS-hidden below 900px) keeps its own sort button until #326.
+  await expect(
+    page.locator('.explorer-page [aria-label^="Sort by"]'),
+  ).toHaveCount(0);
+
+  const tree = page.getByRole('tree').first();
+  const inbox = tree.locator('a[href="/folder/0-Inbox"]');
+  await expect(inbox).toContainText('What you added, waiting for a tidy-up');
+  const answers = tree.locator('a[href="/folder/Answers"]');
+  await expect(answers).toContainText('What Bower wrote back to you');
+
+  const health = page.locator('.explorer-health-row');
+  await expect(health).toContainText('Health check');
+  await expect(health).toContainText('Sunday · 3 small things to fix');
+  // Scoped to `.explorer-foot`: the sidebar has its own hidden-files
+  // button too (always mounted, CSS-hidden below 900px).
+  const hidden = page.locator('.explorer-foot .explorer-hidden');
+  await expect(health).toBeVisible();
+  await expect(hidden).toBeVisible();
+  // Health and the hidden-files line sit together, after the tree.
+  const footBox = await page.locator('.explorer-foot').boundingBox();
+  const treeBox = await tree.boundingBox();
+  expect((footBox?.y ?? 0) >= (treeBox?.y ?? 0)).toBe(true);
+
+  await shot(page, testInfo, 'notes-tab');
 });
 
 test('an old /tell link opens the Bower tab with its text', async ({

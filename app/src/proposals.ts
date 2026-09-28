@@ -15,7 +15,8 @@
  * - created: 2026-09-27
  * ```
  *
- * The app lists the open ones in Health; Accept appends the rule to
+ * The app lists the open ones in the Suggested group on the Bower tab's
+ * Rules (`components/suggested-rules.tsx`, #346); Accept appends the rule to
  * `Rules.md` (`rulesWithAccepted`, in the shape `rules.ts` reads) and marks
  * the section, Dismiss only marks it (`applyDecision`). The agent never writes `Rules.md` for a
  * proposal. Pure: no Drive, no clock unless a date is not given —
