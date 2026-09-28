@@ -958,6 +958,30 @@ test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#
   await shot(page, testInfo, 'folder-notes-elsewhere');
 });
 
+test('A root folder explained: the meaning line, then its subfolders (#348)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await page.goto('/folder/1-Projects');
+  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+  const explainer = page.locator('.folder-explainer');
+  await expect(explainer).toHaveText('Things with an end date');
+  // The meaning line sits between the header and the chip row, above the
+  // subfolders — same words as the folder menu and the intro (#319).
+  const chips = page.locator('.folder-chips');
+  const explainerBox = await explainer.boundingBox();
+  const chipsBox = await chips.boundingBox();
+  expect((explainerBox?.y ?? 0) < (chipsBox?.y ?? 0)).toBe(true);
+  await shot(page, testInfo, 'folder-root-explained');
+
+  // A non-root folder (a project) has no meaning line to show.
+  await page.goto('/folder/1-Projects/Lisbon%20Trip');
+  await expect(
+    page.getByRole('heading', { name: 'Lisbon Trip' }),
+  ).toBeVisible();
+  await expect(page.locator('.folder-explainer')).toHaveCount(0);
+});
+
 test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)', async ({
   page,
 }, testInfo) => {

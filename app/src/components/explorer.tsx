@@ -333,7 +333,6 @@ export function Explorer({
             expandKey={variant === 'sidebar' ? expandKey : pageExpandKey}
             filter={variant === 'sidebar' ? undefined : filter}
             showAppFiles={showAppFiles}
-            linkFolders
             rootMeanings={variant !== 'sidebar'}
           />
         )}
