@@ -4,7 +4,13 @@ import { useLocation } from 'preact-iso';
 
 import { linkNoteName } from '../add.js';
 import { Bird } from '../components/bird.js';
-import { IconNote } from '../components/icons.js';
+import {
+  IconCamera,
+  IconChevronRight,
+  IconDrive,
+  IconFile,
+  IconNote,
+} from '../components/icons.js';
 import { ProcessButton } from '../components/process-button.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import {
@@ -456,6 +462,62 @@ export function Add() {
         onChange={onFileInputChange}
       />
 
+      {/* Phone: a list of doors, no drop square (spec C.6). Desktop hides
+       * this list and shows the drop zone below instead
+       * (`add.css`'s 900 px breakpoint, the same one `layout.css` uses for
+       * the sidebar). Both live in the DOM at once so neither needs its own
+       * copy of the file inputs or the disabled/online rules. */}
+      <div class="add-doors">
+        {touch && (
+          <button
+            type="button"
+            class="add-door"
+            onClick={() => cameraInputRef.current?.click()}
+          >
+            <span class="add-door-icon">
+              <IconCamera />
+            </span>
+            <span class="add-door-text">
+              <b>Take a photo</b>
+              <span>A receipt, a sign, a page of a book</span>
+            </span>
+            <IconChevronRight />
+          </button>
+        )}
+        <button
+          type="button"
+          class="add-door"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <span class="add-door-icon">
+            <IconFile />
+          </span>
+          <span class="add-door-text">
+            <b>Choose files</b>
+            <span>Photos, PDFs, screenshots, voice memos</span>
+          </span>
+          <IconChevronRight />
+        </button>
+        {GOOGLE_API_KEY !== '' && (
+          <button
+            type="button"
+            class="add-door"
+            disabled={driveDisabled}
+            aria-disabled={driveDisabled}
+            onClick={() => void onFromDrive()}
+          >
+            <span class="add-door-icon">
+              <IconDrive />
+            </span>
+            <span class="add-door-text">
+              <b>From your Drive</b>
+              <span>Copies a file in; the original stays put</span>
+            </span>
+            <IconChevronRight />
+          </button>
+        )}
+      </div>
+
       <div
         class={`add-dropzone${dragOver ? ' add-dropzone-active' : ''}`}
         onDragOver={onDragOver}
@@ -466,10 +528,7 @@ export function Add() {
           <Bird state={dragOver ? 'shiny' : 'peeking'} size={64} />
         </div>
         <p class="add-dropzone-title">Drop anything here</p>
-        <p class="add-dropzone-hint">
-          Photos, PDFs, screenshots, voice memos, links. Or share to Bower from
-          any app.
-        </p>
+        <p class="add-dropzone-hint">Photos, PDFs, screenshots, links.</p>
         <div class="add-actions">
           <button
             type="button"
@@ -478,15 +537,6 @@ export function Add() {
           >
             Choose files
           </button>
-          {touch && (
-            <button
-              type="button"
-              class="button button-secondary"
-              onClick={() => cameraInputRef.current?.click()}
-            >
-              Photo
-            </button>
-          )}
           {GOOGLE_API_KEY !== '' && (
             <button
               type="button"
@@ -532,6 +582,10 @@ export function Add() {
         </div>
         {linkError !== null && <p class="add-field-error">{linkError}</p>}
       </div>
+
+      <p class="add-share-line">
+        Or share to Bower from any app: it lands here too.
+      </p>
 
       {queue.length > 0 && (
         <ul class="add-queue">
@@ -608,19 +662,20 @@ export function Add() {
 
       {!online && <p class="offline-reason">{offlineReason('add')}</p>}
 
-      <button
-        type="button"
-        class="button"
-        disabled={
-          busy || inboxFolderId === null || queue.length === 0 || !online
-        }
-        aria-disabled={
-          busy || inboxFolderId === null || queue.length === 0 || !online
-        }
-        onClick={() => void runQueue(queue)}
-      >
-        {busy ? 'Adding…' : 'Add to Bower'}
-      </button>
+      {/* The submit belongs to the queue, not to the empty screen (#333):
+       * a link or a Drive pick already runs itself, so this is only for
+       * files chosen, dropped or photographed, still `waiting`. */}
+      {queue.length > 0 && (
+        <button
+          type="button"
+          class="button"
+          disabled={busy || inboxFolderId === null || !online}
+          aria-disabled={busy || inboxFolderId === null || !online}
+          onClick={() => void runQueue(queue)}
+        >
+          {busy ? 'Adding…' : 'Add to Bower'}
+        </button>
+      )}
     </section>
   );
 }

@@ -148,6 +148,38 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'note');
 });
 
+test("a note Bower wrote opens with Bower's note and What Bower used (#351)", async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+
+  const box = page.locator('.bower-note');
+  await expect(box).toBeVisible();
+  await expect(box.locator('.bower-note-title')).toHaveText("Bower's note");
+  // The word is always shown with the colour.
+  await expect(box.locator('.bower-note-word')).toHaveText([
+    'Fine',
+    'Check',
+    'Problem',
+  ]);
+  await expect(
+    page.getByRole('heading', { name: 'What Bower used', level: 2 }),
+  ).toBeVisible();
+  await expect(page.locator('.bower-sources li')).toHaveText([
+    'Bills and renewals (from your notes)',
+  ]);
+  await shot(page, testInfo, 'note-from-bower');
+});
+
 test('a missing note shows Not found', async ({ page }, testInfo) => {
   await openHome(page);
   await page.goto('/note/does-not-exist');
@@ -158,6 +190,40 @@ test('a missing note shows Not found', async ({ page }, testInfo) => {
   await expect(page.getByRole('link', { name: 'Search for it' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Go home' })).toBeVisible();
   await shot(page, testInfo, 'note-not-found');
+});
+
+test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+  await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible();
+
+  const doors = page.locator('.add-doors');
+  const dropzone = page.locator('.add-dropzone');
+
+  if (testInfo.project.name === 'desktop') {
+    await expect(doors).toBeHidden();
+    await expect(dropzone).toBeVisible();
+    await expect(page.getByText('Drop anything here')).toBeVisible();
+    await expect(
+      page.getByText('Or share to Bower from any app: it lands here too.'),
+    ).toBeHidden();
+    return;
+  }
+
+  await expect(dropzone).toBeHidden();
+  await expect(doors).toBeVisible();
+  await expect(
+    doors.getByRole('button', { name: /^Choose files/ }),
+  ).toBeVisible();
+  await expect(
+    doors.getByRole('button', { name: /^Take a photo/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Or share to Bower from any app: it lands here too.'),
+  ).toBeVisible();
+  await shot(page, testInfo, 'add-doors');
 });
 
 test('Add puts a file in the inbox', async ({ page }, testInfo) => {

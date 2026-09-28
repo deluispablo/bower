@@ -95,7 +95,8 @@ export function IconPdf(): JSX.Element {
   );
 }
 
-/** A photo or any other image on a folder screen (#349). */
+/** A photo or any other image on a folder screen (#349), and Add's
+ * "Choose files" door when what was picked is a picture. */
 export function IconImage(): JSX.Element {
   return (
     <Svg>
@@ -112,6 +113,26 @@ export function IconDoc(): JSX.Element {
     <Svg>
       <rect x="5" y="3" width="14" height="18" rx="2" />
       <path d="M9 9h6M9 13h6M9 17h4" />
+    </Svg>
+  );
+}
+
+/** Add's "Take a photo" door (spec C.6). */
+export function IconCamera(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </Svg>
+  );
+}
+
+/** Add's "From your Drive" door (spec C.6): the Drive triangle. */
+export function IconDrive(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M9 4h6l6 10-3 6H6l-3-6z" />
+      <path d="M3 14h18M9 4l3 10" />
     </Svg>
   );
 }
@@ -226,7 +247,8 @@ export function IconClock(): JSX.Element {
   );
 }
 
-/** A plain page: the help sheets' "Photo, files, your Drive, a link" (#330). */
+/** A plain page: the help sheets' "Photo, files, your Drive, a link"
+ * (#330), and Add's "Choose files" door (spec C.6). */
 export function IconFile(): JSX.Element {
   return (
     <Svg>
