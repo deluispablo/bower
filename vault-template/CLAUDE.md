@@ -1,8 +1,8 @@
 ---
 tags: [meta, personal]
 created: 2026-09-26
-updated: 2026-09-27
-bower_rules_version: 6
+updated: 2026-09-28
+bower_rules_version: 7
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)

@@ -459,8 +459,8 @@ if [ "$SMOKE_SCENARIO" = fail ]; then
 fi
 [ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/
 printf '%s\n' 'Working on 0-Inbox/a.pdf' 'Reading Clippings/b.md' \
-  'SUMMARY-MARKER 1 processed a.pdf' 'SUMMARY-MARKER 2 processed b.md' \
-  'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5'
+  'SUMMARY-MARKER 1 processed a.pdf' \
+  'Filed: 1 files' 'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5' 'SUMMARY-MARKER 6'
 STUB
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -698,7 +698,16 @@ grep -Fq 'Bower*.md` in `Clippings/`' <<<"$INGEST_PROMPT" ||
 grep -Fq 'the `.md` file next to the original with the same base name' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not explain the converted Markdown sibling'
 grep -Fq 'a converted document together with its `.md`' <<<"$INGEST_PROMPT" ||
-  die 'ingest prompt does not move the sibling to Processed/ with the original'
+  die 'ingest prompt does not file the sibling together with the original'
+grep -Fq 'Write no summary note unless something asks for one' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt does not file originals without a summary note (#368)'
+grep -Fq '   Filed: <n> files' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt report has no Filed line (#368)'
+RULEBOOK=$(cat "$HERE/../../vault-template/CLAUDE.md")
+grep -Fq 'Bower only files, by default' <<<"$RULEBOOK" ||
+  die 'the rulebook Ingest does not file by default (#368)'
+grep -Fq '· <type> · filed by Bower' <<<"$RULEBOOK" ||
+  die 'the rulebook does not index filed originals with their type (#368)'
 grep -Fq '`0-Inbox/Quarantine/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not tell the agent to leave Quarantine/ alone'
 grep -Fq 'listed by the runner' <<<"$INGEST_PROMPT" ||
@@ -732,9 +741,11 @@ expect_eq "$(post 2 p.kind)" ingest 'second kind'
 expect_eq "$(post 2 p.runId)" 4242 'done runId'
 expect_eq "$(post 2 p.processed)" \
   '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed'
-expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
+expect_eq "$(post 2 'p.summary.split("\n").length')" 6 'summary lines'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
-expect_eq "$(post 2 'p.summary.split("\n")[4]')" 'SUMMARY-MARKER 5' 'summary end'
+expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end'
+grep -Fxq 'Filed: 1 files' <<<"$(post 2 p.summary)" || die 'the Filed line is not in the summary'
+grep -q ' 1 originals filed$' "$STATE/out.log" || die 'filed count not logged'
 expect_eq "$(post 2 p.refused)" '[]' 'refused'
 expect_eq "$(post 1 'p.refused === undefined')" true 'running has no refused'
 expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'uploaded files (the manifest diff)'
@@ -898,9 +909,9 @@ expect_eq "$(posts_count)" 2 'status posts'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.processed)" \
   '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed'
-expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
+expect_eq "$(post 2 'p.summary.split("\n").length')" 6 'summary lines'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
-expect_eq "$(post 2 'p.summary.split("\n")[4]')" 'SUMMARY-MARKER 5' 'summary end'
+expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 1 'rclone deletefile calls'
 [ ! -e "$STATE/remote/0-Inbox/a.pdf" ] || die 'original back in 0-Inbox/ in Drive'
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive'

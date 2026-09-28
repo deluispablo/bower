@@ -854,7 +854,14 @@ done 3<"$PENDING_FILE"
 # --- report done ------------------------------------------------------------
 STEP='report done'
 log "$STEP"
-SUMMARY=$(tail -n 5 "$AGENT_OUT")
+# The agent's final report is its last lines: six for an ingest (Processed,
+# Filed, Created, Updated, Rules, Problems; issue #368), five for a lint (no
+# Filed line). The Filed count is logged as a number, nothing else.
+report_lines=5
+[ "$MODE" != ingest ] || report_lines=6
+SUMMARY=$(tail -n "$report_lines" "$AGENT_OUT")
+filed=$(awk '/^Filed: [0-9]+ files?$/ { n = $2 } END { print n }' <<<"$SUMMARY")
+[ -z "$filed" ] || log "$filed originals filed"
 if [ "$TOO_MANY_CHANGES" -eq 1 ]; then
   # Nothing was saved, so nothing was processed, whatever the agent said.
   SUMMARY="Refused: too many changes (more than $MAX_CHANGES files). Nothing was saved."
