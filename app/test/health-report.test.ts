@@ -336,7 +336,7 @@ describe('the Notes row and the Health bubble read the same "when" (#496)', () =
 
     expect(when).toBe('Yesterday');
     expect(healthRowSubtitle(2, when)).toBe(
-      'Yesterday · 2 small things to fix',
+      'Checked yesterday · 2 small things to fix',
     );
   });
 });

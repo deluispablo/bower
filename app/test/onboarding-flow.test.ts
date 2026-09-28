@@ -193,7 +193,7 @@ describe('The first-run interview (#198)', () => {
     await reachInterview();
     expect(heading()).toBe('Tell Bower about yourself');
 
-    void act(() => button('Everything I capture').click());
+    void act(() => button('Home and bills').click());
     void act(() => button('Next').click());
     void act(() => button('Spanish').click());
     void act(() => button('Next').click());
@@ -206,7 +206,7 @@ describe('The first-run interview (#198)', () => {
     await flush();
 
     expect(submitInterview).toHaveBeenCalledWith({
-      keep: 'Everything I capture',
+      keep: 'Home and bills',
       languages: 'Spanish',
       areas: ['Health', 'Career'],
       titleStyle: 'Short and plain',
