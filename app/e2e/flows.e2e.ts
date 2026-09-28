@@ -337,6 +337,9 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   await visible(
     page.getByRole('button', { name: 'Tidy up', exact: true }),
   ).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(confirm).toBeHidden();
 
   // Running: the scene, the count against the three things waiting, when
   // it started, the sentence, and the item being read.
