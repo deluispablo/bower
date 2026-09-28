@@ -241,6 +241,93 @@ describe('buildTree', () => {
   });
 });
 
+describe('buildTree with files (#588)', () => {
+  const PDF = 'application/pdf';
+  const JPG = 'image/jpeg';
+
+  it('puts files as leaf rows next to notes, all sorted by display title', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      entry('1-Projects/Flat hunt/Zoo plan.md'),
+      entry('1-Projects/Flat hunt/Arlington Road, 2 bed.pdf', PDF),
+      entry('1-Projects/Flat hunt/Budget.md'),
+      entry('1-Projects/Flat hunt/Window sign.jpg', JPG),
+    ]);
+    const flat = buildTree(index).folders[0]?.folders[0];
+    expect(flat?.files.map((f) => f.name)).toEqual([
+      'Arlington Road, 2 bed.pdf',
+      'Window sign.jpg',
+    ]);
+    expect(flat?.notes.map((n) => n.name)).toEqual([
+      'Budget.md',
+      'Zoo plan.md',
+    ]);
+    expect(flat?.items.map((n) => n.name)).toEqual([
+      'Arlington Road, 2 bed.pdf',
+      'Budget.md',
+      'Window sign.jpg',
+      'Zoo plan.md',
+    ]);
+  });
+
+  it("a folder's rows match its count", () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      entry('1-Projects/Flat hunt/Budget.md'),
+      entry('1-Projects/Flat hunt/Lease.pdf', PDF),
+      entry('1-Projects/Flat hunt/Sign.jpg', JPG),
+    ]);
+    const flat = buildTree(index).folders[0]?.folders[0];
+    expect(flat?.items).toHaveLength(
+      folderCounts(index).get('1-Projects/Flat hunt') ?? -1,
+    );
+  });
+
+  it('orders the five landmarks first in their fixed order, then the others', () => {
+    const index = buildVaultIndex([
+      dir('Zeta'),
+      dir('4-Archives'),
+      dir('Answers'),
+      dir('2-Areas'),
+      dir('0-Inbox'),
+      dir('3-Resources'),
+      dir('1-Projects'),
+      dir('Clippings'),
+    ]);
+    const expected = [
+      '0-Inbox',
+      '1-Projects',
+      '2-Areas',
+      '3-Resources',
+      '4-Archives',
+      'Answers',
+      'Clippings',
+      'Zeta',
+    ];
+    expect(buildTree(index).folders.map((f) => f.name)).toEqual(expected);
+    expect(
+      buildTree(index, 'modified')
+        .folders.slice(0, 5)
+        .map((f) => f.name),
+    ).toEqual(expected.slice(0, 5));
+  });
+
+  it('keeps files through a filter', () => {
+    const index = buildVaultIndex([
+      dir('Home'),
+      entry('Home/Boiler invoice.pdf', PDF),
+      entry('Home/Other.md'),
+    ]);
+    const filtered = filterTree(buildTree(index), 'boiler');
+    expect(filtered.folders[0]?.files.map((f) => f.name)).toEqual([
+      'Boiler invoice.pdf',
+    ]);
+    expect(filtered.folders[0]?.items).toHaveLength(1);
+  });
+});
+
 describe('filterTree', () => {
   it('returns the tree unchanged for a blank query', () => {
     const index = buildVaultIndex([

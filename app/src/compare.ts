@@ -49,13 +49,17 @@ export function notesOfKind(
 
 /**
  * The kinds a folder can compare (R-COMP-1): kinds with two or more notes
- * whose `compare` is `table`. Receipts and bookings have their own views
- * (#615) and contracts never compare. Most notes first, then the kinds'
- * own order.
+ * whose `compare` is `table`, `by-month` (receipts, #615) or `timeline`
+ * (bookings, #615). Contracts never compare. Most notes first, then the
+ * kinds' own order.
  */
 export function compareKinds(notes: readonly CompareNote[]): Kind[] {
   return KINDS.filter(
-    (kind) => kind.compare === 'table' && notesOfKind(notes, kind).length >= 2,
+    (kind) =>
+      (kind.compare === 'table' ||
+        kind.compare === 'by-month' ||
+        kind.compare === 'timeline') &&
+      notesOfKind(notes, kind).length >= 2,
   ).sort(
     (a, b) =>
       notesOfKind(notes, b).length - notesOfKind(notes, a).length ||
@@ -538,4 +542,242 @@ export function kindOfNote(note: CompareNote): Kind | undefined {
 export function statusValue(note: Pick<CompareNote, 'fields'>): string {
   const status = note.fields.status;
   return typeof status === 'string' ? status.trim().toLowerCase() : '';
+}
+
+// --- Receipts by month, bookings as a timeline (issue #615) -----------------
+
+const MONEY_FIELD: KindField = { key: '', label: '', type: 'money', group: '' };
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/** A sum as "£1,234.50"; whole amounts have no pence. */
+export function moneyOf(amount: number): string {
+  return formatFieldValue(MONEY_FIELD, Math.round(amount * 100) / 100);
+}
+
+/** One receipt under its month. */
+export interface ReceiptRow {
+  note: CompareNote;
+  shop: string;
+  /** "12 Sep", '' when the date was not read. */
+  date: string;
+  /** "£42.50", '' when the total was not read. */
+  total: string;
+}
+
+export interface MonthGroup {
+  /** `2026-09`, or `undated`. */
+  key: string;
+  /** "September 2026", or "No date". */
+  label: string;
+  total: number;
+  totalText: string;
+  receipts: ReceiptRow[];
+}
+
+export interface ReceiptsByMonth {
+  /** Newest month first; receipts with no readable date come last. */
+  months: MonthGroup[];
+  /** The receipts of the current year, up to now. `null` when there are none. */
+  year: { year: number; total: number; totalText: string } | null;
+}
+
+function kindField(kindId: string, key: string): KindField | undefined {
+  return kindById(kindId)?.fields.find((candidate) => candidate.key === key);
+}
+
+/**
+ * Receipts grouped by the month of their date, newest month first and the
+ * newest receipt first within it, each month with its total. `now` is the
+ * moment "the year so far" is counted to.
+ */
+export function receiptsByMonth(
+  notes: readonly CompareNote[],
+  now: Date = new Date(),
+): ReceiptsByMonth {
+  const dateField = kindField('receipt', 'date');
+  const shopField = kindField('receipt', 'shop');
+  const totalField = kindField('receipt', 'total');
+  const groups = new Map<string, MonthGroup & { stamp: number }>();
+  const stamps = new Map<string, number>();
+  let yearTotal = 0;
+  let yearCount = 0;
+  const year = now.getUTCFullYear();
+  for (const note of notes) {
+    const stamp = dateOf(note.fields.date);
+    const amount = numberOf(note.fields.total);
+    const when = stamp === null ? null : new Date(stamp);
+    const key =
+      when === null
+        ? 'undated'
+        : `${when.getUTCFullYear()}-${String(when.getUTCMonth() + 1).padStart(2, '0')}`;
+    let group = groups.get(key);
+    if (group === undefined) {
+      group = {
+        key,
+        label:
+          when === null
+            ? 'No date'
+            : `${MONTH_NAMES[when.getUTCMonth()] ?? ''} ${when.getUTCFullYear()}`,
+        total: 0,
+        totalText: '',
+        receipts: [],
+        stamp: stamp ?? -Infinity,
+      };
+      groups.set(key, group);
+    }
+    if (amount !== null) group.total += amount;
+    stamps.set(note.id, stamp ?? -Infinity);
+    group.receipts.push({
+      note,
+      shop:
+        (shopField === undefined
+          ? ''
+          : formatFieldValue(shopField, note.fields.shop)) || noteTitle(note),
+      date:
+        dateField === undefined || stamp === null
+          ? ''
+          : formatFieldValue(dateField, note.fields.date),
+      total:
+        totalField === undefined
+          ? ''
+          : formatFieldValue(totalField, note.fields.total),
+    });
+    if (
+      when !== null &&
+      amount !== null &&
+      when.getUTCFullYear() === year &&
+      when.getTime() <= now.getTime()
+    ) {
+      yearTotal += amount;
+      yearCount += 1;
+    }
+  }
+  const months = [...groups.values()].sort((a, b) => b.stamp - a.stamp);
+  for (const group of months) {
+    group.totalText = moneyOf(group.total);
+    group.receipts.sort(
+      (a, b) =>
+        (stamps.get(b.note.id) ?? 0) - (stamps.get(a.note.id) ?? 0) ||
+        a.shop.localeCompare(b.shop, 'en'),
+    );
+  }
+  return {
+    months: months.map((group) => ({
+      key: group.key,
+      label: group.label,
+      total: group.total,
+      totalText: group.totalText,
+      receipts: group.receipts,
+    })),
+    year:
+      yearCount === 0
+        ? null
+        : { year, total: yearTotal, totalText: moneyOf(yearTotal) },
+  };
+}
+
+/** One booking on the timeline. */
+export interface TimelineEntry {
+  note: CompareNote;
+  what: string;
+  /** "14 Nov", '' when the date was not read. */
+  date: string;
+  /** "18:30", '' when the booking has no time. */
+  time: string;
+  where: string;
+  reference: string;
+  /** Already over: faded on the timeline. */
+  past: boolean;
+}
+
+/** The `HH:MM` of a `when` value, '' when it has none. */
+function timeOf(raw: unknown): string {
+  if (raw instanceof Date) {
+    const hours = raw.getUTCHours();
+    const minutes = raw.getUTCMinutes();
+    return hours === 0 && minutes === 0
+      ? ''
+      : `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+  if (typeof raw !== 'string') return '';
+  const match = /^\d{4}-\d{2}-\d{2}[T ](\d{2}):(\d{2})/.exec(raw.trim());
+  return match === null ? '' : `${match[1] ?? ''}:${match[2] ?? ''}`;
+}
+
+/**
+ * Bookings in the order they happen, earliest first, by date and time, each
+ * marked past when it is already over at `now`. A booking with no readable
+ * date goes last and is never past.
+ */
+export function bookingsTimeline(
+  notes: readonly CompareNote[],
+  now: Date = new Date(),
+): TimelineEntry[] {
+  const text = (key: string, note: CompareNote): string => {
+    const found = kindField('booking', key);
+    return found === undefined ? '' : formatFieldValue(found, note.fields[key]);
+  };
+  const dayStart = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const rows = notes.map((note) => {
+    const day = dateOf(note.fields.when);
+    const time = timeOf(note.fields.when);
+    const [hours = 0, minutes = 0] = time.split(':').map(Number);
+    const stamp = day === null ? null : day + (hours * 60 + minutes) * 60000;
+    let past = false;
+    if (stamp !== null && day !== null) {
+      past = time === '' ? day < dayStart : stamp < now.getTime();
+    }
+    const entry: TimelineEntry = {
+      note,
+      what: text('what', note) || noteTitle(note),
+      date: day === null ? '' : text('when', note),
+      time,
+      where: text('where', note),
+      reference: text('reference', note),
+      past,
+    };
+    return { entry, stamp };
+  });
+  rows.sort((a, b) => {
+    if (a.stamp === null && b.stamp === null) return 0;
+    if (a.stamp === null) return 1;
+    if (b.stamp === null) return -1;
+    return a.stamp - b.stamp;
+  });
+  return rows.map((row) => row.entry);
+}
+
+/** The explainer above the months (issue #615). */
+export function receiptsExplainer(count: number): string {
+  return (
+    `You saved ${countWord(count)} receipts here. Bower read the total, the ` +
+    'shop and the date from each one, so they add up by month.'
+  );
+}
+
+/** The explainer above the timeline (issue #615). */
+export function timelineExplainer(count: number): string {
+  return (
+    `You saved ${countWord(count)} bookings here. Bower read the date, the ` +
+    'place and the reference from each one, so they line up in the order ' +
+    'they happen.'
+  );
 }

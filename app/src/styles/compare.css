@@ -292,3 +292,107 @@
   font-size: var(--text-sm);
   text-decoration: none;
 }
+
+/* Receipts by month and bookings as a timeline (issue #615). */
+
+.compare-months,
+.compare-timeline {
+  max-width: 720px;
+}
+
+.compare-month-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.compare-month-total {
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-month-list,
+.compare-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.compare-receipt {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--space-3);
+  align-items: baseline;
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+
+.compare-receipt-date {
+  color: var(--color-text-muted);
+}
+
+.compare-receipt-total {
+  min-width: 4.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-year {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 2px solid var(--color-border-strong);
+  font-size: var(--text-base);
+}
+
+.compare-steps {
+  position: relative;
+  padding-left: var(--space-5);
+  border-left: 2px solid var(--color-border-strong);
+}
+
+.compare-step {
+  position: relative;
+  padding-bottom: var(--space-4);
+}
+
+.compare-step::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--space-5) - 6px);
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand);
+}
+
+.compare-step-past {
+  opacity: 0.55;
+}
+
+.compare-step-past::before {
+  background: var(--color-border-strong);
+}
+
+.compare-step-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+
+.compare-step-when,
+.compare-step-where,
+.compare-step-ref {
+  color: var(--color-text-muted);
+}

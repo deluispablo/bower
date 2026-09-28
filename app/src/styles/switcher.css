@@ -76,31 +76,6 @@
   font-size: var(--text-sm);
 }
 
-.switcher-recent {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0 0 var(--space-2);
-  padding: 0;
-  list-style: none;
-}
-
-.switcher-recent button {
-  width: 100%;
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.switcher-recent button:hover {
-  background: var(--color-surface);
-}
-
 .switcher-list {
   display: flex;
   flex-direction: column;
@@ -168,6 +143,144 @@
   background: none;
   color: var(--color-link);
   font-weight: 600;
+}
+
+/* v4 search (#593, boards Phone-Search-Start / Phone-Search / Phone-Search-None) */
+
+.switcher-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.switcher-chips:empty {
+  display: none;
+}
+
+.switcher-chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.switcher-chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.switcher-chip[aria-pressed='true'],
+.switcher-time[data-active='true'] {
+  border-color: var(--color-link);
+  background: var(--color-surface);
+}
+
+.switcher-chip i {
+  color: var(--color-text-muted);
+  font-style: normal;
+}
+
+.switcher-chip .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.switcher-time select {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.switcher-link {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: none;
+  background: none;
+  color: var(--color-link);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+/* A status line that only a screen reader needs. */
+.switcher-quiet {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.switcher-hint {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.switcher-recent-group .switcher-heading {
+  margin: 0;
+}
+
+.switcher-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+}
+
+.switcher-row-icon-file {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.switcher-row-path .folder-mark {
+  vertical-align: middle;
+}
+
+.switcher-none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-3) 0;
+  text-align: center;
+}
+
+.switcher-none-title {
+  color: var(--color-text);
+  font-size: var(--text-lg);
+}
+
+.switcher-none-text {
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* R-SEARCH-9: on the phone the bird would sit over the field, so it stays away. */
+@media (max-width: 899px) {
+  .switcher-bird {
+    display: none;
+  }
 }
 
 @keyframes switcher-in {

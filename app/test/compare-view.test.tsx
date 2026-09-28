@@ -285,3 +285,69 @@ describe('Compare on a desktop', () => {
     expect(select.value).toBe('to view');
   });
 });
+
+describe('Compare for receipts and bookings', () => {
+  function mountKind(items: CompareNote[]): Promise<void> {
+    return act(() => {
+      render(h(CompareView, { notes: items, folderPath: 'Receipts' }), root);
+    });
+  }
+  const of = (
+    kind: string,
+    name: string,
+    fields: Record<string, unknown>,
+  ): CompareNote => ({ ...note(name, fields), kind });
+
+  beforeEach(() => {
+    setDesktop(false);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-28T10:00:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('adds receipts up by month with the year so far', async () => {
+    await mountKind([
+      of('receipt', 'A', { shop: 'Bakery', date: '2026-09-21', total: 7.5 }),
+      of('receipt', 'B', {
+        shop: 'Corner Shop',
+        date: '2026-08-03',
+        total: 12,
+      }),
+      of('receipt', 'C', { shop: 'Hardware', date: '2026-08-20', total: 40 }),
+    ]);
+    expect(root.querySelector('.compare-explainer')?.textContent).toBe(
+      'You saved three receipts here. Bower read the total, the shop and the date from each one, so they add up by month.',
+    );
+    const heads = [...root.querySelectorAll('.compare-month-head')].map(
+      (el) => el.textContent,
+    );
+    expect(heads).toEqual(['September 2026£7.50', 'August 2026£52']);
+    expect(root.querySelectorAll('.compare-receipt')).toHaveLength(3);
+    expect(root.querySelector('.compare-year')?.textContent).toBe(
+      '2026 so far£59.50',
+    );
+  });
+
+  it('lists bookings on a timeline and fades the past ones', async () => {
+    await mountKind([
+      of('booking', 'Hotel', {
+        what: 'Hotel',
+        when: '2026-11-14T15:00',
+        where: 'Lisbon',
+        reference: 'H123',
+      }),
+      of('booking', 'Train', { what: 'Train', when: '2026-09-01T08:30' }),
+    ]);
+    const steps = [...root.querySelectorAll('.compare-step')];
+    expect(
+      steps.map((s) => s.querySelector('.compare-step-what')?.textContent),
+    ).toEqual(['Train', 'Hotel']);
+    expect(steps[0]?.classList.contains('compare-step-past')).toBe(true);
+    expect(steps[1]?.classList.contains('compare-step-past')).toBe(false);
+    expect(steps[1]?.textContent).toContain('14 Nov, 15:00');
+    expect(steps[1]?.textContent).toContain('Lisbon');
+    expect(steps[1]?.textContent).toContain('Ref H123');
+  });
+});
