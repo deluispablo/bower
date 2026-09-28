@@ -256,7 +256,7 @@ export function buildTree(
  * One rule for every screen (spec R-SYS-7): notes plus files, system and
  * hidden files never counted (the index already leaves them out).
  * `includeFiles` (on by default) also walks `index.files` (everything that is not a note
- * or a folder) into the same totals — what the folder menu, the Notes
+ * or a folder) into the same totals — what the Notes
  * tree and the desktop sidebar show (#425: they used to count notes only,
  * so the same folder read a different number there than on its own
  * screen, which always counted both, "n files · n notes"). None of
