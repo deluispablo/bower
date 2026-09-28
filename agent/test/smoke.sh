@@ -194,6 +194,18 @@ cat >"$STUBS/rclone" <<'STUB'
 # (appended to moved.txt as "<old> -> <new>").
 set -euo pipefail
 remote="$SMOKE_STATE/remote"
+# Drive ids (#597): "<id><TAB><path>" per remote file ever listed.
+ids="$SMOKE_STATE/ids.tsv"
+move_id() {
+  [ -f "$ids" ] || return 0
+  O="$1" N="$2" awk -F '\t' -v OFS='\t' '$2 == ENVIRON["O"] { $2 = ENVIRON["N"] } 1' "$ids" >"$ids.tmp"
+  mv "$ids.tmp" "$ids"
+}
+forget_id() {
+  [ -f "$ids" ] || return 0
+  O="$1" awk -F '\t' '$2 != ENVIRON["O"]' "$ids" >"$ids.tmp"
+  mv "$ids.tmp" "$ids"
+}
 # The run's outcome (#315) goes through its own work-dir folder, "outcome":
 # those calls and uploads are recorded apart, so every other scenario's
 # counts stay about the agent's own changes.
@@ -210,8 +222,11 @@ for a in "$@"; do
   [ "$prev" != --filter-from ] || [ -f "$SMOKE_STATE/system-filter.txt" ] || cp "$a" "$SMOKE_STATE/system-filter.txt"
   prev=$a
 done
+# The tree listings with ids and the .bower/paths.json upload (#597) are
+# recorded apart too, in paths-calls.log.
 case "$*" in
   */outcome* | *' vault:log.md '*) printf '%s\n' "$plain" >>"$SMOKE_STATE/outcome-calls.log" ;;
+  lsjson\ * | */paths-out*) printf '%s\n' "$plain" >>"$SMOKE_STATE/paths-calls.log" ;;
   *) printf '%s\n' "$plain" >>"$SMOKE_STATE/calls.log" ;;
 esac
 if [ ! -f "$SMOKE_STATE/rclone-env.log" ]; then
@@ -235,6 +250,23 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
     [ "$SMOKE_SCENARIO" = nocfg ] || echo '# rules' >"$remote/CLAUDE.md"
     case "$SMOKE_SCENARIO" in
       empty | reauth) ;;
+      paths)
+        # Nothing pending, a few filed files, a system file and index.md
+        # rows naming two of them (#597): the person moves and deletes
+        # files between runs.
+        mkdir -p "$remote/1-Projects" "$remote/2-Areas" "$remote/3-Resources" "$remote/.obsidian"
+        echo pdf >"$remote/3-Resources/lease.pdf"
+        echo pdf >"$remote/3-Resources/old.pdf"
+        echo '# Plan' >"$remote/2-Areas/plan.md"
+        echo ini >"$remote/2-Areas/desktop.ini"
+        echo '{}' >"$remote/.obsidian/app.json"
+        printf -- '%s\n' '# Index' '' '## Resources' \
+          '- [[3-Resources/lease.pdf]] · PDF · filed by Bower' \
+          '- [[3-Resources/old.pdf]] · PDF · filed by Bower' \
+          '- [[2-Areas/plan]] · Note · filed by Bower' '```' '- [[3-Resources/old.pdf]]' '```' \
+          >"$remote/index.md"
+        echo '# Log' >"$remote/log.md"
+        ;;
       *)
         echo pdf >"$remote/0-Inbox/a.pdf"
         echo old >"$remote/0-Inbox/Processed/old.pdf"
@@ -442,6 +474,7 @@ elif [ "$1" = copy ] && [ "$3" = vault: ]; then
         cp "$2/$path" "$remote/$path"
         case "$2" in
           */outcome) echo "$path" >>"$SMOKE_STATE/outcome-uploaded.txt"; continue ;;
+          */paths-out) echo "$path" >>"$SMOKE_STATE/paths-uploaded.txt"; continue ;;
         esac
         printf '%s\n' "$path" >>"$SMOKE_STATE/uploaded.txt"
       done <"$5"
@@ -458,6 +491,7 @@ elif [ "$1" = deletefile ]; then
   target="$remote/${2#vault:}"
   [ -f "$target" ] || exit 4
   rm "$target"
+  forget_id "${2#vault:}"
 elif [ "$1" = mkdir ]; then
   mkdir -p "$remote/${2#vault:}"
 elif [ "$1" = moveto ] && [ "${2%%:*}" = vault ] && [ "${3%%:*}" = vault ]; then
@@ -468,6 +502,54 @@ elif [ "$1" = moveto ] && [ "${2%%:*}" = vault ] && [ "${3%%:*}" = vault ]; then
   [ -d "$(dirname "$remote/${3#vault:}")" ] || exit 3
   mv "$remote/${2#vault:}" "$remote/${3#vault:}"
   printf '%s -> %s\n' "${2#vault:}" "${3#vault:}" >>"$SMOKE_STATE/moved.txt"
+  move_id "${2#vault:}" "${3#vault:}"
+elif [ "$1" = lsjson ] && [ "$2" = vault: ]; then
+  # "lsjson vault: -R ...": every remote file with a Drive id (#597), kept
+  # in ids.tsv ("<id><TAB><path>"): a file gets an id the first time it is
+  # listed and keeps it through moveto. Like rclone, it honours --exclude
+  # and the filter file's "- " lines ("<dir>/**" at any depth, anything
+  # else against the file name, ignoring case), so a filter run.sh forgot
+  # would show in the listing.
+  touch "$ids"
+  pats=()
+  prev=''
+  for a in "$@"; do
+    case "$prev" in
+      --exclude) pats+=("$a") ;;
+      --filter-from)
+        while IFS= read -r l; do [ "${l#- }" = "$l" ] || pats+=("${l#- }"); done <"$a"
+        ;;
+    esac
+    prev=$a
+  done
+  shopt -s nocasematch
+  sep=''
+  printf '['
+  while IFS= read -r path; do
+    skip=''
+    for pat in "${pats[@]}"; do
+      case "$pat" in
+        */'**')
+          d=${pat%/\*\*}
+          if [[ "$path" == $d/* || "$path" == */$d/* ]]; then skip=1; fi
+          ;;
+        *) if [[ "${path##*/}" == $pat ]]; then skip=1; fi ;;
+      esac
+    done
+    [ -z "$skip" ] || continue
+    id=$(P="$path" awk -F '\t' '$2 == ENVIRON["P"] { print $1; exit }' "$ids")
+    if [ -z "$id" ]; then
+      n=$(($(cat "$SMOKE_STATE/ids.next" 2>/dev/null || echo 0) + 1))
+      echo "$n" >"$SMOKE_STATE/ids.next"
+      id="id-$n"
+      printf '%s\t%s\n' "$id" "$path" >>"$ids"
+    fi
+    esc=$(printf '%s' "$path" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    printf '%s{"Path":"%s","Name":"%s","Size":1,"IsDir":false,"ID":"%s"}' "$sep" "$esc" "${esc##*/}" "$id"
+    sep=','
+  done < <(cd "$remote" && find . -type f | sed 's#^\./##' | LC_ALL=C sort)
+  printf ']\n'
+  exit 0
 fi
 echo "rclone stub output naming 0-Inbox/a.pdf"
 STUB
@@ -779,6 +861,29 @@ if (filter === '$ARGS.named') {
     process.exit(5);
   }
   for (const f of files) process.stdout.write(String(f.name) + '\n');
+} else if (filter.startsWith('.[] | select((.IsDir | not)') && flags.has('r')) {
+  // run.sh's LISTING_FILTER (#597).
+  for (const o of JSON.parse(input())) {
+    if (o.IsDir || typeof o.ID !== 'string' || /[\t\n]/.test(o.ID + o.Path)) continue;
+    process.stdout.write(o.ID + '\t' + o.Path + '\n');
+  }
+} else if (filter.startsWith('to_entries[]') && flags.has('r')) {
+  // run.sh's PATHS_READ_FILTER (#597).
+  const m = JSON.parse(input());
+  if (m === null || typeof m !== 'object' || Array.isArray(m)) {
+    process.stderr.write('jq stand-in: not an object\n');
+    process.exit(5);
+  }
+  for (const [k, v] of Object.entries(m)) {
+    if (typeof v === 'string' && !/[\t\n]/.test(k + v)) process.stdout.write(k + '\t' + v + '\n');
+  }
+} else if (filter.startsWith('[inputs | split(') && flags.has('R')) {
+  // run.sh's PATHS_WRITE_FILTER (#597).
+  const lines = input().split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  const m = {};
+  for (const l of lines) { const parts = l.split('\t'); m[parts[0]] = parts[1]; }
+  process.stdout.write(JSON.stringify(m) + '\n');
 } else if (filter === '.[$k] // empty' && flags.has('r')) {
   const v = JSON.parse(input())[named.k];
   if (v !== undefined && v !== null && v !== false) {
@@ -838,6 +943,8 @@ run_case() {
   : >"$STATE/posts.log"
   : >"$STATE/uploaded.txt"
   : >"$STATE/moved.txt"
+  : >"$STATE/paths-calls.log"
+  : >"$STATE/paths-uploaded.txt"
   rm -f "$STATE/curl-env-leak" "$STATE/ticket-retired" "$STATE/final-tries"
   # No wait between the final report's tries (#315), unless a case says.
   local settings=("BOWER_API_URL=$API_URL" "BOWER_RUN_TICKET=$RUN_TICKET" BOWER_REPORT_BACKOFF=0) extra=() arg
@@ -2252,3 +2359,63 @@ expect_eq "$(cat "$book/log.md")" "$(printf '%s\n' '# Log' \
 cmp -s "$STATE/after-1.txt" "$STATE/after-2.txt" || die 'the second pass changed a file'
 [ ! -s "$STATE/upload-2.txt" ] || die 'the second pass listed files to upload'
 echo "ok the bookkeeping books each move once"
+
+# The reconcile phase (#597): the runner leaves .bower/paths.json (Drive id
+# to path) in the vault at the end of every run and, at the start of the
+# next, books the moves the person made in between in index.md and log.md,
+# and marks the rows of files that are gone "(missing)". Three runs over
+# the same fake Drive, with nothing pending.
+paths_values() {
+  node -e 'const m = JSON.parse(require("fs").readFileSync(0, "utf8"));
+    process.stdout.write(Object.values(m).sort().join("|"))' <"$STATE/remote/.bower/paths.json"
+}
+MODE=ingest
+run_case paths
+expect_eq "$RC" 0 'exit code (first run)'
+# The first run: no reconciliation, just the file.
+[ -f "$STATE/remote/.bower/paths.json" ] || die 'the first run wrote no .bower/paths.json'
+expect_eq "$(cat "$STATE/paths-uploaded.txt")" '.bower/paths.json' 'paths file uploaded'
+expect_eq "$(calls rclone | grep -vc '^rclone sync vault: ' || true)" 0 'rclone calls besides sync down and the paths'
+expect_eq "$(grep -c '^rclone lsjson vault: -R ' "$STATE/paths-calls.log")" 2 'tree listings with ids'
+if grep '^rclone lsjson ' "$STATE/filter-calls.log" | grep -qv -- ' --filter-from [^ ]* --ignore-case'; then
+  die 'a tree listing ran without the system-file filter'
+fi
+expect_eq "$(paths_values)" \
+  '0-Inbox/.gitkeep|2-Areas/plan.md|3-Resources/lease.pdf|3-Resources/old.pdf|CLAUDE.md|index.md|log.md' \
+  'paths file (no system file, no .obsidian/ or .bower/)'
+[ ! -s "$STATE/uploaded.txt" ] || die 'the first run uploaded a file'
+grep -q '\[\[3-Resources/lease.pdf\]\]' "$STATE/remote/index.md" || die 'the first run changed index.md'
+! grep -q 'Moved by you' "$STATE/remote/log.md" || die 'the first run logged a move'
+expect_content_free
+
+# Between runs the person moves one file and deletes another in Drive.
+mkdir -p "$STATE/remote/1-Projects/Flat hunt"
+mv "$STATE/remote/3-Resources/lease.pdf" "$STATE/remote/1-Projects/Flat hunt/lease.pdf"
+awk -F '\t' -v OFS='\t' '$2 == "3-Resources/lease.pdf" { $2 = "1-Projects/Flat hunt/lease.pdf" } 1' \
+  "$STATE/ids.tsv" >"$STATE/ids.tmp"
+mv "$STATE/ids.tmp" "$STATE/ids.tsv"
+rm "$STATE/remote/3-Resources/old.pdf"
+run_case paths
+expect_eq "$RC" 0 'exit code (second run)'
+expect_eq "$(cat "$STATE/remote/index.md")" "$(printf -- '%s\n' '# Index' '' '## Resources' \
+  '- [[1-Projects/Flat hunt/lease.pdf]] · PDF · filed by Bower' \
+  '- [[3-Resources/old.pdf]] · PDF · filed by Bower (missing)' \
+  '- [[2-Areas/plan]] · Note · filed by Bower' '```' '- [[3-Resources/old.pdf]]' '```')" \
+  'index.md after the moves the person made'
+expect_eq "$(grep -c 'Moved by you' "$STATE/remote/log.md")" 1 'Moved by you lines'
+grep -Eq '^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} · Moved by you: 3-Resources/lease\.pdf → 1-Projects/Flat hunt/lease\.pdf$' \
+  "$STATE/remote/log.md" || die 'no Moved by you line for the move'
+expect_eq "$(LC_ALL=C sort "$STATE/uploaded.txt" | tr '\n' '|')" 'index.md|log.md|' 'uploaded files (the reconciled rows and log)'
+expect_eq "$(paths_values)" \
+  '0-Inbox/.gitkeep|1-Projects/Flat hunt/lease.pdf|2-Areas/plan.md|CLAUDE.md|index.md|log.md' \
+  'paths file after the moves'
+expect_content_free
+
+# A third run with nothing moved changes nothing: no second log line, no
+# second mark.
+run_case paths
+expect_eq "$RC" 0 'exit code (third run)'
+expect_eq "$(grep -c 'Moved by you' "$STATE/remote/log.md")" 1 'Moved by you lines after a quiet run'
+expect_eq "$(grep -c '(missing)' "$STATE/remote/index.md")" 1 'missing marks after a quiet run'
+[ ! -s "$STATE/uploaded.txt" ] || die 'a quiet run uploaded a file'
+echo "ok the runner reconciles moves the person made"
