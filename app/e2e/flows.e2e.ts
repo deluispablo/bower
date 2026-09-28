@@ -1230,7 +1230,9 @@ test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#
   await page.goto('/folder/1-Projects');
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.getByText('Nothing here yet.')).toBeHidden();
-  await expect(page.getByText(/notes in /)).toBeVisible();
+  // #424: the total is real (2 + 3 + 4 across three subfolders), but no
+  // single one of them holds all nine, so none is named.
+  await expect(page.getByText('9 notes in its folders')).toBeVisible();
   await shot(page, testInfo, 'folder-notes-elsewhere');
 });
 
