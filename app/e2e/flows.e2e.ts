@@ -2468,7 +2468,7 @@ test('folder counts add files and notes together, the same total the folder scre
     await bar.getByRole('button', { name: 'Your folders' }).click();
     const menu = page.getByRole('dialog', { name: 'Your folders' });
     await expect(
-      menu.getByRole('link', { name: /^0-Inbox.*added\D*2$/ }),
+      menu.getByRole('link', { name: /^0-Inbox.*tidy-up\D*2$/ }),
     ).toBeVisible();
     await expect(
       menu.getByRole('link', { name: /^1-Projects.*end date\D*15$/ }),
@@ -2498,7 +2498,7 @@ test('a project folder lists its files and notes together, newest first, with wh
     page.getByRole('heading', { level: 1, name: 'Kitchen Refresh' }),
   ).toBeVisible();
   await expect(page.locator('.folder-meta')).toHaveText(
-    '1-Projects · 2 files · 3 notes',
+    'Projects · 2 files · 3 notes',
   );
 
   const rows = page.locator('.folder-item');
