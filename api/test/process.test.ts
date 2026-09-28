@@ -96,12 +96,14 @@ async function sessionCookie(): Promise<string> {
 async function postProcess(
   fetchImpl: FetchLike,
   cookie?: string,
+  body?: string,
 ): Promise<Response> {
   const headers: Record<string, string> = { origin: env.APP_ORIGIN };
   if (cookie !== undefined) headers.cookie = cookie;
+  if (body !== undefined) headers['content-type'] = 'application/json';
   return createApp({ fetchImpl }).request(
     `${API}/process`,
-    { method: 'POST', headers },
+    { method: 'POST', headers, ...(body === undefined ? {} : { body }) },
     env,
   );
 }
@@ -278,12 +280,13 @@ describe('POST /process', () => {
     expect(call?.headers.get('user-agent')).toBe('bower-api');
     const sent = call?.body as {
       event_type: string;
-      client_payload: { vault_id: string; ticket: string };
+      client_payload: { vault_id: string; ticket: string; scope: string };
     };
     const { ticket } = sent.client_payload;
+    // No body: a tidy-up, everything in the inbox.
     expect(sent).toEqual({
       event_type: 'ingest',
-      client_payload: { vault_id: USER_ID, ticket },
+      client_payload: { vault_id: USER_ID, ticket, scope: 'all' },
     });
     // The run's ticket: 32 random bytes, only its hash kept, and it lives
     // as long as the queued and running windows together.
@@ -297,6 +300,72 @@ describe('POST /process', () => {
     expect(await getRun(kv, USER_ID)).toEqual(run);
     expect(await getQuota(kv, USER_ID, today())).toBe(1);
   });
+
+  it('passes scope "instructions" through to the dispatch (#344)', async () => {
+    await seedUser();
+    const github = githubStub();
+
+    const response = await postProcess(
+      github.fetchImpl,
+      await sessionCookie(),
+      JSON.stringify({ scope: 'instructions' }),
+    );
+
+    expect(response.status).toBe(202);
+    const sent = github.calls[0]?.body as {
+      client_payload: { scope: string };
+    };
+    expect(sent.client_payload.scope).toBe('instructions');
+    expect(await getQuota(kv, USER_ID, today())).toBe(1);
+  });
+
+  it('treats an empty object or scope "all" as a tidy-up', async () => {
+    await seedUser();
+    const github = githubStub();
+
+    await postProcess(github.fetchImpl, await sessionCookie(), '{}');
+    await kv.delete(keys.run(USER_ID));
+    await postProcess(
+      github.fetchImpl,
+      await sessionCookie(),
+      JSON.stringify({ scope: 'all' }),
+    );
+
+    expect(
+      github.calls.map(
+        (call) =>
+          (call.body as { client_payload: { scope: string } }).client_payload
+            .scope,
+      ),
+    ).toEqual(['all', 'all']);
+  });
+
+  it.each([
+    ['an unknown scope', JSON.stringify({ scope: 'everything' })],
+    ['a scope that is not a string', JSON.stringify({ scope: 1 })],
+    ['a body that is not an object', JSON.stringify(['instructions'])],
+    ['a body that is not JSON', 'scope=instructions'],
+  ])(
+    'answers 400 bad_request for %s, dispatching and counting nothing',
+    async (_label, body) => {
+      await seedUser();
+      const github = githubStub();
+
+      const response = await postProcess(
+        github.fetchImpl,
+        await sessionCookie(),
+        body,
+      );
+
+      expect(response.status).toBe(400);
+      const { error } = await response.json<ErrorBody>();
+      expect(error.code).toBe('bad_request');
+      expect(github.calls).toHaveLength(0);
+      expect(await getRun(kv, USER_ID)).toBeUndefined();
+      expect(await getRunTicket(kv, USER_ID, 'ingest')).toBeUndefined();
+      expect(await getQuota(kv, USER_ID, today())).toBe(0);
+    },
+  );
 
   it('returns the active run on a second press without dispatching again', async () => {
     await seedUser();

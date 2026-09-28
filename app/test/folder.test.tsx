@@ -10,22 +10,40 @@ import { buildVaultIndex } from '../src/vault-index.js';
 
 const route = { params: { path: '1-Projects' } };
 
-function file(path: string, mimeType = 'text/markdown'): DriveFile {
+function file(
+  path: string,
+  mimeType = 'text/markdown',
+  modifiedTime?: string,
+): DriveFile {
   return {
     id: `id-${path}`,
     name: path.split('/').pop() ?? path,
     mimeType,
     parents: ['FOLDER_ID'],
     path,
+    ...(modifiedTime === undefined ? {} : { modifiedTime }),
   };
 }
+
+/** "Now" for the age lines (#431): the fixture's times are relative to it. */
+const NOW = Date.parse('2026-09-28T12:00:00Z');
 
 const files: DriveFile[] = [
   file('1-Projects', FOLDER_MIME),
   file('1-Projects/Flat hunt', FOLDER_MIME),
-  file('1-Projects/Flat hunt/Flat hunt.md'),
+  file(
+    '1-Projects/Flat hunt/Flat hunt.md',
+    'text/markdown',
+    '2026-09-20T09:00:00Z',
+  ),
+  file(
+    '1-Projects/Flat hunt/Lease 2026.pdf',
+    'application/pdf',
+    '2026-09-28T08:00:00Z',
+  ),
   file('2-Areas', FOLDER_MIME),
   file('2-Areas/Cooking', FOLDER_MIME),
+  file('2-Areas/Cooking/Sourdough.md', 'text/markdown', '2026-09-23T09:00:00Z'),
 ];
 
 vi.mock('preact-iso', () => ({
@@ -61,9 +79,12 @@ function mount(): void {
 
 beforeEach(() => {
   route.params.path = '1-Projects';
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   void act(() => {
     render(null, root);
   });
@@ -124,5 +145,72 @@ describe('Folder More menu (#352)', () => {
     );
     expect(labels).toContain('Pin to Home');
     expect(labels).not.toContain('Edit the text');
+  });
+});
+
+describe('Root folder screen details (#431, Phone-Folder board)', () => {
+  function heading(): string | null | undefined {
+    return root.querySelector('.folder-head h1')?.textContent;
+  }
+
+  function meta(): string | null | undefined {
+    return root.querySelector('.folder-meta')?.textContent;
+  }
+
+  it('heads a root folder with its name, the numeric prefix stripped', () => {
+    mount();
+    expect(heading()).toBe('Projects');
+    route.params.path = '2-Areas';
+    mount();
+    expect(heading()).toBe('Areas');
+  });
+
+  it('keeps the full name for a folder that is not a root', () => {
+    route.params.path = '1-Projects/Flat hunt';
+    mount();
+    expect(heading()).toBe('Flat hunt');
+  });
+
+  it('reads "N projects · N things" for 1-Projects', () => {
+    mount();
+    expect(meta()).toBe('1 project · 2 things');
+  });
+
+  it('keeps the plain notes and folders line for another root folder', () => {
+    route.params.path = '2-Areas';
+    mount();
+    expect(meta()).toBe('1 note · 1 folder');
+  });
+
+  it('gives each subfolder row a second line: things and when updated', () => {
+    mount();
+    const row = root.querySelector(
+      'a.folder-row[href="/folder/1-Projects/Flat%20hunt"]',
+    );
+    expect(row?.querySelector('.folder-row-detail')?.textContent).toBe(
+      '2 things · updated today',
+    );
+    expect(row?.querySelector('.folder-row-count')).toBeNull();
+    route.params.path = '2-Areas';
+    mount();
+    const cooking = root.querySelector(
+      'a.folder-row[href="/folder/2-Areas/Cooking"]',
+    );
+    expect(cooking?.querySelector('.folder-row-detail')?.textContent).toBe(
+      '1 thing · 5 d',
+    );
+  });
+});
+
+describe('Ask Bower about it chip (#354)', () => {
+  it('prefills "About <folder>: " and nothing else from the folder', () => {
+    route.params.path = '1-Projects/Flat hunt';
+    mount();
+    const chip = Array.from(
+      root.querySelectorAll<HTMLAnchorElement>('.folder-chips a.chip'),
+    ).find((a) => a.textContent?.includes('Ask Bower about it'));
+    expect(chip?.getAttribute('href')).toBe(
+      `/bower?text=${encodeURIComponent('About Flat hunt: ')}`,
+    );
   });
 });

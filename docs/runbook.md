@@ -232,7 +232,7 @@ Each Worker secret is rotated the same way — pipe the new value into `wrangler
 
 ### Quotas
 
-`DAILY_RUN_LIMIT` (default 20) caps `/process` runs per vault per day; `DEFAULT_MAX_TURNS` (default 30) caps how many turns the agent takes per run, unless the instance repo's `BOWER_MAX_TURNS` variable overrides it. Change either in `wrangler.local.toml`'s `[vars]` and redeploy (step 3.6 above).
+`DAILY_RUN_LIMIT` (default 20) caps `/process` runs per vault per day; `DEFAULT_MAX_TURNS` (default 30) caps how many turns the agent takes per run, unless the instance repo's `BOWER_MAX_TURNS` variable overrides it. Change either in `wrangler.local.toml`'s `[vars]` and redeploy (step 3.6 above). A waiting request's **Do it now** on the Bower tab is a run too (`POST /process` with `scope: "instructions"`) and counts the same; the dispatch carries `client_payload.scope`, which the runner does not honour yet (#373), so until then Do it now tidies up the whole inbox like Tidy up.
 
 The runner also caps what one run may change: `BOWER_MAX_CHANGES` (default 200) is the most files a run may add or change. Above it, `agent/run.sh` reverts the whole run: nothing is uploaded or deleted, originals stay in the inbox, and the report's summary starts `Refused: too many changes`. The workflows do not pass it yet, so every instance uses the default; to change it, add `BOWER_MAX_CHANGES: <n>` to the `Run` step's `env:` in both workflows. Files the agent may not change (anything outside the vault's known folders, `CLAUDE.md`, `README.md`, `.claude/`) are reverted the same way, one by one; see "Protected paths and the post-run audit" in `agent/README.md`.
 
