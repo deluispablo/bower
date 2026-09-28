@@ -1226,7 +1226,12 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
     'the Notes tab is phone-only; desktop keeps the sidebar',
   );
   await openHome(page);
-  await page.getByRole('link', { name: 'Notes' }).click();
+  // Scoped to the bottom nav (#367 added a note titled "Notes from the
+  // viewing", otherwise an ambiguous substring match on Home's own list).
+  await page
+    .locator('nav.bottom-nav')
+    .getByRole('link', { name: 'Notes' })
+    .click();
   await expect(page).toHaveURL(/\/notes$/);
 
   const bar = page.locator('header.topbar');
@@ -1796,15 +1801,16 @@ test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#
 }, testInfo) => {
   await openHome(page);
   // Projects (the demo fixture) has no notes of its own — Lisbon Trip,
-  // Kitchen Refresh and Half Marathon hold all of them — a real instance
-  // of 1.9: the header's count is the whole subtree, the empty state used
-  // to say "Nothing here yet" regardless.
+  // Kitchen Refresh, Half Marathon and Flat hunt hold all of them — a real
+  // instance of 1.9: the header's count is the whole subtree, the empty
+  // state used to say "Nothing here yet" regardless.
   await page.goto('/folder/1-Projects');
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.getByText('Nothing here yet.')).toBeHidden();
-  // #424: the total is real (2 + 3 + 4 across three subfolders), but no
-  // single one of them holds all nine, so none is named.
-  await expect(page.getByText('9 notes in its folders')).toBeVisible();
+  // #424: the total is real (2 + 3 + 4 + 2 across four subfolders, #367
+  // added Flat hunt), but no single one of them holds all eleven, so none
+  // is named.
+  await expect(page.getByText('11 notes in its folders')).toBeVisible();
   await shot(page, testInfo, 'folder-notes-elsewhere');
 });
 
@@ -1942,7 +1948,7 @@ test('folder counts add files and notes together, the same total the folder scre
       menu.getByRole('link', { name: /^0-Inbox.*added\D*2$/ }),
     ).toBeVisible();
     await expect(
-      menu.getByRole('link', { name: /^1-Projects.*end date\D*11$/ }),
+      menu.getByRole('link', { name: /^1-Projects.*end date\D*15$/ }),
     ).toBeVisible();
     await page.keyboard.press('Escape');
   } else {
@@ -1952,7 +1958,7 @@ test('folder counts add files and notes together, the same total the folder scre
     ).toHaveText('2');
     await expect(
       sidebar.locator('a[href="/folder/1-Projects"] .tree-count'),
-    ).toHaveText('11');
+    ).toHaveText('15');
   }
 
   // 0-Inbox: 1 file (the boiler invoice) + 1 note (Tomato seedlings) — the
