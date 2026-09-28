@@ -132,6 +132,26 @@
   --motion-bird: 320ms; /* the bird's entrances and reactions */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --color-para-inbox: #b8492f;
+  --color-para-inbox-on: #ffffff;
+  --color-para-projects: #1f7a6d;
+  --color-para-projects-on: #ffffff;
+  --color-para-areas: #9a6408;
+  --color-para-areas-on: #ffffff;
+  --color-para-resources: #2f63b8;
+  --color-para-resources-on: #ffffff;
+  --color-para-archives: #6b52b8;
+  --color-para-archives-on: #ffffff;
+  --color-origin-file-bg: rgb(39,128,116 / 0.14);
+  --color-origin-file: #278074;
+  --color-origin-notes-bg: rgb(107,82,184 / 0.14);
+  --color-origin-notes: #6b52b8;
+  --color-origin-web-bg: rgb(47,99,184 / 0.14);
+  --color-origin-web: #2f63b8;
+  --color-origin-you-bg: rgb(154,100,8 / 0.14);
+  --color-origin-you: #9a6408;
+  --color-new: #278074;
+  --color-new-on: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -162,6 +182,26 @@
     --motion-bird: 320ms;
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --color-para-inbox: #f4a28c;
+    --color-para-inbox-on: #0b1220;
+    --color-para-projects: #5fcfbc;
+    --color-para-projects-on: #0b1220;
+    --color-para-areas: #f0b64f;
+    --color-para-areas-on: #0b1220;
+    --color-para-resources: #93c5fd;
+    --color-para-resources-on: #0b1220;
+    --color-para-archives: #c4b5fd;
+    --color-para-archives-on: #0b1220;
+    --color-origin-file-bg: rgb(95,207,188 / 0.2);
+    --color-origin-file: #8fe0d2;
+    --color-origin-notes-bg: rgb(196,181,253 / 0.2);
+    --color-origin-notes: #c4b5fd;
+    --color-origin-web-bg: rgb(147,197,253 / 0.2);
+    --color-origin-web: #93c5fd;
+    --color-origin-you-bg: rgb(240,182,79 / 0.2);
+    --color-origin-you: #f0b64f;
+    --color-new: #5fcfbc;
+    --color-new-on: #0b1220;
   }
 }
 
@@ -192,4 +232,24 @@
   --motion-bird: 320ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --color-para-inbox: #f4a28c;
+  --color-para-inbox-on: #0b1220;
+  --color-para-projects: #5fcfbc;
+  --color-para-projects-on: #0b1220;
+  --color-para-areas: #f0b64f;
+  --color-para-areas-on: #0b1220;
+  --color-para-resources: #93c5fd;
+  --color-para-resources-on: #0b1220;
+  --color-para-archives: #c4b5fd;
+  --color-para-archives-on: #0b1220;
+  --color-origin-file-bg: rgb(95,207,188 / 0.2);
+  --color-origin-file: #8fe0d2;
+  --color-origin-notes-bg: rgb(196,181,253 / 0.2);
+  --color-origin-notes: #c4b5fd;
+  --color-origin-web-bg: rgb(147,197,253 / 0.2);
+  --color-origin-web: #93c5fd;
+  --color-origin-you-bg: rgb(240,182,79 / 0.2);
+  --color-origin-you: #f0b64f;
+  --color-new: #5fcfbc;
+  --color-new-on: #0b1220;
 }

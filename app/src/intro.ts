@@ -96,12 +96,16 @@ export const INTRO_PAGES: IntroPages = [
   },
 ];
 
-/** The four PARA colours, as the boards use them (letters, folder names). */
+/**
+ * The four PARA colours, as the boards use them (letters, folder names). They
+ * read the theme tokens (`tokens.css`), so the intro keeps its look in dark
+ * and takes the darker marks in light. `archive` is the Archives token.
+ */
 export const PARA_COLORS = {
-  projects: '#5fcfbc',
-  areas: '#f0b64f',
-  resources: '#93c5fd',
-  archive: '#c4b5fd',
+  projects: 'var(--color-para-projects)',
+  areas: 'var(--color-para-areas)',
+  resources: 'var(--color-para-resources)',
+  archive: 'var(--color-para-archives)',
 } as const;
 
 /** Page 1's sort strip at rest: each folder with its cards stacked above it. */
