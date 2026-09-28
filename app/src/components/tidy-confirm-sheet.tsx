@@ -13,6 +13,11 @@
  * "so once is better than five times"); the board is the source of truth
  * (same wording `help-rows.ts` and `Phone-Add.dc.html` already use
  * elsewhere), so this follows it — see the PR's "Left out"/notes.
+ *
+ * The demo build (`isDemo()`) swaps in its own sentence instead
+ * (`demoConfirmSentenceParts`, #489, `Demo-Tidy-Confirm` board): "in the
+ * inbox" rather than "waiting", "In your own Bower..." rather than "A
+ * tidy-up...", since what follows is a recording.
  */
 
 import { useRef } from 'preact/hooks';
@@ -21,6 +26,7 @@ import type { JSX } from 'preact';
 import { isDemo } from '../api.js';
 import { Bird } from './bird.js';
 import { IconSparkle } from './icons.js';
+import { useDismissGuard } from './use-dismiss-guard.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
 import '../styles/tidy-confirm-sheet.css';
@@ -53,6 +59,25 @@ export function confirmSentenceParts(count: number): {
   };
 }
 
+/**
+ * The demo's own confirmation sentence (#489, `Demo-Tidy-Confirm` board):
+ * "in the inbox", not "waiting", and "In your own Bower..." rather than
+ * "A tidy-up...", since what follows is a recording, not a real one.
+ * Demo build only (`isDemo()`); the real sentence above is unchanged.
+ */
+export function demoConfirmSentenceParts(count: number): {
+  lead: string;
+  rest: string;
+} {
+  const lead = `${count} ${count === 1 ? 'thing' : 'things'}`;
+  return {
+    lead,
+    rest:
+      'in the inbox. In your own Bower this takes a few minutes and uses ' +
+      'one run of your plan, so once is better than five times.',
+  };
+}
+
 export interface TidyConfirmSheetProps {
   /** How many things the sentence counts (see `run-store.ts#tidyUp`). */
   count: number;
@@ -69,15 +94,18 @@ export function TidyConfirmSheet({
 }: TidyConfirmSheetProps): JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, onDismiss);
+  const guardedDismiss = useDismissGuard(onDismiss);
 
-  const { lead, rest } = confirmSentenceParts(count);
+  const { lead, rest } = isDemo()
+    ? demoConfirmSentenceParts(count)
+    : confirmSentenceParts(count);
 
   return (
     <div class="tidy-confirm">
       <div
         class="tidy-confirm-backdrop"
         aria-hidden="true"
-        onClick={onDismiss}
+        onClick={guardedDismiss}
       />
       <div
         ref={panelRef}
