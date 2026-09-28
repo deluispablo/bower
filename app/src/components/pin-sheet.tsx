@@ -20,6 +20,7 @@ import { useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { IconChat, IconExternalLink, IconFolder, IconPin } from './icons.js';
+import { useDismissGuard } from './use-dismiss-guard.js';
 import { useFocusTrap } from './use-focus-trap.js';
 import '../styles/pin-sheet.css';
 
@@ -50,6 +51,7 @@ export function PinSheet({
 }: PinSheetProps): JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, onClose);
+  const guardedClose = useDismissGuard(onClose);
 
   function selectAndClose(action: () => void): () => void {
     return () => {
@@ -60,7 +62,11 @@ export function PinSheet({
 
   return (
     <div class="pin-sheet">
-      <div class="pin-sheet-backdrop" aria-hidden="true" onClick={onClose} />
+      <div
+        class="pin-sheet-backdrop"
+        aria-hidden="true"
+        onClick={guardedClose}
+      />
       <div
         ref={panelRef}
         class="pin-sheet-panel"
