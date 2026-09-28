@@ -268,6 +268,52 @@ describe('getText and getBlob', () => {
 });
 
 describe('listVault', () => {
+  it('parses thumbnail and media metadata, leaving them off when absent', async () => {
+    stubFetch(() =>
+      jsonResponse(200, {
+        files: [
+          {
+            id: 'p1',
+            name: 'a.jpg',
+            mimeType: 'image/jpeg',
+            thumbnailLink: 'https://lh3.googleusercontent.com/x=s220',
+            imageMediaMetadata: {
+              time: '2024:05:01 10:00:00',
+              width: 40,
+              height: '30',
+            },
+          },
+          {
+            id: 'v1',
+            name: 'b.mp4',
+            mimeType: 'video/mp4',
+            videoMediaMetadata: { durationMillis: '61000' },
+          },
+          {
+            id: 'n1',
+            name: 'c.md',
+            mimeType: 'text/markdown',
+            imageMediaMetadata: {},
+          },
+        ],
+      }),
+    );
+
+    const files = await listVault('ROOT');
+
+    expect(files[0]).toMatchObject({
+      thumbnailLink: 'https://lh3.googleusercontent.com/x=s220',
+      imageMediaMetadata: {
+        time: '2024:05:01 10:00:00',
+        width: 40,
+        height: 30,
+      },
+    });
+    expect(files[1]?.videoMediaMetadata).toEqual({ durationMillis: 61000 });
+    expect(files[2]).not.toHaveProperty('imageMediaMetadata');
+    expect(files[2]).not.toHaveProperty('thumbnailLink');
+  });
+
   it('joins every page of a folder listing', async () => {
     const root = Array.from({ length: 5 }, (_, i) =>
       note(`n${i}`, `Note ${i}.md`, 'ROOT'),
@@ -296,7 +342,7 @@ describe('listVault', () => {
       "'it\\'s' in parents and trashed = false",
     );
     expect(url?.searchParams.get('fields')).toBe(
-      'nextPageToken,files(id,name,mimeType,parents,modifiedTime,size,webViewLink,appProperties)',
+      'nextPageToken,files(id,name,mimeType,parents,modifiedTime,size,webViewLink,appProperties,thumbnailLink,imageMediaMetadata(time,width,height),videoMediaMetadata(durationMillis))',
     );
     expect(url?.searchParams.get('pageSize')).toBe('1000');
   });
