@@ -86,4 +86,49 @@ describe('writeContextNote', () => {
     expect(await writeContextNote('FOLDER_ID')).toBe(true);
     error.mockRestore();
   });
+
+  it('keeps a rule sentence in your rules before the note, and the note keeps it too (#435)', async () => {
+    const order: string[] = [];
+    createTextFile.mockImplementation(() => {
+      order.push('note');
+      return Promise.resolve(written);
+    });
+    const keepRule = vi.fn((sentence: string) => {
+      order.push(`rule: ${sentence}`);
+      return Promise.resolve('Garden');
+    });
+    setQueue([item('a', 'done')]);
+    setContextText(
+      'Receipts: add them to a table. From now on, file garden receipts under Garden.',
+    );
+
+    expect(await writeContextNote('FOLDER_ID', keepRule)).toBe(true);
+    expect(order).toEqual([
+      'rule: From now on, file garden receipts under Garden.',
+      'note',
+    ]);
+    expect(createTextFile.mock.calls[0]?.[2]).toContain(
+      'From now on, file garden receipts under Garden.',
+    );
+  });
+
+  it('keeps nothing without a rule sentence, and writes the note when the rule fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    createTextFile.mockResolvedValue(written);
+    const keepRule = vi.fn(() => Promise.reject(new Error('conflict')));
+    setQueue([item('a', 'done')]);
+    setContextText('Translate these.');
+    await writeContextNote('FOLDER_ID', keepRule);
+    expect(keepRule).not.toHaveBeenCalled();
+
+    setQueue([item('a', 'done'), item('b', 'done')]);
+    setContextText('Always tag these #garden');
+    expect(await writeContextNote('FOLDER_ID', keepRule)).toBe(true);
+    expect(keepRule).toHaveBeenCalledWith('Always tag these #garden');
+    expect(createTextFile).toHaveBeenCalledTimes(2);
+    expect(showToast).toHaveBeenCalledWith(
+      'Could not add your rule yet. Bower still reads it.',
+    );
+    error.mockRestore();
+  });
 });

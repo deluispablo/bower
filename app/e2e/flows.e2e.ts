@@ -347,7 +347,10 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
     );
   const box = page.getByRole('textbox', { name: 'What is this?' });
   await expect(box).toHaveAttribute('placeholder', /^Just filing is fine\./);
-  await box.fill('Receipts: add them to a table with the shop and the total.');
+  // The rule sentence is kept in your rules too (#435).
+  await box.fill(
+    'Receipts: add them to a table with the shop and the total. From now on, file garden receipts under Garden.',
+  );
   await shot(page, testInfo, 'add-context');
   await page.getByRole('button', { name: 'Add to Bower' }).click();
 
@@ -359,8 +362,14 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
     ),
   ).toHaveText('5');
   // It waits in the inbox with the other instruction notes, under the
-  // Bower tab's Requests (the demo resets on a reload, so no `goto`).
+  // Bower tab's Requests (the demo resets on a reload, so no `goto`); the
+  // rule sentence is already in Rules, under its own topic.
   await navigate(page, /^Bower$/);
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'Rules' })
+      .getByRole('button', { name: /^Garden\s*1$/ }),
+  ).toBeVisible();
   await page.getByRole('tab', { name: 'Requests' }).click();
   await expect(
     page
@@ -899,16 +908,16 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   if (testInfo.project.name === 'desktop') {
     await expect(tabs).toBeHidden();
 
-    // The sidebar (#326, C.9): one Expand/Collapse all tool, no sort menu,
-    // and the waiting-count bubble on Home's row, not Add's (the boards
-    // disagree with the issue's own title and C.9's text, which say Add).
+    // The sidebar (#422, #326, C.9): one Expand/Collapse all tool, no sort
+    // menu, and the waiting-count bubble on Add's row, where the pile gets
+    // filled, not Home's.
     const sidebar = page.getByRole('navigation', { name: 'Your notes' });
     await expect(sidebar.locator('[aria-label^="Sort by"]')).toHaveCount(0);
     await expect(
       sidebar.getByRole('button', { name: 'Expand all' }),
     ).toBeVisible();
-    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveText('3');
-    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveCount(0);
+    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveText('3');
+    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveCount(0);
     await shot(page, testInfo, 'desktop-sidebar');
     return;
   }

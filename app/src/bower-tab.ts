@@ -165,3 +165,15 @@ export function sentenceKind(text: string): SentenceKind {
   if (RULE_START.test(trimmed)) return 'rule';
   return 'job';
 }
+
+/**
+ * The rule sentences in a longer text (#435, Add's "What is this?" box):
+ * the text split into sentences (after `.`, `!` or `?`, and at line
+ * breaks), keeping those `sentenceKind` reads as a rule, as written.
+ */
+export function ruleSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence !== '' && sentenceKind(sentence) === 'rule');
+}
