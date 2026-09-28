@@ -315,6 +315,17 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         '' '## Applies to' '' '- offer-north.pdf' '- offer-south.pdf' '- offer-west.pdf' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0903 Context.md"
     fi
+    if [ "$SMOKE_SCENARIO" = paused ]; then
+      # Rules.md in the shape the app reads (issue #376): topic headings,
+      # dated bullets, and one paused (struck-through) rule that would send
+      # receipts somewhere else.
+      printf -- '%s\n' '# Rules' '' '## Finance' \
+        "- File receipts under 2-Areas/Finance/Receipts. (owner's request, 2026-01-02)" \
+        '- ~~File receipts under 4-Archives/Old receipts.~~ (paused 2026-01-10)' '' \
+        '## Everything else' "- Keep file names short. (owner's request, 2026-01-03)" \
+        >"$remote/Rules.md"
+      echo jpg >"$remote/0-Inbox/till-slip.jpg"
+    fi
     if [ "$SMOKE_SCENARIO" = rename ]; then
       # A photo whose name says nothing (issue #369).
       echo jpg >"$remote/0-Inbox/IMG_4471.jpg"
@@ -565,6 +576,13 @@ case "$SMOKE_SCENARIO" in
       'Context: a table of the job offers' >>log.md
     mv '0-Inbox/Bower - 2026-01-15 0903 Context.md' 0-Inbox/Processed/
     ;;
+  # A paused rule (issue #376): the agent follows the rule in force and
+  # leaves the struck-through one alone, in Rules.md and in what it does.
+  paused)
+    mkdir -p 2-Areas/Finance/Receipts
+    mv 0-Inbox/till-slip.jpg 2-Areas/Finance/Receipts/till-slip.jpg
+    echo 'Filed: till-slip.jpg → 2-Areas/Finance/Receipts' >>log.md
+    ;;
   # A question sent from the app (issue #371): the answer starts with the
   # note-from-Bower block the app renders as a box.
   answer)
@@ -766,7 +784,7 @@ expect_content_free() {
     evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
-    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington 'Which flat' offer- 'Job hunt' \
+    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington 'Which flat' offer- 'Job hunt' till-slip 'Old receipts' \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -925,6 +943,14 @@ BOWER_NOTE_TEMPLATE=$(awk '/^\*\*A note from Bower\*\*/ { f = 1 }
   g' <<<"$RULEBOOK")
 [ -n "$BOWER_NOTE_TEMPLATE" ] || die 'the rulebook has no note-from-Bower template (#371)'
 expect_bower_note 'the rulebook template (#371)' "$BOWER_NOTE_TEMPLATE"
+grep -Fq 'is paused: never apply it, never edit it' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt does not skip a paused rule (#376)'
+grep -Fq '`- ~~<text>~~ (paused YYYY-MM-DD)`. Ignore it completely' <<<"$RULEBOOK" ||
+  die 'the rulebook does not ignore a struck-through rule (#376)'
+grep -Fq "one rule per bullet: \`- <text> (owner's request, YYYY-MM-DD)\`" <<<"$RULEBOOK" ||
+  die 'the rulebook does not give the Rules.md bullet shape (#376)'
+grep -Fq 'or under `## Everything else` when no topic fits' <<<"$RULEBOOK" ||
+  die 'the rulebook does not send an unmatched rule to Everything else (#376)'
 grep -Fq 'A context note (frontmatter `kind: context`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not handle a context note first (#370)'
 grep -Fq '**Context note** (frontmatter `kind: context`' <<<"$RULEBOOK" ||
@@ -1879,3 +1905,23 @@ grep -Fxq 'Context: offer-west.pdf is not in the inbox' "$remote/log.md" ||
 expect_content_free
 expect_cleaned_up
 echo "ok a context note files its batch, makes its table and keeps its rule"
+
+# 34. A paused rule (issue #376): with Rules.md in the app's shape (topic
+# headings, dated bullets, one struck-through rule), the receipt goes where
+# the rule in force says, never where the paused one would send it, and
+# Rules.md reaches Drive unchanged, the paused line included. A stub cannot
+# show the model obeying the rulebook; this pins the runner's side and the
+# fixture shape, the rulebook text is pinned in the contract above.
+run_case paused
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(post 2 p.refused)" '[]' 'refused'
+remote="$STATE/remote"
+[ -f "$remote/2-Areas/Finance/Receipts/till-slip.jpg" ] || die 'the receipt is not where the rule in force says'
+[ ! -e "$remote/4-Archives/Old receipts" ] || die 'the paused rule was applied'
+grep -Fxq -- '- ~~File receipts under 4-Archives/Old receipts.~~ (paused 2026-01-10)' "$remote/Rules.md" ||
+  die 'the paused rule did not survive the run as it was'
+! grep -Fxq 'Rules.md' "$STATE/uploaded.txt" || die 'Rules.md was changed by a run with no instruction note'
+expect_content_free
+expect_cleaned_up
+echo "ok a paused rule is left alone"
