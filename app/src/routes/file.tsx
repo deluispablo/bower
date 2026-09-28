@@ -625,7 +625,7 @@ function useSourceName(source: string | undefined): SourceName {
 }
 
 /** "A copy of your Google Sheet “…”" with the way to the original and to this copy. */
-function CopyNotice({
+export function CopyNotice({
   file,
   kind,
   source,
