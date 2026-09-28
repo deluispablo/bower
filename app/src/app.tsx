@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import {
-  LocationProvider,
-  lazy,
-  Route,
-  Router,
-  useLocation,
-} from 'preact-iso';
+import { LocationProvider, lazy, Route, Router, useLocation } from 'preact-iso';
 import { registerSW } from 'virtual:pwa-register';
 
 import { isDemo } from './api.js';
@@ -21,39 +15,23 @@ import { VaultProvider } from './vault-store.js';
 
 /** Every screen but Home and Login loads on demand (#661), keeping the startup
  * script under its size budget. */
-const Add = lazy(() =>
-  import('./routes/add.js').then((m) => m.Add),
-);
-const Bower = lazy(() =>
-  import('./routes/bower.js').then((m) => m.Bower),
-);
+const Add = lazy(() => import('./routes/add.js').then((m) => m.Add));
+const Bower = lazy(() => import('./routes/bower.js').then((m) => m.Bower));
 const FileScreen = lazy(() =>
   import('./routes/file.js').then((m) => m.FileScreen),
 );
-const Folder = lazy(() =>
-  import('./routes/folder.js').then((m) => m.Folder),
-);
-const Health = lazy(() =>
-  import('./routes/health.js').then((m) => m.Health),
-);
-const Ideas = lazy(() =>
-  import('./routes/ideas.js').then((m) => m.Ideas),
-);
-const Intro = lazy(() =>
-  import('./routes/intro.js').then((m) => m.Intro),
-);
+const Folder = lazy(() => import('./routes/folder.js').then((m) => m.Folder));
+const Health = lazy(() => import('./routes/health.js').then((m) => m.Health));
+const Ideas = lazy(() => import('./routes/ideas.js').then((m) => m.Ideas));
+const Intro = lazy(() => import('./routes/intro.js').then((m) => m.Intro));
 const LintRedirect = lazy(() =>
   import('./routes/lint-redirect.js').then((m) => m.LintRedirect),
 );
-const Note = lazy(() =>
-  import('./routes/note.js').then((m) => m.Note),
-);
+const Note = lazy(() => import('./routes/note.js').then((m) => m.Note));
 const NotFound = lazy(() =>
   import('./routes/not-found.js').then((m) => m.NotFound),
 );
-const Notes = lazy(() =>
-  import('./routes/notes.js').then((m) => m.Notes),
-);
+const Notes = lazy(() => import('./routes/notes.js').then((m) => m.Notes));
 const NotInvited = lazy(() =>
   import('./routes/not-invited.js').then((m) => m.NotInvited),
 );
@@ -75,9 +53,7 @@ const Settings = lazy(() =>
 const TellRedirect = lazy(() =>
   import('./routes/tell-redirect.js').then((m) => m.TellRedirect),
 );
-const Terms = lazy(() =>
-  import('./routes/terms.js').then((m) => m.Terms),
-);
+const Terms = lazy(() => import('./routes/terms.js').then((m) => m.Terms));
 
 /** Whether `target` is a field the user is typing in — Ctrl/Cmd+K is ignored there. */
 function isTypingTarget(target: EventTarget | null): boolean {
