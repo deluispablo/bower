@@ -1,0 +1,719 @@
+{
+ "v": 3,
+ "attachments": {},
+ "boards": {
+  "System-Folders.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1300,
+   "h": 844,
+   "title": "System: folder colours, file kinds, Bower's note"
+  },
+  "System-Formats.dc.html": {
+   "x": 1380,
+   "y": 0,
+   "w": 1300,
+   "h": 844,
+   "title": "System: formats"
+  },
+  "Main.dc.html": {
+   "x": 0,
+   "y": 1304,
+   "w": 390,
+   "h": 844,
+   "title": "Notes tab: the one explorer",
+   "is_interactive": true
+  },
+  "Phone-Notes-Revealed.dc.html": {
+   "x": 470,
+   "y": 1304,
+   "w": 390,
+   "h": 844,
+   "title": "Notes tab opened from a note: revealed",
+   "is_interactive": true
+  },
+  "Phone-Notes-Loading.dc.html": {
+   "x": 940,
+   "y": 1304,
+   "w": 390,
+   "h": 844,
+   "title": "Notes tab, first load on a device",
+   "is_interactive": true
+  },
+  "Phone-Notes-Light.dc.html": {
+   "x": 1410,
+   "y": 1304,
+   "w": 390,
+   "h": 844,
+   "title": "Notes tab, light theme",
+   "is_interactive": true
+  },
+  "Phone-Search-Start.dc.html": {
+   "x": 1880,
+   "y": 1304,
+   "w": 390,
+   "h": 844,
+   "title": "Search before typing",
+   "is_interactive": true
+  },
+  "Phone-Search.dc.html": {
+   "x": 2350,
+   "y": 1304,
+   "w": 390,
+   "h": 844,
+   "title": "Search: folders, notes and files, typos forgiven",
+   "is_interactive": true
+  },
+  "Phone-Search-None.dc.html": {
+   "x": 2820,
+   "y": 1304,
+   "w": 390,
+   "h": 844,
+   "title": "Search with no results",
+   "is_interactive": true
+  },
+  "Phone-Folder-List.dc.html": {
+   "x": 0,
+   "y": 2608,
+   "w": 390,
+   "h": 844,
+   "title": "Folder, list view",
+   "is_interactive": true
+  },
+  "Phone-Folder-ByBower.dc.html": {
+   "x": 470,
+   "y": 2608,
+   "w": 390,
+   "h": 844,
+   "title": "Folder, showing only what Bower wrote",
+   "is_interactive": true
+  },
+  "Phone-Folder-Grid.dc.html": {
+   "x": 940,
+   "y": 2608,
+   "w": 390,
+   "h": 844,
+   "title": "Folder, grid view",
+   "is_interactive": true
+  },
+  "Phone-Folder-QuickLook.dc.html": {
+   "x": 1410,
+   "y": 2608,
+   "w": 390,
+   "h": 844,
+   "title": "Folder, holding a tile: quick look",
+   "is_interactive": true
+  },
+  "Phone-Folder-Empty.dc.html": {
+   "x": 1880,
+   "y": 2608,
+   "w": 390,
+   "h": 844,
+   "title": "Folder, empty",
+   "is_interactive": true
+  },
+  "Phone-More.dc.html": {
+   "x": 2350,
+   "y": 2608,
+   "w": 390,
+   "h": 844,
+   "title": "More menu on a file",
+   "is_interactive": true
+  },
+  "Phone-Move-Picker.dc.html": {
+   "x": 2820,
+   "y": 2608,
+   "w": 390,
+   "h": 844,
+   "title": "Move to\u2026: a folder picker, Bower moves it",
+   "is_interactive": true
+  },
+  "Phone-Folder-Compare.dc.html": {
+   "x": 3290,
+   "y": 2608,
+   "w": 390,
+   "h": 844,
+   "title": "Four flat listings side by side",
+   "is_interactive": true
+  },
+  "Phone-Note-Bower.dc.html": {
+   "x": 0,
+   "y": 3912,
+   "w": 390,
+   "h": 844,
+   "title": "A note with Bower's note, as the v3 board drew it",
+   "is_interactive": true
+  },
+  "Phone-File-Photo.dc.html": {
+   "x": 470,
+   "y": 3912,
+   "w": 390,
+   "h": 844,
+   "title": "A photo",
+   "is_interactive": true
+  },
+  "Phone-Photo-Full.dc.html": {
+   "x": 940,
+   "y": 3912,
+   "w": 390,
+   "h": 844,
+   "title": "A photo, full screen, zoomed",
+   "is_interactive": true
+  },
+  "Phone-File-Sheet.dc.html": {
+   "x": 1410,
+   "y": 3912,
+   "w": 390,
+   "h": 844,
+   "title": "A spreadsheet Bower copied: say what it is",
+   "is_interactive": true
+  },
+  "Phone-File-Excel.dc.html": {
+   "x": 1880,
+   "y": 3912,
+   "w": 390,
+   "h": 844,
+   "title": "An Excel file, previewed by Drive",
+   "is_interactive": true
+  },
+  "Phone-File-Video.dc.html": {
+   "x": 2350,
+   "y": 3912,
+   "w": 390,
+   "h": 844,
+   "title": "A video: kept and played, not read",
+   "is_interactive": true
+  },
+  "Phone-File-NoPreview.dc.html": {
+   "x": 2820,
+   "y": 3912,
+   "w": 390,
+   "h": 844,
+   "title": "A file with no preview",
+   "is_interactive": true
+  },
+  "Phone-Note-Details.dc.html": {
+   "x": 0,
+   "y": 5216,
+   "w": 390,
+   "h": 844,
+   "title": "A note with what Bower read: key facts, details folded",
+   "is_interactive": true
+  },
+  "Phone-Note-Details-Open.dc.html": {
+   "x": 470,
+   "y": 5216,
+   "w": 390,
+   "h": 844,
+   "title": "Details open: grouped, labelled, each with where it came from",
+   "is_interactive": true
+  },
+  "Phone-Note-Long.dc.html": {
+   "x": 940,
+   "y": 5216,
+   "w": 390,
+   "h": 844,
+   "title": "A long note: the gist on top, Bower on each section that needs it",
+   "is_interactive": true
+  },
+  "Phone-File-PDF-Long.dc.html": {
+   "x": 1410,
+   "y": 5216,
+   "w": 390,
+   "h": 844,
+   "title": "A long PDF: Bower's note points to the pages",
+   "is_interactive": true
+  },
+  "Desktop-Explorer.dc.html": {
+   "x": 0,
+   "y": 6520,
+   "w": 1440,
+   "h": 900,
+   "title": "Desktop: tree, folder, preview",
+   "is_interactive": true
+  },
+  "Desktop-Note.dc.html": {
+   "x": 1520,
+   "y": 6520,
+   "w": 1440,
+   "h": 900,
+   "title": "Desktop: a note open, the tree follows it",
+   "is_interactive": true
+  },
+  "Desktop-Search.dc.html": {
+   "x": 3040,
+   "y": 6520,
+   "w": 1440,
+   "h": 900,
+   "title": "Desktop: search with filters and a preview",
+   "is_interactive": true
+  },
+  "Desktop-Compare.dc.html": {
+   "x": 4560,
+   "y": 6520,
+   "w": 1440,
+   "h": 900,
+   "title": "Desktop: four flat listings as a table",
+   "is_interactive": true
+  },
+  "Flow-01-Welcome.dc.html": {
+   "x": 0,
+   "y": -1600,
+   "w": 390,
+   "h": 844,
+   "title": "Story 1: four general questions, all optional",
+   "is_interactive": true
+  },
+  "Flow-02-Earlier.dc.html": {
+   "x": 470,
+   "y": -1600,
+   "w": 390,
+   "h": 844,
+   "title": "Story 2: months earlier, everyday papers",
+   "is_interactive": true
+  },
+  "Flow-03-Add.dc.html": {
+   "x": 940,
+   "y": -1600,
+   "w": 390,
+   "h": 844,
+   "title": "Story 3: the flats go in, with three words",
+   "is_interactive": true
+  },
+  "Flow-04-Working.dc.html": {
+   "x": 1410,
+   "y": -1600,
+   "w": 390,
+   "h": 844,
+   "title": "Story 4: one tap, Bower files and reads",
+   "is_interactive": true
+  },
+  "Flow-05-Home.dc.html": {
+   "x": 1880,
+   "y": -1600,
+   "w": 390,
+   "h": 844,
+   "title": "Story 5: Home after the tidy-up",
+   "is_interactive": true
+  },
+  "Flow-06-Dots.dc.html": {
+   "x": 2350,
+   "y": -1600,
+   "w": 390,
+   "h": 844,
+   "title": "Story 6: nobody asked, Bower joined the dots",
+   "is_interactive": true
+  },
+  "Flow-07-Answer.dc.html": {
+   "x": 2820,
+   "y": -1600,
+   "w": 390,
+   "h": 844,
+   "title": "Story 7: a question in her words, an answer with its sources",
+   "is_interactive": true
+  },
+  "Flow-08-Suggest.dc.html": {
+   "x": 3290,
+   "y": -1600,
+   "w": 390,
+   "h": 844,
+   "title": "Story 8: Bower suggests a rule, Alex decides",
+   "is_interactive": true
+  },
+  "Phone-Notes-New.dc.html": {
+   "x": 0,
+   "y": -3100,
+   "w": 390,
+   "h": 844,
+   "title": "Notes tab after a tidy-up: Just filed, and New",
+   "is_interactive": true
+  },
+  "Phone-JustFiled.dc.html": {
+   "x": 470,
+   "y": -3100,
+   "w": 390,
+   "h": 844,
+   "title": "Just filed: what you added and where it went",
+   "is_interactive": true
+  },
+  "Why-Add.dc.html": {
+   "x": 940,
+   "y": -3100,
+   "w": 1440,
+   "h": 920,
+   "title": "What changes on Add, and why"
+  },
+  "Why-Home.dc.html": {
+   "x": 2460,
+   "y": -3100,
+   "w": 1440,
+   "h": 920,
+   "title": "What changes on Home after a tidy-up, and why"
+  },
+  "System-Kinds.dc.html": {
+   "x": 2760,
+   "y": 0,
+   "w": 1300,
+   "h": 900,
+   "title": "System: how key facts and Compare work"
+  },
+  "System-KeyFacts.dc.html": {
+   "x": 4140,
+   "y": 0,
+   "w": 1300,
+   "h": 900,
+   "title": "System: key facts from one to four"
+  },
+  "Desktop-Folder.dc.html": {
+   "x": 0,
+   "y": 7620,
+   "w": 1440,
+   "h": 900,
+   "title": "Desktop: a folder with New, tags, key facts and a preview",
+   "is_interactive": true
+  },
+  "Desktop-JustFiled.dc.html": {
+   "x": 1520,
+   "y": 7620,
+   "w": 1440,
+   "h": 900,
+   "title": "Desktop: Just filed, as a table",
+   "is_interactive": true
+  },
+  "Desktop-Note-Details.dc.html": {
+   "x": 3040,
+   "y": 7620,
+   "w": 1440,
+   "h": 900,
+   "title": "Desktop: a note, key facts and details in the About panel",
+   "is_interactive": true
+  },
+  "Desktop-Add.dc.html": {
+   "x": 4560,
+   "y": 7620,
+   "w": 1440,
+   "h": 900,
+   "title": "Desktop: Add, with the drop zone",
+   "is_interactive": true
+  },
+  "Deck-01.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 1: Bower",
+   "page": "deck"
+  },
+  "Deck-02.dc.html": {
+   "x": 2080,
+   "y": 0,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 2: what it does",
+   "page": "deck"
+  },
+  "Deck-03.dc.html": {
+   "x": 4160,
+   "y": 0,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 3: yours",
+   "page": "deck"
+  },
+  "Deck-04.dc.html": {
+   "x": 0,
+   "y": 1280,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 4: why different",
+   "page": "deck"
+  },
+  "Deck-05.dc.html": {
+   "x": 2080,
+   "y": 1280,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 5: two questions",
+   "page": "deck"
+  },
+  "Deck-06.dc.html": {
+   "x": 4160,
+   "y": 1280,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 6: everyday papers",
+   "page": "deck"
+  },
+  "Deck-07.dc.html": {
+   "x": 0,
+   "y": 2560,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 7: a flat hunt",
+   "page": "deck"
+  },
+  "Deck-08.dc.html": {
+   "x": 2080,
+   "y": 2560,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 8: where it went",
+   "page": "deck"
+  },
+  "Deck-09.dc.html": {
+   "x": 4160,
+   "y": 2560,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 9: the dots",
+   "page": "deck"
+  },
+  "Deck-10.dc.html": {
+   "x": 0,
+   "y": 3840,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 10: how it joins",
+   "page": "deck"
+  },
+  "Deck-11.dc.html": {
+   "x": 2080,
+   "y": 3840,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 11: compare",
+   "page": "deck"
+  },
+  "Deck-12.dc.html": {
+   "x": 4160,
+   "y": 3840,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 12: ask",
+   "page": "deck"
+  },
+  "Deck-13.dc.html": {
+   "x": 0,
+   "y": 5120,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 13: suggests",
+   "page": "deck"
+  },
+  "Deck-14.dc.html": {
+   "x": 2080,
+   "y": 5120,
+   "w": 1920,
+   "h": 1080,
+   "title": "Demo deck 14: get started",
+   "page": "deck"
+  }
+ },
+ "createdOnFiles": {
+  "at": "2026-09-28T14:26:52Z",
+  "v": 1
+ },
+ "designSystems": [],
+ "launch": {
+  "view": "canvas"
+ },
+ "notes": {
+  "t_system": {
+   "x": 0,
+   "y": -300,
+   "text": "The system",
+   "kind": "title1",
+   "maxW": 2160
+  },
+  "s_system": {
+   "x": 5520,
+   "y": 0,
+   "text": "Inbox and the four PARA folders keep one colour, one mark and one place, everywhere; P A R A reads down the list, Archives as a lilac A. Formats: what Bower reads, what the app shows, what is only kept, said at Add time. Colour is only for these five; file kinds are grey with a short badge. Bower's note keeps the v3 colour code by where each line comes from.",
+   "w": 420,
+   "fill": "teal",
+   "size": 24
+  },
+  "t_find": {
+   "x": 0,
+   "y": 1004,
+   "text": "Find: the Notes tab and search",
+   "kind": "title1",
+   "maxW": 2690
+  },
+  "s_find": {
+   "x": 3330,
+   "y": 1304,
+   "text": "One explorer on the phone: the Notes tab. The top-left folder menu goes; its good parts (Pinned, the five folders with their meaning) move here. Opening Notes from a note opens it at that note. Search finds folders, notes and files, forgives typos, and filters by kind and folder.",
+   "w": 420,
+   "fill": "teal",
+   "size": 24
+  },
+  "t_folder": {
+   "x": 0,
+   "y": 2308,
+   "text": "A folder: list, grid, quick look, move",
+   "kind": "title1",
+   "maxW": 3160
+  },
+  "s_folder": {
+   "x": 3800,
+   "y": 2608,
+   "text": "A folder is a list or a grid, remembered per folder. Sort and kind filter on one row. All \u00b7 Originals \u00b7 By Bower shows everything, only what you added or wrote, or only what Bower wrote with its key facts; a small Bower tag marks what Bower wrote. An original and Bower's note on it share one row. Holding a tile gives a quick look. Move to\u2026 stays Bower's job: a folder picker, then now or with the next tidy-up.",
+   "w": 420,
+   "fill": "teal",
+   "size": 24
+  },
+  "t_view": {
+   "x": 0,
+   "y": 3612,
+   "text": "Seeing a thing: notes, photos, spreadsheets",
+   "kind": "title1",
+   "maxW": 2690
+  },
+  "s_view": {
+   "x": 3330,
+   "y": 3912,
+   "text": "Bower's note is back at the top of a note, as the v3 board drew it, and on a file's own screen when Bower has something to say about it. Every file says what it is. A copy says it is a copy and links to the original. Next and previous walk the folder.",
+   "w": 420,
+   "fill": "teal",
+   "size": 24
+  },
+  "t_read": {
+   "x": 0,
+   "y": 4916,
+   "text": "What Bower reads: details and long documents",
+   "kind": "title1",
+   "maxW": 1280
+  },
+  "s_read": {
+   "x": 1920,
+   "y": 5216,
+   "text": "Bower reads details from what it files (a listing, an offer, a receipt) as properties, grouped and labelled, each with where it came from; they fold under Details, with four key facts on top. A folder of the same kind becomes a table to compare. A long note keeps a short gist on top and adds Bower on a section only where it has something to say; a long PDF gets Where to look.",
+   "w": 420,
+   "fill": "teal",
+   "size": 24
+  },
+  "t_desk": {
+   "x": 0,
+   "y": 6220,
+   "text": "Desktop: the tree follows you",
+   "kind": "title1",
+   "maxW": 5480
+  },
+  "s_desk": {
+   "x": 6120,
+   "y": 6520,
+   "text": "Desktop: tree, folder and preview side by side. Opening anything highlights it in the tree and opens the folders above it. Space for a quick look, arrows to move, Backspace up a folder. Search can be kept to the folder you are in.",
+   "w": 420,
+   "fill": "teal",
+   "size": 24
+  },
+  "t_story": {
+   "x": 0,
+   "y": -1900,
+   "text": "The story: Bower joins the dots nobody asked it to",
+   "kind": "title1",
+   "maxW": 3500
+  },
+  "s_story": {
+   "x": 3800,
+   "y": -1600,
+   "w": 420,
+   "fill": "teal",
+   "size": 24,
+   "text": "Sign-up asks two general questions, all optional; Bower never asks for a CV. Over the months Alex adds everyday papers: an offer letter, a Cycle to Work agreement. When she adds flat listings with three words, Bower times each flat by bike to her office on its own, and says which notes it joined."
+  },
+  "t_new": {
+   "x": 0,
+   "y": -3400,
+   "text": "After a tidy-up: what is new, where it went, and what changed on Add and Home",
+   "kind": "title1",
+   "maxW": 3900
+  },
+  "t_deck": {
+   "x": 0,
+   "y": -300,
+   "text": "Bower: what it is, why it is yours, and Alex's case",
+   "kind": "title1",
+   "maxW": 3800,
+   "page": "deck"
+  }
+ },
+ "order": [
+  "System-Folders.dc.html",
+  "System-Formats.dc.html",
+  "Main.dc.html",
+  "Phone-Notes-Revealed.dc.html",
+  "Phone-Notes-Loading.dc.html",
+  "Phone-Notes-Light.dc.html",
+  "Phone-Search-Start.dc.html",
+  "Phone-Search.dc.html",
+  "Phone-Search-None.dc.html",
+  "Phone-Folder-List.dc.html",
+  "Phone-Folder-ByBower.dc.html",
+  "Phone-Folder-Grid.dc.html",
+  "Phone-Folder-QuickLook.dc.html",
+  "Phone-Folder-Empty.dc.html",
+  "Phone-More.dc.html",
+  "Phone-Move-Picker.dc.html",
+  "Phone-Folder-Compare.dc.html",
+  "Phone-Note-Bower.dc.html",
+  "Phone-File-Photo.dc.html",
+  "Phone-Photo-Full.dc.html",
+  "Phone-File-Sheet.dc.html",
+  "Phone-File-Excel.dc.html",
+  "Phone-File-Video.dc.html",
+  "Phone-File-NoPreview.dc.html",
+  "Phone-Note-Details.dc.html",
+  "Phone-Note-Details-Open.dc.html",
+  "Phone-Note-Long.dc.html",
+  "Phone-File-PDF-Long.dc.html",
+  "Desktop-Explorer.dc.html",
+  "Desktop-Note.dc.html",
+  "Desktop-Search.dc.html",
+  "Desktop-Compare.dc.html",
+  "Flow-01-Welcome.dc.html",
+  "Flow-02-Earlier.dc.html",
+  "Flow-03-Add.dc.html",
+  "Flow-04-Working.dc.html",
+  "Flow-05-Home.dc.html",
+  "Flow-06-Dots.dc.html",
+  "Flow-07-Answer.dc.html",
+  "Flow-08-Suggest.dc.html",
+  "Phone-Notes-New.dc.html",
+  "Phone-JustFiled.dc.html",
+  "Why-Add.dc.html",
+  "Why-Home.dc.html",
+  "System-Kinds.dc.html",
+  "System-KeyFacts.dc.html",
+  "Desktop-Folder.dc.html",
+  "Desktop-JustFiled.dc.html",
+  "Desktop-Note-Details.dc.html",
+  "Desktop-Add.dc.html",
+  "Deck-01.dc.html",
+  "Deck-02.dc.html",
+  "Deck-03.dc.html",
+  "Deck-04.dc.html",
+  "Deck-05.dc.html",
+  "Deck-06.dc.html",
+  "Deck-07.dc.html",
+  "Deck-08.dc.html",
+  "Deck-09.dc.html",
+  "Deck-10.dc.html",
+  "Deck-11.dc.html",
+  "Deck-12.dc.html",
+  "Deck-13.dc.html",
+  "Deck-14.dc.html"
+ ],
+ "pages": [
+  {
+   "id": "design",
+   "name": "Design"
+  },
+  {
+   "id": "deck",
+   "name": "Demo deck"
+  }
+ ],
+ "title": "Bower explorer v4"
+}
