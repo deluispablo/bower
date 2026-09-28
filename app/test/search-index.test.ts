@@ -70,7 +70,11 @@ const FILES: DriveFile[] = [
   folder('f4', '2-Areas'),
   file('n1', '1-Projects/Flat hunt/Notes from the viewing.md', 'text/markdown'),
   file('n2', '1-Projects/Kitchen Refresh/Shopping list.md', 'text/markdown'),
-  file('p1', '1-Projects/Flat hunt/Lease agreement 2026.pdf', 'application/pdf'),
+  file(
+    'p1',
+    '1-Projects/Flat hunt/Lease agreement 2026.pdf',
+    'application/pdf',
+  ),
   file(
     'i1',
     '1-Projects/Flat hunt/Arlington Road, window sign.jpg',
@@ -235,9 +239,9 @@ describe('index upkeep and storage', () => {
     );
     expect(syncSearchIndex(restored, vault, TEXTS).updated).toBe(0);
     syncSearchIndex(restored, withSourdough, TEXTS);
-    expect(searchVault(restored, withSourdough, 'sourdough').notes).toHaveLength(
-      1,
-    );
+    expect(
+      searchVault(restored, withSourdough, 'sourdough').notes,
+    ).toHaveLength(1);
   });
 
   it('restores nothing when nothing is saved or the data is unusable', async () => {
