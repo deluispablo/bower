@@ -71,7 +71,46 @@ function isFolderNoteName(name: string): boolean {
   return name.startsWith('_') && isMarkdown(name);
 }
 
+/**
+ * Operating-system, sync and Office lock files nobody should ever see (spec
+ * D18, R-SYS-4). Matched case-insensitively against every path segment, so a
+ * hit at any depth hides the file. `*` matches any run of characters; an
+ * entry ending in `/` names a folder and hides everything inside it.
+ *
+ * The runner's rclone filters (#581) mirror this list: keep the two in step.
+ */
+export const SYSTEM_FILE_PATTERNS: readonly string[] = [
+  'desktop.ini',
+  'Thumbs.db',
+  'ehthumbs.db',
+  '.DS_Store',
+  'Icon\r',
+  '~$*',
+  '.~lock.*#',
+  '.tmp.driveupload/',
+];
+
+function patternToRegExp(pattern: string): RegExp {
+  const source = pattern
+    .replace(/\/$/, '')
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${source}$`, 'i');
+}
+
+const SYSTEM_FILE_MATCHERS: readonly RegExp[] =
+  SYSTEM_FILE_PATTERNS.map(patternToRegExp);
+
+/** Whether any segment of `path` is a system file or folder (`SYSTEM_FILE_PATTERNS`). */
+function isSystemPath(path: string): boolean {
+  return path
+    .split('/')
+    .some((segment) => SYSTEM_FILE_MATCHERS.some((re) => re.test(segment)));
+}
+
 export function isHidden(file: DriveFile): boolean {
+  if (isSystemPath(file.path)) return true;
   const segments = file.path.split('/');
   if (segments.some((segment) => segment.startsWith('.'))) return true;
   const folders = isFolder(file) ? segments : segments.slice(0, -1);
@@ -159,10 +198,21 @@ export type FileKind =
   | 'note'
   | 'pdf'
   | 'photo'
+  | 'heic'
   | 'image'
   | 'doc'
   | 'sheet'
   | 'slides'
+  | 'excel'
+  | 'csv'
+  | 'word'
+  | 'powerpoint'
+  | 'opendocument'
+  | 'text'
+  | 'markdown'
+  | 'zip'
+  | 'email'
+  | 'web'
   | 'audio'
   | 'video'
   | 'file';
@@ -173,28 +223,87 @@ const GOOGLE_KINDS: Readonly<Record<string, FileKind>> = {
   'application/vnd.google-apps.presentation': 'slides',
 };
 
-/** Raster formats a phone or camera produces: labelled "Photo". Any other
- * image (a drawing, an icon) is just an "Image". */
-const PHOTO_MIMES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/heic',
-  'image/heif',
-  'image/webp',
-]);
+/** Exact MIME types, checked before any extension. */
+const MIME_KINDS: Readonly<Record<string, FileKind>> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'photo',
+  'image/png': 'photo',
+  'image/webp': 'photo',
+  'image/heic': 'heic',
+  'image/heif': 'heic',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'excel',
+  'application/vnd.ms-excel': 'excel',
+  'text/csv': 'csv',
+  'application/csv': 'csv',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    'word',
+  'application/msword': 'word',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+    'powerpoint',
+  'application/vnd.ms-powerpoint': 'powerpoint',
+  'application/vnd.oasis.opendocument.text': 'opendocument',
+  'application/vnd.oasis.opendocument.spreadsheet': 'opendocument',
+  'text/plain': 'text',
+  'text/markdown': 'markdown',
+  'application/zip': 'zip',
+  'application/x-zip-compressed': 'zip',
+  'message/rfc822': 'email',
+  'text/html': 'web',
+  'application/xhtml+xml': 'web',
+};
 
-/** `file`'s kind from its name (`.md` is a note) and its Drive `mimeType`. */
+/** Extensions, used when the MIME type does not say (or is generic). */
+const EXTENSION_KINDS: Readonly<Record<string, FileKind>> = {
+  pdf: 'pdf',
+  jpg: 'photo',
+  jpeg: 'photo',
+  png: 'photo',
+  webp: 'photo',
+  heic: 'heic',
+  heif: 'heic',
+  gif: 'image',
+  svg: 'image',
+  xlsx: 'excel',
+  xls: 'excel',
+  csv: 'csv',
+  docx: 'word',
+  doc: 'word',
+  pptx: 'powerpoint',
+  ppt: 'powerpoint',
+  odt: 'opendocument',
+  ods: 'opendocument',
+  txt: 'text',
+  markdown: 'markdown',
+  zip: 'zip',
+  eml: 'email',
+  html: 'web',
+  htm: 'web',
+  mp3: 'audio',
+  m4a: 'audio',
+  wav: 'audio',
+  mp4: 'video',
+  mov: 'video',
+};
+
+function extensionOf(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+}
+
+/**
+ * `file`'s kind: a `.md` name is a note; then its Drive `mimeType`, then its
+ * extension (spec R-SYS-5). Only a file neither says anything about is a
+ * plain `file`.
+ */
 export function fileKind(file: Pick<DriveFile, 'name' | 'mimeType'>): FileKind {
   if (isMarkdown(file.name)) return 'note';
   const mime = file.mimeType.toLowerCase();
-  const google = GOOGLE_KINDS[mime];
-  if (google !== undefined) return google;
-  if (mime === 'application/pdf') return 'pdf';
-  if (PHOTO_MIMES.has(mime)) return 'photo';
-  if (mime.startsWith('image/')) return 'image';
+  const known = GOOGLE_KINDS[mime] ?? MIME_KINDS[mime];
+  if (known !== undefined) return known;
+  if (mime.startsWith('image/') && mime !== 'image/gif') return 'image';
   if (mime.startsWith('audio/')) return 'audio';
   if (mime.startsWith('video/')) return 'video';
-  return 'file';
+  return EXTENSION_KINDS[extensionOf(file.name)] ?? 'file';
 }
 
 /** The type word a folder row shows ("PDF · filed by Bower"). */
@@ -202,14 +311,70 @@ export const FILE_KIND_LABELS: Readonly<Record<FileKind, string>> = {
   note: 'Note',
   pdf: 'PDF',
   photo: 'Photo',
+  heic: 'iPhone photo',
   image: 'Image',
   doc: 'Google Doc',
   sheet: 'Google Sheet',
   slides: 'Google Slides',
+  excel: 'Excel spreadsheet',
+  csv: 'Spreadsheet',
+  word: 'Word document',
+  powerpoint: 'PowerPoint',
+  opendocument: 'OpenDocument',
+  text: 'Text',
+  markdown: 'Markdown',
+  zip: 'ZIP archive',
+  email: 'Email',
+  web: 'Web page',
   audio: 'Audio',
   video: 'Video',
   file: 'File',
 };
+
+/** The badge each kind has when its file is not needed to tell (see `kindBadge`). */
+const KIND_BADGES: Readonly<Record<FileKind, string>> = {
+  note: 'MD',
+  pdf: 'PDF',
+  photo: 'JPG',
+  heic: 'HEIC',
+  image: 'PNG',
+  doc: 'LINK',
+  sheet: 'LINK',
+  slides: 'LINK',
+  excel: 'XLS',
+  csv: 'CSV',
+  word: 'DOC',
+  powerpoint: 'PPT',
+  opendocument: 'DOC',
+  text: 'TXT',
+  markdown: 'MD',
+  zip: 'ZIP',
+  email: 'EML',
+  web: 'HTML',
+  audio: 'MP3',
+  video: 'MP4',
+  file: 'FILE',
+};
+
+/**
+ * The 3–4 letter badge for a kind. A photo is `JPG` unless `file` says it
+ * is a PNG or WebP; a video is `MP4` unless `file` says QuickTime (`MOV`).
+ * Google files are `LINK`: they open in Drive.
+ */
+export function kindBadge(
+  kind: FileKind,
+  file?: Pick<DriveFile, 'name' | 'mimeType'>,
+): string {
+  if (file !== undefined) {
+    const mime = file.mimeType.toLowerCase();
+    const ext = extensionOf(file.name);
+    if (kind === 'photo' && (mime === 'image/png' || ext === 'png'))
+      return 'PNG';
+    if (kind === 'video' && (mime === 'video/quicktime' || ext === 'mov'))
+      return 'MOV';
+  }
+  return KIND_BADGES[kind];
+}
 
 /**
  * A file's title: its name without the extension (`Lease 2026.pdf` →
