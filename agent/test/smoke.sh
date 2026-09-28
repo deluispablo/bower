@@ -407,6 +407,14 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       # A photo whose name says nothing (issue #369).
       echo jpg >"$remote/0-Inbox/IMG_4471.jpg"
     fi
+    if [ "$SMOKE_SCENARIO" = formats ]; then
+      # Report v2 (#598): a video and an Excel file (kinds Bower only
+      # keeps), a photo over the 50 MB limit, and a PDF over 300 pages.
+      echo mp4 >"$remote/0-Inbox/clip.mp4"
+      echo xlsx >"$remote/0-Inbox/budget.xlsx"
+      truncate -s 51M "$remote/0-Inbox/huge-photo.jpg"
+      for _ in $(seq 301); do echo '1 0 obj << /Type /Page >> endobj'; done >"$remote/0-Inbox/long-scan.pdf"
+    fi
     if [ "$SMOKE_SCENARIO" = moves ]; then
       # Server-side moves (#595): a note in a PARA folder the agent moves to
       # a project that is not in Drive yet, one it renames, a pending photo
@@ -765,6 +773,19 @@ case "$SMOKE_SCENARIO" in
       '- Bike time to the office (reasoned)' >'Answers/2026-01-15 Which flat first.md'
     mv '0-Inbox/Bower - 2026-01-15 0900 Tidy up.md' 0-Inbox/Processed/
     ;;
+  # Report v2 (#598): the agent files the kinds it only keeps and the files
+  # over the size limit by name and date, and writes one clause about what
+  # it added besides filing (a blank line first, spaces around it, and a
+  # second line that is ignored).
+  formats)
+    cp .bower/too-large.txt "$SMOKE_STATE/too-large-seen.txt" 2>/dev/null || true
+    mkdir -p 3-Resources/Videos 2-Areas/Finance 3-Resources/Photos
+    mv 0-Inbox/clip.mp4 '3-Resources/Videos/2026-01-15 clip.mp4'
+    mv 0-Inbox/budget.xlsx 2-Areas/Finance/budget.xlsx
+    mv 0-Inbox/huge-photo.jpg '3-Resources/Photos/2026-01-15 huge-photo.jpg'
+    mv 0-Inbox/long-scan.pdf 3-Resources/long-scan.pdf
+    printf '\n  I added bike times to the flats  \nA second line\n' >.bower/added.txt
+    ;;
   # A name that says nothing (issue #369): the photo is renamed from its
   # content, indexed with its type and origin, and the rename logged.
   rename)
@@ -997,6 +1018,7 @@ expect_content_free() {
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
     Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington 'Which flat' offer- 'Job hunt' till-slip 'Old receipts' \
+    clip.mp4 budget huge-photo long-scan 'bike times' 'second line' \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -1639,6 +1661,10 @@ expect_eq "$(post 2 p.quarantined)" '["0-Inbox/Quarantine/evil.md"]' 'quarantine
 expect_eq "$(post 2 p.refused)" '[]' 'refused'
 expect_eq "$(post 2 'p.processed.map((i) => i.path)')" \
   '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed excludes the quarantined file'
+# Report v2 (#598): the quarantined file is set aside as `quarantined`, and
+# a run whose agent writes no added note sends no `added`.
+expect_eq "$(post 2 p.setAside)" '[{"path":"0-Inbox/Quarantine/evil.md","reason":"quarantined"}]' 'set aside'
+expect_eq "$(post 2 'p.added === undefined')" true 'no added without an added note'
 grep -q ' 1 files quarantined$' "$STATE/out.log" || die 'quarantined count not logged'
 saw="$STATE/claude-saw.txt"
 grep -Fxq '0-Inbox/evil.md' "$saw" && die 'the agent saw the flagged file at its original pending path'
@@ -2419,3 +2445,39 @@ expect_eq "$(grep -c 'Moved by you' "$STATE/remote/log.md")" 1 'Moved by you lin
 expect_eq "$(grep -c '(missing)' "$STATE/remote/index.md")" 1 'missing marks after a quiet run'
 [ ! -s "$STATE/uploaded.txt" ] || die 'a quiet run uploaded a file'
 echo "ok the runner reconciles moves the person made"
+
+# 34. Report v2 (#598): the final report and .bower/last-run.json say where
+# each processed item went (`to`) and its old name when it was renamed
+# (`renamedFrom`); a video and an Excel file are set aside as
+# `kept-not-read`, a photo over 50 MB and a PDF over 300 pages as
+# `too-large` (the agent finds those two listed in .bower/too-large.txt, so
+# it files them without reading); the agent's one clause about what it added
+# is read from .bower/added.txt, sent as `added`, and neither file reaches
+# Drive. The script output stays content-free.
+run_case formats
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(cat "$STATE/too-large-seen.txt")" "$(printf '%s\n' 0-Inbox/huge-photo.jpg 0-Inbox/long-scan.pdf)" \
+  'the too-large list the agent found'
+expect_eq "$(post 2 'p.processed.filter((i) => i.to).map((i) => [i.path, i.to, i.renamedFrom ?? ""].join(">")).join("|")')" \
+  '0-Inbox/a.pdf>0-Inbox/Processed/a.pdf>|0-Inbox/budget.xlsx>2-Areas/Finance/budget.xlsx>|0-Inbox/clip.mp4>3-Resources/Videos/2026-01-15 clip.mp4>clip.mp4|0-Inbox/huge-photo.jpg>3-Resources/Photos/2026-01-15 huge-photo.jpg>huge-photo.jpg|0-Inbox/long-scan.pdf>3-Resources/long-scan.pdf>' \
+  'processed items with to and renamedFrom'
+expect_eq "$(post 2 'p.processed.filter((i) => !i.to).map((i) => i.path).join("|")')" \
+  'Clippings/Bower trick.md|Clippings/b.md' 'processed items that did not move'
+expect_eq "$(post 2 'p.setAside.map((i) => i.reason + ":" + i.path).join("|")')" \
+  'kept-not-read:0-Inbox/budget.xlsx|kept-not-read:0-Inbox/clip.mp4|too-large:0-Inbox/huge-photo.jpg|too-large:0-Inbox/long-scan.pdf' \
+  'set aside with reasons'
+expect_eq "$(post 2 p.added)" 'I added bike times to the flats' 'added'
+outcome="$STATE/remote/.bower/last-run.json"
+expect_eq "$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(JSON.stringify([o.items, o.setAside, o.added]))' "$outcome")" \
+  "$(post 2 'JSON.stringify([p.processed, p.setAside, p.added])')" 'last-run.json carries the same report v2 fields'
+for f in .bower/added.txt .bower/too-large.txt; do
+  [ ! -e "$STATE/remote/$f" ] || die "$f reached Drive"
+  if grep -Fxq -- "$f" "$STATE/uploaded.txt"; then die "$f was uploaded"; fi
+done
+[ -f "$STATE/remote/3-Resources/Videos/2026-01-15 clip.mp4" ] || die 'the video is not filed in Drive'
+expect_content_free
+expect_cleaned_up
+echo "ok the report says where each thing went, what was set aside and why, and what Bower added"
+
