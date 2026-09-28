@@ -5,6 +5,7 @@ import { useLocation } from 'preact-iso';
 import { linkNoteName } from '../add.js';
 import { Bird } from '../components/bird.js';
 import { IconNote } from '../components/icons.js';
+import { ProcessButton } from '../components/process-button.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import {
   copyOrExportIntoInbox,
@@ -307,12 +308,13 @@ export function Add() {
   }
 
   /** After a batch's worth of uploads: report the add and go home. Add only
-   * ever fills the inbox; the run itself is started by the Tidy up pill or
-   * the switcher command, never from here. */
+   * ever fills the inbox; the run itself is started by a tap on Tidy up
+   * (the hint below, Home's Inbox card, the switcher command), never by
+   * adding. */
   function finish(): void {
     setMessage('Added to your inbox.');
     // The vault index otherwise only catches up on its next background
-    // revalidation, so the "Tidy up (n)" count and Home's Inbox card would
+    // revalidation, so the switcher's Tidy up count and Home's Inbox card would
     // read stale until then (#289).
     void refresh();
     // A sentence about the last Drive pick stays on screen to be read.
@@ -591,6 +593,7 @@ export function Add() {
           then tap Tidy up once: Bower does better work with a pile than with
           one thing at a time.
         </p>
+        <ProcessButton />
       </div>
 
       {message !== null && <p class="add-message">{message}</p>}

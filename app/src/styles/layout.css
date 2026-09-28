@@ -262,20 +262,6 @@ button.page-bare-back {
   display: flex;
 }
 
-/* Flush to the right edge (spec §14), after the actions slot whether or not
-   it holds anything. */
-.topbar-pill {
-  margin-left: auto;
-}
-
-.topbar .process-offline-reason {
-  max-width: 10rem;
-}
-
-.theme-toggle {
-  display: none;
-}
-
 /* The avatar (#318): the account's initial in a teal-tinted circle; it
    opens Settings. Phone only: the desktop sidebar has a Settings row. */
 .topbar-avatar {
@@ -364,28 +350,13 @@ button.page-bare-back {
   padding-bottom: calc(var(--space-16) + var(--space-6));
 }
 
-/* Explorer (components/explorer.tsx): the drawer on phone, the sidebar on desktop. */
+/* Explorer (components/explorer.tsx): the Notes tab on phone, the sidebar on desktop. */
 .explorer {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   height: 100%;
   min-height: 0;
-}
-
-.explorer-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: 60px;
-  padding: var(--space-2) var(--space-2) 0 var(--space-4);
-}
-
-.explorer-title {
-  flex: 1;
-  margin: 0;
-  font-size: var(--text-lg);
-  font-weight: 600;
 }
 
 .explorer-tools {
@@ -435,7 +406,7 @@ button.page-bare-back {
   font-size: var(--text-xs);
 }
 
-/* The drawer's own filter field (spec §14): a real input, not a button —
+/* The Notes tab's own filter field (spec §14): a real input, not a button —
    `.explorer-filter` supplies the row's look, this only fills it. */
 .explorer-filter-input {
   flex: 1;
@@ -587,7 +558,8 @@ button.page-bare-back {
   color: var(--color-text);
 }
 
-/* The phone drawer: a modal dialog sliding in from the left. */
+/* The phone's folder menu (components/folder-menu.tsx, #319): a modal
+   dialog 320 px wide sliding in from the left over the dimmed page. */
 .drawer {
   position: fixed;
   inset: 0;
@@ -608,7 +580,7 @@ button.page-bare-back {
   left: 0;
   display: flex;
   flex-direction: column;
-  width: min(340px, 88vw);
+  width: min(320px, 88vw);
   background: var(--color-sidebar);
   border-right: 1px solid var(--color-border);
   box-shadow: var(--shadow-md);
@@ -752,10 +724,6 @@ button.page-bare-back {
     display: block;
   }
 
-  .theme-toggle {
-    display: inline-flex;
-  }
-
   .content {
     padding: var(--space-6);
   }
@@ -799,16 +767,6 @@ button.page-bare-back {
   .explorer-tool .icon {
     width: 16px;
     height: 16px;
-  }
-
-  .theme-toggle {
-    width: 36px;
-    height: 36px;
-  }
-
-  .theme-toggle .icon {
-    width: 18px;
-    height: 18px;
   }
 
   .explorer-filter {

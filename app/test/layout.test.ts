@@ -13,7 +13,13 @@ import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import { BackLink } from '../src/components/back-link.js';
 import { bowerUrlFor } from '../src/routes/tell-redirect.js';
-import { helpStepFor, isInnerScreen, usesShell } from '../src/shell-routes.js';
+import {
+  helpScreenFor,
+  isInnerScreen,
+  usesShell,
+} from '../src/shell-routes.js';
+import type { RunPhase } from '../src/run-store.js';
+import { closeSwitcher } from '../src/switcher-store.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 const location = { path: '/', route: vi.fn() };
@@ -54,14 +60,35 @@ vi.mock('../src/session.js', () => ({
   useSession: () => ({ status: 'signed-in', me, signOut }),
 }));
 
+// One index for the whole file, as the real store keeps it between renders:
+// the quick switcher (opened from the folder menu's search row) re-reads it
+// in an effect, so a fresh one per render would never settle.
+let index: ReturnType<typeof buildVaultIndex> | undefined;
+
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ index: buildVaultIndex(files), files }),
+  useVault: () => {
+    index ??= buildVaultIndex(files);
+    return { index, files };
+  },
 }));
+
+const runState: { phase: RunPhase; sheetOpen: boolean } = {
+  phase: 'idle',
+  sheetOpen: false,
+};
 
 vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
-  useRun: () => ({ phase: 'idle', process: vi.fn() }),
+  useRun: () => ({
+    ...runState,
+    run: null,
+    sheetReopenKey: 0,
+    process: vi.fn(),
+    tidyUp: vi.fn(),
+    openSheet: vi.fn(),
+    dismissSheet: vi.fn(),
+  }),
 }));
 
 vi.mock('../src/cache.js', () => ({
@@ -110,6 +137,8 @@ function openDrawer(): HTMLButtonElement {
 
 beforeEach(() => {
   location.path = '/';
+  runState.phase = 'idle';
+  runState.sheetOpen = false;
   localStorage.clear();
 });
 
@@ -150,25 +179,39 @@ describe('Layout', () => {
     }
   });
 
-  it('renders the Tidy up pill once, with the pending count', () => {
+  it('has no Tidy up in the bar, idle or during a run (#320)', () => {
     mount();
-    const pills = root.querySelectorAll('.process-button');
-    expect(pills).toHaveLength(1);
-    expect(pills[0]?.textContent).toBe('Tidy up (1)');
+    expect(root.querySelector('.process-button')).toBeNull();
+    expect(query('.topbar').textContent).not.toContain('Tidy');
+    void act(() => {
+      render(null, root);
+    });
+
+    runState.phase = 'running';
+    mount();
+    expect(root.querySelector('.process-button')).toBeNull();
+    expect(query('.topbar').textContent).not.toContain('Tidying');
   });
 
-  it('orders the bar: folder menu, title, pill, "?", avatar (#318)', () => {
+  it('mounts the working sheet once, outside the bar, during a run (#320)', () => {
+    runState.phase = 'running';
+    runState.sheetOpen = true;
+    mount();
+    const sheets = root.querySelectorAll('[aria-label="Tidying up status"]');
+    expect(sheets).toHaveLength(1);
+    expect(query('.topbar').contains(sheets[0] ?? null)).toBe(false);
+  });
+
+  it('orders the bar: folder menu, title, "?", avatar (#318)', () => {
     mount();
     const bar = query('.topbar');
     const order = Array.from(bar.children).map((el) => el.className);
     const menuIndex = order.findIndex((c) => c.includes('menu-button'));
     const titleIndex = order.findIndex((c) => c.includes('topbar-crumb'));
-    const pillIndex = order.findIndex((c) => c.includes('topbar-pill'));
     const helpIndex = order.findIndex((c) => c.includes('topbar-help'));
     expect(menuIndex).toBe(0);
     expect(titleIndex).toBeGreaterThan(menuIndex);
-    expect(pillIndex).toBeGreaterThan(titleIndex);
-    expect(helpIndex).toBeGreaterThan(pillIndex);
+    expect(helpIndex).toBeGreaterThan(titleIndex);
     expect(order[order.length - 1]).toBe('topbar-avatar');
 
     expect(query('.menu-button').getAttribute('aria-label')).toBe(
@@ -220,13 +263,31 @@ describe('Layout', () => {
     expect(back.getAttribute('href')).toBe('/folder/2-Areas');
   });
 
-  it('opens the tour at the step for the tab on "?"', () => {
+  it('opens the help sheet for the tab on "?"', () => {
     location.path = '/bower';
     mount();
     click(query('.topbar-help'));
     const dialog = query('[role="dialog"]');
-    expect(dialog.textContent).toContain('Tell Bower');
-    expect(dialog.textContent).not.toContain('Drop anything here.');
+    expect(dialog.textContent).toContain('About this screen');
+    expect(dialog.querySelector('h2')?.textContent).toBe('Bower');
+    // jsdom lays nothing out, so the first Bower link (the sidebar's) wins.
+    expect(query('[data-tour="bower"]').classList.contains('help-tab-on')).toBe(
+      true,
+    );
+  });
+
+  it('"Show me around" on the help sheet closes it and goes Home for the tour', () => {
+    location.path = '/notes';
+    location.route.mockClear();
+    mount();
+    click(query('.topbar-help'));
+    const showMe = Array.from(root.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Show me around',
+    );
+    if (showMe === undefined) throw new Error('Show me around missing');
+    click(showMe);
+    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(location.route).toHaveBeenCalledWith('/');
   });
 
   it('shows the explorer as a desktop landmark, not a dialog', () => {
@@ -239,7 +300,7 @@ describe('Layout', () => {
     expect(root.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it('keeps Settings as a desktop sidebar row, not in the drawer', () => {
+  it('keeps Settings as a desktop sidebar row, not in the folder menu', () => {
     mount();
     expect(
       query('nav[aria-label="Your notes"] a[href="/settings"]').textContent,
@@ -250,18 +311,76 @@ describe('Layout', () => {
     ).toBeNull();
   });
 
-  it('opens the drawer as a modal dialog and closes it on Escape', () => {
+  it('opens the folder menu as a modal dialog over an inert page (#319)', () => {
     mount();
     const menu = openDrawer();
     expect(menu.getAttribute('aria-expanded')).toBe('true');
     const dialog = query('[role="dialog"]');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-    expect(dialog.getAttribute('aria-label')).toBe('Your notes');
+    const title = query(`#${dialog.getAttribute('aria-labelledby') ?? ''}`);
+    expect(title.textContent).toBe('Your folders');
     expect(dialog.contains(document.activeElement)).toBe(true);
+    for (const selector of ['.shell-sidebar', '.shell-main', '.bottom-nav']) {
+      expect(query(selector).hasAttribute('inert')).toBe(true);
+    }
 
     pressEscape();
     expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(query('.shell-main').hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(menu);
+  });
+
+  it('lists the top-level folders with their meaning line and count', () => {
+    mount();
+    openDrawer();
+    const links = Array.from(
+      root.querySelectorAll<HTMLAnchorElement>(
+        '[role="dialog"] .folder-menu-link',
+      ),
+    );
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/folder/0-Inbox',
+      '/folder/2-Areas',
+    ]);
+    expect(links[1]?.textContent).toBe(
+      '2-AreasParts of life that go on: home, health, money1',
+    );
+    // No count at zero: the inbox holds only a PDF, not a note.
+    expect(links[0]?.querySelector('.folder-menu-count')).toBeNull();
+    expect(query('[role="dialog"] .folder-menu-foot').textContent).toContain(
+      'Long-press to pin it to Home.',
+    );
+  });
+
+  it("shows a folder's subfolders from its chevron", () => {
+    mount();
+    openDrawer();
+    const chevron = query<HTMLButtonElement>(
+      '[role="dialog"] button[aria-label="Folders in 2-Areas"]',
+    );
+    expect(chevron.getAttribute('aria-expanded')).toBe('false');
+    click(chevron);
+    expect(chevron.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      query('[role="dialog"] a[href="/folder/2-Areas/Cooking"]').textContent,
+    ).toBe('Cooking1');
+  });
+
+  it('closes the menu and opens the switcher from the search row', () => {
+    mount();
+    openDrawer();
+    const search = Array.from(
+      root.querySelectorAll('[role="dialog"] button'),
+    ).find((button) => button.textContent === 'Search or jump to anything');
+    if (search === undefined) throw new Error('search row missing');
+    click(search);
+    expect(root.querySelector('.drawer')).toBeNull();
+    expect(
+      root.querySelector('[role="dialog"][aria-label="Quick switcher"]'),
+    ).not.toBeNull();
+    void act(() => {
+      closeSwitcher();
+    });
   });
 
   it('closes the drawer on a backdrop tap and on the close button', () => {
@@ -301,7 +420,7 @@ describe('Layout', () => {
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
   });
 
-  it('renders content from the actions shell slot next to the pill', () => {
+  it('renders content from the actions shell slot in the bar', () => {
     // A stable VNode, created once: useShellSlot refills the slot whenever
     // its `content` argument is a new reference, so passing a fresh one on
     // every render (as an inline h(...) call here would) never settles.
@@ -383,12 +502,15 @@ describe('isInnerScreen', () => {
   });
 });
 
-describe('helpStepFor', () => {
-  it('points "?" at the step for the tab on screen', () => {
-    expect(helpStepFor('/add')).toBe('add');
-    expect(helpStepFor('/bower')).toBe('tell');
-    expect(helpStepFor('/')).toBeUndefined();
-    expect(helpStepFor('/notes')).toBeUndefined();
+describe('helpScreenFor', () => {
+  it('points "?" at the sheet for the screen on show', () => {
+    expect(helpScreenFor('/')).toBe('home');
+    expect(helpScreenFor('/notes')).toBe('notes');
+    expect(helpScreenFor('/add')).toBe('add');
+    expect(helpScreenFor('/bower')).toBe('bower');
+    expect(helpScreenFor('/folder/2-Areas/Cooking')).toBe('folder');
+    expect(helpScreenFor('/note/id-1')).toBe('notes');
+    expect(helpScreenFor('/settings')).toBe('home');
   });
 });
 

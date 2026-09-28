@@ -67,13 +67,12 @@ describe('DemoBanner', () => {
     expect(root.textContent).toBe('');
   });
 
-  it('shows the sample-notes sentence and its tour target in a demo build', () => {
+  it('shows the sample-notes sentence in a demo build', () => {
     state.demo = true;
     mount();
     expect(root.textContent).toContain(
       'These are sample notes. Nothing here is real.',
     );
-    expect(root.querySelector('[data-tour="banner"]')).not.toBeNull();
   });
 
   it('"Show me around" replays the tour', () => {

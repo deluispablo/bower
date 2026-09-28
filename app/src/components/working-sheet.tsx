@@ -19,7 +19,7 @@
  *
  * The run store (`run-store.tsx`, #304) owns `open`: the sheet opens by
  * itself once per run, never because a screen mounted again, and when the
- * header button is tapped during a run; it closes on dismiss.
+ * Tidy up button is tapped during a run; it closes on dismiss.
  */
 
 import type { JSX } from 'preact';

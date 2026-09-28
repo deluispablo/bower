@@ -2,7 +2,8 @@
  * The six main flows (#196, spec §5) against the demo build: Alex's sample
  * notes, three items waiting in the inbox and a scripted Tidy up run
  * (`src/demo/`). Each flow skips the first-run tour first, except "Open
- * Home", which walks it from the "What is Bower" intro to the end.
+ * Home", which walks it (four sheets, one per tab) from the "What is Bower"
+ * intro to the end.
  * Assertions are on the text a person reads; the screenshots are a
  * by-product for the README and the CI artifacts, never compared.
  */
@@ -60,23 +61,36 @@ test.describe('open Home', () => {
     }
     await page.getByRole('button', { name: 'Explore the demo' }).click();
 
+    // The tour: four sheets, one per tab, each over its highlighted tab.
     const tour = page.getByRole('dialog');
-    const steps = [
-      ['1 of 4 · Add', 'Drop anything here.'],
-      ['2 of 4 · Tidy up', "When you're ready, tap Tidy up."],
-      ['3 of 4 · Tell Bower', 'Talk to me like a person.'],
-      ['4 of 4 · This is a demo', 'This is a demo; run your own.'],
+    const sheets = [
+      ['Home', 'Next: Notes'],
+      ['Notes', 'Next: Add'],
+      ['Add', 'Next: Bower'],
+      ['Bower', "Let's go"],
     ] as const;
-    for (const [index, [label, title]] of steps.entries()) {
-      await expect(tour.getByText(label)).toBeVisible();
+    for (const [index, [title, next]] of sheets.entries()) {
+      await expect(tour.getByText(`Tour · ${index + 1} of 4`)).toBeVisible();
       await expect(tour.getByRole('heading', { name: title })).toBeVisible();
-      if (index < steps.length - 1) {
-        await tour.getByRole('button', { name: 'Next' }).click();
+      await expect(tour.getByRole('button', { name: 'Skip' })).toBeVisible();
+      await expect(
+        visible(page.locator(`[data-tour="${title.toLowerCase()}"]`)),
+      ).toHaveClass(/help-tab-on/);
+      if (index === 0) {
+        await expect(
+          tour.getByText("These are Alex's things, a sample."),
+        ).toBeVisible();
       }
+      if (testInfo.project.name === 'phone') {
+        await shot(page, testInfo, `tour-${index + 1}`);
+      }
+      await tour.getByRole('button', { name: next }).click();
     }
-    await tour.getByRole('link', { name: 'Run your own Bower' }).click();
     await expect(tour).toBeHidden();
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/$/);
+
+    // Run your own Bower is the demo's sign-in.
+    await page.goto('/login');
     await expect(
       page.getByRole('heading', { name: 'Bower', level: 1 }),
     ).toBeVisible();
@@ -90,7 +104,7 @@ test.describe('open Home', () => {
       page.getByRole('heading', { name: 'Good morning, Alex' }),
     ).toBeVisible();
     await expect(page.getByText('These are sample notes.')).toBeVisible();
-    await page.getByRole('button', { name: 'Skip tour' }).click();
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(
       visible(
         page.getByRole('link', { name: /Answers\s+1\s+things Bower answered/ }),
@@ -165,19 +179,22 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await expect(page.getByText('Added to your inbox.')).toBeVisible();
   await shot(page, testInfo, 'add');
 
-  // Back on Home once the upload finishes: the Tidy up count and the Inbox
-  // card read the new total right away (#289), not after the next
-  // background refresh.
+  // Back on Home once the upload finishes: the Inbox card reads the new
+  // total right away (#289), not after the next background refresh.
   await expect(page).toHaveURL('/');
   await expect(
-    visible(page.getByRole('button', { name: 'Tidy up (4)' })),
-  ).toBeVisible();
+    visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
+      '.home-card-count',
+    ),
+  ).toHaveText('4');
 });
 
 test('Tidy up files the inbox and says so', async ({ page }, testInfo) => {
   await openHome(page);
   await expect(page.getByText('waiting to be tidied')).toBeVisible();
-  await visible(page.getByRole('button', { name: 'Tidy up (3)' })).click();
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
 
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(
@@ -199,7 +216,9 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   page,
 }, testInfo) => {
   await openHome(page);
-  await visible(page.getByRole('button', { name: 'Tidy up (3)' })).click();
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
 
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet).toBeVisible();
@@ -218,9 +237,11 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
     visible(page.getByRole('button', { name: 'Tidying up…' })),
   ).toBeVisible();
   await expect(sheet).toBeHidden();
+  // The bar shows nothing while the run goes; Home's Inbox card does (#320).
+  await expect(page.locator('header.topbar')).not.toContainText('Tidy');
 
   // Done is announced once, in a toast that closes; the sheet stays closed
-  // and the pill reads Tidy up again within seconds, not "Done ✓" for good.
+  // and the Inbox card's button reads Tidy up again within seconds.
   const toast = page.getByRole('status').filter({
     hasText: '3 files processed',
   });
@@ -233,7 +254,7 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   await page.keyboard.press('Enter');
   await expect(toast).toBeHidden();
   await expect(
-    visible(page.getByRole('button', { name: /^Tidy up/ })),
+    visible(page.getByRole('button', { name: 'Tidy up', exact: true })),
   ).toBeVisible({ timeout: 10_000 });
   await expect(sheet).toBeHidden();
 });
@@ -273,6 +294,50 @@ test('Settings switches the theme to dark, and it sticks', async ({
   await expect(page.getByRole('radio', { name: 'Dark' })).toBeChecked();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await shot(page, testInfo, 'settings');
+});
+
+test('What is Bower from Settings opens with Close and Done (#329)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await openSettings(page);
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await expect(
+    page.getByText('The whole story, in nine screens'),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'What is Bower' }).click();
+  await expect(page).toHaveURL(/\/welcome\?from=settings$/);
+  await expect(
+    page.getByRole('heading', { name: /Bower files it/ }),
+  ).toBeInViewport();
+
+  // Close (X), not Skip, when opened from Settings.
+  await expect(
+    page.getByRole('button', { name: 'Skip', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  await shot(page, testInfo, 'intro-from-settings');
+
+  // Closing on page 1 goes straight back to Settings, not the sign-in.
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+
+  // Walking all nine pages ends on Done, not Sign in with Google.
+  await page.getByRole('button', { name: 'What is Bower' }).click();
+  const next = page.getByRole('button', { name: 'Next', exact: true });
+  await expect(next).toHaveCount(8);
+  for (let index = 0; index < 8; index += 1) {
+    await next.nth(index).click();
+  }
+  await expect(
+    page.getByRole('heading', { name: 'What will you start with?' }),
+  ).toBeInViewport();
+  await expect(
+    page.getByRole('link', { name: 'Sign in with Google' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page).toHaveURL(/\/settings$/);
 });
 
 test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', async ({
@@ -398,24 +463,35 @@ test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
     await shot(page, testInfo, 'bar-home');
   }
 
-  // "?" opens the tour at the step for this tab, until the help sheets.
+  // "?" opens the help sheet for this tab: About this screen, no counter.
   await help.click();
-  const tour = page.getByRole('dialog');
-  await expect(tour.getByText(/^1 of 4 · Add$/)).toBeVisible();
-  await tour.getByRole('button', { name: 'Skip tour' }).click();
-  await expect(tour).toBeHidden();
+  const sheet = page.getByRole('dialog', { name: 'Home' });
+  await expect(sheet.getByText('About this screen')).toBeVisible();
+  await expect(sheet.getByText('Tour ·')).toHaveCount(0);
+  await expect(
+    sheet.getByRole('link', { name: 'What is Bower, from the start' }),
+  ).toBeVisible();
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
 
   await visible(page.getByRole('link', { name: /^Bower$/ })).click();
   await help.click();
-  await expect(tour.getByText(/^3 of 4 · Tell Bower$/)).toBeVisible();
-  await tour.getByRole('button', { name: 'Skip tour' }).click();
+  const bower = page.getByRole('dialog', { name: 'Bower' });
+  await expect(bower.getByText('About this screen')).toBeVisible();
+  if (testInfo.project.name === 'phone') {
+    await shot(page, testInfo, 'help-bower');
+  }
+  // "Show me around" goes Home and runs the tour from its first sheet.
+  await bower.getByRole('button', { name: 'Show me around' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  const tour = page.getByRole('dialog', { name: 'Home' });
+  await expect(tour.getByText('Tour · 1 of 4')).toBeVisible();
+  await tour.getByRole('button', { name: 'Skip' }).click();
+  await expect(tour).toBeHidden();
 
   if (testInfo.project.name !== 'phone') return;
   await page.goto('/');
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Skip tour' })
-    .click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Skip' }).click();
   await visible(
     page.getByRole('button', { name: /Search or jump to a note/ }),
   ).click();
@@ -461,4 +537,100 @@ test('The bar and the bottom nav align with the content column at 768 (#311)', a
   expect(navBox?.width).toBeCloseTo(contentBox?.width ?? NaN, 0);
 
   await shot(page, testInfo, 'tablet-768');
+});
+
+test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  // Projects (the demo fixture) has no notes of its own — Lisbon Trip,
+  // Kitchen Refresh and Half Marathon hold all of them — a real instance
+  // of 1.9: the header's count is the whole subtree, the empty state used
+  // to say "Nothing here yet" regardless.
+  await page.goto('/folder/1-Projects');
+  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+  await expect(page.getByText('Nothing here yet.')).toBeHidden();
+  await expect(page.getByText(/notes in /)).toBeVisible();
+  await shot(page, testInfo, 'folder-notes-elsewhere');
+});
+
+test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+
+  // Chips: Pin to Home / Ask Bower about it / Open in Drive, at 13 px,
+  // fit the phone's 343 px content width in one row (2.14) instead of
+  // wrapping to two.
+  await page.goto('/folder/1-Projects/Lisbon%20Trip');
+  await expect(
+    page.getByRole('heading', { name: 'Lisbon Trip' }),
+  ).toBeVisible();
+  const chips = page.locator('.folder-chips .chip');
+  const ys = await chips.evaluateAll((els) =>
+    els.map((el) => el.getBoundingClientRect().y),
+  );
+  expect(new Set(ys).size).toBe(1);
+  await shot(page, testInfo, 'folder-chips');
+
+  // The tree shows a count only above zero (3.6): no folder row reads "0".
+  // On the phone the tree lives on the Notes tab (the folder menu lists
+  // only the top-level folders, #319); on desktop it is the sidebar.
+  if (testInfo.project.name === 'phone') await navigate(page, /^Notes$/);
+  const counts = await page.locator('.tree-count').allTextContents();
+  expect(counts.length).toBeGreaterThan(0);
+  expect(counts).not.toContain('0');
+});
+
+test('the folder menu: open it, tap a folder, land on it (#319)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'phone',
+    'The folder menu is on the phone bar; desktop keeps the sidebar.',
+  );
+  await openHome(page);
+  const bar = page.locator('header.topbar');
+  const opener = bar.getByRole('button', { name: 'Your folders' });
+  await opener.click();
+  const menu = page.getByRole('dialog', { name: 'Your folders' });
+  await expect(menu).toBeVisible();
+  await expect(
+    menu.getByRole('link', { name: /^1-Projects Things with an end date/ }),
+  ).toBeVisible();
+  // 1-Projects opens with its projects showing, as on the board.
+  await expect(
+    menu.getByRole('link', { name: /^Lisbon Trip \d+$/ }),
+  ).toBeVisible();
+  await expect(
+    menu.getByText('The full tree with search lives on the Notes tab.', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await shot(page, testInfo, 'folder-menu');
+
+  // Holding a row (here its context menu, what a long press also opens)
+  // offers the pin; Escape closes that sheet alone.
+  await menu
+    .getByRole('link', { name: /^2-Areas Parts of life/ })
+    .click({ button: 'right' });
+  const sheet = page.getByRole('dialog', { name: '2-Areas' });
+  // Focus moves into the sheet once it is open: wait for that before Escape.
+  await expect(
+    sheet.getByRole('menuitem', { name: 'Pin to Home' }),
+  ).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(menu).toBeVisible();
+
+  // Escape closes it and gives focus back to the menu button.
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(opener).toBeFocused();
+
+  await opener.click();
+  await menu.getByRole('link', { name: /^3-Resources Things to keep/ }).click();
+  await expect(page).toHaveURL(/\/folder\/3-Resources$/);
+  await expect(menu).toBeHidden();
+  await expect(bar.locator('.topbar-title')).toHaveText('3-Resources');
 });

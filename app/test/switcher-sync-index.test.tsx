@@ -31,7 +31,7 @@ const INDEX = buildVaultIndex(FILES);
 // `vi.mock` factories are hoisted above every import, so the mocks they
 // reference must be too (`vi.hoisted`) — otherwise they are read before
 // they exist.
-const { searchFullText, loadNote, process } = vi.hoisted(() => ({
+const { searchFullText, loadNote, process, tidyUp } = vi.hoisted(() => ({
   // Resolves never: stands in for a Drive full-text search that never
   // comes back (offline, or just slow), so any result shown before it
   // settles must have come from the local index, not from this.
@@ -42,6 +42,7 @@ const { searchFullText, loadNote, process } = vi.hoisted(() => ({
     () => new Promise(() => {}),
   ),
   process: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+  tidyUp: vi.fn<() => void>(),
 }));
 
 vi.mock('preact-iso', () => ({ useLocation: () => ({ route: vi.fn() }) }));
@@ -56,7 +57,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 }));
 vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
-  useRun: () => ({ process }),
+  useRun: () => ({ process, tidyUp }),
 }));
 
 const { Switcher } = await import('../src/components/switcher.js');
@@ -139,5 +140,29 @@ describe('the switcher, against a Drive search that never resolves', () => {
     // The status line never falsely claims no notes match while the
     // request is still pending.
     expect(root.textContent).not.toContain('No notes contain');
+  });
+});
+
+describe('the Tidy up command (#320)', () => {
+  it('goes through the same tidyUp as the Inbox card and Add, never process', async () => {
+    await flush();
+    const field = root.querySelector('input') as HTMLInputElement;
+    void act(() => {
+      type(field, 'tidy');
+    });
+    await flush();
+
+    const row = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        '[role="option"] a, [role="option"] button',
+      ),
+    ).find((el) => (el.textContent ?? '').includes('Tidy up the inbox'));
+    if (row === undefined) throw new Error('Tidy up command missing');
+    void act(() => {
+      row.click();
+    });
+
+    expect(tidyUp).toHaveBeenCalledTimes(1);
+    expect(process).not.toHaveBeenCalled();
   });
 });

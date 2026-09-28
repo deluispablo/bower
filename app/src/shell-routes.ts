@@ -1,4 +1,4 @@
-import type { TourTarget } from './components/tour.js';
+import type { HelpScreen } from './help-rows.js';
 
 /**
  * Which routes render inside the shell (`components/layout.tsx`) and which
@@ -36,14 +36,18 @@ export function isInnerScreen(path: string): boolean {
 }
 
 /**
- * Which tour step the top bar's "?" opens on `path` (#318): the step about
- * the tab on screen, or the first one. Until each tab has its own help
- * sheet (#330).
+ * Which help sheet the top bar's "?" opens on `path` (#330): the tab's own
+ * sheet on a tab; the folder sheet on a folder; the Notes sheet on a note
+ * or a search, which are reached from Notes; Home's everywhere else.
  */
-export function helpStepFor(path: string): TourTarget | undefined {
+export function helpScreenFor(path: string): HelpScreen {
+  if (path === '/notes' || path === '/search' || path.startsWith('/note/')) {
+    return 'notes';
+  }
+  if (path === '/folder' || path.startsWith('/folder/')) return 'folder';
   if (path === '/add') return 'add';
-  if (path === BOWER_PATH) return 'tell';
-  return undefined;
+  if (path === BOWER_PATH) return 'bower';
+  return 'home';
 }
 
 export function usesShell(path: string): boolean {

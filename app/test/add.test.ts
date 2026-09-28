@@ -60,10 +60,10 @@ describe('linkNoteName', () => {
 });
 
 // #208: Add only ever fills the inbox. Uploading resolves without starting
-// a run — there is no `autoProcessOnAdd` left to call `process()` for, and
-// `Add` no longer even reads `run-store.js` (rendered here with no
-// `RunProvider` in the tree at all: `useRun()` would throw if it were still
-// called).
+// a run — there is no `autoProcessOnAdd` left to call `process()` for. The
+// only way to start one from Add is the Tidy up button in the hint (#320).
+const tidyUp = vi.fn();
+const startRun = vi.fn(() => Promise.resolve());
 const fakeFile: DriveFile = {
   id: 'FILE_ID',
   name: 'a.txt',
@@ -115,6 +115,15 @@ vi.mock('../src/drive.js', () => ({
 // worth of uploads). Mocked the same way sibling suites do
 // (`layout.test.ts`, `settings-demo.test.ts`): no real VaultProvider
 // needed for a plain UI check.
+vi.mock('../src/run-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/run-store.js')>()),
+  useRun: () => ({
+    phase: 'idle',
+    tidyUp,
+    process: startRun,
+    openSheet: vi.fn(),
+  }),
+}));
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => ({ refresh: vi.fn() }),
@@ -194,11 +203,20 @@ describe('Add', () => {
     }
     void act(() => addButton.click());
     // Every upload resolves and the button goes back to its idle label —
-    // the whole batch settled with nothing throwing and no run started
-    // (nothing here reads `run-store.js`; `useRun()` would throw outside a
-    // `RunProvider`, which this test never wraps `Add` in).
+    // the whole batch settled with nothing throwing and no run started.
     await waitFor(() => (addButton.textContent ?? '') === 'Add to Bower');
 
     expect(upload).toHaveBeenCalledTimes(3);
+    expect(tidyUp).not.toHaveBeenCalled();
+    expect(startRun).not.toHaveBeenCalled();
+  });
+
+  it('carries the Tidy up button in the hint, which asks the run store (#320)', () => {
+    const button = root.querySelector<HTMLButtonElement>(
+      '.app-file-banner .process-button',
+    );
+    expect(button?.textContent).toBe('Tidy up');
+    void act(() => button?.click());
+    expect(tidyUp).toHaveBeenCalledTimes(1);
   });
 });

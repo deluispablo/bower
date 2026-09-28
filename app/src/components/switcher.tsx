@@ -223,7 +223,7 @@ function SwitcherPanel({
 }): JSX.Element {
   const { route } = useLocation();
   const { index, files } = useVault();
-  const { process } = useRun();
+  const { tidyUp } = useRun();
 
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState<SearchStatus>('idle');
@@ -335,7 +335,7 @@ function SwitcherPanel({
     (command: Command) => {
       if (command.id === 'tidy-up') {
         closeSwitcher();
-        void process();
+        tidyUp();
         return;
       }
       if (command.id === 'theme') {
@@ -349,7 +349,7 @@ function SwitcherPanel({
         route(command.href);
       }
     },
-    [process, route, theme],
+    [tidyUp, route, theme],
   );
 
   const activate = useCallback(

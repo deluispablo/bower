@@ -50,9 +50,9 @@ export function visible(locator: Locator): Locator {
 /** Opens Home and skips the first-run tour, which the demo shows on every load. */
 export async function openHome(page: Page): Promise<void> {
   await page.goto('/');
-  const tour = page.getByRole('dialog', { name: 'Drop anything here.' });
-  await expect(tour).toBeVisible();
-  await tour.getByRole('button', { name: 'Skip tour' }).click();
+  const tour = page.getByRole('dialog', { name: 'Home' });
+  await expect(tour.getByText('Tour · 1 of 4')).toBeVisible();
+  await tour.getByRole('button', { name: 'Skip' }).click();
   await expect(tour).toBeHidden();
 }
 

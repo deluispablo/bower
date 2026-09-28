@@ -1,0 +1,208 @@
+/*
+ * The help sheets and the tour (#330, boards `Help-*` and `Help-Q-*`): the
+ * dimmed screen with the tab bar left lit, the highlighted tab and the
+ * sheet over it. `components/help-sheet.tsx` sets the positions; the
+ * motion is transform and opacity only.
+ */
+
+.help {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  animation: help-fade var(--motion-base) var(--ease-out) both;
+}
+
+/* No tab on screen: dim the whole page instead of leaving the bar lit. */
+.help--no-spot {
+  background: rgb(8 13 24 / 0.6);
+}
+
+.help-spot {
+  position: fixed;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 100vmax rgb(8 13 24 / 0.6);
+  pointer-events: none;
+}
+
+.help-sheet {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: var(--space-4) var(--space-4) 20px;
+  overflow-y: auto;
+  border-radius: 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 -16px 48px rgb(0 0 0 / 0.5);
+  color: var(--color-text);
+  animation: help-rise var(--motion-bird) var(--ease-out) both;
+}
+
+.help-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.help-bird {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.help-bird svg {
+  overflow: visible;
+}
+
+.help-heading {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.help-kicker {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.help-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--color-heading);
+}
+
+.help-lede {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.help-skip {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.help-skip:hover {
+  color: var(--color-text);
+}
+
+.help-close {
+  align-self: flex-start;
+}
+
+.help-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.help-row .icon {
+  margin-top: 1px;
+  color: var(--color-link);
+}
+
+.help-row b {
+  color: var(--color-heading);
+  font-weight: 600;
+}
+
+.help-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: 6px;
+}
+
+.help-actions .button {
+  flex: 1;
+  gap: var(--space-2);
+}
+
+.help-actions .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.help-secondary {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+}
+
+.help-secondary:hover {
+  background: var(--color-surface-hover);
+  filter: none;
+}
+
+.help-intro-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  font-size: var(--text-sm);
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+.help-intro-link:hover {
+  text-decoration: underline;
+}
+
+/* The sheet's tab, lit inside the lit bar (the boards' outlined tab). */
+.help-tab-on {
+  border-radius: 14px;
+  background: var(--color-surface);
+  outline: 2px solid var(--color-brand);
+  outline-offset: -2px;
+}
+
+@keyframes help-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes help-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help,
+  .help-sheet {
+    animation: none;
+  }
+}

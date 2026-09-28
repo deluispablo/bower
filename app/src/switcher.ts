@@ -141,7 +141,7 @@ export function mergeResults(
 }
 
 export interface SwitcherState {
-  /** The Tidy up pill's own count (`run-store.ts#pendingCount`). */
+  /** The inbox count (`run-store.ts#pendingCount`), as on Home's Inbox card. */
   pending: number;
   /** The effective theme (`theme.ts#effectiveTheme`), not the `'system'` preference. */
   theme: 'light' | 'dark';

@@ -1,75 +1,61 @@
 /**
- * The header's Process button (#37). Reads run status from `useRun()` and
- * the pending count from `useVault()`'s file listing; starts a run on tap
- * (idle), or reopens the working sheet on tap once it stopped (failed /
- * stale / over quota) to show the bird confused with the reason (#147).
- * `done` announces itself with a toast from the run store (#304).
+ * The Tidy up button (#37; moved out of the top bar in #320): it sits on
+ * Home's Inbox card and in Add's hint, never in the bar (Phone-Home and
+ * Phone-Add boards). A tap goes through the run store's `tidyUp`, the one
+ * place the "Is that everything?" confirmation (#337) will open from; until
+ * then it starts the run directly. During a run, or once the day's limit is
+ * reached, a tap brings the working sheet back instead; after a failure the
+ * button says Try again and starts a new run.
  *
- * It also renders the working sheet (#38, redesigned in #147). Whether the
- * sheet is open lives in the run store (#304): it opens by itself once per
- * run, closes on dismiss, and a tap on the button in any non-idle phase
- * reopens it. So the button is no longer disabled during a run; a tap then
- * never starts a second run.
+ * The working sheet and the notifications prompt no longer live here: they
+ * are mounted once in the shell (`run-sheets.tsx`), since this button now
+ * appears on more than one screen.
  */
 
-import { useState } from 'preact/hooks';
+import type { JSX } from 'preact';
 
 import { offlineReason, useOnline } from '../online.js';
 import '../styles/process.css';
-import { pendingCount, useRun } from '../run-store.js';
+import { useRun } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import { useSession } from '../session.js';
-import { useVault } from '../vault-store.js';
-import { PushPrompt } from './push-prompt.js';
-import { WorkingSheet } from './working-sheet.js';
+import { IconSparkle } from './icons.js';
 
-export function labelFor(phase: RunPhase, pending: number): string {
+export function labelFor(phase: RunPhase): string {
   switch (phase) {
     case 'idle':
-      return pending > 0 ? `Tidy up (${pending})` : 'Tidy up';
+    case 'done':
+      return 'Tidy up';
     case 'queued':
     case 'running':
       return 'Tidying up…';
-    case 'done':
-      return 'Done ✓';
     case 'failed':
     case 'stale':
-      return 'Failed';
+      return 'Try again';
     case 'quota':
       return 'Limit reached';
   }
 }
 
-export function ProcessButton() {
+/** Whether a tap in `phase` starts a run (else it reopens the sheet). */
+export function startsRun(phase: RunPhase): boolean {
+  return (
+    phase === 'idle' ||
+    phase === 'done' ||
+    phase === 'failed' ||
+    phase === 'stale'
+  );
+}
+
+export function ProcessButton(): JSX.Element | null {
   const { me } = useSession();
-  const { phase, run, message, process, sheetOpen, openSheet, dismissSheet } =
-    useRun();
-  const { files } = useVault();
+  const { phase, tidyUp, openSheet } = useRun();
   const online = useOnline();
-  // Bumped whenever a tap deliberately brings the sheet back, so the sheet
-  // re-measures its linger window even if the phase itself hasn't changed
-  // (e.g. tapping "Failed" again after it already lingered and faded).
-  const [reopenKey, setReopenKey] = useState(0);
 
-  function onClick(): void {
-    if (phase === 'idle') {
-      openSheet();
-      void process();
-      return;
-    }
-    // Any other phase brings the sheet back, even if it had already
-    // lingered away: queued/running shows progress, done shows off,
-    // failed/stale/quota shows the bird confused with today's message.
-    openSheet();
-    setReopenKey((key) => key + 1);
-  }
-
-  const reopens = phase !== 'idle';
-  // Offline is the only reason to disable: during a run a tap reopens the sheet.
-  const disabled = !online;
-
-  // Nothing to process before the account has a folder (login, onboarding).
+  // Nothing to tidy before the account has a folder (login, onboarding).
   if (me?.vault == null) return null;
+
+  const starts = startsRun(phase);
 
   return (
     <div class="process">
@@ -78,28 +64,21 @@ export function ProcessButton() {
         class="process-button"
         data-phase={phase}
         data-tour="tidy"
-        aria-haspopup={reopens ? 'dialog' : undefined}
-        disabled={disabled}
-        aria-disabled={disabled}
-        onClick={onClick}
+        aria-haspopup={starts ? undefined : 'dialog'}
+        disabled={!online}
+        aria-disabled={!online}
+        onClick={starts ? tidyUp : openSheet}
       >
-        {phase === 'running' && (
+        {phase === 'running' || phase === 'queued' ? (
           <span class="process-spinner" aria-hidden="true" />
+        ) : (
+          <IconSparkle />
         )}
-        <span aria-live="polite">{labelFor(phase, pendingCount(files))}</span>
+        <span aria-live="polite">{labelFor(phase)}</span>
       </button>
       {!online && (
         <span class="process-offline-reason">{offlineReason('process')}</span>
       )}
-      <PushPrompt />
-      <WorkingSheet
-        phase={phase}
-        run={run}
-        message={message}
-        open={sheetOpen}
-        onDismiss={dismissSheet}
-        reopenKey={reopenKey}
-      />
     </div>
   );
 }
