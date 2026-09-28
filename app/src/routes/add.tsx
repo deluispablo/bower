@@ -16,8 +16,10 @@ import {
 } from '../add-queue-store.js';
 import {
   ADD_HINT_TEXT,
+  CONTEXT_PLACEHOLDER,
   DEMO_ADD_HINT_TEXT,
   addHintLead,
+  linkDisplayTitle,
   linkNoteName,
 } from '../add.js';
 import { isDemo } from '../api.js';
@@ -59,11 +61,6 @@ import '../styles/add.css';
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
 const CRUMB = <h1 class="topbar-title">Add</h1>;
-
-/** The "What is this?" box's placeholder, word for word from the Phone-Add
- * board (#335). */
-const CONTEXT_PLACEHOLDER =
-  'Just filing is fine. Or tell Bower what to do with these: "Job offers: pull out salary, location and deadline, and add them to a table". Say "from now on" and it becomes a rule.';
 
 /** Without a Picker key the "From your Drive" button is hidden, as the
  * onboarding folder picker is — except in the demo, where it always shows,
@@ -658,7 +655,11 @@ export function Add() {
                   {isImageName(item.name) ? <IconImage /> : <IconFile />}
                 </span>
                 <span class="add-queue-body">
-                  <span class="add-queue-name">{item.name}</span>
+                  <span class="add-queue-name">
+                    {item.kind === 'link' && item.url !== undefined
+                      ? linkDisplayTitle(item.url)
+                      : item.name}
+                  </span>
                   {item.status === 'uploading' && item.kind !== 'drive' && (
                     <span class="add-queue-bar">
                       <span
