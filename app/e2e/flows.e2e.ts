@@ -106,8 +106,10 @@ test.describe('open Home', () => {
     await expect(
       page.getByRole('heading', { name: 'Good morning, Alex' }),
     ).toBeVisible();
-    await expect(page.getByText('These are sample notes.')).toBeVisible();
     await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(
+      page.getByText('This is a demo, not the real thing'),
+    ).toBeVisible();
     await expect(
       visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
     ).toContainText('No tidy-up yet');
@@ -127,6 +129,43 @@ test.describe('first visit, Skip', () => {
       page.getByRole('heading', { name: 'Bower', level: 1 }),
     ).toBeVisible();
   });
+});
+
+test('the demo banner carries Run your own on Home, Add and Settings (#362)', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/');
+  const banner = page
+    .getByRole('status')
+    .filter({ hasText: 'This is a demo, not the real thing' });
+  const runYourOwn = page.getByRole('link', {
+    name: 'Run your own',
+    exact: true,
+  });
+  // While the tour is on screen the banner steps aside: one card at a time.
+  const tour = page.getByRole('dialog', { name: 'Home' });
+  await expect(tour.getByText('Tour · 1 of 4')).toBeVisible();
+  await expect(banner).toHaveCount(0);
+  await tour.getByRole('button', { name: 'Skip' }).click();
+
+  await expect(banner).toHaveText(
+    'This is a demo, not the real thing: sample notes, nothing saved.Run your own',
+  );
+  await expect(runYourOwn).toHaveAttribute('href', '/login');
+  await shot(page, testInfo, 'demo-banner-home');
+
+  await navigate(page, /^Add$/);
+  await expect(page).toHaveURL(/\/add$/);
+  await expect(runYourOwn).toBeVisible();
+
+  await openSettings(page);
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(runYourOwn).toBeVisible();
+
+  // The link is the demo's sign-in: Run your own Bower.
+  await runYourOwn.click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByText('This is a demo: sample notes')).toBeVisible();
 });
 
 test('the quick switcher opens a note', async ({ page }, testInfo) => {
