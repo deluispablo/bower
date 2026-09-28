@@ -12,14 +12,34 @@ import { getText } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { parseFrontmatter } from './markdown/frontmatter.js';
 
+export type NoteOrigin = 'file' | 'notes' | 'web' | 'you';
+
+const ORIGINS: readonly string[] = ['file', 'notes', 'web', 'you'];
+
+/** The `{ field: origin }` map out of `bower_origins`; unknown origins and
+ * anything that is not a map are dropped. */
+function originMap(value: unknown): Record<string, NoteOrigin> {
+  const out: Record<string, NoteOrigin> = {};
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return out;
+  }
+  for (const [field, origin] of Object.entries(value)) {
+    if (typeof origin === 'string' && ORIGINS.includes(origin)) {
+      out[field] = origin as NoteOrigin;
+    }
+  }
+  return out;
+}
+
 export interface NoteMeta {
   /** The note's kind id (`kinds.ts`), when the frontmatter names one. */
   kind?: string;
   /** Every frontmatter field, raw, for `keyFactsFor`. */
   fields: Record<string, unknown>;
   status?: string;
-  /** Who put the note there: `bower_origins`, as a list of strings. */
-  bower_origins: string[];
+  /** Where each field came from: `bower_origins`, a field-to-origin map
+   * (spec R-AG-2). A field with no entry came from the document (`file`). */
+  bowerOrigins: Readonly<Record<string, NoteOrigin>>;
   /** Fields Bower could not find in the source: `not_stated`. */
   not_stated: string[];
   /** The original file this note was made from (`original`). */
@@ -56,7 +76,7 @@ function list(value: unknown): string[] {
 export function noteMetaFrom(data: Record<string, unknown>): NoteMeta {
   const meta: NoteMeta = {
     fields: data,
-    bower_origins: list(data.bower_origins),
+    bowerOrigins: originMap(data.bower_origins),
     not_stated: list(data.not_stated),
   };
   const kind = text(data.kind);
