@@ -151,6 +151,47 @@ describe('findingsIn', () => {
       { text: 'Everything looks fine' },
     ]);
   });
+
+  it('never splits on a colon inside a **bold** title, even one with no other colon to split on', () => {
+    // #492: the old naive first-colon split cut this mid-span, leaving
+    // "**Orphan file" as the title and "<path>.**" as the detail.
+    expect(
+      findingsIn(
+        '- [ ] **Orphan file: 2-Areas/Trips/old-plan.md** nothing links to it',
+      ),
+    ).toEqual([
+      {
+        text: '**Orphan file: 2-Areas/Trips/old-plan.md** nothing links to it',
+      },
+    ]);
+  });
+
+  it('never splits on a colon inside an hh:mm time in the detail', () => {
+    // #492: "…14:44…" used to split into text "…14" and detail "44…".
+    expect(
+      findingsIn(
+        '- [ ] **Stale move**: last touched 2026-09-27 14:44, nothing links to it',
+      ),
+    ).toEqual([
+      {
+        text: '**Stale move**',
+        detail: 'last touched 2026-09-27 14:44, nothing links to it',
+      },
+    ]);
+  });
+
+  it('renders one card with a clean bold title and the full detail when both a colon-bearing bold title and a time share one item', () => {
+    expect(
+      findingsIn(
+        '- [ ] **Orphan file: 2-Areas/Trips/old-plan.md** last touched 2026-09-27 14:44: nothing links to it.',
+      ),
+    ).toEqual([
+      {
+        text: '**Orphan file: 2-Areas/Trips/old-plan.md** last touched 2026-09-27 14:44',
+        detail: 'nothing links to it.',
+      },
+    ]);
+  });
 });
 
 describe('reportDateLabel', () => {

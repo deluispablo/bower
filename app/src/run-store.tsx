@@ -1,10 +1,18 @@
 /**
- * Run state (#37): is Bower idle, queued, running, done, failed, stale or
- * over quota. `process()` starts a run (`POST /process`); the store then
- * polls `GET /status` every 5 s while a run is in flight, up to 30 minutes,
- * after which it gives up locally (`stale`) even if the server never
- * reports one. Polling pauses while the tab is hidden and resumes on
+ * Run state (#37): is Bower idle, starting, queued, running, done, failed,
+ * stale or over quota. `process()` starts a run (`POST /process`); the
+ * store then polls `GET /status` every 5 s while a run is in flight, up to
+ * 30 minutes, after which it gives up locally (`stale`) even if the server
+ * never reports one. Polling pauses while the tab is hidden and resumes on
  * `visibilitychange`/`focus`.
+ *
+ * `starting` (#505) covers the gap between "Yes, tidy up" and the
+ * `POST /process` answer: on the real instance that can take four seconds
+ * or more, during which nothing used to change on screen and people tapped
+ * again. `confirmTidyUp` dispatches it, and opens the sheet, before
+ * `process()` is even called; `process-started` then moves on to `queued`
+ * or `running` as before, and a failure to start moves on to `failed` as
+ * before — `starting` only ever sits in between.
  *
  * Mounted in `app.tsx`, inside `VaultProvider`: a run that finishes `done`,
  * or goes `stale` after the Worker's timeout, drops the cached vault index
@@ -51,7 +59,14 @@ import { isHidden } from './vault-index.js';
 import { invalidateAfterRun, useVault } from './vault-store.js';
 
 export type RunPhase =
-  'idle' | 'queued' | 'running' | 'done' | 'failed' | 'stale' | 'quota';
+  | 'idle'
+  | 'starting'
+  | 'queued'
+  | 'running'
+  | 'done'
+  | 'failed'
+  | 'stale'
+  | 'quota';
 
 export interface RunState {
   phase: RunPhase;
@@ -65,6 +80,7 @@ export interface RunState {
 }
 
 export type RunEvent =
+  | { type: 'starting' }
   | { type: 'process-started'; run: Run }
   | { type: 'process-quota'; retryAfter: number; message: string }
   | { type: 'process-failed'; message: string }
@@ -82,6 +98,9 @@ const IDLE_STATE: RunState = {
   sheetRunId: null,
 };
 const STALE_MESSAGE = 'Bower did not answer; try again';
+
+/** The working sheet's line while `starting` (#505). */
+export const STARTING_MESSAGE = 'Starting the tidy-up…';
 
 function phaseForRun(run: Run): RunPhase {
   if (run.state === 'queued') return 'queued';
@@ -192,6 +211,14 @@ export function lastFinishedRun(
 export function reduce(state: RunState, event: RunEvent): RunState {
   const sheet = { sheetOpen: state.sheetOpen, sheetRunId: state.sheetRunId };
   switch (event.type) {
+    case 'starting':
+      return {
+        phase: 'starting',
+        run: null,
+        message: STARTING_MESSAGE,
+        sheetOpen: true,
+        sheetRunId: null,
+      };
     case 'process-started': {
       const phase = phaseForRun(event.run);
       const opened = isActive(phase) ? sheetForActive(state, event.run) : sheet;
@@ -539,7 +566,11 @@ export function RunProvider({ children }: RunProviderProps) {
   }, []);
 
   // Opening the working sheet first means a run that cannot start (the
-  // day's limit, an error) still shows its reason in the sheet.
+  // day's limit, an error) still shows its reason in the sheet. `starting`
+  // (#505) moves the phase and opens the sheet in the very same tick, so
+  // there is something on screen at once — the `POST /process` answer that
+  // moves it on to `queued`/`running` (or `failed`) can take four seconds
+  // or more on the real instance.
   // Add's "What is this?" note (#335) lands in the inbox before the run
   // starts, so the run sees it, and a rule sentence in it is already in
   // `Rules.md` (#435); `writeContextNote` never rejects and does
@@ -547,11 +578,12 @@ export function RunProvider({ children }: RunProviderProps) {
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const confirmTidyUp = useCallback((): void => {
     setConfirmOpen(false);
-    openSheet();
+    apply({ type: 'starting' });
+    setSheetReopenKey((key) => key + 1);
     void writeContextNote(inboxFolderId, keepRule).then(() =>
       process(confirmScope === 'instructions' ? confirmScope : undefined),
     );
-  }, [openSheet, process, inboxFolderId, keepRule, confirmScope]);
+  }, [apply, process, inboxFolderId, keepRule, confirmScope]);
 
   const dismissConfirm = useCallback((): void => {
     setConfirmOpen(false);
