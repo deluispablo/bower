@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { KINDS, keyFactsFor, kindById, type Kind } from '../src/kinds.js';
+import {
+  KINDS,
+  formatFieldValue,
+  keyFactsFor,
+  kindById,
+  questionsLabelFor,
+  statusLabel,
+  type Kind,
+  type KindField,
+} from '../src/kinds.js';
 
 function kind(id: string): Kind {
   const found = kindById(id);
@@ -159,5 +168,144 @@ describe('keyFactsFor', () => {
     }
     const facts = keyFactsFor(kind('rental-listing'), listingNote);
     expect(facts.every((f) => f.value !== '' && f.value !== '—')).toBe(true);
+  });
+});
+
+describe('formatFieldValue', () => {
+  const field = (type: KindField['type']): KindField => ({
+    key: 'x',
+    label: 'X',
+    type,
+    group: 'G',
+  });
+
+  it('shows money with its currency symbol and thousands separators', () => {
+    const money = field('money');
+    expect(formatFieldValue(money, 2150)).toBe('£2,150');
+    expect(formatFieldValue(money, '£2150')).toBe('£2,150');
+    expect(formatFieldValue(money, '£2,150')).toBe('£2,150');
+    expect(formatFieldValue(money, 78000)).toBe('£78,000');
+    expect(formatFieldValue(money, '£38.40')).toBe('£38.40');
+    expect(formatFieldValue(money, 38.4)).toBe('£38.40');
+    expect(formatFieldValue(money, 'EUR 1250000')).toBe('€1,250,000');
+    expect(formatFieldValue(money, '99 USD')).toBe('$99');
+    expect(formatFieldValue(money, 'about half')).toBe('about half');
+  });
+
+  it('shows dates as "1 Nov" for a day and "Jul 2027" for a month', () => {
+    const date = field('date');
+    expect(formatFieldValue(date, '2026-11-01')).toBe('1 Nov');
+    expect(formatFieldValue(date, '2026-03-14')).toBe('14 Mar');
+    expect(formatFieldValue(date, '2027-07')).toBe('Jul 2027');
+    expect(formatFieldValue(date, new Date(Date.UTC(2026, 8, 24)))).toBe('24 Sep');
+    expect(formatFieldValue(date, 'next spring')).toBe('next spring');
+  });
+
+  it('shows numbers plain and note links without brackets', () => {
+    expect(formatFieldValue(field('number'), 72)).toBe('72');
+    expect(formatFieldValue(field('number'), '4')).toBe('4');
+    expect(formatFieldValue(field('note-link'), '[[Offer letter]]')).toBe('Offer letter');
+    expect(formatFieldValue(field('text'), ['garden', 'second floor'])).toBe(
+      'garden, second floor',
+    );
+  });
+
+  it('shows nothing for a missing or blank value', () => {
+    for (const type of ['text', 'number', 'money', 'date', 'link', 'note-link'] as const) {
+      expect(formatFieldValue(field(type), undefined)).toBe('');
+      expect(formatFieldValue(field(type), null)).toBe('');
+      expect(formatFieldValue(field(type), '')).toBe('');
+    }
+  });
+});
+
+describe('every kind', () => {
+  it.each(KINDS.map((k) => [k.name, k] as const))('%s is complete', (_, k) => {
+    expect(k.id).toMatch(/^[a-z]+(-[a-z]+)*$/);
+    expect(k.plural).not.toBe('');
+    expect(k.fields.length).toBeGreaterThanOrEqual(4);
+    expect(k.fields.length).toBeLessThanOrEqual(12);
+    expect(k.groups.length).toBeGreaterThanOrEqual(2);
+    expect(k.groups.length).toBeLessThanOrEqual(4);
+    expect(Array.isArray(k.statuses)).toBe(true);
+    expect(['table', 'by-month', 'timeline', 'rarely']).toContain(k.compare);
+    expect(k.questionsLabel).toContain('{n}');
+    expect(k.notStatedLabel).toMatch(/^Not (in|on) the /);
+
+    const keys = k.fields.map((f) => f.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const f of k.fields) {
+      expect(f.key).toMatch(/^[a-z]+(_[a-z]+)*$/);
+      expect(k.groups).toContain(f.group);
+      if (f.forYou === true) expect(f.group).toBe('For you');
+    }
+    for (const group of k.groups) {
+      expect(k.fields.some((f) => f.group === group)).toBe(true);
+    }
+
+    expect(k.keyFacts.length).toBeGreaterThanOrEqual(1);
+    expect(k.keyFacts.length).toBeLessThanOrEqual(4);
+    for (const key of [...k.keyFacts, ...k.compareFields]) expect(keys).toContain(key);
+    for (const key of k.keyFacts) {
+      const f = k.fields.find((candidate) => candidate.key === key);
+      const label = f?.factLabel ?? f?.label.toLowerCase() ?? '';
+      if (!label.includes('{')) expect(label.length).toBeLessThanOrEqual(14);
+    }
+    expect(k.compareFields.length > 0).toBe(k.compare === 'table');
+  });
+
+  it('has the owner’s status lists (spec §9 Q2)', () => {
+    expect(kind('rental-listing').statuses).toEqual([
+      'new',
+      'to view',
+      'viewed',
+      'applied',
+      'rejected',
+    ]);
+    expect(kind('job-offer').statuses).toEqual(['new', 'applied', 'interview', 'offer', 'declined']);
+    expect(kind('bill').statuses).toEqual(['active', 'to renew', 'cancelled']);
+  });
+
+  it('uses Compare as board System-Kinds says', () => {
+    expect(Object.fromEntries(KINDS.map((k) => [k.id, k.compare]))).toEqual({
+      'rental-listing': 'table',
+      'job-offer': 'table',
+      bill: 'table',
+      receipt: 'by-month',
+      payslip: 'table',
+      contract: 'rarely',
+      booking: 'timeline',
+      recipe: 'table',
+    });
+  });
+});
+
+describe('questionsLabelFor', () => {
+  it('writes the count as a number word', () => {
+    expect(questionsLabelFor(kind('rental-listing'), 3)).toBe(
+      'Ask the agent: copy these three as questions',
+    );
+    expect(questionsLabelFor(kind('rental-listing'), 1)).toBe(
+      'Ask the agent: copy this one as a question',
+    );
+    expect(questionsLabelFor(kind('job-offer'), 12)).toBe(
+      'Ask the employer: copy these 12 as questions',
+    );
+  });
+});
+
+describe('statusLabel', () => {
+  const listing = kind('rental-listing');
+
+  it('reads "Viewing <weekday>" for a listing to view with a viewing date', () => {
+    expect(statusLabel(listing, { status: 'to view', viewing: '2026-10-03' })).toBe('Viewing Sat');
+    expect(statusLabel(listing, { status: 'to view' })).toBe('To view');
+    expect(statusLabel(listing, { status: 'viewed', viewing: '2026-10-03' })).toBe('Viewed');
+  });
+
+  it('capitalises the status and is empty without one', () => {
+    expect(statusLabel(listing, { status: 'new' })).toBe('New');
+    expect(statusLabel(kind('bill'), { status: 'to renew' })).toBe('To renew');
+    expect(statusLabel(listing, {})).toBe('');
   });
 });
