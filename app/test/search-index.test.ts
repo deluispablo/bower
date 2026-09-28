@@ -177,6 +177,16 @@ describe('searchVault', () => {
     expect(hit?.snippet).toContain('boiler');
   });
 
+  it('needs every word of a multi-word query, each still prefix and fuzzy', () => {
+    expect(searchVault(handle, vault, 'boiler warranty').notes).toEqual([]);
+    expect(searchVault(handle, vault, 'damp boiler').notes[0]?.file.id).toBe(
+      'n1',
+    );
+    expect(searchVault(handle, vault, 'dam boilr').notes[0]?.file.id).toBe(
+      'n1',
+    );
+  });
+
   it('scopes, filters kinds and dates', () => {
     expect(
       searchVault(handle, vault, 'refresh', { scope: '1-Projects/Flat hunt' })
