@@ -40,7 +40,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 
 import type { AuthDeps } from './auth.js';
 import { decrypt, importEncryptionKey, timingSafeEqual } from './crypto.js';
-import { getAccessToken } from './drive.js';
+import { mintAccessToken } from './drive.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import { dispatchLint } from './github.js';
@@ -524,9 +524,12 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
     let token: DriveToken;
     try {
-      token = await getAccessToken(env, user, fetchImpl);
+      // Minted for this run, never the session's cached token (#315): a
+      // sign-in, a re-consent or the app dropping its own token cannot
+      // touch the one a run is using.
+      ({ token } = await mintAccessToken(env, user, fetchImpl));
     } catch (err) {
-      // `getAccessToken` has already flagged the user (`needsReauth`). For
+      // `mintAccessToken` has already flagged the user (`needsReauth`). For
       // the runner this is not an auth failure of its own request: a 409
       // lets it report `failed` with a clear reason instead of retrying.
       if (err instanceof HttpError && err.code === 'reauth') {

@@ -250,7 +250,7 @@ What one run needs:
 | --- | --- | --- |
 | `folderId` | `string` | The vault's Drive folder |
 | `inboxFolderId` | `string` | Its `0-Inbox` folder |
-| `driveAccessToken` | `string` | A Google access token (scope `drive`), the same cached token `GET /drive/token` serves; never the refresh token |
+| `driveAccessToken` | `string` | A Google access token (scope `drive`) minted for this call from the refresh token and cached nowhere (#315): never the session's cached token that `GET /drive/token` serves, so nothing the app or a sign-in does to that one touches the token a run is using; never the refresh token |
 | `expiresAt` | `string` | ISO-8601; when Google stops accepting `driveAccessToken` (at least a minute away) |
 | `maxTurns` | `number` | `DEFAULT_MAX_TURNS` |
 | `apiKey` | `string` | Optional; the user's own Claude API key, decrypted here and nowhere else. Absent unless the user set one |
