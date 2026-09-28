@@ -27,7 +27,7 @@ function mount(onNavigate: (index: number) => void = () => undefined): {
   const root = document.createElement('div');
   document.body.append(root);
   host = root;
-  act(() => {
+  void act(() => {
     render(
       h(PhotoViewer, {
         src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E',
@@ -46,7 +46,7 @@ function mount(onNavigate: (index: number) => void = () => undefined): {
 }
 
 function key(name: string): void {
-  act(() => {
+  void act(() => {
     document.dispatchEvent(
       new KeyboardEvent('keydown', { key: name, bubbles: true }),
     );
@@ -54,7 +54,7 @@ function key(name: string): void {
 }
 
 afterEach(() => {
-  if (host !== undefined) act(() => render(null, host as HTMLElement));
+  if (host !== undefined) void act(() => render(null, host as HTMLElement));
   host?.remove();
   host = undefined;
 });
@@ -76,7 +76,7 @@ describe('PhotoViewer (issue #605)', () => {
 
   it('opens full screen on tap with a named Close and a text counter', () => {
     const { root, photo } = mount();
-    act(() => photo.click());
+    void act(() => photo.click());
     const dialog = root.querySelector('[role="dialog"]');
     expect(dialog).not.toBeNull();
     expect(root.querySelector('[aria-label="Close"]')).not.toBeNull();
@@ -91,16 +91,16 @@ describe('PhotoViewer (issue #605)', () => {
   it('walks with the arrow keys and the buttons', () => {
     const onNavigate = vi.fn();
     const { root, photo } = mount(onNavigate);
-    act(() => photo.click());
+    void act(() => photo.click());
     key('ArrowRight');
     expect(onNavigate).toHaveBeenLastCalledWith(2);
     key('ArrowLeft');
     expect(onNavigate).toHaveBeenLastCalledWith(0);
-    act(() =>
+    void act(() =>
       root.querySelector<HTMLElement>('[aria-label="Next"]')?.click(),
     );
     expect(onNavigate).toHaveBeenLastCalledWith(2);
-    act(() =>
+    void act(() =>
       root.querySelector<HTMLElement>('[aria-label="Previous"]')?.click(),
     );
     expect(onNavigate).toHaveBeenLastCalledWith(0);
@@ -112,7 +112,7 @@ describe('PhotoViewer (issue #605)', () => {
     const root = document.createElement('div');
     document.body.append(root);
     host = root;
-    act(() => {
+    void act(() => {
       render(
         h(PhotoViewer, {
           src: 'x.png',
@@ -125,23 +125,27 @@ describe('PhotoViewer (issue #605)', () => {
         root,
       );
     });
-    act(() => root.querySelector<HTMLElement>('.photo-viewer-open')?.click());
+    void act(() =>
+      root.querySelector<HTMLElement>('.photo-viewer-open')?.click(),
+    );
     key('ArrowLeft');
     expect(onNavigate).not.toHaveBeenCalled();
     expect(
-      root.querySelector('[aria-label="Previous"]')?.getAttribute('aria-disabled'),
+      root
+        .querySelector('[aria-label="Previous"]')
+        ?.getAttribute('aria-disabled'),
     ).toBe('true');
   });
 
   it('traps focus in full screen and returns it to the photo on close', () => {
     const { root, photo } = mount();
     photo.focus();
-    act(() => photo.click());
+    void act(() => photo.click());
     const close = root.querySelector<HTMLElement>('[aria-label="Close"]');
     expect(document.activeElement).toBe(close);
 
     // Shift+Tab from the first control wraps to the last one.
-    act(() => {
+    void act(() => {
       document.dispatchEvent(
         new KeyboardEvent('keydown', {
           key: 'Tab',
@@ -155,7 +159,7 @@ describe('PhotoViewer (issue #605)', () => {
       root.querySelector('[aria-label="Next"]'),
     );
     // Tab from the last control wraps to the first one.
-    act(() => {
+    void act(() => {
       document.dispatchEvent(
         new KeyboardEvent('keydown', {
           key: 'Tab',
@@ -173,22 +177,24 @@ describe('PhotoViewer (issue #605)', () => {
 
   it('closes with the Close button', () => {
     const { root, photo } = mount();
-    act(() => photo.click());
-    act(() => root.querySelector<HTMLElement>('[aria-label="Close"]')?.click());
+    void act(() => photo.click());
+    void act(() =>
+      root.querySelector<HTMLElement>('[aria-label="Close"]')?.click(),
+    );
     expect(root.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('a double tap toggles 2x and shows the badge', () => {
     const { root, photo } = mount();
-    act(() => photo.click());
+    void act(() => photo.click());
     const img = root.querySelector<HTMLElement>('.photo-viewer-img');
     expect(root.querySelector('.photo-viewer-badge')).toBeNull();
-    act(() => img?.click());
-    act(() => img?.click());
+    void act(() => img?.click());
+    void act(() => img?.click());
     expect(img?.className).toContain('is-zoomed');
     expect(root.querySelector('.photo-viewer-badge')?.textContent).toBe('2×');
-    act(() => img?.click());
-    act(() => img?.click());
+    void act(() => img?.click());
+    void act(() => img?.click());
     expect(img?.className).not.toContain('is-zoomed');
     expect(root.querySelector('.photo-viewer-badge')).toBeNull();
   });
