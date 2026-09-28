@@ -70,9 +70,15 @@ import {
 } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
+import { dayOf } from '../proposals.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
-import { allRules, applyToFiledRequest, parseRules } from '../rules.js';
+import {
+  allRules,
+  applyToFiledRequest,
+  parseRules,
+  ruleBullet,
+} from '../rules.js';
 import type { Rule, RuleRef } from '../rules.js';
 import { IDEAS_PATH } from '../shell-routes.js';
 import {
@@ -400,6 +406,10 @@ export function Bower(): JSX.Element {
   const [editing, setEditing] = useState<EditingRequest | null>(null);
   const [rulesMessage, setRulesMessage] = useState<string | null>(null);
   const [requestsMessage, setRequestsMessage] = useState<string | null>(null);
+  // One line under the box confirming what Send just did (#507): "Kept as
+  // a rule", "Already in your rules", "Will go with this tidy-up". Reset
+  // on every new Send.
+  const [sendConfirm, setSendConfirm] = useState<string | null>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
   useShellSlot('crumb', CRUMB);
@@ -518,9 +528,24 @@ export function Bower(): JSX.Element {
     setSegment('rules');
   }
 
+  /** Whether `sentence` is already a rule in `Rules.md`, the same
+   * dedup check `keepRule`'s own write path (`appendRule`) makes, so the
+   * confirmation line (#507) can tell "Kept as a rule" from "Already in
+   * your rules" before the write even starts. */
+  function ruleAlreadyKept(sentence: string): boolean {
+    if (rulesLoad.status !== 'ready') return false;
+    const bullet = ruleBullet(sentence, dayOf(new Date()));
+    const wanted = allRules(parseRules(bullet))[0]?.text;
+    if (wanted === undefined) return false;
+    return allRules(parseRules(rulesLoad.text)).some(
+      (rule) => rule.text === wanted,
+    );
+  }
+
   /** A rule sentence (#343): kept at once in `Rules.md`, no note, no run,
    * and listed under Requests as Rule kept. */
   async function keepRuleNow(sentence: string): Promise<void> {
+    const already = ruleAlreadyKept(sentence);
     try {
       await keepRule(sentence);
     } catch (err) {
@@ -538,6 +563,7 @@ export function Bower(): JSX.Element {
     ]);
     setText('');
     setSegment('requests');
+    setSendConfirm(already ? 'Already in your rules' : 'Kept as a rule');
   }
 
   async function handleSend(): Promise<void> {
@@ -546,6 +572,7 @@ export function Bower(): JSX.Element {
 
     setSending(true);
     setError(null);
+    setSendConfirm(null);
     if (editing !== null) {
       await saveEdit(editing, trimmed);
     } else if (changing !== null) {
@@ -554,6 +581,10 @@ export function Bower(): JSX.Element {
       await keepRuleNow(trimmed);
     } else if (await sendRequest(trimmed)) {
       setText('');
+      // Idle: the Requests segment already shows the new Waiting row at
+      // once. Mid-run, that row is easy to miss under "Tidying up…", so
+      // it gets a word of its own (#507): it waits for the *next* tidy-up.
+      if (inFlight) setSendConfirm('Will go with this tidy-up');
     } else {
       setError('Could not send that. Try again.');
     }
@@ -566,6 +597,7 @@ export function Bower(): JSX.Element {
     setText(rule.text);
     setError(null);
     setRulesMessage(null);
+    setSendConfirm(null);
     // After the sheet has closed and handed focus back to the rule.
     window.setTimeout(() => {
       boxRef.current?.focus();
@@ -577,6 +609,7 @@ export function Bower(): JSX.Element {
     setEditing(null);
     setText('');
     setError(null);
+    setSendConfirm(null);
   }
 
   /** Edit on a waiting request: the note read fresh, its words in the box. */
@@ -584,6 +617,7 @@ export function Bower(): JSX.Element {
     if (row.fileId === null) return;
     setRequestsMessage(null);
     setError(null);
+    setSendConfirm(null);
     let fresh: { text: string; modifiedTime: string | null };
     try {
       fresh = await openNoteForEdit(row.fileId);
@@ -789,6 +823,9 @@ export function Bower(): JSX.Element {
         )}
         {error !== null && <p class="auth-error">{error}</p>}
         {!online && <p class="offline-reason">{offlineReason('tell')}</p>}
+        {sendConfirm !== null && (
+          <p class="bower-send-confirm">{sendConfirm}</p>
+        )}
       </div>
 
       <Tip
