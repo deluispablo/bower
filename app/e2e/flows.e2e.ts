@@ -500,7 +500,7 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
 
 test('Add: the queue and "Added to your inbox." clear once a tidy-up finishes (#493)', async ({
   page,
-}, testInfo) => {
+}) => {
   await openHome(page);
   await navigate(page, /^Add$/);
 
