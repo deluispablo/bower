@@ -150,13 +150,20 @@ describe('TidyConfirmSheet', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it('the backdrop dismisses without confirming', () => {
+  it('the backdrop dismisses without confirming, once its open-tap guard has passed (#510)', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
     const { onConfirm, onDismiss } = mount(2);
+    // Past useDismissGuard's window: a tap right after opening (#510) must
+    // not dismiss, covered in use-dismiss-guard.test.ts; this test is
+    // about the backdrop's own dismiss wiring, once that window has
+    // passed.
+    vi.advanceTimersByTime(350);
     const backdrop = currentRoot().querySelector('.tidy-confirm-backdrop');
     if (backdrop === null) throw new Error('backdrop missing');
     click(backdrop);
     expect(onDismiss).toHaveBeenCalledOnce();
     expect(onConfirm).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it('Escape dismisses without confirming', () => {
