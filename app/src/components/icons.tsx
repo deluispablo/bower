@@ -95,8 +95,9 @@ export function IconPdf(): JSX.Element {
   );
 }
 
-/** A photo or any other image on a folder screen (#349), and Add's
- * "Choose files" door when what was picked is a picture. */
+/** A photo or any other image on a folder screen (#349), Add's "Choose
+ * files" door when what was picked is a picture, and the Added queue's
+ * type icon for a picture (#334). */
 export function IconImage(): JSX.Element {
   return (
     <Svg>
@@ -248,7 +249,8 @@ export function IconClock(): JSX.Element {
 }
 
 /** A plain page: the help sheets' "Photo, files, your Drive, a link"
- * (#330), and Add's "Choose files" door (spec C.6). */
+ * (#330), Add's "Choose files" door (spec C.6), and the Added queue's
+ * type icon for anything that is not a picture (#334). */
 export function IconFile(): JSX.Element {
   return (
     <Svg>
