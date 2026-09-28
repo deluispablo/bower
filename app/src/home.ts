@@ -17,9 +17,13 @@ export const ANSWERS_FOLDER = 'Answers';
  * Home's states (C.4): things waiting, the first day (nothing waiting and
  * no tidy-up yet), a run in flight, a run that finished, a run that did
  * not. Editing pins is a flag on top of these (`BubbleInput.editingPins`),
- * not a state of its own: the cards stay as they are.
+ * not a state of its own: the cards stay as they are. `loading` (#322, C.2)
+ * is not on that table: it is what Home shows instead of Empty while the
+ * folder index has not resolved yet, so a first day is never reported as
+ * fact before we know it is one.
  */
-export type HomeState = 'waiting' | 'empty' | 'running' | 'done' | 'failed';
+export type HomeState =
+  'waiting' | 'empty' | 'running' | 'done' | 'failed' | 'loading';
 
 export interface HomeStateInput {
   /** The run store's phase (`run-store.tsx`). */
@@ -28,22 +32,27 @@ export interface HomeStateInput {
   pending: number;
   /** The last run that finished (`RunStore.lastFinished`), or `null`. */
   lastFinished: Run | null;
+  /** The folder index has not resolved yet (`VaultStatus === 'loading'`). */
+  loading: boolean;
 }
 
 /**
  * The state, highest precedence first: a run in flight; a run that stopped
  * without finishing (it stays until the next run); a run that just
  * finished (the run store's `done`, which lasts a few seconds); things in
- * the inbox; nothing waiting after a tidy-up; nothing waiting and never
- * tidied (the first day).
+ * the inbox; a run that finished before (Done, from the run store's own
+ * `lastFinished` — already known, whether or not the folder index has
+ * loaded); the index still loading (#322, only once nothing above already
+ * answers the question); nothing waiting and never tidied (the first day).
  */
 export function homeStateFor(input: HomeStateInput): HomeState {
-  const { phase, pending, lastFinished } = input;
+  const { phase, pending, lastFinished, loading } = input;
   if (phase === 'queued' || phase === 'running') return 'running';
   if (phase === 'failed' || phase === 'stale') return 'failed';
   if (phase === 'done') return 'done';
   if (pending > 0) return 'waiting';
-  return lastFinished === null ? 'empty' : 'done';
+  if (lastFinished !== null) return 'done';
+  return loading ? 'loading' : 'empty';
 }
 
 type DayPart = 'morning' | 'afternoon' | 'evening';
@@ -206,6 +215,8 @@ export function bubbleFor(input: BubbleInput): BubblePart[] {
   if (offline) return ["No signal here. I'll keep an eye out."];
   if (error) return ['Could not load your notes.'];
   switch (state) {
+    case 'loading':
+      return ['Looking for what is waiting for you.'];
     case 'waiting':
       if (editingPins) return [`${things(pending)} in your inbox.`];
       return [
@@ -251,15 +262,17 @@ export interface BirdStateInput {
 
 /**
  * The bird's pose on Home, as the boards draw it: Looking while things
- * wait (and while editing pins), Hello on the first day, Tidying during a
- * run, the dance once right after one, Confused after a failure; offline
- * beats everything. `hello` and `showoff` play once; the screen then holds
- * `restingBird` of the same pose.
+ * wait (and while editing pins, and while the index is still loading,
+ * #322), Hello on the first day, Tidying during a run, the dance once
+ * right after one, Confused after a failure; offline beats everything.
+ * `hello` and `showoff` play once; the screen then holds `restingBird` of
+ * the same pose.
  */
 export function birdStateFor(input: BirdStateInput): BirdState {
   if (input.offline) return 'offline';
   switch (input.state) {
     case 'waiting':
+    case 'loading':
       return 'looking';
     case 'empty':
       return 'hello';

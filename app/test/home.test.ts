@@ -79,7 +79,12 @@ function links(parts: BubblePart[]): string[] {
 }
 
 describe('homeStateFor', () => {
-  const base = { phase: 'idle' as const, pending: 0, lastFinished: null };
+  const base = {
+    phase: 'idle' as const,
+    pending: 0,
+    lastFinished: null,
+    loading: false,
+  };
 
   it('waiting while things are in the inbox', () => {
     expect(homeStateFor({ ...base, pending: 3 })).toBe('waiting');
@@ -112,6 +117,28 @@ describe('homeStateFor', () => {
     );
     expect(homeStateFor({ ...base, phase: 'stale', pending: 3 })).toBe(
       'failed',
+    );
+  });
+
+  it('loading instead of empty until the index resolves (#322)', () => {
+    expect(homeStateFor({ ...base, loading: true })).toBe('loading');
+    expect(
+      homeStateFor({ ...base, loading: true, lastFinished: DONE_RUN }),
+    ).toBe('done');
+  });
+
+  it('never loading once something else already answers the question', () => {
+    expect(homeStateFor({ ...base, loading: true, pending: 3 })).toBe(
+      'waiting',
+    );
+    expect(
+      homeStateFor({ ...base, loading: true, phase: 'running', pending: 3 }),
+    ).toBe('running');
+    expect(
+      homeStateFor({ ...base, loading: true, phase: 'failed', pending: 3 }),
+    ).toBe('failed');
+    expect(homeStateFor({ ...base, loading: true, phase: 'done' })).toBe(
+      'done',
     );
   });
 });
@@ -230,6 +257,12 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
     );
   });
 
+  it('Loading: never the Empty welcome (#322)', () => {
+    expect(text(bubbleFor({ ...base, state: 'loading', pending: 0 }))).toBe(
+      'Looking for what is waiting for you.',
+    );
+  });
+
   it('offline and a failed listing come first', () => {
     expect(text(bubbleFor({ ...base, offline: true, error: true }))).toBe(
       "No signal here. I'll keep an eye out.",
@@ -256,12 +289,23 @@ describe('birdStateFor and restingBird', () => {
     );
     expect(birdStateFor({ ...base, state: 'done' })).toBe('looking');
     expect(birdStateFor({ ...base, state: 'failed' })).toBe('confused');
+    expect(birdStateFor({ ...base, state: 'loading' })).toBe('looking');
   });
 
-  it('offline beats every state', () => {
-    expect(birdStateFor({ ...base, state: 'running', offline: true })).toBe(
-      'offline',
-    );
+  it('offline beats every state: the sad pose next to the greeting (#325)', () => {
+    const states: HomeState[] = [
+      'waiting',
+      'empty',
+      'running',
+      'done',
+      'failed',
+    ];
+    for (const state of states) {
+      expect(birdStateFor({ ...base, state, offline: true })).toBe('offline');
+      expect(
+        birdStateFor({ ...base, state, offline: true, justDone: true }),
+      ).toBe('offline');
+    }
   });
 
   it('the dance and the hello play once, then rest on Looking', () => {

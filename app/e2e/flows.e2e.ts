@@ -404,6 +404,38 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(0);
 });
 
+test('Home loading state: dimmed cards and skeleton rows, never Empty (#322)', async ({
+  page,
+}, testInfo) => {
+  // Holds the demo's folder listing back a few seconds (`src/demo/drive.ts`)
+  // so the loading window is long enough to assert against.
+  const DELAY_MS = 3000;
+  await page.addInitScript((ms: number) => {
+    window.__bowerDemoListDelayMs = ms;
+  }, DELAY_MS);
+  await openHome(page);
+
+  const home = page.locator('.home');
+  const bubble = visible(page.locator('.home-bubble'));
+  const inbox = visible(page.locator('.home-card', { hasText: 'Inbox' }));
+
+  await expect(home).toHaveAttribute('data-state', 'loading');
+  await expect(bubble).toHaveText('Looking for what is waiting for you.');
+  await expect(page.getByText('Welcome. Add a few things')).toHaveCount(0);
+  await expect(inbox).toHaveClass(/home-card-loading/);
+  await expect(inbox.locator('.home-card-count')).toHaveCount(0);
+  await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(5);
+  await shot(page, testInfo, 'home-loading');
+
+  // Once the delayed listing resolves, the real numbers replace the
+  // skeleton and the state moves on (Waiting, in the demo fixture).
+  await expect(home).not.toHaveAttribute('data-state', 'loading', {
+    timeout: DELAY_MS + 5_000,
+  });
+  await expect(inbox.locator('.home-card-count')).toBeVisible();
+  await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(0);
+});
+
 test('the working sheet opens once per run, and the run ends back at Tidy up', async ({
   page,
 }, testInfo) => {

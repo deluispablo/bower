@@ -361,10 +361,13 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
     const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
     const encRefreshToken = await encrypt(tokens.refreshToken, key);
-    // An existing user gets only its token (and reauth flag) changed. A
-    // deleted one (tombstone) is never revived, even when a stale write
-    // re-created its record: that record is removed and a fresh account
-    // with a new id is created, so no cookie of the old one works again.
+    // An existing user gets its token (and reauth flag) changed, and its
+    // given name refreshed from Google every time (#323) — so a returning
+    // user who signed up before this existed gets one on their next
+    // sign-in, and a name change on the Google side follows. A deleted one
+    // (tombstone) is never revived, even when a stale write re-created its
+    // record: that record is removed and a fresh account with a new id is
+    // created, so no cookie of the old one works again.
     const existing = await findUserByEmail(kv, info.email);
     let user =
       existing === undefined || (await isDeleted(kv, existing.id))
@@ -372,6 +375,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
         : await updateUser(kv, existing.id, {
             encRefreshToken,
             needsReauth: null,
+            givenName: info.givenName ?? null,
           });
     if (user === undefined) {
       if (existing !== undefined) await deleteUserData(kv, existing.id);
@@ -380,6 +384,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
         email: info.email,
         createdAt: new Date().toISOString(),
         encRefreshToken,
+        givenName: info.givenName,
       };
       await putUser(kv, user);
     }
@@ -447,6 +452,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       needsReauth: user.needsReauth === true,
       hasApiKey: user.encApiKey !== undefined,
       ...(user.tourSeenAt === undefined ? {} : { tourSeenAt: user.tourSeenAt }),
+      ...(user.givenName === undefined ? {} : { name: user.givenName }),
     });
   });
 
