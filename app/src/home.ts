@@ -96,15 +96,26 @@ export interface RunCounts {
 const MESSAGE_PREFIX = 'Bower - ';
 
 /**
+ * Add's "What is this?" note (`add.ts#contextNoteName`): always titled
+ * "Context", the one detail that tells it apart from a message that is
+ * actually a rule, a job or a question. It applies to its own batch
+ * (#444) — not a thing filed, not a question answered — so `runCounts`
+ * counts it in neither bucket.
+ */
+const CONTEXT_NOTE = /^Bower - \d{4}-\d{2}-\d{2} \d{4} Context\.md$/;
+
+/**
  * A run's counts from `run.processed`: a message the app wrote for Bower
  * (a file named "Bower - …", `tell.ts`) counts as answered, everything
- * else as filed. The runner reports no finer split yet.
+ * else as filed, except the "What is this?" context note (#444), which is
+ * neither. The runner reports no finer split yet.
  */
 export function runCounts(run: Run): RunCounts {
   let answered = 0;
   let filed = 0;
   for (const path of run.processed ?? []) {
     const name = path.slice(path.lastIndexOf('/') + 1);
+    if (CONTEXT_NOTE.test(name)) continue;
     if (name.startsWith(MESSAGE_PREFIX)) answered += 1;
     else filed += 1;
   }
