@@ -1,6 +1,7 @@
 /**
  * Google Picker for the onboarding "Choose a folder" button (#53) and for
- * Add's "From your Drive" button (#217). The
+ * Add's "From your Drive" button (#217, scoped to My Drive and refused a
+ * pick already in the Bower folder by #312). The
  * Picker library is never bundled: `loadPicker` injects
  * `https://apis.google.com/js/api.js` on first call and waits for
  * `gapi.load('picker', ...)`, so nothing is fetched until a user actually
@@ -134,7 +135,12 @@ export function openFilePicker(
       .setIncludeFolders(true)
       .setSelectFolderEnabled(true);
   new pickerApi.PickerBuilder()
-    // Recent first: the plain view lists everything, newest first.
+    // My Drive first (#312): real folder navigation from the root, so the
+    // Picker opens the same tree the user sees in Drive, not a flat grid of
+    // every folder in the account (the Bower folder's own subfolders
+    // included). The other views (recent, owned by me, shared, starred)
+    // are unchanged.
+    .addView(view().setParent('root'))
     .addView(view())
     .addView(view().setOwnedByMe(true))
     .addView(view().setOwnedByMe(false))
@@ -159,37 +165,60 @@ export interface PickedItem {
 export interface PickedFiles {
   /** The picks to copy, in the order the Picker returned them. */
   items: PickedItem[];
-  /** Picks left out because they are the Bower folder or sit right in it. */
+  /** Picks left out because they are already in the Bower folder, or a
+   * reserved-shaped folder (dot-prefixed, or named `Processed`). */
   excluded: number;
 }
 
+/** A folder name the app never accepts a pick of, wherever it sits: a
+ * dot-folder at any depth (`.claude`, `.obsidian`, `.trash`, …) or a
+ * `Processed` folder — the same shapes `vault-index.ts`'s `isHidden` keeps
+ * out of the app's own listing. */
+function isReservedName(name: string): boolean {
+  return name.startsWith('.') || name === 'Processed';
+}
+
 /**
- * The files and folders in a Picker response, minus the Bower folder
- * itself and anything directly inside it (the Picker cannot hide a folder,
- * so it is filtered here). A cancelled or empty response gives no items.
- * A document without an id is skipped; one without a name gets
- * "Untitled". Pure: no DOM, no `google.picker`, unit-tested directly.
+ * The files and folders in a Picker response, minus anything already in
+ * the Bower folder and anything with a reserved name (#312).
+ *
+ * The Picker API has no way to hide one folder from its own browser (only
+ * include filters: `setParent`, `setMimeTypes`, `setQuery`), so a pick
+ * inside the Bower folder is refused here instead, once the Picker
+ * returns it. `knownFolderIds` is every folder id the app already has —
+ * the Bower folder itself, plus every folder in its own index, at any
+ * depth — built by the caller with no extra Drive call. A pick is inside
+ * the Bower folder if its own id, or its immediate parent's id, is one of
+ * those; a dot-prefixed or `Processed` pick is refused by name alone,
+ * wherever it sits (the app never learns the id of a folder it hides from
+ * its own index, so a name it recognises is the only signal it has for
+ * one the Picker's own unfiltered browser still shows).
+ *
+ * A cancelled or empty response gives no items. A document without an id
+ * is skipped; one without a name gets "Untitled". Pure: no DOM, no
+ * `google.picker`, unit-tested directly.
  */
 export function filesFromPickerResponse(
   data: google.picker.ResponseObject,
-  bowerFolderId: string | null,
+  knownFolderIds: ReadonlySet<string>,
 ): PickedFiles {
   const result: PickedFiles = { items: [], excluded: 0 };
   if (data.action !== 'picked' || data.docs === undefined) return result;
   for (const doc of data.docs) {
     if (typeof doc.id !== 'string' || doc.id === '') continue;
-    if (
-      bowerFolderId !== null &&
-      (doc.id === bowerFolderId || doc.parentId === bowerFolderId)
-    ) {
+    const name =
+      typeof doc.name === 'string' && doc.name !== '' ? doc.name : 'Untitled';
+    const insideBower =
+      knownFolderIds.has(doc.id) ||
+      (typeof doc.parentId === 'string' && knownFolderIds.has(doc.parentId));
+    if (insideBower || isReservedName(name)) {
       result.excluded++;
       continue;
     }
     const mimeType = typeof doc.mimeType === 'string' ? doc.mimeType : '';
     result.items.push({
       id: doc.id,
-      name:
-        typeof doc.name === 'string' && doc.name !== '' ? doc.name : 'Untitled',
+      name,
       mimeType,
       isFolder: mimeType === FOLDER_MIME_TYPE,
     });

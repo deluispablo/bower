@@ -379,15 +379,16 @@ export function Onboarding(): JSX.Element {
     data: google.picker.ResponseObject,
   ): Promise<void> {
     if (data.action !== 'picked') return;
-    const { items, excluded } = filesFromPickerResponse(
-      data,
-      createdVault?.folderId ?? null,
+    // The vault is brand new here (no index of its own subfolders yet), so
+    // the freshly created root id is all there is to check against — the
+    // same single-id check Add used before #312.
+    const bowerFolderIds = new Set<string>(
+      createdVault?.folderId !== undefined ? [createdVault.folderId] : [],
     );
+    const { items, excluded } = filesFromPickerResponse(data, bowerFolderIds);
     const notes: string[] = [];
     if (excluded > 0) {
-      notes.push(
-        'Your Bower folder was left out: what is in it is already in Bower.',
-      );
+      notes.push('That is already in your Bower folder.');
     }
     const expanded = await expandPicks(items, notes);
     const files = expanded.filter((item: PickedItem) => {

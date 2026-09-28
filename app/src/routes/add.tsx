@@ -142,10 +142,20 @@ function driveStatusText(mimeType: string | undefined, done: boolean): string {
 export function Add() {
   const { me } = useSession();
   const { route } = useLocation();
-  const { refresh } = useVault();
+  const { index, refresh } = useVault();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const bowerFolderId = me?.vault?.folderId ?? null;
+  // Every folder id the app already knows under the Bower folder, at any
+  // depth (#312): the root itself, every folder in its own index (`.claude`
+  // included, kept aside as `agentSettingsFolder`), so a Picker refusal
+  // never needs an extra Drive call.
+  const bowerFolderIds = new Set<string>();
+  if (bowerFolderId !== null) bowerFolderIds.add(bowerFolderId);
+  for (const folder of index?.folders ?? []) bowerFolderIds.add(folder.id);
+  if (index?.agentSettingsFolder !== undefined) {
+    bowerFolderIds.add(index.agentSettingsFolder.id);
+  }
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -342,12 +352,10 @@ export function Add() {
     data: google.picker.ResponseObject,
   ): Promise<void> {
     if (data.action !== 'picked') return;
-    const { items, excluded } = filesFromPickerResponse(data, bowerFolderId);
+    const { items, excluded } = filesFromPickerResponse(data, bowerFolderIds);
     const notes: string[] = [];
     if (excluded > 0) {
-      notes.push(
-        'Your Bower folder was left out: what is in it is already in Bower.',
-      );
+      notes.push('That is already in your Bower folder.');
     }
     const expanded = await expandPicks(items, notes);
     const files = expanded.filter((item) => {
