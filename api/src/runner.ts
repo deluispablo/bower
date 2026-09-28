@@ -22,8 +22,9 @@
  * - `GET /runner/vaults` (legacy flag only): the id of every user with a
  *   vault; ids only, never an email or a token.
  * - `GET /runner/vaults/:id`: what one run needs — the vault's folder ids,
- *   a 1 h Drive access token (never the refresh token), `maxTurns`, and the
- *   user's own Claude API key when they set one.
+ *   a 1 h Drive access token (never the refresh token), `maxTurns`, the
+ *   user's own Claude API key when they set one, and when the run was asked
+ *   for (`requestedAt`, #491).
  * - `POST /runner/vaults/:id/status`: the run's progress (`running`,
  *   `done`, `failed`) and its `kind` (`ingest`, the default, or `lint`),
  *   stored as the user's `Run` of that kind: an ingest under `run:<id>`, a
@@ -170,6 +171,10 @@ export interface RunnerVault {
   maxTurns: number;
   /** The user's own Claude API key, decrypted; absent unless they set one. */
   apiKey?: string;
+  /** ISO-8601; when the run this ticket belongs to was asked for. The
+   * runner leaves a request note written after it for the next tidy-up
+   * (#491). Absent for the legacy operator key or a run record gone. */
+  requestedAt?: string;
 }
 
 type ReportState = 'running' | 'done' | 'failed';
@@ -519,7 +524,7 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   runner.get('/runner/vaults/:id', async (c) => {
     const env = c.get('env');
     const id = c.req.param('id');
-    await authorizeRun(c, id);
+    const kind = await authorizeRun(c, id);
     const user = await loadVaultUser(env.BOWER_KV, id);
 
     let token: DriveToken;
@@ -550,6 +555,10 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       expiresAt: token.expiresAt,
       maxTurns: Number(env.DEFAULT_MAX_TURNS),
     };
+    if (kind !== 'legacy') {
+      const run = await getRun(env.BOWER_KV, user.id, kind);
+      if (run !== undefined) vault.requestedAt = run.requestedAt;
+    }
     if (user.encApiKey !== undefined) {
       const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
       vault.apiKey = await decrypt(user.encApiKey, key);

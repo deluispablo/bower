@@ -5,7 +5,6 @@ import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import {
   CATALOGUE_PATH,
-  ORIGIN_FALLBACK,
   originLine,
   originOf,
   parseCatalogueOrigins,
@@ -113,18 +112,18 @@ describe('originOf', () => {
 });
 
 describe('originLine', () => {
-  it('gives a file its type and origin, or the fallback', () => {
+  it('gives a file its type and origin, or just its type when unknown (#502)', () => {
     const pdf = file('a/Lease.pdf', 'application/pdf');
     const photo = file('a/Sign.jpg', 'image/jpeg');
     expect(originLine(pdf, 'filed')).toBe('PDF · filed by Bower');
-    expect(originLine(photo, null)).toBe(`Photo · ${ORIGIN_FALLBACK}`);
+    expect(originLine(photo, null)).toBe('Photo');
   });
 
-  it('gives a note its origin alone, or "Note" and the fallback', () => {
+  it('gives a note its origin alone, or just "Note" when unknown (#502)', () => {
     const note = file('a/Budget.md', 'text/markdown');
     expect(originLine(note, 'yours')).toBe('Your note');
     expect(originLine(note, 'asked')).toBe('Bower wrote it when you asked');
-    expect(originLine(note, null)).toBe('Note · in this folder');
+    expect(originLine(note, null)).toBe('Note');
   });
 });
 
@@ -169,9 +168,9 @@ describe('the demo fixture', () => {
     ).toEqual([
       ['Sage green test patch', 'Photo · filed by Bower'],
       ['Shelves and tap quote', 'PDF · filed by Bower'],
-      ['Kitchen Refresh', 'Note · in this folder'],
-      ['Paint colours', 'Note · in this folder'],
-      ['Quotes from fitters', 'Note · in this folder'],
+      ['Kitchen Refresh', 'Note'],
+      ['Paint colours', 'Note'],
+      ['Quotes from fitters', 'Note'],
     ]);
   });
 });

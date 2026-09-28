@@ -10,6 +10,7 @@ import type { BirdState } from './components/bird-classes.js';
 import { relativeTime } from './navigation.js';
 import { isContextNote } from './run-progress.js';
 import type { RunPhase } from './run-store.js';
+import { failureCopy } from './run-failure.js';
 
 /** The folder Bower writes answers to (spec §6, Home and Tell Bower rows). */
 export const ANSWERS_FOLDER = 'Answers';
@@ -83,7 +84,7 @@ function plural(n: number, singular: string, plural_ = `${singular}s`): string {
 }
 
 /** "3 things" / "1 thing". */
-function things(n: number): string {
+export function things(n: number): string {
   return `${n} ${plural(n, 'thing')}`;
 }
 
@@ -117,9 +118,11 @@ export function runCounts(run: Run): RunCounts {
 }
 
 /** The Last tidy-up card's line: "4 filed · 1 answered" (either half left
- * out at zero), "Nothing new" when both are, "Failed" for a failed run. */
+ * out at zero), "Nothing new" when both are, "Failed · Drive did not answer"
+ * for a failed run (its reason's short words, #316). */
 export function lastTidyUpLine(run: Run): string {
-  if (run.state === 'failed') return 'Failed';
+  if (run.state === 'failed')
+    return `Failed · ${failureCopy(run.reason).short}`;
   const { filed, answered } = runCounts(run);
   const parts: string[] = [];
   if (filed > 0) parts.push(`${filed} filed`);
@@ -249,7 +252,8 @@ export function bubbleFor(input: BubbleInput): BubblePart[] {
     case 'failed': {
       const are = pending === 1 ? 'is' : 'are';
       return [
-        `I couldn't finish. Nothing was lost; your ${things(pending)} ${are} still in the inbox. `,
+        // The reason's sentence (#316, Phone-Home-Failed), never a step name.
+        `${failureCopy(lastFinished?.reason).sentence} Nothing was lost; your ${things(pending)} ${are} still in the inbox. `,
         { link: 'failure', text: 'Try again' },
         '.',
       ];

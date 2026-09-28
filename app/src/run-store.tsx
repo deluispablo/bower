@@ -421,7 +421,13 @@ export function RunProvider({ children }: RunProviderProps) {
   // Runs once per transition (the effect depends on `state.run`, which does
   // not change again while the phase stays put).
   useEffect(() => {
-    if (state.phase !== 'done' && state.phase !== 'stale') return;
+    if (
+      state.phase !== 'done' &&
+      state.phase !== 'failed' &&
+      state.phase !== 'stale'
+    ) {
+      return;
+    }
     void invalidateAfterRun().then(() => refresh());
   }, [state.phase, state.run, refresh]);
 

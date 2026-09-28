@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import type { DriveFile } from '../src/drive.js';
 import {
   REPORT_PATH,
+  checkWhen,
   findReport,
   findingsIn,
   fixMessage,
+  hasUrgentFinding,
   healthRowSubtitle,
   isReportNew,
   reportDateLabel,
@@ -268,5 +270,76 @@ describe('healthRowSubtitle', () => {
 
   it('never claims a count before the report has loaded', () => {
     expect(healthRowSubtitle(undefined)).toBe('Sunday · not checked yet');
+  });
+
+  it('takes the shared "when" label instead of a hardcoded day (#496)', () => {
+    expect(healthRowSubtitle(2, 'Last Wednesday')).toBe(
+      'Last Wednesday · 2 small things to fix',
+    );
+  });
+});
+
+const WEEKDAYS = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+]; // prettier-ignore
+
+describe('checkWhen', () => {
+  it('is "Today" for a report from earlier the same day', () => {
+    const modifiedTime = new Date(2026, 8, 27, 8, 0).toISOString();
+    const now = new Date(2026, 8, 27, 20, 0).getTime();
+    expect(checkWhen(modifiedTime, now)).toBe('Today');
+  });
+
+  it('is "Yesterday" for a report one calendar day back', () => {
+    const modifiedTime = new Date(2026, 8, 27, 8, 0).toISOString();
+    const now = new Date(2026, 8, 28, 9, 0).getTime();
+    expect(checkWhen(modifiedTime, now)).toBe('Yesterday');
+  });
+
+  it('names the weekday for a report 2-6 days back', () => {
+    const modifiedTime = new Date(2026, 8, 27, 8, 0).toISOString();
+    const now = new Date(2026, 8, 30, 9, 0).getTime();
+    const weekday = WEEKDAYS[new Date(2026, 8, 27).getDay()];
+    expect(checkWhen(modifiedTime, now)).toBe(`Last ${weekday}`);
+  });
+
+  it('falls back to the calendar date at a week or more', () => {
+    const modifiedTime = new Date(2026, 8, 27, 8, 0).toISOString();
+    const now = new Date(2026, 9, 5, 9, 0).getTime();
+    expect(checkWhen(modifiedTime, now)).toBe('Sep 27');
+  });
+
+  it('is "Sunday" for an unreadable date', () => {
+    expect(checkWhen('not-a-date', Date.now())).toBe('Sunday');
+  });
+});
+
+describe('the Notes row and the Health bubble read the same "when" (#496)', () => {
+  it('agree on one fixture date instead of "Sunday" next to a real date', () => {
+    const modifiedTime = new Date(2026, 8, 27, 8, 0).toISOString();
+    const now = new Date(2026, 8, 28, 9, 0).getTime();
+
+    const when = checkWhen(modifiedTime, now);
+
+    expect(when).toBe('Yesterday');
+    expect(healthRowSubtitle(2, when)).toBe(
+      'Yesterday · 2 small things to fix',
+    );
+  });
+});
+
+describe('hasUrgentFinding', () => {
+  it('is true when a finding is titled "Urgent: …"', () => {
+    expect(
+      hasUrgentFinding([{ text: 'Urgent: possible secret in Rules.md' }]),
+    ).toBe(true);
+  });
+
+  it('is false when nothing is urgent', () => {
+    expect(hasUrgentFinding([{ text: '2 notes without tags' }])).toBe(false);
+  });
+
+  it('is false for an empty findings list', () => {
+    expect(hasUrgentFinding([])).toBe(false);
   });
 });

@@ -6,9 +6,11 @@ import { IconExternalLink } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useOpenProposals } from '../components/suggested-rules.js';
 import {
+  checkWhen,
   findReport,
   findingsIn,
   fixMessage,
+  hasUrgentFinding,
   reportDateLabel,
   summarise,
 } from '../health-report.js';
@@ -33,6 +35,9 @@ type ReportLoad =
       status: 'ready';
       counts: HealthCounts | undefined;
       findings: RenderedFinding[];
+      /** A memory-hygiene "Urgent: …" finding is present (#496): the
+       * bubble drops its "good shape" claim, whatever the count. */
+      urgent: boolean;
     }
   | { status: 'offline' }
   | { status: 'error'; message: string };
@@ -46,12 +51,26 @@ type ReportLoad =
 const EXPLAINER =
   'Every Sunday Bower reads through your notes and lists what it would fix: broken links, notes without a home, things that contradict each other. It never changes anything here; you decide.';
 
-/** "Your notes are in good shape, four small things to fix." / "…, one small thing to fix." / all clear. */
-function bubbleText(dateLabel: string, findings: number): string {
-  const when = dateLabel === '' ? "Sunday's check" : `${dateLabel}'s check`;
-  if (findings === 0) return `${when}. Your notes are in good shape.`;
+/** "Last Sunday's check" / "Today's check" / "the Sep 20 check": a
+ * possessive reads fine on a relative label, oddly on an abbreviated date
+ * (#496: "Sep 27's check"). */
+function checkLead(when: string): string {
+  return /^(Today|Yesterday|Last )/.test(when)
+    ? `${when}'s check`
+    : `the ${when} check`;
+}
+
+/**
+ * "Last Sunday's check. Your notes are in good shape, four small things to
+ * fix." / "…, one small thing to fix." / all clear. Never claims good
+ * shape while an Urgent finding stands, whatever the count (#496).
+ */
+function bubbleText(when: string, findings: number, urgent: boolean): string {
+  const lead = checkLead(when);
+  if (findings === 0) return `${lead}. Your notes are in good shape.`;
   const count = findings === 1 ? 'one small thing' : `${findings} small things`;
-  return `${when}. Your notes are in good shape, ${count} to fix.`;
+  if (urgent) return `${lead}. ${count} to fix.`;
+  return `${lead}. Your notes are in good shape, ${count} to fix.`;
 }
 
 interface FiguresProps {
@@ -143,10 +162,12 @@ export function Health() {
       .then((text) => {
         if (cancelled) return;
         const report = parseFrontmatter(text);
+        const parsedFindings = findingsIn(report.body);
         setLoad({
           status: 'ready',
           counts: summarise(report),
-          findings: findingsIn(report.body).map((finding) => ({
+          urgent: hasUrgentFinding(parsedFindings),
+          findings: parsedFindings.map((finding) => ({
             titleHtml: renderInline(finding.text, index),
             detailHtml:
               finding.detail === undefined
@@ -199,6 +220,10 @@ export function Health() {
 
   const dateLabel =
     modifiedTime === undefined ? '' : reportDateLabel(modifiedTime);
+  // Same calendar day (#447's `reportDayStart`) the Notes tab row and the
+  // Home card read, so the three never disagree (#496).
+  const when =
+    modifiedTime === undefined ? 'Sunday' : checkWhen(modifiedTime, Date.now());
 
   return (
     <section class="health page-column">
@@ -227,7 +252,7 @@ export function Health() {
           <div class="health-bubble-row">
             <Bird state="done" size={72} />
             <p class="health-bubble">
-              {bubbleText(dateLabel, load.findings.length)}
+              {bubbleText(when, load.findings.length, load.urgent)}
             </p>
           </div>
 

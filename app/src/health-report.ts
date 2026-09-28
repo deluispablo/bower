@@ -124,6 +124,17 @@ function splitFinding(item: string): HealthFinding {
 }
 
 /**
+ * Whether any finding is one of the memory-hygiene flags the lint prompt's
+ * step 4 raises for `Rules.md` (a credential-shaped line, a personal
+ * identifier, a health or financial detail): the runner titles these
+ * "Urgent: …". The Health bubble (`routes/health.tsx`) drops its "good
+ * shape" claim when one is present (#496), whatever the findings count.
+ */
+export function hasUrgentFinding(findings: HealthFinding[]): boolean {
+  return findings.some((finding) => /^urgent\b/i.test(finding.text.trim()));
+}
+
+/**
  * The report body's `- [ ]` checklist (`agent/prompts/lint.md` step 4) as
  * the findings list `routes/health.tsx` shows, each parsed as Markdown with
  * `splitFinding` above.
@@ -183,17 +194,46 @@ export function fixMessage(dateLabel: string): string {
     : `Fix what the health check from ${dateLabel} found`;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Same reasoning as `ENGLISH_MONTHS` above: no `toLocaleDateString`, ever.
+const ENGLISH_WEEKDAYS = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+] as const; // prettier-ignore
+
 /**
- * The Notes tab's compact Health row subtitle (#353, C.5): "Sunday · 2
- * small things to fix". Always "Sunday" — the day it runs — unlike the
- * full Health screen's own bubble (`bubbleText`), which names the report's
- * actual date once one exists; this row only ever needs the schedule.
- * `undefined` findings: no report parsed yet (loading, offline, or none
- * written), so the row names the day without a claim about its contents.
+ * "Today" / "Yesterday" / "Last Wednesday" / "Sep 20": one relative label
+ * for the report's calendar day (`reportDayStart`, #447), the single
+ * source for "when" the Notes tab row (`healthRowSubtitle`), the Home
+ * card and the Health screen's own bubble all read from, so the three
+ * never again disagree (#496: "Sunday · not checked yet" next to
+ * "Checked yesterday" next to the Sep 27 report). `now`: `Date.now()` in
+ * the app, injected here for tests. An unreadable `modifiedTime` falls
+ * back to `'Sunday'`, the day the check runs, same as no report at all.
  */
-export function healthRowSubtitle(findings: number | undefined): string {
-  if (findings === undefined) return 'Sunday · not checked yet';
-  if (findings === 0) return 'Sunday · your notes are in good shape';
+export function checkWhen(modifiedTime: string, now: number): string {
+  const dayStart = reportDayStart(modifiedTime);
+  if (dayStart === '') return 'Sunday';
+  const days = Math.floor(Math.max(0, now - Date.parse(dayStart)) / DAY_MS);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `Last ${ENGLISH_WEEKDAYS[new Date(dayStart).getDay()]}`;
+  return reportDateLabel(modifiedTime);
+}
+
+/**
+ * The Notes tab's compact Health row subtitle (#353, C.5): "Last Sunday ·
+ * 2 small things to fix". `when` is `checkWhen`'s output (or the literal
+ * `'Sunday'` default, before any report has ever loaded); `undefined`
+ * findings: no report parsed yet (loading, offline, or none written), so
+ * the row names the day without a claim about its contents.
+ */
+export function healthRowSubtitle(
+  findings: number | undefined,
+  when = 'Sunday',
+): string {
+  if (findings === undefined) return `${when} · not checked yet`;
+  if (findings === 0) return `${when} · your notes are in good shape`;
   const count = findings === 1 ? 'one small thing' : `${findings} small things`;
-  return `Sunday · ${count} to fix`;
+  return `${when} · ${count} to fix`;
 }
