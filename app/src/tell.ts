@@ -52,9 +52,10 @@ export function instructionFileName(
 /**
  * What an instruction note is, when the app says so (Part D, D.2): the
  * Bower tab's box writes `request` and leaves it to the agent to decide
- * whether the sentence is a rule, a job or a question.
+ * whether the sentence is a rule, a job or a question; Add's "What is
+ * this?" box writes `context`, for the files of one batch (#335).
  */
-export type InstructionKind = 'request';
+export type InstructionKind = 'request' | 'context';
 
 /**
  * The Markdown content of an instruction note: frontmatter (`tags:

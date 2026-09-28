@@ -36,6 +36,7 @@ import {
   useState,
 } from 'preact/hooks';
 
+import { writeContextNote } from './add-context.js';
 import { ApiError, getStatus, startProcess } from './api.js';
 import type { Run } from './api.js';
 import { FOLDER_MIME } from './drive.js';
@@ -518,11 +519,15 @@ export function RunProvider({ children }: RunProviderProps) {
 
   // Opening the working sheet first means a run that cannot start (the
   // day's limit, an error) still shows its reason in the sheet.
+  // Add's "What is this?" note (#335) lands in the inbox before the run
+  // starts, so the run sees it; `writeContextNote` never rejects and does
+  // nothing when the box is empty.
+  const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const confirmTidyUp = useCallback((): void => {
     setConfirmOpen(false);
     openSheet();
-    void process();
-  }, [openSheet, process]);
+    void writeContextNote(inboxFolderId).then(() => process());
+  }, [openSheet, process, inboxFolderId]);
 
   const dismissConfirm = useCallback((): void => {
     setConfirmOpen(false);
