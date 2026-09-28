@@ -2,10 +2,11 @@
  * The sheet that holds the processing animation (#38, redesigned in #147): a
  * bottom sheet on mobile, a card under the header on desktop
  * (`styles/bower-working.css`). It shows while a run is queued or running,
- * through `done` until the run store goes back to idle (8 s, or sooner when
- * closed), and for 3 s after a failure, a stale run, or the day's quota
- * running out, unless the user closed it (× or Escape). A non-modal
- * dialog: no focus trap, the rest of the app stays usable.
+ * through `done` until closed (× or Escape, #506: never on a timer, so
+ * there is time to read what went where), and for 3 s after a failure, a
+ * stale run, or the day's quota running out, unless the user closed it
+ * first. A non-modal dialog: no focus trap, the rest of the app stays
+ * usable.
  *
  * While a run is queued or running it shows the board's scene (Phone-Working,
  * spec C.6, #338): the bird tidying between "Inbox" and the folders things
@@ -22,6 +23,12 @@
  * spec A.3/A.5), under the summary: `run.quarantined` and `run.refused`,
  * either, both or neither.
  *
+ * After a failure or a stale run it shows the failure (Phone-Working-Failed,
+ * #316): the confused bird, the reason's sentence (`run-failure.ts`, never a
+ * step name), that nothing was lost and how many things are still in the
+ * inbox, a hint, and Try again (a new run, through the usual confirmation)
+ * or Not now. It stays until one of those, or the ×, is tapped.
+ *
  * The run store (`run-store.tsx`, #304) owns `open`: the sheet opens by
  * itself once per run, never because a screen mounted again, and when the
  * Tidy up button is tapped during a run; it closes on dismiss.
@@ -32,7 +39,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Run } from '../api.js';
 import { isDemo } from '../api.js';
-import { doneNotes } from '../home.js';
+import { doneNotes, things } from '../home.js';
+import { failureCopy } from '../run-failure.js';
 import { runKey } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import {
@@ -47,15 +55,16 @@ import { useVault } from '../vault-store.js';
 import { BowerWorking, workingLabel } from './bower-working.js';
 import type { WorkingState } from './bower-working.js';
 import { IconClose, IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
+import '../styles/tidy-confirm-sheet.css';
 
 /** How long the sheet stays up after a run stops without finishing. */
 export const SHEET_LINGER_MS = 3_000;
 
 /**
  * Whether the sheet shows: always while queued/running/done (the run store
- * ends `done` itself), for `SHEET_LINGER_MS` after failed/stale/quota, never
- * once dismissed and never for idle. `sinceMs` is the time since the phase
- * began.
+ * ends `done` itself) and after a failure or a stale run (it asks what to
+ * do, #316), for `SHEET_LINGER_MS` over quota, never once dismissed and
+ * never for idle. `sinceMs` is the time since the phase began.
  */
 export function sheetVisible(
   phase: RunPhase,
@@ -64,12 +73,13 @@ export function sheetVisible(
 ): boolean {
   if (dismissed) return false;
   switch (phase) {
+    case 'starting':
     case 'queued':
     case 'running':
     case 'done':
-      return true;
     case 'failed':
     case 'stale':
+      return true;
     case 'quota':
       return sinceMs < SHEET_LINGER_MS;
     case 'idle':
@@ -77,9 +87,16 @@ export function sheetVisible(
   }
 }
 
-/** The animation state for a run phase, or `null` when there is none. */
+/**
+ * The animation state for a run phase, or `null` when there is none.
+ * `starting` (#505) has no run yet, so it reuses `queued`'s bird and label
+ * — the sheet's own `starting` detail line (`STARTING_MESSAGE`,
+ * `run-store.tsx`) is what actually tells the two apart.
+ */
 export function workingStateFor(phase: RunPhase): WorkingState | null {
   switch (phase) {
+    case 'starting':
+      return 'queued';
     case 'queued':
     case 'running':
     case 'done':
@@ -121,6 +138,14 @@ export interface WorkingSheetProps {
    * same old phase change and find it already expired, opening nothing.
    */
   reopenKey?: number;
+  /** Try again on the failure (#316): starts a new run. */
+  onTryAgain?: () => void;
+}
+
+/** "Nothing was lost: your 3 things are still in the inbox, untouched." */
+export function nothingLost(n: number): string {
+  const are = n === 1 ? 'is' : 'are';
+  return `Nothing was lost: your ${things(n)} ${are} still in the inbox, untouched.`;
 }
 
 /** The sentence under the bar while a run goes (spec C.6). */
@@ -175,6 +200,7 @@ export function WorkingSheet({
   open,
   onDismiss,
   reopenKey = 0,
+  onTryAgain,
 }: WorkingSheetProps): JSX.Element | null {
   // When the sheet should measure the linger window from, updated during
   // render so the first render after a phase change (or a deliberate
@@ -204,9 +230,7 @@ export function WorkingSheet({
   // Re-render once the linger time is up so the sheet can go away.
   const [, setTick] = useState(0);
   useEffect(() => {
-    if (phase !== 'failed' && phase !== 'stale' && phase !== 'quota') {
-      return;
-    }
+    if (phase !== 'quota') return;
     const timer = setTimeout(() => {
       setTick((tick) => tick + 1);
     }, SHEET_LINGER_MS);
@@ -237,13 +261,63 @@ export function WorkingSheet({
 
   if (!visible || state === null) return null;
 
+  if (state === 'failed') {
+    // A stale run never said why: it reads as `unknown`.
+    const copy = failureCopy(phase === 'failed' ? run?.reason : undefined);
+    return (
+      <div
+        class="working-sheet working-sheet-failed"
+        role="dialog"
+        aria-label="Tidying up did not finish"
+      >
+        <div class="working-sheet-head">
+          <h2 class="working-sheet-title">It didn't finish</h2>
+          <button
+            type="button"
+            class="working-sheet-close"
+            aria-label="Close"
+            onClick={onDismiss}
+          >
+            <IconClose />
+          </button>
+        </div>
+        <BowerWorking state="failed" />
+        <p class="working-sheet-detail">{copy.sentence}</p>
+        <p class="working-sheet-detail">{nothingLost(waiting.length)}</p>
+        <p class="working-sheet-reassurance">{copy.hint}</p>
+        <div class="working-sheet-actions">
+          <button
+            type="button"
+            class="tidy-confirm-button"
+            onClick={() => {
+              onDismiss();
+              onTryAgain?.();
+            }}
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            class="tidy-confirm-button tidy-confirm-button-secondary"
+            onClick={onDismiss}
+          >
+            Not now
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // The run store's message, unless it only repeats the label under the bird.
   const detail =
     message !== undefined && message !== workingLabel(state)
       ? message
       : undefined;
 
-  const active = state === 'queued' || state === 'running';
+  // Keyed on `phase`, not the mapped `state`: `starting` (#505) borrows
+  // `queued`'s bird and label but has no run yet, so it must not pull in
+  // the run-data-dependent stage/progress/rows below.
+  const active = phase === 'queued' || phase === 'running';
   const notes = state === 'done' ? doneNotes(run) : [];
   const processed = run?.processed;
   const progress = active ? progressFor(runCounts(processed, waiting)) : null;

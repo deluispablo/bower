@@ -634,6 +634,9 @@ ACCESS_TOKEN=$(field driveAccessToken)
 EXPIRES_AT=$(field expiresAt)
 API_MAX_TURNS=$(field maxTurns)
 USER_API_KEY=$(field apiKey)
+# When this run was asked for (ISO-8601, from the Worker's clock); empty
+# from an older Worker. See "sent during this run" below.
+REQUESTED_AT=$(field requestedAt)
 # The answer holds the Drive token and the user's API key: from here on they
 # live in shell variables only, and the file is gone long before the agent
 # starts.
@@ -738,6 +741,37 @@ if [ "$MODE" = ingest ] && [ "$SCOPE" = instructions ]; then
   done 3<"$PENDING_FILE"
   mv "$WORK_DIR/in-scope.txt" "$PENDING_FILE"
   log "instructions only: $held files left for the next tidy-up"
+fi
+# --- sent during this run ---------------------------------------------------
+# A request the owner sends while this run is queued or running (a
+# `Bower - *.md` instruction note directly in 0-Inbox/, not Add's context
+# note, which goes with its files) belongs to the next tidy-up, as the app
+# shows it: Waiting (#491). Sync down gives each local file Drive's
+# modifiedTime, so a note written or edited after the run was asked for
+# (REQUESTED_AT) is removed from the local copy and the pending list here,
+# exactly like the files an instructions-only run holds back: the agent
+# never sees it, the upload never touches it and the pending-original
+# deletes never name it, so in Drive it stays where it is. Without this,
+# such a note written just before sync down was taken by this run, and
+# one Drive did not list yet as the app's own (its search catches up with
+# a new file only after a while) was quarantined as not written by the
+# app, out of the owner's sight. No REQUESTED_AT (an older Worker), no hold.
+# The log counts, never names.
+if [ "$MODE" = ingest ] && [[ "$REQUESTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$ ]]; then
+  : >"$WORK_DIR/not-sent-during.txt"
+  held=0
+  while IFS= read -r path <&3; do
+    [ -n "$path" ] || continue
+    if in_instructions_scope "$path" &&
+      [ -n "$(find "$VAULT_DIR/$path" -maxdepth 0 -newermt "$REQUESTED_AT" 2>/dev/null)" ]; then
+      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside"
+      held=$((held + 1))
+    else
+      printf '%s\n' "$path" >>"$WORK_DIR/not-sent-during.txt"
+    fi
+  done 3<"$PENDING_FILE"
+  mv "$WORK_DIR/not-sent-during.txt" "$PENDING_FILE"
+  [ "$held" -eq 0 ] || log "$held requests sent during the run left for the next tidy-up"
 fi
 PENDING_COUNT=$(grep -c . "$PENDING_FILE" || true)
 # Only an ingest processes the pending files; a lint reports its summary

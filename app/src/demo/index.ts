@@ -20,9 +20,16 @@ export interface Demo {
   drive: DriveClient;
 }
 
-/** A fresh demo: Alex's folder as the fixture has it, nothing run yet. */
-export function createDemo(now: () => number = () => Date.now()): Demo {
-  const server = new DemoServer(now);
+/**
+ * A fresh demo: Alex's folder as the fixture has it, nothing run yet.
+ * `storage` is `null` in tests, so `tourSeenAt` starts unset and nothing
+ * touches real browser storage; `install()` passes `sessionStorage`.
+ */
+export function createDemo(
+  now: () => number = () => Date.now(),
+  storage: Storage | null = null,
+): Demo {
+  const server = new DemoServer(now, storage);
   return {
     server,
     worker: createDemoWorker(server, now),
@@ -30,9 +37,13 @@ export function createDemo(now: () => number = () => Date.now()): Demo {
   };
 }
 
-/** Swaps both clients for a fresh demo. */
+/**
+ * Swaps both clients for a fresh demo. `sessionStorage`, not
+ * `localStorage` (#494): `tourSeenAt` survives a reload of the same tab,
+ * but a new tab or a fresh visit starts the demo over, tour included.
+ */
 export function install(): void {
-  const demo = createDemo();
+  const demo = createDemo(undefined, sessionStorage);
   setWorkerClient(demo.worker);
   setDriveClient(demo.drive);
 }

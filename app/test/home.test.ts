@@ -15,6 +15,7 @@ import {
   tidyUpAgo,
 } from '../src/home.js';
 import type { BubbleInput, BubblePart, HomeState } from '../src/home.js';
+import { runCounts as sheetRunCounts } from '../src/run-progress.js';
 
 function at(hour: number): Date {
   const date = new Date('2026-09-27T00:00:00');
@@ -155,7 +156,12 @@ describe('runCounts and lastTidyUpLine', () => {
   });
 
   it('says Failed for a failed run', () => {
-    expect(lastTidyUpLine(run('failed', ['0-Inbox/a.pdf']))).toBe('Failed');
+    expect(lastTidyUpLine(run('failed', ['0-Inbox/a.pdf']))).toBe(
+      'Failed · Did not finish',
+    );
+    expect(
+      lastTidyUpLine({ ...run('failed', []), reason: 'drive_unavailable' }),
+    ).toBe('Failed · Drive did not answer');
   });
 
   it('counts neither: the "What is this?" context note (#444)', () => {
@@ -166,6 +172,20 @@ describe('runCounts and lastTidyUpLine', () => {
     ]);
     expect(runCounts(withContext)).toEqual({ filed: 1, answered: 1 });
     expect(lastTidyUpLine(withContext)).toBe('1 filed · 1 answered');
+  });
+
+  it("agrees with the working sheet's own count for the same run (#506)", () => {
+    // Two things filed, a context note, no question: Home's "filed" total
+    // and the sheet's "processed" total (`run-progress.ts#runCounts`) must
+    // land on the same number, since both exclude the same context note.
+    const processed = [
+      '0-Inbox/Lease agreement 2026.pdf',
+      '0-Inbox/IMG_4471.jpg',
+      '0-Inbox/Bower - 2026-09-27 0900 Context.md',
+    ];
+    const withContext = run('done', processed);
+    expect(runCounts(withContext)).toEqual({ filed: 2, answered: 0 });
+    expect(sheetRunCounts(processed, processed).processed).toBe(2);
   });
 });
 
@@ -256,14 +276,24 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
     );
   });
 
-  it('Failed: nothing was lost, and Try again opens the failure', () => {
-    const parts = bubbleFor({ ...base, state: 'failed' });
+  it('Failed: the reason in words, nothing was lost, and Try again opens the failure (#316)', () => {
+    const parts = bubbleFor({
+      ...base,
+      state: 'failed',
+      lastFinished: {
+        state: 'failed',
+        requestedAt: '2026-01-01T00:00:00.000Z',
+        error: 'sync up: copy failed',
+        reason: 'drive_unavailable',
+      },
+    });
     expect(text(parts)).toBe(
-      "I couldn't finish. Nothing was lost; your 3 things are still in the inbox. Try again.",
+      'Google Drive stopped answering half way through copying things back. Nothing was lost; your 3 things are still in the inbox. Try again.',
     );
+    expect(text(parts)).not.toContain('sync up');
     expect(links(parts)).toEqual(['failure:Try again']);
     expect(text(bubbleFor({ ...base, state: 'failed', pending: 1 }))).toBe(
-      "I couldn't finish. Nothing was lost; your 1 thing is still in the inbox. Try again.",
+      'Something went wrong before Bower could finish. Nothing was lost; your 1 thing is still in the inbox. Try again.',
     );
   });
 

@@ -718,6 +718,26 @@ describe('GET /runner/vaults/:id', () => {
     expect((await response.json<RunnerVault>()).apiKey).toBe(API_KEY);
   });
 
+  // #491: the runner leaves a request note written after this for the next
+  // tidy-up.
+  it("returns when the ticket's run was asked for", async () => {
+    await seedUser();
+    await seedDriveToken();
+    const github = stub();
+    const queued = await (await postProcess(github.fetchImpl)).json<RunBody>();
+    const [dispatch] = dispatches(github.calls);
+
+    const response = await getVault(
+      stub().fetchImpl,
+      `Bearer ${dispatch?.client_payload.ticket ?? ''}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json<RunnerVault>()).requestedAt).toBe(
+      queued.run.requestedAt,
+    );
+  });
+
   it('mints a Drive token when none is cached', async () => {
     await seedUser();
     const google = stub(() =>

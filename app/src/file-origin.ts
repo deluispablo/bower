@@ -126,19 +126,19 @@ function capitalise(text: string): string {
 }
 
 /**
- * The line under a folder row's title. A file: its type and origin ("PDF ·
- * filed by Bower", "Photo · in this folder"). A note with a known origin:
+ * The line under a folder row's title. A file with a known origin: its
+ * type and origin ("PDF · filed by Bower"). A note with a known origin:
  * the origin alone, which already says it is a note ("Your note", "Bower
- * wrote it when you asked"); a note without one: "Note · in this folder".
+ * wrote it when you asked"). Neither has one (#502): just the type ("PDF",
+ * "Note") — `ORIGIN_FALLBACK`'s "in this folder" said nothing a folder row
+ * doesn't already say by being there.
  */
 export function originLine(
   file: Pick<DriveFile, 'name' | 'mimeType'>,
   origin: Origin | null,
 ): string {
   const kind = fileKind(file);
-  if (kind === 'note' && origin !== null) {
-    return capitalise(ORIGIN_LABELS[origin]);
-  }
-  const said = origin === null ? ORIGIN_FALLBACK : ORIGIN_LABELS[origin];
-  return `${FILE_KIND_LABELS[kind]} · ${said}`;
+  if (origin === null) return FILE_KIND_LABELS[kind];
+  if (kind === 'note') return capitalise(ORIGIN_LABELS[origin]);
+  return `${FILE_KIND_LABELS[kind]} · ${ORIGIN_LABELS[origin]}`;
 }

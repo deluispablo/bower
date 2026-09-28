@@ -141,8 +141,11 @@ function KindIcon({
 }
 
 /** A root folder screen's subfolder second line (#431, Phone-Folder
- * board): "6 things · updated today", "3 things · 5 d". */
+ * board): "6 things · updated today", "3 things · 5 d". Empty (#502): a
+ * subfolder with nothing in it has no `updated` either, and the tree
+ * already hides a zero count (#310) rather than say "0 things". */
 function subfolderLine(folder: FolderSubfolder, now: number): string {
+  if (folder.things === 0) return '';
   const things = plural(folder.things, 'thing');
   if (folder.updated === undefined) return things;
   const age = shortAge(folder.updated, now);
@@ -295,26 +298,31 @@ function FolderBody({
         <div class="folder-section">
           <h2 class="folder-label">Folders</h2>
           <ul class="folder-list">
-            {contents.subfolders.map((folder) => (
-              <li key={folder.path}>
-                <a class="folder-row" href={folderHref(folder.path)}>
-                  <IconFolder />
-                  {parentName === null ? (
-                    <span class="folder-row-text">
-                      <span class="folder-row-name">{folder.name}</span>
-                      <span class="folder-row-detail">
-                        {subfolderLine(folder, now)}
+            {contents.subfolders.map((folder) => {
+              const detail = subfolderLine(folder, now);
+              return (
+                <li key={folder.path}>
+                  <a class="folder-row" href={folderHref(folder.path)}>
+                    <IconFolder />
+                    {parentName === null ? (
+                      <span class="folder-row-text">
+                        <span class="folder-row-name">{folder.name}</span>
+                        {detail !== '' && (
+                          <span class="folder-row-detail">{detail}</span>
+                        )}
                       </span>
-                    </span>
-                  ) : (
-                    <>
-                      <span class="folder-row-name">{folder.name}</span>
-                      <span class="folder-row-count">{folder.things}</span>
-                    </>
-                  )}
-                </a>
-              </li>
-            ))}
+                    ) : (
+                      <>
+                        <span class="folder-row-name">{folder.name}</span>
+                        {folder.things > 0 && (
+                          <span class="folder-row-count">{folder.things}</span>
+                        )}
+                      </>
+                    )}
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

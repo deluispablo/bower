@@ -32,6 +32,7 @@ import { useLocation } from 'preact-iso';
 import { getPref, setPref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
 import {
+  checkWhen,
   findReport,
   healthRowSubtitle,
   isReportNew,
@@ -195,6 +196,12 @@ export function Explorer({
     getPref('showAppFiles'),
   );
   const findings = useHealthFindings(variant !== 'sidebar');
+  // Same calendar day (#447's `reportDayStart`) the Home card and the
+  // Health screen's own bubble read, so the three never disagree (#496).
+  const reportTime =
+    index === null ? undefined : findReport(index)?.modifiedTime;
+  const healthWhen =
+    reportTime === undefined ? 'Sunday' : checkWhen(reportTime, Date.now());
 
   function toggleSort(): void {
     const next: ExplorerSortPref = sort === 'name' ? 'modified' : 'name';
@@ -260,7 +267,7 @@ export function Explorer({
               {healthIsNew && <span class="nav-badge">New</span>}
             </b>
             <span class="explorer-health-subtitle">
-              {healthRowSubtitle(findings)}
+              {healthRowSubtitle(findings, healthWhen)}
             </span>
           </span>
         </>

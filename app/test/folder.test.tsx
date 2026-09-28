@@ -55,6 +55,10 @@ const files: DriveFile[] = [
   file('2-Areas', FOLDER_MIME),
   file('2-Areas/Cooking', FOLDER_MIME),
   file('2-Areas/Cooking/Sourdough.md', 'text/markdown', '2026-09-23T09:00:00Z'),
+  // Empty subfolders, for #502: a root screen's row shows no count line and
+  // a non-root screen's row shows no count badge, rather than "0 things".
+  file('1-Projects/Empty project', FOLDER_MIME),
+  file('1-Projects/Flat hunt/Empty', FOLDER_MIME),
 ];
 
 vi.mock('preact-iso', () => ({
@@ -193,7 +197,7 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
 
   it('reads "N projects · N things" for 1-Projects', () => {
     mount();
-    expect(meta()).toBe('1 project · 4 things');
+    expect(meta()).toBe('2 projects · 4 things');
   });
 
   it('keeps the plain notes and folders line for another root folder', () => {
@@ -220,6 +224,14 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
       '1 thing · 5 d',
     );
   });
+
+  it('shows no count line for an empty subfolder, not "0 things" (#502)', () => {
+    mount();
+    const empty = root.querySelector(
+      'a.folder-row[href="/folder/1-Projects/Empty%20project"]',
+    );
+    expect(empty?.querySelector('.folder-row-detail')).toBeNull();
+  });
 });
 
 // #457: the non-root folder screen's own subfolder rows (the plain
@@ -236,6 +248,15 @@ describe('Subfolder rows on a non-root folder screen count files too (#457)', ()
     // Viewings holds one note and one file: 2, not 1 (notes only).
     expect(row?.querySelector('.folder-row-count')?.textContent).toBe('2');
     expect(row?.querySelector('.folder-row-detail')).toBeNull();
+  });
+
+  it('shows no count badge for an empty subfolder, not "0" (#502)', () => {
+    route.params.path = '1-Projects/Flat hunt';
+    mount();
+    const empty = root.querySelector(
+      'a.folder-row[href="/folder/1-Projects/Flat%20hunt/Empty"]',
+    );
+    expect(empty?.querySelector('.folder-row-count')).toBeNull();
   });
 });
 

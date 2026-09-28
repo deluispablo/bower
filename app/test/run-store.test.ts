@@ -11,6 +11,7 @@ import {
   reduce,
   resultMessage,
   runKey,
+  STARTING_MESSAGE,
 } from '../src/run-store.js';
 import type { RunState } from '../src/run-store.js';
 import type { Run } from '../src/api.js';
@@ -354,28 +355,7 @@ describe('reduce', () => {
     });
   });
 
-  it('done-timeout moves done to idle and closes the sheet, keeping the message', () => {
-    const state: RunState = {
-      phase: 'done',
-      run: doneRun,
-      message: '2 files processed',
-      ...openFor,
-    };
-    expect(reduce(state, { type: 'done-timeout' })).toEqual({
-      phase: 'idle',
-      run: doneRun,
-      message: '2 files processed',
-      sheetOpen: false,
-      sheetRunId: openFor.sheetRunId,
-    });
-  });
-
-  it('done-timeout is a no-op outside the done phase', () => {
-    const state: RunState = { phase: 'running', run: queuedRun, ...openFor };
-    expect(reduce(state, { type: 'done-timeout' })).toBe(state);
-  });
-
-  it('sheet-dismissed during done goes back to idle at once', () => {
+  it('sheet-dismissed during done goes back to idle at once (#506: the only way out of done)', () => {
     const state: RunState = {
       phase: 'done',
       run: doneRun,
@@ -412,7 +392,39 @@ describe('reduce', () => {
     });
   });
 
-  it('a whole run: the sheet opens once, done ends in idle', () => {
+  it('starting (#505) opens the sheet and sets its own message at once, before any run exists', () => {
+    expect(reduce(idle, { type: 'starting' })).toEqual({
+      phase: 'starting',
+      run: null,
+      message: STARTING_MESSAGE,
+      sheetOpen: true,
+      sheetRunId: null,
+    });
+  });
+
+  it('starting then process-started continues as an ordinary run (#505)', () => {
+    const starting = reduce(idle, { type: 'starting' });
+    expect(
+      reduce(starting, { type: 'process-started', run: queuedRun }),
+    ).toEqual({
+      phase: 'queued',
+      run: queuedRun,
+      ...openFor,
+    });
+  });
+
+  it('starting then a failure to start ends in failed, with its own sentence (#505)', () => {
+    const starting = reduce(idle, { type: 'starting' });
+    const state = reduce(starting, {
+      type: 'process-failed',
+      message: 'Could not start. Try again.',
+    });
+    expect(state.phase).toBe('failed');
+    expect(state.message).toBe('Could not start. Try again.');
+    expect(state.sheetOpen).toBe(true);
+  });
+
+  it('a whole run: the sheet opens once, stays done until dismissed (#506)', () => {
     let state = reduce(idle, { type: 'process-started', run: queuedRun });
     expect(state.sheetOpen).toBe(true);
     state = reduce(state, { type: 'sheet-dismissed' });
@@ -423,7 +435,9 @@ describe('reduce', () => {
     state = reduce(state, { type: 'status', run: doneRun, stale: false });
     expect(state.phase).toBe('done');
     expect(state.sheetOpen).toBe(false);
-    state = reduce(state, { type: 'done-timeout' });
+    // Nothing on a timer moves this on any more: it stays done until the
+    // sheet itself is dismissed, however long that takes.
+    state = reduce(state, { type: 'sheet-dismissed' });
     expect(state.phase).toBe('idle');
     expect(state.message).toBe('2 files processed');
   });
