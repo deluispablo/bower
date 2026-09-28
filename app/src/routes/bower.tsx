@@ -27,6 +27,7 @@ import {
   IconSparkle,
 } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { SuggestedRules } from '../components/suggested-rules.js';
 import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
 import { useSession } from '../session.js';
@@ -328,6 +329,7 @@ export function Bower(): JSX.Element {
         class="bower-panel"
         hidden={segment !== 'rules'}
       >
+        <SuggestedRules />
         {firstTime ? (
           <div class="bower-first">
             <Bird state="looking" size={84} />

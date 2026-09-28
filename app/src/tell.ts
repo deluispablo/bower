@@ -1,15 +1,15 @@
 /**
- * Pure helpers for the Tell Bower screen. No DOM, no fetch: unit-tested
+ * The instruction-note writer, shared by whatever in the app writes an
+ * instruction note (today the Bower tab's box, which a note's "This was
+ * misfiled" and Health's "Ask Bower to fix these" prefill). No DOM, no
+ * fetch: unit-tested
  * directly. `instructionFileName` and `instructionNote` build the
  * `Bower - …md` instruction note the Instructions workflow reads
  * (`vault-template/CLAUDE.md`); the `sentItem` helpers keep a small local
- * history of what was sent, in `localStorage`; `statusLineFor` and the
- * display helpers below turn one of those items into the text a sent
- * bubble shows.
+ * list of what this device sent, in `localStorage`, which the Bower tab's
+ * Requests reads for the words as written (`bower-tab.ts`). The Tell Bower
+ * screen and its conversation feed are gone (#347).
  */
-
-import type { Run } from './api.js';
-import type { RunPhase } from './run-store.js';
 
 /** Characters not allowed in a Drive/Windows file name. */
 const ILLEGAL_CHARS = /[\\/:*?"<>|]/g;
@@ -135,76 +135,8 @@ export function clearSent(): void {
   }
 }
 
-// --- Display helpers -----------------------------------------------------
-
 /** The first line of `text`, shortened if it runs long. */
 export function firstLine(text: string): string {
   const line = text.split('\n')[0] ?? '';
   return line.length > 140 ? `${line.slice(0, 140)}…` : line;
-}
-
-/** A compact "sent at" label, e.g. "Sep 26, 14:05"; `''` for an invalid date. */
-export function formatSentDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-/**
- * Enough of the run store's state to caption a sent item: the phase, and
- * (for `done`) the run it belongs to, whose `finishedAt` decides whether
- * this particular item was part of it.
- */
-export interface RunSnapshot {
-  phase: RunPhase;
-  run: Run | null;
-}
-
-/** Whether `a` (ISO-8601) is at or before `b`; `false` if either fails to parse. */
-function isAtOrBefore(a: string, b: string): boolean {
-  const aTime = Date.parse(a);
-  const bTime = Date.parse(b);
-  return !Number.isNaN(aTime) && !Number.isNaN(bTime) && aTime <= bTime;
-}
-
-/**
- * The status line under a sent bubble (spec §6, Tell Bower row):
- *
- * - `queued` or `running`: "Tidying up…", for every item already in the
- *   list — whether it was sent before the run started or arrived while
- *   it was already going, either way it is (or will be) picked up.
- * - `done`: "Done" once the item was sent at or before the run's
- *   `finishedAt`, i.e. it was actually part of the run that just
- *   finished; an item sent after that (a message typed in the few
- *   seconds the "done" state lingers) falls through to the plain sent
- *   line below, since it wasn't.
- * - `idle`, `failed`, or anything else — `stale`, `quota`, a missing run
- *   snapshot, or a phase this function doesn't otherwise recognise —
- *   falls back to "Sent · <date>".
- */
-export function statusLineFor(
-  item: SentItem,
-  runPhase: RunSnapshot | null | undefined,
-): string {
-  const sentLine = `Sent · ${formatSentDate(item.sentAt)}`;
-  if (runPhase == null) return sentLine;
-
-  switch (runPhase.phase) {
-    case 'queued':
-    case 'running':
-      return 'Tidying up…';
-    case 'done': {
-      const finishedAt = runPhase.run?.finishedAt;
-      return finishedAt !== undefined && isAtOrBefore(item.sentAt, finishedAt)
-        ? 'Done'
-        : sentLine;
-    }
-    default:
-      return sentLine;
-  }
 }

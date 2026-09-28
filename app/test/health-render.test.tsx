@@ -11,7 +11,7 @@
  * old report with no figures at all.
  *
  * `summarise`/`findingsIn` as pure functions are `health-report.test.ts`'s
- * concern; Bower's suggestions are `health-proposals.test.tsx`'s.
+ * concern; the pointer to Bower's suggestions is `suggested-rules.test.tsx`'s.
  */
 
 import { h, render } from 'preact';
