@@ -5,9 +5,8 @@
  * its folder, who put it there and when), the preview (`file-preview.ts`
  * chooses: an image inline, a Google Doc as text, else Drive's thumbnail,
  * which for a PDF is its first page), and a tip to ask Bower for a note on
- * it. Open in Drive is in the More menu, today's note menu in its file
- * version (`note-menu.tsx`, `noun="file"`); one menu for note, file and
- * folder is #352's.
+ * it. Open in Drive is in the More menu, the one menu for note, file and
+ * folder (#352, `note-menu.tsx`, `kind="file"`).
  *
  * A note's id opens the note screen instead; an id the index does not have
  * shows Not found.
@@ -50,7 +49,7 @@ import {
 } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
 import { useVault } from '../vault-store.js';
-import { fileKind, fileTitle } from '../vault-index.js';
+import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
 import { NotFound } from './not-found.js';
 import '../styles/markdown.css';
 import '../styles/file.css';
@@ -310,14 +309,11 @@ export function FileScreen(): JSX.Element {
           />
           {menuOpen && (
             <NoteMenu
+              kind="file"
               file={file}
-              noteName={file.name}
-              noun="file"
-              canEdit={false}
-              canAppend={false}
-              pinned={false}
-              onAddParagraph={() => undefined}
-              onEdit={() => undefined}
+              title={title}
+              typeLabel={FILE_KIND_LABELS[fileKind(file)]}
+              askName={file.name}
               onClose={() => setMenuOpen(false)}
             />
           )}

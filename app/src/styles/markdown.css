@@ -353,30 +353,10 @@
   text-decoration: underline;
 }
 
-/* `position: relative` anchors the note menu popover (issue #210,
-   `note-menu.css`) to this row on desktop; the phone's own More trigger
-   lives in the shell's `actions` slot instead (`layout.css`), so
-   `.note-header-more` stays hidden until the desktop breakpoint. */
-.note-header-actions {
-  position: relative;
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.note-header-more {
-  display: none;
-}
-
 /* Reading measure (spec §6 row Note): the note's own column, not the third
    "About this note" column, which sits outside `.note-view` in the shell. */
 @media (min-width: 900px) {
   .note-view {
     max-width: 720px;
-  }
-
-  .note-header-more {
-    display: inline-flex;
   }
 }
