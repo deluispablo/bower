@@ -6,18 +6,6 @@
 
 import { expect, navigate, openHome, test } from './demo.js';
 
-function textFile(name: string): {
-  name: string;
-  mimeType: string;
-  buffer: Uint8Array;
-} {
-  return {
-    name,
-    mimeType: 'text/plain',
-    buffer: new TextEncoder().encode(name),
-  };
-}
-
 test('the three doors fit one row at 375 px with 48 px targets (R-ADD-1)', async ({
   page,
 }, testInfo) => {
@@ -53,7 +41,7 @@ test('the three doors fit one row at 375 px with 48 px targets (R-ADD-1)', async
 
 test('the button reads "Tidy up 5 things" with five items and opens the confirmation (R-ADD-5)', async ({
   page,
-}) => {
+}, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
 
@@ -61,7 +49,12 @@ test('the button reads "Tidy up 5 things" with five items and opens the confirma
   await page
     .locator('input[type="file"]')
     .first()
-    .setInputFiles([textFile('Flat one.txt'), textFile('Flat two.txt')]);
+
+    .setInputFiles(
+      Array<string>(2).fill(
+        `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+      ),
+    );
   await expect(page.locator('.add-queue-kept')).toHaveCount(0);
   await expect(page.locator('.add-queue-card .kind-badge')).toHaveCount(2);
 
