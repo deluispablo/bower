@@ -728,6 +728,48 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   await shot(page, testInfo, 'tabs-notes');
 });
 
+test('the Notes tab: root meanings, Health and hidden-files at the bottom, one Expand/Collapse button (#353)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === 'desktop',
+    'the Notes tab is phone-only; desktop keeps the sidebar',
+  );
+  await openHome(page);
+  await page.getByRole('link', { name: 'Notes' }).click();
+  await expect(page).toHaveURL(/\/notes$/);
+
+  const bar = page.locator('header.topbar');
+  await expect(bar.getByRole('button', { name: 'Expand all' })).toBeVisible();
+  await expect(bar.getByRole('button', { name: /^Sort by/ })).toHaveCount(0);
+  // Scoped to the Notes screen itself: the desktop sidebar (always mounted,
+  // just CSS-hidden below 900px) keeps its own sort button until #326.
+  await expect(
+    page.locator('.explorer-page [aria-label^="Sort by"]'),
+  ).toHaveCount(0);
+
+  const tree = page.getByRole('tree').first();
+  const inbox = tree.locator('a[href="/folder/0-Inbox"]');
+  await expect(inbox).toContainText('What you added, waiting for a tidy-up');
+  const answers = tree.locator('a[href="/folder/Answers"]');
+  await expect(answers).toContainText('What Bower wrote back to you');
+
+  const health = page.locator('.explorer-health-row');
+  await expect(health).toContainText('Health check');
+  await expect(health).toContainText('Sunday · 3 small things to fix');
+  // Scoped to `.explorer-foot`: the sidebar has its own hidden-files
+  // button too (always mounted, CSS-hidden below 900px).
+  const hidden = page.locator('.explorer-foot .explorer-hidden');
+  await expect(health).toBeVisible();
+  await expect(hidden).toBeVisible();
+  // Health and the hidden-files line sit together, after the tree.
+  const footBox = await page.locator('.explorer-foot').boundingBox();
+  const treeBox = await tree.boundingBox();
+  expect((footBox?.y ?? 0) >= (treeBox?.y ?? 0)).toBe(true);
+
+  await shot(page, testInfo, 'notes-tab');
+});
+
 test('an old /tell link opens the Bower tab with its text', async ({
   page,
 }) => {
