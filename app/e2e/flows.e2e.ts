@@ -709,7 +709,7 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   // rule sentence is already in Rules, under its own topic.
   await navigate(page, /^Bower$/);
   await expect(
-    bowerPart(page, 'Rules').getByRole('button', { name: /^Garden\s*1$/ }),
+    bowerPart(page, 'Rules').getByRole('button', { name: 'Garden, 1 rule' }),
   ).toBeVisible();
   await showBowerPart(page, 'Requests');
   await expect(
@@ -1090,11 +1090,12 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
   await expect(
     rules.getByText('Rules are yours and start at once.'),
   ).toBeVisible();
-  // Alex's groups, each with its count; only the first is open.
-  const money = rules.getByRole('button', { name: /^Money\s*4$/ });
+  // Alex's groups, each with its count, the name and the count now named
+  // apart (#511: "Money4" read as one glued word); only the first is open.
+  const money = rules.getByRole('button', { name: 'Money, 4 rules' });
   await expect(money).toHaveAttribute('aria-expanded', 'true');
   await expect(
-    rules.getByRole('button', { name: /^Travel\s*1$/ }),
+    rules.getByRole('button', { name: 'Travel, 1 rule' }),
   ).toHaveAttribute('aria-expanded', 'false');
   // Bower's two open suggestions sit on top, with Accept and Dismiss.
   await expect(

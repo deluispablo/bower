@@ -6,7 +6,10 @@
 .ideas-screen {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  /* #511: `--space-5` does not exist (the tokens jump 4 to 6), so this
+   * gap silently computed to 0 — the bird bubble's last line touched the
+   * first group heading. 16 px, the issue's own figure. */
+  gap: var(--space-4);
 }
 
 .ideas-intro {
