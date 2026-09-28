@@ -1455,7 +1455,10 @@ expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end
 # The server-side move finds nothing (#595), so the original falls back to
 # the copy up and its delete.
 grep -q ' 1 moves copied up instead$' "$STATE/out.log" || die 'the failed move was not counted'
-expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'the failed move is copied up'
+expect_eq "$(cat "$STATE/uploaded.txt")" "$(printf '0-Inbox/Processed/a.pdf\nlog.md')" \
+  'the failed move is copied up, and booked (#643)'
+grep -qE ' · Moved: 0-Inbox/a\.pdf → 0-Inbox/Processed/a\.pdf$' "$STATE/remote/log.md" ||
+  die 'the failed move is not booked in log.md'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 1 'rclone deletefile calls'
 [ ! -e "$STATE/remote/0-Inbox/a.pdf" ] || die 'original back in 0-Inbox/ in Drive'
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive'
