@@ -130,3 +130,18 @@ a.home-pinned-tile:hover {
   font-size: var(--text-sm);
   cursor: pointer;
 }
+
+/* Desktop (#356, Desktop-Home board): the tiles sit on the same grid as
+   Home's four cards (`home.css`) — same gap, two columns under 1200 and
+   four from there. Edit keeps its single column of rows. */
+@media (min-width: 900px) {
+  .home-pinned-grid {
+    gap: var(--space-4);
+  }
+}
+
+@media (min-width: 1200px) {
+  .home-pinned-grid:not(.home-pinned-grid-edit) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

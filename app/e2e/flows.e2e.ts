@@ -1316,6 +1316,70 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await shot(page, testInfo, 'container-1920-settings');
 });
 
+test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent in two columns (#356)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The desktop grid; the phone keeps its own Home.',
+  );
+  const cards = page.locator('.home-cards > .home-card');
+  const boxes = async (
+    locator: typeof cards,
+  ): Promise<{ x: number; y: number; width: number }[]> =>
+    await locator.evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width };
+      }),
+    );
+  // Nothing inside Home ends past Home's own right edge (6.1.1: at 1024
+  // the send button was clipped by the viewport).
+  const clipped = async (): Promise<string[]> =>
+    page.locator('.home').evaluate((home) => {
+      const edge = home.getBoundingClientRect().right + 0.5;
+      const found: string[] = [];
+      for (const el of home.querySelectorAll('*')) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.right > edge) found.push(String(el.className));
+      }
+      return found;
+    });
+
+  // 1024: the content column is narrow, so the cards are 2 x 2.
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await openHome(page);
+  await expect(cards).toHaveCount(4);
+  await expect(cards.nth(3)).toBeVisible();
+  let grid = await boxes(cards);
+  expect(new Set(grid.map((b) => Math.round(b.width))).size).toBe(1);
+  expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(2);
+  expect(await clipped()).toEqual([]);
+  // No Tell column on Home (#347).
+  await expect(page.getByRole('textbox', { name: /Tell Bower/ })).toHaveCount(
+    0,
+  );
+  await shot(page, testInfo, 'home-desktop-1024');
+
+  // 1280: four equal cards in one row; the Pinned tiles on the same
+  // columns; Recent in two columns.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  grid = await boxes(cards);
+  expect(new Set(grid.map((b) => Math.round(b.width))).size).toBe(1);
+  expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(1);
+  const tiles = await boxes(page.locator('.home-pinned-grid > *'));
+  expect(tiles.length).toBeGreaterThan(0);
+  tiles.forEach((tile, i) => {
+    expect(tile.x).toBeCloseTo(grid[i % 4]?.x ?? NaN, 0);
+    expect(tile.width).toBeCloseTo(grid[i % 4]?.width ?? NaN, 0);
+  });
+  const recent = await boxes(page.locator('.home-notes > li'));
+  expect(recent.length).toBeGreaterThan(1);
+  expect(new Set(recent.map((b) => Math.round(b.x))).size).toBe(2);
+  expect(await clipped()).toEqual([]);
+  await shot(page, testInfo, 'home-desktop-1280');
+});
+
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
   page,
 }, testInfo) => {
