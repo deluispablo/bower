@@ -26,12 +26,26 @@ import '../styles/ideas.css';
 const BACK = <BackLink href={BOWER_PATH} label="Bower" />;
 const CRUMB = <span class="topbar-title">Ideas</span>;
 
+/** How many words of `text` name a "Copy" link (#511, WCAG 2.4.4): enough
+ * to tell nine identical "Copy" links apart, short enough to stay a name
+ * rather than a repeat of the row. */
+const COPY_LABEL_WORDS = 6;
+
+/** "Copy: <first words>": distinct accessible names for the nine
+ * otherwise-identical "Copy" links (#511). An ellipsis marks a real cut;
+ * a `text` short enough to fit whole gets none. */
+export function copyLabel(text: string): string {
+  const words = text.trim().split(/\s+/);
+  const lead = words.slice(0, COPY_LABEL_WORDS).join(' ');
+  return `Copy: ${lead}${words.length > COPY_LABEL_WORDS ? '…' : ''}`;
+}
+
 function IdeaRow({ text, prompt }: Idea): JSX.Element {
   return (
     <li class="idea-row">
       <IconSparkle />
       <span class="idea-text">{text}</span>
-      <a class="idea-copy" href={ideaHref(prompt)}>
+      <a class="idea-copy" href={ideaHref(prompt)} aria-label={copyLabel(text)}>
         <IconCopy />
         Copy
       </a>
