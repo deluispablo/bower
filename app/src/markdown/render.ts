@@ -2,8 +2,8 @@
  * Renders a note like Obsidian's reading view: GitHub-flavoured Markdown
  * (tables, read-only task lists, code, blockquotes), wikilinks resolved
  * against the vault index, `==highlight==`, callouts and heading anchors.
- * A note Bower wrote when asked shows `## Bower's note` as the conclusions
- * box and `## What Bower used` as the sources list (`bower-note.ts`).
+ * Bower's note (`> [!bower]` callouts, or the older `## Bower's note`) and
+ * `## What Bower used` render their own way (`bower-note.ts`).
  * Attachments: links to files other than notes open in Drive; embedded
  * images and notes become placeholders (`embeds.ts`) that the note view
  * fills in after rendering, so this stays synchronous and needs no network.
@@ -61,17 +61,17 @@ export interface RenderOptions {
 }
 
 const ALLOWED_TAGS = [
-  'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'dd', 'del', 'div',
-  'dl', 'dt', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img',
+  'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'dd', 'del', 'details',
+  'div', 'dl', 'dt', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img',
   'input', 'kbd', 'li', 'mark', 'ol', 'p', 'pre', 's', 'small', 'span',
-  'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th',
+  'strong', 'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th',
   'thead', 'tr', 'u', 'ul',
 ]; // prettier-ignore
 
 const ALLOWED_ATTR = [
   'align', 'alt', 'checked', 'class', 'data-bower-embed', 'data-bower-file',
-  'disabled', 'href', 'id', 'rel', 'src', 'start', 'target', 'title',
-  'type',
+  'disabled', 'href', 'id', 'open', 'rel', 'src', 'start', 'target',
+  'title', 'type',
 ]; // prettier-ignore
 
 /**
@@ -165,15 +165,6 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/**
- * A callout's default title (no `[!kind] Title` given): `[!bower]` is the
- * agent's own note (spec §6 row Note, issue #144), styled and worded as
- * "Bower's note"; any other kind just gets its name capitalized.
- */
-function defaultCalloutTitle(kind: string): string {
-  return kind === 'bower' ? "Bower's note" : capitalize(kind);
-}
-
 function createMarked(index: VaultIndex, options: RenderOptions): Marked {
   const slugCounts = new Map<string, number>();
   const notePath = options.path ?? '';
@@ -254,9 +245,7 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
         type: 'callout',
         raw: match[0],
         kind,
-        titleTokens: this.lexer.inline(
-          title === '' ? defaultCalloutTitle(kind) : title,
-        ),
+        titleTokens: this.lexer.inline(title === '' ? capitalize(kind) : title),
         tokens: this.lexer.blockTokens(body, []),
       };
     },

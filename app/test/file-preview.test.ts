@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  drivePreviewUrl,
+  formatDuration,
   formatSize,
+  kindWord,
+  metaFacts,
   previewKind,
+  shortDate,
   thumbnailUrl,
   typeLine,
   whenLine,
@@ -42,8 +47,34 @@ describe('previewKind', () => {
         mimeType: 'application/vnd.google-apps.spreadsheet',
       }),
     ).toBe('thumbnail');
+  });
+
+  it('has nothing to show for a ZIP or an unknown file', () => {
     expect(previewKind({ name: 'a.zip', mimeType: 'application/zip' })).toBe(
-      'thumbnail',
+      'none',
+    );
+    expect(previewKind({ name: 'a.xyz', mimeType: '' })).toBe('none');
+  });
+
+  it('reads a CSV as a table and text as text', () => {
+    expect(previewKind({ name: 'Budget.csv', mimeType: 'text/csv' })).toBe(
+      'table',
+    );
+    expect(previewKind({ name: 'a.txt', mimeType: 'text/plain' })).toBe(
+      'plain',
+    );
+  });
+
+  it('gives Office files and video to Drive', () => {
+    expect(
+      previewKind({
+        name: 'Costs.xlsx',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    ).toBe('drive');
+    expect(previewKind({ name: 'Walk.mp4', mimeType: 'video/mp4' })).toBe(
+      'drive',
     );
   });
 });
@@ -112,5 +143,85 @@ describe('whenLine', () => {
     expect(whenLine('drive', undefined, NOW)).toBe(
       'From your Drive, as Markdown',
     );
+  });
+});
+
+describe('drivePreviewUrl', () => {
+  it('is the address of Drive embeddable viewer', () => {
+    expect(drivePreviewUrl('a b')).toBe(
+      'https://drive.google.com/file/d/a%20b/preview',
+    );
+  });
+});
+
+describe('formatDuration and shortDate', () => {
+  it('says a length in words', () => {
+    expect(formatDuration(45_000)).toBe('45 s');
+    expect(formatDuration(134_000)).toBe('2 min 14 s');
+    expect(formatDuration(120_000)).toBe('2 min');
+    expect(formatDuration(3_900_000)).toBe('1 h 5 min');
+  });
+
+  it('says a day and month, from an ISO time or EXIF', () => {
+    expect(shortDate('2026-09-26T11:20:00.000Z')).toBe('26 Sep');
+    expect(shortDate('2024:05:01 10:00:00')).toBe('1 May');
+    expect(shortDate('nonsense')).toBeNull();
+    expect(shortDate(undefined)).toBeNull();
+  });
+});
+
+describe('kindWord and metaFacts', () => {
+  it('names a CSV a spreadsheet (CSV)', () => {
+    expect(kindWord({ name: 'Budget.csv', mimeType: 'text/csv' })).toBe(
+      'Spreadsheet (CSV)',
+    );
+    expect(kindWord({ name: 'a.zip', mimeType: 'application/zip' })).toBe(
+      'ZIP archive',
+    );
+  });
+
+  it('follows the boards for each kind', () => {
+    expect(
+      metaFacts({
+        name: 'Sign.jpg',
+        mimeType: 'image/jpeg',
+        size: 2_400_000,
+        imageMediaMetadata: { time: '2026:09:26 10:00:00' },
+      }),
+    ).toEqual(['Taken 26 Sep', '2.4 MB']);
+    expect(
+      metaFacts(
+        { name: 'Budget.csv', mimeType: 'text/csv', size: 3000 },
+        { rows: 24 },
+      ),
+    ).toEqual(['3 KB', '24 rows']);
+    expect(
+      metaFacts({
+        name: 'Walk.mp4',
+        mimeType: 'video/mp4',
+        size: 86_000_000,
+        modifiedTime: '2026-09-26T11:20:00.000Z',
+        videoMediaMetadata: { durationMillis: 134_000 },
+      }),
+    ).toEqual(['2 min 14 s', '86 MB', '26 Sep']);
+    expect(
+      metaFacts(
+        { name: 'Lease.pdf', mimeType: 'application/pdf', size: 1_100_000 },
+        { pages: 42 },
+      ),
+    ).toEqual(['42 pages', '1.1 MB']);
+  });
+
+  it('leaves out what nobody knows', () => {
+    expect(
+      metaFacts({ name: 'Lease.pdf', mimeType: 'application/pdf' }),
+    ).toEqual([]);
+    expect(
+      metaFacts({
+        name: 'a.zip',
+        mimeType: 'application/zip',
+        size: 38_000_000,
+      }),
+    ).toEqual(['38 MB']);
   });
 });

@@ -379,7 +379,7 @@ test('/search?q= lands on Home with the switcher open and prefilled (#495)', asy
   expect(snippetText?.trimStart().startsWith('#')).toBe(false);
 });
 
-test("a note Bower wrote opens with Bower's note and What Bower used (#351)", async ({
+test("a note Bower wrote opens with Bower's note and the Used line (#351, #602)", async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -396,18 +396,19 @@ test("a note Bower wrote opens with Bower's note and What Bower used (#351)", as
   const box = page.locator('.bower-note');
   await expect(box).toBeVisible();
   await expect(box.locator('.bower-note-title')).toHaveText("Bower's note");
-  // The word is always shown with the colour.
+  // v3 markers (#602): ✅ shows no word, ⚠️ "Check", ❌ "Problem".
+  await expect(box.locator('.bower-note-row')).toHaveCount(3);
   await expect(box.locator('.bower-note-word')).toHaveText([
-    'Fine',
     'Check',
     'Problem',
   ]);
+  // `## What Bower used` is one compact "Used:" line, origins dropped.
   await expect(
-    page.getByRole('heading', { name: 'What Bower used', level: 2 }),
-  ).toBeVisible();
-  await expect(page.locator('.bower-sources li')).toHaveText([
-    'Bills and renewals (from your notes)',
-  ]);
+    page.getByRole('heading', { name: 'What Bower used' }),
+  ).toHaveCount(0);
+  await expect(page.locator('.bower-used')).toHaveText(
+    'Used: Bills and renewals.',
+  );
   await shot(page, testInfo, 'note-from-bower');
 });
 
@@ -2524,7 +2525,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   const props = page.locator('.file-props');
   await expect(props).toContainText('Photo ·');
   await expect(
-    props.getByRole('link', { name: '1-Projects / Kitchen Refresh' }),
+    props.getByRole('link', { name: 'Projects / Kitchen Refresh' }),
   ).toBeVisible();
   await expect(props).toContainText('Filed by Bower ·');
   const photo = page.getByRole('img', { name: 'Sage green test patch' });

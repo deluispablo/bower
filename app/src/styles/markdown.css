@@ -214,34 +214,17 @@
   margin-bottom: 0;
 }
 
-/* The agent's own note (spec §6 row Note): `> [!bower]`, never a "Bower:"
-   paragraph — too easy for a user to trigger by accident (issue #144). The
-   mark is the app's own icon (app/public/icons/favicon.svg), added in CSS
-   so the sanitizer's link/image allowlist (render.ts) never has to widen
-   for it. */
-.markdown .callout-bower .callout-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.markdown .callout-bower .callout-title::before {
-  content: '';
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  background: url('/icons/favicon.svg') center / contain no-repeat;
-  border-radius: var(--radius-sm);
-}
-
-/* A note Bower wrote when asked (handover D.4, issue #351; the Phone-Note
-   and Desktop-Note boards' `.prov`): `## Bower's note` becomes this box,
-   one row per conclusion. Each ✅ / ⚠️ / ❌ is a chip with its word
-   (Fine / Check / Problem), so the colour is never the only signal. */
-.markdown .bower-note {
+/* Bower's note (spec §6.7 R-NOTE-1/2/3/6; boards Phone-Note-Bower,
+   Phone-Note-Long, Flow-06-Dots, Flow-07-Answer): the `> [!bower]` callout
+   (or the older `## Bower's note`) becomes this box, one row per line with
+   its origin square. Colour is never alone: each square carries its icon
+   and the legend names the origins. Icons are CSS masks, so the sanitizer
+   (render.ts) never has to allow SVG. */
+.markdown .bower-note,
+.markdown .bower-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin: 0 0 var(--space-4);
   padding: 12px 14px;
   border-radius: 12px;
@@ -249,7 +232,15 @@
   border: 1px solid var(--color-border);
 }
 
-.markdown .bower-note-title {
+.markdown .bower-note-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+}
+
+.markdown .bower-note-title,
+.markdown .bower-section-head {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -258,7 +249,9 @@
   color: var(--color-heading);
 }
 
-.markdown .bower-note-title::before {
+.markdown .bower-note-title::before,
+.markdown .bower-section-head::before,
+.markdown .bower-contents-noted .bower-contents-mark {
   content: '';
   width: 22px;
   height: 22px;
@@ -267,15 +260,27 @@
   border-radius: var(--radius-sm);
 }
 
-.markdown .bower-note > :last-child,
-.markdown .bower-note-text > :last-child {
-  margin-bottom: 0;
+.markdown .bower-note-legend {
+  font-size: 0.75rem; /* 12px */
+  color: var(--color-text-muted);
 }
 
-.markdown .bower-note p,
-.markdown .bower-note li {
-  font-size: var(--text-sm);
-  line-height: 1.4;
+.markdown .bower-note-legend em {
+  font-style: normal;
+  font-weight: 600;
+}
+
+.markdown .bower-legend-file {
+  color: var(--color-origin-file);
+}
+.markdown .bower-legend-notes {
+  color: var(--color-origin-notes);
+}
+.markdown .bower-legend-web {
+  color: var(--color-origin-web);
+}
+.markdown .bower-legend-you {
+  color: var(--color-origin-you);
 }
 
 .markdown .bower-note-rows {
@@ -291,43 +296,183 @@
   display: flex;
   gap: var(--space-2);
   align-items: flex-start;
+  font-size: var(--text-sm);
+  line-height: 1.4;
 }
 
 .markdown .bower-note-text {
   min-width: 0;
 }
 
-.markdown .bower-note-word {
+.markdown .bower-note-text > :last-child {
+  margin-bottom: 0;
+}
+
+/* The origin square: the same tints as `OriginSquare` (marks.css). */
+.markdown .bower-origin {
   display: inline-flex;
-  justify-content: center;
   flex-shrink: 0;
-  min-width: 4.25rem;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   margin-top: 1px;
-  padding: 0 var(--space-1);
   border-radius: 5px;
-  font-size: var(--text-xs);
+}
+
+.markdown .bower-origin::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  mask: var(--origin-icon) center / contain no-repeat;
+}
+
+.markdown .bower-origin-file {
+  --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h8l4 4v14H6z'/%3E%3Cpath d='M14 3v4h4'/%3E%3C/svg%3E");
+  background: var(--color-origin-file-bg);
+  color: var(--color-origin-file);
+}
+.markdown .bower-origin-notes {
+  --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 4h10l4 4v12H5z'/%3E%3Cpath d='M8 12h8M8 16h5'/%3E%3C/svg%3E");
+  background: var(--color-origin-notes-bg);
+  color: var(--color-origin-notes);
+}
+.markdown .bower-origin-web {
+  --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16'/%3E%3C/svg%3E");
+  background: var(--color-origin-web-bg);
+  color: var(--color-origin-web);
+}
+.markdown .bower-origin-you {
+  --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='3.5'/%3E%3Cpath d='M5 20c1-4 4-6 7-6s6 2 7 6'/%3E%3C/svg%3E");
+  background: var(--color-origin-you-bg);
+  color: var(--color-origin-you);
+}
+
+/* "Check" (and a v3 "Problem"): a small word at the end of the line. */
+.markdown .bower-note-word {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font-size: 0.71875rem; /* 11.5px */
   font-weight: 600;
-  line-height: 1.5;
-}
-
-.markdown .bower-note-fine .bower-note-word {
-  background: var(--color-success);
-  color: var(--color-on-success);
-}
-
-.markdown .bower-note-check .bower-note-word {
-  background: var(--color-accent);
-  color: var(--color-on-accent);
+  line-height: 18px;
+  color: var(--color-text-muted);
 }
 
 .markdown .bower-note-problem .bower-note-word {
-  background: var(--color-danger);
-  color: var(--color-on-danger);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
-/* `## What Bower used`: each source's origin, in brackets, muted. */
-.markdown .bower-source-origin {
+/* "Joined from:" chips under a box, one per note named (R-NOTE-3). */
+.markdown .bower-joined {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  font-size: var(--text-xs);
   color: var(--color-text-muted);
+}
+
+.markdown .bower-joined-chip a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  text-decoration: none;
+}
+
+/* A section note: smaller, folded by default with `[!bower]-`. The open
+   box says "Bower on this section"; folded, it names the section and
+   counts its lines. */
+.markdown .bower-section {
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.markdown .bower-section:not([open]) {
+  padding: 8px 12px;
+}
+
+.markdown .bower-section-head {
+  cursor: pointer;
+  list-style: none;
+}
+
+.markdown .bower-section-head::-webkit-details-marker {
+  display: none;
+}
+
+.markdown .bower-section-head::before {
+  width: 18px;
+  height: 18px;
+}
+
+.markdown .bower-section-head::after {
+  content: '›';
+  margin-left: auto;
+  color: var(--color-text-muted);
+  transition: transform 0.15s;
+}
+
+.markdown .bower-section[open] > .bower-section-head::after {
+  transform: rotate(90deg);
+}
+
+.markdown .bower-section[open] .bower-section-folded,
+.markdown .bower-section:not([open]) .bower-section-title {
+  display: none;
+}
+
+/* The contents strip under the top box: the note's sections, the ones
+   with a section note marked with the bird (board Phone-Note-Long). */
+.markdown .bower-contents {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 var(--space-4);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+
+.markdown .bower-contents-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  text-decoration: none;
+}
+
+.markdown .bower-contents-mark {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.markdown .bower-contents-noted .bower-contents-mark {
+  width: 16px;
+  height: 16px;
+}
+
+/* `## What Bower used`: one compact line (board Flow-07-Answer). */
+.markdown .bower-used {
+  font-size: 0.78125rem; /* 12.5px */
+  color: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown .bower-section-head::after {
+    transition: none;
+  }
 }
 
 .tags {
