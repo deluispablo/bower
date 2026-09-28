@@ -258,10 +258,20 @@ describe('birdStateFor and restingBird', () => {
     expect(birdStateFor({ ...base, state: 'failed' })).toBe('confused');
   });
 
-  it('offline beats every state', () => {
-    expect(birdStateFor({ ...base, state: 'running', offline: true })).toBe(
-      'offline',
-    );
+  it('offline beats every state: the sad pose next to the greeting (#325)', () => {
+    const states: HomeState[] = [
+      'waiting',
+      'empty',
+      'running',
+      'done',
+      'failed',
+    ];
+    for (const state of states) {
+      expect(birdStateFor({ ...base, state, offline: true })).toBe('offline');
+      expect(
+        birdStateFor({ ...base, state, offline: true, justDone: true }),
+      ).toBe('offline');
+    }
   });
 
   it('the dance and the hello play once, then rest on Looking', () => {
