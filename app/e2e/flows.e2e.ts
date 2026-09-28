@@ -333,6 +333,52 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
   await expect(hint).toContainText('4 things waiting.');
 });
 
+test('Add: What is this? becomes one context note in the inbox (#335)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  const box = page.getByRole('textbox', { name: 'What is this?' });
+  await expect(box).toHaveAttribute('placeholder', /^Just filing is fine\./);
+  // The rule sentence is kept in your rules too (#435).
+  await box.fill(
+    'Receipts: add them to a table with the shop and the total. From now on, file garden receipts under Garden.',
+  );
+  await shot(page, testInfo, 'add-context');
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+
+  // Leaving Add writes the note: the three things, the receipt, the note.
+  await expect(page).toHaveURL('/');
+  await expect(
+    visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
+      '.home-card-count',
+    ),
+  ).toHaveText('5');
+  // It waits in the inbox with the other instruction notes, under the
+  // Bower tab's Requests (the demo resets on a reload, so no `goto`); the
+  // rule sentence is already in Rules, under its own topic.
+  await navigate(page, /^Bower$/);
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'Rules' })
+      .getByRole('button', { name: /^Garden\s*1$/ }),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: 'Requests' }).click();
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'Requests' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Context' }),
+  ).toHaveCount(1);
+});
+
 test('Home through the scripted run: waiting, running, done (#321)', async ({
   page,
 }, testInfo) => {
@@ -563,7 +609,9 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
     .getByRole('listitem')
     .filter({ hasText: 'How much did I spend on the kitchen this year?' });
   await expect(row).toBeVisible();
-  await expect(row.getByText('Waiting', { exact: true })).toBeVisible();
+  await expect(
+    row.getByText('Waiting · question', { exact: true }),
+  ).toBeVisible();
   await row.scrollIntoViewIfNeeded();
   await shot(page, testInfo, 'tell');
 
@@ -578,6 +626,68 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
       '.home-card-count',
     ),
   ).toHaveText('4');
+});
+
+test('Rules: the explanation on top, groups with counts, pause a rule and see the chip (#342)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  const rules = page.getByRole('tabpanel', { name: 'Rules' });
+  await expect(
+    rules.getByText('Rules are yours and start at once.'),
+  ).toBeVisible();
+  // Alex's groups, each with its count; only the first is open.
+  const money = rules.getByRole('button', { name: /^Money\s*4$/ });
+  await expect(money).toHaveAttribute('aria-expanded', 'true');
+  await expect(
+    rules.getByRole('button', { name: /^Travel\s*1$/ }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  // Bower's two open suggestions sit on top, with Accept and Dismiss.
+  await expect(
+    rules.getByRole('region', { name: /^Suggested/ }).getByRole('button', {
+      name: 'Accept',
+    }),
+  ).toHaveCount(2);
+  await shot(page, testInfo, 'bower-rules');
+
+  const rule = rules.getByRole('button', { name: /Never archive Money/ });
+  await expect(rule.getByText('Paused', { exact: true })).toHaveCount(0);
+  await rule.click();
+  const sheet = page.getByRole('dialog', { name: 'Never archive Money' });
+  await expect(sheet).toBeVisible();
+  await shot(page, testInfo, 'bower-rule-menu');
+  await sheet.getByRole('button', { name: /Pause it/ }).click();
+  await expect(sheet).toBeHidden();
+  await expect(rule.getByText('Paused', { exact: true })).toBeVisible();
+});
+
+test('a "from now on" sentence is kept at once as a rule, no run (#343)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  const box = page.getByRole('textbox', {
+    name: 'Tell Bower what to do, or ask it something',
+  });
+  await box.fill('From now on, receipts go under Finance');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(box).toHaveValue('');
+  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  const row = requests
+    .getByRole('listitem')
+    .filter({ hasText: 'From now on, receipts go under Finance' });
+  await expect(row.getByText('Rule kept', { exact: true })).toBeVisible();
+  await shot(page, testInfo, 'bower-rule-kept');
+  await expect(
+    page.getByRole('dialog', { name: 'Tidying up status' }),
+  ).toHaveCount(0);
+  await row.getByRole('button', { name: 'In your rules' }).click();
+  await expect(page.getByRole('tab', { name: 'Rules' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });
 
 test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({
@@ -798,16 +908,16 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   if (testInfo.project.name === 'desktop') {
     await expect(tabs).toBeHidden();
 
-    // The sidebar (#326, C.9): one Expand/Collapse all tool, no sort menu,
-    // and the waiting-count bubble on Home's row, not Add's (the boards
-    // disagree with the issue's own title and C.9's text, which say Add).
+    // The sidebar (#422, #326, C.9): one Expand/Collapse all tool, no sort
+    // menu, and the waiting-count bubble on Add's row, where the pile gets
+    // filled, not Home's.
     const sidebar = page.getByRole('navigation', { name: 'Your notes' });
     await expect(sidebar.locator('[aria-label^="Sort by"]')).toHaveCount(0);
     await expect(
       sidebar.getByRole('button', { name: 'Expand all' }),
     ).toBeVisible();
-    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveText('3');
-    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveCount(0);
+    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveText('3');
+    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveCount(0);
     await shot(page, testInfo, 'desktop-sidebar');
     return;
   }

@@ -4,13 +4,19 @@ import fixtureRaw from './fixtures/rules.md?raw';
 import rulesTemplate from '../../vault-template/Rules.md?raw';
 import {
   allRules,
+  appendRule,
   applyRuleEdit,
+  applyToFiledRequest,
   formatRule,
+  guessTopic,
   parseRules,
   RULES_LINE_CAP,
   ruleBullet,
   RuleError,
+  ruleMeta,
+  ruleSheetLabel,
   serialiseRules,
+  shortDay,
   UNGROUPED_TOPIC,
 } from '../src/rules.js';
 import type { Rule, RuleEdit, RuleRef } from '../src/rules.js';
@@ -302,5 +308,160 @@ describe('applyRuleEdit', () => {
         parseRules(SHAPED).lineCount,
       );
     }
+  });
+});
+
+describe('the Rules screen wording', () => {
+  const rule = (line: string): Rule => {
+    const found = allRules(parseRules(line))[0];
+    if (found === undefined) throw new Error('No rule');
+    return found;
+  };
+
+  it('writes a date the way the screen shows it, without the locale', () => {
+    expect(shortDay('2026-09-26')).toBe('26 Sep');
+    expect(shortDay('2026-01-05')).toBe('5 Jan');
+    expect(shortDay('someday')).toBe('someday');
+    expect(shortDay('2026-13-01')).toBe('2026-13-01');
+  });
+
+  it('says who asked for a rule and when, and since when a paused one waits', () => {
+    expect(
+      ruleMeta(rule("- Receipts go to Finance (owner's request, 2026-09-26)")),
+    ).toBe('You said it · 26 Sep');
+    expect(
+      ruleMeta(
+        rule('- Invoices go to Money (accepted suggestion, 2026-09-20)'),
+      ),
+    ).toBe('Accepted suggestion · 20 Sep');
+    expect(
+      ruleMeta(rule('- ~~Never archive Finance~~ (paused 2026-09-27)')),
+    ).toBe('Since 27 Sep');
+    expect(ruleMeta(rule('- A rule with no tail'))).toBe('');
+  });
+
+  it("heads a tapped rule's sheet with its topic, who and when", () => {
+    expect(
+      ruleSheetLabel(
+        'Finance',
+        rule("- Receipts go to Finance (owner's request, 2026-09-26)"),
+      ),
+    ).toBe('Finance · you said it on 26 Sep');
+    expect(
+      ruleSheetLabel(
+        'Finance',
+        rule('- ~~Never archive Finance~~ (paused 2026-09-27)'),
+      ),
+    ).toBe('Finance · paused on 27 Sep');
+    expect(ruleSheetLabel(UNGROUPED_TOPIC, rule('- No tail'))).toBe(
+      UNGROUPED_TOPIC,
+    );
+  });
+
+  it('words the job that applies a rule to what is already filed', () => {
+    expect(applyToFiledRequest('Receipts go to\nFinance ')).toBe(
+      'Apply this rule to what is already filed: Receipts go to Finance',
+    );
+  });
+});
+
+describe('guessTopic', () => {
+  const TOPICS = ['Finance', 'Flat hunt', 'Receipt', UNGROUPED_TOPIC];
+
+  it('picks the topic the sentence names first, plural or singular', () => {
+    expect(guessTopic('From now on, receipts go under Finance', TOPICS)).toBe(
+      'Receipt',
+    );
+    expect(guessTopic('Never archive finance', TOPICS)).toBe('Finance');
+    expect(
+      guessTopic('Always put viewings for the flat hunt in one note', TOPICS),
+    ).toBe('Flat hunt');
+  });
+
+  it('makes a new topic from the first noun: a capitalised word first', () => {
+    expect(guessTopic('Always file recipes under Cooking', [])).toBe('Cooking');
+    expect(guessTopic('Every time I add a payslip, keep it', [])).toBe(
+      'Payslip',
+    );
+    expect(guessTopic('From now on, receipts go by date', [])).toBe('Receipts');
+  });
+
+  it('falls back to Everything else when there is no noun at all', () => {
+    expect(guessTopic('Never do that', TOPICS)).toBe(UNGROUPED_TOPIC);
+    expect(guessTopic('Always', [])).toBe(UNGROUPED_TOPIC);
+  });
+});
+
+describe('appendRule', () => {
+  it('appends under the topic, after its last line, before the next heading', () => {
+    const md = appendRule(
+      SHAPED,
+      'Never archive old statements',
+      'Finance',
+      ON,
+    );
+    const lines = md.split('\n');
+    const at = lines.indexOf(
+      "- Never archive old statements (owner's request, 2026-09-29)",
+    );
+    expect(at).toBe(
+      lines.indexOf('- ~~Never archive Finance~~ (paused 2026-09-27)') + 1,
+    );
+    expect(
+      parseRules(md).groups.find((g) => g.topic === 'Finance')?.count,
+    ).toBe(3);
+    // Only one line added.
+    expect(lines).toHaveLength(SHAPED.split('\n').length + 1);
+  });
+
+  it('adds a heading at the end for a topic the file does not have', () => {
+    const md = appendRule(
+      TEMPLATE,
+      'Always file recipes under Cooking',
+      'Cooking',
+      ON,
+    );
+    expect(md.startsWith(TEMPLATE.trimEnd())).toBe(true);
+    expect(md.slice(TEMPLATE.trimEnd().length)).toBe(
+      "\n\n## Cooking\n- Always file recipes under Cooking (owner's request, 2026-09-29)\n",
+    );
+    expect(parseRules(md).groups.map((g) => [g.topic, g.count])).toEqual([
+      ['Cooking', 1],
+    ]);
+  });
+
+  it('writes a new file from nothing', () => {
+    expect(appendRule('', 'Never do that', UNGROUPED_TOPIC, ON)).toBe(
+      "## Everything else\n- Never do that (owner's request, 2026-09-29)\n",
+    );
+  });
+
+  it('puts an Everything else rule after the rules before the first heading, keeping CRLF', () => {
+    const md = [
+      '# Rules',
+      "- Old ungrouped rule (owner's request, 2026-09-01)",
+      '',
+      '## Finance',
+      "- Receipts (owner's request, 2026-09-26)",
+      '',
+    ].join('\r\n');
+    const out = appendRule(md, 'Never do that', UNGROUPED_TOPIC, ON);
+    expect(out.split('\r\n')[2]).toBe(
+      "- Never do that (owner's request, 2026-09-29)",
+    );
+    expect(out).not.toMatch(/[^\r]\n/);
+  });
+
+  it('adds nothing twice, and refuses no text', () => {
+    const once = appendRule(
+      SHAPED,
+      'Never archive old statements',
+      'Finance',
+      ON,
+    );
+    expect(appendRule(once, 'Never archive old statements', 'Money', ON)).toBe(
+      once,
+    );
+    expect(() => appendRule(SHAPED, '   ', 'Finance', ON)).toThrow(RuleError);
   });
 });

@@ -362,6 +362,15 @@ export function IconCopy(): JSX.Element {
   );
 }
 
+/** A round arrow: "Apply it to what is already filed" (board Phone-Rule-Menu). */
+export function IconRedo(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" />
+    </Svg>
+  );
+}
+
 export function IconEdit(): JSX.Element {
   return (
     <Svg>

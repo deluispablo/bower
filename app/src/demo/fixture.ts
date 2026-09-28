@@ -6,7 +6,8 @@
  *
  * The rulebook, `Rules.md`, `About-Me.md` and the folder notes come straight
  * from `vault-template/`, so the demo starts from the same files a real
- * Bower folder does.
+ * Bower folder does; `Rules.md` then gets a few rules of Alex's own
+ * (`DEMO_RULES`), so the Bower tab's Rules screen has groups to show.
  */
 
 import aboutMe from '../../../vault-template/About-Me.md?raw';
@@ -115,10 +116,28 @@ export const INBOX_PLAN: ReadonlyMap<string, string> = new Map([
 export const INBOX_QUESTION =
   '0-Inbox/Bower - 2026-09-27 0815 What do I still need for Lisbon.md';
 
+/** Alex's own rules under the template's text, in the shape `rules.ts`
+ * reads (#342): one group with more rules than an open group shows, and a
+ * few smaller ones. */
+const DEMO_RULES = `${rules.replace(/\s+$/, '')}
+
+## Money
+- Receipts go to Money, named by shop and date (owner's request, 2026-09-26)
+- Bank statements: one note per month with the totals (owner's request, 2026-09-27)
+- Never archive Money (owner's request, 2026-09-27)
+- Subscriptions go under Bills and renewals (owner's request, 2026-09-20)
+
+## Travel
+- Tickets and bookings go to the trip's project folder (owner's request, 2026-09-25)
+
+## Everything else
+- Photos of a whiteboard become a note with the text typed out (owner's request, 2026-09-22)
+`;
+
 export const FIXTURE_FILES: readonly FixtureFile[] = [
   // --- Top of the folder -------------------------------------------------
   { path: 'CLAUDE.md', content: rulebook, modifiedTime: at(1) },
-  { path: 'Rules.md', content: rules, modifiedTime: at(1) },
+  { path: 'Rules.md', content: DEMO_RULES, modifiedTime: at(1) },
   { path: 'About-Me.md', content: aboutMe, modifiedTime: at(1) },
   note(
     'index.md',

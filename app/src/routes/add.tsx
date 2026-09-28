@@ -4,6 +4,11 @@ import { useLocation } from 'preact-iso';
 
 import { useHasCamera } from '../add-camera.js';
 import {
+  setContextText,
+  useContextText,
+  writeContextNote,
+} from '../add-context.js';
+import {
   getQueue,
   setQueue,
   useAddQueue,
@@ -48,6 +53,11 @@ import '../styles/add.css';
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
 const CRUMB = <h1 class="topbar-title">Add</h1>;
+
+/** The "What is this?" box's placeholder, word for word from the Phone-Add
+ * board (#335). */
+const CONTEXT_PLACEHOLDER =
+  'Just filing is fine. Or tell Bower what to do with these: "Job offers: pull out salary, location and deadline, and add them to a table". Say "from now on" and it becomes a rule.';
 
 /** Without a Picker key the "From your Drive" button is hidden, as the
  * onboarding folder picker is. */
@@ -131,7 +141,7 @@ function driveStateText(mimeType: string | undefined): string {
 export function Add() {
   const { me } = useSession();
   const { route } = useLocation();
-  const { index, files, refresh } = useVault();
+  const { index, files, refresh, keepRule } = useVault();
   const online = useOnline();
   const hasCamera = useHasCamera();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
@@ -167,6 +177,27 @@ export function Add() {
   const [shareError, setShareError] = useState<string | null>(null);
 
   useShellSlot('crumb', CRUMB);
+
+  // "What is this?" (#335): leaving Add with text in the box and a batch in
+  // the inbox writes its context note now, so it is there for whichever
+  // Tidy up comes next (a tidy-up started from Add writes it first,
+  // `run-store.tsx`). The listing catches up afterwards, as after an add.
+  const contextText = useContextText();
+  const leaveRef = useRef({ inboxFolderId, refresh, keepRule });
+  leaveRef.current = { inboxFolderId, refresh, keepRule };
+  useEffect(
+    () => () => {
+      const {
+        inboxFolderId: inbox,
+        refresh: refreshVault,
+        keepRule: keep,
+      } = leaveRef.current;
+      void writeContextNote(inbox, keep).then((written) => {
+        if (written) void refreshVault();
+      });
+    },
+    [],
+  );
 
   // The current inbox listing, so new names are made unique against it.
   // `listFolder` is a single, non-recursive call (unlike `listVault`).
@@ -615,6 +646,21 @@ export function Add() {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {queue.length > 0 && (
+        <div class="add-context">
+          <label for="add-context">
+            What is this? <span class="add-context-optional">optional</span>
+          </label>
+          <textarea
+            id="add-context"
+            rows={2}
+            placeholder={CONTEXT_PLACEHOLDER}
+            value={contextText}
+            onInput={(e) => setContextText(e.currentTarget.value)}
+          />
         </div>
       )}
 
