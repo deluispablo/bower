@@ -27,14 +27,25 @@ const TOKEN_MARGIN_MS = 60_000;
 const FILE_FIELDS = 'id,name,mimeType,parents,modifiedTime,size,webViewLink';
 /** The listing also asks for `appProperties`: a folder screen reads who put
  * a file there from them (`file-origin.ts`, #349). Drive only returns the
- * properties this app's own OAuth client set. */
-const LIST_FIELDS = `${FILE_FIELDS},appProperties`;
+ * properties this app's own OAuth client set. It also asks for the grid
+ * thumbnail and the photo and video metadata the file screens show (#582). */
+const LIST_FIELDS = `${FILE_FIELDS},appProperties,thumbnailLink,imageMediaMetadata(time,width,height),videoMediaMetadata(durationMillis)`;
 
 export interface DriveToken {
   accessToken: string;
   /** ISO timestamp. */
   expiresAt: string;
   folderId: string | null;
+}
+
+export interface ImageMediaMetadata {
+  time?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface VideoMediaMetadata {
+  durationMillis?: number;
 }
 
 export interface DriveFile {
@@ -48,6 +59,14 @@ export interface DriveFile {
   /** The file's private app properties (string values only), when the
    * listing returned any (`listVault`). */
   appProperties?: Readonly<Record<string, string>>;
+  /** Drive's short-lived link to a small picture of the file, when it has
+   * one (`listVault`). Expires within hours; see `loadThumbnail`. */
+  thumbnailLink?: string;
+  /** A photo's EXIF capture time (as Drive formats it, `2024:05:01 10:00:00`)
+   * and pixel size, when known (`listVault`). */
+  imageMediaMetadata?: ImageMediaMetadata;
+  /** A video's length in milliseconds, when known (`listVault`). */
+  videoMediaMetadata?: VideoMediaMetadata;
   /**
    * `/`-joined path relative to the listed folder (`listVault`), or just the
    * file name for a file returned by an upload (relative to its parent).
@@ -227,6 +246,31 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
   return body;
 }
 
+/** Drive sends int64 fields as strings; a finite number or `undefined`. */
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function parseImageMetadata(value: unknown): ImageMediaMetadata | undefined {
+  if (!isRecord(value)) return undefined;
+  const meta: ImageMediaMetadata = {};
+  if (typeof value.time === 'string' && value.time !== '')
+    meta.time = value.time;
+  const width = toFiniteNumber(value.width);
+  if (width !== undefined) meta.width = width;
+  const height = toFiniteNumber(value.height);
+  if (height !== undefined) meta.height = height;
+  return Object.keys(meta).length > 0 ? meta : undefined;
+}
+
+function parseVideoMetadata(value: unknown): VideoMediaMetadata | undefined {
+  if (!isRecord(value)) return undefined;
+  const durationMillis = toFiniteNumber(value.durationMillis);
+  return durationMillis === undefined ? undefined : { durationMillis };
+}
+
 function parseFile(value: unknown, path: string): DriveFile {
   if (
     !isRecord(value) ||
@@ -264,6 +308,13 @@ function parseFile(value: unknown, path: string): DriveFile {
     }
     if (Object.keys(props).length > 0) file.appProperties = props;
   }
+  if (typeof value.thumbnailLink === 'string' && value.thumbnailLink !== '') {
+    file.thumbnailLink = value.thumbnailLink;
+  }
+  const image = parseImageMetadata(value.imageMediaMetadata);
+  if (image !== undefined) file.imageMediaMetadata = image;
+  const video = parseVideoMetadata(value.videoMediaMetadata);
+  if (video !== undefined) file.videoMediaMetadata = video;
   return file;
 }
 
