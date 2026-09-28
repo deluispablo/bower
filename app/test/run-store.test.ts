@@ -11,6 +11,7 @@ import {
   reduce,
   resultMessage,
   runKey,
+  STARTING_MESSAGE,
 } from '../src/run-store.js';
 import type { RunState } from '../src/run-store.js';
 import type { Run } from '../src/api.js';
@@ -410,6 +411,38 @@ describe('reduce', () => {
       ...state,
       sheetOpen: true,
     });
+  });
+
+  it('starting (#505) opens the sheet and sets its own message at once, before any run exists', () => {
+    expect(reduce(idle, { type: 'starting' })).toEqual({
+      phase: 'starting',
+      run: null,
+      message: STARTING_MESSAGE,
+      sheetOpen: true,
+      sheetRunId: null,
+    });
+  });
+
+  it('starting then process-started continues as an ordinary run (#505)', () => {
+    const starting = reduce(idle, { type: 'starting' });
+    expect(
+      reduce(starting, { type: 'process-started', run: queuedRun }),
+    ).toEqual({
+      phase: 'queued',
+      run: queuedRun,
+      ...openFor,
+    });
+  });
+
+  it('starting then a failure to start ends in failed, with its own sentence (#505)', () => {
+    const starting = reduce(idle, { type: 'starting' });
+    const state = reduce(starting, {
+      type: 'process-failed',
+      message: 'Could not start. Try again.',
+    });
+    expect(state.phase).toBe('failed');
+    expect(state.message).toBe('Could not start. Try again.');
+    expect(state.sheetOpen).toBe(true);
   });
 
   it('a whole run: the sheet opens once, done ends in idle', () => {

@@ -27,6 +27,7 @@ export function labelFor(phase: RunPhase): string {
     case 'idle':
     case 'done':
       return 'Tidy up';
+    case 'starting':
     case 'queued':
     case 'running':
       return 'Tidying up…';
@@ -57,6 +58,10 @@ export function ProcessButton(): JSX.Element | null {
   if (me?.vault == null) return null;
 
   const starts = startsRun(phase);
+  // #505: disabled for the gap between "Yes, tidy up" and the
+  // `POST /process` answer, so a tap here cannot reopen the "Is that
+  // everything?" confirmation for a run that is already starting.
+  const starting = phase === 'starting';
 
   return (
     <div class="process">
@@ -66,11 +71,11 @@ export function ProcessButton(): JSX.Element | null {
         data-phase={phase}
         data-tour="tidy"
         aria-haspopup={starts ? undefined : 'dialog'}
-        disabled={!online}
-        aria-disabled={!online}
+        disabled={!online || starting}
+        aria-disabled={!online || starting}
         onClick={starts ? () => tidyUp() : openSheet}
       >
-        {phase === 'running' || phase === 'queued' ? (
+        {phase === 'running' || phase === 'queued' || starting ? (
           <span class="process-spinner" aria-hidden="true" />
         ) : (
           <IconSparkle />

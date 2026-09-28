@@ -8,7 +8,8 @@ describe('labelFor', () => {
     expect(labelFor('done')).toBe('Tidy up');
   });
 
-  it('queued and running: "Tidying up…"', () => {
+  it('starting, queued and running: "Tidying up…"', () => {
+    expect(labelFor('starting')).toBe('Tidying up…');
     expect(labelFor('queued')).toBe('Tidying up…');
     expect(labelFor('running')).toBe('Tidying up…');
   });
@@ -28,7 +29,10 @@ describe('startsRun', () => {
     expect(startsRun('stale')).toBe(true);
   });
 
-  it('reopens the sheet instead during a run and once the limit is reached', () => {
+  it('reopens the sheet instead while starting, during a run, and once the limit is reached', () => {
+    // #505: a tap while starting must not reopen the confirmation for a
+    // run that is already on its way.
+    expect(startsRun('starting')).toBe(false);
     expect(startsRun('queued')).toBe(false);
     expect(startsRun('running')).toBe(false);
     expect(startsRun('quota')).toBe(false);

@@ -123,13 +123,13 @@ test.describe('open Home', () => {
     ).toBeVisible();
     await shot(page, testInfo, 'login');
 
-    // Back on Home from a fresh load: the demo forgets everything on reload,
-    // so the tour is offered again.
+    // Back on Home from a reload: `tourSeenAt` survives it (#494, kept in
+    // `sessionStorage`), so the tour does not replay.
     await page.goto('/');
     await expect(
       page.getByRole('heading', { name: 'Good morning, Alex' }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
     await expect(
       page.getByText('This is a demo, not the real thing'),
     ).toBeVisible();
@@ -137,6 +137,20 @@ test.describe('open Home', () => {
       visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
     ).toContainText('No tidy-up yet');
     await shot(page, testInfo, 'home');
+
+    // "?" still replays the tour on demand.
+    await visible(
+      page.getByRole('button', { name: 'About this screen' }),
+    ).click();
+    await visible(
+      page.getByRole('dialog', { name: 'Home' }).getByRole('button', {
+        name: 'Show me around',
+      }),
+    ).click();
+    const replay = page.getByRole('dialog');
+    await expect(replay.getByText('Tour · 1 of 4')).toBeVisible();
+    await replay.getByRole('button', { name: 'Skip' }).click();
+    await expect(replay).toBeHidden();
   });
 });
 
@@ -1384,8 +1398,9 @@ test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
   await expect(tour).toBeHidden();
 
   if (testInfo.project.name !== 'phone') return;
+  // A reload: `tourSeenAt` already persisted above (#494), so Home opens
+  // with no tour to skip.
   await page.goto('/');
-  await page.getByRole('dialog').getByRole('button', { name: 'Skip' }).click();
   await visible(
     page.getByRole('button', { name: /Search or jump to a note/ }),
   ).click();
@@ -1441,7 +1456,9 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
 
   // A title far longer than Back's own label still fits the bar with no
   // horizontal overflow, the same guarantee from the other direction.
-  await openHome(page);
+  // A reload, not `openHome`: `tourSeenAt` already persisted (#494), so
+  // Home opens with no tour to skip.
+  await page.goto('/');
   await visible(
     page.getByRole('button', { name: /Search or jump to a note/ }),
   ).click();
@@ -2033,7 +2050,8 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(0)).toContainText('Photo · filed by Bower');
   await expect(rows.nth(1)).toContainText('Shelves and tap quote');
   await expect(rows.nth(1)).toContainText('PDF · filed by Bower');
-  await expect(rows.nth(2)).toContainText('Note · in this folder');
+  // No known origin (#502): just its type, not "in this folder".
+  await expect(rows.nth(2).locator('.folder-row-detail')).toHaveText('Note');
 
   // A file opens on its own screen; a note opens in the app.
   await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
