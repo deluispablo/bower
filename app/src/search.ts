@@ -38,7 +38,7 @@ export function filterToIndex(
  * Not a full renderer (tables, footnotes and the rest are left as written):
  * just enough that a snippet built from the result reads like prose.
  */
-function toPlainWords(text: string): string {
+export function toPlainWords(text: string): string {
   const { body } = splitFrontmatter(text);
   return body
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // images: no visible text
