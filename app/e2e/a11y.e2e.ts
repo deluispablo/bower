@@ -35,7 +35,7 @@ test('Home has no button-name or link-name violations', async ({ page }) => {
 test('a note has no button-name or link-name violations', async ({ page }) => {
   await openHome(page);
   await visible(
-    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('Lisbon');

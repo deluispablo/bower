@@ -12,7 +12,7 @@ test("the Arlington Road note shows Bower's note as the board draws it", async (
 }, testInfo) => {
   await openHome(page);
   await visible(
-    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('Arlington Road, 2 bed');

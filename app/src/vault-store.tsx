@@ -29,6 +29,8 @@ import {
   saveIndex,
   saveNote,
 } from './cache.js';
+import { clearFileFacts, readFileFacts } from './file-facts.js';
+import type { FileFactsMap } from './file-facts.js';
 import {
   appendToFile,
   createFolder,
@@ -103,6 +105,8 @@ export interface VaultState {
 }
 
 export interface Vault extends VaultState {
+  /** The runner's counts per file (`.bower/file-facts.json`, #610); empty until read. */
+  fileFacts: FileFactsMap;
   refresh: () => Promise<void>;
   getNoteText: (id: string) => Promise<string>;
   /**
@@ -892,6 +896,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
     fetchedAt: null,
     status: folderId === null ? 'idle' : 'loading',
   });
+  const [fileFacts, setFileFacts] = useState<FileFactsMap>(new Map());
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -913,6 +918,8 @@ export function VaultProvider({ children }: VaultProviderProps) {
       }
       try {
         const fresh = await listVault(folderId);
+        clearFileFacts();
+        void readFileFacts(folderId).then(setFileFacts);
         if (hadIndex && sameListing(cachedFiles, fresh)) {
           // Identical to what's already shown: leave the state alone (no flash).
           setState((prev) => ({ ...prev, status: 'idle', error: undefined }));
@@ -1427,6 +1434,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
 
   const value: Vault = {
     ...state,
+    fileFacts,
     refresh,
     getNoteText,
     appendToNote,
