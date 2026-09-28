@@ -1123,7 +1123,10 @@ grep -Fxq 'Filed: 1 files' <<<"$(post 2 p.summary)" || die 'the Filed line is no
 grep -q ' 1 originals filed$' "$STATE/out.log" || die 'filed count not logged'
 expect_eq "$(post 2 p.refused)" '[]' 'refused'
 expect_eq "$(post 1 'p.refused === undefined')" true 'running has no refused'
-expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'uploaded files (the manifest diff)'
+# The filed original is moved in Drive (#595), not uploaded: nothing else
+# changed.
+expect_eq "$(cat "$STATE/uploaded.txt")" '' 'uploaded files (the manifest diff minus moves)'
+expect_eq "$(cat "$STATE/moved.txt")" '0-Inbox/a.pdf -> 0-Inbox/Processed/a.pdf' 'moved files'
 cmp -s "$STATE/claude-settings-seen.json" "$HERE/../claude-settings.json" ||
   die 'the instance repo policy was not .claude/settings.json during the run'
 [ ! -e "$STATE/claude-settings-local-seen" ] || die "the vault's .claude/settings.local.json was left in place"
@@ -1162,10 +1165,12 @@ rclone_calls=$(calls rclone)
 expect_eq "$(printf '%s\n' "$rclone_calls" | wc -l | tr -d ' ')" 3 'rclone calls'
 printf '%s\n' "$rclone_calls" | sed -n 1p | grep -q "^rclone sync vault: .* --exclude \.obsidian/\*\*$" ||
   die 'first rclone call is not the sync down'
-printf '%s\n' "$rclone_calls" | sed -n 2p | grep -q '^rclone copy .* vault: --files-from-raw ' ||
-  die 'second rclone call is not the changed-only copy up'
+expect_eq "$(printf '%s\n' "$rclone_calls" | sed -n 2p)" 'rclone mkdir vault:0-Inbox/Processed' \
+  'second rclone call makes the parent folder'
+expect_eq "$(printf '%s\n' "$rclone_calls" | sed -n 3p)" \
+  'rclone moveto vault:0-Inbox/a.pdf vault:0-Inbox/Processed/a.pdf' 'third rclone call is the server-side move'
 grep -q ' 1 files changed$' "$STATE/out.log" || die 'changed count not logged'
-expect_eq "$(printf '%s\n' "$rclone_calls" | sed -n 3p)" 'rclone deletefile vault:0-Inbox/a.pdf' 'targeted delete'
+grep -q ' 1 files moved in Drive$' "$STATE/out.log" || die 'move count not logged'
 remote="$STATE/remote"
 [ ! -e "$remote/0-Inbox/a.pdf" ] || die 'processed original still in 0-Inbox/ in Drive'
 [ -f "$remote/0-Inbox/Processed/a.pdf" ] || die 'processed original missing from 0-Inbox/Processed/ in Drive'
@@ -1315,6 +1320,10 @@ expect_eq "$(post 2 'p.processed.map((i) => i.kind)')" '["file","file","file"]' 
   'processed kinds: a clip named Bower is a file'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
 expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end'
+# The server-side move finds nothing (#595), so the original falls back to
+# the copy up and its delete.
+grep -q ' 1 moves copied up instead$' "$STATE/out.log" || die 'the failed move was not counted'
+expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'the failed move is copied up'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 1 'rclone deletefile calls'
 [ ! -e "$STATE/remote/0-Inbox/a.pdf" ] || die 'original back in 0-Inbox/ in Drive'
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive'
@@ -1386,7 +1395,7 @@ grep -q ' 2 files changed$' "$STATE/out.log" || die 'changed count not logged'
 remote="$STATE/remote"
 expect_eq "$(cat "$remote/3-Resources/app.md")" 'v2 from the app' 'note edited in the app during the run'
 expect_eq "$(cat "$remote/3-Resources/agent.md")" 'v2 from the agent' 'note the agent changed'
-expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '0-Inbox/Processed/a.pdf 3-Resources/agent.md ' 'uploaded files'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md ' 'uploaded files (the filed original is moved, #595)'
 expect_eq "$(post 2 p.refused)" '[]' 'refused is always in the report now (#182), empty when nothing was refused'
 [ -f "$remote/0-Inbox/Processed/a.pdf" ] || die 'processed original missing from 0-Inbox/Processed/ in Drive'
 [ ! -e "$remote/0-Inbox/a.pdf" ] || die 'processed original still in 0-Inbox/ in Drive'
@@ -1464,7 +1473,7 @@ remote="$STATE/remote"
 expect_eq "$(cat "$remote/CLAUDE.md")" '# rules' 'rulebook in Drive'
 [ ! -e "$remote/evil" ] || die 'a file outside the known roots reached Drive'
 [ ! -e "$remote/.claude/skills" ] || die 'a file under .claude/ reached Drive'
-expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '0-Inbox/Processed/a.pdf 3-Resources/agent.md ' 'uploaded files'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md ' 'uploaded files (the filed original is moved, #595)'
 expect_eq "$(cat "$remote/3-Resources/agent.md")" 'v2 from the agent' 'accepted change'
 grep -q ' 2 changes refused$' "$STATE/out.log" || die 'refused count not logged'
 expect_claude_env unset test-oauth-token
@@ -1523,9 +1532,12 @@ grep -Fxq '0-Inbox/Quarantine/evil.md' "$saw" || die 'the agent did not see the 
 remote="$STATE/remote"
 [ ! -e "$remote/0-Inbox/evil.md" ] || die 'flagged file left in 0-Inbox/ in Drive'
 [ -f "$remote/0-Inbox/Quarantine/evil.md" ] || die 'flagged file missing from 0-Inbox/Quarantine/ in Drive'
-expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" \
-  '0-Inbox/Processed/a.pdf 0-Inbox/Quarantine/evil.md ' 'uploaded files'
-expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 2 'rclone deletefile calls'
+# Both the filed original and the quarantined file are moved in Drive
+# (#595): nothing is uploaded or deleted.
+expect_eq "$(cat "$STATE/uploaded.txt")" '' 'uploaded files'
+expect_eq "$(LC_ALL=C sort "$STATE/moved.txt" | tr '\n' '|')" \
+  '0-Inbox/a.pdf -> 0-Inbox/Processed/a.pdf|0-Inbox/evil.md -> 0-Inbox/Quarantine/evil.md|' 'moved files'
+expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -1735,7 +1747,7 @@ expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.refused)" '["Rules.md"]' 'refused'
 expect_eq "$(cat "$STATE/remote/Rules.md")" '# my rules' 'Rules.md in Drive'
-expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '0-Inbox/Processed/a.pdf 3-Resources/agent.md ' 'uploaded files'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md ' 'uploaded files (the filed original is moved, #595)'
 expect_eq "$(cat "$STATE/remote/3-Resources/agent.md")" 'v2 from the agent' 'accepted change'
 grep -q ' 1 changes refused$' "$STATE/out.log" || die 'refused count not logged'
 expect_claude_env unset test-oauth-token
@@ -1788,7 +1800,7 @@ grep -Fxq -- '- id: 2026-01-15-recipes' "$proposals" || die 'the new proposal di
 expect_eq "$(grep -c '^- status: open$' "$proposals")" 2 'open proposals in Drive'
 grep -Fxq -- '- Proposal: Recipes go to Cooking (see Bower - Proposals)' "$STATE/remote/log.md" ||
   die 'the log.md pointer did not reach Drive'
-expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' '|')" '0-Inbox/Processed/a.pdf|Answers/Bower - Proposals.md|log.md|' 'uploaded files'
+expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' '|')" 'Answers/Bower - Proposals.md|log.md|' 'uploaded files'
 grep -q ' 1 changes refused$' "$STATE/out.log" || die 'refused count not logged'
 expect_claude_env unset test-oauth-token
 expect_content_free
@@ -1902,10 +1914,13 @@ echo "ok an unknown scope is refused"
 
 # 29. File only (issue #368): a PDF and a receipt photo land in their PARA
 # folders as they are, with no summary note next to them; the clip still
-# becomes a note and its raw copy goes to Processed/. Each move is one
-# copy up of the new path plus one targeted delete of the inbox path, so it
-# counts as one change against BOWER_MAX_CHANGES (8 here: two originals,
-# two hub notes, index.md, log.md, the clip's note and the raw clip).
+# becomes a note and its raw copy goes to Processed/. The PDF and the photo
+# are each one server-side move in Drive (#595); the raw clip, whose content
+# is also in Clippings/Bower trick.md, is not guessed as a move and is one
+# copy up of the new path plus one targeted delete of the inbox path. Each
+# move counts as one change against BOWER_MAX_CHANGES (8 here: two
+# originals, two hub notes, index.md, log.md, the clip's note and the raw
+# clip).
 run_case fileonly
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
@@ -1919,12 +1934,14 @@ for f in 0-Inbox/a.pdf 0-Inbox/receipt.jpg Clippings/b.md 0-Inbox/Processed/a.pd
   [ ! -e "$remote/$f" ] || die "still in Drive after the run: $f"
 done
 expect_eq "$(LC_ALL=C sort "$STATE/uploaded.txt")" "$(printf '%s\n' \
-  '0-Inbox/Processed/b.md' '1-Projects/Flat hunt/Flat hunt.md' '1-Projects/Flat hunt/a.pdf' \
-  '2-Areas/Finance/Finance.md' '2-Areas/Finance/receipt.jpg' '3-Resources/Clipped trick.md' \
+  '0-Inbox/Processed/b.md' '1-Projects/Flat hunt/Flat hunt.md' \
+  '2-Areas/Finance/Finance.md' '3-Resources/Clipped trick.md' \
   index.md log.md | LC_ALL=C sort)" 'uploaded files (originals filed, no summary note)'
-expect_eq "$(calls rclone | grep '^rclone deletefile ' | LC_ALL=C sort)" "$(printf '%s\n' \
-  'rclone deletefile vault:0-Inbox/a.pdf' 'rclone deletefile vault:0-Inbox/receipt.jpg' \
-  'rclone deletefile vault:Clippings/b.md' | LC_ALL=C sort)" 'targeted deletes'
+expect_eq "$(LC_ALL=C sort "$STATE/moved.txt")" "$(printf '%s\n' \
+  '0-Inbox/a.pdf -> 1-Projects/Flat hunt/a.pdf' '0-Inbox/receipt.jpg -> 2-Areas/Finance/receipt.jpg' |
+  LC_ALL=C sort)" 'originals moved in Drive'
+expect_eq "$(calls rclone | grep '^rclone deletefile ')" 'rclone deletefile vault:Clippings/b.md' 'targeted deletes'
+grep -q ' 1 moves not guessed: the same content twice$' "$STATE/out.log" || die 'the raw clip was guessed as a move'
 grep -q ' 8 files changed$' "$STATE/out.log" || die 'a move did not count as one change'
 grep -Fxq -- '- [[2-Areas/Finance/receipt.jpg]] · image · filed by Bower' "$remote/index.md" ||
   die 'the filed receipt has no index.md row with its type'
@@ -1942,7 +1959,13 @@ remote="$STATE/remote"
 [ -f "$remote/1-Projects/Flat hunt/Arlington Road, window sign.jpg" ] ||
   die 'the renamed photo is not in its folder in Drive'
 [ ! -e "$remote/0-Inbox/IMG_4471.jpg" ] || die 'the photo is still in the inbox in Drive'
-expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/IMG_4471.jpg$')" 1 'targeted delete of the old name'
+# A rename is a move with a new name (#595): one server-side move, no
+# upload of the photo and no delete of the old name.
+expect_eq "$(calls rclone | grep '^rclone moveto vault:0-Inbox/IMG_4471.jpg ')" \
+  'rclone moveto vault:0-Inbox/IMG_4471.jpg vault:1-Projects/Flat hunt/Arlington Road, window sign.jpg' \
+  'the rename is one server-side move'
+expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
+if grep -Fq 'window sign.jpg' "$STATE/uploaded.txt"; then die 'the renamed photo was uploaded'; fi
 grep -Fxq -- '- [[1-Projects/Flat hunt/Arlington Road, window sign.jpg]] · Photo · filed by Bower' \
   "$remote/index.md" || die 'the renamed photo has no index.md row with its type and origin'
 grep -Fq ', renamed from IMG_4471.jpg' "$remote/log.md" || die 'the rename is not logged'
@@ -2055,11 +2078,16 @@ expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.refused)" '[]' 'refused'
 remote="$STATE/remote"
-for f in 2-Areas/Finance/Receipts/receipt-one.jpg 2-Areas/Finance/Receipts/receipt-two.jpg \
-  '0-Inbox/Processed/Bower - 2026-01-15 0904 Apply rule.md'; do
+# The two receipts have the same content, so they are not guessed as moves
+# and are uploaded (#595); the job note is moved in Drive.
+for f in 2-Areas/Finance/Receipts/receipt-one.jpg 2-Areas/Finance/Receipts/receipt-two.jpg; do
   [ -f "$remote/$f" ] || die "not in Drive after the run: $f"
   grep -Fxq -- "$f" "$STATE/uploaded.txt" || die "not uploaded: $f"
 done
+[ -f "$remote/0-Inbox/Processed/Bower - 2026-01-15 0904 Apply rule.md" ] || die 'the job note is not filed in Drive'
+grep -Fxq '0-Inbox/Bower - 2026-01-15 0904 Apply rule.md -> 0-Inbox/Processed/Bower - 2026-01-15 0904 Apply rule.md' \
+  "$STATE/moved.txt" || die 'the job note was not moved in Drive'
+if grep -q receipt "$STATE/moved.txt"; then die 'a receipt with the same content was guessed as a move'; fi
 expect_eq "$(grep -cFx 'Correction: 2-Areas/Finance -> 2-Areas/Finance/Receipts (2026-01-15)' "$remote/log.md")" 2 \
   'Correction: lines, one per move'
 ! grep -Fxq 'Rules.md' "$STATE/uploaded.txt" || die 'the apply-a-rule job changed Rules.md'
@@ -2083,7 +2111,8 @@ done
 if grep -Eiq 'desktop\.ini|thumbs\.db|~\$' "$STATE/uploaded.txt"; then
   die 'a system file was uploaded'
 fi
-expect_eq "$(calls rclone | grep '^rclone deletefile ')" 'rclone deletefile vault:0-Inbox/a.pdf' 'targeted deletes'
+expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
+expect_eq "$(cat "$STATE/moved.txt")" '0-Inbox/a.pdf -> 1-Projects/Flat hunt/a.pdf' 'the PDF moved in Drive'
 [ -s "$STATE/filter-calls.log" ] || die 'no rclone calls recorded'
 if grep -v -- ' --filter-from [^ ]* --ignore-case' "$STATE/filter-calls.log" | grep -q '^rclone'; then
   die 'an rclone call ran without the system-file filter'
