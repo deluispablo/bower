@@ -13,3 +13,6 @@ docs/design/v3/boards/
 
 # Test fixtures kept byte-for-byte as written, not reformatted
 app/test/fixtures/
+
+# Exported design boards (the v4 canvas); not hand-edited
+docs/design/v4/boards/
