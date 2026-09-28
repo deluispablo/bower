@@ -810,14 +810,22 @@ button.page-bare-back {
 }
 
 /* From 1200 px: the About panel beside the note body, inside the same
-   container; it stays in view while the note scrolls. */
+   container; it stays in view while the note scrolls. The note's column
+   is its reading measure (720 px, `.note-view` in markdown.css, plus the
+   content padding) and the two are one row centred in the container
+   (#358), so the panel sits next to the text it describes. */
 @media (min-width: 1200px) {
   .shell-with-aside .shell-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .shell-with-aside .content {
+    flex: 0 1 calc(720px + 2 * var(--space-6));
   }
 
   .shell-aside {
+    flex: 0 0 280px;
     position: sticky;
     top: 0;
     align-self: start;

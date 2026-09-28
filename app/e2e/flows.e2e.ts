@@ -1485,6 +1485,48 @@ test('The Bower tab in three aligned columns from 1200, segments below (#357)', 
   await expect(columns).toHaveCount(0);
 });
 
+test('At 1920 a note and its About panel are one row next to the measure, centred (#358)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The About panel beside the note is desktop-only.',
+  );
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+  const panel = page.getByRole('complementary', { name: 'About this note' });
+  await expect(panel).toBeVisible();
+
+  const [text, aside, body] = await Promise.all([
+    page.locator('.note-view').boundingBox(),
+    panel.boundingBox(),
+    page.locator('.shell-body').boundingBox(),
+  ]);
+  const textRight = (text?.x ?? NaN) + (text?.width ?? NaN);
+  // The panel starts right after the text column's padding, not on the
+  // far side of the container (6.1.5: 900 px away at 1920).
+  expect((aside?.x ?? NaN) - textRight).toBeLessThanOrEqual(25);
+  expect((aside?.x ?? NaN) - textRight).toBeGreaterThanOrEqual(0);
+  // The row (text column and panel) is centred in the container.
+  const left = (text?.x ?? NaN) - 24 - (body?.x ?? NaN);
+  const right =
+    (body?.x ?? NaN) +
+    (body?.width ?? NaN) -
+    (aside?.x ?? NaN) -
+    (aside?.width ?? NaN);
+  expect(Math.abs(left - right)).toBeLessThanOrEqual(1);
+  await shot(page, testInfo, 'note-measure-1920');
+});
+
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
   page,
 }, testInfo) => {
