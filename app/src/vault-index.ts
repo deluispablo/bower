@@ -283,3 +283,68 @@ export function withRulesVersion(
 ): VaultIndex {
   return { ...index, bowerRulesVersion };
 }
+
+/**
+ * One file row of `index.md` (#369), the shape the agent writes when it
+ * files an original: `- [[<path>]] · <type> · <origin>`, for example
+ * `- [[1-Projects/Flat hunt/Lease agreement 2026.pdf]] · PDF · filed by Bower`.
+ * Note rows (a link with no extension, or to a `.md`) are not file rows.
+ * `file-origin.ts` reads the same rows for the origin alone.
+ */
+export interface CatalogueFile {
+  /** The link target: the path from the top of the Bower folder, extension included. */
+  path: string;
+  /** The folder part of `path`, `''` for a file at the top. */
+  folder: string;
+  /** The type word as written (`PDF`), `''` when the row has none. */
+  type: string;
+  /** `type` as a `FileKind` when it is one of `FILE_KIND_LABELS` (any letter case), else `null`. */
+  kind: FileKind | null;
+  /** The last field as written (`filed by Bower`), `''` when the row has only a type. */
+  origin: string;
+}
+
+/** A list item starting with a wikilink: `- [[target|alias]] rest`. */
+const CATALOGUE_ROW = /^\s*[-*+]\s+\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\](.*)$/;
+
+const KIND_BY_LABEL: ReadonlyMap<string, FileKind> = new Map(
+  (Object.entries(FILE_KIND_LABELS) as [FileKind, string][]).map(
+    ([kind, label]): [string, FileKind] => [label.toLowerCase(), kind],
+  ),
+);
+
+/** Whether a link target names a file that is not a note: an extension other than `.md`. */
+function isFileTarget(target: string): boolean {
+  const name = target.slice(target.lastIndexOf('/') + 1);
+  const dot = name.lastIndexOf('.');
+  return dot > 0 && dot < name.length - 1 && !isMarkdown(name);
+}
+
+/**
+ * Every file row in `index.md`'s text, in order; the first row for a path
+ * wins. Pure: the caller reads `index.md` from Drive.
+ */
+export function parseCatalogueFiles(text: string): CatalogueFile[] {
+  const rows: CatalogueFile[] = [];
+  const seen = new Set<string>();
+  for (const line of text.split(/\r\n|\r|\n/)) {
+    const match = CATALOGUE_ROW.exec(line);
+    const path = match?.[1]?.trim() ?? '';
+    if (path === '' || !isFileTarget(path) || seen.has(path.toLowerCase()))
+      continue;
+    seen.add(path.toLowerCase());
+    const fields = (match?.[2] ?? '')
+      .split('·')
+      .slice(1)
+      .map((field) => field.trim());
+    const type = fields[0] ?? '';
+    rows.push({
+      path,
+      folder: dirname(path),
+      type,
+      kind: KIND_BY_LABEL.get(type.toLowerCase()) ?? null,
+      origin: fields.length > 1 ? (fields[fields.length - 1] ?? '') : '',
+    });
+  }
+  return rows;
+}

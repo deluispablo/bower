@@ -50,6 +50,30 @@ export function setQueue(next: QueueItem[]): void {
   for (const listener of listeners) listener(queue);
 }
 
+/** The run key (`runKey`, `run-store.tsx`) of the last finished run this
+ * queue has already caught up with. Module-level like `queue` itself, so
+ * a remount (Add left, then opened again) does not re-clear a batch added
+ * after that run — only a run whose key is actually new does anything. */
+let syncedRunKey: string | null = null;
+
+/**
+ * Called with the key of a run Add just saw finish `done` (#493): drops
+ * the rows already filed (`status: 'done'`, i.e. copied into the inbox
+ * before the run started) since the tidy-up just moved them out of it,
+ * leaving anything still `waiting` or `failed` — never part of that run —
+ * untouched. A no-op once this key was already synced. Returns whether it
+ * actually dropped anything, so the caller knows whether to also retire
+ * the "Added to your inbox." message.
+ */
+export function clearFiledAfterRun(key: string): boolean {
+  if (key === syncedRunKey) return false;
+  syncedRunKey = key;
+  const remaining = queue.filter((item) => item.status !== 'done');
+  if (remaining.length === queue.length) return false;
+  setQueue(remaining);
+  return true;
+}
+
 /** The queue; re-renders the subscriber when it changes, including from
  * a batch started before this mount (Add left, then opened again). */
 export function useAddQueue(): QueueItem[] {

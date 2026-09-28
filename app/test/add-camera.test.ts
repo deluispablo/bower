@@ -67,7 +67,12 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 // Add's hint carries the Tidy up button (#320), which reads the run store.
 vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
-  useRun: () => ({ phase: 'idle', tidyUp: vi.fn(), openSheet: vi.fn() }),
+  useRun: () => ({
+    phase: 'idle',
+    tidyUp: vi.fn(),
+    openSheet: vi.fn(),
+    lastFinished: null,
+  }),
 }));
 
 const { Add } = await import('../src/routes/add.js');
