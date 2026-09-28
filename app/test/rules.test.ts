@@ -7,6 +7,7 @@ import {
   appendRule,
   applyRuleEdit,
   applyToFiledRequest,
+  dropRuleLead,
   formatRule,
   guessTopic,
   parseRules,
@@ -438,7 +439,7 @@ describe('appendRule', () => {
     expect(lines).toHaveLength(SHAPED.split('\n').length + 1);
   });
 
-  it('adds a heading at the end for a topic the file does not have', () => {
+  it('adds a heading at the end for a topic the file does not have, the lead dropped (#558)', () => {
     const md = appendRule(
       TEMPLATE,
       'Always file recipes under Cooking',
@@ -447,11 +448,36 @@ describe('appendRule', () => {
     );
     expect(md.startsWith(TEMPLATE.trimEnd())).toBe(true);
     expect(md.slice(TEMPLATE.trimEnd().length)).toBe(
-      "\n\n## Cooking\n- Always file recipes under Cooking (owner's request, 2026-09-29)\n",
+      "\n\n## Cooking\n- File recipes under Cooking (owner's request, 2026-09-29)\n",
     );
     expect(parseRules(md).groups.map((g) => [g.topic, g.count])).toEqual([
       ['Cooking', 1],
     ]);
+  });
+
+  it('a new topic goes before Everything else, not after it (#558)', () => {
+    const md = [
+      '## Money',
+      "- Never archive Money (owner's request, 2026-09-27)",
+      '',
+      '## Everything else',
+      "- Photos become a note (owner's request, 2026-09-22)",
+      '',
+    ].join('\n');
+    const out = appendRule(
+      md,
+      'From now on, job offers go to Job hunt',
+      'Job hunt',
+      ON,
+    );
+    const topics = parseRules(out).groups.map((g) => g.topic);
+    expect(topics).toEqual(['Money', 'Job hunt', UNGROUPED_TOPIC]);
+  });
+
+  it('still appends at the very end when the file has no Everything else heading', () => {
+    const md = appendRule(SHAPED, 'File bank letters under Finance', 'Post', ON);
+    const topics = parseRules(md).groups.map((g) => g.topic);
+    expect(topics).toEqual(['Finance', 'Flat hunt', 'Post']);
   });
 
   it('writes a new file from nothing', () => {
@@ -487,5 +513,57 @@ describe('appendRule', () => {
       once,
     );
     expect(() => appendRule(SHAPED, '   ', 'Finance', ON)).toThrow(RuleError);
+  });
+});
+
+describe('dropRuleLead (#558)', () => {
+  it('drops "From now on," and capitalises what is left', () => {
+    expect(dropRuleLead('From now on, job offers go to Job hunt.')).toBe(
+      'Job offers go to Job hunt',
+    );
+  });
+
+  it('drops "Always," the same way', () => {
+    expect(dropRuleLead('Always add the salary to every job offer.')).toBe(
+      'Add the salary to every job offer',
+    );
+  });
+
+  it('never touches "Never": dropping it would flip the rule\'s meaning', () => {
+    expect(dropRuleLead('Never archive Finance')).toBe('Never archive Finance');
+  });
+
+  it('leaves "Every time" alone when the rest starts with a pronoun', () => {
+    const text = 'Every time you get a receipt, file it under Finance';
+    expect(dropRuleLead(text)).toBe(text);
+  });
+
+  it('drops "Every time" when the rest already reads as a bullet on its own', () => {
+    expect(dropRuleLead('Every time, tag the receipt Finance')).toBe(
+      'Tag the receipt Finance',
+    );
+  });
+
+  it('leaves a sentence with no such lead untouched', () => {
+    const text = 'Receipts go to Finance, named by shop and date';
+    expect(dropRuleLead(text)).toBe(text);
+  });
+
+  it('leaves the lead alone when nothing follows it', () => {
+    expect(dropRuleLead('From now on,')).toBe('From now on,');
+  });
+});
+
+describe('appendRule keeps a rule sentence, not verbatim (#558)', () => {
+  it("reads like the other rules, not the sentence as typed", () => {
+    const out = appendRule(
+      '',
+      'From now on, job offers go to Job hunt.',
+      'Job hunt',
+      ON,
+    );
+    expect(out).toBe(
+      "## Job hunt\n- Job offers go to Job hunt (owner's request, 2026-09-29)\n",
+    );
   });
 });
