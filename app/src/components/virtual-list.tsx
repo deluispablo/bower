@@ -257,9 +257,8 @@ export function VirtualList<T>(props: VirtualListProps<T>): JSX.Element {
             {...(extra as object)}
             key={row.key}
             data-index={row.index}
-            ref={
-              ((node: HTMLElement | null) =>
-                engineRef.current?.measureElement(node)) as never
+            ref={(node: HTMLElement | null) =>
+              engineRef.current?.measureElement(node)
             }
             style={{
               ...(typeof extra.style === 'object' ? extra.style : {}),

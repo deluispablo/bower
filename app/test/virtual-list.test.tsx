@@ -97,7 +97,7 @@ function mount(props: {
   keepIndex?: number;
   handleRef?: RefObject<VirtualListHandle>;
 }): void {
-  act(() => {
+  void act(() => {
     render(
       h(VirtualList<string>, {
         items,
@@ -142,8 +142,8 @@ describe('VirtualList', () => {
 
   it('scrolls to an index through the handle', async () => {
     const handle: { current: VirtualListHandle | null } = { current: null };
-    mount({ handleRef: handle as RefObject<VirtualListHandle> });
-    act(() => handle.current?.scrollToIndex(500, { align: 'auto' }));
+    mount({ handleRef: handle });
+    void act(() => handle.current?.scrollToIndex(500, { align: 'auto' }));
     expect(host.scrollTop).toBeGreaterThan(0);
     await scrolled();
     expect(rendered()).toContain('Row 500');
