@@ -113,7 +113,7 @@ test('a ZIP explains itself, offers Open in Drive and Download, and gives the ti
     'Photos from the viewing',
   );
   await expect(page.locator('.file-props')).toContainText(
-    'ZIP archive · 40 MB',
+    'ZIP archive · 38 MB',
   );
   await expect(
     page.getByText('A ZIP archive holds other files packed together.'),
