@@ -93,7 +93,12 @@ vi.mock('../src/picker.js', async (importOriginal) => {
 // Add's hint carries the Tidy up button (#320), which reads the run store.
 vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
-  useRun: () => ({ phase: 'idle', tidyUp: vi.fn(), openSheet: vi.fn() }),
+  useRun: () => ({
+    phase: 'idle',
+    tidyUp: vi.fn(),
+    openSheet: vi.fn(),
+    lastFinished: null,
+  }),
 }));
 // `index` is a plain mutable holder, not a `vi.hoisted` state object: this
 // mock factory only runs (lazily) once `mountAdd`'s dynamic `import()`
