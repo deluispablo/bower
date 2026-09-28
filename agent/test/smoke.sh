@@ -195,9 +195,22 @@ remote="$SMOKE_STATE/remote"
 # The run's outcome (#315) goes through its own work-dir folder, "outcome":
 # those calls and uploads are recorded apart, so every other scenario's
 # counts stay about the agent's own changes.
+#
+# Every call carries the system-file filter last (#581): calls.log records it
+# without those two flags, so the expectations below stay about the call's
+# own arguments; filter-calls.log records it whole, and the filter file's
+# lines are kept once for the "sysfiles" case.
+full="rclone $*"
+plain=$(printf '%s' "$full" | sed 's/ --filter-from [^ ]* --ignore-case$//; s/ --filter-from [^ ]* --ignore-case / /')
+printf '%s\n' "$full" >>"$SMOKE_STATE/filter-calls.log"
+prev=''
+for a in "$@"; do
+  [ "$prev" != --filter-from ] || [ -f "$SMOKE_STATE/system-filter.txt" ] || cp "$a" "$SMOKE_STATE/system-filter.txt"
+  prev=$a
+done
 case "$*" in
-  */outcome* | *' vault:log.md '*) echo "rclone $*" >>"$SMOKE_STATE/outcome-calls.log" ;;
-  *) echo "rclone $*" >>"$SMOKE_STATE/calls.log" ;;
+  */outcome* | *' vault:log.md '*) printf '%s\n' "$plain" >>"$SMOKE_STATE/outcome-calls.log" ;;
+  *) printf '%s\n' "$plain" >>"$SMOKE_STATE/calls.log" ;;
 esac
 if [ ! -f "$SMOKE_STATE/rclone-env.log" ]; then
   {
@@ -343,6 +356,18 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       printf -- '%s\n' '---' 'tags: [instruction]' 'date: 2026-01-15' 'via: app' 'kind: request' '---' '' \
         'Apply this rule to what is already filed: File receipts under 2-Areas/Finance/Receipts.' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0904 Apply rule.md"
+    fi
+    if [ "$SMOKE_SCENARIO" = sysfiles ]; then
+      # System and sync files (#581), in the inbox and in a project folder,
+      # that a real rclone would have left in Drive: this stub does not
+      # filter, so they reach the local copy and only the runner's own
+      # manifest and pending list keep them out.
+      mkdir -p "$remote/1-Projects/Flat hunt"
+      echo ini >"$remote/0-Inbox/desktop.ini"
+      echo lock >"$remote/0-Inbox/"'~$Offer.docx'
+      echo thumbs >"$remote/0-Inbox/THUMBS.DB"
+      echo ini >"$remote/1-Projects/Flat hunt/desktop.ini"
+      echo '# Flat hunt' >"$remote/1-Projects/Flat hunt/Flat hunt.md"
     fi
     if [ "$SMOKE_SCENARIO" = rename ]; then
       # A photo whose name says nothing (issue #369).
@@ -636,6 +661,16 @@ case "$SMOKE_SCENARIO" in
     echo '- [[Arlington Road, window sign.jpg]] Window sign with the rent' >>'1-Projects/Flat hunt/Flat hunt.md'
     echo '- [[1-Projects/Flat hunt/Arlington Road, window sign.jpg]] · Photo · filed by Bower' >>index.md
     echo 'Filed: Arlington Road, window sign.jpg → 1-Projects/Flat hunt, renamed from IMG_4471.jpg' >>log.md
+    ;;
+  # The agent files the PDF, and what it does to the system files (edits
+  # one in the inbox and one in the project, removes the lock file) must
+  # never reach Drive (#581).
+  sysfiles)
+    mv 0-Inbox/a.pdf '1-Projects/Flat hunt/a.pdf'
+    echo '- [[a.pdf]] Lease offer for the flat' >>'1-Projects/Flat hunt/Flat hunt.md'
+    echo changed >>0-Inbox/desktop.ini
+    echo changed >>'1-Projects/Flat hunt/desktop.ini'
+    rm 0-Inbox/'~$Offer.docx'
     ;;
   fileonly)
     mkdir -p '1-Projects/Flat hunt' 2-Areas/Finance 3-Resources
@@ -1996,3 +2031,31 @@ expect_eq "$(grep -cFx 'Correction: 2-Areas/Finance -> 2-Areas/Finance/Receipts 
 expect_content_free
 expect_cleaned_up
 echo "ok a rule applied to what is already filed moves and logs each file"
+
+# 34. System and sync files (#581): desktop.ini and a lock file in the inbox
+# and a desktop.ini in a project folder are never uploaded, deleted or
+# counted, whatever the run does to them, and every rclone call carries the
+# filter.
+run_case sysfiles
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+remote="$STATE/remote"
+for f in 0-Inbox/desktop.ini '0-Inbox/~$Offer.docx' 0-Inbox/THUMBS.DB '1-Projects/Flat hunt/desktop.ini'; do
+  [ -f "$remote/$f" ] || die "a system file was removed from Drive: $f"
+done
+[ -f "$remote/1-Projects/Flat hunt/a.pdf" ] || die 'the PDF was not filed in Drive'
+if grep -Eiq 'desktop\.ini|thumbs\.db|~\$' "$STATE/uploaded.txt"; then
+  die 'a system file was uploaded'
+fi
+expect_eq "$(calls rclone | grep '^rclone deletefile ')" 'rclone deletefile vault:0-Inbox/a.pdf' 'targeted deletes'
+[ -s "$STATE/filter-calls.log" ] || die 'no rclone calls recorded'
+if grep -v -- ' --filter-from [^ ]* --ignore-case' "$STATE/filter-calls.log" | grep -q '^rclone'; then
+  die 'an rclone call ran without the system-file filter'
+fi
+for line in '- desktop.ini' '- Thumbs.db' '- ehthumbs.db' '- .DS_Store' '- Icon[\r]' '- ~$*' \
+  '- .~lock.*#' '- .tmp.driveupload/**'; do
+  grep -Fxq -- "$line" "$STATE/system-filter.txt" || die "filter file lacks: $line"
+done
+expect_content_free
+expect_cleaned_up
+echo "ok system and sync files never travel"

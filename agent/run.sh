@@ -241,6 +241,26 @@ readonly DRIVE_LOG="$LOG_DIR/drive.log"
 readonly DRIVE_FILES_URL='https://www.googleapis.com/drive/v3/files'
 mkdir -p "$VAULT_DIR" "$LOG_DIR"
 
+# System and sync files (desktop.ini, Thumbs.db, ~$Offer.docx, ...) are never
+# downloaded, uploaded, deleted, read, filed, moved or listed (#581). One list,
+# used twice: as an rclone filter file on every rclone call, and as find tests
+# that keep them out of the manifest and the pending list. The patterns mirror
+# SYSTEM_FILE_PATTERNS in app/src/vault-index.ts: keep the two in step.
+# Matching is case-insensitive (--ignore-case, -iname).
+readonly SYSTEM_FILTER_FILE="$WORK_DIR/system-files.filter"
+{
+  printf '%s\n' '- desktop.ini' '- Thumbs.db' '- ehthumbs.db' '- .DS_Store'
+  # Icon plus a carriage return: a character class, because a bare CR at the
+  # end of a line would be read as a line ending.
+  printf '%s\n' '- Icon[\r]' '- ~$*' '- .~lock.*#' '- .tmp.driveupload/**'
+} >"$SYSTEM_FILTER_FILE"
+readonly RCLONE_FILTER=(--filter-from "$SYSTEM_FILTER_FILE" --ignore-case)
+readonly SYSTEM_FIND_TESTS=(
+  ! -iname desktop.ini ! -iname Thumbs.db ! -iname ehthumbs.db ! -iname .DS_Store
+  ! -iname $'Icon\r' ! -iname '~$*' ! -iname '.~lock.*#'
+  ! -ipath '*/.tmp.driveupload/*' ! -ipath '.tmp.driveupload/*'
+)
+
 STEP='start'   # the step in progress, named in any failure report
 REASON=''      # the failure's reason for people, set by fail() (see there)
 REPORTED=0     # 1 once a final state (done or failed) was reported
@@ -360,12 +380,12 @@ write_outcome() {
   fi
   echo '.bower/last-run.json' >"$dir/files.txt"
   if rclone copyto vault:log.md "$dir/log.md" --retries 1 --low-level-retries 2 \
-    </dev/null >>"$RCLONE_LOG" 2>&1; then
+    "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; then
     echo "- $(date -u '+%F %H:%M') · Tidy-up $state · $sentence ($processed filed, $quarantined set aside, $refused refused)" >>"$dir/log.md"
     echo 'log.md' >>"$dir/files.txt"
   fi
   if ! rclone copy "$dir" vault: --files-from-raw "$dir/files.txt" --retries 1 \
-    --low-level-retries 2 </dev/null >>"$RCLONE_LOG" 2>&1; then
+    --low-level-retries 2 "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; then
     log "outcome not saved to Drive"
   fi
 }
@@ -379,7 +399,8 @@ write_outcome() {
 manifest() {
   (
     cd "$VAULT_DIR" &&
-      find . -type f ! -path './.obsidian/*' ! -path './.claude/*' -exec cksum {} + |
+      find . -type f ! -path './.obsidian/*' ! -path './.claude/*' \
+        "${SYSTEM_FIND_TESTS[@]}" -exec cksum {} + |
       sed 's|^\([0-9]* [0-9]*\) \./|\1 |' |
         LC_ALL=C sort
   )
@@ -495,7 +516,7 @@ copy_changed_up() {
   # --files-from-raw reads each line as a path as is (no comment or
   # whitespace handling).
   rclone copy "$VAULT_DIR" vault: --files-from-raw "$CHANGED_FILE" \
-    >>"$RCLONE_LOG" 2>&1
+    "${RCLONE_FILTER[@]}" >>"$RCLONE_LOG" 2>&1
 }
 
 # Best effort after a failure: upload whatever the agent already added or
@@ -698,7 +719,7 @@ export RCLONE_CONFIG_VAULT_EXPORT_FORMATS=txt
 # --- sync down --------------------------------------------------------------
 STEP='sync down'
 log "$STEP"
-if ! rclone sync vault: "$VAULT_DIR" --exclude '.obsidian/**' >>"$RCLONE_LOG" 2>&1; then
+if ! rclone sync vault: "$VAULT_DIR" --exclude '.obsidian/**' "${RCLONE_FILTER[@]}" >>"$RCLONE_LOG" 2>&1; then
   fail "$STEP: rclone failed" drive_unavailable
 fi
 
@@ -742,7 +763,7 @@ STEP='list pending'
   if [ "${#dirs[@]}" -gt 0 ]; then
     find "${dirs[@]}" -type f \
       ! -path '0-Inbox/Processed/*' ! -path '0-Inbox/Quarantine/*' \
-      ! -name '_*.md' ! -name '.gitkeep' |
+      ! -name '_*.md' ! -name '.gitkeep' "${SYSTEM_FIND_TESTS[@]}" |
       LC_ALL=C sort
   fi
 ) >"$PENDING_FILE"
@@ -1056,7 +1077,7 @@ while IFS= read -r path <&3; do
     continue
   fi
   delete_rc=0
-  rclone deletefile "vault:$path" </dev/null >>"$RCLONE_LOG" 2>&1 || delete_rc=$?
+  rclone deletefile "vault:$path" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1 || delete_rc=$?
   # 4 is rclone's "file not found": someone removed it from Drive during the
   # run, so it is already gone.
   if [ "$delete_rc" -ne 0 ] && [ "$delete_rc" -ne 4 ]; then
