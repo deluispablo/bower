@@ -57,6 +57,15 @@
   gap: var(--space-1);
 }
 
+/* #555: "Not in the demo…" under the greyed Drive chip. Own class from
+   `.folder-explainer` (the root folder's meaning line above the chips) so
+   an e2e assertion scoped to one never picks up the other. */
+.folder-demo-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 /*
  * 13 px, not the shared `.chip`'s 14 (`--text-sm`), with tighter padding,
  * icon-to-label gap and inter-chip gap than the default: at 375 px the

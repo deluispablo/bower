@@ -31,6 +31,7 @@ import type { JSX } from 'preact';
 import { useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
+import { isDemo } from '../api.js';
 import { Bird } from '../components/bird.js';
 import {
   IconChat,
@@ -82,6 +83,11 @@ function plural(n: number, word: string): string {
 
 /** The folder that holds projects, whose screen counts them (#431). */
 const PROJECTS_PATH = '1-Projects';
+
+/** #555/#364: the demo's fixture ids are not real Drive ids, so the Drive
+ * chip is disabled instead of opening a broken Drive page, the same
+ * sentence as Add's own greyed Drive door. */
+const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
 
 /** The header's line under the name, as the Phone-Folder-Project board has
  * it: "1-Projects · 4 files · 2 notes · pinned". Files and folders only
@@ -281,7 +287,7 @@ function FolderBody({
           <IconChat />
           Ask Bower about it
         </a>
-        {file !== undefined && (
+        {file !== undefined && !isDemo() && (
           <a
             class="chip"
             href={driveFolderUrl(file)}
@@ -292,7 +298,16 @@ function FolderBody({
             Drive
           </a>
         )}
+        {file !== undefined && isDemo() && (
+          <button type="button" class="chip" disabled aria-disabled>
+            <IconExternalLink />
+            Drive
+          </button>
+        )}
       </div>
+      {file !== undefined && isDemo() && (
+        <p class="folder-demo-note">{NOT_IN_DEMO_DRIVE}</p>
+      )}
 
       {contents.subfolders.length > 0 && (
         <div class="folder-section">

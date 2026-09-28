@@ -16,6 +16,7 @@ import type { JSX } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
 
+import { isDemo } from '../api.js';
 import { BackLink } from '../components/back-link.js';
 import {
   IconClock,
@@ -63,6 +64,11 @@ type PreviewLoad =
   | { status: 'none' }
   /** The preview could not be fetched (offline, or Drive said no). */
   | { status: 'failed' };
+
+/** #555/#364: the demo's fixture ids are not real Drive ids, so "open it
+ * in Drive" is dropped instead of opening a broken Drive page, the same
+ * sentence as Add's own greyed Drive door. */
+const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
 
 /**
  * Fetches `file`'s preview as `previewKind` says. Starts over for another
@@ -180,13 +186,21 @@ function Preview({
     case 'none':
       return (
         <p class="file-preview-note">
-          There is no preview for this file; {drive} to see it.
+          {isDemo() ? (
+            `There is no preview for this file. ${NOT_IN_DEMO_DRIVE}`
+          ) : (
+            <>There is no preview for this file; {drive} to see it.</>
+          )}
         </p>
       );
     case 'failed':
       return (
         <p class="file-preview-note" role="alert">
-          Could not load the preview; {drive} instead.
+          {isDemo() ? (
+            `Could not load the preview. ${NOT_IN_DEMO_DRIVE}`
+          ) : (
+            <>Could not load the preview; {drive} instead.</>
+          )}
         </p>
       );
   }

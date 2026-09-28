@@ -99,6 +99,16 @@
   background: var(--color-surface-hover);
 }
 
+/* #555: Open in Drive, greyed in the demo (Add's own doors, #364). */
+.note-menu-row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.note-menu-row:disabled:hover {
+  background: transparent;
+}
+
 .note-menu-row .icon {
   color: var(--color-text-muted);
 }

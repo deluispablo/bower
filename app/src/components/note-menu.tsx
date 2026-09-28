@@ -33,6 +33,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
+import { isDemo } from '../api.js';
 import type { DriveFile } from '../drive.js';
 import { driveViewUrl } from '../markdown/embeds.js';
 import { askBowerHref, moreMenuMeta, moveToHref } from '../more-menu.js';
@@ -55,6 +56,11 @@ const MENU_LABELS: Readonly<Record<MoreMenuKind, string>> = {
   file: 'File actions',
   folder: 'Folder actions',
 };
+
+/** #555/#364: the demo's fixture ids are not real Drive ids, so Open in
+ * Drive is disabled instead of opening a broken Drive page, the same
+ * sentence as Add's own greyed Drive door. */
+const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
 
 export interface NoteMenuProps {
   /** What the menu is about: a note (the default), a file or a folder. */
@@ -201,19 +207,35 @@ export function NoteMenu({
             </span>
           </span>
         </a>
-        <a
-          role="menuitem"
-          class="note-menu-row"
-          href={driveHref}
-          target="_blank"
-          rel="noopener"
-          onClick={onClose}
-        >
-          <IconExternalLink />
-          <span class="note-menu-row-text">
-            <span class="note-menu-row-label">Open in Drive</span>
-          </span>
-        </a>
+        {isDemo() ? (
+          <button
+            type="button"
+            role="menuitem"
+            class="note-menu-row"
+            disabled
+            aria-disabled
+          >
+            <IconExternalLink />
+            <span class="note-menu-row-text">
+              <span class="note-menu-row-label">Open in Drive</span>
+              <span class="note-menu-row-hint">{NOT_IN_DEMO_DRIVE}</span>
+            </span>
+          </button>
+        ) : (
+          <a
+            role="menuitem"
+            class="note-menu-row"
+            href={driveHref}
+            target="_blank"
+            rel="noopener"
+            onClick={onClose}
+          >
+            <IconExternalLink />
+            <span class="note-menu-row-text">
+              <span class="note-menu-row-label">Open in Drive</span>
+            </span>
+          </a>
+        )}
         <button
           type="button"
           role="menuitem"
