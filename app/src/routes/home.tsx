@@ -86,8 +86,14 @@ interface BubbleProps {
 }
 
 /** The bubble's text, its links wired: Tidy up and Try again act here,
- * See what I did goes to the Bower tab. */
-function BubbleText({ parts, onTidyUp, onFailure }: BubbleProps): JSX.Element {
+ * See what I did goes to the Bower tab. Exported for `home-bubble.test.tsx`
+ * (#420: the button's click event must never reach `onTidyUp`/`onFailure`,
+ * which both take no arguments). */
+export function BubbleText({
+  parts,
+  onTidyUp,
+  onFailure,
+}: BubbleProps): JSX.Element {
   return (
     <p class="home-bubble">
       {parts.map((part, i) => {
@@ -105,7 +111,7 @@ function BubbleText({ parts, onTidyUp, onFailure }: BubbleProps): JSX.Element {
             type="button"
             class="home-bubble-link"
             aria-haspopup={part.link === 'failure' ? 'dialog' : undefined}
-            onClick={part.link === 'tidy-up' ? onTidyUp : onFailure}
+            onClick={() => (part.link === 'tidy-up' ? onTidyUp() : onFailure())}
           >
             {part.text}
           </button>
