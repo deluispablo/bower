@@ -128,6 +128,21 @@ export function kindWord(file: Pick<DriveFile, 'name' | 'mimeType'>): string {
   return kind === 'csv' ? 'Spreadsheet (CSV)' : FILE_KIND_LABELS[kind];
 }
 
+const SHORT_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
 /** "26 Sep": a day and a short month, from an ISO time or Drive's EXIF form (`2024:05:01 10:00:00`). */
 export function shortDate(value: string | undefined): string | null {
   if (value === undefined) return null;
@@ -136,7 +151,7 @@ export function shortDate(value: string | undefined): string | null {
     exif === null ? value : `${exif[1]}-${exif[2]}-${exif[3]}T${exif[4]}`,
   );
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return `${date.getDate()} ${SHORT_MONTHS[date.getMonth()] ?? ''}`;
 }
 
 /** A length in words: "45 s", "2 min 14 s", "1 h 5 min". */

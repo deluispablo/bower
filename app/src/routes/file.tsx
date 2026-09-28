@@ -20,12 +20,7 @@ import { isDemo } from '../api.js';
 import { BackLink } from '../components/back-link.js';
 import { DrivePreview } from '../components/drive-preview.js';
 import { FolderMark } from '../components/folder-mark.js';
-import {
-  IconClock,
-  IconDoc,
-  IconFolder,
-  IconSparkle,
-} from '../components/icons.js';
+import { IconClock, IconFolder, IconSparkle } from '../components/icons.js';
 import { KindBadge } from '../components/kind-badge.js';
 import { MoreButton } from '../components/more-button.js';
 import { loadImage } from '../components/note-body.js';
@@ -202,6 +197,7 @@ function Preview({
       return (
         <DrivePreview
           id={file.id}
+          demo={isDemo()}
           title={title}
           label={
             fileKind(file) === 'video'
@@ -365,8 +361,9 @@ function NoPreview({
         </p>
       )}
       <p class="file-preview-note">
-        It can&rsquo;t be shown here. Open it in Drive to see what is inside, or
-        download it.
+        {
+          "It can't be shown here. Open it in Drive to see what is inside, or download it."
+        }
       </p>
       <div class="file-actions">
         <OpenInDrive file={file} label="Open in Drive" />

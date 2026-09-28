@@ -4,6 +4,7 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { DrivePreview } from '../src/components/drive-preview.js';
 import {
   MAX_TABLE_ROWS,
   TablePreview,
@@ -65,7 +66,7 @@ describe('TablePreview', () => {
   function mount(rows: string[][]): HTMLElement {
     host = document.createElement('div');
     document.body.append(host);
-    act(() => {
+    void act(() => {
       render(h(TablePreview, { rows }), host as HTMLElement);
     });
     return host;
@@ -94,5 +95,45 @@ describe('TablePreview', () => {
 
   it('says so when the file is empty', () => {
     expect(mount([]).textContent).toContain('This spreadsheet is empty.');
+  });
+});
+
+describe('DrivePreview', () => {
+  let host: HTMLElement | null = null;
+  afterEach(() => {
+    if (host !== null) render(null, host);
+    host?.remove();
+    host = null;
+  });
+
+  function mount(demo: boolean): HTMLElement {
+    host = document.createElement('div');
+    document.body.append(host);
+    void act(() => {
+      render(
+        h(DrivePreview, {
+          id: 'FILE_ID',
+          title: 'Costs',
+          label: 'Preview from Google Drive',
+          demo,
+        }),
+        host as HTMLElement,
+      );
+    });
+    return host;
+  }
+
+  it("frames Drive's own preview under its label", () => {
+    const el = mount(false);
+    expect(el.textContent).toContain('Preview from Google Drive');
+    expect(el.querySelector('iframe')?.getAttribute('src')).toBe(
+      'https://drive.google.com/file/d/FILE_ID/preview',
+    );
+  });
+
+  it('draws no frame in the demo', () => {
+    const el = mount(true);
+    expect(el.querySelector('iframe')).toBeNull();
+    expect(el.textContent).toContain('Not in the demo.');
   });
 });
