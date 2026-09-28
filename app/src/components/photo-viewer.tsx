@@ -137,23 +137,25 @@ function FullScreen(props: FullScreenProps): JSX.Element {
   // A new photo starts fitted.
   useEffect(() => setDoubled(false), [src]);
 
-  useEffect(() => {
-    function go(next: number): void {
-      if (next < 0 || next >= total) return;
-      onNavigate(next);
-    }
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'ArrowLeft') go(index - 1);
-      else if (event.key === 'ArrowRight') go(index + 1);
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [index, total, onNavigate]);
-
   function go(next: number): void {
     if (next < 0 || next >= total) return;
     onNavigate(next);
   }
+  // Bound once and reading the latest render, so a key pressed right after
+  // a step never meets a listener that is between two renders.
+  const goRef = useRef(go);
+  goRef.current = go;
+  const indexRef = useRef(index);
+  indexRef.current = index;
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'ArrowLeft') goRef.current(indexRef.current - 1);
+      else if (event.key === 'ArrowRight') goRef.current(indexRef.current + 1);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   function onPhotoClick(event: MouseEvent): void {
     const now = event.timeStamp;
@@ -260,10 +262,25 @@ function FullScreen(props: FullScreenProps): JSX.Element {
 export function PhotoViewer(props: PhotoViewerProps): JSX.Element {
   const { src, title } = props;
   const [open, setOpen] = useState(false);
+  const openRef = useRef<HTMLButtonElement>(null);
+
+  function close(): void {
+    setOpen(false);
+    // Leaving real full screen is asynchronous and the browser may take
+    // focus with it, so the photo asks for it back once that is done too.
+    const focusPhoto = (): void => openRef.current?.focus();
+    if (inFullscreen()) {
+      document.addEventListener('fullscreenchange', focusPhoto, {
+        once: true,
+      });
+    }
+    requestAnimationFrame(focusPhoto);
+  }
 
   return (
     <div class="photo-viewer">
       <button
+        ref={openRef}
         type="button"
         class="photo-viewer-open"
         aria-label={`${title}. Tap to see it whole`}
@@ -274,7 +291,7 @@ export function PhotoViewer(props: PhotoViewerProps): JSX.Element {
           Tap to see it whole
         </span>
       </button>
-      {open && <FullScreen {...props} onClose={() => setOpen(false)} />}
+      {open && <FullScreen {...props} onClose={close} />}
     </div>
   );
 }
