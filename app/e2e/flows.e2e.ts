@@ -438,6 +438,19 @@ test('an unknown folder and an unknown URL each show Not found with their own se
   await expect(page.getByText("That page doesn't exist")).toBeVisible();
 });
 
+test('a missing file shows Not found with its own sentence, not the generic page one (#529)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.goto('/file/does-not-exist');
+  await expect(
+    page.getByRole('heading', { name: /can.t find that/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("isn't in your Bower folder any more"),
+  ).toBeVisible();
+});
+
 test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
   page,
 }, testInfo) => {
