@@ -19,6 +19,7 @@ import {
   getRun,
   getRunTicket,
   getUser,
+  getDriveToken,
   putDriveToken,
   putRun,
   putUser,
@@ -36,6 +37,8 @@ const API = 'https://api.example.com';
 const USER_ID = 'user-1';
 const REFRESH_TOKEN = 'test-refresh-token';
 const ACCESS_TOKEN = 'test-access-token';
+/** What the default Google stub mints for a run. */
+const RUN_ACCESS_TOKEN = 'test-run-access-token';
 const API_KEY = 'test-claude-api-key';
 /** The operator key: only `POST /runner/lint/dispatch`, or the legacy flag. */
 const RUNNER_AUTH = `Bearer ${env.BOWER_API_KEY}`;
@@ -77,8 +80,16 @@ function stub(
       call.body = JSON.parse(init.body) as unknown;
     }
     calls.push(call);
-    if (input === GOOGLE_TOKEN_URL && tokenResponse !== undefined) {
-      return Promise.resolve(tokenResponse());
+    if (input === GOOGLE_TOKEN_URL) {
+      // By default Google mints a run token (#315: every run gets its own).
+      return Promise.resolve(
+        tokenResponse?.() ??
+          Response.json({
+            access_token: RUN_ACCESS_TOKEN,
+            expires_in: 3599,
+            token_type: 'Bearer',
+          }),
+      );
     }
     if (input.startsWith('https://api.github.com/')) {
       return Promise.resolve(new Response(null, { status: githubStatus }));
@@ -366,6 +377,28 @@ describe('run tickets', () => {
     expect((await getVault(stub().fetchImpl, newer)).status).toBe(200);
   });
 
+  it('a late report from an older run cannot overwrite the newer run (#135)', async () => {
+    await seedUser();
+    const older = await ticketAuth();
+    const newer = await ticketAuth();
+    const newerRun: Run = {
+      state: 'queued',
+      kind: 'ingest',
+      requestedAt: new Date().toISOString(),
+      runId: 'newer-run',
+    };
+    await putRun(kv, USER_ID, newerRun);
+
+    const late = await postStatus(
+      { state: 'done', runId: 'older-run', summary: 'late' },
+      older,
+    );
+
+    expect(late.status).toBe(401);
+    expect(await getRun(kv, USER_ID)).toEqual(newerRun);
+    expect((await postStatus({ state: 'running' }, newer)).status).toBe(200);
+  });
+
   it("keeps an ingest's ticket and a lint's ticket to their own run", async () => {
     await seedUser();
     const ingest = await ticketAuth(USER_ID, 'ingest');
@@ -649,24 +682,29 @@ describe('GET /runner/vaults (legacy flag)', () => {
 });
 
 describe('GET /runner/vaults/:id', () => {
-  it('returns the folder ids, the cached Drive token and maxTurns, without apiKey', async () => {
+  it("returns the folder ids, a Drive token minted for the run (never the session's) and maxTurns, without apiKey (#315)", async () => {
     await seedUser();
-    const expiresAt = await seedDriveToken();
+    const sessionExpiresAt = await seedDriveToken();
     const google = stub();
 
     const response = await getVault(google.fetchImpl);
 
     expect(response.status).toBe(200);
     const body = await response.json<RunnerVault>();
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       folderId: 'FOLDER_ID',
       inboxFolderId: 'INBOX_FOLDER_ID',
-      driveAccessToken: ACCESS_TOKEN,
-      expiresAt,
+      driveAccessToken: RUN_ACCESS_TOKEN,
       maxTurns: Number(env.DEFAULT_MAX_TURNS),
     });
+    expect(Date.parse(body.expiresAt)).toBeGreaterThan(Date.now());
     expect('apiKey' in body).toBe(false);
-    expect(google.calls).toHaveLength(0);
+    expect(google.calls.map((call) => call.url)).toEqual([GOOGLE_TOKEN_URL]);
+    // The session's own cached token is left exactly as it was.
+    expect(await getDriveToken(kv, USER_ID)).toEqual({
+      accessToken: ACCESS_TOKEN,
+      expiresAt: sessionExpiresAt,
+    });
   });
 
   it('returns the decrypted apiKey when the user set one', async () => {

@@ -109,3 +109,60 @@ export async function dispatchLint(
 ): Promise<void> {
   await dispatchRun('bower-lint', input, fetchImpl);
 }
+
+/** What `getWorkflowRun` reads of a workflow run. */
+export interface WorkflowRunState {
+  /** `queued`, `in_progress`, `completed`, … */
+  status: string;
+  /** Once `completed`: `success`, `failure`, `cancelled`, `timed_out`, …; otherwise `null`. */
+  conclusion: string | null;
+}
+
+/**
+ * Reads one workflow run of the instance repo (`GET
+ * /repos/{repo}/actions/runs/{runId}`), for the job-conclusion fallback in
+ * `GET /status` (#315). The token needs read access to the repo's Actions.
+ * Answers `undefined` when GitHub cannot tell (a network failure, a token
+ * without that access, an unknown run, an answer of the wrong shape): the
+ * caller then leaves the run as it is. Logs GitHub's status and request id
+ * only.
+ */
+export async function getWorkflowRun(
+  { repo, token, runId }: { repo: string; token: string; runId: string },
+  fetchImpl: FetchLike,
+): Promise<WorkflowRunState | undefined> {
+  let response: Response;
+  try {
+    response = await fetchImpl(
+      `${GITHUB_API_URL}/repos/${repo}/actions/runs/${encodeURIComponent(runId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'bower-api',
+        },
+      },
+    );
+  } catch (err) {
+    console.error(
+      `GitHub run lookup failed: ${err instanceof Error ? err.name : 'error'}`,
+    );
+    return undefined;
+  }
+  if (response.status !== 200) {
+    const requestId = response.headers.get('x-github-request-id') ?? 'none';
+    console.error(
+      `GitHub run lookup failed: status ${response.status}, request id ${requestId}`,
+    );
+    return undefined;
+  }
+  const body: unknown = await response.json().catch(() => undefined);
+  if (typeof body !== 'object' || body === null) return undefined;
+  const { status, conclusion } = body as Record<string, unknown>;
+  if (typeof status !== 'string') return undefined;
+  return {
+    status,
+    conclusion: typeof conclusion === 'string' ? conclusion : null,
+  };
+}
