@@ -45,7 +45,7 @@ const texts = new Map<string, string>([
 kind: rental-listing
 tags: [housing]
 created: 2026-09-26
-original: Arlington Road, 2 bed.pdf
+original: "[[Arlington Road, 2 bed.pdf]]"
 pages: 2
 rent: 2150
 rooms: 2 bed, 1 bath

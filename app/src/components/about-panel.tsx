@@ -89,7 +89,11 @@ export function originalFileOf(
 
 /** "PDF, 2 pages": the original's format and its page count. */
 export function originalSummary(meta: NoteMeta): string {
-  const extension = extensionOf(meta.original ?? '').toUpperCase();
+  const name = (meta.original ?? '')
+    .replace(/^\[\[|\]\]$/g, '')
+    .split('|')[0]
+    ?.trim();
+  const extension = extensionOf(name ?? '').toUpperCase();
   const parts: string[] = [];
   if (extension !== '') parts.push(extension);
   if (meta.pages !== undefined) {

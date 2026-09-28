@@ -175,3 +175,8 @@
   color: var(--color-text-muted);
   white-space: nowrap;
 }
+
+.note-view .key-facts-box + .details {
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-3);
+}
