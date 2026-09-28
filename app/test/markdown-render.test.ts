@@ -486,3 +486,30 @@ describe('sanitiser profile', () => {
     }
   });
 });
+
+describe('sanitizeHtml and collapsible boxes (#602)', () => {
+  it('keeps details, summary and open, and drops their event handlers', () => {
+    const root = dom(
+      sanitizeHtml(
+        '<details open="" ontoggle="alert(1)" class="bower-section">' +
+          '<summary onclick="alert(2)">Bower on this section</summary>' +
+          '<p>Line</p></details>',
+      ),
+    );
+    const details = root.querySelector('details.bower-section');
+    expect(details?.hasAttribute('open')).toBe(true);
+    expect(details?.querySelector('summary')?.textContent).toBe(
+      'Bower on this section',
+    );
+    expect(root.querySelector('[onclick], [ontoggle]')).toBeNull();
+  });
+
+  it("turns a note's own <details ontoggle> into a harmless box", () => {
+    const html = renderNote(
+      '<details open ontoggle="alert(1)"><summary>More</summary>x</details>\n',
+      index,
+    ).html;
+    expect(dom(html).querySelector('details')).not.toBeNull();
+    expect(html).not.toContain('alert');
+  });
+});
