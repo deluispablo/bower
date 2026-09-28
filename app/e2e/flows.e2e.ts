@@ -362,9 +362,17 @@ test('/search?q= lands on Home with the switcher open and prefilled (#495)', asy
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
   await expect(switcher.getByRole('combobox')).toHaveValue('Lisbon');
-  await expect(
-    switcher.getByRole('option', { name: /Lisbon Trip/ }).first(),
-  ).toBeVisible();
+  const option = switcher.getByRole('option', { name: /Lisbon Trip/ }).first();
+  await expect(option).toBeVisible();
+  // The snippet reads like the note body, not the raw file (#554): no
+  // frontmatter keys, fences or the heading's own "#" mark.
+  const snippetText = await option
+    .locator('.switcher-row-snippet')
+    .textContent();
+  expect(snippetText).not.toBeNull();
+  expect(snippetText).not.toContain('---');
+  expect(snippetText).not.toContain('status:');
+  expect(snippetText?.trimStart().startsWith('#')).toBe(false);
 });
 
 test("a note Bower wrote opens with Bower's note and What Bower used (#351)", async ({

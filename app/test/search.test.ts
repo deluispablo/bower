@@ -131,6 +131,39 @@ describe('snippet', () => {
   it('returns null for an empty query', () => {
     expect(snippet(text, '', 10)).toBeNull();
   });
+
+  it('drops frontmatter and the heading mark, like the note body shows it (#554)', () => {
+    const note = [
+      '---',
+      'created: 2026-09-24',
+      'status: active',
+      'pinned: 2026-09-24T18:00:00.000Z',
+      '---',
+      '# Lisbon Trip',
+      '',
+      'A week in Lisbon, 14 to 21 October, starting with a walk along the river.',
+    ].join('\n');
+
+    const result = snippet(note, 'Lisbon', 40);
+
+    expect(result).not.toContain('---');
+    expect(result).not.toContain('status:');
+    expect(result).not.toContain('#');
+    expect(result).toContain('Lisbon Trip A week in Lisbon');
+  });
+
+  it('keeps only the label of a link and drops emphasis and code marks', () => {
+    const note =
+      'See the **lease** for [Flat hunt](https://example.org/flat) and `run pnpm test` before you sign.';
+
+    const result = snippet(note, 'Flat hunt', 40);
+
+    expect(result).not.toContain('[');
+    expect(result).not.toContain('](');
+    expect(result).not.toContain('**');
+    expect(result).not.toContain('`');
+    expect(result).toContain('Flat hunt');
+  });
 });
 
 describe('recent searches', () => {
