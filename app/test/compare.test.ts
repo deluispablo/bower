@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyFilters,
+  bookingsTimeline,
+  receiptsByMonth,
   compareColumns,
   compareKinds,
   defaultSort,
@@ -70,15 +72,28 @@ describe('compareKinds', () => {
     expect(compareKinds(listings.slice(0, 1))).toEqual([]);
   });
 
-  it('never offers contracts, receipts or bookings', () => {
+  it('never offers contracts', () => {
     const many = (kind: string): CompareNote[] => [
       note('A', kind, {}),
       note('B', kind, {}),
       note('C', kind, {}),
     ];
     expect(compareKinds(many('contract'))).toEqual([]);
-    expect(compareKinds(many('receipt'))).toEqual([]);
-    expect(compareKinds(many('booking'))).toEqual([]);
+  });
+
+  it('offers receipts by month and bookings as a timeline from two notes', () => {
+    const two = (kind: string): CompareNote[] => [
+      note('A', kind, {}),
+      note('B', kind, {}),
+    ];
+    expect(compareKinds(two('receipt')).map((k) => k.compare)).toEqual([
+      'by-month',
+    ]);
+    expect(compareKinds(two('booking')).map((k) => k.compare)).toEqual([
+      'timeline',
+    ]);
+    expect(compareKinds(two('receipt').slice(0, 1))).toEqual([]);
+    expect(compareKinds(two('booking').slice(0, 1))).toEqual([]);
   });
 });
 
@@ -175,5 +190,98 @@ describe('setFrontmatterValue', () => {
     expect(
       setFrontmatterValue('---\r\nkind: bill\r\n---\r\nHi', 'status', 'active'),
     ).toBe('---\r\nkind: bill\r\nstatus: active\r\n---\r\nHi');
+  });
+});
+
+describe('receiptsByMonth', () => {
+  const now = new Date('2026-09-28T10:00:00Z');
+  const receipts = [
+    note('Corner Shop', 'receipt', {
+      shop: 'Corner Shop',
+      date: '2026-09-03',
+      total: 12.5,
+    }),
+    note('Hardware Store', 'receipt', {
+      shop: 'Hardware Store',
+      date: '2026-08-20',
+      total: '£40',
+    }),
+    note('Bakery', 'receipt', {
+      shop: 'Bakery',
+      date: '2026-09-21',
+      total: 7.5,
+    }),
+    note('Old Till', 'receipt', {
+      shop: 'Old Till',
+      date: '2025-12-30',
+      total: 99,
+    }),
+    note('No date', 'receipt', { shop: 'Mystery', total: 5 }),
+  ];
+
+  it('groups by month, newest first, with each month total', () => {
+    const { months } = receiptsByMonth(receipts, now);
+    expect(months.map((m) => [m.label, m.totalText])).toEqual([
+      ['September 2026', '£20'],
+      ['August 2026', '£40'],
+      ['December 2025', '£99'],
+      ['No date', '£5'],
+    ]);
+    expect(months[0]?.receipts.map((r) => [r.shop, r.date, r.total])).toEqual([
+      ['Bakery', '21 Sep', '£7.50'],
+      ['Corner Shop', '3 Sep', '£12.50'],
+    ]);
+  });
+
+  it('totals the year so far, leaving out other years', () => {
+    expect(receiptsByMonth(receipts, now).year).toEqual({
+      year: 2026,
+      total: 60,
+      totalText: '£60',
+    });
+    expect(
+      receiptsByMonth(receipts, new Date('2027-02-01T00:00:00Z')).year,
+    ).toBe(null);
+  });
+});
+
+describe('bookingsTimeline', () => {
+  const now = new Date('2026-09-28T10:00:00Z');
+  const bookings = [
+    note('Hotel', 'booking', {
+      what: 'Hotel',
+      when: '2026-11-14T15:00',
+      where: 'Lisbon',
+      reference: 'H123',
+    }),
+    note('Train', 'booking', {
+      what: 'Train',
+      when: '2026-09-01T08:30',
+      where: 'King Cross',
+      reference: 'T9',
+    }),
+    note('Dentist', 'booking', { what: 'Dentist', when: '2026-09-28' }),
+    note('Flight', 'booking', { what: 'Flight', when: '2026-09-28T18:45' }),
+    note('Open', 'booking', { what: 'Open', when: 'someday' }),
+  ];
+
+  it('sorts by date and time and marks the past ones', () => {
+    const timeline = bookingsTimeline(bookings, now);
+    expect(timeline.map((e) => [e.what, e.past])).toEqual([
+      ['Train', true],
+      ['Dentist', false],
+      ['Flight', false],
+      ['Hotel', false],
+      ['Open', false],
+    ]);
+    expect(timeline[0]).toMatchObject({
+      date: '1 Sep',
+      time: '08:30',
+      where: 'King Cross',
+      reference: 'T9',
+    });
+    expect(
+      bookingsTimeline(bookings, new Date('2026-09-28T20:00:00Z'))[2]?.past,
+    ).toBe(true);
   });
 });
