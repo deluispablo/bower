@@ -2579,7 +2579,10 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
     0,
   );
   // The one More menu (#352): the board's header, then Ask Bower first.
-  await expect(menu).toContainText('PDF · Projects / Kitchen Refresh');
+  await expect(menu.locator('.note-menu-meta')).toContainText('PDF');
+  await expect(menu.locator('.note-menu-meta')).toContainText(
+    'Projects › Kitchen Refresh',
+  );
   await expect(menu.getByRole('menuitem').first()).toContainText(
     'Ask Bower about this',
   );

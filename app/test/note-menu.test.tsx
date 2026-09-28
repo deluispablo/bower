@@ -9,6 +9,17 @@ import { NoteMenu } from '../src/components/note-menu.js';
 import type { NoteMenuProps } from '../src/components/note-menu.js';
 import type { DriveFile } from '../src/drive.js';
 
+// The picker has its own test; here only that the row opens it.
+vi.mock('../src/components/folder-picker.js', () => ({
+  MoveFlow: (props: { name: string; path: string; isFolder: boolean }) =>
+    h('div', {
+      class: 'move-flow-stub',
+      'data-name': props.name,
+      'data-path': props.path,
+      'data-folder': String(props.isFolder),
+    }),
+}));
+
 function file(name: string): DriveFile {
   return {
     id: 'note-1',
@@ -125,12 +136,13 @@ afterEach(() => {
 });
 
 describe('NoteMenu', () => {
-  it('lists seven rows for a normal note, in the board order', () => {
+  it('lists eight rows for a normal note, in the board order', () => {
     mount(true);
     expect(
       rows().map((r) => r.querySelector('.note-menu-row-label')?.textContent),
     ).toEqual([
       'Ask Bower about this',
+      'Show in folders',
       'Pin to Home',
       'Move to…',
       'Open in Drive',
@@ -160,7 +172,7 @@ describe('NoteMenu', () => {
 
   it('lists six rows, Edit left out, for a protected note', () => {
     mount(false);
-    expect(rows()).toHaveLength(6);
+    expect(rows()).toHaveLength(7);
     expect(rows().some((r) => r.textContent?.includes('Edit the text'))).toBe(
       false,
     );
@@ -168,7 +180,7 @@ describe('NoteMenu', () => {
 
   it('leaves out Add a paragraph when the note cannot be appended to', () => {
     mount(true, vi.fn(), false, vi.fn(), false);
-    expect(rows()).toHaveLength(6);
+    expect(rows()).toHaveLength(7);
     expect(rows().some((r) => r.textContent?.includes('Add a paragraph'))).toBe(
       false,
     );
@@ -202,14 +214,25 @@ describe('NoteMenu', () => {
     );
   });
 
-  it('prefills the Bower box with the note path and nothing else, for Move to… (#302)', () => {
+  it('says "Bower does it" under Move to…, which opens the folder picker for this note (#608)', () => {
     mount(true);
-    const misfiled = rowByText('Move to…');
-    expect(misfiled.getAttribute('href')).toBe(
-      `/bower?text=${encodeURIComponent(
-        '"Shopping list.md" was misfiled. It should go to: ',
-      )}`,
-    );
+    const move = rowByText('Move to…');
+    expect(move.textContent).toContain('Bower does it');
+    expect(root.querySelector('.move-flow-stub')).toBeNull();
+    click(move);
+    const flow = root.querySelector('.move-flow-stub');
+    expect(flow?.getAttribute('data-name')).toBe('Shopping list');
+    expect(flow?.getAttribute('data-path')).toBe('Shopping list.md');
+    expect(flow?.getAttribute('data-folder')).toBe('false');
+    // The menu steps aside while the picker is up.
+    expect(root.querySelector<HTMLElement>('[role="menu"]')?.hidden).toBe(true);
+  });
+
+  it('draws the NEW pill next to Show in folders, which reveals the note (#608)', () => {
+    mount(true);
+    const show = rowByText('Show in folders');
+    expect(show.textContent).toContain('NEW');
+    expect(show.getAttribute('href')).toBe('/notes?reveal=note%2Fnote-1');
   });
 
   it('links Open in Drive to the file, in a new tab', () => {
@@ -287,23 +310,28 @@ describe('NoteMenu', () => {
     expect(
       root.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     ).toBe('File actions');
-    expect(root.querySelector('.note-menu-meta')?.textContent).toBe(
-      'PDF · Projects / Flat hunt',
-    );
+    const spans = root.querySelectorAll('.note-menu-meta > span');
+    expect(spans[0]?.textContent).toBe('PDF');
+    expect(spans[1]?.textContent).toContain('Projects › Flat hunt');
+    expect(spans[1]?.querySelector('.folder-mark-projects')).not.toBeNull();
     expect(rows().map((r) => r.textContent)).toEqual([
       expect.stringContaining('Ask Bower about this'),
+      expect.stringContaining('Show in folders'),
       expect.stringContaining('Move to…'),
       expect.stringContaining('Open in Drive'),
+      expect.stringContaining('Download'),
       expect.stringContaining('Copy link'),
     ]);
+    expect(rowByText('Show in folders').getAttribute('href')).toBe(
+      '/notes?reveal=file%2Ffile-1',
+    );
     expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
       `/bower?text=${encodeURIComponent('[[Lease 2026.pdf]] ')}`,
     );
-    expect(rowByText('Move to…').getAttribute('href')).toBe(
-      `/bower?text=${encodeURIComponent(
-        '"1-Projects/Flat hunt/Lease 2026.pdf" was misfiled. It should go to: ',
-      )}`,
-    );
+    click(rowByText('Move to…'));
+    expect(
+      root.querySelector('.move-flow-stub')?.getAttribute('data-path'),
+    ).toBe('1-Projects/Flat hunt/Lease 2026.pdf');
   });
 
   it('has Pin but no note-only rows for a folder, and opens the folder in Drive', () => {
@@ -327,11 +355,12 @@ describe('NoteMenu', () => {
     expect(
       root.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     ).toBe('Folder actions');
-    expect(root.querySelector('.note-menu-meta')?.textContent).toBe(
-      'Folder · Projects',
-    );
+    const spans = root.querySelectorAll('.note-menu-meta > span');
+    expect(spans[0]?.textContent).toBe('Folder');
+    expect(spans[1]?.textContent).toContain('Projects');
     expect(rows().map((r) => r.textContent)).toEqual([
       expect.stringContaining('Ask Bower about this'),
+      expect.stringContaining('Show in folders'),
       expect.stringContaining('Unpin from Home'),
       expect.stringContaining('Move to…'),
       expect.stringContaining('Open in Drive'),
@@ -342,6 +371,9 @@ describe('NoteMenu', () => {
     );
     expect(rowByText('Open in Drive').getAttribute('href')).toBe(
       'https://drive.google.com/drive/folders/folder-1',
+    );
+    expect(rowByText('Show in folders').getAttribute('href')).toBe(
+      '/notes?reveal=folder%2F1-Projects%2FFlat%2520hunt',
     );
     click(rowByText('Unpin from Home'));
     expect(onTogglePin).toHaveBeenCalledOnce();
