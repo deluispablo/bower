@@ -16,7 +16,7 @@
 
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DriveFile } from '../src/drive.js';
 import { REPORT_PATH } from '../src/health-report.js';
@@ -101,10 +101,19 @@ async function mount(): Promise<void> {
   await flush();
 }
 
+// Pinned well past the fixtures' 7 June 2026 modified time (#496: the
+// bubble's wording depends on how long ago that is), so it never drifts
+// with the real clock the suite happens to run under.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 8, 28, 12, 0));
+});
+
 afterEach(() => {
   render(null, root);
   root.remove();
   getNoteText.mockClear();
+  vi.useRealTimers();
 });
 
 describe('Health: the report screen', () => {
@@ -151,7 +160,7 @@ describe('Health: the report screen', () => {
     await mount();
 
     expect(root.querySelector('.health-bubble')?.textContent).toBe(
-      "Jun 7's check. Your notes are in good shape.",
+      'the Jun 7 check. Your notes are in good shape.',
     );
     expect(root.querySelector('.health-fix-button')).toBeNull();
   });
@@ -161,9 +170,46 @@ describe('Health: the report screen', () => {
     await mount();
 
     expect(root.querySelector('.health-bubble')?.textContent).toBe(
-      "Jun 7's check. Your notes are in good shape, 2 small things to fix.",
+      'the Jun 7 check. Your notes are in good shape, 2 small things to fix.',
     );
     expect(root.querySelector('.health-fix-button')).not.toBeNull();
+  });
+
+  it('drops "good shape" when a finding is Urgent, whatever the count (#496)', async () => {
+    reportText = `---
+notes: 12
+findings: 1
+brokenLinks: 0
+---
+
+## To fix
+- [ ] Urgent: possible secret in \`Rules.md\`
+`;
+    await mount();
+
+    expect(root.querySelector('.health-bubble')?.textContent).toBe(
+      'the Jun 7 check. one small thing to fix.',
+    );
+  });
+
+  it('names the relative day, not the date, for a report from this past week', async () => {
+    reportText = `---
+notes: 12
+findings: 0
+brokenLinks: 0
+---
+
+Sunday's check.
+`;
+    // The mocked report's `modifiedTime` is fixed to 7 June 2026 in the
+    // fixture files above; move "now" one day later so the bubble reads
+    // the relative label instead of falling back to the date.
+    vi.setSystemTime(new Date(2026, 5, 8, 9, 0));
+    await mount();
+
+    expect(root.querySelector('.health-bubble')?.textContent).toBe(
+      "Yesterday's check. Your notes are in good shape.",
+    );
   });
 
   it('explains itself in one paragraph at the top', async () => {
