@@ -13,6 +13,7 @@
  * folder once the listing, re-read when the run ends, shows the file there.
  */
 
+import { linkTitleFromFileName } from './add.js';
 import type { RunItem, RunItemKind } from './api.js';
 import type { DriveFile } from './drive.js';
 import { pendingCount } from './navigation.js';
@@ -167,10 +168,14 @@ function toneOf(name: string, file: DriveFile | undefined): RowTone {
   return kind === 'photo' || kind === 'image' ? 'image' : 'file';
 }
 
-/** The title a row shows: the file's title, and an instruction note's
- * words without its date and time. */
+/** The title a row shows: a filed link's own host (#557, `linkNoteName`'s
+ * generated name never was a title), else the file's title, and an
+ * instruction note's words without its date and time. */
 function rowTitle(name: string): string {
-  return fileTitle(name).replace(REQUEST_PREFIX, '');
+  return (linkTitleFromFileName(name) ?? fileTitle(name)).replace(
+    REQUEST_PREFIX,
+    '',
+  );
 }
 
 /**

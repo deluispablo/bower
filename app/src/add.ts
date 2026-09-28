@@ -56,6 +56,19 @@ export function linkDisplayTitle(url: string): string {
 }
 
 /**
+ * The reverse of `linkNoteName` (#557): the host it embedded in a filed
+ * link's own generated file name, for a caller with only the name and no
+ * cached text to read the URL from (the working sheet's rows,
+ * `run-progress.ts#rowTitle`) — host only, not the full host and path
+ * `linkDisplayTitle` reads from the URL itself, but still a title, never
+ * the generated file name. `null` for any other file name.
+ */
+export function linkTitleFromFileName(name: string): string | null {
+  const match = /^Link - (.+) \d{4}-\d{2}-\d{2} \d{4}\.md$/.exec(name);
+  return match?.[1] ?? null;
+}
+
+/**
  * The hint's bold lead on Add (#336, `Phone-Add` board, handover C.6):
  * "3 things waiting." — `count` is the inbox's pending files, the same
  * count Home's Inbox card and the "Is that everything?" sheet show. The

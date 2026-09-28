@@ -1,8 +1,9 @@
 /**
  * The one title a note shows everywhere (issue #306, spec: titles, never
  * file names): frontmatter `title`, else the note's first `# ` heading,
- * else the file name with its `.md` dropped. Extensions never appear
- * except in the Add queue.
+ * else, for a filed link whose body is nothing but the URL (#557), its
+ * host and path, else the file name with its `.md` dropped. Extensions
+ * never appear except in the Add queue.
  *
  * `text` is the note's raw text when the caller already has it (the open
  * note, or a cache entry it happened to load for something else); this
@@ -38,6 +39,30 @@ function titleFromFrontmatter(data: Record<string, unknown>): string | null {
 }
 
 /**
+ * `body` (frontmatter already removed) is one bare `http:`/`https:` URL and
+ * nothing else — the way a link pasted into Add is saved (#557,
+ * `add.ts#linkNoteName`/`onSaveLink`: no page title fetched, just the URL):
+ * its host and path (`add.ts#linkDisplayTitle`'s own logic), the same
+ * title Add's own queue row already shows. `null` for anything else,
+ * including a note that merely mentions a URL among other text.
+ */
+function titleFromBareUrl(body: string): string | null {
+  const trimmed = body.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return null;
+  }
+  const host = parsed.hostname.replace(/^www\./i, '');
+  const path = parsed.pathname === '/' ? '' : parsed.pathname;
+  return `${host}${path}`;
+}
+
+/**
  * The first `# ` heading in `body` (the note's text, frontmatter already
  * removed), or `null` when it has none. A heading inside a fenced code
  * block (` ``` ` or `~~~`) is ignored, matching what the renderer itself
@@ -70,6 +95,8 @@ export function noteTitle(file: { name: string }, text?: string): string {
     if (fromFrontmatter !== null) return fromFrontmatter;
     const fromHeading = firstHeading(body);
     if (fromHeading !== null) return fromHeading;
+    const fromUrl = titleFromBareUrl(body);
+    if (fromUrl !== null) return fromUrl;
   }
   return stripMdExtension(file.name);
 }

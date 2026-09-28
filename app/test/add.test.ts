@@ -12,6 +12,7 @@ import {
   contextNoteName,
   linkDisplayTitle,
   linkNoteName,
+  linkTitleFromFileName,
 } from '../src/add.js';
 import { setQueue } from '../src/add-queue-store.js';
 import type { DriveFile } from '../src/drive.js';
@@ -140,6 +141,19 @@ describe('linkDisplayTitle (#508)', () => {
 
   it('falls back to the raw string for anything it cannot parse', () => {
     expect(linkDisplayTitle('not a link')).toBe('not a link');
+  });
+});
+
+describe('linkTitleFromFileName (#557)', () => {
+  it("reads the host back out of linkNoteName's own generated name", () => {
+    expect(linkTitleFromFileName('Link - example.org 2026-09-28 1414.md')).toBe(
+      'example.org',
+    );
+  });
+
+  it('is null for any other file name', () => {
+    expect(linkTitleFromFileName('Lease agreement 2026.pdf')).toBeNull();
+    expect(linkTitleFromFileName('Link - not quite right.md')).toBeNull();
   });
 });
 
