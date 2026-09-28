@@ -410,8 +410,8 @@ export function Bower(): JSX.Element {
   const [rulesMessage, setRulesMessage] = useState<string | null>(null);
   const [requestsMessage, setRequestsMessage] = useState<string | null>(null);
   // One line under the box confirming what Send just did (#507): "Kept as
-  // a rule", "Already in your rules", "Will go with this tidy-up". Reset
-  // on every new Send.
+  // a rule", "Already in your rules", "Will go with the next tidy-up".
+  // Reset on every new Send.
   const [sendConfirm, setSendConfirm] = useState<string | null>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
@@ -586,8 +586,10 @@ export function Bower(): JSX.Element {
       setText('');
       // Idle: the Requests segment already shows the new Waiting row at
       // once. Mid-run, that row is easy to miss under "Tidying up…", so
-      // it gets a word of its own (#507): it waits for the *next* tidy-up.
-      if (inFlight) setSendConfirm('Will go with this tidy-up');
+      // it gets a word of its own (#507, #552): since #491 a request sent
+      // during a run is held for the *next* one, same as the row's own
+      // "goes with the next tidy-up".
+      if (inFlight) setSendConfirm('Will go with the next tidy-up');
     } else {
       setError('Could not send that. Try again.');
     }

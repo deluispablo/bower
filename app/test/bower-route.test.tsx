@@ -388,7 +388,7 @@ describe('the confirmation line under the box (#507)', () => {
     expect(confirmLine()).toBe('Already in your rules');
   });
 
-  it('says "Will go with this tidy-up" for anything sent while a run is in progress', async () => {
+  it('says "Will go with the next tidy-up" for anything sent while a run is in progress', async () => {
     state.phase = 'running';
     state.run = {
       state: 'running',
@@ -396,7 +396,7 @@ describe('the confirmation line under the box (#507)', () => {
     };
     await mount();
     await send('Which flat should I visit first?');
-    expect(confirmLine()).toBe('Will go with this tidy-up');
+    expect(confirmLine()).toBe('Will go with the next tidy-up');
   });
 
   it('shows nothing sent idle (the row itself is confirmation enough)', async () => {
