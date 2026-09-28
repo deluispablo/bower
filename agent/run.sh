@@ -557,6 +557,32 @@ in_instructions_scope() {
   ! is_context_note "$1"
 }
 
+# The processed list for the status report (#345), from the pending paths in
+# file $1: each path with its kind, so the app never guesses from a name.
+# `context` for Add's context note, `request` for any other instruction note
+# (see in_instructions_scope), `file` for everything else. Whether a request
+# turned out a question, a job or a rule is the agent's call, not known here.
+processed_json() {
+  local path kind
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    kind=file
+    if [ -f "$VAULT_DIR/$path" ]; then
+      if in_instructions_scope "$path"; then
+        kind=request
+      elif is_context_note "$path"; then
+        kind=context
+      fi
+    fi
+    jq -cn --arg path "$path" --arg kind "$kind" '$ARGS.named'
+  done <"$1" | {
+    local items
+    items=$(paste -sd, -)
+    printf '[%s]
+' "$items"
+  }
+}
+
 # The reason for people behind a failed agent run: `timeout` when the
 # agent's own time limit stopped it (timeout's exit code 124, or 137 when it
 # had to be killed) or it ran out of turns; `model_unavailable` when its
@@ -778,7 +804,7 @@ PENDING_COUNT=$(grep -c . "$PENDING_FILE" || true)
 # without a processed list.
 PROCESSED_JSON=''
 if [ "$MODE" = ingest ]; then
-  PROCESSED_JSON=$(jq -Rn '[inputs]' <"$PENDING_FILE")
+  PROCESSED_JSON=$(processed_json "$PENDING_FILE")
 fi
 log "$PENDING_COUNT files pending"
 
@@ -933,7 +959,7 @@ log "$STEP: $flagged_count files quarantined"
 if [ "$MODE" = ingest ] && [ "$flagged_count" -gt 0 ]; then
   LC_ALL=C comm -23 <(LC_ALL=C sort "$PENDING_FILE") <(LC_ALL=C sort "$FLAGGED_FILE") \
     >"$WORK_DIR/pending-after-scan.txt" || true
-  PROCESSED_JSON=$(jq -Rn '[inputs]' <"$WORK_DIR/pending-after-scan.txt")
+  PROCESSED_JSON=$(processed_json "$WORK_DIR/pending-after-scan.txt")
 fi
 
 # The instruction allow-list: the instruction-shaped notes still at their

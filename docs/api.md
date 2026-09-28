@@ -11,6 +11,8 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `allow:<email>` | `'1'` | none | the operator, outside this module | `isAllowed` |
 | `run:<id>` | `Run` (the latest ingest) | none | `putRun` | `getRun` |
 | `lintrun:<id>` | `Run` (the latest scheduled lint) | none | `putRun(…, 'lint')` | `getRun(…, 'lint')` |
+| `runs:<id>` | run history index: up to 20 run ids (`requestedAt` in ms), newest first | none | `recordRun` (from `putRun`, for a `done`/`failed` ingest) | `listRuns` (`GET /runs`) |
+| `runrec:<id>:<runId>` | `Run` (one finished ingest) | none; deleted when it drops off the index | `recordRun` | `listRuns` |
 | `runticket:<id>` | `RunTicket` (`{ hash, expiresAt }`: the SHA-256 of the current ingest's ticket, never the ticket) | 55 min (`RUN_TICKET_TTL_MS`) | `issueRunTicket` (`POST /process`) | `checkRunTicket` (runner routes); deleted by a `done`/`failed` report |
 | `lintticket:<id>` | `RunTicket`, for the current lint | 55 min | `issueRunTicket` (`POST /runner/lint/dispatch`) | `checkRunTicket`; deleted by a `done`/`failed` report |
 | `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
@@ -24,8 +26,9 @@ Notes:
 - `<id>` is always a `User.id`.
 - `<email>` is lower-cased and trimmed before use as a key, so lookups are case-insensitive.
 - `quota` has no atomic increment in KV: `incrQuota` reads, increments and writes back. Two requests racing on the same user and date can undercount by one. Accepted as a soft per-user daily limit, not a billing figure.
-- `deleteUserData` first writes the `deleted:<id>` tombstone, then removes every `user:`, `run:`, `lintrun:`, `runticket:`, `lintticket:`, `quota:<id>:*`, `push:<id>:*`, `drivetoken:<id>` and `sessiongen:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user. The tombstone holds no personal data (the key is a random id) and stays, so a record a stale write re-creates after the deletion is never treated as a user again. Ids are never reused: signing in again after a deletion creates a new account with a new id.
+- `deleteUserData` first writes the `deleted:<id>` tombstone, then removes every `user:`, `run:`, `lintrun:`, `runs:`, `runrec:<id>:*`, `runticket:`, `lintticket:`, `quota:<id>:*`, `push:<id>:*`, `drivetoken:<id>` and `sessiongen:<id>` key for a user, plus its `email:` index, but never `allow:<email>` — the allowlist belongs to the operator, not the user. The tombstone holds no personal data (the key is a random id) and stays, so a record a stale write re-creates after the deletion is never treated as a user again. Ids are never reused: signing in again after a deletion creates a new account with a new id.
 - Revocation state (`sessiongen:`, `deleted:`) lives outside `user:<id>`, in keys no other route writes. A route that changes the user record goes through `updateUser`, which re-reads the record and merges only the fields it changes, so a request holding an older copy of the record cannot write back fields it did not touch. KV is eventually consistent: a read in another location can be up to about 60 s old, so a sign-out everywhere or a deletion can take that long to reach every location.
+- Run history (#345): every finished ingest (`done` or `failed`, from the runner's report, the job-conclusion fallback or staleness) is kept, the last 20 per user (`RUN_HISTORY_LIMIT`), for the Bower tab's Activity. One key per run plus a small index, not one list in one value: a run's lists can hold 200 entries of up to 2,000 characters each, so twenty in one value could pass KV's 25 MiB value limit, and every finished run would rewrite all of them; a key per run keeps each write the size of one run. Twenty covers a few weeks of tidy-ups while `GET /runs` stays at most 21 reads. A run recorded again (same `requestedAt`) replaces its record and keeps its place.
 - `deleteDriveToken` also drops `drivetoken:<id>` on its own, used by `GET /drive/token?fresh=1` (see below) to force a fresh mint.
 
 ## `User`
@@ -54,7 +57,10 @@ Notes:
 | `startedAt` | `string` | optional; ISO-8601 |
 | `finishedAt` | `string` | optional; ISO-8601 |
 | `summary` | `string` | optional |
-| `processed` | `string[]` | optional |
+| `processed` | `string[]` | optional; the inbox paths the run processed |
+| `items` | `{ path, kind }[]` | optional (#345); `processed` with each item's kind (`file`, `question`, `request`, `context`, `rule`), when the runner reported kinds |
+| `quarantined` | `string[]` | optional; paths the pre-scan set aside under `0-Inbox/Quarantine/` |
+| `refused` | `string[]` | optional; paths (or `"*"`) the post-run audit refused |
 | `error` | `string` | optional; for the operator (names the step), never shown to people |
 | `reason` | `'drive_unavailable' \| 'timeout' \| 'model_unavailable' \| 'vault_changed' \| 'unknown'` | optional; only on a `failed` run whose runner said why (#375). The app turns it into one sentence for people; a failed run without one reads as `unknown` |
 | `runId` | `string` | optional |
@@ -210,6 +216,16 @@ Response: `{ "run": Run | null, "stale": boolean }`, status 200.
 | --- | --- | --- |
 | 401 | `unauthenticated` | No valid session cookie, or the user no longer exists |
 
+## `GET /runs`
+
+The signed-in user's finished tidy-ups (#345), newest first, at most 20: the run history `putRun` keeps (see Data model). Requires the session cookie; no request body. The Bower tab's Activity shows one card per run; a lint is never listed, nor a run still queued or running (that one is `GET /status`).
+
+Response: `{ "runs": Run[] }`, status 200 (`[]` when there is none).
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| 401 | `unauthenticated` | No valid session cookie, or the user no longer exists |
+
 ## Runner endpoints
 
 Called by the GitHub Actions runner of the instance repo, never by the app (`api/src/runner.ts`, `api/src/run-ticket.ts`). Two credentials, each sent as `Authorization: Bearer <credential>`; anything else is a 401 `unauthorized`. `:id` is the user id, the `vault_id` of the dispatch. Nothing here logs a key, a ticket, a token, the user's API key, file names or summaries.
@@ -272,7 +288,7 @@ The runner's progress report. Body, validated strictly (an unknown field, a wron
 | `kind` | `'ingest' \| 'lint'` | Optional; `ingest` when absent, so runners that predate it keep working |
 | `runId` | `string` | Optional, non-empty; replaces the stored `runId` when given |
 | `summary` | `string` | Optional; cut to 2,000 characters |
-| `processed` | `string[]` | Optional; cut to 200 entries, each entry cut to 2,000 characters |
+| `processed` | `(string \| { path, kind })[]` | Optional; cut to 200 entries, each path cut to 2,000 characters. An entry is a path (runners before #345) or `{ path, kind }` with `kind` one of `file`, `question`, `request`, `context`, `rule` (#345); another kind or field is a 400. The paths are stored as `processed`, the entries with a kind as `items` |
 | `quarantined` | `string[]` | Optional; paths the pre-scan set aside under `0-Inbox/Quarantine/` this run (spec A.5); same bounds as `processed` |
 | `refused` | `string[]` | Optional; paths (or `"*"` for the whole run) the post-run audit refused (spec A.3/A.4); same bounds as `processed` |
 | `error` | `string` | Optional; cut to 2,000 characters |

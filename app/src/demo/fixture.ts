@@ -21,6 +21,8 @@ import archivesNote from '../../../vault-template/4-Archives/_Archives.md?raw';
 import answersNote from '../../../vault-template/Answers/_Answers.md?raw';
 import clippingsNote from '../../../vault-template/Clippings/_Clippings.md?raw';
 
+import type { Run } from '../api.js';
+
 export const DEMO_NAME = 'Alex';
 export const DEMO_EMAIL = 'alex@example.com';
 /** Tidy up runs a day in the demo, the same as a real instance's default. */
@@ -123,6 +125,51 @@ export const INBOX_PLAN: ReadonlyMap<string, string> = new Map([
 export const INBOX_QUESTION =
   '0-Inbox/Bower - 2026-09-27 0815 What do I still need for Lisbon.md';
 
+/**
+ * Two tidy-ups before the demo starts, newest first, for the Bower tab's
+ * Activity (#345, board Phone-Bower-Activity): this morning's, which filed
+ * the flat-hunt papers and renamed a photo, and yesterday's, which set one
+ * document aside. `log.md` above has their `Filed:` lines.
+ */
+export const DEMO_RUNS: readonly Run[] = [
+  {
+    state: 'done',
+    requestedAt: '2026-09-27T06:47:30.000Z',
+    startedAt: '2026-09-27T06:48:00.000Z',
+    finishedAt: '2026-09-27T06:51:10.000Z',
+    summary: 'Filed 3 items.',
+    processed: [
+      '0-Inbox/Lease agreement 2026.pdf',
+      '0-Inbox/IMG_4471.jpg',
+      '0-Inbox/Notes from the viewing.md',
+    ],
+    items: [
+      { path: '0-Inbox/Lease agreement 2026.pdf', kind: 'file' },
+      { path: '0-Inbox/IMG_4471.jpg', kind: 'file' },
+      { path: '0-Inbox/Notes from the viewing.md', kind: 'file' },
+    ],
+    runId: 'demo-run-earlier-2',
+  },
+  {
+    state: 'done',
+    requestedAt: '2026-09-26T08:08:00.000Z',
+    startedAt: '2026-09-26T08:08:20.000Z',
+    finishedAt: '2026-09-26T08:12:30.000Z',
+    summary: 'Filed 2 items.',
+    processed: [
+      'Clippings/Weeknight curry.md',
+      '0-Inbox/Running log.md',
+      '0-Inbox/Meeting notes.rtf',
+    ],
+    items: [
+      { path: 'Clippings/Weeknight curry.md', kind: 'file' },
+      { path: '0-Inbox/Running log.md', kind: 'file' },
+      { path: '0-Inbox/Meeting notes.rtf', kind: 'file' },
+    ],
+    runId: 'demo-run-earlier-1',
+  },
+];
+
 /** Alex's own rules under the template's text, in the shape `rules.ts`
  * reads (#342): one group with more rules than an open group shows, and a
  * few smaller ones. */
@@ -186,8 +233,11 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
 - 2026-09-12 · Filed · Flights and stays, Things to see in Lisbon
 - 2026-09-18 · Filed · Paint colours, Quotes from fitters
 - 2026-09-21 · Answered · Which subscriptions renew this autumn
-- 2026-09-26 · Filed · Running log, Weeknight curry
-- 2026-09-27 · Filed · Lease agreement 2026, Notes from the viewing`,
+- 2026-09-26 08:10 · Filed: Running log.md → 2-Areas/Health
+- 2026-09-26 08:11 · Filed: Weeknight curry.md → 3-Resources/Cooking
+- 2026-09-27 06:49 · Filed: Lease agreement 2026.pdf → 1-Projects/Flat hunt
+- 2026-09-27 06:50 · Filed: Arlington Road, window sign.jpg → 1-Projects/Flat hunt, renamed from IMG_4471.jpg
+- 2026-09-27 06:51 · Filed: Notes from the viewing.md → 1-Projects/Flat hunt`,
   ),
   note(
     'Lint Report.md',

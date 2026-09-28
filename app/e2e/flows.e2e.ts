@@ -2548,3 +2548,73 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   ).toHaveCount(0);
   await shot(page, testInfo, 'folder-more-menu');
 });
+
+test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-up lands on it (#345)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  await showBowerPart(page, 'Activity');
+  const activity = bowerPart(page, 'Activity');
+  const cards = activity.locator('.activity-card');
+  const rowWith = (card: number, text: string) =>
+    cards.nth(card).getByRole('listitem').filter({ hasText: text });
+
+  // The demo's two earlier tidy-ups (`DEMO_RUNS`), newest first: the rows
+  // come from the run records and `log.md`'s Filed lines.
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(0)).toContainText('Today, 07:51 · 3 min');
+  await expect(cards.nth(0)).toContainText('Done');
+  await expect(rowWith(0, 'Lease agreement 2026.pdf')).toContainText(
+    '→ 1-Projects / Flat hunt',
+  );
+  await expect(rowWith(0, 'IMG_4471.jpg')).toContainText(
+    '→ 1-Projects / Flat hunt, renamed “Arlington Road, window sign”',
+  );
+  await expect(cards.nth(1)).toContainText('Yesterday, 09:12 · 4 min');
+  await expect(cards.nth(1)).toContainText('One thing set aside');
+  await expect(rowWith(1, 'Meeting notes.rtf')).toContainText(
+    'set aside: could not be read.',
+  );
+  await expect(activity).toContainText('Something in the wrong place?');
+  await shot(page, testInfo, 'bower-activity');
+
+  // A tidy-up from Home: its card comes first, the question with "read it".
+  await navigate(page, /^Home$/);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  await page
+    .getByRole('dialog', { name: 'Is that everything?' })
+    .getByRole('button', { name: 'Yes, tidy up' })
+    .click();
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet.getByText('3 files processed')).toBeVisible({
+    timeout: 20_000,
+  });
+  await sheet.getByRole('button', { name: 'Close' }).click();
+
+  // Home's Last tidy-up card opens Activity, on that card.
+  await visible(
+    page.locator('.home-card', { hasText: 'Last tidy-up' }),
+  ).click();
+  await expect(page).toHaveURL(/\/bower\?show=activity$/);
+  await expect(bowerPart(page, 'Activity')).toBeVisible();
+  await expect(cards).toHaveCount(3);
+  await expect(cards.nth(0)).toContainText('Today, 10:30 · 1 min');
+  await expect(rowWith(0, 'Boiler service invoice.pdf')).toContainText(
+    '→ 2-Areas / Home',
+  );
+  await expect(rowWith(0, 'Tomato seedlings')).toContainText(
+    '→ 2-Areas / Garden',
+  );
+  const question = rowWith(0, 'What do I still need for Lisbon?');
+  await expect(question).toContainText('→ Answers, read it');
+  await expect(question.getByRole('link', { name: 'read it' })).toBeVisible();
+  // The phone's notifications prompt follows a first tidy-up; out of the
+  // way for the screenshot.
+  const gotIt = page.getByRole('button', { name: 'Got it' });
+  if (await gotIt.isVisible()) await gotIt.click();
+  await cards.nth(0).scrollIntoViewIfNeeded();
+  await shot(page, testInfo, 'bower-activity-after-tidy-up');
+});

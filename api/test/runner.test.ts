@@ -20,6 +20,7 @@ import {
   getRunTicket,
   getUser,
   getDriveToken,
+  listRuns,
   putDriveToken,
   putRun,
   putUser,
@@ -1022,6 +1023,48 @@ describe('POST /runner/vaults/:id/status', () => {
     expect(run.processed).toHaveLength(MAX_PROCESSED);
     expect(run.quarantined).toHaveLength(MAX_PROCESSED);
     expect(run.refused).toHaveLength(MAX_PROCESSED);
+  });
+
+  it("keeps each processed item's kind (#345) and the paths as before", async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      processed: [
+        { path: '0-Inbox/IMG_4471.jpg', kind: 'file' },
+        { path: '0-Inbox/Bower - 2026-09-28 1850 Context.md', kind: 'context' },
+        'Clippings/old-runner.md',
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.processed).toEqual([
+      '0-Inbox/IMG_4471.jpg',
+      '0-Inbox/Bower - 2026-09-28 1850 Context.md',
+      'Clippings/old-runner.md',
+    ]);
+    expect(run.items).toEqual([
+      { path: '0-Inbox/IMG_4471.jpg', kind: 'file' },
+      { path: '0-Inbox/Bower - 2026-09-28 1850 Context.md', kind: 'context' },
+    ]);
+    // A finished ingest also lands in the run history `GET /runs` reads.
+    expect(await listRuns(kv, USER_ID)).toEqual([run]);
+  });
+
+  it('answers 400 for a processed item with an unknown kind (#345)', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      processed: [{ path: '0-Inbox/a.md', kind: 'summary' }],
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'bad_request' },
+    });
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
   });
 
   it('cuts each quarantined and refused entry to MAX_TEXT_LENGTH', async () => {

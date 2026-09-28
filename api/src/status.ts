@@ -11,6 +11,10 @@
  * `JOB_CHECK_INTERVAL_MS`, and a finished job makes the run `done`
  * (`success`) or `failed` (anything else), its ticket retired.
  *
+ * `GET /runs` (#345): the signed-in user's finished tidy-ups, newest
+ * first, from the run history `putRun` keeps (`recordRun` in `store.ts`),
+ * for the Bower tab's Activity.
+ *
  * Nothing here logs file names, vault content or tokens.
  */
 
@@ -22,13 +26,18 @@ import type { AppEnv, Env } from './env.js';
 import { getWorkflowRun } from './github.js';
 import type { FetchLike } from './google.js';
 import { markStale, runStaleness } from './process.js';
-import { deleteRunTicket, getRun, putRun } from './store.js';
+import { deleteRunTicket, getRun, listRuns, putRun } from './store.js';
 import type { Run } from './types.js';
 
 /** What `GET /status` answers. */
 export interface StatusBody {
   run: Run | null;
   stale: boolean;
+}
+
+/** What `GET /runs` answers. */
+export interface RunsBody {
+  runs: Run[];
 }
 
 /**
@@ -97,7 +106,7 @@ async function checkJob(
   return checked;
 }
 
-/** `GET /status` as a Hono sub-app, mounted at `/` by `index.ts`. */
+/** `GET /status` and `GET /runs` as a Hono sub-app, mounted at `/` by `index.ts`. */
 export function createStatusRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const fetchImpl: FetchLike =
     deps.fetchImpl ?? ((input, init) => fetch(input, init));
@@ -126,6 +135,12 @@ export function createStatusRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       return c.json({ run: failed, stale: true } satisfies StatusBody);
     }
     return c.json({ run: current ?? null, stale: false } satisfies StatusBody);
+  });
+
+  routes.get('/runs', requireSession, async (c) => {
+    const env = c.get('env');
+    const runs = await listRuns(env.BOWER_KV, c.get('userId'));
+    return c.json({ runs } satisfies RunsBody);
   });
 
   return routes;

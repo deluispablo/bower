@@ -62,7 +62,7 @@ import { getPref } from '../prefs.js';
 import { visiblePendingCount } from '../run-progress.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
-import { BOWER_PATH } from '../shell-routes.js';
+import { ACTIVITY_PATH } from '../shell-routes.js';
 import { openSwitcher } from '../switcher-store.js';
 import {
   endTour,
@@ -98,7 +98,7 @@ export function BubbleText({
         if (typeof part === 'string') return part;
         if (part.link === 'activity') {
           return (
-            <a key={i} href={BOWER_PATH}>
+            <a key={i} href={ACTIVITY_PATH}>
               {part.text}
             </a>
           );
@@ -273,7 +273,7 @@ export function LastTidyUpCard({
     );
   }
   return (
-    <a class="home-card home-card-link" href={BOWER_PATH}>
+    <a class="home-card home-card-link" href={ACTIVITY_PATH}>
       {head}
       <p class="home-card-when">
         {tidyUpAgo(run.finishedAt ?? run.requestedAt, now)}

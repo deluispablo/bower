@@ -68,6 +68,28 @@ export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
  */
 export type RunKind = 'ingest' | 'lint';
 
+/**
+ * What one processed inbox item was (#345), as the runner saw it: a file
+ * to file, an instruction note that turned out a question, a request (a
+ * job) or a rule, or Add's context note for its batch. The app reads this
+ * instead of matching the item's title.
+ */
+export const RUN_ITEM_KINDS = [
+  'file',
+  'question',
+  'request',
+  'context',
+  'rule',
+] as const;
+export type RunItemKind = (typeof RUN_ITEM_KINDS)[number];
+
+/** One processed inbox item with its kind (#345). */
+export interface RunItem {
+  /** The inbox path, as in `processed`. */
+  path: string;
+  kind: RunItemKind;
+}
+
 export interface Run {
   state: RunState;
   /** Absent on runs stored before kinds existed; read as `ingest`. */
@@ -80,6 +102,11 @@ export interface Run {
   finishedAt?: string;
   summary?: string;
   processed?: string[];
+  /**
+   * `processed` with each item's kind, when the runner reported kinds
+   * (#345); absent from runners that predate them.
+   */
+  items?: RunItem[];
   /** Paths the pre-scan set aside under `0-Inbox/Quarantine/` this run. */
   quarantined?: string[];
   /** Paths (or `"*"` for the whole run) the post-run audit refused. */
