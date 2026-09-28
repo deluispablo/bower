@@ -52,6 +52,7 @@ function mount(phase: 'running' | 'done' = 'running'): void {
       h(WorkingSheet, {
         phase,
         run,
+        now: Date.now(),
         open: true,
         onDismiss: vi.fn(),
       }),
