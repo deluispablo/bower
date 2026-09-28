@@ -10,6 +10,7 @@ import {
   isAppFile,
   isHidden,
   parseCatalogueFiles,
+  SYSTEM_FILE_PATTERNS,
   withRulesVersion,
 } from '../src/vault-index.js';
 
@@ -235,6 +236,73 @@ describe('files', () => {
     ]);
     expect(index.files.map((f) => f.path)).toEqual(['1-Projects/Lease.pdf']);
     expect(index.notes.map((f) => f.path)).toEqual(['1-Projects/Plan.md']);
+  });
+});
+
+describe('system files', () => {
+  const hiddenPaths = [
+    'desktop.ini',
+    '1-Projects/Desktop.INI',
+    'Thumbs.db',
+    'a/b/thumbs.db',
+    'ehthumbs.db',
+    '.DS_Store',
+    '1-Projects/.ds_store',
+    'Icon\r',
+    '1-Projects/Icon\r',
+    '~$Report.docx',
+    '2-Areas/Finance/~$Budget.xlsx',
+    '.~lock.budget.ods#',
+    '2-Areas/.~LOCK.budget.ods#',
+    '.tmp.driveupload/1234',
+    '1-Projects/.tmp.driveupload/1234/scan.pdf',
+  ];
+
+  it.each(hiddenPaths)('hides %j', (path) => {
+    expect(isHidden(entry(path, 'application/octet-stream'))).toBe(true);
+  });
+
+  it('exports the list the runner filters mirror', () => {
+    expect(SYSTEM_FILE_PATTERNS).toEqual([
+      'desktop.ini',
+      'Thumbs.db',
+      'ehthumbs.db',
+      '.DS_Store',
+      'Icon\r',
+      '~$*',
+      '.~lock.*#',
+      '.tmp.driveupload/',
+    ]);
+  });
+
+  it('does not hide files that only look similar', () => {
+    for (const path of [
+      'Desktop notes.md',
+      'Thumbs.db.md',
+      'a~$b.pdf',
+      'Iconic.md',
+    ]) {
+      expect(isHidden(entry(path))).toBe(false);
+    }
+  });
+
+  it('lists and counts none of them', () => {
+    const other = 'application/octet-stream';
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      entry('1-Projects/Plan.md'),
+      entry('desktop.ini', other),
+      entry('1-Projects/Thumbs.db', other),
+      entry('.DS_Store', other),
+      entry('~$Report.docx', other),
+      entry('.~lock.budget.ods#', other),
+      dir('.tmp.driveupload'),
+      entry('.tmp.driveupload/upload.pdf', 'application/pdf'),
+    ]);
+    expect(index.notes.map((f) => f.path)).toEqual(['1-Projects/Plan.md']);
+    expect(index.files).toEqual([]);
+    expect(index.folders.map((f) => f.path)).toEqual(['1-Projects']);
+    expect(index.byId.size).toBe(2);
   });
 });
 

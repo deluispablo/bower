@@ -71,7 +71,46 @@ function isFolderNoteName(name: string): boolean {
   return name.startsWith('_') && isMarkdown(name);
 }
 
+/**
+ * Operating-system, sync and Office lock files nobody should ever see (spec
+ * D18, R-SYS-4). Matched case-insensitively against every path segment, so a
+ * hit at any depth hides the file. `*` matches any run of characters; an
+ * entry ending in `/` names a folder and hides everything inside it.
+ *
+ * The runner's rclone filters (#581) mirror this list: keep the two in step.
+ */
+export const SYSTEM_FILE_PATTERNS: readonly string[] = [
+  'desktop.ini',
+  'Thumbs.db',
+  'ehthumbs.db',
+  '.DS_Store',
+  'Icon\r',
+  '~$*',
+  '.~lock.*#',
+  '.tmp.driveupload/',
+];
+
+function patternToRegExp(pattern: string): RegExp {
+  const source = pattern
+    .replace(/\/$/, '')
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${source}$`, 'i');
+}
+
+const SYSTEM_FILE_MATCHERS: readonly RegExp[] =
+  SYSTEM_FILE_PATTERNS.map(patternToRegExp);
+
+/** Whether any segment of `path` is a system file or folder (`SYSTEM_FILE_PATTERNS`). */
+function isSystemPath(path: string): boolean {
+  return path
+    .split('/')
+    .some((segment) => SYSTEM_FILE_MATCHERS.some((re) => re.test(segment)));
+}
+
 export function isHidden(file: DriveFile): boolean {
+  if (isSystemPath(file.path)) return true;
   const segments = file.path.split('/');
   if (segments.some((segment) => segment.startsWith('.'))) return true;
   const folders = isFolder(file) ? segments : segments.slice(0, -1);
