@@ -835,16 +835,16 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   if (testInfo.project.name === 'desktop') {
     await expect(tabs).toBeHidden();
 
-    // The sidebar (#326, C.9): one Expand/Collapse all tool, no sort menu,
-    // and the waiting-count bubble on Home's row, not Add's (the boards
-    // disagree with the issue's own title and C.9's text, which say Add).
+    // The sidebar (#422, #326, C.9): one Expand/Collapse all tool, no sort
+    // menu, and the waiting-count bubble on Add's row, where the pile gets
+    // filled, not Home's.
     const sidebar = page.getByRole('navigation', { name: 'Your notes' });
     await expect(sidebar.locator('[aria-label^="Sort by"]')).toHaveCount(0);
     await expect(
       sidebar.getByRole('button', { name: 'Expand all' }),
     ).toBeVisible();
-    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveText('3');
-    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveCount(0);
+    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveText('3');
+    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveCount(0);
     await shot(page, testInfo, 'desktop-sidebar');
     return;
   }
