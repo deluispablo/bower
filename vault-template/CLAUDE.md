@@ -117,8 +117,6 @@ created: YYYY-MM-DD
 > [!bower] Bower's note
 > Rent £2,150 a month, 5 weeks' deposit, available 1 November. (from the file)
 > 14 minutes by bike to your office. (from your notes: [[Offer letter]], [[Cycle to Work]])
-> 10 % under the £2,380 average for the area. (looked up)
-> You want a second bedroom for visitors. (from what you told me)
 > The listing says "newly refurbished"; the photos show the bathroom is not. (from the file) — Check
 
 ## Why
@@ -126,7 +124,7 @@ created: YYYY-MM-DD
 
 <the body of the result: a table, a summary, a translation>
 ```
-- The top box is `> [!bower] Bower's note`, at most three lines (the example shows all four origins; a real note usually needs fewer). It comes first, right after the frontmatter. No ✅, ⚠️, ❌ or other marker in it.
+- The top box is `> [!bower] Bower's note`, at most three lines. It comes first, right after the frontmatter. No ✅, ⚠️, ❌ or other marker in it.
 - A section of a long note may open with `> [!bower]- Bower on this section`, at most one per section and only when there is something to say. It follows the same line rules as the top box.
 - Every line of a callout ends with its origin in brackets, exactly one of: `(from the file)`, `(from your notes: [[A]], [[B]])` (name the notes), `(looked up)` or `(from what you told me)`.
 - A line that needs the person to look, decide or confirm ends with ` — Check` after its origin.
