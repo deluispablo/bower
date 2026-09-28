@@ -316,6 +316,10 @@ After deploying, or every so often after that: instance repo → **Actions → Z
 - **GitHub Actions minutes**: 2,000 free minutes a month on a private repo; each run is capped at 20 minutes (`timeout-minutes` in the workflows), and the weekly health check adds one run per user every Sunday — the Actions tab's usage view (or **Settings → Billing** on the account owning the instance repo) shows the month's total.
 - **Anthropic usage**: a Claude subscription's own usage limits, or an API key's billed usage in the Claude Console — whichever the instance repo's `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` draws on.
 
+### Activity: what each tidy-up did
+
+The Bower tab's Activity (#345) shows one card per tidy-up. The Worker keeps each user's last 20 finished tidy-ups (`GET /runs`; one KV key per run plus an index, see `docs/api.md`), and the app reads `log.md`'s `Filed:`, `Correction:`, `Applied rule:` and `Context:` lines for where things went. That costs two more KV writes per finished tidy-up (and one delete once a user has 20). The runner reports each item's kind (file, request, context) since this change: rerun `scripts/deploy.sh` so the instance repo gets the new `run.sh`; runs from an older runner still show, with requests and context notes told apart by their names.
+
 ### KV write budget
 
 Workers KV's free tier allows **1,000 writes a day per Cloudflare account** (every namespace and every Worker of the account together; deletes and lists have their own 1,000 a day), reset at 00:00 UTC. Past it, every KV write fails until then: sign-ins, Bower folder setup, Tidy up, run status reports and settings all answer errors, for every user. What still writes:
