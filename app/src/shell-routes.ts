@@ -37,11 +37,16 @@ export function isInnerScreen(path: string): boolean {
 
 /**
  * Which help sheet the top bar's "?" opens on `path` (#330): the tab's own
- * sheet on a tab; the folder sheet on a folder; the Notes sheet on a note
- * or a search, which are reached from Notes; Home's everywhere else.
+ * sheet on a tab; the folder sheet on a folder; the Notes sheet on a note,
+ * a file or a search, which are reached from Notes; Home's everywhere else.
  */
 export function helpScreenFor(path: string): HelpScreen {
-  if (path === '/notes' || path === '/search' || path.startsWith('/note/')) {
+  if (
+    path === '/notes' ||
+    path === '/search' ||
+    path.startsWith('/note/') ||
+    path.startsWith('/file/')
+  ) {
     return 'notes';
   }
   if (path === '/folder' || path.startsWith('/folder/')) return 'folder';

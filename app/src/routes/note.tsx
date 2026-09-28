@@ -6,7 +6,7 @@ import { AboutPanel } from '../components/about-panel.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
 import { BackLink } from '../components/back-link.js';
-import { IconMore } from '../components/icons.js';
+import { MoreButton } from '../components/more-button.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
 import { NoteMenu } from '../components/note-menu.js';
@@ -69,39 +69,6 @@ function Crumb({ crumbs, title }: CrumbProps): JSX.Element {
         </nav>
       )}
     </>
-  );
-}
-
-interface MoreButtonProps {
-  expanded: boolean;
-  onClick: () => void;
-  class?: string;
-}
-
-/** The note's one "more" menu trigger (#210): shown twice in the markup —
- * this one in the shell header's `actions` slot for the phone, another in
- * `.note-header-actions` for desktop — `layout.css` and `note-menu.css`
- * show only the one that fits the breakpoint, the same way the shell
- * already does for the crumb slot vs the breadcrumb. */
-function MoreButton({
-  expanded,
-  onClick,
-  class: className,
-}: MoreButtonProps): JSX.Element {
-  return (
-    <button
-      type="button"
-      class={
-        className === undefined ? 'icon-button' : `icon-button ${className}`
-      }
-      aria-label="More"
-      title="More"
-      aria-haspopup="menu"
-      aria-expanded={expanded}
-      onClick={onClick}
-    >
-      <IconMore />
-    </button>
   );
 }
 

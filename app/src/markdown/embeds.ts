@@ -39,7 +39,9 @@ export function extensionOf(name: string): string {
 }
 
 /** Classifies a file by extension, then by MIME type. */
-export function embedKind(file: DriveFile): EmbedKind {
+export function embedKind(
+  file: Pick<DriveFile, 'name' | 'mimeType'>,
+): EmbedKind {
   const extension = extensionOf(file.name);
   if (extension === 'md') return 'note';
   if (IMAGE_TYPE_BY_EXTENSION.has(extension)) return 'image';
