@@ -49,7 +49,6 @@ import {
   IconFile,
   IconFolder,
   IconInbox,
-  IconMenu,
   IconNote,
   IconPin,
   IconPlay,
@@ -63,7 +62,6 @@ import { useFocusTrap } from './use-focus-trap.js';
 import '../styles/help-sheet.css';
 
 const ICONS: Readonly<Record<HelpIcon, () => JSX.Element>> = {
-  menu: IconMenu,
   inbox: IconInbox,
   clock: IconClock,
   pin: IconPin,

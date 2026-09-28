@@ -19,7 +19,6 @@ export type HelpScreen = HelpTab | 'folder';
 
 /** The stroke icon in front of a row (`components/icons.tsx`). */
 export type HelpIcon =
-  | 'menu'
   | 'inbox'
   | 'clock'
   | 'pin'
@@ -59,11 +58,6 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
     lede: 'Where Bower tells you what is going on.',
     tab: 'home',
     rows: [
-      {
-        icon: 'menu',
-        lead: 'The menu, top-left',
-        text: 'opens your folders from any tab: pinned things first, then the tree.',
-      },
       {
         icon: 'inbox',
         lead: 'Inbox',
