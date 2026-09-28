@@ -97,7 +97,7 @@ curl -X POST "https://api.example.com/admin/allow" \
 
 - **Tidy up** plays a scripted run: queued for 1.5 s, then the three inbox items filed one by one, done at 8 s with an answer in `Answers/`.
 - **Health** points to two of Bower's suggestions (`Answers/Bower - Proposals.md`) in the **Suggested** group of the **Bower** tab's Rules; Accept puts the rule in `Rules.md`, Dismiss only marks it.
-- **Tell Bower** answers the three example messages with scripted replies (the rule lands in `Rules.md`) and anything else with one generic answer, on the next Tidy up.
+- **The Bower tab's box** gets scripted replies for a few example sentences (a "from now on" recipes rule lands in `Rules.md`) and one generic answer for anything else, on the next Tidy up.
 - **Add** puts files in the inbox; the next Tidy up files them under `3-Resources/`.
 - **Settings** changes are kept in memory; deleting the account and turning on notifications answer with error code `demo`; signing out only clears the device.
 
@@ -120,7 +120,7 @@ The six flows live in `app/e2e/flows.e2e.ts`, one test each, run in both project
 - **Quick switcher**: search for "Lisbon", pick the note, read it.
 - **Add**: choose a file (`app/e2e/files/`), "Add to Bower", see it added to the inbox.
 - **Tidy up**: "Tidy up" → the "Is that everything?" confirmation → "Yes, tidy up" → the scripted run from queued to "3 files processed", the inbox empty.
-- **Tell Bower**: an example chip, Send, the message in the sent list.
+- **The Bower tab**: send a sentence from the box, see it waiting under Requests (the Tell Bower screen and its conversation feed are gone, #347; an old `/tell` link still lands on the Bower tab).
 - **Settings**: the dark theme, still dark after a reload.
 
 `app/e2e/intro.e2e.ts` checks the intro's loops (#328): with reduced motion nothing in the intro moves and each animated page (1, 2, 4 to 8) is screenshotted at rest as `intro-rest-<n>.png`; with motion allowed every loop runs and changes only transform and opacity.

@@ -1,8 +1,8 @@
 /**
  * What the demo's Bower "answers" when a run meets an instruction note:
- * scripted replies for the three example chips on the Tell Bower screen
- * (`components/tell-composer.tsx`) and the question already waiting in the
- * demo inbox, one generic reply for anything else. Pure: `server.ts` writes
+ * scripted replies for a few example sentences typed in the Bower tab's
+ * box (`routes/bower.tsx`) and the question already waiting in the demo
+ * inbox, one generic reply for anything else. Pure: `server.ts` writes
  * the result into the folder.
  */
 
