@@ -229,7 +229,11 @@ describe('the Rules screen', () => {
     const cards = [...panel().querySelectorAll<HTMLElement>('.suggested-card')];
     expect(
       cards.map((c) => c.querySelector('.suggested-title')?.textContent),
-    ).toEqual(['Recipes go to Cooking', 'Runs go to the running log']);
+    ).toEqual([
+      'Recipes go to Cooking',
+      'Runs go to the running log',
+      'Bike time on every listing',
+    ]);
     const first = cards[0];
     if (first === undefined) throw new Error('No card');
     await click(buttonWith('Accept', first));

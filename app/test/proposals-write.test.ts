@@ -1,7 +1,7 @@
 /**
  * Deciding one of Bower's proposals (#199), through the same exported Drive
  * functions the app calls, over the demo's in-memory Drive (`src/demo/`):
- * hermetic, no network. Alex's demo folder has two open proposals and one
+ * hermetic, no network. Alex's demo folder has three open proposals and one
  * dismissed one in `Answers/Bower - Proposals.md` (`demo/fixture.ts`).
  */
 
@@ -69,10 +69,14 @@ async function decide(
 }
 
 describe('runProposalDecision', () => {
-  it('the demo folder has two open proposals', async () => {
+  it('the demo folder has three open proposals', async () => {
     expect(
       openProposals(await textAt(PROPOSALS_PATH)).map((p) => p.id),
-    ).toEqual(['2026-09-26-recipes', '2026-09-26-runs']);
+    ).toEqual([
+      '2026-09-26-recipes',
+      '2026-09-26-runs',
+      '2026-09-28-bike-time',
+    ]);
   });
 
   it('Accept writes the rule to Rules.md and marks the proposal accepted', async () => {
@@ -148,7 +152,7 @@ describe('runProposalDecision', () => {
     ).rejects.toBeInstanceOf(SaveError);
     // The rule went first, so it is already safe.
     expect(await textAt('Rules.md')).toContain(RULE);
-    expect(openProposals(await textAt(PROPOSALS_PATH))).toHaveLength(2);
+    expect(openProposals(await textAt(PROPOSALS_PATH))).toHaveLength(3);
 
     setDriveClient(drive);
     await decide('2026-09-26-recipes', 'accepted');
@@ -156,6 +160,6 @@ describe('runProposalDecision', () => {
     expect(rules.split(RULE)).toHaveLength(2);
     expect(
       openProposals(await textAt(PROPOSALS_PATH)).map((p) => p.id),
-    ).toEqual(['2026-09-26-runs']);
+    ).toEqual(['2026-09-26-runs', '2026-09-28-bike-time']);
   });
 });
