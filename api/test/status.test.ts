@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
 import { QUEUED_STALE_MS, RUNNING_STALE_MS } from '../src/process.js';
+import { issueRunTicket } from '../src/run-ticket.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
-import { getRun, putRun, putUser } from '../src/store.js';
+import { JOB_CHECK_AFTER_MS } from '../src/status.js';
+import { getRun, getRunTicket, putRun, putUser } from '../src/store.js';
+import type { FetchLike } from '../src/google.js';
 import type { Run, User } from '../src/types.js';
 
 /**
@@ -38,10 +41,36 @@ async function sessionCookie(): Promise<string> {
   return `${SESSION_COOKIE}=${token}`;
 }
 
-async function getStatus(cookie?: string): Promise<Response> {
+async function getStatus(
+  cookie?: string,
+  fetchImpl?: FetchLike,
+): Promise<Response> {
   const headers: Record<string, string> = {};
   if (cookie !== undefined) headers.cookie = cookie;
-  return createApp().request(`${API}/status`, { headers }, env);
+  return createApp(fetchImpl === undefined ? {} : { fetchImpl }).request(
+    `${API}/status`,
+    { headers },
+    env,
+  );
+}
+
+/** A GitHub stub answering one workflow run lookup, recording the URLs. */
+function jobStub(
+  status: number,
+  body: unknown,
+): { urls: string[]; fetchImpl: FetchLike } {
+  const urls: string[] = [];
+  const fetchImpl: FetchLike = (input) => {
+    urls.push(String(input));
+    return Promise.resolve(Response.json(body, { status }));
+  };
+  return { urls, fetchImpl };
+}
+
+/** A run the runner said was running `ago` ms ago, as GitHub run 4242. */
+function runningFor(ago: number): Run {
+  const startedAt = new Date(Date.now() - ago).toISOString();
+  return { state: 'running', requestedAt: startedAt, startedAt, runId: '4242' };
 }
 
 interface StatusResponseBody {
@@ -52,6 +81,86 @@ interface StatusResponseBody {
 beforeEach(async () => {
   const listed = await kv.list({});
   await Promise.all(listed.keys.map((entry) => kv.delete(entry.name)));
+});
+
+describe('GET /status: the job-conclusion fallback (#315)', () => {
+  it('settles a silent running run as done when its job succeeded, retiring the ticket', async () => {
+    await seedUser();
+    await putRun(kv, USER_ID, runningFor(JOB_CHECK_AFTER_MS + 1000));
+    await issueRunTicket(kv, USER_ID, 'ingest', new Date(), 60 * 60 * 1000);
+    const github = jobStub(200, { status: 'completed', conclusion: 'success' });
+
+    const response = await getStatus(await sessionCookie(), github.fetchImpl);
+
+    expect(response.status).toBe(200);
+    const body = await response.json<StatusResponseBody>();
+    expect(body.stale).toBe(false);
+    expect(body.run?.state).toBe('done');
+    expect(Date.parse(body.run?.finishedAt ?? '')).not.toBeNaN();
+    expect(github.urls).toEqual([
+      'https://api.github.com/repos/OWNER/bower-home/actions/runs/4242',
+    ]);
+    expect(await getRun(kv, USER_ID)).toEqual(body.run);
+    expect(await getRunTicket(kv, USER_ID, 'ingest')).toBeUndefined();
+  });
+
+  it('settles it as failed with the conclusion when the job did not succeed', async () => {
+    await seedUser();
+    await putRun(kv, USER_ID, runningFor(JOB_CHECK_AFTER_MS + 1000));
+    const github = jobStub(200, {
+      status: 'completed',
+      conclusion: 'timed_out',
+    });
+
+    const body = await (
+      await getStatus(await sessionCookie(), github.fetchImpl)
+    ).json<StatusResponseBody>();
+
+    expect(body.run?.state).toBe('failed');
+    expect(body.run?.error).toBe('job timed_out');
+  });
+
+  it('leaves a job still going running, and asks again only after a minute', async () => {
+    await seedUser();
+    await putRun(kv, USER_ID, runningFor(JOB_CHECK_AFTER_MS + 1000));
+    const github = jobStub(200, { status: 'in_progress', conclusion: null });
+
+    const first = await (
+      await getStatus(await sessionCookie(), github.fetchImpl)
+    ).json<StatusResponseBody>();
+    await getStatus(await sessionCookie(), github.fetchImpl);
+
+    expect(first.run?.state).toBe('running');
+    expect(github.urls).toHaveLength(1);
+    expect((await getRun(kv, USER_ID))?.jobCheckedAt).toBeDefined();
+  });
+
+  it('does not ask GitHub for a young run, or one without a GitHub run id', async () => {
+    await seedUser();
+    const github = jobStub(200, { status: 'completed', conclusion: 'success' });
+    await putRun(kv, USER_ID, runningFor(60 * 1000));
+    await getStatus(await sessionCookie(), github.fetchImpl);
+    await putRun(kv, USER_ID, {
+      ...runningFor(JOB_CHECK_AFTER_MS + 1000),
+      runId: 'c0ffee00-0000-4000-8000-000000000000',
+    });
+    await getStatus(await sessionCookie(), github.fetchImpl);
+
+    expect(github.urls).toHaveLength(0);
+  });
+
+  it('keeps the run as it is when GitHub will not say (a token without Actions access)', async () => {
+    await seedUser();
+    const run = runningFor(JOB_CHECK_AFTER_MS + 1000);
+    await putRun(kv, USER_ID, run);
+    const github = jobStub(403, { message: 'Resource not accessible' });
+
+    const body = await (
+      await getStatus(await sessionCookie(), github.fetchImpl)
+    ).json<StatusResponseBody>();
+
+    expect(body.run?.state).toBe('running');
+  });
 });
 
 describe('GET /status', () => {

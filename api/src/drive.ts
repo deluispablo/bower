@@ -51,6 +51,28 @@ export async function getAccessToken(
   const cached = await getDriveToken(kv, user.id);
   if (cached !== undefined) return cached;
 
+  const { token, expiresIn } = await mintAccessToken(env, user, fetchImpl);
+  const ttlSeconds = Math.max(
+    EXPIRY_MARGIN_SECONDS,
+    expiresIn - EXPIRY_MARGIN_SECONDS,
+  );
+  await putDriveToken(kv, user.id, token, ttlSeconds);
+  return token;
+}
+
+/**
+ * A brand-new Drive access token for `user`, minted from the refresh token
+ * and cached nowhere: what a run gets (#315), so nothing the app does with
+ * the session's own cached token (`?fresh=1` drops it) touches the token a
+ * run is using. Same failures as `getAccessToken`: `invalid_grant` flags
+ * `needsReauth` and rethrows the 401 `reauth`.
+ */
+export async function mintAccessToken(
+  env: Env,
+  user: User,
+  fetchImpl: FetchLike,
+): Promise<{ token: DriveToken; expiresIn: number }> {
+  const kv = env.BOWER_KV;
   const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
   const refreshToken = await decrypt(user.encRefreshToken, key);
   let minted: GoogleAccessToken;
@@ -75,12 +97,7 @@ export async function getAccessToken(
     accessToken: minted.accessToken,
     expiresAt: new Date(Date.now() + minted.expiresIn * 1000).toISOString(),
   };
-  const ttlSeconds = Math.max(
-    EXPIRY_MARGIN_SECONDS,
-    minted.expiresIn - EXPIRY_MARGIN_SECONDS,
-  );
-  await putDriveToken(kv, user.id, token, ttlSeconds);
-  return token;
+  return { token, expiresIn: minted.expiresIn };
 }
 
 /** `GET /drive/token` as a Hono sub-app, mounted at `/` by `index.ts`. */
