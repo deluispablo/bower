@@ -40,6 +40,7 @@ Notes:
 | `encApiKey` | `string` | optional; AES-GCM envelope (`crypto.ts`); never plaintext |
 | `needsReauth` | `boolean` | optional |
 | `tourSeenAt` | `string` | optional; ISO-8601, when the user finished or skipped the first-run tour. Set through `PATCH /settings`, returned by `GET /me`, never in `GET /admin/users` |
+| `givenName` | `string` | optional; the Google profile's first name (`profile` scope), refreshed on every sign-in (`GET /auth/callback`). Returned by `GET /me` as `name`, never in `GET /admin/users` |
 | `sessionGeneration` | `number` | optional, legacy and read only: where `POST /auth/logout-all` kept the generation before `sessiongen:<id>`. Nothing writes it any more; a stored value still counts (the higher of the two applies) |
 
 ## `Run`

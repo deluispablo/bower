@@ -55,12 +55,16 @@ const EMAIL = 'you@example.com';
 const REFRESH_TOKEN = 'test-refresh-token';
 const ACCESS_TOKEN = 'test-access-token';
 const API = 'https://api.example.com';
+/** The userinfo stub's default `given_name` (#323). */
+const GIVEN_NAME = 'Alex';
 
 interface GoogleStubOptions {
   tokenStatus?: number;
   refreshToken?: string | null;
   email?: string;
   emailVerified?: boolean;
+  /** `null` omits `given_name` from the userinfo answer entirely. */
+  givenName?: string | null;
 }
 
 interface GoogleStub {
@@ -101,11 +105,14 @@ function googleStub(options: GoogleStubOptions = {}): GoogleStub {
       if (headers.get('authorization') !== `Bearer ${ACCESS_TOKEN}`) {
         return Promise.resolve(new Response('unauthorized', { status: 401 }));
       }
+      const givenName =
+        options.givenName === undefined ? GIVEN_NAME : options.givenName;
       return Promise.resolve(
         Response.json({
           sub: 'test-subject',
           email: options.email ?? EMAIL,
           email_verified: options.emailVerified ?? true,
+          ...(givenName === null ? {} : { given_name: givenName }),
         }),
       );
     }
@@ -187,7 +194,7 @@ describe('GET /auth/login', () => {
     expect(params.get('redirect_uri')).toBe(`${env.API_ORIGIN}/auth/callback`);
     expect(params.get('response_type')).toBe('code');
     expect(params.get('scope')).toBe(
-      'openid email https://www.googleapis.com/auth/drive',
+      'openid email profile https://www.googleapis.com/auth/drive',
     );
     expect(params.get('access_type')).toBe('offline');
     expect(params.get('prompt')).toBe('consent');
@@ -252,6 +259,7 @@ describe('GET /auth/callback', () => {
     expect(user).toBeDefined();
     const stored = user as User;
     expect(stored.email).toBe(EMAIL);
+    expect(stored.givenName).toBe(GIVEN_NAME);
     expect(stored.encRefreshToken.startsWith('v1.')).toBe(true);
     expect(stored.encRefreshToken).not.toContain(REFRESH_TOKEN);
     const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
@@ -281,6 +289,7 @@ describe('GET /auth/callback', () => {
   it('updates the token of an existing user and keeps its id', async () => {
     await allow(EMAIL);
     const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    // No `givenName` yet: a user who signed up before #323 existed.
     const existing: User = {
       id: 'user-existing',
       email: EMAIL,
@@ -309,9 +318,33 @@ describe('GET /auth/callback', () => {
     expect(user.createdAt).toBe(existing.createdAt);
     expect(user.vault).toEqual(existing.vault);
     expect(user.needsReauth).toBeUndefined();
+    // #323: a returning user gets their given name on this, their next
+    // sign-in, without having had one before.
+    expect(user.givenName).toBe(GIVEN_NAME);
     expect(await decrypt(user.encRefreshToken, key)).toBe(REFRESH_TOKEN);
     const userKeys = (await allKeys()).filter((k) => k.startsWith('user:'));
     expect(userKeys).toEqual(['user:user-existing']);
+  });
+
+  it('refreshes the given name from Google on every sign-in (#323)', async () => {
+    await allow(EMAIL);
+    await putUser(kv, {
+      id: 'user-existing',
+      email: EMAIL,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      encRefreshToken: 'v1.old-iv.old-ciphertext',
+      givenName: 'Stale',
+    });
+    const app = createApp({
+      fetchImpl: googleStub({ givenName: null }).fetchImpl,
+    });
+    const { cookie, state } = await login(app);
+
+    await callback(app, `code=test-code&state=${state}`, cookie);
+
+    // Google gave no `given_name` this time: cleared, not left stale.
+    const user = (await getUser(kv, 'user-existing')) as User;
+    expect(user.givenName).toBeUndefined();
   });
 
   it('issues a new session on every sign-in, carrying the current generation', async () => {
@@ -781,6 +814,21 @@ describe('GET /me', () => {
       needsReauth: false,
       hasApiKey: false,
     });
+  });
+
+  it('returns the given name as `name`, when the user has one (#323)', async () => {
+    await putUser(kv, {
+      id: 'user-1',
+      email: EMAIL,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      encRefreshToken: 'v1.test-iv.test-ciphertext',
+      givenName: 'Alex',
+    });
+    const token = await signSession({ userId: 'user-1' }, env.SESSION_SECRET);
+
+    const response = await me(`${SESSION_COOKIE}=${token}`);
+
+    expect(await response.json()).toMatchObject({ name: 'Alex' });
   });
 
   it('answers once with the address of an account not invited, then clears it', async () => {

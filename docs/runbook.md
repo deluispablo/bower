@@ -437,7 +437,7 @@ Checks Google sign-in end to end on `wrangler dev` with a real Google OAuth clie
 
 1. Google Cloud Console → APIs & Services:
    - Library: enable the **Google Drive API**.
-   - OAuth consent screen: user type External; scopes `openid`, `email` and `https://www.googleapis.com/auth/drive`. A client left in *Testing* expires refresh tokens after 7 days (add your account as a test user if you keep it there for this check); a real instance must be *In production*.
+   - OAuth consent screen: user type External; scopes `openid`, `email`, `profile` and `https://www.googleapis.com/auth/drive`. `profile` (#323, for the app's greeting) is a basic, non-sensitive OIDC scope like `openid` and `email` — Google grants it with no extra listing or review, only `drive` needs the sensitive-scope justification. A client left in *Testing* expires refresh tokens after 7 days (add your account as a test user if you keep it there for this check); a real instance must be *In production*.
    - Credentials → Create credentials → OAuth client ID → Web application. Authorized redirect URI: `http://localhost:8787/auth/callback`. Copy the client id and secret.
 2. `cp api/.dev.vars.example api/.dev.vars` and set, in `api/.dev.vars`:
    - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from step 1.
