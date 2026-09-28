@@ -18,7 +18,7 @@ import type { Tokens, TokenizerAndRendererExtension } from 'marked';
 import type { VaultIndex } from '../vault-index.js';
 import { bowerNoteExtensions, transformBowerSections } from './bower-note.js';
 import { parseFrontmatter } from './frontmatter.js';
-import { embedKind, imagePlaceholder } from './embeds.js';
+import { driveFileIdOf, embedKind, imagePlaceholder } from './embeds.js';
 import { escapeHtml, slugify } from './html.js';
 import {
   headingFragment,
@@ -80,7 +80,8 @@ const ALLOWED_ATTR = [
  * DOMPurify separately lets `data:` through on `img`; the hook below keeps
  * only raster images of those.
  */
-const ALLOWED_URI_REGEXP = /^(?:(?:https?|mailto):|\/note\/[\w%-]+(?:#|$)|#)/i;
+const ALLOWED_URI_REGEXP =
+  /^(?:(?:https?|mailto):|\/(?:note|file)\/[\w%-]+(?:#|$)|#)/i;
 
 /**
  * `data:` URLs a note may use, and only as an `<img>` source: base64 raster
@@ -283,7 +284,21 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
       // anything unresolved fall back to marked's default (`false`).
       link({ href, tokens }: Tokens.Link): string | false {
         const target = resolveMarkdownLink(href, notePath, index);
-        if (target === undefined) return false;
+        if (target === undefined) {
+          // A Drive URL of a file that is in the Bower folder opens the
+          // file in the app, not in Drive.
+          const driveId = driveFileIdOf(href);
+          const driveFile =
+            driveId === undefined ? undefined : index.byId.get(driveId);
+          if (driveFile === undefined) return false;
+          const label = this.parser.parseInline(tokens);
+          return renderFileLink(
+            driveFile,
+            label === '' ? escapeHtml(driveFile.name) : label,
+            false,
+            '',
+          );
+        }
         const { file } = target;
         const inner = this.parser.parseInline(tokens);
         if (inner === '' && embedKind(file) === 'image') {
@@ -327,11 +342,11 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
 }
 
 /**
- * `body`, without its leading heading when that heading's text equals
- * `title` (issue #307: the note header already shows the title once, so a
- * `# <title>` first line would otherwise repeat it as an H1 inside the
- * body). Only the note's very first block counts — a heading anywhere else,
- * even one that happens to match, stays. `undefined` `title` never drops
+ * `body`, without its first heading when that heading's text equals `title`
+ * (issue #307: the note header already shows the title once, so a
+ * `# <title>` would otherwise repeat it as an H1 inside the body; #609: also
+ * after a leading paragraph or Bower's note box). Only the first heading
+ * counts — a later one, even one that happens to match, stays. `undefined` `title` never drops
  * anything.
  */
 function dropLeadingTitleHeading(
@@ -339,11 +354,27 @@ function dropLeadingTitleHeading(
   title: string | undefined,
 ): string {
   if (title === undefined) return body;
-  const match = /^\s*(#{1,6})[ \t]+([^\n]*?)[ \t]*#*[ \t]*(?:\n|$)/.exec(body);
-  if (match === null) return body;
-  const headingText = (match[2] ?? '').replace(/[*_`]+/g, '').trim();
-  if (headingText.toLowerCase() !== title.trim().toLowerCase()) return body;
-  return body.slice(match[0].length);
+  const wanted = title.trim().toLowerCase();
+  const lines = body.split('\n');
+  let fence: string | undefined;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+    const fenceMark = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fenceMark !== undefined) {
+      if (fence === undefined) fence = fenceMark.charAt(0);
+      else if (fenceMark.charAt(0) === fence) fence = undefined;
+      continue;
+    }
+    if (fence !== undefined) continue;
+    const match = /^ {0,3}#{1,6}[ \t]+([^\n]*?)[ \t]*#*[ \t]*$/.exec(line);
+    if (match === null) continue;
+    // Only the note's first heading counts; a later match stays.
+    const headingText = (match[1] ?? '').replace(/[*_`]+/g, '').trim();
+    if (headingText.toLowerCase() !== wanted) return body;
+    lines.splice(i, 1);
+    return lines.join('\n');
+  }
+  return body;
 }
 
 const plainMarked = new Marked({ gfm: true, breaks: true });

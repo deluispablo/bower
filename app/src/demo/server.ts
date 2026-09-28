@@ -244,7 +244,15 @@ export class DemoServer {
         apply: () => {
           this.vault.move(path, destination);
           run.processed?.push(path);
-          run.items?.push({ path, kind });
+          // Where the item went, and its old name when the run renamed it
+          // (report v2, #583): what makes "New" appear (`seen.ts`).
+          const newName = destination.slice(destination.lastIndexOf('/') + 1);
+          run.items?.push({
+            path,
+            kind,
+            to: destination,
+            ...(newName !== name && { renamedFrom: name }),
+          });
         },
       });
     }
