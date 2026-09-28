@@ -1172,5 +1172,27 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(menu.getByRole('menuitem', { name: /Pin to Home/ })).toHaveCount(
     0,
   );
+  // The one More menu (#352): the board's header, then Ask Bower first.
+  await expect(menu).toContainText('PDF · 1-Projects / Kitchen Refresh');
+  await expect(menu.getByRole('menuitem').first()).toContainText(
+    'Ask Bower about this',
+  );
   await shot(page, testInfo, 'file-pdf-menu');
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+
+  // The same menu on a folder: Pin to Home, no note-only rows.
+  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await visible(page.getByRole('button', { name: 'More' })).click();
+  const folderMenu = page.getByRole('menu', { name: 'Folder actions' });
+  await expect(
+    folderMenu.getByRole('menuitem', { name: /Pin to Home/ }),
+  ).toBeVisible();
+  await expect(
+    folderMenu.getByRole('menuitem', { name: /Ask Bower about this/ }),
+  ).toHaveAttribute('href', /^\/bower\?text=Kitchen%20Refresh/);
+  await expect(
+    folderMenu.getByRole('menuitem', { name: /Edit the text/ }),
+  ).toHaveCount(0);
+  await shot(page, testInfo, 'folder-more-menu');
 });
