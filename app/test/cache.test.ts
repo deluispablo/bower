@@ -22,9 +22,23 @@ vi.mock('idb-keyval', () => ({
   }),
 }));
 
+const thumbnailLinkOf = vi.fn<(id: string) => Promise<string | null>>();
+vi.mock('../src/drive.js', () => ({
+  thumbnailLinkOf: (id: string) => thumbnailLinkOf(id),
+}));
+
 const {
   BLOB_CACHE_CAP_BYTES,
+  STORE_NAMES,
   clearAll,
+  loadSeen,
+  loadThumbnail,
+  loadTreeState,
+  loadViewSettings,
+  saveSeen,
+  saveTreeState,
+  saveViewSettings,
+  upgradeDb,
   evictPlan,
   invalidateIndex,
   loadBlob,
@@ -191,5 +205,122 @@ describe('clearAll', () => {
     expect(await loadIndex()).toBeUndefined();
     expect(await loadNote('n1')).toBeUndefined();
     expect(await loadBlob('b1')).toBeUndefined();
+  });
+});
+
+describe('upgradeDb', () => {
+  function fakeDb(existing: string[]): {
+    names: Set<string>;
+    created: string[];
+    db: Parameters<typeof upgradeDb>[0];
+  } {
+    const names = new Set(existing);
+    const created: string[] = [];
+    return {
+      names,
+      created,
+      db: {
+        objectStoreNames: { contains: (name) => names.has(name) },
+        createObjectStore: (name) => {
+          names.add(name);
+          created.push(name);
+        },
+      },
+    };
+  }
+
+  it('adds the new stores to a version 1 database and keeps keyval', () => {
+    const { db, names, created } = fakeDb(['keyval']);
+
+    expect(upgradeDb(db)).toEqual(created);
+
+    expect(created).not.toContain('keyval');
+    for (const name of STORE_NAMES) expect(names.has(name)).toBe(true);
+    expect(created).toEqual([
+      'seen',
+      'viewSettings',
+      'treeState',
+      'searchIndex',
+      'noteMeta',
+    ]);
+  });
+
+  it('builds every store in a fresh database and is idempotent', () => {
+    const { db, created } = fakeDb([]);
+    upgradeDb(db);
+    expect(created).toHaveLength(STORE_NAMES.length);
+    expect(upgradeDb(db)).toEqual([]);
+  });
+});
+
+describe('per-device stores', () => {
+  it('round trips seen ids, view settings and tree state', async () => {
+    expect(await loadSeen()).toEqual([]);
+    await saveSeen(['a', 'b']);
+    expect(await loadSeen()).toEqual(['a', 'b']);
+
+    const settings = {
+      sort: 'modified',
+      kindFilter: 'invoice',
+      originFilter: null,
+      layout: 'grid',
+    } as const;
+    await saveViewSettings('Projects/Home', settings);
+    expect(await loadViewSettings('Projects/Home')).toEqual(settings);
+
+    const tree = { expanded: ['Projects'], scroll: 40 };
+    await saveTreeState(tree);
+    expect(await loadTreeState()).toEqual(tree);
+  });
+});
+
+describe('loadThumbnail', () => {
+  const link = 'https://lh3.googleusercontent.com/abc=s220';
+  const fresh = 'https://lh3.googleusercontent.com/fresh=s220';
+
+  beforeEach(() => {
+    thumbnailLinkOf.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('refetches an expired link once and serves the cached picture after', async () => {
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(
+        url.includes('/abc')
+          ? new Response('', { status: 403 })
+          : new Response('pixels', { status: 200 }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    thumbnailLinkOf.mockResolvedValue(fresh);
+
+    const first = await loadThumbnail({ id: 'p1', thumbnailLink: link });
+    const second = await loadThumbnail({ id: 'p1', thumbnailLink: link });
+
+    expect(await first?.text()).toBe('pixels');
+    expect(await second?.text()).toBe('pixels');
+    expect(thumbnailLinkOf).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not refetch the link when the first one works', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response('pixels'))),
+    );
+
+    await loadThumbnail({ id: 'p2', thumbnailLink: link });
+
+    expect(thumbnailLinkOf).not.toHaveBeenCalled();
+  });
+
+  it('gives undefined when Drive has no thumbnail', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    thumbnailLinkOf.mockResolvedValue(null);
+
+    expect(await loadThumbnail({ id: 'p3' })).toBeUndefined();
   });
 });
