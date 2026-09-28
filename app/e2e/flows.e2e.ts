@@ -600,7 +600,9 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
     .getByRole('listitem')
     .filter({ hasText: 'How much did I spend on the kitchen this year?' });
   await expect(row).toBeVisible();
-  await expect(row.getByText('Waiting', { exact: true })).toBeVisible();
+  await expect(
+    row.getByText('Waiting · question', { exact: true }),
+  ).toBeVisible();
   await row.scrollIntoViewIfNeeded();
   await shot(page, testInfo, 'tell');
 
@@ -649,6 +651,34 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
   await sheet.getByRole('button', { name: /Pause it/ }).click();
   await expect(sheet).toBeHidden();
   await expect(rule.getByText('Paused', { exact: true })).toBeVisible();
+});
+
+test('a "from now on" sentence is kept at once as a rule, no run (#343)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  const box = page.getByRole('textbox', {
+    name: 'Tell Bower what to do, or ask it something',
+  });
+  await box.fill('From now on, receipts go under Finance');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(box).toHaveValue('');
+  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  const row = requests
+    .getByRole('listitem')
+    .filter({ hasText: 'From now on, receipts go under Finance' });
+  await expect(row.getByText('Rule kept', { exact: true })).toBeVisible();
+  await shot(page, testInfo, 'bower-rule-kept');
+  await expect(
+    page.getByRole('dialog', { name: 'Tidying up status' }),
+  ).toHaveCount(0);
+  await row.getByRole('button', { name: 'In your rules' }).click();
+  await expect(page.getByRole('tab', { name: 'Rules' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });
 
 test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({

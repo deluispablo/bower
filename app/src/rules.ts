@@ -239,6 +239,159 @@ export function ruleBullet(text: string, on: string): string {
   });
 }
 
+/** "From now on", "Always", "Never", "Every time" at the start of a rule
+ * sentence, with the comma or colon after it. */
+const RULE_LEAD = /^\s*(?:from now on|always|never|every time)\b[\s,:;.-]*/i;
+
+/** A word of a sentence: letters or digits, with inner `'` or `-`. */
+const WORD = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
+
+/** Words that are never a topic: the small words and the verbs a rule is
+ * made of ("file", "put", "keep", "tag"…). */
+const SMALL_WORDS: ReadonlySet<string> = new Set(
+  (
+    'a an the i me my mine we us our you your it its they them their this ' +
+    "that these those all any every each some no not dont don't don’t do " +
+    'does did is are be been am was were will would should can could must ' +
+    'may might to of in on at by for with from into onto under over out up ' +
+    'down about as and or but if when whenever where while then so than too ' +
+    'also only just still again ever anything something everything nothing ' +
+    'thing things one ones new old file files filed put puts move moves ' +
+    'moved go goes keep keeps send sends save saves tag tags tagged name ' +
+    'names named rename archive add adds added make makes use uses delete ' +
+    'remove sort store mark leave treat ask turn get gets let lets there ' +
+    'here what which who how time times now always never'
+  ).split(' '),
+);
+
+function isSmall(word: string): boolean {
+  return SMALL_WORDS.has(word.toLowerCase()) || /^\d+$/.test(word);
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Where `topic` (or its plural, or its singular) first appears in
+ * `sentence` as whole words; -1 when it does not. */
+function topicAt(sentence: string, topic: string): number {
+  const base = oneLine(topic).toLowerCase();
+  if (base === '') return -1;
+  const forms = new Set([base, `${base}s`, base.replace(/s$/, '')]);
+  let best = -1;
+  for (const form of forms) {
+    if (form === '') continue;
+    const match = new RegExp(
+      `(?<![\\p{L}\\p{N}])${escapeRegExp(form)}(?![\\p{L}\\p{N}])`,
+      'iu',
+    ).exec(sentence);
+    if (match !== null && (best === -1 || match.index < best)) {
+      best = match.index;
+    }
+  }
+  return best;
+}
+
+/**
+ * The topic a rule sentence goes under (#343, handover D.2), `topics` being
+ * the ones `Rules.md` already has: the topic the sentence names first
+ * (plural or singular, so "receipts" finds "Receipt"); else a new topic
+ * from its first noun, a capitalised word first ("…under Finance" →
+ * `Finance`), then the first word that is not a small word or a verb
+ * ("receipts go…" → `Receipts`); else `UNGROUPED_TOPIC`. The lead ("From
+ * now on", "Always", "Never", "Every time") never counts.
+ */
+export function guessTopic(
+  sentence: string,
+  topics: readonly string[],
+): string {
+  const rest = oneLine(sentence).replace(RULE_LEAD, '');
+  let named: string | null = null;
+  let namedAt = -1;
+  for (const topic of topics) {
+    if (topic.toLowerCase() === UNGROUPED_TOPIC.toLowerCase()) continue;
+    const at = topicAt(rest, topic);
+    if (at !== -1 && (namedAt === -1 || at < namedAt)) {
+      named = topic;
+      namedAt = at;
+    }
+  }
+  if (named !== null) return named;
+
+  const words = (rest.match(WORD) ?? []).filter((word) => !isSmall(word));
+  const capitalised = words.find((word) => /^\p{Lu}/u.test(word));
+  const noun = capitalised ?? words[0];
+  if (noun === undefined) return UNGROUPED_TOPIC;
+  return `${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
+}
+
+/**
+ * `md` with `text` appended as a rule under `topic` (#343, a rule kept at
+ * once), dated `on`: after the last line of that topic's section, or, for
+ * `UNGROUPED_TOPIC` with rules before the first heading, after the last of
+ * those; a topic the file does not have gets its `## ` heading at the end.
+ * Every other line stays as it was. Returns `md` unchanged when the same
+ * rule is already there (a retry adds nothing twice);
+ * `RuleError('empty')` for no text.
+ */
+export function appendRule(
+  md: string,
+  text: string,
+  topic: string,
+  on: string,
+): string {
+  if (oneLine(text) === '') {
+    throw new RuleError('empty', 'A rule needs some words.');
+  }
+  const bullet = ruleBullet(text, on);
+  const wanted = allRules(parseRules(bullet))[0]?.text ?? oneLine(text);
+  const parsed = parseRules(md);
+  if (allRules(parsed).some((rule) => rule.text === wanted)) return md;
+
+  const lines = [...parsed.lines];
+  const name = oneLine(topic) || UNGROUPED_TOPIC;
+  const key = name.toLowerCase();
+  const headings: { line: number; key: string }[] = [];
+  let fenced = false;
+  for (let i = bodyStart(lines); i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    if (FENCE.test(line)) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+    const heading = HEADING.exec(line);
+    if (heading !== null) {
+      headings.push({ line: i, key: (heading[1] ?? '').toLowerCase() });
+    }
+  }
+
+  const own = headings.filter((h) => h.key === key).at(-1);
+  if (own !== undefined) {
+    const next = headings.find((h) => h.line > own.line)?.line ?? lines.length;
+    let at = own.line + 1;
+    for (let i = own.line + 1; i < next; i++) {
+      if ((lines[i] ?? '').trim() !== '') at = i + 1;
+    }
+    lines.splice(at, 0, bullet);
+    return lines.join(parsed.eol);
+  }
+
+  const firstHeading = headings[0]?.line ?? lines.length;
+  const lastUngrouped = allRules(parsed)
+    .filter((rule) => rule.line < firstHeading)
+    .at(-1);
+  if (key === UNGROUPED_TOPIC.toLowerCase() && lastUngrouped !== undefined) {
+    lines.splice(lastUngrouped.line + 1, 0, bullet);
+    return lines.join(parsed.eol);
+  }
+
+  while (lines.length > 0 && (lines.at(-1) ?? '').trim() === '') lines.pop();
+  if (lines.length > 0) lines.push('');
+  lines.push(`## ${name}`, bullet, '');
+  return lines.join(parsed.eol);
+}
+
 /**
  * `parsed` written back: every rule's line from its fields
  * (`formatRule`), every other line as it was, the file's own line ending.
