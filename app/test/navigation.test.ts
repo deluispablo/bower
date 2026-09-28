@@ -337,6 +337,37 @@ describe('folderCounts', () => {
     ]);
     expect(folderCounts(index).get('0-Inbox')).toBe(1);
   });
+
+  // #425: the folder menu, the Notes tree and the desktop sidebar count
+  // files and notes together, the same total the folder screen itself
+  // lists ("n files · n notes") — Pinned's own "n notes" (`home.tsx`,
+  // `pinned-section.tsx`) keeps the notes-only default above.
+  describe('with includeFiles', () => {
+    const index = buildVaultIndex([
+      dir('0-Inbox'),
+      entry('0-Inbox/Receipt.pdf', 'application/pdf'),
+      entry('0-Inbox/A quick note.md'),
+      dir('1-Projects'),
+      dir('1-Projects/Kitchen Refresh'),
+      entry('1-Projects/Kitchen Refresh/Kitchen Refresh.md'),
+      entry('1-Projects/Kitchen Refresh/Paint colours.md'),
+      entry('1-Projects/Kitchen Refresh/Quote.pdf', 'application/pdf'),
+      entry('1-Projects/Kitchen Refresh/Patch.png', 'image/png'),
+    ]);
+
+    it('adds files to the notes-only total', () => {
+      const counts = folderCounts(index, true);
+      expect(counts.get('0-Inbox')).toBe(2);
+      expect(counts.get('1-Projects')).toBe(4);
+      expect(counts.get('1-Projects/Kitchen Refresh')).toBe(4);
+    });
+
+    it('leaves the default (no second argument) notes-only', () => {
+      const counts = folderCounts(index);
+      expect(counts.get('0-Inbox')).toBe(1);
+      expect(counts.get('1-Projects')).toBe(2);
+    });
+  });
 });
 
 describe('folderContents', () => {
@@ -592,6 +623,33 @@ describe('folderEmptyState', () => {
     expect(folderEmptyState(contents!)).toEqual({
       empty: false,
       elsewhere: { count: 1, subfolderName: 'Flat hunt' },
+    });
+  });
+
+  // #424: "9 notes in Half Marathon" attributed the whole subtree total to
+  // the first subfolder that held any, when the notes were actually spread
+  // across three. No single subfolder holds every one, so none is named.
+  it('names no subfolder when the total is spread across more than one', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Half Marathon'),
+      entry('1-Projects/Half Marathon/Half Marathon.md'),
+      entry('1-Projects/Half Marathon/Training plan.md'),
+      dir('1-Projects/Kitchen Refresh'),
+      entry('1-Projects/Kitchen Refresh/Budget.md'),
+      entry('1-Projects/Kitchen Refresh/Tiles.md'),
+      entry('1-Projects/Kitchen Refresh/Paint.md'),
+      dir('1-Projects/Lisbon Trip'),
+      entry('1-Projects/Lisbon Trip/Itinerary.md'),
+      entry('1-Projects/Lisbon Trip/Flights.md'),
+      entry('1-Projects/Lisbon Trip/Hotel.md'),
+      entry('1-Projects/Lisbon Trip/Packing.md'),
+    ]);
+    const contents = folderContents(index, '1-Projects');
+    expect(contents?.notes).toEqual([]);
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: { count: 9, subfolderName: null },
     });
   });
 });

@@ -27,17 +27,23 @@ export interface DispatchRunInput {
    * gets for the Worker, good for this vault and this run only.
    */
   ticket: string;
+  /**
+   * What an ingest covers (`POST /process`'s `scope`): `all` for a tidy-up,
+   * `instructions` for the instruction notes only. Sent as
+   * `client_payload.scope` when set; a lint has none.
+   */
+  scope?: 'all' | 'instructions';
 }
 
 /**
  * Sends `repository_dispatch` with `event_type` and
- * `client_payload: { vault_id, ticket }` to `repo`. GitHub answers 204 when
- * the event is accepted; anything else (or a network failure) is a 502
- * `dispatch`.
+ * `client_payload: { vault_id, ticket }` (plus `scope` when given) to
+ * `repo`. GitHub answers 204 when the event is accepted; anything else (or
+ * a network failure) is a 502 `dispatch`.
  */
 async function dispatchRun(
   eventType: string,
-  { repo, token, vaultId, ticket }: DispatchRunInput,
+  { repo, token, vaultId, ticket, scope }: DispatchRunInput,
   fetchImpl: FetchLike,
 ): Promise<void> {
   let response: Response;
@@ -53,7 +59,11 @@ async function dispatchRun(
       },
       body: JSON.stringify({
         event_type: eventType,
-        client_payload: { vault_id: vaultId, ticket },
+        client_payload: {
+          vault_id: vaultId,
+          ticket,
+          ...(scope === undefined ? {} : { scope }),
+        },
       }),
     });
   } catch (err) {

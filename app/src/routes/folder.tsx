@@ -327,7 +327,7 @@ function FolderBody({
                 emptyState.elsewhere.count,
                 contents.noteCount > 0 ? 'note' : 'file',
               )}{' '}
-              in {emptyState.elsewhere.subfolderName}
+              in {emptyState.elsewhere.subfolderName ?? 'its folders'}
             </p>
           ) : (
             <div class="folder-empty">

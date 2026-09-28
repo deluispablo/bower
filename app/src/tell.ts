@@ -5,11 +5,14 @@
  * fetch: unit-tested
  * directly. `instructionFileName` and `instructionNote` build the
  * `Bower - …md` instruction note the Instructions workflow reads
- * (`vault-template/CLAUDE.md`); the `sentItem` helpers keep a small local
- * list of what this device sent, in `localStorage`, which the Bower tab's
- * Requests reads for the words as written (`bower-tab.ts`). The Tell Bower
- * screen and its conversation feed are gone (#347).
+ * (`vault-template/CLAUDE.md`); `instructionBody` and
+ * `rewriteInstruction` read and rewrite one for the Bower tab's Requests
+ * (#344). The Tell Bower screen and its conversation feed are gone
+ * (#347), and so is the list of sent sentences this device kept (#344).
  */
+
+/** A note's frontmatter block, with the line break after it. */
+const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---[^\S\r\n]*(?:\r?\n|$)/;
 
 /** Characters not allowed in a Drive/Windows file name. */
 const ILLEGAL_CHARS = /[\\/:*?"<>|]/g;
@@ -71,62 +74,41 @@ export function instructionNote(
   return `---\ntags: [instruction]\ndate: ${now.toISOString()}\nvia: app\n${kindLine}---\n\n${text.trim()}\n`;
 }
 
-// --- Sent list ---------------------------------------------------------
-
-export interface SentItem {
-  name: string;
-  text: string;
-  /** ISO-8601. */
-  sentAt: string;
+/**
+ * The words of an instruction note: its content without the frontmatter,
+ * trimmed. For a context note (#335) that includes its "Applies to" list.
+ */
+export function instructionBody(note: string): string {
+  return note.replace(FRONTMATTER, '').trim();
 }
 
+/** Whether the note says it is Add's context note (`kind: context`). */
+export function isContextNote(note: string): boolean {
+  const head = FRONTMATTER.exec(note)?.[0] ?? '';
+  return /^kind:\s*context\s*$/m.test(head);
+}
+
+/**
+ * The note with its words replaced by `text` (a request's Edit, #344): the
+ * frontmatter stays exactly as written, so the note keeps its date, `via`
+ * and `kind`.
+ */
+export function rewriteInstruction(note: string, text: string): string {
+  const head = FRONTMATTER.exec(note)?.[0];
+  if (head === undefined) return `${text.trim()}\n`;
+  return `${head.replace(/\s+$/, '')}\n\n${text.trim()}\n`;
+}
+
+// --- The old sent list -------------------------------------------------
+
+/** Where older versions kept a list of what this device sent. */
 const SENT_KEY = 'bower.tell.sent';
-const MAX_SENT = 50;
-
-function isSentItem(value: unknown): value is SentItem {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as Partial<SentItem>).name === 'string' &&
-    typeof (value as Partial<SentItem>).text === 'string' &&
-    typeof (value as Partial<SentItem>).sentAt === 'string'
-  );
-}
 
 /**
- * The locally kept 'sent' list, newest first. Never throws: a missing key,
- * invalid JSON or an unavailable `localStorage` all resolve to `[]`.
- */
-export function loadSent(): SentItem[] {
-  try {
-    const raw = localStorage.getItem(SENT_KEY);
-    if (raw === null) return [];
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isSentItem) : [];
-  } catch {
-    // Storage blocked or the value is corrupt: treat it as an empty list.
-    return [];
-  }
-}
-
-/**
- * Adds `item` to the front of the 'sent' list, caps it at 50 entries, and
- * persists it. Returns the updated list even if persisting fails (a full or
- * unavailable `localStorage`); this function never throws.
- */
-export function addSent(item: SentItem): SentItem[] {
-  const list = [item, ...loadSent()].slice(0, MAX_SENT);
-  try {
-    localStorage.setItem(SENT_KEY, JSON.stringify(list));
-  } catch {
-    // Best effort: the caller still gets the up-to-date list to render.
-  }
-  return list;
-}
-
-/**
- * Drops the local 'sent' history. Per-user, so `forget.ts` calls this on
- * sign-out and account deletion. Never throws.
+ * Drops the list of sent sentences older versions kept on the device
+ * (Requests now reads everything from the Bower folder, #344). Per-user,
+ * so `forget.ts` calls this on sign-out and account deletion. Never
+ * throws.
  */
 export function clearSent(): void {
   try {

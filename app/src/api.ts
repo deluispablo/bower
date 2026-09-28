@@ -183,6 +183,13 @@ export interface Run {
   runId?: string;
 }
 
+/**
+ * What a run covers (`POST /process`'s `scope`): `all` for a tidy-up,
+ * `instructions` for the instruction notes only (a request's "Do it now",
+ * #344).
+ */
+export type RunScope = 'all' | 'instructions';
+
 export interface StatusResponse {
   run: Run | null;
   stale: boolean;
@@ -208,7 +215,7 @@ export interface WorkerClient {
   logoutAll(): Promise<void>;
   updateSettings(input: UpdateSettingsInput): Promise<UpdateSettingsResult>;
   deleteAccount(): Promise<void>;
-  startProcess(): Promise<{ run: Run }>;
+  startProcess(scope?: RunScope): Promise<{ run: Run }>;
   getStatus(): Promise<StatusResponse>;
   getPushPublicKey(): Promise<PushPublicKeyResponse>;
   subscribePush(subscription: PushSubscriptionJSON): Promise<void>;
@@ -243,7 +250,11 @@ export const httpWorkerClient: WorkerClient = {
   updateSettings: (input) =>
     apiFetch<UpdateSettingsResult>('/settings', sendJson('PATCH', input)),
   deleteAccount: () => apiFetch<void>('/me', { method: 'DELETE' }),
-  startProcess: () => apiFetch<{ run: Run }>('/process', { method: 'POST' }),
+  startProcess: (scope) =>
+    apiFetch<{ run: Run }>(
+      '/process',
+      scope === undefined ? { method: 'POST' } : sendJson('POST', { scope }),
+    ),
   getStatus: () => apiFetch<StatusResponse>('/status'),
   getPushPublicKey: () => apiFetch<PushPublicKeyResponse>('/push/public-key'),
   subscribePush: (subscription) => {
@@ -360,11 +371,12 @@ export function deleteAccount(): Promise<void> {
 
 /**
  * `POST /process`: starts an agent run for the signed-in user's vault, or
- * returns the run already in progress. 429 (`ApiError` code `quota`) means
- * today's runs are used up.
+ * returns the run already in progress. `scope` `instructions` asks for the
+ * instruction notes only; without it the run is a whole tidy-up. 429
+ * (`ApiError` code `quota`) means today's runs are used up.
  */
-export function startProcess(): Promise<{ run: Run }> {
-  return withWorker((c) => c.startProcess());
+export function startProcess(scope?: RunScope): Promise<{ run: Run }> {
+  return withWorker((c) => c.startProcess(scope));
 }
 
 /**
