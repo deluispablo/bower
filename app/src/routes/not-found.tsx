@@ -10,7 +10,7 @@ import '../styles/auth.css';
 
 export function NotFound() {
   return (
-    <section class="auth-screen">
+    <section class="auth-screen page-column">
       <div class="auth-bird">
         <Bird state="confused" size={120} />
       </div>

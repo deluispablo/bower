@@ -1582,6 +1582,55 @@ test('Home, a note, Add, the Bower tab and Settings at 1024, 1280, 1440 and 1920
   }
 });
 
+test('Settings, Health, Ideas, Terms, Privacy and Not found share one centred column (#360)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The shared column is checked on desktop, where it is narrower than the content.',
+  );
+  await openHome(page);
+  const pages: [string, string, RegExp][] = [
+    ['settings', '/settings', /^Settings$/],
+    ['health', '/health', /Health check/],
+    ['ideas', '/ideas', /Ideas/],
+    ['terms', '/terms', /Terms/],
+    ['privacy', '/privacy', /Privacy/],
+    ['not-found', '/note/does-not-exist', /can.t find that note/],
+  ];
+  const widths: number[] = [];
+  for (const [name, path, heading] of pages) {
+    await page.goto(path);
+    await expect(
+      page.getByRole('heading', { name: heading, level: 1 }).first(),
+    ).toBeVisible();
+    const column = page.locator('.page-column');
+    await expect(column).toHaveCount(1);
+    // Measured against the box it sits in: the shell's content column,
+    // or the bare page for Terms and Privacy when they open outside it.
+    const [box, content] = await Promise.all([
+      column.boundingBox(),
+      column.evaluate((el) => {
+        const parent = el.parentElement ?? el;
+        const r = parent.getBoundingClientRect();
+        const style = getComputedStyle(parent);
+        return {
+          left: r.left + parseFloat(style.paddingLeft),
+          right: r.right - parseFloat(style.paddingRight),
+        };
+      }),
+    ]);
+    widths.push(box?.width ?? NaN);
+    // Centred in the content column: the same margin on both sides.
+    const left = (box?.x ?? NaN) - content.left;
+    const right = content.right - (box?.x ?? NaN) - (box?.width ?? NaN);
+    expect(Math.abs(left - right)).toBeLessThanOrEqual(1);
+    await shot(page, testInfo, `single-column-${name}`);
+  }
+  // One width for all six: the Settings column, 640 px on the board.
+  expect(new Set(widths.map((w) => Math.round(w)))).toEqual(new Set([640]));
+});
+
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
   page,
 }, testInfo) => {

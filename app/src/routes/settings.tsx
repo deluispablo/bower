@@ -608,7 +608,7 @@ export function Settings() {
   const version = import.meta.env.VITE_APP_VERSION ?? __APP_VERSION__;
 
   return (
-    <section class="settings">
+    <section class="settings page-column">
       <h1 class="screen-title">Settings</h1>
 
       <div class="settings-section settings-account">

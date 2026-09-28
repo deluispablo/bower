@@ -903,6 +903,17 @@ button.page-bare-back {
   text-align: center;
 }
 
+/*
+ * The single-column pages (#360): Settings, Health, Ideas, Terms, Privacy
+ * and Not found share one centred column, the Settings column of the
+ * Desktop-Settings board. After `.auth-screen` so it wins for Not found.
+ */
+.page-column {
+  width: 100%;
+  max-width: var(--width-column);
+  margin-inline: auto;
+}
+
 .auth-error {
   color: var(--color-danger);
 }

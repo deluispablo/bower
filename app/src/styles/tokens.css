@@ -115,6 +115,9 @@
   --space-12: 3rem; /* 48px */
   --space-16: 4rem; /* 64px */
 
+  /* The single-column pages' width (#360, Desktop-Settings board). */
+  --width-column: 640px;
+
   /* Shape */
   --radius-sm: 6px;
   --radius-md: 10px;
