@@ -1,36 +1,38 @@
 /*
  * Add screen (spec C.6; `docs/design/v3/boards/Phone-Add.dc.html`,
  * `Desktop-Add.dc.html`): phone-first, a list of doors and no drop
- * square. `.add-doors` and `.add-share-line` are phone only;
+ * square. `.add-doors` is phone only;
  * `.add-dropzone` (the bird peeking over its top edge) and its own
  * Choose files/From your Drive pair take over from 900 px, the same
  * breakpoint `layout.css` uses for the sidebar. Both live in the DOM at
  * once, so the queue, the link field and the file inputs never need a
- * second copy. The amber hint ("3 things waiting", #336) is
- * `.add-hint` below. Motion is
+ * second copy. The one Tidy up button is `.add-tidy` below. Motion is
  * transform/opacity only, on the motion tokens, and turned off under
  * `prefers-reduced-motion` below.
  */
 
 .add-doors {
   display: flex;
-  flex-direction: column;
   gap: var(--space-2);
-  margin: var(--space-6) 0 var(--space-3);
+  margin: var(--space-4) 0 var(--space-3);
 }
 
+/* One row of three (R-ADD-1): 48 px tall, the icon beside its one word. */
 .add-door {
   display: flex;
+  flex: 1;
   align-items: center;
-  gap: var(--space-3);
-  min-height: 58px;
-  padding: 0 var(--space-3);
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 var(--space-2);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   color: inherit;
   font: inherit;
-  text-align: left;
+  font-weight: var(--weight-medium);
   cursor: pointer;
 }
 
@@ -39,46 +41,13 @@
   cursor: not-allowed;
 }
 
-.add-door-icon {
-  display: flex;
+.add-door svg {
   flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
   color: var(--color-text-muted);
 }
 
-.add-door-text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.add-door-text b {
-  font-weight: var(--weight-medium);
-}
-
-.add-door-text span {
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.add-door > svg:last-child {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  color: var(--color-text-muted);
-}
-
-.add-share-line {
-  margin: var(--space-3) 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  text-align: center;
+.add-doors-note {
+  margin-top: calc(-1 * var(--space-1));
 }
 
 .add-dropzone {
@@ -100,7 +69,7 @@
 
 @media (min-width: 900px) {
   .add-doors,
-  .add-share-line {
+  .add-doors-note {
     display: none;
   }
 
@@ -194,41 +163,6 @@
   margin: 0;
   color: var(--color-danger);
   font-size: var(--text-sm);
-}
-
-/* The hint (#336, Phone-Add board): an amber-tinted card, the inbox icon
- * on the left, the sentence and the Tidy up button under it. */
-.add-hint {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin: var(--space-4) 0;
-  padding: 10px 12px;
-  background: rgb(240 182 79 / 0.08); /* --bower-amber tint */
-  border: 1px solid rgb(240 182 79 / 0.35);
-  border-radius: 12px;
-  color: var(--color-text);
-  font-size: var(--text-sm);
-  line-height: 1.45;
-}
-
-.add-hint-icon {
-  display: flex;
-  flex-shrink: 0;
-  margin-top: 1px;
-  color: var(--color-accent);
-}
-
-.add-hint-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.add-hint-body p {
-  margin: 0;
 }
 
 /* "What is this?" (#335, Phone-Add board): one optional box under the
@@ -349,6 +283,53 @@
   height: 100%;
   background: var(--color-brand);
   transition: width var(--motion-base) var(--ease-out);
+}
+
+.add-queue-sources {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.add-sources-desktop {
+  display: none;
+}
+
+.add-queue-kept {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The one Tidy up button (R-ADD-5): pinned above the bottom tabs on phone,
+ * at the foot of the column on desktop. */
+.add-tidy {
+  position: sticky;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  z-index: 1;
+  margin: var(--space-3) 0;
+  padding: var(--space-2) 0;
+  background: var(--color-bg);
+}
+
+.add-tidy-button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 0;
+  font-size: var(--text-base, 16px);
+}
+
+@media (min-width: 900px) {
+  .add-sources-phone {
+    display: none;
+  }
+
+  .add-sources-desktop {
+    display: inline;
+  }
+
+  .add-tidy {
+    bottom: 0;
+  }
 }
 
 .add-drive-note {
