@@ -253,6 +253,31 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   ).toHaveText('4');
 });
 
+test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (#334)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
+
+  // Back on Home once the upload finishes, then Add again within the
+  // same session: the row is still there (#334), not an empty screen.
+  await expect(page).toHaveURL('/');
+  await navigate(page, /^Add$/);
+  await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
+  await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
+});
+
 test('Home through the scripted run: waiting, running, done (#321)', async ({
   page,
 }, testInfo) => {
