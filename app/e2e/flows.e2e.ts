@@ -2479,6 +2479,16 @@ test('a project folder lists its files and notes together, newest first, with wh
     'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.',
   );
 
+  // The Drive chip is greyed in the demo (#555): the fixture ids are not
+  // real Drive ids, so it never opens a broken Drive page.
+  const drive = page.getByRole('button', { name: 'Drive' });
+  await expect(drive).toBeVisible();
+  await expect(drive).toBeDisabled();
+  await expect(
+    page.getByText('Not in the demo. Run your own Bower to use it.'),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Drive' })).toHaveCount(0);
+
   // The Ask Bower chip opens the Bower tab's box with the folder named,
   // and nothing else from the folder (#354).
   await page.getByRole('link', { name: 'Ask Bower about it' }).click();
@@ -2520,21 +2530,28 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
     page.getByRole('heading', { level: 1, name: 'Shelves and tap quote' }),
   ).toBeVisible();
   await expect(props).toContainText('PDF ·');
-  // The demo has no Drive thumbnails: one sentence, with the way to Drive.
+  // The demo has no Drive thumbnails, and no real Drive page behind its
+  // fixture ids either (#555): one sentence, no link to a broken page.
   const none = page.getByText('There is no preview for this file');
   await expect(none).toBeVisible();
   await expect(
+    none.getByText('Not in the demo. Run your own Bower to use it.'),
+  ).toBeVisible();
+  await expect(
     none.getByRole('link', { name: 'open it in Drive' }),
-  ).toHaveAttribute('href', /^https:\/\/drive\.google\.com\/file\/d\//);
+  ).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: /Summarise this/ }),
   ).toHaveAttribute('href', /^\/bower\?text=Summarise/);
 
-  // The More menu, in its file version: Open in Drive, no Pin.
+  // The More menu, in its file version: Open in Drive greyed (#555), no Pin.
   await visible(page.getByRole('button', { name: 'More' })).click();
   const menu = page.getByRole('menu', { name: 'File actions' });
+  const openInDrive = menu.getByRole('menuitem', { name: /Open in Drive/ });
+  await expect(openInDrive).toBeVisible();
+  await expect(openInDrive).toBeDisabled();
   await expect(
-    menu.getByRole('menuitem', { name: /Open in Drive/ }),
+    menu.getByText('Not in the demo. Run your own Bower to use it.'),
   ).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: /Pin to Home/ })).toHaveCount(
     0,
