@@ -4,12 +4,9 @@
  * a centred dialog on desktop (same markup, `styles/switcher.css` tells
  * them apart per breakpoint). Replaces the old top-bar search (`search.tsx`,
  * removed): every opener — Home's search button, the desktop sidebar's
- * filter button, `Ctrl/Cmd + K` in `app.tsx`, and the `/search` route — goes
- * through `openSwitcher()` (`switcher-store.ts`), so #143's Home pill can
- * call it too. The drawer's filter field is not among them (spec §14): it
- * narrows the tree in place instead (`components/tree.tsx`'s `filter`
- * prop), so the switcher stays one tap away rather than replacing the
- * drawer.
+ * filter button, the Notes tab's search row (#433), `Ctrl/Cmd + K` in
+ * `app.tsx`, and the `/search` route — goes through `openSwitcher()`
+ * (`switcher-store.ts`), so #143's Home pill can call it too.
  *
  * Notes: the vault index's own names and paths are matched synchronously,
  * before any network round trip (`switcher.ts#rankNotes`, #308); the same

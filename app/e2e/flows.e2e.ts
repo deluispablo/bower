@@ -930,7 +930,7 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   await expect(page).toHaveURL(/\/notes$/);
   await expect(links.nth(1)).toHaveAttribute('aria-current', 'page');
   await expect(
-    page.getByRole('textbox', { name: 'Filter your notes' }),
+    page.getByRole('button', { name: 'Search or jump to anything' }),
   ).toBeVisible();
   await expect(page.getByRole('tree').first()).toBeVisible();
   await shot(page, testInfo, 'tabs-notes');
@@ -976,6 +976,19 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
   expect((footBox?.y ?? 0) >= (treeBox?.y ?? 0)).toBe(true);
 
   await shot(page, testInfo, 'notes-tab');
+
+  // The search row opens the quick switcher (#433, Phone-Notes board), and
+  // closing it lands back on the Notes tab.
+  await page
+    .getByRole('button', { name: 'Search or jump to anything' })
+    .click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  // Focus moves into the switcher once it is open: wait for that first.
+  await expect(switcher.getByRole('combobox')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(switcher).toBeHidden();
+  await expect(page).toHaveURL(/\/notes$/);
+  await expect(tree).toBeVisible();
 });
 
 test('an old /tell link opens the Bower tab with its text', async ({

@@ -1,7 +1,7 @@
 /**
  * Whether the quick switcher (`components/switcher.tsx`, #142) is open, and
  * the query it should start with. A plain pub/sub store, not Preact
- * context: every opener — the drawer's filter field, the desktop sidebar's
+ * context: every opener — the Notes tab's search row, the desktop sidebar's
  * switcher button, `Ctrl/Cmd + K` in `app.tsx`, the `/search` route, and
  * later #143's Home pill — just calls `openSwitcher()` without needing to
  * sit inside any particular provider.

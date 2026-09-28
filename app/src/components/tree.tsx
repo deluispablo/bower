@@ -19,7 +19,8 @@
  * #326, #353) that collapses, or expands, every folder whenever either
  * changes.
  *
- * A non-blank `filter` (the sidebar's live filter, spec §14) swaps in
+ * A non-blank `filter` (spec §14; no caller passes one since the Notes
+ * tab's search row opens the switcher instead, #433) swaps in
  * `filterTree`'s result and force-expands every folder it kept, so a match
  * is always visible; the tree's own expand/collapse state underneath is
  * untouched and takes back over once the filter is cleared.
@@ -123,7 +124,7 @@ interface TreeProps {
    */
   showAppFiles?: boolean;
   /**
-   * The sidebar's live filter (spec §14): narrows the tree to name matches,
+   * A live filter (spec §14; unused since #433): narrows the tree to name matches,
    * force-expanding their parent folders. Blank or left out: the tree
    * behaves as before, with its own expand/collapse state.
    */
