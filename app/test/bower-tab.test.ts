@@ -386,4 +386,34 @@ describe('ruleSentences', () => {
     expect(ruleSentences('Just file these, please.')).toEqual([]);
     expect(ruleSentences('')).toEqual([]);
   });
+
+  it('splits two "from now on" sentences glued together with no punctuation between them (#499)', () => {
+    expect(
+      ruleSentences(
+        'From now on, bird articles go to Learning From now on, nothing goes to Garden.',
+      ),
+    ).toEqual([
+      'From now on, bird articles go to Learning',
+      'From now on, nothing goes to Garden.',
+    ]);
+  });
+
+  it('splits two "every time" sentences the same way', () => {
+    expect(
+      ruleSentences(
+        'Every time I add a payslip put it in Money every time I add a receipt scan it first.',
+      ),
+    ).toEqual([
+      'Every time I add a payslip put it in Money',
+      'every time I add a receipt scan it first.',
+    ]);
+  });
+
+  it('never splits mid-sentence on a lone "always" or "never" (only at the very start)', () => {
+    // #499's fix is deliberately narrower than that: "always"/"never" are
+    // ordinary words too often to trust wherever they appear.
+    expect(
+      ruleSentences('I want you to never archive Finance statements.'),
+    ).toEqual([]);
+  });
 });

@@ -130,7 +130,7 @@ Bower's answers to questions sent as instructions. One note per question, dated.
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-28
-bower_rules_version: 10
+bower_rules_version: 11
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -287,7 +287,7 @@ The owner is talking to you through the app. Before you start, the runner checks
 - Log it (\`Context: <one line>\`), then move the note to \`0-Inbox/Processed/\`.
 
 1. **Permanent rule** ("from now on…", "always…", "when X arrives, do Y"):
-   - Add or amend the rule in \`Rules.md\`, never in this \`CLAUDE.md\`, under a heading that says what it is about, marked \`(owner's request, YYYY-MM-DD)\`.
+   - Add or amend the rule in \`Rules.md\`, never in this \`CLAUDE.md\`, in the shape **The shape of \`Rules.md\`** gives (under **Rules** below): one bullet \`- <text> (owner's request, YYYY-MM-DD)\` under the \`## <Topic>\` heading it belongs to, or under \`## Everything else\` when no topic fits (create the heading if it is missing).
    - If the rule describes a repeatable multi-step process (for example how to handle a specific kind of document), write it as a workflow section in \`Rules.md\`.
    - Append to \`log.md\`: \`Rule added/changed: <one line>\`.
 2. **One-off task** ("compare…", "summarise…", "create a table of…", "this was misfiled, move it to…"):
@@ -341,6 +341,10 @@ Anything you would like the owner to decide (a new rule, a workflow for a recurr
 ## Rules
 Your own rules live in \`Rules.md\`; Bower reads both. Where they disagree, \`Rules.md\` wins, except for the rules below.
 @Rules.md
+
+**The shape of \`Rules.md\`** (the app reads it and writes the same shape: the first-run interview, Accept on a suggestion, and changing, pausing, resuming or removing a rule on the Rules screen):
+- One \`## <Topic>\` heading per subject (\`## Finance\`, \`## Flat hunt\`, \`## Everything else\`); one rule per bullet: \`- <text> (owner's request, YYYY-MM-DD)\`. A workflow section (see Instructions) sits under its topic.
+- A struck-through rule is paused: \`- ~~<text>~~ (paused YYYY-MM-DD)\`. Ignore it completely: never apply it, never edit, resume or remove it, and never add it back as a new rule. Only the owner resumes a rule, in the app.
 
 Three files, three owners: this \`CLAUDE.md\` is Bower's own and is replaced whole when Bower's rules are updated (\`bower_rules_version\` above); \`Rules.md\` holds the owner's rules and \`About-Me.md\` the owner's profile, and an update never touches either. Read \`CLAUDE.md\`, then \`Rules.md\`, then \`About-Me.md\`.
 
