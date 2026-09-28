@@ -187,6 +187,51 @@ describe('Add', () => {
     );
   });
 
+  // #333: the phone doors, the drop zone (both in the DOM; `add.css`'s
+  // breakpoint picks which one shows), and the line about sharing in from
+  // another app.
+  it('lists Choose files as a door, with its hint', () => {
+    const doors = root.querySelector('.add-doors');
+    expect(doors?.textContent).toContain('Choose files');
+    expect(doors?.textContent).toContain(
+      'Photos, PDFs, screenshots, voice memos',
+    );
+  });
+
+  it('opens the file input when the Choose files door is pressed', () => {
+    const doors = root.querySelector('.add-doors');
+    const door = Array.from(doors?.querySelectorAll('button') ?? []).find((b) =>
+      (b.textContent ?? '').startsWith('Choose files'),
+    );
+    if (door === undefined) throw new Error('Choose files door missing');
+    const input = root.querySelector('input[type="file"]:not([capture])');
+    const click = vi.spyOn(input as HTMLInputElement, 'click');
+    door.click();
+    expect(click).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the drop zone in the DOM, sized by its own content', () => {
+    const dropzone = root.querySelector('.add-dropzone');
+    expect(dropzone?.textContent).toContain('Drop anything here');
+    expect(dropzone?.textContent).toContain(
+      'Photos, PDFs, screenshots, links.',
+    );
+  });
+
+  it('mentions sharing in from another app', () => {
+    expect(root.textContent).toContain(
+      'Or share to Bower from any app: it lands here too.',
+    );
+  });
+
+  it('has no submit button until something is queued (#333)', () => {
+    expect(
+      Array.from(root.querySelectorAll('button')).some((b) =>
+        (b.textContent ?? '').includes('Add to Bower'),
+      ),
+    ).toBe(false);
+  });
+
   it('uploading files resolves without starting a run', async () => {
     dropFiles([
       new File(['a'], 'a.txt', { type: 'text/plain' }),

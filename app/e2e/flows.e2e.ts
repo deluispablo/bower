@@ -192,6 +192,40 @@ test('a missing note shows Not found', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'note-not-found');
 });
 
+test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+  await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible();
+
+  const doors = page.locator('.add-doors');
+  const dropzone = page.locator('.add-dropzone');
+
+  if (testInfo.project.name === 'desktop') {
+    await expect(doors).toBeHidden();
+    await expect(dropzone).toBeVisible();
+    await expect(page.getByText('Drop anything here')).toBeVisible();
+    await expect(
+      page.getByText('Or share to Bower from any app: it lands here too.'),
+    ).toBeHidden();
+    return;
+  }
+
+  await expect(dropzone).toBeHidden();
+  await expect(doors).toBeVisible();
+  await expect(
+    doors.getByRole('button', { name: /^Choose files/ }),
+  ).toBeVisible();
+  await expect(
+    doors.getByRole('button', { name: /^Take a photo/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Or share to Bower from any app: it lands here too.'),
+  ).toBeVisible();
+  await shot(page, testInfo, 'add-doors');
+});
+
 test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);

@@ -1,15 +1,89 @@
 /*
- * Add screen (spec §6, the Add row; `docs/design/gen.py`'s Phone-Add):
- * the drop zone with the bird peeking over its top edge, the paste-a-link
- * field and the upload queue as cards. The amber "this only fills your
- * inbox" card reuses `.app-file-banner` (`styles/app-file-banner.css`).
- * Motion is transform/opacity only, on the motion tokens, and turned off
- * under `prefers-reduced-motion` below.
+ * Add screen (spec C.6; `docs/design/v3/boards/Phone-Add.dc.html`,
+ * `Desktop-Add.dc.html`): phone-first, a list of doors and no drop
+ * square. `.add-doors` and `.add-share-line` are phone only;
+ * `.add-dropzone` (the bird peeking over its top edge) and its own
+ * Choose files/From your Drive pair take over from 900 px, the same
+ * breakpoint `layout.css` uses for the sidebar. Both live in the DOM at
+ * once, so the queue, the link field and the file inputs never need a
+ * second copy. The amber "this only fills your inbox" card reuses
+ * `.app-file-banner` (`styles/app-file-banner.css`). Motion is
+ * transform/opacity only, on the motion tokens, and turned off under
+ * `prefers-reduced-motion` below.
  */
 
-.add-dropzone {
-  position: relative;
+.add-doors {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-6) 0 var(--space-3);
+}
+
+.add-door {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 58px;
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.add-door:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.add-door-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.add-door-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.add-door-text b {
+  font-weight: var(--weight-medium);
+}
+
+.add-door-text span {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-door > svg:last-child {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+}
+
+.add-share-line {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.add-dropzone {
+  display: none;
+  position: relative;
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
@@ -22,6 +96,17 @@
   transition:
     background var(--motion-fast) var(--ease-out),
     border-color var(--motion-fast) var(--ease-out);
+}
+
+@media (min-width: 900px) {
+  .add-doors,
+  .add-share-line {
+    display: none;
+  }
+
+  .add-dropzone {
+    display: flex;
+  }
 }
 
 .add-dropzone-active {
