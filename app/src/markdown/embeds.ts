@@ -147,7 +147,37 @@ export function resolveRelativePath(
   return segments.length === 0 ? undefined : segments.join('/');
 }
 
-/** A link that opens a non-note file in Drive, in a new tab. */
+/**
+ * The Drive file id in a Google Drive or Docs link (`/file/d/<id>/view`,
+ * `/document/d/<id>/edit`, `open?id=<id>`), or `undefined` for any other URL.
+ * A note links to a file of the Bower folder this way when it was written
+ * from Drive; the renderer swaps such a link for the app's own file screen.
+ */
+export function driveFileIdOf(href: string): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(href.trim());
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== 'https:') return undefined;
+  if (
+    url.hostname !== 'drive.google.com' &&
+    url.hostname !== 'docs.google.com'
+  ) {
+    return undefined;
+  }
+  const path =
+    /\/(?:file|document|spreadsheets|presentation)\/d\/([\w-]+)/.exec(
+      url.pathname,
+    );
+  if (path?.[1] !== undefined) return path[1];
+  const id = url.searchParams.get('id');
+  return id !== null && /^[\w-]+$/.test(id) ? id : undefined;
+}
+
+/** A link that opens a non-note file of the Bower folder on its screen in
+ * the app (`/file/<id>`), not in Drive. */
 export function fileLinkHtml(
   file: DriveFile,
   textHtml: string,
@@ -156,7 +186,7 @@ export function fileLinkHtml(
   const extra = embed ? ' wikilink-embed' : '';
   return (
     `<a class="wikilink wikilink-file${extra}" ` +
-    `href="${escapeHtml(driveViewUrl(file))}" target="_blank" rel="noopener noreferrer">` +
+    `href="/file/${escapeHtml(encodeURIComponent(file.id))}">` +
     `${textHtml}</a>`
   );
 }
