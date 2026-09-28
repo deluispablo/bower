@@ -1,0 +1,90 @@
+/* Explorer additions (#589): the Just filed slot, Pinned counts, the first-load skeleton. */
+
+/* Empty until #616 fills it: no space taken. */
+.explorer-just-filed:empty {
+  display: none;
+}
+
+.explorer-pinned-count,
+.explorer-pinned-new {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.explorer-pinned .folder-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.explorer-first-load {
+  margin: 0 var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The five landmarks before the index exists (R-NOTES-7, Phone-Notes-Loading). */
+.explorer-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explorer-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding-right: var(--space-2);
+}
+
+.explorer-skeleton-chevron {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+}
+
+.explorer-skeleton-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+  color: var(--color-heading);
+  font-weight: 600;
+}
+
+.explorer-skeleton-bar {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  animation: explorer-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.explorer-skeleton-line {
+  width: 70%;
+  height: var(--text-xs);
+}
+
+.explorer-skeleton-count {
+  width: 1.5rem;
+  height: var(--text-sm);
+}
+
+@keyframes explorer-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .explorer-skeleton-bar {
+    animation: none;
+  }
+}
