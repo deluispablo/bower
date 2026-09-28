@@ -1,36 +1,83 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
+import {
+  LocationProvider,
+  lazy,
+  Route,
+  Router,
+  useLocation,
+} from 'preact-iso';
 import { registerSW } from 'virtual:pwa-register';
 
 import { isDemo } from './api.js';
 import { Layout } from './components/layout.js';
-import { Add } from './routes/add.js';
-import { Bower } from './routes/bower.js';
-import { FileScreen } from './routes/file.js';
-import { Folder } from './routes/folder.js';
-import { Health } from './routes/health.js';
 import { Home } from './routes/home.js';
-import { Ideas } from './routes/ideas.js';
-import { Intro } from './routes/intro.js';
-import { LintRedirect } from './routes/lint-redirect.js';
 import { Login } from './routes/login.js';
-import { Note } from './routes/note.js';
-import { NotFound } from './routes/not-found.js';
-import { Notes } from './routes/notes.js';
-import { NotInvited } from './routes/not-invited.js';
-import { Onboarding } from './routes/onboarding.js';
-import { Privacy } from './routes/privacy.js';
-import { RunYourOwn } from './routes/run-your-own.js';
-import { SearchRedirect } from './routes/search.js';
-import { Settings } from './routes/settings.js';
-import { TellRedirect } from './routes/tell-redirect.js';
-import { Terms } from './routes/terms.js';
 import { RunProvider } from './run-store.js';
 import { ShellSlotsProvider } from './components/shell-slots.js';
 import { SessionProvider, useSession } from './session.js';
 import { BOWER_PATH, IDEAS_PATH, usesShell } from './shell-routes.js';
 import { openSwitcher } from './switcher-store.js';
 import { VaultProvider } from './vault-store.js';
+
+/** Every screen but Home and Login loads on demand (#661), keeping the startup
+ * script under its size budget. */
+const Add = lazy(() =>
+  import('./routes/add.js').then((m) => m.Add),
+);
+const Bower = lazy(() =>
+  import('./routes/bower.js').then((m) => m.Bower),
+);
+const FileScreen = lazy(() =>
+  import('./routes/file.js').then((m) => m.FileScreen),
+);
+const Folder = lazy(() =>
+  import('./routes/folder.js').then((m) => m.Folder),
+);
+const Health = lazy(() =>
+  import('./routes/health.js').then((m) => m.Health),
+);
+const Ideas = lazy(() =>
+  import('./routes/ideas.js').then((m) => m.Ideas),
+);
+const Intro = lazy(() =>
+  import('./routes/intro.js').then((m) => m.Intro),
+);
+const LintRedirect = lazy(() =>
+  import('./routes/lint-redirect.js').then((m) => m.LintRedirect),
+);
+const Note = lazy(() =>
+  import('./routes/note.js').then((m) => m.Note),
+);
+const NotFound = lazy(() =>
+  import('./routes/not-found.js').then((m) => m.NotFound),
+);
+const Notes = lazy(() =>
+  import('./routes/notes.js').then((m) => m.Notes),
+);
+const NotInvited = lazy(() =>
+  import('./routes/not-invited.js').then((m) => m.NotInvited),
+);
+const Onboarding = lazy(() =>
+  import('./routes/onboarding.js').then((m) => m.Onboarding),
+);
+const Privacy = lazy(() =>
+  import('./routes/privacy.js').then((m) => m.Privacy),
+);
+const RunYourOwn = lazy(() =>
+  import('./routes/run-your-own.js').then((m) => m.RunYourOwn),
+);
+const SearchRedirect = lazy(() =>
+  import('./routes/search.js').then((m) => m.SearchRedirect),
+);
+const Settings = lazy(() =>
+  import('./routes/settings.js').then((m) => m.Settings),
+);
+const TellRedirect = lazy(() =>
+  import('./routes/tell-redirect.js').then((m) => m.TellRedirect),
+);
+const Terms = lazy(() =>
+  import('./routes/terms.js').then((m) => m.Terms),
+);
 
 /** Whether `target` is a field the user is typing in — Ctrl/Cmd+K is ignored there. */
 function isTypingTarget(target: EventTarget | null): boolean {
