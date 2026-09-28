@@ -1,0 +1,179 @@
+/* Just filed (#616): the Notes row and sidebar row, the phone list, the desktop table. */
+
+.just-filed-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-brand-tint);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.just-filed-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.just-filed-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.just-filed-row-label {
+  font-weight: 600;
+}
+
+.just-filed-row-sub {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.just-filed-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.just-filed-intro,
+.just-filed-sub,
+.just-filed-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.just-filed-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.just-filed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.just-filed-heading {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: var(--text-base, 1rem);
+  font-weight: 600;
+}
+
+.just-filed-markall,
+.just-filed-say {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.just-filed-say {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+}
+
+.just-filed-list,
+.just-filed-earlier {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.just-filed-item,
+.just-filed-aside {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.just-filed-aside {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.just-filed-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.just-filed-title,
+.just-filed-cell-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-heading);
+  font-weight: 600;
+}
+
+.just-filed-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.just-filed-title a:hover {
+  text-decoration: underline;
+}
+
+.just-filed-was,
+.just-filed-note {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.just-filed-to,
+.just-filed-where {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.just-filed-details > summary {
+  min-height: 44px;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.just-filed-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.just-filed-table th,
+.just-filed-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.just-filed-table th {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.just-filed-was-cell,
+.just-filed-note-cell {
+  color: var(--color-text-muted);
+}

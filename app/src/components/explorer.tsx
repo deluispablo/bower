@@ -53,6 +53,7 @@ import {
   IconSearch,
 } from './icons.js';
 import { FolderMark } from './folder-mark.js';
+import { JustFiledRow } from './just-filed-row.js';
 import { PinnedSidebar } from './pinned-sidebar.js';
 import { Tree } from './tree.js';
 
@@ -361,7 +362,7 @@ export function Explorer({
         </div>
       )}
       <div class="explorer-just-filed" data-slot="just-filed">
-        {justFiled}
+        {justFiled ?? <JustFiledRow variant={variant} />}
       </div>
       {index !== null && (
         <PinnedSidebar items={pinned(index)} variant={variant} />

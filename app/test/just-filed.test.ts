@@ -1,0 +1,253 @@
+// @vitest-environment jsdom
+
+/**
+ * Just filed (#616): the groups from a run report, the set-aside list, the
+ * headings, the fallback to Activity lines for a report without `to`, and the
+ * Done sheet's "See where everything went" link.
+ */
+
+import { h, render } from 'preact';
+import { act } from 'preact/test-utils';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { Run } from '../src/api.js';
+import type { DriveFile } from '../src/drive.js';
+import {
+  EARLIER_LIMIT,
+  asideLabel,
+  earlierHeading,
+  earlierRuns,
+  fallbackLines,
+  filedCount,
+  groupHeading,
+  hasDestinations,
+  justFiledRows,
+  latestRun,
+  rowLabel,
+  rowSub,
+  setAsideRows,
+  unseenIds,
+  wasLabel,
+} from '../src/just-filed.js';
+import { buildVaultIndex } from '../src/vault-index.js';
+
+vi.mock('../src/vault-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/vault-store.js')>()),
+  useVault: () => ({ files: [] }),
+}));
+
+const { WorkingSheet } = await import('../src/components/working-sheet.js');
+
+const NOW = new Date('2026-09-27T10:44:00+01:00').getTime();
+
+function file(id: string, path: string, mimeType = 'application/pdf'): DriveFile {
+  return {
+    id,
+    name: path.slice(path.lastIndexOf('/') + 1),
+    mimeType,
+    parents: [],
+    path,
+  };
+}
+
+const index = buildVaultIndex([
+  file('a', '1-Projects/Flat hunt/Arlington Road, 2 bed.pdf'),
+  file('b', '1-Projects/Flat hunt/Arlington Road, window sign.jpg', 'image/jpeg'),
+  file('c', '3-Resources/Links/Kentish Town photos.md', 'text/markdown'),
+  file('d', '1-Projects/Flat hunt/Walk-through.mp4', 'video/mp4'),
+]);
+
+const run: Run = {
+  state: 'done',
+  requestedAt: '2026-09-27T09:40:00.000Z',
+  finishedAt: '2026-09-27T09:42:00.000Z',
+  processed: [
+    '0-Inbox/Arlington Road.pdf',
+    '0-Inbox/IMG_4471.jpg',
+    'Clippings/a link',
+    '0-Inbox/Walk-through.mp4',
+  ],
+  items: [
+    {
+      path: '0-Inbox/Arlington Road.pdf',
+      kind: 'file',
+      to: '1-Projects/Flat hunt/Arlington Road, 2 bed.pdf',
+      renamedFrom: 'Arlington Road.pdf',
+    },
+    {
+      path: '0-Inbox/IMG_4471.jpg',
+      kind: 'file',
+      to: '1-Projects/Flat hunt/Arlington Road, window sign.jpg',
+      renamedFrom: 'IMG_4471.jpg',
+    },
+    {
+      path: 'Clippings/a link',
+      kind: 'file',
+      to: '3-Resources/Links/Kentish Town photos.md',
+      renamedFrom: 'a link',
+    },
+    {
+      path: '0-Inbox/Walk-through.mp4',
+      kind: 'file',
+      to: '1-Projects/Flat hunt/Walk-through.mp4',
+    },
+  ],
+  setAside: [
+    { path: '1-Projects/Flat hunt/Walk-through.mp4', reason: 'kept-not-read' },
+  ],
+};
+
+describe('justFiledRows', () => {
+  const rows = justFiledRows(run, index);
+
+  it('lists old name, new name and folder, without the set-aside item', () => {
+    expect(rows.map((r) => r.title)).toEqual([
+      'Arlington Road, 2 bed',
+      'Arlington Road, window sign',
+      'Kentish Town photos',
+    ]);
+    expect(rows[0]?.oldName).toBe('Arlington Road.pdf');
+    expect(rows[0]?.folder).toBe('Projects › Flat hunt');
+    expect(rows[0]?.para).toBe('projects');
+    expect(rows[2]?.para).toBe('resources');
+    expect(rows[2]?.folder).toBe('Resources › Links');
+  });
+
+  it('never shows the numeric prefix, and links what the index knows', () => {
+    for (const row of rows) expect(row.folder).not.toMatch(/\d-/);
+    expect(rows[0]?.href).toBe('/file/a');
+    expect(rows[2]?.href).toBe('/note/c');
+  });
+
+  it('points at the note beside a file for its key facts', () => {
+    expect(rows[0]?.notePath).toBe(
+      '1-Projects/Flat hunt/Arlington Road, 2 bed.md',
+    );
+    expect(rows[2]?.notePath).toBe('3-Resources/Links/Kentish Town photos.md');
+  });
+});
+
+describe('setAsideRows', () => {
+  it('gives the folder, the reason sentence and the Say what it is link', () => {
+    const [row] = setAsideRows(run, index);
+    expect(row?.folder).toBe('Projects › Flat hunt');
+    expect(row?.sentence).toBe("Bower can't watch videos.");
+    expect(row?.sayHref).toBe('/bower?text=About%20Walk-through.mp4%3A%20');
+  });
+});
+
+describe('counts and headings', () => {
+  it('counts every filed thing, set aside included', () => {
+    expect(filedCount(run)).toBe(4);
+    expect(rowLabel(6)).toBe('Just filed · 6');
+    expect(asideLabel(1)).toBe('Set aside · 1');
+    expect(wasLabel('a link')).toBe('was “a link”');
+  });
+
+  it('heads the latest group like the boards', () => {
+    expect(groupHeading(run, NOW).endsWith(' · 4 things')).toBe(true);
+    expect(groupHeading(run, NOW, 3).endsWith('4 things · 3 new to you')).toBe(
+      true,
+    );
+    expect(rowSub('Today, 10:42', false)).toBe(
+      "Today's tidy-up: see where everything went",
+    );
+    expect(rowSub('Today, 10:42', true)).toBe("Today's tidy-up");
+  });
+
+  it('names the things of a one- or two-item earlier tidy-up', () => {
+    const small: Run = {
+      ...run,
+      processed: ['0-Inbox/Arlington Road.pdf'],
+      items: run.items?.slice(0, 1),
+      setAside: [],
+    };
+    expect(earlierHeading(small, NOW, index)).toMatch(
+      /1 thing · Arlington Road$/,
+    );
+    expect(earlierHeading(run, NOW, index)).not.toContain('Arlington Road');
+  });
+});
+
+describe('unseen ids', () => {
+  it('is the run’s items the device has not opened', () => {
+    expect([...unseenIds(run, index, new Set())].sort()).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+    ]);
+    expect([...unseenIds(run, index, new Set(['a', 'b', 'c', 'd']))]).toEqual(
+      [],
+    );
+  });
+});
+
+describe('latest and earlier runs', () => {
+  const older: Run = { ...run, requestedAt: '2026-09-26T17:00:00.000Z' };
+  const failed: Run = { ...run, state: 'failed', requestedAt: '2026-09-25' };
+
+  it('prefers the run store’s last run, else the newest of GET /runs', () => {
+    expect(latestRun(older, [run])).toBe(older);
+    expect(latestRun(null, [failed, run, older])).toBe(run);
+    expect(latestRun(null, [])).toBeNull();
+  });
+
+  it('lists the others, done only, at most the last 20', () => {
+    expect(earlierRuns(run, [run, older, failed])).toEqual([older]);
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      ...run,
+      requestedAt: `2026-08-${String(i + 1).padStart(2, '0')}T09:00:00.000Z`,
+    }));
+    expect(earlierRuns(null, many)).toHaveLength(EARLIER_LIMIT);
+  });
+});
+
+describe('a run report without `to`', () => {
+  const old: Run = {
+    state: 'done',
+    requestedAt: '2026-06-12T19:40:00.000Z',
+    finishedAt: '2026-06-12T19:45:00.000Z',
+    processed: ['0-Inbox/Offer letter.pdf'],
+  };
+
+  it('has no destinations and falls back to its Activity lines', () => {
+    expect(hasDestinations(old)).toBe(false);
+    expect(hasDestinations(run)).toBe(true);
+    const log =
+      '- 2026-06-12 19:44 · Filed: Offer letter, Northwind.pdf → 2-Areas/Work\n';
+    const lines = fallbackLines(old, log, NOW);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.title).toBe('Offer letter.pdf');
+  });
+});
+
+describe('the Done sheet', () => {
+  let root: HTMLDivElement;
+
+  afterEach(() => {
+    void act(() => {
+      render(null, root);
+    });
+    document.body.replaceChildren();
+  });
+
+  it('links to Just filed', () => {
+    root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(
+        h(WorkingSheet, {
+          phase: 'done',
+          run,
+          now: NOW,
+          open: true,
+          onDismiss: vi.fn(),
+        }),
+        root,
+      );
+    });
+    const link = root.querySelector('a[href="/just-filed"]');
+    expect(link?.textContent).toBe('See where everything went');
+  });
+});

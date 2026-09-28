@@ -42,6 +42,7 @@ import { isDemo } from '../api.js';
 import { sinceLabel } from '../bower-tab.js';
 import { doneNotes, things } from '../home.js';
 import { failureCopy } from '../run-failure.js';
+import { JUST_FILED_PATH, JUST_SEE_WHERE } from '../just-filed.js';
 import { runKey } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import {
@@ -367,6 +368,11 @@ export function WorkingSheet({
           {note}
         </p>
       ))}
+      {state === 'done' && (
+        <a class="working-sheet-see" href={JUST_FILED_PATH} onClick={onDismiss}>
+          {JUST_SEE_WHERE}
+        </a>
+      )}
       {active && (
         <div class="working-sheet-progress">
           <div class="working-sheet-progress-row">
