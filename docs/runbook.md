@@ -255,6 +255,15 @@ Each Bower folder holds three rule files with three owners: `CLAUDE.md` is Bower
 
 When you change `vault-template/CLAUDE.md` in a way existing folders should receive, bump `bower_rules_version` by one in the same PR, and add every line you removed or reworded to `app/src/rulebook-retired.ts`; see `vault-template/README.md`.
 
+### What a tidy-up does with each file
+
+Since rulebook version 7 (#368), Bower only files by default. Each original (a PDF, a photo, a spreadsheet) moves into its project, area or resource folder as it is, with one line in the folder's hub note, one row in `index.md` (`- [[<path>]] · <type> · filed by Bower`) and one `Filed:` line in `log.md`; no summary note, no copy, no translation. A note is still written for a web clip or saved link (the raw clip then goes to `0-Inbox/Processed/`), for an item an instruction note or a rule in `Rules.md` asks something for, and for a converted Word, OpenDocument, HTML, EPUB or RTF document, whose `.md` is filed next to the original. `0-Inbox/Processed/` now keeps only instruction notes, raw clips, unconvertible items and duplicates.
+
+- **Drive ids.** The runner files a file with `rclone copy` of the new path and `rclone deletefile` of the inbox path, so a filed original gets a new Drive id (a Drive link or bookmark to the inbox copy stops working; the old copy is in the Drive Trash). Notes that were already filed are never moved by a tidy-up, so their ids never change.
+- **`BOWER_MAX_CHANGES`.** A move counts as one change: only the new path is a new file; the delete of the inbox path is not counted.
+- **The report.** An ingest's summary is six lines: `Processed`, `Filed: <n> files` (originals moved into a folder), `Created` (notes written), `Updated`, `Rules`, `Problems`. A lint keeps five. The runner's log shows the filed count as `<n> originals filed`, a number only.
+- **Upgrading.** Rerun `scripts/deploy.sh` so the instance repo gets the new `prompts/ingest.md` and `run.sh`; each user gets the new rulebook from **Settings → Advanced → "Update Bower's rules"** (version 7). Until they update, their folder's old rulebook still asks for a summary note, and the new prompt defers to it.
+
 ### The first-run interview
 
 Right after **Building your bower** and before **Start with what you have**, the bird asks four questions in the Tell Bower conversation (#198): what the user will keep here, which languages their notes come in, three areas of their life to start with, and how they like titles and tags written, with an example. Each is a chip or the user's own words.

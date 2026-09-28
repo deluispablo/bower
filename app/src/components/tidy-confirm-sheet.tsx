@@ -18,11 +18,21 @@
 import { useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 
+import { isDemo } from '../api.js';
 import { Bird } from './bird.js';
 import { IconSparkle } from './icons.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
 import '../styles/tidy-confirm-sheet.css';
+
+/**
+ * The demo's extra amber line (#363, `Demo-Tidy-Confirm` board, handover
+ * C.10): tidy up in the demo never runs the model, so the confirmation
+ * says so before the recording starts. `demo/server.ts`'s scripted run is
+ * unchanged; this is copy only.
+ */
+export const DEMO_RECORDING_NOTICE =
+  'Demo: what follows is a recording. Nothing is sent to Claude, nothing is saved.';
 
 /**
  * The count phrase ("1 thing" / "3 things") and the rest of the sentence,
@@ -82,6 +92,7 @@ export function TidyConfirmSheet({
         <p class="tidy-confirm-text">
           <b>{lead}</b> {rest}
         </p>
+        {isDemo() && <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>}
         <button type="button" class="tidy-confirm-button" onClick={onConfirm}>
           <IconSparkle />
           Yes, tidy up

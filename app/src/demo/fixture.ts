@@ -87,6 +87,15 @@ trailer << /Root 1 0 R >>
 %%EOF
 `;
 
+/** The lease, filed in Flat hunt (#367, `Demo-Home`/`Demo-Add`/
+ * `Demo-Working`/`Demo-Tidy-Confirm` boards): a one-page PDF stub. */
+const LEASE_PDF = `%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj
+trailer << /Root 1 0 R >>
+%%EOF
+`;
+
 /** A photo of the paint test patch: a 1 × 1 PNG, enough to be a photo.
  * Hex rather than base64, which the sanitised-repo check would read as a
  * Drive folder id. */
@@ -148,6 +157,7 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
 - [[Kitchen Refresh]]: paint, shelves and a new tap
 - [[1-Projects/Kitchen Refresh/Sage green test patch.png]] · Photo · filed by Bower
 - [[Half Marathon]]: race day in November
+- [[Flat hunt]]: a one-bedroom before the lease runs out
 
 ## Areas
 - [[Home]], [[Health]], [[Money]], [[Garden]]
@@ -175,7 +185,8 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
 - 2026-09-12 · Filed · Flights and stays, Things to see in Lisbon
 - 2026-09-18 · Filed · Paint colours, Quotes from fitters
 - 2026-09-21 · Answered · Which subscriptions renew this autumn
-- 2026-09-26 · Filed · Running log, Weeknight curry`,
+- 2026-09-26 · Filed · Running log, Weeknight curry
+- 2026-09-27 · Filed · Lease agreement 2026, Notes from the viewing`,
   ),
   note(
     'Lint Report.md',
@@ -355,6 +366,51 @@ Race day: 16 November. Target: finish under two hours, enjoy it.
 - Sunday: long run, adding 1 km a week up to 18 km
 
 Taper the last ten days. Log every run in [[Running log]].`,
+  ),
+  // A fourth project (#367, `Demo-Home`/`Demo-Add`/`Demo-Working`/
+  // `Demo-Tidy-Confirm` boards): the PDF, the photo and the Google Doc
+  // (exported as text) those boards show, already filed rather than
+  // pending — the scripted run's own three inbox items are untouched.
+  note(
+    '1-Projects/Flat hunt/Flat hunt.md',
+    27,
+    'project, hub, home',
+    `# Flat hunt
+
+Looking for a one-bedroom before the current lease runs out in December.
+
+- [[Lease agreement 2026]]
+- [[Notes from the viewing]]
+
+## Still open
+- Ask about the deposit protection scheme
+- Compare the bike commute for each one`,
+    'status: active\n',
+  ),
+  {
+    path: '1-Projects/Flat hunt/Lease agreement 2026.pdf',
+    mimeType: 'application/pdf',
+    modifiedTime: at(27, '0930'),
+    content: new Blob([LEASE_PDF], { type: 'application/pdf' }),
+    appProperties: { bowerOrigin: 'filed' },
+  },
+  // A photo from the viewing: the same tiny stub PNG as the garden test
+  // patch, filed with a camera-style name (spec D.1's own example).
+  {
+    path: '1-Projects/Flat hunt/Arlington Road, window sign.jpg',
+    mimeType: 'image/jpeg',
+    modifiedTime: at(27, '0935'),
+    content: pngBlob(TEST_PATCH_PNG),
+  },
+  // A Google Doc, exported as text (#367): a plain Markdown note, the way
+  // `drive.ts#exportPlanFor` saves one from a real Drive pick.
+  note(
+    '1-Projects/Flat hunt/Notes from the viewing.md',
+    27,
+    'document, home',
+    `# Notes from the viewing
+
+Arlington Road, one bedroom, top floor. Bright kitchen, small garden share. The landlord said the boiler was replaced last year. Ten minutes' walk to the station, twenty-five minutes to the office by bike.`,
   ),
 
   // --- Areas ---------------------------------------------------------------
