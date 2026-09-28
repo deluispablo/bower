@@ -1034,8 +1034,8 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   // line (#363), and the item being read.
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
-  await expect(sheet.getByText(/^[0-3] of 3 filed$/)).toBeVisible();
-  await expect(sheet.getByText('Playing back')).toBeVisible();
+  await expect(sheet.getByText(/^[0-3] of 3 · playing back$/)).toBeVisible();
+  await expect(sheet.getByText(/playing back/)).toBeVisible();
   await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(
@@ -1048,7 +1048,7 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
 
   // The scripted run files one item after another (`src/demo/server.ts`);
   // the app polls every five seconds, so some land before the run ends.
-  await expect(sheet.getByText(/^[12] of 3 filed$/)).toBeVisible({
+  await expect(sheet.getByText(/^[12] of 3 · playing back$/)).toBeVisible({
     timeout: 15_000,
   });
   await expect(

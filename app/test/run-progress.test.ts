@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { FOLDER_MIME } from '../src/drive.js';
+import { kindById } from '../src/kinds.js';
 import type { RunItem } from '../src/api.js';
 import type { DriveFile } from '../src/drive.js';
 import {
@@ -333,8 +334,8 @@ describe('runRows: where it went, what Bower read (board Flow-04-Working)', () =
     files: [],
     active: true,
     items,
-    companionKinds: new Map([
-      [to('Arlington Road, 2 bed.pdf'), 'rental-listing'],
+    companionLabels: new Map([
+      [to('Arlington Road, 2 bed.pdf'), readLabels(kindById('rental-listing'))],
     ]),
   });
 
@@ -349,7 +350,7 @@ describe('runRows: where it went, what Bower read (board Flow-04-Working)', () =
 
   it('"read: ..." carries the first three key-fact labels, lower-case', () => {
     expect(rows[0]).toMatchObject({ read: 'facts' });
-    expect(rows[0]?.readLabels).toEqual(readLabels('rental-listing'));
+    expect(rows[0]?.readLabels).toEqual(readLabels(kindById('rental-listing')));
     expect(rows[0]?.readLabels).toHaveLength(3);
     const joined = rows[0]?.readLabels.join(',') ?? '';
     expect(joined).toBe(joined.toLowerCase());

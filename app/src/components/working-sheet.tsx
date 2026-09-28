@@ -42,7 +42,6 @@ import { isDemo } from '../api.js';
 import { sinceLabel } from '../bower-tab.js';
 import { findCompanion } from '../companion.js';
 import { doneNotes, things } from '../home.js';
-import { loadNoteMeta } from '../note-meta.js';
 import { failureCopy } from '../run-failure.js';
 import { runKey } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
@@ -50,6 +49,7 @@ import {
   destinationsLabel,
   progressFor,
   readingLine,
+  readLabels,
   runCounts,
   runRows,
   waitingPaths,
@@ -277,8 +277,8 @@ export function WorkingSheet({
 
   // The kind of each filed item's companion note, read once per note
   // (`loadNoteMeta` is cached): "read: rent, rooms, dates" on the row.
-  const [companionKinds, setCompanionKinds] = useState<
-    ReadonlyMap<string, string>
+  const [companionLabels, setCompanionLabels] = useState<
+    ReadonlyMap<string, string[]>
   >(new Map());
   const filedItems = run?.items;
   const byPath = useMemo(
@@ -299,19 +299,20 @@ export function WorkingSheet({
       });
       if (companion === undefined) continue;
       const key = item.to;
-      loadNoteMeta(companion).then(
-        (meta) => {
-          if (cancelled) return;
-          setCompanionKinds((previous) =>
-            previous.get(key) === (meta.kind ?? '')
-              ? previous
-              : new Map(previous).set(key, meta.kind ?? ''),
+      // Loaded on demand: the kinds table and the note reader are not
+      // needed to start the app.
+      Promise.all([import('../note-meta.js'), import('../kinds.js')])
+        .then(async ([noteMeta, kinds]) => {
+          const meta = await noteMeta.loadNoteMeta(companion);
+          const labels = readLabels(
+            meta.kind === undefined ? undefined : kinds.kindById(meta.kind),
           );
-        },
-        (error: unknown) => {
+          if (cancelled) return;
+          setCompanionLabels((previous) => new Map(previous).set(key, labels));
+        })
+        .catch((error: unknown) => {
           console.error('Could not read a note for the working sheet', error);
-        },
-      );
+        });
     }
     return () => {
       cancelled = true;
@@ -426,7 +427,7 @@ export function WorkingSheet({
     active,
     items,
     setAside: run?.setAside,
-    companionKinds,
+    companionLabels,
   });
   const started = !active
     ? undefined

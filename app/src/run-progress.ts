@@ -18,7 +18,7 @@ import type { RunItem, RunItemKind, SetAsideItem } from './api.js';
 import type { ParaKind } from './components/folder-mark.js';
 import type { DriveFile } from './drive.js';
 import { formatPolicy } from './formats.js';
-import { kindById } from './kinds.js';
+import type { Kind } from './kinds.js';
 import { displayName, paraKindOf, pendingCount } from './navigation.js';
 import { fileKind, fileTitle } from './vault-index.js';
 
@@ -194,8 +194,7 @@ export function keptNote(
 
 /** The first three key-fact labels of the kind `kindId`, lower-case ("rent,
  * rooms, dates"); empty for an unknown kind. */
-export function readLabels(kindId: string | undefined): string[] {
-  const kind = kindId === undefined ? undefined : kindById(kindId);
+export function readLabels(kind: Kind | undefined): string[] {
   if (kind === undefined) return [];
   const labels: string[] = [];
   for (const key of kind.keyFacts) {
@@ -275,7 +274,7 @@ export function runRows(input: {
   setAside?: readonly SetAsideItem[];
   /** The kind id of each filed item's companion note, keyed by the item's
    * `to` path, as far as the sheet has read them. */
-  companionKinds?: ReadonlyMap<string, string>;
+  companionLabels?: ReadonlyMap<string, string[]>;
 }): RunRow[] {
   const { processed, waiting, files, active, items, setAside } = input;
   if (processed === undefined) return [];
@@ -294,7 +293,7 @@ export function runRows(input: {
       byPath.get(to ?? path) ??
       files.find((candidate) => candidate.name === name);
     const labels =
-      to === undefined ? [] : readLabels(input.companionKinds?.get(to));
+      to === undefined ? [] : (input.companionLabels?.get(to) ?? []);
     const asideNote = setAside?.find((aside) => aside.path === path);
     const kept = asideNote === undefined ? null : keptNote(asideNote);
     const isText = /\.(md|txt)$/i.test(name);
@@ -312,7 +311,7 @@ export function runRows(input: {
           ? null
           : labels.length > 0
             ? 'facts'
-            : isText || input.companionKinds?.has(to) === true
+            : isText || input.companionLabels?.has(to) === true
               ? 'plain'
               : null,
       readLabels: labels,
