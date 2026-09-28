@@ -47,7 +47,9 @@ describe('workingClasses', () => {
 });
 
 describe('sheetVisible', () => {
-  it('shows while queued, running or done, however long', () => {
+  it('shows while starting, queued, running or done, however long', () => {
+    // #505: `starting` shows at once, before the run store even has a run.
+    expect(sheetVisible('starting', 0, false)).toBe(true);
     expect(sheetVisible('queued', 0, false)).toBe(true);
     expect(sheetVisible('running', 10 * 60_000, false)).toBe(true);
     // The run store ends `done` itself (8 s, or on dismiss).
@@ -74,6 +76,8 @@ describe('sheetVisible', () => {
 
 describe('workingStateFor', () => {
   it('maps run phases to animation states', () => {
+    // #505: `starting` has no run yet, so it borrows `queued`'s bird.
+    expect(workingStateFor('starting')).toBe('queued');
     expect(workingStateFor('queued')).toBe('queued');
     expect(workingStateFor('running')).toBe('running');
     expect(workingStateFor('done')).toBe('done');
