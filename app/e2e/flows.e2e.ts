@@ -201,6 +201,15 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(inbox).toContainText('waiting to be filed');
   await inbox.getByRole('button', { name: 'Tidy up', exact: true }).click();
 
+  // The "Is that everything?" confirmation (#337) opens first; nothing
+  // starts until it is confirmed.
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText('3 things');
+  await shot(page, testInfo, 'tidy-confirm');
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(confirm).toBeHidden();
+
   // Running: the bubble says so; the card has no button, only its line.
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(
@@ -237,6 +246,10 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   await visible(
     page.getByRole('button', { name: 'Tidy up', exact: true }),
   ).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(confirm).toBeHidden();
 
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet).toBeVisible();
