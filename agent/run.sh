@@ -879,8 +879,7 @@ if [ "$candidate_count" -gt 0 ]; then
     while IFS= read -r path <&3; do
       [ -n "$path" ] || continue
       grep -Fxq -- "${path#0-Inbox/}" "$INSTRUCTIONS_FILE" ||
-        printf '%s
-' "$path" >>"$UNLISTED_FILE"
+        printf '%s\n' "$path" >>"$UNLISTED_FILE"
     done 3<"$CANDIDATES_FILE"
   else
     log "$STEP: listing failed, none trusted"
