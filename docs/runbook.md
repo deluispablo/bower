@@ -111,6 +111,8 @@ routes = [{ pattern = "api.example.com", custom_domain = true }]
 10. Deploy it, from `app/`: `../api/node_modules/.bin/wrangler pages deploy dist --project-name NAME --branch main` (`pnpm -C api exec wrangler` would run inside `api/`, read `api/wrangler.toml` and refuse it as a non-Pages config).
 11. Add the custom domain in the dashboard — there is no CLI command for it: **Workers & Pages → your Pages project → Custom domains → Set up a domain**, for example `app.example.com`.
 
+Settings' footer shows which commit is live (`Bower 0.1.0 · a1b2c3d`, #512): `vite.config.ts` bakes in Cloudflare Pages' own `CF_PAGES_COMMIT_SHA` when the build runs there, or `git rev-parse --short HEAD` otherwise (step 9's manual build, or `pnpm build` locally); neither available just drops the commit, not the whole line.
+
 `APP_ORIGIN` and `API_ORIGIN` **must share a registrable domain** (e.g. `app.example.com` and `api.example.com`): the session cookie is `SameSite=Lax`, so on the default `*.pages.dev` / `*.workers.dev` hostnames the browser never sends it and nobody can stay signed in. Full mechanics in `docs/security.md`.
 
 ### Every variable the Worker reads

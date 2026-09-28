@@ -19,3 +19,7 @@ interface ImportMeta {
 
 /** Injected by `vite.config.ts` from `package.json`'s `version`. */
 declare const __APP_VERSION__: string;
+
+/** Injected by `vite.config.ts` (#512): the short commit the build was
+ * made from, or `''` when it could not be determined. */
+declare const __BOWER_COMMIT__: string;
