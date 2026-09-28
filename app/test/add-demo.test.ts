@@ -129,44 +129,39 @@ describe('Add from your Drive in a demo build', () => {
   });
 });
 
-describe('Add door subtitles per the boards (#489)', () => {
-  it('Take a photo and Choose files read the real copy outside the demo', async () => {
+describe('Add doors per the boards (R-ADD-1)', () => {
+  it('reads the three short door words, with no subtitles', async () => {
     state.demo = false;
     await mountAdd();
-    expect(root.textContent).toContain('A receipt, a sign, a page of a book');
-    expect(root.textContent).toContain(
-      'Photos, PDFs, screenshots, voice memos',
-    );
-    expect(root.textContent).not.toContain('In the demo it stays in the page');
-  });
-
-  it('Take a photo and Choose files read the Demo-Add board in a demo build', async () => {
-    state.demo = true;
-    await mountAdd();
-    expect(root.textContent).toContain('In the demo it stays in the page');
-    expect(root.textContent).toContain('Photos, PDFs, screenshots');
+    const words = Array.from(
+      root.querySelectorAll('.add-doors > button.add-door'),
+    ).map((b) => b.textContent);
+    expect(words).toContain('Files');
     expect(root.textContent).not.toContain('voice memos');
-    expect(root.textContent).not.toContain(
-      'A receipt, a sign, a page of a book',
-    );
+    expect(root.textContent).not.toContain('In the demo it stays in the page');
   });
 });
 
-describe('the Add hint sentence per the Demo-Add board (#489)', () => {
-  it('reads the real sentence outside the demo', async () => {
+describe('the Add button carries the count in and out of the demo (R-ADD-5)', () => {
+  it('reads "Tidy up 3 things", with no hint sentence, outside the demo', async () => {
     state.demo = false;
     vaultFiles = [inboxFile('a.pdf'), inboxFile('b.pdf'), inboxFile('c.pdf')];
     await mountAdd();
-    expect(root.textContent).toContain('3 things waiting.');
-    expect(root.textContent).toContain('Add the whole pile first');
+    expect(root.querySelector('.add-tidy-button')?.textContent).toBe(
+      'Tidy up 3 things',
+    );
+    expect(root.textContent).not.toContain('Add the whole pile first');
   });
 
-  it("reads the board's recorded-run sentence in a demo build", async () => {
+  it('reads the same in a demo build', async () => {
     state.demo = true;
     vaultFiles = [inboxFile('a.pdf'), inboxFile('b.pdf'), inboxFile('c.pdf')];
     await mountAdd();
-    expect(root.textContent).toContain('3 things waiting.');
-    expect(root.textContent).toContain('Tap Tidy up and watch a recorded run');
-    expect(root.textContent).not.toContain('Add the whole pile first');
+    expect(root.querySelector('.add-tidy-button')?.textContent).toBe(
+      'Tidy up 3 things',
+    );
+    expect(root.textContent).not.toContain(
+      'Tap Tidy up and watch a recorded run',
+    );
   });
 });

@@ -105,8 +105,8 @@ async function flush(): Promise<void> {
 
 function cameraDoor(): HTMLButtonElement | undefined {
   const doors = root.querySelector('.add-doors');
-  return Array.from(doors?.querySelectorAll('button') ?? []).find((b) =>
-    (b.textContent ?? '').startsWith('Take a photo'),
+  return Array.from(doors?.querySelectorAll('button') ?? []).find(
+    (b) => b.getAttribute('aria-label') === 'Take a photo',
   );
 }
 
@@ -159,7 +159,7 @@ describe('Add: the camera door', () => {
     await flush();
     const door = cameraDoor();
     expect(door).toBeDefined();
-    expect(door?.textContent).toContain('A receipt, a sign, a page of a book');
+    expect(door?.textContent).toBe('Photo');
   });
 
   it('opens the capture input when pressed, and the photo joins the queue like any file', async () => {

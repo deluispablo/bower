@@ -11,7 +11,7 @@ import type { DriveFile } from '../src/drive.js';
 // #262/M3: the service worker redirects a share to `/add?shared=1` with the
 // files waiting in Cache Storage (`share-target.ts`). They must join the
 // queue as waiting cards, same as a chosen or dropped file, and never
-// upload on their own — only "Add to Bower" (the same button) uploads them.
+// upload on their own — only the Tidy up button (which uploads them first) does.
 // `/add?shared=failed` (#134) is the service worker reporting that nothing
 // usable came through; the page shows one sentence and queues nothing.
 
@@ -139,10 +139,8 @@ describe('Add: shared files', () => {
     expect(card?.textContent).toContain('Waiting');
     expect(upload).not.toHaveBeenCalled();
 
-    const addButton = Array.from(root.querySelectorAll('button')).find((b) =>
-      (b.textContent ?? '').includes('Add to Bower'),
-    );
-    if (addButton === undefined) throw new Error('Add to Bower button missing');
+    const addButton = root.querySelector<HTMLButtonElement>('.add-tidy-button');
+    if (addButton === null) throw new Error('Tidy up button missing');
     void act(() => addButton.click());
     await waitFor(() => upload.mock.calls.length > 0);
 
