@@ -161,6 +161,7 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
 
 ## Areas
 - [[Home]], [[Health]], [[Money]], [[Garden]]
+- [[Shopping list]] · under Home
 
 ## Resources
 - [[Cooking]], [[Reading list]], [[Packing light]]
@@ -252,7 +253,7 @@ A week in Lisbon, 14 to 21 October. Goal: rest, walk a lot, eat well.
 ## Still open
 - Book the day trip to Sintra
 - Travel insurance: check the card's cover`,
-    'status: active\npinned: 2026-09-24T18:00:00.000Z\n',
+    'status: active\n',
   ),
   note(
     '1-Projects/Lisbon Trip/Flights and stays.md',
@@ -371,6 +372,14 @@ Taper the last ten days. Log every run in [[Running log]].`,
   // `Demo-Tidy-Confirm` boards): the PDF, the photo and the Google Doc
   // (exported as text) those boards show, already filed rather than
   // pending — the scripted run's own three inbox items are untouched.
+  // Pinned to Home (#489, `Demo-Home` board): a note pin, not a folder
+  // pin — `hydratePinnedAt` (`vault-store.tsx`) checks every note before
+  // any folder note, capped at `PINNED_HYDRATION_FETCH_CAP` (12) fetches
+  // per load, and the fixture has ~30; a folder pin would never be
+  // reached on a first, cold-cache visit. "Flat hunt.md" sorts 4th by
+  // path, well inside the cap, so this one reliably shows. See the PR's
+  // "Left out" for the board's folder-style tile ("1-Projects · 6
+  // things"), not reproduced here for the same reason.
   note(
     '1-Projects/Flat hunt/Flat hunt.md',
     27,
@@ -385,7 +394,7 @@ Looking for a one-bedroom before the current lease runs out in December.
 ## Still open
 - Ask about the deposit protection scheme
 - Compare the bike commute for each one`,
-    'status: active\n',
+    'status: active\npinned: 2026-09-27T08:00:00.000Z\n',
   ),
   {
     path: '1-Projects/Flat hunt/Lease agreement 2026.pdf',
@@ -423,7 +432,23 @@ Arlington Road, one bedroom, top floor. Bright kitchen, small garden share. The 
 
 - [[Boiler]]
 - [[Bills and renewals]]
+- [[Shopping list]]
 - Project: [[Kitchen Refresh]]`,
+  ),
+  // The board also pins this one ("Shopping list · 2-Areas / Home",
+  // #489, `Demo-Home` board); not pinned here — see the PR's "Left out".
+  note(
+    '2-Areas/Home/Shopping list.md',
+    25,
+    'inventory, home',
+    `# Shopping list
+
+- Milk, eggs, bread
+- Washing-up liquid
+- Light bulbs for the hallway
+- Bin bags
+
+Part of [[Home]].`,
   ),
   note(
     '2-Areas/Home/Boiler.md',
