@@ -17,9 +17,7 @@ export type MoreMenuKind = 'note' | 'file' | 'folder';
  */
 export function moreMenuMeta(typeLabel: string, path: string): string {
   const folder = folderOf(path);
-  return folder === ''
-    ? typeLabel
-    : `${typeLabel} · ${displayPath(folder)}`;
+  return folder === '' ? typeLabel : `${typeLabel} · ${displayPath(folder)}`;
 }
 
 /**

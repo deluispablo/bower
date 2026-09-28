@@ -28,29 +28,28 @@ export const ROOT_FOLDERS: readonly RootFolder[] = [
   { name: 'Answers', meaning: 'What Bower wrote back to you' },
 ];
 
-const MEANINGS: Readonly<Record<ParaKind, { full: string; short: string }>> =
-  {
-    inbox: {
-      full: 'Waiting for the next tidy-up',
-      short: 'Waiting for the next tidy-up',
-    },
-    projects: {
-      full: 'Things with an end date',
-      short: 'Things with an end date',
-    },
-    areas: {
-      full: 'Parts of life that go on: home, health, money',
-      short: 'Parts of life that go on',
-    },
-    resources: {
-      full: 'Things to keep: articles, recipes, manuals',
-      short: 'Things to keep',
-    },
-    archives: {
-      full: 'Finished, kept, never deleted',
-      short: 'Finished, kept, never deleted',
-    },
-  };
+const MEANINGS: Readonly<Record<ParaKind, { full: string; short: string }>> = {
+  inbox: {
+    full: 'Waiting for the next tidy-up',
+    short: 'Waiting for the next tidy-up',
+  },
+  projects: {
+    full: 'Things with an end date',
+    short: 'Things with an end date',
+  },
+  areas: {
+    full: 'Parts of life that go on: home, health, money',
+    short: 'Parts of life that go on',
+  },
+  resources: {
+    full: 'Things to keep: articles, recipes, manuals',
+    short: 'Things to keep',
+  },
+  archives: {
+    full: 'Finished, kept, never deleted',
+    short: 'Finished, kept, never deleted',
+  },
+};
 
 /** Answers and Clippings carry a line too (spec §9 Q1). */
 const OTHER_MEANINGS: Readonly<Record<string, string>> = {

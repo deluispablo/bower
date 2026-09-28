@@ -14,11 +14,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The five landmark folders of the Bower folder (spec §6.1 R-SYS-2). */
 export type ParaKind =
-  | 'inbox'
-  | 'projects'
-  | 'areas'
-  | 'resources'
-  | 'archives';
+  'inbox' | 'projects' | 'areas' | 'resources' | 'archives';
 
 /** The landmarks in their fixed order (R-SYS-3), by their prefix digit. */
 const PARA_KINDS: readonly ParaKind[] = [
