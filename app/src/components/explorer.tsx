@@ -68,9 +68,7 @@ export const HEALTH_PATH = '/health';
 
 /** The `?reveal=` value "Show in folders" (#608, `revealHref`) put on `/notes`. */
 function revealParam(): string | undefined {
-  return (
-    new URLSearchParams(window.location.search).get('reveal') ?? undefined
-  );
+  return new URLSearchParams(window.location.search).get('reveal') ?? undefined;
 }
 
 /**
