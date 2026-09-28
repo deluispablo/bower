@@ -110,9 +110,11 @@ describe('thumbnailUrl', () => {
 describe('formatSize and typeLine', () => {
   it('says a size in bytes, KB or MB', () => {
     expect(formatSize(820)).toBe('820 bytes');
-    expect(formatSize(14_200)).toBe('14 KB');
-    expect(formatSize(1_234_567)).toBe('1.2 MB');
-    expect(formatSize(23_400_000)).toBe('23 MB');
+    expect(formatSize(1023)).toBe('1023 bytes');
+    expect(formatSize(340 * 1024)).toBe('340 KB');
+    expect(formatSize(Math.round(2.4 * 1024 * 1024))).toBe('2.4 MB');
+    expect(formatSize(38 * 1024 * 1024)).toBe('38 MB');
+    expect(formatSize(86 * 1024 * 1024)).toBe('86 MB');
   });
 
   it('is the type word, then the size when Drive knows it', () => {
@@ -120,7 +122,7 @@ describe('formatSize and typeLine', () => {
       typeLine({
         name: 'Lease.pdf',
         mimeType: 'application/pdf',
-        size: 1_200_000,
+        size: 1_258_291,
       }),
     ).toBe('PDF · 1.2 MB');
     expect(
@@ -185,7 +187,7 @@ describe('kindWord and metaFacts', () => {
       metaFacts({
         name: 'Sign.jpg',
         mimeType: 'image/jpeg',
-        size: 2_400_000,
+        size: 2_516_582,
         imageMediaMetadata: { time: '2026:09:26 10:00:00' },
       }),
     ).toEqual(['Taken 26 Sep', '2.4 MB']);
@@ -199,14 +201,14 @@ describe('kindWord and metaFacts', () => {
       metaFacts({
         name: 'Walk.mp4',
         mimeType: 'video/mp4',
-        size: 86_000_000,
+        size: 90_177_536,
         modifiedTime: '2026-09-26T11:20:00.000Z',
         videoMediaMetadata: { durationMillis: 134_000 },
       }),
     ).toEqual(['2 min 14 s', '86 MB', '26 Sep']);
     expect(
       metaFacts(
-        { name: 'Lease.pdf', mimeType: 'application/pdf', size: 1_100_000 },
+        { name: 'Lease.pdf', mimeType: 'application/pdf', size: 1_153_434 },
         { pages: 42 },
       ),
     ).toEqual(['42 pages', '1.1 MB']);
@@ -220,7 +222,7 @@ describe('kindWord and metaFacts', () => {
       metaFacts({
         name: 'a.zip',
         mimeType: 'application/zip',
-        size: 38_000_000,
+        size: 39_845_888,
       }),
     ).toEqual(['38 MB']);
   });
