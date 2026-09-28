@@ -105,9 +105,14 @@ export function buildHeaders({ apiUrl, googleApiKey }) {
     `img-src 'self' data: blob: https://*.googleusercontent.com`,
     `font-src 'self'`,
     `worker-src 'self'`,
-    ...(pickerEnabled
-      ? [`frame-src https://apis.google.com https://docs.google.com`]
-      : []),
+    // Drive's own preview frame (/file/d/<id>/preview) is always admitted;
+    // the Picker's loader and dialog hosts only when a Picker key is set.
+    [
+      `frame-src https://drive.google.com`,
+      ...(pickerEnabled
+        ? [`https://apis.google.com`, `https://docs.google.com`]
+        : []),
+    ].join(' '),
     `frame-ancestors 'none'`,
     `object-src 'none'`,
     `base-uri 'self'`,
