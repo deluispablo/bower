@@ -270,6 +270,28 @@
   font-size: var(--text-sm);
 }
 
+/* "In your rules" on a kept rule: a link-looking button to the Rules tab. */
+.bower-request-link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bower-request-link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.bower-state--kept {
+  background: rgb(95 207 188 / 0.2);
+  color: var(--color-text);
+}
+
 /* A state chip: a word on a tint, never the hue alone (C.11). */
 .bower-state {
   display: inline-flex;
@@ -284,4 +306,209 @@
 .bower-state--waiting {
   background: rgb(240 182 79 / 0.2);
   color: var(--color-text);
+}
+
+.bower-changing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.bower-changing-cancel {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+/* Rules (#342, boards Phone-Bower and Phone-Rule-Menu): the explanation on
+ * top, Suggested (`suggested-rules.css`), then the topic groups with their
+ * counts. */
+
+.rules-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rules-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.rules-tip b {
+  color: var(--color-text);
+}
+
+.rules-tip .icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--color-link);
+}
+
+.rules-status {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.rules-group-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rules-group-row > .icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--color-accent);
+}
+
+.rules-group-chevron {
+  display: inline-flex;
+  color: var(--color-text-muted);
+  transition: transform var(--motion-base) var(--ease-out);
+}
+
+.rules-group-chevron .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.rules-group-row[aria-expanded='true'] .rules-group-chevron {
+  transform: rotate(90deg);
+}
+
+.rules-group-name {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rules-group-count {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  padding: 0 0 0 26px;
+  list-style: none;
+}
+
+.rules-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rules-rule:hover {
+  background: var(--color-surface-hover);
+}
+
+.rules-rule > .icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+}
+
+.rules-rule-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.rules-rule-text {
+  overflow-wrap: anywhere;
+}
+
+.rules-rule-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.bower-state--paused {
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.rules-more {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rules-group-row:focus-visible,
+.rules-rule:focus-visible,
+.rules-more:focus-visible,
+.bower-changing-cancel:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rules-group-chevron {
+    transition: none;
+  }
 }

@@ -18,7 +18,7 @@ import { createDemo } from '../src/demo/index.js';
 import { ROOT_ID } from '../src/demo/vault.js';
 import { allRules, parseRules, RuleError } from '../src/rules.js';
 import type { RuleEdit, RuleRef } from '../src/rules.js';
-import { runRuleEdit } from '../src/vault-store.js';
+import { runKeepRule, runRuleEdit } from '../src/vault-store.js';
 
 const RULES = [
   '# Rules',
@@ -123,5 +123,49 @@ describe('runRuleEdit', () => {
       }),
     ).rejects.toBeInstanceOf(SaveError);
     expect(await getText(file.id)).toContain('- Added elsewhere.');
+  });
+});
+
+describe('runKeepRule', () => {
+  it('appends a rule sentence under the topic it names, in Drive', async () => {
+    const kept = await runKeepRule({
+      folderId: ROOT_ID,
+      rulesFile: await rulesFile(),
+      sentence: 'Never archive Finance statements',
+      on: '2026-09-29',
+    });
+    const text = await getText((await rulesFile()).id);
+    expect(kept.topic).toBe('Finance');
+    expect(kept.createdRules).toBe(false);
+    expect(kept.rules?.text).toBe(text);
+    expect(text).toContain(
+      "- ~~Never archive Finance~~ (paused 2026-09-27)\n- Never archive Finance statements (owner's request, 2026-09-29)\n",
+    );
+  });
+
+  it('writes nothing when the rule is already there', async () => {
+    const before = await rulesFile();
+    const kept = await runKeepRule({
+      folderId: ROOT_ID,
+      rulesFile: before,
+      sentence: 'Receipts go to Finance, named by shop and date',
+      on: '2026-09-29',
+    });
+    expect(kept.rules).toBeNull();
+    expect((await rulesFile()).modifiedTime).toBe(before.modifiedTime);
+  });
+
+  it('creates Rules.md when the folder has none', async () => {
+    const kept = await runKeepRule({
+      folderId: ROOT_ID,
+      rulesFile: undefined,
+      sentence: 'Always file recipes under Cooking',
+      on: '2026-09-29',
+    });
+    expect(kept.createdRules).toBe(true);
+    expect(kept.topic).toBe('Cooking');
+    expect(kept.rules?.text).toBe(
+      "## Cooking\n- Always file recipes under Cooking (owner's request, 2026-09-29)\n",
+    );
   });
 });

@@ -69,7 +69,13 @@ import {
   rulesWithUserLines,
   splitLegacyRules,
 } from './rulebook.js';
-import { applyRuleEdit, RuleError } from './rules.js';
+import {
+  appendRule,
+  applyRuleEdit,
+  guessTopic,
+  parseRules,
+  RuleError,
+} from './rules.js';
 import type { RuleEdit } from './rules.js';
 import { useSession } from './session.js';
 import {
@@ -164,6 +170,13 @@ export interface Vault extends VaultState {
    * `RuleError('missing')` when the rule (or the file) is no longer there.
    */
   editRule: (edit: RuleEdit) => Promise<void>;
+  /**
+   * Keeps a rule sentence at once, without a run (#343, `runKeepRule`):
+   * appended to `Rules.md` under the topic `guessTopic` picks (the file
+   * read fresh, created when missing, the write conflict-checked), then the
+   * cached text and listing updated. Resolves to that topic.
+   */
+  keepRule: (sentence: string) => Promise<string>;
 }
 
 /** What `updateRules` did. */
@@ -720,6 +733,56 @@ export async function runRuleEdit(
   });
 }
 
+export interface KeepRuleInput {
+  /** The Bower folder, where a missing `Rules.md` is created. */
+  folderId: string;
+  /** `Rules.md` as listed, when the folder has one. */
+  rulesFile: DriveFile | undefined;
+  /** The sentence as the person wrote it. */
+  sentence: string;
+  /** `YYYY-MM-DD` the rule is dated. */
+  on: string;
+}
+
+/** What `runKeepRule` wrote, for the caller to patch its cache with. */
+export interface KeptRuleWrites {
+  /** The topic the rule went under. */
+  topic: string;
+  /** `Rules.md` after the write, or `null` when the rule was already there. */
+  rules: { text: string; file: DriveFile } | null;
+  /** Whether `Rules.md` was created (it is not in any listing yet). */
+  createdRules: boolean;
+}
+
+/**
+ * A rule sentence kept at once (#343, handover D.2), through Drive, the way
+ * Accept writes (`runProposalDecision`): reads `Rules.md` fresh, guesses
+ * the topic from the topics it already has (`guessTopic`), appends the rule
+ * there (`appendRule`, which adds nothing when the rule is already in the
+ * file) and saves it conflict-checked against the `modifiedTime` just
+ * read, or creates `Rules.md` when the folder has none.
+ */
+export async function runKeepRule(
+  input: KeepRuleInput,
+): Promise<KeptRuleWrites> {
+  const { folderId, rulesFile, sentence, on } = input;
+  const before =
+    rulesFile !== undefined ? await readNoteForEdit(rulesFile.id) : null;
+  const md = before?.text ?? '';
+  const topics = parseRules(md).groups.map((group) => group.topic);
+  const topic = guessTopic(sentence, topics);
+  const text = appendRule(md, sentence, topic, on);
+  if (text === md) return { topic, rules: null, createdRules: false };
+  if (rulesFile === undefined || before === null) {
+    const created = await createTextFile(folderId, RULES_PATH, text);
+    return { topic, rules: { text, file: created }, createdRules: true };
+  }
+  const rules = await saveNoteText(rulesFile, text, {
+    baseModifiedTime: before.modifiedTime,
+  });
+  return { topic, rules, createdRules: false };
+}
+
 /** Attempts per note or folder-note pin write: the first one plus one retry
  * after a conflict, same as `appendToFile`. */
 const PIN_ATTEMPTS = 2;
@@ -1254,6 +1317,25 @@ export function VaultProvider({ children }: VaultProviderProps) {
     [recordNote],
   );
 
+  const keepRule = useCallback(
+    async (sentence: string): Promise<string> => {
+      if (folderId === null) throw new Error('No Bower folder yet.');
+      const kept = await runKeepRule({
+        folderId,
+        rulesFile: stateRef.current.index?.byPath.get(RULES_PATH),
+        sentence,
+        on: dayOf(new Date()),
+      });
+      if (kept.rules !== null) {
+        await recordNote(kept.rules.file.id, kept.rules.text, kept.rules.file);
+      }
+      // A new `Rules.md` is not in the listing yet: list the folder again.
+      if (kept.createdRules) await load('refresh');
+      return kept.topic;
+    },
+    [folderId, recordNote, load],
+  );
+
   const value: Vault = {
     ...state,
     refresh,
@@ -1269,6 +1351,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
     submitInterview,
     decideProposal,
     editRule,
+    keepRule,
   };
 
   return (

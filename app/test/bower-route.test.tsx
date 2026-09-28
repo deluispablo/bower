@@ -53,6 +53,13 @@ const createTextFile = vi.fn<CreateTextFile>((_parent, name) =>
 );
 
 const refresh = vi.fn(() => Promise.resolve());
+// Stable across renders, as the vault's own callbacks are.
+const getNoteText = vi.fn(() => Promise.resolve(''));
+const editRule = vi.fn(() => Promise.resolve());
+const decideProposal = vi.fn(() => Promise.resolve());
+const keepRule = vi.fn<(sentence: string) => Promise<string>>(() =>
+  Promise.resolve('Finance'),
+);
 
 vi.mock('../src/drive.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/drive.js')>()),
@@ -67,12 +74,17 @@ vi.mock('../src/session.js', () => ({
   useSession: () => ({ me, setMe: vi.fn(), signOut: vi.fn() }),
 }));
 
-vi.mock('../src/vault-store.js', () => ({
+vi.mock('../src/vault-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => ({
     index: null,
     files: state.files,
     fetchedAt: state.fetchedAt,
     refresh,
+    getNoteText,
+    editRule,
+    decideProposal,
+    keepRule,
   }),
 }));
 
@@ -109,6 +121,7 @@ beforeEach(() => {
   state.query = {};
   createTextFile.mockClear();
   refresh.mockClear();
+  keepRule.mockClear();
 });
 
 afterEach(() => {
@@ -163,7 +176,6 @@ describe('the Bower tab', () => {
       },
     ];
     await mount();
-    expect(root.textContent).not.toContain('Nothing yet');
     const toggle = buttonNamed('Things you can ask');
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
     await act(() => {
@@ -219,6 +231,72 @@ describe('the Bower tab', () => {
     });
     expect(root.textContent).toContain('Could not send that. Try again.');
     expect(box().value).toBe('Hello');
+    consoleError.mockRestore();
+  });
+});
+
+describe('a rule kept at once (#343)', () => {
+  async function send(text: string): Promise<void> {
+    await act(() => {
+      box().value = text;
+      box().dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      buttonNamed('Send')?.click();
+      await Promise.resolve();
+    });
+  }
+
+  it('keeps a "from now on" sentence in your rules: no note, Rule kept under Requests', async () => {
+    await mount();
+    await send('  From now on, receipts go under Finance');
+
+    expect(keepRule).toHaveBeenCalledWith(
+      'From now on, receipts go under Finance',
+    );
+    expect(createTextFile).not.toHaveBeenCalled();
+    expect(box().value).toBe('');
+    const requests = root.querySelector('#bower-panel-requests');
+    expect(requests?.hasAttribute('hidden')).toBe(false);
+    const row = [...(requests?.querySelectorAll('li') ?? [])].find((li) =>
+      li.textContent?.includes('From now on, receipts go under Finance'),
+    );
+    expect(row?.textContent).toContain('Rule kept');
+    expect(row?.textContent).not.toContain('Waiting');
+
+    const link = [...(row?.querySelectorAll('button') ?? [])].find(
+      (b) => b.textContent === 'In your rules',
+    );
+    await act(() => {
+      link?.click();
+    });
+    expect(
+      root.querySelector('#bower-panel-rules')?.hasAttribute('hidden'),
+    ).toBe(false);
+  });
+
+  it('a question and a job wait for the next tidy-up, each named', async () => {
+    await mount();
+    await send('Which flat should I visit first?');
+    await send('Make a packing list for my next trip');
+
+    expect(keepRule).not.toHaveBeenCalled();
+    expect(createTextFile).toHaveBeenCalledTimes(2);
+    const text = root.querySelector('#bower-panel-requests')?.textContent;
+    expect(text).toContain('Waiting · question');
+    expect(text).toContain('Waiting · job');
+  });
+
+  it('keeps the sentence in the box and says so when the rule cannot be saved', async () => {
+    keepRule.mockRejectedValueOnce(new Error('Drive said no'));
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    await mount();
+    await send('Never archive Finance');
+    expect(root.textContent).toContain('Could not keep that rule. Try again.');
+    expect(box().value).toBe('Never archive Finance');
+    expect(createTextFile).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
 });

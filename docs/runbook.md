@@ -244,7 +244,7 @@ The instance repo's `lint.yml` runs on its own every Sunday at 06:17 UTC: its `d
 
 ### Updating Bower's rules
 
-Each Bower folder holds three rule files with three owners: `CLAUDE.md` is Bower's rulebook, copied from `vault-template/CLAUDE.md` and never edited by the agent; `Rules.md` holds the user's own rules (the agent adds the permanent ones a user asks for through Tell Bower); `About-Me.md` is the user's profile. The agent reads them in that order, and `Rules.md` wins over `CLAUDE.md` except for the rulebook's protected-path rules.
+Each Bower folder holds three rule files with three owners: `CLAUDE.md` is Bower's rulebook, copied from `vault-template/CLAUDE.md` and never edited by the agent; `Rules.md` holds the user's own rules (a sentence sent from the Bower tab that starts with "From now on", "Always", "Never" or "Every time" is added by the app at once, under the topic heading it names, with no run; the agent adds the other permanent ones a user asks for); `About-Me.md` is the user's profile. The agent reads them in that order, and `Rules.md` wins over `CLAUDE.md` except for the rulebook's protected-path rules.
 
 `CLAUDE.md` carries `bower_rules_version` in its frontmatter; one without it (every folder created before #197) counts as version 1. A deploy whose template has a higher number does not touch anyone's folder. Instead, each user sees **Settings → Advanced → "Update Bower's rules (v1 → v2)"** once the app has read their rulebook. Tapping it:
 
