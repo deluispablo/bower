@@ -85,6 +85,37 @@ export function IconNote(): JSX.Element {
   );
 }
 
+/** A PDF on a folder screen (#349): the note's page with one short line more. */
+export function IconPdf(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4M9 13h6M9 16h6M9 10h2" />
+    </Svg>
+  );
+}
+
+/** A photo or any other image on a folder screen (#349). */
+export function IconImage(): JSX.Element {
+  return (
+    <Svg>
+      <rect x="4" y="5" width="16" height="14" rx="2" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="M20 16l-5-5-7 8" />
+    </Svg>
+  );
+}
+
+/** A Google Doc, a note copied from Drive, or any other file (#349). */
+export function IconDoc(): JSX.Element {
+  return (
+    <Svg>
+      <rect x="5" y="3" width="14" height="18" rx="2" />
+      <path d="M9 9h6M9 13h6M9 17h4" />
+    </Svg>
+  );
+}
+
 export function IconChevronRight(): JSX.Element {
   return (
     <Svg>

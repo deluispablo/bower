@@ -321,6 +321,31 @@ export function driveFolderUrl(file: {
   );
 }
 
+/** Where a file opens in Google Drive: its `webViewLink`, else its own Drive URL. */
+export function driveFileUrl(file: {
+  id: string;
+  webViewLink?: string;
+}): string {
+  return (
+    file.webViewLink ??
+    `https://drive.google.com/file/d/${encodeURIComponent(file.id)}/view`
+  );
+}
+
+/**
+ * A folder row's age, as short as the row's right edge allows (the
+ * Phone-Folder-Project board): "today", "3 d", "2 w", "4 mo", "1 y".
+ */
+export function shortAge(iso: string, now: number | Date): string {
+  const nowMs = now instanceof Date ? now.getTime() : now;
+  const days = Math.floor(Math.max(0, nowMs - Date.parse(iso)) / DAY_MS);
+  if (days === 0) return 'today';
+  if (days < 7) return `${days} d`;
+  if (days < 30) return `${Math.floor(days / 7)} w`;
+  if (days < 365) return `${Math.floor(days / 30)} mo`;
+  return `${Math.floor(days / 365)} y`;
+}
+
 function findNode(node: TreeNode, path: string): TreeNode | null {
   if (node.path === path) return node;
   for (const folder of node.folders) {
@@ -344,14 +369,28 @@ export interface FolderContents {
   subfolders: FolderSubfolder[];
   /** This folder's own notes (not its subfolders'), newest first. */
   notes: DriveFile[];
+  /** This folder's own other files (PDFs, photos, Google Docs…), newest first. */
+  files: DriveFile[];
+  /** `notes` and `files` together, newest first: the folder screen's list (#349). */
+  items: DriveFile[];
   /** Notes anywhere under this folder, subfolders included (the header count). */
   noteCount: number;
+  /** Other files anywhere under this folder, subfolders included. */
+  fileCount: number;
+}
+
+function newestFirst(a: DriveFile, b: DriveFile): number {
+  return (
+    (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
+    compareNames(a.name, b.name)
+  );
 }
 
 /**
  * A folder's contents for the Folder screen (issue #214): its direct
  * subfolders (each with its own recursive note count, `folderCounts`) and
- * its own notes, always newest first regardless of `sort` — unlike the
+ * its own notes and other files (#349), always newest first regardless of
+ * `sort` — unlike the
  * tree, where "by name" also puts a hub note first. `sort` only orders the
  * subfolders, the same preference as the explorer's tree (`explorerSort`).
  * `null` when `path` does not resolve to a visible folder (deleted, or
@@ -375,17 +414,21 @@ export function folderContents(
     name: folder.name,
     count: counts.get(folder.path) ?? 0,
   }));
-  const notes = [...node.notes].sort(
-    (a, b) =>
-      (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
-      compareNames(a.name, b.name),
-  );
+  const notes = [...node.notes].sort(newestFirst);
+  const prefix = path === '' ? '' : `${path}/`;
+  const under = index.files.filter((file) => file.path.startsWith(prefix));
+  const files = under
+    .filter((file) => folderOf(file.path) === path)
+    .sort(newestFirst);
   return {
     path: node.path,
     name: node.name,
     subfolders,
     notes,
+    files,
+    items: [...notes, ...files].sort(newestFirst),
     noteCount: counts.get(path) ?? 0,
+    fileCount: under.length,
   };
 }
 
@@ -413,13 +456,18 @@ export interface FolderEmptyState {
  * subfolder the name is a "for instance", not a claim every note is there.
  */
 export function folderEmptyState(contents: FolderContents): FolderEmptyState {
-  if (contents.notes.length > 0) return { empty: false, elsewhere: null };
-  if (contents.noteCount === 0) return { empty: true, elsewhere: null };
+  // Files count too (#349): a folder holding only a PDF is not empty, and
+  // one with only files a level down names them ("2 files in …") when it
+  // has no notes to name.
+  if (contents.items.length > 0) return { empty: false, elsewhere: null };
+  const total =
+    contents.noteCount > 0 ? contents.noteCount : contents.fileCount;
+  if (total === 0) return { empty: true, elsewhere: null };
   const holder = contents.subfolders.find((folder) => folder.count > 0);
   return {
     empty: false,
     elsewhere: {
-      count: contents.noteCount,
+      count: total,
       subfolderName: holder?.name ?? contents.subfolders[0]?.name ?? '',
     },
   };

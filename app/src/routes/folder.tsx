@@ -4,7 +4,10 @@
  * card, a note's breadcrumb, the desktop tree's folder name, or another
  * Folder screen's own subfolder rows. Shows the folder's icon and name, its
  * counts, a chip row (Pinned, Ask Bower about it, Open in Drive), its
- * subfolders (with their own counts) and its own notes, newest first.
+ * subfolders (with their own counts) and its own notes and files together,
+ * newest first (#349): each row with the type icon, the title and who put
+ * it there (`file-origin.ts`). A note opens in the app; any other file
+ * opens in Google Drive for now.
  *
  * The chips share `styles/layout.css`'s generic `.chip` (already used by
  * `tell-composer.tsx`). Pinned toggles the folder's own pin (#215, #216:
@@ -20,15 +23,18 @@
  */
 
 import type { JSX } from 'preact';
-import { useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
 import { Bird } from '../components/bird.js';
 import {
   IconChat,
+  IconDoc,
   IconExternalLink,
   IconFolder,
+  IconImage,
   IconNote,
+  IconPdf,
   IconPin,
 } from '../components/icons.js';
 import { BackLink } from '../components/back-link.js';
@@ -36,23 +42,121 @@ import { useShellSlot } from '../components/shell-slots.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
 import {
+  CATALOGUE_PATH,
+  originLine,
+  originOf,
+  parseCatalogueOrigins,
+} from '../file-origin.js';
+import type { Origin } from '../file-origin.js';
+import {
   breadcrumb,
+  driveFileUrl,
   driveFolderUrl,
   folderContents,
   folderEmptyState,
   folderHref,
-  relativeTime,
+  shortAge,
 } from '../navigation.js';
 import type { BreadcrumbSegment, FolderContents } from '../navigation.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { useVault } from '../vault-store.js';
+import { fileKind, fileTitle } from '../vault-index.js';
 import '../styles/folder.css';
 
 /** "1 note" / "3 notes", "1 folder" / "2 folders" — the header's count line. */
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+/** The header's line under the name, as the Phone-Folder-Project board has
+ * it: "1-Projects · 4 files · 2 notes · pinned". Files and folders only
+ * when there are any; notes always. */
+function metaLine(
+  contents: FolderContents,
+  parentName: string | null,
+  pinned: boolean,
+): string {
+  const parts: string[] = [];
+  if (parentName !== null) parts.push(parentName);
+  if (contents.fileCount > 0) parts.push(plural(contents.fileCount, 'file'));
+  parts.push(plural(contents.noteCount, 'note'));
+  if (contents.subfolders.length > 0) {
+    parts.push(plural(contents.subfolders.length, 'folder'));
+  }
+  if (pinned) parts.push('pinned');
+  return parts.join(' · ');
+}
+
+/**
+ * The origins `index.md` states (`parseCatalogueOrigins`), read once per
+ * version of the catalogue through the vault's note cache. Empty until the
+ * text arrives, and when there is no catalogue or it cannot be read (the
+ * rows then fall back to their app properties or "in this folder").
+ */
+function useCatalogueOrigins(
+  catalogue: DriveFile | undefined,
+  getNoteText: (id: string) => Promise<string>,
+): ReadonlyMap<string, Origin> {
+  const [origins, setOrigins] = useState<ReadonlyMap<string, Origin>>(
+    () => new Map(),
+  );
+  const id = catalogue?.id;
+  const version = catalogue?.modifiedTime;
+
+  useEffect(() => {
+    if (id === undefined) {
+      setOrigins(new Map());
+      return;
+    }
+    let cancelled = false;
+    getNoteText(id).then(
+      (text) => {
+        if (!cancelled) setOrigins(parseCatalogueOrigins(text));
+      },
+      (err: unknown) => {
+        console.error(err);
+        if (!cancelled) setOrigins(new Map());
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [id, version, getNoteText]);
+
+  return origins;
+}
+
+/** A row's type icon, coloured by kind (`folder.css`). A note copied from
+ * Drive keeps the Drive page icon, as on the board. */
+function KindIcon({
+  file,
+  origin,
+}: {
+  file: DriveFile;
+  origin: Origin | null;
+}): JSX.Element {
+  const kind = fileKind(file);
+  let icon: JSX.Element;
+  let tone: string;
+  if (kind === 'note') {
+    icon = origin === 'drive' ? <IconDoc /> : <IconNote />;
+    tone = origin === 'drive' ? 'drive' : 'note';
+  } else if (kind === 'pdf') {
+    icon = <IconPdf />;
+    tone = 'pdf';
+  } else if (kind === 'photo' || kind === 'image') {
+    icon = <IconImage />;
+    tone = 'image';
+  } else {
+    icon = <IconDoc />;
+    tone =
+      kind === 'doc' || kind === 'sheet' || kind === 'slides'
+        ? 'drive'
+        : 'note';
+  }
+  return <span class={`folder-row-icon tone-${tone}`}>{icon}</span>;
 }
 
 interface FolderCrumbProps {
@@ -83,6 +187,8 @@ function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
 interface FolderBodyProps {
   contents: FolderContents;
   parentName: string | null;
+  /** Who put each file there, from `index.md` (`useCatalogueOrigins`). */
+  catalogue: ReadonlyMap<string, Origin>;
   /** The folder's own Drive file, for "Open in Drive"; always set in
    * practice (`contents` only exists for a folder the index already has). */
   file: DriveFile | undefined;
@@ -99,6 +205,7 @@ interface FolderBodyProps {
 function FolderBody({
   contents,
   parentName,
+  catalogue,
   file,
   pinned,
   onTogglePin,
@@ -116,11 +223,7 @@ function FolderBody({
         <IconFolder />
         <div class="folder-head-text">
           <h1>{contents.name}</h1>
-          <p class="folder-meta">
-            {parentName !== null ? `${parentName} · ` : ''}
-            {plural(contents.noteCount, 'note')} ·{' '}
-            {plural(contents.subfolders.length, 'folder')}
-          </p>
+          <p class="folder-meta">{metaLine(contents, parentName, pinned)}</p>
         </div>
       </div>
 
@@ -173,12 +276,15 @@ function FolderBody({
       )}
 
       <div class="folder-section">
-        <h2 class="folder-label">Notes · newest first</h2>
-        {contents.notes.length === 0 ? (
+        <h2 class="folder-label">Newest first</h2>
+        {contents.items.length === 0 ? (
           emptyState.elsewhere !== null ? (
             <p class="folder-elsewhere">
-              {plural(emptyState.elsewhere.count, 'note')} in{' '}
-              {emptyState.elsewhere.subfolderName}
+              {plural(
+                emptyState.elsewhere.count,
+                contents.noteCount > 0 ? 'note' : 'file',
+              )}{' '}
+              in {emptyState.elsewhere.subfolderName}
             </p>
           ) : (
             <div class="folder-empty">
@@ -191,21 +297,41 @@ function FolderBody({
           )
         ) : (
           <ul class="folder-list">
-            {contents.notes.map((note) => (
-              <li key={note.id}>
-                <a class="folder-row" href={`/note/${note.id}`}>
-                  <IconNote />
-                  <span class="folder-row-name">
-                    {titles.get(note.id) ?? noteTitle(note)}
-                  </span>
-                  {note.modifiedTime !== undefined && (
-                    <span class="folder-row-meta">
-                      {relativeTime(note.modifiedTime, now)}
+            {contents.items.map((item) => {
+              const origin = originOf(item, catalogue);
+              const isNote = fileKind(item) === 'note';
+              const title = isNote
+                ? (titles.get(item.id) ?? noteTitle(item))
+                : fileTitle(item.name);
+              const link = isNote
+                ? { href: `/note/${item.id}` }
+                : {
+                    href: driveFileUrl(item),
+                    target: '_blank',
+                    rel: 'noopener',
+                  };
+              return (
+                <li key={item.id}>
+                  <a class="folder-row folder-item" {...link}>
+                    <KindIcon file={item} origin={origin} />
+                    <span class="folder-row-text">
+                      <span class="folder-row-name">{title}</span>
+                      <span class="folder-row-detail">
+                        {originLine(item, origin)}
+                      </span>
                     </span>
-                  )}
-                </a>
-              </li>
-            ))}
+                    {item.modifiedTime !== undefined && (
+                      <time
+                        class="folder-row-meta"
+                        dateTime={item.modifiedTime}
+                      >
+                        {shortAge(item.modifiedTime, now)}
+                      </time>
+                    )}
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -216,7 +342,7 @@ function FolderBody({
 export function Folder(): JSX.Element {
   const { params } = useRoute();
   const path = params.path ?? '';
-  const { index, pinFolder, unpinFolder } = useVault();
+  const { index, pinFolder, unpinFolder, getNoteText } = useVault();
   const [justChanged, setJustChanged] = useState(false);
 
   const contents = useMemo(
@@ -247,6 +373,11 @@ export function Folder(): JSX.Element {
     return <FolderCrumb ancestors={ancestors} name={contents.name} />;
   }, [contents, ancestors]);
   useShellSlot('crumb', crumbContent);
+
+  const catalogue = useCatalogueOrigins(
+    index?.byPath.get(CATALOGUE_PATH),
+    getNoteText,
+  );
 
   if (index === null) {
     return (
@@ -279,6 +410,7 @@ export function Folder(): JSX.Element {
     <FolderBody
       contents={contents}
       parentName={parent === undefined ? null : parent.name}
+      catalogue={catalogue}
       file={index.byPath.get(contents.path)}
       pinned={pinned}
       onTogglePin={() => void handleTogglePin()}

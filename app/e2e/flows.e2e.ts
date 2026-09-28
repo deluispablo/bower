@@ -692,3 +692,34 @@ test('the folder menu: open it, tap a folder, land on it (#319)', async ({
   await expect(menu).toBeHidden();
   await expect(bar.locator('.topbar-title')).toHaveText('3-Resources');
 });
+
+test('a project folder lists its files and notes together, newest first, with who put each there', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Kitchen Refresh' }),
+  ).toBeVisible();
+  await expect(page.locator('.folder-meta')).toHaveText(
+    '1-Projects · 2 files · 3 notes',
+  );
+
+  const rows = page.locator('.folder-item');
+  await expect(rows).toHaveCount(5);
+  // The photo's origin comes from its row in `index.md`, the PDF's from
+  // its Drive app property.
+  await expect(rows.nth(0)).toContainText('Sage green test patch');
+  await expect(rows.nth(0)).toContainText('Photo · filed by Bower');
+  await expect(rows.nth(1)).toContainText('Shelves and tap quote');
+  await expect(rows.nth(1)).toContainText('PDF · filed by Bower');
+  await expect(rows.nth(2)).toContainText('Note · in this folder');
+
+  // A file opens in Drive for now; a note opens in the app.
+  await expect(rows.nth(1)).toHaveAttribute(
+    'href',
+    /^https:\/\/drive\.google\.com\/file\/d\//,
+  );
+  await expect(rows.nth(1)).toHaveAttribute('target', '_blank');
+  await expect(rows.nth(2)).toHaveAttribute('href', /^\/note\//);
+  await shot(page, testInfo, 'folder-project');
+});

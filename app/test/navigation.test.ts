@@ -6,6 +6,7 @@ import {
   appFileGroup,
   breadcrumb,
   buildTree,
+  driveFileUrl,
   filterTree,
   folderContents,
   folderCounts,
@@ -15,6 +16,7 @@ import {
   pendingCount,
   recentNotes,
   relativeTime,
+  shortAge,
   siblings,
 } from '../src/navigation.js';
 import type { TreeRow } from '../src/navigation.js';
@@ -405,6 +407,42 @@ describe('folderContents', () => {
     expect(contents?.noteCount).toBe(1);
   });
 
+  it('lists its own files next to its notes, newest first, and counts every file below', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      dir('1-Projects/Flat hunt/Camden'),
+      entry(
+        '1-Projects/Flat hunt/Budget.md',
+        'text/markdown',
+        '2026-02-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/Lease.pdf',
+        'application/pdf',
+        '2026-03-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/Sign.jpg',
+        'image/jpeg',
+        '2026-01-01T00:00:00.000Z',
+      ),
+      entry('1-Projects/Flat hunt/Camden/Listing.pdf', 'application/pdf'),
+    ]);
+    const contents = folderContents(index, '1-Projects/Flat hunt');
+    expect(contents?.files.map((f) => f.name)).toEqual([
+      'Lease.pdf',
+      'Sign.jpg',
+    ]);
+    expect(contents?.items.map((f) => f.name)).toEqual([
+      'Lease.pdf',
+      'Budget.md',
+      'Sign.jpg',
+    ]);
+    expect(contents?.fileCount).toBe(3);
+    expect(contents?.noteCount).toBe(1);
+  });
+
   it('returns null for a path that does not resolve to a visible folder', () => {
     const index = buildVaultIndex([dir('1-Projects')]);
     expect(folderContents(index, '1-Projects/Nope')).toBeNull();
@@ -455,6 +493,31 @@ describe('folderEmptyState', () => {
     expect(folderEmptyState(contents!)).toEqual({
       empty: false,
       elsewhere: { count: 2, subfolderName: 'Flat hunt' },
+    });
+  });
+
+  it('is not empty when this folder holds only a file (#349)', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      entry('1-Projects/Lease.pdf', 'application/pdf'),
+    ]);
+    const contents = folderContents(index, '1-Projects');
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: null,
+    });
+  });
+
+  it('counts files one level down when there are no notes (#349)', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      entry('1-Projects/Flat hunt/Lease.pdf', 'application/pdf'),
+    ]);
+    const contents = folderContents(index, '1-Projects');
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: { count: 1, subfolderName: 'Flat hunt' },
     });
   });
 
@@ -635,5 +698,28 @@ describe('nextFocusIndex', () => {
   it('ignores other keys and empty row lists', () => {
     expect(nextFocusIndex(rows, 1, 'Enter')).toBe(1);
     expect(nextFocusIndex([], 0, 'ArrowDown')).toBe(0);
+  });
+});
+
+describe('shortAge', () => {
+  const now = Date.parse('2026-09-27T10:00:00.000Z');
+
+  it('is as short as the board has it', () => {
+    expect(shortAge('2026-09-27T08:00:00.000Z', now)).toBe('today');
+    expect(shortAge('2026-09-25T08:00:00.000Z', now)).toBe('2 d');
+    expect(shortAge('2026-09-18T08:00:00.000Z', now)).toBe('1 w');
+    expect(shortAge('2026-06-01T08:00:00.000Z', now)).toBe('3 mo');
+    expect(shortAge('2024-09-01T08:00:00.000Z', now)).toBe('2 y');
+  });
+});
+
+describe('driveFileUrl', () => {
+  it('uses the webViewLink, else the file’s own Drive page', () => {
+    expect(
+      driveFileUrl({ id: 'FILE_ID', webViewLink: 'https://example.com/f' }),
+    ).toBe('https://example.com/f');
+    expect(driveFileUrl({ id: 'FILE_ID' })).toBe(
+      'https://drive.google.com/file/d/FILE_ID/view',
+    );
   });
 });

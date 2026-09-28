@@ -25,6 +25,10 @@ export const LIST_CONCURRENCY = 4;
 
 const TOKEN_MARGIN_MS = 60_000;
 const FILE_FIELDS = 'id,name,mimeType,parents,modifiedTime,size,webViewLink';
+/** The listing also asks for `appProperties`: a folder screen reads who put
+ * a file there from them (`file-origin.ts`, #349). Drive only returns the
+ * properties this app's own OAuth client set. */
+const LIST_FIELDS = `${FILE_FIELDS},appProperties`;
 
 export interface DriveToken {
   accessToken: string;
@@ -41,6 +45,9 @@ export interface DriveFile {
   modifiedTime?: string;
   size?: number;
   webViewLink?: string;
+  /** The file's private app properties (string values only), when the
+   * listing returned any (`listVault`). */
+  appProperties?: Readonly<Record<string, string>>;
   /**
    * `/`-joined path relative to the listed folder (`listVault`), or just the
    * file name for a file returned by an upload (relative to its parent).
@@ -250,6 +257,13 @@ function parseFile(value: unknown, path: string): DriveFile {
   if (typeof value.webViewLink === 'string') {
     file.webViewLink = value.webViewLink;
   }
+  if (isRecord(value.appProperties)) {
+    const props: Record<string, string> = {};
+    for (const [key, prop] of Object.entries(value.appProperties)) {
+      if (typeof prop === 'string') props[key] = prop;
+    }
+    if (Object.keys(props).length > 0) file.appProperties = props;
+  }
   return file;
 }
 
@@ -267,7 +281,7 @@ async function listChildren(folderId: string): Promise<unknown[]> {
   do {
     const params = new URLSearchParams({
       q: `'${escapeQuery(folderId)}' in parents and trashed = false`,
-      fields: `nextPageToken,files(${FILE_FIELDS})`,
+      fields: `nextPageToken,files(${LIST_FIELDS})`,
       pageSize: '1000',
     });
     if (pageToken !== undefined) params.set('pageToken', pageToken);
