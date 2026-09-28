@@ -152,7 +152,10 @@ export function Tree({
   // The one row (folder or note) whose pin sheet/menu is open, or `null`.
   const [openRow, setOpenRow] = useState<Row | null>(null);
   const tree = useMemo(() => buildTree(index, sort), [index, sort]);
-  const counts = useMemo(() => folderCounts(index), [index]);
+  // #425: files and notes together, the same total the folder screen
+  // itself lists ("n files · n notes") — the Notes tab and the desktop
+  // sidebar (`components/explorer.tsx`) share this one `Tree`.
+  const counts = useMemo(() => folderCounts(index, true), [index]);
   const group = useMemo(() => appFileGroup(index), [index]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set<string>(),

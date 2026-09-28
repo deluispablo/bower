@@ -74,8 +74,11 @@ export function FolderMenu({ onClose }: FolderMenuProps): JSX.Element {
   );
   const [held, setHeld] = useState<Held | null>(null);
 
+  // #425: files and notes together, the same total the folder screen
+  // itself lists ("n files · n notes").
   const counts = useMemo(
-    () => (index === null ? new Map<string, number>() : folderCounts(index)),
+    () =>
+      index === null ? new Map<string, number>() : folderCounts(index, true),
     [index],
   );
   const roots = useMemo(

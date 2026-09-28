@@ -43,6 +43,7 @@ import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { ANSWERS_FOLDER } from './home.js';
 import { folderHref } from './navigation.js';
+import { isContextNote } from './run-progress.js';
 import { useSession } from './session.js';
 import { showToast } from './toast-store.js';
 import { isHidden } from './vault-index.js';
@@ -102,10 +103,14 @@ export const DONE_LINGER_MS = 8_000;
 
 /**
  * "N files processed" / "1 file processed" / "Nothing new to process": the
- * same wording as the push notification body (`api/src/runner.ts`).
+ * same wording as the push notification body (`api/src/runner.ts`). Add's
+ * "What is this?" context note (#446) applies to its own batch, not a
+ * file processed, so it never counts here.
  */
 export function resultMessage(run: Run): string {
-  const count = run.processed?.length ?? 0;
+  const count = (run.processed ?? []).filter(
+    (path) => !isContextNote(path),
+  ).length;
   if (count === 0) return 'Nothing new to process';
   return `${count} ${count === 1 ? 'file' : 'files'} processed`;
 }

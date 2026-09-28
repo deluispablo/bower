@@ -17,9 +17,14 @@
  * Back, the phone title, the actions slot and the avatar are phone-only;
  * Settings is a sidebar row there; the theme control lives only in
  * Settings › Look, #324),
- * and on note screens a third column, filled through the `aside` shell slot
+ * and on note screens the About panel, filled through the `aside` shell slot
  * (#144, `shell-slots.ts` — the note screen sits inside `children`, so it
  * cannot reach these any other way).
+ *
+ * Right of the sidebar, one centred container (#355, Desktop-Responsive
+ * board): 980 px wide, 1200 on a note with the About panel, holding the
+ * header row, the banners, the content and the panel. What is left of a
+ * wide window is margin; the toast centres on the same container.
  *
  * There is no Tidy up in the bar (#320): the button lives on Home's Inbox
  * card and in Add's hint, and the bar shows nothing while a run goes. The
@@ -245,66 +250,74 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         />
       </nav>
       <div class="shell-main" inert={drawerOpen}>
-        <div ref={headRef}>
-          <header class="topbar">
-            {inner ? (
-              (back ?? HOME_BACK)
-            ) : (
+        {/* The one centred container (#355, Desktop-Responsive board): the
+            header row, the banners, the content and, on a note, the About
+            panel all sit inside it, so nothing reaches the viewport's right
+            edge however wide the window is. */}
+        <div class="shell-container">
+          <div ref={headRef}>
+            <header class="topbar">
+              {inner ? (
+                (back ?? HOME_BACK)
+              ) : (
+                <button
+                  ref={menuRef}
+                  type="button"
+                  class="icon-button menu-button"
+                  aria-label="Your folders"
+                  aria-haspopup="dialog"
+                  aria-expanded={drawerOpen}
+                  onClick={() => {
+                    setDrawerOpen(true);
+                  }}
+                >
+                  <IconMenu />
+                </button>
+              )}
+              <div class="topbar-crumb">
+                {crumb ?? <span class="topbar-title">Bower</span>}
+              </div>
+              <div class="topbar-slot topbar-actions" data-slot="actions">
+                {actions}
+              </div>
               <button
-                ref={menuRef}
                 type="button"
-                class="icon-button menu-button"
-                aria-label="Your folders"
+                class="icon-button topbar-help"
+                aria-label="About this screen"
                 aria-haspopup="dialog"
-                aria-expanded={drawerOpen}
                 onClick={() => {
-                  setDrawerOpen(true);
+                  setHelpOpen(true);
                 }}
               >
-                <IconMenu />
+                <IconHelp />
               </button>
+              <a
+                href={SETTINGS.href}
+                class="topbar-avatar"
+                aria-label="Settings"
+              >
+                <span aria-hidden="true">{avatarInitial(me?.email)}</span>
+              </a>
+            </header>
+            <DemoBanner />
+            <OfflineBanner />
+            {me?.needsReauth === true && (
+              <div class="reauth-banner">
+                <span>Google access needs to be renewed.</span>
+                <a href={loginUrl()}>Reconnect Google</a>
+              </div>
             )}
-            <div class="topbar-crumb">
-              {crumb ?? <span class="topbar-title">Bower</span>}
-            </div>
-            <div class="topbar-slot topbar-actions" data-slot="actions">
-              {actions}
-            </div>
-            <button
-              type="button"
-              class="icon-button topbar-help"
-              aria-label="About this screen"
-              aria-haspopup="dialog"
-              onClick={() => {
-                setHelpOpen(true);
-              }}
-            >
-              <IconHelp />
-            </button>
-            <a href={SETTINGS.href} class="topbar-avatar" aria-label="Settings">
-              <span aria-hidden="true">{avatarInitial(me?.email)}</span>
-            </a>
-          </header>
-          <DemoBanner />
-          <OfflineBanner />
-          {me?.needsReauth === true && (
-            <div class="reauth-banner">
-              <span>Google access needs to be renewed.</span>
-              <a href={loginUrl()}>Reconnect Google</a>
-            </div>
-          )}
+          </div>
+          <div class="shell-body">
+            <main class="content">{children}</main>
+            {aside !== null && (
+              <aside class="shell-aside" aria-label="About this note">
+                {aside}
+              </aside>
+            )}
+          </div>
         </div>
-        <main class="content">{children}</main>
       </div>
-      {aside !== null && (
-        <aside
-          class="shell-aside"
-          aria-label="About this note"
-          inert={drawerOpen}
-        >
-          {aside}
-        </aside>
-      )}
       <nav class="bottom-nav" aria-label="Primary" inert={drawerOpen}>
         {TABS.map(({ href, label, Icon, tour }) => (
           <a

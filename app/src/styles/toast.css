@@ -59,8 +59,16 @@
   outline-offset: 2px;
 }
 
+/* From 900 px the toast is anchored to the shell's centred container
+   (#355, `layout.css`), not to the whole window: centred right of the
+   sidebar, never wider than the container. */
 @media (min-width: 900px) {
   .toast {
+    left: calc(50% + var(--sidebar-width, 264px) / 2);
     bottom: var(--space-4);
+    max-width: min(
+      calc(100vw - var(--sidebar-width, 264px) - var(--space-8)),
+      calc(980px - var(--space-8))
+    );
   }
 }

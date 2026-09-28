@@ -8,6 +8,8 @@
 # Prints "ok <case>" per case and exits non-zero on the first failure.
 
 set -euo pipefail
+# Under pipefail, never pipe into grep -q: it exits at the first match, the
+# writer can then die of SIGPIPE and fail the pipeline (#391). Use <<<"$x".
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SCRIPT_SRC="$HERE/../check-sanitized.sh"
@@ -50,7 +52,7 @@ die() {
 
 expect_eq() { [ "$1" = "$2" ] || die "$3: expected [$2], got [$1]"; }
 expect_contains() {
-  printf '%s' "$OUT" | grep -qF -- "$1" || die "output does not contain [$1]: $OUT"
+  grep -qF -- "$1" <<<"$OUT" || die "output does not contain [$1]: $OUT"
 }
 
 # --- 1. a clean file: exit 0 -------------------------------------------
