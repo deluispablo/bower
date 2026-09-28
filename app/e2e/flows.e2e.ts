@@ -1188,6 +1188,60 @@ test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
   await shot(page, testInfo, 'bar-note');
 });
 
+test("a note's top bar: the title keeps a readable floor, Back gives way first, and one More menu (#426)", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'the phone top bar only');
+  await openHome(page);
+  const bar = page.locator('header.topbar');
+
+  // Lisbon Trip is its own folder's hub note, so Back points to a name as
+  // long as the title itself -- the exact shape that used to leave both
+  // cut to a few letters (#426).
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('Lisbon');
+  await switcher
+    .getByRole('option', { name: /Lisbon Trip/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/note\//);
+
+  // The title keeps its 130px floor: Back gives way to it, not the other
+  // way round, and the bar itself never grows past the viewport.
+  const crumbBox = await bar.locator('.topbar-crumb').boundingBox();
+  expect(crumbBox?.width ?? 0).toBeGreaterThanOrEqual(130);
+  await expect
+    .poll(async () => page.evaluate(() => document.body.scrollWidth))
+    .toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
+  // Back still works, and its full destination is there for a screen
+  // reader even while its visible label is short (or gone).
+  const back = bar.getByRole('link', { name: 'Back to Lisbon Trip' });
+  await expect(back).toBeVisible();
+
+  // One More menu, not two (#439 already fixed the leftover desktop
+  // trigger; this just guards against it coming back).
+  await expect(bar.getByRole('button', { name: 'More' })).toHaveCount(1);
+
+  // A title far longer than Back's own label still fits the bar with no
+  // horizontal overflow, the same guarantee from the other direction.
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/note\//);
+  await expect
+    .poll(async () => page.evaluate(() => document.body.scrollWidth))
+    .toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
+});
+
 test('The bar and the bottom nav align with the content column at 768 (#311)', async ({
   page,
 }, testInfo) => {
