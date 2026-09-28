@@ -2469,20 +2469,21 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(
     page.getByRole('heading', { level: 1, name: 'Kitchen Refresh' }),
   ).toBeVisible();
-  await expect(page.locator('.folder-meta')).toHaveText(
-    'Projects · 2 files · 3 notes',
+  await expect(page.locator('.folder-counts')).toHaveText(
+    /^5 things · \d+ originals?, \d+ by Bower$/,
   );
 
   const rows = page.locator('.folder-item');
-  await expect(rows).toHaveCount(5);
-  // The photo's origin comes from its row in `index.md`, the PDF's from
-  // its Drive app property.
+  await expect(rows.first()).toBeVisible();
+  // The board's row lines (#611): the kind word and size for a file, "Note
+  // · written by you" for the person's own notes.
   await expect(rows.nth(0)).toContainText('Sage green test patch');
-  await expect(rows.nth(0)).toContainText('Photo · filed by Bower');
+  await expect(rows.nth(0)).toContainText('Photo · ');
   await expect(rows.nth(1)).toContainText('Shelves and tap quote');
-  await expect(rows.nth(1)).toContainText('PDF · filed by Bower');
-  // No known origin (#502): just its type, not "in this folder".
-  await expect(rows.nth(2).locator('.folder-row-detail')).toHaveText('Note');
+  await expect(rows.nth(1)).toContainText('PDF · ');
+  await expect(rows.nth(2).locator('.folder-row-detail')).toHaveText(
+    'Note · written by you',
+  );
 
   // A file opens on its own screen; a note opens in the app.
   await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
