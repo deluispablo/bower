@@ -913,7 +913,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
     timeout: 20_000,
   });
   await expect(bubble).toHaveText(
-    'All tidy. 2 things filed and 1 question answered. See what I did.',
+    'All tidy. 2 filed and 1 question answered. See where they went.',
   );
   await expect(inbox).toContainText('Nothing waiting. Add something.');
   await expect(
@@ -2637,11 +2637,19 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   });
   await sheet.getByRole('button', { name: 'Close' }).click();
 
-  // Home's Last tidy-up card opens Activity, on that card.
+  // Home's Last tidy-up card opens Just filed (#617); Activity in the Bower
+  // tab stays the full history, with that run's card first.
   await visible(
     page.locator('.home-card', { hasText: 'Last tidy-up' }),
   ).click();
-  await expect(page).toHaveURL(/\/bower\?show=activity$/);
+  await expect(page).toHaveURL(/\/just-filed$/);
+  // The push prompt a finished run raises covers the phone's tab bar.
+  const prompt = page.locator('.push-prompt');
+  if (await prompt.isVisible()) {
+    await prompt.getByRole('button', { name: /Not now|Got it/ }).click();
+  }
+  await navigate(page, /^Bower$/);
+  await showBowerPart(page, 'Activity');
   await expect(bowerPart(page, 'Activity')).toBeVisible();
   await expect(cards).toHaveCount(5);
   await expect(cards.nth(0)).toContainText('Today, 10:44 · 1 min');

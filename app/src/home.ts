@@ -173,7 +173,8 @@ export function refusedMessage(n: number): string {
  * the failure (the working sheet, which says what happened).
  */
 export type BubblePart =
-  string | { link: 'tidy-up' | 'activity' | 'just-filed' | 'failure'; text: string };
+  | string
+  | { link: 'tidy-up' | 'activity' | 'just-filed' | 'failure'; text: string };
 
 export interface BubbleInput {
   state: HomeState;

@@ -372,6 +372,70 @@ function useRecentInfo(
   return info;
 }
 
+/**
+ * Recent's rows (#617, `Flow-05-Home`): the kind badge, the title, New and
+ * the Bower tag, the note's key facts on one line ("£2,150 · 2 bed · 14 min
+ * by bike"), its folder and when it changed. Exported for its own render
+ * test.
+ */
+export function RecentRows({
+  notes,
+  titles,
+  isNew,
+  now,
+}: {
+  notes: readonly DriveFile[];
+  titles: ReadonlyMap<string, string>;
+  isNew: (id: string) => boolean;
+  now: number;
+}): JSX.Element {
+  const info = useRecentInfo(notes);
+  return (
+    <ul class="home-notes">
+      {notes.map((note) => {
+        const folder = folderOf(note.path);
+        const extra = info.get(note.id);
+        return (
+          <li key={note.id}>
+            <a class="home-note-row" href={`/note/${note.id}`}>
+              <span class="home-note-badge">
+                <KindBadge
+                  kind={extra?.kind ?? 'note'}
+                  {...(extra?.badgeFile !== undefined && {
+                    file: extra.badgeFile,
+                  })}
+                />
+              </span>
+              <span class="home-note-text">
+                <span class="home-note-line">
+                  <b class="home-note-title">
+                    {titles.get(note.id) ?? noteTitle(note)}
+                  </b>
+                  {isNew(note.id) && <NewTag />}
+                  {extra?.bower === true && <BowerTag />}
+                </span>
+                {extra !== undefined && extra.facts !== '' && (
+                  <span class="home-note-facts">{extra.facts}</span>
+                )}
+                {folder !== '' && (
+                  <span class="home-note-meta">
+                    {folder.split('/').join(' / ')}
+                  </span>
+                )}
+              </span>
+              {note.modifiedTime !== undefined && (
+                <span class="home-note-time">
+                  {relativeTime(note.modifiedTime, now)}
+                </span>
+              )}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function Home(): JSX.Element {
   const { me } = useSession();
   const { index, files, status, unpinNote, unpinFolder } = useVault();
@@ -386,7 +450,6 @@ export function Home(): JSX.Element {
   const recent =
     index === null ? [] : recentNotes(index, RECENT_ROWS, showAppFiles);
   const recentTitles = useNoteTitles(recent);
-  const recentInfo = useRecentInfo(recent);
   const { ids: newIds, isNew } = useNew();
   // #506: the same total the working sheet counts against, so "N things"
   // here never runs one ahead of it — the context note Add may have left
@@ -593,48 +656,12 @@ export function Home(): JSX.Element {
             <h2>Recent</h2>
             <a href="/notes">All</a>
           </div>
-          <ul class="home-notes">
-            {recent.map((note) => {
-              const folder = folderOf(note.path);
-              const extra = recentInfo.get(note.id);
-              return (
-                <li key={note.id}>
-                  <a class="home-note-row" href={`/note/${note.id}`}>
-                    <span class="home-note-badge">
-                      <KindBadge
-                        kind={extra?.kind ?? 'note'}
-                        {...(extra?.badgeFile !== undefined && {
-                          file: extra.badgeFile,
-                        })}
-                      />
-                    </span>
-                    <span class="home-note-text">
-                      <span class="home-note-line">
-                        <b class="home-note-title">
-                          {recentTitles.get(note.id) ?? noteTitle(note)}
-                        </b>
-                        {isNew(note.id) && <NewTag />}
-                        {extra?.bower === true && <BowerTag />}
-                      </span>
-                      {extra !== undefined && extra.facts !== '' && (
-                        <span class="home-note-facts">{extra.facts}</span>
-                      )}
-                      {folder !== '' && (
-                        <span class="home-note-meta">
-                          {folder.split('/').join(' / ')}
-                        </span>
-                      )}
-                    </span>
-                    {note.modifiedTime !== undefined && (
-                      <span class="home-note-time">
-                        {relativeTime(note.modifiedTime, now)}
-                      </span>
-                    )}
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
+          <RecentRows
+            notes={recent}
+            titles={recentTitles}
+            isNew={isNew}
+            now={now}
+          />
         </div>
       )}
       {showTour && me !== undefined && (
