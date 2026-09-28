@@ -14,6 +14,7 @@ import {
   type QueueItem,
 } from '../add-queue-store.js';
 import { ADD_HINT_TEXT, addHintLead, linkNoteName } from '../add.js';
+import { isDemo } from '../api.js';
 import { Bird } from '../components/bird.js';
 import {
   IconCamera,
@@ -59,8 +60,16 @@ const CONTEXT_PLACEHOLDER =
   'Just filing is fine. Or tell Bower what to do with these: "Job offers: pull out salary, location and deadline, and add them to a table". Say "from now on" and it becomes a rule.';
 
 /** Without a Picker key the "From your Drive" button is hidden, as the
- * onboarding folder picker is. */
+ * onboarding folder picker is — except in the demo, where it always shows,
+ * greyed (#364). */
 const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
+
+/** "From your Drive" and Settings' push toggle, greyed with one sentence
+ * each in the demo (#364, `Demo-Add` board, handover C.10 and D.6): there
+ * is no real Drive or push behind the demo to reach. Settings' own copy
+ * (`routes/settings.tsx`) keeps its own identical constant, same as its
+ * existing `NOT_IN_DEMO`, rather than a cross-route import. */
+const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
 
 /** Files copied from one picked Drive folder, at most. */
 export const MAX_FOLDER_FILES = 50;
@@ -444,7 +453,9 @@ export function Add() {
 
   const pending = pendingCount(files);
   const linkDisabled = inboxFolderId === null || !online;
-  const driveDisabled = inboxFolderId === null || !online || pickerOpening;
+  const driveShown = GOOGLE_API_KEY !== '' || isDemo();
+  const driveDisabled =
+    isDemo() || inboxFolderId === null || !online || pickerOpening;
 
   return (
     <section class="add-screen">
@@ -504,7 +515,7 @@ export function Add() {
           </span>
           <IconChevronRight />
         </button>
-        {GOOGLE_API_KEY !== '' && (
+        {driveShown && (
           <button
             type="button"
             class="add-door"
@@ -517,7 +528,11 @@ export function Add() {
             </span>
             <span class="add-door-text">
               <b>From your Drive</b>
-              <span>Copies a file in; the original stays put</span>
+              <span>
+                {isDemo()
+                  ? NOT_IN_DEMO_DRIVE
+                  : 'Copies a file in; the original stays put'}
+              </span>
             </span>
             <IconChevronRight />
           </button>
@@ -543,7 +558,7 @@ export function Add() {
           >
             Choose files
           </button>
-          {GOOGLE_API_KEY !== '' && (
+          {driveShown && (
             <button
               type="button"
               class="button button-secondary"
@@ -555,10 +570,11 @@ export function Add() {
             </button>
           )}
         </div>
-        {GOOGLE_API_KEY !== '' && (
+        {driveShown && (
           <p class="add-drive-note">
-            Docs become Markdown, Sheets a table, Slides a PDF. Everything else
-            is copied as it is.
+            {isDemo()
+              ? NOT_IN_DEMO_DRIVE
+              : 'Docs become Markdown, Sheets a table, Slides a PDF. Everything else is copied as it is.'}
           </p>
         )}
       </div>

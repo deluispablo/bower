@@ -6,7 +6,7 @@
  */
 
 import { expect, test as base } from '@playwright/test';
-import type { Locator, Page, TestInfo } from '@playwright/test';
+import type { Locator, Page, Route, TestInfo } from '@playwright/test';
 
 // No `@types/node` in this repo; `process` is a real Node global here.
 declare const process: { env: Record<string, string | undefined> };
@@ -26,9 +26,51 @@ interface Options {
   introSeen: boolean;
 }
 
+/**
+ * The demo never talks to anyone (#365, handover D.6): the scripted run
+ * and the in-memory vault answer everything, so a demo build page should
+ * make no request to any host but its own — no network, no Google, no
+ * Claude. Route interception records every request this page makes and
+ * aborts (never lets through) any whose origin differs from `baseURL`;
+ * the offenders are asserted empty once the test that used `page` is
+ * done, so a stray request fails that test with the URLs in the message,
+ * not a silent pass or a hang on the aborted request.
+ */
+async function guardAgainstOtherHosts(
+  page: Page,
+  baseURL: string | undefined,
+): Promise<() => void> {
+  const own = baseURL !== undefined ? new URL(baseURL).origin : undefined;
+  const offHost: string[] = [];
+  await page.route('**/*', (route: Route) => {
+    const url = route.request().url();
+    // `data:`/`about:` URLs (inline SVGs, the initial blank page) have no
+    // remote host to speak of; `blob:` ones (a Drive file's local preview)
+    // carry the creating page's own origin.
+    if (url.startsWith('data:') || url.startsWith('about:')) {
+      void route.continue();
+      return;
+    }
+    const origin = new URL(url).origin;
+    if (own === undefined || origin === own) {
+      void route.continue();
+      return;
+    }
+    offHost.push(url);
+    void route.abort('failed');
+  });
+  return () => {
+    expect(
+      offHost,
+      `the demo talked to another host: ${offHost.join(', ')}`,
+    ).toEqual([]);
+  };
+}
+
 export const test = base.extend<Options>({
   introSeen: [true, { option: true }],
-  page: async ({ page, introSeen }, use) => {
+  page: async ({ page, introSeen, baseURL }, use) => {
+    const assertNoOtherHost = await guardAgainstOtherHosts(page, baseURL);
     await page.clock.install({ time: DEMO_NOW });
     if (introSeen) {
       await page.addInitScript((key: string) => {
@@ -36,6 +78,7 @@ export const test = base.extend<Options>({
       }, INTRO_SEEN_KEY);
     }
     await use(page);
+    assertNoOtherHost();
   },
 });
 
