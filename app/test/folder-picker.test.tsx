@@ -8,13 +8,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DriveFile } from '../src/drive.js';
 import { buildTree } from '../src/navigation.js';
 import { pickerFolders } from '../src/move-request.js';
+import { currentToast, dismissToast } from '../src/toast-store.js';
 import { buildVaultIndex } from '../src/vault-index.js';
+import type { VaultIndex } from '../src/vault-index.js';
 
 const mocks = vi.hoisted(() => ({
   createTextFile: vi.fn(),
   process: vi.fn(),
   refresh: vi.fn(),
-  index: null,
+  index: null as VaultIndex | null,
 }));
 
 vi.mock('../src/drive.js', async (importOriginal) => ({
@@ -115,7 +117,7 @@ async function flush(): Promise<void> {
 
 beforeEach(() => {
   mocks.createTextFile.mockReset().mockResolvedValue({});
-  mocks.process.mockReset().mockResolvedValue(undefined);
+  mocks.process.mockReset().mockResolvedValue(true);
   mocks.refresh.mockReset().mockResolvedValue(undefined);
   mocks.index = INDEX;
 });
@@ -235,6 +237,30 @@ describe('MoveFlow', () => {
       'Move “Lease agreement 2026” (2-Areas/Home/Lease agreement 2026.pdf) to 2-Areas/Garden.',
     );
     expect(mocks.process).toHaveBeenCalledWith('instructions');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('says Asked Bower to move it now when the run started', async () => {
+    dismissToast();
+    flow();
+    click(radio('Garden'));
+    click(button('Move it now'));
+    await flush();
+    expect(currentToast()?.message).toBe('Asked Bower to move it now.');
+  });
+
+  it('says the run did not start, and the request waits, when POST /process failed', async () => {
+    dismissToast();
+    mocks.process.mockResolvedValue(false);
+    const onClose = vi.fn();
+    flow(onClose);
+    click(radio('Garden'));
+    click(button('Move it now'));
+    await flush();
+    expect(mocks.createTextFile).toHaveBeenCalledTimes(1);
+    expect(currentToast()?.message).toBe(
+      "Couldn't start Bower now. Your request goes with the next tidy-up.",
+    );
     expect(onClose).toHaveBeenCalled();
   });
 

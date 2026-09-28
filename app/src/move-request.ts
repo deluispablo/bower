@@ -84,6 +84,9 @@ export function findFolders(
   return out;
 }
 
+/** How a send ended: `run-failed` means the note is written, the run is not. */
+export type MoveOutcome = 'sent' | 'run-failed';
+
 /** What `sendMoveRequest` needs from Drive and the Worker, so tests stub it. */
 export interface MoveDeps {
   createTextFile: (
@@ -93,13 +96,15 @@ export interface MoveDeps {
     options: { appProperties: Readonly<Record<string, string>> },
   ) => Promise<unknown>;
   /** Starts a run (`POST /process`); called with `instructions`. */
-  startRun: (scope: RunScope) => Promise<void>;
+  startRun: (scope: RunScope) => Promise<boolean>;
 }
 
 /**
  * Writes the request note into the inbox and, for `now`, starts an
  * instructions-only run; `later` only writes it (it goes with the next
  * tidy-up). Throws when the note could not be written, and then no run is
+ * Resolves to `run-failed` when the note is written but the run did not
+ * start (it then goes with the next tidy-up), else `sent`.
  * started.
  */
 export async function sendMoveRequest(
@@ -110,11 +115,14 @@ export async function sendMoveRequest(
     when: 'now' | 'later';
     now: Date;
   },
-): Promise<void> {
+): Promise<MoveOutcome> {
   const name = instructionFileName(input.text, '', input.now);
   const content = instructionNote(input.text, input.now, 'request');
   await deps.createTextFile(input.inboxFolderId, name, content, {
     appProperties: INSTRUCTION_APP_PROPERTIES,
   });
-  if (input.when === 'now') await deps.startRun('instructions');
+  if (input.when === 'now' && !(await deps.startRun('instructions'))) {
+    return 'run-failed';
+  }
+  return 'sent';
 }

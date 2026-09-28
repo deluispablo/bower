@@ -27,7 +27,7 @@ import {
   pickerFolders,
   sendMoveRequest,
 } from '../move-request.js';
-import type { MoveSubject } from '../move-request.js';
+import type { MoveOutcome, MoveSubject } from '../move-request.js';
 import {
   buildTree,
   displayName,
@@ -280,8 +280,9 @@ export function MoveFlow({
     }
     setBusy(true);
     setError(null);
+    let outcome: MoveOutcome;
     try {
-      await sendMoveRequest(
+      outcome = await sendMoveRequest(
         { createTextFile, startRun: process },
         {
           inboxFolderId,
@@ -298,11 +299,17 @@ export function MoveFlow({
     }
     // The listing catches up now, so Requests and Home's counts show it.
     void refresh();
-    showToast(
-      when === 'now'
-        ? 'Asked Bower to move it now.'
-        : 'Asked Bower to move it with the next tidy-up.',
-    );
+    if (outcome === 'run-failed') {
+      showToast(
+        "Couldn't start Bower now. Your request goes with the next tidy-up.",
+      );
+    } else {
+      showToast(
+        when === 'now'
+          ? 'Asked Bower to move it now.'
+          : 'Asked Bower to move it with the next tidy-up.',
+      );
+    }
     onClose();
   }
 

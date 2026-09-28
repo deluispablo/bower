@@ -121,7 +121,7 @@ describe('sendMoveRequest', () => {
 
   it('"later" writes one request note and starts nothing', async () => {
     const createTextFile = vi.fn().mockResolvedValue({});
-    const startRun = vi.fn().mockResolvedValue(undefined);
+    const startRun = vi.fn().mockResolvedValue(true);
     await sendMoveRequest(
       { createTextFile, startRun },
       { inboxFolderId: 'INBOX_ID', text, when: 'later', now },
@@ -137,13 +137,37 @@ describe('sendMoveRequest', () => {
 
   it('"now" writes the note, then starts an instructions-only run', async () => {
     const createTextFile = vi.fn().mockResolvedValue({});
-    const startRun = vi.fn().mockResolvedValue(undefined);
+    const startRun = vi.fn().mockResolvedValue(true);
     await sendMoveRequest(
       { createTextFile, startRun },
       { inboxFolderId: 'INBOX_ID', text, when: 'now', now },
     );
     expect(createTextFile).toHaveBeenCalledTimes(1);
     expect(startRun).toHaveBeenCalledWith('instructions');
+  });
+
+  it('says the run did not start, the note being written', async () => {
+    const createTextFile = vi.fn().mockResolvedValue({});
+    const startRun = vi.fn().mockResolvedValue(false);
+    await expect(
+      sendMoveRequest(
+        { createTextFile, startRun },
+        { inboxFolderId: 'INBOX_ID', text, when: 'now', now },
+      ),
+    ).resolves.toBe('run-failed');
+    expect(createTextFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('says sent when the run started, and for "later"', async () => {
+    const createTextFile = vi.fn().mockResolvedValue({});
+    const startRun = vi.fn().mockResolvedValue(true);
+    const args = { inboxFolderId: 'INBOX_ID', text, now };
+    await expect(
+      sendMoveRequest({ createTextFile, startRun }, { ...args, when: 'now' }),
+    ).resolves.toBe('sent');
+    await expect(
+      sendMoveRequest({ createTextFile, startRun }, { ...args, when: 'later' }),
+    ).resolves.toBe('sent');
   });
 
   it('starts no run when the note could not be written', async () => {
