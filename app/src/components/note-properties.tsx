@@ -12,6 +12,9 @@ import { useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import type { NoteProperties } from '../markdown/frontmatter.js';
+import { kindById } from '../kinds.js';
+import type { NoteMeta } from '../note-meta.js';
+import { Details } from './details.js';
 import { IconClose } from './icons.js';
 import { useFocusTrap } from './use-focus-trap.js';
 import '../styles/note-properties.css';
@@ -27,8 +30,10 @@ export interface NoteFolderLink {
 export function hasNoteProperties(
   folder: NoteFolderLink | undefined,
   properties: NoteProperties,
+  meta?: NoteMeta,
 ): boolean {
   return (
+    hasKindDetails(meta) ||
     folder !== undefined ||
     properties.tags.length > 0 ||
     properties.created !== undefined ||
@@ -36,9 +41,17 @@ export function hasNoteProperties(
   );
 }
 
+/** Whether the note's frontmatter names a kind Bower knows: those notes
+ * get `Details` (#603); every other note keeps the plain list. */
+export function hasKindDetails(meta: NoteMeta | undefined): boolean {
+  return meta?.kind !== undefined && kindById(meta.kind) !== undefined;
+}
+
 export interface NotePropertiesListProps {
   folder?: NoteFolderLink;
   properties: NoteProperties;
+  /** The note's frontmatter facts; a known kind adds the Details block. */
+  meta?: NoteMeta;
 }
 
 /** The properties themselves: a folder link, tag pills, created, source —
@@ -47,7 +60,9 @@ export interface NotePropertiesListProps {
 export function NotePropertiesList({
   folder,
   properties,
+  meta,
 }: NotePropertiesListProps): JSX.Element {
+  const kind = meta?.kind === undefined ? undefined : kindById(meta.kind);
   return (
     <div class="note-properties-list">
       {folder !== undefined && (
@@ -81,6 +96,9 @@ export function NotePropertiesList({
           <span class="note-property-label">Source</span>
           {properties.source}
         </span>
+      )}
+      {kind !== undefined && meta !== undefined && (
+        <Details kind={kind} meta={meta} />
       )}
     </div>
   );

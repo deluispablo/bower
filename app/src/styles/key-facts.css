@@ -1,0 +1,175 @@
+/*
+ * Key facts (issue #603, board `System-KeyFacts`): one to four cells in a
+ * row; under 340 px of available width three and four become two columns
+ * (four is two rows of two). The width is the box's, not the screen's, so
+ * the same block fits a phone, a column and a sheet.
+ */
+
+.key-facts-box {
+  container-type: inline-size;
+}
+
+.key-facts {
+  display: grid;
+  grid-template-columns: repeat(var(--key-facts-columns, 1), minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.key-facts-1 {
+  --key-facts-columns: 1;
+}
+.key-facts-2 {
+  --key-facts-columns: 2;
+}
+.key-facts-3 {
+  --key-facts-columns: 3;
+}
+.key-facts-4 {
+  --key-facts-columns: 4;
+}
+
+.key-fact {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.key-fact-value {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.key-fact-label {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (max-width: 339px) {
+  .key-facts-3,
+  .key-facts-4 {
+    --key-facts-columns: 2;
+  }
+}
+
+.key-facts-inline {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.key-facts-caption {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Details (issue #603): the folded block under a kind note's key facts. */
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.details-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.details-toggle-meta {
+  color: var(--color-text-muted);
+}
+
+.details-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.details-group-title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.details-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.details-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 var(--space-2);
+  align-items: start;
+}
+
+.details-field-label {
+  grid-column: 1;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.details-field-value {
+  grid-column: 1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.details-field .origin-square {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.details-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.details-chip {
+  padding: 2px var(--space-3);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.details-ask {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
