@@ -22,6 +22,7 @@ export function RunSheets(): JSX.Element | null {
     message,
     sheetOpen,
     dismissSheet,
+    tidyUp,
     sheetReopenKey,
     confirmOpen,
     confirmCount,
@@ -49,6 +50,7 @@ export function RunSheets(): JSX.Element | null {
         open={sheetOpen}
         onDismiss={dismissSheet}
         reopenKey={sheetReopenKey}
+        onTryAgain={tidyUp}
       />
     </>
   );
