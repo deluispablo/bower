@@ -1041,9 +1041,11 @@ expect_eq "$(post 1 'p.processed === undefined')" true 'running has no processed
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.kind)" ingest 'second kind'
 expect_eq "$(post 2 p.runId)" 4242 'done runId'
-expect_eq "$(post 2 p.processed)" \
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')" \
   '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed'
 expect_eq "$(post 2 'p.summary.split("\n").length')" 6 'summary lines'
+expect_eq "$(post 2 'p.processed.map((i) => i.kind)')" '["file","file","file"]' \
+  'processed kinds: a clip named Bower is a file'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
 expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end'
 grep -Fxq 'Filed: 1 files' <<<"$(post 2 p.summary)" || die 'the Filed line is not in the summary'
@@ -1142,7 +1144,7 @@ expect_eq "$RC" 0 'exit code'
 expect_eq "$(posts_count)" 1 'status posts'
 expect_eq "$(post 1 p.state)" done 'state'
 expect_eq "$(post 1 p.kind)" ingest 'kind'
-expect_eq "$(post 1 p.processed)" '[]' 'processed'
+expect_eq "$(post 1 'p.processed.map((i) => i.path)')" '[]' 'processed'
 grep -Eq '^[0-9a-f]{16}$' <<<"$(post 1 p.runId)" || die 'random runId is not 16 hex characters'
 expect_eq "$(calls claude)" '' 'claude calls'
 expect_eq "$(calls rclone | wc -l | tr -d ' ')" 1 'rclone calls (sync down only)'
@@ -1235,9 +1237,11 @@ run_case gone
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(posts_count)" 2 'status posts'
 expect_eq "$(post 2 p.state)" done 'second state'
-expect_eq "$(post 2 p.processed)" \
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')" \
   '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed'
 expect_eq "$(post 2 'p.summary.split("\n").length')" 6 'summary lines'
+expect_eq "$(post 2 'p.processed.map((i) => i.kind)')" '["file","file","file"]' \
+  'processed kinds: a clip named Bower is a file'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
 expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 1 'rclone deletefile calls'
@@ -1369,7 +1373,7 @@ expect_eq "$(cat "$remote/Clippings/saved-page.md")" 'converted by pandoc' 'conv
 [ -f "$remote/0-Inbox/damaged.docx" ] || die 'unconvertible original gone from Drive'
 [ ! -e "$remote/0-Inbox/damaged.md" ] || die 'a failed conversion reached Drive'
 expect_eq "$(cat "$remote/0-Inbox/already.md")" 'mine' 'existing sibling left alone'
-expect_eq "$(post 2 'p.processed.some((f) => f.endsWith("quarterly-report.md") || f.endsWith("saved-page.md"))')" \
+expect_eq "$(post 2 'p.processed.some((i) => i.path.endsWith("quarterly-report.md") || i.path.endsWith("saved-page.md"))')" \
   false 'converted siblings are not reported as processed originals'
 expect_no_copy_or_convert_tool
 expect_claude_env unset test-oauth-token
@@ -1418,7 +1422,7 @@ expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.refused)" '["*"]' 'refused'
 grep -q '^Refused: too many changes' <<<"$(post 2 p.summary)" || die 'summary does not say too many changes'
-expect_eq "$(post 2 p.processed)" '[]' 'processed'
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')" '[]' 'processed'
 expect_eq "$(calls rclone | grep -c '^rclone copy ')" 0 'rclone copy calls'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
 [ -f "$STATE/remote/0-Inbox/a.pdf" ] || die 'original left the inbox in Drive'
@@ -1439,7 +1443,7 @@ expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.quarantined)" '["0-Inbox/Quarantine/evil.md"]' 'quarantined'
 expect_eq "$(post 2 p.refused)" '[]' 'refused'
-expect_eq "$(post 2 p.processed)" \
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')" \
   '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed excludes the quarantined file'
 grep -q ' 1 files quarantined$' "$STATE/out.log" || die 'quarantined count not logged'
 saw="$STATE/claude-saw.txt"
@@ -1472,7 +1476,7 @@ grep -Fxq "q='INBOX_ID' in parents and appProperties has { key='bower' and value
 grep -Fxq 'fields=files(name)' "$STATE/drive-list.log" || die 'Drive listing fields'
 expect_eq "$(post 2 p.quarantined)" \
   '["0-Inbox/Quarantine/Bower - 2026-01-15 0901 Weekly planning tips.md"]' 'quarantined'
-expect_eq "$(post 2 p.processed)" \
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')" \
   '["0-Inbox/Bower - 2026-01-15 0900 Tidy up.md","0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' \
   'processed has the listed note, not the lookalike'
 saw="$STATE/claude-saw.txt"
@@ -1508,7 +1512,7 @@ expect_eq "$(cat "$STATE/remote/Rules.md")" '# my rules' 'Rules.md in Drive'
 expect_eq "$(post 2 p.quarantined)" \
   '["0-Inbox/Quarantine/Bower - 2026-01-15 0900 Tidy up.md","0-Inbox/Quarantine/Bower - 2026-01-15 0901 Weekly planning tips.md"]' \
   'quarantined'
-expect_eq "$(post 2 p.processed)" \
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')" \
   '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed'
 saw="$STATE/claude-saw.txt"
 grep -q '^0-Inbox/Bower - ' "$saw" && die 'the agent saw an instruction note after a failed listing'
@@ -1536,7 +1540,7 @@ run_case quarantine
 expect_eq "$RC" 0 'second run: exit code'
 expect_eq "$(post 2 p.state)" done 'second run: second state'
 expect_eq "$(post 2 p.quarantined)" '[]' 'second run: nothing newly quarantined'
-expect_eq "$(post 2 p.processed)" \
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')" \
   '["0-Inbox/late.pdf","Clippings/Bower trick.md","Clippings/b.md","Clippings/late.md"]' \
   'second run: processed excludes the already-quarantined file'
 grep -q ' 4 files pending$' "$STATE/out.log" ||
@@ -1799,7 +1803,7 @@ echo "ok the final report is tried again and the outcome lands in the vault"
 run_case scope BOWER_SCOPE=instructions
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
-expect_eq "$(post 2 p.processed)" '["0-Inbox/Bower - 2026-01-15 0900 Tidy up.md"]' 'processed'
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')" '["0-Inbox/Bower - 2026-01-15 0900 Tidy up.md"]' 'processed'
 expect_eq "$(post 2 p.quarantined)" \
   '["0-Inbox/Quarantine/Bower - 2026-01-15 0901 Weekly planning tips.md"]' 'quarantined'
 saw=$(cat "$STATE/claude-saw.txt")
@@ -1886,9 +1890,12 @@ echo "ok a photo whose name says nothing is renamed and indexed"
 run_case midrun
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
-expect_eq "$(post 2 p.processed)" \
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')" \
   '["0-Inbox/Bower - 2026-01-15 0850 Old question.md","0-Inbox/Bower - 2026-01-15 0906 Context.md","0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' \
   'processed leaves out the request sent during the run'
+# Each item carries its kind (#345): the app never guesses from a name.
+expect_eq "$(post 2 'p.processed.map((i) => i.kind)')" \
+  '["request","context","file","file","file"]' 'processed kinds'
 expect_eq "$(post 2 p.quarantined)" '[]' 'quarantined'
 saw=$(cat "$STATE/claude-saw.txt")
 grep -Fxq '0-Inbox/Bower - 2026-01-15 0850 Old question.md' <<<"$saw" ||
