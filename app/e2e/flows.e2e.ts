@@ -180,6 +180,28 @@ test("a note Bower wrote opens with Bower's note and What Bower used (#351)", as
   await shot(page, testInfo, 'note-from-bower');
 });
 
+test("previous/next under a note hides Bower's own files and uses titles (#423)", async ({
+  page,
+}) => {
+  // Answers has exactly one real note ("Which subscriptions renew this
+  // autumn?") alongside Bower's own "Bower - Proposals.md" (#420's demo
+  // fixture already has both, matching the issue's own repro).
+  await page.goto('/folder/Answers');
+  await page
+    .getByRole('link', { name: /Which subscriptions renew this autumn/ })
+    .click();
+  await expect(
+    page.getByRole('heading', {
+      level: 1,
+      name: 'Which subscriptions renew this autumn?',
+    }),
+  ).toBeVisible();
+
+  // No sibling nav at all: the only other file in the folder is Bower's
+  // own, hidden unless "Show Bower's own files" is on.
+  await expect(page.locator('.note-siblings')).toHaveCount(0);
+});
+
 test('a missing note shows Not found', async ({ page }, testInfo) => {
   await openHome(page);
   await page.goto('/note/does-not-exist');
