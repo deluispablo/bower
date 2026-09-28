@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
+import { useHasCamera } from '../add-camera.js';
 import {
   getQueue,
   setQueue,
@@ -96,10 +97,6 @@ export async function expandPicks(
   return files;
 }
 
-function isTouchDevice(): boolean {
-  return typeof window !== 'undefined' && 'ontouchstart' in window;
-}
-
 /** The Added queue's type icon (#334): a picture, or a plain file for
  * everything else — the row's name after any renaming still ends in the
  * same extension, so this reads it straight off `item.name`. */
@@ -135,6 +132,7 @@ export function Add() {
   const { route } = useLocation();
   const { index, refresh } = useVault();
   const online = useOnline();
+  const hasCamera = useHasCamera();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const bowerFolderId = me?.vault?.folderId ?? null;
   // Every folder id the app already knows under the Bower folder, at any
@@ -418,7 +416,6 @@ export function Add() {
     void runQueue([item]);
   }
 
-  const touch = isTouchDevice();
   const linkDisabled = inboxFolderId === null || !online;
   const driveDisabled = inboxFolderId === null || !online || pickerOpening;
 
@@ -450,7 +447,7 @@ export function Add() {
        * the sidebar). Both live in the DOM at once so neither needs its own
        * copy of the file inputs or the disabled/online rules. */}
       <div class="add-doors">
-        {touch && (
+        {hasCamera && (
           <button
             type="button"
             class="add-door"
