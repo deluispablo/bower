@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { useLocation } from 'preact-iso';
 
 import { useHasCamera } from '../add-camera.js';
 import {
@@ -140,8 +139,7 @@ function driveStateText(mimeType: string | undefined): string {
 
 export function Add() {
   const { me } = useSession();
-  const { route } = useLocation();
-  const { index, files, refresh } = useVault();
+  const { index, files, refresh, keepRule } = useVault();
   const online = useOnline();
   const hasCamera = useHasCamera();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
@@ -160,7 +158,6 @@ export function Add() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const sharedHandledRef = useRef(false);
-  const driveNotesRef = useRef<string[]>([]);
 
   // The queue itself lives in `add-queue-store.js`, outside this
   // component, so it survives navigating away and back within the
@@ -183,12 +180,16 @@ export function Add() {
   // Tidy up comes next (a tidy-up started from Add writes it first,
   // `run-store.tsx`). The listing catches up afterwards, as after an add.
   const contextText = useContextText();
-  const leaveRef = useRef({ inboxFolderId, refresh });
-  leaveRef.current = { inboxFolderId, refresh };
+  const leaveRef = useRef({ inboxFolderId, refresh, keepRule });
+  leaveRef.current = { inboxFolderId, refresh, keepRule };
   useEffect(
     () => () => {
-      const { inboxFolderId: inbox, refresh: refreshVault } = leaveRef.current;
-      void writeContextNote(inbox).then((written) => {
+      const {
+        inboxFolderId: inbox,
+        refresh: refreshVault,
+        keepRule: keep,
+      } = leaveRef.current;
+      void writeContextNote(inbox, keep).then((written) => {
         if (written) void refreshVault();
       });
     },
@@ -329,7 +330,9 @@ export function Add() {
     }
   }
 
-  /** After a batch's worth of uploads: report the add and go home. Add only
+  /** After a batch's worth of uploads: report the add. Stays on Add (#421,
+   * C.6/#334): adding is meant to take the whole pile before a tidy-up, so
+   * leaving for Home after the first row would work against that. Add only
    * ever fills the inbox; the run itself is started by a tap on Tidy up
    * (the hint below, Home's Inbox card, the switcher command), never by
    * adding. */
@@ -339,9 +342,6 @@ export function Add() {
     // revalidation, so the switcher's Tidy up count and Home's Inbox card would
     // read stale until then (#289).
     void refresh();
-    // A sentence about the last Drive pick stays on screen to be read.
-    if (driveNotesRef.current.length > 0) return;
-    setTimeout(() => route('/'), 900);
   }
 
   /** Runs whatever in `list` is not already `done`, then `finish()`s if,
@@ -377,7 +377,6 @@ export function Add() {
       );
       return false;
     });
-    driveNotesRef.current = notes;
     setDriveNotes(notes);
     if (files.length === 0) return;
     await runQueue(addDriveItems(files));
@@ -386,7 +385,6 @@ export function Add() {
   /** Loads the Picker (only now, never before the button is pressed) and
    * opens it over the user's Drive. */
   async function onFromDrive(): Promise<void> {
-    driveNotesRef.current = [];
     setDriveNotes([]);
     setPickerOpening(true);
     try {
@@ -689,9 +687,12 @@ export function Add() {
       {!online && <p class="offline-reason">{offlineReason('add')}</p>}
 
       {/* The submit belongs to the queue, not to the empty screen (#333):
-       * a link or a Drive pick already runs itself, so this is only for
-       * files chosen, dropped or photographed, still `waiting`. */}
-      {queue.length > 0 && (
+       * a link or a Drive pick already runs itself, so this only shows for
+       * files chosen, dropped or photographed, still `waiting` (#421: a
+       * `queue.length > 0` check alone left it sitting there, doing
+       * nothing but re-finishing an already-done queue, once a link or a
+       * Drive pick had run and settled). */}
+      {(busy || queue.some((item) => item.status === 'waiting')) && (
         <button
           type="button"
           class="button"

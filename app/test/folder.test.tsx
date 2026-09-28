@@ -103,3 +103,26 @@ describe('Folder (#348)', () => {
     );
   });
 });
+
+describe('Folder More menu (#352)', () => {
+  it('opens the one More menu, in its folder version', () => {
+    route.params.path = '1-Projects/Flat hunt';
+    mount();
+    const more = root.querySelector<HTMLButtonElement>('.note-header-more');
+    if (more === null) throw new Error('More button missing');
+    void act(() => {
+      more.click();
+    });
+    const menu = root.querySelector('[role="menu"]');
+    expect(menu?.getAttribute('aria-label')).toBe('Folder actions');
+    expect(root.querySelector('.note-menu-title')?.textContent).toBe(
+      'Flat hunt',
+    );
+    const labels = Array.from(
+      root.querySelectorAll('.note-menu-row-label'),
+      (el) => el.textContent,
+    );
+    expect(labels).toContain('Pin to Home');
+    expect(labels).not.toContain('Edit the text');
+  });
+});

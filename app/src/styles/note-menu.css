@@ -1,10 +1,34 @@
 /*
- * The note's more menu (#210, spec §14): a popover pinned under the More
- * button from 900 px up, a bottom sheet under it. `.note-header-actions`
- * (note.tsx) is `position: relative` so the popover can anchor to it; the
- * backdrop is a full-viewport click-catcher either way, tinted dark only
- * for the phone sheet.
+ * The one More menu for a note, a file and a folder (#210, #352, spec §14,
+ * board Phone-Note-Menu): a popover pinned under the More button from
+ * 900 px up, a bottom sheet under it. `.note-header-actions` (note, file
+ * and folder screens) is `position: relative` so the popover can anchor to
+ * it; the backdrop is a full-viewport click-catcher either way, tinted
+ * dark only for the phone sheet.
  */
+
+/* The phone's own More trigger lives in the shell's `actions` slot instead
+   (`layout.css`), so `.note-header-more` stays hidden until the desktop
+   breakpoint. */
+.note-header-actions {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Scoped to its row so it outranks `.icon-button`'s own `display`,
+   whichever stylesheet the bundle happens to load last. */
+.note-header-actions > .note-header-more {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .note-header-actions > .note-header-more {
+    display: inline-flex;
+  }
+}
 
 .note-menu-backdrop {
   position: fixed;
@@ -29,6 +53,30 @@
   box-shadow: var(--shadow-md);
   outline: none;
   animation: note-menu-in var(--motion-base) var(--ease-out);
+}
+
+/* The board's header: the title, then the type word and the folder. */
+.note-menu-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: var(--space-1);
+  padding: var(--space-1) var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.note-menu-title {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-menu-meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 .note-menu-row {
@@ -65,6 +113,30 @@
 .note-menu-row-hint {
   font-size: var(--text-sm);
   color: var(--color-text-muted);
+}
+
+/* Cancel closes the phone sheet; the desktop popover closes on Escape or
+   a click outside, as the board only draws the sheet. */
+.note-menu-cancel {
+  min-height: 48px;
+  margin-top: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.note-menu-cancel:hover {
+  background: var(--color-surface-hover);
+}
+
+@media (min-width: 900px) {
+  .note-menu-cancel {
+    display: none;
+  }
 }
 
 .note-menu-copy-fallback {

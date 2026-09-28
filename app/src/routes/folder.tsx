@@ -9,6 +9,10 @@
  * it there (`file-origin.ts`). A note opens in the app, any other file on
  * its own screen (`routes/file.tsx`, #350).
  *
+ * The More menu (#352) is the one a note and a file have
+ * (`note-menu.tsx`, `kind="folder"`): its phone trigger in the shell's
+ * `actions` slot, its desktop one next to the heading, as on a note.
+ *
  * The chips share `styles/layout.css`'s generic `.chip` (also used by the
  * interview's answers). Pinned toggles the folder's own pin (#215, #216:
  * `pinFolder`/`unpinFolder`, through `pin-action.ts`'s shared toast).
@@ -38,6 +42,8 @@ import {
   IconPin,
 } from '../components/icons.js';
 import { BackLink } from '../components/back-link.js';
+import { MoreButton } from '../components/more-button.js';
+import { NoteMenu } from '../components/note-menu.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
@@ -163,6 +169,10 @@ interface FolderBodyProps {
    * bird's `done` pose on the chip instead of the pin icon. */
   justChanged: boolean;
   onDoneShown: () => void;
+  /** Whether the More menu (#352) is open, and its toggle. */
+  menuOpen: boolean;
+  onToggleMenu: () => void;
+  onCloseMenu: () => void;
 }
 
 function FolderBody({
@@ -175,6 +185,9 @@ function FolderBody({
   onTogglePin,
   justChanged,
   onDoneShown,
+  menuOpen,
+  onToggleMenu,
+  onCloseMenu,
 }: FolderBodyProps): JSX.Element {
   const tellHref = `/bower?text=${encodeURIComponent(`${contents.name} `)}`;
   const now = Date.now();
@@ -189,6 +202,27 @@ function FolderBody({
           <h1>{contents.name}</h1>
           <p class="folder-meta">{metaLine(contents, parentName, pinned)}</p>
         </div>
+        {file !== undefined && (
+          <div class="note-header-actions folder-head-actions">
+            <MoreButton
+              class="note-header-more"
+              expanded={menuOpen}
+              onClick={onToggleMenu}
+            />
+            {menuOpen && (
+              <NoteMenu
+                kind="folder"
+                file={file}
+                title={contents.name}
+                typeLabel="Folder"
+                askName={contents.name}
+                pinned={pinned}
+                onTogglePin={onTogglePin}
+                onClose={onCloseMenu}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {meaning !== undefined && <p class="folder-explainer">{meaning}</p>}
@@ -304,6 +338,7 @@ export function Folder(): JSX.Element {
   const path = params.path ?? '';
   const { index, pinFolder, unpinFolder, getNoteText } = useVault();
   const [justChanged, setJustChanged] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const contents = useMemo(
     () =>
@@ -333,6 +368,22 @@ export function Folder(): JSX.Element {
     return <FolderCrumb ancestors={ancestors} name={contents.name} />;
   }, [contents, ancestors]);
   useShellSlot('crumb', crumbContent);
+
+  // The phone's More trigger (#352), in the shell's `actions` slot like a
+  // note's; only once the folder's own Drive entry is known.
+  const hasFile =
+    contents !== null && index?.byPath.get(contents.path) !== undefined;
+  const actionsContent = useMemo(
+    () =>
+      hasFile ? (
+        <MoreButton
+          expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        />
+      ) : null,
+    [hasFile, menuOpen],
+  );
+  useShellSlot('actions', actionsContent);
 
   const catalogue = useCatalogueOrigins(
     index?.byPath.get(CATALOGUE_PATH),
@@ -377,6 +428,9 @@ export function Folder(): JSX.Element {
       onTogglePin={() => void handleTogglePin()}
       justChanged={justChanged}
       onDoneShown={() => setJustChanged(false)}
+      menuOpen={menuOpen}
+      onToggleMenu={() => setMenuOpen((open) => !open)}
+      onCloseMenu={() => setMenuOpen(false)}
     />
   );
 }

@@ -6,6 +6,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteMenu } from '../src/components/note-menu.js';
+import type { NoteMenuProps } from '../src/components/note-menu.js';
 import type { DriveFile } from '../src/drive.js';
 
 function file(name: string): DriveFile {
@@ -50,7 +51,9 @@ function mount(
     if (!open) return null;
     return h(NoteMenu, {
       file: NOTE,
-      noteName: 'Shopping list',
+      title: 'Shopping list',
+      typeLabel: 'Note',
+      askName: 'Shopping list',
       canEdit,
       canAppend,
       pinned,
@@ -75,8 +78,21 @@ function mount(
   return { onEdit, onTogglePin, onAddParagraph, onClose };
 }
 
+/** The menu's rows, Cancel left out (it only closes the sheet). */
 function rows(): HTMLElement[] {
-  return Array.from(root.querySelectorAll('[role="menuitem"]'));
+  return Array.from(
+    root.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ).filter((r) => !r.classList.contains('note-menu-cancel'));
+}
+
+/** Mounts the menu for a file or a folder, the way `file.tsx` and
+ * `folder.tsx` do. */
+function mountFor(props: Omit<NoteMenuProps, 'onClose'>): void {
+  root = document.createElement('div');
+  document.body.append(root);
+  void act(() => {
+    render(h(NoteMenu, { onClose: vi.fn(), ...props }), root);
+  });
 }
 
 function rowByText(text: string): HTMLElement {
@@ -109,17 +125,37 @@ afterEach(() => {
 });
 
 describe('NoteMenu', () => {
-  it('lists seven rows for a normal note, Pin first', () => {
+  it('lists seven rows for a normal note, in the board order', () => {
     mount(true);
-    expect(rows()).toHaveLength(7);
-    expect(rowByText('Pin to Home')).toBeDefined();
-    expect(rowByText('Ask Bower about this note')).toBeDefined();
-    expect(rowByText('This was misfiled')).toBeDefined();
-    expect(rowByText('Open in Drive')).toBeDefined();
-    expect(rowByText('Copy link')).toBeDefined();
-    expect(rowByText('Add a paragraph…')).toBeDefined();
-    expect(rowByText('Edit the text')).toBeDefined();
-    expect(rows()[0]?.textContent).toContain('Pin to Home');
+    expect(
+      rows().map((r) => r.querySelector('.note-menu-row-label')?.textContent),
+    ).toEqual([
+      'Ask Bower about this',
+      'Pin to Home',
+      'Move to…',
+      'Open in Drive',
+      'Copy link',
+      'Add a paragraph…',
+      'Edit the text',
+    ]);
+  });
+
+  it('heads the menu with the title, then the type word and the folder', () => {
+    mount(true);
+    expect(root.querySelector('.note-menu-title')?.textContent).toBe(
+      'Shopping list',
+    );
+    // The note sits at the top of the Bower folder: just the type word.
+    expect(root.querySelector('.note-menu-meta')?.textContent).toBe('Note');
+  });
+
+  it('closes on Cancel, and returns focus to the opener', () => {
+    const { onClose } = mount(true);
+    const cancel = root.querySelector('.note-menu-cancel');
+    if (cancel === null) throw new Error('Cancel missing');
+    click(cancel);
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(opener);
   });
 
   it('lists six rows, Edit left out, for a protected note', () => {
@@ -158,17 +194,17 @@ describe('NoteMenu', () => {
     expect(onTogglePin).toHaveBeenCalledOnce();
   });
 
-  it('prefills Tell Bower with a wikilink to the note, and a space', () => {
+  it('prefills the Bower box with a wikilink to the note, and a space', () => {
     mount(true);
-    const ask = rowByText('Ask Bower about this note');
+    const ask = rowByText('Ask Bower about this');
     expect(ask.getAttribute('href')).toBe(
       `/bower?text=${encodeURIComponent('[[Shopping list]] ')}`,
     );
   });
 
-  it('prefills Tell Bower with the note path and nothing else, for This was misfiled', () => {
+  it('prefills the Bower box with the note path and nothing else, for Move to… (#302)', () => {
     mount(true);
-    const misfiled = rowByText('This was misfiled');
+    const misfiled = rowByText('Move to…');
     expect(misfiled.getAttribute('href')).toBe(
       `/bower?text=${encodeURIComponent(
         '"Shopping list.md" was misfiled. It should go to: ',
@@ -228,43 +264,86 @@ describe('NoteMenu', () => {
     expect(fallback.value).toBe(location.href);
   });
 
-  it('speaks of "this file", with no Pin row, for a file (#350)', () => {
+  it('has no Pin, Add a paragraph or Edit row for a file (#350)', () => {
     const pdf: DriveFile = {
       id: 'file-1',
       name: 'Lease 2026.pdf',
       mimeType: 'application/pdf',
       parents: ['FOLDER_ID'],
-      path: '1-Projects/Lease 2026.pdf',
+      path: '1-Projects/Flat hunt/Lease 2026.pdf',
     };
-    root = document.createElement('div');
-    document.body.append(root);
-    void act(() => {
-      render(
-        h(NoteMenu, {
-          file: pdf,
-          noteName: pdf.name,
-          noun: 'file',
-          canEdit: false,
-          canAppend: false,
-          pinned: false,
-          onAddParagraph: vi.fn(),
-          onEdit: vi.fn(),
-          onClose: vi.fn(),
-        }),
-        root,
-      );
+    mountFor({
+      kind: 'file',
+      file: pdf,
+      title: 'Lease 2026',
+      typeLabel: 'PDF',
+      askName: pdf.name,
+      // Even if a caller passed them, a file never gets the note-only rows.
+      canEdit: true,
+      canAppend: true,
+      onEdit: vi.fn(),
+      onAddParagraph: vi.fn(),
     });
     expect(
       root.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     ).toBe('File actions');
+    expect(root.querySelector('.note-menu-meta')?.textContent).toBe(
+      'PDF · 1-Projects / Flat hunt',
+    );
     expect(rows().map((r) => r.textContent)).toEqual([
-      expect.stringContaining('Ask Bower about this file'),
-      expect.stringContaining('This was misfiled'),
+      expect.stringContaining('Ask Bower about this'),
+      expect.stringContaining('Move to…'),
       expect.stringContaining('Open in Drive'),
       expect.stringContaining('Copy link'),
     ]);
-    expect(rowByText('Ask Bower about this file').getAttribute('href')).toBe(
+    expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
       `/bower?text=${encodeURIComponent('[[Lease 2026.pdf]] ')}`,
     );
+    expect(rowByText('Move to…').getAttribute('href')).toBe(
+      `/bower?text=${encodeURIComponent(
+        '"1-Projects/Flat hunt/Lease 2026.pdf" was misfiled. It should go to: ',
+      )}`,
+    );
+  });
+
+  it('has Pin but no note-only rows for a folder, and opens the folder in Drive', () => {
+    const folder: DriveFile = {
+      id: 'folder-1',
+      name: 'Flat hunt',
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: ['FOLDER_ID'],
+      path: '1-Projects/Flat hunt',
+    };
+    const onTogglePin = vi.fn();
+    mountFor({
+      kind: 'folder',
+      file: folder,
+      title: 'Flat hunt',
+      typeLabel: 'Folder',
+      askName: 'Flat hunt',
+      pinned: true,
+      onTogglePin,
+    });
+    expect(
+      root.querySelector('[role="menu"]')?.getAttribute('aria-label'),
+    ).toBe('Folder actions');
+    expect(root.querySelector('.note-menu-meta')?.textContent).toBe(
+      'Folder · 1-Projects',
+    );
+    expect(rows().map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Ask Bower about this'),
+      expect.stringContaining('Unpin from Home'),
+      expect.stringContaining('Move to…'),
+      expect.stringContaining('Open in Drive'),
+      expect.stringContaining('Copy link'),
+    ]);
+    expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
+      `/bower?text=${encodeURIComponent('Flat hunt ')}`,
+    );
+    expect(rowByText('Open in Drive').getAttribute('href')).toBe(
+      'https://drive.google.com/drive/folders/folder-1',
+    );
+    click(rowByText('Unpin from Home'));
+    expect(onTogglePin).toHaveBeenCalledOnce();
   });
 });

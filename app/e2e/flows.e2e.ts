@@ -270,7 +270,9 @@ test('Add: the camera door opens a capture input (#339)', async ({
   await expect(page.locator('input[type="file"][capture]')).toHaveCount(1);
 });
 
-test('Add puts a file in the inbox', async ({ page }, testInfo) => {
+test('Add puts a file in the inbox and stays on Add (#421)', async ({
+  page,
+}, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
   await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible();
@@ -287,9 +289,16 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await expect(page.getByText('Added to your inbox.')).toBeVisible();
   await shot(page, testInfo, 'add');
 
-  // Back on Home once the upload finishes: the Inbox card reads the new
-  // total right away (#289), not after the next background refresh.
-  await expect(page).toHaveURL('/');
+  // Adding is meant to take the whole pile before a tidy-up (#421): no
+  // navigation away, and no leftover "Add to Bower" once nothing is
+  // waiting any more.
+  await expect(page).toHaveURL('/add');
+  await expect(page.getByRole('button', { name: 'Add to Bower' })).toBeHidden();
+
+  // The vault index refreshed in place (#289): Home already reads the new
+  // total once we go there ourselves, not after the next background
+  // refresh.
+  await navigate(page, /^Home$/);
   await expect(
     visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
       '.home-card-count',
@@ -314,12 +323,14 @@ test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (
   await page.getByRole('button', { name: 'Add to Bower' }).click();
   await expect(page.getByText('In your inbox')).toBeVisible();
 
-  // Back on Home once the upload finishes, then Add again within the
-  // same session: the row is still there (#334), not an empty screen.
-  await expect(page).toHaveURL('/');
+  // Leave for Home ourselves, then Add again within the same session: the
+  // row is still there (#334), not an empty screen, and no leftover
+  // "Add to Bower" reappears now that nothing is waiting (#421).
+  await navigate(page, /^Home$/);
   await navigate(page, /^Add$/);
   await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
   await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add to Bower' })).toBeHidden();
 });
 
 test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', async ({
@@ -350,8 +361,9 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
       `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
     );
   await page.getByRole('button', { name: 'Add to Bower' }).click();
-  await expect(page).toHaveURL('/');
-  await navigate(page, /^Add$/);
+  // Stays on Add (#421): the new total shows in place, no round trip
+  // through Home needed to see it.
+  await expect(page).toHaveURL('/add');
   await expect(hint).toContainText('4 things waiting.');
 });
 
@@ -369,20 +381,32 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
     );
   const box = page.getByRole('textbox', { name: 'What is this?' });
   await expect(box).toHaveAttribute('placeholder', /^Just filing is fine\./);
-  await box.fill('Receipts: add them to a table with the shop and the total.');
+  // The rule sentence is kept in your rules too (#435).
+  await box.fill(
+    'Receipts: add them to a table with the shop and the total. From now on, file garden receipts under Garden.',
+  );
   await shot(page, testInfo, 'add-context');
   await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
 
-  // Leaving Add writes the note: the three things, the receipt, the note.
-  await expect(page).toHaveURL('/');
+  // The context note is written on leaving Add (#421: no longer automatic
+  // once a batch finishes), so leave for Home ourselves: the three
+  // things, the receipt, the note.
+  await navigate(page, /^Home$/);
   await expect(
     visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
       '.home-card-count',
     ),
   ).toHaveText('5');
   // It waits in the inbox with the other instruction notes, under the
-  // Bower tab's Requests (the demo resets on a reload, so no `goto`).
+  // Bower tab's Requests (the demo resets on a reload, so no `goto`); the
+  // rule sentence is already in Rules, under its own topic.
   await navigate(page, /^Bower$/);
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'Rules' })
+      .getByRole('button', { name: /^Garden\s*1$/ }),
+  ).toBeVisible();
   await page.getByRole('tab', { name: 'Requests' }).click();
   await expect(
     page
@@ -622,7 +646,9 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
     .getByRole('listitem')
     .filter({ hasText: 'How much did I spend on the kitchen this year?' });
   await expect(row).toBeVisible();
-  await expect(row.getByText('Waiting', { exact: true })).toBeVisible();
+  await expect(
+    row.getByText('Waiting · question', { exact: true }),
+  ).toBeVisible();
   await row.scrollIntoViewIfNeeded();
   await shot(page, testInfo, 'tell');
 
@@ -671,6 +697,34 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
   await sheet.getByRole('button', { name: /Pause it/ }).click();
   await expect(sheet).toBeHidden();
   await expect(rule.getByText('Paused', { exact: true })).toBeVisible();
+});
+
+test('a "from now on" sentence is kept at once as a rule, no run (#343)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  const box = page.getByRole('textbox', {
+    name: 'Tell Bower what to do, or ask it something',
+  });
+  await box.fill('From now on, receipts go under Finance');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(box).toHaveValue('');
+  const requests = page.getByRole('tabpanel', { name: 'Requests' });
+  const row = requests
+    .getByRole('listitem')
+    .filter({ hasText: 'From now on, receipts go under Finance' });
+  await expect(row.getByText('Rule kept', { exact: true })).toBeVisible();
+  await shot(page, testInfo, 'bower-rule-kept');
+  await expect(
+    page.getByRole('dialog', { name: 'Tidying up status' }),
+  ).toHaveCount(0);
+  await row.getByRole('button', { name: 'In your rules' }).click();
+  await expect(page.getByRole('tab', { name: 'Rules' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });
 
 test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({
@@ -891,16 +945,16 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   if (testInfo.project.name === 'desktop') {
     await expect(tabs).toBeHidden();
 
-    // The sidebar (#326, C.9): one Expand/Collapse all tool, no sort menu,
-    // and the waiting-count bubble on Home's row, not Add's (the boards
-    // disagree with the issue's own title and C.9's text, which say Add).
+    // The sidebar (#422, #326, C.9): one Expand/Collapse all tool, no sort
+    // menu, and the waiting-count bubble on Add's row, where the pile gets
+    // filled, not Home's.
     const sidebar = page.getByRole('navigation', { name: 'Your notes' });
     await expect(sidebar.locator('[aria-label^="Sort by"]')).toHaveCount(0);
     await expect(
       sidebar.getByRole('button', { name: 'Expand all' }),
     ).toBeVisible();
-    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveText('3');
-    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveCount(0);
+    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveText('3');
+    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveCount(0);
     await shot(page, testInfo, 'desktop-sidebar');
     return;
   }
@@ -913,7 +967,7 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   await expect(page).toHaveURL(/\/notes$/);
   await expect(links.nth(1)).toHaveAttribute('aria-current', 'page');
   await expect(
-    page.getByRole('textbox', { name: 'Filter your notes' }),
+    page.getByRole('button', { name: 'Search or jump to anything' }),
   ).toBeVisible();
   await expect(page.getByRole('tree').first()).toBeVisible();
   await shot(page, testInfo, 'tabs-notes');
@@ -959,6 +1013,19 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
   expect((footBox?.y ?? 0) >= (treeBox?.y ?? 0)).toBe(true);
 
   await shot(page, testInfo, 'notes-tab');
+
+  // The search row opens the quick switcher (#433, Phone-Notes board), and
+  // closing it lands back on the Notes tab.
+  await page
+    .getByRole('button', { name: 'Search or jump to anything' })
+    .click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  // Focus moves into the switcher once it is open: wait for that first.
+  await expect(switcher.getByRole('combobox')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(switcher).toBeHidden();
+  await expect(page).toHaveURL(/\/notes$/);
+  await expect(tree).toBeVisible();
 });
 
 test('an old /tell link opens the Bower tab with its text', async ({
@@ -1265,5 +1332,27 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(menu.getByRole('menuitem', { name: /Pin to Home/ })).toHaveCount(
     0,
   );
+  // The one More menu (#352): the board's header, then Ask Bower first.
+  await expect(menu).toContainText('PDF · 1-Projects / Kitchen Refresh');
+  await expect(menu.getByRole('menuitem').first()).toContainText(
+    'Ask Bower about this',
+  );
   await shot(page, testInfo, 'file-pdf-menu');
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+
+  // The same menu on a folder: Pin to Home, no note-only rows.
+  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await visible(page.getByRole('button', { name: 'More' })).click();
+  const folderMenu = page.getByRole('menu', { name: 'Folder actions' });
+  await expect(
+    folderMenu.getByRole('menuitem', { name: /Pin to Home/ }),
+  ).toBeVisible();
+  await expect(
+    folderMenu.getByRole('menuitem', { name: /Ask Bower about this/ }),
+  ).toHaveAttribute('href', /^\/bower\?text=Kitchen%20Refresh/);
+  await expect(
+    folderMenu.getByRole('menuitem', { name: /Edit the text/ }),
+  ).toHaveCount(0);
+  await shot(page, testInfo, 'folder-more-menu');
 });

@@ -61,6 +61,15 @@ vi.mock('../src/session.js', () => ({
   }),
 }));
 
+const openSwitcher = vi.fn();
+
+vi.mock('../src/switcher-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/switcher-store.js')>()),
+  openSwitcher: () => {
+    openSwitcher();
+  },
+}));
+
 let index: ReturnType<typeof buildVaultIndex> | undefined;
 
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
@@ -102,6 +111,7 @@ async function flush(): Promise<void> {
 
 beforeEach(() => {
   location.path = '/notes';
+  openSwitcher.mockClear();
 });
 
 afterEach(() => {
@@ -112,11 +122,15 @@ afterEach(() => {
 });
 
 describe('Notes (#353)', () => {
-  it('keeps the page own live filter field, unchanged by #353', () => {
+  it('has a search row that opens the quick switcher, no inline filter (#433)', () => {
     mount();
-    expect(query<HTMLInputElement>('.explorer-filter-input').placeholder).toBe(
-      'Filter your notes',
-    );
+    expect(root.querySelector('input')).toBeNull();
+    const row = query<HTMLButtonElement>('button.explorer-filter');
+    expect(row.textContent).toBe('Search or jump to anything');
+    void act(() => {
+      row.click();
+    });
+    expect(openSwitcher).toHaveBeenCalledOnce();
   });
 
   it('has no sort button, only the tree', () => {

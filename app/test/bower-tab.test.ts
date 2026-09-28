@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   EXAMPLES,
   examplesFor,
+  ruleSentences,
+  sentenceKind,
   sinceLabel,
   waitingRequests,
 } from '../src/bower-tab.js';
@@ -158,5 +160,57 @@ describe('sinceLabel', () => {
 
   it('is empty for a date it cannot read', () => {
     expect(sinceLabel('', now)).toBe('');
+  });
+});
+
+describe('sentenceKind', () => {
+  it('reads a rule from its first words, any case, leading spaces allowed', () => {
+    for (const text of [
+      'From now on, receipts go under Finance',
+      '  always file recipes under Cooking',
+      'NEVER archive Finance',
+      'Every time I add a payslip, put it in Money',
+      '\nfrom now on: tag bills',
+    ]) {
+      expect(sentenceKind(text)).toBe('rule');
+    }
+  });
+
+  it('asks a sentence that ends in "?", even one that starts like a rule', () => {
+    expect(sentenceKind('How much did I spend on the kitchen this year?')).toBe(
+      'question',
+    );
+    expect(sentenceKind('Every time I add a receipt, where does it go? ')).toBe(
+      'question',
+    );
+  });
+
+  it('waits with everything else as a job', () => {
+    for (const text of [
+      'Make a packing list for my next trip',
+      'Nevertheless, summarise the PDF',
+      'Is it always like this',
+      'Alwaysy is not a word',
+    ]) {
+      expect(sentenceKind(text)).toBe('job');
+    }
+  });
+});
+
+describe('ruleSentences', () => {
+  it('finds the rule sentences in a longer text, as written', () => {
+    expect(
+      ruleSentences(
+        'Receipts: add them to a table. From now on, file receipts under Money.\nnever archive these! Is it always like this?',
+      ),
+    ).toEqual([
+      'From now on, file receipts under Money.',
+      'never archive these!',
+    ]);
+  });
+
+  it('finds none in a text without one', () => {
+    expect(ruleSentences('Just file these, please.')).toEqual([]);
+    expect(ruleSentences('')).toEqual([]);
   });
 });

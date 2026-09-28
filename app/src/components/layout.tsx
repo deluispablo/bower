@@ -215,11 +215,12 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         >
           <Icon />
           <span class="explorer-row-label">{label}</span>
-          {href === HOME.href && pending > 0 && (
-            // aria-hidden: the link's accessible name stays plain "Home"
+          {href === ADD.href && pending > 0 && (
+            // aria-hidden: the link's accessible name stays plain "Add"
             // (screen-reader users meet the same count on Home's own
-            // Inbox card); it also keeps `Home` matchable by name in the
-            // e2e flows' navigation helper.
+            // Inbox card); it also keeps `Add` matchable by name in the
+            // e2e flows' navigation helper. #422/#326: the waiting count
+            // belongs on Add, where the pile gets filled, not on Home.
             <span class="nav-badge" aria-hidden="true">
               {pending}
             </span>

@@ -237,3 +237,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The desktop More trigger (#352) sits at the heading's far end, as on a
+   note; `note-menu.css` shows it from 900 px up. */
+.folder-head-actions {
+  margin-left: auto;
+}

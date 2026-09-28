@@ -327,7 +327,9 @@ export function Note() {
           {menuOpen && (
             <NoteMenu
               file={file}
-              noteName={title}
+              title={title}
+              typeLabel="Note"
+              askName={title}
               canEdit={canEdit}
               canAppend={canAppend}
               pinned={index.notePinnedAt.has(file.id)}

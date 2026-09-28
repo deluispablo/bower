@@ -270,6 +270,28 @@
   font-size: var(--text-sm);
 }
 
+/* "In your rules" on a kept rule: a link-looking button to the Rules tab. */
+.bower-request-link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bower-request-link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.bower-state--kept {
+  background: rgb(95 207 188 / 0.2);
+  color: var(--color-text);
+}
+
 /* A state chip: a word on a tint, never the hue alone (C.11). */
 .bower-state {
   display: inline-flex;

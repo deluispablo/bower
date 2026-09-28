@@ -144,3 +144,36 @@ export function sinceLabel(iso: string, now: number | Date): string {
   if (diffMs < DAY_MS) return `${Math.floor(diffMs / HOUR_MS)} h ago`;
   return relativeTime(iso, nowMs);
 }
+
+/** What a sentence sent from the box is, by plain pattern (#343, handover
+ * D.2): the app keeps a rule at once, the others wait for a run. */
+export type SentenceKind = 'rule' | 'question' | 'job';
+
+/** "From now on", "Always", "Never" or "Every time" as the first words,
+ * any case, leading whitespace allowed. */
+const RULE_START = /^\s*(?:from now on|always|never|every time)\b/i;
+
+/**
+ * A sentence ending in "?" is a question (checked first, so "Every time I
+ * add a receipt, where does it go?" is asked, not kept); one starting with
+ * "From now on", "Always", "Never" or "Every time" is a rule; everything
+ * else is a job.
+ */
+export function sentenceKind(text: string): SentenceKind {
+  const trimmed = text.trim();
+  if (trimmed.endsWith('?')) return 'question';
+  if (RULE_START.test(trimmed)) return 'rule';
+  return 'job';
+}
+
+/**
+ * The rule sentences in a longer text (#435, Add's "What is this?" box):
+ * the text split into sentences (after `.`, `!` or `?`, and at line
+ * breaks), keeping those `sentenceKind` reads as a rule, as written.
+ */
+export function ruleSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence !== '' && sentenceKind(sentence) === 'rule');
+}
