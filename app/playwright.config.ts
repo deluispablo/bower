@@ -39,6 +39,10 @@ export default defineConfig({
     // screenshots.
     contextOptions: { reducedMotion: 'reduce' },
     trace: 'retain-on-failure',
+    // A fake webcam, so Add's "Take a photo" door (#339, issue 21.7) shows
+    // up the same way on every machine and in CI, never depending on
+    // whether the box actually running the tests has a camera.
+    launchOptions: { args: ['--use-fake-device-for-media-stream'] },
   },
   projects: [
     {

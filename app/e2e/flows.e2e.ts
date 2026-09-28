@@ -226,6 +226,28 @@ test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
   await shot(page, testInfo, 'add-doors');
 });
 
+test('Add: the camera door opens a capture input (#339)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  // The fake webcam (`playwright.config.ts`'s `--use-fake-device-for-
+  // media-stream`) is what makes the door show up here at all, on the
+  // phone project and every machine alike (issue 21.7's actual rule is
+  // unit-tested in `add-camera.test.ts`).
+  if (testInfo.project.name === 'desktop') {
+    await expect(page.locator('.add-doors')).toBeHidden();
+    return;
+  }
+
+  const door = page
+    .locator('.add-doors')
+    .getByRole('button', { name: /^Take a photo/ });
+  await expect(door).toBeVisible();
+  await expect(page.locator('input[type="file"][capture]')).toHaveCount(1);
+});
+
 test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
@@ -328,6 +350,58 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
     visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
   ).toContainText('2 filed · 1 answered');
   await shot(page, testInfo, 'tidy-up');
+});
+
+test('the working sheet: the bird between Inbox and the folders, the rows as they land (#338)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(confirm).toBeHidden();
+
+  // Running: the scene, the count against the three things waiting, when
+  // it started, the sentence, and the item being read.
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
+  await expect(sheet.getByText(/^[0-3] of 3 filed$/)).toBeVisible();
+  await expect(sheet.getByText('Started just now')).toBeVisible();
+  await expect(
+    sheet.getByText(
+      'Usually three to five minutes. Close this and keep going; Home will say when it is done.',
+    ),
+  ).toBeVisible();
+  const rows = sheet.locator('.working-sheet-row');
+  await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(1);
+
+  // The scripted run files one item after another (`src/demo/server.ts`);
+  // the app polls every five seconds, so some land before the run ends.
+  await expect(sheet.getByText(/^[12] of 3 filed$/)).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(
+    rows.filter({ hasText: 'Boiler service invoice' }),
+  ).toContainText('filed');
+  await shot(page, testInfo, 'run-working-rows');
+
+  // Done: the listing is read again and the rows name where things went;
+  // the request went to the processed folder, so it only says filed.
+  await expect(sheet.getByText('3 files processed')).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(
+    rows.filter({ hasText: 'Boiler service invoice' }),
+  ).toContainText('→ Home');
+  await expect(rows.filter({ hasText: 'Tomato seedlings' })).toContainText(
+    '→ Garden',
+  );
+  await expect(
+    rows.filter({ hasText: 'What do I still need for Lisbon' }),
+  ).toContainText('filed');
+  await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(0);
 });
 
 test('the working sheet opens once per run, and the run ends back at Tidy up', async ({
@@ -439,6 +513,55 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
       '.home-card-count',
     ),
   ).toHaveText('4');
+});
+
+test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  await page.getByRole('button', { name: 'Things you can ask' }).click();
+  await page.getByRole('link', { name: 'More ideas' }).click();
+  await expect(page).toHaveURL(/\/ideas$/);
+  if (testInfo.project.name === 'desktop') {
+    // `.screen-title` is phone-hidden (the crumb slot has the title there).
+    await expect(
+      page.getByRole('heading', { name: 'Ideas', level: 1 }),
+    ).toBeVisible();
+  }
+  for (const group of [
+    'Home and money',
+    'Health',
+    'Trips and projects',
+    'Reading',
+    'Rules that save time',
+  ]) {
+    await expect(page.getByRole('heading', { name: group })).toBeVisible();
+  }
+  await shot(page, testInfo, 'ideas');
+
+  const row = page
+    .getByRole('listitem')
+    .filter({ hasText: 'How much did I spend on groceries this month?' });
+  await row.getByRole('link', { name: 'Copy' }).click();
+  await expect(page).toHaveURL(/\/bower\?text=/);
+  await expect(
+    page.getByRole('textbox', {
+      name: 'Tell Bower what to do, or ask it something',
+    }),
+  ).toHaveValue('How much did I spend on groceries this month?');
+
+  // Also reachable from the "?" tip: the Ideas button on a help sheet.
+  await page.getByRole('button', { name: 'About this screen' }).click();
+  await visible(page.getByRole('link', { name: 'Ideas' })).click();
+  await expect(page).toHaveURL(/\/ideas$/);
+
+  // Back in the bar is phone-only (#318): the desktop shell has no Back
+  // link, so this only applies there.
+  if (testInfo.project.name === 'phone') {
+    await page.getByRole('link', { name: 'Back to Bower' }).click();
+    await expect(page).toHaveURL(/\/bower$/);
+  }
 });
 
 test('Settings switches the theme to dark, and it sticks', async ({
@@ -576,6 +699,18 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   const tabs = page.locator('nav.bottom-nav');
   if (testInfo.project.name === 'desktop') {
     await expect(tabs).toBeHidden();
+
+    // The sidebar (#326, C.9): one Expand/Collapse all tool, no sort menu,
+    // and the waiting-count bubble on Home's row, not Add's (the boards
+    // disagree with the issue's own title and C.9's text, which say Add).
+    const sidebar = page.getByRole('navigation', { name: 'Your notes' });
+    await expect(sidebar.locator('[aria-label^="Sort by"]')).toHaveCount(0);
+    await expect(
+      sidebar.getByRole('button', { name: 'Expand all' }),
+    ).toBeVisible();
+    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveText('3');
+    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveCount(0);
+    await shot(page, testInfo, 'desktop-sidebar');
     return;
   }
   await expect(tabs).toBeVisible();

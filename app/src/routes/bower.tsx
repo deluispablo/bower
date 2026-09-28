@@ -30,6 +30,7 @@ import { useShellSlot } from '../components/shell-slots.js';
 import { INSTRUCTION_APP_PROPERTIES, createTextFile } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
 import { useSession } from '../session.js';
+import { IDEAS_PATH } from '../shell-routes.js';
 import {
   addSent,
   instructionFileName,
@@ -107,7 +108,9 @@ function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
               </li>
             ))}
           </ul>
-          {/* "More ideas" links to the Ideas screen (#332) once it exists. */}
+          <a class="bower-more-ideas" href={IDEAS_PATH}>
+            More ideas
+          </a>
         </div>
       )}
     </div>

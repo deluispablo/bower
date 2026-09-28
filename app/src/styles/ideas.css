@@ -1,0 +1,86 @@
+/*
+ * The Ideas screen (#332, board `Phone-Ideas`): the bird's line, then
+ * groups of example sentences, each with a Copy link.
+ */
+
+.ideas-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 40rem;
+}
+
+.ideas-intro {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ideas-bubble {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.idea-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.idea-group-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+}
+
+.idea-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.idea-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.idea-row .icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--color-brand);
+}
+
+.idea-text {
+  flex: 1;
+}
+
+.idea-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+
+.idea-copy:hover {
+  filter: brightness(0.95);
+}
+
+.idea-copy .icon {
+  color: inherit;
+}

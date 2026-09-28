@@ -69,6 +69,8 @@ import {
   rulesWithUserLines,
   splitLegacyRules,
 } from './rulebook.js';
+import { applyRuleEdit, RuleError } from './rules.js';
+import type { RuleEdit } from './rules.js';
 import { useSession } from './session.js';
 import {
   buildVaultIndex,
@@ -155,6 +157,13 @@ export interface Vault extends VaultState {
    * conflict-checked.
    */
   decideProposal: (id: string, decision: ProposalDecision) => Promise<void>;
+  /**
+   * Changes, pauses, resumes or removes one rule in `Rules.md` (#341,
+   * `runRuleEdit`): read fresh, only that rule's line rewritten, the write
+   * conflict-checked, then the cached text and listing updated. Throws
+   * `RuleError('missing')` when the rule (or the file) is no longer there.
+   */
+  editRule: (edit: RuleEdit) => Promise<void>;
 }
 
 /** What `updateRules` did. */
@@ -486,6 +495,8 @@ export interface InterviewInput {
    * so an area the owner already started is left alone. */
   existingAreaNames: ReadonlySet<string>;
   answers: InterviewAnswers;
+  /** `YYYY-MM-DD` the rule it writes is dated. */
+  on: string;
 }
 
 /** One area's folder note, once created. */
@@ -531,6 +542,7 @@ export async function runInterview(
     areasFolderId,
     existingAreaNames,
     answers,
+    on,
   } = input;
 
   const aboutBefore =
@@ -538,10 +550,14 @@ export async function runInterview(
   const rulesBefore =
     rulesFile !== undefined ? await readNoteForEdit(rulesFile.id) : null;
 
-  const files = interviewToFiles(answers, {
-    aboutMe: aboutBefore?.text ?? '',
-    rules: rulesBefore?.text ?? '',
-  });
+  const files = interviewToFiles(
+    answers,
+    {
+      aboutMe: aboutBefore?.text ?? '',
+      rules: rulesBefore?.text ?? '',
+    },
+    on,
+  );
 
   let aboutMe: InterviewWrites['aboutMe'] = null;
   let createdAbout = false;
@@ -671,6 +687,37 @@ export async function runProposalDecision(
           baseModifiedTime: before.modifiedTime,
         });
   return { proposals, rules, createdRules };
+}
+
+export interface RuleEditInput {
+  /** `Rules.md` as listed, when the folder has one. */
+  rulesFile: DriveFile | undefined;
+  edit: RuleEdit;
+  /** `YYYY-MM-DD` a changed, paused or resumed rule is dated. */
+  on: string;
+}
+
+/**
+ * One rule changed, paused, resumed or removed (#341), through Drive, the
+ * way `runProposalDecision` writes: reads `Rules.md` fresh, applies the edit
+ * to that text (`applyRuleEdit`, which only rewrites the rule's own line
+ * and throws `RuleError('missing')` when the rule is gone), and saves it
+ * conflict-checked against the `modifiedTime` just read. Resolves to the
+ * file as saved, or `null` when the edit changed nothing (a retry).
+ */
+export async function runRuleEdit(
+  input: RuleEditInput,
+): Promise<{ text: string; file: DriveFile } | null> {
+  const { rulesFile, edit, on } = input;
+  if (rulesFile === undefined) {
+    throw new RuleError('missing', 'That rule is no longer there.');
+  }
+  const before = await readNoteForEdit(rulesFile.id);
+  const text = applyRuleEdit(before.text, edit, on);
+  if (text === before.text) return null;
+  return saveNoteText(rulesFile, text, {
+    baseModifiedTime: before.modifiedTime,
+  });
 }
 
 /** Attempts per note or folder-note pin write: the first one plus one retry
@@ -1114,6 +1161,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
         areasFolderId: areasFolder.id,
         existingAreaNames,
         answers,
+        on: dayOf(new Date()),
       });
 
       if (
@@ -1183,6 +1231,21 @@ export function VaultProvider({ children }: VaultProviderProps) {
     [folderId, recordNote, load],
   );
 
+  const editRule = useCallback(
+    async (edit: RuleEdit): Promise<void> => {
+      const index = stateRef.current.index;
+      const saved = await runRuleEdit({
+        rulesFile: index?.byPath.get(RULES_PATH),
+        edit,
+        on: dayOf(new Date()),
+      });
+      if (saved !== null) {
+        await recordNote(saved.file.id, saved.text, saved.file);
+      }
+    },
+    [recordNote],
+  );
+
   const value: Vault = {
     ...state,
     refresh,
@@ -1197,6 +1260,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
     updateRules,
     submitInterview,
     decideProposal,
+    editRule,
   };
 
   return (

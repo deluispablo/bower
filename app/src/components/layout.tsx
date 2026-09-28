@@ -25,6 +25,12 @@
  * card and in Add's hint, and the bar shows nothing while a run goes. The
  * working sheet and the notifications prompt are mounted once, here
  * (`RunSheets`), whichever screen the run was started from.
+ *
+ * The sidebar's waiting-count bubble (#326, C.9): the Desktop-Home and
+ * Desktop-Add boards both put it on the Home row, not Add — the board
+ * wins over the issue's own title and C.9's text, which say Add. Same
+ * count as Home's Inbox card and Add's hint (`pendingCount`); hidden at
+ * zero, same convention as the folder menu's counts (#319).
  */
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -32,9 +38,16 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
+import { pendingCount } from '../run-store.js';
 import { useSession } from '../session.js';
-import { BOWER_PATH, helpScreenFor, isInnerScreen } from '../shell-routes.js';
+import {
+  BOWER_PATH,
+  IDEAS_PATH,
+  helpScreenFor,
+  isInnerScreen,
+} from '../shell-routes.js';
 import { replayTour } from '../tour-store.js';
+import { useVault } from '../vault-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
 import { DemoBanner } from './demo-banner.js';
@@ -122,6 +135,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
+  const { files } = useVault();
   const { path, route } = useLocation();
   const { back, crumb, actions, aside } = useShellSlots();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -152,6 +166,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   }, []);
 
   const healthIsNew = useHealthIsNew();
+  const pending = pendingCount(files);
 
   const closeDrawer = (): void => {
     setDrawerOpen(false);
@@ -200,6 +215,15 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         >
           <Icon />
           <span class="explorer-row-label">{label}</span>
+          {href === HOME.href && pending > 0 && (
+            // aria-hidden: the link's accessible name stays plain "Home"
+            // (screen-reader users meet the same count on Home's own
+            // Inbox card); it also keeps `Home` matchable by name in the
+            // e2e flows' navigation helper.
+            <span class="nav-badge" aria-hidden="true">
+              {pending}
+            </span>
+          )}
         </a>
       ))}
     </nav>
@@ -297,6 +321,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       {helpOpen && (
         <HelpSheet
           screen={helpScreenFor(path)}
+          ideasHref={IDEAS_PATH}
           onClose={() => {
             setHelpOpen(false);
           }}

@@ -143,6 +143,11 @@ describe('the Bower tab', () => {
     });
     expect(box().value).toBe(examples[0]?.textContent);
     expect(createTextFile).not.toHaveBeenCalled();
+
+    const moreIdeas = [...root.querySelectorAll('a')].find(
+      (a) => a.textContent === 'More ideas',
+    );
+    expect(moreIdeas?.getAttribute('href')).toBe('/ideas');
   });
 
   it('with something waiting: the tip starts closed and opens on "?"', async () => {

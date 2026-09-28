@@ -131,7 +131,7 @@ describe('rulesWithAccepted', () => {
     const next = rulesWithAccepted(RULES, invoices, '2026-09-27');
     expect(next).toBe(
       `${RULES.replace(/\s+$/, '')}\n\n${ACCEPTED_HEADING}\n\n` +
-        '- File invoices under 2-Areas/Money with the tag finance. (accepted suggestion, 2026-09-27)\n',
+        "- File invoices under 2-Areas/Money with the tag finance. (owner's request, 2026-09-27)\n",
     );
   });
 
@@ -141,7 +141,7 @@ describe('rulesWithAccepted', () => {
     const once = `${rulesWithAccepted(RULES, invoices, '2026-09-27')}\n## Later\n- Mine.\n`;
     const twice = rulesWithAccepted(once, race, '2026-09-28');
     expect(twice).toContain(
-      '(accepted suggestion, 2026-09-27)\n- For a race result, record the date, distance and time in [[Running log]] and link it from [[Half Marathon]]. (accepted suggestion, 2026-09-28)\n',
+      "(owner's request, 2026-09-27)\n- For a race result, record the date, distance and time in [[Running log]] and link it from [[Half Marathon]]. (owner's request, 2026-09-28)\n",
     );
     expect(twice.endsWith('## Later\n- Mine.\n')).toBe(true);
   });
@@ -151,9 +151,16 @@ describe('rulesWithAccepted', () => {
     expect(rulesWithAccepted(once, invoices, '2026-09-28')).toBe(once);
   });
 
+  it('knows a rule accepted before the new shape, or paused since', () => {
+    const older = `${RULES}\n${ACCEPTED_HEADING}\n\n- ${invoices.text} (accepted suggestion, 2026-09-20)\n`;
+    expect(rulesWithAccepted(older, invoices, '2026-09-28')).toBe(older);
+    const paused = `${RULES}\n## Finance\n- ~~${invoices.text}~~ (paused 2026-09-21)\n`;
+    expect(rulesWithAccepted(paused, invoices, '2026-09-28')).toBe(paused);
+  });
+
   it('starts an empty file with the section alone', () => {
     expect(rulesWithAccepted('', invoices, '2026-09-27')).toBe(
-      `${ACCEPTED_HEADING}\n\n- File invoices under 2-Areas/Money with the tag finance. (accepted suggestion, 2026-09-27)\n`,
+      `${ACCEPTED_HEADING}\n\n- File invoices under 2-Areas/Money with the tag finance. (owner's request, 2026-09-27)\n`,
     );
   });
 });

@@ -10,6 +10,7 @@ import { FileScreen } from './routes/file.js';
 import { Folder } from './routes/folder.js';
 import { Health } from './routes/health.js';
 import { Home } from './routes/home.js';
+import { Ideas } from './routes/ideas.js';
 import { Intro } from './routes/intro.js';
 import { LintRedirect } from './routes/lint-redirect.js';
 import { Login } from './routes/login.js';
@@ -27,7 +28,7 @@ import { Terms } from './routes/terms.js';
 import { RunProvider } from './run-store.js';
 import { ShellSlotsProvider } from './components/shell-slots.js';
 import { SessionProvider, useSession } from './session.js';
-import { BOWER_PATH, usesShell } from './shell-routes.js';
+import { BOWER_PATH, IDEAS_PATH, usesShell } from './shell-routes.js';
 import { openSwitcher } from './switcher-store.js';
 import { VaultProvider } from './vault-store.js';
 
@@ -79,6 +80,7 @@ function AppRoutes() {
       <Route path="/notes" component={Notes} />
       <Route path="/add" component={Add} />
       <Route path={BOWER_PATH} component={Bower} />
+      <Route path={IDEAS_PATH} component={Ideas} />
       <Route path="/tell" component={TellRedirect} />
       <Route path="/search" component={SearchRedirect} />
       <Route path="/settings" component={Settings} />

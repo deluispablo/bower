@@ -23,6 +23,10 @@ const BARE_PATHS = new Set([
 /** The Bower tab (#317), which replaced `/tell`. */
 export const BOWER_PATH = '/bower';
 
+/** The Ideas screen (#332): reached from the Bower tab's tip and every
+ * help sheet's Ideas button; Back goes to the Bower tab. */
+export const IDEAS_PATH = '/ideas';
+
 /** The four tabs (#317); every other screen in the shell is an inner one. */
 const TAB_PATHS = new Set(['/', '/notes', '/add', BOWER_PATH]);
 
