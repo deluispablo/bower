@@ -12,6 +12,8 @@
 # naming the missing variable and file.
 
 set -euo pipefail
+# Under pipefail, never pipe into grep -q: it exits at the first match, the
+# writer can then die of SIGPIPE and fail the pipeline (#391). Use <<<"$x".
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORKFLOWS_DIR="$HERE/../../agent/workflows"
@@ -75,24 +77,23 @@ for mode in ingest lint; do
   hand_off=$(step "$path" 'Hand the runner settings to run.sh')
   [ -n "$hand_off" ] || die "$file: no step writes the runner settings file"
   for name in "${FILE_VARS[@]}"; do
-    printf '%s\n' "$hand_off" | grep -q "^ \{10\}$name: " || die "$file: settings step env lacks $name"
-    printf '%s\n' "$hand_off" | grep -Fq "printf '$name=%s\n' \"\$$name\"" ||
+    grep -q "^ \{10\}$name: " <<<"$hand_off" || die "$file: settings step env lacks $name"
+    grep -Fq "printf '$name=%s\n' \"\$$name\"" <<<"$hand_off" ||
       die "$file: settings step does not write $name"
   done
-  printf '%s\n' "$hand_off" | grep -Fq '>"$RUNNER_TEMP/bower-secrets"' ||
+  grep -Fq '>"$RUNNER_TEMP/bower-secrets"' <<<"$hand_off" ||
     die "$file: settings step does not write \$RUNNER_TEMP/bower-secrets"
-  printf '%s\n' "$hand_off" | grep -Fq 'umask 077' || die "$file: settings file not created private"
-  printf '%s\n' "$hand_off" | grep -Fq 'chmod 600 "$RUNNER_TEMP/bower-secrets"' ||
+  grep -Fq 'umask 077' <<<"$hand_off" || die "$file: settings file not created private"
+  grep -Fq 'chmod 600 "$RUNNER_TEMP/bower-secrets"' <<<"$hand_off" ||
     die "$file: settings file not mode 600"
   hand_off_line=$(grep -n '^      - name: Hand the runner settings to run.sh$' "$path" | cut -d: -f1)
   run_line=$(grep -n "^      - name: Run $mode\$" "$path" | cut -d: -f1)
   [ "$hand_off_line" -lt "$run_line" ] || die "$file: the settings step does not come before the Run step"
   echo "ok $file hands the runner settings over in a private file first"
 
-  printf '%s\n' "$hand_off" |
-    grep -Fq 'BOWER_RUN_TICKET: ${{ github.event.client_payload.ticket }}' ||
+  grep -Fq 'BOWER_RUN_TICKET: ${{ github.event.client_payload.ticket }}' <<<"$hand_off" ||
     die "$file: the run ticket does not come from the dispatch"
-  printf '%s\n' "$hand_off" | grep -Fq 'echo "::add-mask::$BOWER_RUN_TICKET"' ||
+  grep -Fq 'echo "::add-mask::$BOWER_RUN_TICKET"' <<<"$hand_off" ||
     die "$file: the run ticket is not masked"
   echo "ok $file takes the run ticket from the dispatch, masked"
 done
@@ -104,15 +105,15 @@ done
 echo 'ok ingest.yml holds no BOWER_API_KEY'
 lint_job=$(job "$WORKFLOWS_DIR/lint.yml" lint)
 [ -n "$lint_job" ] || die "lint.yml: no 'lint' job"
-! printf '%s\n' "$lint_job" | grep -q 'BOWER_API_KEY' || die "lint.yml: the 'lint' job mentions BOWER_API_KEY"
-printf '%s\n' "$lint_job" | grep -Fq "if: github.event_name == 'repository_dispatch'" ||
+! grep -q 'BOWER_API_KEY' <<<"$lint_job" || die "lint.yml: the 'lint' job mentions BOWER_API_KEY"
+grep -Fq "if: github.event_name == 'repository_dispatch'" <<<"$lint_job" ||
   die "lint.yml: the 'lint' job runs on something other than the Worker's dispatch"
 dispatch_job=$(job "$WORKFLOWS_DIR/lint.yml" dispatch)
-printf '%s\n' "$dispatch_job" | grep -Fq 'BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}' ||
+grep -Fq 'BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}' <<<"$dispatch_job" ||
   die "lint.yml: the 'dispatch' job does not get BOWER_API_KEY"
-printf '%s\n' "$dispatch_job" | grep -Fq '/runner/lint/dispatch' ||
+grep -Fq '/runner/lint/dispatch' <<<"$dispatch_job" ||
   die "lint.yml: the 'dispatch' job does not call /runner/lint/dispatch"
-! printf '%s\n' "$dispatch_job" | grep -q 'run.sh' || die "lint.yml: the 'dispatch' job runs the agent"
+! grep -q 'run.sh' <<<"$dispatch_job" || die "lint.yml: the 'dispatch' job runs the agent"
 [ "$(grep -c 'secrets.BOWER_API_KEY' "$WORKFLOWS_DIR/lint.yml")" = 1 ] ||
   die 'lint.yml: BOWER_API_KEY is passed somewhere other than the dispatch job'
 echo "ok lint.yml gives BOWER_API_KEY to the 'dispatch' job only"

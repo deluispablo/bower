@@ -8,6 +8,8 @@
 # Prints "ok <scenario>" per case and exits non-zero on the first failure.
 
 set -euo pipefail
+# Under pipefail, never pipe into grep -q: it exits at the first match, the
+# writer can then die of SIGPIPE and fail the pipeline (#391). Use <<<"$x".
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 RUN_SH="$HERE/../run.sh"
@@ -44,9 +46,9 @@ cat >"$STUBS/curl" <<'STUB'
 set -euo pipefail
 # run.sh's children must not inherit a BOWER_* setting, the run ticket or
 # the operator key (#258): recorded here, checked by the test.
-if env | grep -q '^BOWER_' ||
-  env | grep -qF -- "$(cat "$SMOKE_STATE/../values/run-ticket")" ||
-  env | grep -qF -- "$(cat "$SMOKE_STATE/../values/operator-key")"; then
+if grep -q '^BOWER_' <<<"$(env)" ||
+  grep -qF -- "$(cat "$SMOKE_STATE/../values/run-ticket")" <<<"$(env)" ||
+  grep -qF -- "$(cat "$SMOKE_STATE/../values/operator-key")" <<<"$(env)"; then
   echo leak >>"$SMOKE_STATE/curl-env-leak"
 fi
 # The credentials and the tokens the fake Worker hands out come from files,
@@ -678,30 +680,30 @@ expect_no_copy_or_convert_tool() {
 # Bower*.md clipped into Clippings/ is never read as a command.
 CASE='ingest prompt contract'
 INGEST_PROMPT=$(cat "$HERE/../prompts/ingest.md")
-printf '%s' "$INGEST_PROMPT" | grep -Fq 'directly in `0-Inbox/`' ||
+grep -Fq 'directly in `0-Inbox/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not restrict instruction notes to 0-Inbox/'
-printf '%s' "$INGEST_PROMPT" | grep -Fq 'tags: [instruction]' ||
+grep -Fq 'tags: [instruction]' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not require the instruction frontmatter'
-printf '%s' "$INGEST_PROMPT" | grep -Fq 'Bower*.md` in `Clippings/`' ||
+grep -Fq 'Bower*.md` in `Clippings/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not call out a Clippings/ Bower*.md as content'
-printf '%s' "$INGEST_PROMPT" | grep -Fq 'the `.md` file next to the original with the same base name' ||
+grep -Fq 'the `.md` file next to the original with the same base name' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not explain the converted Markdown sibling'
-printf '%s' "$INGEST_PROMPT" | grep -Fq 'a converted document together with its `.md`' ||
+grep -Fq 'a converted document together with its `.md`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not move the sibling to Processed/ with the original'
-printf '%s' "$INGEST_PROMPT" | grep -Fq '`0-Inbox/Quarantine/`' ||
+grep -Fq '`0-Inbox/Quarantine/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not tell the agent to leave Quarantine/ alone'
-printf '%s' "$INGEST_PROMPT" | grep -Fq 'listed by the runner' ||
+grep -Fq 'listed by the runner' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not require an instruction note to be listed by the runner'
-printf '%s' "$INGEST_PROMPT" | grep -Fq 'and only from an instruction note (step 2)' ||
+grep -Fq 'and only from an instruction note (step 2)' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not keep Rules.md to instruction notes'
-printf '%s' "$INGEST_PROMPT" | grep -Fq 'never write a file named `CLAUDE.md` anywhere' ||
+grep -Fq 'never write a file named `CLAUDE.md` anywhere' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not forbid a nested CLAUDE.md'
-printf '%s' "$INGEST_PROMPT" | grep -Fq 'append it to `Answers/Bower - Proposals.md`' ||
+grep -Fq 'append it to `Answers/Bower - Proposals.md`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not send proposals to the proposals file'
-printf '%s' "$INGEST_PROMPT" | grep -Fq "never change a proposal's \`status\`" ||
+grep -Fq "never change a proposal's \`status\`" <<<"$INGEST_PROMPT" ||
   die 'ingest prompt lets the agent decide a proposal'
 LINT_PROMPT=$(cat "$HERE/../prompts/lint.md")
-printf '%s' "$LINT_PROMPT" | grep -Fq 'more than 30 days before today; never touch an `open` one' ||
+grep -Fq 'more than 30 days before today; never touch an `open` one' <<<"$LINT_PROMPT" ||
   die 'lint prompt does not prune decided proposals after 30 days'
 echo "ok ingest prompt contract"
 
@@ -819,7 +821,7 @@ expect_eq "$(posts_count)" 1 'status posts'
 expect_eq "$(post 1 p.state)" done 'state'
 expect_eq "$(post 1 p.kind)" ingest 'kind'
 expect_eq "$(post 1 p.processed)" '[]' 'processed'
-post 1 p.runId | grep -Eq '^[0-9a-f]{16}$' || die 'random runId is not 16 hex characters'
+grep -Eq '^[0-9a-f]{16}$' <<<"$(post 1 p.runId)" || die 'random runId is not 16 hex characters'
 expect_eq "$(calls claude)" '' 'claude calls'
 expect_eq "$(calls rclone | wc -l | tr -d ' ')" 1 'rclone calls (sync down only)'
 expect_content_free
@@ -833,7 +835,7 @@ expect_eq "$(posts_count)" 2 'status posts'
 expect_eq "$(post 1 p.state)" running 'first state'
 expect_eq "$(post 2 p.state)" failed 'second state'
 expect_eq "$(post 2 p.kind)" ingest 'failed kind'
-post 2 p.error | grep -q '^agent run' || die 'error does not name the agent run step'
+grep -q '^agent run' <<<"$(post 2 p.error)" || die 'error does not name the agent run step'
 expect_eq "$(post 2 'p.processed === undefined && p.summary === undefined')" true 'failed has no processed or summary'
 expect_eq "$(calls rclone | grep -c '^rclone copy ')" 1 'rclone copy calls'
 expect_eq "$(calls rclone | grep -c '^rclone sync ')" 1 'rclone sync calls (sync down only)'
@@ -852,7 +854,7 @@ run_case nocfg
 expect_eq "$RC" 2 'exit code'
 expect_eq "$(posts_count)" 1 'status posts'
 expect_eq "$(post 1 p.state)" failed 'state'
-post 1 p.error | grep -q 'CLAUDE.md' || die 'error does not mention CLAUDE.md'
+grep -q 'CLAUDE.md' <<<"$(post 1 p.error)" || die 'error does not mention CLAUDE.md'
 expect_eq "$(calls claude)" '' 'claude calls'
 expect_eq "$(calls rclone | grep -c '^rclone copy ')" 0 'rclone copy calls'
 expect_content_free
@@ -872,7 +874,7 @@ run_case reauth
 expect_eq "$RC" 2 'exit code'
 expect_eq "$(posts_count)" 1 'status posts'
 expect_eq "$(post 1 p.state)" failed 'state'
-post 1 p.error | grep -q '^fetch vault info' || die 'error does not name the fetch step'
+grep -q '^fetch vault info' <<<"$(post 1 p.error)" || die 'error does not name the fetch step'
 expect_eq "$(calls rclone)" '' 'rclone calls'
 expect_eq "$(calls claude)" '' 'claude calls'
 expect_content_free
@@ -1048,7 +1050,7 @@ run_case toomany BOWER_MAX_CHANGES=3 BOWER_REPORT_REFUSED=1
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.refused)" '["*"]' 'refused'
-post 2 p.summary | grep -q '^Refused: too many changes' || die 'summary does not say too many changes'
+grep -q '^Refused: too many changes' <<<"$(post 2 p.summary)" || die 'summary does not say too many changes'
 expect_eq "$(post 2 p.processed)" '[]' 'processed'
 expect_eq "$(calls rclone | grep -c '^rclone copy ')" 0 'rclone copy calls'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
