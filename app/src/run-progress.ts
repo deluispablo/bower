@@ -81,6 +81,19 @@ export function waitingPaths(files: readonly DriveFile[]): string[] {
 }
 
 /**
+ * How many things are waiting in the inbox, the way a person would count
+ * them: `navigation.ts#pendingCount`'s rule, minus the context note (#506)
+ * — it is Add's own scratch note for the batch, not a thing waiting to be
+ * filed, and every other count in this file already leaves it out. Home's
+ * "N things" (waiting, tidying up, or left after a failure) uses this, so
+ * it never runs one ahead of the working sheet's own total for the same
+ * inbox.
+ */
+export function visiblePendingCount(files: readonly DriveFile[]): number {
+  return waitingPaths(files).filter((path) => !isContextNote(path)).length;
+}
+
+/**
  * The counts for `progressFor`: `processed` only when the run reports it,
  * and a total only then too, since a total with nothing filed to set
  * against it would pin the bar at zero for the whole of a real run.

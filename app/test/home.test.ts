@@ -15,6 +15,7 @@ import {
   tidyUpAgo,
 } from '../src/home.js';
 import type { BubbleInput, BubblePart, HomeState } from '../src/home.js';
+import { runCounts as sheetRunCounts } from '../src/run-progress.js';
 
 function at(hour: number): Date {
   const date = new Date('2026-09-27T00:00:00');
@@ -166,6 +167,20 @@ describe('runCounts and lastTidyUpLine', () => {
     ]);
     expect(runCounts(withContext)).toEqual({ filed: 1, answered: 1 });
     expect(lastTidyUpLine(withContext)).toBe('1 filed · 1 answered');
+  });
+
+  it("agrees with the working sheet's own count for the same run (#506)", () => {
+    // Two things filed, a context note, no question: Home's "filed" total
+    // and the sheet's "processed" total (`run-progress.ts#runCounts`) must
+    // land on the same number, since both exclude the same context note.
+    const processed = [
+      '0-Inbox/Lease agreement 2026.pdf',
+      '0-Inbox/IMG_4471.jpg',
+      '0-Inbox/Bower - 2026-09-27 0900 Context.md',
+    ];
+    const withContext = run('done', processed);
+    expect(runCounts(withContext)).toEqual({ filed: 2, answered: 0 });
+    expect(sheetRunCounts(processed, processed).processed).toBe(2);
   });
 });
 

@@ -51,7 +51,6 @@ import type { BubblePart, HomeState } from '../home.js';
 import {
   folderCounts,
   folderOf,
-  pendingCount,
   recentNotes,
   relativeTime,
 } from '../navigation.js';
@@ -60,6 +59,7 @@ import { tourOnScreen } from '../onboarding.js';
 import { useOnline } from '../online.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
+import { visiblePendingCount } from '../run-progress.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import { BOWER_PATH } from '../shell-routes.js';
@@ -295,7 +295,10 @@ export function Home(): JSX.Element {
   const recent =
     index === null ? [] : recentNotes(index, RECENT_ROWS, showAppFiles);
   const recentTitles = useNoteTitles(recent);
-  const pending = pendingCount(files);
+  // #506: the same total the working sheet counts against, so "N things"
+  // here never runs one ahead of it — the context note Add may have left
+  // in the inbox is not one of the "things" either place counts.
+  const pending = visiblePendingCount(files);
   const noteCounts =
     index === null ? new Map<string, number>() : folderCounts(index);
   const pinnedItems = index === null ? [] : pinned(index);
