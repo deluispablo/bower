@@ -72,6 +72,7 @@ import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { useVault } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
+import { NotFound } from './not-found.js';
 import '../styles/folder.css';
 
 /** "1 note" / "3 notes", "1 folder" / "2 folders" — the header's count line. */
@@ -461,11 +462,7 @@ export function Folder(): JSX.Element {
   }
 
   if (contents === null) {
-    return (
-      <section>
-        <p>This folder is not in your notes.</p>
-      </section>
-    );
+    return <NotFound kind="folder" />;
   }
 
   const folderPath = contents.path;

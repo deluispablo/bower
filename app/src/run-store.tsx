@@ -118,6 +118,49 @@ export function runKey(run: Run): string {
 }
 
 /**
+ * A `Storage`-like interface (`sessionStorage`'s own shape, narrowed to
+ * what this needs) so a plain object can stand in for it in tests.
+ */
+export interface RunSheetStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+const SHEET_SEEN_KEY = 'bower-run-sheet-seen';
+
+/**
+ * The run key (`runKey`) whose working sheet has already opened, kept in
+ * `sessionStorage` (#497) so a run already seen never opens it again —
+ * not on a full reload, which used to lose this the moment the provider
+ * remounted with a fresh, empty `sheetRunId`, and the sheet read a run
+ * still `queued`/`running` as new. Storage can be unavailable (private
+ * mode, quota, a non-browser test environment): read/write both fail
+ * closed, so the worst case is the pre-#497 behaviour, never a crash.
+ */
+export function readSeenRunKey(storage: RunSheetStorage): string | null {
+  try {
+    return storage.getItem(SHEET_SEEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps `sessionStorage` in step with `state.sheetRunId`; `null` clears it
+ * (a fresh run, or none at all — nothing left to keep from reopening). */
+export function writeSeenRunKey(
+  storage: RunSheetStorage,
+  key: string | null,
+): void {
+  try {
+    if (key === null) storage.removeItem(SHEET_SEEN_KEY);
+    else storage.setItem(SHEET_SEEN_KEY, key);
+  } catch {
+    // Nothing user-facing: worst case the sheet opens once more next time.
+  }
+}
+
+/**
  * "N files processed" / "1 file processed" / "Nothing new to process": the
  * same wording as the push notification body (`api/src/runner.ts`). Add's
  * "What is this?" context note (#446) applies to its own batch, not a
@@ -373,13 +416,32 @@ export function RunProvider({ children }: RunProviderProps) {
   const { files, refresh, keepRule } = useVault();
   const hasVault = me?.vault != null;
 
-  const [state, setState] = useState<RunState>(IDLE_STATE);
+  // #497: seeded from `sessionStorage` so a run already seen (its sheet
+  // opened, dismissed or not) does not read as new to a provider that
+  // just mounted — a reload chief among them — and reopen the sheet for
+  // it. `sheetOpen` itself always starts closed either way: only a fresh
+  // `status`/`process-started` for that same key can reopen it, and
+  // `sheetForActive` already keeps it closed once the key matches.
+  const [state, setState] = useState<RunState>(() => ({
+    ...IDLE_STATE,
+    sheetRunId:
+      typeof sessionStorage === 'undefined'
+        ? null
+        : readSeenRunKey(sessionStorage),
+  }));
   const stateRef = useRef(state);
   stateRef.current = state;
 
   const apply = useCallback((event: RunEvent): void => {
     setState((prev) => reduce(prev, event));
   }, []);
+
+  // Keeps `sessionStorage` in step, so the next mount (a reload) starts
+  // already knowing this run's sheet has been seen.
+  useEffect(() => {
+    if (typeof sessionStorage === 'undefined') return;
+    writeSeenRunKey(sessionStorage, state.sheetRunId);
+  }, [state.sheetRunId]);
 
   const poll = useCallback(async (): Promise<void> => {
     try {

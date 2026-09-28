@@ -42,6 +42,12 @@ function isTypingTarget(target: EventTarget | null): boolean {
   );
 }
 
+/** The catch-all route's own screen (#504): any URL that matches no route
+ * above is a page that never existed, not a missing note. */
+function NotFoundPage() {
+  return <NotFound kind="page" />;
+}
+
 function AppRoutes() {
   const { status } = useSession();
   const { path } = useLocation();
@@ -88,7 +94,7 @@ function AppRoutes() {
       <Route path="/lint" component={LintRedirect} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/welcome" component={Intro} />
-      <Route default component={NotFound} />
+      <Route default component={NotFoundPage} />
     </Router>
   );
 
