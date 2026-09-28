@@ -54,39 +54,54 @@ const LEASE = file(
 const FILES = [...PARA_FOLDERS, FLAT_HUNT, FLAT_NOTE, LEASE, LISBON, CURRY];
 const INDEX = buildVaultIndex(FILES);
 
+const vaultStub = { index: INDEX, files: FILES };
+
 // `vi.mock` factories are hoisted above every import, so the mocks they
 // reference must be too (`vi.hoisted`) — otherwise they are read before
 // they exist.
-const { searchFullText, loadNote, process, tidyUp, runStub } = vi.hoisted(
-  () => ({
-    runStub: { lastFinished: null as Run | null },
-    // Resolves never: stands in for a Drive full-text search that never
-    // comes back (offline, or just slow), so any result shown before it
-    // settles must have come from the local index, not from this.
-    searchFullText: vi.fn<(query: string) => Promise<DriveFile[]>>(
-      () => new Promise<DriveFile[]>(() => {}),
-    ),
-    loadNote: vi.fn<(id: string) => Promise<{ text: string }>>(
-      () => new Promise(() => {}),
-    ),
-    process: vi.fn<() => Promise<void>>(() => Promise.resolve()),
-    tidyUp: vi.fn<() => void>(),
-  }),
-);
+const {
+  searchFullText,
+  loadNote,
+  loadThumbnail,
+  loadNoteMeta,
+  process,
+  tidyUp,
+  runStub,
+} = vi.hoisted(() => ({
+  loadThumbnail: vi.fn<(file: unknown) => Promise<Blob | undefined>>(() =>
+    Promise.resolve(undefined),
+  ),
+  loadNoteMeta: vi.fn<(file: unknown) => Promise<{ pages?: number }>>(() =>
+    Promise.resolve({}),
+  ),
+  runStub: { lastFinished: null as Run | null },
+  // Resolves never: stands in for a Drive full-text search that never
+  // comes back (offline, or just slow), so any result shown before it
+  // settles must have come from the local index, not from this.
+  searchFullText: vi.fn<(query: string) => Promise<DriveFile[]>>(
+    () => new Promise<DriveFile[]>(() => {}),
+  ),
+  loadNote: vi.fn<(id: string) => Promise<{ text: string }>>(
+    () => new Promise(() => {}),
+  ),
+  process: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+  tidyUp: vi.fn<() => void>(),
+}));
 
 vi.mock('preact-iso', () => ({ useLocation: () => ({ route: vi.fn() }) }));
 vi.mock('../src/drive.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/drive.js')>()),
   searchFullText,
 }));
-vi.mock('../src/cache.js', () => ({ loadNote }));
+vi.mock('../src/cache.js', () => ({ loadNote, loadThumbnail }));
+vi.mock('../src/note-meta.js', () => ({ loadNoteMeta }));
 vi.mock('../src/api.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/api.js')>()),
   getRuns: () => Promise.resolve({ runs: [] }),
 }));
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ index: INDEX, files: FILES }),
+  useVault: () => vaultStub,
 }));
 vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
@@ -318,5 +333,82 @@ describe('results (#593, board Phone-Search)', () => {
     expect(ask?.getAttribute('href')).toBe(
       '/bower?text=Where%20is%20boiler%20warranty%3F',
     );
+  });
+});
+
+describe('rows learn a photo thumbnail and a PDF page count (#594)', () => {
+  const PHOTO = file(
+    'photo',
+    '1-Projects/Flat hunt/Arlington Road window.jpg',
+    'image/jpeg',
+  );
+  const COMPANION = note(
+    'lease-note',
+    '1-Projects/Flat hunt/Lease agreement 2026.md',
+  );
+  const withExtras = [...FILES, COMPANION, PHOTO];
+
+  beforeEach(() => {
+    vaultStub.index = buildVaultIndex(withExtras);
+    vaultStub.files = withExtras;
+    URL.createObjectURL = vi.fn(() => 'blob:thumb');
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => {
+    vaultStub.index = INDEX;
+    vaultStub.files = FILES;
+  });
+
+  it('says "PDF · 6 pages" from the companion note and draws the photo thumbnail', async () => {
+    loadNoteMeta.mockResolvedValue({ pages: 6 });
+    loadThumbnail.mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
+    await flush();
+    const field = root.querySelector('input') as HTMLInputElement;
+    void act(() => {
+      type(field, 'lease');
+    });
+    await flush();
+    await flush();
+    expect(optionTexts().some((t) => t.includes('PDF · 6 pages · '))).toBe(
+      true,
+    );
+
+    void act(() => {
+      type(field, 'window');
+    });
+    await flush();
+    await flush();
+    expect(
+      root.querySelector('.switcher-row-thumb img')?.getAttribute('src'),
+    ).toBe('blob:thumb');
+  });
+
+  it('leaves the PDF row without a count when the note does not say', async () => {
+    loadNoteMeta.mockResolvedValue({});
+    await flush();
+    const field = root.querySelector('input') as HTMLInputElement;
+    void act(() => {
+      type(field, 'lease');
+    });
+    await flush();
+    await flush();
+    expect(optionTexts().some((t) => t.includes('PDF · Projects'))).toBe(false);
+    expect(optionTexts().some((t) => /pages/.test(t))).toBe(false);
+  });
+});
+
+describe('the multi-word query (#594)', () => {
+  it('shows the none state when only one of the words exists', async () => {
+    searchFullText.mockResolvedValue([]);
+    await flush();
+    const field = root.querySelector('input') as HTMLInputElement;
+    void act(() => {
+      type(field, 'curry warranty');
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(root.textContent).toContain('Nothing called “curry warranty”');
   });
 });

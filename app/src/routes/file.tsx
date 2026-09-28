@@ -23,8 +23,9 @@ import { FolderMark } from '../components/folder-mark.js';
 import { IconClock, IconFolder, IconSparkle } from '../components/icons.js';
 import { KindBadge } from '../components/kind-badge.js';
 import { MoreButton } from '../components/more-button.js';
-import { loadImage } from '../components/note-body.js';
+import { NoteBody, loadImage } from '../components/note-body.js';
 import { NoteMenu } from '../components/note-menu.js';
+import { PhotoViewer } from '../components/photo-viewer.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import {
   TablePreview,
@@ -32,7 +33,26 @@ import {
   parseCsv,
 } from '../components/table-preview.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
-import { exportFile, getBlob, getText, thumbnailLinkOf } from '../drive.js';
+import {
+  companionCandidates,
+  copyNotice,
+  findCompanion,
+  pageUrl,
+  parseCatalogueFiles,
+  sourceKindOf,
+  sourceUrl,
+  walkOf,
+  whereToLook,
+  withoutWhereToLook,
+} from '../companion.js';
+import type { SourceKind, Walk } from '../companion.js';
+import {
+  driveFetch,
+  exportFile,
+  getBlob,
+  getText,
+  thumbnailLinkOf,
+} from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH, originOf } from '../file-origin.js';
 import {
@@ -45,19 +65,24 @@ import {
 } from '../file-preview.js';
 import { formatPolicy } from '../formats.js';
 import { imageMimeType } from '../markdown/embeds.js';
+import { renderNote } from '../markdown/render.js';
 import {
   breadcrumb,
   displayPath,
   driveFileUrl,
+  folderContents,
   folderHref,
   folderOf,
   paraKindOf,
 } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
+import { noteTitle } from '../note-title.js';
+import { getPref } from '../prefs.js';
+import { markSeen } from '../seen.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
-import type { FileKind } from '../vault-index.js';
+import type { FileKind, VaultIndex } from '../vault-index.js';
 import { NotFound } from './not-found.js';
 import '../styles/markdown.css';
 import '../styles/file.css';
@@ -426,6 +451,276 @@ function usePages(
   return pages;
 }
 
+interface Companion {
+  note: DriveFile;
+  text: string;
+}
+
+/** How many of a folder's notes are read for their `original` at most. */
+const COMPANION_READS = 30;
+
+/**
+ * The note Bower wrote about `file` and its text (`companion.ts`): found by
+ * its `original` (the frontmatter of the folder's notes, cached), then by the
+ * catalogue, then by sharing the file's name. `undefined` while it looks, `null` when
+ * there is none.
+ */
+function useCompanion(
+  file: DriveFile | undefined,
+  index: VaultIndex | null,
+  getNoteText: (id: string) => Promise<string>,
+): Companion | null | undefined {
+  const [found, setFound] = useState<Companion | null | undefined>(undefined);
+  const id = file?.id;
+  const version = file?.modifiedTime;
+  const notes = index?.notes.length;
+  const catalogue = index?.byPath.get(CATALOGUE_PATH);
+  const catalogueVersion = catalogue?.modifiedTime;
+
+  useEffect(() => {
+    setFound(undefined);
+    if (file === undefined || index === null) return;
+    if (fileKind(file) === 'note') {
+      setFound(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const originals = new Map<string, string>();
+      const candidates = companionCandidates(
+        file,
+        index.notes,
+        index.byPath,
+      ).slice(0, COMPANION_READS);
+      for (const note of candidates) {
+        try {
+          const meta = await loadNoteMeta(note);
+          if (meta.original !== undefined)
+            originals.set(note.id, meta.original);
+        } catch (err) {
+          console.error(err);
+        }
+        if (cancelled) return;
+      }
+      let listed = new Map<string, string>();
+      if (catalogue !== undefined) {
+        try {
+          listed = parseCatalogueFiles(await getNoteText(catalogue.id));
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      const note = findCompanion(file, {
+        notes: index.notes,
+        byPath: index.byPath,
+        originals,
+        catalogue: listed,
+      });
+      if (note === undefined) {
+        if (!cancelled) setFound(null);
+        return;
+      }
+      const text = await getNoteText(note.id);
+      if (!cancelled) setFound({ note, text });
+    })().catch((err: unknown) => console.error(err));
+    return () => {
+      cancelled = true;
+    };
+  }, [id, version, notes, catalogueVersion]);
+
+  return found;
+}
+
+/** Bower's note under the preview: its first lines, "Where to look" on a long PDF, and the way to the note. */
+function BowerNote({
+  file,
+  companion,
+  index,
+}: {
+  file: DriveFile;
+  companion: Companion;
+  index: VaultIndex;
+}): JSX.Element {
+  const { note, text } = companion;
+  const pages = useMemo(() => whereToLook(text), [text]);
+  const html = useMemo(
+    () =>
+      renderNote(withoutWhereToLook(text), index, {
+        path: note.path,
+        title: noteTitle(note, text),
+      }).html,
+    [text, index, note.path],
+  );
+  const driveUrl = driveFileUrl(file);
+  return (
+    <section class="file-bower-note" aria-label="Bower's note">
+      <div class="file-bower-note-text">
+        <NoteBody html={html} />
+      </div>
+      {pages.length > 0 && (
+        <div class="file-where">
+          <h2>Where to look</h2>
+          <ul>
+            {pages.map((page) => (
+              <li key={page.page}>
+                <a
+                  href={pageUrl(driveUrl, page.page)}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  {page.label}
+                </a>
+                <span>{page.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <a class="file-bower-note-link" href={`/note/${note.id}`}>
+        {"Bower's note on this"}
+      </a>
+    </section>
+  );
+}
+
+type SourceName =
+  { status: 'loading' } | { status: 'known'; name: string | null };
+
+/**
+ * The name of the Google file a copy was made from (`files.get`, name only).
+ * `null` once Drive says it is gone or cannot be reached. In the demo the
+ * fixture's `bowerSource` already is the name.
+ */
+function useSourceName(source: string | undefined): SourceName {
+  const [load, setLoad] = useState<SourceName>({ status: 'loading' });
+  useEffect(() => {
+    if (source === undefined) return;
+    if (isDemo()) {
+      setLoad({ status: 'known', name: source });
+      return;
+    }
+    let cancelled = false;
+    setLoad({ status: 'loading' });
+    driveFetch(`/drive/v3/files/${encodeURIComponent(source)}?fields=name`)
+      .then((response) => response.json() as Promise<unknown>)
+      .then((body) => {
+        const name =
+          typeof body === 'object' &&
+          body !== null &&
+          'name' in body &&
+          typeof body.name === 'string'
+            ? body.name
+            : null;
+        if (!cancelled) setLoad({ status: 'known', name });
+      })
+      .catch((err: unknown) => {
+        console.error(err);
+        if (!cancelled) setLoad({ status: 'known', name: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+  return load;
+}
+
+/** "A copy of your Google Sheet “…”" with the way to the original and to this copy. */
+export function CopyNotice({
+  file,
+  kind,
+  source,
+}: {
+  file: DriveFile;
+  kind: SourceKind;
+  source: string;
+}): JSX.Element | null {
+  const load = useSourceName(source);
+  if (load.status === 'loading') return null;
+  const original = load.name === null ? null : sourceUrl(kind, source);
+  return (
+    <div class="file-notice file-copy-notice">
+      <p>{copyNotice(kind, load.name)}</p>
+      <div class="file-actions">
+        {isDemo() ? (
+          <>
+            <button type="button" class="button" disabled aria-disabled="true">
+              Open the original
+            </button>
+            <button
+              type="button"
+              class="button file-button-secondary"
+              disabled
+              aria-disabled="true"
+            >
+              Open this copy in Drive
+            </button>
+            <span class="file-caption">{NOT_IN_DEMO_DRIVE}</span>
+          </>
+        ) : (
+          <>
+            {original !== null && (
+              <a class="button" href={original} target="_blank" rel="noopener">
+                Open the original
+              </a>
+            )}
+            <a
+              class="button file-button-secondary"
+              href={driveFileUrl(file)}
+              target="_blank"
+              rel="noopener"
+            >
+              Open this copy in Drive
+            </a>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function walkHref(item: DriveFile): string {
+  return fileKind(item) === 'note' ? `/note/${item.id}` : `/file/${item.id}`;
+}
+
+function walkTitle(item: DriveFile): string {
+  return fileKind(item) === 'note' ? noteTitle(item) : fileTitle(item.name);
+}
+
+/** Previous and next in the folder's list: "Lease agreement · 4 of 5 · Viewing notes". */
+function WalkBar({ walk }: { walk: Walk }): JSX.Element {
+  return (
+    <nav class="file-walk" aria-label="In this folder">
+      {walk.previous === null ? (
+        <span class="file-walk-side" />
+      ) : (
+        <a
+          class="file-walk-side file-walk-previous"
+          rel="prev"
+          href={walkHref(walk.previous)}
+        >
+          <span aria-hidden="true">&lsaquo; </span>
+          {walkTitle(walk.previous)}
+        </a>
+      )}
+      <span class="file-walk-place">
+        {walk.position} of {walk.total}
+      </span>
+      {walk.next === null ? (
+        <span class="file-walk-side" />
+      ) : (
+        <a
+          class="file-walk-side file-walk-next"
+          rel="next"
+          href={walkHref(walk.next)}
+        >
+          {walkTitle(walk.next)}
+          <span aria-hidden="true"> &rsaquo;</span>
+        </a>
+      )}
+    </nav>
+  );
+}
+
 export function FileScreen(): JSX.Element {
   const { params } = useRoute();
   const { route } = useLocation();
@@ -438,11 +733,19 @@ export function FileScreen(): JSX.Element {
   const isNote = file !== undefined && fileKind(file) === 'note';
   const load = usePreview(file);
   const pages = usePages(file, index?.byPath);
+  const companion = useCompanion(file, index, getNoteText);
 
   useEffect(() => {
     setMenuOpen(false);
     setThumbnailBroken(false);
   }, [id]);
+
+  // Opening a file marks it seen (#587).
+  useEffect(() => {
+    if (file !== undefined && !isNote) {
+      markSeen(id).catch((err: unknown) => console.error(err));
+    }
+  }, [id, file === undefined, isNote]);
 
   // A note's id belongs on the note screen.
   useEffect(() => {
@@ -510,6 +813,11 @@ export function FileScreen(): JSX.Element {
   const facts = metaFacts(file, { pages, rows });
   const topFolder = folder.split('/')[0] ?? '';
   const para = paraKindOf(topFolder);
+  const walkSiblings =
+    folderContents(index, folder, getPref('explorerSort'))?.items ?? [];
+  const walk = walkOf(walkSiblings, file);
+  const sourceKind = sourceKindOf(file);
+  const source = file.appProperties?.bowerSource;
   const askHref = `/bower?text=${encodeURIComponent(
     `Summarise [[${file.name}]] and list what matters in it`,
   )}`;
@@ -559,9 +867,28 @@ export function FileScreen(): JSX.Element {
       </ul>
 
       <FileNotice file={file} kind={kind} />
+      {sourceKind !== null && source !== undefined && source !== '' && (
+        <CopyNotice file={file} kind={sourceKind} source={source} />
+      )}
 
       {shows === 'none' ? (
         <NoPreview file={file} kind={kind} />
+      ) : preview.status === 'image' ? (
+        <PhotoViewer
+          src={preview.url}
+          title={title}
+          siblings={(walk === null ? [file] : walkSiblings).map((item) => ({
+            id: item.id,
+            name: walkTitle(item),
+          }))}
+          index={walk === null ? 0 : walk.position - 1}
+          folderName={folder === '' ? 'Bower' : displayPath(folder)}
+          onNavigate={(at) => {
+            const target = walkSiblings[at];
+            if (target !== undefined) route(walkHref(target));
+          }}
+          onMore={() => setMenuOpen(true)}
+        />
       ) : (
         <Preview
           file={file}
@@ -577,7 +904,13 @@ export function FileScreen(): JSX.Element {
         </>
       )}
 
-      {policy.bowerReads === 'yes' && (
+      {walk !== null && walk.total > 1 && <WalkBar walk={walk} />}
+
+      {companion !== null && companion !== undefined && (
+        <BowerNote file={file} companion={companion} index={index} />
+      )}
+
+      {policy.bowerReads === 'yes' && companion === null && (
         <p class="file-tip">
           <IconSparkle />
           <span>

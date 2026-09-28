@@ -39,10 +39,12 @@ import { useLocation } from 'preact-iso';
 
 import { getRuns } from '../api.js';
 import type { Run } from '../api.js';
-import { loadNote } from '../cache.js';
-import { FOLDER_MIME, searchFullText } from '../drive.js';
+import { loadNote, loadThumbnail } from '../cache.js';
+import { FOLDER_MIME, getText, searchFullText } from '../drive.js';
 import type { DriveFile } from '../drive.js';
+import { formatSize } from '../file-preview.js';
 import { things } from '../home.js';
+import { parseFrontmatter } from '../markdown/frontmatter.js';
 import {
   displayName,
   folderHref,
@@ -50,6 +52,7 @@ import {
   relativeTime,
 } from '../navigation.js';
 import type { ParaKind } from '../navigation.js';
+import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { getPref } from '../prefs.js';
 import { pendingCount, useRun } from '../run-store.js';
@@ -69,6 +72,7 @@ import {
 import { BOWER_PATH } from '../shell-routes.js';
 import {
   closeSwitcher,
+  openSwitcher,
   feedCachedNoteText,
   knownNoteText,
   loadOpened,
@@ -80,8 +84,9 @@ import {
 import type { Command } from '../switcher.js';
 import { commandsFor } from '../switcher.js';
 import { effectiveTheme, setTheme } from '../theme.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
-import type { VaultIndex } from '../vault-index.js';
+import type { FileKind, VaultIndex } from '../vault-index.js';
 import { useVault } from '../vault-store.js';
 import { Bird } from './bird.js';
 import { FolderIcon, FolderMark } from './folder-mark.js';
@@ -108,8 +113,214 @@ const DEBOUNCE_MS = 300;
 const DAY_MS = 86_400_000;
 const START_LIST_MAX = 5;
 
+/** The desktop overlay's two columns start here (`switcher.css`). */
+const DESKTOP_QUERY = '(min-width: 900px)';
+const EXTRAS_MAX = 30;
+const PREVIEW_LINES = 8;
+const PREVIEW_DELAY_MS = 120;
+
 type SearchStatus = 'idle' | 'searching' | 'done' | 'error';
 type KindChip = 'all' | 'folders' | 'notes' | 'files';
+
+/** The desktop chips group files by what they are: "PDFs 2 · Spreadsheets 1". */
+const FAMILIES: readonly { key: string; label: string; kinds: FileKind[] }[] = [
+  { key: 'pdf', label: 'PDFs', kinds: ['pdf'] },
+  { key: 'sheet', label: 'Spreadsheets', kinds: ['sheet', 'excel', 'csv'] },
+  { key: 'photo', label: 'Photos', kinds: ['photo', 'heic', 'image'] },
+  {
+    key: 'doc',
+    label: 'Documents',
+    kinds: ['doc', 'word', 'opendocument', 'text', 'markdown'],
+  },
+  { key: 'slides', label: 'Slides', kinds: ['slides', 'powerpoint'] },
+  { key: 'video', label: 'Videos', kinds: ['video'] },
+  { key: 'audio', label: 'Audio', kinds: ['audio'] },
+];
+
+/** The desktop chip a hit is counted under. */
+function chipKeyOf(hit: Pick<SearchHit, 'kind' | 'file'>): string {
+  if (hit.kind !== 'file') return hit.kind;
+  const kind = fileKind(hit.file);
+  return FAMILIES.find((family) => family.kinds.includes(kind))?.key ?? 'other';
+}
+
+/** The desktop chips for `results`: All, then one per kind that has a hit. */
+function desktopChips(
+  results: SearchResults,
+): { key: string; label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const hit of [...results.folders, ...results.notes, ...results.files]) {
+    const key = chipKeyOf(hit);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const labelled = [
+    { key: 'folder', label: 'Folders' },
+    { key: 'note', label: 'Notes' },
+    ...FAMILIES,
+    { key: 'other', label: 'Other files' },
+  ];
+  return [
+    { key: 'all', label: 'All', count: resultTotal(results) },
+    ...labelled.flatMap(({ key, label }) => {
+      const count = counts.get(key);
+      return count === undefined ? [] : [{ key, label, count }];
+    }),
+  ];
+}
+
+/** The note that describes a PDF (`Name.pdf` -> `Name.md`), if the vault has one. */
+function companionOf(
+  file: DriveFile,
+  byPath: ReadonlyMap<string, DriveFile> | undefined,
+): DriveFile | undefined {
+  if (byPath === undefined || fileKind(file) !== 'pdf') return undefined;
+  return byPath.get(file.path.replace(/\.[^./]+$/, '.md'));
+}
+
+function pagesWord(pages: number): string {
+  return `${pages} ${pages === 1 ? 'page' : 'pages'}`;
+}
+
+/** Whether the file's picture is worth showing in its row. */
+function isPictureKind(file: DriveFile): boolean {
+  const kind = fileKind(file);
+  return kind === 'photo' || kind === 'heic' || kind === 'image';
+}
+
+/**
+ * What the rows learn after they are drawn: photo thumbnails (the listing's
+ * `thumbnailLink`, blob-cached) and a PDF's page count, from its companion
+ * note's `pages`. Each is fetched once per file; a miss leaves the row as it
+ * was (icon, no count).
+ */
+function useRowExtras(
+  rows: readonly RowModel[],
+  byPath: ReadonlyMap<string, DriveFile> | undefined,
+): { pages: ReadonlyMap<string, number>; thumbs: ReadonlyMap<string, string> } {
+  const [pages, setPages] = useState<ReadonlyMap<string, number>>(new Map());
+  const [thumbs, setThumbs] = useState<ReadonlyMap<string, string>>(new Map());
+  const asked = useRef(new Set<string>());
+  const urls = useRef(new Set<string>());
+  const gone = useRef(false);
+
+  useEffect(
+    () => () => {
+      gone.current = true;
+      for (const url of urls.current) URL.revokeObjectURL(url);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    for (const row of rows.slice(0, EXTRAS_MAX)) {
+      if (row.kind !== 'file') continue;
+      const { file } = row;
+      const companion = companionOf(file, byPath);
+      const pagesKey = `pages:${file.id}:${companion?.modifiedTime ?? ''}`;
+      if (companion !== undefined && !asked.current.has(pagesKey)) {
+        asked.current.add(pagesKey);
+        loadNoteMeta(companion).then(
+          (meta) => {
+            const count = meta.pages;
+            if (gone.current || count === undefined) return;
+            setPages((prev) => new Map(prev).set(file.id, count));
+          },
+          (err: unknown) => {
+            console.error(err);
+          },
+        );
+      }
+      const thumbKey = `thumb:${file.id}`;
+      if (isPictureKind(file) && !asked.current.has(thumbKey)) {
+        asked.current.add(thumbKey);
+        loadThumbnail(file).then(
+          (blob) => {
+            if (blob === undefined) return;
+            const url = URL.createObjectURL(blob);
+            if (gone.current) {
+              URL.revokeObjectURL(url);
+              return;
+            }
+            urls.current.add(url);
+            setThumbs((prev) => new Map(prev).set(file.id, url));
+          },
+          (err: unknown) => {
+            console.error(err);
+          },
+        );
+      }
+    }
+  }, [rows, byPath]);
+
+  return { pages, thumbs };
+}
+
+/** The first lines of a note's own words (no frontmatter, no markup marks). */
+function previewLines(text: string): string[] {
+  return parseFrontmatter(text)
+    .body.split(/\r\n|\r|\n/)
+    .map((line) => line.replace(/^\s*(?:#{1,6}|[-*+>])\s*/, '').trim())
+    .filter((line) => line !== '')
+    .slice(0, PREVIEW_LINES);
+}
+
+/**
+ * What the desktop preview column shows for the highlighted row: the file's
+ * first page or picture (Drive's thumbnail) and the lines of the note
+ * (its own, or the one Bower wrote beside a PDF). Read after a short pause,
+ * so arrowing down the list does not fetch every row it passes.
+ */
+function usePreview(
+  row: RowModel | null,
+  byPath: ReadonlyMap<string, DriveFile> | undefined,
+): { picture: string | null; lines: string[] | null } {
+  const [picture, setPicture] = useState<string | null>(null);
+  const [lines, setLines] = useState<string[] | null>(null);
+  const file = row?.file;
+  const id = file?.id;
+  const kind = row?.kind;
+
+  useEffect(() => {
+    setPicture(null);
+    setLines(null);
+    if (file === undefined || kind === undefined || kind === 'folder') return;
+    let cancelled = false;
+    let url: string | null = null;
+    const timer = setTimeout(() => {
+      if (kind === 'file') {
+        loadThumbnail(file).then(
+          (blob) => {
+            if (blob === undefined) return;
+            url = URL.createObjectURL(blob);
+            if (cancelled) URL.revokeObjectURL(url);
+            else setPicture(url);
+          },
+          (err: unknown) => {
+            console.error(err);
+          },
+        );
+      }
+      const source = kind === 'note' ? file : companionOf(file, byPath);
+      if (source === undefined) return;
+      void (async () => {
+        const text =
+          knownNoteText(source.id) ??
+          (await loadNote(source.id).catch(() => undefined))?.text ??
+          (await getText(source.id));
+        if (!cancelled) setLines(previewLines(text));
+      })().catch((err: unknown) => {
+        console.error(err);
+      });
+    }, PREVIEW_DELAY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      if (url !== null) URL.revokeObjectURL(url);
+    };
+  }, [id, kind, byPath]);
+
+  return { picture, lines };
+}
 type TimeKey = 'any' | 'today' | '7d' | '30d' | 'year';
 
 const TIME_LABELS: Readonly<Record<TimeKey, string>> = {
@@ -347,7 +558,20 @@ function commandIcon(command: Command, theme: 'light' | 'dark'): JSX.Element {
 }
 
 /** The row's icon; a file also wears its grey kind badge. */
-function RowIcon({ row }: { row: RowModel }): JSX.Element {
+function RowIcon({
+  row,
+  thumb,
+}: {
+  row: RowModel;
+  thumb?: string | undefined;
+}): JSX.Element {
+  if (thumb !== undefined) {
+    return (
+      <span class="switcher-row-thumb">
+        <img src={thumb} alt="" />
+      </span>
+    );
+  }
   if (row.kind === 'folder') return <FolderIcon tint={row.para ?? undefined} />;
   if (row.kind === 'note') return <IconNote />;
   const kind = fileKind(row.file);
@@ -371,6 +595,8 @@ interface HitRowProps {
   id: string;
   row: RowModel;
   selected: boolean;
+  pages?: number | undefined;
+  thumb?: string | undefined;
   onActivate: (row: RowModel) => void;
   onHighlight: () => void;
 }
@@ -379,6 +605,8 @@ function HitRow({
   id,
   row,
   selected,
+  pages,
+  thumb,
   onActivate,
   onHighlight,
 }: HitRowProps): JSX.Element {
@@ -400,13 +628,14 @@ function HitRow({
           onActivate(row);
         }}
       >
-        <RowIcon row={row} />
+        <RowIcon row={row} thumb={thumb} />
         <span class="switcher-row-text">
           <span class="switcher-row-name">
             <Highlighted text={row.title} spans={row.highlights} />
           </span>
           <span class="switcher-row-path">
-            {row.kind === 'file' && `${row.kindWord} · `}
+            {row.kind === 'file' &&
+              `${row.kindWord} · ${pages === undefined ? '' : `${pagesWord(pages)} · `}`}
             {row.para !== null && (
               <>
                 <FolderMark kind={row.para} size={18} />{' '}
@@ -487,6 +716,54 @@ function CommandRow({
   );
 }
 
+/** The desktop column beside the list: the highlighted result, larger. */
+function SearchPreview({
+  row,
+  pages,
+  picture,
+  lines,
+}: {
+  row: RowModel | null;
+  pages: number | undefined;
+  picture: string | null;
+  lines: string[] | null;
+}): JSX.Element {
+  if (row === null) {
+    return (
+      <aside class="switcher-preview" aria-label="Preview">
+        <p class="switcher-preview-empty">Pick a result to see it here.</p>
+      </aside>
+    );
+  }
+  const facts: string[] = [];
+  if (row.kind === 'folder') {
+    facts.push('Folder');
+    if (row.count !== null) facts.push(things(row.count));
+  } else if (row.kind === 'note') {
+    facts.push('Note');
+  } else {
+    facts.push(row.kindWord);
+    if (pages !== undefined) facts.push(pagesWord(pages));
+    if (row.file.size !== undefined) facts.push(formatSize(row.file.size));
+  }
+  return (
+    <aside class="switcher-preview" aria-label="Preview">
+      <b class="switcher-preview-title">{row.title}</b>
+      <p class="switcher-preview-meta">{facts.join(' · ')}</p>
+      {picture !== null && (
+        <img class="switcher-preview-picture" src={picture} alt="" />
+      )}
+      {lines !== null && lines.length > 0 && (
+        <div class="switcher-preview-lines">
+          {lines.map((line, at) => (
+            <p key={at}>{line}</p>
+          ))}
+        </div>
+      )}
+    </aside>
+  );
+}
+
 function headingFor(kind: HitKind, count: number): string {
   if (kind === 'folder') return count === 1 ? 'Folder' : 'Folders';
   return kind === 'note' ? 'Notes' : 'Files';
@@ -528,7 +805,8 @@ function SwitcherPanel({
   const [scope, setScope] = useState<Scope | null>(() =>
     folderOfLocation(location, index),
   );
-  const [kindChip, setKindChip] = useState<KindChip>('all');
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const [kindChip, setKindChip] = useState<string>('all');
   const [time, setTime] = useState<TimeKey>('any');
   const [timeOpen, setTimeOpen] = useState(false);
   // Bumped when the index learns something on its own (a restored copy, note
@@ -675,16 +953,40 @@ function SwitcherPanel({
     return best;
   }, [results]);
 
+  // Desktop chips count by what the thing is ("PDFs 2"); the phone's by group.
+  const chipList = useMemo(
+    () => (results === null ? [] : desktopChips(results)),
+    [results],
+  );
+  const activeChip =
+    desktop && !chipList.some((chip) => chip.key === kindChip)
+      ? 'all'
+      : kindChip;
+
   const sections = useMemo((): Section[] => {
     if (index === null) return [];
     if (results !== null) {
-      const wanted = CHIP_KINDS[kindChip];
-      const groups: [HitKind, SearchHit[]][] = [
-        ['folder', results.folders],
-        ['note', results.notes],
-        ['file', results.files],
-      ];
+      const wanted = desktop
+        ? null
+        : (CHIP_KINDS[activeChip as KindChip] ?? null);
+      const groups: [HitKind, SearchHit[]][] = desktop
+        ? [
+            ['folder', results.folders],
+            ['file', results.files],
+            ['note', results.notes],
+          ]
+        : [
+            ['folder', results.folders],
+            ['note', results.notes],
+            ['file', results.files],
+          ];
       return groups
+        .map(([kind, all]): [HitKind, SearchHit[]] => [
+          kind,
+          desktop && activeChip !== 'all'
+            ? all.filter((hit) => chipKeyOf(hit) === activeChip)
+            : all,
+        ])
         .filter(
           ([kind, hits]) =>
             hits.length > 0 && (wanted === null || wanted === kind),
@@ -730,7 +1032,16 @@ function SwitcherPanel({
       });
     }
     return out;
-  }, [index, results, kindChip, searching, opened, lastFinished, now]);
+  }, [
+    index,
+    results,
+    desktop,
+    activeChip,
+    searching,
+    opened,
+    lastFinished,
+    now,
+  ]);
 
   const matchingCommands = useMemo(() => {
     if (!searching) return [];
@@ -745,12 +1056,15 @@ function SwitcherPanel({
     [sections],
   );
   const entryCount = flatRows.length + matchingCommands.length;
+  const extras = useRowExtras(flatRows, index?.byPath);
+  const highlightedRow = flatRows[highlightedIndex] ?? null;
+  const preview = usePreview(desktop ? highlightedRow : null, index?.byPath);
 
   // The highlight starts (and resets) on the list's first row whenever the
   // list itself changes shape.
   useEffect(() => {
     setHighlightedIndex(0);
-  }, [entryCount, trimmed, kindChip, scope, time]);
+  }, [entryCount, trimmed, activeChip, scope, time]);
 
   const goTo = useCallback(
     (href: string) => {
@@ -785,6 +1099,44 @@ function SwitcherPanel({
     [tidyUp, goTo, theme],
   );
 
+  const openHighlighted = useCallback(() => {
+    const row = flatRows[highlightedIndex];
+    if (row !== undefined) {
+      activateRow(row);
+      return;
+    }
+    const command = matchingCommands[highlightedIndex - flatRows.length];
+    if (command !== undefined) runCommand(command);
+  }, [flatRows, matchingCommands, highlightedIndex, activateRow, runCommand]);
+
+  // From the chips: arrows walk along them, Enter opens the highlighted
+  // result (the hint says "Enter open"; Space or a click picks a filter).
+  const handleChipsKeyDown = useCallback(
+    (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => {
+      const chips = Array.from(
+        event.currentTarget.querySelectorAll<HTMLElement>(
+          '.switcher-chip:not(:disabled)',
+        ),
+      );
+      const at = chips.indexOf(document.activeElement as HTMLElement);
+      if (event.key === 'Enter' && desktop) {
+        event.preventDefault();
+        openHighlighted();
+      } else if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+        const next = at + (event.key === 'ArrowRight' ? 1 : -1);
+        const chip = chips[next];
+        if (at >= 0 && chip !== undefined) {
+          event.preventDefault();
+          chip.focus();
+        }
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
+    },
+    [desktop, openHighlighted],
+  );
+
   const handleKeyDown = useCallback(
     (event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
       if (event.key === 'ArrowDown') {
@@ -793,25 +1145,23 @@ function SwitcherPanel({
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
         setHighlightedIndex((i) => Math.max(i - 1, 0));
+      } else if (event.key === 'Tab' && !event.shiftKey && desktop) {
+        // Tab goes to the filters (the hint under the list says so), not to
+        // Close; Enter still opens the highlighted result from there.
+        const chip =
+          panelRef.current?.querySelector<HTMLElement>(
+            '.switcher-chips .switcher-chip[aria-pressed="true"], .switcher-chips .switcher-chip:not(:disabled)',
+          ) ?? null;
+        if (chip !== null) {
+          event.preventDefault();
+          chip.focus();
+        }
       } else if (event.key === 'Enter') {
         event.preventDefault();
-        const row = flatRows[highlightedIndex];
-        if (row !== undefined) {
-          activateRow(row);
-          return;
-        }
-        const command = matchingCommands[highlightedIndex - flatRows.length];
-        if (command !== undefined) runCommand(command);
+        openHighlighted();
       }
     },
-    [
-      entryCount,
-      flatRows,
-      matchingCommands,
-      highlightedIndex,
-      activateRow,
-      runCommand,
-    ],
+    [desktop, entryCount, openHighlighted],
   );
 
   const total = results === null ? 0 : resultTotal(results);
@@ -827,6 +1177,8 @@ function SwitcherPanel({
     paraKindOf(scope.path) !== null
       ? paraKindOf(scope.path)
       : null;
+  const paraOfScope =
+    scope === null ? null : paraKindOf(scope.path.split('/')[0] ?? '');
   const showParaChips = !searching && (scope === null || paraScope !== null);
   const placeholder =
     scope === null
@@ -886,6 +1238,23 @@ function SwitcherPanel({
             }}
             onKeyDown={handleKeyDown}
           />
+          {desktop && scope !== null && (
+            <button
+              type="button"
+              class="switcher-scope"
+              aria-label={`Clear search in ${scope.label}`}
+              onClick={() => {
+                setScope(null);
+              }}
+            >
+              in
+              {paraOfScope !== null && (
+                <FolderMark kind={paraOfScope} size={18} />
+              )}
+              {scope.label}
+              <IconClose />
+            </button>
+          )}
           <button
             type="button"
             class="icon-button"
@@ -898,7 +1267,7 @@ function SwitcherPanel({
             <Bird state={fieldFocused ? 'shiny' : 'peeking'} flip size={72} />
           </div>
         </div>
-        <div class="switcher-chips">
+        <div class="switcher-chips" onKeyDown={handleChipsKeyDown}>
           {showParaChips &&
             PARA_CHIPS.map(({ kind, label }) => {
               const folder = paraFolder(index, kind);
@@ -921,7 +1290,7 @@ function SwitcherPanel({
                 </button>
               );
             })}
-          {scope !== null && !showParaChips && (
+          {scope !== null && !showParaChips && !desktop && (
             <button
               type="button"
               class="switcher-chip"
@@ -937,19 +1306,32 @@ function SwitcherPanel({
           )}
           {searching && (
             <>
-              {(
-                [
-                  ['all', 'All', total],
-                  ['folders', 'Folders', results?.folders.length ?? 0],
-                  ['notes', 'Notes', results?.notes.length ?? 0],
-                  ['files', 'Files', results?.files.length ?? 0],
-                ] as const
-              ).map(([key, label, count]) => (
+              {(desktop
+                ? chipList
+                : [
+                    { key: 'all', label: 'All', count: total },
+                    {
+                      key: 'folders',
+                      label: 'Folders',
+                      count: results?.folders.length ?? 0,
+                    },
+                    {
+                      key: 'notes',
+                      label: 'Notes',
+                      count: results?.notes.length ?? 0,
+                    },
+                    {
+                      key: 'files',
+                      label: 'Files',
+                      count: results?.files.length ?? 0,
+                    },
+                  ]
+              ).map(({ key, label, count }) => (
                 <button
                   key={key}
                   type="button"
                   class="switcher-chip"
-                  aria-pressed={kindChip === key}
+                  aria-pressed={activeChip === key}
                   onClick={() => {
                     setKindChip(key);
                   }}
@@ -990,133 +1372,178 @@ function SwitcherPanel({
             ))}
           </div>
         )}
-        <div class="switcher-body">
-          {scope !== null && (
-            <button
-              type="button"
-              class="switcher-link"
-              onClick={() => {
-                setScope(null);
-              }}
-            >
-              Search everywhere
-            </button>
-          )}
-          <p
-            class={`switcher-status${
-              status === 'searching' || status === 'error'
-                ? ''
-                : ' switcher-quiet'
-            }`}
-            aria-live="polite"
-          >
-            {searching && statusText}
-          </p>
-          {noResults && (
-            <div class="switcher-none">
-              <b class="switcher-none-title">Nothing called “{trimmed}”</b>
-              <span class="switcher-none-text">
-                No folder, note or file has those words in its name or its text.
-              </span>
-              <a
-                class="button"
-                href={`${BOWER_PATH}?text=${encodeURIComponent(`Where is ${trimmed}?`)}`}
-                onClick={(event) => {
-                  event.preventDefault();
-                  goTo(
-                    `${BOWER_PATH}?text=${encodeURIComponent(`Where is ${trimmed}?`)}`,
-                  );
+        <div class="switcher-columns">
+          <div class="switcher-body">
+            {scope !== null && !desktop && (
+              <button
+                type="button"
+                class="switcher-link"
+                onClick={() => {
+                  setScope(null);
                 }}
               >
-                Ask Bower where it is
-              </a>
-              {scope !== null && (
-                <button
-                  type="button"
-                  class="switcher-link"
-                  onClick={() => {
-                    setScope(null);
+                Search everywhere
+              </button>
+            )}
+            <p
+              class={`switcher-status${
+                status === 'searching' || status === 'error'
+                  ? ''
+                  : ' switcher-quiet'
+              }`}
+              aria-live="polite"
+            >
+              {searching && statusText}
+            </p>
+            {noResults && (
+              <div class="switcher-none">
+                <b class="switcher-none-title">Nothing called “{trimmed}”</b>
+                <span class="switcher-none-text">
+                  No folder, note or file has those words in its name or its
+                  text.
+                </span>
+                <a
+                  class="button"
+                  href={`${BOWER_PATH}?text=${encodeURIComponent(`Where is ${trimmed}?`)}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    goTo(
+                      `${BOWER_PATH}?text=${encodeURIComponent(`Where is ${trimmed}?`)}`,
+                    );
                   }}
                 >
-                  Search all of {scope.label} instead
-                </button>
-              )}
-            </div>
-          )}
-          <ul
-            id="switcher-listbox"
-            role="listbox"
-            aria-label="Folders, notes, files and commands"
-            class="switcher-list"
-          >
-            {sections.map((section) => (
-              <Fragment key={section.id}>
-                <li class="switcher-heading" role="presentation">
-                  {section.heading}
-                </li>
-                {section.rows.map((row) => {
-                  const position = at++;
-                  return (
-                    <HitRow
-                      key={`${section.id}-${row.file.id}`}
-                      id={`switcher-option-${position}`}
-                      row={row}
-                      selected={position === highlightedIndex}
-                      onActivate={activateRow}
-                      onHighlight={() => {
-                        setHighlightedIndex(position);
-                      }}
-                    />
-                  );
-                })}
-              </Fragment>
-            ))}
-            {matchingCommands.length > 0 && (
-              <li class="switcher-heading" role="presentation">
-                Commands
-              </li>
-            )}
-            {matchingCommands.map((command) => {
-              const position = at++;
-              return (
-                <CommandRow
-                  key={command.id}
-                  id={`switcher-option-${position}`}
-                  command={command}
-                  selected={position === highlightedIndex}
-                  theme={theme}
-                  onActivate={runCommand}
-                  onHighlight={() => {
-                    setHighlightedIndex(position);
-                  }}
-                />
-              );
-            })}
-          </ul>
-          {results !== null && results.fuzzy && topHit !== null && (
-            <p class="switcher-hint">
-              Close enough counts: “{trimmed}” finds {topHit.title}.
-            </p>
-          )}
-          {!searching && recent.length > 0 && (
-            <div class="switcher-recent-group">
-              <p class="switcher-heading">Searched before</p>
-              <div class="switcher-recent">
-                {recent.map((entry) => (
+                  Ask Bower where it is
+                </a>
+                {scope !== null && (
                   <button
-                    key={entry}
                     type="button"
-                    class="switcher-chip"
+                    class="switcher-link"
                     onClick={() => {
-                      setQuery(entry);
-                      inputRef.current?.focus();
+                      setScope(null);
                     }}
                   >
-                    {entry}
+                    Search all of {scope.label} instead
                   </button>
-                ))}
+                )}
               </div>
-            </div>
+            )}
+            <ul
+              id="switcher-listbox"
+              role="listbox"
+              aria-label="Folders, notes, files and commands"
+              class="switcher-list"
+            >
+              {sections.map((section) => (
+                <Fragment key={section.id}>
+                  <li class="switcher-heading" role="presentation">
+                    {section.heading}
+                  </li>
+                  {section.rows.map((row) => {
+                    const position = at++;
+                    return (
+                      <HitRow
+                        key={`${section.id}-${row.file.id}`}
+                        id={`switcher-option-${position}`}
+                        row={row}
+                        selected={position === highlightedIndex}
+                        pages={extras.pages.get(row.file.id)}
+                        thumb={extras.thumbs.get(row.file.id)}
+                        onActivate={activateRow}
+                        onHighlight={() => {
+                          setHighlightedIndex(position);
+                        }}
+                      />
+                    );
+                  })}
+                </Fragment>
+              ))}
+              {matchingCommands.length > 0 && (
+                <li class="switcher-heading" role="presentation">
+                  Commands
+                </li>
+              )}
+              {matchingCommands.map((command) => {
+                const position = at++;
+                return (
+                  <CommandRow
+                    key={command.id}
+                    id={`switcher-option-${position}`}
+                    command={command}
+                    selected={position === highlightedIndex}
+                    theme={theme}
+                    onActivate={runCommand}
+                    onHighlight={() => {
+                      setHighlightedIndex(position);
+                    }}
+                  />
+                );
+              })}
+            </ul>
+            {results !== null && results.fuzzy && topHit !== null && (
+              <p class="switcher-hint">
+                Close enough counts: “{trimmed}” finds {topHit.title}.
+              </p>
+            )}
+            {!searching && recent.length > 0 && (
+              <div class="switcher-recent-group">
+                <p class="switcher-heading">Searched before</p>
+                <div class="switcher-recent">
+                  {recent.map((entry) => (
+                    <button
+                      key={entry}
+                      type="button"
+                      class="switcher-chip"
+                      onClick={() => {
+                        setQuery(entry);
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      {entry}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {desktop && (
+              <div class="switcher-foot">
+                <span>
+                  {scope !== null && (
+                    <>
+                      Only in {scope.label}.{' '}
+                      <button
+                        type="button"
+                        class="switcher-link switcher-link-inline"
+                        onClick={() => {
+                          setScope(null);
+                        }}
+                      >
+                        Search everywhere
+                      </button>
+                    </>
+                  )}
+                </span>
+                <span class="switcher-kbhint">
+                  <span>
+                    <kbd>Tab</kbd> filters
+                  </span>
+                  <span>
+                    <kbd>Enter</kbd> open
+                  </span>
+                </span>
+              </div>
+            )}
+          </div>
+          {desktop && (
+            <SearchPreview
+              row={highlightedRow}
+              pages={
+                highlightedRow === null
+                  ? undefined
+                  : extras.pages.get(highlightedRow.file.id)
+              }
+              picture={preview.picture}
+              lines={preview.lines}
+            />
           )}
         </div>
       </div>
@@ -1139,6 +1566,33 @@ function openedIdOf(location: string | undefined): string | null {
 export function Switcher(): JSX.Element | null {
   const { open, initialQuery } = useSwitcherOpen();
   const { path } = useLocation();
+
+  // "/" opens search from anywhere that is not a text field (R-DESK-4);
+  // Ctrl/Cmd+K is `app.tsx`'s.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      if (open) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      openSwitcher();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   // Mounted for the whole session, so this sees every note or file opened.
   useEffect(() => {
