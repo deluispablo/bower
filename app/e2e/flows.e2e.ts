@@ -191,6 +191,38 @@ test.describe('first visit, Skip', () => {
   });
 });
 
+test('the phone greeting is one line at 24 px, even with a long given name (#500, Phone-Home board)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'phone',
+    'The board only draws this size for the phone greeting; desktop is unchanged.',
+  );
+  await openHome(page);
+  const heading = page.getByRole('heading', { name: /^Good morning, Alex$/ });
+  await expect(heading).toBeVisible();
+
+  // Substitute a long given name for the demo's short "Alex" (#341's data
+  // never has one to test with) to check the row holds under real-world
+  // length, not just this fixture's own name. One `evaluate` call: the
+  // text swap changes the heading's accessible name, so a fresh locator
+  // lookup afterward would no longer find it.
+  const box = await heading.evaluate((el) => {
+    el.textContent = 'Good morning, Persephone-Alexandra';
+    const style = getComputedStyle(el);
+    return {
+      fontSize: style.fontSize,
+      lineHeight: parseFloat(style.lineHeight),
+      height: el.getBoundingClientRect().height,
+    };
+  });
+  expect(box.fontSize).toBe('24px');
+  // One line: the row's rendered height doesn't exceed one line-height
+  // (a couple of px of rounding slack).
+  expect(box.height).toBeLessThanOrEqual(box.lineHeight + 2);
+  await shot(page, testInfo, 'home-greeting-long-name');
+});
+
 test('the demo banner carries Run your own on Home, Add and Settings (#362)', async ({
   page,
 }, testInfo) => {
