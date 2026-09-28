@@ -577,7 +577,7 @@ function BowerNote({
         </div>
       )}
       <a class="file-bower-note-link" href={`/note/${note.id}`}>
-        Bower&rsquo;s note on this
+        {"Bower's note on this"}
       </a>
     </section>
   );
