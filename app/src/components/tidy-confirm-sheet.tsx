@@ -92,9 +92,7 @@ export function TidyConfirmSheet({
         <p class="tidy-confirm-text">
           <b>{lead}</b> {rest}
         </p>
-        {isDemo() && (
-          <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>
-        )}
+        {isDemo() && <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>}
         <button type="button" class="tidy-confirm-button" onClick={onConfirm}>
           <IconSparkle />
           Yes, tidy up

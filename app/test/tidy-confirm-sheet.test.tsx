@@ -12,11 +12,8 @@ vi.mock('../src/api.js', async (importOriginal) => ({
   isDemo: () => state.demo,
 }));
 
-const {
-  TidyConfirmSheet,
-  confirmSentenceParts,
-  DEMO_RECORDING_NOTICE,
-} = await import('../src/components/tidy-confirm-sheet.js');
+const { TidyConfirmSheet, confirmSentenceParts, DEMO_RECORDING_NOTICE } =
+  await import('../src/components/tidy-confirm-sheet.js');
 
 let root: HTMLDivElement | undefined;
 
