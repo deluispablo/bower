@@ -174,6 +174,18 @@ describe('runCounts and lastTidyUpLine', () => {
     expect(lastTidyUpLine(withContext)).toBe('1 filed · 1 answered');
   });
 
+  it('a run recovered from .bower/last-run.json shows its own sentence (#564)', () => {
+    // No `processed` list, only a count baked into `summary` — the runner
+    // never writes paths there (`agent/run.sh`).
+    const recovered: Run = {
+      state: 'done',
+      requestedAt: '2026-09-27T08:00:00Z',
+      finishedAt: '2026-09-27T08:05:00Z',
+      summary: 'Tidied up 3 things.',
+    };
+    expect(lastTidyUpLine(recovered)).toBe('Tidied up 3 things.');
+  });
+
   it("agrees with the working sheet's own count for the same run (#506)", () => {
     // Two things filed, a context note, no question: Home's "filed" total
     // and the sheet's "processed" total (`run-progress.ts#runCounts`) must

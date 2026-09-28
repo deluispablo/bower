@@ -827,9 +827,13 @@ export function Bower(): JSX.Element {
         )}
         {error !== null && <p class="auth-error">{error}</p>}
         {!online && <p class="offline-reason">{offlineReason('tell')}</p>}
-        {sendConfirm !== null && (
-          <p class="bower-send-confirm">{sendConfirm}</p>
-        )}
+        {/* #553: always in the markup, empty until Send sets it, so the
+            region exists before the text does (WCAG 4.1.3) — an element
+            mounted only once there is something to say is never picked up
+            by a screen reader's live-region announcement. */}
+        <p class="bower-send-confirm" aria-live="polite">
+          {sendConfirm}
+        </p>
       </div>
 
       <Tip

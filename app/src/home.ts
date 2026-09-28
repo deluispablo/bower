@@ -115,10 +115,17 @@ export function runCounts(run: Run): RunCounts {
 
 /** The Last tidy-up card's line: "4 filed · 1 answered" (either half left
  * out at zero), "Nothing new" when both are, "Failed · Drive did not answer"
- * for a failed run (its reason's short words, #316). */
+ * for a failed run (its reason's short words, #316). A run recovered from
+ * `.bower/last-run.json` after the Worker lost track (#564) has no
+ * per-file `processed` list, only a count baked into its own `summary`
+ * sentence — shown as is, since "N filed · M answered" cannot be rebuilt
+ * from a count alone. */
 export function lastTidyUpLine(run: Run): string {
   if (run.state === 'failed')
     return `Failed · ${failureCopy(run.reason).short}`;
+  if (run.processed === undefined && run.summary !== undefined) {
+    return run.summary;
+  }
   const { filed, answered } = runCounts(run);
   const parts: string[] = [];
   if (filed > 0) parts.push(`${filed} filed`);

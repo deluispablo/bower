@@ -362,9 +362,17 @@ test('/search?q= lands on Home with the switcher open and prefilled (#495)', asy
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
   await expect(switcher.getByRole('combobox')).toHaveValue('Lisbon');
-  await expect(
-    switcher.getByRole('option', { name: /Lisbon Trip/ }).first(),
-  ).toBeVisible();
+  const option = switcher.getByRole('option', { name: /Lisbon Trip/ }).first();
+  await expect(option).toBeVisible();
+  // The snippet reads like the note body, not the raw file (#554): no
+  // frontmatter keys, fences or the heading's own "#" mark.
+  const snippetText = await option
+    .locator('.switcher-row-snippet')
+    .textContent();
+  expect(snippetText).not.toBeNull();
+  expect(snippetText).not.toContain('---');
+  expect(snippetText).not.toContain('status:');
+  expect(snippetText?.trimStart().startsWith('#')).toBe(false);
 });
 
 test("a note Bower wrote opens with Bower's note and What Bower used (#351)", async ({
@@ -1172,6 +1180,28 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
   await sheet.getByRole('button', { name: /Pause it/ }).click();
   await expect(sheet).toBeHidden();
   await expect(rule.getByText('Paused', { exact: true })).toBeVisible();
+});
+
+test('the Bower box confirmation is a live region that exists before Send (#553)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  const confirm = page.locator('.bower-send-confirm');
+  // Present and wired for announcement before anything was ever sent —
+  // an element only mounted once there is text is too late for a screen
+  // reader to pick up.
+  await expect(confirm).toHaveAttribute('aria-live', 'polite');
+  await expect(confirm).toHaveText('');
+
+  const box = page.getByRole('textbox', {
+    name: 'Tell Bower what to do, or ask it something',
+  });
+  await box.fill('From now on, file every ticket under Travel');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  // Same node, now holding the confirmation text.
+  await expect(confirm).toHaveText('Kept as a rule');
 });
 
 test('a "from now on" sentence is kept at once as a rule, no run (#343)', async ({
