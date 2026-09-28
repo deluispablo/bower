@@ -332,7 +332,7 @@ export function Note() {
   // with its date prefix.
   const { prev, next, position, total } =
     index === null
-      ? ({ prev: null, next: null, position: 0, total: 0 } as FolderWalk)
+      ? { prev: null, next: null, position: 0, total: 0 }
       : walkFolder(index, id, getPref('showAppFiles'), getPref('explorerSort'));
   const siblingFiles: DriveFile[] = [prev, next].filter(
     (sibling): sibling is DriveFile => sibling !== null,

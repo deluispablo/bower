@@ -97,7 +97,7 @@ vi.mock('preact-iso', () => ({ useRoute: () => route }));
 vi.mock('../src/cache.js', () => ({
   loadNote: () => Promise.resolve(undefined),
 }));
-const markSeen = vi.fn((_id: string) => Promise.resolve());
+const markSeen = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
 vi.mock('../src/seen.js', () => ({ markSeen }));
 
 const index = buildVaultIndex([LISTING, ANSWER, CHECKLIST, SCAN]);

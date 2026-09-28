@@ -154,7 +154,9 @@ describe('placeholders', () => {
 
   it('reads the file id out of a Drive or Docs link', () => {
     expect(
-      driveFileIdOf('https://drive.google.com/file/d/scan_1-x/view?usp=sharing'),
+      driveFileIdOf(
+        'https://drive.google.com/file/d/scan_1-x/view?usp=sharing',
+      ),
     ).toBe('scan_1-x');
     expect(
       driveFileIdOf('https://docs.google.com/document/d/DOC_ID/edit'),
@@ -238,9 +240,9 @@ describe('hydrateEmbeds', () => {
     // Same image twice: fetched once, one object URL.
     expect(deps.loadImage).toHaveBeenCalledTimes(1);
     expect(deps.createObjectUrl).toHaveBeenCalledTimes(1);
-    expect(
-      root.querySelector('a.wikilink-file')?.getAttribute('href'),
-    ).toMatch(/^\/file\//);
+    expect(root.querySelector('a.wikilink-file')?.getAttribute('href')).toMatch(
+      /^\/file\//,
+    );
 
     cleanup();
     expect(deps.revokeObjectUrl).toHaveBeenCalledWith('blob:test/0');
@@ -487,7 +489,9 @@ describe('links to files in the Bower folder (#609)', () => {
   });
 
   it('leaves a Drive URL of a file that is not in the folder alone', () => {
-    const link = linkOf('[else](https://drive.google.com/file/d/elsewhere/view)');
+    const link = linkOf(
+      '[else](https://drive.google.com/file/d/elsewhere/view)',
+    );
     expect(link?.getAttribute('href')).toBe(
       'https://drive.google.com/file/d/elsewhere/view',
     );
