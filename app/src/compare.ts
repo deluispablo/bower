@@ -676,7 +676,13 @@ export function receiptsByMonth(
     );
   }
   return {
-    months: months.map(({ stamp: _stamp, ...group }) => group),
+    months: months.map((group) => ({
+      key: group.key,
+      label: group.label,
+      total: group.total,
+      totalText: group.totalText,
+      receipts: group.receipts,
+    })),
     year:
       yearCount === 0
         ? null
