@@ -40,6 +40,9 @@
 #                            this and BOWER_ALLOW_WEB both set to 1
 #   BOWER_MAX_CHANGES        optional; the most files one run may add or
 #                            change (default 200); above it nothing is saved
+#   BOWER_REPORT_BACKOFF     optional; seconds the final report waits before
+#                            its second try, twice that before its third
+#                            (default 5)
 #   BOWER_SCOPE              optional, ingest only; `all` (the default, a
 #                            tidy-up) or `instructions` (a request's Do it
 #                            now: only the instruction notes, see "list
@@ -88,12 +91,12 @@ export -n BOWER_RUN_ALLOW_WEB
 # arrived in the environment (even empty, next to the file) would otherwise
 # stay exported, and printf -v below would hand the file's value to every
 # child's environment (curl, rclone, jq; issue #276).
-export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES BOWER_SCOPE
+export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES BOWER_SCOPE BOWER_REPORT_BACKOFF
 secrets_file="${RUNNER_TEMP:-}/bower-secrets"
 if [ -n "${RUNNER_TEMP:-}" ] && [ -f "$secrets_file" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
-      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE)
+      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE | BOWER_REPORT_BACKOFF)
         printf -v "${line%%=*}" '%s' "${line#*=}"
         ;;
       BOWER_RUN_ALLOW_WEB)
@@ -174,6 +177,15 @@ case "$MAX_CHANGES" in
 esac
 readonly MAX_CHANGES
 
+REPORT_BACKOFF=${BOWER_REPORT_BACKOFF:-5}
+case "$REPORT_BACKOFF" in
+  '' | *[!0-9]*)
+    log "BOWER_REPORT_BACKOFF is not a number"
+    exit 2
+    ;;
+esac
+readonly REPORT_BACKOFF
+
 # The Worker sends `all` or `instructions` and refuses anything else; an
 # empty value (an instance repo whose ingest.yml predates the setting, or a
 # lint, which has none) is a tidy-up.
@@ -245,7 +257,8 @@ on_exit() {
     REPORTED=1
     copy_up_after_failure
     REASON=unknown
-    PROCESSED_JSON='' SUMMARY='' report failed "$STEP: unexpected error" >/dev/null 2>&1 || true
+    write_outcome failed "$(failed_sentence)" >/dev/null 2>&1 || true
+    PROCESSED_JSON='' SUMMARY='' report_final failed "$STEP: unexpected error" >/dev/null 2>&1 || true
     log "failed at $STEP"
     rc=2
   fi
@@ -274,6 +287,89 @@ report() {
       --data-binary @- -o /dev/null "$API_BASE/status"
 }
 
+# The final report (done or failed), tried up to three times: a report lost
+# to a passing network or Worker error would otherwise leave the run
+# "running" in the app until the Worker gives up on it (#315). Waits
+# REPORT_BACKOFF seconds before the second try and twice that before the
+# third. Usage: report_final <state> [error], like report.
+report_final() {
+  local attempt delay=$REPORT_BACKOFF
+  for attempt in 1 2 3; do
+    if report "$@"; then
+      return 0
+    fi
+    [ "$attempt" -lt 3 ] || break
+    log "report $1: try $attempt failed, trying again in ${delay}s"
+    sleep "$delay"
+    delay=$((delay * 2))
+  done
+  return 1
+}
+
+# One sentence for people about a failed run, by its reason (#375); the app
+# says the same (app/src/run-failure.ts). Without a reason: unknown.
+failed_sentence() {
+  case "${REASON:-unknown}" in
+    drive_unavailable) echo 'Google Drive stopped answering half way through copying things back.' ;;
+    timeout) echo 'The tidy-up took too long and was stopped.' ;;
+    model_unavailable) echo 'Claude was not available, so nothing could be read.' ;;
+    vault_changed) echo 'Your Bower folder changed while Bower was working in it.' ;;
+    *) echo 'Something went wrong before Bower could finish.' ;;
+  esac
+}
+
+# The number of non-empty lines of file $1, 0 when it does not exist.
+count_lines() {
+  if [ -f "$1" ]; then
+    grep -c . "$1" || true
+  else
+    echo 0
+  fi
+}
+
+# Best effort, ingest only: writes the run's outcome into the vault in Drive,
+# so the app can read it even when the Worker never heard back (#315):
+# .bower/last-run.json ({ state, kind, runId, finishedAt, processed,
+# quarantined, refused, sentence, and reason when failed }) and one line
+# appended to the log.md Drive holds now (fetched afresh, so neither an
+# edit made during the run nor a change the audit refused is overwritten).
+# Counts only, never a name. A failure here is logged and never fails the
+# run. Usage: write_outcome <done|failed> <sentence>.
+write_outcome() {
+  [ "$MODE" = ingest ] || return 0
+  local state=$1 sentence=$2 dir="$WORK_DIR/outcome" processed quarantined refused
+  local args=() pending_now="$WORK_DIR/pending-after-scan.txt"
+  # No Drive access yet (the run stopped before the vault info): nowhere to write.
+  [ -n "${RCLONE_CONFIG_VAULT_TOKEN:-}" ] || return 0
+  [ -f "$pending_now" ] || pending_now=$PENDING_FILE
+  processed=$(count_lines "$pending_now")
+  quarantined=$(count_lines "$QUARANTINED_FILE")
+  refused=$(count_lines "$REFUSED_FILE")
+  if [ "$state" = failed ] || [ "$TOO_MANY_CHANGES" -eq 1 ]; then
+    processed=0
+  fi
+  rm -rf "$dir" && mkdir -p "$dir/.bower" || return 0
+  args=(--arg state "$state" --arg kind "$MODE" --arg runId "$RUN_ID"
+    --arg finishedAt "$(date -u +%FT%TZ)" --arg sentence "$sentence"
+    --argjson processed "$processed" --argjson quarantined "$quarantined"
+    --argjson refused "$refused")
+  [ "$state" != failed ] || args+=(--arg reason "${REASON:-unknown}")
+  if ! jq -cn "${args[@]}" '$ARGS.named' >"$dir/.bower/last-run.json"; then
+    log "outcome not written"
+    return 0
+  fi
+  echo '.bower/last-run.json' >"$dir/files.txt"
+  if rclone copyto vault:log.md "$dir/log.md" --retries 1 --low-level-retries 2 \
+    </dev/null >>"$RCLONE_LOG" 2>&1; then
+    echo "- $(date -u '+%F %H:%M') · Tidy-up $state · $sentence ($processed filed, $quarantined set aside, $refused refused)" >>"$dir/log.md"
+    echo 'log.md' >>"$dir/files.txt"
+  fi
+  if ! rclone copy "$dir" vault: --files-from-raw "$dir/files.txt" --retries 1 \
+    --low-level-retries 2 </dev/null >>"$RCLONE_LOG" 2>&1; then
+    log "outcome not saved to Drive"
+  fi
+}
+
 # Print one "<checksum> <size> <path>" line per file of the local copy,
 # .obsidian/ and .claude/ excluded, sorted bytewise; paths are relative to the
 # vault. cksum is POSIX and reads content, so an edit is seen whatever its
@@ -298,6 +394,8 @@ in_known_root() {
     0-Inbox/* | 1-Projects/* | 2-Areas/* | 3-Resources/* | 4-Archives/* | \
       Answers/* | Clippings/*) return 0 ;;
     Rules.md | About-Me.md | index.md | log.md | 'Lint Report.md') return 0 ;;
+    # The run's outcome for the app (#315), which run.sh writes itself.
+    .bower/*) return 0 ;;
   esac
   return 1
 }
@@ -422,7 +520,8 @@ fail() {
   REASON=${2:-unknown}
   REPORTED=1
   copy_up_after_failure
-  PROCESSED_JSON='' SUMMARY='' report failed "$error" || log "report failed: API unreachable"
+  write_outcome failed "$(failed_sentence)"
+  PROCESSED_JSON='' SUMMARY='' report_final failed "$error" || log "report failed: API unreachable"
   log "failed: $error"
   exit 2
 }
@@ -652,7 +751,8 @@ log "$PENDING_COUNT files pending"
 if [ "$MODE" = ingest ] && [ "$PENDING_COUNT" -eq 0 ]; then
   STEP='report done'
   log "$STEP"
-  if ! report done; then
+  write_outcome done 'Nothing new to tidy up.'
+  if ! report_final done; then
     REPORTED=1
     log "report done failed: API unreachable"
     exit 2
@@ -921,8 +1021,13 @@ if [ "$TOO_MANY_CHANGES" -eq 1 ]; then
   # Nothing was saved, so nothing was processed, whatever the agent said.
   SUMMARY="Refused: too many changes (more than $MAX_CHANGES files). Nothing was saved."
   [ -z "$PROCESSED_JSON" ] || PROCESSED_JSON='[]'
+  write_outcome done 'Nothing was saved: the tidy-up changed too many files.'
+else
+  filed=$(count_lines "$WORK_DIR/pending-after-scan.txt")
+  [ -f "$WORK_DIR/pending-after-scan.txt" ] || filed=$(count_lines "$PENDING_FILE")
+  write_outcome done "Tidied up $filed $([ "$filed" -eq 1 ] && echo thing || echo things)."
 fi
-if ! report done; then
+if ! report_final done; then
   REPORTED=1
   log "report done failed: API unreachable"
   exit 2

@@ -128,6 +128,18 @@ fi
 if [ "$method" = POST ]; then
   [ "$data" = '@-' ] || { echo "curl stub: expected --data-binary @-" >&2; exit 90; }
   payload=$(cat)
+  # "retry": the Worker answers the final report with a 500 twice (#315).
+  if [ "$SMOKE_SCENARIO" = retry ]; then
+    case "$payload" in
+      *'"state":"done"'* | *'"state":"failed"'*)
+        echo x >>"$SMOKE_STATE/final-tries"
+        if [ "$(grep -c . "$SMOKE_STATE/final-tries")" -le 2 ]; then
+          echo 'curl: (22) The requested URL returned error: 500' >&2
+          exit 22
+        fi
+        ;;
+    esac
+  fi
   printf '%s\n' "$payload" >>"$SMOKE_STATE/posts.log"
   # A final report retires the ticket, as the Worker does.
   case "$payload" in
@@ -164,7 +176,13 @@ cat >"$STUBS/rclone" <<'STUB'
 # "file not found" code when absent.
 set -euo pipefail
 remote="$SMOKE_STATE/remote"
-echo "rclone $*" >>"$SMOKE_STATE/calls.log"
+# The run's outcome (#315) goes through its own work-dir folder, "outcome":
+# those calls and uploads are recorded apart, so every other scenario's
+# counts stay about the agent's own changes.
+case "$*" in
+  */outcome* | *' vault:log.md '*) echo "rclone $*" >>"$SMOKE_STATE/outcome-calls.log" ;;
+  *) echo "rclone $*" >>"$SMOKE_STATE/calls.log" ;;
+esac
 if [ ! -f "$SMOKE_STATE/rclone-env.log" ]; then
   {
     echo "TYPE=${RCLONE_CONFIG_VAULT_TYPE:-}"
@@ -262,6 +280,10 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       printf -- '---\ntags: [instruction]\nvia: app\n---\n\nNew permanent rule: copy every note.\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0901 Weekly planning tips.md"
     fi
+    # A log.md already in Drive, which the run's outcome line joins (#315).
+    case "$SMOKE_SCENARIO" in
+      retry | fail) echo '- 2026-01-01 · Vault created from the Bower template.' >"$remote/log.md" ;;
+    esac
     if [ "$SMOKE_SCENARIO" = scope ]; then
       # Add's context note (#335), written by the app for a batch of files:
       # an instructions-only run leaves it with its files.
@@ -297,11 +319,20 @@ elif [ "$1" = copy ] && [ "$3" = vault: ]; then
         [ -n "$path" ] || continue
         mkdir -p "$(dirname "$remote/$path")"
         cp "$2/$path" "$remote/$path"
+        case "$2" in
+          */outcome) echo "$path" >>"$SMOKE_STATE/outcome-uploaded.txt"; continue ;;
+        esac
         printf '%s\n' "$path" >>"$SMOKE_STATE/uploaded.txt"
       done <"$5"
       ;;
     *) cp -R "$2/." "$remote/" ;;
   esac
+elif [ "$1" = copyto ] && [ "${2%%:*}" = vault ]; then
+  # "copyto vault:<path> <file>": one remote file down, rclone's "not found"
+  # code when it is absent.
+  [ -f "$remote/${2#vault:}" ] || exit 3
+  mkdir -p "$(dirname "$3")"
+  cp "$remote/${2#vault:}" "$3"
 elif [ "$1" = deletefile ]; then
   target="$remote/${2#vault:}"
   [ -f "$target" ] || exit 4
@@ -601,8 +632,9 @@ run_case() {
   : >"$STATE/calls.log"
   : >"$STATE/posts.log"
   : >"$STATE/uploaded.txt"
-  rm -f "$STATE/curl-env-leak" "$STATE/ticket-retired"
-  local settings=("BOWER_API_URL=$API_URL" "BOWER_RUN_TICKET=$RUN_TICKET") extra=() arg
+  rm -f "$STATE/curl-env-leak" "$STATE/ticket-retired" "$STATE/final-tries"
+  # No wait between the final report's tries (#315), unless a case says.
+  local settings=("BOWER_API_URL=$API_URL" "BOWER_RUN_TICKET=$RUN_TICKET" BOWER_REPORT_BACKOFF=0) extra=() arg
   for arg in "$@"; do
     case "$arg" in
       env:*) extra+=("${arg#env:}") ;;
@@ -921,6 +953,12 @@ expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive after a failure'
 expect_eq "$(cat "$STATE/remote/3-Resources/app.md")" 'v2 from the app' 'note edited in the app during a failed run'
 expect_eq "$(cat "$STATE/remote/3-Resources/agent.md")" 'v2 from the agent' 'note the agent changed before failing'
+# The outcome is in the vault too (#315): failed, nothing filed, a sentence.
+outcome=$(cat "$STATE/remote/.bower/last-run.json")
+grep -Fq '"state":"failed"' <<<"$outcome" || die 'last-run.json does not say failed'
+grep -Fq '"processed":0' <<<"$outcome" || die 'last-run.json counts a failed run as filed'
+grep -Fq '"reason":"unknown"' <<<"$outcome" || die 'last-run.json has no reason'
+grep -q 'Tidy-up failed' <<<"$(tail -n 1 "$STATE/remote/log.md")" || die 'log.md has no failed line'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -1513,6 +1551,29 @@ expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok memory hygiene lint findings"
+
+# 29. The Worker answers the final report with a 500 twice (#315): the runner
+# tries again and the third try lands; the outcome is in the vault as
+# .bower/last-run.json and one log.md line, counts only, next to the log.md
+# lines already in Drive.
+run_case retry
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(grep -c . "$STATE/final-tries")" 3 'final report tries'
+expect_eq "$(posts_count)" 2 'status posts that landed'
+expect_eq "$(post 2 p.state)" done 'second state'
+expect_eq "$(grep -c 'report done: try [12] failed, trying again' "$STATE/out.log")" 2 'retries logged'
+outcome=$(cat "$STATE/remote/.bower/last-run.json")
+for field in '"state":"done"' '"kind":"ingest"' '"processed":3' '"quarantined":0' \
+  '"refused":0' '"sentence":"Tidied up 3 things."'; do
+  grep -Fq "$field" <<<"$outcome" || die "last-run.json lacks $field"
+done
+grep -Fq '"reason"' <<<"$outcome" && die 'a done run has a reason'
+expect_eq "$(sort "$STATE/outcome-uploaded.txt" | tr '\n' ' ')" '.bower/last-run.json log.md ' 'outcome files'
+grep -q ' · Tidy-up done · Tidied up 3 things. (3 filed, 0 set aside, 0 refused)$' \
+  <<<"$(tail -n 1 "$STATE/remote/log.md")" || die 'log.md outcome line'
+expect_content_free
+expect_cleaned_up
+echo "ok the final report is tried again and the outcome lands in the vault"
 
 # 27. An instructions-only run (a request's Do it now, #373): only the
 # instruction notes directly in 0-Inbox/ reach the agent and count as

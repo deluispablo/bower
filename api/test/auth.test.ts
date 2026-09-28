@@ -18,6 +18,7 @@ import {
 } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
+import { checkRunTicket, issueRunTicket } from '../src/run-ticket.js';
 import {
   genericWindow,
   RATE_LIMIT_PER_MINUTE,
@@ -324,6 +325,55 @@ describe('GET /auth/callback', () => {
     expect(await decrypt(user.encRefreshToken, key)).toBe(REFRESH_TOKEN);
     const userKeys = (await allKeys()).filter((k) => k.startsWith('user:'));
     expect(userKeys).toEqual(['user:user-existing']);
+  });
+
+  it('a sign-in during a run leaves its ticket working (#315)', async () => {
+    await allow(EMAIL);
+    await putUser(kv, {
+      id: 'user-running',
+      email: EMAIL,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      vault: {
+        folderId: 'FOLDER_ID',
+        inboxFolderId: 'FOLDER_ID',
+        name: 'Bower',
+      },
+      encRefreshToken: 'v1.old-iv.old-ciphertext',
+    });
+    const ticket = await issueRunTicket(
+      kv,
+      'user-running',
+      'ingest',
+      new Date(),
+      60 * 60 * 1000,
+    );
+    const app = createApp({ fetchImpl: googleStub().fetchImpl });
+    const { cookie, state } = await login(app);
+
+    // A sign-in (or a re-consent) while the run goes.
+    const signedIn = await callback(
+      app,
+      `code=test-code&state=${state}`,
+      cookie,
+    );
+    expect(signedIn.status).toBe(302);
+
+    expect(
+      await checkRunTicket(kv, 'user-running', 'ingest', ticket, new Date()),
+    ).toBe(true);
+    const report = await app.request(
+      `${API}/runner/vaults/user-running/status`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${ticket}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ state: 'running', runId: '4242' }),
+      },
+      env,
+    );
+    expect(report.status).toBe(200);
   });
 
   it('refreshes the given name from Google on every sign-in (#323)', async () => {
