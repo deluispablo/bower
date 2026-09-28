@@ -25,7 +25,7 @@ const PARA_KINDS: readonly ParaKind[] = [
   'archives',
 ];
 
-const NUMERIC_PREFIX = /^(\d+)-/;
+const NUMERIC_PREFIX = /^(\d{1,2})-/;
 
 /**
  * A folder name without its numeric prefix ("2-Areas" → "Areas"): what the
@@ -48,7 +48,7 @@ export function displayPath(path: string, separator = ' / '): string {
 
 /**
  * Which landmark a top folder is: Inbox, Projects, Areas, Resources or
- * Archives when its name without a leading `\d+-` is one of those
+ * Archives when its name without a leading `\d{1,2}-` is one of those
  * (case-insensitive), else when it carries the prefix `0-` to `4-`. Anything
  * else (Answers, Clippings, a custom folder) is `null`: neutral.
  */

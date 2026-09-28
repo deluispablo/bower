@@ -424,6 +424,14 @@ describe('displayName and displayPath', () => {
     expect(displayName('Cooking')).toBe('Cooking');
   });
 
+  it('strips only a one- or two-digit prefix', () => {
+    expect(displayName('10-Work')).toBe('Work');
+    expect(displayName('2024-Trip')).toBe('2024-Trip');
+    expect(displayName('2026-09 Receipts')).toBe('2026-09 Receipts');
+    expect(paraKindOf('2024-Trip')).toBeNull();
+    expect(paraKindOf('10-Work')).toBeNull();
+  });
+
   it('never leaves a lone prefix', () => {
     expect(displayName('2-')).toBe('2-');
   });
