@@ -78,4 +78,7 @@ export const RETIRED_RULEBOOK_LINES: readonly string[] = [
   '- `## What Bower used` lists every source, each ending with its origin in brackets: `(from the file)`, `(looked up on the web)`, `(from what you told me)` or `(reasoned)`.',
   '- The body of the result (a table, a summary, a translation) follows after `## What Bower used`.',
   "3. Write the answer as **A note from Bower** (see Note templates) in `Answers/<YYYY-MM-DD> <question>.md`: `type: answer`, `## Bower's note` with only ✅ ⚠️ ❌ bullets, `## Why`, `## What Bower used` with each source's origin in brackets.",
+  "- Originals (PDFs, spreadsheets, images, documents) live in their project, area or resource folder, linked from its hub note and listed in `index.md`. A note sits next to an original only when one was asked for, and a converted document's `.md` sits next to its original (see Ingest).",
+  'status: active | waiting | done | archived   # projects and tasks only',
+  'Bower only files, by default: an original lands in its PARA folder as it is, sensibly named. No summary note, no converted copy, no analysis, no translation, unless something asks for one (step 6).',
 ];

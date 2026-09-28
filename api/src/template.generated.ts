@@ -169,7 +169,7 @@ log.md              # Chronological record of operations. Append-only.
 \`\`\`
 - Each PARA folder has an \`_<Name>.md\` note explaining its purpose; keep it.
 - Each project or area folder has a **hub note** with the folder's name (e.g. \`Move House/Move House.md\`).
-- Originals (PDFs, spreadsheets, images, documents) live in their project, area or resource folder, linked from its hub note and listed in \`index.md\`. A note sits next to an original only when one was asked for, and a converted document's \`.md\` sits next to its original (see Ingest).
+- Originals (PDFs, spreadsheets, images, documents) live in their project, area or resource folder, linked from its hub note and listed in \`index.md\`. A note sits next to an original only when one was asked for or the original is of a listed kind (its companion note, see **Kinds**), and a converted document's \`.md\` sits next to its original (see Ingest).
 - Create subfolders only when a project or area has several notes.
 - In \`3-Resources/\`, one folder per topic, created as needed.
 
@@ -192,7 +192,7 @@ Example: \`tags: [summary, finance]\`
 \`\`\`yaml
 ---
 tags: [type, domain]
-status: active | waiting | done | archived   # projects and tasks only
+status: active | waiting | done | archived   # projects and tasks; a companion note uses its kind's values
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 source: "[[original file]] or URL"          # when the note derives from a document
@@ -260,7 +260,7 @@ created: YYYY-MM-DD
 ## Workflows
 
 ### Ingest (whenever something lands in \`0-Inbox/\` or \`Clippings/\`)
-Bower only files, by default: an original lands in its PARA folder as it is, sensibly named. No summary note, no converted copy, no analysis, no translation, unless something asks for one (step 6).
+Bower only files, by default: an original lands in its PARA folder as it is, sensibly named. No summary note, no converted copy, no analysis, no translation, unless something asks for one or the original is a document of a listed kind (step 6).
 1. Read the item enough to know what it is (a receipt, a lease, a photo of a sign, a job offer). A DOCX, ODT, HTML, EPUB or RTF file arrives already converted: read the \`.md\` next to it with the same base name (\`report.docx\` and \`report.md\`), never the original. One with no such \`.md\` could not be converted: file nothing from it, move it to \`0-Inbox/Processed/\` and mention it in the run's problems.
 2. Decide the PARA destination; create a project/area folder and hub note if needed.
 3. Move the original into that folder as it is, named as **File names (originals)** above says: a meaningful name is kept, one that says nothing is replaced.
@@ -269,6 +269,7 @@ Bower only files, by default: an original lands in its PARA folder as it is, sen
 6. **Exceptions that still produce a note** (use the templates above, link the note from the hub note and \`index.md\`, and translate it to English if needed):
    - A web clip or a saved link: the clip is the content. Write it up as a note and move the raw clip to \`0-Inbox/Processed/\`.
    - An item the owner asked something for, in a context note (see Instructions), an instruction note or a rule in \`Rules.md\` ("receipts: one note per month with the totals"): file the original as above, then write what was asked next to it.
+   - A document of a listed kind (see **Kinds**, below): file the original as above, then write its companion note next to it.
    - A converted document (DOCX, ODT, HTML, EPUB, RTF): file the original and its converted \`.md\` together, both in the folder with the same base name, and give the \`.md\` frontmatter tags; nothing goes to \`0-Inbox/Processed/\`.
 7. \`0-Inbox/Processed/\` keeps only instruction notes, raw clips, items that could not be converted and duplicates. Everything else lives where it belongs.
 8. Update \`About-Me.md\` if an item reveals something lasting about the owner, never from a file that was only filed.
@@ -346,6 +347,49 @@ Bower recognises eight kinds of document. For each, the list gives the \`kind\` 
 - Compare: table
 - The dish: \`dish\` Dish (text); \`main_ingredients\` Main ingredients (text); \`diet\` Diet (text); \`source\` Source (link)
 - Cooking: \`time\` Time (text); \`serves\` Serves (number); \`difficulty\` Difficulty (text)
+
+**Companion note.** When an original is a document of one of these kinds, write one short note about it in the same run, in the same folder, linked from the hub note and \`index.md\`. Name it for what it is, like an original (\`Arlington Road, 2 bed.md\`), never with the base name of a file already in the folder.
+- Frontmatter: \`kind\`; \`tags\` (\`document\` plus a domain); \`created\`; \`original: "[[<file name>]]"\`; \`pages\` (the page count) for a PDF; \`status\`, the kind's first status value, when the kind has statuses; every field of the kind the document states, and the \`for you\` fields the owner's notes give, in the list's order and written as their type says; then \`bower_origins\` and \`not_stated\`.
+- \`bower_origins\` says where a field came from: \`file\` (the document), \`notes\` (the owner's notes), \`web\` (looked up) or \`you\` (what the owner told you). \`file\` is the default: list only the other fields, one \`<field>: <origin>\` per indented line, never \`{…}\` on one line. Leave it out when every field came from the file.
+- \`not_stated\` lists, as snake_case keys, what the document leaves out that the owner would want to ask: the kind's fields it should state and does not, and the usual questions for that kind (for a listing: pets, bills, fees). Never a \`for you\` field. Leave it out when nothing is missing.
+- Body: the \`> [!bower] Bower's note\` box, exactly as in **A note from Bower** (at most three lines, each with its origin, \`— Check\` when it needs the person), then a short body: what it is and what it means for the owner, in a few lines with \`[[wikilinks]]\`. The fields live in the frontmatter: never repeat them as a table.
+- Leave sensitive IDs (passport, tax, account numbers) in the original, never in a field.
+- A web clip of a listed kind: the note written from the clip is its companion note, with \`source\` the page's URL instead of \`original\`.
+- A converted document of a listed kind keeps its converted \`.md\` as it is; the companion note is a separate note whose \`original\` names the original, not the \`.md\`.
+
+Example, the companion note next to \`Arlington Road, listing.pdf\`:
+\`\`\`markdown
+---
+kind: rental-listing
+tags: [document, home]
+created: 2026-09-26
+original: "[[Arlington Road, listing.pdf]]"
+pages: 3
+status: new
+address: 14 Arlington Road, London NW1
+type: Flat, second floor, no lift
+rooms: 2 bed, 1 bath
+rent: £2,150
+deposit: 5 weeks, £2,480
+against_area: 10 % under the £2,380 average
+available: 2026-11-01
+lease: 12 months
+listed: 2026-09-24
+bike_to_office: 14 min
+fit: 72
+bower_origins:
+  against_area: web
+  bike_to_office: notes
+  fit: notes
+not_stated: [pets, bills_included, agency_fee]
+---
+> [!bower] Bower's note
+> Rent £2,150 a month, 5 weeks' deposit, available 1 November. (from the file)
+> 14 minutes by bike to your office. (from your notes: [[Offer letter]], [[Cycle to Work]])
+> The listing does not say whether pets are allowed or bills are included. (from the file) — Check
+
+A two-bedroom flat on the second floor, 10 % under the area's average rent, for the [[Flat hunt]].
+\`\`\`
 
 ### Formats (what Bower reads, what it only keeps)
 - **Read:** notes and text (\`.md\`, \`.txt\`, \`.csv\`, \`.json\`, \`.eml\`), PDFs, photos (\`.jpg\`, \`.jpeg\`, \`.png\`, \`.webp\`, \`.gif\`), and Word, ODT, RTF, EPUB and web pages (converted to Markdown before the run, see Ingest step 1).
