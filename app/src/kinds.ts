@@ -17,7 +17,8 @@
 /** How a field's raw frontmatter value is read and shown. `money` carries
  * its currency; `date` is `YYYY-MM-DD`, or `YYYY-MM` when only the month is
  * known; `note-link` is an Obsidian `[[wikilink]]` to another note. */
-export type FieldType = 'text' | 'number' | 'money' | 'date' | 'link' | 'note-link';
+export type FieldType =
+  'text' | 'number' | 'money' | 'date' | 'link' | 'note-link';
 
 export interface KindField {
   /** The frontmatter key, snake_case. */
@@ -78,7 +79,13 @@ export const KINDS: readonly Kind[] = [
     fields: [
       { key: 'address', label: 'Address', type: 'text', group: 'The place' },
       { key: 'type', label: 'Type', type: 'text', group: 'The place' },
-      { key: 'rooms', label: 'Rooms', type: 'text', group: 'The place', factLabel: '{rest}' },
+      {
+        key: 'rooms',
+        label: 'Rooms',
+        type: 'text',
+        group: 'The place',
+        factLabel: '{rest}',
+      },
       {
         key: 'rent',
         label: 'Rent',
@@ -88,7 +95,12 @@ export const KINDS: readonly Kind[] = [
         compareLabel: 'Rent a month',
       },
       { key: 'deposit', label: 'Deposit', type: 'money', group: 'Money' },
-      { key: 'against_area', label: 'Against the area', type: 'text', group: 'Money' },
+      {
+        key: 'against_area',
+        label: 'Against the area',
+        type: 'text',
+        group: 'Money',
+      },
       {
         key: 'available',
         label: 'Available',
@@ -97,8 +109,18 @@ export const KINDS: readonly Kind[] = [
         factLabel: 'available',
       },
       { key: 'lease', label: 'Lease', type: 'text', group: 'Terms and dates' },
-      { key: 'listed', label: 'Listed', type: 'date', group: 'Terms and dates' },
-      { key: 'viewing', label: 'Viewing', type: 'date', group: 'Terms and dates' },
+      {
+        key: 'listed',
+        label: 'Listed',
+        type: 'date',
+        group: 'Terms and dates',
+      },
+      {
+        key: 'viewing',
+        label: 'Viewing',
+        type: 'date',
+        group: 'Terms and dates',
+      },
       {
         key: 'bike_to_office',
         label: 'Bike to the office',
@@ -107,12 +129,25 @@ export const KINDS: readonly Kind[] = [
         forYou: true,
         factLabel: 'bike to work',
       },
-      { key: 'fit', label: 'Fit', type: 'number', group: 'For you', forYou: true },
+      {
+        key: 'fit',
+        label: 'Fit',
+        type: 'number',
+        group: 'For you',
+        forYou: true,
+      },
     ],
     keyFacts: ['rent', 'rooms', 'available', 'bike_to_office'],
     statuses: ['new', 'to view', 'viewed', 'applied', 'rejected'],
     compare: 'table',
-    compareFields: ['rent', 'rooms', 'available', 'against_area', 'bike_to_office', 'fit'],
+    compareFields: [
+      'rent',
+      'rooms',
+      'available',
+      'against_area',
+      'bike_to_office',
+      'fit',
+    ],
     questionsLabel: 'Ask the agent: copy these {n} as questions',
     notStatedLabel: 'Not in the listing',
   },
@@ -126,17 +161,36 @@ export const KINDS: readonly Kind[] = [
       { key: 'employer', label: 'Employer', type: 'text', group: 'The role' },
       { key: 'office', label: 'Office', type: 'text', group: 'The role' },
       { key: 'hours', label: 'Hours', type: 'text', group: 'The role' },
-      { key: 'salary', label: 'Salary', type: 'money', group: 'Money', factLabel: 'a year' },
+      {
+        key: 'salary',
+        label: 'Salary',
+        type: 'money',
+        group: 'Money',
+        factLabel: 'a year',
+      },
       { key: 'bonus', label: 'Bonus', type: 'text', group: 'Money' },
       { key: 'holiday', label: 'Holiday', type: 'text', group: 'Money' },
       { key: 'starts', label: 'Starts', type: 'date', group: 'Dates' },
       { key: 'reply_by', label: 'Reply by', type: 'date', group: 'Dates' },
-      { key: 'commute', label: 'Commute', type: 'text', group: 'For you', forYou: true },
+      {
+        key: 'commute',
+        label: 'Commute',
+        type: 'text',
+        group: 'For you',
+        forYou: true,
+      },
     ],
     keyFacts: ['salary', 'office', 'starts', 'reply_by'],
     statuses: ['new', 'applied', 'interview', 'offer', 'declined'],
     compare: 'table',
-    compareFields: ['salary', 'office', 'starts', 'reply_by', 'holiday', 'commute'],
+    compareFields: [
+      'salary',
+      'office',
+      'starts',
+      'reply_by',
+      'holiday',
+      'commute',
+    ],
     questionsLabel: 'Ask the employer: copy these {n} as questions',
     notStatedLabel: 'Not in the offer',
   },
@@ -146,13 +200,29 @@ export const KINDS: readonly Kind[] = [
     plural: 'bills and renewals',
     groups: ['The service', 'Money', 'Dates'],
     fields: [
-      { key: 'provider', label: 'Provider', type: 'text', group: 'The service' },
+      {
+        key: 'provider',
+        label: 'Provider',
+        type: 'text',
+        group: 'The service',
+      },
       { key: 'service', label: 'What for', type: 'text', group: 'The service' },
       { key: 'amount', label: 'Amount', type: 'money', group: 'Money' },
       { key: 'billed', label: 'How often', type: 'text', group: 'Money' },
-      { key: 'renews_on', label: 'Renews on', type: 'date', group: 'Dates', factLabel: 'renews' },
+      {
+        key: 'renews_on',
+        label: 'Renews on',
+        type: 'date',
+        group: 'Dates',
+        factLabel: 'renews',
+      },
       { key: 'since', label: 'Since', type: 'date', group: 'Dates' },
-      { key: 'notice', label: 'Notice to cancel', type: 'text', group: 'Dates' },
+      {
+        key: 'notice',
+        label: 'Notice to cancel',
+        type: 'text',
+        group: 'Dates',
+      },
     ],
     keyFacts: ['provider', 'amount', 'renews_on'],
     statuses: ['active', 'to renew', 'cancelled'],
@@ -169,7 +239,12 @@ export const KINDS: readonly Kind[] = [
     fields: [
       { key: 'shop', label: 'Shop', type: 'text', group: 'The purchase' },
       { key: 'date', label: 'Date', type: 'date', group: 'The purchase' },
-      { key: 'items', label: 'What you bought', type: 'text', group: 'The purchase' },
+      {
+        key: 'items',
+        label: 'What you bought',
+        type: 'text',
+        group: 'The purchase',
+      },
       {
         key: 'total',
         label: 'Total',
@@ -197,11 +272,28 @@ export const KINDS: readonly Kind[] = [
       { key: 'month', label: 'Month', type: 'date', group: 'The period' },
       { key: 'employer', label: 'Employer', type: 'text', group: 'The period' },
       { key: 'paid_on', label: 'Paid on', type: 'date', group: 'The period' },
-      { key: 'net', label: 'Net pay', type: 'money', group: 'Pay', factLabel: 'net' },
-      { key: 'gross', label: 'Gross pay', type: 'money', group: 'Pay', factLabel: 'gross' },
+      {
+        key: 'net',
+        label: 'Net pay',
+        type: 'money',
+        group: 'Pay',
+        factLabel: 'net',
+      },
+      {
+        key: 'gross',
+        label: 'Gross pay',
+        type: 'money',
+        group: 'Pay',
+        factLabel: 'gross',
+      },
       { key: 'tax', label: 'Tax', type: 'money', group: 'Deductions' },
       { key: 'pension', label: 'Pension', type: 'money', group: 'Deductions' },
-      { key: 'other_deductions', label: 'Other deductions', type: 'money', group: 'Deductions' },
+      {
+        key: 'other_deductions',
+        label: 'Other deductions',
+        type: 'money',
+        group: 'Deductions',
+      },
     ],
     keyFacts: ['month', 'net', 'gross'],
     statuses: [],
@@ -217,7 +309,12 @@ export const KINDS: readonly Kind[] = [
     groups: ['The agreement', 'Money', 'Dates'],
     fields: [
       { key: 'with', label: 'With', type: 'text', group: 'The agreement' },
-      { key: 'covers', label: 'What it covers', type: 'text', group: 'The agreement' },
+      {
+        key: 'covers',
+        label: 'What it covers',
+        type: 'text',
+        group: 'The agreement',
+      },
       {
         key: 'value',
         label: 'Value',
@@ -244,8 +341,18 @@ export const KINDS: readonly Kind[] = [
     groups: ['The booking', 'When and where', 'Money', 'For you'],
     fields: [
       { key: 'what', label: 'What', type: 'text', group: 'The booking' },
-      { key: 'reference', label: 'Reference', type: 'text', group: 'The booking' },
-      { key: 'booking_page', label: 'Booking page', type: 'link', group: 'The booking' },
+      {
+        key: 'reference',
+        label: 'Reference',
+        type: 'text',
+        group: 'The booking',
+      },
+      {
+        key: 'booking_page',
+        label: 'Booking page',
+        type: 'link',
+        group: 'The booking',
+      },
       { key: 'when', label: 'When', type: 'date', group: 'When and where' },
       { key: 'until', label: 'Until', type: 'date', group: 'When and where' },
       { key: 'where', label: 'Where', type: 'text', group: 'When and where' },
@@ -273,12 +380,22 @@ export const KINDS: readonly Kind[] = [
     groups: ['The dish', 'Cooking'],
     fields: [
       { key: 'dish', label: 'Dish', type: 'text', group: 'The dish' },
-      { key: 'main_ingredients', label: 'Main ingredients', type: 'text', group: 'The dish' },
+      {
+        key: 'main_ingredients',
+        label: 'Main ingredients',
+        type: 'text',
+        group: 'The dish',
+      },
       { key: 'diet', label: 'Diet', type: 'text', group: 'The dish' },
       { key: 'source', label: 'Source', type: 'link', group: 'The dish' },
       { key: 'time', label: 'Time', type: 'text', group: 'Cooking' },
       { key: 'serves', label: 'Serves', type: 'number', group: 'Cooking' },
-      { key: 'difficulty', label: 'Difficulty', type: 'text', group: 'Cooking' },
+      {
+        key: 'difficulty',
+        label: 'Difficulty',
+        type: 'text',
+        group: 'Cooking',
+      },
     ],
     keyFacts: ['time', 'serves'],
     statuses: [],
@@ -295,14 +412,33 @@ export function kindById(id: string): Kind | undefined {
   return KINDS.find((kind) => kind.id === id);
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const CURRENCY_SYMBOLS: Record<string, string> = { GBP: '£', EUR: '€', USD: '$' };
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  GBP: '£',
+  EUR: '€',
+  USD: '$',
+};
 
 /** Digits with a comma every three, and two decimals only when there are
  * pence ("2,150", "38.40"). */
 function groupThousands(amount: number): string {
-  const fixed = Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(2);
+  const fixed = Number.isInteger(amount)
+    ? amount.toFixed(0)
+    : amount.toFixed(2);
   const [whole = '', decimals] = fixed.split('.');
   const sign = whole.startsWith('-') ? '-' : '';
   const digits = sign === '' ? whole : whole.slice(1);
@@ -314,10 +450,13 @@ function groupThousands(amount: number): string {
  * (£ € $) or a code (GBP EUR USD) before or after the amount. Anything that
  * does not read as an amount is shown as written. */
 function formatMoney(raw: unknown): string {
-  if (typeof raw === 'number' && Number.isFinite(raw)) return '£' + groupThousands(raw);
+  if (typeof raw === 'number' && Number.isFinite(raw))
+    return '£' + groupThousands(raw);
   if (typeof raw !== 'string') return '';
   const text = raw.trim();
-  const match = /^([£€$]|[A-Z]{3})?\s*(-?[\d,]*\.?\d+)\s*([A-Z]{3})?$/.exec(text);
+  const match = /^([£€$]|[A-Z]{3})?\s*(-?[\d,]*\.?\d+)\s*([A-Z]{3})?$/.exec(
+    text,
+  );
   if (match === null) return text;
   const [, before, digits = '', after] = match;
   const amount = Number(digits.replace(/,/g, ''));
@@ -340,7 +479,11 @@ function dateParts(raw: unknown): [number, number, number | undefined] | null {
   if (match === null) return null;
   const month = Number(match[2]);
   if (month < 1 || month > 12) return null;
-  return [Number(match[1]), month, match[3] === undefined ? undefined : Number(match[3])];
+  return [
+    Number(match[1]),
+    month,
+    match[3] === undefined ? undefined : Number(match[3]),
+  ];
 }
 
 /** A date as the boards show it: "1 Nov" for a day, "Jul 2027" for a month
@@ -391,16 +534,24 @@ export function formatFieldValue(field: KindField, raw: unknown): string {
 
 /** `template` with `{key}` filled from the note's other fields; a `[…]`
  * part naming a missing field is dropped. */
-function fillLabel(kind: Kind, template: string, frontmatter: Record<string, unknown>): string {
+function fillLabel(
+  kind: Kind,
+  template: string,
+  frontmatter: Record<string, unknown>,
+): string {
   const value = (key: string): string => {
     const field = kind.fields.find((candidate) => candidate.key === key);
     return field === undefined ? '' : formatFieldValue(field, frontmatter[key]);
   };
   const withOptional = template.replace(/\[([^\]]*)\]/g, (_, part: string) => {
-    const keys = [...part.matchAll(/\{(\w+)\}/g)].map((found) => found[1] ?? '');
+    const keys = [...part.matchAll(/\{(\w+)\}/g)].map(
+      (found) => found[1] ?? '',
+    );
     return keys.every((key) => value(key) !== '') ? part : '';
   });
-  return withOptional.replace(/\{(\w+)\}/g, (_, key: string) => value(key)).trim();
+  return withOptional
+    .replace(/\{(\w+)\}/g, (_, key: string) => value(key))
+    .trim();
 }
 
 /** The note's key facts: the kind's key fields actually present, in the
@@ -422,7 +573,11 @@ export function keyFactsFor(
       facts.push(
         comma === -1
           ? { value, label: '', key }
-          : { value: value.slice(0, comma), label: value.slice(comma + 2), key },
+          : {
+              value: value.slice(0, comma),
+              label: value.slice(comma + 2),
+              key,
+            },
       );
     } else {
       facts.push({ value, label: fillLabel(kind, template, frontmatter), key });
@@ -450,7 +605,11 @@ const NUMBER_WORDS = [
  * number word ("copy these three as questions"), "copy this one as a
  * question" for one. */
 export function questionsLabelFor(kind: Kind, n: number): string {
-  if (n === 1) return kind.questionsLabel.replace('these {n} as questions', 'this one as a question');
+  if (n === 1)
+    return kind.questionsLabel.replace(
+      'these {n} as questions',
+      'this one as a question',
+    );
   return kind.questionsLabel.replace('{n}', NUMBER_WORDS[n] ?? String(n));
 }
 
@@ -458,13 +617,21 @@ export function questionsLabelFor(kind: Kind, n: number): string {
  * to view with a viewing date reads "Viewing Sat" (board `Desktop-Compare`);
  * otherwise the status with a capital ("To view"), including a value a
  * rule added that is not in the kind's list. */
-export function statusLabel(kind: Kind, frontmatter: Record<string, unknown>): string {
+export function statusLabel(
+  kind: Kind,
+  frontmatter: Record<string, unknown>,
+): string {
   const status = plainText(frontmatter.status).toLowerCase();
   if (status === '') return '';
-  if (status === 'to view' && kind.fields.some((field) => field.key === 'viewing')) {
+  if (
+    status === 'to view' &&
+    kind.fields.some((field) => field.key === 'viewing')
+  ) {
     const parts = dateParts(frontmatter.viewing);
     if (parts !== null && parts[2] !== undefined) {
-      const weekday = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])).getUTCDay();
+      const weekday = new Date(
+        Date.UTC(parts[0], parts[1] - 1, parts[2]),
+      ).getUTCDay();
       return `Viewing ${WEEKDAYS[weekday] ?? ''}`;
     }
   }

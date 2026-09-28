@@ -45,7 +45,9 @@ describe('rental listing', () => {
   it('groups its Details fields as board Phone-Note-Details-Open does', () => {
     const byGroup = listing.groups.map((group) => [
       group,
-      listing.fields.filter((f) => f.group === group && f.key !== 'viewing').map((f) => f.label),
+      listing.fields
+        .filter((f) => f.group === group && f.key !== 'viewing')
+        .map((f) => f.label),
     ]);
     expect(byGroup).toEqual([
       ['The place', ['Address', 'Type', 'Rooms']],
@@ -60,10 +62,9 @@ describe('rental listing', () => {
   });
 
   it('marks the For you fields as coming from the person’s notes', () => {
-    expect(listing.fields.filter((f) => f.forYou === true).map((f) => f.label)).toEqual([
-      'Bike to the office',
-      'Fit',
-    ]);
+    expect(
+      listing.fields.filter((f) => f.forYou === true).map((f) => f.label),
+    ).toEqual(['Bike to the office', 'Fit']);
   });
 
   it('has a Viewing date field in Terms and dates', () => {
@@ -75,8 +76,11 @@ describe('rental listing', () => {
   });
 
   it('has the key facts of board System-KeyFacts, in order', () => {
-    expect(listing.keyFacts.map((key) => listing.fields.find((f) => f.key === key)?.factLabel))
-      .toEqual(['a month', '{rest}', 'available', 'bike to work']);
+    expect(
+      listing.keyFacts.map(
+        (key) => listing.fields.find((f) => f.key === key)?.factLabel,
+      ),
+    ).toEqual(['a month', '{rest}', 'available', 'bike to work']);
   });
 
   it('has the Compare columns of board Desktop-Compare', () => {
@@ -117,7 +121,11 @@ describe('keyFactsFor', () => {
   });
 
   it('finds three facts for a job offer (board Flow-02-Earlier)', () => {
-    const offer = { salary: 78000, office: "King's Cross", starts: '2026-08-01' };
+    const offer = {
+      salary: 78000,
+      office: "King's Cross",
+      starts: '2026-08-01',
+    };
     expect(keyFactsFor(kind('job-offer'), offer)).toEqual([
       { value: '£78,000', label: 'a year', key: 'salary' },
       { value: "King's Cross", label: 'office', key: 'office' },
@@ -131,32 +139,41 @@ describe('keyFactsFor', () => {
       { value: '£1,200', label: 'bike value', key: 'value' },
       { value: 'Jul 2027', label: 'ends', key: 'ends' },
     ]);
-    expect(keyFactsFor(kind('contract'), { value: 1200 })[0]?.label).toBe('value');
+    expect(keyFactsFor(kind('contract'), { value: 1200 })[0]?.label).toBe(
+      'value',
+    );
   });
 
   it('finds one fact for a receipt, labelled with shop and date', () => {
-    const receipt = { total: '£38.40', shop: 'Corner shop', date: '2026-03-14' };
+    const receipt = {
+      total: '£38.40',
+      shop: 'Corner shop',
+      date: '2026-03-14',
+    };
     expect(keyFactsFor(kind('receipt'), receipt)).toEqual([
       { value: '£38.40', label: 'total at Corner shop, 14 Mar', key: 'total' },
     ]);
-    expect(keyFactsFor(kind('receipt'), { total: 38.4, date: '2026-03-14' })[0]?.label).toBe(
-      'total, 14 Mar',
+    expect(
+      keyFactsFor(kind('receipt'), { total: 38.4, date: '2026-03-14' })[0]
+        ?.label,
+    ).toBe('total, 14 Mar');
+    expect(keyFactsFor(kind('receipt'), { total: 38.4 })[0]?.label).toBe(
+      'total',
     );
-    expect(keyFactsFor(kind('receipt'), { total: 38.4 })[0]?.label).toBe('total');
   });
 
   it('skips a missing middle field and keeps the order', () => {
     const noRooms: Record<string, unknown> = { ...listingNote };
     delete noRooms.rooms;
-    expect(keyFactsFor(kind('rental-listing'), noRooms).map((f) => f.key)).toEqual([
-      'rent',
-      'available',
-      'bike_to_office',
-    ]);
     expect(
-      keyFactsFor(kind('rental-listing'), { ...listingNote, available: '', rooms: null }).map(
-        (f) => f.key,
-      ),
+      keyFactsFor(kind('rental-listing'), noRooms).map((f) => f.key),
+    ).toEqual(['rent', 'available', 'bike_to_office']);
+    expect(
+      keyFactsFor(kind('rental-listing'), {
+        ...listingNote,
+        available: '',
+        rooms: null,
+      }).map((f) => f.key),
     ).toEqual(['rent', 'bike_to_office']);
   });
 
@@ -197,21 +214,32 @@ describe('formatFieldValue', () => {
     expect(formatFieldValue(date, '2026-11-01')).toBe('1 Nov');
     expect(formatFieldValue(date, '2026-03-14')).toBe('14 Mar');
     expect(formatFieldValue(date, '2027-07')).toBe('Jul 2027');
-    expect(formatFieldValue(date, new Date(Date.UTC(2026, 8, 24)))).toBe('24 Sep');
+    expect(formatFieldValue(date, new Date(Date.UTC(2026, 8, 24)))).toBe(
+      '24 Sep',
+    );
     expect(formatFieldValue(date, 'next spring')).toBe('next spring');
   });
 
   it('shows numbers plain and note links without brackets', () => {
     expect(formatFieldValue(field('number'), 72)).toBe('72');
     expect(formatFieldValue(field('number'), '4')).toBe('4');
-    expect(formatFieldValue(field('note-link'), '[[Offer letter]]')).toBe('Offer letter');
+    expect(formatFieldValue(field('note-link'), '[[Offer letter]]')).toBe(
+      'Offer letter',
+    );
     expect(formatFieldValue(field('text'), ['garden', 'second floor'])).toBe(
       'garden, second floor',
     );
   });
 
   it('shows nothing for a missing or blank value', () => {
-    for (const type of ['text', 'number', 'money', 'date', 'link', 'note-link'] as const) {
+    for (const type of [
+      'text',
+      'number',
+      'money',
+      'date',
+      'link',
+      'note-link',
+    ] as const) {
       expect(formatFieldValue(field(type), undefined)).toBe('');
       expect(formatFieldValue(field(type), null)).toBe('');
       expect(formatFieldValue(field(type), '')).toBe('');
@@ -245,7 +273,8 @@ describe('every kind', () => {
 
     expect(k.keyFacts.length).toBeGreaterThanOrEqual(1);
     expect(k.keyFacts.length).toBeLessThanOrEqual(4);
-    for (const key of [...k.keyFacts, ...k.compareFields]) expect(keys).toContain(key);
+    for (const key of [...k.keyFacts, ...k.compareFields])
+      expect(keys).toContain(key);
     for (const key of k.keyFacts) {
       const f = k.fields.find((candidate) => candidate.key === key);
       const label = f?.factLabel ?? f?.label.toLowerCase() ?? '';
@@ -262,7 +291,13 @@ describe('every kind', () => {
       'applied',
       'rejected',
     ]);
-    expect(kind('job-offer').statuses).toEqual(['new', 'applied', 'interview', 'offer', 'declined']);
+    expect(kind('job-offer').statuses).toEqual([
+      'new',
+      'applied',
+      'interview',
+      'offer',
+      'declined',
+    ]);
     expect(kind('bill').statuses).toEqual(['active', 'to renew', 'cancelled']);
   });
 
@@ -298,9 +333,13 @@ describe('statusLabel', () => {
   const listing = kind('rental-listing');
 
   it('reads "Viewing <weekday>" for a listing to view with a viewing date', () => {
-    expect(statusLabel(listing, { status: 'to view', viewing: '2026-10-03' })).toBe('Viewing Sat');
+    expect(
+      statusLabel(listing, { status: 'to view', viewing: '2026-10-03' }),
+    ).toBe('Viewing Sat');
     expect(statusLabel(listing, { status: 'to view' })).toBe('To view');
-    expect(statusLabel(listing, { status: 'viewed', viewing: '2026-10-03' })).toBe('Viewed');
+    expect(
+      statusLabel(listing, { status: 'viewed', viewing: '2026-10-03' }),
+    ).toBe('Viewed');
   });
 
   it('capitalises the status and is empty without one', () => {
