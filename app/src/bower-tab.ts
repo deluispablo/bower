@@ -379,12 +379,19 @@ export function sentenceKind(text: string): SentenceKind {
 
 /**
  * The rule sentences in a longer text (#435, Add's "What is this?" box):
- * the text split into sentences (after `.`, `!` or `?`, and at line
- * breaks), keeping those `sentenceKind` reads as a rule, as written.
+ * the text split into sentences — after `.`, `!` or `?`, at line breaks,
+ * and before a later "from now on" or "every time" glued onto the one
+ * before it with nothing but a space between (#499: two "From now on"
+ * sentences typed back to back, with neither punctuation nor a line break
+ * between them, used to merge into one blob; only its own guessed topic —
+ * the second clause's — ever showed up as a rule, the first silently lost
+ * inside it). "Always"/"never" stay start-of-sentence only (`RULE_START`
+ * above): on their own they are ordinary words too often to split on
+ * wherever they appear. Kept `sentenceKind` reads as a rule, as written.
  */
 export function ruleSentences(text: string): string[] {
   return text
-    .split(/(?<=[.!?])\s+|\n+/)
+    .split(/(?<=[.!?])\s+|\n+|\s+(?=(?:from now on|every time)\b)/i)
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence !== '' && sentenceKind(sentence) === 'rule');
 }
