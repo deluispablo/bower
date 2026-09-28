@@ -9,14 +9,7 @@ import type { JSX } from 'preact';
 import '../styles/marks.css';
 
 export type FileKind =
-  | 'pdf'
-  | 'photo'
-  | 'csv'
-  | 'excel'
-  | 'word'
-  | 'zip'
-  | 'link'
-  | 'video';
+  'pdf' | 'photo' | 'csv' | 'excel' | 'word' | 'zip' | 'link' | 'video';
 
 export const KIND_BADGES: Record<FileKind, string> = {
   pdf: 'PDF',

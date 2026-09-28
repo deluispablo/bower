@@ -14,11 +14,7 @@ import { IconFolder, IconInbox } from './icons.js';
 import '../styles/marks.css';
 
 export type ParaKind =
-  | 'inbox'
-  | 'projects'
-  | 'areas'
-  | 'resources'
-  | 'archives';
+  'inbox' | 'projects' | 'areas' | 'resources' | 'archives';
 
 export type OriginKind = 'file' | 'notes' | 'web' | 'you';
 

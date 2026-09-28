@@ -2,7 +2,7 @@
 
 /** The v4 marks (#579): sizes, tints, grey kinds, tags and aria-hidden. */
 
-import { h, render } from 'preact';
+import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 
