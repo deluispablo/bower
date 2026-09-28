@@ -48,6 +48,20 @@ export interface User {
 export type RunState = 'queued' | 'running' | 'done' | 'failed';
 
 /**
+ * Why a run failed, in a word the app turns into a sentence for people
+ * (#375): the runner classifies its own failure; anything it cannot tell
+ * apart is `unknown`.
+ */
+export const RUN_FAILURE_REASONS = [
+  'drive_unavailable',
+  'timeout',
+  'model_unavailable',
+  'vault_changed',
+  'unknown',
+] as const;
+export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
+
+/**
  * What a run does: `ingest` processes the inbox (`POST /process`), `lint` is
  * the scheduled health check. The two are stored under different keys (see
  * `store.ts`), so a lint never shows up as the user's current run.
@@ -71,6 +85,8 @@ export interface Run {
   /** Paths (or `"*"` for the whole run) the post-run audit refused. */
   refused?: string[];
   error?: string;
+  /** Only on a `failed` run, when the runner said why (#375). */
+  reason?: RunFailureReason;
   runId?: string;
 }
 

@@ -56,7 +56,14 @@ import {
   listVaultIds,
   putRun,
 } from './store.js';
-import type { DriveToken, Run, RunKind, User } from './types.js';
+import { RUN_FAILURE_REASONS } from './types.js';
+import type {
+  DriveToken,
+  Run,
+  RunFailureReason,
+  RunKind,
+  User,
+} from './types.js';
 
 /**
  * Longest `summary` or `error` kept on a `Run`, and the longest any single
@@ -204,6 +211,7 @@ interface StatusReport {
   quarantined?: string[];
   refused?: string[];
   error?: string;
+  reason?: RunFailureReason;
 }
 
 const REPORT_STATES: readonly string[] = ['running', 'done', 'failed'];
@@ -217,6 +225,7 @@ const REPORT_FIELDS: ReadonlySet<string> = new Set([
   'quarantined',
   'refused',
   'error',
+  'reason',
 ]);
 
 function badRequest(message: string): HttpError {
@@ -308,6 +317,15 @@ function parseStatusReport(body: unknown): StatusReport {
   if (summary !== undefined) report.summary = summary;
   const error = optionalText(record, 'error');
   if (error !== undefined) report.error = error;
+  const reason = record.reason;
+  if (reason !== undefined) {
+    if (!RUN_FAILURE_REASONS.some((known) => known === reason)) {
+      throw badRequest(
+        `reason must be one of ${RUN_FAILURE_REASONS.join(', ')}`,
+      );
+    }
+    report.reason = reason as RunFailureReason;
+  }
 
   const processed = optionalStringArray(record, 'processed');
   if (processed !== undefined) report.processed = processed;
@@ -360,6 +378,10 @@ function applyReport(
   if (report.quarantined !== undefined) run.quarantined = report.quarantined;
   if (report.refused !== undefined) run.refused = report.refused;
   if (report.error !== undefined) run.error = report.error;
+  // A reason explains a failure only; a done run never carries one.
+  if (report.state === 'failed' && report.reason !== undefined) {
+    run.reason = report.reason;
+  }
   return run;
 }
 

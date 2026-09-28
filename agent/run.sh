@@ -50,7 +50,8 @@
 #                            returns the user's own apiKey
 #   RUNNER_TEMP              optional; set by GitHub Actions
 #
-# Requires bash, curl, jq, rclone, pandoc and claude on PATH.
+# Requires bash, curl, jq, rclone, pandoc, timeout (coreutils) and claude on
+# PATH.
 #
 # `claude` itself runs under `env -i` with its own, smaller allow-list (see
 # the comment above the agent run step): the Drive token, the run ticket and
@@ -229,6 +230,7 @@ readonly DRIVE_FILES_URL='https://www.googleapis.com/drive/v3/files'
 mkdir -p "$VAULT_DIR" "$LOG_DIR"
 
 STEP='start'   # the step in progress, named in any failure report
+REASON=''      # the failure's reason for people, set by fail() (see there)
 REPORTED=0     # 1 once a final state (done or failed) was reported
 RUN_STARTED=0  # 1 once the agent may have changed the local copy
 REFUSED_JSON=''      # the audit's refused paths, a JSON array, once it ran
@@ -242,6 +244,7 @@ on_exit() {
     # An unexpected error that no explicit check caught.
     REPORTED=1
     copy_up_after_failure
+    REASON=unknown
     PROCESSED_JSON='' SUMMARY='' report failed "$STEP: unexpected error" >/dev/null 2>&1 || true
     log "failed at $STEP"
     rc=2
@@ -259,6 +262,7 @@ report() {
   local state=$1 error=${2:-}
   local args=(--arg state "$state" --arg kind "$MODE" --arg runId "$RUN_ID")
   [ -n "$error" ] && args+=(--arg error "$error")
+  [ -n "$REASON" ] && args+=(--arg reason "$REASON")
   [ -n "${PROCESSED_JSON:-}" ] && args+=(--argjson processed "$PROCESSED_JSON")
   [ -n "${SUMMARY:-}" ] && args+=(--arg summary "$SUMMARY")
   [ -n "$REFUSED_JSON" ] && args+=(--argjson refused "$REFUSED_JSON")
@@ -405,9 +409,17 @@ copy_up_after_failure() {
   fi
 }
 
-# Report failed with a short error naming the step, then exit 2.
+# Report failed with a short error naming the step (for the operator) and a
+# reason for people (the app turns it into a sentence, #375), then exit 2.
+# Usage: fail <error> [reason]; the reason is one of
+#   drive_unavailable  Google Drive did not answer, or access to it is gone
+#   timeout            the agent ran out of time or turns
+#   model_unavailable  Claude could not be reached or refused the credential
+#   vault_changed      the Bower folder is not what the run expected
+#   unknown            anything else (the default)
 fail() {
   local error=$1
+  REASON=${2:-unknown}
   REPORTED=1
   copy_up_after_failure
   PROCESSED_JSON='' SUMMARY='' report failed "$error" || log "report failed: API unreachable"
@@ -446,6 +458,28 @@ in_instructions_scope() {
   ! is_context_note "$1"
 }
 
+# The reason for people behind a failed agent run: `timeout` when the
+# agent's own time limit stopped it (timeout's exit code 124, or 137 when it
+# had to be killed) or it ran out of turns; `model_unavailable` when its
+# private error log shows Claude could not be reached or the credential was
+# refused; `unknown` otherwise. The log is read here, never printed.
+agent_failure_reason() {
+  case "$1" in
+    124 | 137)
+      echo timeout
+      return
+      ;;
+  esac
+  if grep -Eiq 'max(imum)?[ _-]?turns' "$AGENT_ERR" 2>/dev/null; then
+    echo timeout
+  elif grep -Eiq 'overloaded|rate[ _-]?limit|credit balance|api error|authentication|invalid (api key|x-api-key|bearer)|oauth token|529|503 service' \
+    "$AGENT_ERR" 2>/dev/null; then
+    echo model_unavailable
+  else
+    echo unknown
+  fi
+}
+
 # Read one string field of the vault info; empty when absent or null.
 field() { jq -r --arg k "$1" '.[$k] // empty' "$VAULT_JSON"; }
 
@@ -481,7 +515,7 @@ if ! http_code=$(curl -sS -o "$VAULT_JSON" -w '%{http_code}' \
 fi
 case "$http_code" in
   200) ;;
-  409) fail "$STEP: Google access revoked, the user must sign in again" ;;
+  409) fail "$STEP: Google access revoked, the user must sign in again" drive_unavailable ;;
   *)
     # The Worker always answers an error as JSON { error: { code, message } }.
     # Anything else was answered before the request reached it, at
@@ -521,7 +555,7 @@ if [ -n "$USER_API_KEY" ]; then
   export ANTHROPIC_API_KEY="$USER_API_KEY"
   unset CLAUDE_CODE_OAUTH_TOKEN
 elif [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-  fail "$STEP: no Claude credentials"
+  fail "$STEP: no Claude credentials" model_unavailable
 fi
 
 # rclone reads its remote "vault" from these variables; no config file.
@@ -537,12 +571,12 @@ export RCLONE_CONFIG_VAULT_EXPORT_FORMATS=txt
 STEP='sync down'
 log "$STEP"
 if ! rclone sync vault: "$VAULT_DIR" --exclude '.obsidian/**' >>"$RCLONE_LOG" 2>&1; then
-  fail "$STEP: rclone failed"
+  fail "$STEP: rclone failed" drive_unavailable
 fi
 
 STEP='check rulebook'
 if [ ! -f "$VAULT_DIR/CLAUDE.md" ]; then
-  fail "$STEP: CLAUDE.md missing, not a Bower folder"
+  fail "$STEP: CLAUDE.md missing, not a Bower folder" vault_changed
 fi
 
 # The permission policy comes from the instance repo, never from the vault:
@@ -810,6 +844,13 @@ for name in "${CLAUDE_ENV_ALLOWLIST[@]}"; do
   fi
 done
 
+# The agent gets AGENT_TIME_LIMIT seconds (15 minutes), well inside the
+# job's own 20-minute limit, so a run that takes too long is stopped here,
+# with time left to copy back what is done and report `timeout` (#375),
+# instead of GitHub killing the job before anything is reported. timeout
+# runs outside `env -i`, so it starts with this shell's environment and the
+# agent under it with the allow-list only.
+readonly AGENT_TIME_LIMIT=900
 STEP='agent run'
 log "$STEP"
 PROMPT=$(cat "$PROMPT_FILE")
@@ -817,14 +858,14 @@ RUN_STARTED=1
 set +e
 (
   cd "$VAULT_DIR"
-  env -i "${claude_env[@]}" \
+  timeout -k 30 "$AGENT_TIME_LIMIT" env -i "${claude_env[@]}" \
     claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format text \
       --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
 ) >"$AGENT_OUT" 2>"$AGENT_ERR"
 agent_rc=$?
 set -e
 if [ "$agent_rc" -ne 0 ]; then
-  fail "$STEP: exit $agent_rc"
+  fail "$STEP: exit $agent_rc" "$(agent_failure_reason "$agent_rc")"
 fi
 
 # --- post-run audit and sync up -------------------------------------------
@@ -842,7 +883,7 @@ fi
 STEP='sync up'
 log "$STEP"
 if ! copy_changed_up; then
-  fail "$STEP: copy failed"
+  fail "$STEP: copy failed" drive_unavailable
 fi
 RUN_STARTED=0  # the copy is done; a later failure needs no second copy
 kept=0
@@ -860,7 +901,7 @@ while IFS= read -r path <&3; do
   # 4 is rclone's "file not found": someone removed it from Drive during the
   # run, so it is already gone.
   if [ "$delete_rc" -ne 0 ] && [ "$delete_rc" -ne 4 ]; then
-    fail "$STEP: delete failed"
+    fail "$STEP: delete failed" drive_unavailable
   fi
 done 3<"$PENDING_FILE"
 [ "$kept" -eq 0 ] || log "$kept originals kept in the inbox"

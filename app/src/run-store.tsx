@@ -43,6 +43,7 @@ import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { ANSWERS_FOLDER } from './home.js';
 import { folderHref } from './navigation.js';
+import { failureCopy } from './run-failure.js';
 import { isContextNote } from './run-progress.js';
 import { useSession } from './session.js';
 import { showToast } from './toast-store.js';
@@ -81,7 +82,6 @@ const IDLE_STATE: RunState = {
   sheetRunId: null,
 };
 const STALE_MESSAGE = 'Bower did not answer; try again';
-const GENERIC_FAILED_MESSAGE = 'Something went wrong';
 
 function phaseForRun(run: Run): RunPhase {
   if (run.state === 'queued') return 'queued';
@@ -252,7 +252,9 @@ export function reduce(state: RunState, event: RunEvent): RunState {
       return {
         phase,
         run,
-        message: run.error ?? GENERIC_FAILED_MESSAGE,
+        // The reason's sentence for people (#375), never `run.error`,
+        // which names the runner's step for the operator.
+        message: failureCopy(run.reason).sentence,
         ...sheet,
       };
     }

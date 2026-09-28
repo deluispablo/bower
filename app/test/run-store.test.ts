@@ -313,18 +313,20 @@ describe('reduce', () => {
     });
   });
 
-  it('status with a failed run uses run.error, falling back to a generic message', () => {
+  it("status with a failed run says the reason's sentence, never run.error (#375)", () => {
     const withError: Run = {
       state: 'failed',
       requestedAt: '2026-01-01T00:00:00.000Z',
-      error: 'The runner could not reach Drive.',
+      error: 'sync up: copy failed',
+      reason: 'drive_unavailable',
     };
     expect(
       reduce(idle, { type: 'status', run: withError, stale: false }),
     ).toEqual({
       phase: 'failed',
       run: withError,
-      message: 'The runner could not reach Drive.',
+      message:
+        'Google Drive stopped answering half way through copying things back.',
       ...closed,
     });
 
@@ -337,7 +339,7 @@ describe('reduce', () => {
     ).toEqual({
       phase: 'failed',
       run: withoutError,
-      message: 'Something went wrong',
+      message: 'Something went wrong before Bower could finish.',
       ...closed,
     });
   });

@@ -174,6 +174,11 @@ if [ ! -f "$SMOKE_STATE/rclone-env.log" ]; then
   } >"$SMOKE_STATE/rclone-env.log"
   printf '%s' "${RCLONE_CONFIG_VAULT_TOKEN:-}" >"$SMOKE_STATE/rclone-token.json"
 fi
+if [ "$1" = sync ] && [ "$2" = vault: ] && [ "$SMOKE_SCENARIO" = syncfail ]; then
+  # "syncfail": Drive stops answering on the way down.
+  echo 'Failed to sync: googleapi: Error 503: backendError' >&2
+  exit 1
+fi
 if [ "$1" = sync ] && [ "$2" = vault: ]; then
   if [ ! -d "$remote" ]; then
     mkdir -p "$remote/0-Inbox/Processed" "$remote/Clippings"
@@ -478,6 +483,13 @@ case "$SMOKE_SCENARIO" in
     ;;
 esac
 if [ "$SMOKE_SCENARIO" = fail ]; then
+  exit 1
+fi
+# "agenttimeout": the agent's time limit stops it (timeout's exit code).
+[ "$SMOKE_SCENARIO" != agenttimeout ] || exit 124
+# "overloaded": Claude answers that it is overloaded.
+if [ "$SMOKE_SCENARIO" = overloaded ]; then
+  echo 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}' >&2
   exit 1
 fi
 [ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/
@@ -879,6 +891,9 @@ expect_eq "$(post 1 p.state)" running 'first state'
 expect_eq "$(post 2 p.state)" failed 'second state'
 expect_eq "$(post 2 p.kind)" ingest 'failed kind'
 grep -q '^agent run' <<<"$(post 2 p.error)" || die 'error does not name the agent run step'
+# Nothing in the agent's error log says why: the reason for people is
+# unknown (#375).
+expect_eq "$(post 2 p.reason)" unknown 'reason'
 expect_eq "$(post 2 'p.processed === undefined && p.summary === undefined')" true 'failed has no processed or summary'
 expect_eq "$(calls rclone | grep -c '^rclone copy ')" 1 'rclone copy calls'
 expect_eq "$(calls rclone | grep -c '^rclone sync ')" 1 'rclone sync calls (sync down only)'
@@ -898,6 +913,7 @@ expect_eq "$RC" 2 'exit code'
 expect_eq "$(posts_count)" 1 'status posts'
 expect_eq "$(post 1 p.state)" failed 'state'
 grep -q 'CLAUDE.md' <<<"$(post 1 p.error)" || die 'error does not mention CLAUDE.md'
+expect_eq "$(post 1 p.reason)" vault_changed 'reason'
 expect_eq "$(calls claude)" '' 'claude calls'
 expect_eq "$(calls rclone | grep -c '^rclone copy ')" 0 'rclone copy calls'
 expect_content_free
@@ -918,11 +934,27 @@ expect_eq "$RC" 2 'exit code'
 expect_eq "$(posts_count)" 1 'status posts'
 expect_eq "$(post 1 p.state)" failed 'state'
 grep -q '^fetch vault info' <<<"$(post 1 p.error)" || die 'error does not name the fetch step'
+expect_eq "$(post 1 p.reason)" drive_unavailable 'reason'
 expect_eq "$(calls rclone)" '' 'rclone calls'
 expect_eq "$(calls claude)" '' 'claude calls'
 expect_content_free
 expect_cleaned_up
 echo "ok reauth"
+
+# 6b. The failure reasons for people (#375), one per reason the runner
+# tells apart (reauth above is drive_unavailable, a missing CLAUDE.md
+# vault_changed, the agent failure unknown): Drive stops answering on the
+# way down, the agent's time limit stops it, Claude is overloaded.
+for reason_case in 'syncfail drive_unavailable' 'agenttimeout timeout' \
+  'overloaded model_unavailable'; do
+  run_case "${reason_case%% *}"
+  expect_eq "$RC" 2 'exit code'
+  expect_eq "$(post "$(posts_count)" p.state)" failed 'last state'
+  expect_eq "$(post "$(posts_count)" p.reason)" "${reason_case#* }" 'reason'
+  expect_content_free
+  expect_cleaned_up
+done
+echo "ok a failure is reported with its reason for people"
 
 # 7. A pending original leaves Drive mid-run while the agent moves it
 # locally: the delete finds nothing, which counts as done.

@@ -40,6 +40,8 @@ The script is idempotent. After `git pull` here, rerun `bash scripts/deploy.sh`:
 
 `bash scripts/deploy.sh --rotate` sets every secret again, in the Worker and in the instance repo. It asks for the Google client id and secret, the GitHub token and the Claude credential again, and generates new values for the rest, so: everyone is signed out and has to sign in with Google again (new `SESSION_SECRET` and `TOKEN_ENC_KEY`), every device has to allow notifications again (new VAPID pair), and `api/.prod.secrets` gets the new `ADMIN_KEY`.
 
+Update the Worker together with the instance repo, never the instance repo alone: the Worker checks the runner's reports strictly, so a newer `run.sh` can send a field an older Worker refuses. For example, since #375 a failed run reports a `reason` for people (Drive did not answer, took too long, Claude unavailable, the folder changed, or unknown); a Worker older than that answers the report with a 400 and the run shows no reason. `deploy.sh` does both in one go.
+
 To update only the Worker: `bash scripts/deploy-api.sh` (or `pnpm -C api deploy`), and `bash scripts/deploy-api.sh secrets [--rotate]` (or `pnpm -C api secrets`) for its secrets. They read and create `api/wrangler.local.toml` the same way; `secrets` needs `gh` and the instance repo, because `BOWER_API_KEY` goes to both at once.
 
 ### Upgrading to run tickets

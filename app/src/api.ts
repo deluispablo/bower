@@ -187,6 +187,8 @@ export interface Run {
   /** Paths (or `"*"` for the whole run) the post-run audit refused. */
   refused?: string[];
   error?: string;
+  /** Why a `failed` run failed, for people (#375; `run-failure.ts`). */
+  reason?: string;
   runId?: string;
 }
 
