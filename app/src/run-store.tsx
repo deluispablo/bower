@@ -336,7 +336,7 @@ interface RunProviderProps {
 
 export function RunProvider({ children }: RunProviderProps) {
   const { me } = useSession();
-  const { files, refresh } = useVault();
+  const { files, refresh, keepRule } = useVault();
   const hasVault = me?.vault != null;
 
   const [state, setState] = useState<RunState>(IDLE_STATE);
@@ -520,14 +520,15 @@ export function RunProvider({ children }: RunProviderProps) {
   // Opening the working sheet first means a run that cannot start (the
   // day's limit, an error) still shows its reason in the sheet.
   // Add's "What is this?" note (#335) lands in the inbox before the run
-  // starts, so the run sees it; `writeContextNote` never rejects and does
+  // starts, so the run sees it, and a rule sentence in it is already in
+  // `Rules.md` (#435); `writeContextNote` never rejects and does
   // nothing when the box is empty.
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const confirmTidyUp = useCallback((): void => {
     setConfirmOpen(false);
     openSheet();
-    void writeContextNote(inboxFolderId).then(() => process());
-  }, [openSheet, process, inboxFolderId]);
+    void writeContextNote(inboxFolderId, keepRule).then(() => process());
+  }, [openSheet, process, inboxFolderId, keepRule]);
 
   const dismissConfirm = useCallback((): void => {
     setConfirmOpen(false);

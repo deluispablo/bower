@@ -347,7 +347,10 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
     );
   const box = page.getByRole('textbox', { name: 'What is this?' });
   await expect(box).toHaveAttribute('placeholder', /^Just filing is fine\./);
-  await box.fill('Receipts: add them to a table with the shop and the total.');
+  // The rule sentence is kept in your rules too (#435).
+  await box.fill(
+    'Receipts: add them to a table with the shop and the total. From now on, file garden receipts under Garden.',
+  );
   await shot(page, testInfo, 'add-context');
   await page.getByRole('button', { name: 'Add to Bower' }).click();
 
@@ -359,8 +362,14 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
     ),
   ).toHaveText('5');
   // It waits in the inbox with the other instruction notes, under the
-  // Bower tab's Requests (the demo resets on a reload, so no `goto`).
+  // Bower tab's Requests (the demo resets on a reload, so no `goto`); the
+  // rule sentence is already in Rules, under its own topic.
   await navigate(page, /^Bower$/);
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'Rules' })
+      .getByRole('button', { name: /^Garden\s*1$/ }),
+  ).toBeVisible();
   await page.getByRole('tab', { name: 'Requests' }).click();
   await expect(
     page

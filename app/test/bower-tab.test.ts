@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EXAMPLES,
   examplesFor,
+  ruleSentences,
   sentenceKind,
   sinceLabel,
   waitingRequests,
@@ -193,5 +194,23 @@ describe('sentenceKind', () => {
     ]) {
       expect(sentenceKind(text)).toBe('job');
     }
+  });
+});
+
+describe('ruleSentences', () => {
+  it('finds the rule sentences in a longer text, as written', () => {
+    expect(
+      ruleSentences(
+        'Receipts: add them to a table. From now on, file receipts under Money.\nnever archive these! Is it always like this?',
+      ),
+    ).toEqual([
+      'From now on, file receipts under Money.',
+      'never archive these!',
+    ]);
+  });
+
+  it('finds none in a text without one', () => {
+    expect(ruleSentences('Just file these, please.')).toEqual([]);
+    expect(ruleSentences('')).toEqual([]);
   });
 });
