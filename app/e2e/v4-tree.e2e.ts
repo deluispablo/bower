@@ -6,7 +6,7 @@
 
 import type { Locator, Page } from '@playwright/test';
 
-import { expect, openHome, test, visible } from './demo.js';
+import { expect, navigate, openHome, test, visible } from './demo.js';
 
 /** The tree the Notes tab shows (phone) or the sidebar (desktop). */
 function tree(page: Page): Locator {
@@ -113,4 +113,43 @@ test('expanded folders survive a reload on the same device', async ({
   await expect(
     again.getByRole('button', { name: 'Expand Areas' }),
   ).toBeVisible();
+});
+
+test('after a tidy-up, the folder it filed into shows "<n> new" and its new rows show New', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  await page
+    .getByRole('dialog', { name: 'Is that everything?' })
+    .getByRole('button', { name: 'Yes, tidy up' })
+    .click();
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet.getByText('3 files processed')).toBeVisible({
+    timeout: 20_000,
+  });
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  // The phone's notifications prompt follows a first tidy-up.
+  const gotIt = page.getByRole('button', { name: 'Got it' });
+  if (await gotIt.isVisible()) await gotIt.click();
+  // In-app navigation: a reload would forget the run.
+  // On desktop the sidebar is the tree already.
+  if (testInfo.project.name === 'phone') await navigate(page, /^Notes$/);
+  const list = tree(page);
+  await expect(list).toBeVisible();
+
+  // Areas holds the two items the run filed (Garden and Home).
+  const areas = list.locator('a[href="/folder/2-Areas"]');
+  await expect(areas.locator('.new-tag')).toHaveText('2 new');
+  await expand(list, 'Areas');
+  await expand(list, 'Garden');
+  const garden = list.locator('a[href="/folder/2-Areas/Garden"]');
+  await expect(garden.locator('.new-tag')).toHaveText('1 new');
+  await expect(
+    list
+      .locator('a[href^="/note/"]', { hasText: 'Tomato seedlings' })
+      .locator('.new-tag'),
+  ).toHaveText('New');
 });
