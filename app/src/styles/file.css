@@ -227,3 +227,9 @@
   background: var(--color-surface);
   filter: none;
 }
+
+.file-caption {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

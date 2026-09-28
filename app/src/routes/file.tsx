@@ -18,39 +18,51 @@ import { useLocation, useRoute } from 'preact-iso';
 
 import { isDemo } from '../api.js';
 import { BackLink } from '../components/back-link.js';
+import { DrivePreview } from '../components/drive-preview.js';
+import { FolderMark } from '../components/folder-mark.js';
 import {
   IconClock,
   IconDoc,
   IconFolder,
-  IconImage,
-  IconPdf,
   IconSparkle,
 } from '../components/icons.js';
+import { KindBadge } from '../components/kind-badge.js';
 import { MoreButton } from '../components/more-button.js';
 import { loadImage } from '../components/note-body.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import {
+  TablePreview,
+  dataRowCount,
+  parseCsv,
+} from '../components/table-preview.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
-import { exportFile, thumbnailLinkOf } from '../drive.js';
+import { exportFile, getBlob, getText, thumbnailLinkOf } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH, originOf } from '../file-origin.js';
 import {
   DOC_PREVIEW_MIME,
+  kindWord,
+  metaFacts,
   previewKind,
   thumbnailUrl,
-  typeLine,
   whenLine,
 } from '../file-preview.js';
+import { formatPolicy } from '../formats.js';
 import { imageMimeType } from '../markdown/embeds.js';
 import {
   breadcrumb,
+  displayPath,
   driveFileUrl,
   folderHref,
   folderOf,
+  paraKindOf,
 } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
+import { loadNoteMeta } from '../note-meta.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
+import type { FileKind } from '../vault-index.js';
 import { NotFound } from './not-found.js';
 import '../styles/markdown.css';
 import '../styles/file.css';
@@ -60,6 +72,10 @@ type PreviewLoad =
   | { status: 'image'; url: string }
   | { status: 'thumbnail'; url: string }
   | { status: 'text'; text: string }
+  /** A CSV, parsed: the header row, then the data. */
+  | { status: 'table'; rows: string[][] }
+  /** Drive's own preview frame (Office files and video). */
+  | { status: 'drive' }
   /** Drive has no picture of this file. */
   | { status: 'none' }
   /** The preview could not be fetched (offline, or Drive said no). */
@@ -103,6 +119,17 @@ function usePreview(file: DriveFile | undefined): PreviewLoad {
         objectUrl = URL.createObjectURL(new Blob([blob], { type }));
         setLoad({ status: 'image', url: objectUrl });
       }, fail);
+    } else if (kind === 'drive' || kind === 'none') {
+      setLoad({ status: kind });
+    } else if (kind === 'table' || kind === 'plain') {
+      getText(file.id).then((text) => {
+        if (cancelled) return;
+        setLoad(
+          kind === 'table'
+            ? { status: 'table', rows: parseCsv(text) }
+            : { status: 'text', text },
+        );
+      }, fail);
     } else if (kind === 'text') {
       exportFile(file.id, DOC_PREVIEW_MIME)
         .then((blob) => blob.text())
@@ -128,14 +155,6 @@ function usePreview(file: DriveFile | undefined): PreviewLoad {
   }, [id, version]);
 
   return load;
-}
-
-/** The type line's icon, as on a folder row. */
-function KindIcon({ file }: { file: DriveFile }): JSX.Element {
-  const kind = fileKind(file);
-  if (kind === 'pdf') return <IconPdf />;
-  if (kind === 'photo' || kind === 'image') return <IconImage />;
-  return <IconDoc />;
 }
 
 interface PreviewProps {
@@ -176,6 +195,20 @@ function Preview({
             onError={onThumbnailError}
           />
         </div>
+      );
+    case 'table':
+      return <TablePreview rows={load.rows} />;
+    case 'drive':
+      return (
+        <DrivePreview
+          id={file.id}
+          title={title}
+          label={
+            fileKind(file) === 'video'
+              ? 'Plays from Google Drive'
+              : 'Preview from Google Drive'
+          }
+        />
       );
     case 'text':
       return load.text.trim() === '' ? (
@@ -231,6 +264,171 @@ function Crumb({ crumbs, title }: CrumbProps): JSX.Element {
   );
 }
 
+/** Open in Drive as a button; in the demo, a greyed one with the same sentence as elsewhere. */
+function OpenInDrive({
+  file,
+  label,
+  secondary = false,
+}: {
+  file: DriveFile;
+  label: string;
+  secondary?: boolean;
+}): JSX.Element {
+  const cls = `button${secondary ? ' file-button-secondary' : ''}`;
+  if (isDemo()) {
+    return (
+      <div class="file-actions">
+        <button type="button" class={cls} disabled aria-disabled="true">
+          {label}
+        </button>
+        <span class="file-caption">{NOT_IN_DEMO_DRIVE}</span>
+      </div>
+    );
+  }
+  return (
+    <div class="file-actions">
+      <a class={cls} href={driveFileUrl(file)} target="_blank" rel="noopener">
+        {label}
+      </a>
+    </div>
+  );
+}
+
+const KEPT_LINE_EXCEL =
+  'Bower keeps it, not reads it; editing happens in Drive or Excel.';
+
+/** The sentence a kind has on its screen (`formats.ts`), before the preview. */
+function FileNotice({
+  file,
+  kind,
+}: {
+  file: DriveFile;
+  kind: FileKind;
+}): JSX.Element | null {
+  const sayHref = `/bower?text=${encodeURIComponent(`About ${file.name}: `)}`;
+  if (kind === 'video' || kind === 'audio') {
+    const cant =
+      kind === 'video'
+        ? "Bower can't watch videos."
+        : "Bower can't listen to audio.";
+    const what = kind === 'video' ? 'shows' : 'is';
+    return (
+      <div class="file-notice">
+        <p>
+          <b>{cant}</b> It filed this one by its name and the date it was taken.
+          Tell Bower what it {what} and it will write that down with it.
+        </p>
+        <div class="file-actions">
+          <a class="button" href={sayHref}>
+            Say what it is
+          </a>
+        </div>
+      </div>
+    );
+  }
+  if (kind === 'excel') return null;
+  const notice = formatPolicy(kind).fileNotice;
+  return notice === null ? null : <p class="file-notice">{notice}</p>;
+}
+
+/** A ZIP, or a file Bower has no way to show (board `Phone-File-NoPreview`). */
+function NoPreview({
+  file,
+  kind,
+}: {
+  file: DriveFile;
+  kind: FileKind;
+}): JSX.Element {
+  const [failed, setFailed] = useState(false);
+  const download = (): void => {
+    setFailed(false);
+    getBlob(file.id).then(
+      (blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = file.name;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      (err: unknown) => {
+        console.error(err);
+        setFailed(true);
+      },
+    );
+  };
+  return (
+    <div class="file-nopreview">
+      {kind === 'zip' && (
+        <p class="file-notice">
+          <b>A ZIP archive holds other files packed together.</b>
+        </p>
+      )}
+      <p class="file-preview-note">
+        It can&rsquo;t be shown here. Open it in Drive to see what is inside, or
+        download it.
+      </p>
+      <div class="file-actions">
+        <OpenInDrive file={file} label="Open in Drive" />
+        <button
+          type="button"
+          class="button file-button-secondary"
+          onClick={download}
+        >
+          Download
+        </button>
+      </div>
+      {failed && (
+        <p class="file-preview-note" role="alert">
+          Could not download it. Try again in a moment.
+        </p>
+      )}
+      {kind === 'zip' && (
+        <p class="file-tip">
+          <IconSparkle />
+          <span>
+            Next time, add the photos themselves: Bower can file and describe
+            photos, not what is inside a ZIP.
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A PDF's page count, from its companion note's `pages` (`Name.pdf` → `Name.md`). */
+function usePages(
+  file: DriveFile | undefined,
+  byPath: ReadonlyMap<string, DriveFile> | undefined,
+): number | undefined {
+  const [pages, setPages] = useState<number | undefined>(undefined);
+  const path = file?.path;
+  const isPdf = file !== undefined && fileKind(file) === 'pdf';
+  const companion =
+    isPdf && path !== undefined && byPath !== undefined
+      ? byPath.get(path.replace(/\.[^./]+$/, '.md'))
+      : undefined;
+  const id = companion?.id;
+  const version = companion?.modifiedTime;
+
+  useEffect(() => {
+    setPages(undefined);
+    if (companion === undefined) return;
+    let cancelled = false;
+    loadNoteMeta(companion).then(
+      (meta) => {
+        if (!cancelled) setPages(meta.pages);
+      },
+      (err: unknown) => console.error(err),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [id, version]);
+
+  return pages;
+}
+
 export function FileScreen(): JSX.Element {
   const { params } = useRoute();
   const { route } = useLocation();
@@ -242,6 +440,7 @@ export function FileScreen(): JSX.Element {
   const file = index?.byId.get(id);
   const isNote = file !== undefined && fileKind(file) === 'note';
   const load = usePreview(file);
+  const pages = usePages(file, index?.byPath);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -305,8 +504,15 @@ export function FileScreen(): JSX.Element {
 
   const origin = originOf(file, catalogue);
   const folder = folderOf(file.path);
+  const kind = fileKind(file);
+  const shows = previewKind(file);
+  const policy = formatPolicy(kind);
   const preview: PreviewLoad =
     thumbnailBroken && load.status === 'thumbnail' ? { status: 'none' } : load;
+  const rows = load.status === 'table' ? dataRowCount(load.rows) : undefined;
+  const facts = metaFacts(file, { pages, rows });
+  const topFolder = folder.split('/')[0] ?? '';
+  const para = paraKindOf(topFolder);
   const askHref = `/bower?text=${encodeURIComponent(
     `Summarise [[${file.name}]] and list what matters in it`,
   )}`;
@@ -326,7 +532,7 @@ export function FileScreen(): JSX.Element {
               kind="file"
               file={file}
               title={title}
-              typeLabel={FILE_KIND_LABELS[fileKind(file)]}
+              typeLabel={FILE_KIND_LABELS[kind]}
               askName={file.name}
               onClose={() => setMenuOpen(false)}
             />
@@ -336,13 +542,17 @@ export function FileScreen(): JSX.Element {
 
       <ul class="file-props">
         <li>
-          <KindIcon file={file} />
-          {typeLine(file)}
+          <KindBadge kind={kind} file={file} />
+          {[kindWord(file), ...facts].join(' · ')}
         </li>
         {folder !== '' && (
           <li>
-            <IconFolder />
-            <a href={folderHref(folder)}>{folder.split('/').join(' / ')}</a>
+            {para === null ? (
+              <IconFolder />
+            ) : (
+              <FolderMark kind={para} size={18} />
+            )}
+            <a href={folderHref(folder)}>{displayPath(folder)}</a>
           </li>
         )}
         <li>
@@ -351,23 +561,38 @@ export function FileScreen(): JSX.Element {
         </li>
       </ul>
 
-      <Preview
-        file={file}
-        title={title}
-        load={preview}
-        onThumbnailError={() => setThumbnailBroken(true)}
-      />
+      <FileNotice file={file} kind={kind} />
 
-      <p class="file-tip">
-        <IconSparkle />
-        <span>
-          <b>Want a note on it?</b>{' '}
-          {origin === 'filed' ? 'Bower filed this as it is. ' : ''}Ask for one:{' '}
-          <a href={askHref}>
-            &ldquo;Summarise this and list what matters&rdquo;
-          </a>
-        </span>
-      </p>
+      {shows === 'none' ? (
+        <NoPreview file={file} kind={kind} />
+      ) : (
+        <Preview
+          file={file}
+          title={title}
+          load={preview}
+          onThumbnailError={() => setThumbnailBroken(true)}
+        />
+      )}
+      {kind === 'excel' && (
+        <>
+          <OpenInDrive file={file} label="Open in Drive to edit" />
+          <p class="file-caption">{KEPT_LINE_EXCEL}</p>
+        </>
+      )}
+
+      {policy.bowerReads === 'yes' && (
+        <p class="file-tip">
+          <IconSparkle />
+          <span>
+            <b>Want a note on it?</b>{' '}
+            {origin === 'filed' ? 'Bower filed this as it is. ' : ''}Ask for
+            one:{' '}
+            <a href={askHref}>
+              &ldquo;Summarise this and list what matters&rdquo;
+            </a>
+          </span>
+        </p>
+      )}
     </section>
   );
 }
