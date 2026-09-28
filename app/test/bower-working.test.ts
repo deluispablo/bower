@@ -9,6 +9,7 @@ import {
 import {
   doneNotes,
   SHEET_LINGER_MS,
+  nothingLost,
   sheetVisible,
   startedAgo,
   workingStateFor,
@@ -54,12 +55,26 @@ describe('sheetVisible', () => {
     expect(sheetVisible('done', SHEET_LINGER_MS, false)).toBe(true);
   });
 
-  it('lingers 3 s after failed, stale or over quota', () => {
-    for (const phase of ['failed', 'stale', 'quota'] as const) {
-      expect(sheetVisible(phase, 0, false)).toBe(true);
-      expect(sheetVisible(phase, SHEET_LINGER_MS - 1, false)).toBe(true);
-      expect(sheetVisible(phase, SHEET_LINGER_MS, false)).toBe(false);
+  it('stays after a failure or a stale run until dismissed (#316)', () => {
+    for (const phase of ['failed', 'stale'] as const) {
+      expect(sheetVisible(phase, 10 * 60_000, false)).toBe(true);
+      expect(sheetVisible(phase, 0, true)).toBe(false);
     }
+  });
+
+  it('lingers 3 s over quota', () => {
+    expect(sheetVisible('quota', 0, false)).toBe(true);
+    expect(sheetVisible('quota', SHEET_LINGER_MS - 1, false)).toBe(true);
+    expect(sheetVisible('quota', SHEET_LINGER_MS, false)).toBe(false);
+  });
+
+  it('says nothing was lost with the count (#316)', () => {
+    expect(nothingLost(3)).toBe(
+      'Nothing was lost: your 3 things are still in the inbox, untouched.',
+    );
+    expect(nothingLost(1)).toBe(
+      'Nothing was lost: your 1 thing is still in the inbox, untouched.',
+    );
   });
 
   it('never shows once dismissed', () => {

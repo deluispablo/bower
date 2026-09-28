@@ -376,3 +376,13 @@
     transform: translateY(0);
   }
 }
+
+/* The failure's two choices (Phone-Working-Failed, #316): Try again, then
+   Not now, stacked and centred like the confirmation sheet's. */
+.working-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
