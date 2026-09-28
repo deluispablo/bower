@@ -450,7 +450,7 @@ export function Home(): JSX.Element {
   const recent =
     index === null ? [] : recentNotes(index, RECENT_ROWS, showAppFiles);
   const recentTitles = useNoteTitles(recent);
-  const { ids: newIds, isNew } = useNew();
+  const news = useNew();
   // #506: the same total the working sheet counts against, so "N things"
   // here never runs one ahead of it — the context note Add may have left
   // in the inbox is not one of the "things" either place counts.
@@ -566,7 +566,7 @@ export function Home(): JSX.Element {
           state={state}
           run={lastFinished}
           now={now}
-          newCount={newIds.size}
+          newCount={news.ids.size}
         />
         {state === 'loading' ? (
           <div
@@ -659,7 +659,7 @@ export function Home(): JSX.Element {
           <RecentRows
             notes={recent}
             titles={recentTitles}
-            isNew={isNew}
+            isNew={(id) => news.isNew(id)}
             now={now}
           />
         </div>

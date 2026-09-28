@@ -111,6 +111,7 @@ describe('RecentRows (#617)', () => {
         name: 'Arlington Road, 2 bed.md',
         mimeType: 'text/markdown',
         path: '1-Projects/Flat hunt/Arlington Road, 2 bed.md',
+        parents: [],
         modifiedTime: '2026-09-27T09:42:00Z',
       },
       {
@@ -118,6 +119,7 @@ describe('RecentRows (#617)', () => {
         name: 'Shopping.md',
         mimeType: 'text/markdown',
         path: 'Shopping.md',
+        parents: [],
         modifiedTime: '2026-09-27T09:00:00Z',
       },
     ];
