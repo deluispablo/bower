@@ -88,7 +88,7 @@ async function settle(): Promise<void> {
 }
 
 async function mount(props: { rootMeanings?: boolean } = {}): Promise<void> {
-  await act(async () => {
+  await act(() => {
     render(h(Tree, { index: buildVaultIndex(files), ...props }), host);
   });
   await settle();
