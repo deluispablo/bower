@@ -1512,6 +1512,13 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(2)).toHaveAttribute('href', /^\/note\//);
   await shot(page, testInfo, 'folder-project');
 
+  // The end-of-folder tip is generic (#464): it used to name "the flats I
+  // saved" and "rent and size" on every project folder, Kitchen Refresh
+  // included, hard-coding the board's own Flat hunt example.
+  await expect(page.locator('.folder-tip')).toHaveText(
+    'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.',
+  );
+
   // The Ask Bower chip opens the Bower tab's box with the folder named,
   // and nothing else from the folder (#354).
   await page.getByRole('link', { name: 'Ask Bower about it' }).click();
