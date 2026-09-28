@@ -253,12 +253,21 @@ describe('Drive chip and end-of-folder tip (#453, Phone-Folder-Project board)', 
     expect(chip?.textContent).toBe('Drive');
   });
 
-  it('ends the screen with the tip to ask Bower for more', () => {
+  // #464: the copy used to name "the flats I saved" and "rent and size"
+  // regardless of which folder it sat under -- a hard-coded reference to
+  // the board's own Flat hunt example. The two examples are generic now,
+  // so the exact same tip fits a different folder ("Cooking") too.
+  it('ends the screen with a generic tip to ask Bower for more, on any project folder', () => {
     route.params.path = '1-Projects/Flat hunt';
     mount();
-    expect(root.querySelector('.folder-tip')?.textContent).toBe(
-      'Want more from this folder? Ask Bower: “Compare the flats I saved” or “From now on, pull rent and size out of every listing”.',
-    );
+    const tip =
+      'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.';
+    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
+    expect(tip).not.toMatch(/flat|rent|listing/i);
+
+    route.params.path = '2-Areas/Cooking';
+    mount();
+    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
   });
 
   it('has no tip on a root folder', () => {

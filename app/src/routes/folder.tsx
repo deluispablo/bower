@@ -377,9 +377,9 @@ function FolderBody({
         <p class="folder-tip">
           <IconSparkle />
           <span>
-            Want more from this folder? Ask Bower: &ldquo;Compare the flats I
-            saved&rdquo; or &ldquo;From now on, pull rent and size out of every
-            listing&rdquo;.
+            Want more from this folder? Ask Bower: &ldquo;Compare what I saved
+            here&rdquo; or &ldquo;From now on, pull the dates out of everything
+            in this folder&rdquo;.
           </span>
         </p>
       )}
