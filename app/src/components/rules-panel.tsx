@@ -33,7 +33,7 @@ const RULES_PATH = 'Rules.md';
 /** How many rules an open group shows before "n more in <topic>". */
 export const RULES_SHOWN = 3;
 
-type TextLoad =
+export type TextLoad =
   | { status: 'none' }
   | { status: 'loading' }
   | { status: 'ready'; text: string }
@@ -42,7 +42,7 @@ type TextLoad =
 
 /** The text of `file`, read again whenever the listing gives it a new
  * `modifiedTime` (after a write, `recordNote` patches it). */
-function useFileText(file: DriveFile | undefined): TextLoad {
+export function useFileText(file: DriveFile | undefined): TextLoad {
   const { getNoteText } = useVault();
   const [load, setLoad] = useState<TextLoad>({ status: 'loading' });
 

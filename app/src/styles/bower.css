@@ -287,9 +287,45 @@
   outline-offset: 2px;
 }
 
+/* Answered and Rule kept: something came of it (board: green). */
+.bower-state--answered,
 .bower-state--kept {
-  background: rgb(95 207 188 / 0.2);
+  background: rgb(126 211 161 / 0.2);
   color: var(--color-text);
+}
+
+/* Tidying up: the run in flight has it (board: blue). */
+.bower-state--tidying {
+  background: rgb(147 197 253 / 0.2);
+  color: var(--color-text);
+}
+
+/* The row's icon takes the state's hue; the chip carries the word. */
+.bower-request--waiting > .icon {
+  color: var(--color-accent);
+}
+
+.bower-request--tidying > .icon {
+  color: var(--color-info);
+}
+
+.bower-request--answered > .icon,
+.bower-request--kept > .icon {
+  color: var(--color-success);
+}
+
+/* Edit, Remove and Do it now under a waiting request. */
+.bower-request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.chip.bower-request-now {
+  border-color: var(--color-brand);
+  color: var(--color-link);
+  font-weight: var(--weight-bold);
 }
 
 /* A state chip: a word on a tint, never the hue alone (C.11). */

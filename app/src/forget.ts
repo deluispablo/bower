@@ -3,7 +3,8 @@
  * IndexedDB vault cache, the two Cache Storage buckets the service worker
  * and the Web Share Target use, the in-memory Drive token, the per-user
  * local preferences (keeping `theme`, a device setting rather than a user
- * one), the Tell Bower 'sent' history, and the recent-searches list.
+ * one), the list of sent sentences older versions kept, and the
+ * recent-searches list.
  *
  * `forgetDevice` takes its work as injected dependencies so it is
  * unit-tested hermetically, without a real IndexedDB, Cache Storage or
@@ -37,7 +38,7 @@ export interface ForgetDeviceDeps {
   invalidateToken: () => void;
   /** Drops per-user local preferences, keeping `theme` (`prefs.ts`). */
   resetPrefs: () => void;
-  /** Drops the local Tell Bower 'sent' history (`clearSent` in `tell.ts`). */
+  /** Drops the sent list older versions kept (`clearSent` in `tell.ts`). */
   clearSent: () => void;
   /** Drops the local recent-searches list (`clearRecentSearches` in `search.ts`). */
   clearRecentSearches: () => void;

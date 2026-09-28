@@ -25,11 +25,11 @@ export function moreMenuMeta(typeLabel: string, path: string): string {
 /**
  * "Ask Bower about this": the Bower tab's box, prefilled with the thing's
  * name and nothing else from it. A note or a file is named as a
- * `[[wikilink]]`; a folder by its plain name, as the folder screen's own
- * chip does.
+ * `[[wikilink]]`; a folder as "About <folder>: " (#354), the same words
+ * for the folder screen's "Ask Bower about it" chip and its More menu.
  */
 export function askBowerHref(kind: MoreMenuKind, name: string): string {
-  const text = kind === 'folder' ? `${name} ` : `[[${name}]] `;
+  const text = kind === 'folder' ? `About ${name}: ` : `[[${name}]] `;
   return `/bower?text=${encodeURIComponent(text)}`;
 }
 

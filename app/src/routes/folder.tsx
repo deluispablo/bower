@@ -50,6 +50,7 @@ import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH, originLine, originOf } from '../file-origin.js';
 import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
+import { askBowerHref } from '../more-menu.js';
 import type { Origin } from '../file-origin.js';
 import {
   breadcrumb,
@@ -216,7 +217,9 @@ function FolderBody({
   onToggleMenu,
   onCloseMenu,
 }: FolderBodyProps): JSX.Element {
-  const tellHref = `/bower?text=${encodeURIComponent(`${contents.name} `)}`;
+  // "About <folder>: " and nothing else from the folder (#354), through
+  // the same `/bower?text=` link the More menu's rows use.
+  const tellHref = askBowerHref('folder', contents.name);
   const now = Date.now();
   const titles = useNoteTitles(contents.notes);
   const emptyState = folderEmptyState(contents);
@@ -322,7 +325,7 @@ function FolderBody({
                 emptyState.elsewhere.count,
                 contents.noteCount > 0 ? 'note' : 'file',
               )}{' '}
-              in {emptyState.elsewhere.subfolderName}
+              in {emptyState.elsewhere.subfolderName ?? 'its folders'}
             </p>
           ) : (
             <div class="folder-empty">

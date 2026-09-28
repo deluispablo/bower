@@ -338,7 +338,7 @@ describe('NoteMenu', () => {
       expect.stringContaining('Copy link'),
     ]);
     expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
-      `/bower?text=${encodeURIComponent('Flat hunt ')}`,
+      `/bower?text=${encodeURIComponent('About Flat hunt: ')}`,
     );
     expect(rowByText('Open in Drive').getAttribute('href')).toBe(
       'https://drive.google.com/drive/folders/folder-1',

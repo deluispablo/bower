@@ -12,7 +12,7 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Me } from '../src/api.js';
+import type { Me, Run } from '../src/api.js';
 import type { CreateTextFileOptions, DriveFile } from '../src/drive.js';
 
 const me: Me = {
@@ -27,12 +27,19 @@ interface State {
   files: DriveFile[];
   fetchedAt: string | null;
   query: Record<string, string>;
+  /** Note contents by id, for `getNoteText` and `openNoteForEdit`. */
+  notes: Record<string, string>;
+  phase: string;
+  run: Run | null;
 }
 
 const state = vi.hoisted((): State => ({
   files: [],
   fetchedAt: '2026-09-27T09:00:00.000Z',
   query: {},
+  notes: {},
+  phase: 'idle',
+  run: null,
 }));
 
 type CreateTextFile = (
@@ -54,7 +61,17 @@ const createTextFile = vi.fn<CreateTextFile>((_parent, name) =>
 
 const refresh = vi.fn(() => Promise.resolve());
 // Stable across renders, as the vault's own callbacks are.
-const getNoteText = vi.fn(() => Promise.resolve(''));
+const getNoteText = vi.fn((id: string) =>
+  Promise.resolve(state.notes[id] ?? ''),
+);
+const openNoteForEdit = vi.fn((id: string) =>
+  Promise.resolve({ text: state.notes[id] ?? '', modifiedTime: 'T1' }),
+);
+const saveEditedNote = vi.fn(() =>
+  Promise.resolve({ text: '', modifiedTime: 'T2' }),
+);
+const deleteFile = vi.fn(() => Promise.resolve());
+const doItNow = vi.fn();
 const editRule = vi.fn(() => Promise.resolve());
 const decideProposal = vi.fn(() => Promise.resolve());
 const keepRule = vi.fn<(sentence: string) => Promise<string>>(() =>
@@ -64,6 +81,11 @@ const keepRule = vi.fn<(sentence: string) => Promise<string>>(() =>
 vi.mock('../src/drive.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/drive.js')>()),
   createTextFile,
+  deleteFile,
+}));
+
+vi.mock('../src/run-store.js', () => ({
+  useRun: () => ({ phase: state.phase, run: state.run, doItNow }),
 }));
 
 vi.mock('preact-iso', () => ({
@@ -82,6 +104,8 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
     fetchedAt: state.fetchedAt,
     refresh,
     getNoteText,
+    openNoteForEdit,
+    saveEditedNote,
     editRule,
     decideProposal,
     keepRule,
@@ -119,7 +143,13 @@ beforeEach(() => {
   state.files = [];
   state.fetchedAt = '2026-09-27T09:00:00.000Z';
   state.query = {};
+  state.notes = {};
+  state.phase = 'idle';
+  state.run = null;
   createTextFile.mockClear();
+  saveEditedNote.mockClear();
+  deleteFile.mockClear();
+  doItNow.mockClear();
   refresh.mockClear();
   keepRule.mockClear();
 });
@@ -298,5 +328,126 @@ describe('a rule kept at once (#343)', () => {
     expect(box().value).toBe('Never archive Finance');
     expect(createTextFile).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe('Requests (#344)', () => {
+  const question: DriveFile = {
+    id: 'Q_ID',
+    name: 'Bower - 2026-09-27 0815 Which flat should I visit.md',
+    mimeType: 'text/markdown',
+    parents: ['INBOX_ID'],
+    path: '0-Inbox/Bower - 2026-09-27 0815 Which flat should I visit.md',
+    modifiedTime: '2026-09-27T08:15:00.000Z',
+  };
+  const context: DriveFile = {
+    ...question,
+    id: 'C_ID',
+    name: 'Bower - 2026-09-27 0816 Context.md',
+    path: '0-Inbox/Bower - 2026-09-27 0816 Context.md',
+  };
+  const head =
+    '---\ntags: [instruction]\ndate: 2026-09-27T08:15:00.000Z\nvia: app\nkind: request\n---\n\n';
+
+  function row(text: string): HTMLLIElement | undefined {
+    return [...root.querySelectorAll('#bower-panel-requests li')].find((li) =>
+      li.textContent?.includes(text),
+    ) as HTMLLIElement | undefined;
+  }
+
+  function button(within: Element | undefined, name: string) {
+    return [...(within?.querySelectorAll('button') ?? [])].find(
+      (b) => b.textContent?.trim() === name,
+    );
+  }
+
+  /** Mounts, then lets the notes' words load. */
+  async function mountRead(): Promise<void> {
+    await mount();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  beforeEach(() => {
+    state.files = [question, context];
+    state.notes = {
+      Q_ID: `${head}Which flat should I visit first?\n`,
+      C_ID: `${head.replace('request', 'context')}Receipts\n\n## Applies to\n\n- a.pdf\n`,
+    };
+  });
+
+  it('shows each waiting note in its words, with Edit, Remove and Do it now', async () => {
+    await mountRead();
+    const waiting = row('Which flat should I visit first?');
+    expect(waiting?.textContent).toContain('Waiting · question');
+    expect(waiting?.textContent).toContain('goes with the next tidy-up');
+    for (const name of ['Edit', 'Remove', 'Do it now']) {
+      expect(button(waiting, name)).toBeDefined();
+    }
+    // Add's context note: named for what it is, no Edit.
+    const about = row('About the files you added');
+    expect(about?.textContent).toContain('Waiting');
+    expect(button(about, 'Edit')).toBeUndefined();
+    expect(button(about, 'Remove')).toBeDefined();
+  });
+
+  it('Do it now opens the confirmation with the count of requests', async () => {
+    await mountRead();
+    await act(() => {
+      button(row('Which flat should I visit first?'), 'Do it now')?.click();
+    });
+    expect(doItNow).toHaveBeenCalledWith(2);
+  });
+
+  it('Edit fills the box, and Send rewrites the note with its frontmatter', async () => {
+    await mountRead();
+    await act(async () => {
+      button(row('Which flat should I visit first?'), 'Edit')?.click();
+      await Promise.resolve();
+    });
+    expect(box().value).toBe('Which flat should I visit first?');
+    expect(root.textContent).toContain('Changing a request');
+
+    await act(() => {
+      box().value = 'Which flat is closest to work?';
+      box().dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      buttonNamed('Send')?.click();
+      await Promise.resolve();
+    });
+    expect(saveEditedNote).toHaveBeenCalledWith(
+      'Q_ID',
+      `${head}Which flat is closest to work?\n`,
+      { baseModifiedTime: 'T1' },
+    );
+    expect(createTextFile).not.toHaveBeenCalled();
+    expect(box().value).toBe('');
+  });
+
+  it('Remove sends the note to the Trash and takes it off the list', async () => {
+    await mountRead();
+    await act(async () => {
+      button(row('Which flat should I visit first?'), 'Remove')?.click();
+      await Promise.resolve();
+    });
+    expect(deleteFile).toHaveBeenCalledWith('Q_ID');
+    expect(refresh).toHaveBeenCalled();
+    expect(row('Which flat should I visit first?')).toBeUndefined();
+  });
+
+  it('while a run is in flight: Tidying up, and nothing to press', async () => {
+    state.phase = 'running';
+    state.run = {
+      state: 'running',
+      requestedAt: '2026-09-27T09:00:00.000Z',
+      startedAt: '2026-09-27T09:00:00.000Z',
+    };
+    await mountRead();
+    const tidying = row('Which flat should I visit first?');
+    expect(tidying?.textContent).toContain('Tidying up · question');
+    expect(tidying?.textContent).toMatch(/started /);
+    expect(tidying?.querySelectorAll('button')).toHaveLength(0);
   });
 });

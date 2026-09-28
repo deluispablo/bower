@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CONTEXT_TITLE,
   EXAMPLES,
+  dayLabel,
   examplesFor,
+  requestRows,
   ruleSentences,
   sentenceKind,
   sinceLabel,
-  waitingRequests,
+  stateLabel,
 } from '../src/bower-tab.js';
+import type { RequestsInput, SentRequest } from '../src/bower-tab.js';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
-import type { SentItem } from '../src/tell.js';
+import { allRules, parseRules } from '../src/rules.js';
+import { instructionNote } from '../src/tell.js';
 
 function file(path: string, modifiedTime?: string): DriveFile {
   const name = path.slice(path.lastIndexOf('/') + 1);
@@ -44,107 +49,199 @@ describe('examplesFor', () => {
   });
 });
 
-describe('waitingRequests', () => {
-  const name = 'Bower - 2026-09-27 0815 What do I still need for Lisbon.md';
+describe('requestRows', () => {
+  const question = 'Bower - 2026-09-27 0815 What do I still need for Lisbon.md';
+  const context = 'Bower - 2026-09-27 0900 Context.md';
+  // The times in the names are local, as `instructionFileName` writes them.
+  const questionAt = new Date(2026, 8, 27, 8, 15).toISOString();
+  const contextAt = new Date(2026, 8, 27, 9, 0).toISOString();
+  const answeredAt = '2026-09-21T10:00:00.000Z';
 
-  it('lists an instruction note directly in the inbox, with the words as sent', () => {
-    const sent: SentItem[] = [
+  /** A fixture inbox: a question and Add's context note waiting, a
+   * processed note, a file, an answer, and the files `Answers/` always
+   * has. */
+  const files: DriveFile[] = [
+    file(`0-Inbox/${question}`, '2026-09-27T12:00:00.000Z'),
+    file(`0-Inbox/${context}`),
+    file('0-Inbox/Processed/Bower - 2026-09-20 0930 Start a reading list.md'),
+    file('0-Inbox/Tomato seedlings.md'),
+    file('Clippings/Bower - 2026-09-27 0815 A clipped page.md'),
+    {
+      ...file('0-Inbox/Bower - 2026-09-27 0815 Folder.md'),
+      mimeType: FOLDER_MIME,
+    },
+    file(
+      'Answers/2026-09-21 Which subscriptions renew this autumn.md',
+      answeredAt,
+    ),
+    file('Answers/_Answers.md'),
+    file('Answers/Bower - Proposals.md'),
+  ];
+
+  const texts = new Map([
+    [
+      `0-Inbox/${question}`,
+      instructionNote(
+        'What do I still need to sort out for the Lisbon trip?',
+        new Date(questionAt),
+        'request',
+      ),
+    ],
+    [
+      `0-Inbox/${context}`,
+      instructionNote(
+        'Receipts: add them to a table',
+        new Date(contextAt),
+        'context',
+      ),
+    ],
+  ]);
+
+  const rules = allRules(
+    parseRules(
+      [
+        '## Money',
+        "- Never archive Money (owner's request, 2026-09-27)",
+        '- ~~Receipts go to Money~~ (paused 2026-09-26)',
+        '- Tag bills (accepted suggestion, 2026-09-12)',
+        '',
+      ].join('\n'),
+    ),
+  );
+
+  const base: RequestsInput = {
+    files,
+    fetchedAt: LISTED_AT,
+    texts,
+    justSent: [],
+    runSince: null,
+    rules,
+    justKept: [],
+  };
+
+  it('derives every state from the folder, newest first', () => {
+    expect(requestRows(base)).toEqual([
       {
-        name,
-        text: 'What do I still need for Lisbon?\nThanks',
-        sentAt: '2026-09-27T08:15:00.000Z',
+        key: `request-${context}`,
+        state: 'waiting',
+        text: CONTEXT_TITLE,
+        kind: 'context',
+        since: contextAt,
+        fileId: `0-Inbox/${context}`,
       },
-    ];
-    expect(
-      waitingRequests({
-        files: [file(`0-Inbox/${name}`, '2026-09-27T08:15:30.000Z')],
-        fetchedAt: LISTED_AT,
-        sent,
-        justSent: [],
-      }),
-    ).toEqual([
       {
-        name,
-        text: 'What do I still need for Lisbon?',
-        since: '2026-09-27T08:15:00.000Z',
+        key: `request-${question}`,
+        state: 'waiting',
+        text: 'What do I still need to sort out for the Lisbon trip?',
+        kind: 'question',
+        since: questionAt,
+        fileId: `0-Inbox/${question}`,
+      },
+      {
+        key: 'rule-1',
+        state: 'kept',
+        text: 'Never archive Money',
+        kind: 'rule',
+        since: new Date(2026, 8, 27).toISOString(),
+        fileId: null,
+      },
+      {
+        key: 'answer-Answers/2026-09-21 Which subscriptions renew this autumn.md',
+        state: 'answered',
+        text: 'Which subscriptions renew this autumn',
+        kind: 'job',
+        since: answeredAt,
+        fileId: 'Answers/2026-09-21 Which subscriptions renew this autumn.md',
       },
     ]);
   });
 
-  it('falls back to the title in the name when this device did not send it', () => {
-    const [request] = waitingRequests({
-      files: [file(`0-Inbox/${name}`, '2026-09-27T08:15:30.000Z')],
-      fetchedAt: LISTED_AT,
-      sent: [],
-      justSent: [],
+  it('falls back to the title in the name while a note is not read', () => {
+    const rows = requestRows({ ...base, texts: new Map() });
+    expect(rows.map((row) => [row.text, row.kind])).toEqual([
+      [CONTEXT_TITLE, 'context'],
+      ['What do I still need for Lisbon', 'job'],
+      ['Never archive Money', 'rule'],
+      ['Which subscriptions renew this autumn', 'job'],
+    ]);
+  });
+
+  it('marks what was waiting before the run in flight as Tidying up', () => {
+    const rows = requestRows({
+      ...base,
+      runSince: new Date(2026, 8, 27, 8, 30).toISOString(),
     });
-    expect(request?.text).toBe('What do I still need for Lisbon');
-    expect(request?.since).toBe('2026-09-27T08:15:30.000Z');
+    const states = new Map(rows.map((row) => [row.fileId, row.state]));
+    expect(states.get(`0-Inbox/${question}`)).toBe('tidying');
+    // Sent after the run was asked for: it waits for the next one.
+    expect(states.get(`0-Inbox/${context}`)).toBe('waiting');
   });
 
-  it('leaves out processed notes, other inbox files and folders', () => {
-    const files: DriveFile[] = [
-      file(`0-Inbox/Processed/${name}`),
-      file('0-Inbox/Tomato seedlings.md'),
-      file('Clippings/Bower - 2026-09-27 0815 A clipped page.md'),
-      {
-        ...file('0-Inbox/Bower - 2026-09-27 0815 Folder.md'),
-        mimeType: FOLDER_MIME,
-      },
-    ];
-    expect(
-      waitingRequests({ files, fetchedAt: LISTED_AT, sent: [], justSent: [] }),
-    ).toEqual([]);
-  });
-
-  it('counts a note sent after the listing as waiting, newest first', () => {
-    const later: SentItem = {
+  it('counts a sentence sent after the listing as waiting, with its words', () => {
+    const later: SentRequest = {
       name: 'Bower - 2026-09-27 1000 Make a packing list.md',
-      text: 'Make a packing list',
+      text: 'Make a packing list\nfor Lisbon',
       sentAt: '2026-09-27T10:00:00.000Z',
     };
-    const result = waitingRequests({
-      files: [file(`0-Inbox/${name}`, '2026-09-27T08:15:30.000Z')],
-      fetchedAt: LISTED_AT,
-      sent: [later],
-      justSent: [later],
+    const [first] = requestRows({ ...base, justSent: [later] });
+    expect(first).toEqual({
+      key: `request-${later.name}`,
+      state: 'waiting',
+      text: 'Make a packing list',
+      kind: 'job',
+      since: later.sentAt,
+      fileId: null,
     });
-    expect(result.map((request) => request.text)).toEqual([
-      'Make a packing list',
-      'What do I still need for Lisbon',
-    ]);
   });
 
-  it('trusts a listing fetched after the send: a processed note is no longer waiting', () => {
-    const sentEarlier: SentItem = {
+  it('trusts a listing fetched after the send: a processed note is gone', () => {
+    const earlier: SentRequest = {
       name: 'Bower - 2026-09-27 0830 Make a packing list.md',
       text: 'Make a packing list',
       sentAt: '2026-09-27T08:30:00.000Z',
     };
-    expect(
-      waitingRequests({
-        files: [],
-        fetchedAt: LISTED_AT,
-        sent: [sentEarlier],
-        justSent: [sentEarlier],
-      }),
-    ).toEqual([]);
+    const rows = requestRows({ ...base, justSent: [earlier] });
+    expect(rows.some((row) => row.key === `request-${earlier.name}`)).toBe(
+      false,
+    );
   });
 
-  it('shows what was just sent before the first listing arrives', () => {
-    const item: SentItem = {
-      name: 'Bower - 2026-09-27 0830 Hello.md',
-      text: 'Hello',
-      sentAt: '2026-09-27T08:30:00.000Z',
-    };
-    expect(
-      waitingRequests({
-        files: [],
-        fetchedAt: null,
-        sent: [item],
-        justSent: [item],
-      }),
-    ).toHaveLength(1);
+  it('dates a rule kept from this screen to the minute, even before Rules.md is read again', () => {
+    const since = '2026-09-28T07:00:00.000Z';
+    const kept = requestRows({
+      ...base,
+      justKept: [
+        { text: 'Never archive Money', since },
+        { text: 'Always tag receipts', since },
+      ],
+    }).filter((row) => row.state === 'kept');
+    expect(kept.map((row) => [row.text, row.since])).toEqual([
+      ['Never archive Money', since],
+      ['Always tag receipts', since],
+    ]);
+  });
+});
+
+describe('stateLabel', () => {
+  it('says the state, and the kind while it waits or runs', () => {
+    expect(stateLabel({ state: 'waiting', kind: 'job' })).toBe('Waiting · job');
+    expect(stateLabel({ state: 'tidying', kind: 'question' })).toBe(
+      'Tidying up · question',
+    );
+    expect(stateLabel({ state: 'waiting', kind: 'context' })).toBe('Waiting');
+    expect(stateLabel({ state: 'answered', kind: 'question' })).toBe(
+      'Answered',
+    );
+    expect(stateLabel({ state: 'kept', kind: 'rule' })).toBe('Rule kept');
+  });
+});
+
+describe('dayLabel', () => {
+  it('writes the local day as the Rules screen does', () => {
+    expect(dayLabel(new Date(2026, 8, 27, 23, 30).toISOString())).toBe(
+      '27 Sep',
+    );
+    expect(dayLabel('')).toBe('');
   });
 });
 
