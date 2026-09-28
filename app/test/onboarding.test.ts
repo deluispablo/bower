@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Me } from '../src/api.js';
-import { parseFolderId, shouldShowTour } from '../src/onboarding.js';
+import {
+  parseFolderId,
+  shouldShowTour,
+  tourOnScreen,
+} from '../src/onboarding.js';
 
 describe('parseFolderId', () => {
   it('accepts a bare folder id', () => {
@@ -76,5 +80,29 @@ describe('shouldShowTour', () => {
 
   it('waits for a folder before the first tour', () => {
     expect(shouldShowTour({ ...base, vault: null }, false)).toBe(false);
+  });
+});
+
+describe('tourOnScreen', () => {
+  const me: Me = {
+    email: 'you@example.com',
+    vault: { folderId: 'FOLDER_ID', inboxFolderId: 'FOLDER_ID', name: 'Bower' },
+    quota: { used: 0, limit: 10 },
+    needsReauth: false,
+    hasApiKey: false,
+  };
+
+  it('is on screen for an account that has not seen it', () => {
+    expect(tourOnScreen(me, { dismissed: false, replay: false })).toBe(true);
+  });
+
+  it('is gone once finished or skipped in this session', () => {
+    expect(tourOnScreen(me, { dismissed: true, replay: false })).toBe(false);
+  });
+
+  it('is not on screen before the session is known', () => {
+    expect(tourOnScreen(undefined, { dismissed: false, replay: true })).toBe(
+      false,
+    );
   });
 });

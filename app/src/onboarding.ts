@@ -50,3 +50,16 @@ export function shouldShowTour(me: Me, replay: boolean): boolean {
   if (replay) return true;
   return me.vault !== null && me.tourSeenAt === undefined;
 }
+
+/**
+ * Whether the tour is on screen right now: Home shows it unless it was
+ * finished or skipped in this session (`dismissed`, `tour-store.ts`). Shared
+ * by Home, which renders it, and the shell, which keeps the demo banner out
+ * of its way (#362) so the two never stack.
+ */
+export function tourOnScreen(
+  me: Me | undefined,
+  tour: { dismissed: boolean; replay: boolean },
+): boolean {
+  return me !== undefined && !tour.dismissed && shouldShowTour(me, tour.replay);
+}
