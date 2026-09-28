@@ -15,6 +15,7 @@
  */
 
 import type { DriveFile } from './drive.js';
+import { displayPath } from './navigation.js';
 
 export interface HighlightSpan {
   /** Inclusive start offset into the matched text. */
@@ -177,5 +178,5 @@ export function commandsFor(state: SwitcherState): Command[] {
 /** The folder a file lives in: its path with the file's own name removed. */
 export function folderPath(file: DriveFile): string {
   const cut = file.path.length - file.name.length - 1;
-  return cut > 0 ? file.path.slice(0, cut) : '';
+  return cut > 0 ? displayPath(file.path.slice(0, cut), '/') : '';
 }

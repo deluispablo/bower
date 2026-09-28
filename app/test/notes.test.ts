@@ -143,7 +143,7 @@ describe('Notes (#353)', () => {
     mount();
     const inbox = query('.tree-folder-link[href="/folder/0-Inbox"]');
     expect(inbox.querySelector('.tree-meaning')?.textContent).toBe(
-      'What you added, waiting for a tidy-up',
+      'Waiting for the next tidy-up',
     );
     // Expand 2-Areas (its own chevron, not 0-Inbox's) to reveal Cooking,
     // a non-root folder.

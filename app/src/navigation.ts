@@ -12,6 +12,73 @@ import type { VaultIndex } from './vault-index.js';
 const INBOX_FOLDERS = new Set(['0-Inbox', 'Clippings']);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** The five landmark folders of the Bower folder (spec §6.1 R-SYS-2). */
+export type ParaKind =
+  'inbox' | 'projects' | 'areas' | 'resources' | 'archives';
+
+/** The landmarks in their fixed order (R-SYS-3), by their prefix digit. */
+const PARA_KINDS: readonly ParaKind[] = [
+  'inbox',
+  'projects',
+  'areas',
+  'resources',
+  'archives',
+];
+
+const NUMERIC_PREFIX = /^(\d{1,2})-/;
+
+/**
+ * A folder name without its numeric prefix ("2-Areas" → "Areas"): what the
+ * breadcrumb, folder paths, activity labels, the More menu header and the
+ * back label read. A name that is only a prefix ("2-") is kept whole, so
+ * nothing ever shows as an empty label.
+ */
+export function displayName(name: string): string {
+  const stripped = name.replace(NUMERIC_PREFIX, '');
+  return stripped === '' ? name : stripped;
+}
+
+/**
+ * `path` with every segment through `displayName`, joined by `separator`
+ * ("2-Areas/Cooking" → "Areas / Cooking").
+ */
+export function displayPath(path: string, separator = ' / '): string {
+  return path.split('/').filter(Boolean).map(displayName).join(separator);
+}
+
+/**
+ * Which landmark a top folder is: Inbox, Projects, Areas, Resources or
+ * Archives when its name without a leading `\d{1,2}-` is one of those
+ * (case-insensitive), else when it carries the prefix `0-` to `4-`. Anything
+ * else (Answers, Clippings, a custom folder) is `null`: neutral.
+ */
+export function paraKindOf(topFolderName: string): ParaKind | null {
+  const bare = displayName(topFolderName).trim().toLowerCase();
+  const byName = PARA_KINDS.find((kind) => kind === bare);
+  if (byName !== undefined) return byName;
+  const prefix = NUMERIC_PREFIX.exec(topFolderName)?.[1];
+  if (prefix === undefined) return null;
+  return PARA_KINDS[Number(prefix)] ?? null;
+}
+
+/**
+ * The top folders in the order every screen shows them (R-SYS-3): Inbox,
+ * Projects, Areas, Resources, Archives first, never sorted, filtered away
+ * or reordered by pins; then the others (Answers, Clippings, any custom
+ * folder) by name.
+ */
+export function orderTopFolders<T extends { name: string }>(
+  folders: readonly T[],
+): T[] {
+  const rank = (folder: T): number => {
+    const kind = paraKindOf(folder.name);
+    return kind === null ? PARA_KINDS.length : PARA_KINDS.indexOf(kind);
+  };
+  return [...folders].sort(
+    (a, b) => rank(a) - rank(b) || compareNames(a.name, b.name),
+  );
+}
+
 function compareNames(a: string, b: string): number {
   return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
 }
@@ -186,7 +253,9 @@ export function buildTree(
  * what `buildTree` shows for it (they never appear inside a real folder,
  * `showAppFiles` on or off).
  *
- * `includeFiles` also walks `index.files` (everything that is not a note
+ * One rule for every screen (spec R-SYS-7): notes plus files, system and
+ * hidden files never counted (the index already leaves them out).
+ * `includeFiles` (on by default) also walks `index.files` (everything that is not a note
  * or a folder) into the same totals — what the folder menu, the Notes
  * tree and the desktop sidebar show (#425: they used to count notes only,
  * so the same folder read a different number there than on its own
@@ -196,7 +265,7 @@ export function buildTree(
  */
 export function folderCounts(
   index: VaultIndex,
-  includeFiles = false,
+  includeFiles = true,
 ): Map<string, number> {
   const counts = new Map<string, number>();
   for (const folder of index.folders) counts.set(folder.path, 0);
@@ -305,7 +374,10 @@ export interface BreadcrumbSegment {
   path: string;
 }
 
-/** Folder segments of a note's path, each carrying its own full path. */
+/**
+ * Folder segments of a note's path, each carrying its own full path and its
+ * display name (no numeric prefix).
+ */
 export function breadcrumb(path: string): BreadcrumbSegment[] {
   const segments = path.split('/');
   segments.pop(); // the note's own file name
@@ -313,7 +385,7 @@ export function breadcrumb(path: string): BreadcrumbSegment[] {
   let acc = '';
   for (const segment of segments) {
     acc = acc === '' ? segment : `${acc}/${segment}`;
-    result.push({ name: segment, path: acc });
+    result.push({ name: displayName(segment), path: acc });
   }
   return result;
 }
@@ -435,7 +507,7 @@ export function folderContents(
 ): FolderContents | null {
   const node = findNode(buildTree(index, sort), path);
   if (node === null) return null;
-  const counts = folderCounts(index);
+  const counts = folderCounts(index, false);
   const subfolders: FolderSubfolder[] = node.folders.map((folder) => {
     const inside = `${folder.path}/`;
     const files = index.files.filter((file) => file.path.startsWith(inside));

@@ -8,6 +8,7 @@
 
 import type { JSX } from 'preact';
 
+import { displayName } from '../navigation.js';
 import { IconChevronRight } from './icons.js';
 
 export interface BackLinkProps {
@@ -16,7 +17,8 @@ export interface BackLinkProps {
   label: string;
 }
 
-export function BackLink({ href, label }: BackLinkProps): JSX.Element {
+export function BackLink({ href, label: raw }: BackLinkProps): JSX.Element {
+  const label = displayName(raw);
   return (
     <a class="topbar-back" href={href} aria-label={`Back to ${label}`}>
       <IconChevronRight />

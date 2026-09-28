@@ -59,7 +59,30 @@ describe('ROOT_FOLDERS', () => {
   it('reads a meaning by path, and none for any other folder', () => {
     expect(folderMeaning('1-Projects')).toBe('Things with an end date');
     expect(folderMeaning('1-Projects/Flat hunt')).toBeUndefined();
-    expect(folderMeaning('Clippings')).toBeUndefined();
+    expect(folderMeaning('Recipes')).toBeUndefined();
+  });
+
+  it('reads the board lines, the short variants, Answers and Clippings', () => {
+    expect(folderMeaning('0-Inbox')).toBe('Waiting for the next tidy-up');
+    expect(folderMeaning('2-Areas')).toBe(
+      'Parts of life that go on: home, health, money',
+    );
+    expect(folderMeaning('2-Areas', 'short')).toBe('Parts of life that go on');
+    expect(folderMeaning('3-Resources')).toBe(
+      'Things to keep: articles, recipes, manuals',
+    );
+    expect(folderMeaning('3-Resources', 'short')).toBe('Things to keep');
+    expect(folderMeaning('4-Archives', 'short')).toBe(
+      'Finished, kept, never deleted',
+    );
+    expect(folderMeaning('Answers')).toBe('What Bower wrote back to you');
+    expect(folderMeaning('Clippings')).toBe(
+      'Pages you clipped, waiting to be read',
+    );
+  });
+
+  it('reads a renamed PARA folder by its name', () => {
+    expect(folderMeaning('Projects')).toBe('Things with an end date');
   });
 });
 

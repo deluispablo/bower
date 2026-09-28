@@ -6,6 +6,9 @@
  * from here rather than keep their own copies.
  */
 
+import { displayName, paraKindOf } from './navigation.js';
+import type { ParaKind } from './navigation.js';
+
 export interface RootFolder {
   /** The folder's name in Drive, which is also its path from the root. */
   name: string;
@@ -14,7 +17,7 @@ export interface RootFolder {
 }
 
 export const ROOT_FOLDERS: readonly RootFolder[] = [
-  { name: '0-Inbox', meaning: 'What you added, waiting for a tidy-up' },
+  { name: '0-Inbox', meaning: 'Waiting for the next tidy-up' },
   { name: '1-Projects', meaning: 'Things with an end date' },
   { name: '2-Areas', meaning: 'Parts of life that go on: home, health, money' },
   {
@@ -25,19 +28,53 @@ export const ROOT_FOLDERS: readonly RootFolder[] = [
   { name: 'Answers', meaning: 'What Bower wrote back to you' },
 ];
 
+const MEANINGS: Readonly<Record<ParaKind, { full: string; short: string }>> = {
+  inbox: {
+    full: 'Waiting for the next tidy-up',
+    short: 'Waiting for the next tidy-up',
+  },
+  projects: {
+    full: 'Things with an end date',
+    short: 'Things with an end date',
+  },
+  areas: {
+    full: 'Parts of life that go on: home, health, money',
+    short: 'Parts of life that go on',
+  },
+  resources: {
+    full: 'Things to keep: articles, recipes, manuals',
+    short: 'Things to keep',
+  },
+  archives: {
+    full: 'Finished, kept, never deleted',
+    short: 'Finished, kept, never deleted',
+  },
+};
+
+/** Answers and Clippings carry a line too (spec §9 Q1). */
+const OTHER_MEANINGS: Readonly<Record<string, string>> = {
+  answers: 'What Bower wrote back to you',
+  clippings: 'Pages you clipped, waiting to be read',
+};
+
 /**
  * A top-level folder's heading on its own screen (#431, Phone-Folder
  * board): the name without its numeric prefix ("1-Projects" → "Projects").
- * Any other path, and a root folder outside the table, keeps its name; the
- * tree, the folder menu and the bar keep the full name everywhere.
  */
 export function rootFolderHeading(path: string): string {
-  const root = ROOT_FOLDERS.find((folder) => folder.name === path);
-  if (root === undefined) return path.slice(path.lastIndexOf('/') + 1);
-  return root.name.replace(/^\d+-/, '');
+  return displayName(path.slice(path.lastIndexOf('/') + 1));
 }
 
-/** The meaning line of a top-level folder, or `undefined` for any other path. */
-export function folderMeaning(path: string): string | undefined {
-  return ROOT_FOLDERS.find((folder) => folder.name === path)?.meaning;
+/**
+ * The meaning line of a top-level folder, or `undefined` for any other path.
+ * `'short'` is the desktop sidebar's and the Move picker's variant.
+ */
+export function folderMeaning(
+  path: string,
+  variant: 'full' | 'short' = 'full',
+): string | undefined {
+  if (path === '' || path.includes('/')) return undefined;
+  const kind = paraKindOf(path);
+  if (kind !== null) return MEANINGS[kind][variant];
+  return OTHER_MEANINGS[path.toLowerCase()];
 }

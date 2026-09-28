@@ -1751,7 +1751,7 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
 
   const tree = page.getByRole('tree').first();
   const inbox = tree.locator('a[href="/folder/0-Inbox"]');
-  await expect(inbox).toContainText('What you added, waiting for a tidy-up');
+  await expect(inbox).toContainText('Waiting for the next tidy-up');
   const answers = tree.locator('a[href="/folder/Answers"]');
   await expect(answers).toContainText('What Bower wrote back to you');
 
@@ -2468,7 +2468,7 @@ test('folder counts add files and notes together, the same total the folder scre
     await bar.getByRole('button', { name: 'Your folders' }).click();
     const menu = page.getByRole('dialog', { name: 'Your folders' });
     await expect(
-      menu.getByRole('link', { name: /^0-Inbox.*added\D*2$/ }),
+      menu.getByRole('link', { name: /^0-Inbox.*tidy-up\D*2$/ }),
     ).toBeVisible();
     await expect(
       menu.getByRole('link', { name: /^1-Projects.*end date\D*15$/ }),
@@ -2498,7 +2498,7 @@ test('a project folder lists its files and notes together, newest first, with wh
     page.getByRole('heading', { level: 1, name: 'Kitchen Refresh' }),
   ).toBeVisible();
   await expect(page.locator('.folder-meta')).toHaveText(
-    '1-Projects · 2 files · 3 notes',
+    'Projects · 2 files · 3 notes',
   );
 
   const rows = page.locator('.folder-item');
@@ -2602,7 +2602,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
     0,
   );
   // The one More menu (#352): the board's header, then Ask Bower first.
-  await expect(menu).toContainText('PDF · 1-Projects / Kitchen Refresh');
+  await expect(menu).toContainText('PDF · Projects / Kitchen Refresh');
   await expect(menu.getByRole('menuitem').first()).toContainText(
     'Ask Bower about this',
   );
@@ -2643,10 +2643,10 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   await expect(cards.nth(0)).toContainText('Today, 07:51 · 3 min');
   await expect(cards.nth(0)).toContainText('Done');
   await expect(rowWith(0, 'Lease agreement 2026.pdf')).toContainText(
-    '→ 1-Projects / Flat hunt',
+    '→ Projects / Flat hunt',
   );
   await expect(rowWith(0, 'IMG_4471.jpg')).toContainText(
-    '→ 1-Projects / Flat hunt, renamed “Arlington Road, window sign”',
+    '→ Projects / Flat hunt, renamed “Arlington Road, window sign”',
   );
   await expect(cards.nth(1)).toContainText('Yesterday, 09:12 · 4 min');
   await expect(cards.nth(1)).toContainText('One thing set aside');
@@ -2680,10 +2680,10 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   await expect(cards).toHaveCount(3);
   await expect(cards.nth(0)).toContainText('Today, 10:30 · 1 min');
   await expect(rowWith(0, 'Boiler service invoice.pdf')).toContainText(
-    '→ 2-Areas / Home',
+    '→ Areas / Home',
   );
   await expect(rowWith(0, 'Tomato seedlings')).toContainText(
-    '→ 2-Areas / Garden',
+    '→ Areas / Garden',
   );
   const question = rowWith(0, 'What do I still need for Lisbon?');
   await expect(question).toContainText('→ Answers, read it');

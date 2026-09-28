@@ -151,20 +151,20 @@ describe('activityCards (#345)', () => {
         key: '0-Inbox/Lease agreement 2026.pdf',
         tone: 'pdf',
         title: 'Lease agreement 2026.pdf',
-        destination: '1-Projects / Flat hunt',
+        destination: 'Projects / Flat hunt',
       },
       {
         key: '0-Inbox/IMG_4471.jpg',
         tone: 'image',
         title: 'IMG_4471.jpg',
-        destination: '1-Projects / Flat hunt',
+        destination: 'Projects / Flat hunt',
         renamed: 'Arlington Road, window sign',
       },
       {
         key: '0-Inbox/Notes from the viewing.md',
         tone: 'note',
         title: 'Notes from the viewing',
-        destination: '1-Projects / Flat hunt',
+        destination: 'Projects / Flat hunt',
       },
       {
         key: QUESTION,
@@ -181,8 +181,8 @@ describe('activityCards (#345)', () => {
       {
         key: 'correction:1-Projects/Flat hunt:2-Areas/Home',
         tone: 'move',
-        title: 'Moved from 1-Projects / Flat hunt',
-        destination: '2-Areas / Home',
+        title: 'Moved from Projects / Flat hunt',
+        destination: 'Areas / Home',
       },
     ]);
   });
@@ -194,7 +194,7 @@ describe('activityCards (#345)', () => {
         key: '0-Inbox/receipt-hardware-store.jpg',
         tone: 'image',
         title: 'receipt-hardware-store.jpg',
-        destination: '2-Areas / Finance',
+        destination: 'Areas / Finance',
       },
       {
         key: '0-Inbox/Old notes.rtf',
@@ -275,8 +275,9 @@ describe('labels', () => {
   const at = (min: number): string =>
     new Date(Date.UTC(2026, 8, 28, 10, min)).toISOString();
 
-  it('folderLabel spaces the slashes', () => {
-    expect(folderLabel('1-Projects/Flat hunt')).toBe('1-Projects / Flat hunt');
+  it('folderLabel spaces the slashes and drops the numeric prefix', () => {
+    expect(folderLabel('1-Projects/Flat hunt')).toBe('Projects / Flat hunt');
+    expect(folderLabel('0-Inbox')).not.toMatch(/[0-4]-/);
   });
 
   it('cardDuration: at least a minute, hours past sixty', () => {

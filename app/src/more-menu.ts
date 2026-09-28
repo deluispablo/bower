@@ -5,21 +5,19 @@
  * tested on its own (`test/more-menu.test.ts`).
  */
 
-import { folderOf } from './navigation.js';
+import { displayPath, folderOf } from './navigation.js';
 
 /** What the menu is about: a note, any other file, or a folder. */
 export type MoreMenuKind = 'note' | 'file' | 'folder';
 
 /**
  * The header's second line, as the board draws it: the type word, then
- * the folder the thing sits in ("PDF · 1-Projects / Flat hunt"). Just the
+ * the folder the thing sits in ("PDF · Projects / Flat hunt"). Just the
  * type word for something at the top of the Bower folder.
  */
 export function moreMenuMeta(typeLabel: string, path: string): string {
   const folder = folderOf(path);
-  return folder === ''
-    ? typeLabel
-    : `${typeLabel} · ${folder.split('/').join(' / ')}`;
+  return folder === '' ? typeLabel : `${typeLabel} · ${displayPath(folder)}`;
 }
 
 /**

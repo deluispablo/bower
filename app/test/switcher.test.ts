@@ -231,9 +231,9 @@ describe('commandsFor', () => {
 });
 
 describe('folderPath', () => {
-  it('is the path with the file name removed', () => {
+  it('is the path with the file name and the numeric prefix removed', () => {
     expect(folderPath(note('a', '2-Areas/Cooking/Sourdough starter.md'))).toBe(
-      '2-Areas/Cooking',
+      'Areas/Cooking',
     );
   });
 
