@@ -334,7 +334,7 @@ test('Run your own Bower: the rows, the runbook, and the nine screens with Close
 test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await openHome(page);
   await visible(
-    page.getByRole('button', { name: /Search or jump to a note/ }),
+    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('Lisbon');
@@ -386,7 +386,7 @@ test("a note Bower wrote opens with Bower's note and the Used line (#351, #602)"
 }, testInfo) => {
   await openHome(page);
   await visible(
-    page.getByRole('button', { name: /Search or jump to a note/ }),
+    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('subscriptions renew');
@@ -1741,7 +1741,7 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   await expect(page).toHaveURL(/\/notes$/);
   await expect(links.nth(1)).toHaveAttribute('aria-current', 'page');
   await expect(
-    page.getByRole('button', { name: 'Search or jump to anything' }),
+    page.getByRole('button', { name: 'Search folders, notes and files' }),
   ).toBeVisible();
   await expect(page.getByRole('tree').first()).toBeVisible();
   await shot(page, testInfo, 'tabs-notes');
@@ -1799,7 +1799,7 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
   // The search row opens the quick switcher (#433, Phone-Notes board), and
   // closing it lands back on the Notes tab.
   await page
-    .getByRole('button', { name: 'Search or jump to anything' })
+    .getByRole('button', { name: 'Search folders, notes and files' })
     .click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   // Focus moves into the switcher once it is open: wait for that first.
@@ -1873,7 +1873,7 @@ test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
   // with no tour to skip.
   await page.goto('/');
   await visible(
-    page.getByRole('button', { name: /Search or jump to a note/ }),
+    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('Lisbon');
@@ -1903,7 +1903,7 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
   // long as the title itself -- the exact shape that used to leave both
   // cut to a few letters (#426).
   await visible(
-    page.getByRole('button', { name: /Search or jump to a note/ }),
+    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('Lisbon');
@@ -1937,7 +1937,7 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
   // Home opens with no tour to skip.
   await page.goto('/');
   await visible(
-    page.getByRole('button', { name: /Search or jump to a note/ }),
+    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
   ).click();
   await switcher.getByRole('combobox').fill('subscriptions renew');
   await switcher
@@ -2043,7 +2043,7 @@ test('At 1920 the content stays in one centred container, away from the right ed
 
   // A note, with its About panel: the container grows to 1200, still centred.
   await visible(
-    page.getByRole('button', { name: /Search or jump to a note/ }),
+    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('subscriptions renew');
@@ -2212,7 +2212,7 @@ test('At 1920 a note and its About panel are one row next to the measure, centre
   await page.setViewportSize({ width: 1920, height: 1080 });
   await openHome(page);
   await visible(
-    page.getByRole('button', { name: /Search or jump to a note/ }),
+    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('subscriptions renew');
@@ -2267,7 +2267,7 @@ test('Home, a note, Add, the Bower tab and Settings at 1024, 1280, 1440 and 1920
       'note',
       async () => {
         await visible(
-          page.getByRole('button', { name: /Search or jump to a note/ }),
+          page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
         ).click();
         const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
         await switcher.getByRole('combobox').fill('subscriptions renew');

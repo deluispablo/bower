@@ -1,17 +1,23 @@
 /**
- * `/notes`, the Notes tab (#317): the search row, the tree (root folders
- * with their meaning and count, projects expandable), the Health row and
- * the hidden-files line at the bottom, and no sort — the same explorer the
- * drawer and the desktop sidebar show, laid out as a screen of its own
- * (`Explorer`'s `page` variant, #353, C.5). Its one bar button —
- * Expand/Collapse all — lives in the header's `actions` slot instead of an
- * inline tools row, since that is where the Phone-Notes board puts it.
+ * `/notes`, the Notes tab (#317, #589): the one explorer as a screen. Search,
+ * a slot for the "Just filed" row (#616), Pinned, "Your folders" (the five
+ * landmarks with their marks and meaning lines, a divider, the other
+ * folders), the Health row and the hidden-files line at the bottom, and no
+ * sort (`Explorer`'s `page` variant). Its one bar button, Expand/Collapse
+ * all folders, lives in the header's `actions` slot instead of an inline
+ * tools row, since that is where the Phone-Notes board puts it.
  */
 
 import type { JSX } from 'preact';
-import { useMemo, useState } from 'preact/hooks';
+import { useMemo } from 'preact/hooks';
 
-import { Explorer, useHealthIsNew } from '../components/explorer.js';
+import {
+  COLLAPSE_LABEL,
+  EXPAND_LABEL,
+  Explorer,
+  useExpandToggle,
+  useHealthIsNew,
+} from '../components/explorer.js';
 import { IconCollapse } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
 
@@ -21,20 +27,9 @@ const CRUMB = <h1 class="topbar-title">Notes</h1>;
 
 export function Notes(): JSX.Element {
   const healthIsNew = useHealthIsNew();
-  const [collapseKey, setCollapseKey] = useState(0);
-  const [expandKey, setExpandKey] = useState(0);
-  // Tracks the toggle's own last action, not the tree's real state (a
-  // folder a person expands or collapses by hand doesn't flip it back):
-  // simple on purpose, same as a one-way Collapse all would have been.
-  const [expanded, setExpanded] = useState(false);
+  const { expanded, collapseKey, expandKey, toggle } = useExpandToggle();
 
-  function toggleExpandCollapse(): void {
-    if (expanded) setCollapseKey((key) => key + 1);
-    else setExpandKey((key) => key + 1);
-    setExpanded((was) => !was);
-  }
-
-  const expandLabel = expanded ? 'Collapse all' : 'Expand all';
+  const expandLabel = expanded ? COLLAPSE_LABEL : EXPAND_LABEL;
   const actions = useMemo(
     () => (
       <button
@@ -42,11 +37,13 @@ export function Notes(): JSX.Element {
         class="icon-button"
         aria-label={expandLabel}
         title={expandLabel}
-        onClick={toggleExpandCollapse}
+        onClick={toggle}
       >
         <IconCollapse />
       </button>
     ),
+    // `toggle` is a new closure every render, but it only reads `expanded`,
+    // which the label already tracks.
     [expandLabel],
   );
 
