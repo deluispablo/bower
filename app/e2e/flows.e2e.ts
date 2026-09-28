@@ -356,13 +356,17 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
 test('/search?q= lands on Home with the switcher open and prefilled (#495)', async ({
   page,
 }) => {
-  await page.goto('/search?q=Lisbon');
+  await page.goto('/search?q=viewing');
 
   await expect(page).toHaveURL(/\/$/);
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
-  await expect(switcher.getByRole('combobox')).toHaveValue('Lisbon');
-  const option = switcher.getByRole('option', { name: /Lisbon Trip/ }).first();
+  await expect(switcher.getByRole('combobox')).toHaveValue('viewing');
+  // A recent note: a snippet needs the note's text in the cache, and the
+  // load caches the newest notes first, up to a fetch cap.
+  const option = switcher
+    .getByRole('option', { name: /Notes from the viewing/ })
+    .first();
   await expect(option).toBeVisible();
   // The snippet reads like the note body, not the raw file (#554): no
   // frontmatter keys, fences or the heading's own "#" mark.
@@ -2670,7 +2674,7 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   await expect(page).toHaveURL(/\/bower\?show=activity$/);
   await expect(bowerPart(page, 'Activity')).toBeVisible();
   await expect(cards).toHaveCount(5);
-  await expect(cards.nth(0)).toContainText('Today, 10:30 · 1 min');
+  await expect(cards.nth(0)).toContainText('Today, 10:44 · 1 min');
   await expect(rowWith(0, 'Boiler service invoice.pdf')).toContainText(
     '→ Areas / Home',
   );

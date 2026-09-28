@@ -116,7 +116,7 @@ describe('hydratePinnedAt', () => {
       )
       .slice(0, 12)
       .map((n) => n.id);
-    const fetched = getTextMock.mock.calls.map(([id]) => id as string);
+    const fetched = getTextMock.mock.calls.map(([id]) => id);
     expect(fetched.slice(0, 12)).toEqual(expected.slice(0, 12));
     expect(expected).toContain(
       flipped.notes.find((n) => n.name === 'Zzz late note.md')?.id,
