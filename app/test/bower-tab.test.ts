@@ -252,9 +252,7 @@ describe('requestRows', () => {
     });
     expect(
       listed.filter((row) => row.key === `request-${during.name}`),
-    ).toEqual([
-      expect.objectContaining({ state: 'waiting', fileId: note.id }),
-    ]);
+    ).toEqual([expect.objectContaining({ state: 'waiting', fileId: note.id })]);
   });
 
   it('trusts a listing fetched after the send: a processed note is gone', () => {
