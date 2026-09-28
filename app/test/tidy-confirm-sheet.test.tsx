@@ -16,8 +16,10 @@ const {
   TidyConfirmSheet,
   confirmSentenceParts,
   demoConfirmSentenceParts,
+  requestConfirmSentenceParts,
   DEMO_RECORDING_NOTICE,
 } = await import('../src/components/tidy-confirm-sheet.js');
+type TidyConfirmKind = 'tidy' | 'request';
 
 let root: HTMLDivElement | undefined;
 
@@ -30,12 +32,14 @@ function mount(
   count: number,
   onConfirm = vi.fn(),
   onDismiss = vi.fn(),
+  kind?: TidyConfirmKind,
 ): { onConfirm: () => void; onDismiss: () => void } {
   function Harness() {
     const [open, setOpen] = useState(true);
     if (!open) return null;
     return h(TidyConfirmSheet, {
       count,
+      kind,
       onConfirm: () => {
         onConfirm();
         setOpen(false);
@@ -220,5 +224,58 @@ describe('TidyConfirmSheet', () => {
     expect(currentRoot().textContent).toContain('in the inbox');
     expect(currentRoot().textContent).toContain('In your own Bower');
     expect(currentRoot().textContent).not.toContain('are waiting');
+  });
+});
+
+describe('requestConfirmSentenceParts', () => {
+  it('singular: "1 request is waiting…"', () => {
+    expect(requestConfirmSentenceParts(1)).toEqual({
+      lead: '1 request',
+      rest: 'is waiting. Do it now runs it on its own, in one turn of your Claude plan.',
+    });
+  });
+
+  it('plural: "3 requests are waiting…"', () => {
+    expect(requestConfirmSentenceParts(3)).toEqual({
+      lead: '3 requests',
+      rest: 'are waiting. Do it now runs them on their own, in one turn of your Claude plan.',
+    });
+  });
+});
+
+describe('TidyConfirmSheet, kind="request" (#501)', () => {
+  it('shows a request-specific title, count line and button, not the tidy-up copy', () => {
+    mount(1, vi.fn(), vi.fn(), 'request');
+    const el = dialog();
+    expect(el.getAttribute('aria-label')).toBe('Run this now?');
+    expect(currentRoot().textContent).toContain('Run this now?');
+    expect(currentRoot().textContent).toContain('1 request');
+    expect(currentRoot().textContent).toContain('is waiting');
+    expect(currentRoot().textContent).not.toContain('Is that everything?');
+    expect(currentRoot().textContent).not.toContain('the whole pile');
+    expect(buttonByText('Yes, do it now')).toBeDefined();
+    expect(buttonByText('Not now')).toBeDefined();
+  });
+
+  it('"Yes, do it now" calls onConfirm', () => {
+    const { onConfirm, onDismiss } = mount(1, vi.fn(), vi.fn(), 'request');
+    click(buttonByText('Yes, do it now'));
+    expect(onConfirm).toHaveBeenCalledOnce();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('"Not now" calls onDismiss, not onConfirm', () => {
+    const { onConfirm, onDismiss } = mount(2, vi.fn(), vi.fn(), 'request');
+    click(buttonByText('Not now'));
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('TidyConfirmSheet, kind="tidy" (default, unchanged)', () => {
+  it('still shows the whole-inbox copy when kind is left out', () => {
+    mount(3);
+    expect(currentRoot().textContent).toContain('Is that everything?');
+    expect(currentRoot().textContent).toContain('the whole pile');
   });
 });

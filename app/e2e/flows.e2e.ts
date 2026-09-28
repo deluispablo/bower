@@ -1245,14 +1245,16 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
   await job.getByRole('button', { name: 'Remove' }).click();
   await expect(job).toHaveCount(0);
 
-  // Do it now: the confirmation counts the requests, and the run files
-  // only them; the rest of the inbox stays for the next tidy-up.
+  // Do it now: its own confirmation, about the request rather than a pile
+  // of files (#501), counts the requests, and the run files only them;
+  // the rest of the inbox stays for the next tidy-up.
   await edited.getByRole('button', { name: 'Do it now' }).click();
-  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
-  // The demo's own sentence (#489): "in the inbox", not "is waiting".
-  await expect(confirm).toContainText('1 thing in the inbox.');
+  // A request's own confirmation (#501) keeps its copy in the demo too,
+  // unlike the whole-inbox tidy-up's demo sentence (#489).
+  const confirm = page.getByRole('dialog', { name: 'Run this now?' });
+  await expect(confirm).toContainText('1 request is waiting.');
   await shot(page, testInfo, 'bower-requests-do-it-now');
-  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await confirm.getByRole('button', { name: 'Yes, do it now' }).click();
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await sheet.getByRole('button', { name: 'Close' }).click();
   await expect(sheet).toBeHidden();
