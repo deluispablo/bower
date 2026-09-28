@@ -475,6 +475,8 @@ export type UploadProgress = (sent: number, total: number) => void;
 export interface UploadOptions {
   /** Resumable chunk size in bytes; a multiple of 256 KiB. */
   chunkSize?: number;
+  /** Set on the new file as Drive app properties, when given. */
+  appProperties?: Record<string, string>;
 }
 
 interface Metadata {
@@ -575,6 +577,9 @@ async function uploadHttp(
   options: UploadOptions = {},
 ): Promise<DriveFile> {
   const metadata = metadataFor(parentId, file.name, file.type);
+  if (options.appProperties !== undefined) {
+    metadata.appProperties = options.appProperties;
+  }
   if (file.size <= MULTIPART_MAX_BYTES) {
     const created = await uploadMultipart(metadata, file);
     onProgress?.(file.size, file.size);
@@ -677,6 +682,13 @@ const GOOGLE_SHEET_MIME = 'application/vnd.google-apps.spreadsheet';
 const GOOGLE_SLIDES_MIME = 'application/vnd.google-apps.presentation';
 const GOOGLE_DRAWING_MIME = 'application/vnd.google-apps.drawing';
 const GOOGLE_FORM_MIME = 'application/vnd.google-apps.form';
+
+/** What `bowerSourceKind` says about an export: the Google kind it came from. */
+const SOURCE_KINDS: Readonly<Record<string, string>> = {
+  [GOOGLE_DOC_MIME]: 'doc',
+  [GOOGLE_SHEET_MIME]: 'sheet',
+  [GOOGLE_SLIDES_MIME]: 'slides',
+};
 
 export type ExportPlan =
   | { action: 'copy' }
@@ -790,7 +802,14 @@ export async function copyOrExportIntoInbox(
   const file = new File([blob], withExtension(pick.name, plan.extension), {
     type: mimeType,
   });
-  return upload(inboxId, file);
+  // An export remembers its original (#607): the file screen can say it is a
+  // copy. A plain copy carries no such link.
+  return upload(inboxId, file, undefined, {
+    appProperties: {
+      bowerSource: pick.id,
+      bowerSourceKind: SOURCE_KINDS[pick.mimeType] ?? '',
+    },
+  });
 }
 
 // --- Update and append -------------------------------------------------

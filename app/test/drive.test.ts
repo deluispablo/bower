@@ -923,6 +923,52 @@ describe('copyOrExportIntoInbox', () => {
     expect(result).toMatchObject({ path: 'Budget.csv' });
   });
 
+  it('marks each export with its original and kind, and a plain copy with neither (#607)', async () => {
+    const kinds: Array<[string, string]> = [
+      ['application/vnd.google-apps.document', 'doc'],
+      ['application/vnd.google-apps.spreadsheet', 'sheet'],
+      ['application/vnd.google-apps.presentation', 'slides'],
+    ];
+    for (const [mimeType, kind] of kinds) {
+      let meta = '';
+      stubFetch(async (url, init) => {
+        if (url.pathname === '/drive/v3/files/SRC_ID/export') {
+          return new Response('x', { headers: { 'content-type': 'text/csv' } });
+        }
+        meta = (await multipartParts(init))[0] ?? '';
+        return jsonResponse(200, {
+          id: 'NEW_ID',
+          name: 'a',
+          mimeType: 'text/csv',
+          parents: ['INBOX_ID'],
+        });
+      });
+      await copyOrExportIntoInbox(
+        { id: 'SRC_ID', name: 'a', mimeType },
+        'INBOX_ID',
+      );
+      expect(meta).toContain(
+        `"appProperties":{"bowerSource":"SRC_ID","bowerSourceKind":"${kind}"}`,
+      );
+    }
+
+    let copyBody = '';
+    stubFetch((_url, init) => {
+      copyBody = String(init.body);
+      return jsonResponse(200, {
+        id: 'COPY_ID',
+        name: 'a.pdf',
+        mimeType: 'application/pdf',
+        parents: ['INBOX_ID'],
+      });
+    });
+    await copyOrExportIntoInbox(
+      { id: 'SRC_ID', name: 'a.pdf', mimeType: 'application/pdf' },
+      'INBOX_ID',
+    );
+    expect(copyBody).not.toContain('bowerSource');
+  });
+
   it('throws without a request for a Drawing or a Form', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
