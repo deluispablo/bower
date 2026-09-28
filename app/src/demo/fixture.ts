@@ -21,7 +21,8 @@ import archivesNote from '../../../vault-template/4-Archives/_Archives.md?raw';
 import answersNote from '../../../vault-template/Answers/_Answers.md?raw';
 import clippingsNote from '../../../vault-template/Clippings/_Clippings.md?raw';
 
-import type { Run } from '../api.js';
+import type { Run, RunItem } from '../api.js';
+import type { ImageMediaMetadata, VideoMediaMetadata } from '../drive.js';
 
 export const DEMO_NAME = 'Alex';
 export const DEMO_EMAIL = 'alex@example.com';
@@ -38,6 +39,14 @@ export interface FixtureFile {
   modifiedTime: string;
   /** Drive app properties the file carries (`bowerOrigin`, `file-origin.ts`). */
   appProperties?: Readonly<Record<string, string>>;
+  /** The size Drive reports when it differs from the stub's own bytes. */
+  size?: number;
+  /** Drive's small picture of the file (`thumbnailLink`), when it has one. */
+  thumbnailLink?: string;
+  imageMediaMetadata?: ImageMediaMetadata;
+  videoMediaMetadata?: VideoMediaMetadata;
+  /** Drive previews this file in its own viewer (Office files, video). */
+  preview?: boolean;
 }
 
 /** `2026-09-<day>` at `hhmm`, UTC: the fixture's dates, all in one month. */
@@ -125,49 +134,121 @@ export const INBOX_PLAN: ReadonlyMap<string, string> = new Map([
 export const INBOX_QUESTION =
   '0-Inbox/Bower - 2026-09-27 0815 What do I still need for Lisbon.md';
 
+/** One processed item of a run, in the report v2 shape (#583, R-RUN-4). */
+function filed(path: string, to: string, renamedFrom?: string): RunItem {
+  return {
+    path,
+    kind: 'file',
+    to,
+    ...(renamedFrom !== undefined && { renamedFrom }),
+  };
+}
+
+function runOf(
+  runId: string,
+  finishedAt: string,
+  items: readonly RunItem[],
+  extra: Partial<Run> = {},
+): Run {
+  const finished = new Date(finishedAt).getTime();
+  return {
+    state: 'done',
+    requestedAt: new Date(finished - 5 * 60_000).toISOString(),
+    startedAt: new Date(finished - 4 * 60_000).toISOString(),
+    finishedAt,
+    summary: `Filed ${items.length} ${items.length === 1 ? 'item' : 'items'}.`,
+    processed: items.map((item) => item.path),
+    items: items.map((item) => ({ ...item })),
+    runId,
+    ...extra,
+  };
+}
+
 /**
- * Two tidy-ups before the demo starts, newest first, for the Bower tab's
- * Activity (#345, board Phone-Bower-Activity): this morning's, which filed
- * the flat-hunt papers and renamed a photo, and yesterday's, which set one
- * document aside. `log.md` above has their `Filed:` lines.
+ * The tidy-ups before the demo starts, newest first (boards `Phone-JustFiled`,
+ * `Desktop-JustFiled`, `Flow-05-Home`): today's at 10:42, which filed the
+ * flat listings and set the walk-through video aside, then the three the
+ * Just filed screen lists as earlier (26 Sep 18:10, 21 Sep 09:02, 12 Jun
+ * 20:45, London time). The first is also the demo's last run.
  */
 export const DEMO_RUNS: readonly Run[] = [
-  {
-    state: 'done',
-    requestedAt: '2026-09-27T06:47:30.000Z',
-    startedAt: '2026-09-27T06:48:00.000Z',
-    finishedAt: '2026-09-27T06:51:10.000Z',
-    summary: 'Filed 3 items.',
-    processed: [
-      '0-Inbox/Lease agreement 2026.pdf',
-      '0-Inbox/IMG_4471.jpg',
-      '0-Inbox/Notes from the viewing.md',
+  runOf(
+    'demo-run-earlier-4',
+    '2026-09-27T09:42:00.000Z',
+    [
+      filed(
+        '0-Inbox/Arlington Road, 2 bed.pdf',
+        '1-Projects/Flat hunt/Arlington Road, 2 bed.pdf',
+        'Arlington Road, 2 bed.pdf',
+      ),
+      filed(
+        '0-Inbox/Kentish Town flat.pdf',
+        '1-Projects/Flat hunt/Kentish Town, 2 bed.pdf',
+        'Kentish Town flat.pdf',
+      ),
+      filed(
+        '0-Inbox/Camden Mews studio.pdf',
+        '1-Projects/Flat hunt/Camden Mews, 1 bed.pdf',
+        'Camden Mews studio.pdf',
+      ),
+      filed(
+        '0-Inbox/IMG_4471.jpg',
+        '1-Projects/Flat hunt/Arlington Road, window sign.jpg',
+        'IMG_4471.jpg',
+      ),
+      filed(
+        'Clippings/a link',
+        '3-Resources/Links/Kentish Town photos.md',
+        'a link',
+      ),
+      filed(
+        '0-Inbox/Walk-through, Arlington Road.mp4',
+        '1-Projects/Flat hunt/Walk-through, Arlington Road.mp4',
+      ),
     ],
-    items: [
-      { path: '0-Inbox/Lease agreement 2026.pdf', kind: 'file' },
-      { path: '0-Inbox/IMG_4471.jpg', kind: 'file' },
-      { path: '0-Inbox/Notes from the viewing.md', kind: 'file' },
-    ],
-    runId: 'demo-run-earlier-2',
-  },
-  {
-    state: 'done',
-    requestedAt: '2026-09-26T08:08:00.000Z',
-    startedAt: '2026-09-26T08:08:20.000Z',
-    finishedAt: '2026-09-26T08:12:30.000Z',
-    summary: 'Filed 2 items.',
-    processed: [
+    {
+      setAside: [
+        {
+          path: '1-Projects/Flat hunt/Walk-through, Arlington Road.mp4',
+          reason: 'kept-not-read',
+        },
+      ],
+      added: 'I added bike times to the flats',
+    },
+  ),
+  runOf('demo-run-earlier-3', '2026-09-26T17:10:00.000Z', [
+    filed(
       'Clippings/Weeknight curry.md',
-      '0-Inbox/Running log.md',
-      '0-Inbox/Meeting notes.rtf',
-    ],
-    items: [
-      { path: 'Clippings/Weeknight curry.md', kind: 'file' },
-      { path: '0-Inbox/Running log.md', kind: 'file' },
-      { path: '0-Inbox/Meeting notes.rtf', kind: 'file' },
-    ],
-    runId: 'demo-run-earlier-1',
-  },
+      '3-Resources/Cooking/Weeknight curry.md',
+    ),
+    filed('0-Inbox/Running log.md', '2-Areas/Health/Running log.md'),
+    filed(
+      '0-Inbox/Sage green test patch.png',
+      '1-Projects/Kitchen Refresh/Sage green test patch.png',
+    ),
+  ]),
+  runOf('demo-run-earlier-2', '2026-09-21T08:02:00.000Z', [
+    filed(
+      '0-Inbox/Bills and renewals.md',
+      '2-Areas/Home/Bills and renewals.md',
+    ),
+    filed('0-Inbox/Reading list.md', '3-Resources/Books/Reading list.md'),
+    filed('0-Inbox/Training plan.md', '1-Projects/Half Marathon/Training plan.md'),
+    filed('0-Inbox/Half Marathon.md', '1-Projects/Half Marathon/Half Marathon.md'),
+    filed('0-Inbox/Paint colours.md', '1-Projects/Kitchen Refresh/Paint colours.md'),
+    filed(
+      '0-Inbox/Quotes from fitters.md',
+      '1-Projects/Kitchen Refresh/Quotes from fitters.md',
+    ),
+    filed('0-Inbox/Sourdough.md', '3-Resources/Cooking/Sourdough.md'),
+  ]),
+  runOf('demo-run-earlier-1', '2026-06-12T19:45:00.000Z', [
+    filed(
+      '0-Inbox/Offer letter, Northwind Data.pdf',
+      '2-Areas/Work/Offer letter, Northwind Data.pdf',
+    ),
+    filed('0-Inbox/Bike shop receipt.pdf', '2-Areas/Money/Bike shop receipt.pdf'),
+  ]),
 ];
 
 /** Alex's own rules under the template's text, in the shape `rules.ts`
@@ -187,6 +268,594 @@ const DEMO_RULES = `${rules.replace(/\s+$/, '')}
 ## Everything else
 - Photos of a whiteboard become a note with the text typed out (owner's request, 2026-09-22)
 `;
+
+// --- The v4 sample folder (#583) -------------------------------------------
+//
+// One story across the boards in `docs/design/v4/boards/`: Alex's flat hunt,
+// the papers Bower filed in June, a garden, household costs. Every file kind
+// the explorer shows is here once, plus the system files the app hides.
+
+const KIB = 1024;
+const MIB = 1024 * KIB;
+
+/** A small picture standing in for Drive's `thumbnailLink`: hermetic (no
+ * network), and fetchable like any URL. */
+function thumb(label: string, fill: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" width="160" height="120"><rect width="160" height="120" fill="${fill}"/><text x="80" y="66" font-family="sans-serif" font-size="14" text-anchor="middle">${label}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/** A blob of `text` typed as `mimeType`: a stand-in for a binary file whose
+ * Drive size is set on the fixture entry. */
+function stub(text: string, mimeType: string): Blob {
+  return new Blob([text], { type: mimeType });
+}
+
+/** A frontmatter value: numbers and plain dates as they are, text quoted. */
+function yamlValue(value: string | number): string {
+  if (typeof value === 'number') return String(value);
+  return /^\d{4}-\d{2}(-\d{2})?$/.test(value) ? value : JSON.stringify(value);
+}
+
+interface CompanionSpec {
+  /** Where the note lives; its name is the original's, with `.md`. */
+  path: string;
+  /** The original file's name, for `original: [[…]]`. */
+  original: string;
+  created: string;
+  tags: string;
+  kind?: string;
+  /** The kind's fields, in the order written. */
+  fields?: Readonly<Record<string, string | number>>;
+  /** Where each field came from when not the file itself (R-AG-2). */
+  origins?: Readonly<Record<string, 'notes' | 'web' | 'you'>>;
+  notStated?: readonly string[];
+  status?: string;
+  /** Extra frontmatter after the standard fields. */
+  extra?: Readonly<Record<string, string | number>>;
+  /** The "Bower's note" callout's lines, origin included (R-AG-3). */
+  callout: readonly string[];
+  body: string;
+}
+
+/**
+ * A companion note in the v4 format (spec R-AG-2, R-AG-3): frontmatter with
+ * the kind's fields, `original`, `bower_origins`, `not_stated` and `status`,
+ * then the `> [!bower] Bower's note` box and a short body.
+ */
+function companion(spec: CompanionSpec): FixtureFile {
+  const lines = [
+    '---',
+    `tags: [${spec.tags}]`,
+    `created: ${spec.created}`,
+    `updated: ${spec.created}`,
+  ];
+  if (spec.kind !== undefined) lines.push(`kind: ${spec.kind}`);
+  for (const [key, value] of Object.entries(spec.fields ?? {})) {
+    lines.push(`${key}: ${yamlValue(value)}`);
+  }
+  lines.push(`original: "[[${spec.original}]]"`);
+  if (spec.origins !== undefined && Object.keys(spec.origins).length > 0) {
+    const pairs = Object.entries(spec.origins).map(([k, v]) => `${k}: ${v}`);
+    lines.push(`bower_origins: {${pairs.join(', ')}}`);
+  }
+  if (spec.notStated !== undefined && spec.notStated.length > 0) {
+    lines.push(`not_stated: [${spec.notStated.join(', ')}]`);
+  }
+  if (spec.status !== undefined) lines.push(`status: ${spec.status}`);
+  for (const [key, value] of Object.entries(spec.extra ?? {})) {
+    lines.push(`${key}: ${yamlValue(value)}`);
+  }
+  lines.push('---', '', "> [!bower] Bower's note");
+  for (const line of spec.callout) lines.push(`> ${line}`);
+  lines.push('', spec.body.trim(), '');
+  const day = Number(spec.created.slice(8, 10));
+  const modified = spec.created.startsWith('2026-09')
+    ? at(day, '1042')
+    : `${spec.created}T09:00:00.000Z`;
+  return {
+    path: spec.path,
+    modifiedTime: modified,
+    content: lines.join('\n'),
+  };
+}
+
+/** The four flat listings the Compare tab lines up (boards
+ * `Phone-Folder-Compare`, `Desktop-Compare`): what Bower read from each. */
+interface Listing {
+  name: string;
+  address: string;
+  type: string;
+  rent: number;
+  rooms: string;
+  available: string;
+  against: string;
+  bike: string;
+  fit: number;
+  status: string;
+  viewing?: string;
+  oldName: string;
+  callout: readonly string[];
+  body: string;
+}
+
+const FROM_NOTES =
+  '(from your notes: [[Offer letter, Northwind Data]], [[Cycle to Work agreement]])';
+
+export const FLAT_LISTINGS: readonly Listing[] = [
+  {
+    name: 'Kentish Town, 2 bed',
+    address: '9 Fictional Row, London NW5',
+    type: 'Flat with a garden',
+    rent: 2400,
+    rooms: '2 bed',
+    available: '2026-11-15',
+    against: '+1 %',
+    bike: '22 min',
+    fit: 81,
+    status: 'to view',
+    viewing: '2026-10-03',
+    oldName: 'Kentish Town flat.pdf',
+    callout: [
+      'Rent £2,400 a month, garden, available 15 November. (from the file)',
+      `22 minutes by bike to your office. ${FROM_NOTES}`,
+      'About the average for the area. (looked up)',
+    ],
+    body: 'The garden is the draw. It is the dearest of the four, and over the £2,300 you said you wanted to stay under.',
+  },
+  {
+    name: 'Arlington Road, 2 bed',
+    address: '14 Arlington Road, London NW1',
+    type: 'Flat, second floor, no lift',
+    rent: 2150,
+    rooms: '2 bed',
+    available: '2026-11-01',
+    against: '−10 %',
+    bike: '14 min',
+    fit: 72,
+    status: 'to view',
+    oldName: 'Arlington Road, 2 bed.pdf',
+    callout: [
+      "Rent £2,150 a month, 5 weeks' deposit, available 1 November. (from the file)",
+      `14 minutes by bike to your office. ${FROM_NOTES}`,
+      'The listing says "newly refurbished"; the photos show the bathroom is not. (from the file) — Check',
+    ],
+    body: `10 % under the £2,380 average for the area (looked up). Bright, south-facing, second floor, no lift.
+
+## Before you sign, check
+- Bathroom against the "newly refurbished" claim
+- Water pressure and boiler age
+- Who pays the agency fee`,
+  },
+  {
+    name: 'Camden Mews, 1 bed',
+    address: '3 Fictional Mews, London NW1',
+    type: 'Ground-floor flat',
+    rent: 1850,
+    rooms: '1 bed',
+    available: 'Now',
+    against: '−4 %',
+    bike: '18 min',
+    fit: 64,
+    status: 'new',
+    oldName: 'Camden Mews studio.pdf',
+    callout: [
+      'Rent £1,850 a month, ground floor, free now. (from the file)',
+      'One bedroom, and you said you want a room for a desk. (from what you told me)',
+      'Cheapest of the four. (from the file)',
+    ],
+    body: 'Free immediately, which helps with the lease ending in December. The bedroom is small.',
+  },
+  {
+    name: 'Holloway Road, 2 bed',
+    address: '210 Holloway Road, London N7',
+    type: 'Flat on a main road',
+    rent: 1990,
+    rooms: '2 bed',
+    available: '2026-12-01',
+    against: '−12 %',
+    bike: '27 min',
+    fit: 58,
+    status: 'new',
+    oldName: 'Holloway Road flat.pdf',
+    callout: [
+      'Rent £1,990 a month, two bedrooms, available 1 December. (from the file)',
+      'On a main road, and you work from home two days a week. (from what you told me) — Check',
+      'Furthest from your office at 27 minutes by bike. (looked up)',
+    ],
+    body: 'Cheap for two bedrooms. Ask about double glazing before you book a viewing.',
+  },
+];
+
+function listingFiles(): FixtureFile[] {
+  const files: FixtureFile[] = [];
+  for (const [i, listing] of FLAT_LISTINGS.entries()) {
+    const pdf = `${listing.name}.pdf`;
+    files.push({
+      path: `1-Projects/Flat hunt/${pdf}`,
+      mimeType: 'application/pdf',
+      modifiedTime: at(28, '0942'),
+      content: new Blob([LEASE_PDF], { type: 'application/pdf' }),
+      size: (180 + i * 40) * KIB,
+      thumbnailLink: thumb(listing.name, '#e8eef7'),
+      appProperties: { bowerOrigin: 'filed' },
+    });
+    files.push(
+      companion({
+        path: `1-Projects/Flat hunt/${listing.name}.md`,
+        original: pdf,
+        created: '2026-09-28',
+        tags: 'housing, summary',
+        kind: 'rental-listing',
+        fields: {
+          address: listing.address,
+          type: listing.type,
+          rent: listing.rent,
+          rooms: listing.rooms,
+          available: listing.available,
+          against_area: listing.against,
+          bike_to_office: listing.bike,
+          fit: listing.fit,
+          ...(listing.viewing !== undefined && { viewing: listing.viewing }),
+        },
+        origins: {
+          against_area: 'web',
+          bike_to_office: 'notes',
+          fit: 'you',
+        },
+        notStated: ['pets', 'bills_included', 'agency_fee'],
+        status: listing.status,
+        extra: { pages: 2 },
+        callout: listing.callout,
+        body: listing.body,
+      }),
+    );
+  }
+  return files;
+}
+
+/** The budget Alex copied from a Google Sheet: 24 months, one row each. */
+function budgetCsv(): string {
+  const months = [
+    'Nov',
+    'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+  ];
+  const bills = [210, 240, 260, 250, 220, 190, 170, 160, 160, 170, 190, 200];
+  const rows = ['Month,Rent,Bills,Total'];
+  for (let i = 0; i < 24; i++) {
+    const bill = bills[i % 12] ?? 0;
+    rows.push(`${months[i % 12] ?? ''},2150,${bill},${2150 + bill}`);
+  }
+  return `${rows.join('\n')}\n`;
+}
+
+/** The rows of the Flat budget the fixture writes, for tests. */
+export const FLAT_BUDGET_ROWS = 24;
+
+const V4_FILES: readonly FixtureFile[] = [
+  // --- Flat hunt: listings, photo, lease, budget, video, ZIP ----------------
+  ...listingFiles(),
+  companion({
+    path: '1-Projects/Flat hunt/Arlington Road, window sign.md',
+    original: 'Arlington Road, window sign.jpg',
+    created: '2026-09-27',
+    tags: 'housing',
+    callout: [
+      'The sign gives the agent\'s number and "viewings Saturdays 10 to 12". (from the file)',
+    ],
+    body: 'A photo of the "To let" sign outside 14 Arlington Road, taken on the way to the viewing.',
+  }),
+  companion({
+    path: '1-Projects/Flat hunt/Lease agreement 2026.md',
+    original: 'Lease agreement 2026.pdf',
+    created: '2026-09-27',
+    tags: 'housing, summary',
+    kind: 'contract',
+    fields: {
+      with: 'Fictional Lettings Ltd',
+      covers: 'the flat',
+      payments: 'monthly',
+      starts: '2026-11-01',
+      notice: 'two months, after six',
+    },
+    notStated: ['value', 'ends'],
+    extra: { pages: 42 },
+    callout: [
+      'Twelve months from 1 November, then month to month. (from the file)',
+      "Break clause after six months, two months' notice. (from the file)",
+    ],
+    body: `A long tenancy agreement.
+
+## Where to look
+- [[Lease agreement 2026.pdf#page=4|p. 4]]: Rent, deposit and when it is paid
+- [[Lease agreement 2026.pdf#page=12|p. 12]]: The break clause
+- [[Lease agreement 2026.pdf#page=19|p. 19]]: Pets: none without written consent
+- [[Lease agreement 2026.pdf#page=31|p. 31]]: Who repairs what`,
+  }),
+  {
+    // A copy of a Google Sheet: Bower keeps the first sheet as a table.
+    path: '1-Projects/Flat hunt/Flat budget.csv',
+    mimeType: 'text/csv',
+    modifiedTime: at(26, '1815'),
+    content: budgetCsv(),
+    size: 3 * KIB,
+    appProperties: { bowerSource: 'Flat budget', bowerSourceKind: 'sheet' },
+  },
+  {
+    path: '1-Projects/Flat hunt/Walk-through, Arlington Road.mp4',
+    mimeType: 'video/mp4',
+    modifiedTime: at(26, '1120'),
+    content: stub('video', 'video/mp4'),
+    size: 86 * MIB,
+    thumbnailLink: thumb('Walk-through', '#dfe7e0'),
+    videoMediaMetadata: { durationMillis: 134_000 },
+    preview: true,
+  },
+  {
+    path: '1-Projects/Flat hunt/Photos from the viewing.zip',
+    mimeType: 'application/zip',
+    modifiedTime: at(26, '1130'),
+    content: stub('zip', 'application/zip'),
+    size: 38 * MIB,
+  },
+
+  // --- Work: the papers Bower filed in June and July -----------------------
+  {
+    path: '2-Areas/Work/Offer letter, Northwind Data.pdf',
+    mimeType: 'application/pdf',
+    modifiedTime: '2026-06-12T19:45:00.000Z',
+    content: new Blob([INVOICE_PDF], { type: 'application/pdf' }),
+    size: 240 * KIB,
+    thumbnailLink: thumb('Offer letter', '#f3ece0'),
+    appProperties: { bowerOrigin: 'filed' },
+  },
+  companion({
+    path: '2-Areas/Work/Offer letter, Northwind Data.md',
+    original: 'Offer letter, Northwind Data.pdf',
+    created: '2026-06-12',
+    tags: 'work, summary',
+    kind: 'job-offer',
+    fields: {
+      role: 'Data engineer',
+      employer: 'Northwind Data',
+      office: "King's Cross",
+      salary: 78000,
+      starts: '2026-08-01',
+    },
+    status: 'applied',
+    extra: { pages: 3 },
+    callout: [
+      'Data engineer, £78,000 a year, starting 1 August. (from the file)',
+      "The office is at King's Cross. (from the file)",
+    ],
+    body: 'The offer you accepted in June. Original: PDF, 3 pages.',
+  }),
+  {
+    path: '2-Areas/Work/Cycle to Work agreement.pdf',
+    mimeType: 'application/pdf',
+    modifiedTime: '2026-07-08T18:20:00.000Z',
+    content: new Blob([INVOICE_PDF], { type: 'application/pdf' }),
+    size: 310 * KIB,
+    thumbnailLink: thumb('Cycle to Work', '#f3ece0'),
+    appProperties: { bowerOrigin: 'filed' },
+  },
+  companion({
+    path: '2-Areas/Work/Cycle to Work agreement.md',
+    original: 'Cycle to Work agreement.pdf',
+    created: '2026-07-08',
+    tags: 'work, summary',
+    kind: 'contract',
+    fields: {
+      with: 'Northwind Data',
+      covers: 'bike',
+      value: 1200,
+      payments: 'from your salary, monthly',
+      starts: '2026-07',
+      ends: '2027-07',
+    },
+    callout: [
+      'A £1,200 bike, paid back from your salary until July 2027. (from the file)',
+    ],
+    body: 'Also filed in July. Keep it: the scheme asks for it if you leave early.',
+  }),
+  {
+    path: '2-Areas/Work/Job offer, Northwind Data.md',
+    modifiedTime: at(26, '1005'),
+    content: `---
+tags: [work, summary]
+created: 2026-09-26
+updated: 2026-09-26
+---
+
+> [!bower] Bower's note
+> Senior data engineer, £78,000, hybrid three days in the office. (from the file)
+> That is £6,000 above your floor; the commute is 40 minutes. (from your notes: [[About-Me]])
+> Reply by 10 October. (from the file) — Check
+
+# Job offer, Northwind Data
+
+A second offer from the same company, for a senior role. The full letter is long; the sections below keep its order.
+
+## Pay and benefits
+
+> [!bower]- Bower on this section
+> £78,000 base, a 10 % bonus and 28 days of holiday. (from the file)
+> The bonus is paid in March, after the year end. (from the file)
+
+Base salary of £78,000 a year, paid monthly. A discretionary bonus of up to 10 % is paid in March. Twenty-eight days of holiday plus bank holidays, rising by one day a year to a maximum of thirty-three.
+
+## Notice and non-compete
+
+> [!bower]- Bower on this section
+> Twelve months' non-compete in the same sector: longer than the usual six. (from the file) — Check
+
+Notice is three months on both sides after the probation period. Clause 9.2 restricts working for a competitor in the same sector for twelve months after leaving.
+
+## The team
+
+Six engineers and a product manager, working from the King's Cross office on Tuesdays, Wednesdays and Thursdays.
+
+## Questions to ask
+
+- Can the non-compete be shortened to six months?
+- Is the hybrid pattern written into the contract or a policy?
+- Does the bonus depend on company results or personal ones?
+`,
+  },
+
+  // --- Money, Garden, Home ---------------------------------------------------
+  {
+    path: '2-Areas/Money/Household costs 2026.xlsx',
+    mimeType:
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    modifiedTime: at(24, '2010'),
+    content: stub(
+      'xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ),
+    size: 18 * KIB,
+    thumbnailLink: thumb('Household costs', '#e3f0e6'),
+    preview: true,
+  },
+  {
+    path: '2-Areas/Money/Bike shop receipt.pdf',
+    mimeType: 'application/pdf',
+    modifiedTime: '2026-06-12T19:45:00.000Z',
+    content: new Blob([INVOICE_PDF], { type: 'application/pdf' }),
+    size: 96 * KIB,
+    thumbnailLink: thumb('Receipt', '#f3ece0'),
+    appProperties: { bowerOrigin: 'filed' },
+  },
+  {
+    path: '2-Areas/Garden/Tomato seedlings.jpg',
+    mimeType: 'image/jpeg',
+    modifiedTime: at(27, '0738'),
+    content: pngBlob(TEST_PATCH_PNG),
+    size: 1_800_000,
+    thumbnailLink: thumb('Tomato seedlings', '#dcefd0'),
+    imageMediaMetadata: {
+      time: '2026:09:27 07:31:12',
+      width: 4032,
+      height: 3024,
+    },
+  },
+  {
+    // An iPhone photo: a format the app shows only by name (System-Formats).
+    path: '2-Areas/Garden/Front bed.heic',
+    mimeType: 'image/heic',
+    modifiedTime: at(25, '1650'),
+    content: stub('heic', 'image/heic'),
+    size: 2 * MIB,
+    imageMediaMetadata: {
+      time: '2026:09:25 16:48:03',
+      width: 4032,
+      height: 3024,
+    },
+  },
+
+  // --- Resources and Answers -------------------------------------------------
+  note(
+    '3-Resources/Links/Kentish Town photos.md',
+    28,
+    'link',
+    `# Kentish Town photos
+
+A link to the listing's photo gallery: rightmove.example.com/properties/kentish-town
+
+Saved from the flat hunt. Part of [[Flat hunt]].`,
+    'source: https://rightmove.example.com/properties/kentish-town\n',
+  ),
+  note(
+    '3-Resources/Viewing checklist.md',
+    28,
+    'guide, housing',
+    `# Viewing checklist
+
+- Damp by the windows and in the bathroom
+- Water pressure: run the shower and a tap together
+- Boiler age and the last service date
+- Who pays the agency fee, and what is in the bills
+- Whether pets are allowed, in writing
+
+Made for [[Flat hunt]].`,
+  ),
+  {
+    path: 'Answers/Which flat should we view first.md',
+    modifiedTime: at(28, '0950'),
+    content: `---
+type: answer
+tags: [answer, housing]
+created: 2026-09-28
+updated: 2026-09-28
+question: Which two should we view first?
+---
+
+> [!bower] Bower's note
+> Arlington Road first: the cheapest 2-bed, 14 minutes by bike to your office. (from the file)
+> Kentish Town second: a garden and 2 beds, but £2,400 and 22 minutes. (from the file)
+> Camden Mews has one bedroom; Holloway Road is on a main road. (from what you told me) — Check
+
+# Which flat should we view first?
+
+## At the viewing, check
+- Arlington: the bathroom against "newly refurbished"
+- Both: damp by the windows, water pressure
+
+## Ask the agent
+- Can the start move to 15 November?
+- Pets, bills, the agency fee: not in either listing
+
+More in [[Viewing checklist]].
+
+Used: the four listings, your offer letter and Cycle to Work agreement, routes and area prices from the web.
+`,
+  },
+
+  // --- Written by Alex -------------------------------------------------------
+  // (`Notes from the viewing.md` is in the Projects block above.)
+
+  // --- System files: never shown (D18) --------------------------------------
+  {
+    path: '1-Projects/Flat hunt/desktop.ini',
+    mimeType: 'text/plain',
+    modifiedTime: at(26, '1000'),
+    content: '[.ShellClassInfo]\n',
+  },
+  {
+    path: '2-Areas/Work/desktop.ini',
+    mimeType: 'text/plain',
+    modifiedTime: at(26, '1000'),
+    content: '[.ShellClassInfo]\n',
+  },
+  {
+    path: '2-Areas/Garden/desktop.ini',
+    mimeType: 'text/plain',
+    modifiedTime: at(26, '1000'),
+    content: '[.ShellClassInfo]\n',
+  },
+  {
+    path: '1-Projects/Flat hunt/~$Lease agreement 2026.docx',
+    mimeType:
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    modifiedTime: at(27, '0930'),
+    content: stub('lock', 'application/octet-stream'),
+    size: 162,
+  },
+];
+
+/** Folders that exist with nothing in them: the empty-folder screen's
+ * target (board `Phone-Folder-Empty`). */
+export const FIXTURE_FOLDERS: readonly string[] = ['2-Areas/Car'];
 
 export const FIXTURE_FILES: readonly FixtureFile[] = [
   // --- Top of the folder -------------------------------------------------
@@ -451,6 +1120,8 @@ Looking for a one-bedroom before the current lease runs out in December.
     mimeType: 'application/pdf',
     modifiedTime: at(27, '0930'),
     content: new Blob([LEASE_PDF], { type: 'application/pdf' }),
+    size: Math.round(1.1 * 1024 * 1024),
+    thumbnailLink: thumb('Lease agreement', '#e8eef7'),
     appProperties: { bowerOrigin: 'filed' },
   },
   // A photo from the viewing: the same tiny stub PNG as the garden test
@@ -460,6 +1131,13 @@ Looking for a one-bedroom before the current lease runs out in December.
     mimeType: 'image/jpeg',
     modifiedTime: at(27, '0935'),
     content: pngBlob(TEST_PATCH_PNG),
+    size: Math.round(2.4 * 1024 * 1024),
+    thumbnailLink: thumb('TO LET', '#f4e9c9'),
+    imageMediaMetadata: {
+      time: '2026:09:26 10:14:00',
+      width: 4032,
+      height: 3024,
+    },
   },
   // A Google Doc, exported as text (#367): a plain Markdown note, the way
   // `drive.ts#exportPlanFor` saves one from a real Drive pick.
@@ -693,6 +1371,14 @@ Done in August: new chain, brake pads and a tune-up. Kept for the receipts.`,
 - status: open
 - created: 2026-09-26
 
+## Bike time on every listing
+- id: 2026-09-28-bike-time
+- kind: rule
+- text: For every flat listing, add the bike time to your office.
+- evidence: You asked about bike times twice this week, and you cycle to work.
+- status: open
+- created: 2026-09-28
+
 ## A tag for bills
 - id: 2026-09-12-bills-tag
 - kind: tag
@@ -719,4 +1405,6 @@ Home insurance on 3 November, and the streaming service every month until you ca
 ## What Bower used
 - [[Bills and renewals]] (from your notes)`,
   ),
+
+  ...V4_FILES,
 ];

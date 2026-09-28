@@ -12,6 +12,7 @@ import { DriveError, FOLDER_MIME } from '../drive.js';
 import type { DriveClient, DriveFile } from '../drive.js';
 import { reply } from './api.js';
 import type { DemoServer } from './server.js';
+import { drivePreviewUrl } from './vault.js';
 import type { Entry } from './vault.js';
 
 /**
@@ -34,6 +35,15 @@ function listDelayMs(): number {
 
 function notFound(): DriveError {
   return new DriveError(404, 'File not found.');
+}
+
+/**
+ * Drive's embeddable viewer for a file the fixture marks `preview` (Office
+ * files and video), or `null` for any other. Not part of `DriveClient`: the
+ * real app builds this address from the file id.
+ */
+export function previewUrlOf(server: DemoServer, id: string): string | null {
+  return server.vault.get(id)?.preview === true ? drivePreviewUrl(id) : null;
 }
 
 export function createDemoDrive(server: DemoServer): DriveClient {
@@ -192,12 +202,9 @@ export function createDemoDrive(server: DemoServer): DriveClient {
 
     modifiedTimeOf: (id) => reply(() => entry(id).modifiedTime),
 
-    // The demo has no Drive to draw thumbnails: every file answers "none",
-    // so the file screen shows its one sentence instead (#350).
-    thumbnailLinkOf: (id) =>
-      reply(() => {
-        file(id);
-        return null;
-      }),
-  };
+    // Only the files the fixture gives a picture to (photos, PDFs, Office
+    // files) have a thumbnail; the rest answer "none", so the file screen
+    // shows its one sentence instead (#350).
+    thumbnailLinkOf: (id) => reply(() => file(id).thumbnailLink ?? null),
+  } satisfies DriveClient;
 }

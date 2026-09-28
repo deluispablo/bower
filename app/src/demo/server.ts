@@ -27,6 +27,7 @@ import {
   DEMO_QUOTA_LIMIT,
   DEMO_RUNS,
   FIXTURE_FILES,
+  FIXTURE_FOLDERS,
   INBOX_PLAN,
 } from './fixture.js';
 import { instructionText, replyTo } from './replies.js';
@@ -44,9 +45,15 @@ const RUN_HISTORY_LIMIT = 20;
 
 function copyRun(run: Run): Run {
   const copy: Run = { ...run, processed: [...(run.processed ?? [])] };
+  if (run.setAside !== undefined)
+    copy.setAside = run.setAside.map((item) => ({ ...item }));
   if (run.items !== undefined)
     copy.items = run.items.map((item) => ({ ...item }));
   return copy;
+}
+
+function emptyRun(): Run {
+  return { state: 'done', requestedAt: new Date(0).toISOString() };
 }
 
 interface Step {
@@ -91,8 +98,10 @@ export class DemoServer {
   readonly vault: DemoVault;
   readonly me: Me;
   private active: ActiveRun | null = null;
-  private last: Run | null = null;
-  /** Finished runs, newest first (`GET /runs`, #345): two earlier
+  /** The last finished run (`GET /status`): today's tidy-up, the first of
+   * `DEMO_RUNS`, until a scripted run replaces it (#583). */
+  private last: Run | null = copyRun(DEMO_RUNS[0] ?? emptyRun());
+  /** Finished runs, newest first (`GET /runs`, #345): the story's four
    * tidy-ups, then every scripted run as it ends. */
   private history: Run[] = DEMO_RUNS.map(copyRun);
 
@@ -101,7 +110,7 @@ export class DemoServer {
     /** `null` in tests: `tourSeenAt` then starts unset and is never persisted. */
     private readonly storage: Storage | null = null,
   ) {
-    this.vault = new DemoVault(FIXTURE_FILES, now);
+    this.vault = new DemoVault(FIXTURE_FILES, now, FIXTURE_FOLDERS);
     const inbox = this.vault.byPath('0-Inbox');
     this.me = {
       email: DEMO_EMAIL,
