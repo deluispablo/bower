@@ -107,6 +107,15 @@ grep -Fq "printf 'BOWER_SCOPE=%s\n' \"\$BOWER_SCOPE\"" <<<"$ingest_hand_off" ||
   die 'ingest.yml: settings step does not write BOWER_SCOPE'
 echo 'ok ingest.yml hands the scope from the dispatch to run.sh'
 
+# The user's web switch (#374) comes from the Worker's dispatch and reaches
+# run.sh through the settings file, like the ticket; a lint has none.
+web_hand_off=$(step "$WORKFLOWS_DIR/ingest.yml" 'Hand the runner settings to run.sh')
+grep -Fq 'BOWER_RUN_ALLOW_WEB: ${{ github.event.client_payload.allow_web }}' <<<"$web_hand_off" ||
+  die "ingest.yml: the user's web switch does not come from the dispatch"
+grep -Fq "printf 'BOWER_RUN_ALLOW_WEB=%s\n' \"\$BOWER_RUN_ALLOW_WEB\"" <<<"$web_hand_off" ||
+  die 'ingest.yml: settings step does not write BOWER_RUN_ALLOW_WEB'
+echo "ok ingest.yml hands the user's web switch from the dispatch to run.sh"
+
 # No job that runs the agent holds the operator key (issue #259).
 ! grep -q 'BOWER_API_KEY' "$WORKFLOWS_DIR/ingest.yml" || die 'ingest.yml: mentions BOWER_API_KEY'
 ! grep -q 'workflow_dispatch' "$WORKFLOWS_DIR/ingest.yml" ||

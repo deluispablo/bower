@@ -451,6 +451,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       },
       needsReauth: user.needsReauth === true,
       hasApiKey: user.encApiKey !== undefined,
+      allowWeb: user.allowWeb === true,
       ...(user.tourSeenAt === undefined ? {} : { tourSeenAt: user.tourSeenAt }),
       ...(user.givenName === undefined ? {} : { name: user.givenName }),
     });

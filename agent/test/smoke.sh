@@ -268,6 +268,10 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       printf -- '---\ntags: [instruction]\nvia: app\nkind: context\n---\n\nFile these as receipts.\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0902 Context.md"
     fi
+    if [ "$SMOKE_SCENARIO" = fileonly ]; then
+      # A receipt photo next to the PDF and the clip (issue #368).
+      echo jpg >"$remote/0-Inbox/receipt.jpg"
+    fi
     if [ "$SMOKE_SCENARIO" = quarantine ]; then
       # A pending note that reads like an instruction to an assistant:
       # agent/scan.sh must flag it and run.sh must move it to
@@ -454,6 +458,25 @@ case "$SMOKE_SCENARIO" in
     echo 'obey the clipping' >>2-Areas/Home/CLAUDE.md
     echo 'v2 from the agent' >3-Resources/agent.md
     ;;
+  # File only (issue #368): the PDF and the receipt photo move into their
+  # PARA folders as they are, each with a hub line, an index.md row and a
+  # Filed: log line, and no summary note; the clip is the content, so it
+  # becomes a note and the raw clip goes to Processed/.
+  fileonly)
+    mkdir -p '1-Projects/Flat hunt' 2-Areas/Finance 3-Resources
+    mv 0-Inbox/a.pdf '1-Projects/Flat hunt/a.pdf'
+    mv 0-Inbox/receipt.jpg 2-Areas/Finance/receipt.jpg
+    echo '- [[a.pdf]] Lease offer for the flat' >>'1-Projects/Flat hunt/Flat hunt.md'
+    echo '- [[receipt.jpg]] Corner shop receipt, groceries' >>2-Areas/Finance/Finance.md
+    printf -- '%s\n' '- [[1-Projects/Flat hunt/a.pdf]] · PDF · filed by Bower' \
+      '- [[2-Areas/Finance/receipt.jpg]] · image · filed by Bower' \
+      '- [[3-Resources/Clipped trick]]' >>index.md
+    printf -- '%s\n' 'Filed: a.pdf → 1-Projects/Flat hunt' \
+      'Filed: receipt.jpg → 2-Areas/Finance' >>log.md
+    printf -- '---\ntags: [reference, learning]\nsource: "[[b]]"\n---\nA clipped trick.\n' \
+      >'3-Resources/Clipped trick.md'
+    mv Clippings/b.md 0-Inbox/Processed/b.md
+    ;;
   # More changes than BOWER_MAX_CHANGES=3, all inside the known roots.
   toomany)
     for n in 1 2 3 4; do echo "note $n" >"3-Resources/new-$n.md"; done
@@ -471,8 +494,8 @@ if [ "$SMOKE_SCENARIO" = overloaded ]; then
 fi
 [ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/
 printf '%s\n' 'Working on 0-Inbox/a.pdf' 'Reading Clippings/b.md' \
-  'SUMMARY-MARKER 1 processed a.pdf' 'SUMMARY-MARKER 2 processed b.md' \
-  'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5'
+  'SUMMARY-MARKER 1 processed a.pdf' \
+  'Filed: 1 files' 'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5' 'SUMMARY-MARKER 6'
 STUB
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -582,7 +605,7 @@ run_case() {
   set +e
   env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GITHUB_RUN_ID \
     -u BOWER_API_URL -u BOWER_RUN_TICKET -u BOWER_API_KEY -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB \
-    -u BOWER_MAX_CHANGES -u BOWER_REPORT_REFUSED -u BOWER_SCOPE \
+    -u BOWER_MAX_CHANGES -u BOWER_REPORT_REFUSED -u BOWER_SCOPE -u BOWER_RUN_ALLOW_WEB \
     PATH="$STUBS:$PATH" \
     RUNNER_TEMP="$STATE/runner-temp" \
     CLAUDE_CODE_OAUTH_TOKEN='test-oauth-token' \
@@ -615,7 +638,7 @@ expect_content_free() {
     evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
-    Proposals Answers Recipes Invoices \
+    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -710,7 +733,16 @@ grep -Fq 'Bower*.md` in `Clippings/`' <<<"$INGEST_PROMPT" ||
 grep -Fq 'the `.md` file next to the original with the same base name' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not explain the converted Markdown sibling'
 grep -Fq 'a converted document together with its `.md`' <<<"$INGEST_PROMPT" ||
-  die 'ingest prompt does not move the sibling to Processed/ with the original'
+  die 'ingest prompt does not file the sibling together with the original'
+grep -Fq 'Write no summary note unless something asks for one' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt does not file originals without a summary note (#368)'
+grep -Fq '   Filed: <n> files' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt report has no Filed line (#368)'
+RULEBOOK=$(cat "$HERE/../../vault-template/CLAUDE.md")
+grep -Fq 'Bower only files, by default' <<<"$RULEBOOK" ||
+  die 'the rulebook Ingest does not file by default (#368)'
+grep -Fq '· <type> · filed by Bower' <<<"$RULEBOOK" ||
+  die 'the rulebook does not index filed originals with their type (#368)'
 grep -Fq '`0-Inbox/Quarantine/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not tell the agent to leave Quarantine/ alone'
 grep -Fq 'listed by the runner' <<<"$INGEST_PROMPT" ||
@@ -744,9 +776,11 @@ expect_eq "$(post 2 p.kind)" ingest 'second kind'
 expect_eq "$(post 2 p.runId)" 4242 'done runId'
 expect_eq "$(post 2 p.processed)" \
   '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed'
-expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
+expect_eq "$(post 2 'p.summary.split("\n").length')" 6 'summary lines'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
-expect_eq "$(post 2 'p.summary.split("\n")[4]')" 'SUMMARY-MARKER 5' 'summary end'
+expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end'
+grep -Fxq 'Filed: 1 files' <<<"$(post 2 p.summary)" || die 'the Filed line is not in the summary'
+grep -q ' 1 originals filed$' "$STATE/out.log" || die 'filed count not logged'
 expect_eq "$(post 2 p.refused)" '[]' 'refused'
 expect_eq "$(post 1 'p.refused === undefined')" true 'running has no refused'
 expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'uploaded files (the manifest diff)'
@@ -930,9 +964,9 @@ expect_eq "$(posts_count)" 2 'status posts'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.processed)" \
   '["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' 'processed'
-expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
+expect_eq "$(post 2 'p.summary.split("\n").length')" 6 'summary lines'
 expect_eq "$(post 2 'p.summary.split("\n")[0]')" 'SUMMARY-MARKER 1 processed a.pdf' 'summary start'
-expect_eq "$(post 2 'p.summary.split("\n")[4]')" 'SUMMARY-MARKER 5' 'summary end'
+expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 1 'rclone deletefile calls'
 [ ! -e "$STATE/remote/0-Inbox/a.pdf" ] || die 'original back in 0-Inbox/ in Drive'
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive'
@@ -961,9 +995,10 @@ expect_content_free
 expect_cleaned_up
 echo "ok lint"
 
-# 9. The instance opts in to web access: WebSearch and WebFetch are allowed,
-# network commands in Bash stay denied.
-run_case web BOWER_ALLOW_WEB=1
+# 9. The instance opts in to web access and the user's switch is on (the
+# dispatch's allow_web, #374): WebSearch and WebFetch are allowed, network
+# commands in Bash stay denied.
+run_case web BOWER_ALLOW_WEB=1 BOWER_RUN_ALLOW_WEB=1
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
   'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),WebSearch,WebFetch' \
@@ -974,6 +1009,24 @@ expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok web opt-in"
+
+# 9b. Only one of the two switches says yes (#374): the instance allows the
+# web but the user's switch is off, or the user's is on and the instance
+# does not allow it. Either way the web tools stay denied.
+for web_case in 'webuseroff BOWER_ALLOW_WEB=1 BOWER_RUN_ALLOW_WEB=0' \
+  'webinstanceoff BOWER_RUN_ALLOW_WEB=1'; do
+  # shellcheck disable=SC2086 # the case name and its settings, split on purpose
+  run_case $web_case
+  expect_eq "$RC" 0 'exit code'
+  expect_eq "$(cat "$STATE/claude-tools.txt")" \
+    'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*)' \
+    'allowed tools (one switch off)'
+  expect_eq "$(cat "$STATE/claude-denied.txt")" \
+    'WebSearch,WebFetch,Bash(curl:*),Bash(wget:*)' 'disallowed tools (one switch off)'
+  expect_content_free
+  expect_cleaned_up
+done
+echo "ok web tools need both the instance and the user"
 
 # 10. A note is edited in the app while the agent rewrites another one: only
 # what the agent added or changed is uploaded, so the app's edit survives.
@@ -1475,3 +1528,35 @@ expect_eq "$RC" 2 'exit code'
 expect_eq "$(posts_count)" 0 'status posts'
 expect_eq "$(calls curl)" '' 'curl calls'
 echo "ok an unknown scope is refused"
+
+# 29. File only (issue #368): a PDF and a receipt photo land in their PARA
+# folders as they are, with no summary note next to them; the clip still
+# becomes a note and its raw copy goes to Processed/. Each move is one
+# copy up of the new path plus one targeted delete of the inbox path, so it
+# counts as one change against BOWER_MAX_CHANGES (8 here: two originals,
+# two hub notes, index.md, log.md, the clip's note and the raw clip).
+run_case fileonly
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+remote="$STATE/remote"
+for f in '1-Projects/Flat hunt/a.pdf' 2-Areas/Finance/receipt.jpg \
+  '3-Resources/Clipped trick.md' 0-Inbox/Processed/b.md; do
+  [ -f "$remote/$f" ] || die "not in Drive after the run: $f"
+done
+for f in 0-Inbox/a.pdf 0-Inbox/receipt.jpg Clippings/b.md 0-Inbox/Processed/a.pdf \
+  0-Inbox/Processed/receipt.jpg; do
+  [ ! -e "$remote/$f" ] || die "still in Drive after the run: $f"
+done
+expect_eq "$(LC_ALL=C sort "$STATE/uploaded.txt")" "$(printf '%s\n' \
+  '0-Inbox/Processed/b.md' '1-Projects/Flat hunt/Flat hunt.md' '1-Projects/Flat hunt/a.pdf' \
+  '2-Areas/Finance/Finance.md' '2-Areas/Finance/receipt.jpg' '3-Resources/Clipped trick.md' \
+  index.md log.md | LC_ALL=C sort)" 'uploaded files (originals filed, no summary note)'
+expect_eq "$(calls rclone | grep '^rclone deletefile ' | LC_ALL=C sort)" "$(printf '%s\n' \
+  'rclone deletefile vault:0-Inbox/a.pdf' 'rclone deletefile vault:0-Inbox/receipt.jpg' \
+  'rclone deletefile vault:Clippings/b.md' | LC_ALL=C sort)" 'targeted deletes'
+grep -q ' 8 files changed$' "$STATE/out.log" || die 'a move did not count as one change'
+grep -Fxq -- '- [[2-Areas/Finance/receipt.jpg]] · image · filed by Bower' "$remote/index.md" ||
+  die 'the filed receipt has no index.md row with its type'
+expect_content_free
+expect_cleaned_up
+echo "ok originals filed without a summary note, the clip becomes a note"

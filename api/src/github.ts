@@ -33,17 +33,25 @@ export interface DispatchRunInput {
    * `client_payload.scope` when set; a lint has none.
    */
   scope?: 'all' | 'instructions';
+  /**
+   * Whether the user allows web lookups for this run (#374): sent as
+   * `client_payload.allow_web`, `"1"` or `"0"`, when set; a lint has none.
+   * The runner turns the web tools on only when the instance's
+   * `BOWER_ALLOW_WEB` allows them too.
+   */
+  allowWeb?: boolean;
 }
 
 /**
  * Sends `repository_dispatch` with `event_type` and
- * `client_payload: { vault_id, ticket }` (plus `scope` when given) to
+ * `client_payload: { vault_id, ticket }` (plus `scope` and `allow_web`
+ * when given) to
  * `repo`. GitHub answers 204 when the event is accepted; anything else (or
  * a network failure) is a 502 `dispatch`.
  */
 async function dispatchRun(
   eventType: string,
-  { repo, token, vaultId, ticket, scope }: DispatchRunInput,
+  { repo, token, vaultId, ticket, scope, allowWeb }: DispatchRunInput,
   fetchImpl: FetchLike,
 ): Promise<void> {
   let response: Response;
@@ -63,6 +71,9 @@ async function dispatchRun(
           vault_id: vaultId,
           ticket,
           ...(scope === undefined ? {} : { scope }),
+          ...(allowWeb === undefined
+            ? {}
+            : { allow_web: allowWeb ? '1' : '0' }),
         },
       }),
     });

@@ -31,6 +31,12 @@ export interface User {
    * absent when Google gave none. */
   givenName?: string;
   /**
+   * The user's "Let Bower look things up on the web" switch (#374): `true`
+   * when on; absent is off. A run gets the web tools only when this and the
+   * instance's `BOWER_ALLOW_WEB` both allow it.
+   */
+  allowWeb?: boolean;
+  /**
    * Legacy, read only: where "Sign out everywhere" kept the generation
    * before it moved to its own `sessiongen:<id>` key (see `store.ts`).
    * Nothing writes it any more; a stored value still counts, so a sign-out

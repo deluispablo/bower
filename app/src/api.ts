@@ -131,6 +131,9 @@ export interface Me {
   quota: { used: number; limit: number };
   needsReauth: boolean;
   hasApiKey: boolean;
+  /** "Let Bower look things up on the web" (#374); absent (an older
+   * Worker) reads as off. */
+  allowWeb?: boolean;
   /** ISO-8601; when the first-run tour was finished or skipped. Absent until then. */
   tourSeenAt?: string;
 }
@@ -159,10 +162,14 @@ export interface UpdateSettingsInput {
   apiKey?: string | null;
   /** ISO-8601 (`Date.prototype.toISOString()`): the first-run tour was seen. */
   tourSeenAt?: string;
+  /** The web lookup switch (#374). */
+  allowWeb?: boolean;
 }
 
 export interface UpdateSettingsResult {
   hasApiKey: boolean;
+  /** Absent from an older Worker; reads as off. */
+  allowWeb?: boolean;
 }
 
 export type RunState = 'queued' | 'running' | 'done' | 'failed';

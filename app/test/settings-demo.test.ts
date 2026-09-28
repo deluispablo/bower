@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 
 /**
- * Settings in a demo build (#193): the own API key field, "Sign out
- * everywhere" and "Delete my Bower account" each show one sentence instead
- * of a working form or button; plain "Sign out" is untouched. `isDemo()`
- * is mocked directly (rather than stubbing `VITE_DEMO` and re-importing
- * `api.ts`) so the real demo module never boots for a plain UI check.
+ * Settings in a demo build (#193): the own API key field and "Sign out
+ * everywhere" render nothing of their own, replaced by one combined
+ * sentence for the whole Advanced section (#364, not one per control);
+ * "Delete my Bower account" (its own section) keeps its own sentence, and
+ * the push toggle is greyed with its own sentence too. Plain "Sign out"
+ * is untouched. `isDemo()` is mocked directly (rather than stubbing
+ * `VITE_DEMO` and re-importing `api.ts`) so the real demo module never
+ * boots for a plain UI check.
  */
 
 import { h, render } from 'preact';
@@ -51,6 +54,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 const { Settings } = await import('../src/routes/settings.js');
 
 const NOT_IN_DEMO = 'Not in the demo: run your own Bower to use this.';
+const NOT_IN_DEMO_PUSH = 'Not in the demo. Run your own Bower to use it.';
 
 let root: HTMLDivElement;
 
@@ -119,10 +123,25 @@ describe('Settings in a demo build', () => {
     ).toBe(false);
   });
 
-  it('shows the sentence exactly three times (API key, sign out everywhere, delete)', () => {
+  it('shows the sentence exactly twice, not once per control (#364)', () => {
     state.demo = true;
     mount();
     const notes = textsOf('.settings-note').filter((t) => t === NOT_IN_DEMO);
-    expect(notes).toHaveLength(3);
+    // Once for the whole Advanced section (API key + sign out everywhere,
+    // now silent), once for the Danger zone (delete my account).
+    expect(notes).toHaveLength(2);
+  });
+
+  it('greys the push toggle with its own sentence', () => {
+    state.demo = true;
+    mount();
+    const row = Array.from(root.querySelectorAll('.toggle-row')).find((el) =>
+      el.textContent?.includes("Ping me when it's done"),
+    );
+    if (row === undefined) throw new Error('push toggle row missing');
+    expect(row.textContent).toContain(NOT_IN_DEMO_PUSH);
+    expect(row.textContent).not.toContain('Notifications on this device');
+    const input = row.querySelector('input[role="switch"]');
+    expect((input as HTMLInputElement | null)?.disabled).toBe(true);
   });
 });

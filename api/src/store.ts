@@ -106,6 +106,7 @@ export interface UserPatch {
   needsReauth?: true | null;
   tourSeenAt?: string | null;
   givenName?: string | null;
+  allowWeb?: true | null;
 }
 
 /**

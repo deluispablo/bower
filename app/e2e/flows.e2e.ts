@@ -471,6 +471,19 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
   await confirm.getByRole('button', { name: 'Add more first' }).click();
   await expect(confirm).toBeHidden();
 
+  // "From your Drive" (#364, `Demo-Add` board, handover C.10/D.6): shown,
+  // greyed, with its own sentence — no Picker key is configured for the
+  // demo build, so outside the demo this door would be hidden entirely.
+  // The sentence sits inside the phone door's own row but as a separate
+  // paragraph next to the desktop dropzone's button, so it is checked on
+  // the page rather than inside the (possibly CSS-hidden) button itself.
+  const drive = visible(page.getByRole('button', { name: /From your Drive/ }));
+  await expect(drive).toBeVisible();
+  await expect(drive).toBeDisabled();
+  await expect(
+    visible(page.getByText('Not in the demo. Run your own Bower to use it.')),
+  ).toBeVisible();
+
   // After an add the count is the new total (#300), not the old one.
   await page
     .locator('input[type="file"]')
@@ -550,6 +563,11 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await expect(confirm).toBeVisible();
   await expect(confirm).toContainText('3 things');
+  // The demo's amber line (#363, `Demo-Tidy-Confirm` board, handover
+  // C.10): tidy up here never runs the model.
+  await expect(confirm).toContainText(
+    'Demo: what follows is a recording. Nothing is sent to Claude, nothing is saved.',
+  );
   await shot(page, testInfo, 'tidy-confirm');
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
@@ -566,6 +584,15 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
     inbox.getByRole('button', { name: /^Tidying up… started/ }),
   ).toBeVisible();
   await expect(inbox.getByRole('button', { name: 'Tidy up' })).toHaveCount(0);
+
+  // The demo's own copy under the bar (#363, `Demo-Working` board): the
+  // scripted run is a recording, not a real one, and the progress row's
+  // right-hand badge says so too, instead of "Started n min ago".
+  await expect(sheet).toContainText('A recording.');
+  await expect(sheet).toContainText(
+    'In the demo the bird plays back a real run in twenty seconds',
+  );
+  await expect(sheet).toContainText('Playing back');
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed
@@ -594,15 +621,18 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
 
-  // Running: the scene, the count against the three things waiting, when
-  // it started, the sentence, and the item being read.
+  // Running: the scene, the count against the three things waiting, the
+  // demo's own copy in place of "Started just now" and the reassurance
+  // line (#363), and the item being read.
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
   await expect(sheet.getByText(/^[0-3] of 3 filed$/)).toBeVisible();
-  await expect(sheet.getByText('Started just now')).toBeVisible();
+  await expect(sheet.getByText('Playing back')).toBeVisible();
+  await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(
-      'Usually three to five minutes. Close this and keep going; Home will say when it is done.',
+      'In the demo the bird plays back a real run in twenty seconds',
+      { exact: false },
     ),
   ).toBeVisible();
   const rows = sheet.locator('.working-sheet-row');
@@ -1086,27 +1116,41 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
     .allTextContents();
   expect(headings).toEqual(['Tidying up', 'Look', 'Bower', 'Advanced']);
 
-  // The web-lookup row is present but disabled until #374 lands.
+  // The web-lookup switch (#374): off by default, and it turns on.
   const webLookup = page
     .locator('.settings')
     .getByRole('switch', { name: 'Let Bower look things up on the web' });
   await expect(webLookup).toBeVisible();
-  await expect(webLookup).toBeDisabled();
-  await expect(
-    page.locator('.settings').getByText('Coming soon.'),
-  ).toBeVisible();
+  await expect(webLookup).toBeEnabled();
+  await expect(webLookup).not.toBeChecked();
+  await webLookup.click();
+  await expect(webLookup).toBeChecked();
+  await webLookup.click();
+  await expect(webLookup).not.toBeChecked();
 
   // Sign out is a plain button, apart from Sign out everywhere; in the
-  // demo build, Sign out everywhere, the own API key and Delete each show
-  // the not-in-the-demo sentence instead of a working control. Scoped to
-  // the settings section: the desktop sidebar has its own Sign out button.
+  // demo build, Sign out everywhere and the own API key render nothing of
+  // their own — one sentence covers the whole Advanced section instead of
+  // repeating per control (#364) — and Delete (its own section) keeps its
+  // own sentence: twice total, not three times. Scoped to the settings
+  // section: the desktop sidebar has its own Sign out button.
   const settings = page.locator('.settings');
   await expect(
     settings.getByRole('button', { name: 'Sign out', exact: true }),
   ).toBeVisible();
   await expect(
     settings.getByText('Not in the demo: run your own Bower to use this.'),
-  ).toHaveCount(3);
+  ).toHaveCount(2);
+
+  // The push toggle is greyed with its own sentence (#364, handover
+  // C.10/D.6), word for word what "From your Drive" gets in Add.
+  const pushToggle = settings.getByRole('switch', {
+    name: "Ping me when it's done",
+  });
+  await expect(pushToggle).toBeDisabled();
+  await expect(
+    settings.getByText('Not in the demo. Run your own Bower to use it.'),
+  ).toBeVisible();
 });
 
 test.describe('/login never redirects to the intro (#313)', () => {
@@ -1184,7 +1228,12 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
     'the Notes tab is phone-only; desktop keeps the sidebar',
   );
   await openHome(page);
-  await page.getByRole('link', { name: 'Notes' }).click();
+  // Scoped to the bottom nav (#367 added a note titled "Notes from the
+  // viewing", otherwise an ambiguous substring match on Home's own list).
+  await page
+    .locator('nav.bottom-nav')
+    .getByRole('link', { name: 'Notes' })
+    .click();
   await expect(page).toHaveURL(/\/notes$/);
 
   const bar = page.locator('header.topbar');
@@ -1754,15 +1803,16 @@ test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#
 }, testInfo) => {
   await openHome(page);
   // Projects (the demo fixture) has no notes of its own — Lisbon Trip,
-  // Kitchen Refresh and Half Marathon hold all of them — a real instance
-  // of 1.9: the header's count is the whole subtree, the empty state used
-  // to say "Nothing here yet" regardless.
+  // Kitchen Refresh, Half Marathon and Flat hunt hold all of them — a real
+  // instance of 1.9: the header's count is the whole subtree, the empty
+  // state used to say "Nothing here yet" regardless.
   await page.goto('/folder/1-Projects');
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.getByText('Nothing here yet.')).toBeHidden();
-  // #424: the total is real (2 + 3 + 4 across three subfolders), but no
-  // single one of them holds all nine, so none is named.
-  await expect(page.getByText('9 notes in its folders')).toBeVisible();
+  // #424: the total is real (2 + 3 + 4 + 2 across four subfolders, #367
+  // added Flat hunt), but no single one of them holds all eleven, so none
+  // is named.
+  await expect(page.getByText('11 notes in its folders')).toBeVisible();
   await shot(page, testInfo, 'folder-notes-elsewhere');
 });
 
@@ -1900,7 +1950,7 @@ test('folder counts add files and notes together, the same total the folder scre
       menu.getByRole('link', { name: /^0-Inbox.*added\D*2$/ }),
     ).toBeVisible();
     await expect(
-      menu.getByRole('link', { name: /^1-Projects.*end date\D*11$/ }),
+      menu.getByRole('link', { name: /^1-Projects.*end date\D*15$/ }),
     ).toBeVisible();
     await page.keyboard.press('Escape');
   } else {
@@ -1910,7 +1960,7 @@ test('folder counts add files and notes together, the same total the folder scre
     ).toHaveText('2');
     await expect(
       sidebar.locator('a[href="/folder/1-Projects"] .tree-count'),
-    ).toHaveText('11');
+    ).toHaveText('15');
   }
 
   // 0-Inbox: 1 file (the boiler invoice) + 1 note (Tomato seedlings) — the

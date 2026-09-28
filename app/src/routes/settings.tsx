@@ -40,8 +40,16 @@ function toMessage(err: unknown): string {
 }
 
 /** Delete account, the own API key and Sign out everywhere all need a
- * real backend (#193): the demo shows this sentence instead of acting. */
+ * real backend (#193): the demo shows this sentence instead of acting.
+ * One sentence for the whole Advanced section, not once per control
+ * (#364): the API key field and Sign out everywhere used to each show
+ * their own copy of this line. */
 const NOT_IN_DEMO = 'Not in the demo: run your own Bower to use this.';
+
+/** The push toggle's demo line (#364, handover C.10/D.6): the same
+ * sentence "From your Drive" gets in Add (`routes/add.tsx`), word for
+ * word from the `Demo-Add` board. */
+const NOT_IN_DEMO_PUSH = 'Not in the demo. Run your own Bower to use it.';
 
 function driveUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
@@ -65,14 +73,10 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (isDemo()) {
-    return (
-      <div class="settings-field">
-        <label>Use my own Claude API key</label>
-        <p class="settings-note">{NOT_IN_DEMO}</p>
-      </div>
-    );
-  }
+  // The Advanced section shows one combined sentence for every control
+  // this needs a real backend (#364), not one per control — see
+  // `AdvancedSection` below.
+  if (isDemo()) return null;
 
   const save = async (): Promise<void> => {
     const apiKey = value.trim();
@@ -203,7 +207,11 @@ function NotificationsToggle() {
   const [error, setError] = useState<string | null>(null);
   const [support] = useState(() => currentPushSupport());
 
+  // Skips the browser subscription check entirely in the demo: every hook
+  // above still runs unconditionally (rules of hooks), this just never
+  // subscribes to anything real.
   useEffect(() => {
+    if (isDemo()) return;
     let cancelled = false;
     void currentPushState().then((pushState) => {
       if (cancelled) return;
@@ -214,6 +222,20 @@ function NotificationsToggle() {
       cancelled = true;
     };
   }, []);
+
+  if (isDemo()) {
+    return (
+      <Toggle
+        label="Ping me when it's done"
+        hint={NOT_IN_DEMO_PUSH}
+        checked={false}
+        disabled
+        onChange={() => {
+          /* not in the demo */
+        }}
+      />
+    );
+  }
 
   const toggle = async (checked: boolean): Promise<void> => {
     setBusy(true);
@@ -257,21 +279,41 @@ function NotificationsToggle() {
 }
 
 /**
- * "Let Bower look things up on the web" (#309): drawn per the board, but
- * left off and disabled until the lookup itself ships (#374) — a switch
- * that cannot do anything yet would only confuse.
+ * "Let Bower look things up on the web" (#374): the user's own switch,
+ * stored by the Worker (`PATCH /settings`) and sent with every run. Off by
+ * default; a run gets the web tools only when the operator's instance
+ * allows them too.
  */
-function WebLookupToggle() {
+function WebLookupToggle({ me }: { me: Me }) {
+  const { setMe } = useSession();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = async (checked: boolean): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { allowWeb } = await updateSettings({ allowWeb: checked });
+      setMe({ ...me, allowWeb: allowWeb === true });
+    } catch (err) {
+      console.error(err);
+      setError('Could not change web lookups.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <Toggle
-      label="Let Bower look things up on the web"
-      hint="Off, Bower only reads what you gave it. On, it may search the web to fill in what a document leaves out. Coming soon."
-      checked={false}
-      disabled
-      onChange={() => {
-        /* disabled until #374 */
-      }}
-    />
+    <>
+      <Toggle
+        label="Let Bower look things up on the web"
+        hint="Off, Bower only reads what you gave it. On, it may search the web to fill in what a document leaves out."
+        checked={me.allowWeb === true}
+        disabled={busy}
+        onChange={(checked) => void toggle(checked)}
+      />
+      {error && <p class="settings-error">{error}</p>}
+    </>
   );
 }
 
@@ -427,13 +469,9 @@ function SignOutEverywhereRow() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (isDemo()) {
-    return (
-      <div class="settings-field">
-        <p class="settings-note">{NOT_IN_DEMO}</p>
-      </div>
-    );
-  }
+  // One combined sentence for the whole Advanced section (#364), not one
+  // per control — see `AdvancedSection` below.
+  if (isDemo()) return null;
 
   const signOutEverywhere = async (): Promise<void> => {
     setBusy(true);
@@ -476,6 +514,10 @@ function SignOutEverywhereRow() {
  * Claude API key form, "Show Bower's own files" (the same `showAppFiles`
  * pref as the explorer's footer button) and "Sign out everywhere" — real
  * per-account controls, kept apart from the "Bower" section above.
+ *
+ * In a demo build the API key form and Sign out everywhere each need a
+ * real backend and render nothing of their own (#364): one sentence
+ * covers the whole section instead of repeating per control.
  */
 function AdvancedSection({ me }: { me: Me }) {
   const [showAppFiles, setShowAppFiles] = useState(() =>
@@ -485,6 +527,8 @@ function AdvancedSection({ me }: { me: Me }) {
   return (
     <div class="settings-section">
       <h2>Advanced</h2>
+
+      {isDemo() && <p class="settings-note">{NOT_IN_DEMO}</p>}
 
       <ApiKeySection me={me} />
 
@@ -643,7 +687,7 @@ export function Settings() {
       <div class="settings-section">
         <h2>Tidying up</h2>
         <NotificationsToggle />
-        <WebLookupToggle />
+        <WebLookupToggle me={me} />
       </div>
 
       <AppearanceSection />

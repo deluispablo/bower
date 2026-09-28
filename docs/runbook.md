@@ -160,7 +160,7 @@ Either way, set these under the instance repo's **Settings → Secrets and varia
 | `ANTHROPIC_API_KEY` | Secret (this or `CLAUDE_CODE_OAUTH_TOKEN`) | Claude Console → API keys |
 | `BOWER_API_URL` | Variable | The Worker's deployed origin, same as `API_ORIGIN` | 
 | `BOWER_MAX_TURNS` | Variable (optional) | Overrides the Worker's `DEFAULT_MAX_TURNS` for this instance |
-| `BOWER_ALLOW_WEB` | Variable (optional) | Leave unset (the default): the agent gets no web access, so a clipped page cannot make it send notes anywhere. This variable is the one way a run can reach the network: `1` gives it `WebSearch` and `WebFetch`; only set it if your users' rulebooks need the web, and tell them (`docs/privacy.md`). See "Tools and web access" in `agent/README.md` |
+| `BOWER_ALLOW_WEB` | Variable (optional) | Leave unset (the default): the agent gets no web access, so a clipped page cannot make it send notes anywhere. This variable is the instance's half of the one way a run can reach the network: with `1`, a tidy-up gets `WebSearch` and `WebFetch` only for a user who also turned on **Let Bower look things up on the web** in Settings (stored by the Worker, sent as the dispatch's `allow_web`, #374). Unset, the Settings switch still shows and saves, but no run gets the web. Only set it if your users need the web, and tell them (`docs/privacy.md`). The weekly lint never gets the web tools. See "Tools and web access" in `agent/README.md` |
 
 With the GitHub CLI, from the instance repo's checkout (or add `-R OWNER/bower-home`):
 
@@ -256,6 +256,15 @@ Each Bower folder holds three rule files with three owners: `CLAUDE.md` is Bower
 `About-Me.md` and every note are left alone. Both writes are checked against the file's last-modified time, so a run or another device writing at the same moment makes the update fail with a short message; trying again later is safe and never copies a line twice. Anything a user added before the first `##` heading (frontmatter, title, intro) is not carried over. Drive keeps the previous `CLAUDE.md` in the file's version history (in drive.google.com, right-click the file → **File information → Manage versions**) if anything needs to be copied back by hand.
 
 When you change `vault-template/CLAUDE.md` in a way existing folders should receive, bump `bower_rules_version` by one in the same PR, and add every line you removed or reworded to `app/src/rulebook-retired.ts`; see `vault-template/README.md`.
+
+### What a tidy-up does with each file
+
+Since rulebook version 7 (#368), Bower only files by default. Each original (a PDF, a photo, a spreadsheet) moves into its project, area or resource folder as it is, with one line in the folder's hub note, one row in `index.md` (`- [[<path>]] · <type> · filed by Bower`) and one `Filed:` line in `log.md`; no summary note, no copy, no translation. A note is still written for a web clip or saved link (the raw clip then goes to `0-Inbox/Processed/`), for an item an instruction note or a rule in `Rules.md` asks something for, and for a converted Word, OpenDocument, HTML, EPUB or RTF document, whose `.md` is filed next to the original. `0-Inbox/Processed/` now keeps only instruction notes, raw clips, unconvertible items and duplicates.
+
+- **Drive ids.** The runner files a file with `rclone copy` of the new path and `rclone deletefile` of the inbox path, so a filed original gets a new Drive id (a Drive link or bookmark to the inbox copy stops working; the old copy is in the Drive Trash). Notes that were already filed are never moved by a tidy-up, so their ids never change.
+- **`BOWER_MAX_CHANGES`.** A move counts as one change: only the new path is a new file; the delete of the inbox path is not counted.
+- **The report.** An ingest's summary is six lines: `Processed`, `Filed: <n> files` (originals moved into a folder), `Created` (notes written), `Updated`, `Rules`, `Problems`. A lint keeps five. The runner's log shows the filed count as `<n> originals filed`, a number only.
+- **Upgrading.** Rerun `scripts/deploy.sh` so the instance repo gets the new `prompts/ingest.md` and `run.sh`; each user gets the new rulebook from **Settings → Advanced → "Update Bower's rules"** (version 7). Until they update, their folder's old rulebook still asks for a summary note, and the new prompt defers to it.
 
 ### The first-run interview
 

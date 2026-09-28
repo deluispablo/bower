@@ -88,6 +88,7 @@ export class DemoServer {
       quota: { used: 0, limit: DEMO_QUOTA_LIMIT },
       needsReauth: false,
       hasApiKey: false,
+      allowWeb: false,
     };
   }
 
