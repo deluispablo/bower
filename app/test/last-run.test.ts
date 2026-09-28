@@ -69,10 +69,8 @@ describe('parseLastRun (#564)', () => {
   });
 
   it('a failed outcome with no reason field reads as unknown', () => {
-    const { reason: _reason, ...withoutReason } = JSON.parse(FAILED_JSON) as Record<
-      string,
-      unknown
-    >;
+    const withoutReason = JSON.parse(FAILED_JSON) as Record<string, unknown>;
+    delete withoutReason.reason;
     expect(parseLastRun(JSON.stringify(withoutReason))?.reason).toBe('unknown');
   });
 

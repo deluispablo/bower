@@ -433,6 +433,98 @@ describe('reduce', () => {
     });
   });
 
+  describe('last-run (#564)', () => {
+    const stale: RunState = {
+      phase: 'stale',
+      run: queuedRun,
+      message: 'Bower did not answer; try again',
+      ...openFor,
+    };
+
+    it('a done outcome moves to done, with the outcome sentence as the message', () => {
+      expect(
+        reduce(stale, {
+          type: 'last-run',
+          outcome: {
+            state: 'done',
+            kind: 'ingest',
+            runId: 'run-9',
+            finishedAt: '2026-01-01T01:00:00Z',
+            sentence: 'Tidied up 3 things.',
+            processed: 3,
+            quarantined: 0,
+            refused: 0,
+          },
+        }),
+      ).toEqual({
+        phase: 'done',
+        run: {
+          state: 'done',
+          requestedAt: queuedRun.requestedAt,
+          finishedAt: '2026-01-01T01:00:00Z',
+          summary: 'Tidied up 3 things.',
+          runId: 'run-9',
+        },
+        message: 'Tidied up 3 things.',
+        ...openFor,
+      });
+    });
+
+    it('a failed outcome moves to failed, with the reason sentence as the message (#375)', () => {
+      expect(
+        reduce(stale, {
+          type: 'last-run',
+          outcome: {
+            state: 'failed',
+            kind: 'ingest',
+            runId: 'run-9',
+            finishedAt: '2026-01-01T01:00:00Z',
+            sentence: 'Refused: too many changes.',
+            processed: 0,
+            quarantined: 0,
+            refused: 0,
+            reason: 'timeout',
+          },
+        }),
+      ).toEqual({
+        phase: 'failed',
+        run: {
+          state: 'failed',
+          requestedAt: queuedRun.requestedAt,
+          finishedAt: '2026-01-01T01:00:00Z',
+          summary: 'Refused: too many changes.',
+          runId: 'run-9',
+          reason: 'timeout',
+        },
+        message: 'The tidy-up took too long and was stopped.',
+        ...openFor,
+      });
+    });
+
+    it('no outcome (missing file, or it did not parse) leaves stale exactly as it was', () => {
+      expect(reduce(stale, { type: 'last-run', outcome: null })).toEqual(stale);
+    });
+
+    it('a race — the phase already moved on — is ignored', () => {
+      const movedOn: RunState = { ...stale, phase: 'running' };
+      expect(
+        reduce(movedOn, {
+          type: 'last-run',
+          outcome: {
+            state: 'done',
+            kind: 'ingest',
+            runId: 'run-9',
+            finishedAt: '2026-01-01T01:00:00Z',
+            sentence: 'Tidied up 3 things.',
+            processed: 3,
+            quarantined: 0,
+            refused: 0,
+          },
+        }),
+      ).toEqual(movedOn);
+    });
+  });
+
   it('sheet-dismissed during done goes back to idle at once (#506: the only way out of done)', () => {
     const state: RunState = {
       phase: 'done',

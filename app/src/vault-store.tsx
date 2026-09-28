@@ -35,7 +35,9 @@ import {
   createTextFile,
   deleteFile,
   DriveError,
+  FOLDER_MIME,
   getText,
+  listFolder,
   listVault,
   modifiedTimeOf,
   readNoteForEdit,
@@ -47,6 +49,8 @@ import {
 import type { DriveFile, SaveOptions } from './drive.js';
 import { interviewToFiles } from './interview.js';
 import type { InterviewAnswers } from './interview.js';
+import { parseLastRun } from './last-run.js';
+import type { LastRunOutcome } from './last-run.js';
 import {
   clearPinned,
   folderNoteName,
@@ -426,6 +430,42 @@ async function hydrateRulesVersion(index: VaultIndex): Promise<number | null> {
   } catch (err) {
     console.error(err);
     return cached !== undefined ? rulesVersionOf(cached.text) : null;
+  }
+}
+
+/** `.bower/last-run.json`'s folder and file name, from the Bower folder. */
+const LAST_RUN_FOLDER = '.bower';
+const LAST_RUN_FILE = 'last-run.json';
+
+/**
+ * The runner's last outcome (#564), read straight from Drive by path. The
+ * file lives in a dot-folder, so `isHidden` (`vault-index.ts`) keeps it out
+ * of `VaultIndex` like every other dot-folder — it is never in
+ * `index.byPath`, hence two direct listings (`listFolder`, one level, no
+ * recursion) rather than the full recursive `listVault` walk. `null` when
+ * the folder or the file is not there (an older runner, or a run that
+ * never got this far) or its content does not parse (`parseLastRun`); any
+ * other Drive failure is logged and also reads as `null` — this is always
+ * a best-effort read on an already-`stale` run, never one the app must
+ * have (`run-store.tsx`).
+ */
+export async function readLastRunOutcome(
+  folderId: string,
+): Promise<LastRunOutcome | null> {
+  try {
+    const root = await listFolder(folderId);
+    const dot = root.find(
+      (file) => file.name === LAST_RUN_FOLDER && file.mimeType === FOLDER_MIME,
+    );
+    if (dot === undefined) return null;
+    const children = await listFolder(dot.id);
+    const file = children.find((child) => child.name === LAST_RUN_FILE);
+    if (file === undefined) return null;
+    const text = await getText(file.id);
+    return parseLastRun(text);
+  } catch (err) {
+    console.error(err);
+    return null;
   }
 }
 

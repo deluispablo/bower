@@ -58,8 +58,17 @@ export function parseLastRun(text: string): LastRunOutcome | null {
     return null;
   }
   if (!isRecord(data)) return null;
-  const { state, kind, runId, finishedAt, sentence, processed, quarantined, refused, reason } =
-    data;
+  const {
+    state,
+    kind,
+    runId,
+    finishedAt,
+    sentence,
+    processed,
+    quarantined,
+    refused,
+    reason,
+  } = data;
   if (state !== 'done' && state !== 'failed') return null;
   if (!isNonEmptyString(kind)) return null;
   if (!isNonEmptyString(runId)) return null;
