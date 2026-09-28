@@ -474,12 +474,15 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
   // "From your Drive" (#364, `Demo-Add` board, handover C.10/D.6): shown,
   // greyed, with its own sentence — no Picker key is configured for the
   // demo build, so outside the demo this door would be hidden entirely.
-  const drive = page.getByRole('button', { name: /From your Drive/ }).first();
+  // The sentence sits inside the phone door's own row but as a separate
+  // paragraph next to the desktop dropzone's button, so it is checked on
+  // the page rather than inside the (possibly CSS-hidden) button itself.
+  const drive = visible(page.getByRole('button', { name: /From your Drive/ }));
   await expect(drive).toBeVisible();
   await expect(drive).toBeDisabled();
-  await expect(drive).toContainText(
-    'Not in the demo. Run your own Bower to use it.',
-  );
+  await expect(
+    visible(page.getByText('Not in the demo. Run your own Bower to use it.')),
+  ).toBeVisible();
 
   // After an add the count is the new total (#300), not the old one.
   await page
