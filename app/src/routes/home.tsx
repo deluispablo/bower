@@ -35,7 +35,7 @@ import { ProcessButton } from '../components/process-button.js';
 import { Tour } from '../components/help-sheet.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import { startedAgo } from '../components/working-sheet.js';
-import { findReport, isReportNew } from '../health-report.js';
+import { findReport, isReportNew, reportDayStart } from '../health-report.js';
 import {
   ANSWERS_FOLDER,
   birdStateFor,
@@ -314,7 +314,7 @@ export function Home(): JSX.Element {
       ? 'No check yet'
       : isReportNew(reportTime, getPref('healthSeenAt'))
         ? 'New'
-        : `Checked ${relativeTime(reportTime, now)}`;
+        : `Checked ${relativeTime(reportDayStart(reportTime), now)}`;
 
   const offline = !online;
   // #322: the very first fetch, before the folder index has ever resolved —

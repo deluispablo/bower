@@ -214,3 +214,27 @@ describe('Ask Bower about it chip (#354)', () => {
     );
   });
 });
+
+describe('Drive chip and end-of-folder tip (#453, Phone-Folder-Project board)', () => {
+  it('labels the Drive chip "Drive", not "Open in Drive"', () => {
+    route.params.path = '1-Projects/Flat hunt';
+    mount();
+    const chip = Array.from(
+      root.querySelectorAll<HTMLAnchorElement>('.folder-chips a.chip'),
+    ).find((a) => a.getAttribute('href')?.includes('drive.google.com'));
+    expect(chip?.textContent).toBe('Drive');
+  });
+
+  it('ends the screen with the tip to ask Bower for more', () => {
+    route.params.path = '1-Projects/Flat hunt';
+    mount();
+    expect(root.querySelector('.folder-tip')?.textContent).toBe(
+      'Want more from this folder? Ask Bower: “Compare the flats I saved” or “From now on, pull rent and size out of every listing”.',
+    );
+  });
+
+  it('has no tip on a root folder', () => {
+    mount();
+    expect(root.querySelector('.folder-tip')).toBeNull();
+  });
+});

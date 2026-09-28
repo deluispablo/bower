@@ -191,23 +191,47 @@ describe('applyRuleEdit', () => {
     });
   }
 
-  it('pauses a rule: struck through, dated, only its own line', () => {
+  it('pauses a rule: struck through, dated, only its own line, said-on date kept', () => {
     const ref = refTo(SHAPED, receipts);
     const next = applyRuleEdit(SHAPED, { kind: 'pause', rule: ref }, ON);
     expect(next.split('\n')[ref.line]).toBe(
-      `- ~~${receipts}~~ (paused 2026-09-29)`,
+      `- ~~${receipts}~~ (said 2026-09-26, paused 2026-09-29)`,
     );
     only(SHAPED, next, ref.line);
     expect(ruleAt(next, receipts).paused).toBe(true);
   });
 
-  it('resumes a paused rule as the owner asking again', () => {
+  it('pauses a rule with no known date: no said-on date to keep', () => {
+    const ref = refTo(FIXTURE, 'Tag anything about the garden with garden.');
+    const next = applyRuleEdit(FIXTURE, { kind: 'pause', rule: ref }, ON);
+    expect(next.split('\n')[ref.line]).toBe(
+      '* ~~Tag anything about the garden with garden.~~ (paused 2026-09-29)',
+    );
+  });
+
+  it('resumes a paused rule as the owner asking again, today, with no said-on date to restore', () => {
     const ref = refTo(SHAPED, archive);
     const next = applyRuleEdit(SHAPED, { kind: 'resume', rule: ref }, ON);
     expect(next.split('\n')[ref.line]).toBe(
       "- Never archive Finance (owner's request, 2026-09-29)",
     );
     only(SHAPED, next, ref.line);
+  });
+
+  it('resumes keeping the date the rule was said on, not the pause date (#443)', () => {
+    const ref = refTo(SHAPED, receipts);
+    const paused = applyRuleEdit(SHAPED, { kind: 'pause', rule: ref }, ON);
+    expect(ruleAt(paused, receipts).date).toBe('2026-09-29');
+
+    const pausedRef = refTo(paused, receipts);
+    const resumed = applyRuleEdit(
+      paused,
+      { kind: 'resume', rule: pausedRef },
+      '2026-10-01',
+    );
+    expect(resumed.split('\n')[pausedRef.line]).toBe(
+      "- Receipts go to Finance, named by shop and date (owner's request, 2026-09-26)",
+    );
   });
 
   it('changes a rule inside its own line, keeping it paused if it was', () => {

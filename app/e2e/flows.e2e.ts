@@ -1452,6 +1452,40 @@ test('the folder menu: open it, tap a folder, land on it (#319)', async ({
   await expect(bar.locator('.topbar-title')).toHaveText('3-Resources');
 });
 
+test('folder counts add files and notes together, the same total the folder screen itself lists (#425)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+
+  if (testInfo.project.name === 'phone') {
+    // The folder menu button only sits on an outer screen's bar (C.2); open
+    // it from Home before navigating into a folder.
+    const bar = page.locator('header.topbar');
+    await bar.getByRole('button', { name: 'Your folders' }).click();
+    const menu = page.getByRole('dialog', { name: 'Your folders' });
+    await expect(
+      menu.getByRole('link', { name: /^0-Inbox.*added\D*2$/ }),
+    ).toBeVisible();
+    await expect(
+      menu.getByRole('link', { name: /^1-Projects.*end date\D*11$/ }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+  } else {
+    const sidebar = page.getByRole('navigation', { name: 'Your notes' });
+    await expect(
+      sidebar.locator('a[href="/folder/0-Inbox"] .tree-count'),
+    ).toHaveText('2');
+    await expect(
+      sidebar.locator('a[href="/folder/1-Projects"] .tree-count'),
+    ).toHaveText('11');
+  }
+
+  // 0-Inbox: 1 file (the boiler invoice) + 1 note (Tomato seedlings) — the
+  // folder screen's own header already says "1 file · 1 note".
+  await page.goto('/folder/0-Inbox');
+  await expect(page.locator('.folder-meta')).toHaveText('1 file · 1 note');
+});
+
 test('a project folder lists its files and notes together, newest first, with who put each there', async ({
   page,
 }, testInfo) => {

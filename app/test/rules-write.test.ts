@@ -70,7 +70,7 @@ describe('runRuleEdit', () => {
     const text = await getText((await rulesFile()).id);
     expect(saved?.text).toBe(text);
     expect(text).toContain(
-      '- ~~Receipts go to Finance, named by shop and date~~ (paused 2026-09-29)\n',
+      '- ~~Receipts go to Finance, named by shop and date~~ (said 2026-09-26, paused 2026-09-29)\n',
     );
     expect(parseRules(text).groups[0]?.paused).toBe(2);
   });

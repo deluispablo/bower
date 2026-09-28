@@ -157,6 +157,16 @@ describe('runCounts and lastTidyUpLine', () => {
   it('says Failed for a failed run', () => {
     expect(lastTidyUpLine(run('failed', ['0-Inbox/a.pdf']))).toBe('Failed');
   });
+
+  it('counts neither: the "What is this?" context note (#444)', () => {
+    const withContext = run('done', [
+      '0-Inbox/Lease agreement 2026.pdf',
+      '0-Inbox/Bower - 2026-09-27 0815 What do I still need.md',
+      '0-Inbox/Bower - 2026-09-27 0900 Context.md',
+    ]);
+    expect(runCounts(withContext)).toEqual({ filed: 1, answered: 1 });
+    expect(lastTidyUpLine(withContext)).toBe('1 filed · 1 answered');
+  });
 });
 
 describe('tidyUpAgo', () => {
