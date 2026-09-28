@@ -286,7 +286,13 @@ describe('POST /process', () => {
     // No body: a tidy-up, everything in the inbox.
     expect(sent).toEqual({
       event_type: 'ingest',
-      client_payload: { vault_id: USER_ID, ticket, scope: 'all' },
+      client_payload: {
+        vault_id: USER_ID,
+        ticket,
+        scope: 'all',
+        // The web lookup switch is off until the user turns it on (#374).
+        allow_web: '0',
+      },
     });
     // The run's ticket: 32 random bytes, only its hash kept, and it lives
     // as long as the queued and running windows together.
@@ -317,6 +323,19 @@ describe('POST /process', () => {
     };
     expect(sent.client_payload.scope).toBe('instructions');
     expect(await getQuota(kv, USER_ID, today())).toBe(1);
+  });
+
+  it('passes allow_web "1" when the user turned web lookups on (#374)', async () => {
+    await seedUser({ allowWeb: true });
+    const github = githubStub();
+
+    const response = await postProcess(github.fetchImpl, await sessionCookie());
+
+    expect(response.status).toBe(202);
+    const sent = github.calls[0]?.body as {
+      client_payload: { allow_web: string };
+    };
+    expect(sent.client_payload.allow_web).toBe('1');
   });
 
   it('treats an empty object or scope "all" as a tidy-up', async () => {

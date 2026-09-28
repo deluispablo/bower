@@ -144,7 +144,7 @@ describe('PATCH /settings', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ hasApiKey: true });
+    expect(await response.json()).toEqual({ hasApiKey: true, allowWeb: false });
 
     const stored = await kv.get<User>(keys.user(USER_ID), 'json');
     expect(stored?.encApiKey?.startsWith('v1.')).toBe(true);
@@ -155,6 +155,53 @@ describe('PATCH /settings', () => {
     const me = await getMe(google.fetchImpl, await sessionCookie());
     const meBody = await me.json<{ hasApiKey: boolean }>();
     expect(meBody.hasApiKey).toBe(true);
+  });
+
+  it('stores the web lookup switch and GET /me reports it (#374)', async () => {
+    await seedUser();
+    const google = revokeStub();
+
+    const on = await patchSettings(
+      google.fetchImpl,
+      { allowWeb: true },
+      await sessionCookie(),
+    );
+    expect(on.status).toBe(200);
+    expect(await on.json()).toEqual({ hasApiKey: false, allowWeb: true });
+    expect((await kv.get<User>(keys.user(USER_ID), 'json'))?.allowWeb).toBe(
+      true,
+    );
+    const me = await getMe(google.fetchImpl, await sessionCookie());
+    expect((await me.json<{ allowWeb: boolean }>()).allowWeb).toBe(true);
+
+    const off = await patchSettings(
+      google.fetchImpl,
+      { allowWeb: false },
+      await sessionCookie(),
+    );
+    expect(await off.json()).toEqual({ hasApiKey: false, allowWeb: false });
+    expect(
+      (await kv.get<User>(keys.user(USER_ID), 'json'))?.allowWeb,
+    ).toBeUndefined();
+  });
+
+  it('refuses an allowWeb that is not a boolean, storing nothing', async () => {
+    await seedUser();
+    const google = revokeStub();
+
+    const response = await patchSettings(
+      google.fetchImpl,
+      { allowWeb: 'yes', apiKey: API_KEY },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: { code: 'bad_request', message: 'allowWeb must be a boolean' },
+    });
+    const stored = await kv.get<User>(keys.user(USER_ID), 'json');
+    expect(stored?.allowWeb).toBeUndefined();
+    expect(stored?.encApiKey).toBeUndefined();
   });
 
   it('clears the key on apiKey: null', async () => {
@@ -169,7 +216,10 @@ describe('PATCH /settings', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ hasApiKey: false });
+    expect(await response.json()).toEqual({
+      hasApiKey: false,
+      allowWeb: false,
+    });
     const stored = await kv.get<User>(keys.user(USER_ID), 'json');
     expect(stored?.encApiKey).toBeUndefined();
   });
@@ -187,7 +237,7 @@ describe('PATCH /settings', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ hasApiKey: true });
+    expect(await response.json()).toEqual({ hasApiKey: true, allowWeb: false });
     const stored = await kv.get<User>(keys.user(USER_ID), 'json');
     expect(stored?.encApiKey).toBe(existing);
   });
@@ -241,7 +291,7 @@ describe('PATCH /settings', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ hasApiKey: true });
+    expect(await response.json()).toEqual({ hasApiKey: true, allowWeb: false });
     const stored = await kv.get<User>(keys.user(USER_ID), 'json');
     expect(stored?.tourSeenAt).toBe(tourSeenAt);
     expect(stored?.encApiKey).toBe(existing);
