@@ -1,23 +1,41 @@
 import { describe, expect, it } from 'vitest';
 
-import { askBowerHref, moreMenuMeta, moveToHref } from '../src/more-menu.js';
+import {
+  askBowerHref,
+  moreMenuHeader,
+  showInFoldersHref,
+} from '../src/more-menu.js';
+import { revealHref } from '../src/reveal.js';
 
 function prefill(href: string): string | null {
   return new URL(href, 'https://example.com').searchParams.get('text');
 }
 
-describe('moreMenuMeta (#352)', () => {
-  it('reads "type · folder / subfolder", as the board draws it', () => {
-    expect(moreMenuMeta('PDF', '1-Projects/Flat hunt/Lease 2026.pdf')).toBe(
-      'PDF · Projects / Flat hunt',
-    );
-    expect(moreMenuMeta('Note', '2-Areas/Home/Boiler.md')).not.toMatch(
-      /[0-4]-/,
-    );
+describe('moreMenuHeader (#352, #608)', () => {
+  it('gives the type word and the folder with its PARA kind, as the board draws it', () => {
+    expect(
+      moreMenuHeader('PDF', '1-Projects/Flat hunt/Lease 2026.pdf'),
+    ).toEqual({
+      typeLabel: 'PDF',
+      place: { label: 'Projects › Flat hunt', kind: 'projects' },
+    });
+    expect(
+      moreMenuHeader('Note', '2-Areas/Home/Boiler.md').place?.label,
+    ).not.toMatch(/[0-4]-/);
   });
 
-  it('is just the type word at the top of the Bower folder', () => {
-    expect(moreMenuMeta('Folder', '1-Projects')).toBe('Folder');
+  it('has a neutral kind for a folder that is not a landmark', () => {
+    expect(moreMenuHeader('Note', 'Answers/Reply.md').place).toEqual({
+      label: 'Answers',
+      kind: null,
+    });
+  });
+
+  it('has no place at the top of the Bower folder', () => {
+    expect(moreMenuHeader('Folder', '1-Projects')).toEqual({
+      typeLabel: 'Folder',
+      place: null,
+    });
   });
 });
 
@@ -46,10 +64,16 @@ describe('askBowerHref (#352)', () => {
   });
 });
 
-describe('moveToHref (#302, #352)', () => {
-  it('prefills the path in the move request words and nothing else', () => {
-    expect(prefill(moveToHref('3-Resources/Recipe.md'))).toBe(
-      '"3-Resources/Recipe.md" was misfiled. It should go to: ',
+describe('showInFoldersHref (#608)', () => {
+  it('reveals a note or a file by id, and a folder by path', () => {
+    expect(showInFoldersHref('note', { id: 'n1', path: 'a/b.md' })).toBe(
+      revealHref({ kind: 'note', id: 'n1', path: 'a/b.md' }),
     );
+    expect(showInFoldersHref('file', { id: 'f1', path: 'a/b.pdf' })).toBe(
+      '/notes?reveal=file%2Ff1',
+    );
+    expect(
+      showInFoldersHref('folder', { id: 'd1', path: '1-Projects/Flat hunt' }),
+    ).toBe(revealHref({ kind: 'folder', path: '1-Projects/Flat hunt' }));
   });
 });

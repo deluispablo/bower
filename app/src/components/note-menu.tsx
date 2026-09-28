@@ -1,7 +1,7 @@
 /**
- * The one More menu for a note, a file and a folder (#210, #352, board
- * Phone-Note-Menu): a bottom sheet under 900 px, a popover pinned under the
- * More button from 900 px up — one component, `note-menu.css`'s breakpoint
+ * The one More menu for a note, a file and a folder (#210, #352, #608, board
+ * Phone-More): a bottom sheet under 900 px, a popover pinned under the More
+ * button from 900 px up — one component, `note-menu.css`'s breakpoint
  * switches the presentation the same way `layout.css` already does for the
  * drawer vs the sidebar. `role="menu"`, each row `role="menuitem"`; focus
  * is trapped inside while open (`use-focus-trap.ts`, the same pattern as
@@ -10,8 +10,9 @@
  *
  * Three callers: `routes/note.tsx`, `routes/file.tsx` and
  * `routes/folder.tsx`. The board's order: a header (the title, then the
- * type word and the folder it sits in), Ask Bower about this, Pin to Home,
- * Move to…, Open in Drive, Copy link, Edit the text (notes only), Cancel.
+ * type word and the folder it sits in, with its PARA mark), Ask Bower about
+ * this, Show in folders, Pin to Home, Move to… ("Bower does it"), Open in
+ * Drive, Download (files), Copy link, Edit the text (notes only), Cancel.
  *
  * The Pin row (#216) toggles `pinned`/`onTogglePin`, which the note and
  * folder screens wire to `useVault()`'s pin actions (#215) through
@@ -19,10 +20,12 @@
  * note's frontmatter or `index.md`'s folder list, and a PDF has neither),
  * so its menu leaves the row out.
  *
- * "Ask Bower about this" and "Move to…" (the board's name for #302's
- * "This was misfiled") open the Bower tab's box prefilled through
- * `/bower?text=` (`more-menu.ts`): the thing's name, or its path and the
- * move request's words, and nothing else from it.
+ * "Ask Bower about this" opens the Bower tab's box prefilled through
+ * `/bower?text=` (`more-menu.ts`) with the thing's name and nothing else.
+ * "Show in folders" (#608) opens the Notes tab revealed at the item (phone)
+ * or scrolls the sidebar to it (desktop). "Move to…" opens the folder
+ * picker (`folder-picker.tsx`): the app never moves anything itself, it
+ * writes a request for Bower.
  *
  * "Add a paragraph…" (issue #307, Part E 18.4) reveals the append form
  * ("Add to this note"); it is a note-only row the board does not draw,
@@ -34,11 +37,20 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { isDemo } from '../api.js';
+import { getBlob } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { driveViewUrl } from '../markdown/embeds.js';
-import { askBowerHref, moreMenuMeta, moveToHref } from '../more-menu.js';
+import {
+  askBowerHref,
+  moreMenuHeader,
+  showInFoldersHref,
+} from '../more-menu.js';
 import type { MoreMenuKind } from '../more-menu.js';
 import { driveFolderUrl } from '../navigation.js';
+import { showToast } from '../toast-store.js';
+import { mediaMatches } from '../use-media-query.js';
+import { FolderMark } from './folder-mark.js';
+import { MoveFlow } from './folder-picker.js';
 import {
   IconChat,
   IconCopy,
@@ -62,6 +74,45 @@ const MENU_LABELS: Readonly<Record<MoreMenuKind, string>> = {
  * sentence as Add's own greyed Drive door. */
 const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
 
+/** The board's "Show in folders" mark: a target. Not in the shared set. */
+function IconLocate(): JSX.Element {
+  return (
+    <svg
+      class="icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <circle cx="12" cy="12" r="7" />
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+    </svg>
+  );
+}
+
+function IconDownloadArrow(): JSX.Element {
+  return (
+    <svg
+      class="icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />
+    </svg>
+  );
+}
+
 export interface NoteMenuProps {
   /** What the menu is about: a note (the default), a file or a folder. */
   kind?: MoreMenuKind;
@@ -72,8 +123,9 @@ export interface NoteMenuProps {
   title: string;
   /** The header's type word: "Note", "PDF", "Folder"… */
   typeLabel: string;
-  /** The name "Ask Bower about this" prefills: the note's title, the
-   * file's full name, the folder's name. */
+  /** The name "Ask Bower about this" prefills and the picker's title and
+   * request use: the note's title, the file's full name, the folder's
+   * name. */
   askName: string;
   /** False for Bower's own files (spec §14) and for anything but a note:
    * the Edit row is left out. */
@@ -127,6 +179,7 @@ export function NoteMenu({
   const panelRef = useRef<HTMLDivElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
+  const [moving, setMoving] = useState(false);
   useFocusTrap(panelRef, onClose);
 
   useEffect(() => {
@@ -137,6 +190,40 @@ export function NoteMenu({
     setCopyState((await copyToClipboard(location.href)) ? 'copied' : 'manual');
   }
 
+  /** Desktop: the sidebar already follows the route, so scroll it to the
+   * open item. Otherwise (phone, or no such row) the link opens the Notes
+   * tab revealed at it. */
+  function showInFolders(event: MouseEvent): void {
+    if (mediaMatches('(min-width: 900px)')) {
+      const row = document.querySelector(
+        '.explorer-sidebar [aria-current="page"]',
+      );
+      if (row !== null) {
+        event.preventDefault();
+        row.scrollIntoView?.({ block: 'nearest' });
+      }
+    }
+    onClose();
+  }
+
+  function download(): void {
+    onClose();
+    getBlob(file.id).then(
+      (blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = file.name;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      (err: unknown) => {
+        console.error(err);
+        showToast('Could not download it. Try again in a moment.');
+      },
+    );
+  }
+
   function selectAndClose(action: () => void): () => void {
     return () => {
       onClose();
@@ -145,23 +232,41 @@ export function NoteMenu({
   }
 
   const isNote = kind === 'note';
+  const header = moreMenuHeader(typeLabel, file.path);
   const driveHref =
     kind === 'folder' ? driveFolderUrl(file) : driveViewUrl(file);
 
   return (
     <div class="note-menu">
       <div class="note-menu-backdrop" aria-hidden="true" onClick={onClose} />
+      {moving && (
+        <MoveFlow
+          name={askName}
+          path={file.path}
+          isFolder={kind === 'folder'}
+          onClose={onClose}
+        />
+      )}
       <div
         ref={panelRef}
         class="note-menu-panel"
         role="menu"
         aria-label={MENU_LABELS[kind]}
         tabIndex={-1}
+        hidden={moving}
       >
         <div class="note-menu-head" role="presentation">
           <span class="note-menu-title">{title}</span>
           <span class="note-menu-meta">
-            {moreMenuMeta(typeLabel, file.path)}
+            <span>{header.typeLabel}</span>
+            {header.place !== null && (
+              <span class="note-menu-place">
+                {header.place.kind !== null && (
+                  <FolderMark kind={header.place.kind} size={18} />
+                )}
+                {header.place.label}
+              </span>
+            )}
           </span>
         </div>
         <a
@@ -178,6 +283,18 @@ export function NoteMenu({
             </span>
           </span>
         </a>
+        <a
+          role="menuitem"
+          class="note-menu-row"
+          href={showInFoldersHref(kind, file)}
+          onClick={showInFolders}
+        >
+          <IconLocate />
+          <span class="note-menu-row-text">
+            <span class="note-menu-row-label">Show in folders</span>
+          </span>
+          <span class="note-menu-new">NEW</span>
+        </a>
         {onTogglePin !== undefined && (
           <button
             type="button"
@@ -193,20 +310,18 @@ export function NoteMenu({
             </span>
           </button>
         )}
-        <a
+        <button
+          type="button"
           role="menuitem"
           class="note-menu-row"
-          href={moveToHref(file.path)}
-          onClick={onClose}
+          onClick={() => setMoving(true)}
         >
           <IconFolder />
           <span class="note-menu-row-text">
             <span class="note-menu-row-label">Move to…</span>
-            <span class="note-menu-row-hint">
-              Tell Bower where it goes; it remembers
-            </span>
+            <span class="note-menu-row-hint">Bower does it</span>
           </span>
-        </a>
+        </button>
         {isDemo() ? (
           <button
             type="button"
@@ -235,6 +350,19 @@ export function NoteMenu({
               <span class="note-menu-row-label">Open in Drive</span>
             </span>
           </a>
+        )}
+        {kind === 'file' && (
+          <button
+            type="button"
+            role="menuitem"
+            class="note-menu-row"
+            onClick={download}
+          >
+            <IconDownloadArrow />
+            <span class="note-menu-row-text">
+              <span class="note-menu-row-label">Download</span>
+            </span>
+          </button>
         )}
         <button
           type="button"

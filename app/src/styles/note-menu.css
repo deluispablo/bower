@@ -74,9 +74,36 @@
   white-space: nowrap;
 }
 
+/* While the Move to… picker is open the menu itself steps aside. */
+.note-menu-panel[hidden] {
+  display: none;
+}
+
 .note-menu-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
   font-size: var(--text-sm);
   color: var(--color-text-muted);
+}
+
+.note-menu-place {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The board's small "NEW" pill next to Show in folders. */
+.note-menu-new {
+  margin-left: auto;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.04em;
 }
 
 .note-menu-row {
