@@ -82,4 +82,6 @@ export const RETIRED_RULEBOOK_LINES: readonly string[] = [
   'status: active | waiting | done | archived   # projects and tasks only',
   'updated: 2026-09-28',
   'Bower only files, by default: an original lands in its PARA folder as it is, sensibly named. No summary note, no converted copy, no analysis, no translation, unless something asks for one (step 6).',
+  "3. Write the answer as **A note from Bower** (see Note templates) in `Answers/<YYYY-MM-DD> <question>.md`: `type: answer`, the `> [!bower] Bower's note` box (at most three lines, each ending with its origin in brackets; `— Check` when it needs the person), then `## Why`.",
+  '- evidence: <one line: why, with [[wikilinks]] to the notes that show it>',
 ];
