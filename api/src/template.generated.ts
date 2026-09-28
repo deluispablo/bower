@@ -129,8 +129,8 @@ Bower's answers to questions sent as instructions. One note per question, dated.
     content: `---
 tags: [meta, personal]
 created: 2026-09-26
-updated: 2026-09-28
-bower_rules_version: 16
+updated: 2026-09-29
+bower_rules_version: 17
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
