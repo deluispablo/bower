@@ -19,6 +19,7 @@ import {
   usesShell,
 } from '../src/shell-routes.js';
 import type { RunPhase } from '../src/run-store.js';
+import { closeSwitcher } from '../src/switcher-store.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 const location = { path: '/', route: vi.fn() };
@@ -59,9 +60,17 @@ vi.mock('../src/session.js', () => ({
   useSession: () => ({ status: 'signed-in', me, signOut }),
 }));
 
+// One index for the whole file, as the real store keeps it between renders:
+// the quick switcher (opened from the folder menu's search row) re-reads it
+// in an effect, so a fresh one per render would never settle.
+let index: ReturnType<typeof buildVaultIndex> | undefined;
+
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ index: buildVaultIndex(files), files }),
+  useVault: () => {
+    index ??= buildVaultIndex(files);
+    return { index, files };
+  },
 }));
 
 const runState: { phase: RunPhase; sheetOpen: boolean } = {
@@ -291,7 +300,7 @@ describe('Layout', () => {
     expect(root.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it('keeps Settings as a desktop sidebar row, not in the drawer', () => {
+  it('keeps Settings as a desktop sidebar row, not in the folder menu', () => {
     mount();
     expect(
       query('nav[aria-label="Your notes"] a[href="/settings"]').textContent,
@@ -302,18 +311,76 @@ describe('Layout', () => {
     ).toBeNull();
   });
 
-  it('opens the drawer as a modal dialog and closes it on Escape', () => {
+  it('opens the folder menu as a modal dialog over an inert page (#319)', () => {
     mount();
     const menu = openDrawer();
     expect(menu.getAttribute('aria-expanded')).toBe('true');
     const dialog = query('[role="dialog"]');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-    expect(dialog.getAttribute('aria-label')).toBe('Your notes');
+    const title = query(`#${dialog.getAttribute('aria-labelledby') ?? ''}`);
+    expect(title.textContent).toBe('Your folders');
     expect(dialog.contains(document.activeElement)).toBe(true);
+    for (const selector of ['.shell-sidebar', '.shell-main', '.bottom-nav']) {
+      expect(query(selector).hasAttribute('inert')).toBe(true);
+    }
 
     pressEscape();
     expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(query('.shell-main').hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(menu);
+  });
+
+  it('lists the top-level folders with their meaning line and count', () => {
+    mount();
+    openDrawer();
+    const links = Array.from(
+      root.querySelectorAll<HTMLAnchorElement>(
+        '[role="dialog"] .folder-menu-link',
+      ),
+    );
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/folder/0-Inbox',
+      '/folder/2-Areas',
+    ]);
+    expect(links[1]?.textContent).toBe(
+      '2-AreasParts of life that go on: home, health, money1',
+    );
+    // No count at zero: the inbox holds only a PDF, not a note.
+    expect(links[0]?.querySelector('.folder-menu-count')).toBeNull();
+    expect(query('[role="dialog"] .folder-menu-foot').textContent).toContain(
+      'Long-press to pin it to Home.',
+    );
+  });
+
+  it("shows a folder's subfolders from its chevron", () => {
+    mount();
+    openDrawer();
+    const chevron = query<HTMLButtonElement>(
+      '[role="dialog"] button[aria-label="Folders in 2-Areas"]',
+    );
+    expect(chevron.getAttribute('aria-expanded')).toBe('false');
+    click(chevron);
+    expect(chevron.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      query('[role="dialog"] a[href="/folder/2-Areas/Cooking"]').textContent,
+    ).toBe('Cooking1');
+  });
+
+  it('closes the menu and opens the switcher from the search row', () => {
+    mount();
+    openDrawer();
+    const search = Array.from(
+      root.querySelectorAll('[role="dialog"] button'),
+    ).find((button) => button.textContent === 'Search or jump to anything');
+    if (search === undefined) throw new Error('search row missing');
+    click(search);
+    expect(root.querySelector('.drawer')).toBeNull();
+    expect(
+      root.querySelector('[role="dialog"][aria-label="Quick switcher"]'),
+    ).not.toBeNull();
+    void act(() => {
+      closeSwitcher();
+    });
   });
 
   it('closes the drawer on a backdrop tap and on the close button', () => {

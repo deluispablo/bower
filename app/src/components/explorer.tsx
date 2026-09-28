@@ -1,22 +1,20 @@
 /**
  * The explorer (spec §5.1, §5.2): the user's notes as a tree, with the
  * search field, the Health row, the hidden-files footer and the account.
- * One component, three homes:
+ * One component, two homes (the phone's top-bar menu opens the folder menu
+ * instead, `folder-menu.tsx`, #319):
  *
  * - `variant="sidebar"`: the desktop column (`layout.tsx` wraps it in a
  *   `<nav aria-label="Your notes">` landmark, always open). Shows the mark
  *   and the primary links passed as `nav`.
- * - `variant="drawer"`: inside `ExplorerDrawer`, the phone's modal dialog
- *   opened from the top bar's menu button. Shows a title row with a close
- *   button; following any link inside closes it.
  * - `variant="page"`: the Notes tab (`routes/notes.tsx`, #317). No title row
- *   of its own (the top bar carries "Notes"), the drawer's live filter field
- *   and the sidebar's section header with the tree tools.
+ *   of its own (the top bar carries "Notes"), a live filter field and the
+ *   sidebar's section header with the tree tools.
  *
- * The filter field differs per variant (spec §14): the drawer's is a real
+ * The filter field differs per variant (spec §14): the page's is a real
  * text field that narrows the tree in place (`Tree`'s `filter` prop, pure
- * logic in `navigation.ts#filterTree`), so the drawer stays open while
- * typing; the sidebar's stays a button with a `Ctrl K` hint that opens the
+ * logic in `navigation.ts#filterTree`); the sidebar's stays a button with a
+ * `Ctrl K` hint that opens the
  * quick switcher (#142) instead — the switcher is one tap away either way,
  * from Home's search button and `Ctrl/Cmd+K`. The hidden-files footer
  * button toggles the `showAppFiles` preference (spec §5.3), the same one
@@ -24,7 +22,7 @@
  */
 
 import type { ComponentChildren, JSX } from 'preact';
-import { useRef, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { getPref, setPref } from '../prefs.js';
@@ -34,7 +32,6 @@ import { useSession } from '../session.js';
 import { openSwitcher } from '../switcher-store.js';
 import { pinned, useVault } from '../vault-store.js';
 import {
-  IconClose,
   IconCollapse,
   IconEye,
   IconEyeOff,
@@ -44,7 +41,6 @@ import {
 } from './icons.js';
 import { PinnedSidebar } from './pinned-sidebar.js';
 import { Tree } from './tree.js';
-import { useFocusTrap } from './use-focus-trap.js';
 
 export const HEALTH_PATH = '/health';
 
@@ -65,13 +61,11 @@ export function useHealthIsNew(): boolean {
 }
 
 export interface ExplorerProps {
-  variant: 'sidebar' | 'drawer' | 'page';
+  variant: 'sidebar' | 'page';
   /** The latest health report has not been opened yet: show "New". */
   healthIsNew: boolean;
   /** Primary links, shown under the search field (desktop sidebar). */
   nav?: ComponentChildren;
-  /** Drawer only: close it (close button, a followed link, sign out). */
-  onClose?: () => void;
 }
 
 interface ToolsProps {
@@ -110,7 +104,6 @@ export function Explorer({
   variant,
   healthIsNew,
   nav,
-  onClose,
 }: ExplorerProps): JSX.Element {
   const { me, signOut } = useSession();
   const { index } = useVault();
@@ -122,7 +115,7 @@ export function Explorer({
   const [showAppFiles, setShowAppFiles] = useState(() =>
     getPref('showAppFiles'),
   );
-  // Drawer only: the live filter text (spec §14); the sidebar has no field
+  // Page only: the live filter text (spec §14); the sidebar has no field
   // of its own to hold, its button opens the switcher instead.
   const [filter, setFilter] = useState('');
 
@@ -148,20 +141,6 @@ export function Explorer({
 
   return (
     <div class={`explorer explorer-${variant}`}>
-      {variant === 'drawer' && (
-        <div class="explorer-head">
-          <h2 class="explorer-title">Your notes</h2>
-          {tools}
-          <button
-            type="button"
-            class="icon-button"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <IconClose />
-          </button>
-        </div>
-      )}
       {variant === 'sidebar' && (
         <a href="/" class="brand explorer-brand" aria-label="Bower home">
           <span class="brand-word">Bower</span>
@@ -202,7 +181,6 @@ export function Explorer({
           href={HEALTH_PATH}
           class="explorer-row"
           aria-current={path === HEALTH_PATH ? 'page' : undefined}
-          onClick={onClose}
         >
           <IconHeart />
           <span class="explorer-row-label">Health</span>
@@ -212,17 +190,10 @@ export function Explorer({
       {variant === 'sidebar' && index !== null && (
         <PinnedSidebar items={pinned(index)} />
       )}
-      {variant !== 'drawer' && (
-        <div class="explorer-section">
-          <h2 class="explorer-label">Your notes</h2>
-          {tools}
-        </div>
-      )}
-      {variant === 'drawer' && (
-        <div class="explorer-section">
-          <h2 class="explorer-label">Your notes</h2>
-        </div>
-      )}
+      <div class="explorer-section">
+        <h2 class="explorer-label">Your notes</h2>
+        {tools}
+      </div>
       <div class="explorer-tree">
         {index !== null && (
           <Tree
@@ -230,9 +201,8 @@ export function Explorer({
             sort={sort}
             collapseKey={collapseKey}
             filter={variant === 'sidebar' ? undefined : filter}
-            onNavigate={onClose}
             showAppFiles={showAppFiles}
-            linkFolders={variant !== 'drawer'}
+            linkFolders
           />
         )}
       </div>
@@ -254,7 +224,6 @@ export function Explorer({
             type="button"
             class="explorer-signout"
             onClick={() => {
-              onClose?.();
               void signOut();
             }}
           >
@@ -262,43 +231,6 @@ export function Explorer({
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-interface ExplorerDrawerProps {
-  healthIsNew: boolean;
-  onClose: () => void;
-}
-
-/**
- * The phone's explorer: a modal dialog over the page. Focus is trapped
- * inside while it is open; Escape, the close button and a tap on the
- * backdrop close it, and focus then goes back to the menu button.
- */
-export function ExplorerDrawer({
-  healthIsNew,
-  onClose,
-}: ExplorerDrawerProps): JSX.Element {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(panelRef, onClose);
-  return (
-    <div class="drawer">
-      <div class="drawer-backdrop" aria-hidden="true" onClick={onClose} />
-      <div
-        ref={panelRef}
-        class="drawer-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Your notes"
-        tabIndex={-1}
-      >
-        <Explorer
-          variant="drawer"
-          healthIsNew={healthIsNew}
-          onClose={onClose}
-        />
-      </div>
     </div>
   );
 }

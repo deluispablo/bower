@@ -24,6 +24,23 @@ function Trap({ onEscape }: TrapProps): JSX.Element {
   );
 }
 
+interface NamedTrapProps {
+  prefix: string;
+  onEscape: () => void;
+}
+
+/** A trap whose two buttons carry `prefix`, so two can be open at once. */
+function NamedTrap({ prefix, onEscape }: NamedTrapProps): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null);
+  useFocusTrap(ref, onEscape);
+  return h(
+    'div',
+    { ref },
+    h('button', { type: 'button', id: `${prefix}-first` }, 'First'),
+    h('button', { type: 'button', id: `${prefix}-last` }, 'Last'),
+  );
+}
+
 function press(key: string, shiftKey = false): KeyboardEvent {
   const event = new KeyboardEvent('keydown', {
     key,
@@ -102,5 +119,35 @@ describe('useFocusTrap', () => {
       render(null, root);
     });
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('lets only the innermost of two open traps answer a key', () => {
+    const outerEscape = vi.fn();
+    const innerEscape = vi.fn();
+    root = document.createElement('div');
+    const inner = document.createElement('div');
+    document.body.append(root, inner);
+    void act(() => {
+      render(h(NamedTrap, { prefix: 'outer', onEscape: outerEscape }), root);
+    });
+    void act(() => {
+      render(h(NamedTrap, { prefix: 'inner', onEscape: innerEscape }), inner);
+    });
+    expect(document.activeElement).toBe(byId('inner-first'));
+
+    byId('inner-last').focus();
+    press('Tab');
+    expect(document.activeElement).toBe(byId('inner-first'));
+    press('Escape');
+    expect(innerEscape).toHaveBeenCalledOnce();
+    expect(outerEscape).not.toHaveBeenCalled();
+
+    void act(() => {
+      render(null, inner);
+    });
+    expect(document.activeElement).toBe(byId('outer-first'));
+    press('Escape');
+    expect(outerEscape).toHaveBeenCalledOnce();
+    expect(innerEscape).toHaveBeenCalledOnce();
   });
 });
