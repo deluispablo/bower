@@ -33,7 +33,12 @@ import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
 import { useSession } from '../session.js';
-import { BOWER_PATH, helpScreenFor, isInnerScreen } from '../shell-routes.js';
+import {
+  BOWER_PATH,
+  IDEAS_PATH,
+  helpScreenFor,
+  isInnerScreen,
+} from '../shell-routes.js';
 import { replayTour } from '../tour-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
@@ -297,6 +302,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       {helpOpen && (
         <HelpSheet
           screen={helpScreenFor(path)}
+          ideasHref={IDEAS_PATH}
           onClose={() => {
             setHelpOpen(false);
           }}

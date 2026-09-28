@@ -416,6 +416,55 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
   ).toHaveText('4');
 });
 
+test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  await page.getByRole('button', { name: 'Things you can ask' }).click();
+  await page.getByRole('link', { name: 'More ideas' }).click();
+  await expect(page).toHaveURL(/\/ideas$/);
+  if (testInfo.project.name === 'desktop') {
+    // `.screen-title` is phone-hidden (the crumb slot has the title there).
+    await expect(
+      page.getByRole('heading', { name: 'Ideas', level: 1 }),
+    ).toBeVisible();
+  }
+  for (const group of [
+    'Home and money',
+    'Health',
+    'Trips and projects',
+    'Reading',
+    'Rules that save time',
+  ]) {
+    await expect(page.getByRole('heading', { name: group })).toBeVisible();
+  }
+  await shot(page, testInfo, 'ideas');
+
+  const row = page
+    .getByRole('listitem')
+    .filter({ hasText: 'How much did I spend on groceries this month?' });
+  await row.getByRole('link', { name: 'Copy' }).click();
+  await expect(page).toHaveURL(/\/bower\?text=/);
+  await expect(
+    page.getByRole('textbox', {
+      name: 'Tell Bower what to do, or ask it something',
+    }),
+  ).toHaveValue('How much did I spend on groceries this month?');
+
+  // Also reachable from the "?" tip: the Ideas button on a help sheet.
+  await page.getByRole('button', { name: 'About this screen' }).click();
+  await visible(page.getByRole('link', { name: 'Ideas' })).click();
+  await expect(page).toHaveURL(/\/ideas$/);
+
+  // Back in the bar is phone-only (#318): the desktop shell has no Back
+  // link, so this only applies there.
+  if (testInfo.project.name === 'phone') {
+    await page.getByRole('link', { name: 'Back to Bower' }).click();
+    await expect(page).toHaveURL(/\/bower$/);
+  }
+});
+
 test('Settings switches the theme to dark, and it sticks', async ({
   page,
 }, testInfo) => {
