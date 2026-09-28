@@ -266,6 +266,20 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'note');
 });
 
+test('/search?q= lands on Home with the switcher open and prefilled (#495)', async ({
+  page,
+}) => {
+  await page.goto('/search?q=Lisbon');
+
+  await expect(page).toHaveURL(/\/$/);
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await expect(switcher).toBeVisible();
+  await expect(switcher.getByRole('combobox')).toHaveValue('Lisbon');
+  await expect(
+    switcher.getByRole('option', { name: /Lisbon Trip/ }).first(),
+  ).toBeVisible();
+});
+
 test("a note Bower wrote opens with Bower's note and What Bower used (#351)", async ({
   page,
 }, testInfo) => {
