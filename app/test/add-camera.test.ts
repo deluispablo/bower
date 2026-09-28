@@ -62,7 +62,7 @@ vi.mock('../src/drive.js', () => ({
 }));
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ refresh: vi.fn() }),
+  useVault: () => ({ files: [], refresh: vi.fn() }),
 }));
 // Add's hint carries the Tidy up button (#320), which reads the run store.
 vi.mock('../src/run-store.js', async (importOriginal) => ({

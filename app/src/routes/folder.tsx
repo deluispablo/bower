@@ -43,6 +43,7 @@ import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH, originLine, originOf } from '../file-origin.js';
+import { folderMeaning } from '../folder-meanings.js';
 import type { Origin } from '../file-origin.js';
 import {
   breadcrumb,
@@ -143,6 +144,12 @@ function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
 interface FolderBodyProps {
   contents: FolderContents;
   parentName: string | null;
+  /**
+   * A root folder's one-line meaning (#348, C.5), from the one table
+   * `folder-meanings.ts` — the same words the folder menu (#319) and the
+   * "What is Bower" intro use. `undefined` for any other folder.
+   */
+  meaning: string | undefined;
   /** Who put each file there, from `index.md` (`useCatalogueOrigins`). */
   catalogue: ReadonlyMap<string, Origin>;
   /** The folder's own Drive file, for "Open in Drive"; always set in
@@ -161,6 +168,7 @@ interface FolderBodyProps {
 function FolderBody({
   contents,
   parentName,
+  meaning,
   catalogue,
   file,
   pinned,
@@ -182,6 +190,8 @@ function FolderBody({
           <p class="folder-meta">{metaLine(contents, parentName, pinned)}</p>
         </div>
       </div>
+
+      {meaning !== undefined && <p class="folder-explainer">{meaning}</p>}
 
       <div class="folder-chips">
         <button
@@ -360,6 +370,7 @@ export function Folder(): JSX.Element {
     <FolderBody
       contents={contents}
       parentName={parent === undefined ? null : parent.name}
+      meaning={parent === undefined ? folderMeaning(contents.path) : undefined}
       catalogue={catalogue}
       file={index.byPath.get(contents.path)}
       pinned={pinned}

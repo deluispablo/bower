@@ -5,9 +5,63 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me, Vault } from '../src/api.js';
-import { linkNoteName } from '../src/add.js';
+import {
+  addHintLead,
+  contextNote,
+  contextNoteName,
+  linkNoteName,
+} from '../src/add.js';
 import { setQueue } from '../src/add-queue-store.js';
 import type { DriveFile } from '../src/drive.js';
+
+describe('addHintLead', () => {
+  it('counts the things waiting, singular for one', () => {
+    expect(addHintLead(1)).toBe('1 thing waiting.');
+    expect(addHintLead(3)).toBe('3 things waiting.');
+  });
+});
+
+describe('contextNote (#335)', () => {
+  const now = new Date(Date.UTC(2026, 8, 28, 9, 5));
+
+  it('names the note Bower - <date> <time> Context.md', () => {
+    const local = new Date(2026, 8, 28, 9, 5);
+    expect(contextNoteName(local)).toBe('Bower - 2026-09-28 0905 Context.md');
+  });
+
+  it('writes the instruction frontmatter, the text and the files', () => {
+    expect(
+      contextNote(
+        '  Job offers: pull out salary and deadline.  ',
+        ['Offer A.pdf', 'Offer B.pdf'],
+        now,
+      ),
+    ).toBe(
+      [
+        '---',
+        'tags: [instruction]',
+        'date: 2026-09-28T09:05:00.000Z',
+        'via: app',
+        'kind: context',
+        '---',
+        '',
+        'Job offers: pull out salary and deadline.',
+        '',
+        '## Applies to',
+        '',
+        '- Offer A.pdf',
+        '- Offer B.pdf',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('keeps one bullet per file even with a line break in a name', () => {
+    expect(contextNote('File these.', ['a\nb.pdf'], now)).toContain(
+      '\n- a b.pdf\n',
+    );
+  });
+});
 
 describe('linkNoteName', () => {
   it('names the note after the host and the given date and time', () => {
@@ -85,7 +139,12 @@ const upload = vi.fn<
   ) => Promise<DriveFile>
 >(() => Promise.resolve(fakeFile));
 const createTextFile = vi.fn<
-  (parentId: string, name: string, content: string) => Promise<DriveFile>
+  (
+    parentId: string,
+    name: string,
+    content: string,
+    options?: unknown,
+  ) => Promise<DriveFile>
 >(() => Promise.resolve(fakeFile));
 
 const vault: Vault = {
@@ -108,6 +167,8 @@ vi.mock('../src/online.js', () => ({
   offlineReason: () => '',
 }));
 vi.mock('../src/drive.js', () => ({
+  FOLDER_MIME: 'application/vnd.google-apps.folder',
+  INSTRUCTION_APP_PROPERTIES: { bower: 'instruction' },
   listFolder,
   upload,
   createTextFile,
@@ -125,12 +186,30 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
     openSheet: vi.fn(),
   }),
 }));
+// The raw file list the hint counts (#336): three things waiting in the
+// inbox unless a test empties it before rendering.
+function inboxFile(name: string): DriveFile {
+  return {
+    id: `ID_${name}`,
+    name,
+    mimeType: 'application/pdf',
+    parents: ['FOLDER_ID'],
+    path: `0-Inbox/${name}`,
+  };
+}
+const THREE_WAITING = [
+  inboxFile('a.pdf'),
+  inboxFile('b.pdf'),
+  inboxFile('c.pdf'),
+];
+let vaultFiles: DriveFile[] = THREE_WAITING;
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ refresh: vi.fn() }),
+  useVault: () => ({ files: vaultFiles, refresh: vi.fn() }),
 }));
 
 const { Add } = await import('../src/routes/add.js');
+const { resetContext } = await import('../src/add-context.js');
 
 let root: HTMLElement;
 
@@ -166,6 +245,7 @@ describe('Add', () => {
     // this suite's own instance of it empty rather than inheriting the
     // previous test's rows.
     setQueue([]);
+    resetContext();
     root = document.createElement('div');
     document.body.append(root);
     void act(() => {
@@ -185,11 +265,12 @@ describe('Add', () => {
     expect(root.textContent).not.toContain('Tidy up right after adding');
   });
 
-  it('shows the amber card saying Add only fills the inbox', () => {
-    const banner = root.querySelector('.app-file-banner');
-    expect(banner?.textContent).toContain('This only fills your inbox.');
-    expect(banner?.textContent).toContain(
-      'Bower does better work with a pile than with one thing at a time.',
+  // #336: the hint, copy word for word from the Phone-Add board.
+  it('shows the hint with the inbox count and the board copy', () => {
+    const hint = root.querySelector('.add-hint');
+    expect(hint?.querySelector('b')?.textContent).toBe('3 things waiting.');
+    expect(hint?.textContent).toContain(
+      'Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.',
     );
   });
 
@@ -264,11 +345,27 @@ describe('Add', () => {
 
   it('carries the Tidy up button in the hint, which asks the run store (#320)', () => {
     const button = root.querySelector<HTMLButtonElement>(
-      '.app-file-banner .process-button',
+      '.add-hint .process-button',
     );
     expect(button?.textContent).toBe('Tidy up');
     void act(() => button?.click());
     expect(tidyUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the hint when the inbox is empty (#336)', () => {
+    vaultFiles = [];
+    try {
+      void act(() => {
+        render(null, root);
+      });
+      void act(() => {
+        render(h(Add, {}), root);
+      });
+      expect(root.querySelector('.add-hint')).toBeNull();
+      expect(root.querySelector('.process-button')).toBeNull();
+    } finally {
+      vaultFiles = THREE_WAITING;
+    }
   });
 
   // #334 (issue 21.2): the queue's own heading, its type icon, and the
@@ -316,6 +413,90 @@ describe('Add', () => {
     expect(root.querySelector('.add-queue-name')?.textContent).toBe(
       'receipt.txt',
     );
+  });
+
+  // #335: the "What is this?" box and the note it becomes.
+  function typeContext(value: string): void {
+    const box = root.querySelector<HTMLTextAreaElement>('#add-context');
+    if (box === null) throw new Error('What is this? box missing');
+    void act(() => {
+      box.value = value;
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  async function addOneFile(): Promise<void> {
+    dropFiles([new File(['a'], 'Offer A.pdf', { type: 'application/pdf' })]);
+    await flush();
+    const addButton = Array.from(root.querySelectorAll('button')).find((b) =>
+      (b.textContent ?? '').includes('Add to Bower'),
+    );
+    if (addButton === undefined) throw new Error('Add to Bower missing');
+    void act(() => addButton.click());
+    await waitFor(
+      () =>
+        (root.querySelector('.add-queue-status')?.textContent ?? '') ===
+        'In your inbox',
+    );
+  }
+
+  function leaveAdd(): void {
+    void act(() => {
+      render(null, root);
+    });
+  }
+
+  it('shows the optional What is this? box only under a queue (#335)', () => {
+    expect(root.querySelector('#add-context')).toBeNull();
+    dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
+    const box = root.querySelector<HTMLTextAreaElement>('#add-context');
+    expect(box?.placeholder).toBe(
+      'Just filing is fine. Or tell Bower what to do with these: "Job offers: pull out salary, location and deadline, and add them to a table". Say "from now on" and it becomes a rule.',
+    );
+    expect(root.querySelector('label[for="add-context"]')?.textContent).toBe(
+      'What is this? optional',
+    );
+  });
+
+  it('leaving Add with text and a batch writes one context note (#335)', async () => {
+    await addOneFile();
+    typeContext('Job offers: pull out salary and deadline.');
+    createTextFile.mockClear();
+    leaveAdd();
+    await flush();
+
+    expect(createTextFile).toHaveBeenCalledTimes(1);
+    const [parent, name, content, options] = createTextFile.mock.calls[0] as [
+      string,
+      string,
+      string,
+      unknown,
+    ];
+    expect(parent).toBe('FOLDER_ID');
+    expect(name).toMatch(/^Bower - \d{4}-\d{2}-\d{2} \d{4} Context\.md$/);
+    expect(content).toContain('kind: context');
+    expect(content).toContain('Job offers: pull out salary and deadline.');
+    expect(content).toContain('- Offer A.pdf');
+    expect(options).toEqual({ appProperties: { bower: 'instruction' } });
+
+    // The box is cleared, and the same batch is never written twice.
+    void act(() => {
+      render(h(Add, {}), root);
+    });
+    expect(root.querySelector<HTMLTextAreaElement>('#add-context')?.value).toBe(
+      '',
+    );
+    leaveAdd();
+    await flush();
+    expect(createTextFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaving Add with an empty box writes nothing (#335)', async () => {
+    await addOneFile();
+    createTextFile.mockClear();
+    leaveAdd();
+    await flush();
+    expect(createTextFile).not.toHaveBeenCalled();
   });
 
   it('keeps the pasted link in the field after Save, so it never greys out', () => {

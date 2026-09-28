@@ -4,12 +4,17 @@ import { useLocation } from 'preact-iso';
 
 import { useHasCamera } from '../add-camera.js';
 import {
+  setContextText,
+  useContextText,
+  writeContextNote,
+} from '../add-context.js';
+import {
   getQueue,
   setQueue,
   useAddQueue,
   type QueueItem,
 } from '../add-queue-store.js';
-import { linkNoteName } from '../add.js';
+import { ADD_HINT_TEXT, addHintLead, linkNoteName } from '../add.js';
 import { Bird } from '../components/bird.js';
 import {
   IconCamera,
@@ -17,6 +22,7 @@ import {
   IconDrive,
   IconFile,
   IconImage,
+  IconInbox,
 } from '../components/icons.js';
 import { ProcessButton } from '../components/process-button.js';
 import { useShellSlot } from '../components/shell-slots.js';
@@ -36,17 +42,22 @@ import {
   openFilePicker,
   type PickedItem,
 } from '../picker.js';
+import { pendingCount } from '../run-store.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
 import { useVault } from '../vault-store.js';
 
 import '../styles/add.css';
-import '../styles/app-file-banner.css';
 
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
 const CRUMB = <h1 class="topbar-title">Add</h1>;
+
+/** The "What is this?" box's placeholder, word for word from the Phone-Add
+ * board (#335). */
+const CONTEXT_PLACEHOLDER =
+  'Just filing is fine. Or tell Bower what to do with these: "Job offers: pull out salary, location and deadline, and add them to a table". Say "from now on" and it becomes a rule.';
 
 /** Without a Picker key the "From your Drive" button is hidden, as the
  * onboarding folder picker is. */
@@ -130,7 +141,7 @@ function driveStateText(mimeType: string | undefined): string {
 export function Add() {
   const { me } = useSession();
   const { route } = useLocation();
-  const { index, refresh } = useVault();
+  const { index, files, refresh } = useVault();
   const online = useOnline();
   const hasCamera = useHasCamera();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
@@ -166,6 +177,23 @@ export function Add() {
   const [shareError, setShareError] = useState<string | null>(null);
 
   useShellSlot('crumb', CRUMB);
+
+  // "What is this?" (#335): leaving Add with text in the box and a batch in
+  // the inbox writes its context note now, so it is there for whichever
+  // Tidy up comes next (a tidy-up started from Add writes it first,
+  // `run-store.tsx`). The listing catches up afterwards, as after an add.
+  const contextText = useContextText();
+  const leaveRef = useRef({ inboxFolderId, refresh });
+  leaveRef.current = { inboxFolderId, refresh };
+  useEffect(
+    () => () => {
+      const { inboxFolderId: inbox, refresh: refreshVault } = leaveRef.current;
+      void writeContextNote(inbox).then((written) => {
+        if (written) void refreshVault();
+      });
+    },
+    [],
+  );
 
   // The current inbox listing, so new names are made unique against it.
   // `listFolder` is a single, non-recursive call (unlike `listVault`).
@@ -416,6 +444,7 @@ export function Add() {
     void runQueue([item]);
   }
 
+  const pending = pendingCount(files);
   const linkDisabled = inboxFolderId === null || !online;
   const driveDisabled = inboxFolderId === null || !online || pickerOpening;
 
@@ -616,20 +645,44 @@ export function Add() {
         </div>
       )}
 
+      {queue.length > 0 && (
+        <div class="add-context">
+          <label for="add-context">
+            What is this? <span class="add-context-optional">optional</span>
+          </label>
+          <textarea
+            id="add-context"
+            rows={2}
+            placeholder={CONTEXT_PLACEHOLDER}
+            value={contextText}
+            onInput={(e) => setContextText(e.currentTarget.value)}
+          />
+        </div>
+      )}
+
       {driveNotes.map((note) => (
         <p key={note} class="add-drive-note">
           {note}
         </p>
       ))}
 
-      <div class="app-file-banner" role="note">
-        <p>
-          <strong>This only fills your inbox.</strong> Add as much as you like,
-          then tap Tidy up once: Bower does better work with a pile than with
-          one thing at a time.
-        </p>
-        <ProcessButton />
-      </div>
+      {/* The hint (#336, handover C.6): the inbox's pending count, the
+       * same one Home's Inbox card, the sidebar bubble and the "Is that
+       * everything?" sheet read (`pendingCount`), refreshed after an add
+       * (#300). Hidden when nothing is waiting: there is nothing to tidy. */}
+      {pending > 0 && (
+        <div class="add-hint" role="note">
+          <span class="add-hint-icon" aria-hidden="true">
+            <IconInbox />
+          </span>
+          <div class="add-hint-body">
+            <p>
+              <b>{addHintLead(pending)}</b> {ADD_HINT_TEXT}
+            </p>
+            <ProcessButton />
+          </div>
+        </div>
+      )}
 
       {message !== null && <p class="add-message">{message}</p>}
 
