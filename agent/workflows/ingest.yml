@@ -106,6 +106,11 @@ jobs:
           BOWER_ALLOW_WEB: ${{ vars.BOWER_ALLOW_WEB }}
           # Unset by default: run.sh falls back to the API's own maxTurns.
           BOWER_MAX_TURNS: ${{ vars.BOWER_MAX_TURNS }}
+          # What the run covers, from the Worker's dispatch: `all` (a
+          # tidy-up) or `instructions` (a request's Do it now: only the
+          # instruction notes). Empty from an older Worker: run.sh reads it
+          # as `all`.
+          BOWER_SCOPE: ${{ github.event.client_payload.scope }}
         run: |
           echo "::add-mask::$BOWER_RUN_TICKET"
           umask 077
@@ -114,6 +119,7 @@ jobs:
             printf 'BOWER_RUN_TICKET=%s\n' "$BOWER_RUN_TICKET"
             printf 'BOWER_ALLOW_WEB=%s\n' "$BOWER_ALLOW_WEB"
             printf 'BOWER_MAX_TURNS=%s\n' "$BOWER_MAX_TURNS"
+            printf 'BOWER_SCOPE=%s\n' "$BOWER_SCOPE"
           } >"$RUNNER_TEMP/bower-secrets"
           chmod 600 "$RUNNER_TEMP/bower-secrets"
 

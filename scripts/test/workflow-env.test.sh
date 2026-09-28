@@ -98,6 +98,15 @@ for mode in ingest lint; do
   echo "ok $file takes the run ticket from the dispatch, masked"
 done
 
+# The run's scope (#373) comes from the Worker's dispatch and reaches run.sh
+# through the settings file, like the ticket; a lint has none.
+ingest_hand_off=$(step "$WORKFLOWS_DIR/ingest.yml" 'Hand the runner settings to run.sh')
+grep -Fq 'BOWER_SCOPE: ${{ github.event.client_payload.scope }}' <<<"$ingest_hand_off" ||
+  die 'ingest.yml: the scope does not come from the dispatch'
+grep -Fq "printf 'BOWER_SCOPE=%s\n' \"\$BOWER_SCOPE\"" <<<"$ingest_hand_off" ||
+  die 'ingest.yml: settings step does not write BOWER_SCOPE'
+echo 'ok ingest.yml hands the scope from the dispatch to run.sh'
+
 # No job that runs the agent holds the operator key (issue #259).
 ! grep -q 'BOWER_API_KEY' "$WORKFLOWS_DIR/ingest.yml" || die 'ingest.yml: mentions BOWER_API_KEY'
 ! grep -q 'workflow_dispatch' "$WORKFLOWS_DIR/ingest.yml" ||

@@ -34,6 +34,10 @@
 #                            WebFetch, anything else (the default) denies them
 #   BOWER_MAX_CHANGES        optional; the most files one run may add or
 #                            change (default 200); above it nothing is saved
+#   BOWER_SCOPE              optional, ingest only; `all` (the default, a
+#                            tidy-up) or `instructions` (a request's Do it
+#                            now: only the instruction notes, see "list
+#                            pending" below)
 #
 # Environment:
 #   CLAUDE_CODE_OAUTH_TOKEN  or ANTHROPIC_API_KEY; not needed when the API
@@ -74,12 +78,12 @@ log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
 # arrived in the environment (even empty, next to the file) would otherwise
 # stay exported, and printf -v below would hand the file's value to every
 # child's environment (curl, rclone, jq; issue #276).
-export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES
+export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES BOWER_SCOPE
 secrets_file="${RUNNER_TEMP:-}/bower-secrets"
 if [ -n "${RUNNER_TEMP:-}" ] && [ -f "$secrets_file" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
-      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES)
+      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE)
         printf -v "${line%%=*}" '%s' "${line#*=}"
         ;;
     esac
@@ -154,6 +158,19 @@ case "$MAX_CHANGES" in
     ;;
 esac
 readonly MAX_CHANGES
+
+# The Worker sends `all` or `instructions` and refuses anything else; an
+# empty value (an instance repo whose ingest.yml predates the setting, or a
+# lint, which has none) is a tidy-up.
+SCOPE=${BOWER_SCOPE:-all}
+case "$SCOPE" in
+  all | instructions) ;;
+  *)
+    log "BOWER_SCOPE is not all or instructions"
+    exit 2
+    ;;
+esac
+readonly SCOPE
 
 AGENT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly AGENT_DIR
@@ -384,6 +401,37 @@ fail() {
   exit 2
 }
 
+# Whether the local file at vault path $1 is Add's context note: its
+# frontmatter (the lines between the first two `---`) says `kind: context`
+# (app/src/tell.ts, #335).
+is_context_note() {
+  awk '{ sub(/\r$/, "") }
+    NR == 1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    /^kind:[[:space:]]*context[[:space:]]*$/ { found = 1; exit }
+    END { exit !found }' "$VAULT_DIR/$1"
+}
+
+# Whether pending path $1 belongs to an instructions-only run: an
+# instruction-shaped note directly in 0-Inbox/ (`Bower - *.md`, any letter
+# case, as the instruction-origin step below matches them) that is not a
+# context note. A context note applies to the files it names, which such a
+# run leaves alone, so it waits with them for the next tidy-up. Whether the
+# app really wrote the note is checked later, as in any run.
+in_instructions_scope() {
+  local name
+  case "$1" in
+    0-Inbox/*/*) return 1 ;;
+    0-Inbox/*) name=${1#0-Inbox/} ;;
+    *) return 1 ;;
+  esac
+  case "${name,,}" in
+    'bower - '*.md) ;;
+    *) return 1 ;;
+  esac
+  ! is_context_note "$1"
+}
+
 # Read one string field of the vault info; empty when absent or null.
 field() { jq -r --arg k "$1" '.[$k] // empty' "$VAULT_JSON"; }
 
@@ -522,6 +570,28 @@ STEP='list pending'
       LC_ALL=C sort
   fi
 ) >"$PENDING_FILE"
+# An instructions-only run (BOWER_SCOPE=instructions, a request's Do it now)
+# keeps only the instruction notes pending (in_instructions_scope above).
+# Every other pending file, Clippings/ included, is removed from the local
+# copy before the manifest is taken, so the agent never sees it, the upload
+# never touches it and the pending-original deletes never name it: in Drive
+# it stays exactly where it is, for the next tidy-up. The log counts, never
+# names.
+if [ "$MODE" = ingest ] && [ "$SCOPE" = instructions ]; then
+  : >"$WORK_DIR/in-scope.txt"
+  held=0
+  while IFS= read -r path <&3; do
+    [ -n "$path" ] || continue
+    if in_instructions_scope "$path"; then
+      printf '%s\n' "$path" >>"$WORK_DIR/in-scope.txt"
+    else
+      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside"
+      held=$((held + 1))
+    fi
+  done 3<"$PENDING_FILE"
+  mv "$WORK_DIR/in-scope.txt" "$PENDING_FILE"
+  log "instructions only: $held files left for the next tidy-up"
+fi
 PENDING_COUNT=$(grep -c . "$PENDING_FILE" || true)
 # Only an ingest processes the pending files; a lint reports its summary
 # without a processed list.
