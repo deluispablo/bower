@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 /**
- * The "What is Bower" intro's last page in a demo build (#193): "Run your
- * own Bower" instead of "Sign in with Google", except when opened from
+ * The "What is Bower" intro in a demo build (#361): the demo banner on top
+ * and "Try the demo" instead of "Sign in with Google", which marks the
+ * intro seen and goes Home (where the tour starts), except when opened from
  * Settings (`?from=settings`), which still just closes. `isDemo()` is
  * mocked directly (rather than stubbing `VITE_DEMO` and re-importing
  * `api.ts`) so the real demo module never boots for a plain UI check.
@@ -29,10 +30,6 @@ vi.mock('preact-iso', () => ({
   useLocation: () => location,
 }));
 
-vi.mock('../src/session.js', () => ({
-  useSession: () => ({ refresh: vi.fn(() => Promise.resolve()) }),
-}));
-
 const { Intro } = await import('../src/routes/intro.js');
 
 let root: HTMLDivElement;
@@ -46,6 +43,8 @@ function mount(): void {
 }
 
 afterEach(() => {
+  localStorage.clear();
+  location.route.mockReset();
   void act(() => {
     render(null, root);
   });
@@ -55,15 +54,29 @@ afterEach(() => {
 });
 
 describe('Intro in a demo build', () => {
-  it('shows Run your own Bower instead of Sign in with Google', () => {
+  it('shows Try the demo instead of Sign in with Google, and goes Home', () => {
     state.demo = true;
     mount();
-    expect(root.querySelector('.intro-cta')).toBeNull();
-    expect(
-      Array.from(root.querySelectorAll('button')).some(
-        (b) => b.textContent === 'Explore the demo',
-      ),
-    ).toBe(true);
+    const cta = root.querySelector<HTMLButtonElement>('.intro-cta');
+    expect(cta?.textContent).toBe('Try the demo');
+    expect(root.textContent).not.toContain('Sign in with Google');
+    void act(() => cta?.click());
+    expect(localStorage.getItem('bower:intro:seen')).toBe('1');
+    expect(location.route).toHaveBeenCalledWith('/');
+  });
+
+  it('carries the demo banner on top', () => {
+    state.demo = true;
+    mount();
+    expect(root.querySelector('.intro-bar + .demo-banner')).not.toBeNull();
+  });
+
+  it('has no banner and signs in with Google in a real build', () => {
+    mount();
+    expect(root.querySelector('.demo-banner')).toBeNull();
+    expect(root.querySelector('.intro-cta')?.textContent).toBe(
+      'Sign in with Google',
+    );
   });
 
   it('still shows Done when opened from Settings', () => {

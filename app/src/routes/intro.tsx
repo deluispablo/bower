@@ -8,6 +8,11 @@
  * both as `/welcome?from=settings` (Close and Done instead of Skip and Sign
  * in with Google).
  *
+ * In a demo build (#361, board Demo-Intro) the same nine pages carry the
+ * demo banner on top and "Try the demo" where the app says Sign in with
+ * Google; it lands on Home, where the four-sheet tour starts. The seen flag
+ * is per browser there too.
+ *
  * Swiping moves the track on touch; Next, the desktop's side arrows and the
  * arrow keys move it everywhere. Every page is its board's resting frame
  * (`docs/design/v3/boards/Intro-1.dc.html` to `Intro-9`); `intro.css` plays
@@ -21,6 +26,7 @@ import { useLocation } from 'preact-iso';
 
 import { isDemo, loginUrl } from '../api.js';
 import { Bird } from '../components/bird.js';
+import { DemoBanner } from '../components/demo-banner.js';
 import {
   IconChevronRight,
   IconClose,
@@ -59,7 +65,6 @@ import {
   type IntroTable,
   type IntroWindowRow,
 } from '../intro.js';
-import { RunYourOwnCta } from './run-your-own.js';
 import '../styles/intro.css';
 
 const PAGE_COUNT = INTRO_PAGES.length;
@@ -491,7 +496,7 @@ function Page9({ fromSettings, onFinish }: LastPageProps): JSX.Element {
             Done
           </button>
         ) : isDemo() ? (
-          <RunYourOwnCta />
+          <TryTheDemo />
         ) : (
           <>
             <a
@@ -506,6 +511,27 @@ function Page9({ fromSettings, onFinish }: LastPageProps): JSX.Element {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * The demo's stand-in for Sign in with Google: the demo is already signed
+ * in as Alex (`demo/api.ts`), so it only marks the intro seen and goes Home,
+ * where the first-run tour takes over.
+ */
+function TryTheDemo(): JSX.Element {
+  const { route } = useLocation();
+  return (
+    <button
+      type="button"
+      class="button intro-cta"
+      onClick={() => {
+        markIntroSeen(localStorage);
+        route('/');
+      }}
+    >
+      Try the demo
+    </button>
   );
 }
 
@@ -621,6 +647,7 @@ export function Intro(): JSX.Element {
           </button>
         )}
       </header>
+      <DemoBanner />
 
       <div class="intro-viewport">
         <button

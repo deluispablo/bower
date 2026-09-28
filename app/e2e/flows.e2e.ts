@@ -32,6 +32,8 @@ test.describe('open Home', () => {
     await expect(
       page.getByRole('heading', { name: /Bower files it/ }),
     ).toBeInViewport();
+    // The demo's intro is the app's, with the banner on top (#361).
+    await expect(page.locator('.intro-bar + .demo-banner')).toBeVisible();
     // Nine pages, one "Next" on each of the first eight; the desktop's side
     // arrows are extra.
     const headings = [
@@ -62,7 +64,12 @@ test.describe('open Home', () => {
       await expect(page.getByRole('heading', { name })).toBeInViewport();
       await intro(index + 2);
     }
-    await page.getByRole('button', { name: 'Explore the demo' }).click();
+    // "Try the demo" where the app says Sign in with Google (#361).
+    await expect(
+      page.getByRole('link', { name: 'Sign in with Google' }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: 'Try the demo' }).click();
+    await expect(page).toHaveURL(/\/$/);
 
     // The tour: four sheets, one per tab, each over its highlighted tab.
     const tour = page.getByRole('dialog');
@@ -91,6 +98,20 @@ test.describe('open Home', () => {
     }
     await expect(tour).toBeHidden();
     await expect(page).toHaveURL(/\/$/);
+    await expect(
+      page.getByRole('heading', { name: 'Good morning, Alex' }),
+    ).toBeVisible();
+    // "?" opens the same sheet afterwards, without the step counter.
+    await visible(
+      page.getByRole('button', { name: 'About this screen' }),
+    ).click();
+    const help = page.getByRole('dialog', { name: 'Home' });
+    await expect(
+      help.getByRole('button', { name: 'Show me around' }),
+    ).toBeVisible();
+    await expect(help.getByText('Tour · 1 of 4')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(help).toBeHidden();
 
     // Run your own Bower is the demo's sign-in.
     await page.goto('/login');
