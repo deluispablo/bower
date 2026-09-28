@@ -337,6 +337,37 @@ describe('folderCounts', () => {
     ]);
     expect(folderCounts(index).get('0-Inbox')).toBe(1);
   });
+
+  // #425: the folder menu, the Notes tree and the desktop sidebar count
+  // files and notes together, the same total the folder screen itself
+  // lists ("n files · n notes") — Pinned's own "n notes" (`home.tsx`,
+  // `pinned-section.tsx`) keeps the notes-only default above.
+  describe('with includeFiles', () => {
+    const index = buildVaultIndex([
+      dir('0-Inbox'),
+      entry('0-Inbox/Receipt.pdf', 'application/pdf'),
+      entry('0-Inbox/A quick note.md'),
+      dir('1-Projects'),
+      dir('1-Projects/Kitchen Refresh'),
+      entry('1-Projects/Kitchen Refresh/Kitchen Refresh.md'),
+      entry('1-Projects/Kitchen Refresh/Paint colours.md'),
+      entry('1-Projects/Kitchen Refresh/Quote.pdf', 'application/pdf'),
+      entry('1-Projects/Kitchen Refresh/Patch.png', 'image/png'),
+    ]);
+
+    it('adds files to the notes-only total', () => {
+      const counts = folderCounts(index, true);
+      expect(counts.get('0-Inbox')).toBe(2);
+      expect(counts.get('1-Projects')).toBe(4);
+      expect(counts.get('1-Projects/Kitchen Refresh')).toBe(4);
+    });
+
+    it('leaves the default (no second argument) notes-only', () => {
+      const counts = folderCounts(index);
+      expect(counts.get('0-Inbox')).toBe(1);
+      expect(counts.get('1-Projects')).toBe(2);
+    });
+  });
 });
 
 describe('folderContents', () => {
