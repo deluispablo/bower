@@ -250,6 +250,19 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
     [ "$SMOKE_SCENARIO" = nocfg ] || echo '# rules' >"$remote/CLAUDE.md"
     case "$SMOKE_SCENARIO" in
       empty | reauth) ;;
+      facts)
+        # File facts (#610): a PDF, a workbook and an archive to count, a
+        # corrupt PDF and a corrupt archive, and a facts file from an
+        # earlier run that names a file that is gone.
+        mkdir -p "$remote/3-Resources" "$remote/.bower"
+        printf 'pages=42\n' >"$remote/3-Resources/big.pdf"
+        printf '%s\n' xl/workbook.xml xl/worksheets/sheet1.xml xl/worksheets/sheet2.xml \
+          xl/worksheets/sheet3.xml xl/worksheets/_rels/sheet1.xml.rels >"$remote/3-Resources/budget.xlsx"
+        printf '%s\n' a.jpg photos/ photos/b.jpg photos/c.jpg d.txt >"$remote/3-Resources/photos.zip"
+        printf 'junk\n' >"$remote/3-Resources/bad.pdf"
+        printf 'CORRUPT\n' >"$remote/3-Resources/bad.zip"
+        printf '{"3-Resources/gone.pdf":{"k":"1 2","pages":9}}\n' >"$remote/.bower/file-facts.json"
+        ;;
       paths)
         # Nothing pending, a few filed files, a system file and index.md
         # rows naming two of them (#597): the person moves and deletes
@@ -846,6 +859,24 @@ printf '%s\n' 'Working on 0-Inbox/a.pdf' 'Reading Clippings/b.md' \
   'Filed: 1 files' 'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5' 'SUMMARY-MARKER 6'
 STUB
 
+# pdfinfo and unzip stubs for the file facts (#610). pdfinfo reads a
+# "pages=N" line from the fake PDF and fails on anything else (like a corrupt
+# file); unzip -Z1 prints the fake archive's lines, one entry each, and fails
+# when its first line is CORRUPT. Every pdfinfo call is recorded.
+cat >"$STUBS/pdfinfo" <<'STUB'
+#!/usr/bin/env bash
+echo call >>"$SMOKE_STATE/pdfinfo-calls.txt"
+n=$(sed -n 's/^pages=//p' "$1")
+[ -n "$n" ] || { echo 'Syntax Error: cannot read xref table' >&2; exit 1; }
+printf 'Title:          x\nPages:          %s\nPage size:      612 x 792 pts\n' "$n"
+STUB
+cat >"$STUBS/unzip" <<'STUB'
+#!/usr/bin/env bash
+[ "$1" = -Z1 ] || exit 2
+[ "$(head -n 1 "$2")" != CORRUPT ] || { echo 'End-of-central-directory signature not found' >&2; exit 9; }
+cat "$2"
+STUB
+
 if ! command -v jq >/dev/null 2>&1; then
   cat >"$STUBS/jq.js" <<'STUB'
 // Stand-in for jq, covering only the filters run.sh uses:
@@ -884,7 +915,7 @@ if (filter === '$ARGS.named') {
     if (o.IsDir || typeof o.ID !== 'string' || /[\t\n]/.test(o.ID + o.Path)) continue;
     process.stdout.write(o.ID + '\t' + o.Path + '\n');
   }
-} else if (filter.startsWith('to_entries[]') && flags.has('r')) {
+} else if (filter.startsWith('to_entries[] | select((.value | type) == "string"') && flags.has('r')) {
   // run.sh's PATHS_READ_FILTER (#597).
   const m = JSON.parse(input());
   if (m === null || typeof m !== 'object' || Array.isArray(m)) {
@@ -901,6 +932,28 @@ if (filter === '$ARGS.named') {
   const m = {};
   for (const l of lines) { const parts = l.split('\t'); m[parts[0]] = parts[1]; }
   process.stdout.write(JSON.stringify(m) + '\n');
+} else if (filter.startsWith('to_entries[] | select((.value | type) == "object"') && flags.has('r')) {
+  // run.sh's FACTS_KEYS_FILTER (#610).
+  const m = JSON.parse(input());
+  if (m === null || typeof m !== 'object' || Array.isArray(m)) {
+    process.stderr.write('jq stand-in: not an object\n');
+    process.exit(5);
+  }
+  for (const [k, v] of Object.entries(m)) {
+    if (v !== null && typeof v === 'object' && typeof v.k === 'string' && !/[\t\n]/.test(k + v.k)) {
+      process.stdout.write(k + '\t' + v.k + '\n');
+    }
+  }
+} else if (filter.startsWith('$prev as $p | [inputs') && flags.has('R')) {
+  // run.sh's FACTS_WRITE_FILTER (#610).
+  const lines = fs.readFileSync(0, 'utf8').split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  const m = {};
+  for (const l of lines) {
+    const [path, key, kind, n] = l.split('\t');
+    m[path] = kind === 'keep' ? named.prev[path] : { k: key, [kind]: Number(n) };
+  }
+  process.stdout.write(JSON.stringify(m, null, 2) + '\n');
 } else if (filter === '.[$k] // empty' && flags.has('r')) {
   const v = JSON.parse(input())[named.k];
   if (v !== undefined && v !== null && v !== false) {
@@ -2478,4 +2531,37 @@ done
 expect_content_free
 expect_cleaned_up
 echo "ok the report says where each thing went, what was set aside and why, and what Bower added"
+
+# File facts (#610): after a run .bower/file-facts.json holds the pages of
+# the PDF, the sheets of the workbook and the entries of the archive (files,
+# not folders), a fact of a file that is gone is dropped, a corrupt PDF and
+# a corrupt archive get no fact and the run still succeeds, and the log
+# counts what was skipped without naming it. A file that did not change is
+# not counted again.
+facts_json() {
+  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(JSON.stringify(Object.keys(m).sort().map((k) => {
+      const { k: _key, ...rest } = m[k];
+      return [k, rest];
+    })))' "$STATE/remote/.bower/file-facts.json"
+}
+MODE=ingest
+run_case facts
+expect_eq "$RC" 0 'exit code (facts)'
+expect_eq "$(facts_json)" \
+  '[["3-Resources/big.pdf",{"pages":42}],["3-Resources/budget.xlsx",{"sheets":3}],["3-Resources/photos.zip",{"entries":4}]]' \
+  'file facts'
+grep -q ' 2 file facts skipped$' "$STATE/out.log" || die 'the log does not count the skipped facts'
+if grep -q 'bad\.' "$STATE/out.log"; then die 'the log names a file whose fact was skipped'; fi
+expect_eq "$(wc -l <"$STATE/pdfinfo-calls.txt" | tr -d ' ')" 2 'PDFs counted on the first run'
+expect_content_free
+# Second run: one archive is removed, nothing else changes.
+rm "$STATE/remote/3-Resources/photos.zip" "$STATE/pdfinfo-calls.txt"
+run_case facts
+expect_eq "$RC" 0 'exit code (facts, second run)'
+expect_eq "$(facts_json)" \
+  '[["3-Resources/big.pdf",{"pages":42}],["3-Resources/budget.xlsx",{"sheets":3}]]' \
+  'file facts after a file was removed'
+expect_eq "$(wc -l <"$STATE/pdfinfo-calls.txt" | tr -d ' ')" 1 'only the corrupt PDF is tried again'
+echo "ok the runner counts pages, sheets and archive entries, and skips what it cannot read"
 

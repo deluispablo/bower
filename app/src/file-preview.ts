@@ -170,12 +170,17 @@ export interface MetaExtras {
   pages?: number;
   /** A CSV's data rows, once parsed. */
   rows?: number;
+  /** An Excel file's sheets, from the runner's file facts (#610). */
+  sheets?: number;
+  /** What a ZIP holds, in files, from the runner's file facts (#610). */
+  entries?: number;
 }
 
 /**
  * The facts after the kind word on a file's screen (boards `Phone-File-*`):
  * "Taken 26 Sep · 2.4 MB" for a photo, "3 KB · 24 rows" for a CSV,
- * "2 min 14 s · 86 MB · 26 Sep" for a video, "42 pages · 1.1 MB" for a PDF.
+ * "2 min 14 s · 86 MB · 26 Sep" for a video, "42 pages · 1.1 MB" for a PDF,
+ * "18 KB · 3 sheets" for an Excel file, "14 files · 38 MB" for a ZIP.
  * Anything Drive or the note does not say is left out.
  */
 export function metaFacts(
@@ -214,6 +219,22 @@ export function metaFacts(
     facts.push(
       size,
       rows === undefined ? null : `${rows} ${rows === 1 ? 'row' : 'rows'}`,
+    );
+  } else if (kind === 'excel') {
+    const sheets = extras.sheets;
+    facts.push(
+      size,
+      sheets === undefined
+        ? null
+        : `${sheets} ${sheets === 1 ? 'sheet' : 'sheets'}`,
+    );
+  } else if (kind === 'zip') {
+    const entries = extras.entries;
+    facts.push(
+      entries === undefined
+        ? null
+        : `${entries} ${entries === 1 ? 'file' : 'files'}`,
+      size,
     );
   } else {
     facts.push(size);
