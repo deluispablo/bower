@@ -31,6 +31,8 @@ interface State {
   notes: Record<string, string>;
   phase: string;
   run: Run | null;
+  /** The run store's shared clock (#513, #537): epoch ms. */
+  now: number;
 }
 
 const state = vi.hoisted((): State => ({
@@ -40,6 +42,7 @@ const state = vi.hoisted((): State => ({
   notes: {},
   phase: 'idle',
   run: null,
+  now: Date.parse('2026-09-27T09:00:00.000Z'),
 }));
 
 type CreateTextFile = (
@@ -85,7 +88,12 @@ vi.mock('../src/drive.js', async (importOriginal) => ({
 }));
 
 vi.mock('../src/run-store.js', () => ({
-  useRun: () => ({ phase: state.phase, run: state.run, doItNow }),
+  useRun: () => ({
+    phase: state.phase,
+    run: state.run,
+    doItNow,
+    now: state.now,
+  }),
 }));
 
 vi.mock('preact-iso', () => ({
@@ -117,6 +125,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 
 const { Bower } = await import('../src/routes/bower.js');
 const { buildVaultIndex } = await import('../src/vault-index.js');
+const { sinceLabel } = await import('../src/bower-tab.js');
 
 let root: HTMLDivElement;
 
@@ -150,6 +159,7 @@ beforeEach(() => {
   state.notes = {};
   state.phase = 'idle';
   state.run = null;
+  state.now = Date.parse('2026-09-27T09:00:00.000Z');
   createTextFile.mockClear();
   saveEditedNote.mockClear();
   deleteFile.mockClear();
@@ -463,6 +473,16 @@ describe('Requests (#344)', () => {
     expect(about?.textContent).toContain('Waiting');
     expect(button(about, 'Edit')).toBeUndefined();
     expect(button(about, 'Remove')).toBeDefined();
+  });
+
+  it("reads the run store's shared clock, so its label matches sinceLabel for the same instant (#513)", async () => {
+    // The row's `since` comes from the file name's own date and time
+    // ("2026-09-27 0815"), read as local time the same way `bower-tab.ts`'s
+    // `sinceFromName` does — not from `modifiedTime`.
+    const since = new Date(2026, 8, 27, 8, 15).toISOString();
+    await mountRead();
+    const waiting = row('Which flat should I visit first?');
+    expect(waiting?.textContent).toContain(sinceLabel(since, state.now));
   });
 
   it('Do it now opens the confirmation with the count of requests', async () => {
