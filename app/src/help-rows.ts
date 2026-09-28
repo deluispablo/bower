@@ -115,7 +115,12 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
       {
         icon: 'file',
         lead: 'Photo, files, your Drive, a link',
-        text: 'all land in the inbox. Nothing runs yet. Sharing to Bower from another app lands here too.',
+        text: 'all land in the inbox. Nothing runs yet.',
+      },
+      {
+        icon: 'file',
+        lead: 'Share from any app',
+        text: 'to Bower: it lands here too.',
       },
       {
         icon: 'edit',

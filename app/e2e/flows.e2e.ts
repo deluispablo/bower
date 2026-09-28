@@ -484,6 +484,16 @@ test('a missing file shows Not found with its own sentence, not the generic page
   ).toBeVisible();
 });
 
+/** Presses the one Tidy up button on Add, which uploads what is waiting and
+ * opens the "Is that everything?" sheet, then closes the sheet again. */
+async function addPileToInbox(page: Page): Promise<void> {
+  await page.locator('.add-tidy-button').click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Add more first' }).click();
+  await expect(confirm).toBeHidden();
+}
+
 test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
   page,
 }, testInfo) => {
@@ -497,7 +507,7 @@ test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
   if (testInfo.project.name === 'desktop') {
     await expect(doors).toBeHidden();
     await expect(dropzone).toBeVisible();
-    await expect(page.getByText('Drop anything here')).toBeVisible();
+    await expect(page.getByText('Drop files here')).toBeVisible();
     await expect(
       page.getByText('Or share to Bower from any app: it lands here too.'),
     ).toBeHidden();
@@ -512,16 +522,12 @@ test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
   await expect(
     doors.getByRole('button', { name: /^Take a photo/ }),
   ).toBeVisible();
-  // The two doors' subtitles are the demo's own (#489, `Demo-Add` board).
-  await expect(
-    doors.getByText('In the demo it stays in the page'),
-  ).toBeVisible();
-  await expect(
-    doors.getByText('Photos, PDFs, screenshots', { exact: true }),
-  ).toBeVisible();
+  // R-ADD-1: one row of short words, the share line lives in the help sheet.
+  await expect(doors.getByText('Files', { exact: true })).toBeVisible();
+  await expect(doors.getByText('Photo', { exact: true })).toBeVisible();
   await expect(
     page.getByText('Or share to Bower from any app: it lands here too.'),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await shot(page, testInfo, 'add-doors');
 });
 
@@ -561,7 +567,7 @@ test('Add puts a file in the inbox and stays on Add (#421)', async ({
       `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
     );
   await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
-  await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await addPileToInbox(page);
 
   await expect(page.getByText('Added to your inbox.')).toBeVisible();
   await shot(page, testInfo, 'add');
@@ -570,7 +576,6 @@ test('Add puts a file in the inbox and stays on Add (#421)', async ({
   // navigation away, and no leftover "Add to Bower" once nothing is
   // waiting any more.
   await expect(page).toHaveURL('/add');
-  await expect(page.getByRole('button', { name: 'Add to Bower' })).toBeHidden();
 
   // The vault index refreshed in place (#289): Home already reads the new
   // total once we go there ourselves, not after the next background
@@ -583,7 +588,7 @@ test('Add puts a file in the inbox and stays on Add (#421)', async ({
   ).toHaveText('4');
 });
 
-test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (#334)', async ({
+test('Add: "In your inbox · n", and the row survives leaving the tab (#334)', async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -595,19 +600,24 @@ test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (
     .setInputFiles(
       `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
     );
-  await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'In your inbox · 1' }),
+  ).toBeVisible();
 
-  await page.getByRole('button', { name: 'Add to Bower' }).click();
-  await expect(page.getByText('In your inbox')).toBeVisible();
+  await addPileToInbox(page);
+  await expect(
+    page.locator('.add-queue-status', { hasText: 'In your inbox' }),
+  ).toBeVisible();
 
   // Leave for Home ourselves, then Add again within the same session: the
   // row is still there (#334), not an empty screen, and no leftover
   // "Add to Bower" reappears now that nothing is waiting (#421).
   await navigate(page, /^Home$/);
   await navigate(page, /^Add$/);
-  await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'In your inbox · 1' }),
+  ).toBeVisible();
   await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add to Bower' })).toBeHidden();
 });
 
 test('a fast double-tap on Tidy up leaves the confirmation open, not opened-and-closed (#510)', async ({
@@ -640,23 +650,21 @@ test('a fast double-tap on Tidy up leaves the confirmation open, not opened-and-
   ).toBeHidden();
 });
 
-test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', async ({
+test('Add: the one button counts what is waiting, and asks first (#336)', async ({
   page,
 }, testInfo) => {
   await openHome(page);
   await navigate(page, /^Add$/);
 
-  // The demo starts with three things in the inbox; the hint's rest of
-  // sentence is the demo's own (#489, `Demo-Add` board), not the real
-  // build's "Add the whole pile first...".
-  const hint = page.locator('.add-hint');
-  await expect(hint).toContainText(
-    '3 things waiting. Tap Tidy up and watch a recorded run: in the demo the bird does not really think, so nothing costs anything.',
-  );
+  // The demo starts with three things in the inbox; the one button
+  // carries the count (R-ADD-5), and there is no separate hint.
+  const tidy = page.locator('.add-tidy-button');
+  await expect(tidy).toHaveText('Tidy up 3 things');
+  await expect(page.locator('.add-hint')).toHaveCount(0);
   await shot(page, testInfo, 'add-hint');
 
   // The Tidy up button opens the "Is that everything?" confirmation (#337).
-  await hint.getByRole('button', { name: 'Tidy up', exact: true }).click();
+  await tidy.click();
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: 'Add more first' }).click();
@@ -682,11 +690,11 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
     .setInputFiles(
       `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
     );
-  await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await addPileToInbox(page);
   // Stays on Add (#421): the new total shows in place, no round trip
   // through Home needed to see it.
   await expect(page).toHaveURL('/add');
-  await expect(hint).toContainText('4 things waiting.');
+  await expect(tidy).toHaveText('Tidy up 4 things');
 });
 
 test('Add: the queue and "Added to your inbox." clear once a tidy-up finishes (#493)', async ({
@@ -695,13 +703,14 @@ test('Add: the queue and "Added to your inbox." clear once a tidy-up finishes (#
   await openHome(page);
   await navigate(page, /^Add$/);
 
-  await page.getByLabel('Or paste a link').fill('https://example.com/page');
+  await page.getByLabel('Paste a link').fill('https://example.com/page');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('In your inbox')).toBeVisible();
+  await expect(
+    page.locator('.add-queue-status', { hasText: 'In your inbox' }),
+  ).toBeVisible();
   await expect(page.getByText('Added to your inbox.')).toBeVisible();
 
-  const hint = page.locator('.add-hint');
-  await hint.getByRole('button', { name: 'Tidy up', exact: true }).click();
+  await page.locator('.add-tidy-button').click();
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
@@ -730,14 +739,16 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
       `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
     );
   const box = page.getByRole('textbox', { name: 'What is this?' });
-  await expect(box).toHaveAttribute('placeholder', /^Just filing is fine\./);
+  await expect(box).toHaveAttribute('placeholder', /^Flats for November\./);
   // The rule sentence is kept in your rules too (#435).
   await box.fill(
     'Receipts: add them to a table with the shop and the total. From now on, file garden receipts under Garden.',
   );
   await shot(page, testInfo, 'add-context');
-  await page.getByRole('button', { name: 'Add to Bower' }).click();
-  await expect(page.getByText('In your inbox')).toBeVisible();
+  await addPileToInbox(page);
+  await expect(
+    page.locator('.add-queue-status', { hasText: 'In your inbox' }),
+  ).toBeVisible();
 
   // The context note is written on leaving Add (#421: no longer automatic
   // once a batch finishes), so leave for Home ourselves: the three things,
@@ -781,8 +792,10 @@ test('rules from a What is this? box drop "From now on," and sort before Everyth
   await box.fill(
     'From now on, job offers go to Job hunt. From now on, add the salary to every job offer.',
   );
-  await page.getByRole('button', { name: 'Add to Bower' }).click();
-  await expect(page.getByText('In your inbox')).toBeVisible();
+  await addPileToInbox(page);
+  await expect(
+    page.locator('.add-queue-status', { hasText: 'In your inbox' }),
+  ).toBeVisible();
   await navigate(page, /^Home$/);
   await navigate(page, /^Bower$/);
 
@@ -818,9 +831,7 @@ test('Add: a link row shows the URL, and the What is this? placeholder fits its 
 
   // C.11: titles, not file names — the row must never say
   // "Link - example.com <date> <time>.md", the note's own saved name.
-  await page
-    .getByLabel('Or paste a link')
-    .fill('https://www.example.com/a/page');
+  await page.getByLabel('Paste a link').fill('https://www.example.com/a/page');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('example.com/a/page')).toBeVisible();
   await expect(page.getByText(/^Link - /)).toHaveCount(0);
@@ -990,7 +1001,9 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   await navigate(page, /^Add$/);
   await page.locator('#add-link').fill('https://example.com/second');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('In your inbox')).toBeVisible();
+  await expect(
+    page.locator('.add-queue-status', { hasText: 'In your inbox' }),
+  ).toBeVisible();
   await navigate(page, /^Home$/);
   await visible(
     page.getByRole('button', { name: 'Tidy up', exact: true }),

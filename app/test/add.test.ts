@@ -16,6 +16,7 @@ import {
 } from '../src/add.js';
 import { setQueue } from '../src/add-queue-store.js';
 import type { DriveFile } from '../src/drive.js';
+import { HELP_ROWS } from '../src/help-rows.js';
 
 describe('addHintLead', () => {
   it('counts the things waiting, singular for one', () => {
@@ -287,6 +288,13 @@ function dropFiles(files: File[]): void {
   });
 }
 
+/** The one Tidy up button at the foot of the screen (R-ADD-5). */
+function tidyButton(): HTMLButtonElement {
+  const button = root.querySelector<HTMLButtonElement>('.add-tidy-button');
+  if (button === null) throw new Error('Tidy up button missing');
+  return button;
+}
+
 async function flush(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -330,30 +338,69 @@ describe('Add', () => {
     expect(root.textContent).not.toContain('Tidy up right after adding');
   });
 
-  // #336: the hint, copy word for word from the Phone-Add board.
-  it('shows the hint with the inbox count and the board copy', () => {
-    const hint = root.querySelector('.add-hint');
-    expect(hint?.querySelector('b')?.textContent).toBe('3 things waiting.');
-    expect(hint?.textContent).toContain(
-      'Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.',
-    );
+  // R-ADD-5: one button carrying the count, no separate hint.
+  it('carries the inbox count in the one Tidy up button, with no hint', () => {
+    expect(tidyButton().textContent).toBe('Tidy up 3 things');
+    expect(root.querySelector('.add-hint')).toBeNull();
+    expect(root.querySelectorAll('.process-button')).toHaveLength(1);
+  });
+
+  it('counts the files chosen but not yet uploaded, and says "thing" for one', () => {
+    vaultFiles = [];
+    try {
+      void act(() => {
+        render(null, root);
+      });
+      void act(() => {
+        render(h(Add, {}), root);
+      });
+      dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
+      expect(tidyButton().textContent).toBe('Tidy up 1 thing');
+    } finally {
+      vaultFiles = THREE_WAITING;
+    }
+  });
+
+  it('reads "Tidy up 5 things" with five items and opens the confirmation once they are in', async () => {
+    vaultFiles = [];
+    try {
+      void act(() => {
+        render(null, root);
+      });
+      void act(() => {
+        render(h(Add, {}), root);
+      });
+      dropFiles(
+        ['a', 'b', 'c', 'd', 'e'].map(
+          (n) => new File([n], `${n}.txt`, { type: 'text/plain' }),
+        ),
+      );
+      expect(tidyButton().textContent).toBe('Tidy up 5 things');
+      void act(() => tidyButton().click());
+      await waitFor(() => tidyUp.mock.calls.length === 1);
+      expect(upload).toHaveBeenCalledTimes(5);
+    } finally {
+      vaultFiles = THREE_WAITING;
+    }
   });
 
   // #333: the phone doors, the drop zone (both in the DOM; `add.css`'s
   // breakpoint picks which one shows), and the line about sharing in from
   // another app.
-  it('lists Choose files as a door, with its hint', () => {
-    const doors = root.querySelector('.add-doors');
-    expect(doors?.textContent).toContain('Choose files');
-    expect(doors?.textContent).toContain(
-      'Photos, PDFs, screenshots, voice memos',
+  it('lists the doors as one row: Files, then Drive when it shows (R-ADD-1)', () => {
+    const doors = Array.from(
+      root.querySelectorAll('.add-doors > button.add-door'),
+    );
+    expect(doors.map((d) => d.textContent)).toContain('Files');
+    expect(root.querySelector('.add-doors')?.textContent).not.toContain(
+      'voice memos',
     );
   });
 
   it('opens the file input when the Choose files door is pressed', () => {
     const doors = root.querySelector('.add-doors');
-    const door = Array.from(doors?.querySelectorAll('button') ?? []).find((b) =>
-      (b.textContent ?? '').startsWith('Choose files'),
+    const door = Array.from(doors?.querySelectorAll('button') ?? []).find(
+      (b) => b.getAttribute('aria-label') === 'Choose files',
     );
     if (door === undefined) throw new Error('Choose files door missing');
     const input = root.querySelector('input[type="file"]:not([capture])');
@@ -364,19 +411,18 @@ describe('Add', () => {
 
   it('keeps the drop zone in the DOM, sized by its own content', () => {
     const dropzone = root.querySelector('.add-dropzone');
-    expect(dropzone?.textContent).toContain('Drop anything here');
-    expect(dropzone?.textContent).toContain(
-      'Photos, PDFs, screenshots, links.',
-    );
+    expect(dropzone?.textContent).toContain('Drop files here');
+    expect(dropzone?.textContent).toContain('Choose files');
   });
 
-  it('mentions sharing in from another app', () => {
-    expect(root.textContent).toContain(
-      'Or share to Bower from any app: it lands here too.',
-    );
+  it('moves the share line to the Add help sheet (R-ADD-1)', () => {
+    expect(root.textContent).not.toContain('share to Bower from any app');
+    const rows = HELP_ROWS.add.rows.map((r) => `${r.lead} ${r.text}`);
+    expect(rows).toContain('Share from any app to Bower: it lands here too.');
   });
 
-  it('has no submit button until something is queued (#333)', () => {
+  it('has no Add to Bower button any more: the one Tidy up button does both', () => {
+    dropFiles([new File(['a'], 'a.txt', { type: 'text/plain' })]);
     expect(
       Array.from(root.querySelectorAll('button')).some((b) =>
         (b.textContent ?? '').includes('Add to Bower'),
@@ -384,51 +430,34 @@ describe('Add', () => {
     ).toBe(false);
   });
 
-  it('uploading files resolves without starting a run', async () => {
+  it('uploads the waiting files, then opens the confirmation without starting a run', async () => {
     dropFiles([
       new File(['a'], 'a.txt', { type: 'text/plain' }),
       new File(['b'], 'b.txt', { type: 'text/plain' }),
       new File(['c'], 'c.txt', { type: 'text/plain' }),
     ]);
     await flush();
+    expect(upload).not.toHaveBeenCalled();
 
-    const addButton = Array.from(root.querySelectorAll('button')).find((b) =>
-      (b.textContent ?? '').includes('Add to Bower'),
-    );
-    if (addButton === undefined) {
-      throw new Error('Add to Bower button missing');
-    }
-    void act(() => addButton.click());
-    // Every upload resolves and settles into "In your inbox" — the whole
-    // batch went through with nothing throwing and no run started. Once
-    // nothing is left waiting the button goes away rather than sit there
-    // as a no-op leftover (#421).
+    void act(() => tidyButton().click());
     await waitFor(() =>
       Array.from(root.querySelectorAll('.add-queue-status')).every(
         (el) => el.textContent === 'In your inbox',
       ),
     );
-    expect(
-      Array.from(root.querySelectorAll('button')).some((b) =>
-        (b.textContent ?? '').includes('Add to Bower'),
-      ),
-    ).toBe(false);
+    await waitFor(() => tidyUp.mock.calls.length === 1);
 
     expect(upload).toHaveBeenCalledTimes(3);
-    expect(tidyUp).not.toHaveBeenCalled();
     expect(startRun).not.toHaveBeenCalled();
   });
 
-  it('carries the Tidy up button in the hint, which asks the run store (#320)', () => {
-    const button = root.querySelector<HTMLButtonElement>(
-      '.add-hint .process-button',
-    );
-    expect(button?.textContent).toBe('Tidy up');
-    void act(() => button?.click());
+  it('with nothing waiting, the button goes straight to the confirmation', () => {
+    void act(() => tidyButton().click());
+    expect(upload).not.toHaveBeenCalled();
     expect(tidyUp).toHaveBeenCalledTimes(1);
   });
 
-  it('hides the hint when the inbox is empty (#336)', () => {
+  it('hides the button when the inbox is empty and nothing is queued (#336)', () => {
     vaultFiles = [];
     try {
       void act(() => {
@@ -437,19 +466,56 @@ describe('Add', () => {
       void act(() => {
         render(h(Add, {}), root);
       });
-      expect(root.querySelector('.add-hint')).toBeNull();
+      expect(root.querySelector('.add-tidy')).toBeNull();
       expect(root.querySelector('.process-button')).toBeNull();
     } finally {
       vaultFiles = THREE_WAITING;
     }
   });
 
+  // R-ADD-2 and R-ADD-4: every row has its badge; a kind Bower only keeps
+  // shows its queue line.
+  it('shows a badge on every row and the kept-not-read line on a video', () => {
+    dropFiles([
+      new File(['a'], 'Lease.pdf', { type: 'application/pdf' }),
+      new File(['b'], 'IMG_1.jpg', { type: 'image/jpeg' }),
+      new File(['c'], 'Walk-through.mp4', { type: 'video/mp4' }),
+    ]);
+    const rows = Array.from(root.querySelectorAll('.add-queue-card'));
+    expect(
+      rows.map((r) => r.querySelector('.kind-badge')?.textContent),
+    ).toEqual(['PDF', 'JPG', 'MP4']);
+    expect(rows[0]?.querySelector('.add-queue-kept')).toBeNull();
+    expect(rows[2]?.querySelector('.add-queue-kept')?.textContent).toBe(
+      "Kept, not read: Bower can't watch videos",
+    );
+  });
+
+  it('names the sources in the queue heading, for phone and desktop', () => {
+    dropFiles([new File(['a'], 'a.pdf', { type: 'application/pdf' })]);
+    const input = root.querySelector('#add-link') as HTMLInputElement;
+    void act(() => {
+      input.value = 'https://example.com/page';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const save = Array.from(root.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Save',
+    );
+    void act(() => save?.click());
+    expect(root.querySelector('.add-sources-phone')?.textContent).toBe(
+      'Shared from Files, a link',
+    );
+    expect(root.querySelector('.add-sources-desktop')?.textContent).toBe(
+      'From drop and a link',
+    );
+  });
+
   // #334 (issue 21.2): the queue's own heading, its type icon, and the
   // per-row state text.
-  it('heads the queue "Added · n" and shows the picked name', () => {
+  it('heads the queue "In your inbox · n" and shows the picked name', () => {
     dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
     const head = root.querySelector('.add-queue-head');
-    expect(head?.textContent).toBe('Added · 1');
+    expect(head?.textContent).toBe('In your inbox · 1');
     expect(root.querySelector('.add-queue-name')?.textContent).toBe(
       'receipt.txt',
     );
@@ -458,11 +524,7 @@ describe('Add', () => {
   it('says "In your inbox" once a plain upload is done', async () => {
     dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
     await flush();
-    const addButton = Array.from(root.querySelectorAll('button')).find((b) =>
-      (b.textContent ?? '').includes('Add to Bower'),
-    );
-    if (addButton === undefined) throw new Error('Add to Bower missing');
-    void act(() => addButton.click());
+    void act(() => tidyButton().click());
     await waitFor(
       () =>
         (root.querySelector('.add-queue-status')?.textContent ?? '') ===
@@ -504,11 +566,7 @@ describe('Add', () => {
   async function addOneFile(): Promise<void> {
     dropFiles([new File(['a'], 'Offer A.pdf', { type: 'application/pdf' })]);
     await flush();
-    const addButton = Array.from(root.querySelectorAll('button')).find((b) =>
-      (b.textContent ?? '').includes('Add to Bower'),
-    );
-    if (addButton === undefined) throw new Error('Add to Bower missing');
-    void act(() => addButton.click());
+    void act(() => tidyButton().click());
     await waitFor(
       () =>
         (root.querySelector('.add-queue-status')?.textContent ?? '') ===
@@ -526,7 +584,7 @@ describe('Add', () => {
     expect(root.querySelector('#add-context')).toBeNull();
     dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
     const box = root.querySelector<HTMLTextAreaElement>('#add-context');
-    expect(box?.placeholder).toBe(CONTEXT_PLACEHOLDER);
+    expect(box?.placeholder).toBe('Flats for November.');
     expect(root.querySelector('label[for="add-context"]')?.textContent).toBe(
       'What is this? optional',
     );
@@ -609,7 +667,7 @@ describe('Add', () => {
   // and coming back to Add (the queue survives navigation, #334) then
   // showed a leftover "Add to Bower" button that did nothing but re-run
   // `finish()` and bounce back to Home again.
-  it('saving a link stays on Add, with no leftover Add to Bower button', async () => {
+  it('saving a link stays on Add, with no upload left waiting', async () => {
     const input = root.querySelector('#add-link') as HTMLInputElement;
     const save = Array.from(root.querySelectorAll('button')).find(
       (b) => b.textContent === 'Save',
@@ -627,13 +685,9 @@ describe('Add', () => {
     );
 
     expect(root.querySelector('.add-queue-head')?.textContent).toBe(
-      'Added · 1',
+      'In your inbox · 1',
     );
-    expect(
-      Array.from(root.querySelectorAll('button')).some((b) =>
-        (b.textContent ?? '').includes('Add to Bower'),
-      ),
-    ).toBe(false);
+    expect(root.querySelector('.add-queue-card-waiting')).toBeNull();
     expect(location.route).not.toHaveBeenCalled();
   });
 
