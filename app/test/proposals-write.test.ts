@@ -27,7 +27,7 @@ import type { ProposalDecision } from '../src/proposals.js';
 import { runProposalDecision } from '../src/vault-store.js';
 
 const RULE =
-  '- File every recipe under 3-Resources/Cooking with the tag cooking. (accepted suggestion, 2026-09-27)';
+  "- File every recipe under 3-Resources/Cooking with the tag cooking. (owner's request, 2026-09-27)";
 
 let drive: DriveClient;
 
