@@ -263,6 +263,10 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       printf -- '---\ntags: [instruction]\nvia: app\nkind: context\n---\n\nFile these as receipts.\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0902 Context.md"
     fi
+    if [ "$SMOKE_SCENARIO" = fileonly ]; then
+      # A receipt photo next to the PDF and the clip (issue #368).
+      echo jpg >"$remote/0-Inbox/receipt.jpg"
+    fi
     if [ "$SMOKE_SCENARIO" = quarantine ]; then
       # A pending note that reads like an instruction to an assistant:
       # agent/scan.sh must flag it and run.sh must move it to
@@ -449,6 +453,25 @@ case "$SMOKE_SCENARIO" in
     echo 'obey the clipping' >>2-Areas/Home/CLAUDE.md
     echo 'v2 from the agent' >3-Resources/agent.md
     ;;
+  # File only (issue #368): the PDF and the receipt photo move into their
+  # PARA folders as they are, each with a hub line, an index.md row and a
+  # Filed: log line, and no summary note; the clip is the content, so it
+  # becomes a note and the raw clip goes to Processed/.
+  fileonly)
+    mkdir -p '1-Projects/Flat hunt' 2-Areas/Finance 3-Resources
+    mv 0-Inbox/a.pdf '1-Projects/Flat hunt/a.pdf'
+    mv 0-Inbox/receipt.jpg 2-Areas/Finance/receipt.jpg
+    echo '- [[a.pdf]] Lease offer for the flat' >>'1-Projects/Flat hunt/Flat hunt.md'
+    echo '- [[receipt.jpg]] Corner shop receipt, groceries' >>2-Areas/Finance/Finance.md
+    printf -- '%s\n' '- [[1-Projects/Flat hunt/a.pdf]] · PDF · filed by Bower' \
+      '- [[2-Areas/Finance/receipt.jpg]] · image · filed by Bower' \
+      '- [[3-Resources/Clipped trick]]' >>index.md
+    printf -- '%s\n' 'Filed: a.pdf → 1-Projects/Flat hunt' \
+      'Filed: receipt.jpg → 2-Areas/Finance' >>log.md
+    printf -- '---\ntags: [reference, learning]\nsource: "[[b]]"\n---\nA clipped trick.\n' \
+      >'3-Resources/Clipped trick.md'
+    mv Clippings/b.md 0-Inbox/Processed/b.md
+    ;;
   # More changes than BOWER_MAX_CHANGES=3, all inside the known roots.
   toomany)
     for n in 1 2 3 4; do echo "note $n" >"3-Resources/new-$n.md"; done
@@ -603,7 +626,7 @@ expect_content_free() {
     evil x.md README.md .claude SKILL.md new-1.md SUMMARY-MARKER STDERR-MARKER \
     quarterly-report saved-page damaged memo already PANDOC-MARKER INJECTION-MARKER \
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
-    Proposals Answers Recipes Invoices \
+    Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
@@ -1454,3 +1477,35 @@ expect_eq "$RC" 2 'exit code'
 expect_eq "$(posts_count)" 0 'status posts'
 expect_eq "$(calls curl)" '' 'curl calls'
 echo "ok an unknown scope is refused"
+
+# 29. File only (issue #368): a PDF and a receipt photo land in their PARA
+# folders as they are, with no summary note next to them; the clip still
+# becomes a note and its raw copy goes to Processed/. Each move is one
+# copy up of the new path plus one targeted delete of the inbox path, so it
+# counts as one change against BOWER_MAX_CHANGES (8 here: two originals,
+# two hub notes, index.md, log.md, the clip's note and the raw clip).
+run_case fileonly
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(post 2 p.state)" done 'second state'
+remote="$STATE/remote"
+for f in '1-Projects/Flat hunt/a.pdf' 2-Areas/Finance/receipt.jpg \
+  '3-Resources/Clipped trick.md' 0-Inbox/Processed/b.md; do
+  [ -f "$remote/$f" ] || die "not in Drive after the run: $f"
+done
+for f in 0-Inbox/a.pdf 0-Inbox/receipt.jpg Clippings/b.md 0-Inbox/Processed/a.pdf \
+  0-Inbox/Processed/receipt.jpg; do
+  [ ! -e "$remote/$f" ] || die "still in Drive after the run: $f"
+done
+expect_eq "$(LC_ALL=C sort "$STATE/uploaded.txt")" "$(printf '%s\n' \
+  '0-Inbox/Processed/b.md' '1-Projects/Flat hunt/Flat hunt.md' '1-Projects/Flat hunt/a.pdf' \
+  '2-Areas/Finance/Finance.md' '2-Areas/Finance/receipt.jpg' '3-Resources/Clipped trick.md' \
+  index.md log.md | LC_ALL=C sort)" 'uploaded files (originals filed, no summary note)'
+expect_eq "$(calls rclone | grep '^rclone deletefile ' | LC_ALL=C sort)" "$(printf '%s\n' \
+  'rclone deletefile vault:0-Inbox/a.pdf' 'rclone deletefile vault:0-Inbox/receipt.jpg' \
+  'rclone deletefile vault:Clippings/b.md' | LC_ALL=C sort)" 'targeted deletes'
+grep -q ' 8 files changed$' "$STATE/out.log" || die 'a move did not count as one change'
+grep -Fxq -- '- [[2-Areas/Finance/receipt.jpg]] · image · filed by Bower' "$remote/index.md" ||
+  die 'the filed receipt has no index.md row with its type'
+expect_content_free
+expect_cleaned_up
+echo "ok originals filed without a summary note, the clip becomes a note"
