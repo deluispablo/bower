@@ -25,8 +25,8 @@ export interface Prefs {
   healthSeenAt: string;
   /**
    * ISO time Bower's suggestions (`Answers/Bower - Proposals.md`, #199)
-   * were last shown in Health; `''` before the first time. Home mentions
-   * open suggestions only when the file changed after this.
+   * were last shown in the Suggested group on the Bower tab (#346); `''`
+   * before the first time.
    */
   proposalsSeenAt: string;
   /** The explorer tree's order: by name, or most recently modified first. */

@@ -518,8 +518,9 @@ Done in August: new chain, brake pads and a tune-up. Kept for the receipts.`,
     'status: archived\n',
   ),
   { path: 'Answers/_Answers.md', content: answersNote, modifiedTime: at(1) },
-  // Two suggestions waiting for Alex, so Health shows Accept and Dismiss
-  // (#199), and one already dismissed, which the list leaves out.
+  // Two suggestions waiting for Alex, so the Bower tab's Suggested group
+  // shows Accept and Dismiss and Health points there (#199, #346), and one
+  // already dismissed, which the list leaves out.
   note(
     'Answers/Bower - Proposals.md',
     26,
