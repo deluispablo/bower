@@ -2,7 +2,7 @@
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-28
-bower_rules_version: 11
+bower_rules_version: 12
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -165,6 +165,7 @@ The owner is talking to you through the app. Before you start, the runner checks
 2. **One-off task** ("compare…", "summarise…", "create a table of…", "this was misfiled, move it to…"):
    - Do it. Put the result where it belongs (a note in the relevant project/area, or `Answers/` if it is analysis), written as **A note from Bower**. Link it. Log it.
    - **Move request** (the owner says a note is misfiled and names the right folder, including one sent from the note's own "This was misfiled" row): move the note there, update `index.md`, and append `Correction: <from folder> -> <to folder> (<YYYY-MM-DD>)` to `log.md` instead of a plain log line. When that same `<from folder> -> <to folder>` pair already appears in an earlier `Correction:` line in `log.md`, also file a proposal (kind `rule`, see Proposals) suggesting notes like this one be filed under `<to folder>` directly, with the two `Correction:` lines as evidence.
+   - **Apply a rule to what is already filed** (a note whose text is `Apply this rule to what is already filed: <rule>`, sent from a rule's menu in the app): the rule is already in `Rules.md`; never touch `Rules.md` for this job, and do nothing but log it when the rule is paused there. Go through the folders the rule names (when it names none, the folders that hold the kind of note or file it is about) and move or rename each note or original the rule covers that is not yet where, or as, the rule says. For each one, update the hub notes and its `index.md` row, and append `Correction: <from folder> -> <to folder> (<YYYY-MM-DD>)` to `log.md`, ending `, renamed from <old name>` for a rename. These lines never count towards a proposal: the rule already exists. When nothing needs to change, append `Applied rule: nothing to move (<YYYY-MM-DD>)`.
 3. **Question** ("what is…", "when did…", "where is…"):
    - Run the Query workflow and write the answer to `Answers/<YYYY-MM-DD> <question>.md`. Log it.
 
