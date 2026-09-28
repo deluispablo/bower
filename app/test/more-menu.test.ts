@@ -28,8 +28,13 @@ describe('askBowerHref (#352)', () => {
     );
   });
 
-  it('names a folder by its plain name', () => {
-    expect(prefill(askBowerHref('folder', 'Flat hunt'))).toBe('Flat hunt ');
+  it('names a folder as "About <folder>: ", and nothing else (#354)', () => {
+    expect(prefill(askBowerHref('folder', 'Flat hunt'))).toBe(
+      'About Flat hunt: ',
+    );
+    expect(askBowerHref('folder', 'Flat hunt')).toBe(
+      `/bower?text=${encodeURIComponent('About Flat hunt: ')}`,
+    );
   });
 
   it('opens the Bower tab, the name encoded', () => {

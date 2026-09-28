@@ -201,3 +201,16 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
     );
   });
 });
+
+describe('Ask Bower about it chip (#354)', () => {
+  it('prefills "About <folder>: " and nothing else from the folder', () => {
+    route.params.path = '1-Projects/Flat hunt';
+    mount();
+    const chip = Array.from(
+      root.querySelectorAll<HTMLAnchorElement>('.folder-chips a.chip'),
+    ).find((a) => a.textContent?.includes('Ask Bower about it'));
+    expect(chip?.getAttribute('href')).toBe(
+      `/bower?text=${encodeURIComponent('About Flat hunt: ')}`,
+    );
+  });
+});
