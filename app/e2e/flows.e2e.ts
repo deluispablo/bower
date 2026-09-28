@@ -154,6 +154,29 @@ test.describe('open Home', () => {
   });
 });
 
+test.describe('intro page 8, the desktop scroll cue (#509)', () => {
+  test.use({ introSeen: false });
+
+  test('the panel fades at the bottom where the case overflows it', async ({
+    page,
+  }, testInfo) => {
+    await page.goto('/welcome');
+    const next = page.getByRole('button', { name: 'Next', exact: true });
+    for (let i = 0; i < 7; i += 1) await next.nth(i).click();
+    await expect(
+      page.getByRole('heading', { name: 'The archive: finished, kept' }),
+    ).toBeInViewport();
+    // Page 8's copy ends as a sentence, not a fragment.
+    await expect(page.getByText('It asks before it archives.')).toBeVisible();
+    const panel = page.locator('.intro-page--8');
+    if (testInfo.project.name === 'desktop') {
+      // The fade only applies from the desktop breakpoint (intro.css).
+      await expect(panel).toHaveCSS('background-image', /gradient/);
+    }
+    await shot(page, testInfo, 'intro-8-scroll-cue');
+  });
+});
+
 test.describe('first visit, Skip', () => {
   test.use({ introSeen: false });
 
@@ -166,6 +189,38 @@ test.describe('first visit, Skip', () => {
       page.getByRole('heading', { name: 'Run your own Bower', level: 1 }),
     ).toBeVisible();
   });
+});
+
+test('the phone greeting is one line at 24 px, even with a long given name (#500, Phone-Home board)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'phone',
+    'The board only draws this size for the phone greeting; desktop is unchanged.',
+  );
+  await openHome(page);
+  const heading = page.getByRole('heading', { name: /^Good morning, Alex$/ });
+  await expect(heading).toBeVisible();
+
+  // Substitute a long given name for the demo's short "Alex" (#341's data
+  // never has one to test with) to check the row holds under real-world
+  // length, not just this fixture's own name. One `evaluate` call: the
+  // text swap changes the heading's accessible name, so a fresh locator
+  // lookup afterward would no longer find it.
+  const box = await heading.evaluate((el) => {
+    el.textContent = 'Good morning, Persephone-Alexandra';
+    const style = getComputedStyle(el);
+    return {
+      fontSize: style.fontSize,
+      lineHeight: parseFloat(style.lineHeight),
+      height: el.getBoundingClientRect().height,
+    };
+  });
+  expect(box.fontSize).toBe('24px');
+  // One line: the row's rendered height doesn't exceed one line-height
+  // (a couple of px of rounding slack).
+  expect(box.height).toBeLessThanOrEqual(box.lineHeight + 2);
+  await shot(page, testInfo, 'home-greeting-long-name');
 });
 
 test('the demo banner carries Run your own on Home, Add and Settings (#362)', async ({
@@ -411,6 +466,13 @@ test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
   await expect(
     doors.getByRole('button', { name: /^Take a photo/ }),
   ).toBeVisible();
+  // The two doors' subtitles are the demo's own (#489, `Demo-Add` board).
+  await expect(
+    doors.getByText('In the demo it stays in the page'),
+  ).toBeVisible();
+  await expect(
+    doors.getByText('Photos, PDFs, screenshots', { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText('Or share to Bower from any app: it lands here too.'),
   ).toBeVisible();
@@ -508,10 +570,12 @@ test('Add: the hint counts what is waiting, and its Tidy up asks first (#336)', 
   await openHome(page);
   await navigate(page, /^Add$/);
 
-  // The demo starts with three things in the inbox.
+  // The demo starts with three things in the inbox; the hint's rest of
+  // sentence is the demo's own (#489, `Demo-Add` board), not the real
+  // build's "Add the whole pile first...".
   const hint = page.locator('.add-hint');
   await expect(hint).toContainText(
-    '3 things waiting. Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.',
+    '3 things waiting. Tap Tidy up and watch a recorded run: in the demo the bird does not really think, so nothing costs anything.',
   );
   await shot(page, testInfo, 'add-hint');
 
@@ -644,6 +708,11 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await expect(confirm).toBeVisible();
   await expect(confirm).toContainText('3 things');
+  // The demo's own main sentence (#489, `Demo-Tidy-Confirm` board): "in
+  // the inbox", "In your own Bower...", not the real build's wording.
+  await expect(confirm).toContainText(
+    'in the inbox. In your own Bower this takes a few minutes and uses one run of your plan, so once is better than five times.',
+  );
   // The demo's amber line (#363, `Demo-Tidy-Confirm` board, handover
   // C.10): tidy up here never runs the model.
   await expect(confirm).toContainText(
@@ -696,6 +765,51 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toBeVisible();
   await sheet.getByRole('button', { name: 'Close' }).click();
   await expect(sheet).toBeHidden();
+});
+
+test('the Last tidy-up card keeps the previous line while the next run goes (#498)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await expect(sheet.getByText('3 files processed')).toBeVisible({
+    timeout: 20_000,
+  });
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  // The one-time push prompt (#39) can slide up over the bottom of the
+  // screen at the same moment as this first `done`; dismiss it so it
+  // never intercepts a later click.
+  const pushPrompt = page.locator('.push-prompt');
+  if (await pushPrompt.isVisible()) {
+    await pushPrompt.getByRole('button', { name: /Not now|Got it/ }).click();
+  }
+
+  const lastCard = visible(
+    page.locator('.home-card', { hasText: 'Last tidy-up' }),
+  );
+  await expect(lastCard).toContainText('2 filed · 1 answered');
+
+  // A second batch, then a second tidy-up: while it goes, the card must
+  // still read the first run's line, not "No tidy-up yet" — the board
+  // (Phone-Home-Running) keeps it on screen the whole time.
+  await navigate(page, /^Add$/);
+  await page.locator('#add-link').fill('https://example.com/second');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
+  await navigate(page, /^Home$/);
+  await visible(
+    page.getByRole('button', { name: 'Tidy up', exact: true }),
+  ).click();
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(sheet).toBeVisible();
+  await expect(lastCard).toContainText('2 filed · 1 answered');
+  await expect(lastCard).not.toContainText('No tidy-up yet');
+  await shot(page, testInfo, 'last-tidy-up-during-next-run');
 });
 
 test('the working sheet: the bird between Inbox and the folders, the rows as they land (#338)', async ({
@@ -1064,7 +1178,8 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
   // only them; the rest of the inbox stays for the next tidy-up.
   await edited.getByRole('button', { name: 'Do it now' }).click();
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
-  await expect(confirm).toContainText('1 thing is waiting.');
+  // The demo's own sentence (#489): "in the inbox", not "is waiting".
+  await expect(confirm).toContainText('1 thing in the inbox.');
   await shot(page, testInfo, 'bower-requests-do-it-now');
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
@@ -1725,6 +1840,10 @@ test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent i
   expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(1);
   const tiles = await boxes(page.locator('.home-pinned-grid > *'));
   expect(tiles.length).toBeGreaterThan(0);
+  // Flat hunt, seeded from the fixture (#489, `Demo-Home` board).
+  await expect(
+    page.locator('.home-pinned-grid').getByText('Flat hunt', { exact: true }),
+  ).toBeVisible();
   tiles.forEach((tile, i) => {
     expect(tile.x).toBeCloseTo(grid[i % 4]?.x ?? NaN, 0);
     expect(tile.width).toBeCloseTo(grid[i % 4]?.width ?? NaN, 0);

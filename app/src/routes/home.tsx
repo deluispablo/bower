@@ -233,8 +233,15 @@ function InboxCard({
   );
 }
 
-/** The Last tidy-up card (C.4): when, and what it did, or "No tidy-up yet". */
-function LastTidyUpCard({
+/**
+ * The Last tidy-up card (C.4): when, and what it did, or "No tidy-up yet".
+ * `run` is the run store's `lastFinished` (#321), which already stays put
+ * while the next run goes (`lastFinishedRun`, `run-store.tsx`) — so this
+ * only ever reads "No tidy-up yet" when nothing has finished, `state`
+ * notwithstanding; a run in progress (`state === 'running'`) is not
+ * special-cased here on purpose (#498). Exported for its own render test.
+ */
+export function LastTidyUpCard({
   state,
   run,
   now,

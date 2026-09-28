@@ -15,6 +15,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me } from '../src/api.js';
+import type { DriveFile } from '../src/drive.js';
 
 const state = vi.hoisted(() => ({ demo: false }));
 
@@ -28,6 +29,19 @@ const me: Me = {
 
 const location = { path: '/add', route: vi.fn() };
 
+// The hint only shows with something pending (#336): one inbox file,
+// empty unless a test asks for it.
+function inboxFile(name: string): DriveFile {
+  return {
+    id: `ID_${name}`,
+    name,
+    mimeType: 'application/pdf',
+    parents: ['FOLDER_ID'],
+    path: `0-Inbox/${name}`,
+  };
+}
+let vaultFiles: DriveFile[] = [];
+
 vi.mock('../src/api.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/api.js')>()),
   isDemo: () => state.demo,
@@ -40,7 +54,7 @@ vi.mock('../src/online.js', () => ({
 }));
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
-  useVault: () => ({ files: [], refresh: vi.fn(), index: null }),
+  useVault: () => ({ files: vaultFiles, refresh: vi.fn(), index: null }),
 }));
 vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
@@ -50,6 +64,12 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
     openSheet: vi.fn(),
     lastFinished: null,
   }),
+}));
+// The camera door (#339) needs a touch device with a real camera; this
+// file is about copy, not that rule, so it just shows the door.
+vi.mock('../src/add-camera.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/add-camera.js')>()),
+  useHasCamera: () => true,
 }));
 
 const { Add } = await import('../src/routes/add.js');
@@ -76,6 +96,7 @@ afterEach(() => {
   render(null, root);
   root.remove();
   state.demo = false;
+  vaultFiles = [];
 });
 
 describe('Add from your Drive outside the demo', () => {
@@ -105,5 +126,47 @@ describe('Add from your Drive in a demo build', () => {
       b.textContent?.includes('Choose files'),
     );
     expect(chooseFiles?.disabled).toBeFalsy();
+  });
+});
+
+describe('Add door subtitles per the boards (#489)', () => {
+  it('Take a photo and Choose files read the real copy outside the demo', async () => {
+    state.demo = false;
+    await mountAdd();
+    expect(root.textContent).toContain('A receipt, a sign, a page of a book');
+    expect(root.textContent).toContain(
+      'Photos, PDFs, screenshots, voice memos',
+    );
+    expect(root.textContent).not.toContain('In the demo it stays in the page');
+  });
+
+  it('Take a photo and Choose files read the Demo-Add board in a demo build', async () => {
+    state.demo = true;
+    await mountAdd();
+    expect(root.textContent).toContain('In the demo it stays in the page');
+    expect(root.textContent).toContain('Photos, PDFs, screenshots');
+    expect(root.textContent).not.toContain('voice memos');
+    expect(root.textContent).not.toContain(
+      'A receipt, a sign, a page of a book',
+    );
+  });
+});
+
+describe('the Add hint sentence per the Demo-Add board (#489)', () => {
+  it('reads the real sentence outside the demo', async () => {
+    state.demo = false;
+    vaultFiles = [inboxFile('a.pdf'), inboxFile('b.pdf'), inboxFile('c.pdf')];
+    await mountAdd();
+    expect(root.textContent).toContain('3 things waiting.');
+    expect(root.textContent).toContain('Add the whole pile first');
+  });
+
+  it("reads the board's recorded-run sentence in a demo build", async () => {
+    state.demo = true;
+    vaultFiles = [inboxFile('a.pdf'), inboxFile('b.pdf'), inboxFile('c.pdf')];
+    await mountAdd();
+    expect(root.textContent).toContain('3 things waiting.');
+    expect(root.textContent).toContain('Tap Tidy up and watch a recorded run');
+    expect(root.textContent).not.toContain('Add the whole pile first');
   });
 });
