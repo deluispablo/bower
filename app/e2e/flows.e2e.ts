@@ -1295,7 +1295,10 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
 
   const health = page.locator('.explorer-health-row');
   await expect(health).toContainText('Health check');
-  await expect(health).toContainText('Sunday · 3 small things to fix');
+  // The day half is relative (#496: "Today"/"Yesterday"/"Last <day>"), so
+  // only the count half is pinned here; `health-report.test.ts` covers the
+  // wording itself.
+  await expect(health).toContainText('small things to fix');
   // Scoped to `.explorer-foot`: the sidebar has its own hidden-files
   // button too (always mounted, CSS-hidden below 900px).
   const hidden = page.locator('.explorer-foot .explorer-hidden');
