@@ -12,6 +12,8 @@
 # Prints "ok <case>" per case and exits non-zero on the first failure.
 
 set -euo pipefail
+# Under pipefail, never pipe into grep -q: it exits at the first match, the
+# writer can then die of SIGPIPE and fail the pipeline (#391). Use <<<"$x".
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SRC=$(cd "$HERE/../.." && pwd)
@@ -239,12 +241,12 @@ calls() { cat "$STATE/calls.log" 2>/dev/null || true; }
 count() { calls | grep -c -- "$1" || true; }
 expect_eq() { [ "$1" = "$2" ] || die "$3: expected [$2], got [$1]"; }
 expect_contains() {
-  printf '%s' "$OUT" | grep -qF -- "$2" || die "$1: output does not contain [$2]"
+  grep -qF -- "$2" <<<"$OUT" || die "$1: output does not contain [$2]"
 }
 expect_no_secret_in_output() {
   local value
   for value in $SECRET_VALUES; do
-    if printf '%s' "$OUT" | grep -qF -- "$value"; then die "a secret value appeared in the output"; fi
+    if grep -qF -- "$value" <<<"$OUT"; then die "a secret value appeared in the output"; fi
   done
 }
 wrangler_secret() { cat "$STATE/wrangler/secrets/$1" 2>/dev/null || true; }
@@ -311,7 +313,7 @@ expect_eq "$(wrangler_secret SESSION_SECRET)" "$GENERATED" 'SESSION_SECRET value
 expect_eq "$(count '^gh repo create alex/bower-home --private$')" 1 'repo create'
 files=$(git --git-dir="$STATE/gh/remote.git" ls-tree -r --name-only main)
 for f in .github/workflows/ingest.yml .github/workflows/lint.yml agent/run.sh agent/claude-settings.json agent/prompts/ingest.md agent/prompts/lint.md; do
-  printf '%s\n' "$files" | grep -qx "$f" || die "instance repo lacks $f"
+  grep -qx "$f" <<<"$files" || die "instance repo lacks $f"
 done
 expect_eq "$(gh_secret BOWER_API_KEY)" "$(wrangler_secret BOWER_API_KEY)" 'BOWER_API_KEY same in Worker and repo'
 expect_eq "$(gh_secret CLAUDE_CODE_OAUTH_TOKEN)" "$CLAUDE_TOKEN" 'Claude token in repo'

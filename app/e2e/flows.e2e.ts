@@ -1189,6 +1189,60 @@ test('the top bar: folder menu, title, "?", avatar; Back on a note', async ({
   await shot(page, testInfo, 'bar-note');
 });
 
+test("a note's top bar: the title keeps a readable floor, Back gives way first, and one More menu (#426)", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'the phone top bar only');
+  await openHome(page);
+  const bar = page.locator('header.topbar');
+
+  // Lisbon Trip is its own folder's hub note, so Back points to a name as
+  // long as the title itself -- the exact shape that used to leave both
+  // cut to a few letters (#426).
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('Lisbon');
+  await switcher
+    .getByRole('option', { name: /Lisbon Trip/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/note\//);
+
+  // The title keeps its 130px floor: Back gives way to it, not the other
+  // way round, and the bar itself never grows past the viewport.
+  const crumbBox = await bar.locator('.topbar-crumb').boundingBox();
+  expect(crumbBox?.width ?? 0).toBeGreaterThanOrEqual(130);
+  await expect
+    .poll(async () => page.evaluate(() => document.body.scrollWidth))
+    .toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
+  // Back still works, and its full destination is there for a screen
+  // reader even while its visible label is short (or gone).
+  const back = bar.getByRole('link', { name: 'Back to Lisbon Trip' });
+  await expect(back).toBeVisible();
+
+  // One More menu, not two (#439 already fixed the leftover desktop
+  // trigger; this just guards against it coming back).
+  await expect(bar.getByRole('button', { name: 'More' })).toHaveCount(1);
+
+  // A title far longer than Back's own label still fits the bar with no
+  // horizontal overflow, the same guarantee from the other direction.
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/note\//);
+  await expect
+    .poll(async () => page.evaluate(() => document.body.scrollWidth))
+    .toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
+});
+
 test('The bar and the bottom nav align with the content column at 768 (#311)', async ({
   page,
 }, testInfo) => {
@@ -1314,6 +1368,70 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-settings');
+});
+
+test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent in two columns (#356)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The desktop grid; the phone keeps its own Home.',
+  );
+  const cards = page.locator('.home-cards > .home-card');
+  const boxes = async (
+    locator: typeof cards,
+  ): Promise<{ x: number; y: number; width: number }[]> =>
+    await locator.evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width };
+      }),
+    );
+  // Nothing inside Home ends past Home's own right edge (6.1.1: at 1024
+  // the send button was clipped by the viewport).
+  const clipped = async (): Promise<string[]> =>
+    page.locator('.home').evaluate((home) => {
+      const edge = home.getBoundingClientRect().right + 0.5;
+      const found: string[] = [];
+      for (const el of home.querySelectorAll('*')) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.right > edge) found.push(String(el.className));
+      }
+      return found;
+    });
+
+  // 1024: the content column is narrow, so the cards are 2 x 2.
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await openHome(page);
+  await expect(cards).toHaveCount(4);
+  await expect(cards.nth(3)).toBeVisible();
+  let grid = await boxes(cards);
+  expect(new Set(grid.map((b) => Math.round(b.width))).size).toBe(1);
+  expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(2);
+  expect(await clipped()).toEqual([]);
+  // No Tell column on Home (#347).
+  await expect(page.getByRole('textbox', { name: /Tell Bower/ })).toHaveCount(
+    0,
+  );
+  await shot(page, testInfo, 'home-desktop-1024');
+
+  // 1280: four equal cards in one row; the Pinned tiles on the same
+  // columns; Recent in two columns.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  grid = await boxes(cards);
+  expect(new Set(grid.map((b) => Math.round(b.width))).size).toBe(1);
+  expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(1);
+  const tiles = await boxes(page.locator('.home-pinned-grid > *'));
+  expect(tiles.length).toBeGreaterThan(0);
+  tiles.forEach((tile, i) => {
+    expect(tile.x).toBeCloseTo(grid[i % 4]?.x ?? NaN, 0);
+    expect(tile.width).toBeCloseTo(grid[i % 4]?.width ?? NaN, 0);
+  });
+  const recent = await boxes(page.locator('.home-notes > li'));
+  expect(recent.length).toBeGreaterThan(1);
+  expect(new Set(recent.map((b) => Math.round(b.x))).size).toBe(2);
+  expect(await clipped()).toEqual([]);
+  await shot(page, testInfo, 'home-desktop-1280');
 });
 
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
@@ -1511,6 +1629,13 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
   await expect(rows.nth(2)).toHaveAttribute('href', /^\/note\//);
   await shot(page, testInfo, 'folder-project');
+
+  // The end-of-folder tip is generic (#464): it used to name "the flats I
+  // saved" and "rent and size" on every project folder, Kitchen Refresh
+  // included, hard-coding the board's own Flat hunt example.
+  await expect(page.locator('.folder-tip')).toHaveText(
+    'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.',
+  );
 
   // The Ask Bower chip opens the Bower tab's box with the folder named,
   // and nothing else from the folder (#354).
