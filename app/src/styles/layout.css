@@ -7,11 +7,13 @@
  *   - 600 px: the phone layout's content column becomes a centred 640 px
  *     measure (Home, Add, Tell, Settings, a note, a folder); the top bar's
  *     side padding grows to 24 px and stays there from here on.
- *   - 900 px: the sidebar layout (explorer as a left column, four home
- *     cards instead of two).
- *   - 1200 px: the About panel (`shell-with-aside`'s third column). Below
- *     it, on a note screen, Outline and In this folder fold under the note
- *     body instead.
+ *   - 900 px: the sidebar layout (explorer as a left column, the header
+ *     row and one centred container, #355).
+ *   - 1200 px: the About panel beside the note body. Below it, on a note
+ *     screen, Outline and In this folder fold under the note body instead.
+ * Nothing above 1200 (#359, Desktop-Responsive board): a wider window only
+ * adds margin around the container. `max-width: 899px` / `899.98px` and
+ * `1199px` are the same two breakpoints seen from below.
  */
 
 *,
