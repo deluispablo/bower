@@ -9,6 +9,7 @@ import {
   fileTitle,
   isAppFile,
   isHidden,
+  parseCatalogueFiles,
   withRulesVersion,
 } from '../src/vault-index.js';
 
@@ -257,5 +258,54 @@ describe('fileTitle', () => {
     expect(fileTitle('Lease agreement 2026.pdf')).toBe('Lease agreement 2026');
     expect(fileTitle('Budget')).toBe('Budget');
     expect(fileTitle('.env')).toBe('.env');
+  });
+});
+
+describe('parseCatalogueFiles', () => {
+  const catalogue = [
+    '# Index',
+    '',
+    '## Projects',
+    '- [[1-Projects/Flat hunt/Flat hunt]]',
+    '- [[1-Projects/Flat hunt/Lease agreement 2026.pdf]] · PDF · filed by Bower',
+    '- [[1-Projects/Flat hunt/Arlington Road, window sign.jpg]] · Photo · filed by Bower',
+    '- [[2-Areas/Finance/Budget.xlsx]] · Spreadsheet · filed by Bower',
+    '- [[3-Resources/Recipes/Bread.md]] · Note · your note',
+    '- [[1-Projects/Flat hunt/Lease agreement 2026.pdf]] · PDF · your note',
+    '- [[Scan.pdf|the scan]] · PDF',
+    'Loose text with [[Not a row.pdf]] in it',
+  ].join('\n');
+
+  it('reads the file rows the agent writes, with path, folder, type and origin', () => {
+    expect(parseCatalogueFiles(catalogue)).toEqual([
+      {
+        path: '1-Projects/Flat hunt/Lease agreement 2026.pdf',
+        folder: '1-Projects/Flat hunt',
+        type: 'PDF',
+        kind: 'pdf',
+        origin: 'filed by Bower',
+      },
+      {
+        path: '1-Projects/Flat hunt/Arlington Road, window sign.jpg',
+        folder: '1-Projects/Flat hunt',
+        type: 'Photo',
+        kind: 'photo',
+        origin: 'filed by Bower',
+      },
+      {
+        path: '2-Areas/Finance/Budget.xlsx',
+        folder: '2-Areas/Finance',
+        type: 'Spreadsheet',
+        kind: null,
+        origin: 'filed by Bower',
+      },
+      { path: 'Scan.pdf', folder: '', type: 'PDF', kind: 'pdf', origin: '' },
+    ]);
+  });
+
+  it('finds nothing in a catalogue with notes only', () => {
+    expect(parseCatalogueFiles('## Meta\n- [[About-Me]]\n- [[log]]\n')).toEqual(
+      [],
+    );
   });
 });

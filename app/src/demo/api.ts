@@ -53,7 +53,7 @@ export function createDemoWorker(
           server.me.hasApiKey = input.apiKey !== null;
         }
         if (input.tourSeenAt !== undefined) {
-          server.me.tourSeenAt = input.tourSeenAt;
+          server.setTourSeenAt(input.tourSeenAt);
         }
         if (input.allowWeb !== undefined) {
           server.me.allowWeb = input.allowWeb;

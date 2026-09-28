@@ -8,6 +8,7 @@ import {
   writeContextNote,
 } from '../add-context.js';
 import {
+  clearFiledAfterRun,
   getQueue,
   setQueue,
   useAddQueue,
@@ -42,7 +43,7 @@ import {
   openFilePicker,
   type PickedItem,
 } from '../picker.js';
-import { pendingCount } from '../run-store.js';
+import { pendingCount, runKey, useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
@@ -183,6 +184,18 @@ export function Add() {
   const [shareError, setShareError] = useState<string | null>(null);
 
   useShellSlot('crumb', CRUMB);
+
+  // #493: once a tidy-up this session finishes `done`, the rows it just
+  // filed (and the "Added to your inbox." line about them) are stale —
+  // Home already says "All tidy" by then. `clearFiledAfterRun` is the
+  // single source of truth for which run this queue has already caught up
+  // with, so this fires safely even if Add was not mounted when the run
+  // actually finished.
+  const { lastFinished } = useRun();
+  useEffect(() => {
+    if (lastFinished === null || lastFinished.state !== 'done') return;
+    if (clearFiledAfterRun(runKey(lastFinished))) setMessage(null);
+  }, [lastFinished]);
 
   // "What is this?" (#335): leaving Add with text in the box and a batch in
   // the inbox writes its context note now, so it is there for whichever
@@ -445,9 +458,10 @@ export function Add() {
       progress: 0,
     };
     setQueue([...getQueue(), item]);
-    // The field keeps the link (#334, issue 21.2): clearing it made Save
-    // immediately grey out again, which read as broken rather than as a
-    // successful save.
+    // #493: the field clears and Save greys out again — a second press on
+    // a still-full field was re-saving the same link as "… (2).md". The
+    // queue row below is the record of the save now, not the field.
+    setLinkUrl('');
     void runQueue([item]);
   }
 

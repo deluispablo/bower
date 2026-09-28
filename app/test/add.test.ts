@@ -4,7 +4,7 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Me, Vault } from '../src/api.js';
+import type { Me, Run, Vault } from '../src/api.js';
 import {
   addHintLead,
   contextNote,
@@ -177,6 +177,10 @@ vi.mock('../src/drive.js', () => ({
 // worth of uploads). Mocked the same way sibling suites do
 // (`layout.test.ts`, `settings-demo.test.ts`): no real VaultProvider
 // needed for a plain UI check.
+// The last run this session saw finish (#493): `null` unless a test sets
+// it, so `useRun().lastFinished` behaves like the real store's initial
+// state.
+let lastFinished: Run | null = null;
 vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
   useRun: () => ({
@@ -184,6 +188,7 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
     tidyUp,
     process: startRun,
     openSheet: vi.fn(),
+    lastFinished,
   }),
 }));
 // The raw file list the hint counts (#336): three things waiting in the
@@ -245,6 +250,7 @@ describe('Add', () => {
     // this suite's own instance of it empty rather than inheriting the
     // previous test's rows.
     setQueue([]);
+    lastFinished = null;
     resetContext();
     root = document.createElement('div');
     document.body.append(root);
@@ -510,7 +516,7 @@ describe('Add', () => {
     expect(createTextFile).not.toHaveBeenCalled();
   });
 
-  it('keeps the pasted link in the field after Save, so it never greys out', () => {
+  it('clears the field and greys out Save again, so a second press cannot resave it (#493)', () => {
     const input = root.querySelector('#add-link') as HTMLInputElement;
     const save = Array.from(root.querySelectorAll('button')).find(
       (b) => b.textContent === 'Save',
@@ -522,8 +528,8 @@ describe('Add', () => {
     });
     expect(save.hasAttribute('disabled')).toBe(false);
     void act(() => save.click());
-    expect(input.value).toBe('https://example.com/page');
-    expect(save.hasAttribute('disabled')).toBe(false);
+    expect(input.value).toBe('');
+    expect(save.hasAttribute('disabled')).toBe(true);
   });
 
   // #421: Save used to navigate to Home once the link finished uploading,
@@ -556,5 +562,36 @@ describe('Add', () => {
       ),
     ).toBe(false);
     expect(location.route).not.toHaveBeenCalled();
+  });
+
+  it('clears the filed rows and "Added to your inbox." once a tidy-up finishes (#493)', async () => {
+    const input = root.querySelector('#add-link') as HTMLInputElement;
+    const save = Array.from(root.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Save',
+    );
+    if (save === undefined) throw new Error('Save button missing');
+    void act(() => {
+      input.value = 'https://example.com/page';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    void act(() => save.click());
+    await waitFor(
+      () =>
+        root.querySelector('.add-queue-status')?.textContent ===
+        'In your inbox',
+    );
+    expect(root.querySelector('.add-message')?.textContent).toBe(
+      'Added to your inbox.',
+    );
+
+    // Home's Inbox card and the run store both say the run is over; the
+    // effect only needs `lastFinished` to have moved to a new `done` run.
+    lastFinished = { state: 'done', requestedAt: '2026-09-28T09:05:00.000Z' };
+    void act(() => {
+      render(h(Add, {}), root);
+    });
+
+    expect(root.querySelector('.add-queue-section')).toBeNull();
+    expect(root.querySelector('.add-message')).toBeNull();
   });
 });
