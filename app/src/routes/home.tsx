@@ -14,7 +14,7 @@
  */
 
 import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 
 import type { Run } from '../api.js';
 import { Bird } from '../components/bird.js';
@@ -73,8 +73,6 @@ import {
 import { isAppFile } from '../vault-index.js';
 import { pinned, useVault } from '../vault-store.js';
 import '../styles/home.css';
-
-const MINUTE_MS = 60_000;
 
 /** Recent shows this many rows (C.4); "All" opens Notes for the rest. */
 const RECENT_ROWS = 5;
@@ -281,15 +279,12 @@ function LastTidyUpCard({
 export function Home(): JSX.Element {
   const { me } = useSession();
   const { index, files, status, unpinNote, unpinFolder } = useVault();
-  const { phase, run, lastFinished, tidyUp, openSheet } = useRun();
+  // #513: `now` is the run store's own shared clock, so this card, the
+  // Last tidy-up card and the working sheet always agree on how long ago
+  // something happened, down to the same minute boundary.
+  const { phase, run, lastFinished, now, tidyUp, openSheet } = useRun();
   const online = useOnline();
-  const [now, setNow] = useState(() => Date.now());
   const [editing, setEditing] = useState(false);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), MINUTE_MS);
-    return () => clearInterval(timer);
-  }, []);
 
   const showAppFiles = getPref('showAppFiles');
   const recent =

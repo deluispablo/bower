@@ -20,6 +20,7 @@ export function RunSheets(): JSX.Element | null {
     phase,
     run,
     message,
+    now,
     sheetOpen,
     dismissSheet,
     tidyUp,
@@ -47,6 +48,7 @@ export function RunSheets(): JSX.Element | null {
         phase={phase}
         run={run}
         message={message}
+        now={now}
         open={sheetOpen}
         onDismiss={dismissSheet}
         reopenKey={sheetReopenKey}
