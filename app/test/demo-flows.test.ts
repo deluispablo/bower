@@ -14,7 +14,7 @@ import type * as DriveModule from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import { summarise } from '../src/health-report.js';
 import { parseFrontmatter } from '../src/markdown/frontmatter.js';
-import { instructionFileName, instructionNote, loadSent } from '../src/tell.js';
+import { instructionFileName, instructionNote } from '../src/tell.js';
 import { DONE_MS, QUEUED_MS } from '../src/demo/server.js';
 
 const START = new Date('2026-09-27T10:00:00.000Z');
@@ -115,7 +115,6 @@ describe('demo mode', () => {
     const rulebook = await drive.getText((await fileAt('CLAUDE.md')).id);
     expect(rulebook).toContain('Vault rulebook');
 
-    expect(loadSent().map((item) => item.name)).toHaveLength(2);
     const found = await drive.searchFullText('sintra');
     expect(found.map((f) => f.name)).toContain('Things to see in Lisbon.md');
   });
@@ -151,6 +150,23 @@ describe('demo mode', () => {
 
     const again = await tidyUp();
     expect(again.processed).toEqual([]);
+  });
+
+  it('Do it now: an instructions-only run answers the request and leaves the rest of the inbox (#344)', async () => {
+    await api.startProcess('instructions');
+    vi.advanceTimersByTime(DONE_MS);
+    const done = (await api.getStatus()).run;
+    expect(done?.state).toBe('done');
+    expect(done?.processed).toHaveLength(1);
+
+    const after = await paths();
+    expect(after.filter(isInboxItem)).toEqual([
+      '0-Inbox/Boiler service invoice.pdf',
+      '0-Inbox/Tomato seedlings.md',
+    ]);
+    expect(
+      after.some((p) => /^Answers\/2026-09-27 What do I still need/.test(p)),
+    ).toBe(true);
   });
 
   it('answers Tell Bower: scripted replies for the chips, a generic one otherwise', async () => {

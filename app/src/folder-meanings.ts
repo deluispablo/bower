@@ -25,6 +25,18 @@ export const ROOT_FOLDERS: readonly RootFolder[] = [
   { name: 'Answers', meaning: 'What Bower wrote back to you' },
 ];
 
+/**
+ * A top-level folder's heading on its own screen (#431, Phone-Folder
+ * board): the name without its numeric prefix ("1-Projects" → "Projects").
+ * Any other path, and a root folder outside the table, keeps its name; the
+ * tree, the folder menu and the bar keep the full name everywhere.
+ */
+export function rootFolderHeading(path: string): string {
+  const root = ROOT_FOLDERS.find((folder) => folder.name === path);
+  if (root === undefined) return path.slice(path.lastIndexOf('/') + 1);
+  return root.name.replace(/^\d+-/, '');
+}
+
 /** The meaning line of a top-level folder, or `undefined` for any other path. */
 export function folderMeaning(path: string): string | undefined {
   return ROOT_FOLDERS.find((folder) => folder.name === path)?.meaning;

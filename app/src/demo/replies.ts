@@ -96,6 +96,6 @@ Flights and the flat are sorted ([[Flights and stays]]).`,
 
 > ${text.replace(/\n/g, '\n> ')}
 
-This is the demo, so these notes are samples and Bower only has scripted answers. Try one of the example messages on the Tell Bower screen to see a full reply; your own Bower reads your notes and answers here.`,
+This is the demo, so these notes are samples and Bower only has scripted answers. Try one of the example messages under Things you can ask in the Bower tab to see a full reply; your own Bower reads your notes and answers here.`,
   };
 }

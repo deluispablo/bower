@@ -86,6 +86,10 @@ vi.mock('preact-iso', () => ({
   useLocation: () => ({ path: '/bower', query: {}, route: vi.fn() }),
 }));
 
+vi.mock('../src/run-store.js', () => ({
+  useRun: () => ({ phase: 'idle', run: null, doItNow: vi.fn() }),
+}));
+
 vi.mock('../src/session.js', () => ({
   useSession: () => ({ me, setMe: vi.fn(), signOut: vi.fn() }),
 }));

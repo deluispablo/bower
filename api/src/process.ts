@@ -3,6 +3,9 @@
  * dispatching `ingest` to the instance repo, with at most one active run
  * per user and a daily quota (`DAILY_RUN_LIMIT`). Each run gets its own
  * ticket (`run-ticket.ts`), the only credential its runner job holds.
+ * An optional body `{ "scope": "instructions" }` asks for an
+ * instructions-only run (a request's "Do it now", #344); the scope goes to
+ * the runner in the dispatch payload.
  *
  * Nothing here logs file names, vault content, tokens or tickets.
  */
@@ -102,6 +105,47 @@ export function markStale(run: Run, now: Date): Run {
   };
 }
 
+/**
+ * What a run covers: `all` (a tidy-up: everything in the inbox) or
+ * `instructions` (the instruction notes only: a request's "Do it now").
+ */
+export const RUN_SCOPES = ['all', 'instructions'] as const;
+export type RunScope = (typeof RUN_SCOPES)[number];
+
+function isRunScope(value: unknown): value is RunScope {
+  return RUN_SCOPES.some((scope) => scope === value);
+}
+
+/**
+ * The run's scope from `POST /process`'s optional body: no body, an empty
+ * one, or no `scope` field is `all`; `{ "scope": "instructions" }` is an
+ * instructions-only run. Anything else is a 400 `bad_request`.
+ */
+export function parseScope(raw: string): RunScope {
+  if (raw.trim() === '') return 'all';
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch (err) {
+    throw new HttpError(400, 'bad_request', 'Body must be JSON', {
+      cause: err,
+    });
+  }
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    throw new HttpError(400, 'bad_request', 'Body must be a JSON object');
+  }
+  const scope = (body as Record<string, unknown>).scope;
+  if (scope === undefined) return 'all';
+  if (!isRunScope(scope)) {
+    throw new HttpError(
+      400,
+      'bad_request',
+      'scope must be "all" or "instructions"',
+    );
+  }
+  return scope;
+}
+
 /** Seconds from `now` to the next midnight UTC, at least 1. */
 function secondsUntilUtcMidnight(now: Date): number {
   const midnight = Date.UTC(
@@ -129,6 +173,8 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       c.get('userId'),
     ),
     async (c) => {
+      // A bad body is refused before anything is read, stored or counted.
+      const scope = parseScope(await c.req.text());
       const env = c.get('env');
       const kv = env.BOWER_KV;
       const userId = c.get('userId');
@@ -190,6 +236,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
             token: env.GITHUB_TOKEN,
             vaultId: userId,
             ticket,
+            scope,
           },
           fetchImpl,
         );

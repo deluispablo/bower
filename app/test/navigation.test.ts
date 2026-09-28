@@ -355,15 +355,56 @@ describe('folderContents', () => {
     expect(contents?.name).toBe('Flat hunt');
     expect(contents?.path).toBe('1-Projects/Flat hunt');
     expect(contents?.subfolders).toEqual([
-      { path: '1-Projects/Flat hunt/Camden', name: 'Camden', count: 1 },
+      {
+        path: '1-Projects/Flat hunt/Camden',
+        name: 'Camden',
+        count: 1,
+        things: 1,
+        updated: undefined,
+      },
       {
         path: '1-Projects/Flat hunt/Shoreditch',
         name: 'Shoreditch',
         count: 2,
+        things: 2,
+        updated: undefined,
       },
     ]);
     expect(contents?.notes.map((n) => n.name)).toEqual(['Budget.md']);
     expect(contents?.noteCount).toBe(4);
+  });
+
+  it("counts a subfolder's things (notes and files) and its newest change (#431)", () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      dir('1-Projects/Flat hunt/Viewings'),
+      entry(
+        '1-Projects/Flat hunt/Budget.md',
+        'text/markdown',
+        '2026-01-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/Viewings/Camden.md',
+        'text/markdown',
+        '2026-02-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/Lease.pdf',
+        'application/pdf',
+        '2026-03-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/_Flat hunt.md',
+        'text/markdown',
+        '2026-04-01T00:00:00.000Z',
+      ),
+    ]);
+    const [flatHunt] = folderContents(index, '1-Projects')?.subfolders ?? [];
+    // Bower's own folder note neither counts nor dates the folder.
+    expect(flatHunt?.count).toBe(2);
+    expect(flatHunt?.things).toBe(3);
+    expect(flatHunt?.updated).toBe('2026-03-01T00:00:00.000Z');
   });
 
   it('sorts its own notes newest first regardless of `sort`', () => {
@@ -551,6 +592,33 @@ describe('folderEmptyState', () => {
     expect(folderEmptyState(contents!)).toEqual({
       empty: false,
       elsewhere: { count: 1, subfolderName: 'Flat hunt' },
+    });
+  });
+
+  // #424: "9 notes in Half Marathon" attributed the whole subtree total to
+  // the first subfolder that held any, when the notes were actually spread
+  // across three. No single subfolder holds every one, so none is named.
+  it('names no subfolder when the total is spread across more than one', () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Half Marathon'),
+      entry('1-Projects/Half Marathon/Half Marathon.md'),
+      entry('1-Projects/Half Marathon/Training plan.md'),
+      dir('1-Projects/Kitchen Refresh'),
+      entry('1-Projects/Kitchen Refresh/Budget.md'),
+      entry('1-Projects/Kitchen Refresh/Tiles.md'),
+      entry('1-Projects/Kitchen Refresh/Paint.md'),
+      dir('1-Projects/Lisbon Trip'),
+      entry('1-Projects/Lisbon Trip/Itinerary.md'),
+      entry('1-Projects/Lisbon Trip/Flights.md'),
+      entry('1-Projects/Lisbon Trip/Hotel.md'),
+      entry('1-Projects/Lisbon Trip/Packing.md'),
+    ]);
+    const contents = folderContents(index, '1-Projects');
+    expect(contents?.notes).toEqual([]);
+    expect(folderEmptyState(contents!)).toEqual({
+      empty: false,
+      elsewhere: { count: 9, subfolderName: null },
     });
   });
 });

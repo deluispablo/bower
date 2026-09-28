@@ -21,8 +21,6 @@ import archivesNote from '../../../vault-template/4-Archives/_Archives.md?raw';
 import answersNote from '../../../vault-template/Answers/_Answers.md?raw';
 import clippingsNote from '../../../vault-template/Clippings/_Clippings.md?raw';
 
-import type { SentItem } from '../tell.js';
-
 export const DEMO_NAME = 'Alex';
 export const DEMO_EMAIL = 'alex@example.com';
 /** Tidy up runs a day in the demo, the same as a real instance's default. */
@@ -588,18 +586,4 @@ Home insurance on 3 November, and the streaming service every month until you ca
 ## What Bower used
 - [[Bills and renewals]] (from your notes)`,
   ),
-];
-
-/** The Tell Bower history the demo starts with, newest first. */
-export const FIXTURE_SENT: readonly SentItem[] = [
-  {
-    name: 'Bower - 2026-09-27 0815 What do I still need for Lisbon.md',
-    text: 'What do I still need to sort out for the Lisbon trip?',
-    sentAt: '2026-09-27T08:15:00.000Z',
-  },
-  {
-    name: 'Bower - 2026-09-20 0930 Start a reading list.md',
-    text: 'Start a reading list with the books I mention.',
-    sentAt: '2026-09-20T09:30:00.000Z',
-  },
 ];
