@@ -8,7 +8,11 @@ import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
 import { RUN_TICKET_TTL_MS } from '../src/process.js';
 import { hashTicket, issueRunTicket } from '../src/run-ticket.js';
-import { MAX_PROCESSED, MAX_TEXT_LENGTH } from '../src/runner.js';
+import {
+  MAX_ADDED_LENGTH,
+  MAX_PROCESSED,
+  MAX_TEXT_LENGTH,
+} from '../src/runner.js';
 import type {
   LintDispatchResult,
   RunnerVault,
@@ -1059,6 +1063,96 @@ describe('POST /runner/vaults/:id/status', () => {
       state: 'done',
       processed: [{ path: '0-Inbox/a.md', kind: 'summary' }],
     });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'bad_request' },
+    });
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+  });
+
+  it('keeps report v2 fields: to, renamedFrom, setAside, added (#598)', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      processed: [
+        {
+          path: '0-Inbox/IMG_4471.jpg',
+          kind: 'file',
+          to: '2-Areas/Home/2026-09-28 Boiler receipt.jpg',
+          renamedFrom: 'IMG_4471.jpg',
+        },
+        { path: '0-Inbox/a.md', kind: 'question' },
+      ],
+      setAside: [
+        { path: '0-Inbox/clip.mp4', reason: 'kept-not-read' },
+        { path: '0-Inbox/Quarantine/b.md', reason: 'quarantined' },
+      ],
+      added: 'I added bike times to the flats',
+      quarantined: ['0-Inbox/Quarantine/b.md'],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.items).toEqual([
+      {
+        path: '0-Inbox/IMG_4471.jpg',
+        kind: 'file',
+        to: '2-Areas/Home/2026-09-28 Boiler receipt.jpg',
+        renamedFrom: 'IMG_4471.jpg',
+      },
+      { path: '0-Inbox/a.md', kind: 'question' },
+    ]);
+    expect(run.setAside).toEqual([
+      { path: '0-Inbox/clip.mp4', reason: 'kept-not-read' },
+      { path: '0-Inbox/Quarantine/b.md', reason: 'quarantined' },
+    ]);
+    expect(run.added).toBe('I added bike times to the flats');
+    expect(await getRun(kv, USER_ID)).toEqual(run);
+    // `GET /runs` reads the history: the new fields come back unchanged.
+    expect(await listRuns(kv, USER_ID)).toEqual([run]);
+  });
+
+  it('cuts added to MAX_ADDED_LENGTH', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      added: 'a'.repeat(MAX_ADDED_LENGTH + 10),
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.added).toHaveLength(MAX_ADDED_LENGTH);
+  });
+
+  it.each([
+    ['a non-string to', { processed: [{ path: 'a', kind: 'file', to: 1 }] }],
+    [
+      'a non-string renamedFrom',
+      { processed: [{ path: 'a', kind: 'file', renamedFrom: ['x'] }] },
+    ],
+    [
+      'an unknown item key',
+      { processed: [{ path: 'a', kind: 'file', from: 'x' }] },
+    ],
+    ['a non-array setAside', { setAside: 'a' }],
+    ['a setAside string entry', { setAside: ['a'] }],
+    [
+      'an unknown setAside reason',
+      { setAside: [{ path: 'a', reason: 'big' }] },
+    ],
+    ['a setAside entry without path', { setAside: [{ reason: 'too-large' }] }],
+    [
+      'an unknown setAside key',
+      { setAside: [{ path: 'a', reason: 'too-large', size: 1 }] },
+    ],
+    ['a non-string added', { added: 3 }],
+  ])('answers 400 for %s (#598)', async (_label, fields) => {
+    await seedUser();
+
+    const response = await postStatus({ state: 'done', ...fields });
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
