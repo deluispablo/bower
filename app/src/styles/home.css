@@ -48,6 +48,17 @@
   text-overflow: ellipsis;
 }
 
+/* #551: `.content`'s own padding (layout.css) plus the bird and the gap
+   leave only 243 px for the text at 375 px wide — 16 px short of even a
+   four-letter name like the fixture's ("Good afternoon, Alex") at 24 px,
+   so it was cut. The row bleeds into the page's right padding, the one
+   place with spare width, and the gap tightens a little, so a short name
+   never needs the ellipsis; a genuinely long one still gets it. */
+.home-greeting--phone {
+  gap: var(--space-2);
+  margin-right: calc(-1 * var(--space-4));
+}
+
 .home-bubble {
   margin: 0;
   padding: var(--space-2) var(--space-3);

@@ -223,6 +223,24 @@ test('the phone greeting is one line at 24 px, even with a long given name (#500
   await shot(page, testInfo, 'home-greeting-long-name');
 });
 
+test('the phone greeting shows a short given name in full, not cut (#551)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'phone',
+    'The 243 px box only happens at the phone width.',
+  );
+  await openHome(page);
+  const heading = page.getByRole('heading', { name: /^Good \w+, Alex$/ });
+  await expect(heading).toBeVisible();
+
+  // No ellipsis: the text's own scrollWidth fits inside the rendered box.
+  const overflowing = await heading.evaluate(
+    (el) => el.scrollWidth > el.clientWidth,
+  );
+  expect(overflowing).toBe(false);
+});
+
 test('the demo banner carries Run your own on Home, Add and Settings (#362)', async ({
   page,
 }, testInfo) => {
@@ -1282,6 +1300,46 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
   await expect(edited.getByText('Answered', { exact: true })).toBeVisible({
     timeout: 10_000,
   });
+});
+
+test('a request sent while a run is in flight says it goes with the next tidy-up (#552)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await navigate(page, /^Bower$/);
+  await showBowerPart(page, 'Requests');
+  const requests = bowerPart(page, 'Requests');
+  const rowWith = (text: string) =>
+    requests.getByRole('listitem').filter({ hasText: text });
+  const box = page.getByRole('textbox', {
+    name: 'Tell Bower what to do, or ask it something',
+  });
+
+  // Start a run on one request (#344's own steps), then send a second one
+  // while it is still in flight.
+  await box.fill('Draft an itinerary for the weekend');
+  await page.getByRole('button', { name: 'Send' }).click();
+  const first = rowWith('Draft an itinerary for the weekend');
+  await first.getByRole('button', { name: 'Do it now' }).click();
+  await page
+    .getByRole('dialog', { name: 'Run this now?' })
+    .getByRole('button', { name: 'Yes, do it now' })
+    .click();
+  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+
+  await box.fill('Summarise the lease in Flat hunt');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  // The confirmation under the box and the new row must promise the same
+  // thing: since #491 a request sent mid-run waits for the *next* one, not
+  // this one.
+  await expect(page.locator('.bower-send-confirm')).toHaveText(
+    'Will go with the next tidy-up',
+  );
+  const second = rowWith('Summarise the lease in Flat hunt');
+  await expect(second).toContainText('goes with the next tidy-up');
 });
 
 test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({
