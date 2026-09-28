@@ -50,11 +50,24 @@ export function instructionFileName(
 }
 
 /**
- * The Markdown content of an instruction note: frontmatter (`tags:
- * [instruction]`, `date`, `via: app`) followed by the text as written.
+ * What an instruction note is, when the app says so (Part D, D.2): the
+ * Bower tab's box writes `request` and leaves it to the agent to decide
+ * whether the sentence is a rule, a job or a question.
  */
-export function instructionNote(text: string, now: Date): string {
-  return `---\ntags: [instruction]\ndate: ${now.toISOString()}\nvia: app\n---\n\n${text.trim()}\n`;
+export type InstructionKind = 'request';
+
+/**
+ * The Markdown content of an instruction note: frontmatter (`tags:
+ * [instruction]`, `date`, `via: app`, then `kind` when given) followed by
+ * the text as written.
+ */
+export function instructionNote(
+  text: string,
+  now: Date,
+  kind?: InstructionKind,
+): string {
+  const kindLine = kind === undefined ? '' : `kind: ${kind}\n`;
+  return `---\ntags: [instruction]\ndate: ${now.toISOString()}\nvia: app\n${kindLine}---\n\n${text.trim()}\n`;
 }
 
 // --- Sent list ---------------------------------------------------------

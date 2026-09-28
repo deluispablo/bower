@@ -12,6 +12,7 @@ export type BirdState =
   | 'shiny'
   | 'singing'
   | 'tidying'
+  | 'flying'
   | 'showoff'
   | 'confused'
   | 'building'
@@ -36,6 +37,8 @@ const POSES: Record<BirdState, string> = {
   shiny: 'p-shiny',
   singing: 'p-sing',
   tidying: 'p-tidy',
+  // Carrying a note across: the intro's sort strip and Drive window (#328).
+  flying: 'p-fly',
   showoff: 'p-dance',
   confused: 'p-confused',
   building: 'p-build',

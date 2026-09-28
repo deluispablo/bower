@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { bubbleFor, birdStateFor, greetingFor } from '../src/home.js';
+import type { Run } from '../src/api.js';
+import {
+  birdStateFor,
+  bubbleFor,
+  greetingFor,
+  homeStateFor,
+  inboxLine,
+  lastTidyUpLine,
+  quarantinedMessage,
+  refusedMessage,
+  restingBird,
+  runCounts,
+  tidyUpAgo,
+} from '../src/home.js';
+import type { BubbleInput, BubblePart, HomeState } from '../src/home.js';
 
 function at(hour: number): Date {
   const date = new Date('2026-09-27T00:00:00');
@@ -35,183 +49,234 @@ describe('greetingFor', () => {
   });
 });
 
-describe('bubbleFor', () => {
-  const allTidy = {
-    offline: false,
-    error: false,
-    newHealthReport: false,
-    pending: 0,
+function run(state: Run['state'], processed: string[] = []): Run {
+  return {
+    state,
+    requestedAt: '2026-09-27T08:00:00Z',
+    finishedAt: '2026-09-27T08:05:00Z',
+    processed,
   };
+}
 
-  it('n pending', () => {
-    expect(bubbleFor({ ...allTidy, pending: 3 })).toBe(
-      '3 new things in your inbox. Shall I tidy up?',
+/** Three things filed and one message answered. */
+const DONE_RUN = run('done', [
+  '0-Inbox/Lease agreement 2026.pdf',
+  '0-Inbox/Scan of a letter.jpg',
+  '0-Inbox/Tomato seedlings.md',
+  '0-Inbox/Bower - 2026-09-27 0815 What do I still need.md',
+]);
+
+function text(parts: BubblePart[]): string {
+  return parts
+    .map((part) => (typeof part === 'string' ? part : part.text))
+    .join('');
+}
+
+function links(parts: BubblePart[]): string[] {
+  return parts.flatMap((part) =>
+    typeof part === 'string' ? [] : [`${part.link}:${part.text}`],
+  );
+}
+
+describe('homeStateFor', () => {
+  const base = { phase: 'idle' as const, pending: 0, lastFinished: null };
+
+  it('waiting while things are in the inbox', () => {
+    expect(homeStateFor({ ...base, pending: 3 })).toBe('waiting');
+    expect(homeStateFor({ ...base, phase: 'quota', pending: 3 })).toBe(
+      'waiting',
     );
   });
 
-  it('1 pending is singular', () => {
-    expect(bubbleFor({ ...allTidy, pending: 1 })).toBe(
-      '1 new thing in your inbox. Shall I tidy up?',
+  it('empty on the first day: nothing waiting, no tidy-up yet', () => {
+    expect(homeStateFor(base)).toBe('empty');
+  });
+
+  it('running while a run is queued or running', () => {
+    expect(homeStateFor({ ...base, phase: 'queued', pending: 3 })).toBe(
+      'running',
+    );
+    expect(homeStateFor({ ...base, phase: 'running', pending: 3 })).toBe(
+      'running',
     );
   });
 
-  it('0 pending, nothing new: all tidy', () => {
-    expect(bubbleFor(allTidy)).toBe('All tidy.');
+  it('done right after a run, and once nothing waits after one', () => {
+    expect(homeStateFor({ ...base, phase: 'done', pending: 1 })).toBe('done');
+    expect(homeStateFor({ ...base, lastFinished: DONE_RUN })).toBe('done');
   });
 
-  it('offline beats everything else', () => {
-    expect(
-      bubbleFor({
-        offline: true,
-        error: true,
-        done: { processed: 2 },
-        newHealthReport: true,
-        pending: 3,
-      }),
-    ).toBe("No signal here. I'll keep an eye out.");
-  });
-
-  it('error loading beats a done run, a new report and pending', () => {
-    expect(
-      bubbleFor({
-        offline: false,
-        error: true,
-        done: { processed: 2 },
-        newHealthReport: true,
-        pending: 3,
-      }),
-    ).toBe('Could not load your notes.');
-  });
-
-  it('done with counts beats a new report and pending', () => {
-    expect(
-      bubbleFor({
-        offline: false,
-        error: false,
-        done: { processed: 3 },
-        newHealthReport: true,
-        pending: 5,
-      }),
-    ).toBe('All tidy. 3 things filed.');
-  });
-
-  it('done with one thing is singular', () => {
-    expect(bubbleFor({ ...allTidy, done: { processed: 1 } })).toBe(
-      'All tidy. 1 thing filed.',
+  it('failed after a failed or stale run, until the next one', () => {
+    expect(homeStateFor({ ...base, phase: 'failed', pending: 3 })).toBe(
+      'failed',
     );
-  });
-
-  it('done with nothing processed', () => {
-    expect(bubbleFor({ ...allTidy, done: { processed: 0 } })).toBe(
-      'All tidy. Nothing new this time.',
-    );
-  });
-
-  it('a new health report beats pending', () => {
-    expect(bubbleFor({ ...allTidy, newHealthReport: true, pending: 4 })).toBe(
-      "Sunday's health check is ready. Want to see it?",
-    );
-  });
-
-  it('new suggestions come after a new report and before pending', () => {
-    expect(bubbleFor({ ...allTidy, newProposals: 2, pending: 4 })).toBe(
-      'I have 2 suggestions for your rules. They are in Health.',
-    );
-    expect(bubbleFor({ ...allTidy, newProposals: 1 })).toBe(
-      'I have 1 suggestion for your rules. They are in Health.',
-    );
-    expect(
-      bubbleFor({ ...allTidy, newHealthReport: true, newProposals: 2 }),
-    ).toBe("Sunday's health check is ready. Want to see it?");
-    expect(bubbleFor({ ...allTidy, newProposals: 0, pending: 4 })).toBe(
-      '4 new things in your inbox. Shall I tidy up?',
-    );
-  });
-
-  it('quarantined beats refused, done, a new report and pending', () => {
-    expect(
-      bubbleFor({
-        offline: false,
-        error: false,
-        done: { processed: 3, quarantined: 2, refused: 1 },
-        newHealthReport: true,
-        pending: 5,
-      }),
-    ).toBe(
-      'Bower set aside 2 files that contained instructions. Look at them in Drive and move them back if they are fine.',
-    );
-  });
-
-  it('quarantined with one file is singular', () => {
-    expect(
-      bubbleFor({ ...allTidy, done: { processed: 0, quarantined: 1 } }),
-    ).toBe(
-      'Bower set aside 1 file that contained instructions. Look at them in Drive and move them back if they are fine.',
-    );
-  });
-
-  it('refused beats done when there is no quarantined', () => {
-    expect(
-      bubbleFor({
-        offline: false,
-        error: false,
-        done: { processed: 3, refused: 2 },
-        newHealthReport: true,
-        pending: 5,
-      }),
-    ).toBe('2 changes were refused; nothing was lost.');
-  });
-
-  it('refused with one change is singular', () => {
-    expect(bubbleFor({ ...allTidy, done: { processed: 0, refused: 1 } })).toBe(
-      '1 change was refused; nothing was lost.',
-    );
-  });
-
-  it('done with quarantined/refused absent or zero falls back to the plain done message', () => {
-    expect(
-      bubbleFor({
-        ...allTidy,
-        done: { processed: 3, quarantined: 0, refused: 0 },
-      }),
-    ).toBe('All tidy. 3 things filed.');
-    expect(bubbleFor({ ...allTidy, done: { processed: 3 } })).toBe(
-      'All tidy. 3 things filed.',
+    expect(homeStateFor({ ...base, phase: 'stale', pending: 3 })).toBe(
+      'failed',
     );
   });
 });
 
-describe('birdStateFor', () => {
-  const settled = {
+describe('runCounts and lastTidyUpLine', () => {
+  it('counts a message to Bower as answered, the rest as filed', () => {
+    expect(runCounts(DONE_RUN)).toEqual({ filed: 3, answered: 1 });
+    expect(lastTidyUpLine(DONE_RUN)).toBe('3 filed · 1 answered');
+  });
+
+  it('leaves out a half at zero, says Nothing new at both', () => {
+    expect(lastTidyUpLine(run('done', ['0-Inbox/a.pdf']))).toBe('1 filed');
+    expect(lastTidyUpLine(run('done'))).toBe('Nothing new');
+  });
+
+  it('says Failed for a failed run', () => {
+    expect(lastTidyUpLine(run('failed', ['0-Inbox/a.pdf']))).toBe('Failed');
+  });
+});
+
+describe('tidyUpAgo', () => {
+  it('just now, minutes, hours, then days', () => {
+    const iso = '2026-09-27T08:00:00Z';
+    const finished = Date.parse(iso);
+    expect(tidyUpAgo(iso, finished + 30_000)).toBe('just now');
+    expect(tidyUpAgo(iso, finished + 5 * 60_000)).toBe('5 min ago');
+    expect(tidyUpAgo(iso, finished + 2 * 3_600_000)).toBe('2 h ago');
+    expect(tidyUpAgo(iso, finished + 30 * 3_600_000)).toBe('yesterday');
+  });
+});
+
+describe('bubbleFor (the C.4 table, as the boards write it)', () => {
+  const base: BubbleInput = {
+    state: 'waiting',
+    pending: 3,
     offline: false,
-    justDone: false,
-    pending: 0,
-    newHealthReport: false,
+    error: false,
+    editingPins: false,
+    lastFinished: null,
   };
 
-  it('looks around by default, with something pending', () => {
-    expect(birdStateFor({ ...settled, pending: 2 })).toBe('looking');
+  it('Waiting: the count and a Tidy up link', () => {
+    const parts = bubbleFor(base);
+    expect(text(parts)).toBe(
+      '3 things in your inbox. Tidy up when you have added everything.',
+    );
+    expect(links(parts)).toEqual(['tidy-up:Tidy up']);
+    expect(text(bubbleFor({ ...base, pending: 1 }))).toBe(
+      '1 thing in your inbox. Tidy up when you have added everything.',
+    );
   });
 
-  it('is asleep once nothing is pending and nothing is new', () => {
-    expect(birdStateFor(settled)).toBe('asleep');
+  it('Editing pins: the count alone', () => {
+    expect(text(bubbleFor({ ...base, editingPins: true }))).toBe(
+      '3 things in your inbox.',
+    );
   });
 
-  it('stays looking when a report is new even with nothing pending', () => {
-    expect(birdStateFor({ ...settled, newHealthReport: true })).toBe('looking');
+  it('Empty: the welcome', () => {
+    expect(text(bubbleFor({ ...base, state: 'empty', pending: 0 }))).toBe(
+      'Welcome. Add a few things from your phone or your Drive, then tap Tidy up once. I file them where they belong; you can always ask me for more.',
+    );
   });
 
-  it('stays looking when there are new suggestions', () => {
-    expect(birdStateFor({ ...settled, newProposals: 1 })).toBe('looking');
+  it('Running: how many, how long, keep adding', () => {
+    expect(text(bubbleFor({ ...base, state: 'running' }))).toBe(
+      "Tidying up 3 things. Takes a few minutes; I'll say when I'm done. You can keep adding.",
+    );
   });
 
-  it('shows off right after a run finishes', () => {
-    expect(birdStateFor({ ...settled, justDone: true })).toBe('showoff');
-  });
-
-  it('goes offline before anything else', () => {
+  it('Done: what it filed and answered, and See what I did', () => {
+    const parts = bubbleFor({
+      ...base,
+      state: 'done',
+      pending: 0,
+      lastFinished: DONE_RUN,
+    });
+    expect(text(parts)).toBe(
+      'All tidy. 3 things filed and 1 question answered. See what I did.',
+    );
+    expect(links(parts)).toEqual(['activity:See what I did']);
     expect(
-      birdStateFor({ ...settled, offline: true, justDone: true, pending: 3 }),
-    ).toBe('offline');
+      text(
+        bubbleFor({
+          ...base,
+          state: 'done',
+          lastFinished: run('done', ['0-Inbox/a.pdf']),
+        }),
+      ),
+    ).toBe('All tidy. 1 thing filed. See what I did.');
+    expect(
+      text(bubbleFor({ ...base, state: 'done', lastFinished: run('done') })),
+    ).toBe('All tidy. Nothing new this time. See what I did.');
+  });
+
+  it('Done: adds what the run set aside or had refused (spec A.3/A.5)', () => {
+    const parts = bubbleFor({
+      ...base,
+      state: 'done',
+      lastFinished: { ...DONE_RUN, quarantined: ['a'], refused: ['b', 'c'] },
+    });
+    expect(text(parts)).toBe(
+      'All tidy. 3 things filed and 1 question answered. See what I did. ' +
+        `${quarantinedMessage(1)} ${refusedMessage(2)}`,
+    );
+  });
+
+  it('Failed: nothing was lost, and Try again opens the failure', () => {
+    const parts = bubbleFor({ ...base, state: 'failed' });
+    expect(text(parts)).toBe(
+      "I couldn't finish. Nothing was lost; your 3 things are still in the inbox. Try again.",
+    );
+    expect(links(parts)).toEqual(['failure:Try again']);
+    expect(text(bubbleFor({ ...base, state: 'failed', pending: 1 }))).toBe(
+      "I couldn't finish. Nothing was lost; your 1 thing is still in the inbox. Try again.",
+    );
+  });
+
+  it('offline and a failed listing come first', () => {
+    expect(text(bubbleFor({ ...base, offline: true, error: true }))).toBe(
+      "No signal here. I'll keep an eye out.",
+    );
+    expect(text(bubbleFor({ ...base, error: true }))).toBe(
+      'Could not load your notes.',
+    );
+  });
+});
+
+describe('birdStateFor and restingBird', () => {
+  const base: { state: HomeState; offline: boolean; justDone: boolean } = {
+    state: 'waiting',
+    offline: false,
+    justDone: false,
+  };
+
+  it("holds the boards' pose per state", () => {
+    expect(birdStateFor(base)).toBe('looking');
+    expect(birdStateFor({ ...base, state: 'empty' })).toBe('hello');
+    expect(birdStateFor({ ...base, state: 'running' })).toBe('tidying');
+    expect(birdStateFor({ ...base, state: 'done', justDone: true })).toBe(
+      'showoff',
+    );
+    expect(birdStateFor({ ...base, state: 'done' })).toBe('looking');
+    expect(birdStateFor({ ...base, state: 'failed' })).toBe('confused');
+  });
+
+  it('offline beats every state', () => {
+    expect(birdStateFor({ ...base, state: 'running', offline: true })).toBe(
+      'offline',
+    );
+  });
+
+  it('the dance and the hello play once, then rest on Looking', () => {
+    expect(restingBird('showoff')).toBe('looking');
+    expect(restingBird('hello')).toBe('looking');
+    expect(restingBird('confused')).toBe('confused');
+  });
+});
+
+describe('inboxLine', () => {
+  it('per state, as the boards write it', () => {
+    expect(inboxLine('waiting', 3)).toBe('waiting to be filed');
+    expect(inboxLine('running', 3)).toBe('Tidying up…');
+    expect(inboxLine('failed', 3)).toBe('still waiting');
+    expect(inboxLine('done', 0)).toBe('Nothing waiting. Add something.');
+    expect(inboxLine('empty', 0)).toBe('Nothing waiting. Add something.');
   });
 });

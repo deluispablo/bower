@@ -82,7 +82,7 @@ User (browser) ── DELETE /me ──▶ Worker ── best-effort revoke at G
 - **Push**: the runner's status report triggers a web-push message straight from the Worker to the browser's push subscription; no third-party notification service.
 - **Delete account**: `DELETE /me` revokes the Google grant (best effort — a user can always leave even if Google does not cooperate), deletes every KV key for that user (profile, quota counters, cached Drive token, push subscriptions, session generation), keeps only a `deleted:<id>` tombstone of the random id so the account can never come back, and clears the cookie. The Drive folder and its content are never touched; the user keeps their notes.
 
-Trigger model: **button only**. The app calls `/process` after Add and Tell Bower; the user presses Process for anything that arrived through Drive, Obsidian or another path. No cron for processing, no change watching, no state about "what is new" outside the vault itself. The one scheduled run is the weekly health check (`lint.yml`, Sundays): it checks the notes, makes only safe mechanical fixes and writes `Lint Report.md`.
+Trigger model: **button only**. The app calls `/process` when the user taps Tidy up (or its switcher command); Add and the Bower tab only put notes in the inbox, where they wait for that tap, like anything that arrived through Drive, Obsidian or another path. No cron for processing, no change watching, no state about "what is new" outside the vault itself. The one scheduled run is the weekly health check (`lint.yml`, Sundays): it checks the notes, makes only safe mechanical fixes and writes `Lint Report.md`.
 
 ## Credentials
 

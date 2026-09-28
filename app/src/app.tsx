@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register';
 import { isDemo } from './api.js';
 import { Layout } from './components/layout.js';
 import { Add } from './routes/add.js';
+import { Bower } from './routes/bower.js';
 import { Folder } from './routes/folder.js';
 import { Health } from './routes/health.js';
 import { Home } from './routes/home.js';
@@ -20,7 +21,6 @@ import { Privacy } from './routes/privacy.js';
 import { RunYourOwn } from './routes/run-your-own.js';
 import { SearchRedirect } from './routes/search.js';
 import { Settings } from './routes/settings.js';
-import { Tell } from './routes/tell.js';
 import { TellRedirect } from './routes/tell-redirect.js';
 import { Terms } from './routes/terms.js';
 import { RunProvider } from './run-store.js';
@@ -76,8 +76,7 @@ function AppRoutes() {
       <Route path="/folder/:path*" component={Folder} />
       <Route path="/notes" component={Notes} />
       <Route path="/add" component={Add} />
-      {/* The old Tell composer, until the Bower tab's own screen (#340). */}
-      <Route path={BOWER_PATH} component={Tell} />
+      <Route path={BOWER_PATH} component={Bower} />
       <Route path="/tell" component={TellRedirect} />
       <Route path="/search" component={SearchRedirect} />
       <Route path="/settings" component={Settings} />

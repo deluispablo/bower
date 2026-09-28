@@ -3,7 +3,11 @@
  * keeps it out of the shell), one CSS scroll-snap track holding all nine
  * pages side by side, each page scrolling on its own. Every page is its
  * board's resting frame (`docs/design/v3/boards/Intro-1.dc.html` to
- * `Intro-9`); the loops that animate them are #328.
+ * `Intro-9`): the rules up to the motion block at the end draw only that.
+ * The boards' loops (#328) live in that block, behind
+ * `prefers-reduced-motion: no-preference`, so with reduced motion nothing
+ * moves and every page stays complete at rest. They move transform and
+ * opacity only, and run on CSS alone (no timers).
  *
  * From 900 px with a fine pointer (desktop; same query as layout.css's
  * sidebar breakpoint): a header with the bird and the wordmark, Skip as a
@@ -185,6 +189,7 @@
 }
 
 .intro-raw {
+  position: relative;
   display: flex;
   gap: 10px;
   min-width: 0;
@@ -193,6 +198,25 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   font-size: 0.8125rem;
+  overflow: hidden;
+}
+
+/* The line that reads an added thing on pages 5 to 8; hidden at rest. */
+.intro-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.intro-scan::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--color-brand);
 }
 
 .intro-raw--tile {
@@ -273,23 +297,33 @@
   color: var(--color-link);
 }
 
-/* Page 1: the sort strip, every card resting on its folder. */
+/*
+ * Page 1: the sort strip, every card resting on its folder. The strip is as
+ * tall as the board's, so the cards have room to start jumbled above their
+ * folders; the bird that carries them waits outside it, clipped.
+ */
 .intro-hero-bird {
   display: flex;
   justify-content: center;
 }
 
 .intro-strip {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
+  flex-shrink: 0;
+  box-sizing: border-box;
+  height: 230px;
   padding: var(--space-3);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
+  overflow: hidden;
 }
 
 .intro-strip-done {
+  margin: auto 0;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-full);
   background: var(--color-success);
@@ -370,6 +404,15 @@
   transform: rotate(45deg);
 }
 
+.intro-strip-carrier {
+  position: absolute;
+  top: 70px;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  transform: translateX(112%);
+}
+
 .intro-caption {
   margin: 0;
   font-size: 0.8125rem;
@@ -382,6 +425,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  /* The flying copies start over their tile: `cqw` is this block's width. */
+  container-type: inline-size;
 }
 
 .intro-arrivals {
@@ -426,8 +471,52 @@
   padding-left: 44px;
 }
 
+/* The light is a layer of its own, so the loop can fade it (opacity only). */
 .intro-tree-row--lit {
+  position: relative;
+  isolation: isolate;
+}
+
+.intro-tree-row--lit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
   background: var(--color-brand-tint);
+}
+
+/*
+ * The copy of an arrival that flies into its row; hidden at rest. `--from-x`
+ * and `--from-y` are where its tile is, seen from the row: the tiles are a
+ * three-column grid with an 8 px gap, and the rows are 30 px apart.
+ */
+.intro-fly {
+  --from-x: calc(var(--i) * (100cqw + 8px) / 3 - 40px);
+  --from-y: calc(-118px - var(--row) * 30px);
+
+  position: absolute;
+  top: 0;
+  left: 36px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.intro-fly .icon {
+  width: 13px;
+  height: 13px;
+  color: var(--color-text-muted);
 }
 
 .intro-why {
@@ -483,14 +572,14 @@
 }
 
 /*
- * Page 4: the window onto Drive at rest, the curtain half open: the app on
- * the left, the same folder in Drive on the right (the sliding curtain is
- * #328).
+ * Page 4: the window onto Drive. The app is a curtain drawn over the same
+ * folder in Drive; at rest it is open, the app on the left 58 % and Drive
+ * showing on the right, with the handle and its bird on the edge. The
+ * curtain clips by moving (a box that slides, the app inside it sliding
+ * back), so the loop that closes and opens it is transform only.
  */
 .intro-window {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   flex-shrink: 0;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
@@ -502,7 +591,23 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: var(--space-3) 10px 44px;
+  box-sizing: border-box;
+  padding: var(--space-3) 14px 44px;
+}
+
+.intro-window-curtain,
+.intro-window-slider {
+  position: absolute;
+  inset: 0;
+  transform: translateX(-42%);
+}
+
+.intro-window-curtain {
+  overflow: hidden;
+}
+
+.intro-window-slider {
+  pointer-events: none;
 }
 
 /* Drive draws itself in its own light colours, whatever the app's theme. */
@@ -511,6 +616,9 @@
 }
 
 .intro-window-layer--app {
+  position: absolute;
+  inset: 0;
+  transform: translateX(42%);
   background: var(--color-bg);
   color: var(--color-text);
 }
@@ -584,11 +692,17 @@
 .intro-window-handle {
   position: absolute;
   top: 0;
+  right: 0;
   bottom: 0;
-  left: 50%;
   width: 2px;
   background: var(--color-brand);
   box-shadow: 0 0 12px rgb(95 207 188 / 0.8);
+}
+
+.intro-window-handle .b {
+  position: absolute;
+  bottom: 6px;
+  left: -30px;
 }
 
 .intro-window-tag {
@@ -709,6 +823,12 @@
   line-height: 1.4;
 }
 
+.intro-workers {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
 .intro-ask-line {
   margin: 0;
   font-size: 0.8125rem;
@@ -796,7 +916,7 @@
   list-style: none;
 }
 
-/* A ticked box at rest (the ticks appearing one by one are #328). */
+/* A ticked box at rest; in motion the ticks appear one by one. */
 .intro-checklist li {
   position: relative;
   padding-left: 24px;
@@ -952,5 +1072,276 @@
 @media (prefers-reduced-motion: reduce) {
   .intro-track {
     scroll-behavior: auto;
+  }
+}
+
+/*
+ * The boards' loops (#328), timings and keyframes as the boards draw them.
+ * Only with motion allowed; the resting frame above is what reduced motion
+ * keeps. `backwards` holds each staggered part at its first frame during its
+ * delay, as the boards do.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  /* Page 1: the cards jump from a jumble to their folders, 7 s. */
+  .intro-strip-card {
+    animation: intro-sort-card 7s cubic-bezier(0.4, 0, 0.2, 1) var(--delay, 0s)
+      infinite backwards;
+  }
+
+  .intro-strip-check {
+    animation: intro-check-pop 7s ease-out 0.2s infinite backwards;
+  }
+
+  .intro-strip-column:nth-child(2) .intro-strip-check {
+    animation-delay: 0.5s;
+  }
+
+  .intro-strip-column:nth-child(3) .intro-strip-check {
+    animation-delay: 0.8s;
+  }
+
+  .intro-strip-column:nth-child(4) .intro-strip-check {
+    animation-delay: 1.1s;
+  }
+
+  .intro-strip-done {
+    animation: intro-all-tidy 7s ease-out infinite;
+  }
+
+  .intro-strip-carrier {
+    animation: intro-carry 7s ease-in-out infinite;
+  }
+
+  /* Page 2: each arrival flies to its folder, which lights up; 14 s. */
+  .intro-fly {
+    animation: intro-fly 14s cubic-bezier(0.4, 0, 0.2, 1) calc(var(--i) * 4.2s)
+      infinite backwards;
+  }
+
+  .intro-tree-row--lit::before {
+    animation: intro-lit 14s ease-in-out calc(var(--i) * 4.2s) infinite
+      backwards;
+  }
+
+  .intro-why {
+    animation: intro-why 14s ease-out calc(0.8s + var(--i) * 4.2s) infinite
+      backwards;
+  }
+
+  /* Page 4: the curtain closes over Drive and opens again, 9 s. */
+  .intro-window-curtain,
+  .intro-window-slider {
+    animation: intro-curtain 9s ease-in-out infinite;
+  }
+
+  .intro-window-layer--app {
+    animation: intro-curtain-back 9s ease-in-out infinite;
+  }
+
+  /* Pages 5 to 8: the added things are read, the checklist ticks; 9 s. */
+  .intro-scan {
+    animation: intro-scan 9s linear infinite;
+  }
+
+  .intro-checklist li::after {
+    animation: intro-tick 9s ease-out calc(6.48s + var(--i) * 0.27s) infinite
+      backwards;
+  }
+}
+
+@keyframes intro-sort-card {
+  0%,
+  18% {
+    transform: translate(var(--jx, 0), var(--jy, 0)) rotate(var(--jr, 0deg));
+  }
+
+  44%,
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes intro-check-pop {
+  0%,
+  52% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  58%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes intro-all-tidy {
+  0%,
+  60% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+
+  66%,
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes intro-carry {
+  0%,
+  14% {
+    transform: translateX(-17%);
+  }
+
+  40% {
+    transform: translate(42%, -30px);
+  }
+
+  62%,
+  100% {
+    transform: translateX(112%);
+  }
+}
+
+@keyframes intro-fly {
+  0%,
+  4% {
+    opacity: 0;
+    transform: translate(var(--from-x), var(--from-y)) scale(0.9);
+  }
+
+  5% {
+    opacity: 1;
+    transform: translate(var(--from-x), var(--from-y)) scale(1);
+  }
+
+  12% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+
+  26% {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.6);
+  }
+
+  27%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.6);
+  }
+}
+
+@keyframes intro-lit {
+  0%,
+  4% {
+    opacity: 0;
+  }
+
+  6%,
+  26% {
+    opacity: 1;
+  }
+
+  30%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes intro-why {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.9);
+  }
+
+  8% {
+    opacity: 1;
+    transform: none;
+  }
+
+  92% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes intro-curtain {
+  0%,
+  14%,
+  88%,
+  100% {
+    transform: translateX(0);
+  }
+
+  40%,
+  62% {
+    transform: translateX(-42%);
+  }
+}
+
+@keyframes intro-curtain-back {
+  0%,
+  14%,
+  88%,
+  100% {
+    transform: translateX(0);
+  }
+
+  40%,
+  62% {
+    transform: translateX(42%);
+  }
+}
+
+@keyframes intro-scan {
+  0%,
+  4% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+
+  6% {
+    opacity: 0.9;
+  }
+
+  30% {
+    opacity: 0.9;
+    transform: translateY(100%);
+  }
+
+  32%,
+  100% {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+@keyframes intro-tick {
+  0% {
+    opacity: 0;
+    transform: rotate(45deg) scale(0.4);
+  }
+
+  10%,
+  94% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: rotate(45deg) scale(1);
   }
 }

@@ -48,3 +48,13 @@ test('Settings has no button-name or link-name violations', async ({
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expectNoNameViolations(page);
 });
+
+test('the Bower tab has no button-name or link-name violations', async ({
+  page,
+}) => {
+  await openHome(page);
+  await visible(page.getByRole('link', { name: /^Bower$/ })).click();
+  await page.getByRole('button', { name: 'Things you can ask' }).click();
+  await expect(page.getByRole('tab', { name: 'Rules' })).toBeVisible();
+  await expectNoNameViolations(page);
+});

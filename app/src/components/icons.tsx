@@ -205,7 +205,8 @@ export function IconFile(): JSX.Element {
   );
 }
 
-/** A shield: Rules on the Bower help sheet (#330). */
+/** A shield: Rules on the Bower help sheet (#330) and the Bower tab's
+ * Rules segment (#340). */
 export function IconShield(): JSX.Element {
   return (
     <Svg>
@@ -315,7 +316,8 @@ export function IconEdit(): JSX.Element {
   );
 }
 
-/** The sparkle on the Tidy up button (Phone-Home and Phone-Add boards). */
+/** The sparkle on the Tidy up button (Phone-Home and Phone-Add boards),
+ * and next to each example under the Bower tab's box (#340). */
 export function IconSparkle(): JSX.Element {
   return (
     <Svg>
