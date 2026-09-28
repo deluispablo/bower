@@ -502,13 +502,27 @@ export interface Siblings {
   next: DriveFile | null;
 }
 
-/** The previous and next note in the same folder, sorted by name. */
-export function siblings(index: VaultIndex, id: string): Siblings {
+/**
+ * The previous and next note in the same folder, sorted by name — the
+ * same walk the folder screen itself lists (#423): Bower's own files
+ * (`isAppFile`) are left out unless `showAppFiles` is on (the current note
+ * stays the anchor either way, even if it is itself one of Bower's own
+ * files and would otherwise be filtered out).
+ */
+export function siblings(
+  index: VaultIndex,
+  id: string,
+  showAppFiles = false,
+): Siblings {
   const file = index.byId.get(id);
   if (file === undefined) return { prev: null, next: null };
   const folder = folderOf(file.path);
   const inFolder = index.notes
-    .filter((note) => folderOf(note.path) === folder)
+    .filter(
+      (note) =>
+        folderOf(note.path) === folder &&
+        (showAppFiles || note.id === id || !isAppFile(note.path, note.name)),
+    )
     .sort((a, b) => compareNames(a.name, b.name));
   const at = inFolder.findIndex((note) => note.id === file.id);
   if (at === -1) return { prev: null, next: null };
