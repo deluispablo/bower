@@ -355,15 +355,56 @@ describe('folderContents', () => {
     expect(contents?.name).toBe('Flat hunt');
     expect(contents?.path).toBe('1-Projects/Flat hunt');
     expect(contents?.subfolders).toEqual([
-      { path: '1-Projects/Flat hunt/Camden', name: 'Camden', count: 1 },
+      {
+        path: '1-Projects/Flat hunt/Camden',
+        name: 'Camden',
+        count: 1,
+        things: 1,
+        updated: undefined,
+      },
       {
         path: '1-Projects/Flat hunt/Shoreditch',
         name: 'Shoreditch',
         count: 2,
+        things: 2,
+        updated: undefined,
       },
     ]);
     expect(contents?.notes.map((n) => n.name)).toEqual(['Budget.md']);
     expect(contents?.noteCount).toBe(4);
+  });
+
+  it("counts a subfolder's things (notes and files) and its newest change (#431)", () => {
+    const index = buildVaultIndex([
+      dir('1-Projects'),
+      dir('1-Projects/Flat hunt'),
+      dir('1-Projects/Flat hunt/Viewings'),
+      entry(
+        '1-Projects/Flat hunt/Budget.md',
+        'text/markdown',
+        '2026-01-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/Viewings/Camden.md',
+        'text/markdown',
+        '2026-02-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/Lease.pdf',
+        'application/pdf',
+        '2026-03-01T00:00:00.000Z',
+      ),
+      entry(
+        '1-Projects/Flat hunt/_Flat hunt.md',
+        'text/markdown',
+        '2026-04-01T00:00:00.000Z',
+      ),
+    ]);
+    const [flatHunt] = folderContents(index, '1-Projects')?.subfolders ?? [];
+    // Bower's own folder note neither counts nor dates the folder.
+    expect(flatHunt?.count).toBe(2);
+    expect(flatHunt?.things).toBe(3);
+    expect(flatHunt?.updated).toBe('2026-03-01T00:00:00.000Z');
   });
 
   it('sorts its own notes newest first regardless of `sort`', () => {
@@ -680,6 +721,45 @@ describe('siblings', () => {
     const root = index.byPath.get('index.md');
     const result = siblings(index, root?.id ?? '');
     expect(result).toEqual({ prev: null, next: null });
+  });
+
+  // #423: the folder screen hides Bower's own files unless `showAppFiles`
+  // is on, so the previous/next walk must skip them the same way, rather
+  // than land on one.
+  describe("with one of Bower's own files in the folder", () => {
+    const withAppFile = buildVaultIndex([
+      dir('Answers'),
+      entry('Answers/Bower - Proposals.md'),
+      entry('Answers/Which subscriptions renew this autumn.md'),
+    ]);
+
+    it('skips it by default', () => {
+      const note = withAppFile.byPath.get(
+        'Answers/Which subscriptions renew this autumn.md',
+      );
+      const result = siblings(withAppFile, note?.id ?? '');
+      expect(result).toEqual({ prev: null, next: null });
+    });
+
+    it('walks it when showAppFiles is on', () => {
+      const note = withAppFile.byPath.get(
+        'Answers/Which subscriptions renew this autumn.md',
+      );
+      const result = siblings(withAppFile, note?.id ?? '', true);
+      expect(result.prev?.name).toBe('Bower - Proposals.md');
+      expect(result.next).toBeNull();
+    });
+
+    it("still finds the note even when it is itself one of Bower's own files", () => {
+      // The anchor stays in the walk even though it would otherwise be
+      // filtered out; the real note next to it (by name) is still found.
+      const proposals = withAppFile.byPath.get('Answers/Bower - Proposals.md');
+      const result = siblings(withAppFile, proposals?.id ?? '');
+      expect(result.prev).toBeNull();
+      expect(result.next?.name).toBe(
+        'Which subscriptions renew this autumn.md',
+      );
+    });
   });
 });
 

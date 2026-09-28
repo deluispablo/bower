@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  addSent,
   clearSent,
   firstLine,
+  instructionBody,
   instructionFileName,
   instructionNote,
-  loadSent,
+  isContextNote,
+  rewriteInstruction,
 } from '../src/tell.js';
-import type { SentItem } from '../src/tell.js';
 
 // Built from local components (not an ISO/UTC string) so the local getters
 // `instructionFileName` reads (`getFullYear`, `getHours`, …) are stable no
@@ -99,7 +99,52 @@ describe('instructionNote', () => {
   });
 });
 
-// --- sentItem helpers, with a stubbed localStorage --------------------
+describe('instructionBody / rewriteInstruction / isContextNote', () => {
+  const note = instructionNote(
+    'Make a packing list\nfor Lisbon',
+    NOW,
+    'request',
+  );
+
+  it('reads the words without the frontmatter', () => {
+    expect(instructionBody(note)).toBe('Make a packing list\nfor Lisbon');
+    expect(instructionBody('No frontmatter here\n')).toBe(
+      'No frontmatter here',
+    );
+  });
+
+  it('rewrites the words and keeps the frontmatter as written', () => {
+    const rewritten = rewriteInstruction(
+      note,
+      '  Make a packing list for Porto ',
+    );
+    expect(rewritten).toBe(
+      '---\ntags: [instruction]\n' +
+        `date: ${NOW.toISOString()}\n` +
+        'via: app\nkind: request\n---\n\n' +
+        'Make a packing list for Porto\n',
+    );
+    expect(instructionBody(rewritten)).toBe('Make a packing list for Porto');
+  });
+
+  it('keeps a CRLF frontmatter as it is', () => {
+    const crlf =
+      '---\r\ntags: [instruction]\r\nvia: app\r\n---\r\n\r\nOld words\r\n';
+    expect(rewriteInstruction(crlf, 'New words')).toBe(
+      '---\r\ntags: [instruction]\r\nvia: app\r\n---\n\nNew words\n',
+    );
+  });
+
+  it("tells Add's context note apart from a request", () => {
+    expect(isContextNote(instructionNote('Receipts', NOW, 'context'))).toBe(
+      true,
+    );
+    expect(isContextNote(note)).toBe(false);
+    expect(isContextNote('kind: context\n')).toBe(false);
+  });
+});
+
+// --- The old sent list, with a stubbed localStorage -------------------
 
 function createMemoryStorage(): Storage {
   const data = new Map<string, string>();
@@ -125,125 +170,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('loadSent / addSent', () => {
-  it('returns an empty list when nothing was stored', () => {
-    vi.stubGlobal('localStorage', createMemoryStorage());
-    expect(loadSent()).toEqual([]);
-  });
-
-  it('round-trips an added item', () => {
-    vi.stubGlobal('localStorage', createMemoryStorage());
-    const item: SentItem = {
-      name: 'Bower - 2026-09-26 1405 a note.md',
-      text: 'a note',
-      sentAt: NOW.toISOString(),
-    };
-
-    const result = addSent(item);
-
-    expect(result).toEqual([item]);
-    expect(loadSent()).toEqual([item]);
-  });
-
-  it('keeps newest first', () => {
-    vi.stubGlobal('localStorage', createMemoryStorage());
-    const first: SentItem = {
-      name: 'a.md',
-      text: 'a',
-      sentAt: '2026-09-26T10:00:00.000Z',
-    };
-    const second: SentItem = {
-      name: 'b.md',
-      text: 'b',
-      sentAt: '2026-09-26T11:00:00.000Z',
-    };
-
-    addSent(first);
-    const result = addSent(second);
-
-    expect(result).toEqual([second, first]);
-  });
-
-  it('caps the list at 50 entries', () => {
-    vi.stubGlobal('localStorage', createMemoryStorage());
-    for (let i = 0; i < 55; i++) {
-      addSent({
-        name: `item-${i}.md`,
-        text: `item ${i}`,
-        sentAt: NOW.toISOString(),
-      });
-    }
-
-    const result = loadSent();
-
-    expect(result.length).toBe(50);
-    // Newest (last added, item-54) stays at the front; oldest five fall off.
-    expect(result[0]?.name).toBe('item-54.md');
-    expect(result.some((item) => item.name === 'item-4.md')).toBe(false);
-  });
-
-  it('never throws when localStorage.getItem throws', () => {
-    vi.stubGlobal('localStorage', {
-      getItem: () => {
-        throw new Error('unavailable');
-      },
-      setItem: () => {
-        throw new Error('unavailable');
-      },
-    });
-
-    expect(() => loadSent()).not.toThrow();
-    expect(loadSent()).toEqual([]);
-  });
-
-  it('never throws when localStorage.setItem throws, and still returns the list', () => {
-    const storage = createMemoryStorage();
-    vi.stubGlobal('localStorage', {
-      ...storage,
-      setItem: () => {
-        throw new Error('quota exceeded');
-      },
-    });
-
-    const item: SentItem = {
-      name: 'a.md',
-      text: 'a',
-      sentAt: NOW.toISOString(),
-    };
-
-    expect(() => addSent(item)).not.toThrow();
-    // setItem always throws, so nothing ever actually persists: each call
-    // starts again from the (empty) underlying storage.
-    expect(addSent(item)).toEqual([item]);
-  });
-
-  it('ignores malformed stored JSON', () => {
-    vi.stubGlobal('localStorage', {
-      getItem: () => '{not json',
-      setItem: () => {},
-    });
-
-    expect(loadSent()).toEqual([]);
-  });
-
-  it('ignores a stored value that is not an array of sent items', () => {
-    vi.stubGlobal('localStorage', {
-      getItem: () => JSON.stringify({ not: 'an array' }),
-      setItem: () => {},
-    });
-
-    expect(loadSent()).toEqual([]);
-  });
-});
-
 describe('clearSent', () => {
-  it('drops the stored sent history', () => {
-    vi.stubGlobal('localStorage', createMemoryStorage());
-    addSent({ name: 'a.md', text: 'a', sentAt: NOW.toISOString() });
+  it('drops the sent list older versions kept', () => {
+    const storage = createMemoryStorage();
+    vi.stubGlobal('localStorage', storage);
+    storage.setItem('bower.tell.sent', '[]');
+    storage.setItem('theme', 'dark');
 
     clearSent();
 
-    expect(loadSent()).toEqual([]);
+    expect(storage.getItem('bower.tell.sent')).toBeNull();
+    expect(storage.getItem('theme')).toBe('dark');
   });
 
   it('never throws when localStorage.removeItem is blocked', () => {

@@ -360,6 +360,12 @@ export interface FolderSubfolder {
   name: string;
   /** Notes inside, subfolders included (`folderCounts`). */
   count: number;
+  /** Notes and other files inside, subfolders included: a root folder
+   * screen's "6 things" (#431). */
+  things: number;
+  /** The newest `modifiedTime` of anything inside, subfolders included;
+   * `undefined` when nothing inside has one (#431). */
+  updated: string | undefined;
 }
 
 export interface FolderContents {
@@ -409,11 +415,29 @@ export function folderContents(
   const node = findNode(buildTree(index, sort), path);
   if (node === null) return null;
   const counts = folderCounts(index);
-  const subfolders: FolderSubfolder[] = node.folders.map((folder) => ({
-    path: folder.path,
-    name: folder.name,
-    count: counts.get(folder.path) ?? 0,
-  }));
+  const subfolders: FolderSubfolder[] = node.folders.map((folder) => {
+    const inside = `${folder.path}/`;
+    const files = index.files.filter((file) => file.path.startsWith(inside));
+    const notes = index.notes.filter(
+      (note) =>
+        note.path.startsWith(inside) && !isAppFile(note.path, note.name),
+    );
+    let updated: string | undefined;
+    for (const item of [...notes, ...files]) {
+      const time = item.modifiedTime;
+      if (time !== undefined && (updated === undefined || time > updated)) {
+        updated = time;
+      }
+    }
+    const count = counts.get(folder.path) ?? 0;
+    return {
+      path: folder.path,
+      name: folder.name,
+      count,
+      things: count + files.length,
+      updated,
+    };
+  });
   const notes = [...node.notes].sort(newestFirst);
   const prefix = path === '' ? '' : `${path}/`;
   const under = index.files.filter((file) => file.path.startsWith(prefix));
@@ -489,13 +513,27 @@ export interface Siblings {
   next: DriveFile | null;
 }
 
-/** The previous and next note in the same folder, sorted by name. */
-export function siblings(index: VaultIndex, id: string): Siblings {
+/**
+ * The previous and next note in the same folder, sorted by name — the
+ * same walk the folder screen itself lists (#423): Bower's own files
+ * (`isAppFile`) are left out unless `showAppFiles` is on (the current note
+ * stays the anchor either way, even if it is itself one of Bower's own
+ * files and would otherwise be filtered out).
+ */
+export function siblings(
+  index: VaultIndex,
+  id: string,
+  showAppFiles = false,
+): Siblings {
   const file = index.byId.get(id);
   if (file === undefined) return { prev: null, next: null };
   const folder = folderOf(file.path);
   const inFolder = index.notes
-    .filter((note) => folderOf(note.path) === folder)
+    .filter(
+      (note) =>
+        folderOf(note.path) === folder &&
+        (showAppFiles || note.id === id || !isAppFile(note.path, note.name)),
+    )
     .sort((a, b) => compareNames(a.name, b.name));
   const at = inFolder.findIndex((note) => note.id === file.id);
   if (at === -1) return { prev: null, next: null };

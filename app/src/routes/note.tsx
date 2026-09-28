@@ -17,8 +17,9 @@ import {
 } from '../components/note-properties.js';
 import type { NoteFolderLink } from '../components/note-properties.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { useNoteTitles } from '../components/use-note-titles.js';
 import { isProtectedNote } from '../drive.js';
-import type { SaveOptions } from '../drive.js';
+import type { DriveFile, SaveOptions } from '../drive.js';
 import { propertiesFor } from '../markdown/frontmatter.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
@@ -26,6 +27,7 @@ import { breadcrumb, folderHref, folderOf, siblings } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
 import { noteTitle as computeNoteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
+import { getPref } from '../prefs.js';
 import { isAppFile } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
@@ -127,6 +129,20 @@ export function Note() {
   }, [id]);
 
   const file = index?.byId.get(id);
+
+  // The previous/next walk (#423): the same folder listing the folder
+  // screen itself shows (Bower's own files hidden unless `showAppFiles` is
+  // on), and their real titles (`noteTitle`, #306) resolved from the note
+  // cache the same way Home's Recent and Pinned rows do, not the file name
+  // with its date prefix.
+  const { prev, next } =
+    index === null
+      ? { prev: null, next: null }
+      : siblings(index, id, getPref('showAppFiles'));
+  const siblingFiles: DriveFile[] = [prev, next].filter(
+    (sibling): sibling is DriveFile => sibling !== null,
+  );
+  const siblingTitles = useNoteTitles(siblingFiles);
 
   useEffect(() => {
     if (index === null || file === undefined) return;
@@ -232,7 +248,6 @@ export function Note() {
     return <NotFound />;
   }
 
-  const { prev, next } = siblings(index, file.id);
   const properties =
     load.status === 'ready' ? propertiesFor(load.rendered.frontmatter) : null;
   const folderLink = folderLinkFor(file.path);
@@ -312,7 +327,9 @@ export function Note() {
           {menuOpen && (
             <NoteMenu
               file={file}
-              noteName={title}
+              title={title}
+              typeLabel="Note"
+              askName={title}
               canEdit={canEdit}
               canAppend={canAppend}
               pinned={index.notePinnedAt.has(file.id)}
@@ -373,12 +390,16 @@ export function Note() {
       {(prev !== null || next !== null) && (
         <nav class="note-siblings" aria-label="Notes in this folder">
           {prev !== null ? (
-            <a href={`/note/${prev.id}`}>← {computeNoteTitle(prev)}</a>
+            <a href={`/note/${prev.id}`}>
+              ← {siblingTitles.get(prev.id) ?? computeNoteTitle(prev)}
+            </a>
           ) : (
             <span />
           )}
           {next !== null && (
-            <a href={`/note/${next.id}`}>{computeNoteTitle(next)} →</a>
+            <a href={`/note/${next.id}`}>
+              {siblingTitles.get(next.id) ?? computeNoteTitle(next)} →
+            </a>
           )}
         </nav>
       )}

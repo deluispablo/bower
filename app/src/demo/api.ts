@@ -61,7 +61,9 @@ export function createDemoWorker(
       reply(() => {
         throw notInDemo('There is no account to delete in the demo.');
       }),
-    startProcess: async () => ({ run: await server.startProcess() }),
+    startProcess: async (scope) => ({
+      run: await server.startProcess(scope),
+    }),
     getStatus: () => reply(() => server.status()),
     getPushPublicKey: () =>
       reply(() => {

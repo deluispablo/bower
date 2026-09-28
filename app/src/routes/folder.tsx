@@ -9,6 +9,10 @@
  * it there (`file-origin.ts`). A note opens in the app, any other file on
  * its own screen (`routes/file.tsx`, #350).
  *
+ * The More menu (#352) is the one a note and a file have
+ * (`note-menu.tsx`, `kind="folder"`): its phone trigger in the shell's
+ * `actions` slot, its desktop one next to the heading, as on a note.
+ *
  * The chips share `styles/layout.css`'s generic `.chip` (also used by the
  * interview's answers). Pinned toggles the folder's own pin (#215, #216:
  * `pinFolder`/`unpinFolder`, through `pin-action.ts`'s shared toast).
@@ -38,12 +42,15 @@ import {
   IconPin,
 } from '../components/icons.js';
 import { BackLink } from '../components/back-link.js';
+import { MoreButton } from '../components/more-button.js';
+import { NoteMenu } from '../components/note-menu.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH, originLine, originOf } from '../file-origin.js';
-import { folderMeaning } from '../folder-meanings.js';
+import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
+import { askBowerHref } from '../more-menu.js';
 import type { Origin } from '../file-origin.js';
 import {
   breadcrumb,
@@ -53,7 +60,11 @@ import {
   folderHref,
   shortAge,
 } from '../navigation.js';
-import type { BreadcrumbSegment, FolderContents } from '../navigation.js';
+import type {
+  BreadcrumbSegment,
+  FolderContents,
+  FolderSubfolder,
+} from '../navigation.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
@@ -66,14 +77,24 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
+/** The folder that holds projects, whose screen counts them (#431). */
+const PROJECTS_PATH = '1-Projects';
+
 /** The header's line under the name, as the Phone-Folder-Project board has
  * it: "1-Projects · 4 files · 2 notes · pinned". Files and folders only
- * when there are any; notes always. */
+ * when there are any; notes always. 1-Projects itself reads the way the
+ * Phone-Folder board has it instead: "2 projects · 9 things" (#431). */
 function metaLine(
   contents: FolderContents,
   parentName: string | null,
   pinned: boolean,
 ): string {
+  if (contents.path === PROJECTS_PATH) {
+    return `${plural(contents.subfolders.length, 'project')} · ${plural(
+      contents.noteCount + contents.fileCount,
+      'thing',
+    )}`;
+  }
   const parts: string[] = [];
   if (parentName !== null) parts.push(parentName);
   if (contents.fileCount > 0) parts.push(plural(contents.fileCount, 'file'));
@@ -116,6 +137,15 @@ function KindIcon({
   return <span class={`folder-row-icon tone-${tone}`}>{icon}</span>;
 }
 
+/** A root folder screen's subfolder second line (#431, Phone-Folder
+ * board): "6 things · updated today", "3 things · 5 d". */
+function subfolderLine(folder: FolderSubfolder, now: number): string {
+  const things = plural(folder.things, 'thing');
+  if (folder.updated === undefined) return things;
+  const age = shortAge(folder.updated, now);
+  return `${things} · ${age === 'today' ? 'updated today' : age}`;
+}
+
 interface FolderCrumbProps {
   /** This folder's ancestors only (`breadcrumb`), nearest last. */
   ancestors: BreadcrumbSegment[];
@@ -144,6 +174,9 @@ function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
 interface FolderBodyProps {
   contents: FolderContents;
   parentName: string | null;
+  /** The `<h1>`: a root folder's name without its numeric prefix
+   * ("Projects", #431); any other folder's own name. */
+  heading: string;
   /**
    * A root folder's one-line meaning (#348, C.5), from the one table
    * `folder-meanings.ts` — the same words the folder menu (#319) and the
@@ -163,11 +196,16 @@ interface FolderBodyProps {
    * bird's `done` pose on the chip instead of the pin icon. */
   justChanged: boolean;
   onDoneShown: () => void;
+  /** Whether the More menu (#352) is open, and its toggle. */
+  menuOpen: boolean;
+  onToggleMenu: () => void;
+  onCloseMenu: () => void;
 }
 
 function FolderBody({
   contents,
   parentName,
+  heading,
   meaning,
   catalogue,
   file,
@@ -175,8 +213,13 @@ function FolderBody({
   onTogglePin,
   justChanged,
   onDoneShown,
+  menuOpen,
+  onToggleMenu,
+  onCloseMenu,
 }: FolderBodyProps): JSX.Element {
-  const tellHref = `/bower?text=${encodeURIComponent(`${contents.name} `)}`;
+  // "About <folder>: " and nothing else from the folder (#354), through
+  // the same `/bower?text=` link the More menu's rows use.
+  const tellHref = askBowerHref('folder', contents.name);
   const now = Date.now();
   const titles = useNoteTitles(contents.notes);
   const emptyState = folderEmptyState(contents);
@@ -186,9 +229,30 @@ function FolderBody({
       <div class="folder-head">
         <IconFolder />
         <div class="folder-head-text">
-          <h1>{contents.name}</h1>
+          <h1>{heading}</h1>
           <p class="folder-meta">{metaLine(contents, parentName, pinned)}</p>
         </div>
+        {file !== undefined && (
+          <div class="note-header-actions folder-head-actions">
+            <MoreButton
+              class="note-header-more"
+              expanded={menuOpen}
+              onClick={onToggleMenu}
+            />
+            {menuOpen && (
+              <NoteMenu
+                kind="folder"
+                file={file}
+                title={contents.name}
+                typeLabel="Folder"
+                askName={contents.name}
+                pinned={pinned}
+                onTogglePin={onTogglePin}
+                onClose={onCloseMenu}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {meaning !== undefined && <p class="folder-explainer">{meaning}</p>}
@@ -232,8 +296,19 @@ function FolderBody({
               <li key={folder.path}>
                 <a class="folder-row" href={folderHref(folder.path)}>
                   <IconFolder />
-                  <span class="folder-row-name">{folder.name}</span>
-                  <span class="folder-row-count">{folder.count}</span>
+                  {parentName === null ? (
+                    <span class="folder-row-text">
+                      <span class="folder-row-name">{folder.name}</span>
+                      <span class="folder-row-detail">
+                        {subfolderLine(folder, now)}
+                      </span>
+                    </span>
+                  ) : (
+                    <>
+                      <span class="folder-row-name">{folder.name}</span>
+                      <span class="folder-row-count">{folder.count}</span>
+                    </>
+                  )}
                 </a>
               </li>
             ))}
@@ -304,6 +379,7 @@ export function Folder(): JSX.Element {
   const path = params.path ?? '';
   const { index, pinFolder, unpinFolder, getNoteText } = useVault();
   const [justChanged, setJustChanged] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const contents = useMemo(
     () =>
@@ -333,6 +409,22 @@ export function Folder(): JSX.Element {
     return <FolderCrumb ancestors={ancestors} name={contents.name} />;
   }, [contents, ancestors]);
   useShellSlot('crumb', crumbContent);
+
+  // The phone's More trigger (#352), in the shell's `actions` slot like a
+  // note's; only once the folder's own Drive entry is known.
+  const hasFile =
+    contents !== null && index?.byPath.get(contents.path) !== undefined;
+  const actionsContent = useMemo(
+    () =>
+      hasFile ? (
+        <MoreButton
+          expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        />
+      ) : null,
+    [hasFile, menuOpen],
+  );
+  useShellSlot('actions', actionsContent);
 
   const catalogue = useCatalogueOrigins(
     index?.byPath.get(CATALOGUE_PATH),
@@ -370,6 +462,9 @@ export function Folder(): JSX.Element {
     <FolderBody
       contents={contents}
       parentName={parent === undefined ? null : parent.name}
+      heading={
+        parent === undefined ? rootFolderHeading(contents.path) : contents.name
+      }
       meaning={parent === undefined ? folderMeaning(contents.path) : undefined}
       catalogue={catalogue}
       file={index.byPath.get(contents.path)}
@@ -377,6 +472,9 @@ export function Folder(): JSX.Element {
       onTogglePin={() => void handleTogglePin()}
       justChanged={justChanged}
       onDoneShown={() => setJustChanged(false)}
+      menuOpen={menuOpen}
+      onToggleMenu={() => setMenuOpen((open) => !open)}
+      onCloseMenu={() => setMenuOpen(false)}
     />
   );
 }

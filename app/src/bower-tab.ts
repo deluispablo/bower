@@ -1,15 +1,17 @@
 /**
  * Pure helpers behind the Bower tab (#340, spec C.7): the rotating examples
- * under the box, and the requests still waiting for a tidy-up, read from
- * the inbox listing. No DOM, no Drive calls: unit-tested directly
+ * under the box, and Requests with each one's state (#344), derived from
+ * the Bower folder: the inbox, the run in flight, `Answers/` and
+ * `Rules.md`. No DOM, no Drive calls: unit-tested directly
  * (`test/bower-tab.test.ts`); `routes/bower.tsx` renders them.
  */
 
 import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { relativeTime } from './navigation.js';
-import { firstLine } from './tell.js';
-import type { SentItem } from './tell.js';
+import { OWNER_ORIGIN, shortDay } from './rules.js';
+import type { Rule } from './rules.js';
+import { firstLine, instructionBody, isContextNote } from './tell.js';
 
 /**
  * Sentences a person could send, in sets of three (a job, a rule, a
@@ -40,26 +42,75 @@ export function examplesFor(turn: number): string[] {
   return EXAMPLES.slice(start, start + EXAMPLES_PER_SET);
 }
 
-/** A sentence sent from the box that no tidy-up has picked up yet. */
-export interface WaitingRequest {
+/** A sentence sent from the box on this screen, kept in memory until a
+ * listing has its note (the listing cannot know about it before). */
+export interface SentRequest {
   /** The instruction note's file name (`Bower - <date> <time> <title>.md`). */
   name: string;
-  /** What the person wrote (first line), or the note's title when this
-   * device has no record of sending it. */
+  /** What the person wrote. */
   text: string;
-  /** ISO-8601: when it was sent, or the note's time when unknown. */
+  /** ISO-8601. */
+  sentAt: string;
+}
+
+/** A rule sentence kept at once from this screen (#343), in memory: its
+ * exact time, which `Rules.md` (a day only) does not have. */
+export interface KeptSentence {
+  text: string;
+  /** ISO-8601. */
   since: string;
 }
+
+/**
+ * Where a request stands (#344, spec C.7, board Phone-Bower-Requests):
+ * waiting for the next tidy-up, in the run in flight, answered, or kept
+ * as a rule.
+ */
+export type RequestState = 'waiting' | 'tidying' | 'answered' | 'kept';
+
+export interface RequestRow {
+  /** Unique within the list, and the same for a sentence before and
+   * after the listing has its note (the row keeps its element). */
+  key: string;
+  state: RequestState;
+  /** The sentence as the person wrote it (first line), the question an
+   * answer is for, or the rule. */
+  text: string;
+  /** What the sentence is (`sentenceKind`); `context` for Add's "What is
+   * this?" note (#335). */
+  kind: SentenceKind | 'context';
+  /** ISO-8601: when it was sent, answered, or kept (a rule's day, from
+   * its start, when this screen did not keep it). */
+  since: string;
+  /** The Drive file behind the row: the instruction note (waiting,
+   * tidying up) or the answer (answered); `null` for a rule, or for a
+   * sentence the listing does not have yet. */
+  fileId: string | null;
+}
+
+/** How Requests names Add's context note (#335): it is about a batch of
+ * files, not a sentence to show. */
+export const CONTEXT_TITLE = 'About the files you added';
 
 /** `Bower - YYYY-MM-DD HHmm <title>.md`, as `instructionFileName` builds it. */
 const REQUEST_NAME =
   /^Bower - (\d{4})-(\d{2})-(\d{2}) (\d{2})(\d{2}) (.+)\.md$/;
 
-const INBOX = '0-Inbox';
+/** `YYYY-MM-DD <question>.md`, how the agent names an answer. */
+const ANSWER_NAME = /^(\d{4})-(\d{2})-(\d{2}) (.+)\.md$/;
 
-/** The date and time in the note's name (local time), or `null`. */
-function sinceFromName(match: RegExpMatchArray): string | null {
-  const [, year, month, day, hours, minutes] = match;
+const INBOX = '0-Inbox';
+const ANSWERS = 'Answers';
+
+/** Local midnight of `YYYY`, `MM`, `DD` and, when given, `hh:mm`, as
+ * ISO-8601; `null` when that is not a date. */
+function localIso(
+  year: string,
+  month: string,
+  day: string,
+  hours = '0',
+  minutes = '0',
+): string | null {
   const date = new Date(
     Number(year),
     Number(month) - 1,
@@ -70,47 +121,103 @@ function sinceFromName(match: RegExpMatchArray): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-export interface WaitingInput {
-  /** The folder listing (`useVault().files`). */
-  files: DriveFile[];
-  /** When that listing was fetched (ISO-8601), `null` before the first one. */
-  fetchedAt: string | null;
-  /** This device's sent list (`loadSent()`), for the words as written. */
-  sent: SentItem[];
-  /** Sent from this screen since it opened: they count as waiting until a
-   * listing fetched after them says otherwise. */
-  justSent: SentItem[];
+/** The date and time in an instruction note's name (local time), or `null`. */
+function sinceFromName(match: RegExpMatchArray): string | null {
+  const [, year = '', month = '', day = '', hours, minutes] = match;
+  return localIso(year, month, day, hours, minutes);
+}
+
+/** A rule's `YYYY-MM-DD` as the start of that day, or `null`. */
+function dayStart(day: string | null): string | null {
+  const match = day === null ? null : /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (match === null) return null;
+  const [, year = '', month = '', dd = ''] = match;
+  return localIso(year, month, dd);
 }
 
 /**
- * The requests still waiting, newest first: every instruction note sitting
- * directly in `0-Inbox/` (a processed one has moved to
- * `0-Inbox/Processed/`), plus anything sent from this screen after the
- * listing was fetched, which the listing cannot know about yet.
+ * The instruction notes still waiting: every `Bower - <date> <time>
+ * <title>.md` file directly in `0-Inbox/` (a processed one has moved to
+ * `0-Inbox/Processed/`). The Bower tab reads their words from these.
  */
-export function waitingRequests({
+export function waitingNotes(files: readonly DriveFile[]): DriveFile[] {
+  return files.filter(
+    (file) =>
+      file.mimeType !== FOLDER_MIME &&
+      file.path === `${INBOX}/${file.name}` &&
+      REQUEST_NAME.test(file.name),
+  );
+}
+
+export interface RequestsInput {
+  /** The folder listing (`useVault().files`). */
+  files: readonly DriveFile[];
+  /** When that listing was fetched (ISO-8601), `null` before the first one. */
+  fetchedAt: string | null;
+  /** Instruction notes' content, by file id, for those read so far. */
+  texts: ReadonlyMap<string, string>;
+  /** Sent from this screen since it opened. */
+  justSent: readonly SentRequest[];
+  /** When the run in flight was asked for (ISO-8601), `null` when no run
+   * is in flight. */
+  runSince: string | null;
+  /** Every rule in `Rules.md` (`allRules(parseRules(…))`), `[]` before it
+   * is read. */
+  rules: readonly Rule[];
+  /** Rule sentences kept from this screen since it opened. */
+  justKept: readonly KeptSentence[];
+}
+
+/**
+ * Every request and what came of it, newest first (#344, spec C.7), all
+ * derived from the Bower folder:
+ * - an instruction note directly in `0-Inbox/` is **waiting** for the next
+ *   tidy-up, or **tidying up** when it was there before the run in flight
+ *   was asked for; its words come from the note (`texts`), else from what
+ *   this screen sent, else from the title in its name;
+ * - a note in `Answers/` named `YYYY-MM-DD <question>.md` is **answered**;
+ * - a rule in `Rules.md` the owner asked for (`owner's request`, not
+ *   paused) is **kept**.
+ * Anything sent from this screen after the listing was fetched counts as
+ * waiting until a listing fetched after it says otherwise, and a rule kept
+ * from this screen shows even before `Rules.md` is read again.
+ */
+export function requestRows({
   files,
   fetchedAt,
-  sent,
+  texts,
   justSent,
-}: WaitingInput): WaitingRequest[] {
-  const sentByName = new Map(sent.map((item) => [item.name, item]));
-  const waiting: WaitingRequest[] = [];
+  runSince,
+  rules,
+  justKept,
+}: RequestsInput): RequestRow[] {
+  const sentByName = new Map(justSent.map((item) => [item.name, item]));
+  const runMs = runSince === null ? null : Date.parse(runSince);
+  const stateAt = (since: string): RequestState =>
+    runMs !== null && Date.parse(since) <= runMs ? 'tidying' : 'waiting';
+  const rows: RequestRow[] = [];
   const listed = new Set<string>();
 
-  for (const file of files) {
-    if (file.mimeType === FOLDER_MIME) continue;
-    if (file.path !== `${INBOX}/${file.name}`) continue;
+  for (const file of waitingNotes(files)) {
     const match = REQUEST_NAME.exec(file.name);
     if (match === null) continue;
     listed.add(file.name);
-    const item = sentByName.get(file.name);
+    const note = texts.get(file.id);
+    const sent = sentByName.get(file.name);
+    const title = match[6] ?? file.name;
+    const context =
+      note === undefined ? title === 'Context' : isContextNote(note);
+    const words =
+      note === undefined ? (sent?.text ?? title) : instructionBody(note);
     const since =
-      item?.sentAt ?? file.modifiedTime ?? sinceFromName(match) ?? '';
-    waiting.push({
-      name: file.name,
-      text: item === undefined ? (match[6] ?? file.name) : firstLine(item.text),
+      sent?.sentAt ?? sinceFromName(match) ?? file.modifiedTime ?? '';
+    rows.push({
+      key: `request-${file.name}`,
+      state: stateAt(since),
+      text: context ? CONTEXT_TITLE : firstLine(words),
+      kind: context ? 'context' : sentenceKind(words),
       since,
+      fileId: file.id,
     });
   }
 
@@ -119,14 +226,59 @@ export function waitingRequests({
     if (listed.has(item.name)) continue;
     if (fetchedMs !== null && Date.parse(item.sentAt) <= fetchedMs) continue;
     listed.add(item.name);
-    waiting.push({
-      name: item.name,
+    rows.push({
+      key: `request-${item.name}`,
+      state: stateAt(item.sentAt),
       text: firstLine(item.text),
+      kind: sentenceKind(item.text),
       since: item.sentAt,
+      fileId: null,
     });
   }
 
-  return waiting.sort((a, b) => b.since.localeCompare(a.since));
+  for (const file of files) {
+    if (file.mimeType === FOLDER_MIME) continue;
+    if (file.path !== `${ANSWERS}/${file.name}`) continue;
+    const match = ANSWER_NAME.exec(file.name);
+    if (match === null) continue;
+    const [, year = '', month = '', day = '', question = ''] = match;
+    rows.push({
+      key: `answer-${file.id}`,
+      state: 'answered',
+      text: question,
+      kind: sentenceKind(question),
+      since: file.modifiedTime ?? localIso(year, month, day) ?? '',
+      fileId: file.id,
+    });
+  }
+
+  const keptAt = new Map(justKept.map((item) => [item.text, item.since]));
+  const inRules = new Set<string>();
+  for (const rule of rules) {
+    if (rule.paused || rule.origin?.toLowerCase() !== OWNER_ORIGIN) continue;
+    inRules.add(rule.text);
+    rows.push({
+      key: `rule-${String(rule.line)}`,
+      state: 'kept',
+      text: rule.text,
+      kind: 'rule',
+      since: keptAt.get(rule.text) ?? dayStart(rule.date) ?? '',
+      fileId: null,
+    });
+  }
+  for (const [i, item] of justKept.entries()) {
+    if (inRules.has(item.text)) continue;
+    rows.push({
+      key: `kept-${String(i)}`,
+      state: 'kept',
+      text: item.text,
+      kind: 'rule',
+      since: item.since,
+      fileId: null,
+    });
+  }
+
+  return rows.sort((a, b) => b.since.localeCompare(a.since));
 }
 
 const MINUTE_MS = 60 * 1000;
@@ -176,4 +328,38 @@ export function ruleSentences(text: string): string[] {
     .split(/(?<=[.!?])\s+|\n+/)
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence !== '' && sentenceKind(sentence) === 'rule');
+}
+
+/**
+ * The state chip on a request (board Phone-Bower-Requests): `Waiting ·
+ * job`, `Tidying up · question`, `Answered`, `Rule kept`. Add's context
+ * note is about files, not a sentence, so its chip has no kind.
+ */
+export function stateLabel(row: Pick<RequestRow, 'state' | 'kind'>): string {
+  const kind = row.kind === 'context' ? '' : ` · ${row.kind}`;
+  switch (row.state) {
+    case 'waiting':
+      return `Waiting${kind}`;
+    case 'tidying':
+      return `Tidying up${kind}`;
+    case 'answered':
+      return 'Answered';
+    case 'kept':
+      return 'Rule kept';
+    default: {
+      const exhaustive: never = row.state;
+      return exhaustive;
+    }
+  }
+}
+
+/** The day of `iso` on this device, as the Rules screen writes it
+ * (`26 Sep`); empty for a date it cannot read. */
+export function dayLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return shortDay(
+    `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+  );
 }
