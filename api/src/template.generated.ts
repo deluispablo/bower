@@ -357,6 +357,12 @@ Bower recognises eight kinds of document. For each, the list gives the \`kind\` 
 - A web clip of a listed kind: the note written from the clip is its companion note, with \`source\` the page's URL instead of \`original\`.
 - A converted document of a listed kind keeps its converted \`.md\` as it is; the companion note is a separate note whose \`original\` names the original, not the \`.md\`.
 
+**No note, and the owner's changes.**
+- Photos (a place, a sign, people) and documents of no listed kind get no note unless the owner asks for one (a context note, an instruction note) or a rule in \`Rules.md\` says so: they are only filed. A photo of a document of a listed kind (a receipt, a ticket) is that document and gets its companion note.
+- A rule can switch a kind off ("For receipts, no note"): documents of that kind are then only filed.
+- A rule can add a field to a kind ("For job offers, also note the pension"): write it as one more frontmatter field, a snake_case key (\`pension\`), after the kind's own fields, with its origin in \`bower_origins\` as usual. The app shows it in Details, never as a key fact.
+- A rule can add a status value to a kind; the kind's first status value is still the one a new note gets.
+
 Example, the companion note next to \`Arlington Road, listing.pdf\`:
 \`\`\`markdown
 ---
