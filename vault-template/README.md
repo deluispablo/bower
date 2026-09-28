@@ -12,6 +12,14 @@ The vault every new user starts from, copied into their own Google Drive; see `A
 
 The agent reads them in that order: `CLAUDE.md`, then `Rules.md`, then `About-Me.md`.
 
+## What a tidy-up leaves in the folder
+
+Filing only, by default (rulebook version 7 on, #368): each original moves into its PARA folder as it is, under a meaningful name (its own when it has one), with one line in the folder's hub note, one row in `index.md` and one `Filed:` line in `log.md`. A note is written only for a web clip or saved link (the raw clip then goes to `0-Inbox/Processed/`), for an item an instruction note or a rule in `Rules.md` asks something for, and for a converted document, whose `.md` is filed next to its original, so the original and its note sit side by side. `0-Inbox/Processed/` keeps only instruction notes, raw clips, unconvertible items and duplicates.
+
+Two things in a folder are written by the runner, not by the agent: `.bower/last-run.json`, the outcome of the last tidy-up (`state`, counts, one sentence for people, the failure's `reason`), and the matching line at the end of `log.md` (#315). The runner's post-run audit counts `.bower/` among the places a run may write, so that file is saved like any other change.
+
+Whether the agent may use the web is not in this template: a tidy-up gets the web tools only when the instance allows them (`BOWER_ALLOW_WEB`) and the user turned on **Let Bower look things up on the web** in Settings (#374).
+
 ## Changing the rulebook
 
 Any change to `CLAUDE.md` that existing vaults should receive bumps `bower_rules_version` by one. The app compares the vault's number with the template's (compiled in at build time) and offers the update when the vault is behind. A vault whose `CLAUDE.md` has no `bower_rules_version` counts as version 1, the rulebook from before the split: the update also moves the user's own additions into `Rules.md`: the lines of its `## Rules` section, then, under `## Migrated from your old rulebook (v1)`, every section this template has no heading for and the lines a shared section (`## Tags`) has that this template lacks. The update recognises a line as Bower's own when this template has it or an earlier version did: whenever you remove or reword a line here, add the old line to `app/src/rulebook-retired.ts` in the same PR, or old folders would get it copied into their `Rules.md` as if the user had written it. Never reuse the `## Rules` section for anything the user writes.

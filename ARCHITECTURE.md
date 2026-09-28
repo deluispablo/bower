@@ -69,7 +69,9 @@ User (browser) ── POST /process ──▶ Worker ── repository_dispatch 
 Lint dispatch job (Sundays) ── POST /runner/lint/dispatch (Bearer BOWER_API_KEY) ──▶ Worker ── repository_dispatch bower-lint {vault_id, ticket}, one per vault ──▶ Instance repo (Actions)
 Runner ── GET /runner/vaults/:id (Bearer that run's ticket) ──▶ Worker ── 1 h Drive token, folder id, maxTurns, apiKey?, requestedAt
 Runner ── rclone sync ↓, manifest, pandoc --sandbox, claude -p, rclone copy ↑ (files new or changed since the manifest only), rclone deletefile ↑ (processed originals only) ──▶ Google Drive
-Runner ── POST /runner/vaults/:id/status (Bearer that run's ticket) ──▶ Worker ── web push ──▶ User's devices
+Runner ── .bower/last-run.json + one log.md line (the outcome, counts only) ──▶ Google Drive
+Runner ── POST /runner/vaults/:id/status {state, counts, reason} (Bearer that run's ticket; the final one tried three times) ──▶ Worker ── web push ──▶ User's devices
+User (browser) ── GET /status ──▶ Worker ── a running run silent for 5 min: GET actions/runs/:runId ──▶ GitHub (the job's conclusion settles it)
 User (browser) ── DELETE /me ──▶ Worker ── best-effort revoke at Google, deletes the user's KV data, clears the session cookie ──▶ (the Drive folder itself is never touched)
 ```
 
