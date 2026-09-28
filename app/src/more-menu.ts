@@ -1,23 +1,46 @@
 /**
- * The pure half of the one More menu (#352, board Phone-Note-Menu,
- * `components/note-menu.tsx`): what its header says and where its two
- * Bower rows point, for a note, a file or a folder. No DOM, so it is unit
- * tested on its own (`test/more-menu.test.ts`).
+ * The pure half of the one More menu (#352, board Phone-More,
+ * `components/note-menu.tsx`): what its header says and where its Bower
+ * rows point, for a note, a file or a folder. No DOM, so it is unit tested
+ * on its own (`test/more-menu.test.ts`).
  */
 
-import { displayPath, folderOf } from './navigation.js';
+import { displayPath, folderOf, paraKindOf } from './navigation.js';
+import type { ParaKind } from './navigation.js';
+import { revealHref } from './reveal.js';
 
 /** What the menu is about: a note, any other file, or a folder. */
 export type MoreMenuKind = 'note' | 'file' | 'folder';
 
+export interface MoreMenuHeader {
+  typeLabel: string;
+  /** The folder the thing sits in; `null` at the top of the Bower folder. */
+  place: {
+    /** "Projects › Flat hunt": the numeric prefixes left off. */
+    label: string;
+    /** The landmark it belongs to, `null` for a neutral folder. */
+    kind: ParaKind | null;
+  } | null;
+}
+
 /**
- * The header's second line, as the board draws it: the type word, then
- * the folder the thing sits in ("PDF · Projects / Flat hunt"). Just the
- * type word for something at the top of the Bower folder.
+ * The header's second line, as the board draws it (`Phone-More`): the type
+ * word, and the folder the thing sits in with its PARA mark ("Projects ›
+ * Flat hunt").
  */
-export function moreMenuMeta(typeLabel: string, path: string): string {
+export function moreMenuHeader(
+  typeLabel: string,
+  path: string,
+): MoreMenuHeader {
   const folder = folderOf(path);
-  return folder === '' ? typeLabel : `${typeLabel} · ${displayPath(folder)}`;
+  if (folder === '') return { typeLabel, place: null };
+  return {
+    typeLabel,
+    place: {
+      label: displayPath(folder, ' › '),
+      kind: paraKindOf(folder.split('/')[0] ?? ''),
+    },
+  };
 }
 
 /**
@@ -32,12 +55,16 @@ export function askBowerHref(kind: MoreMenuKind, name: string): string {
 }
 
 /**
- * "Move to…" (the board's label for #302's "This was misfiled"): the
- * Bower tab's box, prefilled with the path and nothing else, in the exact
- * words the rulebook's move request expects (`vault-template/CLAUDE.md`).
+ * "Show in folders" (#608, R-REVEAL-3): the Notes tab, told to reveal this
+ * note, file or folder (`revealHref`, #591).
  */
-export function moveToHref(path: string): string {
-  return `/bower?text=${encodeURIComponent(
-    `"${path}" was misfiled. It should go to: `,
-  )}`;
+export function showInFoldersHref(
+  kind: MoreMenuKind,
+  file: { id: string; path: string },
+): string {
+  return revealHref(
+    kind === 'folder'
+      ? { kind, path: file.path }
+      : { kind, id: file.id, path: file.path },
+  );
 }

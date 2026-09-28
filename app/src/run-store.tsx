@@ -387,7 +387,7 @@ export const pendingCount = visiblePendingCount;
 
 export interface RunStore extends RunState {
   /** Starts a run: a whole tidy-up, or `instructions` only (`startProcess`). */
-  process: (scope?: RunScope) => Promise<void>;
+  process: (scope?: RunScope) => Promise<boolean>;
   /**
    * What every Tidy up control calls (the Inbox card, Add's hint, the
    * switcher command, #320). Opens the "Is that everything?" confirmation
@@ -624,10 +624,11 @@ export function RunProvider({ children }: RunProviderProps) {
   }, [state.phase, apply, poll]);
 
   const process = useCallback(
-    async (scope?: RunScope): Promise<void> => {
+    async (scope?: RunScope): Promise<boolean> => {
       try {
         const { run } = await startProcess(scope);
         apply({ type: 'process-started', run });
+        return true;
       } catch (err) {
         if (err instanceof ApiError && err.code === 'quota') {
           const retryAfter = err.retryAfter ?? 0;
@@ -636,13 +637,14 @@ export function RunProvider({ children }: RunProviderProps) {
             retryAfter,
             message: quotaMessage(retryAfter),
           });
-          return;
+          return false;
         }
         console.error(err);
         apply({
           type: 'process-failed',
           message: 'Could not start. Try again.',
         });
+        return false;
       }
     },
     [apply],
