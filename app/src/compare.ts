@@ -233,9 +233,7 @@ type SortValue = number | string | null;
 function sortValue(kind: Kind, note: CompareNote, column: string): SortValue {
   if (column === TITLE_COLUMN) return noteTitle(note).toLowerCase();
   if (column === STATUS_COLUMN) {
-    const index = kind.statuses.indexOf(
-      String(note.fields.status ?? '').toLowerCase(),
-    );
+    const index = kind.statuses.indexOf(statusValue(note));
     return index === -1 ? null : index;
   }
   const field = kind.fields.find((candidate) => candidate.key === column);
@@ -534,4 +532,10 @@ export function statusOptionLabel(status: string): string {
 /** The kind of a note's frontmatter `kind`, when it is one Compare knows. */
 export function kindOfNote(note: CompareNote): Kind | undefined {
   return kindById(note.kind);
+}
+
+/** The note's status, lower case; '' when it has none. */
+export function statusValue(note: Pick<CompareNote, 'fields'>): string {
+  const status = note.fields.status;
+  return typeof status === 'string' ? status.trim().toLowerCase() : '';
 }

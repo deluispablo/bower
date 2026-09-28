@@ -33,6 +33,7 @@ import {
   sortNotes,
   statusOptionLabel,
   STATUS_COLUMN,
+  statusValue,
   TITLE_COLUMN,
 } from '../compare.js';
 import type { CompareColumn, CompareNote, CompareSort } from '../compare.js';
@@ -44,7 +45,6 @@ import { loadNoteMeta } from '../note-meta.js';
 import { showToast } from '../toast-store.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { OriginSquare } from './folder-mark.js';
-import type { OriginKind } from './folder-mark.js';
 
 import '../styles/compare.css';
 
@@ -62,7 +62,8 @@ export async function loadCompareNotes(
 ): Promise<CompareNote[]> {
   const markdown = files.filter(
     (file) =>
-      file.mimeType === 'text/markdown' || file.name.toLowerCase().endsWith('.md'),
+      file.mimeType === 'text/markdown' ||
+      file.name.toLowerCase().endsWith('.md'),
   );
   const notes = await Promise.all(
     markdown.map(async (file): Promise<CompareNote | null> => {
@@ -123,8 +124,8 @@ export function CompareView({
     loadViewSettings(folderPath).then(
       (settings) => {
         if (!live) return;
-        const order = (settings as CompareViewSettings | undefined)
-          ?.compareColumns;
+        const stored: CompareViewSettings | undefined = settings;
+        const order = stored?.compareColumns;
         if (Array.isArray(order)) setStoredOrder(order);
       },
       (error: unknown) => {
@@ -226,7 +227,9 @@ export function CompareView({
           setSort(defaultSort(kind));
         }}
       >
-        {kind.compareFields.includes('fit') ? 'Best fit first' : 'Default order'}
+        {kind.compareFields.includes('fit')
+          ? 'Best fit first'
+          : 'Default order'}
       </button>
       {chips.map((chip) => (
         <button
@@ -248,9 +251,7 @@ export function CompareView({
     const faded = fadedLine(hidden, active);
     return (
       <section class="compare compare-phone" aria-label="Compare">
-        <p class="compare-explainer">
-          {phoneExplainer(kind, current.length)}
-        </p>
+        <p class="compare-explainer">{phoneExplainer(kind, current.length)}</p>
         {chipRow}
         <ul class="compare-cards">
           {sorted.map((note) => (
@@ -292,12 +293,13 @@ export function CompareView({
                         ? {
                             column: id,
                             direction:
-                              effectiveSort.direction === 'asc' ? 'desc' : 'asc',
+                              effectiveSort.direction === 'asc'
+                                ? 'desc'
+                                : 'asc',
                           }
                         : {
                             column: id,
-                            direction:
-                              id === 'fit' ? 'desc' : 'asc',
+                            direction: id === 'fit' ? 'desc' : 'asc',
                           },
                     );
                   }}
@@ -448,7 +450,9 @@ function HeaderCell({
       >
         {column.label}
         {sorted && (
-          <span aria-hidden="true">{sort.direction === 'asc' ? ' ▴' : ' ▾'}</span>
+          <span aria-hidden="true">
+            {sort.direction === 'asc' ? ' ▴' : ' ▾'}
+          </span>
         )}
       </button>
       {movable && (
@@ -465,7 +469,11 @@ function HeaderCell({
             ⋯
           </button>
           {menu && (
-            <span class="compare-menu" role="group" aria-label={`Move ${column.label}`}>
+            <span
+              class="compare-menu"
+              role="group"
+              aria-label={`Move ${column.label}`}
+            >
               <button
                 type="button"
                 disabled={order.indexOf(column.id) <= 1}
@@ -515,10 +523,11 @@ function BodyCell({
     );
   }
   if (column.id === STATUS_COLUMN) {
-    const value = String(note.fields.status ?? '').toLowerCase();
-    const options = kind.statuses.includes(value) || value === ''
-      ? kind.statuses
-      : [...kind.statuses, value];
+    const value = statusValue(note);
+    const options =
+      kind.statuses.includes(value) || value === ''
+        ? kind.statuses
+        : [...kind.statuses, value];
     const shownLabel = statusLabel(kind, note.fields);
     return (
       <td class="compare-td">
@@ -527,7 +536,7 @@ function BodyCell({
           aria-label={`Status of ${noteTitle(note)}`}
           value={value}
           onChange={(event) => {
-            onStatus((event.currentTarget as HTMLSelectElement).value);
+            onStatus(event.currentTarget.value);
           }}
         >
           {value === '' && <option value="">No status</option>}
@@ -548,7 +557,7 @@ function BodyCell({
     <td class="compare-td">
       {text}
       {origin !== undefined && origin !== 'file' && text !== '' && (
-        <OriginSquare origin={origin as OriginKind} />
+        <OriginSquare origin={origin} />
       )}
     </td>
   );

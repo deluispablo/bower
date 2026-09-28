@@ -71,7 +71,7 @@ function setDesktop(desktop: boolean): void {
 }
 
 async function mount(): Promise<void> {
-  await act(async () => {
+  await act(() => {
     render(h(CompareView, { notes, folderPath: '1-Projects/Flat hunt' }), root);
   });
   await act(async () => {
@@ -81,7 +81,7 @@ async function mount(): Promise<void> {
 
 function click(el: Element | null | undefined): void {
   if (el === null || el === undefined) throw new Error('missing element');
-  act(() => {
+  void act(() => {
     (el as HTMLElement).click();
   });
 }
@@ -113,12 +113,13 @@ describe('Compare on a phone', () => {
   it('shows cards, best fit first, with three facts and the status', async () => {
     await mount();
     const cards = [...root.querySelectorAll('.compare-card')];
-    expect(cards.map((c) => c.querySelector('.compare-card-title')?.textContent))
-      .toEqual([
-        'Kentish Town, 2 bed',
-        'Arlington Road, 2 bed',
-        'Camden Mews, 1 bed',
-      ]);
+    expect(
+      cards.map((c) => c.querySelector('.compare-card-title')?.textContent),
+    ).toEqual([
+      'Kentish Town, 2 bed',
+      'Arlington Road, 2 bed',
+      'Camden Mews, 1 bed',
+    ]);
     expect(cards[0]?.querySelector('.compare-fit')?.textContent).toBe('Fit 81');
     expect(cards[0]?.textContent).toContain('£2,400');
     expect(cards[0]?.textContent).toContain('Viewing Sat');
@@ -146,10 +147,9 @@ describe('Compare on a desktop', () => {
 
   const headers = (): string[] =>
     [...root.querySelectorAll('th[scope="col"]')].map((th) =>
-      (th.querySelector('.compare-th-sort')?.textContent ?? '').replace(
-        /[▴▾]/g,
-        '',
-      ).trim(),
+      (th.querySelector('.compare-th-sort')?.textContent ?? '')
+        .replace(/[▴▾]/g, '')
+        .trim(),
     );
   const firstColumn = (): string[] =>
     [...root.querySelectorAll('tbody th')].map((th) => th.textContent ?? '');
@@ -203,7 +203,11 @@ describe('Compare on a desktop', () => {
         (el) => el.textContent === 'Move left',
       ),
     );
-    expect(headers().slice(5, 8)).toEqual(['Fit', 'Bike to the office', 'Status']);
+    expect(headers().slice(5, 8)).toEqual([
+      'Fit',
+      'Bike to the office',
+      'Status',
+    ]);
     await vi.waitFor(() => {
       expect(cache.saveViewSettings).toHaveBeenCalledTimes(1);
     });
