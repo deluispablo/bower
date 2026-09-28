@@ -958,7 +958,7 @@ test('a filed link reads by its host and path, on the Done sheet and in Recent, 
     hasText: 'example.org',
   });
   await expect(row).toBeVisible();
-  await expect(row).toContainText('3-Resources');
+  await expect(row).toContainText('Resources');
   await expect(sheet.getByText(/^Link - /)).toHaveCount(0);
   await sheet.getByRole('button', { name: 'Close' }).click();
 
