@@ -406,20 +406,6 @@ button.page-bare-back {
   font-size: var(--text-xs);
 }
 
-/* The Notes tab's own filter field (spec §14): a real input, not a button —
-   `.explorer-filter` supplies the row's look, this only fills it. */
-.explorer-filter-input {
-  flex: 1;
-  min-width: 0;
-  min-height: 44px;
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--color-text);
-  font: inherit;
-  outline: none;
-}
-
 .explorer-rows,
 .explorer-nav {
   display: flex;
