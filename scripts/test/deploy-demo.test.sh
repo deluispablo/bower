@@ -2,8 +2,8 @@
 # Hermetic test for scripts/deploy-demo.sh.
 # wrangler and pnpm are stateful stubs on PATH: wrangler keeps Pages
 # projects under $STUB_STATE, same as scripts/test/deploy.test.sh; pnpm
-# fakes `-C app build:demo` by writing a dist/index.html and logging its
-# env vars. Nothing reaches Cloudflare or the network.
+# fakes `-C app build:demo` by writing a dist/index.html. Nothing reaches
+# Cloudflare or the network.
 #
 # Prints "ok <case>" per case and exits non-zero on the first failure.
 
@@ -33,7 +33,6 @@ for arg in "$@"; do
 done
 case " $* " in
   *' build:demo '*)
-    echo "build:demo VITE_ABOUT_URL=${VITE_ABOUT_URL:-}" >>"$STUB_STATE/calls.log"
     if [ "${STUB_SCENARIO:-}" = no-dist ]; then exit 0; fi
     mkdir -p "$dir/dist"
     echo '<!doctype html>' >"$dir/dist/index.html"
@@ -111,7 +110,7 @@ run_script() {
   shift 3
   : >"$STATE/calls.log"
   set +e
-  PATH="$STUBS:$PATH" STUB_SCENARIO="$scenario" STUB_STATE="$STATE" VITE_ABOUT_URL="${VITE_ABOUT_URL:-}" \
+  PATH="$STUBS:$PATH" STUB_SCENARIO="$scenario" STUB_STATE="$STATE" \
     bash "$REPO/scripts/deploy-demo.sh" "$@" <"$input" >"$STATE/out.log" 2>&1
   RC=$?
   set -e
@@ -158,14 +157,6 @@ expect_eq "$(count '^wrangler pages project create')" 0 'project not recreated'
 expect_eq "$(count '^wrangler pages deploy ')" 1 'deploy still runs'
 expect_contains 'already exists' 'already exists'
 echo "ok second run skips project creation and redeploys"
-
-# --- VITE_ABOUT_URL passed through -----------------------------------------
-
-new_state about_url
-VITE_ABOUT_URL='https://bower.example/what-is-bower' run_script about_url ok /dev/null
-expect_eq "$RC" 0 'exit code'
-expect_eq "$(count 'build:demo VITE_ABOUT_URL=https://bower.example/what-is-bower$')" 1 'VITE_ABOUT_URL forwarded to the build'
-echo "ok VITE_ABOUT_URL is forwarded to the demo build"
 
 # --- --project NAME ---------------------------------------------------------
 

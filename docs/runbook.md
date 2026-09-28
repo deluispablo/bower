@@ -422,7 +422,7 @@ Deploy or redeploy it with:
 scripts/deploy-demo.sh
 ```
 
-This builds the app (`pnpm -C app build:demo`) and pushes `app/dist` to its own Cloudflare Pages project, `bower-demo` (pass `--project NAME` to use a different one, e.g. for a staging copy). Nothing needs to be set: the demo's "Run your own Bower" screen (the banner's **Run your own**) links to this runbook on GitHub and opens the app's own nine "What is Bower" pages, so the app no longer reads `VITE_ABOUT_URL` (the script still forwards it when set; it has no effect). It creates the Pages project the first time, the same way `scripts/deploy.sh` does for the real app's `bower-app` project — and, like that script, it never touches the Worker, KV or any secret, since the demo has no backend of its own.
+This builds the app (`pnpm -C app build:demo`) and pushes `app/dist` to its own Cloudflare Pages project, `bower-demo` (pass `--project NAME` to use a different one, e.g. for a staging copy). Nothing needs to be set: the demo's "Run your own Bower" screen (the banner's **Run your own**) links to this runbook on GitHub and opens the app's own nine "What is Bower" pages. It creates the Pages project the first time, the same way `scripts/deploy.sh` does for the real app's `bower-app` project — and, like that script, it never touches the Worker, KV or any secret, since the demo has no backend of its own.
 
 A real instance's build (`pnpm -C app build`) adds `<meta name="robots" content="noindex">` to `index.html` so search engines skip it; the demo build leaves it out, so it stays indexable.
 
