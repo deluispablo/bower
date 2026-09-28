@@ -17,7 +17,11 @@
  * The demo build (`isDemo()`) swaps in its own sentence instead
  * (`demoConfirmSentenceParts`, #489, `Demo-Tidy-Confirm` board): "in the
  * inbox" rather than "waiting", "In your own Bower..." rather than "A
- * tidy-up...", since what follows is a recording.
+ * tidy-up...", since what follows is a recording. That swap is for the
+ * whole-inbox tidy-up only; a waiting request's own "Do it now" (#501,
+ * `Phone-Bower-Requests` board item 2.4) opens this sheet with
+ * `kind="request"` instead — its own title, count line and button, about
+ * the request rather than a pile of files, in the demo or not.
  */
 
 import { useRef } from 'preact/hooks';
@@ -63,7 +67,9 @@ export function confirmSentenceParts(count: number): {
  * The demo's own confirmation sentence (#489, `Demo-Tidy-Confirm` board):
  * "in the inbox", not "waiting", and "In your own Bower..." rather than
  * "A tidy-up...", since what follows is a recording, not a real one.
- * Demo build only (`isDemo()`); the real sentence above is unchanged.
+ * Demo build only (`isDemo()`); the real sentence above is unchanged. Only
+ * for the whole-inbox tidy-up (`kind === 'tidy'`) — a request's own "Do
+ * it now" below keeps its own copy in the demo too.
  */
 export function demoConfirmSentenceParts(count: number): {
   lead: string;
@@ -78,17 +84,45 @@ export function demoConfirmSentenceParts(count: number): {
   };
 }
 
+/**
+ * The same split for "Do it now" on a request (#501, `Phone-Bower-Requests`
+ * board, item 2.4): the count is the request or requests themselves, not
+ * files waiting in the inbox, and the run is instructions-only, so the
+ * tidy-up's "add the whole pile first" reasoning does not apply.
+ */
+export function requestConfirmSentenceParts(count: number): {
+  lead: string;
+  rest: string;
+} {
+  const lead = `${count} ${count === 1 ? 'request' : 'requests'}`;
+  const verb = count === 1 ? 'is' : 'are';
+  const pronoun = count === 1 ? 'it' : 'them';
+  const possessive = count === 1 ? 'its' : 'their';
+  return {
+    lead,
+    rest: `${verb} waiting. Do it now runs ${pronoun} on ${possessive} own, in one turn of your Claude plan.`,
+  };
+}
+
+/** "tidy": the whole-inbox confirmation every Tidy up opens (unchanged).
+ * "request": a waiting request's own "Do it now" (#501) — its own title,
+ * count line and button, about the request rather than a pile of files. */
+export type TidyConfirmKind = 'tidy' | 'request';
+
 export interface TidyConfirmSheetProps {
-  /** How many things the sentence counts (see `run-store.ts#tidyUp`). */
+  /** How many things the sentence counts (see `run-store.ts#tidyUp`/`doItNow`). */
   count: number;
-  /** "Yes, tidy up": starts the run. */
+  /** Which copy to show (see `TidyConfirmKind`). Defaults to `'tidy'`. */
+  kind?: TidyConfirmKind;
+  /** "Yes, tidy up"/"Yes, do it now": starts the run. */
   onConfirm: () => void;
-  /** "Add more first", the backdrop, or Escape: no run starts. */
+  /** The secondary button, the backdrop, or Escape: no run starts. */
   onDismiss: () => void;
 }
 
 export function TidyConfirmSheet({
   count,
+  kind = 'tidy',
   onConfirm,
   onDismiss,
 }: TidyConfirmSheetProps): JSX.Element {
@@ -96,9 +130,13 @@ export function TidyConfirmSheet({
   useFocusTrap(panelRef, onDismiss);
   const guardedDismiss = useDismissGuard(onDismiss);
 
-  const { lead, rest } = isDemo()
-    ? demoConfirmSentenceParts(count)
-    : confirmSentenceParts(count);
+  const isRequest = kind === 'request';
+  const { lead, rest } = isRequest
+    ? requestConfirmSentenceParts(count)
+    : isDemo()
+      ? demoConfirmSentenceParts(count)
+      : confirmSentenceParts(count);
+  const title = isRequest ? 'Run this now?' : 'Is that everything?';
 
   return (
     <div class="tidy-confirm">
@@ -112,25 +150,25 @@ export function TidyConfirmSheet({
         class="tidy-confirm-panel"
         role="dialog"
         aria-modal="true"
-        aria-label="Is that everything?"
+        aria-label={title}
         tabIndex={-1}
       >
         <Bird state="idle" face="curious" size={84} />
-        <h2 class="tidy-confirm-title">Is that everything?</h2>
+        <h2 class="tidy-confirm-title">{title}</h2>
         <p class="tidy-confirm-text">
           <b>{lead}</b> {rest}
         </p>
         {isDemo() && <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>}
         <button type="button" class="tidy-confirm-button" onClick={onConfirm}>
           <IconSparkle />
-          Yes, tidy up
+          {isRequest ? 'Yes, do it now' : 'Yes, tidy up'}
         </button>
         <button
           type="button"
           class="tidy-confirm-button tidy-confirm-button-secondary"
           onClick={onDismiss}
         >
-          Add more first
+          {isRequest ? 'Not now' : 'Add more first'}
         </button>
       </div>
     </div>

@@ -392,6 +392,12 @@ export interface RunStore extends RunState {
   confirmOpen: boolean;
   /** The count the confirmation shows (see `tidyUp`). */
   confirmCount: number;
+  /**
+   * `'all'` for `tidyUp()`'s whole-inbox confirmation, `'instructions'` for
+   * `doItNow()`'s (#501): which copy `TidyConfirmSheet` shows
+   * (`run-sheets.tsx` maps this to its `kind` prop).
+   */
+  confirmScope: RunScope;
   /** The confirmation's "Yes, tidy up": closes it and starts the run. */
   confirmTidyUp: () => void;
   /** The confirmation's "Add more first": closes it, no run starts. */
@@ -665,6 +671,7 @@ export function RunProvider({ children }: RunProviderProps) {
     dismissSheet,
     confirmOpen,
     confirmCount,
+    confirmScope,
     confirmTidyUp,
     dismissConfirm,
     now,
