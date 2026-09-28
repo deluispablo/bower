@@ -1,26 +1,40 @@
 /**
- * A note Bower wrote because it was asked (handover D.4, issue #351) opens
- * with two sections the reading view shows its own way:
+ * Bower's note in the reading view (spec §6.7 R-NOTE-1/2/3/6, §7 R-AG-3;
+ * boards `Phone-Note-Bower`, `Phone-Note-Long`, `Flow-06-Dots`,
+ * `Flow-07-Answer`).
  *
- * - `## Bower's note`: the conclusions box. Each bullet starts with ✅, ⚠️
- *   or ❌, shown as a coloured chip that always carries its word (Fine,
- *   Check, Problem), so colour is never the only signal.
- * - `## What Bower used`: the sources list, each item's trailing
- *   `(origin)` — "from the file", "looked up on the web" — set apart.
+ * The agent writes its note as Obsidian callouts (D10):
  *
- * `transformBowerSections` rewrites marked's token list (the
- * `processAllTokens` hook in `render.ts`); `bowerNoteExtensions` renders the
- * tokens it creates. Everything else in a note is left as it was.
+ * - `> [!bower] Bower's note`: the box at the top. One line per finding,
+ *   each ending with its origin in brackets — `(from the file)`,
+ *   `(from your notes: [[A]], [[B]])`, `(looked up)`,
+ *   `(from what you told me)` — and, when the person must look, `— Check`.
+ *   Each row gets its origin square (colour and icon), the box a legend
+ *   naming the origins present, so colour is never the only signal.
+ * - `> [!bower]- Bower on this section`: a smaller box at the start of a
+ *   section, collapsible; `-` means folded by default, as in Obsidian.
+ *
+ * Notes written before v4 use `## Bower's note` with ✅ ⚠️ ❌ bullets; they
+ * render in the same box (✅ no word, ⚠️ "Check", ❌ "Problem").
+ * `## What Bower used` becomes one compact "Used:" line.
+ *
+ * The block extensions in `bowerNoteExtensions` turn both forms into
+ * `bowerBox` tokens; `transformBowerSections` (the `processAllTokens` hook in
+ * `render.ts`) names each section box after its heading, adds the contents
+ * strip and the "Used:" line. Every piece of note text is either escaped
+ * here or lexed as Markdown, and all of it goes through the sanitizer in
+ * `render.ts`; wikilinks resolve through `wikilinks.ts`.
  */
 
 import type { Token, Tokens, TokenizerAndRendererExtension } from 'marked';
 
-import { escapeHtml } from './html.js';
+import type { OriginKind } from '../components/folder-mark.js';
+import { escapeHtml, headingAnchor } from './html.js';
 
-/** What a conclusion's leading marker means. */
+/** What a conclusion's leading marker (v3) or `— Check` (v4) means. */
 export type ConclusionTone = 'fine' | 'check' | 'problem';
 
-/** The word shown with each tone's colour. */
+/** The word shown with a tone; "Fine" is never shown (R-NOTE-2). */
 export const TONE_WORDS: Readonly<Record<ConclusionTone, string>> = {
   fine: 'Fine',
   check: 'Check',
@@ -71,6 +85,77 @@ export function splitOrigin(text: string): {
   return { source: text.slice(0, match.index), origin };
 }
 
+/**
+ * Which of the four origins a bracket names: "from the file", "from your
+ * notes: …", "looked up (on the web)", "from what you told me". Anything
+ * else is not an origin.
+ */
+export function originKind(origin: string): OriginKind | undefined {
+  const text = origin.toLowerCase();
+  if (/\byour notes?\b/.test(text)) return 'notes';
+  if (/\bfile\b/.test(text)) return 'file';
+  if (/\blooked up\b|\bweb\b/.test(text)) return 'web';
+  if (/\btold me\b|^you$/.test(text)) return 'you';
+  return undefined;
+}
+
+/** The legend's words for each origin, in the legend's order. */
+export const ORIGIN_WORDS: Readonly<Record<OriginKind, string>> = {
+  file: 'the file',
+  notes: 'your notes',
+  web: 'looked up',
+  you: 'you',
+};
+
+const ORIGIN_ORDER: readonly OriginKind[] = ['file', 'notes', 'web', 'you'];
+
+/** A trailing `— Check` (em or en dash, or a spaced hyphen). */
+const CHECK_PATTERN = /(?:[ \t]*[—–]|[ \t]+-{1,2})[ \t]*Check[ \t]*$/;
+
+/** A list bullet at the start of a line. */
+const BULLET_PATTERN = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+/;
+
+/** One line of Bower's note, taken apart. */
+export interface BowerLine {
+  tone: ConclusionTone | undefined;
+  /** The line's text without marker, origin bracket or `— Check`. */
+  text: string;
+  origin: OriginKind | undefined;
+  /** `[[…]]` links named in a "your notes" bracket, as written. */
+  joined: string[];
+}
+
+function stripCheck(text: string): { text: string; check: boolean } {
+  const match = CHECK_PATTERN.exec(text);
+  if (match === null) return { text, check: false };
+  return { text: text.slice(0, match.index), check: true };
+}
+
+/**
+ * Takes one line of the note apart: `- ⚠️ text`, `text (from the file)`,
+ * `text (from your notes: [[A]]) — Check`. A bracket that names no origin
+ * stays part of the text.
+ */
+export function parseBowerLine(line: string): BowerLine {
+  const { tone: marker, rest } = conclusionTone(
+    line.replace(BULLET_PATTERN, ''),
+  );
+  let { text, check } = stripCheck(rest.trim());
+  const { source, origin } = splitOrigin(text);
+  const kind = origin === undefined ? undefined : originKind(origin);
+  if (origin !== undefined && kind !== undefined) {
+    const after = stripCheck(source.trim());
+    text = after.text;
+    check = check || after.check;
+  }
+  const joined =
+    kind === 'notes' && origin !== undefined
+      ? [...new Set(origin.match(/\[\[[^[\]\n]+?\]\]/g) ?? [])]
+      : [];
+  const tone = marker ?? (check ? 'check' : undefined);
+  return { tone, text: text.trim(), origin: kind, joined };
+}
+
 /** Heading text without emphasis markers, curly apostrophes made straight. */
 function headingKey(text: string): string {
   return text
@@ -80,19 +165,97 @@ function headingKey(text: string): string {
     .toLowerCase();
 }
 
+/** Heading text as shown in a label: no emphasis, wikilinks by their text. */
+function plainHeading(text: string): string {
+  return text
+    .replace(/!?\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, '$1')
+    .replace(/[*_`]+/g, '')
+    .trim();
+}
+
 const NOTE_HEADING = "bower's note";
+const SECTION_TITLE = 'Bower on this section';
 const SOURCES_HEADING = 'what bower used';
 
-/** One row of the conclusions box. */
-interface ConclusionRow {
+/** One row of a box, its text lexed as inline Markdown. */
+interface BoxRow {
   tone: ConclusionTone | undefined;
+  origin: OriginKind | undefined;
   tokens: Token[];
 }
 
-/** One item of the sources list. */
-interface SourceItem {
-  origin: string | undefined;
-  tokens: Token[];
+type BoxVariant = 'top' | 'section';
+
+interface LexerLike {
+  inline(src: string, tokens?: Token[]): Token[];
+}
+
+/** A `bowerBox` token from the note's lines. */
+function boxToken(
+  lexer: LexerLike,
+  raw: string,
+  variant: BoxVariant,
+  title: string,
+  open: boolean,
+  lines: readonly string[],
+): Tokens.Generic {
+  const parsed = lines.map(parseBowerLine).filter((line) => line.text !== '');
+  const joined = [...new Set(parsed.flatMap((line) => line.joined))];
+  return {
+    type: 'bowerBox',
+    raw,
+    variant,
+    title,
+    open,
+    rows: parsed.map((line): BoxRow => ({
+      tone: line.tone,
+      origin: line.origin,
+      tokens: lexer.inline(line.text),
+    })),
+    joined: joined.map((link) => lexer.inline(link)),
+  };
+}
+
+const BOWER_CALLOUT =
+  /^ {0,3}>[ \t]?\[!bower\]([+-]?)[ \t]*([^\n]*)(?:\n|$)((?: {0,3}>[^\n]*(?:\n|$))*)/i;
+
+const V3_HEADING = /^ {0,3}#{1,6}[ \t]+([^\n]*?)[ \t]*#*[ \t]*(?:\n|$)/;
+
+const NEXT_HEADING = /^ {0,3}#{1,6}[ \t]/m;
+
+/** The body of a v3 `## Bower's note`: bullets, continuations joined. */
+function v3Lines(body: string): string[] {
+  const lines: string[] = [];
+  for (const line of body.split('\n')) {
+    if (line.trim() === '') continue;
+    const last = lines.length - 1;
+    if (/^[ \t]+\S/.test(line) && !BULLET_PATTERN.test(line) && last >= 0) {
+      lines[last] = `${lines[last] ?? ''} ${line.trim()}`;
+    } else {
+      lines.push(line);
+    }
+  }
+  return lines;
+}
+
+/** One "Used:" item: its inline tokens, the trailing origin dropped. */
+function usedItem(item: Tokens.ListItem): Token[] {
+  const first = item.tokens[0];
+  const inline: unknown =
+    first !== undefined && (first.type === 'text' || first.type === 'paragraph')
+      ? first.tokens
+      : undefined;
+  if (!Array.isArray(inline)) return [];
+  const tokens = inline as Token[];
+  const tail = tokens[tokens.length - 1];
+  if (tail?.type !== 'text' || typeof tail.text !== 'string') return tokens;
+  const { source, origin } = splitOrigin(tail.text);
+  if (origin === undefined) return tokens;
+  const rest: Token[] =
+    source.trim() === ''
+      ? []
+      : [{ ...tail, raw: source.trimEnd(), text: source.trimEnd() }];
+  return [...tokens.slice(0, -1), ...rest];
 }
 
 function isHeading(token: Token): token is Tokens.Heading {
@@ -103,199 +266,262 @@ function isList(token: Token): token is Tokens.List {
   return token.type === 'list';
 }
 
-/**
- * The item's first line of inline tokens (a tight item's `text` block or a
- * loose item's paragraph), where the marker and the origin live.
- */
-function firstInlineTokens(item: Tokens.ListItem): Token[] | undefined {
-  const first = item.tokens[0];
-  if (first === undefined) return undefined;
-  if (first.type !== 'text' && first.type !== 'paragraph') return undefined;
-  const inline: unknown = first.tokens;
-  return Array.isArray(inline) ? (inline as Token[]) : undefined;
+function isBox(token: Token, variant: BoxVariant): boolean {
+  return token.type === 'bowerBox' && token.variant === variant;
+}
+
+/** One entry of the contents strip. */
+interface ContentsEntry {
+  text: string;
+  anchor: string;
+  noted: boolean;
 }
 
 /**
- * `item.tokens` with the first block's inline tokens replaced, copying only
- * what changes (the tokens came from this render's lexer, but the transform
- * stays pure for its tests).
- */
-function withInline(item: Tokens.ListItem, inline: Token[]): Token[] {
-  const [first, ...others] = item.tokens;
-  if (first === undefined) return item.tokens;
-  return [{ ...first, tokens: inline }, ...others];
-}
-
-/** A plain inline text token, whose `text` is a string. */
-function textToken(token: Token | undefined): Tokens.Text | undefined {
-  if (token?.type !== 'text') return undefined;
-  const text: unknown = token.text;
-  return typeof text === 'string' ? (token as Tokens.Text) : undefined;
-}
-
-function conclusionRow(item: Tokens.ListItem): ConclusionRow {
-  const { tone } = conclusionTone(item.text);
-  const inline = firstInlineTokens(item);
-  const head = textToken(inline?.[0]);
-  if (tone === undefined || inline === undefined || head === undefined) {
-    return { tone, tokens: item.tokens };
-  }
-  const text = conclusionTone(head.text).rest;
-  const raw = conclusionTone(head.raw).rest;
-  const stripped: Token = { ...head, raw, text };
-  return { tone, tokens: withInline(item, [stripped, ...inline.slice(1)]) };
-}
-
-function sourceItem(item: Tokens.ListItem): SourceItem {
-  const inline = firstInlineTokens(item);
-  const tail = textToken(inline?.[inline.length - 1]);
-  if (inline === undefined || tail === undefined) {
-    return { origin: undefined, tokens: item.tokens };
-  }
-  const { source, origin } = splitOrigin(tail.text);
-  if (origin === undefined) return { origin, tokens: item.tokens };
-  const rest: Token[] =
-    source === ''
-      ? []
-      : [{ ...tail, raw: splitOrigin(tail.raw).source, text: source }];
-  return {
-    origin,
-    tokens: withInline(item, [...inline.slice(0, -1), ...rest]),
-  };
-}
-
-function rawOf(tokens: readonly Token[]): string {
-  return tokens.map((token) => token.raw).join('');
-}
-
-/**
- * Rewrites the note's top-level tokens: `## Bower's note` and everything up
- * to the next heading becomes one `bowerNote` token (its lists become
- * `bowerConclusions`); the first list right after `## What Bower used`
- * becomes `bowerSources`, the heading itself staying a heading. Any other
- * token is returned as it was.
+ * Rewrites the note's top-level tokens: each section box learns its
+ * section's heading, `## What Bower used` and its list become one
+ * `bowerUsed` line, and when the note has a top box and at least one
+ * section box, a `bowerContents` strip follows the top box. Any other token
+ * is returned as it was.
  */
 export function transformBowerSections(tokens: readonly Token[]): Token[] {
   const out: Token[] = [];
+  const entries: ContentsEntry[] = [];
+  let section: ContentsEntry | undefined;
+  let heading: string | undefined;
   let i = 0;
   while (i < tokens.length) {
     const token = tokens[i];
     i += 1;
     if (token === undefined) continue;
+    if (isBox(token, 'section')) {
+      if (section !== undefined) section.noted = true;
+      out.push({ ...token, section: heading });
+      continue;
+    }
     if (!isHeading(token)) {
       out.push(token);
       continue;
     }
-    const key = headingKey(token.text);
-    if (key === NOTE_HEADING) {
-      const children: Token[] = [];
-      while (i < tokens.length) {
-        const next = tokens[i];
-        if (next === undefined || isHeading(next)) break;
-        children.push(
-          isList(next)
-            ? {
-                type: 'bowerConclusions',
-                raw: next.raw,
-                rows: next.items.map(conclusionRow),
-              }
-            : next,
-        );
-        i += 1;
+    if (headingKey(token.text) === SOURCES_HEADING) {
+      let j = i;
+      while (tokens[j]?.type === 'space') j += 1;
+      const list = tokens[j];
+      if (list !== undefined && isList(list)) {
+        out.push({
+          type: 'bowerUsed',
+          raw: token.raw + list.raw,
+          items: list.items.map(usedItem).filter((item) => item.length > 0),
+        });
+        i = j + 1;
+        continue;
       }
-      out.push({
-        type: 'bowerNote',
-        raw: token.raw + rawOf(children),
-        tokens: children,
-      });
-      continue;
     }
     out.push(token);
-    if (key !== SOURCES_HEADING) continue;
-    while (tokens[i]?.type === 'space') {
-      const space = tokens[i];
-      if (space !== undefined) out.push(space);
-      i += 1;
+    heading = plainHeading(token.text);
+    section = undefined;
+    if (token.depth === 2) {
+      section = {
+        text: heading,
+        anchor: headingAnchor(token.text),
+        noted: false,
+      };
+      entries.push(section);
     }
-    const list = tokens[i];
-    if (list !== undefined && isList(list)) {
-      out.push({
-        type: 'bowerSources',
-        raw: list.raw,
-        ordered: list.ordered,
-        items: list.items.map(sourceItem),
-      });
-      i += 1;
-    }
+  }
+  const top = out.findIndex((token) => isBox(token, 'top'));
+  if (top >= 0 && entries.some((entry) => entry.noted)) {
+    out.splice(top + 1, 0, {
+      type: 'bowerContents',
+      raw: '',
+      entries,
+    });
   }
   return out;
 }
 
-function rowsOf(token: Tokens.Generic): ConclusionRow[] {
-  const rows: unknown = token.rows;
-  return Array.isArray(rows) ? (rows as ConclusionRow[]) : [];
+function arrayField<T>(token: Tokens.Generic, name: string): T[] {
+  const value: unknown = token[name];
+  return Array.isArray(value) ? (value as T[]) : [];
 }
 
-function itemsOf(token: Tokens.Generic): SourceItem[] {
-  const items: unknown = token.items;
-  return Array.isArray(items) ? (items as SourceItem[]) : [];
+function stringField(token: Tokens.Generic, name: string): string {
+  const value: unknown = token[name];
+  return typeof value === 'string' ? value : '';
 }
 
-function childrenOf(token: Tokens.Generic): Token[] {
-  const children: unknown = token.tokens;
-  return Array.isArray(children) ? (children as Token[]) : [];
+interface InlineParser {
+  parseInline(tokens: Token[]): string;
+}
+
+function rowHtml(parser: InlineParser, row: BoxRow): string {
+  const tone = row.tone === undefined ? '' : ` bower-note-${row.tone}`;
+  const square =
+    row.origin === undefined
+      ? ''
+      : `<span class="bower-origin bower-origin-${row.origin}" title="${escapeHtml(capitalized(ORIGIN_WORDS[row.origin]))}"></span>`;
+  const word =
+    row.tone === 'check' || row.tone === 'problem'
+      ? `<span class="bower-note-word">${TONE_WORDS[row.tone]}</span>`
+      : '';
+  return (
+    `<li class="bower-note-row${tone}">${square}` +
+    `<div class="bower-note-text">${parser.parseInline(row.tokens)}</div>` +
+    `${word}</li>\n`
+  );
+}
+
+function capitalized(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** "· from the file, your notes": only the origins present, in order. */
+function legendHtml(rows: readonly BoxRow[]): string {
+  const present = ORIGIN_ORDER.filter((kind) =>
+    rows.some((row) => row.origin === kind),
+  );
+  if (present.length === 0) return '';
+  const words = present
+    .map(
+      (kind) => `<em class="bower-legend-${kind}">${ORIGIN_WORDS[kind]}</em>`,
+    )
+    .join(', ');
+  return `<div class="bower-note-legend">· from ${words}</div>`;
+}
+
+function joinedHtml(parser: InlineParser, links: Token[][]): string {
+  if (links.length === 0) return '';
+  const chips = links
+    .map(
+      (link) =>
+        `<span class="bower-joined-chip">${parser.parseInline(link)}</span>`,
+    )
+    .join('');
+  return (
+    '<div class="bower-joined">' +
+    `<span class="bower-joined-label">Joined from:</span>${chips}</div>\n`
+  );
 }
 
 /**
- * Renderers for the tokens `transformBowerSections` creates. The class
- * names are styled in `styles/markdown.css`; the sanitizer keeps `class`.
+ * The block tokenizers for both forms of the note and the renderers for
+ * the tokens they and `transformBowerSections` create. The class names are
+ * styled in `styles/markdown.css`; the sanitizer keeps `class`.
  */
 export const bowerNoteExtensions: TokenizerAndRendererExtension[] = [
   {
-    name: 'bowerNote',
-    renderer(token) {
-      const body = this.parser.parse(childrenOf(token));
-      return (
-        '<div class="bower-note">' +
-        `<div class="bower-note-title">Bower's note</div>` +
-        `${body}</div>\n`
+    // v3: `## Bower's note` and everything up to the next heading.
+    name: 'bowerV3Note',
+    level: 'block',
+    start: (src) =>
+      src.match(/^ {0,3}#{1,6}[ \t]+[*_]*Bower['’]s note/im)?.index,
+    tokenizer(src) {
+      const match = V3_HEADING.exec(src);
+      if (match === null || headingKey(match[1] ?? '') !== NOTE_HEADING) {
+        return undefined;
+      }
+      const rest = src.slice(match[0].length);
+      const next = NEXT_HEADING.exec(rest);
+      const body = next === null ? rest : rest.slice(0, next.index);
+      return boxToken(
+        this.lexer,
+        match[0] + body,
+        'top',
+        "Bower's note",
+        true,
+        v3Lines(body),
       );
     },
   },
   {
-    name: 'bowerConclusions',
-    renderer(token) {
-      const rows = rowsOf(token)
-        .map(({ tone, tokens }) => {
-          const text = this.parser.parse(tokens);
-          if (tone === undefined) {
-            return `<li class="bower-note-row"><div class="bower-note-text">${text}</div></li>\n`;
-          }
-          return (
-            `<li class="bower-note-row bower-note-${tone}">` +
-            `<span class="bower-note-word">${TONE_WORDS[tone]}</span>` +
-            `<div class="bower-note-text">${text}</div></li>\n`
-          );
-        })
-        .join('');
-      return `<ul class="bower-note-rows">\n${rows}</ul>\n`;
+    // v4: `> [!bower] Bower's note` and `> [!bower]- Bower on this section`.
+    name: 'bowerCallout',
+    level: 'block',
+    start: (src) => src.match(/^ {0,3}>[ \t]?\[!bower\]/im)?.index,
+    tokenizer(src) {
+      const match = BOWER_CALLOUT.exec(src);
+      if (match === null) return undefined;
+      const fold = match[1] ?? '';
+      const title = (match[2] ?? '').trim();
+      const section =
+        fold !== '' || headingKey(title) === SECTION_TITLE.toLowerCase();
+      const lines = (match[3] ?? '')
+        .split('\n')
+        .map((line) => line.replace(/^ {0,3}>[ \t]?/, ''))
+        .filter((line) => line.trim() !== '');
+      return boxToken(
+        this.lexer,
+        match[0],
+        section ? 'section' : 'top',
+        title !== '' ? title : section ? SECTION_TITLE : "Bower's note",
+        fold !== '-',
+        lines,
+      );
     },
   },
   {
-    name: 'bowerSources',
+    name: 'bowerBox',
     renderer(token) {
-      const tag = token.ordered === true ? 'ol' : 'ul';
-      const items = itemsOf(token)
-        .map(({ origin, tokens }) => {
-          const text = this.parser.parse(tokens);
-          const tail =
-            origin === undefined
-              ? ''
-              : ` <span class="bower-source-origin">(${escapeHtml(origin)})</span>`;
-          return `<li>${text}${tail}</li>\n`;
-        })
+      const rows = arrayField<BoxRow>(token, 'rows');
+      const list =
+        rows.length === 0
+          ? ''
+          : `<ul class="bower-note-rows">\n${rows
+              .map((row) => rowHtml(this.parser, row))
+              .join('')}</ul>\n`;
+      const joined = joinedHtml(this.parser, arrayField(token, 'joined'));
+      const title = escapeHtml(stringField(token, 'title'));
+      if (token.variant !== 'section') {
+        return (
+          '<div class="bower-note"><div class="bower-note-head">' +
+          `<div class="bower-note-title">${title}</div>` +
+          `${legendHtml(rows)}</div>${list}</div>\n${joined}`
+        );
+      }
+      const name = stringField(token, 'section');
+      const count = `${rows.length} ${rows.length === 1 ? 'line' : 'lines'}`;
+      const folded =
+        name === ''
+          ? `${SECTION_TITLE}: ${count}`
+          : `Bower on “${name}”: ${count}`;
+      const open = token.open === true ? ' open=""' : '';
+      return (
+        `<details class="bower-section"${open}>` +
+        '<summary class="bower-section-head">' +
+        `<span class="bower-section-title">${title}</span>` +
+        `<span class="bower-section-folded">${escapeHtml(folded)}</span>` +
+        `</summary>${list}</details>\n${joined}`
+      );
+    },
+  },
+  {
+    name: 'bowerContents',
+    renderer(token) {
+      const links = arrayField<ContentsEntry>(token, 'entries')
+        .map(
+          ({ text, anchor, noted }) =>
+            `<a class="bower-contents-link${noted ? ' bower-contents-noted' : ''}"` +
+            ` href="#${escapeHtml(anchor)}">` +
+            (noted
+              ? '<span class="bower-contents-mark" title="Bower on this section"></span>'
+              : '<span class="bower-contents-mark"></span>') +
+            `${escapeHtml(text)}</a>`,
+        )
         .join('');
-      return `<${tag} class="bower-sources">\n${items}</${tag}>\n`;
+      return `<div class="bower-contents">${links}</div>\n`;
+    },
+  },
+  {
+    name: 'bowerUsed',
+    renderer(token) {
+      const items = arrayField<Token[]>(token, 'items');
+      const last = items[items.length - 1];
+      const lastRaw = last?.map((part) => part.raw).join('') ?? '';
+      const stop = /[.!?]\s*$/.test(lastRaw) ? '' : '.';
+      const list = items
+        .map((item) => this.parser.parseInline(item))
+        .join(', ');
+      return `<p class="bower-used">Used: ${list}${stop}</p>\n`;
     },
   },
 ];
