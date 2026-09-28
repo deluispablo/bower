@@ -67,6 +67,7 @@ async function baseInput(
     areasFolderId: areasFolder.id,
     existingAreaNames,
     answers,
+    on: '2026-09-28',
   };
 }
 
