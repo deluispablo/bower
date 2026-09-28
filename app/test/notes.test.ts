@@ -63,6 +63,20 @@ vi.mock('../src/session.js', () => ({
 
 const openSwitcher = vi.fn();
 
+// The tree reads what is new (`useNew`) and its saved expansion.
+vi.mock('../src/run-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/run-store.js')>()),
+  useRun: () => ({ lastFinished: null }),
+}));
+
+vi.mock('../src/cache.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/cache.js')>()),
+  loadSeen: () => Promise.resolve([]),
+  saveSeen: () => Promise.resolve(),
+  loadTreeState: () => Promise.resolve(undefined),
+  saveTreeState: () => Promise.resolve(),
+}));
+
 vi.mock('../src/switcher-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/switcher-store.js')>()),
   openSwitcher: () => {

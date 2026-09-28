@@ -94,6 +94,10 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
 vi.mock('../src/cache.js', () => ({
   loadIndex: () => Promise.resolve(undefined),
   loadNote: () => Promise.resolve(undefined),
+  loadSeen: () => Promise.resolve([]),
+  saveSeen: () => Promise.resolve(),
+  loadTreeState: () => Promise.resolve(undefined),
+  saveTreeState: () => Promise.resolve(),
 }));
 
 const { Layout, avatarInitial } = await import('../src/components/layout.js');
@@ -330,8 +334,8 @@ describe('Layout', () => {
       'nav[aria-label="Primary"] a[href="/"]',
     );
     expect(home.querySelector('.nav-badge')).toBeNull();
-    // Sanity: the fixture's one pending file is `0-Inbox/Receipt.pdf`.
-    expect(sidebar.textContent).toContain('0-Inbox');
+    // Sanity: the fixture's one pending file is `0-Inbox/Receipt.pdf` (the tree names its folder Inbox).
+    expect(sidebar.textContent).toContain('Inbox');
   });
 
   it('renders content from the actions shell slot in the bar', () => {
