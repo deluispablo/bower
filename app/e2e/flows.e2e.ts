@@ -223,6 +223,24 @@ test('the phone greeting is one line at 24 px, even with a long given name (#500
   await shot(page, testInfo, 'home-greeting-long-name');
 });
 
+test('the phone greeting shows a short given name in full, not cut (#551)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'phone',
+    'The 243 px box only happens at the phone width.',
+  );
+  await openHome(page);
+  const heading = page.getByRole('heading', { name: /^Good \w+, Alex$/ });
+  await expect(heading).toBeVisible();
+
+  // No ellipsis: the text's own scrollWidth fits inside the rendered box.
+  const overflowing = await heading.evaluate(
+    (el) => el.scrollWidth > el.clientWidth,
+  );
+  expect(overflowing).toBe(false);
+});
+
 test('the demo banner carries Run your own on Home, Add and Settings (#362)', async ({
   page,
 }, testInfo) => {
