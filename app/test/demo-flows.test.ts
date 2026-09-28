@@ -166,6 +166,16 @@ describe('demo mode', () => {
     expect(done?.state).toBe('done');
     expect(done?.processed).toHaveLength(3);
     expect(done?.processed).toContain('0-Inbox/Tomato seedlings.md');
+    // Each item says where it went (New, #652); none was renamed.
+    expect(done?.items).toContainEqual({
+      path: '0-Inbox/Tomato seedlings.md',
+      kind: 'file',
+      to: '2-Areas/Garden/Tomato seedlings.md',
+    });
+    for (const item of done?.items ?? []) {
+      expect(item.to).toEqual(expect.any(String));
+      expect(item.renamedFrom).toBeUndefined();
+    }
 
     const after = await paths();
     expect(after.filter(isInboxItem)).toHaveLength(0);
