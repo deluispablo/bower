@@ -1527,6 +1527,61 @@ test('At 1920 a note and its About panel are one row next to the measure, centre
   await shot(page, testInfo, 'note-measure-1920');
 });
 
+/** The desktop widths every wide screen is drawn and checked at (#359,
+ * Desktop-Responsive board; `docs/testing.md`). */
+const DESKTOP_WIDTHS = [1024, 1280, 1440, 1920] as const;
+
+test('Home, a note, Add, the Bower tab and Settings at 1024, 1280, 1440 and 1920; nothing changes above 1200 (#359)', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'The four desktop widths; the phone project has its own.',
+  );
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openHome(page);
+
+  // Each screen, reached the way a person would, then read back at every
+  // width (resizing keeps the page and its state).
+  const screens: [string, () => Promise<void>][] = [
+    ['home', () => navigate(page, /^Home$/)],
+    [
+      'note',
+      async () => {
+        await visible(
+          page.getByRole('button', { name: /Search or jump to a note/ }),
+        ).click();
+        const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+        await switcher.getByRole('combobox').fill('subscriptions renew');
+        await switcher
+          .getByRole('option', { name: /subscriptions renew/ })
+          .first()
+          .click();
+        await expect(page.locator('.bower-note')).toBeVisible();
+      },
+    ],
+    ['add', () => navigate(page, /^Add$/)],
+    ['bower', () => navigate(page, /^Bower$/)],
+    ['settings', () => openSettings(page)],
+  ];
+  const container = page.locator('.shell-container');
+  for (const [name, open] of screens) {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await open();
+    await expect(page.locator('main.content')).toBeVisible();
+    const widths: number[] = [];
+    for (const width of DESKTOP_WIDTHS) {
+      await page.setViewportSize({ width, height: 900 });
+      widths.push((await container.boundingBox())?.width ?? NaN);
+      await shot(page, testInfo, `widths-${String(width)}-${name}`);
+    }
+    // No breakpoint above 1200: past the container's own cap, a wider
+    // window only adds margin.
+    if (name !== 'note') expect(widths[3]).toBeCloseTo(widths[2] ?? NaN, 0);
+  }
+});
+
 test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#310)', async ({
   page,
 }, testInfo) => {
