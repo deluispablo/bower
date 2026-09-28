@@ -21,6 +21,11 @@
  * ("Add to this note") that used to sit on every note by default; it is a
  * rare action, so it now lives here instead, gated the same way the form
  * itself was (`!isProtectedNote`, `routes/note.tsx`).
+ *
+ * A file's screen (#350) reuses it with `noun="file"` and no pin handler:
+ * the rows then speak of "this file", and Pin to Home is left out (pins
+ * live in a note's frontmatter, which a PDF or a photo has none of). One
+ * menu for note, file and folder is #352's.
  */
 
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -42,8 +47,12 @@ import '../styles/note-menu.css';
 
 export interface NoteMenuProps {
   file: DriveFile;
-  /** The note's name with its `.md` extension stripped. */
+  /** The note's name with its `.md` extension stripped; a file's full name.
+   * Only used in the `[[link]]` Ask Bower prefills. */
   noteName: string;
+  /** What the rows call the thing: "this note" (the default) or "this
+   * file". */
+  noun?: 'note' | 'file';
   /** False for Bower's own files (spec §14): the Edit row is left out. */
   canEdit: boolean;
   /** False for a protected note (`isProtectedNote`): the Add a paragraph
@@ -51,8 +60,9 @@ export interface NoteMenuProps {
   canAppend: boolean;
   /** Whether the note currently has a `pinned` timestamp (#215, #216). */
   pinned: boolean;
-  /** Pins or unpins the note; the row's own label follows `pinned`. */
-  onTogglePin: () => void;
+  /** Pins or unpins the note; the row's own label follows `pinned`. Left
+   * out, the Pin row is too. */
+  onTogglePin?: () => void;
   onAddParagraph: () => void;
   onEdit: () => void;
   onClose: () => void;
@@ -79,6 +89,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 export function NoteMenu({
   file,
   noteName,
+  noun = 'note',
   canEdit,
   canAppend,
   pinned,
@@ -114,27 +125,29 @@ export function NoteMenu({
         ref={panelRef}
         class="note-menu-panel"
         role="menu"
-        aria-label="Note actions"
+        aria-label={noun === 'file' ? 'File actions' : 'Note actions'}
         tabIndex={-1}
       >
-        <button
-          type="button"
-          role="menuitem"
-          class="note-menu-row"
-          onClick={selectAndClose(onTogglePin)}
-        >
-          <IconPin />
-          <span class="note-menu-row-text">
-            <span class="note-menu-row-label">
-              {pinned ? 'Unpin from Home' : 'Pin to Home'}
+        {onTogglePin !== undefined && (
+          <button
+            type="button"
+            role="menuitem"
+            class="note-menu-row"
+            onClick={selectAndClose(onTogglePin)}
+          >
+            <IconPin />
+            <span class="note-menu-row-text">
+              <span class="note-menu-row-label">
+                {pinned ? 'Unpin from Home' : 'Pin to Home'}
+              </span>
+              <span class="note-menu-row-hint">
+                {pinned
+                  ? 'No longer shown on Home'
+                  : 'Shows above Recent, on every device'}
+              </span>
             </span>
-            <span class="note-menu-row-hint">
-              {pinned
-                ? 'No longer shown on Home'
-                : 'Shows above Recent, on every device'}
-            </span>
-          </span>
-        </button>
+          </button>
+        )}
         <a
           role="menuitem"
           class="note-menu-row"
@@ -143,9 +156,11 @@ export function NoteMenu({
         >
           <IconChat />
           <span class="note-menu-row-text">
-            <span class="note-menu-row-label">Ask Bower about this note</span>
+            <span class="note-menu-row-label">
+              {`Ask Bower about this ${noun}`}
+            </span>
             <span class="note-menu-row-hint">
-              Opens Tell Bower with the note attached
+              {`Opens Tell Bower with the ${noun} attached`}
             </span>
           </span>
         </a>
@@ -198,7 +213,7 @@ export function NoteMenu({
           <input
             ref={linkInputRef}
             class="note-menu-copy-fallback"
-            aria-label="This note's link"
+            aria-label={`This ${noun}'s link`}
             readOnly
             value={location.href}
           />

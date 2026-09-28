@@ -2,9 +2,21 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
+import {
+  getQueue,
+  setQueue,
+  useAddQueue,
+  type QueueItem,
+} from '../add-queue-store.js';
 import { linkNoteName } from '../add.js';
 import { Bird } from '../components/bird.js';
-import { IconNote } from '../components/icons.js';
+import {
+  IconCamera,
+  IconChevronRight,
+  IconDrive,
+  IconFile,
+  IconImage,
+} from '../components/icons.js';
 import { ProcessButton } from '../components/process-button.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import {
@@ -84,32 +96,15 @@ export async function expandPicks(
   return files;
 }
 
-type QueueStatus = 'waiting' | 'uploading' | 'done' | 'failed';
-
-interface QueueItem {
-  id: string;
-  /** A picked/dropped/shared file, a pasted link's note, or a file picked
-   * in the user's Drive and copied into the inbox. */
-  kind: 'file' | 'link' | 'drive';
-  /** Set for `kind: 'file'`. */
-  file?: File;
-  /** The original's Drive id, set for `kind: 'drive'`. */
-  driveId?: string;
-  /** The original's MIME type, set for `kind: 'drive'`: decides whether it
-   * is copied as it is or exported first (`exportPlanFor`, #218). */
-  driveMimeType?: string;
-  /** The pasted URL, kept for `kind: 'link'` so a failed save can retry. */
-  url?: string;
-  /** Possibly renamed to stay unique in the inbox. */
-  name: string;
-  status: QueueStatus;
-  /** 0–100; always 100 once `done` (a link note has no progress of its own). */
-  progress: number;
-  error?: string;
-}
-
 function isTouchDevice(): boolean {
   return typeof window !== 'undefined' && 'ontouchstart' in window;
+}
+
+/** The Added queue's type icon (#334): a picture, or a plain file for
+ * everything else — the row's name after any renaming still ends in the
+ * same extension, so this reads it straight off `item.name`. */
+function isImageName(name: string): boolean {
+  return /\.(?:jpe?g|png|gif|webp|heic|heif|bmp|svg)$/i.test(name);
 }
 
 /** `file` renamed to `name`, or `file` itself when the name did not change. */
@@ -119,24 +114,20 @@ function withName(file: File, name: string): File {
     : new File([file], name, { type: file.type });
 }
 
-/** The queue card's status line for a `kind: 'drive'` item, once done or
- * while it is being copied or exported (#218). */
-function driveStatusText(mimeType: string | undefined, done: boolean): string {
+/** The queue row's state text for a finished `kind: 'drive'` item (#334,
+ * issue 21.2): a plain copy only says where it came from; an export also
+ * says what it was saved as (#218). While it is still copying, the row
+ * shows a percentage instead, the same as any other kind. */
+function driveStateText(mimeType: string | undefined): string {
   const plan = exportPlanFor(mimeType ?? '');
-  if (plan.action !== 'export') {
-    return done
-      ? 'Copied from your Drive · the original stays where it was'
-      : 'Copying from your Drive…';
-  }
+  if (plan.action !== 'export') return 'From your Drive';
   const savedAs =
     plan.extension === '.md'
       ? 'Markdown'
       : plan.extension === '.csv'
         ? 'a table'
         : 'a PDF';
-  return done
-    ? `Saved as ${savedAs} from your Drive · the original stays where it was`
-    : `Saving as ${savedAs}…`;
+  return `From your Drive · saved as ${savedAs}`;
 }
 
 export function Add() {
@@ -159,11 +150,13 @@ export function Add() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const queueRef = useRef<QueueItem[]>([]);
   const sharedHandledRef = useRef(false);
   const driveNotesRef = useRef<string[]>([]);
 
-  const [queue, setQueue] = useState<QueueItem[]>([]);
+  // The queue itself lives in `add-queue-store.js`, outside this
+  // component, so it survives navigating away and back within the
+  // session (#334): `queue` here is just this render's snapshot.
+  const queue = useAddQueue();
   const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -229,19 +222,14 @@ export function Add() {
     return unique;
   }
 
-  // The single writer for `queue`: keeps `queueRef.current` exactly in
-  // step with every change, rather than catching up on the next render (a
-  // plain `useEffect` used to do that, one render behind). `runQueue`
-  // reads `queueRef.current` right after its last `await`, in the same
-  // tick as the last item's final status change, so a render behind was
-  // exactly one render too many -- the demo's uploads settle over a plain
-  // microtask with no real I/O, so that render never caught up in time and
-  // `finish()` (the vault refresh included) never ran (#289).
-  function setQueueSynced(next: QueueItem[]): void {
-    queueRef.current = next;
-    setQueue(next);
-  }
-
+  // `setQueue` (`add-queue-store.js`) is the single writer for the queue:
+  // it updates the module-level array synchronously, so `getQueue()`
+  // right after it is never a render behind. `runQueue` reads `getQueue()`
+  // right after its last `await`, in the same tick as the last item's
+  // final status change, so a render behind was exactly one render too
+  // many -- the demo's uploads settle over a plain microtask with no real
+  // I/O, so that render never caught up in time and `finish()` (the vault
+  // refresh included) never ran (#289).
   function addFiles(newFiles: File[]): QueueItem[] {
     const created: QueueItem[] = newFiles.map((file) => ({
       id: crypto.randomUUID(),
@@ -251,7 +239,7 @@ export function Add() {
       status: 'waiting',
       progress: 0,
     }));
-    setQueueSynced([...queueRef.current, ...created]);
+    setQueue([...getQueue(), ...created]);
     return created;
   }
 
@@ -265,14 +253,12 @@ export function Add() {
       status: 'waiting',
       progress: 0,
     }));
-    setQueueSynced([...queueRef.current, ...created]);
+    setQueue([...getQueue(), ...created]);
     return created;
   }
 
   function updateItem(id: string, patch: Partial<QueueItem>): void {
-    setQueueSynced(
-      queueRef.current.map((it) => (it.id === id ? { ...it, ...patch } : it)),
-    );
+    setQueue(getQueue().map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
 
   async function runOne(item: QueueItem, folderId: string): Promise<boolean> {
@@ -343,8 +329,8 @@ export function Add() {
       await runOne(item, inboxFolderId);
     }
     setBusy(false);
-    if (queueRef.current.length === 0) return;
-    if (!queueRef.current.every((it) => it.status === 'done')) return;
+    if (getQueue().length === 0) return;
+    if (!getQueue().every((it) => it.status === 'done')) return;
     finish();
   }
 
@@ -425,8 +411,10 @@ export function Add() {
       status: 'waiting',
       progress: 0,
     };
-    setQueueSynced([...queueRef.current, item]);
-    setLinkUrl('');
+    setQueue([...getQueue(), item]);
+    // The field keeps the link (#334, issue 21.2): clearing it made Save
+    // immediately grey out again, which read as broken rather than as a
+    // successful save.
     void runQueue([item]);
   }
 
@@ -456,6 +444,62 @@ export function Add() {
         onChange={onFileInputChange}
       />
 
+      {/* Phone: a list of doors, no drop square (spec C.6). Desktop hides
+       * this list and shows the drop zone below instead
+       * (`add.css`'s 900 px breakpoint, the same one `layout.css` uses for
+       * the sidebar). Both live in the DOM at once so neither needs its own
+       * copy of the file inputs or the disabled/online rules. */}
+      <div class="add-doors">
+        {touch && (
+          <button
+            type="button"
+            class="add-door"
+            onClick={() => cameraInputRef.current?.click()}
+          >
+            <span class="add-door-icon">
+              <IconCamera />
+            </span>
+            <span class="add-door-text">
+              <b>Take a photo</b>
+              <span>A receipt, a sign, a page of a book</span>
+            </span>
+            <IconChevronRight />
+          </button>
+        )}
+        <button
+          type="button"
+          class="add-door"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <span class="add-door-icon">
+            <IconFile />
+          </span>
+          <span class="add-door-text">
+            <b>Choose files</b>
+            <span>Photos, PDFs, screenshots, voice memos</span>
+          </span>
+          <IconChevronRight />
+        </button>
+        {GOOGLE_API_KEY !== '' && (
+          <button
+            type="button"
+            class="add-door"
+            disabled={driveDisabled}
+            aria-disabled={driveDisabled}
+            onClick={() => void onFromDrive()}
+          >
+            <span class="add-door-icon">
+              <IconDrive />
+            </span>
+            <span class="add-door-text">
+              <b>From your Drive</b>
+              <span>Copies a file in; the original stays put</span>
+            </span>
+            <IconChevronRight />
+          </button>
+        )}
+      </div>
+
       <div
         class={`add-dropzone${dragOver ? ' add-dropzone-active' : ''}`}
         onDragOver={onDragOver}
@@ -466,10 +510,7 @@ export function Add() {
           <Bird state={dragOver ? 'shiny' : 'peeking'} size={64} />
         </div>
         <p class="add-dropzone-title">Drop anything here</p>
-        <p class="add-dropzone-hint">
-          Photos, PDFs, screenshots, voice memos, links. Or share to Bower from
-          any app.
-        </p>
+        <p class="add-dropzone-hint">Photos, PDFs, screenshots, links.</p>
         <div class="add-actions">
           <button
             type="button"
@@ -478,15 +519,6 @@ export function Add() {
           >
             Choose files
           </button>
-          {touch && (
-            <button
-              type="button"
-              class="button button-secondary"
-              onClick={() => cameraInputRef.current?.click()}
-            >
-              Photo
-            </button>
-          )}
           {GOOGLE_API_KEY !== '' && (
             <button
               type="button"
@@ -533,60 +565,58 @@ export function Add() {
         {linkError !== null && <p class="add-field-error">{linkError}</p>}
       </div>
 
+      <p class="add-share-line">
+        Or share to Bower from any app: it lands here too.
+      </p>
+
       {queue.length > 0 && (
-        <ul class="add-queue">
-          {queue.map((item) => (
-            <li
-              key={item.id}
-              class={`add-queue-card${item.status === 'waiting' ? ' add-queue-card-waiting' : ''}`}
-            >
-              <span class="add-queue-icon" aria-hidden="true">
-                {item.status === 'done' && (
-                  <span class="add-queue-check">✓</span>
-                )}
-                {item.status === 'uploading' && (
-                  <Bird state="tidying" size={30} />
-                )}
-                {item.status === 'waiting' && <IconNote />}
-                {item.status === 'failed' && (
-                  <span class="add-queue-check add-queue-check-failed">!</span>
-                )}
-              </span>
-              <span class="add-queue-body">
-                <span class="add-queue-name">{item.name}</span>
-                {item.status === 'uploading' && item.kind !== 'drive' && (
-                  <span class="add-queue-bar">
-                    <span
-                      class="add-queue-bar-fill"
-                      style={{ width: `${item.progress}%` }}
-                    />
-                  </span>
-                )}
-                <span class="add-queue-status">
-                  {item.status === 'waiting' && 'Waiting'}
-                  {item.status === 'uploading' &&
-                    (item.kind === 'drive'
-                      ? driveStatusText(item.driveMimeType, false)
-                      : `${item.progress} %`)}
-                  {item.status === 'done' &&
-                    (item.kind === 'drive'
-                      ? driveStatusText(item.driveMimeType, true)
-                      : 'Added to your inbox')}
-                  {item.status === 'failed' && (item.error ?? 'Failed')}
+        <div class="add-queue-section">
+          <h2 class="add-queue-head">Added · {queue.length}</h2>
+          <ul class="add-queue">
+            {queue.map((item) => (
+              <li
+                key={item.id}
+                class={`add-queue-card${item.status === 'waiting' ? ' add-queue-card-waiting' : ''}`}
+              >
+                {/* The type icon, not the upload status (#334): a picture,
+                 * or a plain file otherwise, the same one whether the row
+                 * is waiting, copying, done or failed. */}
+                <span class="add-queue-icon" aria-hidden="true">
+                  {isImageName(item.name) ? <IconImage /> : <IconFile />}
                 </span>
-              </span>
-              {item.status === 'failed' && (
-                <button
-                  type="button"
-                  class="button-link"
-                  onClick={() => void runQueue([item])}
-                >
-                  Retry
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+                <span class="add-queue-body">
+                  <span class="add-queue-name">{item.name}</span>
+                  {item.status === 'uploading' && item.kind !== 'drive' && (
+                    <span class="add-queue-bar">
+                      <span
+                        class="add-queue-bar-fill"
+                        style={{ width: `${item.progress}%` }}
+                      />
+                    </span>
+                  )}
+                  <span class="add-queue-status">
+                    {item.status === 'waiting' && 'Waiting'}
+                    {item.status === 'uploading' && `${item.progress}%`}
+                    {item.status === 'done' &&
+                      (item.kind === 'drive'
+                        ? driveStateText(item.driveMimeType)
+                        : 'In your inbox')}
+                    {item.status === 'failed' && (item.error ?? 'Failed')}
+                  </span>
+                </span>
+                {item.status === 'failed' && (
+                  <button
+                    type="button"
+                    class="button-link"
+                    onClick={() => void runQueue([item])}
+                  >
+                    Retry
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {driveNotes.map((note) => (
@@ -608,19 +638,20 @@ export function Add() {
 
       {!online && <p class="offline-reason">{offlineReason('add')}</p>}
 
-      <button
-        type="button"
-        class="button"
-        disabled={
-          busy || inboxFolderId === null || queue.length === 0 || !online
-        }
-        aria-disabled={
-          busy || inboxFolderId === null || queue.length === 0 || !online
-        }
-        onClick={() => void runQueue(queue)}
-      >
-        {busy ? 'Adding…' : 'Add to Bower'}
-      </button>
+      {/* The submit belongs to the queue, not to the empty screen (#333):
+       * a link or a Drive pick already runs itself, so this is only for
+       * files chosen, dropped or photographed, still `waiting`. */}
+      {queue.length > 0 && (
+        <button
+          type="button"
+          class="button"
+          disabled={busy || inboxFolderId === null || !online}
+          aria-disabled={busy || inboxFolderId === null || !online}
+          onClick={() => void runQueue(queue)}
+        >
+          {busy ? 'Adding…' : 'Add to Bower'}
+        </button>
+      )}
     </section>
   );
 }

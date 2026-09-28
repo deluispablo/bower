@@ -67,6 +67,14 @@ describe('buildHeaders', () => {
     );
   });
 
+  it("admits Google's image host in img-src, for Drive thumbnails, and nothing else remote", () => {
+    const headers = buildHeaders({ apiUrl: API_URL, googleApiKey: 'a-key' });
+
+    expect(directive(headers, 'img-src')).toBe(
+      `img-src 'self' data: blob: https://*.googleusercontent.com`,
+    );
+  });
+
   it('never allows unsafe-inline for scripts', () => {
     const headers = buildHeaders({ apiUrl: API_URL, googleApiKey: 'a-key' });
 

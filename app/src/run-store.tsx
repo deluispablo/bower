@@ -294,10 +294,13 @@ export interface RunStore extends RunState {
   process: () => Promise<void>;
   /**
    * What every Tidy up control calls (the Inbox card, Add's hint, the
-   * switcher command, #320). The one place the "Is that everything?"
-   * confirmation (#337) will go; until it lands, it starts the run directly.
+   * switcher command, #320). Opens the "Is that everything?" confirmation
+   * (#337) first; only the sheet's "Yes, tidy up" (`confirmTidyUp`) starts
+   * the run. `count`, when given, is the confirmation's own count instead
+   * of the inbox's pending files — for a future requests-only run (#344,
+   * the count of requests rather than files); no caller passes it yet.
    */
-  tidyUp: () => void;
+  tidyUp: (count?: number) => void;
   /** Opens the working sheet (a tap during or after a run). */
   openSheet: () => void;
   /**
@@ -314,6 +317,14 @@ export interface RunStore extends RunState {
   lastFinished: Run | null;
   /** Closes the working sheet; a `done` run goes back to `idle` with it. */
   dismissSheet: () => void;
+  /** Whether the "Is that everything?" confirmation is open. */
+  confirmOpen: boolean;
+  /** The count the confirmation shows (see `tidyUp`). */
+  confirmCount: number;
+  /** The confirmation's "Yes, tidy up": closes it and starts the run. */
+  confirmTidyUp: () => void;
+  /** The confirmation's "Add more first": closes it, no run starts. */
+  dismissConfirm: () => void;
 }
 
 const RunContext = createContext<RunStore | undefined>(undefined);
@@ -324,7 +335,7 @@ interface RunProviderProps {
 
 export function RunProvider({ children }: RunProviderProps) {
   const { me } = useSession();
-  const { refresh } = useVault();
+  const { files, refresh } = useVault();
   const hasVault = me?.vault != null;
 
   const [state, setState] = useState<RunState>(IDLE_STATE);
@@ -490,12 +501,32 @@ export function RunProvider({ children }: RunProviderProps) {
     apply({ type: 'sheet-dismissed' });
   }, [apply]);
 
-  // Opening the sheet first means a run that cannot start (the day's limit,
-  // an error) still shows its reason in the sheet.
-  const tidyUp = useCallback((): void => {
+  // The "Is that everything?" confirmation (#337): every `tidyUp()` opens
+  // this first, showing `count` (the caller's own, or the inbox's pending
+  // files); only `confirmTidyUp` (the sheet's "Yes, tidy up") goes on to
+  // open the working sheet and start the run.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmCount, setConfirmCount] = useState(0);
+
+  const tidyUp = useCallback(
+    (count?: number): void => {
+      setConfirmCount(count ?? pendingCount(files));
+      setConfirmOpen(true);
+    },
+    [files],
+  );
+
+  // Opening the working sheet first means a run that cannot start (the
+  // day's limit, an error) still shows its reason in the sheet.
+  const confirmTidyUp = useCallback((): void => {
+    setConfirmOpen(false);
     openSheet();
     void process();
   }, [openSheet, process]);
+
+  const dismissConfirm = useCallback((): void => {
+    setConfirmOpen(false);
+  }, []);
 
   const value: RunStore = {
     ...state,
@@ -505,6 +536,10 @@ export function RunProvider({ children }: RunProviderProps) {
     sheetReopenKey,
     lastFinished,
     dismissSheet,
+    confirmOpen,
+    confirmCount,
+    confirmTidyUp,
+    dismissConfirm,
   };
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>;

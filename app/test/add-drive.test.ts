@@ -212,9 +212,7 @@ describe('Add from your Drive', () => {
     await waitFor(
       () =>
         root.querySelectorAll('.add-queue-card').length === 3 &&
-        (root.textContent ?? '').includes(
-          'Copied from your Drive · the original stays where it was',
-        ),
+        (root.textContent ?? '').includes('From your Drive'),
     );
   });
 
@@ -382,9 +380,9 @@ describe('Add from your Drive', () => {
     await waitFor(() => {
       const text = root.textContent ?? '';
       return (
-        text.includes('Saved as Markdown from your Drive') &&
-        text.includes('Saved as a table from your Drive') &&
-        text.includes('Saved as a PDF from your Drive')
+        text.includes('From your Drive · saved as Markdown') &&
+        text.includes('From your Drive · saved as a table') &&
+        text.includes('From your Drive · saved as a PDF')
       );
     });
   });

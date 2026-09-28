@@ -148,6 +148,38 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await shot(page, testInfo, 'note');
 });
 
+test("a note Bower wrote opens with Bower's note and What Bower used (#351)", async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /Search or jump to a note/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('subscriptions renew');
+  await switcher
+    .getByRole('option', { name: /subscriptions renew/ })
+    .first()
+    .click();
+
+  const box = page.locator('.bower-note');
+  await expect(box).toBeVisible();
+  await expect(box.locator('.bower-note-title')).toHaveText("Bower's note");
+  // The word is always shown with the colour.
+  await expect(box.locator('.bower-note-word')).toHaveText([
+    'Fine',
+    'Check',
+    'Problem',
+  ]);
+  await expect(
+    page.getByRole('heading', { name: 'What Bower used', level: 2 }),
+  ).toBeVisible();
+  await expect(page.locator('.bower-sources li')).toHaveText([
+    'Bills and renewals (from your notes)',
+  ]);
+  await shot(page, testInfo, 'note-from-bower');
+});
+
 test('a missing note shows Not found', async ({ page }, testInfo) => {
   await openHome(page);
   await page.goto('/note/does-not-exist');
@@ -158,6 +190,40 @@ test('a missing note shows Not found', async ({ page }, testInfo) => {
   await expect(page.getByRole('link', { name: 'Search for it' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Go home' })).toBeVisible();
   await shot(page, testInfo, 'note-not-found');
+});
+
+test('Add: three doors on the phone, the drop zone on desktop (#333)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+  await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible();
+
+  const doors = page.locator('.add-doors');
+  const dropzone = page.locator('.add-dropzone');
+
+  if (testInfo.project.name === 'desktop') {
+    await expect(doors).toBeHidden();
+    await expect(dropzone).toBeVisible();
+    await expect(page.getByText('Drop anything here')).toBeVisible();
+    await expect(
+      page.getByText('Or share to Bower from any app: it lands here too.'),
+    ).toBeHidden();
+    return;
+  }
+
+  await expect(dropzone).toBeHidden();
+  await expect(doors).toBeVisible();
+  await expect(
+    doors.getByRole('button', { name: /^Choose files/ }),
+  ).toBeVisible();
+  await expect(
+    doors.getByRole('button', { name: /^Take a photo/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Or share to Bower from any app: it lands here too.'),
+  ).toBeVisible();
+  await shot(page, testInfo, 'add-doors');
 });
 
 test('Add puts a file in the inbox', async ({ page }, testInfo) => {
@@ -187,6 +253,31 @@ test('Add puts a file in the inbox', async ({ page }, testInfo) => {
   ).toHaveText('4');
 });
 
+test('Add: "Added · n", "In your inbox", and the row survives leaving the tab (#334)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  await navigate(page, /^Add$/);
+
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
+    );
+  await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Add to Bower' }).click();
+  await expect(page.getByText('In your inbox')).toBeVisible();
+
+  // Back on Home once the upload finishes, then Add again within the
+  // same session: the row is still there (#334), not an empty screen.
+  await expect(page).toHaveURL('/');
+  await navigate(page, /^Add$/);
+  await expect(page.getByRole('heading', { name: 'Added · 1' })).toBeVisible();
+  await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
+});
+
 test('Home through the scripted run: waiting, running, done (#321)', async ({
   page,
 }, testInfo) => {
@@ -200,6 +291,15 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   );
   await expect(inbox).toContainText('waiting to be filed');
   await inbox.getByRole('button', { name: 'Tidy up', exact: true }).click();
+
+  // The "Is that everything?" confirmation (#337) opens first; nothing
+  // starts until it is confirmed.
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText('3 things');
+  await shot(page, testInfo, 'tidy-confirm');
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(confirm).toBeHidden();
 
   // Running: the bubble says so; the card has no button, only its line.
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
@@ -237,6 +337,10 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   await visible(
     page.getByRole('button', { name: 'Tidy up', exact: true }),
   ).click();
+  const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
+  await expect(confirm).toBeHidden();
 
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet).toBeVisible();
@@ -726,12 +830,60 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(1)).toContainText('PDF · filed by Bower');
   await expect(rows.nth(2)).toContainText('Note · in this folder');
 
-  // A file opens in Drive for now; a note opens in the app.
-  await expect(rows.nth(1)).toHaveAttribute(
-    'href',
-    /^https:\/\/drive\.google\.com\/file\/d\//,
-  );
-  await expect(rows.nth(1)).toHaveAttribute('target', '_blank');
+  // A file opens on its own screen; a note opens in the app.
+  await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
   await expect(rows.nth(2)).toHaveAttribute('href', /^\/note\//);
   await shot(page, testInfo, 'folder-project');
+});
+
+test('a file opens on its own screen: the photo inline, the PDF without a preview says so', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await page
+    .locator('.folder-item', { hasText: 'Sage green test patch' })
+    .click();
+  await expect(page).toHaveURL(/\/file\//);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Sage green test patch' }),
+  ).toBeVisible();
+  const props = page.locator('.file-props');
+  await expect(props).toContainText('Photo ·');
+  await expect(
+    props.getByRole('link', { name: '1-Projects / Kitchen Refresh' }),
+  ).toBeVisible();
+  await expect(props).toContainText('Filed by Bower ·');
+  const photo = page.getByRole('img', { name: 'Sage green test patch' });
+  await expect(photo).toBeVisible();
+  await expect(photo).toHaveAttribute('src', /^blob:/);
+  await shot(page, testInfo, 'file-photo');
+
+  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await page
+    .locator('.folder-item', { hasText: 'Shelves and tap quote' })
+    .click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Shelves and tap quote' }),
+  ).toBeVisible();
+  await expect(props).toContainText('PDF ·');
+  // The demo has no Drive thumbnails: one sentence, with the way to Drive.
+  const none = page.getByText('There is no preview for this file');
+  await expect(none).toBeVisible();
+  await expect(
+    none.getByRole('link', { name: 'open it in Drive' }),
+  ).toHaveAttribute('href', /^https:\/\/drive\.google\.com\/file\/d\//);
+  await expect(
+    page.getByRole('link', { name: /Summarise this/ }),
+  ).toHaveAttribute('href', /^\/bower\?text=Summarise/);
+
+  // The More menu, in its file version: Open in Drive, no Pin.
+  await visible(page.getByRole('button', { name: 'More' })).click();
+  const menu = page.getByRole('menu', { name: 'File actions' });
+  await expect(
+    menu.getByRole('menuitem', { name: /Open in Drive/ }),
+  ).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: /Pin to Home/ })).toHaveCount(
+    0,
+  );
+  await shot(page, testInfo, 'file-pdf-menu');
 });
