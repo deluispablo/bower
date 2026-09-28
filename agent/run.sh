@@ -30,8 +30,14 @@
 #                            workflows predate run tickets; the Worker takes
 #                            it only while RUNNER_ACCEPT_LEGACY_KEY=1
 #   BOWER_MAX_TURNS          optional; defaults to the API's maxTurns
-#   BOWER_ALLOW_WEB          optional; 1 lets the agent use WebSearch and
-#                            WebFetch, anything else (the default) denies them
+#   BOWER_ALLOW_WEB          optional; the instance's switch: 1 lets the
+#                            agent use WebSearch and WebFetch when the run
+#                            allows them too, anything else (the default)
+#                            denies them
+#   BOWER_RUN_ALLOW_WEB      optional; the run's switch, from the user's
+#                            "Let Bower look things up on the web" setting
+#                            (the dispatch's allow_web): the web tools need
+#                            this and BOWER_ALLOW_WEB both set to 1
 #   BOWER_MAX_CHANGES        optional; the most files one run may add or
 #                            change (default 200); above it nothing is saved
 #   BOWER_SCOPE              optional, ingest only; `all` (the default, a
@@ -61,6 +67,9 @@ set -euo pipefail
 
 log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
 
+# The run's own web switch (#374), handled like the settings below.
+export -n BOWER_RUN_ALLOW_WEB
+
 # --- runner settings --------------------------------------------------------
 # A process's initial environment stays readable in /proc/<pid>/environ for
 # its whole life, by anything running as the same user: the agent too, as a
@@ -86,6 +95,9 @@ if [ -n "${RUNNER_TEMP:-}" ] && [ -f "$secrets_file" ]; then
       BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE)
         printf -v "${line%%=*}" '%s' "${line#*=}"
         ;;
+      BOWER_RUN_ALLOW_WEB)
+        BOWER_RUN_ALLOW_WEB=${line#*=}
+        ;;
     esac
   done <"$secrets_file"
   if ! rm -f "$secrets_file"; then
@@ -104,13 +116,15 @@ unset secrets_file line
 # a URL as input, a way out) and neither is cp (it can copy /proc/self/environ
 # or any other file on the runner into the vault): documents are converted by
 # this script before the agent runs (see "convert documents" below). The web
-# tools come back only when the instance opts in with BOWER_ALLOW_WEB=1, the
+# tools come back only when both switches say yes: the instance opts in with
+# BOWER_ALLOW_WEB=1 and the user turned on "Let Bower look things up on the
+# web", which reaches this run as BOWER_RUN_ALLOW_WEB=1 (#374). That is the
 # one way a run can reach the network. The deny list wins over any allow
 # rule, including one in a settings file inside the vault.
 readonly BASE_TOOLS='Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*)'
 readonly WEB_TOOLS='WebSearch,WebFetch'
 readonly NETWORK_COMMANDS='Bash(curl:*),Bash(wget:*)'
-if [ "${BOWER_ALLOW_WEB:-}" = 1 ]; then
+if [ "${BOWER_ALLOW_WEB:-}" = 1 ] && [ "${BOWER_RUN_ALLOW_WEB:-}" = 1 ]; then
   readonly ALLOWED_TOOLS="$BASE_TOOLS,$WEB_TOOLS"
   readonly DISALLOWED_TOOLS="$NETWORK_COMMANDS"
 else
