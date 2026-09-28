@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me, Run, Vault } from '../src/api.js';
 import {
   addHintLead,
+  CONTEXT_PLACEHOLDER,
   contextNote,
   contextNoteName,
+  linkDisplayTitle,
   linkNoteName,
 } from '../src/add.js';
 import { setQueue } from '../src/add-queue-store.js';
@@ -111,6 +113,49 @@ describe('linkNoteName', () => {
     expect(linkNoteName('mailto:you@example.com', new Date())).toBeNull();
     expect(linkNoteName('javascript:alert(1)', new Date())).toBeNull();
     expect(linkNoteName('ftp://example.com/file', new Date())).toBeNull();
+  });
+});
+
+describe('linkDisplayTitle (#508)', () => {
+  it('reads the host and path, not the saved file name', () => {
+    expect(linkDisplayTitle('https://example.com/page')).toBe(
+      'example.com/page',
+    );
+  });
+
+  it('drops a leading www. from the host', () => {
+    expect(linkDisplayTitle('https://www.example.com/x')).toBe('example.com/x');
+  });
+
+  it('leaves off a bare "/" path', () => {
+    expect(linkDisplayTitle('https://example.com')).toBe('example.com');
+    expect(linkDisplayTitle('https://example.com/')).toBe('example.com');
+  });
+
+  it('keeps a deeper path and a subdomain', () => {
+    expect(linkDisplayTitle('https://news.example.com/x/y')).toBe(
+      'news.example.com/x/y',
+    );
+  });
+
+  it('falls back to the raw string for anything it cannot parse', () => {
+    expect(linkDisplayTitle('not a link')).toBe('not a link');
+  });
+});
+
+describe('CONTEXT_PLACEHOLDER (#508)', () => {
+  it('gives one example, not two', () => {
+    // The board's own copy named a second example ("from now on" becoming
+    // a rule) that pushed the text to four lines in the three-line box at
+    // 375 px; shortened to one, agreed with the lead in the PR.
+    expect(CONTEXT_PLACEHOLDER.match(/"/g)).toHaveLength(2);
+  });
+
+  it('stays short enough to fit three lines at 375 px', () => {
+    // A rough proxy for the real, visual check (`docs`/PR screenshot):
+    // this box wraps at roughly 30 characters a line on the phone, so
+    // three lines is around 90 characters including the quoted example.
+    expect(CONTEXT_PLACEHOLDER.length).toBeLessThanOrEqual(90);
   });
 });
 
@@ -467,9 +512,7 @@ describe('Add', () => {
     expect(root.querySelector('#add-context')).toBeNull();
     dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
     const box = root.querySelector<HTMLTextAreaElement>('#add-context');
-    expect(box?.placeholder).toBe(
-      'Just filing is fine. Or tell Bower what to do with these: "Job offers: pull out salary, location and deadline, and add them to a table". Say "from now on" and it becomes a rule.',
-    );
+    expect(box?.placeholder).toBe(CONTEXT_PLACEHOLDER);
     expect(root.querySelector('label[for="add-context"]')?.textContent).toBe(
       'What is this? optional',
     );
@@ -530,6 +573,22 @@ describe('Add', () => {
     void act(() => save.click());
     expect(input.value).toBe('');
     expect(save.hasAttribute('disabled')).toBe(true);
+  });
+
+  it("a saved link's row shows the URL, not the note's file name (#508)", () => {
+    const input = root.querySelector('#add-link') as HTMLInputElement;
+    const save = Array.from(root.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Save',
+    );
+    if (save === undefined) throw new Error('Save button missing');
+    void act(() => {
+      input.value = 'https://www.example.com/a/page';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    void act(() => save.click());
+    expect(root.querySelector('.add-queue-name')?.textContent).toBe(
+      'example.com/a/page',
+    );
   });
 
   // #421: Save used to navigate to Home once the link finished uploading,

@@ -57,6 +57,13 @@ describe('NotFound (#504)', () => {
     );
   });
 
+  it('reads a missing file’s own sentence for kind="file" (#529)', () => {
+    mount('file');
+    expect(root.querySelector('.auth-note')?.textContent).toBe(
+      "It isn't in your Bower folder any more. Maybe it moved, or the link is old.",
+    );
+  });
+
   it('reads the generic page sentence for kind="page", and by default', () => {
     mount('page');
     expect(root.querySelector('.auth-note')?.textContent).toBe(

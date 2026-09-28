@@ -99,7 +99,10 @@ vi.mock('../src/session.js', () => ({
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => ({
-    index: null,
+    // Real, built from `state.files` (empty when none, same as no vault
+    // yet): lets a test register a `Rules.md` file for `rulesLoad` (#507's
+    // "already in your rules" check) without changing anything else here.
+    index: state.files.length === 0 ? null : buildVaultIndex(state.files),
     files: state.files,
     fetchedAt: state.fetchedAt,
     refresh,
@@ -113,6 +116,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 }));
 
 const { Bower } = await import('../src/routes/bower.js');
+const { buildVaultIndex } = await import('../src/vault-index.js');
 
 let root: HTMLDivElement;
 
@@ -328,6 +332,75 @@ describe('a rule kept at once (#343)', () => {
     expect(box().value).toBe('Never archive Finance');
     expect(createTextFile).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe('the confirmation line under the box (#507)', () => {
+  const RULES_FILE: DriveFile = {
+    id: 'RULES_ID',
+    name: 'Rules.md',
+    mimeType: 'text/markdown',
+    parents: ['FOLDER_ID'],
+    path: 'Rules.md',
+  };
+  const RULES_TEXT =
+    '# Rules\n\n## Finance\n\n' +
+    "- From now on, receipts go under Finance (owner's request, 2026-09-20)\n";
+
+  async function send(text: string): Promise<void> {
+    await act(() => {
+      box().value = text;
+      box().dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      buttonNamed('Send')?.click();
+      await Promise.resolve();
+    });
+  }
+
+  function confirmLine(): string | null {
+    return root.querySelector('.bower-send-confirm')?.textContent ?? null;
+  }
+
+  it('says "Kept as a rule" for a new one', async () => {
+    await mount();
+    await send('From now on, never archive Money notes');
+    expect(confirmLine()).toBe('Kept as a rule');
+  });
+
+  it('says "Already in your rules" for one already there', async () => {
+    state.files = [RULES_FILE];
+    state.notes[RULES_FILE.id] = RULES_TEXT;
+    await mount();
+    // The mocked `keepRule` never actually rewrites `state.notes`, so the
+    // fixture above is what `rulesLoad` — and the dedup check — reads.
+    await send('From now on, receipts go under Finance');
+    expect(confirmLine()).toBe('Already in your rules');
+  });
+
+  it('says "Will go with this tidy-up" for anything sent while a run is in progress', async () => {
+    state.phase = 'running';
+    state.run = {
+      state: 'running',
+      requestedAt: '2026-09-27T09:00:00.000Z',
+    };
+    await mount();
+    await send('Which flat should I visit first?');
+    expect(confirmLine()).toBe('Will go with this tidy-up');
+  });
+
+  it('shows nothing sent idle (the row itself is confirmation enough)', async () => {
+    await mount();
+    await send('Which flat should I visit first?');
+    expect(confirmLine()).toBeNull();
+  });
+
+  it('clears on the next Send', async () => {
+    await mount();
+    await send('From now on, never archive Money notes');
+    expect(confirmLine()).toBe('Kept as a rule');
+    await send('Make a packing list for my next trip');
+    expect(confirmLine()).toBeNull();
   });
 });
 

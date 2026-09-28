@@ -36,6 +36,26 @@ export function linkNoteName(url: string, now: Date): string | null {
 }
 
 /**
+ * What a link's row in the queue reads (#508, C.11: titles, not file
+ * names): the host and path with a leading `www.` dropped, never the
+ * `Link - host date time.md` name the note is saved under. Bower does not
+ * fetch the page for its own title, so this is the best a person can read
+ * at a glance before the run files it; `url` is assumed already valid
+ * (`onSaveLink` only ever queues a link `linkNoteName` accepted).
+ */
+export function linkDisplayTitle(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  const host = parsed.hostname.replace(/^www\./i, '');
+  const path = parsed.pathname === '/' ? '' : parsed.pathname;
+  return `${host}${path}`;
+}
+
+/**
  * The hint's bold lead on Add (#336, `Phone-Add` board, handover C.6):
  * "3 things waiting." — `count` is the inbox's pending files, the same
  * count Home's Inbox card and the "Is that everything?" sheet show. The
@@ -58,6 +78,15 @@ export const ADD_HINT_TEXT =
  */
 export const DEMO_ADD_HINT_TEXT =
   'Tap Tidy up and watch a recorded run: in the demo the bird does not really think, so nothing costs anything.';
+
+/**
+ * The "What is this?" box's placeholder (#335, `Phone-Add` board; #508:
+ * shortened to one example, board copy agreed with the lead — the
+ * board's own two-example text overflowed the three-line box at 375 px,
+ * cut off mid-sentence).
+ */
+export const CONTEXT_PLACEHOLDER =
+  'Just filing is fine. Or tell Bower what to do: "Job offers: pull out salary and deadline".';
 
 /**
  * The name of the context note Add's "What is this?" box writes (#335,

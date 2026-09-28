@@ -16,7 +16,7 @@ import {
 } from '../src/components/shell-slots.js';
 import { IDEAS } from '../src/ideas.js';
 
-const { Ideas } = await import('../src/routes/ideas.js');
+const { Ideas, copyLabel } = await import('../src/routes/ideas.js');
 
 let root: HTMLDivElement;
 
@@ -70,5 +70,35 @@ describe('the Ideas screen', () => {
     await mount();
     const back = root.querySelector('.topbar-back');
     expect(back?.getAttribute('href')).toBe('/bower');
+  });
+
+  it("gives each Copy link a distinct accessible name, its idea's first words (#511)", async () => {
+    await mount();
+    const names = [...root.querySelectorAll('a.idea-copy')].map((link) =>
+      link.getAttribute('aria-label'),
+    );
+    expect(names).toHaveLength(9);
+    expect(names.every((name) => name?.startsWith('Copy: '))).toBe(true);
+    expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+describe('copyLabel (#511)', () => {
+  it('names a short idea whole, with no ellipsis', () => {
+    expect(copyLabel('Save articles you mean to read.')).toBe(
+      'Copy: Save articles you mean to read.',
+    );
+  });
+
+  it('cuts a long idea to its first six words, with an ellipsis', () => {
+    expect(copyLabel('From now on, file every receipt under Finance.')).toBe(
+      'Copy: From now on, file every receipt…',
+    );
+  });
+
+  it('adds no ellipsis when the idea is exactly six words', () => {
+    expect(copyLabel('One two three four five six')).toBe(
+      'Copy: One two three four five six',
+    );
   });
 });

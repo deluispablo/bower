@@ -4,28 +4,28 @@
  * for whichever kind of thing was not where a link said it would be (#504).
  * One screen (the board has just the one), the sentence per `kind`:
  * `routes/note.tsx` for a missing note, `routes/folder.tsx` for an unknown
- * folder, and `app.tsx`'s catch-all route for any other unknown URL.
- * "Search for it" is the `/search` route (`routes/search.tsx`): it opens
- * the quick switcher (#142) and replaces itself with Home.
+ * folder, `routes/file.tsx` for a missing file (#529), and `app.tsx`'s
+ * catch-all route for any other unknown URL. "Search for it" is the
+ * `/search` route (`routes/search.tsx`): it opens the quick switcher
+ * (#142) and replaces itself with Home.
  */
 
 import { Bird } from '../components/bird.js';
 import '../styles/auth.css';
 
-export type NotFoundKind = 'note' | 'folder' | 'page';
+export type NotFoundKind = 'note' | 'folder' | 'file' | 'page';
 
 const SENTENCE: Readonly<Record<NotFoundKind, string>> = {
   note: "It isn't in your Bower folder any more. Maybe it moved, or the link is old.",
   folder:
     "This folder isn't in your Bower folder any more. Maybe it moved, or the link is old.",
+  file: "It isn't in your Bower folder any more. Maybe it moved, or the link is old.",
   page: "That page doesn't exist. Maybe the link is old, or it was never there.",
 };
 
 interface NotFoundProps {
-  /** Defaults to the generic "page" sentence: only `note.tsx` and
-   * `folder.tsx` know they are missing a note or a folder specifically;
-   * every other not-found case (`file.tsx`'s missing file included) reads
-   * as a page that was never there. */
+  /** Defaults to the generic "page" sentence for any other not-found
+   * case. */
   kind?: NotFoundKind;
 }
 

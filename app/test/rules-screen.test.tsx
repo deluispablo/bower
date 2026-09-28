@@ -209,6 +209,21 @@ describe('the Rules screen', () => {
     );
   });
 
+  it("names each group's count separately from its topic, singular and plural (#511)", async () => {
+    // The name and the count used to sit right against each other with
+    // nothing between them ("Money4"): a screen reader read one glued
+    // word instead of "Money, 4 rules".
+    await mount();
+    const groups = [
+      ...panel().querySelectorAll<HTMLButtonElement>('.rules-group-row'),
+    ].filter((row) => row.tagName === 'BUTTON');
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual([
+      'Money, 4 rules',
+      'Travel, 1 rule',
+      'Everything else, 1 rule',
+    ]);
+  });
+
   it('lists the open suggestions with Accept and Dismiss', async () => {
     await mount();
     const cards = [...panel().querySelectorAll<HTMLElement>('.suggested-card')];
