@@ -308,7 +308,7 @@ function FolderBody({
                   ) : (
                     <>
                       <span class="folder-row-name">{folder.name}</span>
-                      <span class="folder-row-count">{folder.count}</span>
+                      <span class="folder-row-count">{folder.things}</span>
                     </>
                   )}
                 </a>
