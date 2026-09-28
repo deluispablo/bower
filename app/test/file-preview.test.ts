@@ -225,5 +225,33 @@ describe('kindWord and metaFacts', () => {
         size: 39_845_888,
       }),
     ).toEqual(['38 MB']);
+    expect(
+      metaFacts({
+        name: 'Costs.xlsx',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        size: 18_432,
+      }),
+    ).toEqual(['18 KB']);
+  });
+
+  it('adds the runner counts: sheets, and what a ZIP holds', () => {
+    const xlsx = {
+      name: 'Costs.xlsx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      size: 18_432,
+    };
+    const zip = {
+      name: 'a.zip',
+      mimeType: 'application/zip',
+      size: 39_845_888,
+    };
+    expect(metaFacts(xlsx, { sheets: 3 })).toEqual(['18 KB', '3 sheets']);
+    expect(metaFacts(xlsx, { sheets: 1 })).toEqual(['18 KB', '1 sheet']);
+    expect(metaFacts(zip, { entries: 14 })).toEqual(['14 files', '38 MB']);
+    expect(metaFacts(zip, { entries: 1 })).toEqual(['1 file', '38 MB']);
+    // A count that does not belong to the kind is ignored.
+    expect(metaFacts(zip, { sheets: 3 })).toEqual(['38 MB']);
   });
 });
