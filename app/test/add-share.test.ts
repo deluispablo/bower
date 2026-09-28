@@ -5,6 +5,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me, Vault } from '../src/api.js';
+import { setQueue } from '../src/add-queue-store.js';
 import type { DriveFile } from '../src/drive.js';
 
 // #262/M3: the service worker redirects a share to `/add?shared=1` with the
@@ -106,6 +107,10 @@ describe('Add: shared files', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     takeSharedFiles.mockImplementation(() => Promise.resolve([]));
+    // The queue lives in `add-queue-store.js`, module scope, on purpose
+    // (#334): each test starts it empty rather than inheriting rows left
+    // by the previous one.
+    setQueue([]);
   });
 
   afterEach(() => {

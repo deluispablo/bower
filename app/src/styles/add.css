@@ -196,11 +196,23 @@
   font-size: var(--text-sm);
 }
 
-.add-queue {
+.add-queue-section {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   margin: var(--space-3) 0;
+}
+
+.add-queue-head {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.add-queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -226,15 +238,6 @@
   width: 30px;
   height: 30px;
   color: var(--color-text-muted);
-}
-
-.add-queue-check {
-  font-size: var(--text-lg);
-  color: var(--color-success);
-}
-
-.add-queue-check-failed {
-  color: var(--color-danger);
 }
 
 .add-queue-body {
