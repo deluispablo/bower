@@ -420,9 +420,9 @@ describe('requests and their runs (#756, R-REQ-1)', () => {
     expect(isPileNoteName(pileName)).toBe(true);
     expect(isPileNoteName(name)).toBe(false);
     expect(waitingNotes([file(`0-Inbox/${pileName}`)])).toEqual([]);
-    expect(requestRows(input([file(`0-Inbox/${pileName}`)], [pileRun]))).toEqual(
-      [],
-    );
+    expect(
+      requestRows(input([file(`0-Inbox/${pileName}`)], [pileRun])),
+    ).toEqual([]);
   });
 
   it('the run in flight wins over an earlier failure', () => {

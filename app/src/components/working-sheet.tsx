@@ -456,7 +456,9 @@ export function rowFor(
   // The pile is looked up by the name the file had in the inbox.
   const origin =
     item.action === 'filed' || item.action === 'needs'
-      ? pileOriginOf(item.from ?? item.path.slice(item.path.lastIndexOf('/') + 1))
+      ? pileOriginOf(
+          item.from ?? item.path.slice(item.path.lastIndexOf('/') + 1),
+        )
       : undefined;
   return {
     key: `${item.action}:${item.path}`,

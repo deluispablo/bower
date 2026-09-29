@@ -325,11 +325,7 @@ function RunBody({
             <h2 class="just-filed-pile-heading">
               {group.origin ?? 'Added from elsewhere'}
             </h2>
-            <View
-              rows={group.rows}
-              unseen={unseen}
-              addresses={addresses}
-            />
+            <View rows={group.rows} unseen={unseen} addresses={addresses} />
           </section>
         ))}
       </>

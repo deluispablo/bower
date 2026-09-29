@@ -75,7 +75,10 @@ export function rememberPileOrigins(piles: readonly Pile[]): void {
     }
   }
   const names = Object.keys(origins);
-  for (const name of names.slice(0, Math.max(0, names.length - PILE_ORIGINS_MAX)))
+  for (const name of names.slice(
+    0,
+    Math.max(0, names.length - PILE_ORIGINS_MAX),
+  ))
     delete origins[name];
   writeOrigins(origins);
 }
@@ -134,7 +137,11 @@ export function pileConfirm(
       .filter((name) => waiting.has(name) && !claimed.has(name));
     if (names.length === 0) continue;
     for (const name of names) claimed.add(name);
-    rows.push({ id: pile.id, label: pileHeading(pile.text), count: names.length });
+    rows.push({
+      id: pile.id,
+      label: pileHeading(pile.text),
+      count: names.length,
+    });
   }
   if (rows.length === 0) return undefined;
   return { piles: rows, elsewhere: waiting.size - claimed.size };
