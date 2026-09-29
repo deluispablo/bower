@@ -28,19 +28,15 @@
  */
 
 import type { JSX } from 'preact';
-import { useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
 import { isDemo } from '../api.js';
 import { Bird } from '../components/bird.js';
 import {
   IconChat,
-  IconDoc,
   IconExternalLink,
   IconFolder,
-  IconImage,
-  IconNote,
-  IconPdf,
   IconPin,
   IconSparkle,
 } from '../components/icons.js';
@@ -51,10 +47,10 @@ import { useShellSlot } from '../components/shell-slots.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import type { DriveFile } from '../drive.js';
-import { CATALOGUE_PATH, originLine, originOf } from '../file-origin.js';
+import { CATALOGUE_PATH } from '../file-origin.js';
+import type { Origin } from '../file-origin.js';
 import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
 import { askBowerHref } from '../more-menu.js';
-import type { Origin } from '../file-origin.js';
 import {
   breadcrumb,
   driveFolderUrl,
@@ -68,11 +64,9 @@ import type {
   FolderContents,
   FolderSubfolder,
 } from '../navigation.js';
-import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { useVault } from '../vault-store.js';
-import { fileKind, fileTitle } from '../vault-index.js';
 import { NotFound } from './not-found.js';
 import '../styles/folder.css';
 
@@ -115,37 +109,6 @@ function metaLine(
   return parts.join(' · ');
 }
 
-/** A row's type icon, coloured by kind (`folder.css`). A note copied from
- * Drive keeps the Drive page icon, as on the board. */
-function KindIcon({
-  file,
-  origin,
-}: {
-  file: DriveFile;
-  origin: Origin | null;
-}): JSX.Element {
-  const kind = fileKind(file);
-  let icon: JSX.Element;
-  let tone: string;
-  if (kind === 'note') {
-    icon = origin === 'drive' ? <IconDoc /> : <IconNote />;
-    tone = origin === 'drive' ? 'drive' : 'note';
-  } else if (kind === 'pdf') {
-    icon = <IconPdf />;
-    tone = 'pdf';
-  } else if (kind === 'photo' || kind === 'image') {
-    icon = <IconImage />;
-    tone = 'image';
-  } else {
-    icon = <IconDoc />;
-    tone =
-      kind === 'doc' || kind === 'sheet' || kind === 'slides'
-        ? 'drive'
-        : 'note';
-  }
-  return <span class={`folder-row-icon tone-${tone}`}>{icon}</span>;
-}
-
 /** A root folder screen's subfolder second line (#431, Phone-Folder
  * board): "6 things · updated today", "3 things · 5 d". Empty (#502): a
  * subfolder with nothing in it has no `updated` either, and the tree
@@ -181,6 +144,23 @@ function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
       </nav>
     </>
   );
+}
+
+type ItemsModule = typeof import('../components/folder-items.js');
+
+// Loaded when a folder is first shown, so the path bar and the list mode
+// (filters, pairing, rows) stay out of the startup chunk (#41's budget).
+let itemsModule: ItemsModule | null = null;
+
+function useFolderItems(): ItemsModule | null {
+  const [loaded, setLoaded] = useState<ItemsModule | null>(itemsModule);
+  useEffect(() => {
+    import('../components/folder-items.js').then(
+      (mod) => setLoaded((itemsModule = mod)),
+      (err: unknown) => console.error(err),
+    );
+  }, []);
+  return loaded;
 }
 
 interface FolderBodyProps {
@@ -235,14 +215,21 @@ function FolderBody({
   const now = Date.now();
   const titles = useNoteTitles(contents.notes);
   const emptyState = folderEmptyState(contents);
+  const items = useFolderItems();
+  // The board's header (#611) for a folder with things in it; a root folder
+  // and an empty one keep the counts line they have always had.
+  const boardHeader = parentName !== null && contents.items.length > 0;
 
   return (
     <section class="folder-view">
+      {items !== null && <items.PathBar path={contents.path} />}
       <div class="folder-head">
         <IconFolder />
         <div class="folder-head-text">
           <h1>{heading}</h1>
-          <p class="folder-meta">{metaLine(contents, parentName, pinned)}</p>
+          {!boardHeader && (
+            <p class="folder-meta">{metaLine(contents, parentName, pinned)}</p>
+          )}
         </div>
         {file !== undefined && (
           <div class="note-header-actions folder-head-actions">
@@ -342,10 +329,9 @@ function FolderBody({
         </div>
       )}
 
-      <div class="folder-section">
-        <h2 class="folder-label">Newest first</h2>
-        {contents.items.length === 0 ? (
-          emptyState.elsewhere !== null ? (
+      {contents.items.length === 0 ? (
+        <div class="folder-section">
+          {emptyState.elsewhere !== null ? (
             <p class="folder-elsewhere">
               {plural(
                 emptyState.elsewhere.count,
@@ -361,41 +347,18 @@ function FolderBody({
                 Add
               </a>
             </div>
-          )
-        ) : (
-          <ul class="folder-list">
-            {contents.items.map((item) => {
-              const origin = originOf(item, catalogue);
-              const isNote = fileKind(item) === 'note';
-              const title = isNote
-                ? (titles.get(item.id) ?? noteTitle(item))
-                : fileTitle(item.name);
-              const href = isNote ? `/note/${item.id}` : `/file/${item.id}`;
-              return (
-                <li key={item.id}>
-                  <a class="folder-row folder-item" href={href}>
-                    <KindIcon file={item} origin={origin} />
-                    <span class="folder-row-text">
-                      <span class="folder-row-name">{title}</span>
-                      <span class="folder-row-detail">
-                        {originLine(item, origin)}
-                      </span>
-                    </span>
-                    {item.modifiedTime !== undefined && (
-                      <time
-                        class="folder-row-meta"
-                        dateTime={item.modifiedTime}
-                      >
-                        {shortAge(item.modifiedTime, now)}
-                      </time>
-                    )}
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+          )}
+        </div>
+      ) : (
+        items !== null && (
+          <items.FolderItems
+            contents={contents}
+            titles={titles}
+            catalogue={catalogue}
+            now={now}
+          />
+        )
+      )}
 
       {parentName !== null && (
         <p class="folder-tip">

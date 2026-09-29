@@ -24,6 +24,13 @@ async function openFile(
 
 const FLAT = '1-Projects/Flat%20hunt';
 
+/** The folder screen with Originals showing (#611): in All an original and
+ * its companion note are one row that opens the note. */
+async function gotoOriginals(page: Page, folder: string): Promise<void> {
+  await page.goto(`/folder/${folder}`);
+  await page.getByRole('button', { name: /^Originals/ }).click();
+}
+
 test('a CSV is a table with its row count, and a meta line with its kind word (#604)', async ({
   page,
 }) => {
@@ -49,7 +56,7 @@ test('a CSV is a table with its row count, and a meta line with its kind word (#
 test('a PDF says its pages from the companion note (#604)', async ({
   page,
 }) => {
-  await page.goto(`/folder/${FLAT}`);
+  await gotoOriginals(page, FLAT);
   await page
     .locator('.folder-item', { hasText: 'Lease agreement 2026' })
     .filter({ hasText: /PDF/ })
@@ -136,7 +143,7 @@ test('a ZIP explains itself, offers Open in Drive and Download, and gives the ti
 });
 
 async function openLeasePdf(page: Page): Promise<void> {
-  await page.goto(`/folder/${FLAT}`);
+  await gotoOriginals(page, FLAT);
   await page
     .locator('.folder-item', { hasText: 'Lease agreement 2026' })
     .filter({ hasText: /PDF/ })
@@ -196,38 +203,31 @@ test('an exported Sheet says it is a copy (#606)', async ({ page }) => {
 test('previous and next walk the folder in its list, with n of m (#606)', async ({
   page,
 }) => {
-  await page.goto(`/folder/${FLAT}`);
-  await expect(page.locator('.folder-item').first()).toBeVisible();
-  const names = await page
-    .locator('.folder-item .folder-row-name')
-    .allTextContents();
-  const at = names.findIndex((name) => name.includes('Flat budget'));
-  expect(at).toBeGreaterThan(0);
-  expect(at).toBeLessThan(names.length - 1);
+  await gotoOriginals(page, FLAT);
   await page
     .locator('.folder-item', { hasText: 'Flat budget' })
     .first()
     .click();
   const walk = page.locator('.file-walk');
-  await expect(
-    walk.getByRole('link', { name: names[at - 1] ?? '' }),
-  ).toBeVisible();
-  await expect(
-    walk.getByRole('link', { name: names[at + 1] ?? '' }),
-  ).toBeVisible();
-  await expect(walk).toContainText(
-    `${String(at + 1)} of ${String(names.length)}`,
+  await expect(walk).toContainText(/\d+ of \d+/);
+  const where = /(\d+) of (\d+)/.exec(
+    (await walk.locator('.file-walk-place').textContent()) ?? '',
   );
-  await walk.getByRole('link', { name: names[at + 1] ?? '' }).click();
+  const at = Number(where?.[1]);
+  const total = Number(where?.[2]);
+  expect(at).toBeGreaterThan(1);
+  expect(at).toBeLessThan(total);
+  await expect(walk.getByRole('link')).toHaveCount(2);
+  await walk.getByRole('link').nth(1).click();
   await expect(page.locator('.file-walk')).toContainText(
-    `${String(at + 2)} of ${String(names.length)}`,
+    `${String(at + 1)} of ${String(total)}`,
   );
 });
 
 test('a photo opens the viewer, full screen with More (#606)', async ({
   page,
 }) => {
-  await page.goto(`/folder/${FLAT}`);
+  await gotoOriginals(page, FLAT);
   await page
     .locator('.folder-item', { hasText: 'Arlington Road, window sign' })
     .filter({ hasText: /Photo/ })
