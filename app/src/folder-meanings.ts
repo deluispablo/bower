@@ -1,9 +1,9 @@
 /**
  * The Bower folder's six top-level folders, in the order the app lists them,
- * each with its one-line meaning (the Phone-Drawer and Phone-Notes boards).
- * One table on purpose: the folder menu (#319) reads it today, and the Notes
- * tab (#348) and the "What is Bower" intro are meant to read the same words
- * from here rather than keep their own copies.
+ * each with its one-line meaning (the Phone-Notes board).
+ * One table on purpose: the Notes tab, the desktop sidebar and the "What is
+ * Bower" intro read the same words from here rather than keep their own
+ * copies.
  */
 
 import { displayName, paraKindOf } from './navigation.js';

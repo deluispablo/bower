@@ -1,7 +1,6 @@
 /**
  * Desktop "About this note" third column (spec §5.2, issue #144): Properties
- * (folder, tags, created, source — issue #307; the same section a phone or
- * tablet gets as a sheet instead, below 1200 px, `note-properties.tsx`),
+ * (folder, tags, created, source — issue #307, `note-properties.tsx`),
  * Outline (the rendered note's own headings), Linked mentions (only once
  * `VaultIndex` carries `backlinks`, #150 — it does not yet, so this section
  * never renders today) and In this folder (the note's siblings, current one

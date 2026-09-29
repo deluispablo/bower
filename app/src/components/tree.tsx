@@ -2,8 +2,7 @@
  * The PARA tree: collapsible folders, notes linking to `/note/:id` and files
  * linking to `/file/:id`, all as rows (#588). Used by
  * both explorer variants (`explorer.tsx`) — the desktop sidebar and the
- * Notes tab (#317) — never the phone's own folder menu, which is a
- * separate component with its own rendering (`folder-menu.tsx`, #397).
+ * Notes tab (#317), the one explorer on every screen size.
  *
  * Desktop keyboard support is a roving `tabindex` (only the focused row is
  * in the tab order) driven by `nextFocusIndex` (pure, in `navigation.ts`):
@@ -39,7 +38,7 @@
  *
  * Pinning (spec §14, issue #216): a hover pin button on every row plus a
  * `contextmenu` (right-click, or the keyboard's Menu key / Shift+F10) menu
- * with the same items as the folder menu's held-row sheet (`pin-sheet.tsx`).
+ * with the same items as the held-row sheet (`pin-sheet.tsx`).
  */
 
 import { Fragment } from 'preact';

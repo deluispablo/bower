@@ -259,6 +259,30 @@ Each Bower folder holds three rule files with three owners: `CLAUDE.md` is Bower
 
 When you change `vault-template/CLAUDE.md` in a way existing folders should receive, bump `bower_rules_version` by one in the same PR, and add every line you removed or reworded to `app/src/rulebook-retired.ts`; see `vault-template/README.md`.
 
+### One tidy-up, phase by phase
+
+`agent/run.sh` runs these in this order; each has its own bullet under "What a tidy-up does with each file" below. The log names each step and counts, never a file name.
+
+1. **Reconcile** (#597). List the Bower folder with Drive ids and compare with `.bower/paths.json` from the last run: a file the person moved in Drive or Obsidian gets its `index.md` row rewritten and a `Moved by you:` line in `log.md`. Best effort.
+2. **Agent.** Convert documents with pandoc, pre-scan and quarantine, set aside what Bower only keeps (`kept-not-read`, `too-large`, `unconvertible`, `quarantined`), then `claude -p` inside the folder, following its `CLAUDE.md`. The agent files, writes notes and companion notes; it never deletes.
+3. **Audit and moves** (#595). Revert what the agent may not change; then move in Drive itself each file it moved or renamed (same content at a new path), so the file keeps its Drive id.
+4. **Bookkeeping** (#596). Without AI, book each move in `index.md`, in the links that name the file and in `log.md`.
+5. **Upload.** Copy up the accepted files the agent added or changed and did not move; delete only the pending originals the move phase did not move.
+6. **File facts** (#610). Count PDF pages, Excel sheets and ZIP entries without AI into `.bower/file-facts.json`; write `.bower/paths.json` for the next reconcile.
+7. **Report** (#598). Write `.bower/last-run.json` and one `log.md` line, then send the report (with `to`, `renamedFrom`, `setAside` and `added`) to the Worker, which keeps it for `GET /status` and `GET /runs`.
+
+Known gap: the Add screen's sources line cannot say "email" yet, because `QueueItem` in `app/src/add-queue-store.ts` has no "shared" origin. Recorded here, not implemented.
+
+### Deploy order for a v4 update
+
+Worker first, then the runner, then the app:
+
+1. **Worker**: `bash scripts/deploy-api.sh` (or `pnpm -C api deploy`). It accepts the new report fields (`to`, `renamedFrom`, `setAside`, `added`); one from before answers a report that carries them with a 400.
+2. **Runner**: rerun `bash scripts/deploy.sh` (or `scripts/new-instance.sh`) so the instance repo gets the new `run.sh`, `prompts/` and workflows. `deploy.sh` does steps 1 and 2 in that order.
+3. **App**: Cloudflare Pages builds it from `main`. An app deployed before the Worker still works: it treats a report without the new fields as an older runner's and falls back (New shows nothing, Just filed becomes Activity).
+
+Each user then gets the new rulebook from **Settings → Advanced → "Update Bower's rules"** (`bower_rules_version` in `vault-template/CLAUDE.md` is the current number).
+
 ### What a tidy-up does with each file
 
 Since rulebook version 7 (#368), Bower only files by default. Each original (a PDF, a photo, a spreadsheet) moves into its project, area or resource folder as it is, with one line in the folder's hub note, one row in `index.md` (`- [[<path>]] · <type> · filed by Bower`) and one `Filed:` line in `log.md`; no summary note, no copy, no translation. A note is still written for a web clip or saved link (the raw clip then goes to `0-Inbox/Processed/`), for an item an instruction note or a rule in `Rules.md` asks something for, and for a converted Word, OpenDocument, HTML, EPUB or RTF document, whose `.md` is filed next to the original. `0-Inbox/Processed/` now keeps only instruction notes, raw clips, unconvertible items and duplicates.
@@ -466,7 +490,7 @@ A note is pinned when its frontmatter has `pinned: <ISO 8601 time>` — the time
 
 This means a `pinned` line can show up if you open a note straight in Obsidian or another editor — it's expected, not a stray field, and the agent's `CLAUDE.md` tells it to leave `pinned` as it is when it rewrites a note. Removing the line by hand unpins the note the same way the app would.
 
-The UI (issue #216): Home shows a Pinned section above Recent, hidden while there is nothing pinned — up to 8 tiles, "All pinned" past that, an Edit toggle turning tiles into rows with an unpin button. The desktop sidebar shows the same items as a Pinned group above the tree, up to 5. Four entry points pin or unpin: the note's own menu (More → Pin to Home), holding a row in the phone's folder menu for half a second (a sheet: Pin to Home, Open the folder, Ask Bower about it, Open in Drive, Cancel), a tree row's hover pin button on desktop with the same items on right-click or the keyboard's Menu key, and the Folder screen's Pinned chip. Every one of them shows the same toast, "Pinned to Home" or "Unpinned"; a failure shows one sentence instead and changes nothing. The quick switcher has no filter mode of its own yet, so "All pinned" opens it with `pinned:` already typed in the field rather than actually narrowing the list — a real filter is left for a later issue.
+The UI (issue #216): Home shows a Pinned section above Recent, hidden while there is nothing pinned — up to 8 tiles, "All pinned" past that, an Edit toggle turning tiles into rows with an unpin button. The desktop sidebar shows the same items as a Pinned group above the tree, up to 5. Four entry points pin or unpin: the note's own menu (More → Pin to Home), opening a Notes-tab row's context menu (a sheet: Pin to Home, Open the folder, Ask Bower about it, Open in Drive, Cancel), a tree row's hover pin button on desktop with the same items on right-click or the keyboard's Menu key, and the Folder screen's Pinned chip. Every one of them shows the same toast, "Pinned to Home" or "Unpinned"; a failure shows one sentence instead and changes nothing. The quick switcher has no filter mode of its own yet, so "All pinned" opens it with `pinned:` already typed in the field rather than actually narrowing the list — a real filter is left for a later issue.
 
 ## Extensions
 

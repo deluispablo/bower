@@ -519,7 +519,7 @@ export interface FolderSubfolder {
   count: number;
   /** Notes and other files together, subfolders included: a root folder
    * screen's "6 things" second line (#431), and — the same definition the
-   * folder menu, the Notes tree and the desktop sidebar use (#425) — a
+   * Notes tree and the desktop sidebar use (#425) — a
    * non-root folder screen's own subfolder-row count (#457). */
   things: number;
   /** The newest `modifiedTime` of anything inside, subfolders included;
@@ -664,41 +664,6 @@ export function folderEmptyState(contents: FolderContents): FolderEmptyState {
       count: total,
       subfolderName: holders.length === 1 ? (holders[0]?.name ?? null) : null,
     },
-  };
-}
-
-export interface Siblings {
-  prev: DriveFile | null;
-  next: DriveFile | null;
-}
-
-/**
- * The previous and next note in the same folder, sorted by name — the
- * same walk the folder screen itself lists (#423): Bower's own files
- * (`isAppFile`) are left out unless `showAppFiles` is on (the current note
- * stays the anchor either way, even if it is itself one of Bower's own
- * files and would otherwise be filtered out).
- */
-export function siblings(
-  index: VaultIndex,
-  id: string,
-  showAppFiles = false,
-): Siblings {
-  const file = index.byId.get(id);
-  if (file === undefined) return { prev: null, next: null };
-  const folder = folderOf(file.path);
-  const inFolder = index.notes
-    .filter(
-      (note) =>
-        folderOf(note.path) === folder &&
-        (showAppFiles || note.id === id || !isAppFile(note.path, note.name)),
-    )
-    .sort((a, b) => compareNames(a.name, b.name));
-  const at = inFolder.findIndex((note) => note.id === file.id);
-  if (at === -1) return { prev: null, next: null };
-  return {
-    prev: at > 0 ? (inFolder[at - 1] ?? null) : null,
-    next: at < inFolder.length - 1 ? (inFolder[at + 1] ?? null) : null,
   };
 }
 

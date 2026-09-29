@@ -2049,8 +2049,9 @@ echo "ok memory hygiene lint findings"
 
 # 29. The Worker answers the final report with a 500 twice (#315): the runner
 # tries again and the third try lands; the outcome is in the vault as
-# .bower/last-run.json and one log.md line, counts only, next to the log.md
-# lines already in Drive.
+# .bower/last-run.json (the counts and, since #660, the paths of what was
+# filed, set aside and added) and one log.md line, counts only, next to the
+# log.md lines already in Drive.
 run_case retry
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(grep -c . "$STATE/final-tries")" 3 'final report tries'

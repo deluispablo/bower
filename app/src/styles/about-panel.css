@@ -62,9 +62,9 @@
  * Properties (issue #307): unlike Outline, Linked mentions and In this
  * folder, which already fold under the note body from 900 px
  * (`.shell-aside` in layout.css), properties wait for the panel proper at
- * 1200 px — below that, `note-properties.tsx`'s own trigger and sheet show
- * them instead (`note-properties.css`), so this section would otherwise
- * double them up between 900 and 1199.
+ * 1200 px; below that the note screen's own props line says the same
+ * (#609), so this section would otherwise double them up between 900 and
+ * 1199.
  */
 .about-properties {
   display: none;

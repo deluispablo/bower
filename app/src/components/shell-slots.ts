@@ -1,6 +1,6 @@
 /**
  * Lets a screen fill four places in the shell (#144, #318): the top bar's
- * Back link (`back`, in place of the folder menu button on an inner screen;
+ * Back link (`back`, shown on an inner screen;
  * `Layout` falls back to Back to Home when a screen leaves it empty), the header's
  * breadcrumb (the desktop breadcrumb, or the phone back link, in place of
  * the wordmark), the header's `actions` slot next to the Tidy up pill (the

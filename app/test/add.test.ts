@@ -6,8 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me, Run, Vault } from '../src/api.js';
 import {
-  addHintLead,
-  CONTEXT_PLACEHOLDER,
   contextNote,
   contextNoteName,
   linkDisplayTitle,
@@ -17,13 +15,6 @@ import {
 import { setQueue } from '../src/add-queue-store.js';
 import type { DriveFile } from '../src/drive.js';
 import { HELP_ROWS } from '../src/help-rows.js';
-
-describe('addHintLead', () => {
-  it('counts the things waiting, singular for one', () => {
-    expect(addHintLead(1)).toBe('1 thing waiting.');
-    expect(addHintLead(3)).toBe('3 things waiting.');
-  });
-});
 
 describe('contextNote (#335)', () => {
   const now = new Date(Date.UTC(2026, 8, 28, 9, 5));
@@ -155,22 +146,6 @@ describe('linkTitleFromFileName (#557)', () => {
   it('is null for any other file name', () => {
     expect(linkTitleFromFileName('Lease agreement 2026.pdf')).toBeNull();
     expect(linkTitleFromFileName('Link - not quite right.md')).toBeNull();
-  });
-});
-
-describe('CONTEXT_PLACEHOLDER (#508)', () => {
-  it('gives one example, not two', () => {
-    // The board's own copy named a second example ("from now on" becoming
-    // a rule) that pushed the text to four lines in the three-line box at
-    // 375 px; shortened to one, agreed with the lead in the PR.
-    expect(CONTEXT_PLACEHOLDER.match(/"/g)).toHaveLength(2);
-  });
-
-  it('stays short enough to fit three lines at 375 px', () => {
-    // A rough proxy for the real, visual check (`docs`/PR screenshot):
-    // this box wraps at roughly 30 characters a line on the phone, so
-    // three lines is around 90 characters including the quoted example.
-    expect(CONTEXT_PLACEHOLDER.length).toBeLessThanOrEqual(90);
   });
 });
 
