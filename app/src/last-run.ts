@@ -9,7 +9,7 @@
  * Pure: no Drive, no cache; `vault-store.tsx` does the read.
  */
 
-import type { RunItem, SetAsideItem } from './api.js';
+import type { RunItem, SetAsideItem, UpdatedItem } from './api.js';
 import { failureReason } from './run-failure.js';
 import type { RunFailureReason } from './run-failure.js';
 
@@ -36,6 +36,12 @@ export interface LastRunOutcome {
   setAside?: SetAsideItem[];
   /** Report v2: one short clause about what Bower added. */
   added?: string;
+  /** R-RUNNER-2: paths the run added that are not a move destination. */
+  created?: string[];
+  /** R-RUNNER-2: notes that existed and changed, with a one-line note. */
+  updated?: UpdatedItem[];
+  /** R-RUNNER-2: pending inbox paths still there at the end. */
+  left?: string[];
   /** Only on a failed run; unrecognised or missing reads as `unknown`
    * (`failureReason`, `run-failure.ts`), same as a Worker-reported run. */
   reason?: RunFailureReason;
@@ -97,6 +103,25 @@ function parseSetAside(value: unknown): SetAsideItem[] | undefined {
   return items;
 }
 
+function parseStrings(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return (value as unknown[]).filter(isNonEmptyString);
+}
+
+function parseUpdated(value: unknown): UpdatedItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items: UpdatedItem[] = [];
+  for (const raw of value as unknown[]) {
+    if (!isRecord(raw)) continue;
+    const { path, what } = raw;
+    if (!isNonEmptyString(path)) continue;
+    const item: UpdatedItem = { path };
+    if (isNonEmptyString(what)) item.what = what;
+    items.push(item);
+  }
+  return items;
+}
+
 /**
  * Parses `.bower/last-run.json`'s text. `null` on anything that is not the
  * shape `write_outcome` writes: malformed JSON, a missing or wrong-typed
@@ -125,6 +150,9 @@ export function parseLastRun(text: string): LastRunOutcome | null {
     items,
     setAside,
     added,
+    created,
+    updated,
+    left,
   } = data;
   if (state !== 'done' && state !== 'failed') return null;
   if (!isNonEmptyString(kind)) return null;
@@ -150,6 +178,12 @@ export function parseLastRun(text: string): LastRunOutcome | null {
   const parsedSetAside = parseSetAside(setAside);
   if (parsedSetAside !== undefined) outcome.setAside = parsedSetAside;
   if (isNonEmptyString(added)) outcome.added = added;
+  const parsedCreated = parseStrings(created);
+  if (parsedCreated !== undefined) outcome.created = parsedCreated;
+  const parsedUpdated = parseUpdated(updated);
+  if (parsedUpdated !== undefined) outcome.updated = parsedUpdated;
+  const parsedLeft = parseStrings(left);
+  if (parsedLeft !== undefined) outcome.left = parsedLeft;
   if (state === 'failed') outcome.reason = failureReason(reason);
   return outcome;
 }
