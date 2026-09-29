@@ -5,9 +5,9 @@
  * it and when, Open and Open in Drive. From 900 px it is a centred card; on
  * the desktop Space opens it too, and #614 places it in the right pane.
  *
- * A dialog with a focus trap (`use-focus-trap.ts`), closed by Escape, a
- * swipe down on its handle or the backdrop (guarded like the pin sheet's,
- * #510).
+ * An `Overlay` dialog on the queue (R-OVL-2): inert page behind, focus
+ * trap, closed by Escape, a swipe down on its handle or the scrim (guarded
+ * like the pin sheet's, #510).
  */
 
 import type { JSX } from 'preact';

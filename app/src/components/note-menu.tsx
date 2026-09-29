@@ -1,12 +1,11 @@
 /**
  * The one More menu for a note, a file and a folder (#210, #352, #608, board
  * Phone-More): a bottom sheet under 900 px, a popover pinned under the More
- * button from 900 px up — one component, `note-menu.css`'s breakpoint
- * switches the presentation the same way `layout.css` already does for the
- * drawer vs the sidebar. `role="menu"`, each row `role="menuitem"`; focus
- * is trapped inside while open (`use-focus-trap.ts`, the same pattern as
- * the explorer drawer), Escape, Cancel and a backdrop tap close it and hand
- * focus back to the More button that opened it.
+ * button from 900 px up — one component: an `Overlay` of kind `menu` on the
+ * queue (R-OVL-2), which switches the presentation at 900 px. `role="menu"`,
+ * each row `role="menuitem"`; the page behind is inert and focus is trapped
+ * inside while open; Escape, Cancel and a scrim tap close it and hand focus
+ * back to the More button that opened it.
  *
  * Three callers: `routes/note.tsx`, `routes/file.tsx` and
  * `routes/folder.tsx`. The board's order: a header (the title, then the

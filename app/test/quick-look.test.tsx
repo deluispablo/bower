@@ -4,6 +4,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { OverlayHost } from '../src/components/overlay.js';
 import type { DriveFile } from '../src/drive.js';
 
 let demo = false;
@@ -103,17 +104,20 @@ describe('QuickLook', () => {
   function mount(): void {
     void act(() => {
       render(
-        <QuickLook
-          title="Lease agreement 2026"
-          href="/file/FILE_ID"
-          file={pdf}
-          kind="pdf"
-          pages={6}
-          origin="filed"
-          folderPath="1-Projects/Flat hunt"
-          now={NOW}
-          onClose={onClose}
-        />,
+        <>
+          <QuickLook
+            title="Lease agreement 2026"
+            href="/file/FILE_ID"
+            file={pdf}
+            kind="pdf"
+            pages={6}
+            origin="filed"
+            folderPath="1-Projects/Flat hunt"
+            now={NOW}
+            onClose={onClose}
+          />
+          <OverlayHost />
+        </>,
         root,
       );
     });
@@ -133,24 +137,25 @@ describe('QuickLook', () => {
 
   it('shows the board content and opens the file', () => {
     mount();
-    const dialog = root.querySelector('[role="dialog"]');
+    const dialog = document.querySelector('[role="dialog"]');
     expect(dialog).not.toBeNull();
-    expect(root.querySelector('.quick-look-title')?.textContent).toBe(
+    expect(document.querySelector('.quick-look-title')?.textContent).toBe(
       'Lease agreement 2026',
     );
-    expect(root.querySelector('.quick-look-kind')?.textContent).toBe(
+    expect(document.querySelector('.quick-look-kind')?.textContent).toBe(
       'PDF · 6 pages · 340 KB',
     );
-    expect(root.querySelector('.quick-look-path-text')?.textContent).toBe(
+    expect(document.querySelector('.quick-look-path-text')?.textContent).toBe(
       'Projects › Flat hunt',
     );
-    expect(root.querySelector('.quick-look-filed')?.textContent).toBe(
+    expect(document.querySelector('.quick-look-filed')?.textContent).toBe(
       'Filed by Bower yesterday',
     );
-    const open = root.querySelector<HTMLAnchorElement>('.quick-look-open');
+    const open = document.querySelector<HTMLAnchorElement>('.quick-look-open');
     expect(open?.textContent).toBe('Open');
     expect(open?.getAttribute('href')).toBe('/file/FILE_ID');
-    const drive = root.querySelector<HTMLAnchorElement>('.quick-look-drive');
+    const drive =
+      document.querySelector<HTMLAnchorElement>('.quick-look-drive');
     expect(drive?.textContent).toBe('Open in Drive');
     expect(drive?.href).toContain('drive.google.com');
     expect(drive?.getAttribute('target')).toBe('_blank');
@@ -159,7 +164,8 @@ describe('QuickLook', () => {
   it('disables Open in Drive in the demo, where the ids are not real', () => {
     demo = true;
     mount();
-    const drive = root.querySelector<HTMLButtonElement>('.quick-look-drive');
+    const drive =
+      document.querySelector<HTMLButtonElement>('.quick-look-drive');
     expect(drive?.tagName).toBe('BUTTON');
     expect(drive?.disabled).toBe(true);
   });
@@ -176,7 +182,7 @@ describe('QuickLook', () => {
 
   it('closes on a swipe down on its handle, not on a short drag', () => {
     mount();
-    const grip = root.querySelector<HTMLElement>('.quick-look-grip');
+    const grip = document.querySelector<HTMLElement>('.quick-look-grip');
     expect(grip).not.toBeNull();
     const pointer = (type: string, clientY: number): void => {
       void act(() => {
@@ -197,7 +203,7 @@ describe('QuickLook', () => {
     vi.useFakeTimers();
     try {
       mount();
-      const backdrop = root.querySelector<HTMLElement>('.quick-look-backdrop');
+      const backdrop = document.querySelector<HTMLElement>('.overlay-scrim');
       void act(() => backdrop?.click());
       expect(onClose).not.toHaveBeenCalled();
       vi.setSystemTime(Date.now() + 400);

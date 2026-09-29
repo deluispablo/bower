@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { OverlayHost } from '../src/components/overlay.js';
 import {
   PhotoViewer,
   counterText,
@@ -29,14 +30,19 @@ function mount(onNavigate: (index: number) => void = () => undefined): {
   host = root;
   void act(() => {
     render(
-      h(PhotoViewer, {
-        src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E',
-        title: 'Arlington Road, window sign',
-        siblings: SIBLINGS,
-        index: 1,
-        folderName: 'Flat hunt',
-        onNavigate,
-      }),
+      h(
+        Fragment,
+        null,
+        h(PhotoViewer, {
+          src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E',
+          title: 'Arlington Road, window sign',
+          siblings: SIBLINGS,
+          index: 1,
+          folderName: 'Flat hunt',
+          onNavigate,
+        }),
+        h(OverlayHost, null),
+      ),
       root,
     );
   });
@@ -71,19 +77,19 @@ describe('PhotoViewer (issue #605)', () => {
   it('starts fitted, with the hint and no full-screen layer', () => {
     const { root } = mount();
     expect(root.textContent).toContain('Tap to see it whole');
-    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('opens full screen on tap with a named Close and a text counter', () => {
     const { root, photo } = mount();
     void act(() => photo.click());
-    const dialog = root.querySelector('[role="dialog"]');
+    const dialog = document.querySelector('[role="dialog"]');
     expect(dialog).not.toBeNull();
-    expect(root.querySelector('[aria-label="Close"]')).not.toBeNull();
-    expect(root.querySelector('.photo-viewer-counter')?.textContent).toBe(
+    expect(document.querySelector('[aria-label="Close"]')).not.toBeNull();
+    expect(document.querySelector('.photo-viewer-counter')?.textContent).toBe(
       '2 of 5 in Flat hunt',
     );
-    expect(root.querySelector('.photo-viewer-caption')?.textContent).toBe(
+    expect(document.querySelector('.photo-viewer-caption')?.textContent).toBe(
       'Arlington Road, window sign',
     );
   });
@@ -97,11 +103,11 @@ describe('PhotoViewer (issue #605)', () => {
     key('ArrowLeft');
     expect(onNavigate).toHaveBeenLastCalledWith(0);
     void act(() =>
-      root.querySelector<HTMLElement>('[aria-label="Next"]')?.click(),
+      document.querySelector<HTMLElement>('[aria-label="Next"]')?.click(),
     );
     expect(onNavigate).toHaveBeenLastCalledWith(2);
     void act(() =>
-      root.querySelector<HTMLElement>('[aria-label="Previous"]')?.click(),
+      document.querySelector<HTMLElement>('[aria-label="Previous"]')?.click(),
     );
     expect(onNavigate).toHaveBeenLastCalledWith(0);
     expect(onNavigate).toHaveBeenCalledTimes(4);
@@ -114,14 +120,19 @@ describe('PhotoViewer (issue #605)', () => {
     host = root;
     void act(() => {
       render(
-        h(PhotoViewer, {
-          src: 'x.png',
-          title: 'Front door',
-          siblings: SIBLINGS,
-          index: 0,
-          folderName: 'Flat hunt',
-          onNavigate,
-        }),
+        h(
+          Fragment,
+          null,
+          h(PhotoViewer, {
+            src: 'x.png',
+            title: 'Front door',
+            siblings: SIBLINGS,
+            index: 0,
+            folderName: 'Flat hunt',
+            onNavigate,
+          }),
+          h(OverlayHost, null),
+        ),
         root,
       );
     });
@@ -131,7 +142,7 @@ describe('PhotoViewer (issue #605)', () => {
     key('ArrowLeft');
     expect(onNavigate).not.toHaveBeenCalled();
     expect(
-      root
+      document
         .querySelector('[aria-label="Previous"]')
         ?.getAttribute('aria-disabled'),
     ).toBe('true');
@@ -141,7 +152,7 @@ describe('PhotoViewer (issue #605)', () => {
     const { root, photo } = mount();
     photo.focus();
     void act(() => photo.click());
-    const close = root.querySelector<HTMLElement>('[aria-label="Close"]');
+    const close = document.querySelector<HTMLElement>('[aria-label="Close"]');
     expect(document.activeElement).toBe(close);
 
     // Shift+Tab from the first control wraps to the last one.
@@ -156,7 +167,7 @@ describe('PhotoViewer (issue #605)', () => {
       );
     });
     expect(document.activeElement).toBe(
-      root.querySelector('[aria-label="Next"]'),
+      document.querySelector('[aria-label="Next"]'),
     );
     // Tab from the last control wraps to the first one.
     void act(() => {
@@ -171,7 +182,7 @@ describe('PhotoViewer (issue #605)', () => {
     expect(document.activeElement).toBe(close);
 
     key('Escape');
-    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(photo);
   });
 
@@ -179,23 +190,44 @@ describe('PhotoViewer (issue #605)', () => {
     const { root, photo } = mount();
     void act(() => photo.click());
     void act(() =>
-      root.querySelector<HTMLElement>('[aria-label="Close"]')?.click(),
+      document.querySelector<HTMLElement>('[aria-label="Close"]')?.click(),
     );
-    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('a double tap toggles 2x and shows the badge', () => {
     const { root, photo } = mount();
     void act(() => photo.click());
-    const img = root.querySelector<HTMLElement>('.photo-viewer-img');
-    expect(root.querySelector('.photo-viewer-badge')).toBeNull();
+    const img = document.querySelector<HTMLElement>('.photo-viewer-img');
+    expect(document.querySelector('.photo-viewer-badge')).toBeNull();
     void act(() => img?.click());
     void act(() => img?.click());
     expect(img?.className).toContain('is-zoomed');
-    expect(root.querySelector('.photo-viewer-badge')?.textContent).toBe('2×');
+    expect(document.querySelector('.photo-viewer-badge')?.textContent).toBe(
+      '2×',
+    );
     void act(() => img?.click());
     void act(() => img?.click());
     expect(img?.className).not.toContain('is-zoomed');
-    expect(root.querySelector('.photo-viewer-badge')).toBeNull();
+    expect(document.querySelector('.photo-viewer-badge')).toBeNull();
+  });
+
+  it('opens as one overlay dialog, named by the photo, over an inert page', () => {
+    const page = document.createElement('div');
+    page.id = 'app';
+    const shell = document.createElement('div');
+    shell.className = 'shell';
+    page.append(shell);
+    document.body.append(page);
+    const { photo } = mount();
+    void act(() => photo.click());
+    const dialogs = document.querySelectorAll('[role="dialog"]');
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]?.getAttribute('aria-label')).toBe(
+      'Arlington Road, window sign',
+    );
+    expect(dialogs[0]?.querySelector('.photo-viewer-full')).not.toBeNull();
+    expect(shell.hasAttribute('inert')).toBe(true);
+    page.remove();
   });
 });

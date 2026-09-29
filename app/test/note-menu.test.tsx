@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { useState } from 'preact/hooks';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteMenu } from '../src/components/note-menu.js';
+import { OverlayHost } from '../src/components/overlay.js';
 import type { NoteMenuProps } from '../src/components/note-menu.js';
 import type { DriveFile } from '../src/drive.js';
 
@@ -76,7 +77,7 @@ function mount(
   root = document.createElement('div');
   document.body.append(root);
   void act(() => {
-    render(h(Harness, {}), root);
+    render(h(Fragment, null, h(Harness, {}), h(OverlayHost, null)), root);
   });
   return { onEdit, onTogglePin, onAddParagraph, onClose };
 }
@@ -84,7 +85,7 @@ function mount(
 /** The menu's rows, Cancel left out (it only closes the sheet). */
 function rows(): HTMLElement[] {
   return Array.from(
-    root.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
   ).filter((r) => !r.classList.contains('note-menu-cancel'));
 }
 
@@ -94,7 +95,15 @@ function mountFor(props: Omit<NoteMenuProps, 'onClose'>): void {
   root = document.createElement('div');
   document.body.append(root);
   void act(() => {
-    render(h(NoteMenu, { onClose: vi.fn(), ...props }), root);
+    render(
+      h(
+        Fragment,
+        null,
+        h(NoteMenu, { onClose: vi.fn(), ...props }),
+        h(OverlayHost, null),
+      ),
+      root,
+    );
   });
 }
 
@@ -196,16 +205,16 @@ describe('NoteMenu', () => {
 
   it('heads the menu with the title, then the type word and the folder', () => {
     mount(true);
-    expect(root.querySelector('.note-menu-title')?.textContent).toBe(
+    expect(document.querySelector('.note-menu-title')?.textContent).toBe(
       'Shopping list',
     );
     // The note sits at the top of the Bower folder: just the type word.
-    expect(root.querySelector('.note-menu-meta')?.textContent).toBe('Note');
+    expect(document.querySelector('.note-menu-meta')?.textContent).toBe('Note');
   });
 
   it('closes on Cancel, and returns focus to the opener', () => {
     const { onClose } = mount(true);
-    const cancel = root.querySelector('.note-menu-cancel');
+    const cancel = document.querySelector('.note-menu-cancel');
     if (cancel === null) throw new Error('Cancel missing');
     click(cancel);
     expect(onClose).toHaveBeenCalledOnce();
@@ -303,9 +312,22 @@ describe('NoteMenu', () => {
     expect(onEdit).toHaveBeenCalledOnce();
   });
 
+  it('is one menu on the overlay, with the page behind inert', () => {
+    const page = document.createElement('div');
+    page.id = 'app';
+    const shell = document.createElement('div');
+    shell.className = 'shell';
+    page.append(shell);
+    document.body.append(page);
+    mount(true);
+    expect(document.querySelectorAll('[role="menu"]')).toHaveLength(1);
+    expect(document.querySelector('.overlay--menu')).not.toBeNull();
+    expect(shell.hasAttribute('inert')).toBe(true);
+  });
+
   it('closes on a backdrop click, and returns focus to the opener', () => {
     const { onClose } = mount(true);
-    const backdrop = root.querySelector('.note-menu-backdrop');
+    const backdrop = document.querySelector('.overlay-scrim');
     if (backdrop === null) throw new Error('backdrop missing');
     click(backdrop);
     expect(onClose).toHaveBeenCalledOnce();
@@ -331,7 +353,7 @@ describe('NoteMenu', () => {
     mount(true);
     click(rowByText('Copy link'));
     await flush();
-    const fallback = root.querySelector<HTMLInputElement>(
+    const fallback = document.querySelector<HTMLInputElement>(
       '.note-menu-copy-fallback',
     );
     if (fallback === null) throw new Error('fallback input missing');
@@ -360,9 +382,9 @@ describe('NoteMenu', () => {
       onAddParagraph: vi.fn(),
     });
     expect(
-      root.querySelector('[role="menu"]')?.getAttribute('aria-label'),
+      document.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     ).toBe('File actions');
-    const spans = root.querySelectorAll('.note-menu-meta > span');
+    const spans = document.querySelectorAll('.note-menu-meta > span');
     expect(spans[0]?.textContent).toBe('PDF');
     expect(spans[1]?.textContent).toContain('Projects › Flat hunt');
     expect(spans[1]?.querySelector('.folder-mark-projects')).not.toBeNull();
@@ -410,9 +432,9 @@ describe('NoteMenu', () => {
       onTogglePin,
     });
     expect(
-      root.querySelector('[role="menu"]')?.getAttribute('aria-label'),
+      document.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     ).toBe('Folder actions');
-    const spans = root.querySelectorAll('.note-menu-meta > span');
+    const spans = document.querySelectorAll('.note-menu-meta > span');
     expect(spans[0]?.textContent).toBe('Folder');
     expect(spans[1]?.textContent).toContain('Projects');
     expect(rows().map((r) => r.textContent)).toEqual([
