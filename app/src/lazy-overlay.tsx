@@ -33,7 +33,7 @@ export function lazyOverlay<P extends object>(
   }
 
   function Component(props: P): JSX.Element | null {
-    const [ready, setReady] = useState<ComponentType<P> | null>(loaded);
+    const [ready, setReady] = useState<ComponentType<P> | null>(() => loaded);
     useEffect(() => {
       if (ready !== null) return;
       preload();
