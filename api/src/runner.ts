@@ -55,6 +55,7 @@ import {
   getUser,
   listVaultIds,
   putRun,
+  updateUser,
 } from './store.js';
 import {
   RUN_FAILURE_REASONS,
@@ -719,7 +720,7 @@ export async function runScheduledLint(
 ): Promise<void> {
   try {
     const env = assertEnv(rawEnv);
-    const ids = await listVaultIds(env.BOWER_KV);
+    const ids = await lintableVaultIds(env.BOWER_KV);
     const { failed } = await dispatchLintRuns(env, ids, fetchImpl);
     if (failed > 0) {
       throw new HttpError(
@@ -733,6 +734,34 @@ export async function runScheduledLint(
     console.error(`Weekly lint failed: ${code}`);
     throw err;
   }
+}
+
+/**
+ * The ids of every vault the weekly lint should check: `listVaultIds`
+ * without the vaults marked missing (spec R-VAULT-8), whose folder a lint
+ * run could only fail on.
+ */
+export async function lintableVaultIds(kv: KVNamespace): Promise<string[]> {
+  const ids = await listVaultIds(kv);
+  const users = await Promise.all(ids.map((id) => getUser(kv, id)));
+  return ids.filter((_, index) => users[index]?.vault?.missingAt === undefined);
+}
+
+/**
+ * Marks the vault missing after a run failed with `vault_missing` (spec
+ * R-VAULT-8), only while `folderId` is still the user's folder: a re-point
+ * in between is never marked. `GET /me` then returns `vault.missingAt`.
+ */
+async function markVaultMissing(
+  kv: KVNamespace,
+  userId: string,
+  folderId: string,
+  now: string,
+): Promise<void> {
+  const vault = (await getUser(kv, userId))?.vault;
+  if (vault === undefined || vault.folderId !== folderId) return;
+  if (vault.missingAt !== undefined) return;
+  await updateUser(kv, userId, { vault: { ...vault, missingAt: now } });
 }
 
 type VaultUser = User & { vault: NonNullable<User['vault']> };
@@ -774,7 +803,7 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const only = parseLintDispatch(body);
     const ids =
       only === undefined
-        ? await listVaultIds(kv)
+        ? await lintableVaultIds(kv)
         : [(await loadVaultUser(kv, only)).id];
 
     const { dispatched, failed } = await dispatchLintRuns(env, ids, fetchImpl);
@@ -850,8 +879,12 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     // Each kind has its own key: a lint report never reads or writes the
     // ingest run that `GET /status` and `POST /process` look at.
     const current = await getRun(kv, user.id, report.kind);
-    const run = applyReport(current, report, new Date().toISOString());
+    const now = new Date().toISOString();
+    const run = applyReport(current, report, now);
     await putRun(kv, user.id, run, report.kind);
+    if (run.state === 'failed' && run.reason === 'vault_missing') {
+      await markVaultMissing(kv, user.id, user.vault.folderId, now);
+    }
 
     if (run.state === 'done' || run.state === 'failed') {
       // The run is over: its ticket is retired, so nothing can fetch a
