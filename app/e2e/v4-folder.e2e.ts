@@ -288,7 +288,9 @@ test('holding a row or a tile opens quick look (#613)', async ({
   // By its name, not its text: once Bower's note lines load, another tile
   // mentions the lease too.
   const tile = page.locator('.folder-tile').filter({
-    has: page.locator('[id^="row-name-"]', { hasText: /^Lease agreement 2026$/ }),
+    has: page.locator('[id^="row-name-"]', {
+      hasText: /^Lease agreement 2026$/,
+    }),
   });
   await tile.hover();
   await page.mouse.down();
