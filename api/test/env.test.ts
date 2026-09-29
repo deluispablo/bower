@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import app from '../src/index.js';
+import { createApp } from '../src/index.js';
 import { assertEnv } from '../src/env.js';
 import type { AppEnv } from '../src/env.js';
 import { HttpError } from '../src/errors.js';
@@ -20,7 +20,6 @@ function validRawEnv(
     SESSION_SECRET: 'test-session-secret',
     // base64 of 32 zero bytes — a fixture, not a real key.
     TOKEN_ENC_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-    BOWER_API_KEY: 'test-bower-api-key',
     GITHUB_TOKEN: 'test-github-token',
     ADMIN_KEY: 'test-admin-key',
     VAPID_PUBLIC_KEY: 'test-vapid-public-key',
@@ -127,7 +126,7 @@ describe('GET /health with a missing secret', () => {
     // per-test way to remove one binding from it. Hono's
     // `app.request(path, init, env)` runs the same app instance with
     // bindings passed explicitly, so we use that instead for this case.
-    const response = await app.request(
+    const response = await createApp().request(
       '/health',
       undefined,
       withoutKey(validRawEnv(), 'GOOGLE_CLIENT_ID'),

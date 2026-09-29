@@ -32,7 +32,7 @@ function unauthorized(): HttpError {
  * `timingSafeEqual`. Missing header, wrong scheme or wrong key are all a
  * 401 `unauthorized`; the key itself is never logged.
  */
-const requireAdmin: MiddlewareHandler<AppEnv> = async (c, next) => {
+export const requireAdmin: MiddlewareHandler<AppEnv> = async (c, next) => {
   const header = c.req.header('authorization') ?? '';
   const [scheme, key] = header.split(' ');
   if (scheme !== 'Bearer' || key === undefined || key === '') {

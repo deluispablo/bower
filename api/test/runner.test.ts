@@ -1,5 +1,5 @@
 import { env as testEnv } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
@@ -12,6 +12,7 @@ import {
   MAX_ADDED_LENGTH,
   MAX_PROCESSED,
   MAX_TEXT_LENGTH,
+  runScheduledLint,
 } from '../src/runner.js';
 import type { LintDispatchResult, RunnerVault } from '../src/runner.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
@@ -41,8 +42,8 @@ const ACCESS_TOKEN = 'test-access-token';
 /** What the default Google stub mints for a run. */
 const RUN_ACCESS_TOKEN = 'test-run-access-token';
 const API_KEY = 'test-claude-api-key';
-/** The operator key: only `POST /runner/lint/dispatch`. */
-const RUNNER_AUTH = `Bearer ${env.BOWER_API_KEY}`;
+/** The admin key: only `POST /runner/lint/dispatch` takes it (#292). */
+const ADMIN_AUTH = `Bearer ${env.ADMIN_KEY}`;
 
 interface Call {
   url: string;
@@ -209,7 +210,7 @@ async function postStatus(
 async function postLintDispatch(
   fetchImpl: FetchLike,
   body?: unknown,
-  authorization: string | null = RUNNER_AUTH,
+  authorization: string | null = ADMIN_AUTH,
 ): Promise<Response> {
   const headers: Record<string, string> = {};
   if (authorization !== null) headers.authorization = authorization;
@@ -266,7 +267,7 @@ describe('runner key', () => {
   it.each([
     ['missing', null],
     ['wrong', 'Bearer not-the-key'],
-    ['wrong scheme', `Basic ${env.BOWER_API_KEY}`],
+    ['wrong scheme', `Basic ${env.ADMIN_KEY}`],
     ['empty', 'Bearer '],
   ])('answers 401 unauthorized on GET with a %s key', async (_, auth) => {
     await seedUser();
@@ -417,12 +418,12 @@ describe('run tickets', () => {
     ).toBe(200);
   });
 
-  it('refuses the operator key on GET and POST status', async () => {
+  it('refuses the admin key on GET and POST status', async () => {
     await seedUser();
     await seedDriveToken();
 
-    const vault = await getVault(stub().fetchImpl, RUNNER_AUTH);
-    const status = await postStatus({ state: 'running' }, RUNNER_AUTH);
+    const vault = await getVault(stub().fetchImpl, ADMIN_AUTH);
+    const status = await postStatus({ state: 'running' }, ADMIN_AUTH);
 
     expect(vault.status).toBe(401);
     expect(status.status).toBe(401);
@@ -545,7 +546,7 @@ describe('POST /runner/lint/dispatch', () => {
   it.each([
     ['missing', null],
     ['wrong', 'Bearer not-the-key'],
-    ['admin', `Bearer ${env.ADMIN_KEY}`],
+    ['old operator key', 'Bearer test-bower-api-key'],
   ])('answers 401 unauthorized with a %s key', async (_, auth) => {
     await seedUser();
     const github = stub();
@@ -582,13 +583,52 @@ describe('POST /runner/lint/dispatch', () => {
   });
 });
 
+describe('weekly lint cron (#292)', () => {
+  it('dispatches the same ticketed runs the endpoint does, for every vault', async () => {
+    await seedUser();
+    await seedDriveToken();
+    const hub = stub();
+
+    await runScheduledLint(env, hub.fetchImpl);
+
+    const sent = dispatches(hub.calls);
+    expect(sent.map((body) => body.event_type)).toEqual(['bower-lint']);
+    expect(sent[0]?.client_payload.vault_id).toBe(USER_ID);
+    expect((await getRun(kv, USER_ID, 'lint'))?.state).toBe('queued');
+    const auth = `Bearer ${sent[0]?.client_payload.ticket ?? ''}`;
+    expect((await getVault(stub().fetchImpl, auth)).status).toBe(200);
+  });
+
+  it('logs a dispatch failure with its code, retires the ticket and rethrows', async () => {
+    await seedUser();
+    const logged: string[] = [];
+    const spy = vi
+      .spyOn(console, 'error')
+      .mockImplementation((...args: unknown[]) => {
+        logged.push(args.map(String).join(' '));
+      });
+
+    try {
+      await expect(
+        runScheduledLint(env, stub(undefined, 500).fetchImpl),
+      ).rejects.toMatchObject({ code: 'dispatch' });
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(logged).toContain('Weekly lint failed: dispatch');
+    expect(await getRunTicket(kv, USER_ID, 'lint')).toBeUndefined();
+    expect(await getRun(kv, USER_ID, 'lint')).toBeUndefined();
+  });
+});
+
 describe('GET /runner/vaults (removed, #291)', () => {
   it('is gone: not even the operator key lists the vaults', async () => {
     await seedUser();
 
     const response = await createApp({ fetchImpl: stub().fetchImpl }).request(
       `${API}/runner/vaults`,
-      { headers: { authorization: RUNNER_AUTH } },
+      { headers: { authorization: ADMIN_AUTH } },
       env,
     );
 

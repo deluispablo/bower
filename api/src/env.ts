@@ -15,7 +15,6 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;
   TOKEN_ENC_KEY: string;
-  BOWER_API_KEY: string;
   GITHUB_TOKEN: string;
   ADMIN_KEY: string;
   VAPID_PUBLIC_KEY: string;
@@ -66,7 +65,6 @@ const REQUIRED_SECRETS = [
   'GOOGLE_CLIENT_SECRET',
   'SESSION_SECRET',
   'TOKEN_ENC_KEY',
-  'BOWER_API_KEY',
   'GITHUB_TOKEN',
   'ADMIN_KEY',
   'VAPID_PUBLIC_KEY',
@@ -195,7 +193,6 @@ export function assertEnv(env: unknown): Env {
     GOOGLE_CLIENT_SECRET: requireString(source, 'GOOGLE_CLIENT_SECRET'),
     SESSION_SECRET: requireString(source, 'SESSION_SECRET'),
     TOKEN_ENC_KEY: tokenEncKey,
-    BOWER_API_KEY: requireString(source, 'BOWER_API_KEY'),
     GITHUB_TOKEN: requireString(source, 'GITHUB_TOKEN'),
     ADMIN_KEY: requireString(source, 'ADMIN_KEY'),
     VAPID_PUBLIC_KEY: requireString(source, 'VAPID_PUBLIC_KEY'),
