@@ -10,6 +10,8 @@ const drive = vi.hoisted(() => ({
   getText: vi.fn<(id: string) => Promise<string>>(),
   saveNoteText: vi.fn(),
 }));
+const noteMeta = vi.hoisted(() => ({ recordNoteMeta: vi.fn() }));
+const vault = vi.hoisted(() => ({ saveEditedNote: vi.fn() }));
 const cache = vi.hoisted(() => ({
   loadViewSettings: vi.fn(),
   saveViewSettings: vi.fn(),
@@ -17,7 +19,28 @@ const cache = vi.hoisted(() => ({
 
 vi.mock('../src/drive.js', () => drive);
 vi.mock('../src/cache.js', () => cache);
-vi.mock('../src/note-meta.js', () => ({ loadNoteMeta: vi.fn() }));
+vi.mock('../src/note-meta.js', () => ({
+  loadNoteMeta: vi.fn(),
+  recordNoteMeta: noteMeta.recordNoteMeta,
+}));
+// The vault store's own save path (which refreshes the index) is faked over
+// the mocked Drive write, so the test sees what Compare hands to it.
+vi.mock('../src/vault-store.js', () => ({
+  useVault: () => ({ saveEditedNote: vault.saveEditedNote }),
+}));
+
+vault.saveEditedNote.mockImplementation(
+  async (
+    id: string,
+    text: string,
+    options: { baseModifiedTime: string | null },
+  ): Promise<{ text: string; modifiedTime: string | null }> => {
+    const saved = (await drive.saveNoteText({ id }, text, options)) as {
+      file: { modifiedTime?: string };
+    };
+    return { text, modifiedTime: saved.file.modifiedTime ?? null };
+  },
+);
 
 const { CompareView } = await import('../src/components/compare.js');
 
@@ -263,6 +286,15 @@ describe('Compare on a desktop', () => {
       '---\nkind: rental-listing\nstatus: viewed\n---\nBody\n',
     );
     expect(args[2].baseModifiedTime).toBe('2026-09-28T08:00:00Z');
+    // Saved through the vault store (index refresh) and written through to
+    // the note-meta cache at the new modifiedTime, so coming back to the
+    // folder shows the new status.
+    expect(vault.saveEditedNote).toHaveBeenCalledTimes(1);
+    expect(noteMeta.recordNoteMeta).toHaveBeenCalledWith(
+      'id-Arlington Road, 2 bed',
+      '2026-09-28T09:00:00Z',
+      '---\nkind: rental-listing\nstatus: viewed\n---\nBody\n',
+    );
   });
 
   it('puts the status back and says so when the save fails', async () => {

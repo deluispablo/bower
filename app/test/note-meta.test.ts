@@ -25,7 +25,8 @@ vi.mock('../src/drive.js', () => ({
   thumbnailLinkOf: vi.fn(),
 }));
 
-const { loadNoteMeta, noteMetaFrom } = await import('../src/note-meta.js');
+const { loadNoteMeta, noteMetaFrom, recordNoteMeta } =
+  await import('../src/note-meta.js');
 
 const NOTE = [
   '---',
@@ -116,5 +117,16 @@ describe('loadNoteMeta', () => {
     await loadNoteMeta({ id: 'n1' });
     await loadNoteMeta({ id: 'n1' });
     expect(getText).toHaveBeenCalledTimes(2);
+  });
+
+  it('serves a write-through at the new modifiedTime without reading Drive', async () => {
+    getText.mockResolvedValueOnce(NOTE);
+    await loadNoteMeta({ id: 'n1', modifiedTime: 'T1' });
+
+    await recordNoteMeta('n1', 'T2', '---\nkind: invoice\nstatus: paid\n---\n');
+    const meta = await loadNoteMeta({ id: 'n1', modifiedTime: 'T2' });
+
+    expect(getText).toHaveBeenCalledTimes(1);
+    expect(meta.status).toBe('paid');
   });
 });

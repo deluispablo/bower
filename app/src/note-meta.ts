@@ -120,3 +120,21 @@ export async function loadNoteMeta(
   } satisfies NoteMetaEntry);
   return meta;
 }
+
+/**
+ * Writes a note's new frontmatter through to the cache after Bower saved it
+ * (`text` is the text just written, `modifiedTime` the one Drive returned),
+ * so the next `loadNoteMeta` at that `modifiedTime` needs no Drive read.
+ * With no `modifiedTime` the entry is stored as unknown (`''`), which
+ * `loadNoteMeta` never trusts, so the next read goes to Drive.
+ */
+export async function recordNoteMeta(
+  id: string,
+  modifiedTime: string | undefined,
+  text: string,
+): Promise<void> {
+  await saveNoteMetaEntry(id, {
+    modifiedTime: modifiedTime ?? '',
+    meta: noteMetaFrom(parseFrontmatter(text).data),
+  } satisfies NoteMetaEntry);
+}
