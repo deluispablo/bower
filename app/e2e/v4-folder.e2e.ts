@@ -140,3 +140,189 @@ test('sort, kind filter and origin filter survive a reload, per folder (#611)', 
     'true',
   );
 });
+
+const GARDEN = '/folder/2-Areas/Garden';
+const EMPTY = '/folder/2-Areas/Car';
+
+test('a folder of photos opens in Grid and the toggle is remembered (#613)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
+  await page.goto(GARDEN);
+  const view = page.getByRole('group', { name: 'View' });
+  await expect(page.locator('.folder-grid')).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Grid' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  await view.getByRole('button', { name: 'List' }).click();
+  await expect(page.locator('.folder-grid')).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await page.reload();
+  await expect(
+    page
+      .getByRole('group', { name: 'View' })
+      .getByRole('button', { name: 'List' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.folder-grid')).toHaveCount(0);
+
+  // Flat hunt is mostly not photos: List, until it is switched to Grid.
+  await page.goto(FLAT);
+  await expect(page.locator('.folder-item').first()).toBeVisible();
+  await expect(page.locator('.folder-grid')).toHaveCount(0);
+  await page
+    .getByRole('group', { name: 'View' })
+    .getByRole('button', { name: 'Grid' })
+    .click();
+  await expect(page.locator('.folder-grid')).toBeVisible();
+  await page.waitForTimeout(300);
+  await page.reload();
+  await expect(page.locator('.folder-grid')).toBeVisible();
+  await shot(page, testInfo, 'folder-grid');
+});
+
+test('tiles show thumbnails online and the kind icon offline (#613)', async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
+  await page.goto(FLAT);
+  await page
+    .getByRole('group', { name: 'View' })
+    .getByRole('button', { name: 'Grid' })
+    .click();
+  // A pair shows Bower's note: its name and its first lines.
+  const pair = page
+    .locator('.folder-tile', { hasText: 'Arlington Road, 2 bed' })
+    .first();
+  await expect(pair).toContainText('Bower’s note');
+  await expect(pair.locator('.note-line').first()).toBeVisible();
+  // Originals: the photo alone, with Drive's picture.
+  await page.getByRole('button', { name: /^Originals/ }).click();
+  const sign = page.locator('.folder-tile', { hasText: 'window sign' });
+  await expect(sign).toContainText('Photo');
+  await expect(sign.locator('img.thumb-img')).toBeVisible();
+
+  // Offline, inside the app (no reload): the tiles are drawn again and show
+  // the kind icon instead of the picture.
+  const view = page.getByRole('group', { name: 'View' });
+  await context.setOffline(true);
+  await view.getByRole('button', { name: 'List' }).click();
+  await view.getByRole('button', { name: 'Grid' }).click();
+  await expect(sign).toBeVisible();
+  await expect(sign.locator('img.thumb-img')).toHaveCount(0);
+  await expect(sign.locator('.folder-row-icon .icon')).toBeVisible();
+  await context.setOffline(false);
+});
+
+test('holding a row or a tile opens quick look (#613)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
+  await page.goto(FLAT);
+  const row = page.locator('.folder-item', { hasText: 'Lease agreement' });
+  await row.hover();
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+
+  const sheet = page.getByRole('dialog', { name: /^Quick look/ });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole('heading')).toHaveText(/Lease agreement/);
+  await expect(sheet.locator('.quick-look-kind')).toHaveText(
+    /^PDF · .* [KM]B$/,
+  );
+  await expect(sheet.locator('.quick-look-path')).toContainText(
+    'Projects › Flat hunt',
+  );
+  await expect(sheet.locator('.quick-look-filed')).toHaveText(
+    /^Filed by Bower /,
+  );
+  // The demo's files are not in a real Drive: the button says so.
+  await expect(
+    sheet.getByRole('button', { name: 'Open in Drive' }),
+  ).toBeDisabled();
+  await shot(page, testInfo, 'folder-quicklook');
+
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  // The held row did not open.
+  await expect(page).toHaveURL(/\/folder\//);
+
+  // A tile the same way, then Open.
+  await page
+    .getByRole('group', { name: 'View' })
+    .getByRole('button', { name: 'Grid' })
+    .click();
+  const tile = page.locator('.folder-tile', { hasText: 'Lease agreement' });
+  await tile.hover();
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('link', { name: 'Open', exact: true }).click();
+  await expect(page).toHaveURL(/\/(file|note)\//);
+});
+
+test('Space opens quick look on the desktop (#613)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the keyboard is desktop');
+  await page.goto(FLAT);
+  await page.locator('.folder-item', { hasText: 'Lease agreement' }).focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('dialog', { name: /^Quick look/ })).toBeVisible();
+});
+
+test('an empty folder invites adding things (#613)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
+  await page.goto(EMPTY);
+  const empty = page.locator('.folder-empty');
+  await expect(empty).toContainText('Nothing in Car yet');
+  await expect(empty).toContainText(
+    'Add tickets, bookings or ideas and Bower files them here at the next tidy-up.',
+  );
+  await expect(empty.locator('svg.b')).toBeVisible();
+  await expect(
+    empty.getByRole('link', { name: 'Add something' }),
+  ).toHaveAttribute('href', '/add');
+  await expect(
+    empty.getByRole('link', { name: 'Ask Bower to move things here' }),
+  ).toHaveAttribute('href', /^\/bower\?text=/);
+  await shot(page, testInfo, 'folder-empty');
+});
+
+test('Flat hunt has the Compare tab on the phone (#613)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
+  await page.goto(FLAT);
+  const tabs = page.getByRole('tablist', { name: 'Folder content' });
+  await expect(tabs.getByRole('tab')).toHaveText([
+    'Everything',
+    'Compare 4 flats',
+  ]);
+  await expect(tabs.getByRole('tab', { name: 'Everything' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await tabs.getByRole('tab', { name: 'Compare 4 flats' }).click();
+  await expect(page.getByRole('region', { name: 'Compare' })).toBeVisible();
+  await expect(page.locator('.folder-item')).toHaveCount(0);
+  await shot(page, testInfo, 'folder-compare');
+  await tabs.getByRole('tab', { name: 'Everything' }).click();
+  await expect(page.locator('.folder-item').first()).toBeVisible();
+});
+
+test('Flat hunt has the Compare button on the desktop (#613)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the button is desktop');
+  await page.goto(FLAT);
+  await page.getByRole('button', { name: 'Compare 4 flats' }).click();
+  await expect(page.locator('table').first()).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Everything' })).toBeVisible();
+});

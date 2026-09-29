@@ -54,10 +54,20 @@ import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
+import { Bird } from './bird.js';
 import { FolderMark } from './folder-mark.js';
+import {
+  LayoutToggle,
+  NoteLines,
+  Thumb,
+  defaultLayout,
+} from './folder-grid.js';
+import type { FolderLayout } from './folder-grid.js';
 import { IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
 import { KeyFacts } from './key-facts.js';
 import { KindBadge } from './kind-badge.js';
+import { QuickLook } from './quick-look.js';
+import { useLongPress } from './use-long-press.js';
 import { BowerTag, NewTag } from './tags.js';
 
 /** A row's type icon, coloured by kind (`folder.css`). A note copied from
@@ -153,21 +163,21 @@ interface FolderViewState {
   sort: FolderSort;
   kind: FileKind | null;
   origin: OriginFilter;
+  /** `null` until the person picks one: the folder then chooses (#613). */
+  layout: FolderLayout | null;
 }
 
 const DEFAULT_VIEW: FolderViewState = {
   sort: 'newest',
   kind: null,
   origin: 'all',
+  layout: null,
 };
 
 /** The folder's `viewSettings` record. `folderSort` is the exact sort (the
  * shared `sort` only knows name and modified); `compareColumns` is Compare's
  * and is kept whenever this screen writes. */
-type StoredView = ViewSettings & {
-  folderSort?: FolderSort;
-  compareColumns?: string[];
-};
+type StoredView = ViewSettings & { folderSort?: FolderSort };
 
 function readView(stored: StoredView | undefined): FolderViewState {
   if (stored === undefined) return DEFAULT_VIEW;
@@ -182,7 +192,13 @@ function readView(stored: StoredView | undefined): FolderViewState {
     typeof stored.kindFilter === 'string'
       ? (stored.kindFilter as FileKind)
       : null;
-  return { sort, kind, origin };
+  const layout: FolderLayout | null =
+    stored.layoutChosen !== true
+      ? null
+      : stored.layout === 'grid'
+        ? 'grid'
+        : 'list';
+  return { sort, kind, origin, layout };
 }
 
 /** Sort, kind filter and origin filter, remembered per folder (#582). */
@@ -223,6 +239,10 @@ function useFolderView(
           folderSort: next.sort,
           kindFilter: next.kind,
           originFilter: next.origin === 'all' ? null : next.origin,
+          ...(next.layout !== null && {
+            layout: next.layout,
+            layoutChosen: true,
+          }),
         };
         return saveViewSettings(path, record);
       })
@@ -434,6 +454,22 @@ export interface FolderItemsProps {
   titles: ReadonlyMap<string, string>;
   catalogue: ReadonlyMap<string, Origin>;
   now: number;
+  /** The desktop's "Compare <n> <plural>" button beside the kind filter
+   * (#613, R-COMP-1); `undefined` when the folder has nothing to compare. */
+  compare?: { label: string; onOpen: () => void };
+}
+
+/** A tile's line under its title: "PDF · Bower's note", "Photo",
+ * "PDF · 6 pages", "Spreadsheet (CSV)", "Note". */
+export function tileLine(row: FolderRow, pages: number | undefined): string {
+  const label =
+    row.kind === 'csv' ? 'Spreadsheet (CSV)' : FILE_KIND_LABELS[row.kind];
+  if (row.original !== undefined) return `${label} · Bower's note`;
+  if (row.kind === 'note') return row.bower ? "Bower's note" : label;
+  if (pages !== undefined && pages > 0) {
+    return `${label} · ${pages} ${pages === 1 ? 'page' : 'pages'}`;
+  }
+  return label;
 }
 
 type Entry = { type: 'group'; label: string } | { type: 'row'; row: FolderRow };
@@ -449,8 +485,10 @@ export function FolderItems({
   titles,
   catalogue,
   now,
+  compare,
 }: FolderItemsProps): JSX.Element {
   const fresh = useNew();
+  const [quick, setQuick] = useState<FolderRow | null>(null);
   const { index, getNoteText } = useVault();
   const byPath = index?.byPath ?? NO_FILES;
   const catalogueFile = byPath.get(CATALOGUE_PATH);
@@ -536,18 +574,92 @@ export function FolderItems({
 
   const showTime = view.sort === 'name' || view.sort === 'kind';
 
+  // Grid when the person chose it, else when most of the folder is photos.
+  const allKinds = useMemo(
+    () => rowsFor(model, 'all').map((row) => row.kind),
+    [model],
+  );
+  const layout: FolderLayout = view.layout ?? defaultLayout(allKinds);
+
+  // Holding a row or tile opens quick look (#613); the click that follows a
+  // real long press must not also open the row.
+  const { consumeLongPress, ...press } = useLongPress((target) => {
+    const key = target.dataset.rowKey;
+    const held = rows.find((row) => row.key === key);
+    if (held !== undefined) setQuick(held);
+  });
+  const holdProps = (row: FolderRow): Record<string, unknown> => ({
+    ...press,
+    'data-row-key': row.key,
+    onClick: (event: Event): void => {
+      if (consumeLongPress()) event.preventDefault();
+    },
+    onKeyDown: (event: KeyboardEvent): void => {
+      if (event.key !== ' ') return;
+      event.preventDefault();
+      setQuick(row);
+    },
+  });
+  const hrefOf = (row: FolderRow): string =>
+    fileKind(row.file) === 'note'
+      ? `/note/${row.file.id}`
+      : `/file/${row.file.id}`;
+
+  function renderTile(row: FolderRow): JSX.Element {
+    const shown = row.original ?? row.file;
+    const isNote = row.original === undefined && row.kind === 'note';
+    const showsNote = isNote || row.original !== undefined;
+    const isNew =
+      fresh.isNew(row.file.id) ||
+      (row.original !== undefined && fresh.isNew(row.original.id));
+    const icon = (
+      <KindIcon file={shown} origin={originOf(row.file, catalogue)} />
+    );
+    return (
+      <a class="folder-tile folder-item" href={hrefOf(row)} {...holdProps(row)}>
+        <span class="folder-tile-thumb">
+          {showsNote ? (
+            <span class="folder-tile-note">
+              {row.bower && (
+                <span class="folder-tile-bower">
+                  <Bird state="idle" size={16} />
+                  Bower&rsquo;s note
+                </span>
+              )}
+              <NoteLines id={row.file.id} />
+            </span>
+          ) : (
+            <Thumb file={shown} kind={row.kind} fallback={icon} />
+          )}
+          {row.kind !== 'note' && <KindBadge kind={row.kind} file={shown} />}
+        </span>
+        <span class="folder-tile-title">
+          {titleOf(row)}
+          {isNew && (
+            <>
+              {' '}
+              <NewTag />
+            </>
+          )}
+        </span>
+        <span class="folder-tile-line">
+          {tileLine(row, pages.get(shown.id))}
+        </span>
+      </a>
+    );
+  }
+
   function renderEntry(entry: Entry): JSX.Element {
     if (entry.type === 'group') {
       return <h3 class="folder-group">{entry.label}</h3>;
     }
     const { row } = entry;
-    const isNote = fileKind(row.file) === 'note';
-    const href = isNote ? `/note/${row.file.id}` : `/file/${row.file.id}`;
+    const href = hrefOf(row);
     const isNew =
       fresh.isNew(row.file.id) ||
       (row.original !== undefined && fresh.isNew(row.original.id));
     return (
-      <a class="folder-row folder-item" href={href}>
+      <a class="folder-row folder-item" href={href} {...holdProps(row)}>
         <KindIcon
           file={row.original ?? row.file}
           origin={originOf(row.file, catalogue)}
@@ -641,8 +753,19 @@ export function FolderItems({
             </option>
           ))}
         </select>
-        {/* The List/Grid toggle sits here (#613). */}
-        <span class="folder-view-slot" />
+        {compare !== undefined && (
+          <button
+            type="button"
+            class="folder-compare-btn"
+            onClick={compare.onOpen}
+          >
+            {compare.label}
+          </button>
+        )}
+        <LayoutToggle
+          layout={layout}
+          onChange={(next) => onView({ layout: next })}
+        />
       </div>
       {rows.length === 0 ? (
         <p class="folder-elsewhere">
@@ -650,6 +773,12 @@ export function FolderItems({
             ? `Bower has not written anything in ${contents.name} yet.`
             : 'Nothing of that kind here.'}
         </p>
+      ) : layout === 'grid' ? (
+        <ul class="folder-grid">
+          {rows.map((row) => (
+            <li key={row.key}>{renderTile(row)}</li>
+          ))}
+        </ul>
       ) : wantsVirtual && VirtualList !== undefined ? (
         <VirtualList
           as="ul"
@@ -679,6 +808,20 @@ export function FolderItems({
           </span>
         )}
       </p>
+      {quick !== null && (
+        <QuickLook
+          title={titleOf(quick)}
+          href={hrefOf(quick)}
+          file={quick.file}
+          original={quick.original}
+          kind={quick.kind}
+          pages={pages.get((quick.original ?? quick.file).id)}
+          origin={originOf(quick.original ?? quick.file, catalogue)}
+          folderPath={contents.path}
+          now={now}
+          onClose={() => setQuick(null)}
+        />
+      )}
     </div>
   );
 }

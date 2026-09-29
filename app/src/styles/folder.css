@@ -417,3 +417,236 @@
   display: inline-flex;
   vertical-align: middle;
 }
+
+/* Rows and tiles: no text selection or callout while held (quick look, #613). */
+.folder-item {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The List/Grid switch (#613). */
+.folder-layout {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.folder-layout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-height: 36px;
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.folder-layout-btn[aria-pressed='true'] {
+  background: var(--color-brand-tint);
+  color: var(--color-text);
+}
+
+.folder-layout-btn:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+/* Grid mode (#613, board Phone-Folder-Grid): two columns on the phone. */
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 600px) {
+  .folder-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+
+.folder-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.folder-tile-thumb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.folder-tile:hover .folder-tile-thumb {
+  border-color: var(--color-border-strong);
+}
+
+.folder-tile-thumb .thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.folder-tile-thumb .thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.folder-tile-thumb .folder-row-icon {
+  width: 44px;
+  height: 44px;
+  background: transparent;
+}
+
+.folder-tile-thumb .folder-row-icon .icon {
+  width: 28px;
+  height: 28px;
+}
+
+.folder-tile-thumb > .kind-badge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+}
+
+.folder-tile-note {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 2px;
+  padding: var(--space-2);
+  overflow: hidden;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  text-align: left;
+}
+
+.folder-tile-note .note-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.folder-tile-note .note-line {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.folder-tile-bower {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: var(--weight-medium);
+}
+
+.folder-tile-title {
+  display: -webkit-box;
+  margin-top: var(--space-1);
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.folder-tile-line {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* The Compare tabs (phone) and button (desktop), #613 / R-COMP-1. */
+.folder-tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.folder-tab {
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.folder-tab[aria-selected='true'] {
+  border-bottom-color: var(--color-brand);
+  color: var(--color-text);
+}
+
+.folder-tab:focus-visible,
+.folder-compare-btn:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.folder-compare-btn {
+  display: none;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+@media (min-width: 900px) {
+  /* The button replaces the tabs, until Compare is open: then the tabs are
+     the way back to Everything. */
+  .folder-tabs:not(.is-compare) {
+    display: none;
+  }
+
+  .folder-compare-btn {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* The empty folder (R-FOLDER-9, board Phone-Folder-Empty). */
+.folder-empty {
+  align-items: center;
+  text-align: center;
+}
+
+.folder-empty .folder-empty-title {
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+}
+
+.folder-empty .folder-empty-text {
+  max-width: 26rem;
+}
+
+.folder-empty-ask {
+  color: var(--color-link);
+}
