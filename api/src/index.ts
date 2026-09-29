@@ -9,7 +9,7 @@ import type { AppEnv } from './env.js';
 import { createErrorHandler } from './errors.js';
 import { createProcessRoutes } from './process.js';
 import { createPushRoutes } from './push-routes.js';
-import { createRunnerRoutes } from './runner.js';
+import { createRunnerRoutes, runScheduledLint } from './runner.js';
 import {
   appCors,
   COOKIE_ROUTES,
@@ -81,4 +81,20 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   return app;
 }
 
-export default createApp();
+const app = createApp();
+
+/**
+ * The Worker: `fetch` is the Hono app; `scheduled` is the weekly lint's
+ * cron trigger (`wrangler.toml`), which runs the same dispatch as
+ * `POST /runner/lint/dispatch`.
+ */
+export default {
+  fetch: app.fetch.bind(app),
+  scheduled(
+    _controller: ScheduledController,
+    env: unknown,
+    ctx: ExecutionContext,
+  ): void {
+    ctx.waitUntil(runScheduledLint(env));
+  },
+};

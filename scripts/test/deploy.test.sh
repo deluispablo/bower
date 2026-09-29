@@ -298,8 +298,8 @@ expect_eq "$(count '^wrangler pages project create bower-app --production-branch
 expect_eq "$(count '^wrangler pages deploy app/dist --project-name bower-app --branch main --commit-dirty=true$')" 1 'pages deploy'
 expect_eq "$(count '^vite build VITE_API_URL=https://api.bower-home.test$')" 1 'app build with VITE_API_URL'
 expect_eq "$(calls | grep '^wrangler ' | grep -v '^wrangler whoami' | grep -v '^wrangler pages ' | grep -vc -- '-c wrangler.local.toml$' || true)" 0 'worker calls without the local config'
-# Worker secrets: all nine, the right values, none empty.
-for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET SESSION_SECRET TOKEN_ENC_KEY BOWER_API_KEY GITHUB_TOKEN ADMIN_KEY VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY; do
+# Worker secrets: all eight, the right values, none empty.
+for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET SESSION_SECRET TOKEN_ENC_KEY GITHUB_TOKEN ADMIN_KEY VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY; do
   [ -n "$(wrangler_secret "$name")" ] || die "Worker secret $name not set"
 done
 [ -f "$STATE/empty-secrets" ] && die "an empty secret was stored: $(cat "$STATE/empty-secrets")"
@@ -315,7 +315,8 @@ files=$(git --git-dir="$STATE/gh/remote.git" ls-tree -r --name-only main)
 for f in .github/workflows/ingest.yml .github/workflows/lint.yml agent/run.sh agent/claude-settings.json agent/prompts/ingest.md agent/prompts/lint.md; do
   grep -qx "$f" <<<"$files" || die "instance repo lacks $f"
 done
-expect_eq "$(gh_secret BOWER_API_KEY)" "$(wrangler_secret BOWER_API_KEY)" 'BOWER_API_KEY same in Worker and repo'
+[ -z "$(gh_secret BOWER_API_KEY)" ] || die 'BOWER_API_KEY was set in the instance repo'
+[ -z "$(wrangler_secret BOWER_API_KEY)" ] || die 'BOWER_API_KEY was set in the Worker'
 expect_eq "$(gh_secret CLAUDE_CODE_OAUTH_TOKEN)" "$CLAUDE_TOKEN" 'Claude token in repo'
 expect_eq "$(cat "$STATE/gh/vars/BOWER_API_URL")" 'https://api.bower-home.test' 'BOWER_API_URL'
 # ADMIN_KEY kept for the operator, never shown.
@@ -331,6 +332,9 @@ echo "ok first run creates everything"
 
 # --- second run: updates, skips what exists ------------------------------------
 
+grep -q '^crons = \["17 6 \* \* 0"\]$' "$REPO/api/wrangler.local.toml" || die 'no weekly cron trigger in the local config'
+# A config from before #292 has none: the rerun adds it.
+sed -i '/^\[triggers\]$/d;/^crons = /d' "$REPO/api/wrangler.local.toml"
 run_script second_run ok deploy.sh /dev/null
 expect_eq "$RC" 0 'exit code'
 expect_no_secret_in_output
@@ -343,6 +347,8 @@ expect_eq "$(count '^wrangler deploy -c wrangler.local.toml$')" 1 'worker deploy
 expect_eq "$(count '^wrangler pages deploy ')" 1 'pages deploy'
 expect_eq "$(count '^gh variable set BOWER_API_URL')" 1 'variable refreshed'
 expect_contains 'skipped secrets' 'already set'
+expect_contains 'cron added to an old config' 'Added the weekly cron trigger'
+grep -q '^crons = \["17 6 \* \* 0"\]$' "$REPO/api/wrangler.local.toml" || die 'the weekly cron trigger was not added back'
 expect_contains 'repo up to date' 'already up to date'
 echo "ok second run updates and skips what exists"
 
@@ -352,8 +358,8 @@ answers "$WORK/answers-rotate" '2' "$CLAUDE_TOKEN" "$CLIENT_ID" "$CLIENT_SECRET"
 run_script rotate ok deploy.sh "$WORK/answers-rotate" --rotate
 expect_eq "$RC" 0 'exit code'
 expect_no_secret_in_output
-expect_eq "$(count '^wrangler secret put')" 9 'secret puts'
-expect_eq "$(count '^gh secret set BOWER_API_KEY')" 1 'BOWER_API_KEY to the repo'
+expect_eq "$(count '^wrangler secret put')" 8 'secret puts'
+expect_eq "$(count '^gh secret set BOWER_API_KEY')" 0 'BOWER_API_KEY to the repo'
 expect_eq "$(gh_secret ANTHROPIC_API_KEY)" "$CLAUDE_TOKEN" 'API key choice'
 expect_contains 'rotation warning' 'signs everyone out'
 echo "ok --rotate sets every secret again"
@@ -367,7 +373,6 @@ expect_eq "$RC" 0 'exit code'
 expect_no_secret_in_output
 expect_eq "$(count '^gh repo create alex/bower-home --private$')" 1 'repo create'
 expect_eq "$(cat "$STATE/gh/vars/BOWER_API_URL")" 'https://api.bower-home.test' 'BOWER_API_URL'
-expect_contains 'BOWER_API_KEY hint' 'scripts/deploy.sh sets it'
 answers "$WORK/answers-standalone-again" 'api.bower-home.test'
 run_script standalone_again ok new-instance.sh "$WORK/answers-standalone-again" alex/bower-home
 expect_eq "$RC" 0 'exit code'

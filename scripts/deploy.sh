@@ -17,9 +17,9 @@
 # 4. Finds or creates the BOWER_KV namespace and deploys the Worker on its
 #    custom domain (scripts/deploy-api.sh).
 # 5. Sets the Worker's secrets: generates what can be generated, asks for
-#    the Google client id and secret and the GitHub token. BOWER_API_KEY
-#    goes to the Worker and the instance repo at once; ADMIN_KEY is saved
-#    to api/.prod.secrets (git-ignored, mode 600).
+#    the Google client id and secret and the GitHub token. ADMIN_KEY is
+#    saved to api/.prod.secrets (git-ignored, mode 600). The instance repo
+#    gets no Worker key at all (issue #292).
 # 6. Builds the app with VITE_API_URL set to the Worker's origin, optionally
 #    VITE_GOOGLE_API_KEY for the onboarding folder picker, and deploys it to
 #    Cloudflare Pages, creating the project the first time.

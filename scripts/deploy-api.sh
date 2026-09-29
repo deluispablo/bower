@@ -25,13 +25,12 @@
 #
 # `secrets`: sets every secret the Worker needs (see api/src/env.ts).
 # Secrets already set are skipped unless you pass --rotate. Generates
-# SESSION_SECRET, TOKEN_ENC_KEY, BOWER_API_KEY, ADMIN_KEY and the VAPID
+# SESSION_SECRET, TOKEN_ENC_KEY, ADMIN_KEY and the VAPID
 # pair itself and pipes them straight into `wrangler secret put`; asks
 # (input hidden) for the Google client id and secret and the GitHub token,
-# refusing an empty answer. BOWER_API_KEY goes to the Worker and to the
-# instance repo (`gh secret set`) in the same run, so it needs `gh` and the
-# instance repo to exist. ADMIN_KEY is written to api/.prod.secrets
-# (git-ignored, mode 600). No secret value is ever printed.
+# refusing an empty answer. ADMIN_KEY is written to api/.prod.secrets
+# (git-ignored, mode 600). No secret goes to the instance repo but the Claude
+# credential (scripts/new-instance.sh). No secret value is ever printed.
 #
 # Requires `wrangler` on PATH. `pnpm -C api deploy`/`secrets` already put
 # api/node_modules/.bin there (same as `pnpm -C api dev`); running the
@@ -55,7 +54,7 @@ LOCAL_TOML="$API_DIR/$LOCAL_CONFIG_NAME"
 PROD_SECRETS="$API_DIR/.prod.secrets"
 PLACEHOLDER_KV_ID='KV_NAMESPACE_ID'
 VARS_TO_CHECK='APP_ORIGIN API_ORIGIN GITHUB_REPO VAPID_SUBJECT'
-SECRETS='GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET SESSION_SECRET TOKEN_ENC_KEY BOWER_API_KEY GITHUB_TOKEN ADMIN_KEY VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY'
+SECRETS='GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET SESSION_SECRET TOKEN_ENC_KEY GITHUB_TOKEN ADMIN_KEY VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY'
 ROTATE=no
 ANSWER=''
 
@@ -164,6 +163,16 @@ check_login() {
 ensure_local_config() {
   if [ -f "$LOCAL_TOML" ]; then
     log "Using api/$LOCAL_CONFIG_NAME."
+    # A config written before #292 has no cron trigger, so the weekly health
+    # check would silently stop: add the block from api/wrangler.toml.
+    if ! grep -q '^crons = ' "$LOCAL_TOML"; then
+      printf '
+# The weekly health check (added by scripts/deploy-api.sh, #292).
+[triggers]
+crons = ["17 6 * * 0"]
+' >>"$LOCAL_TOML"
+      log "Added the weekly cron trigger to api/$LOCAL_CONFIG_NAME."
+    fi
     return
   fi
   log "api/$LOCAL_CONFIG_NAME not found: creating it from api/wrangler.toml."
@@ -281,7 +290,6 @@ secret_explanation() {
     GOOGLE_CLIENT_SECRET) echo 'The secret of that same OAuth client.' ;;
     SESSION_SECRET) echo 'Signs the session cookie. Generated.' ;;
     TOKEN_ENC_KEY) echo 'Encrypts stored Google refresh tokens. Generated.' ;;
-    BOWER_API_KEY) echo 'Shared key between the Worker and the runner. Generated and set in both.' ;;
     GITHUB_TOKEN) echo "GitHub -> Settings -> Developer settings -> Fine-grained token with contents: write on $(toml_get GITHUB_REPO) only." ;;
     ADMIN_KEY) echo "Key for the admin endpoints. Generated and saved to api/.prod.secrets." ;;
     VAPID_PUBLIC_KEY | VAPID_PRIVATE_KEY) echo 'Web push key pair. Generated with pnpm -C api gen-vapid.' ;;
@@ -326,32 +334,14 @@ save_admin_key() {
   chmod 600 "$PROD_SECRETS"
 }
 
-# require_instance_repo <repo>: BOWER_API_KEY is set in the Worker and the
-# instance repo at once, so both gh and the repo must be there first.
-require_instance_repo() {
-  command -v gh >/dev/null 2>&1 || die "The GitHub CLI (gh) is required: https://cli.github.com"
-  gh auth status >/dev/null 2>&1 </dev/null || die "Not logged in to GitHub. Run: gh auth login"
-  gh repo view "$1" >/dev/null 2>&1 </dev/null ||
-    die "The instance repo $1 does not exist yet. Create it with scripts/new-instance.sh (scripts/deploy.sh does this for you)."
-}
-
 setup_secrets() {
-  local repo worker_list worker_secrets repo_secrets name value public private vapid
-  repo=$(toml_get GITHUB_REPO)
-  require_instance_repo "$repo"
+  local worker_list worker_secrets name value public private vapid
   worker_list=$(wrangler_api secret list --format json </dev/null) ||
     die "Could not list the Worker's secrets. Deploy it first: scripts/deploy-api.sh deploy"
   worker_secrets=$(printf '%s' "$worker_list" | json_field name)
-  repo_secrets=$(gh secret list -R "$repo" --json name -q '.[].name' </dev/null)
 
   for name in $SECRETS; do
     case "$name" in
-      BOWER_API_KEY)
-        if [ "$ROTATE" != yes ] && has_line "$worker_secrets" "$name" && has_line "$repo_secrets" "$name"; then
-          log "$name already set in the Worker and $repo; skipped."
-          continue
-        fi
-        ;;
       VAPID_PRIVATE_KEY) continue ;; # set together with VAPID_PUBLIC_KEY
       VAPID_PUBLIC_KEY)
         if [ "$ROTATE" != yes ] && has_line "$worker_secrets" VAPID_PUBLIC_KEY && has_line "$worker_secrets" VAPID_PRIVATE_KEY; then
@@ -376,13 +366,6 @@ setup_secrets() {
         ask "Paste $name (input hidden): " secret
         put_secret "$name" "$ANSWER"
         ANSWER=''
-        ;;
-      BOWER_API_KEY)
-        value=$(generate_secret)
-        put_secret "$name" "$value"
-        printf '%s' "$value" | gh secret set BOWER_API_KEY -R "$repo"
-        value=''
-        log "$name set (generated) in the Worker and in $repo."
         ;;
       ADMIN_KEY)
         value=$(generate_secret)

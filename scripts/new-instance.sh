@@ -18,15 +18,13 @@
 #    set, unless --rotate.
 # 4. Sets the variable BOWER_API_URL to the Worker's origin.
 #
-# BOWER_API_KEY is not set here: scripts/deploy.sh (or `deploy-api.sh
-# secrets`) generates it and sets it in the Worker and in this repo at once.
-# Only lint.yml's `dispatch` job uses it, to ask the Worker to start the
-# weekly health checks. The jobs that run the agent (ingest.yml, lint.yml's
-# `lint` job) need no secret but the Claude credential: the Worker hands
-# each run its own ticket in the repository_dispatch (issue #259). An
-# instance repo set up before that still has the old workflows, which send
-# BOWER_API_KEY from every run: run this script again after updating Bower
-# (docs/runbook.md, "Upgrading to run tickets").
+# The instance repo holds no Worker key (issue #292): the weekly health
+# check is started by the Worker's own cron trigger, and the jobs that run
+# the agent (ingest.yml, lint.yml) need no secret but the Claude credential:
+# the Worker hands each run its own ticket in the repository_dispatch (issue
+# #259). A repo set up before that may still hold a BOWER_API_KEY secret;
+# this script says so and how to delete it (docs/runbook.md, "Upgrading to
+# the Worker-side weekly lint").
 #
 # OWNER/NAME and the Worker's origin come from api/wrangler.local.toml when
 # it exists (GITHUB_REPO, API_ORIGIN); otherwise they are asked for.
@@ -174,9 +172,8 @@ new_instance_main() {
   gh variable set BOWER_API_URL -R "$REPO" --body "$API_ORIGIN_VALUE" </dev/null
   log "BOWER_API_URL set to $API_ORIGIN_VALUE in $REPO."
   names=$(gh secret list -R "$REPO" --json name -q '.[].name' </dev/null)
-  if ! has_line "$names" BOWER_API_KEY; then
-    log "BOWER_API_KEY is not set in $REPO yet: scripts/deploy.sh sets it in the Worker and here at once."
-    log "(Only the weekly health check's dispatch job uses it; the runs themselves get a ticket per run.)"
+  if has_line "$names" BOWER_API_KEY; then
+    log "The secret BOWER_API_KEY is no longer used. Delete it by hand: https://github.com/$REPO/settings/secrets/actions"
   fi
 }
 

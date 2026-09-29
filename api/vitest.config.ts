@@ -15,7 +15,6 @@ export default defineConfig({
           SESSION_SECRET: 'test-session-secret',
           // base64 of 32 zero bytes — a fixture, not a real key.
           TOKEN_ENC_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-          BOWER_API_KEY: 'test-bower-api-key',
           GITHUB_TOKEN: 'test-github-token',
           ADMIN_KEY: 'test-admin-key',
           VAPID_PUBLIC_KEY: 'test-vapid-public-key',

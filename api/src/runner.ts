@@ -1,5 +1,6 @@
 /**
- * The endpoints the GitHub Actions runner calls. Two credentials:
+ * The endpoints the GitHub Actions runner calls, and the weekly lint's
+ * dispatch. Two credentials:
  *
  * - A run ticket (`run-ticket.ts`): minted for one run of one vault when
  *   the Worker dispatches it, sent in the `repository_dispatch` payload,
@@ -7,8 +8,10 @@
  *   for `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status` of
  *   that vault and that run's kind, until the run reports `done` or
  *   `failed` or the ticket expires.
- * - The operator key `BOWER_API_KEY`: only for `POST /runner/lint/dispatch`,
- *   called by the weekly lint's `dispatch` job, which never runs the agent.
+ * - The admin key `ADMIN_KEY`: only for `POST /runner/lint/dispatch`, the
+ *   manual "lint one vault by hand" call. The weekly lint is started by the
+ *   Worker's own cron trigger (`scheduled`, #292), which runs the same
+ *   `dispatchLintRuns`; no job in the instance repo holds a Worker key.
  *
  * Routes:
  *
@@ -31,11 +34,13 @@
  */
 
 import { Hono } from 'hono';
-import type { Context, MiddlewareHandler } from 'hono';
+import type { Context } from 'hono';
 
 import type { AuthDeps } from './auth.js';
-import { decrypt, importEncryptionKey, timingSafeEqual } from './crypto.js';
+import { requireAdmin } from './admin.js';
+import { decrypt, importEncryptionKey } from './crypto.js';
 import { mintAccessToken } from './drive.js';
+import { assertEnv } from './env.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import { dispatchLint } from './github.js';
@@ -92,18 +97,6 @@ function unauthorized(): HttpError {
 }
 
 /**
- * Requires `Authorization: Bearer <BOWER_API_KEY>`, compared with
- * `timingSafeEqual`. Missing header, wrong scheme or wrong key are all a
- * 401 `unauthorized`; the key itself is never logged.
- */
-export const requireRunnerKey: MiddlewareHandler<AppEnv> = async (c, next) => {
-  if (!isOperatorKey(bearer(c), c.get('env'))) {
-    throw unauthorized();
-  }
-  await next();
-};
-
-/**
  * The credential of `Authorization: Bearer <credential>`. A missing header,
  * another scheme or an empty credential is a 401 `unauthorized`.
  */
@@ -116,16 +109,11 @@ function bearer(c: Context<AppEnv>): string {
   return credential;
 }
 
-/** Whether `credential` is the operator key, compared in constant time. */
-function isOperatorKey(credential: string, env: Env): boolean {
-  return timingSafeEqual(credential, env.BOWER_API_KEY);
-}
-
 /**
  * What the request's credential may do for vault `id`: the kind of run
  * whose live ticket it is (an ingest's is checked first, then a lint's).
  * Anything else (no credential, a ticket for another vault, a retired or
- * expired ticket, the operator key) is a 401 `unauthorized`.
+ * expired ticket, the admin key) is a 401 `unauthorized`.
  */
 async function authorizeRun(c: Context<AppEnv>, id: string): Promise<RunKind> {
   const env = c.get('env');
@@ -520,6 +508,83 @@ export function runPushPayload(run: Run): PushPayload {
   return { title: 'Bower', body, url: '/' };
 }
 
+/**
+ * Starts one lint run for each vault in `ids`, each with its own ticket,
+ * through one `repository_dispatch` (`bower-lint`) per vault. The one
+ * implementation behind both `POST /runner/lint/dispatch` and the Worker's
+ * weekly cron (`scheduled`, #292).
+ *
+ * One vault's failed dispatch does not stop the others: its ticket is
+ * retired, `dispatchLint` has logged GitHub's status, and it is counted in
+ * `failed`. Anything but a `dispatch` `HttpError` is unexpected and thrown.
+ */
+export async function dispatchLintRuns(
+  env: Env,
+  ids: readonly string[],
+  fetchImpl: FetchLike,
+): Promise<{ dispatched: number; failed: number }> {
+  const kv = env.BOWER_KV;
+  let dispatched = 0;
+  for (const id of ids) {
+    const now = new Date();
+    // Stored before the dispatch, so the runner never asks before it
+    // exists; retired again when the dispatch fails.
+    const ticket = await issueRunTicket(kv, id, 'lint', now, RUN_TICKET_TTL_MS);
+    try {
+      await dispatchLint(
+        {
+          repo: env.GITHUB_REPO,
+          token: env.GITHUB_TOKEN,
+          vaultId: id,
+          ticket,
+        },
+        fetchImpl,
+      );
+    } catch (err) {
+      await deleteRunTicket(kv, id, 'lint');
+      if (!(err instanceof HttpError)) throw err;
+      continue;
+    }
+    const run: Run = {
+      state: 'queued',
+      kind: 'lint',
+      requestedAt: now.toISOString(),
+      runId: crypto.randomUUID(),
+    };
+    await putRun(kv, id, run, 'lint');
+    dispatched += 1;
+  }
+  return { dispatched, failed: ids.length - dispatched };
+}
+
+/**
+ * The Worker's weekly cron (`[triggers] crons` in `wrangler.toml`): starts a
+ * lint run for every vault, exactly as `POST /runner/lint/dispatch` does
+ * with no body. A failure is logged with its code (never a token or a
+ * ticket) and rethrown, so Cloudflare records the invocation as failed.
+ */
+export async function runScheduledLint(
+  rawEnv: unknown,
+  fetchImpl: FetchLike = (input, init) => fetch(input, init),
+): Promise<void> {
+  try {
+    const env = assertEnv(rawEnv);
+    const ids = await listVaultIds(env.BOWER_KV);
+    const { failed } = await dispatchLintRuns(env, ids, fetchImpl);
+    if (failed > 0) {
+      throw new HttpError(
+        502,
+        'dispatch',
+        `Could not start ${failed} of ${ids.length} health checks`,
+      );
+    }
+  } catch (err) {
+    const code = err instanceof HttpError ? err.code : 'internal';
+    console.error(`Weekly lint failed: ${code}`);
+    throw err;
+  }
+}
+
 type VaultUser = User & { vault: NonNullable<User['vault']> };
 
 function hasVault(user: User | undefined): user is VaultUser {
@@ -544,7 +609,7 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     return user;
   }
 
-  runner.post('/runner/lint/dispatch', requireRunnerKey, async (c) => {
+  runner.post('/runner/lint/dispatch', requireAdmin, async (c) => {
     const env = c.get('env');
     const kv = env.BOWER_KV;
     const text = await c.req.text();
@@ -562,51 +627,13 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
         ? await listVaultIds(kv)
         : [(await loadVaultUser(kv, only)).id];
 
-    // One vault's failed dispatch does not stop the others; the answer is
-    // a 502 when any failed, so the calling job shows it.
-    let dispatched = 0;
-    for (const id of ids) {
-      const now = new Date();
-      // Stored before the dispatch, so the runner never asks before it
-      // exists; retired again when the dispatch fails.
-      const ticket = await issueRunTicket(
-        kv,
-        id,
-        'lint',
-        now,
-        RUN_TICKET_TTL_MS,
-      );
-      try {
-        await dispatchLint(
-          {
-            repo: env.GITHUB_REPO,
-            token: env.GITHUB_TOKEN,
-            vaultId: id,
-            ticket,
-          },
-          fetchImpl,
-        );
-      } catch (err) {
-        await deleteRunTicket(kv, id, 'lint');
-        // `dispatchLint` has logged GitHub's status; anything but its own
-        // 502 is unexpected and ends the request.
-        if (!(err instanceof HttpError)) throw err;
-        continue;
-      }
-      const run: Run = {
-        state: 'queued',
-        kind: 'lint',
-        requestedAt: now.toISOString(),
-        runId: crypto.randomUUID(),
-      };
-      await putRun(kv, id, run, 'lint');
-      dispatched += 1;
-    }
-    if (dispatched < ids.length) {
+    const { dispatched, failed } = await dispatchLintRuns(env, ids, fetchImpl);
+    // The answer is a 502 when any failed, so the caller sees it.
+    if (failed > 0) {
       throw new HttpError(
         502,
         'dispatch',
-        `Could not start ${ids.length - dispatched} of ${ids.length} health checks`,
+        `Could not start ${failed} of ${ids.length} health checks`,
       );
     }
     const result: LintDispatchResult = { dispatched };

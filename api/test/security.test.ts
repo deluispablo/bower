@@ -439,7 +439,7 @@ describe('input limits', () => {
       `${API}/runner/vaults/${USER_ID}/status`,
       {
         method: 'POST',
-        headers: { authorization: `Bearer ${env.BOWER_API_KEY}` },
+        headers: { authorization: `Bearer ${env.ADMIN_KEY}` },
         body: new Blob([JSON.stringify({ state: 'running' })]),
       },
       env,

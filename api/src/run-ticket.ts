@@ -1,7 +1,7 @@
 /**
  * Run tickets: the per-run, per-vault credential the runner presents to
  * `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status`, instead of
- * the operator key `BOWER_API_KEY`.
+ * an operator key.
  *
  * The Worker mints a random 32-byte ticket when it dispatches a run
  * (`POST /process` for an ingest, `POST /runner/lint/dispatch` for the
