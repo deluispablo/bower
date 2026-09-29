@@ -177,9 +177,9 @@ describe('Note screen (#609)', () => {
       'Rental listing',
     );
     expect(row?.textContent).toContain('Bower');
-    expect(
-      row?.querySelector('select')?.getAttribute('aria-label'),
-    ).toBe('Status: To view. Change');
+    expect(row?.querySelector('select')?.getAttribute('aria-label')).toBe(
+      'Status: To view. Change',
+    );
     const meta = root.querySelector('.note-meta-line');
     expect(meta?.textContent).toContain('Flat hunt');
     expect(meta?.textContent).toContain('Filed 26 Sep');

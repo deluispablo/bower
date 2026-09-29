@@ -288,9 +288,7 @@ function MetaLine({
           {folder.name}
         </a>
       )}
-      {folder !== undefined && date !== '' && (
-        <span aria-hidden="true">·</span>
-      )}
+      {folder !== undefined && date !== '' && <span aria-hidden="true">·</span>}
       {date !== '' && <span>{`${verb} ${date}`}</span>}
     </p>
   );

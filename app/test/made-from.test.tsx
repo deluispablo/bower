@@ -38,11 +38,7 @@ describe('madeFromSources (R-NOTE-3)', () => {
       lookup,
     });
     expect(sources.map((s) => [s.name, s.role, s.href])).toEqual([
-      [
-        'Data Lead, Northwind (clip)',
-        'your clip',
-        `/note/${CLIP.id}`,
-      ],
+      ['Data Lead, Northwind (clip)', 'your clip', `/note/${CLIP.id}`],
       [
         'careers.northwind.example',
         'job advert',
@@ -113,7 +109,9 @@ describe('MadeFrom (R-NOTE-7)', () => {
       caption?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     const fold = root.querySelector('.made-from-fold');
-    expect(fold?.textContent).toBe('Made from your Word document and a job advert');
+    expect(fold?.textContent).toBe(
+      'Made from your Word document and a job advert',
+    );
     expect(fold?.getAttribute('aria-expanded')).toBe('false');
     expect(root.querySelector('.made-from-list')).toBeNull();
     expect(localStorage.getItem(SOURCES_FOLDED_KEY)).toBe('true');
