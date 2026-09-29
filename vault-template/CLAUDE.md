@@ -164,11 +164,11 @@ Bower files, by default: an original lands in its PARA folder as it is, sensibly
 7. `0-Inbox/Processed/` keeps only instruction notes, raw clips, items that could not be converted and duplicates. Everything else lives where it belongs.
 8. Update `About-Me.md` if an item reveals something lasting about the owner, never from a file that was only filed.
 9. **Duplicates:** the same file again (same name and size, or the same URL) moves to `0-Inbox/Processed/` and is logged; a clip about something the vault already tracks updates the existing note with any new detail instead.
-10. **What you added:** when a run adds something besides filing (a note, a table, new lines in a note the owner keeps), end it by writing one short clause about that, in the first person, as the only line of `.bower/added.txt` ("I added bike times to the flats"), at most 200 characters. When the run only filed, write nothing there. The runner reads the file and removes it.
+10. **What you added:** when a run adds something besides filing (a note, a table, new lines in a note the owner keeps), end it by writing one short clause about that, in the first person, as the only line of `.bower/added.txt` ("I added bike times to the flats"), at most 200 characters: plain words for the owner, never an internal word (index, hub, orphaned, crashed, run, frontmatter), and no final full stop. When the run only filed, write nothing there. The runner reads the file and removes it.
 
 ### Kinds (the documents that get a companion note)
 Bower recognises eight kinds of document. For each, the list gives the `kind` value and its name; the key facts, in order (at most four); the status values, in order (`none` when the kind has none); how the app compares notes of that kind; then its fields, grouped and ordered as the app's Details shows them, each as the frontmatter key, the label the app shows and the type. The app keeps the same list: never invent a kind, and never write a field key the kind does not have unless a rule adds it.
-- Types: `text` plain words; `number` a bare number (`72`); `money` the amount with its currency (`£2,150`, `€38.40`); `date` `YYYY-MM-DD`, or `YYYY-MM` when only the month is known; `link` a web address; `note-link` a `[[wikilink]]` to another note.
+- Types: `text` plain words; `number` a bare number (`72`); `money` the amount with its currency (`£2,150`, `€38.40`), and its period when the source states one (`£340 a week`, `£1,450 a month`); `date` `YYYY-MM-DD`, or `YYYY-MM` when only the month is known; `link` a web address; `note-link` a `[[wikilink]]` to another note.
 - A field marked `for you` comes from the owner's own notes, never from the document. When a `for you` field needs a reason, add a companion `<key>_note` of at most 12 words after it in the frontmatter (`bike_to_office: 14 min` then `bike_to_office_note: from your offer letter and Cycle to Work agreement`); the app reads the two as one line.
 - `rooms` is written `2 bed, 1 bath`: the app shows the part before the comma as the key fact.
 
@@ -299,7 +299,7 @@ status: new
 address: 14 Arlington Road, London NW1
 type: Flat, second floor, no lift
 rooms: 2 bed, 1 bath
-rent: £2,150
+rent: £2,150 a month
 deposit: 5 weeks, £2,480
 against_area: 10 % under the £2,380 average
 available: 2026-11-01
