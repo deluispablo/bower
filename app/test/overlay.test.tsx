@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { Overlay, OverlayHost } from '../src/components/overlay.js';
 import type {
@@ -173,27 +173,17 @@ describe('Overlay', () => {
   it('with the opener gone, focus lands on the heading that is on screen, never BODY (#872)', async () => {
     const hidden = document.createElement('h1');
     hidden.textContent = 'Desktop heading';
-    hidden.dataset.hidden = 'true';
+    hidden.style.display = 'none';
     const title = document.createElement('span');
     title.className = 'topbar-title';
     title.textContent = 'Bower';
     shell.append(hidden, title);
-    // jsdom has no layout: a `display: none` element has no client rects.
-    const spy = vi
-      .spyOn(HTMLElement.prototype, 'getClientRects')
-      .mockImplementation(function (this: HTMLElement) {
-        return (this.dataset.hidden === 'true' ? [] : [{}]) as never;
-      });
-    try {
-      openDialog('rename');
-      opener.remove();
-      press('Escape');
-      await Promise.resolve();
-      expect(panel()).toBeNull();
-      expect(document.activeElement).toBe(title);
-    } finally {
-      spy.mockRestore();
-    }
+    openDialog('rename');
+    opener.remove();
+    press('Escape');
+    await Promise.resolve();
+    expect(panel()).toBeNull();
+    expect(document.activeElement).toBe(title);
   });
 
   it('closes on a tap on the scrim', () => {
