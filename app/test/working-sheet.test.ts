@@ -214,6 +214,18 @@ describe('rows (R-SHEET-3)', () => {
     expect(rowFor(updated).note).toBe('Added the next service date');
   });
 
+  it('a filed link reads by its host, not its generated file name (#557)', () => {
+    const link: OutcomeItem = {
+      action: 'filed',
+      title: 'Link - example.org 2026-09-28 1414.md',
+      path: 'Clippings/Link - example.org 2026-09-28 1414.md',
+      to: '3-Resources/Links/Link - example.org 2026-09-28 1414.md',
+    };
+    const row = rowFor(link);
+    expect(row.title).toBe('example.org');
+    expect(row.where).toBe('Resources › Links');
+  });
+
   it('finds the folder that holds the new notes', () => {
     expect(partialFolder({ items } as RunOutcome)).toBe(
       '1-Projects/Flat hunt/Riverside',

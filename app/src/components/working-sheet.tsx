@@ -27,6 +27,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Run, RunPhase as StepPhase } from '../api.js';
 import { isDemo } from '../api.js';
+import { linkTitleFromFileName } from '../add.js';
 import { sinceLabel } from '../bower-tab.js';
 import { doneNotes, things } from '../home.js';
 import { JUST_FILED_PATH } from '../just-filed.js';
@@ -445,10 +446,12 @@ export function rowFor(
     notes.push(`was ${item.from}`);
   }
   if (item.note !== undefined) notes.push(item.note);
+  // A filed link reads by its host, never by its generated file name (#557).
+  const title = linkTitleFromFileName(item.title) ?? item.title;
   return {
     key: `${item.action}:${item.path}`,
-    title: item.title,
-    tone: toneOfName(item.title),
+    title,
+    tone: toneOfName(title),
     action: item.action,
     para,
     where,
