@@ -38,7 +38,7 @@
 }
 
 .tree-row:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: -2px;
 }
 
@@ -157,7 +157,7 @@
 }
 
 .tree-folder-link:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: -2px;
 }
 
@@ -175,7 +175,7 @@
 }
 
 .tree-note-link:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: -2px;
 }
 

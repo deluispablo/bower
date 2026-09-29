@@ -8,7 +8,7 @@
   position: fixed;
   inset: 0;
   z-index: 45;
-  background: rgb(7 12 22 / 0.5);
+  background: var(--color-scrim);
 }
 
 .rule-sheet-panel {
@@ -106,7 +106,7 @@
 
 .rule-sheet-row:focus-visible,
 .rule-sheet-cancel:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 

@@ -130,7 +130,7 @@
 }
 
 .working-sheet-close:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 
@@ -228,7 +228,7 @@
 
 .working-sheet-bar-fill {
   height: 100%;
-  background: var(--color-brand);
+  background: var(--color-accent-line);
   transition: width var(--motion-base) var(--ease-out);
 }
 
@@ -239,7 +239,7 @@
   position: absolute;
   inset: 0;
   width: 40%;
-  background: var(--color-brand);
+  background: var(--color-accent-line);
   border-radius: var(--radius-full);
   animation: working-bar-slide 1.4s ease-in-out infinite;
 }
