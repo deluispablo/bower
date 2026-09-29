@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Run } from '../src/api.js';
 import type { DriveFile } from '../src/drive.js';
+import { tableRows } from '../src/just-filed.js';
+import { outcomeFromRun } from '../src/run-outcome.js';
+import { rowFor } from '../src/components/working-sheet.js';
 import {
   clearPileOrigins,
   groupByOrigin,
@@ -130,6 +134,42 @@ describe('groupByOrigin', () => {
       ['B', [1, 4]],
       ['A', [3]],
       [undefined, [2]],
+    ]);
+  });
+});
+
+describe('rows name their pile (R-PILE-5)', () => {
+  const run: Run = {
+    state: 'done',
+    requestedAt: '2026-09-29T13:50:00.000Z',
+    finishedAt: '2026-09-29T13:57:00.000Z',
+    runId: 'run-a',
+    items: [
+      {
+        path: '0-Inbox/scan_0412.pdf',
+        kind: 'file',
+        to: '2-Areas/Home/Boiler manual.pdf',
+        renamedFrom: 'scan_0412.pdf',
+      },
+      {
+        path: '0-Inbox/offer.pdf',
+        kind: 'file',
+        to: '1-Projects/Jobs/offer.pdf',
+      },
+    ],
+  };
+
+  it('Just filed rows and the sheet rows carry the heading, by the inbox name', () => {
+    rememberPileOrigins([pile('a', 'Flat papers', ['scan_0412.pdf'])]);
+    const rows = tableRows(run, null);
+    expect(rows.map((r) => r.origin)).toEqual([
+      'From your pile: “Flat papers”',
+      undefined,
+    ]);
+    const items = outcomeFromRun(run).items;
+    expect(items.map((item) => rowFor(item).origin)).toEqual([
+      'From your pile: “Flat papers”',
+      undefined,
     ]);
   });
 });

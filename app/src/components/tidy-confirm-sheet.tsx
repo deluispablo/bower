@@ -53,6 +53,13 @@ export const CONFIRM_COST =
 /** The piles variant's line under the count (R-PILE-5). */
 export const CONFIRM_PILES_NOTE = 'Bower reads each pile with its own note.';
 
+/** R-UPL: files still on their way when the person confirms. */
+export function stillUploadingLine(count: number): string {
+  return count === 1
+    ? '1 file is still uploading; it joins the next tidy-up.'
+    : `${count} files are still uploading; they join the next tidy-up.`;
+}
+
 /** CONF-3: "5 things in your inbox" / "1 thing in your inbox". */
 export function confirmCountLine(count: number): string {
   return `${count} ${count === 1 ? 'thing' : 'things'} in your inbox`;
@@ -127,6 +134,8 @@ export interface TidyConfirmSheetProps {
    * gets a row ("From your pile: “…”"). Absent: the plain dialog.
    */
   piles?: PileConfirm;
+  /** Files still uploading (R-UPL); they wait for the next tidy-up. */
+  uploading?: number;
   /** Which copy to show (see `TidyConfirmKind`). Defaults to `'tidy'`. */
   kind?: TidyConfirmKind;
   /** "Yes, tidy up"/"Yes, do it now": starts the run. */
@@ -140,6 +149,7 @@ export function TidyConfirmSheet({
   loading = false,
   breakdown,
   piles,
+  uploading = 0,
   kind = 'tidy',
   onConfirm,
   onDismiss,
@@ -217,6 +227,11 @@ export function TidyConfirmSheet({
                     </li>
                   ))}
                 </ul>
+              )}
+              {uploading > 0 && (
+                <p class="tidy-confirm-text" role="status">
+                  {stillUploadingLine(uploading)}
+                </p>
               )}
               <p class="tidy-confirm-text">{CONFIRM_COST}</p>
             </>

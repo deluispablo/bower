@@ -10,7 +10,9 @@ import type { JSX } from 'preact';
 
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
+import { activeItems } from '../upload-queue.js';
 import { PushPrompt } from './push-prompt.js';
+import { useUploadItems } from './upload-chip.js';
 import { lazyOverlay } from '../lazy-overlay.js';
 
 const LazyConfirm = lazyOverlay(() =>
@@ -50,6 +52,8 @@ export function RunSheets(): JSX.Element | null {
     dismissConfirm,
   } = useRun();
 
+  const uploading = activeItems(useUploadItems()).length;
+
   // No run before the account has a folder (login, onboarding).
   if (me?.vault == null) return null;
 
@@ -72,6 +76,7 @@ export function RunSheets(): JSX.Element | null {
           loading={confirmLoading}
           breakdown={confirmBreakdown}
           piles={confirmPiles}
+          uploading={uploading}
           kind={confirmScope === 'instructions' ? 'request' : 'tidy'}
           onConfirm={confirmTidyUp}
           onDismiss={dismissConfirm}
