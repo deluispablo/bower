@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/assets/hero.svg" alt="Bower: a second brain that files itself. The bird looks around for something bright." width="640">
+  <img src="docs/assets/hero.svg" alt="Bower: a second brain that files itself. The bird looks around; your folders: Projects, Areas, Resources, Archive." width="900">
 </p>
 
-<p align="center">Drop a file, tap <em>Tidy up</em>, get a note. Your Google Drive, your notes; a Claude agent does the filing.<br>
+<p align="center"><b>Drop a file, tap <em>Tidy up</em>, get it filed.</b> Your Google Drive, your notes; a Claude agent does the filing.<br>
 Self-hosted, zero servers, 0 € a month.</p>
 
 <p align="center">
@@ -22,7 +22,7 @@ Self-hosted, zero servers, 0 € a month.</p>
   </tr>
   <tr>
     <td align="center"><img src="docs/assets/screenshots/tidy-up.png" alt="Tidying up, done: three files processed and the inbox empty." width="260"><br><sub>Tidy up</sub></td>
-    <td align="center"><img src="docs/assets/screenshots/tell.png" alt="Tell Bower: a question sent, waiting for the next tidy-up." width="260"><br><sub>Tell Bower</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/tell.png" alt="The Bower tab: a request sent, waiting for the next tidy-up." width="260"><br><sub>The Bower tab</sub></td>
     <td align="center"><img src="docs/assets/screenshots/settings.png" alt="Settings in the dark theme." width="260"><br><sub>Settings, dark</sub></td>
   </tr>
 </table>
@@ -33,15 +33,21 @@ Self-hosted, zero servers, 0 € a month.</p>
 
 ## Why a bowerbird
 
-The bowerbird lives only in Australia and New Guinea. The male spends his days collecting bright things (shells, feathers, flowers, the odd blue bottle cap), arranging them in front of his bower of twigs, sorted by colour and size, and then showing the whole thing off. Rivals steal from each other's collections. It is the tidiest animal there is, and it does all of it to impress.
+The bowerbird lives only in Australia and New Guinea. The male spends his days collecting bright things (shells, feathers, flowers, the odd blue bottle cap), arranging them in front of his bower of twigs, sorted by colour and size, and then showing the whole thing off. It is the tidiest animal there is, and it does all of it to impress.
 
 That is the job Bower does for your notes. It collects what you throw at it (photos, PDFs, links, voice memos, half-thoughts) and keeps it as tidy Markdown in a folder of **your own Google Drive**. You read it in the app, or in Obsidian pointed at the same folder. Nothing leaves your account; the people who run the instance never see a note.
 
 <p align="center"><img src="docs/assets/why.svg" alt="Three panels: the bird collects a bright thing, arranges papers and twigs in its nest, and shows off with its wing open" width="900"></p>
 
+## What it is, and what it is not
+
+<p align="center"><img src="docs/assets/is-and-is-not.svg" alt="Bower is: a window onto one folder of your Drive, a filer that reads what you save, a rulebook in plain English, one button. Bower is not: an editor, a place your things are stored, another app to move into, always watching." width="900"></p>
+
+The details are in [What Bower is not](#what-bower-is-not), below.
+
 ## How it works
 
-<p align="center"><img src="docs/assets/how-it-works.svg" alt="The bird carrying a paper and a twig from your inbox to the nest, labelled with your folders" width="600"></p>
+<p align="center"><img src="docs/assets/how-it-works.svg" alt="Three steps: drop a pile of files and links, tap Tidy up, and the bird carries each thing to the right folder of your Google Drive, renamed." width="900"></p>
 
 1. **Add something.** From your phone or your PC: drop a file, share from any app, paste a link, or just type.
 2. **Tap Tidy up.** Nothing runs on a schedule. When you tap, the bird wakes up in the background and you carry on.
@@ -80,12 +86,14 @@ Bower is a window onto one folder of your own Google Drive. Everything else foll
 
 ## What makes it different
 
+<p align="center"><img src="docs/assets/strengths.svg" alt="Six strengths, each with the bird: your Drive and your notes, one button, a rulebook you can read, talk to it, works offline, 0 euros a month to run." width="900"></p>
+
 | | |
 | --- | --- |
 | **Your data, your account** | Notes are plain Markdown in your Drive. Delete the app and they are still there. |
 | **One button** | No inbox zero rituals. Add things all week, tap once. |
 | **A rulebook you can read** | The agent follows a `CLAUDE.md` in your folder, in plain English. Every rule you give it is written there, dated. |
-| **Talk to it** | Rules, tasks and questions go through the same inbox as everything else. |
+| **Talk to it** | In the Bower tab, type or say what you want: a rule, a task or a question. It waits in the inbox with everything else and is done at the next tidy-up. |
 | **Works offline** | The app is a PWA: your notes are cached, adding waits for signal. |
 | **0 € to run** | Cloudflare and GitHub free tiers; you bring a Claude subscription and a Drive. |
 | **A bird with a job** | The mascot is not decoration. It looks around when idle, peeks over the drop zone, sings while you type, carries papers to the nest while it works, and dances when it's done. |
@@ -104,7 +112,7 @@ One explorer, on every screen size: on a computer it is the left column, on a ph
 | A file | A PDF, a photo, a spreadsheet, a video: shown as Drive allows, with its facts (pages, sheets, what is in a ZIP) and the note Bower wrote about it. **Move to…** asks Bower to file it somewhere else, now or at the next tidy-up. |
 | Search | Groups, kind chips and a scope. On a desktop, two columns with a preview of the highlighted result. |
 | Add | A drop zone the bird peeks over, camera, paste-a-link, upload progress, and a box for saying what a file is. |
-| Tell Bower | A conversation. The bird sings while you type. |
+| Bower | Tell Bower what you want in your own words. **Rules** lists every rule, grouped by topic; **Requests** what is waiting, being done or answered; **Activity** what each tidy-up did. The bird sings while you type. |
 | Tidying up | A sheet with the inbox-to-nest scene, what has been filed and where. |
 | First run | The bird builds your Bower folder in front of you, then shows you around in three steps. Once per account. |
 
@@ -218,19 +226,19 @@ Full walkthrough: [`docs/runbook.md`](docs/runbook.md). Short version, driven mo
 
 ## Status
 
-Shipped: M1 · API and onboarding, M2 · Agent, M3 · App v1, M4 · Public release. In progress: the redesign.
+Shipped: M1 to M33, from the first API to the explorer and the file views.
 
-| Milestone | What | Issues |
-| --- | --- | --- |
-| [M6 · Redesign: foundations](../../milestone/7) | Tokens and fonts, the bird as a component and as the mark, Process renamed Tidy up, this README | [#136](../../issues/136) [#137](../../issues/137) [#138](../../issues/138) [#139](../../issues/139) |
-| [M7 · Redesign: shell and explorer](../../milestone/8) | Three-column desktop, phone nav and drawer, hidden app files, quick switcher | [#140](../../issues/140) [#141](../../issues/141) [#142](../../issues/142) |
-| [M8 · Redesign: screens](../../milestone/9) | Every route with the bird: Home, Note, Add, Tell, the Tidying up sheet, Settings, Health | [#143](../../issues/143) to [#148](../../issues/148) |
-| [M9 · Redesign: first run](../../milestone/10) | Welcome, folder, Building your bower, the tour, once per account | [#149](../../issues/149) |
-| [M10 · Redesign: phase 2](../../milestone/11) | Linked mentions, per-message status from the runner, real screenshots | [#150](../../issues/150) [#151](../../issues/151) [#152](../../issues/152) |
-| [M5 · Next](../../milestone/6) | Append to a note, editing, semantic search, Google Picker, email-in | [issues](../../milestone/6) |
+Next, v5 (milestones M34 to M46, planned in [`PLAN.md`](PLAN.md) from the spec [`docs/superpowers/plans/2026-09-29-runs-notes-folders-spec.md`](docs/superpowers/plans/2026-09-29-runs-notes-folders-spec.md)):
+
+- **Every tidy-up says what it did**, in four counts (filed, new notes, updated, needs you), and a bar follows you on every screen while it runs.
+- **Bower's note** on every note it writes, folded to one line when you want, with a verdict and next steps where it helps.
+- **Piles:** add things together and say in one line what they are; uploads survive a closed tab.
+- **Dictation** wherever you write a sentence, and a short intro plus a **Learn Bower** page.
+- **Bower on screen:** the bird, redrawn as a satin bowerbird, keeps you company without getting in the way.
+- **A missing Bower folder** is noticed and can be put back.
 
 Why things are built this way: [`docs/decisions.md`](docs/decisions.md). What an instance stores about you: [`docs/privacy.md`](docs/privacy.md). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Credits
 
-Built by [Pablo de Luis](https://github.com/deluispablo), with Claude Code doing the typing. MIT licensed. The bird is drawn from the bowerbird, which really does collect, sort and show off; the brand is described in [`docs/brand.md`](docs/brand.md).
+Built by [Pablo de Luis](https://github.com/deluispablo), with Claude Code doing the typing. MIT licensed. The bird is drawn from the satin bowerbird, violet eye and blue bottle cap included, which really does collect, sort and show off; the brand is described in [`docs/brand.md`](docs/brand.md).
