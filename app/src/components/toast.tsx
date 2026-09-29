@@ -22,6 +22,19 @@ export function Toast(): JSX.Element | null {
           {toast.link.label}
         </a>
       )}
+      {toast.action !== undefined && (
+        <button
+          type="button"
+          class="toast-link toast-action"
+          onClick={() => {
+            const { run } = toast.action as NonNullable<typeof toast.action>;
+            dismissToast();
+            run();
+          }}
+        >
+          {toast.action.label}
+        </button>
+      )}
       <button
         type="button"
         class="toast-close"
