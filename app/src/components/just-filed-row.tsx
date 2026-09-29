@@ -24,6 +24,7 @@ import {
 import { useRun } from '../run-store.js';
 import { getSeen, loadSeenSet, subscribeSeen } from '../seen.js';
 import { useVault } from '../vault-store.js';
+import { Bird } from './bird.js';
 import { IconChevronRight } from './icons.js';
 
 import '../styles/just-filed.css';
@@ -104,6 +105,7 @@ export function JustFiledRow({
   const when = cardWhen(latest.finishedAt ?? latest.requestedAt, now);
   return (
     <a class="just-filed-row" href={JUST_FILED_PATH}>
+      <Bird state="idle" size={24} reducedMotion />
       <span class="just-filed-row-text">
         <span class="just-filed-row-label">{rowLabel(filedCount(latest))}</span>
         <span class="just-filed-row-sub">
