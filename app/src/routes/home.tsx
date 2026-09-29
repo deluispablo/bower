@@ -35,6 +35,7 @@ import { PinnedSection } from '../components/pinned-section.js';
 import { ProcessButton } from '../components/process-button.js';
 import { Tour } from '../components/help-sheet.js';
 import { BowerTag, NewTag } from '../components/tags.js';
+import { useShellSlot } from '../components/shell-slots.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import { startedAgo } from '../components/working-sheet.js';
 import {
@@ -88,6 +89,9 @@ import { originalFileOf } from '../components/about-panel.js';
 import { isBowerNote } from './note.js';
 import { pinned, useVault } from '../vault-store.js';
 import '../styles/home.css';
+
+/** The phone top bar's title (Flow-05-Home): "Home", not the wordmark. */
+const CRUMB = <span class="topbar-title">Home</span>;
 
 /** Recent shows this many rows (C.4); "All" opens Notes for the rest. */
 const RECENT_ROWS = 5;
@@ -158,7 +162,7 @@ function Greeting({
     <div class={`home-greeting home-greeting--${variant}`}>
       <Bird state={state} size={size} onDone={onDone} />
       <div class="home-greeting-text">
-        <h1 class="home-h1">{greeting}</h1>
+        {variant === 'desktop' && <h1 class="home-h1">{greeting}</h1>}
         <BubbleText {...bubble} />
       </div>
     </div>
@@ -535,6 +539,7 @@ export function Home(): JSX.Element {
     onFailure: openSheet,
   };
   const greeting = greetingFor(new Date(now), me?.name);
+  useShellSlot('crumb', CRUMB);
 
   // The first-run tour (#149): once per account, or again from Settings.
   // "Let's go" ends it with one show-off on Home.
