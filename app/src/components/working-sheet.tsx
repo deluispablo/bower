@@ -67,7 +67,7 @@ import {
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
-import { RunSummary } from './run-summary.js';
+import { RunSummary, summaryTiles } from './run-summary.js';
 import '../styles/tidy-confirm-sheet.css';
 
 /** How long the sheet stays up after the day's limit is reached. */
@@ -489,6 +489,33 @@ export function partialFolder(outcome: RunOutcome): string | null {
 export const FINISH_LINE =
   'Finish the tidy-up files them without writing the notes again.';
 
+/**
+ * A partly done run's two tiles, as the board draws them (RunSheet-Partial):
+ * the new notes it wrote and what is still in the inbox. The filed and
+ * updated counts are the bubble's and the rows' to tell.
+ */
+function PartialTiles({ outcome }: { outcome: RunOutcome }): JSX.Element {
+  const tiles = summaryTiles(outcome).filter(
+    (tile) => tile.key === 'new' || tile.key === 'left',
+  );
+  return (
+    <ul
+      class="run-summary-stats working-sheet-tiles"
+      aria-label="What this tidy-up did"
+    >
+      {tiles.map((tile) => (
+        <li
+          key={tile.key}
+          class={`run-summary-tile${tile.value === 0 ? ' run-summary-zero' : ''}${tile.warn ? ' run-summary-warn' : ''}`}
+        >
+          <span class="run-summary-value">{tile.value}</span>{' '}
+          <span class="run-summary-label">{tile.label}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export interface WorkingSheetProps {
   phase: RunPhase;
   /** The current run, for its outcome. */
@@ -806,7 +833,11 @@ export function WorkingSheet({
 
           {(state === 'done' || state === 'partial') && outcome !== null && (
             <>
-              <RunSummary outcome={outcome} size="stats" />
+              {state === 'partial' ? (
+                <PartialTiles outcome={outcome} />
+              ) : (
+                <RunSummary outcome={outcome} size="stats" />
+              )}
               {state === 'done' && outcome.quote !== undefined && (
                 <div class="working-sheet-say">
                   <Bird state="done" size={44} overlay />

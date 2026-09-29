@@ -6,9 +6,18 @@
  * vanished folder. Hermetic: the listing is stubbed, no network.
  */
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { OverlayHost } from '../src/components/overlay.js';
+import {
+  close,
+  open,
+  OVERLAY_PRIORITY,
+  queuedOverlays,
+  resetOverlayQueue,
+} from '../src/overlay-queue.js';
 
 import type { Run } from '../src/api.js';
 import { WORKING_STAGE_HEIGHT } from '../src/components/bower-working.js';
@@ -31,14 +40,19 @@ const onTryAgain = vi.fn();
 function mount(phase: Phase, run: Run | null): void {
   void act(() => {
     render(
-      h(WorkingSheet, {
-        phase,
-        run,
-        now: Date.parse('2026-09-29T10:03:00.000Z'),
-        open: true,
-        onDismiss,
-        onTryAgain,
-      }),
+      h(
+        Fragment,
+        null,
+        h(WorkingSheet, {
+          phase,
+          run,
+          now: Date.parse('2026-09-29T10:03:00.000Z'),
+          open: true,
+          onDismiss,
+          onTryAgain,
+        }),
+        h(OverlayHost, null),
+      ),
       root,
     );
   });
@@ -75,8 +89,37 @@ afterEach(() => {
     render(null, root);
   });
   document.body.replaceChildren();
+  resetOverlayQueue();
   document.body.removeAttribute('style');
   resetBirdPresence();
+});
+
+describe('#859: a partly done run', () => {
+  it('shows the two board tiles and keeps the buttons in the sheet', () => {
+    mount('failed', buildRun('partial'));
+    const tiles = [...document.body.querySelectorAll('.run-summary-tile')].map(
+      (tile) => tile.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(tiles).toEqual(['1 new note', '1 still in your inbox']);
+    expect(button('Finish the tidy-up')).toBeTruthy();
+  });
+
+  it('waits behind an overlay the person opened', () => {
+    open({
+      id: 'own',
+      priority: OVERLAY_PRIORITY.own,
+      render: () => h('p', { class: 'own' }, 'own'),
+    });
+    mount('running', buildRun('running'));
+    expect(dialog()).toBeNull();
+    expect(queuedOverlays().map((entry) => entry.id)).toEqual([
+      'working-sheet',
+    ]);
+    act(() => {
+      close('own');
+    });
+    expect(dialog()).not.toBeNull();
+  });
 });
 
 describe('R-SHEET-1: an Overlay sheet', () => {
