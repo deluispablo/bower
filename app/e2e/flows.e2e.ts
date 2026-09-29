@@ -338,6 +338,13 @@ test('/search?q= lands on Home with the switcher open and prefilled (#495)', asy
   await page.goto('/search?q=viewing');
 
   await expect(page).toHaveURL(/\/$/);
+  // The demo's tour is a modal (#776) and makes the page, switcher included,
+  // inert until it ends; whether it or the switcher opens first is a race.
+  await page
+    .getByRole('dialog', { name: 'Home' })
+    .getByRole('button', { name: 'Skip' })
+    .click({ timeout: 3_000 })
+    .catch(() => undefined);
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
   await expect(switcher.getByRole('combobox')).toHaveValue('viewing');
