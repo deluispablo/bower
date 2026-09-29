@@ -9,7 +9,8 @@
 
 import type { RequestRow } from './bower-tab.js';
 import { requestTargetPath } from './bower-tab.js';
-import { displayPath } from './navigation.js';
+import { displayPath, folderOf } from './navigation.js';
+import type { VaultIndex } from './vault-index.js';
 
 /** The words of the request: `Rename {path} to {new name}`. `path` is the
  * vault path, `newName` the whole new file name (its extension included).
@@ -71,6 +72,15 @@ export function validateRename(check: RenameCheck): string | null {
     return RENAME_MESSAGES.taken;
   }
   return null;
+}
+
+/** The full names of everything that sits in the same folder as `path`
+ * (notes, files and folders), what the "taken" check looks at. */
+export function siblingNames(index: VaultIndex, path: string): string[] {
+  const folder = folderOf(path);
+  return [...index.notes, ...index.files, ...index.folders]
+    .filter((entry) => folderOf(entry.path) === folder)
+    .map((entry) => entry.name);
 }
 
 /** A Rename or Move request that has not been done yet, seen from the note

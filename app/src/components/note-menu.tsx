@@ -11,7 +11,7 @@
  * Three callers: `routes/note.tsx`, `routes/file.tsx` and
  * `routes/folder.tsx`. The board's order: a header (the title, then the
  * type word and the folder it sits in, with its PARA mark), Ask Bower about
- * this, Show in folders, Pin to Home, Move to… ("Bower does it"), Open in
+ * this, Show in folders, Pin to Home, Rename… and Move to… ("waits for the tidy-up"), Open in
  * Drive, Download (files), Copy link, Edit the text (notes only), Cancel.
  *
  * The Pin row (#216) toggles `pinned`/`onTogglePin`, which the note, file
@@ -48,10 +48,13 @@ import {
 } from '../more-menu.js';
 import type { MoreMenuKind } from '../more-menu.js';
 import { driveFolderUrl } from '../navigation.js';
+import { renameRequestText, splitFileName, validateRename } from '../rename-request.js';
 import { showToast } from '../toast-store.js';
+import { isAppFile } from '../vault-index.js';
 import { mediaMatches } from '../use-media-query.js';
 import { FolderMark } from './folder-mark.js';
 import { MoveFlow } from './folder-picker.js';
+import { openSendToBower } from './send-to-bower.js';
 import {
   IconChat,
   IconCopy,
@@ -142,6 +145,10 @@ export interface NoteMenuProps {
   onTogglePin?: () => void;
   onAddParagraph?: () => void;
   onEdit?: () => void;
+  /** The full names of everything in the same folder, for Rename's "taken"
+   * check. Rename (#765, R-MORE-1) is for notes and files only, never
+   * Bower's own files: left out, the row is too. */
+  siblingNames?: readonly string[];
   onClose: () => void;
 }
 
@@ -175,6 +182,7 @@ export function NoteMenu({
   onTogglePin,
   onAddParagraph,
   onEdit,
+  siblingNames,
   onClose,
 }: NoteMenuProps): JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -225,6 +233,29 @@ export function NoteMenu({
     );
   }
 
+  /** Rename… (#765): the shared send sheet, with the name check. */
+  function rename(): void {
+    const { base, extension } = splitFileName(file.name, isNote);
+    const place = moreMenuHeader(typeLabel, file.path).place;
+    onClose();
+    openSendToBower({
+      mode: 'rename',
+      about: place?.label ?? 'your notes',
+      ...(place?.kind != null && { aboutKind: place.kind }),
+      initialText: base,
+      ...(extension !== '' && { extension }),
+      buildText: (value) =>
+        renameRequestText(file.path, value.trim() + extension),
+      validate: (value) =>
+        validateRename({
+          currentName: file.name,
+          input: value,
+          extension,
+          siblingNames: siblingNames ?? [],
+        }),
+    });
+  }
+
   function selectAndClose(action: () => void): () => void {
     return () => {
       onClose();
@@ -233,6 +264,10 @@ export function NoteMenu({
   }
 
   const isNote = kind === 'note';
+  const canRename =
+    kind !== 'folder' &&
+    siblingNames !== undefined &&
+    !isAppFile(file.path, file.name);
   const header = moreMenuHeader(typeLabel, file.path);
   const driveHref =
     kind === 'folder' ? driveFolderUrl(file) : driveViewUrl(file);
@@ -311,6 +346,20 @@ export function NoteMenu({
             </span>
           </button>
         )}
+        {canRename && (
+          <button
+            type="button"
+            role="menuitem"
+            class="note-menu-row"
+            onClick={rename}
+          >
+            <IconEdit />
+            <span class="note-menu-row-text">
+              <span class="note-menu-row-label">Rename…</span>
+              <span class="note-menu-row-hint">waits for the tidy-up</span>
+            </span>
+          </button>
+        )}
         <button
           type="button"
           role="menuitem"
@@ -320,7 +369,7 @@ export function NoteMenu({
           <IconFolder />
           <span class="note-menu-row-text">
             <span class="note-menu-row-label">Move to…</span>
-            <span class="note-menu-row-hint">Bower does it</span>
+            <span class="note-menu-row-hint">waits for the tidy-up</span>
           </span>
         </button>
         {isDemo() ? (
