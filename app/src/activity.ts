@@ -23,7 +23,7 @@ import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { displayPath } from './navigation.js';
 import { failureCopy } from './run-failure.js';
-import { outcomeCounts, outcomeFromRun, runSentence } from './run-outcome.js';
+import { outcomeFromRun, runSentence } from './run-outcome.js';
 import type { RunOutcome } from './run-outcome.js';
 import { processedKind } from './run-progress.js';
 import { shortDay } from './rules.js';
@@ -52,22 +52,6 @@ export type LogEntry =
       /** The name it had in the inbox, when Bower renamed it. */
       renamedFrom?: string;
     }
-  | {
-      type: 'correction';
-      at: LogStamp | null;
-      from: string;
-      to: string;
-    }
-  | {
-      type: 'moved';
-      at: LogStamp | null;
-      /** The path it had, in the vault (`1-Projects/Flat hunt/a.md`). */
-      from: string;
-      /** The path it has now. */
-      to: string;
-      /** A move the person made themselves (`Moved by you:`). */
-      byYou: boolean;
-    }
   | { type: 'rule'; at: LogStamp | null; text: string }
   | { type: 'context'; at: LogStamp | null; text: string };
 
@@ -76,9 +60,6 @@ const LINE_PREFIX =
   /^\s*(?:[-*]\s+)?(?:(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2})(?::\d{2})?Z?)?\s*(?:·|-|—)\s*)?/;
 const FILED =
   /^Filed:\s*(.+?)\s*(?:→|->)\s*(.+?)(?:,\s*renamed from\s+(.+?))?\s*\.?$/;
-const MOVED = /^Moved( by you)?:\s*(.+?)\s*(?:→|->)\s*(.+?)\s*\.?$/;
-const CORRECTION =
-  /^Correction:\s*(.+?)\s*->\s*(.+?)\s*\((\d{4}-\d{2}-\d{2})\)/;
 const APPLIED_RULE = /^Applied rule:\s*(.+?)\s*$/;
 const CONTEXT = /^Context:\s*(.+?)\s*$/;
 
@@ -124,31 +105,8 @@ export function parseLog(text: string): LogEntry[] {
       if (entry.name !== '' && entry.folder !== '') entries.push(entry);
       continue;
     }
-    const moved = MOVED.exec(rest);
-    if (moved !== null) {
-      const from = cleanFolder(moved[2] ?? '');
-      const to = cleanFolder(moved[3] ?? '');
-      if (from !== '' && to !== '') {
-        entries.push({
-          type: 'moved',
-          at,
-          from,
-          to,
-          byYou: moved[1] !== undefined,
-        });
-      }
-      continue;
-    }
-    const correction = CORRECTION.exec(rest);
-    if (correction !== null) {
-      entries.push({
-        type: 'correction',
-        at: at ?? { day: correction[3] ?? '' },
-        from: cleanFolder(correction[1] ?? ''),
-        to: cleanFolder(correction[2] ?? ''),
-      });
-      continue;
-    }
+    // "Moved" and "Correction" lines are not read: no card shows a move
+    // (R-JUST-1).
     const rule = APPLIED_RULE.exec(rest);
     if (rule !== null) {
       entries.push({ type: 'rule', at, text: rule[1] ?? '' });
@@ -208,8 +166,6 @@ export interface ActivityCard {
   failed: boolean;
   /** What the run did, from the one place that reads a report (R-RUN-4). */
   outcome: RunOutcome;
-  /** The counts, "2 filed · 3 new notes · 1 needs you"; `''` when none. */
-  counts: string;
   /** The card's sentence, in the third person ("Done 3 h ago: …"). */
   sentence: string;
   rows: ActivityRow[];
@@ -479,7 +435,6 @@ export function activityCard(
     status,
     failed,
     outcome,
-    counts: outcomeCounts(outcome),
     sentence: runSentence(outcome, { now, voice: 'third' }),
     rows,
   };

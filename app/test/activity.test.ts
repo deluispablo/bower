@@ -71,7 +71,7 @@ const YESTERDAY: Run = {
 describe('parseLog (#345)', () => {
   const entries = parseLog(logFixture);
 
-  it('reads Filed, Correction, Applied rule and Context lines and skips the rest', () => {
+  it('reads Filed, Applied rule and Context lines and skips the rest (Correction included)', () => {
     expect(entries.map((entry) => entry.type)).toEqual([
       'filed',
       'filed',
@@ -79,7 +79,6 @@ describe('parseLog (#345)', () => {
       'filed',
       'context',
       'rule',
-      'correction',
     ]);
   });
 
@@ -95,15 +94,6 @@ describe('parseLog (#345)', () => {
     expect(entries[3]).toMatchObject({
       name: 'Notes from the viewing.md',
       folder: '1-Projects/Flat hunt',
-    });
-  });
-
-  it('reads a Correction line with its own date', () => {
-    expect(entries[6]).toEqual({
-      type: 'correction',
-      at: { day: '2026-09-28' },
-      from: '1-Projects/Flat hunt',
-      to: '2-Areas/Home',
     });
   });
 
@@ -205,7 +195,6 @@ describe('activityCards (#345)', () => {
       files: [],
       now: NOW,
     });
-    expect(reported?.counts).toBe('1 filed · 1 new note · 1 updated');
     expect(reported?.sentence).toMatch(
       /^Done .*: 1 filed · 1 new note · 1 updated\.$/,
     );
@@ -327,23 +316,8 @@ describe('Moved lines (#643)', () => {
     '- 2026-09-28 17:50 · Moved by you: 1-Projects/Flat hunt/plan.pdf → 4-Archives/Flat hunt/plan.pdf',
   ].join('\n');
 
-  it('parses both line kinds', () => {
-    expect(parseLog(log)).toEqual([
-      {
-        type: 'moved',
-        at: { day: '2026-09-28', time: '17:49' },
-        from: '3-Resources/Recipes/soup.md',
-        to: '2-Areas/Home/Cooking/soup.md',
-        byYou: false,
-      },
-      {
-        type: 'moved',
-        at: { day: '2026-09-28', time: '17:50' },
-        from: '1-Projects/Flat hunt/plan.pdf',
-        to: '4-Archives/Flat hunt/plan.pdf',
-        byYou: true,
-      },
-    ]);
+  it('does not read either line kind', () => {
+    expect(parseLog(log)).toEqual([]);
   });
 
   it('shows no row for a move: no raw "Moved" line anywhere (R-JUST-1)', () => {
