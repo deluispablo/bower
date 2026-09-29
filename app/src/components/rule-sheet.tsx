@@ -12,11 +12,12 @@
  * portals into `document.body`, outside the inert shell.
  */
 
-import { createPortal } from 'preact/compat';
 import type { JSX } from 'preact';
 
 import { IconClock, IconClose, IconEdit, IconRedo } from './icons.js';
 import { Overlay } from './overlay.js';
+import { Queued } from './queued-overlay.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { ruleSheetLabel } from '../rules.js';
 import type { Rule } from '../rules.js';
 import '../styles/rule-sheet.css';
@@ -79,34 +80,35 @@ export function RuleSheet({
   onPick,
   onClose,
 }: RuleSheetProps): JSX.Element {
-  return createPortal(
-    <Overlay kind="sheet" label={rule.text} onClose={onClose}>
-      <div class="rule-sheet-body">
-        <div class="rule-sheet-head">
-          <p class="rule-sheet-label">{ruleSheetLabel(topic, rule)}</p>
-          <p class="rule-sheet-text">{rule.text}</p>
-        </div>
-        {rowsFor(rule).map(({ action, label, hint, Icon }) => (
-          <button
-            key={action}
-            type="button"
-            class="rule-sheet-row"
-            onClick={() => {
-              onPick(action);
-            }}
-          >
-            <Icon />
-            <span class="rule-sheet-row-text">
-              <span class="rule-sheet-row-label">{label}</span>
-              <span class="rule-sheet-row-hint">{hint}</span>
-            </span>
+  return (
+    <Queued id="rule-sheet" priority={OVERLAY_PRIORITY.own}>
+      <Overlay kind="sheet" label={rule.text} onClose={onClose}>
+        <div class="rule-sheet-body">
+          <div class="rule-sheet-head">
+            <p class="rule-sheet-label">{ruleSheetLabel(topic, rule)}</p>
+            <p class="rule-sheet-text">{rule.text}</p>
+          </div>
+          {rowsFor(rule).map(({ action, label, hint, Icon }) => (
+            <button
+              key={action}
+              type="button"
+              class="rule-sheet-row"
+              onClick={() => {
+                onPick(action);
+              }}
+            >
+              <Icon />
+              <span class="rule-sheet-row-text">
+                <span class="rule-sheet-row-label">{label}</span>
+                <span class="rule-sheet-row-hint">{hint}</span>
+              </span>
+            </button>
+          ))}
+          <button type="button" class="rule-sheet-cancel" onClick={onClose}>
+            Cancel
           </button>
-        ))}
-        <button type="button" class="rule-sheet-cancel" onClick={onClose}>
-          Cancel
-        </button>
-      </div>
-    </Overlay>,
-    document.body,
+        </div>
+      </Overlay>
+    </Queued>
   );
 }

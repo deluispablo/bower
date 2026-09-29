@@ -11,6 +11,7 @@ import { formatFieldValue, kindById, KINDS, statusLabel } from './kinds.js';
 import type { Kind, KindField } from './kinds.js';
 import type { NoteOrigin } from './note-meta.js';
 import { findKeyLine, splitFrontmatter } from './markdown/frontmatter.js';
+import { BOOKKEEPING_KEYS, humaniseKey } from './components/details.js';
 
 /** One note of a folder as Compare reads it. */
 export interface CompareNote {
@@ -90,12 +91,100 @@ const TITLE_LABELS: Readonly<Record<string, string>> = {
   recipe: 'Recipe',
 };
 
-/** The kind's columns in their default order: the title, the compare
- * fields, then Status when the kind has statuses. */
-export function defaultColumnIds(kind: Kind): string[] {
+/** How many extra numeric columns Compare adds after the kind's own
+ * (R-CMP-6, T12). The score column is not one of them. */
+export const MAX_EXTRA_COLUMNS = 3;
+
+/** The heading of the score column (R-CMP-2). */
+export const SCORE_LABEL = 'Your score';
+
+/** The `group` of the score column's field: how the cell knows to read
+ * "79/100". */
+const SCORE_GROUP = 'score';
+
+function numberField(key: string, label: string, group = ''): KindField {
+  return { key, label, type: 'number', group };
+}
+
+/** Whether a number sits under `key` in at least half of `notes`. */
+function presentInHalf(notes: readonly CompareNote[], key: string): boolean {
+  if (notes.length === 0) return false;
+  const count = notes.filter(
+    (note) => numberOf(note.fields[key]) !== null,
+  ).length;
+  return count * 2 >= notes.length;
+}
+
+/**
+ * The columns Compare adds to the kind's own (R-CMP-2, R-CMP-3, R-CMP-6):
+ * "Your score" first when the notes carry a numeric `score` (or a `fit` the
+ * kind has no column for), then up to three more numeric frontmatter keys
+ * present in at least half the notes, in the order they first appear,
+ * labelled by `humaniseKey`. Bookkeeping keys and the kind's own fields are
+ * never extra columns.
+ */
+export function extraColumns(
+  kind: Kind,
+  notes: readonly CompareNote[],
+): CompareColumn[] {
+  const columns: CompareColumn[] = [];
+  const own = new Set(kind.fields.map((field) => field.key));
+  const scoreKey = ['score', 'fit'].find(
+    (key) =>
+      (key === 'score' || !kind.compareFields.includes(key)) &&
+      presentInHalf(notes, key),
+  );
+  if (scoreKey !== undefined) {
+    columns.push({
+      id: scoreKey,
+      label: SCORE_LABEL,
+      field: numberField(scoreKey, SCORE_LABEL, SCORE_GROUP),
+    });
+  }
+  const seen: string[] = [];
+  for (const note of notes) {
+    for (const key of Object.keys(note.fields)) {
+      if (!seen.includes(key)) seen.push(key);
+    }
+  }
+  let extras = 0;
+  for (const key of seen) {
+    if (extras >= MAX_EXTRA_COLUMNS) break;
+    if (key === 'score' || key === 'fit') continue;
+    if (own.has(key) || BOOKKEEPING_KEYS.has(key) || key.endsWith('_note')) {
+      continue;
+    }
+    if (!presentInHalf(notes, key)) continue;
+    columns.push({
+      id: key,
+      label: humaniseKey(key),
+      field: numberField(key, humaniseKey(key)),
+    });
+    extras += 1;
+  }
+  return columns;
+}
+
+/** The score column among `extras`, when there is one. */
+function scoreColumn(
+  extras: readonly CompareColumn[],
+): CompareColumn | undefined {
+  return extras.find((column) => column.field?.group === SCORE_GROUP);
+}
+
+/** The kind's columns in their default order: the title, "Your score" when
+ * there is one, the compare fields, the other extra columns, then Status
+ * when the kind has statuses. */
+export function defaultColumnIds(
+  kind: Kind,
+  extras: readonly CompareColumn[] = [],
+): string[] {
+  const score = scoreColumn(extras);
   return [
     TITLE_COLUMN,
+    ...(score === undefined ? [] : [score.id]),
     ...kind.compareFields,
+    ...extras.filter((column) => column !== score).map((column) => column.id),
     ...(kind.statuses.length > 0 ? [STATUS_COLUMN] : []),
   ];
 }
@@ -105,8 +194,9 @@ export function defaultColumnIds(kind: Kind): string[] {
 export function orderedColumnIds(
   kind: Kind,
   stored: readonly string[] | undefined,
+  extras: readonly CompareColumn[] = [],
 ): string[] {
-  const defaults = defaultColumnIds(kind);
+  const defaults = defaultColumnIds(kind, extras);
   if (stored === undefined) return defaults;
   const movable = defaults.filter((id) => id !== TITLE_COLUMN);
   const kept = stored.filter((id) => movable.includes(id));
@@ -120,18 +210,25 @@ const COLUMN_LABELS: Readonly<Record<string, string>> = {
   'job-offer:office': 'Where',
 };
 
-/** The columns of `kind` in `order` (or the default order). */
+/** The columns of `kind` in `order` (or the default order), with the
+ * `extras` of `extraColumns`. */
 export function compareColumns(
   kind: Kind,
   order?: readonly string[],
+  extras: readonly CompareColumn[] = [],
 ): CompareColumn[] {
   const columns: CompareColumn[] = [];
-  for (const id of orderedColumnIds(kind, order)) {
+  for (const id of orderedColumnIds(kind, order, extras)) {
     if (id === TITLE_COLUMN) {
       columns.push({ id, label: TITLE_LABELS[kind.id] ?? 'Note' });
     } else if (id === STATUS_COLUMN) {
       columns.push({ id, label: 'Status' });
     } else {
+      const extra = extras.find((column) => column.id === id);
+      if (extra !== undefined) {
+        columns.push(extra);
+        continue;
+      }
       const field = kind.fields.find((candidate) => candidate.key === id);
       if (field === undefined) continue;
       columns.push({
@@ -197,6 +294,10 @@ export function cellText(
   if (column.id === TITLE_COLUMN) return noteTitle(note);
   if (column.id === STATUS_COLUMN) return statusLabel(kind, note.fields);
   if (column.field === undefined) return '';
+  if (column.field.group === SCORE_GROUP) {
+    const score = numberOf(note.fields[column.id]);
+    return score === null ? '' : `${Math.round(score)}/100`;
+  }
   const text = formatFieldValue(column.field, note.fields[column.id]);
   return text === '' && column.field.type === 'date' ? NO_DATE : text;
 }
@@ -234,8 +335,14 @@ export interface CompareSort {
   direction: 'asc' | 'desc';
 }
 
-/** Fit, best first; a kind with no fit column sorts by its first field. */
-export function defaultSort(kind: Kind): CompareSort {
+/** Your score, best first; else fit, best first; a kind with neither sorts
+ * by its first field. */
+export function defaultSort(
+  kind: Kind,
+  extras: readonly CompareColumn[] = [],
+): CompareSort {
+  const score = scoreColumn(extras);
+  if (score !== undefined) return { column: score.id, direction: 'desc' };
   if (kind.compareFields.includes('fit')) {
     return { column: 'fit', direction: 'desc' };
   }
@@ -245,9 +352,28 @@ export function defaultSort(kind: Kind): CompareSort {
   };
 }
 
+/** The direction a column sorts in when first picked: scores and fit best
+ * first, everything else A to Z, smallest or soonest first. */
+export function firstDirection(
+  column: string,
+  extras: readonly CompareColumn[] = [],
+): 'asc' | 'desc' {
+  return column === 'fit' || column === scoreColumn(extras)?.id
+    ? 'desc'
+    : 'asc';
+}
+
 type SortValue = number | string | null;
 
-function sortValue(kind: Kind, note: CompareNote, column: string): SortValue {
+function sortValue(
+  kind: Kind,
+  note: CompareNote,
+  column: string,
+  extras: readonly CompareColumn[],
+): SortValue {
+  if (extras.some((candidate) => candidate.id === column)) {
+    return numberOf(note.fields[column]);
+  }
   if (column === TITLE_COLUMN) return noteTitle(note).toLowerCase();
   if (column === STATUS_COLUMN) {
     const index = kind.statuses.indexOf(statusValue(note));
@@ -280,13 +406,14 @@ export function sortNotes(
   kind: Kind,
   notes: readonly CompareNote[],
   sort: CompareSort,
+  extras: readonly CompareColumn[] = [],
 ): CompareNote[] {
   const sign = sort.direction === 'asc' ? 1 : -1;
   const first = kind.compareFields[0] ?? TITLE_COLUMN;
   return [...notes].sort((a, b) => {
     for (const column of [sort.column, first, TITLE_COLUMN]) {
-      const left = sortValue(kind, a, column);
-      const right = sortValue(kind, b, column);
+      const left = sortValue(kind, a, column, extras);
+      const right = sortValue(kind, b, column, extras);
       if (left === null && right === null) continue;
       if (left === null) return 1;
       if (right === null) return -1;
@@ -295,6 +422,49 @@ export function sortNotes(
     }
     return 0;
   });
+}
+
+// --- The phone's Sort sheet (R-CMP-1) ---------------------------------------
+
+/** How a column's values read when ordered: numbers and statuses high or
+ * low first, text A to Z, dates soonest first. */
+export type SortStyle = 'number' | 'text' | 'date';
+
+export function sortStyle(column: CompareColumn): SortStyle {
+  if (column.id === TITLE_COLUMN) return 'text';
+  if (column.id === STATUS_COLUMN) return 'number';
+  const type = column.field?.type;
+  if (type === 'date') return 'date';
+  if (type === 'money' || type === 'number') return 'number';
+  return 'text';
+}
+
+/** The two direction labels of a style, by the direction they sort in. */
+export function directionLabels(style: SortStyle): {
+  asc: string;
+  desc: string;
+} {
+  if (style === 'text') return { asc: 'A to Z', desc: 'Z to A' };
+  if (style === 'date') return { asc: 'Soonest first', desc: 'Latest first' };
+  return { asc: 'Low first', desc: 'High first' };
+}
+
+/** The Sort button's text: "Sort: Your score, high first". */
+export function sortButtonText(
+  column: CompareColumn,
+  direction: 'asc' | 'desc',
+): string {
+  const text = directionLabels(sortStyle(column))[direction];
+  const lower = /^[AZ] to/.test(text)
+    ? text
+    : text.charAt(0).toLowerCase() + text.slice(1);
+  return `Sort: ${column.label}, ${lower}`;
+}
+
+/** The last word of a kind's plural or singular, for "Show 4 offers". */
+export function offerWord(kind: Kind, count: number): string {
+  const words = (count === 1 ? kind.name : kind.plural).split(' ');
+  return words[words.length - 1] ?? '';
 }
 
 // --- Filter chips ----------------------------------------------------------

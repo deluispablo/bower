@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,7 +19,10 @@ vi.mock('../src/api.js', async (importOriginal) => ({
   isDemo: () => state.demo,
 }));
 
-const { HelpSheet, INTRO_AGAIN_HREF, Tour, placeSheet } =
+import { OverlayHost } from '../src/components/overlay.js';
+import { close, open, resetOverlayQueue } from '../src/overlay-queue.js';
+
+const { HelpSheet, dismissedTips, INTRO_AGAIN_HREF, Tour, placeSheet } =
   await import('../src/components/help-sheet.js');
 
 let root: HTMLElement;
@@ -32,13 +35,13 @@ function tab(name: string): HTMLElement {
 }
 
 function dialog(): HTMLElement {
-  const el = root.querySelector<HTMLElement>('[role="dialog"]');
+  const el = document.body.querySelector<HTMLElement>('[role="dialog"]');
   if (el === null) throw new Error('dialog missing');
   return el;
 }
 
 function button(label: string): HTMLButtonElement {
-  const found = Array.from(root.querySelectorAll('button')).find(
+  const found = Array.from(document.body.querySelectorAll('button')).find(
     (b) => (b.getAttribute('aria-label') ?? b.textContent) === label,
   );
   if (found === undefined) throw new Error(`button ${label} missing`);
@@ -46,7 +49,7 @@ function button(label: string): HTMLButtonElement {
 }
 
 function link(label: string): HTMLAnchorElement | undefined {
-  return Array.from(root.querySelectorAll('a')).find(
+  return Array.from(document.body.querySelectorAll('a')).find(
     (a) => a.textContent === label,
   );
 }
@@ -79,6 +82,8 @@ afterEach(() => {
   void act(() => {
     render(null, root);
   });
+  resetOverlayQueue();
+  localStorage.clear();
   root.remove();
   tabs.remove();
   state.demo = false;
@@ -205,7 +210,10 @@ describe('HelpSheet', () => {
       ideasHref,
     };
     void act(() => {
-      render(h(HelpSheet, props), root);
+      render(
+        h(Fragment, null, h(HelpSheet, props), h(OverlayHost, null)),
+        root,
+      );
     });
     return props;
   }
@@ -220,13 +228,44 @@ describe('HelpSheet', () => {
     expect(link('What is Bower, from the start')?.getAttribute('href')).toBe(
       INTRO_AGAIN_HREF,
     );
-    expect(tab('home').classList.contains('help-tab-on')).toBe(true);
+    expect(dialog().getAttribute('aria-modal')).toBe('true');
+    expect(dialog().closest('#app, nav')).toBeNull();
   });
 
-  it('puts the folder sheet over the Notes tab', () => {
+  it('names the folder sheet', () => {
     mount('folder');
     expect(dialog().querySelector('h2')?.textContent).toBe('A folder');
-    expect(tab('notes').classList.contains('help-tab-on')).toBe(true);
+  });
+
+  it('lists a dismissed tip under "Tips on this screen" and brings it back', () => {
+    mount('home');
+    expect(dialog().textContent).not.toContain('Tips on this screen');
+    void act(() => {
+      render(null, root);
+    });
+    resetOverlayQueue();
+    localStorage.setItem('bower:hint:home', '1');
+    mount('home');
+    expect(dialog().textContent).toContain('Tips on this screen');
+    expect(dialog().textContent).toContain(
+      'Use Tidy up once, when you have added everything.',
+    );
+    void act(() => button('Show again').click());
+    expect(localStorage.getItem('bower:hint:home')).toBeNull();
+    expect(dialog().textContent).not.toContain('Tips on this screen');
+    expect(dismissedTips('home')).toEqual([]);
+  });
+
+  it('waits while another overlay is open, then shows', () => {
+    void act(() => {
+      open({ id: 'other', priority: 1, render: () => h('p', null, 'other') });
+    });
+    mount('home');
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    void act(() => {
+      close('other');
+    });
+    expect(dialog().querySelector('h2')?.textContent).toBe('Home');
   });
 
   it('closes on Close and Escape; Show me around starts the tour', () => {

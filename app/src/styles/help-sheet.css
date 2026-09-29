@@ -206,3 +206,57 @@
     animation: none;
   }
 }
+
+/* The help panel on the shared overlay: its scrim, inert page and slide come
+ * from overlay.css; this is what sits inside (R-OVL-4). */
+.help-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: var(--space-4) var(--space-4) 20px;
+  color: var(--color-text);
+}
+
+.help-tips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.help-tip-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-tip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.help-tip-again {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-link);
+  cursor: pointer;
+}
+
+.help-tip-again:hover {
+  text-decoration: underline;
+}

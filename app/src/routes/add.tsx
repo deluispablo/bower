@@ -17,6 +17,7 @@ import {
 import { linkDisplayTitle, linkNoteName } from '../add.js';
 import { isDemo } from '../api.js';
 import { Bird } from '../components/bird.js';
+import { UploadNotes } from '../components/upload-chip.js';
 import {
   IconCamera,
   IconDrive,
@@ -48,6 +49,11 @@ import { runKey, useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
+import {
+  startUploads,
+  uploadQueue,
+  uploadThroughQueue,
+} from '../upload-queue.js';
 import { fileKind, type FileKind } from '../vault-index.js';
 import { useVault } from '../vault-store.js';
 
@@ -337,15 +343,29 @@ export function Add() {
     updateItem(item.id, { status: 'uploading', progress: 0, error: undefined });
     try {
       if (item.kind === 'file' && item.file) {
-        await upload(
-          folderId,
-          withName(item.file, item.name),
-          (sent, total) => {
-            updateItem(item.id, {
-              progress: total > 0 ? Math.round((sent / total) * 100) : 100,
-            });
-          },
-        );
+        const onProgress = (sent: number, total: number): void => {
+          updateItem(item.id, {
+            progress: total > 0 ? Math.round((sent / total) * 100) : 100,
+          });
+        };
+        if (isDemo() || me === undefined) {
+          await upload(folderId, withName(item.file, item.name), onProgress);
+        } else {
+          // The durable queue (R-UPL-1): the file is copied to this device
+          // first, so it still finishes if Bower is closed or reloaded.
+          await startUploads(me.email);
+          await uploadThroughQueue(
+            uploadQueue(),
+            {
+              blob: item.file,
+              name: item.name,
+              type: item.file.type,
+              pileId: 'inbox',
+              parentId: folderId,
+            },
+            onProgress,
+          );
+        }
       } else if (item.kind === 'link' && item.url !== undefined) {
         await createTextFile(folderId, item.name, item.url);
       } else if (item.kind === 'drive' && item.driveId !== undefined) {
@@ -524,6 +544,8 @@ export function Add() {
   return (
     <section class="add-screen">
       <h1 class="screen-title">Add</h1>
+
+      <UploadNotes />
 
       {shareError !== null && <p class="add-field-error">{shareError}</p>}
 
