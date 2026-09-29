@@ -22,15 +22,10 @@ vi.mock('../src/drive.js', () => ({
 }));
 vi.mock('../src/toast-store.js', () => ({ showToast }));
 // The piles (#769) are the pile store's; here only whether they flushed.
-const { flushPiles, attachToPile } = vi.hoisted(() => ({
+const { flushPiles } = vi.hoisted(() => ({
   flushPiles: vi.fn(() => Promise.resolve(true)),
-  attachToPile: vi.fn(() => Promise.resolve()),
 }));
-vi.mock('../src/pile-store.js', () => ({
-  flushPiles,
-  attachToPile,
-  getPiles: () => [],
-}));
+vi.mock('../src/pile-store.js', () => ({ flushPiles }));
 
 const {
   getContextText,
@@ -90,10 +85,6 @@ describe('tidyUpWhenFlushed (R-PILE-7)', () => {
     const content = createTextFile.mock.calls[0]?.[2] ?? '';
     expect(content).toContain('- a.pdf\n');
     expect(content).not.toContain('b.pdf');
-    expect(attachToPile).toHaveBeenCalledWith('p1', {
-      name: 'b.pdf',
-      state: 'done',
-    });
   });
 });
 

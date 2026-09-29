@@ -69,13 +69,12 @@ const deleteFile = vi.fn((id: string): Promise<void> => {
   if (file !== undefined) file.trashed = true;
   return Promise.resolve();
 });
-const listFolder = vi.fn(
-  (folderId: string): Promise<DriveFile[]> =>
-    Promise.resolve(
-      [...files.values()]
-        .filter((f) => f.parent === folderId && !f.trashed)
-        .map(asDrive),
-    ),
+const listFolder = vi.fn((folderId: string): Promise<DriveFile[]> =>
+  Promise.resolve(
+    [...files.values()]
+      .filter((f) => f.parent === folderId && !f.trashed)
+      .map(asDrive),
+  ),
 );
 const getText = vi.fn((id: string): Promise<string> => {
   const file = files.get(id);
@@ -246,9 +245,8 @@ describe('R-PILE-1: the pile note', () => {
 
 describe('hand-off from the upload queue', () => {
   it('a pile file landing in the durable queue rewrites its note', async () => {
-    const { followUploads, uploadPileId } = await import(
-      '../src/add-queue-store.js'
-    );
+    const { followUploads, uploadPileId } =
+      await import('../src/add-queue-store.js');
     const pile = store.startPile(INBOX, NOW, 'p1');
     expect(uploadPileId({ pileId: 'p1' })).toBe('p1');
     expect(uploadPileId({})).toBe('inbox');
@@ -262,7 +260,13 @@ describe('hand-off from the upload queue', () => {
     };
     let items: Upload[] = [
       { ...base, pileId: 'p1', state: 'uploading' as const },
-      { ...base, id: 'q2', name: 'other.pdf', pileId: 'inbox', state: 'done' as const },
+      {
+        ...base,
+        id: 'q2',
+        name: 'other.pdf',
+        pileId: 'inbox',
+        state: 'done' as const,
+      },
     ];
     const listeners = new Set<() => void>();
     const stop = followUploads({
@@ -295,13 +299,18 @@ describe('R-PILE-9: rule sentences', () => {
     land('a.pdf');
     await store.attachToPile(pile.id, { name: 'a.pdf', state: 'done' });
     await store.setPileText(pile.id, 'From now on file offers under Work.');
-    await store.setPileText(pile.id, 'Offers. From now on file offers under Work.');
+    await store.setPileText(
+      pile.id,
+      'Offers. From now on file offers under Work.',
+    );
     expect(keepRule).not.toHaveBeenCalled();
 
     expect(await store.closePile(pile.id, keepRule)).toBe(true);
     expect(await store.closePile(pile.id, keepRule)).toBe(true);
     expect(keepRule).toHaveBeenCalledTimes(1);
-    expect(keepRule).toHaveBeenCalledWith('From now on file offers under Work.');
+    expect(keepRule).toHaveBeenCalledWith(
+      'From now on file offers under Work.',
+    );
     expect(store.openPile()).toBeUndefined();
   });
 });

@@ -11,7 +11,6 @@
 
 import { useEffect, useState } from 'preact/hooks';
 
-import { attachToPile, getPiles } from './pile-store.js';
 import type { UploadQueue } from './upload-queue.js';
 
 export type QueueStatus = 'waiting' | 'uploading' | 'done' | 'failed';
@@ -50,6 +49,29 @@ export function uploadPileId(item: Pick<QueueItem, 'pileId'>): string {
   return item.pileId ?? NO_PILE;
 }
 
+/** A file of a pile, as the pile store takes it (`attachToPile`). */
+export interface PileHandOffItem {
+  name: string;
+  state: QueueStatus;
+  fileId?: string;
+}
+
+/** Takes one file of a pile; a pile this session does not know is ignored. */
+export type PileHandOff = (pileId: string, item: PileHandOffItem) => void;
+
+/** Set by `pile-store.ts` when it loads. Registered rather than imported,
+ * so this store stays free of Drive and loads first wherever it is used. */
+let handOff: PileHandOff | null = null;
+
+export function setPileHandOff(next: PileHandOff | null): void {
+  handOff = next;
+}
+
+function handTo(pileId: string, item: PileHandOffItem): void {
+  if (handOff === null || pileId === NO_PILE) return;
+  handOff(pileId, item);
+}
+
 /**
  * Hands each row that joined a pile to the pile store: its first attach
  * writes the pile's note, and each row that lands rewrites it (R-PILE-1).
@@ -59,7 +81,7 @@ export function uploadPileId(item: Pick<QueueItem, 'pileId'>): string {
 function handToPiles(rows: readonly QueueItem[]): void {
   for (const row of rows) {
     if (row.pileId === undefined) continue;
-    void attachToPile(row.pileId, {
+    handTo(row.pileId, {
       name: row.name,
       state: row.status,
       ...(row.fileId === undefined ? {} : { fileId: row.fileId }),
@@ -77,9 +99,7 @@ export function followUploads(
 ): () => void {
   const sync = (): void => {
     for (const item of uploads.items()) {
-      if (item.pileId === NO_PILE) continue;
-      if (!getPiles().some((pile) => pile.id === item.pileId)) continue;
-      void attachToPile(item.pileId, {
+      handTo(item.pileId, {
         name: item.name,
         state: item.state,
         ...(item.fileId === undefined ? {} : { fileId: item.fileId }),

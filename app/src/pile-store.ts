@@ -22,6 +22,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { contextNote, contextNoteName } from './add.js';
+import { setPileHandOff } from './add-queue-store.js';
 import {
   createTextFile,
   deleteFile,
@@ -76,6 +77,12 @@ interface NoteMeta {
   /** The last write failed; cleared by the next that succeeds. */
   failed: boolean;
 }
+
+// Add's queue and the durable upload queue hand the files of a pile here
+// (`add-queue-store.ts`).
+setPileHandOff((pileId, item) => {
+  void attachToPile(pileId, item);
+});
 
 let piles: Pile[] = [];
 const meta = new Map<string, NoteMeta>();
@@ -384,7 +391,8 @@ export async function closePile(
           await keepRule(sentence);
         } catch (err) {
           console.error(err);
-          if (!told) showToast('Could not add your rule yet. Bower still reads it.');
+          if (!told)
+            showToast('Could not add your rule yet. Bower still reads it.');
           told = true;
         }
       }
