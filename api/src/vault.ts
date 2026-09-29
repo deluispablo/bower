@@ -198,7 +198,10 @@ export function parseFolderCheck(value: unknown): FolderCheck {
     check.driveId = value.driveId;
   }
   const capabilities = value.capabilities;
-  if (isRecord(capabilities) && typeof capabilities.canAddChildren === 'boolean') {
+  if (
+    isRecord(capabilities) &&
+    typeof capabilities.canAddChildren === 'boolean'
+  ) {
     check.canAddChildren = capabilities.canAddChildren;
   }
   return check;
@@ -307,10 +310,7 @@ async function deletePrefix(kv: KVNamespace, prefix: string): Promise<void> {
  * run history are cleared (`clearRunHistory`, once the new pointer is
  * written).
  */
-async function retireOldRuns(
-  kv: KVNamespace,
-  userId: string,
-): Promise<void> {
+async function retireOldRuns(kv: KVNamespace, userId: string): Promise<void> {
   await Promise.all([
     deleteRunTicket(kv, userId, 'ingest'),
     deleteRunTicket(kv, userId, 'lint'),

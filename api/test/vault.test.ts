@@ -271,7 +271,12 @@ async function postVault(
 }
 
 interface VaultBody {
-  vault: { folderId: string; inboxFolderId: string; name: string };
+  vault: {
+    folderId: string;
+    inboxFolderId: string;
+    name: string;
+    setAt?: string;
+  };
 }
 
 interface ErrorBody {
@@ -520,12 +525,13 @@ describe('POST /vault select', () => {
 
     expect(response.status).toBe(200);
     const { vault } = await response.json<VaultBody>();
-    expect(vault).toEqual({
+    const { setAt, ...pointer } = vault;
+    expect(pointer).toEqual({
       folderId,
       inboxFolderId: inboxId,
       name: 'Notes',
-      setAt: expect.any(String),
     });
+    expect(Date.parse(setAt ?? '')).not.toBeNaN();
     // Everything that existed is still there, unchanged.
     for (const item of before) expect(drive.items.get(item.id)).toEqual(item);
     // One item per name: nothing was added next to an existing file.
