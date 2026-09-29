@@ -338,18 +338,23 @@ describe('Drive chip and end-of-folder tip (#453, Phone-Folder-Project board)', 
   });
 });
 
-/** The list mode loads on demand: wait for its filter, then for its notes'
- * frontmatter. */
-async function listReady(): Promise<void> {
-  for (
-    let at = 0;
-    at < 30 && root.querySelector('.folder-seg') === null;
-    at += 1
-  ) {
+/** Polls until `done()` holds (5 s at most): the list mode is loaded on
+ * demand and its notes' frontmatter arrives after the first render, so a
+ * slow runner needs more than a fixed number of ticks. */
+async function waitUntil(done: () => boolean): Promise<void> {
+  const until = Date.now() + 5000;
+  while (!done() && Date.now() < until) {
     await settle();
   }
-  await settle();
+  expect(done()).toBe(true);
 }
+
+/** The list mode has rendered. */
+async function listReady(): Promise<void> {
+  await waitUntil(() => root.querySelector('.folder-seg') !== null);
+}
+
+const has = (text: string) => (): boolean => root.textContent.includes(text);
 
 async function settle(): Promise<void> {
   await act(async () => {
@@ -391,6 +396,7 @@ describe('Folder list mode (#611)', () => {
     useFlatHuntWithPair();
     mount();
     await listReady();
+    await waitUntil(has('3 originals, 1 by Bower'));
     expect(texts('.folder-path')[0]).toBe('PProjects›Flat hunt');
     expect(root.querySelector('.folder-path b')?.textContent).toBe('Flat hunt');
     expect(root.querySelector('.folder-counts')?.textContent).toBe(
@@ -415,19 +421,20 @@ describe('Folder list mode (#611)', () => {
     useFlatHuntWithPair();
     mount();
     await listReady();
+    await waitUntil(has('note on the listing'));
     const names = (): (string | undefined)[] => texts('.folder-row-name');
     expect(names().filter((n) => n?.startsWith('Arlington'))).toHaveLength(1);
     expect(root.textContent).toContain('note on the listing');
 
     const buttons = root.querySelectorAll<HTMLButtonElement>('.folder-seg-btn');
     void act(() => buttons[1]?.click());
-    await settle();
+    await waitUntil(() => !has('note on the listing')());
     expect(names()).toContain('Arlington Road, 2 bed');
     expect(root.querySelector('.kind-badge')?.textContent).toBe('PDF');
     expect(root.textContent).not.toContain('note on the listing');
 
     void act(() => buttons[2]?.click());
-    await settle();
+    await waitUntil(has('note on the listing PDF'));
     expect(root.textContent).toContain('note on the listing PDF');
     expect(root.textContent).toContain(
       'Only what Bower wrote, with its key facts',
@@ -458,7 +465,7 @@ describe('Folder list mode (#611)', () => {
     void act(() => {
       sort.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await settle();
+    await waitUntil(() => viewStore.get(DIR)?.folderSort === 'name');
     expect(viewStore.get(DIR)).toMatchObject({
       sort: 'name',
       folderSort: 'name',
@@ -479,13 +486,7 @@ describe('Folder list mode (#611)', () => {
     route.params.path = DIR;
     mount();
     await listReady();
-    for (
-      let at = 0;
-      at < 20 && root.querySelector('.folder-virtual') === null;
-      at += 1
-    ) {
-      await settle();
-    }
+    await waitUntil(() => root.querySelector('.folder-virtual') !== null);
     expect(root.querySelector('.folder-virtual')).not.toBeNull();
     const rendered = root.querySelectorAll('.folder-item').length;
     expect(rendered).toBeGreaterThan(0);
