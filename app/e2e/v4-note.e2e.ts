@@ -55,6 +55,13 @@ test('the Arlington Road note shows its props line, key facts and folded Details
   const details = view.getByRole('button', { name: /^Details/ });
   await expect(details).toHaveAttribute('aria-expanded', 'false');
   await expect(details).toContainText('rental listing');
+  await details.click();
+  await expect(view.locator('.details-body')).toContainText(
+    '14 min, from your offer letter and Cycle to Work agreement',
+  );
+  await expect(view.locator('.details-body')).toContainText(
+    '72 of 100: cheap, close, one bedroom short of a study',
+  );
   await shot(page, testInfo, 'v4-note-arlington');
 });
 

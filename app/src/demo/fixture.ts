@@ -387,6 +387,8 @@ interface Listing {
   against: string;
   bike: string;
   fit: number;
+  bikeNote?: string;
+  fitNote?: string;
   status: string;
   viewing?: string;
   oldName: string;
@@ -429,7 +431,9 @@ export const FLAT_LISTINGS: readonly Listing[] = [
     available: '2026-11-01',
     against: '−10 %',
     bike: '14 min',
+    bikeNote: 'from your offer letter and Cycle to Work agreement',
     fit: 72,
+    fitNote: 'cheap, close, one bedroom short of a study',
     status: 'to view',
     oldName: 'Arlington Road, 2 bed.pdf',
     callout: [
@@ -516,6 +520,10 @@ function listingFiles(): FixtureFile[] {
           against_area: listing.against,
           bike_to_office: listing.bike,
           fit: listing.fit,
+          ...(listing.bikeNote !== undefined && {
+            bike_to_office_note: listing.bikeNote,
+          }),
+          ...(listing.fitNote !== undefined && { fit_note: listing.fitNote }),
           ...(listing.viewing !== undefined && { viewing: listing.viewing }),
         },
         origins: {
