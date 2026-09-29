@@ -86,6 +86,7 @@ import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
+import { useRequestRows } from '../use-request-rows.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind, VaultIndex } from '../vault-index.js';
@@ -547,6 +548,7 @@ function BowerNote({
   index: VaultIndex;
 }): JSX.Element {
   const { note, text } = companion;
+  const requests = useRequestRows();
   const pages = useMemo(() => whereToLook(text), [text]);
   const rendered = useMemo(() => {
     const out = renderNote(withoutWhereToLook(text), index, {
@@ -570,6 +572,9 @@ function BowerNote({
           html={rendered.top}
           frontmatter={rendered.frontmatter}
           checkSection={rendered.items}
+          path={note.path}
+          requests={requests}
+          names={[noteTitle(note, text)]}
         />
       )}
       <div class="file-bower-note-text">

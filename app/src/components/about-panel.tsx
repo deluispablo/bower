@@ -11,17 +11,17 @@
 import type { JSX } from 'preact';
 
 import type { DriveFile } from '../drive.js';
-import { kindById, keyFactsFor, statusLabel } from '../kinds.js';
+import { kindById, statusLabel } from '../kinds.js';
 import { outlineOf } from '../markdown/frontmatter.js';
 import type { NoteProperties } from '../markdown/frontmatter.js';
 import { extensionOf } from '../markdown/embeds.js';
+import { originalDisplayName, resolveOriginal } from '../companion.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { isAppFile } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
 import { BowerMark } from './bird.js';
 import { detailsGroups, humaniseKey } from './details.js';
-import { KeyFacts } from './key-facts.js';
 import { hasNoteProperties, NotePropertiesList } from './note-properties.js';
 import type { NoteFolderLink } from './note-properties.js';
 import '../styles/about-panel.css';
@@ -62,37 +62,34 @@ function notesInFolder(index: VaultIndex, file: DriveFile): DriveFile[] {
 }
 
 /**
- * The file a note was made from (`original` in its frontmatter): next to the
- * note first, then by path, then by name anywhere in the Bower folder.
- * `undefined` when the note names none or it is not in the index.
+ * The file a note was made from (`original` in its frontmatter), by the
+ * folder screen's own rule (`resolveOriginal`, R-NOTE-3). `undefined` when
+ * the note names none or it is not in the index.
  */
 export function originalFileOf(
   index: VaultIndex,
   file: DriveFile,
   original: string | undefined,
 ): DriveFile | undefined {
-  if (original === undefined) return undefined;
-  const name = original
-    .replace(/^\[\[|\]\]$/g, '')
-    .split('|')[0]
-    ?.trim();
-  if (name === undefined || name === '') return undefined;
-  const folder = folderOf(file.path);
-  const beside = folder === '' ? name : `${folder}/${name}`;
-  return (
-    index.byPath.get(beside) ??
-    index.byPath.get(name) ??
-    index.files.find((candidate) => candidate.name === name)
-  );
+  return resolveOriginal(file, original, index);
+}
+
+/** A value with its `[[wikilinks]]` read as the names they point to, so the
+ * panel never shows raw brackets (R-NOTE-5): `[[A/B.pdf|the CV]]` becomes
+ * "the CV", `[[A/B.pdf]]` becomes "B.pdf". */
+export function plainNames(value: string): string {
+  return value.replace(/\[\[([^\]]*)\]\]/g, (_match, inner: string) => {
+    const [target = '', alias] = inner.split('|');
+    const shown = alias?.trim();
+    if (shown !== undefined && shown !== '') return shown;
+    return originalDisplayName(`[[${target}]]`) || target.trim();
+  });
 }
 
 /** "PDF, 2 pages": the original's format and its page count. */
 export function originalSummary(meta: NoteMeta): string {
-  const name = (meta.original ?? '')
-    .replace(/^\[\[|\]\]$/g, '')
-    .split('|')[0]
-    ?.trim();
-  const extension = extensionOf(name ?? '').toUpperCase();
+  const name = originalDisplayName(meta.original ?? '');
+  const extension = extensionOf(name).toUpperCase();
   const parts: string[] = [];
   if (extension !== '') parts.push(extension);
   if (meta.pages !== undefined) {
@@ -137,10 +134,6 @@ export function AboutPanel({
   meta,
 }: AboutPanelProps): JSX.Element {
   const kind = meta?.kind === undefined ? undefined : kindById(meta.kind);
-  const facts =
-    kind === undefined || meta === undefined
-      ? []
-      : keyFactsFor(kind, meta.fields);
   const original =
     meta === undefined ? undefined : originalFileOf(index, file, meta.original);
   const summary = meta === undefined ? '' : originalSummary(meta);
@@ -151,27 +144,32 @@ export function AboutPanel({
 
   return (
     <>
+      {hasNoteProperties(folder, properties) && (
+        <section
+          class="about-section about-properties"
+          aria-label="About this note"
+        >
+          <h2 class="about-heading">About this note</h2>
+          <NotePropertiesList folder={folder} properties={properties} />
+        </section>
+      )}
+
       {kind !== undefined && meta !== undefined && (
-        <AboutKind kind={kind} meta={meta} facts={facts} />
+        <AboutKind kind={kind} meta={meta} />
       )}
 
       {meta?.original !== undefined && (
         <section class="about-section" aria-label="Original">
           <h2 class="about-heading">Original</h2>
           {original === undefined ? (
-            <span class="about-row">{summary || meta.original}</span>
+            <span class="about-row">
+              {summary || originalDisplayName(meta.original)}
+            </span>
           ) : (
             <a href={`/file/${original.id}`} class="about-row about-original">
               {summary === '' ? original.name : summary}
             </a>
           )}
-        </section>
-      )}
-
-      {kind === undefined && hasNoteProperties(folder, properties) && (
-        <section class="about-section about-properties" aria-label="Properties">
-          <h2 class="about-heading">Properties</h2>
-          <NotePropertiesList folder={folder} properties={properties} />
         </section>
       )}
 
@@ -238,16 +236,15 @@ export function AboutPanel({
   );
 }
 
-/** "Key facts · rental listing", the compact Details list, the fields the
- * document did not state (board `Desktop-Note-Details`). */
+/** The compact Details list and the fields the document did not state
+ * (board `Desktop-Note-Details`). The key facts live in the note's own box
+ * (R-NOTE-5), not here. */
 function AboutKind({
   kind,
   meta,
-  facts,
 }: {
   kind: NonNullable<ReturnType<typeof kindById>>;
   meta: NoteMeta;
-  facts: ReturnType<typeof keyFactsFor>;
 }): JSX.Element {
   const shown = new Set(kind.keyFacts);
   const rows = detailsGroups(kind, meta)
@@ -256,12 +253,6 @@ function AboutKind({
   const status = statusLabel(kind, meta.fields);
   return (
     <>
-      {facts.length > 0 && (
-        <section class="about-section" aria-label="Key facts">
-          <h2 class="about-heading">{`Key facts · ${kind.name}`}</h2>
-          <KeyFacts facts={facts} />
-        </section>
-      )}
       {(rows.length > 0 || status !== '' || meta.not_stated.length > 0) && (
         <section class="about-section" aria-label="Details">
           <h2 class="about-heading">Details</h2>
@@ -269,7 +260,7 @@ function AboutKind({
             {rows.map((row) => (
               <div class="about-detail" key={row.key}>
                 <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
+                <dd>{plainNames(row.value)}</dd>
               </div>
             ))}
             {status !== '' && (

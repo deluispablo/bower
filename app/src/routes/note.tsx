@@ -1,5 +1,5 @@
 import type { JSX } from 'preact';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
 import { AboutPanel } from '../components/about-panel.js';
@@ -41,13 +41,14 @@ import {
   paraKindOf,
 } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
-import { noteMetaFrom, recordNoteMeta } from '../note-meta.js';
+import { loadNoteMeta, noteMetaFrom, recordNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle as computeNoteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
+import { useRequestRows } from '../use-request-rows.js';
 import { isAppFile } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
@@ -134,6 +135,55 @@ export function isBowerNote(meta: NoteMeta): boolean {
   return isBowerWritten(meta);
 }
 
+/** A note's score or fit (0 to 100), `null` when it has neither. */
+export function noteScore(
+  fields: Record<string, unknown> | undefined,
+): number | null {
+  for (const key of ['score', 'fit']) {
+    const raw = fields?.[key];
+    const n =
+      typeof raw === 'number'
+        ? raw
+        : typeof raw === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(raw)
+          ? Number(raw)
+          : Number.NaN;
+    if (Number.isFinite(n) && n >= 0 && n <= 100) return n;
+  }
+  return null;
+}
+
+/** The pager counts only notes of the note's own kind (R-NOTE-4): a job
+ * offer's neighbours are the other offers, not the CV and the letters
+ * written for them. `metas` is what is known of the folder's notes. */
+export interface SameKind {
+  kind: string;
+  metas: ReadonlyMap<string, NoteMeta>;
+  /** Best score first, as the offers are ranked. */
+  byScore: boolean;
+}
+
+/** "3 of 4 offers, by score" for a note with a kind; "2 of 5" without one. */
+export function pagerCount(
+  position: number,
+  total: number,
+  kind: Kind | undefined,
+  byScore: boolean,
+): string {
+  const place = `${String(position)} of ${String(total)}`;
+  if (kind === undefined) return place;
+  const last = kind.name.split(' ').pop() ?? kind.name;
+  const noun = last.endsWith('s') ? last : `${last}s`;
+  return `${place} ${noun}${byScore ? ', by score' : ''}`;
+}
+
+/** The pager's accessible name: "Offers in this folder", "Notes in this folder". */
+export function pagerLabel(kind: Kind | undefined): string {
+  if (kind === undefined) return 'Notes in this folder';
+  const last = kind.name.split(' ').pop() ?? kind.name;
+  const noun = last.endsWith('s') ? last : `${last}s`;
+  return `${noun.charAt(0).toUpperCase()}${noun.slice(1)} in this folder`;
+}
+
 export interface FolderWalk {
   prev: DriveFile | null;
   next: DriveFile | null;
@@ -153,26 +203,42 @@ export function walkFolder(
   id: string,
   showAppFiles: boolean,
   sort: ExplorerSortPref,
+  sameKind?: SameKind,
 ): FolderWalk {
   const none: FolderWalk = { prev: null, next: null, position: 0, total: 0 };
   const file = index.byId.get(id);
   if (file === undefined) return none;
   const folder = folderOf(file.path);
+  const byName = (a: DriveFile, b: DriveFile): number =>
+    a.name.localeCompare(b.name, undefined, {
+      sensitivity: 'base',
+      numeric: true,
+    });
   const inFolder = index.notes
     .filter(
       (note) =>
         folderOf(note.path) === folder &&
-        (showAppFiles || note.id === id || !isAppFile(note.path, note.name)),
+        (showAppFiles || note.id === id || !isAppFile(note.path, note.name)) &&
+        (sameKind === undefined ||
+          note.id === id ||
+          sameKind.metas.get(note.id)?.kind === sameKind.kind),
     )
-    .sort((a, b) =>
-      sort === 'modified'
+    .sort((a, b) => {
+      if (sameKind?.byScore === true) {
+        const scoreA = noteScore(sameKind.metas.get(a.id)?.fields);
+        const scoreB = noteScore(sameKind.metas.get(b.id)?.fields);
+        if (scoreA !== scoreB) {
+          if (scoreA === null) return 1;
+          if (scoreB === null) return -1;
+          return scoreB - scoreA;
+        }
+        return byName(a, b);
+      }
+      return sort === 'modified'
         ? (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
-          a.name.localeCompare(b.name, undefined, { numeric: true })
-        : a.name.localeCompare(b.name, undefined, {
-            sensitivity: 'base',
-            numeric: true,
-          }),
-    );
+            a.name.localeCompare(b.name, undefined, { numeric: true })
+        : byName(a, b);
+    });
   const at = inFolder.findIndex((note) => note.id === id);
   if (at === -1) return none;
   return {
@@ -333,6 +399,50 @@ function PropsLine({
   );
 }
 
+/**
+ * What is known of `notes`' frontmatter (kind, score), read through the
+ * note-meta cache (`loadNoteMeta`, the folder screen reads the same). A note
+ * that cannot be read is left out; the map fills in as they come.
+ */
+function useNoteMetas(
+  notes: readonly DriveFile[],
+): ReadonlyMap<string, NoteMeta> {
+  const [metas, setMetas] = useState<ReadonlyMap<string, NoteMeta>>(
+    () => new Map(),
+  );
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  const key = notes
+    .map((note) => `${note.id}@${note.modifiedTime ?? ''}`)
+    .join('|');
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      notesRef.current.map(async (note): Promise<[string, NoteMeta] | null> => {
+        try {
+          return [note.id, await loadNoteMeta(note)];
+        } catch (error: unknown) {
+          if (!(error instanceof OfflineError)) console.error(error);
+          return null;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) return;
+      setMetas(
+        new Map(
+          entries.filter(
+            (entry): entry is [string, NoteMeta] => entry !== null,
+          ),
+        ),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+  return metas;
+}
+
 type NoteLoad =
   | { status: 'loading' }
   // `text` is the note's raw text, kept alongside `rendered` only so the
@@ -367,6 +477,7 @@ export function Note() {
   const [appendOpen, setAppendOpen] = useState(false);
   /** The status just chosen, shown until the save comes back (or fails). */
   const [statusPick, setStatusPick] = useState<string | null>(null);
+  const requests = useRequestRows();
 
   // Leaving a note (after confirming, if there were unsaved changes) drops
   // its edit, so coming back shows the note rather than a stale editor.
@@ -409,10 +520,65 @@ export function Note() {
   // on), and their real titles (`noteTitle`, #306) resolved from the note
   // cache the same way Home's Recent and Pinned rows do, not the file name
   // with its date prefix.
+  const currentMeta =
+    load.status === 'ready' && load.id === id
+      ? noteMetaFrom(load.rendered.frontmatter)
+      : null;
+  const currentKind =
+    currentMeta?.kind === undefined ? undefined : kindById(currentMeta.kind);
+  const folderNotes = useMemo(
+    () =>
+      index === null || file === undefined || currentKind === undefined
+        ? []
+        : index.notes.filter(
+            (note) =>
+              note.id !== id &&
+              folderOf(note.path) === folderOf(file.path) &&
+              !isAppFile(note.path, note.name),
+          ),
+    [index, file, id, currentKind === undefined],
+  );
+  const peerMetas = useNoteMetas(folderNotes);
+  const sameKind: SameKind | undefined =
+    currentMeta?.kind === undefined || currentKind === undefined
+      ? undefined
+      : {
+          kind: currentMeta.kind,
+          metas: new Map(peerMetas).set(id, currentMeta),
+          byScore: noteScore(currentMeta.fields) !== null,
+        };
   const { prev, next, position, total } =
     index === null
       ? { prev: null, next: null, position: 0, total: 0 }
-      : walkFolder(index, id, getPref('showAppFiles'), getPref('explorerSort'));
+      : walkFolder(
+          index,
+          id,
+          getPref('showAppFiles'),
+          getPref('explorerSort'),
+          sameKind,
+        );
+  const prevLink = useRef<HTMLAnchorElement>(null);
+  const nextLink = useRef<HTMLAnchorElement>(null);
+  // "[" and "]" move between the notes on a keyboard (the pager's hint).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key !== '[' && event.key !== ']') return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return;
+      }
+      (event.key === '[' ? prevLink : nextLink).current?.click();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
   const siblingFiles: DriveFile[] = [prev, next].filter(
     (sibling): sibling is DriveFile => sibling !== null,
   );
@@ -726,6 +892,9 @@ export function Note() {
                 load.status === 'ready' ? load.rendered.frontmatter : {}
               }
               checkSection={checked?.items ?? []}
+              path={file.path}
+              requests={requests}
+              names={[title]}
             />
           )}
           {opening !== null &&
@@ -744,18 +913,32 @@ export function Note() {
       )}
 
       {(prev !== null || next !== null) && (
-        <nav class="note-siblings" aria-label="Notes in this folder">
+        <nav class="note-siblings" aria-label={pagerLabel(currentKind)}>
           {prev !== null ? (
-            <a href={`/note/${prev.id}`}>
-              ← {siblingTitles.get(prev.id) ?? computeNoteTitle(prev)}
+            <a ref={prevLink} class="note-sibling" href={`/note/${prev.id}`}>
+              {`‹ ${siblingTitles.get(prev.id) ?? computeNoteTitle(prev)}`}
             </a>
           ) : (
             <span />
           )}
-          <span class="note-siblings-count">{`${String(position)} of ${String(total)}`}</span>
+          <span class="note-siblings-mid">
+            <span class="note-siblings-count">
+              {pagerCount(
+                position,
+                total,
+                currentKind,
+                sameKind?.byScore === true,
+              )}
+            </span>
+            <span class="note-siblings-keys">[ and ] to move</span>
+          </span>
           {next !== null ? (
-            <a href={`/note/${next.id}`}>
-              {siblingTitles.get(next.id) ?? computeNoteTitle(next)} →
+            <a
+              ref={nextLink}
+              class="note-sibling note-sibling-next"
+              href={`/note/${next.id}`}
+            >
+              {`${siblingTitles.get(next.id) ?? computeNoteTitle(next)} ›`}
             </a>
           ) : (
             <span />

@@ -9,6 +9,7 @@ import {
   requestMeta,
   requestRows,
   requestTargetPath,
+  requestsForNote,
   requestsByTargetPath,
   ruleSentences,
   sentenceKind,
@@ -464,6 +465,31 @@ describe('requestsByTargetPath (#756, for #765 and #784)', () => {
       ),
     ).toBe('1-Projects/Flat/lease.pdf');
     expect(requestTargetPath('Make a packing list')).toBeNull();
+  });
+
+  it('reads the note an Ask or Rename request names as a wikilink', () => {
+    expect(requestTargetPath('[[Data Lead, Northwind]] rename it')).toBe(
+      'Data Lead, Northwind',
+    );
+    expect(requestTargetPath('Rename [[A/B.md|the offer]] to Offer')).toBe(
+      'A/B.md',
+    );
+  });
+
+  it('finds the requests about one note by path, file name or title', () => {
+    const ask = row('tidying', '[[Data Lead, Northwind]] rename it');
+    const other = row('tidying', '[[Something else]] rename it');
+    const move = row('waiting', 'Move “x” (1-Projects/Jobs/offer.md) to Done.');
+    const rows = [ask, other, move];
+    expect(
+      requestsForNote(rows, '1-Projects/Jobs/offer.md', [
+        'data lead, Northwind',
+      ]),
+    ).toEqual([ask, move]);
+    expect(requestsForNote(rows, '1-Projects/Jobs/offer.md')).toEqual([move]);
+    expect(
+      requestsForNote([row('tidying', '[[offer]] rename')], 'Jobs/offer.md'),
+    ).toHaveLength(1);
   });
 
   it('groups waiting, running, failed and done requests by target path', () => {

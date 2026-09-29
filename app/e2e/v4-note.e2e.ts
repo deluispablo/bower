@@ -104,9 +104,8 @@ test('the About panel holds key facts, Details, Original, the folder and the out
   const panel = page.locator('.about-section').first();
   await expect(panel).toBeVisible();
   const headings = page.locator('.about-heading');
-  await expect(
-    headings.filter({ hasText: 'Key facts · rental listing' }),
-  ).toBeVisible();
+  await expect(headings.filter({ hasText: /^About this note$/ })).toBeVisible();
+  await expect(headings.filter({ hasText: /^Key facts/ })).toHaveCount(0);
   await expect(headings.filter({ hasText: /^Details$/ })).toBeVisible();
   await expect(headings.filter({ hasText: /^Original$/ })).toBeVisible();
   await expect(headings.filter({ hasText: /^In this folder$/ })).toBeVisible();

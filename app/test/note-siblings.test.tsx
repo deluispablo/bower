@@ -73,6 +73,7 @@ const loadNote = vi.fn(
 );
 vi.mock('../src/cache.js', () => ({ loadNote }));
 vi.mock('../src/seen.js', () => ({ markSeen: vi.fn(() => Promise.resolve()) }));
+vi.mock('../src/use-request-rows.js', () => ({ useRequestRows: () => [] }));
 
 const index = buildVaultIndex([WIFI, SUBSCRIPTIONS, PROPOSALS]);
 const noop = (): Promise<void> => Promise.resolve();
@@ -90,7 +91,10 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
   }),
 }));
 
-const { Note } = await import('../src/routes/note.js');
+const { Note, walkFolder, pagerCount, pagerLabel } =
+  await import('../src/routes/note.js');
+const { kindById } = await import('../src/kinds.js');
+const { noteMetaFrom } = await import('../src/note-meta.js');
 
 let root: HTMLDivElement;
 
@@ -144,7 +148,7 @@ describe('Note: previous/next (#423)', () => {
     // read behind `useNoteTitles` settles.
     await waitFor(
       () =>
-        nav.querySelector('a')?.textContent === "← What's my Wi-Fi password?",
+        nav.querySelector('a')?.textContent === "‹ What's my Wi-Fi password?",
     );
     const links = Array.from(nav.querySelectorAll('a'));
     expect(links).toHaveLength(1);
@@ -173,8 +177,54 @@ describe('Note: previous/next (#423)', () => {
     await waitFor(
       () =>
         root.querySelector('.note-siblings a')?.textContent ===
-        "What's my Wi-Fi password? →",
+        "What's my Wi-Fi password? ›",
     );
     expect(links[0]?.getAttribute('href')).toBe(`/note/${WIFI.id}`);
+  });
+});
+
+describe('The pager counts the same kind only (R-NOTE-4)', () => {
+  const offer = (name: string): DriveFile =>
+    note(`Applications/${name}.md`, '2026-09-20T00:00:00Z');
+  const A = offer('A offer');
+  const B = offer('B offer');
+  const C = offer('C offer');
+  const CV = offer('CV 2026');
+  const applications = buildVaultIndex([A, B, C, CV]);
+  const meta = (
+    kind: string,
+    score?: number,
+  ): ReturnType<typeof noteMetaFrom> =>
+    noteMetaFrom({ kind, ...(score === undefined ? {} : { score }) });
+  const metas = new Map([
+    [A.id, meta('job-offer', 60)],
+    [B.id, meta('job-offer', 90)],
+    [C.id, meta('job-offer')],
+    [CV.id, meta('cv')],
+  ]);
+
+  it('leaves the CV and the letters out and ranks the offers by score', () => {
+    const walk = walkFolder(applications, A.id, false, 'name', {
+      kind: 'job-offer',
+      metas,
+      byScore: true,
+    });
+    // B (90), A (60), then C with no score: A is 2nd of 3.
+    expect(walk.total).toBe(3);
+    expect(walk.position).toBe(2);
+    expect(walk.prev?.id).toBe(B.id);
+    expect(walk.next?.id).toBe(C.id);
+  });
+
+  it('walks every note of the folder when the note has no kind', () => {
+    expect(walkFolder(applications, A.id, false, 'name').total).toBe(4);
+  });
+
+  it('words the count and the label by kind', () => {
+    const jobOffer = kindById('job-offer');
+    expect(pagerCount(1, 4, jobOffer, true)).toBe('1 of 4 offers, by score');
+    expect(pagerCount(2, 5, undefined, false)).toBe('2 of 5');
+    expect(pagerLabel(jobOffer)).toBe('Offers in this folder');
+    expect(pagerLabel(undefined)).toBe('Notes in this folder');
   });
 });
