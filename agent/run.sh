@@ -1313,7 +1313,7 @@ report_lists() {
 # Best effort: a lost phase report is logged and the run goes on. Usage:
 # report_phase <reading|writing|saving> [total].
 report_phase() {
-  if ! PROCESSED_JSON='' SUMMARY='' PHASE=$1 TOTAL=${2:-} report running; then
+  if ! PROCESSED_JSON='' SUMMARY='' QUARANTINED_JSON='' PHASE=$1 TOTAL=${2:-} report running; then
     log "report $1 failed"
   fi
 }

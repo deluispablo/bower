@@ -523,6 +523,8 @@ elif [ "$1" = copyto ] && [ "${2%%:*}" = vault ]; then
   mkdir -p "$(dirname "$3")"
   cp "$remote/${2#vault:}" "$3"
 elif [ "$1" = deletefile ]; then
+  # "deletefail": Drive stops answering after the copy up (R-RUNNER-1).
+  [ "$SMOKE_SCENARIO" != deletefail ] || exit 1
   target="$remote/${2#vault:}"
   [ -f "$target" ] || exit 4
   rm "$target"
@@ -533,6 +535,9 @@ elif [ "$1" = moveto ] && [ "${2%%:*}" = vault ] && [ "${3%%:*}" = vault ]; then
   # A server-side move (#595): the file itself changes place, so on Drive it
   # keeps its id. Like rclone, it fails when the source is gone, and like
   # this stub's Drive, the parent folder must exist ("mkdir" first).
+  # "deletefail": Drive cannot move, so the move falls back to the copy up
+  # and the delete of the pending original.
+  [ "$SMOKE_SCENARIO" != deletefail ] || exit 1
   [ -f "$remote/${2#vault:}" ] || exit 4
   [ -d "$(dirname "$remote/${3#vault:}")" ] || exit 3
   mv "$remote/${2#vault:}" "$remote/${3#vault:}"
@@ -808,6 +813,19 @@ case "$SMOKE_SCENARIO" in
     mv 0-Inbox/huge-photo.jpg '3-Resources/Photos/2026-01-15 huge-photo.jpg'
     mv 0-Inbox/long-scan.pdf 3-Resources/long-scan.pdf
     printf '\n  I added bike times to the flats  \nA second line\n' >.bower/added.txt
+    ;;
+  # R-RUNNER-1: the agent writes one new note, updates two notes that were
+  # there before, and writes one line about one of them (spaces around it)
+  # to .bower/updated.txt, plus a line for a note it did not change and a
+  # line with no `what`, which are not sent. The two clippings stay.
+  lists | deletefail)
+    echo '# New note' >'3-Resources/New note.md'
+    echo 'v2 from the agent' >3-Resources/agent.md
+    echo 'Renewal is in March.' >>2-Areas/Insurance.md
+    mkdir -p .bower
+    printf '%s\t%s\n' '3-Resources/agent.md' '  Added the renewal date  ' \
+      '3-Resources/app.md' 'Not changed, so not sent' '2-Areas/Insurance.md' '' \
+      >.bower/updated.txt
     ;;
   # A name that says nothing (issue #369): the photo is renamed from its
   # content, indexed with its type and origin, and the rename logged.
@@ -1473,6 +1491,12 @@ outcome=$(cat "$STATE/remote/.bower/last-run.json")
 grep -Fq '"state":"failed"' <<<"$outcome" || die 'last-run.json does not say failed'
 grep -Fq '"processed":0' <<<"$outcome" || die 'last-run.json counts a failed run as filed'
 grep -Fq '"reason":"unknown"' <<<"$outcome" || die 'last-run.json has no reason'
+# R-RUNNER-1 and 2: the note the agent changed before failing was uploaded,
+# so it is updated; the pending files are all still in the inbox.
+expect_eq "$(post 2 'JSON.stringify([p.created, p.updated, p.left])')" \
+  '[[],[{"path":"3-Resources/agent.md"}],["0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]]' \
+  'created, updated and left of the failed run'
+grep -Fq "\"left\":$(post 2 'JSON.stringify(p.left)')" <<<"$outcome" || die 'last-run.json lacks left'
 grep -q 'Tidy-up failed' <<<"$(tail -n 1 "$STATE/remote/log.md")" || die 'log.md has no failed line'
 expect_claude_env unset test-oauth-token
 expect_content_free
@@ -1523,6 +1547,12 @@ for reason_case in 'syncfail drive_unavailable' 'agenttimeout timeout' \
   expect_eq "$RC" 2 'exit code'
   expect_eq "$(post "$(posts_count)" p.state)" failed 'last state'
   expect_eq "$(post "$(posts_count)" p.reason)" "${reason_case#* }" 'reason'
+  # R-RUNNER-1: failing before sync down, nothing was created, updated or
+  # left in the inbox.
+  if [ "$CASE" = syncfail ]; then
+    expect_eq "$(post "$(posts_count)" 'JSON.stringify([p.created, p.updated, p.left])')" '[[],[],[]]' \
+      'created, updated and left of a run failing before sync down'
+  fi
   expect_content_free
   expect_cleaned_up
 done
@@ -2563,6 +2593,61 @@ done
 expect_content_free
 expect_cleaned_up
 echo "ok the report says where each thing went, what was set aside and why, and what Bower added"
+
+# 35. R-RUNNER-1, 2 and 4: the final report says what the run created (not
+# the move destination), what it updated (with the agent's one line, read
+# from .bower/updated.txt, which never reaches Drive nor the log) and what
+# is left in the inbox; last-run.json carries the same; the running reports
+# say reading, writing and saving, one each, with the totals.
+run_case lists
+expect_eq "$RC" 0 'exit code'
+expect_eq "$(posts_count)" 2 'status posts besides the phases'
+expect_eq "$(post 2 p.state)" done 'final state'
+expect_eq "$(post 2 'p.created.join("|")')" '3-Resources/New note.md|log.md' \
+  'created (the new note and the log.md the move bookkeeping started, not the filed original)'
+expect_eq "$(post 2 'JSON.stringify(p.updated)')" \
+  '[{"path":"2-Areas/Insurance.md"},{"path":"3-Resources/agent.md","what":"Added the renewal date"}]' \
+  'updated, with the one line the agent wrote'
+expect_eq "$(post 2 'p.left.join("|")')" 'Clippings/Bower trick.md|Clippings/b.md' 'left'
+expect_eq "$(post 2 'p.processed.find((i) => i.path === "0-Inbox/a.pdf").to')" '0-Inbox/Processed/a.pdf' 'the filed original moved'
+expect_eq "$(post 1 'p.created === undefined && p.phase === undefined')" true 'the first running report'
+expect_eq "$(grep -c . "$STATE/phases.log")" 3 'phase reports'
+expect_eq "$(node -e 'process.stdout.write(require("fs").readFileSync(process.argv[1], "utf8").trim().split("\n")
+  .map((l) => { const p = JSON.parse(l); return [p.state, p.kind, p.phase, p.total ?? "", Object.keys(p).length].join(":"); })
+  .join("|"))' "$STATE/phases.log")" \
+  'running:ingest:reading:3:5|running:ingest:writing:3:5|running:ingest:saving::4' \
+  'phase reports (state, kind, runId, phase and total only)'
+outcome="$STATE/remote/.bower/last-run.json"
+expect_eq "$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(JSON.stringify([o.created, o.updated, o.left]))' "$outcome")" \
+  "$(post 2 'JSON.stringify([p.created, p.updated, p.left])')" 'last-run.json carries the same created, updated and left'
+[ ! -e "$STATE/remote/.bower/updated.txt" ] || die '.bower/updated.txt reached Drive'
+if grep -Fxq -- .bower/updated.txt "$STATE/uploaded.txt"; then die '.bower/updated.txt was uploaded'; fi
+if grep -Eq 'renewal|Not changed|agent\.md|Insurance' "$STATE/out.log"; then die 'the log names an updated note or its line'; fi
+expect_content_free
+expect_cleaned_up
+echo "ok the report says what was created, updated and left, and each phase"
+
+# 36. R-RUNNER-1: a run that fails after the copy up (Drive cannot move the
+# filed original, so it is copied up, and then the delete of the original
+# fails) reports what the copy up actually uploaded, and the original is
+# still left in the inbox.
+run_case deletefail
+expect_eq "$RC" 2 'exit code'
+expect_eq "$(post 2 p.state)" failed 'final state'
+expect_eq "$(post 2 p.reason)" drive_unavailable 'reason'
+expect_eq "$(post 2 'p.created.join("|")')" '3-Resources/New note.md|log.md' 'created (the copied-up original is a move destination)'
+expect_eq "$(post 2 'p.updated.map((u) => u.path + ":" + (u.what ?? "")).join("|")')" \
+  '2-Areas/Insurance.md:|3-Resources/agent.md:Added the renewal date' 'updated'
+expect_eq "$(post 2 'p.left.join("|")')" '0-Inbox/a.pdf|Clippings/Bower trick.md|Clippings/b.md' 'left, the original among them'
+expect_eq "$(LC_ALL=C sort "$STATE/uploaded.txt" | tr '\n' '|')" \
+  '0-Inbox/Processed/a.pdf|2-Areas/Insurance.md|3-Resources/New note.md|3-Resources/agent.md|log.md|' 'what the copy up uploaded'
+expect_eq "$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(JSON.stringify([o.state, o.created, o.updated, o.left]))' "$STATE/remote/.bower/last-run.json")" \
+  "$(post 2 'JSON.stringify(["failed", p.created, p.updated, p.left])')" 'last-run.json of the failed run'
+expect_content_free
+expect_cleaned_up
+echo "ok a run failing after the copy up reports what was uploaded"
 
 # File facts (#610): after a run .bower/file-facts.json holds the pages of
 # the PDF, the sheets of the workbook and the entries of the archive (files,
