@@ -29,7 +29,6 @@
 
 import { Fragment } from 'preact';
 import type { JSX } from 'preact';
-import { createPortal } from 'preact/compat';
 import {
   useCallback,
   useEffect,
@@ -110,6 +109,8 @@ import {
 } from './icons.js';
 import { KindBadge } from './kind-badge.js';
 import { Overlay } from './overlay.js';
+import { Queued } from './queued-overlay.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import '../styles/switcher.css';
 
 const MIN_QUERY_LENGTH = 2;
@@ -1205,347 +1206,350 @@ function SwitcherPanel({
             ? `No results for ${trimmed}.`
             : `${total} result${total === 1 ? '' : 's'}.`;
 
-  return createPortal(
-    <Overlay kind="dialog" label="Quick switcher" onClose={closeSwitcher}>
-      <div ref={panelRef} class="switcher-panel">
-        <div class="switcher-field">
-          <IconSearch />
-          <input
-            ref={inputRef}
-            type="text"
-            class="switcher-input"
-            placeholder={placeholder}
-            aria-label={placeholder}
-            role="combobox"
-            aria-expanded="true"
-            aria-controls="switcher-listbox"
-            aria-activedescendant={
-              entryCount > 0 ? `switcher-option-${highlightedIndex}` : undefined
-            }
-            autocomplete="off"
-            value={query}
-            onInput={(event) => {
-              setQuery((event.target as HTMLInputElement).value);
-            }}
-            onFocus={() => {
-              setFieldFocused(true);
-            }}
-            onBlur={() => {
-              setFieldFocused(false);
-            }}
-            onKeyDown={handleKeyDown}
-          />
-          {desktop && scope !== null && (
-            <button
-              type="button"
-              class="switcher-scope"
-              aria-label={`Clear search in ${scope.label}`}
-              onClick={() => {
-                setScope(null);
+  return (
+    <Queued id="switcher" priority={OVERLAY_PRIORITY.own}>
+      <Overlay kind="dialog" label="Quick switcher" onClose={closeSwitcher}>
+        <div ref={panelRef} class="switcher-panel">
+          <div class="switcher-field">
+            <IconSearch />
+            <input
+              ref={inputRef}
+              type="text"
+              class="switcher-input"
+              placeholder={placeholder}
+              aria-label={placeholder}
+              role="combobox"
+              aria-expanded="true"
+              aria-controls="switcher-listbox"
+              aria-activedescendant={
+                entryCount > 0
+                  ? `switcher-option-${highlightedIndex}`
+                  : undefined
+              }
+              autocomplete="off"
+              value={query}
+              onInput={(event) => {
+                setQuery((event.target as HTMLInputElement).value);
               }}
-            >
-              in
-              {paraOfScope !== null && (
-                <FolderMark kind={paraOfScope} size={18} />
-              )}
-              {scope.label}
-              <IconClose />
-            </button>
-          )}
-          <button
-            type="button"
-            class="icon-button"
-            aria-label="Close"
-            onClick={closeSwitcher}
-          >
-            <IconClose />
-          </button>
-          <div class="switcher-bird" aria-hidden="true">
-            <Bird state={fieldFocused ? 'shiny' : 'peeking'} flip size={72} />
-          </div>
-        </div>
-        <div class="switcher-chips" onKeyDown={handleChipsKeyDown}>
-          {showParaChips &&
-            PARA_CHIPS.map(({ kind, label }) => {
-              const folder = paraFolder(index, kind);
-              const on = folder !== null && scope?.path === folder.path;
-              return (
-                <button
-                  key={kind}
-                  type="button"
-                  class="switcher-chip"
-                  aria-pressed={on}
-                  disabled={folder === null}
-                  onClick={() => {
-                    if (folder === null) return;
-                    setScope(on ? null : scopeOf(folder.path));
-                    inputRef.current?.focus();
-                  }}
-                >
-                  <FolderMark kind={kind} size={18} />
-                  {label}
-                </button>
-              );
-            })}
-          {scope !== null && !showParaChips && !desktop && (
-            <button
-              type="button"
-              class="switcher-chip"
-              aria-pressed="true"
-              aria-label={`Clear search in ${scope.label}`}
-              onClick={() => {
-                setScope(null);
+              onFocus={() => {
+                setFieldFocused(true);
               }}
-            >
-              {scope.label}
-              <IconClose />
-            </button>
-          )}
-          {searching && (
-            <>
-              {(desktop
-                ? chipList
-                : [
-                    { key: 'all', label: 'All', count: total },
-                    {
-                      key: 'folders',
-                      label: 'Folders',
-                      count: results?.folders.length ?? 0,
-                    },
-                    {
-                      key: 'notes',
-                      label: 'Notes',
-                      count: results?.notes.length ?? 0,
-                    },
-                    {
-                      key: 'files',
-                      label: 'Files',
-                      count: results?.files.length ?? 0,
-                    },
-                  ]
-              ).map(({ key, label, count }) => (
-                <button
-                  key={key}
-                  type="button"
-                  class="switcher-chip"
-                  aria-pressed={activeChip === key}
-                  onClick={() => {
-                    setKindChip(key);
-                  }}
-                >
-                  {label} <i>{count}</i>
-                </button>
-              ))}
+              onBlur={() => {
+                setFieldFocused(false);
+              }}
+              onKeyDown={handleKeyDown}
+            />
+            {desktop && scope !== null && (
               <button
                 type="button"
-                class="switcher-chip switcher-time"
-                aria-expanded={timeOpen}
-                data-active={time !== 'any'}
-                onClick={() => {
-                  setTimeOpen((open) => !open);
-                }}
-              >
-                <IconClock />
-                {TIME_LABELS[time]}
-              </button>
-            </>
-          )}
-        </div>
-        {searching && timeOpen && (
-          <div class="switcher-chips" role="group" aria-label="Time">
-            {(Object.keys(TIME_LABELS) as TimeKey[]).map((key) => (
-              <button
-                key={key}
-                type="button"
-                class="switcher-chip"
-                aria-pressed={time === key}
-                onClick={() => {
-                  setTime(key);
-                  setTimeOpen(false);
-                }}
-              >
-                {TIME_LABELS[key]}
-              </button>
-            ))}
-          </div>
-        )}
-        <div class="switcher-columns">
-          <div class="switcher-body">
-            {scope !== null && !desktop && (
-              <button
-                type="button"
-                class="switcher-link"
+                class="switcher-scope"
+                aria-label={`Clear search in ${scope.label}`}
                 onClick={() => {
                   setScope(null);
                 }}
               >
-                Search everywhere
+                in
+                {paraOfScope !== null && (
+                  <FolderMark kind={paraOfScope} size={18} />
+                )}
+                {scope.label}
+                <IconClose />
               </button>
             )}
-            <p
-              class={`switcher-status${
-                status === 'searching' || status === 'error'
-                  ? ''
-                  : ' switcher-quiet'
-              }`}
-              aria-live="polite"
+            <button
+              type="button"
+              class="icon-button"
+              aria-label="Close"
+              onClick={closeSwitcher}
             >
-              {searching && statusText}
-            </p>
-            {noResults && (
-              <div class="switcher-none">
-                <b class="switcher-none-title">Nothing called “{trimmed}”</b>
-                <span class="switcher-none-text">
-                  No folder, note or file has those words in its name or its
-                  text.
-                </span>
-                <a
-                  class="button"
-                  href={`${BOWER_PATH}?text=${encodeURIComponent(`Where is ${trimmed}?`)}`}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    goTo(
-                      `${BOWER_PATH}?text=${encodeURIComponent(`Where is ${trimmed}?`)}`,
-                    );
-                  }}
-                >
-                  Ask Bower where it is
-                </a>
-                {scope !== null && (
+              <IconClose />
+            </button>
+            <div class="switcher-bird" aria-hidden="true">
+              <Bird state={fieldFocused ? 'shiny' : 'peeking'} flip size={72} />
+            </div>
+          </div>
+          <div class="switcher-chips" onKeyDown={handleChipsKeyDown}>
+            {showParaChips &&
+              PARA_CHIPS.map(({ kind, label }) => {
+                const folder = paraFolder(index, kind);
+                const on = folder !== null && scope?.path === folder.path;
+                return (
                   <button
+                    key={kind}
                     type="button"
-                    class="switcher-link"
+                    class="switcher-chip"
+                    aria-pressed={on}
+                    disabled={folder === null}
                     onClick={() => {
-                      setScope(null);
+                      if (folder === null) return;
+                      setScope(on ? null : scopeOf(folder.path));
+                      inputRef.current?.focus();
                     }}
                   >
-                    Search all of {scope.label} instead
+                    <FolderMark kind={kind} size={18} />
+                    {label}
                   </button>
-                )}
-              </div>
-            )}
-            <ul
-              id="switcher-listbox"
-              role="listbox"
-              aria-label="Folders, notes, files and commands"
-              class="switcher-list"
-            >
-              {sections.map((section) => (
-                <Fragment key={section.id}>
-                  <li class="switcher-heading" role="presentation">
-                    {section.heading}
-                  </li>
-                  {section.rows.map((row) => {
-                    const position = at++;
-                    return (
-                      <HitRow
-                        key={`${section.id}-${row.file.id}`}
-                        id={`switcher-option-${position}`}
-                        row={row}
-                        selected={position === highlightedIndex}
-                        pages={extras.pages.get(row.file.id)}
-                        thumb={extras.thumbs.get(row.file.id)}
-                        onActivate={activateRow}
-                        onHighlight={() => {
-                          setHighlightedIndex(position);
-                        }}
-                      />
-                    );
-                  })}
-                </Fragment>
-              ))}
-              {matchingCommands.length > 0 && (
-                <li class="switcher-heading" role="presentation">
-                  Commands
-                </li>
-              )}
-              {matchingCommands.map((command) => {
-                const position = at++;
-                return (
-                  <CommandRow
-                    key={command.id}
-                    id={`switcher-option-${position}`}
-                    command={command}
-                    selected={position === highlightedIndex}
-                    theme={theme}
-                    onActivate={runCommand}
-                    onHighlight={() => {
-                      setHighlightedIndex(position);
-                    }}
-                  />
                 );
               })}
-            </ul>
-            {results !== null && results.fuzzy && topHit !== null && (
-              <p class="switcher-hint">
-                Close enough counts: “{trimmed}” finds {topHit.title}.
-              </p>
+            {scope !== null && !showParaChips && !desktop && (
+              <button
+                type="button"
+                class="switcher-chip"
+                aria-pressed="true"
+                aria-label={`Clear search in ${scope.label}`}
+                onClick={() => {
+                  setScope(null);
+                }}
+              >
+                {scope.label}
+                <IconClose />
+              </button>
             )}
-            {!searching && recent.length > 0 && (
-              <div class="switcher-recent-group">
-                <p class="switcher-heading">Searched before</p>
-                <div class="switcher-recent">
-                  {recent.map((entry) => (
-                    <button
-                      key={entry}
-                      type="button"
-                      class="switcher-chip"
-                      onClick={() => {
-                        setQuery(entry);
-                        inputRef.current?.focus();
-                      }}
-                    >
-                      {entry}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {desktop && (
-              <div class="switcher-foot">
-                <span>
-                  {scope !== null && (
-                    <>
-                      Only in {scope.label}.{' '}
-                      <button
-                        type="button"
-                        class="switcher-link switcher-link-inline"
-                        onClick={() => {
-                          setScope(null);
-                        }}
-                      >
-                        Search everywhere
-                      </button>
-                    </>
-                  )}
-                </span>
-                <span class="switcher-kbhint">
-                  <span>
-                    <kbd>Tab</kbd> filters
-                  </span>
-                  <span>
-                    <kbd>Enter</kbd> open
-                  </span>
-                </span>
-              </div>
+            {searching && (
+              <>
+                {(desktop
+                  ? chipList
+                  : [
+                      { key: 'all', label: 'All', count: total },
+                      {
+                        key: 'folders',
+                        label: 'Folders',
+                        count: results?.folders.length ?? 0,
+                      },
+                      {
+                        key: 'notes',
+                        label: 'Notes',
+                        count: results?.notes.length ?? 0,
+                      },
+                      {
+                        key: 'files',
+                        label: 'Files',
+                        count: results?.files.length ?? 0,
+                      },
+                    ]
+                ).map(({ key, label, count }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    class="switcher-chip"
+                    aria-pressed={activeChip === key}
+                    onClick={() => {
+                      setKindChip(key);
+                    }}
+                  >
+                    {label} <i>{count}</i>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  class="switcher-chip switcher-time"
+                  aria-expanded={timeOpen}
+                  data-active={time !== 'any'}
+                  onClick={() => {
+                    setTimeOpen((open) => !open);
+                  }}
+                >
+                  <IconClock />
+                  {TIME_LABELS[time]}
+                </button>
+              </>
             )}
           </div>
-          {desktop && (
-            <SearchPreview
-              row={highlightedRow}
-              pages={
-                highlightedRow === null
-                  ? undefined
-                  : extras.pages.get(highlightedRow.file.id)
-              }
-              picture={preview.picture}
-              lines={preview.lines}
-            />
+          {searching && timeOpen && (
+            <div class="switcher-chips" role="group" aria-label="Time">
+              {(Object.keys(TIME_LABELS) as TimeKey[]).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  class="switcher-chip"
+                  aria-pressed={time === key}
+                  onClick={() => {
+                    setTime(key);
+                    setTimeOpen(false);
+                  }}
+                >
+                  {TIME_LABELS[key]}
+                </button>
+              ))}
+            </div>
           )}
+          <div class="switcher-columns">
+            <div class="switcher-body">
+              {scope !== null && !desktop && (
+                <button
+                  type="button"
+                  class="switcher-link"
+                  onClick={() => {
+                    setScope(null);
+                  }}
+                >
+                  Search everywhere
+                </button>
+              )}
+              <p
+                class={`switcher-status${
+                  status === 'searching' || status === 'error'
+                    ? ''
+                    : ' switcher-quiet'
+                }`}
+                aria-live="polite"
+              >
+                {searching && statusText}
+              </p>
+              {noResults && (
+                <div class="switcher-none">
+                  <b class="switcher-none-title">Nothing called “{trimmed}”</b>
+                  <span class="switcher-none-text">
+                    No folder, note or file has those words in its name or its
+                    text.
+                  </span>
+                  <a
+                    class="button"
+                    href={`${BOWER_PATH}?text=${encodeURIComponent(`Where is ${trimmed}?`)}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      goTo(
+                        `${BOWER_PATH}?text=${encodeURIComponent(`Where is ${trimmed}?`)}`,
+                      );
+                    }}
+                  >
+                    Ask Bower where it is
+                  </a>
+                  {scope !== null && (
+                    <button
+                      type="button"
+                      class="switcher-link"
+                      onClick={() => {
+                        setScope(null);
+                      }}
+                    >
+                      Search all of {scope.label} instead
+                    </button>
+                  )}
+                </div>
+              )}
+              <ul
+                id="switcher-listbox"
+                role="listbox"
+                aria-label="Folders, notes, files and commands"
+                class="switcher-list"
+              >
+                {sections.map((section) => (
+                  <Fragment key={section.id}>
+                    <li class="switcher-heading" role="presentation">
+                      {section.heading}
+                    </li>
+                    {section.rows.map((row) => {
+                      const position = at++;
+                      return (
+                        <HitRow
+                          key={`${section.id}-${row.file.id}`}
+                          id={`switcher-option-${position}`}
+                          row={row}
+                          selected={position === highlightedIndex}
+                          pages={extras.pages.get(row.file.id)}
+                          thumb={extras.thumbs.get(row.file.id)}
+                          onActivate={activateRow}
+                          onHighlight={() => {
+                            setHighlightedIndex(position);
+                          }}
+                        />
+                      );
+                    })}
+                  </Fragment>
+                ))}
+                {matchingCommands.length > 0 && (
+                  <li class="switcher-heading" role="presentation">
+                    Commands
+                  </li>
+                )}
+                {matchingCommands.map((command) => {
+                  const position = at++;
+                  return (
+                    <CommandRow
+                      key={command.id}
+                      id={`switcher-option-${position}`}
+                      command={command}
+                      selected={position === highlightedIndex}
+                      theme={theme}
+                      onActivate={runCommand}
+                      onHighlight={() => {
+                        setHighlightedIndex(position);
+                      }}
+                    />
+                  );
+                })}
+              </ul>
+              {results !== null && results.fuzzy && topHit !== null && (
+                <p class="switcher-hint">
+                  Close enough counts: “{trimmed}” finds {topHit.title}.
+                </p>
+              )}
+              {!searching && recent.length > 0 && (
+                <div class="switcher-recent-group">
+                  <p class="switcher-heading">Searched before</p>
+                  <div class="switcher-recent">
+                    {recent.map((entry) => (
+                      <button
+                        key={entry}
+                        type="button"
+                        class="switcher-chip"
+                        onClick={() => {
+                          setQuery(entry);
+                          inputRef.current?.focus();
+                        }}
+                      >
+                        {entry}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {desktop && (
+                <div class="switcher-foot">
+                  <span>
+                    {scope !== null && (
+                      <>
+                        Only in {scope.label}.{' '}
+                        <button
+                          type="button"
+                          class="switcher-link switcher-link-inline"
+                          onClick={() => {
+                            setScope(null);
+                          }}
+                        >
+                          Search everywhere
+                        </button>
+                      </>
+                    )}
+                  </span>
+                  <span class="switcher-kbhint">
+                    <span>
+                      <kbd>Tab</kbd> filters
+                    </span>
+                    <span>
+                      <kbd>Enter</kbd> open
+                    </span>
+                  </span>
+                </div>
+              )}
+            </div>
+            {desktop && (
+              <SearchPreview
+                row={highlightedRow}
+                pages={
+                  highlightedRow === null
+                    ? undefined
+                    : extras.pages.get(highlightedRow.file.id)
+                }
+                picture={preview.picture}
+                lines={preview.lines}
+              />
+            )}
+          </div>
         </div>
-      </div>
-    </Overlay>,
-    document.body,
+      </Overlay>
+    </Queued>
   );
 }
 

@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import type { ComponentChild } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PinSheet } from '../src/components/pin-sheet.js';
 import { RuleSheet } from '../src/components/rule-sheet.js';
+import { OverlayHost } from '../src/components/overlay.js';
+import { resetOverlayQueue } from '../src/overlay-queue.js';
 import type { Rule } from '../src/rules.js';
 
 let root: HTMLDivElement;
@@ -22,7 +24,7 @@ function mount(vnode: ComponentChild): void {
   app.append(inner);
   document.body.append(app);
   void act(() => {
-    render(vnode, root);
+    render(h(Fragment, null, vnode, h(OverlayHost, null)), root);
   });
 }
 
@@ -30,6 +32,7 @@ afterEach(() => {
   void act(() => {
     render(null, root);
   });
+  resetOverlayQueue();
   document.body.replaceChildren();
   document.body.style.overflow = '';
 });

@@ -15,7 +15,6 @@
  * one ticked. "Find a folder" swaps the tree for a flat list of matches.
  */
 
-import { createPortal } from 'preact/compat';
 import { useMemo, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
@@ -44,6 +43,8 @@ import { useVault } from '../vault-store.js';
 import { FolderIcon, FolderMark } from './folder-mark.js';
 import { IconCheck, IconChevronRight, IconSearch } from './icons.js';
 import { Overlay } from './overlay.js';
+import { Queued } from './queued-overlay.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import '../styles/folder-picker.css';
 
 export type MoveWhen = 'now' | 'later';
@@ -172,65 +173,66 @@ export function FolderPicker({
     ]);
   }
 
-  return createPortal(
-    <Overlay kind="dialog" label="Move to" onClose={onClose}>
-      <div class="folder-picker-body">
-        <h2 class="folder-picker-title">
-          Move “
-          {subject.isFolder ? name : name.replace(/\.[A-Za-z0-9]{1,5}$/, '')}”
-          to…
-        </h2>
-        <label class="folder-picker-search">
-          <IconSearch />
-          <input
-            type="search"
-            placeholder="Find a folder"
-            aria-label="Find a folder"
-            value={query}
-            onInput={(event) => setQuery(event.currentTarget.value)}
-          />
-        </label>
-        <div
-          class="folder-picker-list"
-          role="radiogroup"
-          aria-label="Destination folder"
-        >
-          {searching
-            ? matches.map((node) => choice(node, 0, true))
-            : tree(folders, 0)}
-          {searching && matches.length === 0 && (
-            <p class="folder-picker-empty" role="status">
-              No folder has that in its name.
+  return (
+    <Queued id="folder-picker" priority={OVERLAY_PRIORITY.own}>
+      <Overlay kind="dialog" label="Move to" onClose={onClose}>
+        <div class="folder-picker-body">
+          <h2 class="folder-picker-title">
+            Move “
+            {subject.isFolder ? name : name.replace(/\.[A-Za-z0-9]{1,5}$/, '')}”
+            to…
+          </h2>
+          <label class="folder-picker-search">
+            <IconSearch />
+            <input
+              type="search"
+              placeholder="Find a folder"
+              aria-label="Find a folder"
+              value={query}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+            />
+          </label>
+          <div
+            class="folder-picker-list"
+            role="radiogroup"
+            aria-label="Destination folder"
+          >
+            {searching
+              ? matches.map((node) => choice(node, 0, true))
+              : tree(folders, 0)}
+            {searching && matches.length === 0 && (
+              <p class="folder-picker-empty" role="status">
+                No folder has that in its name.
+              </p>
+            )}
+          </div>
+          {error !== null && (
+            <p class="folder-picker-error" role="alert">
+              {error}
             </p>
           )}
+          <p class="folder-picker-note">{FOOTER}</p>
+          <div class="folder-picker-actions">
+            <button
+              type="button"
+              class="button folder-picker-primary"
+              disabled={chosen === null || busy}
+              onClick={() => chosen !== null && onChoose(chosen, 'now')}
+            >
+              Move it now
+            </button>
+            <button
+              type="button"
+              class="folder-picker-secondary"
+              disabled={chosen === null || busy}
+              onClick={() => chosen !== null && onChoose(chosen, 'later')}
+            >
+              With the next tidy-up
+            </button>
+          </div>
         </div>
-        {error !== null && (
-          <p class="folder-picker-error" role="alert">
-            {error}
-          </p>
-        )}
-        <p class="folder-picker-note">{FOOTER}</p>
-        <div class="folder-picker-actions">
-          <button
-            type="button"
-            class="button folder-picker-primary"
-            disabled={chosen === null || busy}
-            onClick={() => chosen !== null && onChoose(chosen, 'now')}
-          >
-            Move it now
-          </button>
-          <button
-            type="button"
-            class="folder-picker-secondary"
-            disabled={chosen === null || busy}
-            onClick={() => chosen !== null && onChoose(chosen, 'later')}
-          >
-            With the next tidy-up
-          </button>
-        </div>
-      </div>
-    </Overlay>,
-    document.body,
+      </Overlay>
+    </Queued>
   );
 }
 

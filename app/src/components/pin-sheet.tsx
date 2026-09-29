@@ -15,11 +15,12 @@
  * (R-OVL-2). It portals into `document.body`, outside the inert shell.
  */
 
-import { createPortal } from 'preact/compat';
 import type { JSX } from 'preact';
 
 import { IconChat, IconExternalLink, IconFolder, IconPin } from './icons.js';
 import { Overlay } from './overlay.js';
+import { Queued } from './queued-overlay.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import '../styles/pin-sheet.css';
 
 export interface PinSheetProps {
@@ -54,57 +55,58 @@ export function PinSheet({
     };
   }
 
-  return createPortal(
-    <Overlay kind="menu" label={name} onClose={onClose}>
-      <div class="pin-sheet-rows">
-        <button
-          type="button"
-          role="menuitem"
-          class="pin-sheet-row"
-          onClick={selectAndClose(onTogglePin)}
-        >
-          <IconPin />
-          <span>{pinned ? 'Unpin from Home' : 'Pin to Home'}</span>
-        </button>
-        <a
-          role="menuitem"
-          class="pin-sheet-row"
-          href={openHref}
-          onClick={onClose}
-        >
-          <IconFolder />
-          <span>Open the folder</span>
-        </a>
-        <a
-          role="menuitem"
-          class="pin-sheet-row"
-          href={tellHref}
-          onClick={onClose}
-        >
-          <IconChat />
-          <span>Ask Bower about this {kind}</span>
-        </a>
-        <a
-          role="menuitem"
-          class="pin-sheet-row"
-          href={driveHref}
-          target="_blank"
-          rel="noopener"
-          onClick={onClose}
-        >
-          <IconExternalLink />
-          <span>Open in Drive</span>
-        </a>
-        <button
-          type="button"
-          role="menuitem"
-          class="pin-sheet-row pin-sheet-cancel"
-          onClick={onClose}
-        >
-          Cancel
-        </button>
-      </div>
-    </Overlay>,
-    document.body,
+  return (
+    <Queued id="pin-sheet" priority={OVERLAY_PRIORITY.own}>
+      <Overlay kind="menu" label={name} onClose={onClose}>
+        <div class="pin-sheet-rows">
+          <button
+            type="button"
+            role="menuitem"
+            class="pin-sheet-row"
+            onClick={selectAndClose(onTogglePin)}
+          >
+            <IconPin />
+            <span>{pinned ? 'Unpin from Home' : 'Pin to Home'}</span>
+          </button>
+          <a
+            role="menuitem"
+            class="pin-sheet-row"
+            href={openHref}
+            onClick={onClose}
+          >
+            <IconFolder />
+            <span>Open the folder</span>
+          </a>
+          <a
+            role="menuitem"
+            class="pin-sheet-row"
+            href={tellHref}
+            onClick={onClose}
+          >
+            <IconChat />
+            <span>Ask Bower about this {kind}</span>
+          </a>
+          <a
+            role="menuitem"
+            class="pin-sheet-row"
+            href={driveHref}
+            target="_blank"
+            rel="noopener"
+            onClick={onClose}
+          >
+            <IconExternalLink />
+            <span>Open in Drive</span>
+          </a>
+          <button
+            type="button"
+            role="menuitem"
+            class="pin-sheet-row pin-sheet-cancel"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </Overlay>
+    </Queued>
   );
 }
