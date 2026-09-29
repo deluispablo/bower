@@ -85,6 +85,10 @@ Omit fields that do not apply. Extra fields are fine when useful.
 - Never put the owner's name or any other person's name in a file name: say where, or which organisation (a shop, an employer, an agency).
 - A converted document and its `.md` keep one base name. When the name is taken in the folder, add ` 2`, ` 3` before the extension.
 
+### Note names
+- A name you choose for a note is at most 40 characters, most specific first (`CV · Data Lead, Northwind`, `Job fit ratings`), with no generic prefix (`Tailored …`, `Rate the …`). A longer description goes in `title:`.
+- A note's name never equals the base name of its original (a text copy and a converted `.md` are the exception).
+
 ### Note templates
 **Project hub** (`1-Projects/<Project>/<Project>.md`):
 1. Goal (one line, with the end date if known)
