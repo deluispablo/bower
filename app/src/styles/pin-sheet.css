@@ -80,7 +80,7 @@
 /* Phone (the drawer's held row): a bottom sheet, not a popover. */
 @media (max-width: 899.98px) {
   .pin-sheet-backdrop {
-    background: rgb(7 12 22 / 0.5);
+    background: var(--color-scrim);
   }
 
   .pin-sheet-panel {
