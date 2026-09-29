@@ -42,8 +42,7 @@ test('the bird animates with motion on, and can be sampled at 0, 25, 50 and 75%'
             typeof timing?.duration === 'number' ? timing.duration : 0;
           return duration === 0
             ? 0
-            : (Number(animation.currentTime) - (timing?.delay ?? 0)) /
-                duration;
+            : (Number(animation.currentTime) - (timing?.delay ?? 0)) / duration;
         }),
     );
     for (const fraction of fractions) {
