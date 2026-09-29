@@ -257,6 +257,25 @@ describe('Tour', () => {
     expect(tab('home').classList.contains('help-tab-on')).toBe(true);
   });
 
+  it('never shows with a run sheet in front, only once the queue is free', async () => {
+    // First load with a held run: the run's sheet (priority 2) is up.
+    open({
+      id: 'run-sheet',
+      priority: 2,
+      render: () => h('div', { role: 'dialog', 'aria-label': 'Tidying up' }),
+    });
+    await mountTour();
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(dialog().getAttribute('aria-label')).toBe('Tidying up');
+    expect(document.body.textContent).not.toContain('Tour ·');
+    await act(async () => {
+      close('run-sheet');
+      await Promise.resolve();
+    });
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(dialog().textContent).toContain('Tour · 1 of 4');
+  });
+
   it('carries the demo lines in a demo build', async () => {
     state.demo = true;
     await mountTour();
