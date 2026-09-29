@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DriveFile } from '../src/drive.js';
+import type { QueueItem as Upload } from '../src/upload-queue.js';
 
 // #769 (R-PILE-1, 7, 8, 9, 11): each pile is a context note in the inbox
 // from its first file. Drive is an in-memory folder map; nothing leaves the
@@ -240,6 +241,50 @@ describe('R-PILE-1: the pile note', () => {
     expect(store.pileWriteFailed(pile.id)).toBe(false);
     expect(onlyNote().text).toContain('- a.pdf\n');
     error.mockRestore();
+  });
+});
+
+describe('hand-off from the upload queue', () => {
+  it('a pile file landing in the durable queue rewrites its note', async () => {
+    const { followUploads, uploadPileId } = await import(
+      '../src/add-queue-store.js'
+    );
+    const pile = store.startPile(INBOX, NOW, 'p1');
+    expect(uploadPileId({ pileId: 'p1' })).toBe('p1');
+    expect(uploadPileId({})).toBe('inbox');
+    const base = {
+      id: 'q1',
+      parentId: INBOX,
+      name: 'a.pdf',
+      size: 10,
+      sent: 0,
+      durable: true,
+    };
+    let items: Upload[] = [
+      { ...base, pileId: 'p1', state: 'uploading' as const },
+      { ...base, id: 'q2', name: 'other.pdf', pileId: 'inbox', state: 'done' as const },
+    ];
+    const listeners = new Set<() => void>();
+    const stop = followUploads({
+      items: () => items,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    });
+    await store.pilesSettled();
+    expect(onlyNote().text).toContain('pile: p1\n');
+
+    land('a.pdf');
+    items = [{ ...base, pileId: 'p1', state: 'done', fileId: 'FILE_a.pdf' }];
+    for (const listener of listeners) listener();
+    await store.pilesSettled();
+    expect(onlyNote().text).toMatch(/## Applies to\n\n- a\.pdf\n$/);
+    expect(store.getPiles()[0]?.items).toEqual([
+      { name: 'a.pdf', state: 'done', fileId: 'FILE_a.pdf' },
+    ]);
+    stop();
+    expect(store.getPiles()[0]?.id).toBe(pile.id);
   });
 });
 

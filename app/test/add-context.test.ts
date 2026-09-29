@@ -21,9 +21,81 @@ vi.mock('../src/drive.js', () => ({
   createTextFile,
 }));
 vi.mock('../src/toast-store.js', () => ({ showToast }));
+// The piles (#769) are the pile store's; here only whether they flushed.
+const { flushPiles, attachToPile } = vi.hoisted(() => ({
+  flushPiles: vi.fn(() => Promise.resolve(true)),
+  attachToPile: vi.fn(() => Promise.resolve()),
+}));
+vi.mock('../src/pile-store.js', () => ({
+  flushPiles,
+  attachToPile,
+  getPiles: () => [],
+}));
 
-const { getContextText, resetContext, setContextText, writeContextNote } =
-  await import('../src/add-context.js');
+const {
+  getContextText,
+  PILE_FLUSH_FAILED,
+  resetContext,
+  setContextText,
+  tidyUpWhenFlushed,
+  writeContextNote,
+} = await import('../src/add-context.js');
+
+describe('tidyUpWhenFlushed (R-PILE-7)', () => {
+  afterEach(() => {
+    resetContext();
+    setQueue([]);
+    vi.clearAllMocks();
+  });
+
+  it('flushes every pile, writes the batch note, then starts the tidy-up', async () => {
+    const order: string[] = [];
+    flushPiles.mockImplementationOnce(() => {
+      order.push('flush');
+      return Promise.resolve(true);
+    });
+    createTextFile.mockImplementation(() => {
+      order.push('note');
+      return Promise.resolve(written);
+    });
+    const keepRule = vi.fn(() => Promise.resolve());
+    setQueue([item('a', 'done')]);
+    setContextText('Receipts.');
+    const process = vi.fn(() => {
+      order.push('process');
+    });
+
+    expect(await tidyUpWhenFlushed(process, 'FOLDER_ID', keepRule)).toBe(true);
+    expect(order).toEqual(['flush', 'note', 'process']);
+    expect(flushPiles).toHaveBeenCalledWith(keepRule);
+  });
+
+  it('does not start the tidy-up and says one sentence when a pile fails to flush', async () => {
+    flushPiles.mockResolvedValueOnce(false);
+    const process = vi.fn();
+
+    expect(await tidyUpWhenFlushed(process, 'FOLDER_ID')).toBe(false);
+    expect(process).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith(PILE_FLUSH_FAILED);
+  });
+
+  it('writeContextNote leaves rows that joined a pile to the pile note', async () => {
+    createTextFile.mockResolvedValue(written);
+    setQueue([item('a', 'done'), { ...item('b', 'done'), pileId: 'p1' }]);
+    setContextText('Receipts.');
+
+    expect(await writeContextNote('FOLDER_ID')).toBe(true);
+    expect(flushPiles).toHaveBeenCalledTimes(1);
+    const content = createTextFile.mock.calls[0]?.[2] ?? '';
+    expect(content).toContain('- a.pdf\n');
+    expect(content).not.toContain('b.pdf');
+    expect(attachToPile).toHaveBeenCalledWith('p1', {
+      name: 'b.pdf',
+      state: 'done',
+    });
+  });
+});
 
 function item(id: string, status: QueueItem['status']): QueueItem {
   return { id, kind: 'file', name: `${id}.pdf`, status, progress: 0 };

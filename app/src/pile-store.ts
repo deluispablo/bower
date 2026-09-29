@@ -195,7 +195,7 @@ export function attachToPile(pileId: string, item: PileItem): Promise<void> {
   if (
     existing !== undefined &&
     existing.state === item.state &&
-    existing.fileId === item.fileId
+    (item.fileId === undefined || existing.fileId === item.fileId)
   ) {
     return meta.get(pileId)?.chain ?? Promise.resolve();
   }
@@ -409,6 +409,11 @@ export async function flushPiles(
     piles.map((pile) => closePile(pile.id, keepRule)),
   );
   return results.every(Boolean);
+}
+
+/** Settles once no pile note write is in flight or queued. */
+export async function pilesSettled(): Promise<void> {
+  await Promise.all([...meta.values()].map((m) => m.chain));
 }
 
 /** Whether the pile's last write failed. */

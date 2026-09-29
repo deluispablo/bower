@@ -23,7 +23,13 @@ import { contextNote, contextNoteName } from './add.js';
 import { getQueue } from './add-queue-store.js';
 import { ruleSentences } from './bower-tab.js';
 import { createTextFile, INSTRUCTION_APP_PROPERTIES } from './drive.js';
+import { flushPiles } from './pile-store.js';
 import { showToast } from './toast-store.js';
+
+/** Said once when a pile's note could not be brought up to date before a
+ * tidy-up, so the tidy-up does not start (R-PILE-7). */
+export const PILE_FLUSH_FAILED =
+  'Could not save your piles in the inbox, so the tidy-up did not start. Try again.';
 
 let text = '';
 const listeners = new Set<(text: string) => void>();
@@ -76,10 +82,47 @@ export async function writeContextNote(
   keepRule?: KeepRule,
   now: Date = new Date(),
 ): Promise<boolean> {
+  // Every pile's note is brought up to date first, awaited (R-PILE-7); a
+  // failure is logged by the pile store. `tidyUpWhenFlushed` is the path
+  // that also keeps the tidy-up from starting on such a failure.
+  await flushPiles(keepRule);
+  return writeBatchNote(inboxFolderId, keepRule, now);
+}
+
+/**
+ * R-PILE-7: "Yes, tidy up". Closes and flushes every open pile (each final
+ * `## Applies to`, awaited) and writes the batch note, then calls `process`.
+ * When a pile's note could not be written, `process` is not called and the
+ * person gets one sentence. Resolves whether `process` was called.
+ */
+export async function tidyUpWhenFlushed(
+  process: () => unknown,
+  inboxFolderId: string | null,
+  keepRule?: KeepRule,
+  now: Date = new Date(),
+): Promise<boolean> {
+  if (!(await flushPiles(keepRule))) {
+    showToast(PILE_FLUSH_FAILED);
+    return false;
+  }
+  await writeBatchNote(inboxFolderId, keepRule, now);
+  process();
+  return true;
+}
+
+async function writeBatchNote(
+  inboxFolderId: string | null,
+  keepRule: KeepRule | undefined,
+  now: Date,
+): Promise<boolean> {
   const trimmed = text.trim();
   if (inboxFolderId === null || trimmed === '') return false;
+  // A row that joined a pile is named in that pile's own note.
   const batch = getQueue().filter(
-    (item) => item.status === 'done' && !covered.has(item.id),
+    (item) =>
+      item.status === 'done' &&
+      item.pileId === undefined &&
+      !covered.has(item.id),
   );
   if (batch.length === 0) return false;
 
