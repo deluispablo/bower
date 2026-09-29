@@ -59,6 +59,12 @@ Notes:
 | `summary` | `string` | optional |
 | `processed` | `string[]` | optional; the inbox paths the run processed |
 | `items` | `{ path, kind }[]` | optional (#345); `processed` with each item's kind (`file`, `question`, `request`, `context`, `rule`), when the runner reported kinds |
+| `created` | `string[]` | optional (#728, spec R-RUNNER-1); paths the run added that are not a move destination. Kept on a `failed` run too |
+| `updated` | `{ path, what? }[]` | optional (#728); paths that existed before and changed, `what` one line of at most 120 characters |
+| `left` | `string[]` | optional (#728); pending inbox paths still there at the end |
+| `phase` | `'queued' \| 'reading' \| 'writing' \| 'saving'` | optional (#728, spec R-RUNNER-4); only on a `running` run: the step it last reported |
+| `total`, `done` | `number` | optional; only with `phase`: how many items the run has and how many it finished, when known |
+| `phaseAt` | `string` | optional; ISO-8601, when the running run last reported a `phase`. The running-stale window counts from here, else from `startedAt` |
 | `quarantined` | `string[]` | optional; paths the pre-scan set aside under `0-Inbox/Quarantine/` |
 | `refused` | `string[]` | optional; paths (or `"*"`) the post-run audit refused |
 | `error` | `string` | optional; for the operator (names the step), never shown to people |
@@ -281,15 +287,20 @@ The runner's progress report. Body, validated strictly (an unknown field, a wron
 | `processed` | `(string \| { path, kind })[]` | Optional; cut to 200 entries, each path cut to 2,000 characters. An entry is a path (runners before #345) or `{ path, kind }` with `kind` one of `file`, `question`, `request`, `context`, `rule` (#345); another kind or field is a 400. The paths are stored as `processed`, the entries with a kind as `items` |
 | `quarantined` | `string[]` | Optional; paths the pre-scan set aside under `0-Inbox/Quarantine/` this run (spec A.5); same bounds as `processed` |
 | `refused` | `string[]` | Optional; paths (or `"*"` for the whole run) the post-run audit refused (spec A.3/A.4); same bounds as `processed` |
+| `created` | `string[]` | Optional (#728); paths the run added that are not a move destination; same bounds as `processed` |
+| `updated` | `{ path, what? }[]` | Optional (#728); paths that existed before and changed; same bounds as `processed`. `what` is one line (a line break is a 400), cut to 120 characters; another key is a 400 |
+| `left` | `string[]` | Optional (#728); pending inbox paths still there at the end; same bounds as `processed` |
+| `phase` | `'queued' \| 'reading' \| 'writing' \| 'saving'` | Optional (#728); anything else is a 400. Kept on a `running` run only |
+| `total`, `done` | `number` | Optional; whole numbers, 0 or more, and only with `phase` (else a 400); `done` over `total` is a 400 |
 | `error` | `string` | Optional; cut to 2,000 characters |
 | `reason` | `string` | Optional; one of `drive_unavailable` (Google Drive did not answer, or access to it is gone), `timeout` (the agent ran out of time or turns), `model_unavailable` (Claude could not be reached or refused the credential), `vault_changed` (the Bower folder is not what the run expected), `unknown` (#375). Anything else is a 400. Stored on a `failed` run only |
 
-A report with `quarantined` and/or `refused` but no `processed` is still valid.
+A report with `quarantined` and/or `refused` but no `processed` is still valid. `processed`, `created`, `updated`, `left` and `setAside` together may carry at most 400 entries, counted after each is cut to 200 (spec T13); more is a 400.
 
 The stored run of that kind is updated and takes the report's `kind`: an ingest under `run:<id>`, a lint under `lintrun:<id>`. A lint report never reads or writes `run:<id>`, so `GET /status`, `POST /process` and the app's Process button ignore it. Without a stored run of that kind, one is started with `requestedAt` set to now.
 
-- `running`: `state` and `startedAt` (now) are set. A run that is already `running` keeps its `startedAt`. Outcome fields of an earlier attempt (`finishedAt`, `summary`, `processed`, `quarantined`, `refused`, `error`) are dropped.
-- `done` or `failed`: `state` and `finishedAt` (now) are set; `summary`, `processed`, `quarantined`, `refused`, `error` and (for `failed`) `reason` become exactly the report's (absent when the report has none). The run's ticket is deleted: it can fetch nothing and report nothing more. Then the user's devices get a push notification (see [Web push](#web-push)). For an ingest: `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. For a lint: `Health check ready`, or `Health check failed` for `failed`, never a count. A push failure never fails the report.
+- `running`: `state` and `startedAt` (now) are set. A run that is already `running` keeps its `startedAt`. With a `phase`, `phase`, `total`, `done` and `phaseAt` (now) are set, so each phase report restarts the running-stale window; without one, a running run keeps its earlier phase. Outcome fields of an earlier attempt (`finishedAt`, `summary`, `processed`, `created`, `updated`, `left`, `quarantined`, `refused`, `error`) are dropped.
+- `done` or `failed`: `state` and `finishedAt` (now) are set and the phase fields are dropped; `summary`, `processed`, `created`, `updated`, `left`, `quarantined`, `refused`, `error` and (for `failed`) `reason` become exactly the report's (absent when the report has none). The run's ticket is deleted: it can fetch nothing and report nothing more. Then the user's devices get a push notification (see [Web push](#web-push)). For an ingest: `2 files processed` (the length of `processed`), `Nothing new to process` when `processed` is empty or absent, or `Something went wrong` for `failed`. For a lint: `Health check ready`, or `Health check failed` for `failed`, never a count. A push failure never fails the report.
 
 Response: `{ "run": Run }`, status 200.
 

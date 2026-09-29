@@ -46,7 +46,7 @@ import { HttpError } from './errors.js';
 import { dispatchLint } from './github.js';
 import type { FetchLike } from './google.js';
 import { RUN_TICKET_TTL_MS } from './process.js';
-import { sendPush } from './push.js';
+import { runPushBody, sendPush } from './push.js';
 import type { PushPayload } from './push.js';
 import { checkRunTicket, issueRunTicket } from './run-ticket.js';
 import {
@@ -58,6 +58,7 @@ import {
 } from './store.js';
 import {
   RUN_FAILURE_REASONS,
+  RUN_PHASES,
   RUN_ITEM_KINDS,
   SET_ASIDE_REASONS,
 } from './types.js';
@@ -68,8 +69,10 @@ import type {
   RunItem,
   RunItemKind,
   RunKind,
+  RunPhase,
   SetAsideItem,
   SetAsideReason,
+  UpdatedItem,
   User,
 } from './types.js';
 
@@ -91,6 +94,19 @@ export const MAX_PROCESSED = 200;
  * clause for Home's bubble; longer text is cut.
  */
 export const MAX_ADDED_LENGTH = 200;
+
+/**
+ * Longest `updated[].what` kept on a `Run` (spec R-RUNNER-1): one line;
+ * longer text is cut.
+ */
+export const MAX_WHAT_LENGTH = 120;
+
+/**
+ * Most entries one report may carry across `processed`, `created`,
+ * `updated`, `left` and `setAside` together, counted after each is cut to
+ * `MAX_PROCESSED` (spec T13). More is a 400, so a `Run` stays small in KV.
+ */
+export const MAX_REPORT_ENTRIES = 400;
 
 function unauthorized(): HttpError {
   return new HttpError(401, 'unauthorized', 'Missing or invalid runner key');
@@ -181,6 +197,12 @@ interface StatusReport {
   processed?: string[];
   items?: RunItem[];
   setAside?: SetAsideItem[];
+  created?: string[];
+  updated?: UpdatedItem[];
+  left?: string[];
+  phase?: RunPhase;
+  total?: number;
+  done?: number;
   added?: string;
   quarantined?: string[];
   refused?: string[];
@@ -197,6 +219,12 @@ const REPORT_FIELDS: ReadonlySet<string> = new Set([
   'summary',
   'processed',
   'setAside',
+  'created',
+  'updated',
+  'left',
+  'phase',
+  'total',
+  'done',
   'added',
   'quarantined',
   'refused',
@@ -299,6 +327,96 @@ function optionalSetAside(
     });
   }
   return items;
+}
+
+/**
+ * The `created` field (spec R-RUNNER-1): absent, or an array of paths the
+ * run added. Cut like `processed`: `MAX_PROCESSED` entries, each path to
+ * `MAX_TEXT_LENGTH` characters.
+ */
+function optionalCreated(body: Record<string, unknown>): string[] | undefined {
+  return optionalStringArray(body, 'created');
+}
+
+/**
+ * The `left` field (spec R-RUNNER-1): absent, or an array of the inbox
+ * paths still pending at the end. Cut like `processed`.
+ */
+function optionalLeft(body: Record<string, unknown>): string[] | undefined {
+  return optionalStringArray(body, 'left');
+}
+
+/**
+ * The `updated` field (spec R-RUNNER-1): absent, or an array of
+ * `{ path, what? }` with no other key. `what` is one line: a line break is
+ * a 400, longer than `MAX_WHAT_LENGTH` characters is cut. Cut like
+ * `processed`: `MAX_PROCESSED` entries, each path to `MAX_TEXT_LENGTH`.
+ */
+function optionalUpdated(
+  body: Record<string, unknown>,
+): UpdatedItem[] | undefined {
+  const value = body.updated;
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw badRequest('updated must be an array');
+  }
+  const items: UpdatedItem[] = [];
+  for (const entry of value.slice(0, MAX_PROCESSED) as unknown[]) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw badRequest('updated entries must be { path, what? }');
+    }
+    const record = entry as Record<string, unknown>;
+    if (
+      typeof record.path !== 'string' ||
+      Object.keys(record).some((key) => key !== 'path' && key !== 'what')
+    ) {
+      throw badRequest('updated entries must be { path, what? }');
+    }
+    const item: UpdatedItem = { path: record.path.slice(0, MAX_TEXT_LENGTH) };
+    const what = record.what;
+    if (what !== undefined) {
+      if (typeof what !== 'string' || /[\r\n]/.test(what)) {
+        throw badRequest('updated[].what must be one line of text');
+      }
+      item.what = what.slice(0, MAX_WHAT_LENGTH);
+    }
+    items.push(item);
+  }
+  return items;
+}
+
+function isRunPhase(value: unknown): value is RunPhase {
+  return RUN_PHASES.some((known) => known === value);
+}
+
+/** The `phase` field (spec R-RUNNER-4): absent, or a known phase. */
+function optionalPhase(body: Record<string, unknown>): RunPhase | undefined {
+  const value = body.phase;
+  if (value === undefined) return undefined;
+  if (!isRunPhase(value)) {
+    throw badRequest(`phase must be one of ${RUN_PHASES.join(', ')}`);
+  }
+  return value;
+}
+
+/** The `total` field (spec R-RUNNER-4): absent, or a count (integer >= 0). */
+function optionalTotal(body: Record<string, unknown>): number | undefined {
+  const value = body.total;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw badRequest('total must be a whole number, 0 or more');
+  }
+  return value;
+}
+
+/** The `done` field (spec R-RUNNER-4): absent, or a count (integer >= 0). */
+function optionalDone(body: Record<string, unknown>): number | undefined {
+  const value = body.done;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw badRequest('done must be a whole number, 0 or more');
+  }
+  return value;
 }
 
 function isRunItemKind(value: unknown): value is RunItemKind {
@@ -415,6 +533,37 @@ function parseStatusReport(body: unknown): StatusReport {
   }
   const setAside = optionalSetAside(record);
   if (setAside !== undefined) report.setAside = setAside;
+  const created = optionalCreated(record);
+  if (created !== undefined) report.created = created;
+  const updated = optionalUpdated(record);
+  if (updated !== undefined) report.updated = updated;
+  const left = optionalLeft(record);
+  if (left !== undefined) report.left = left;
+  const entries =
+    (report.processed?.length ?? 0) +
+    (report.created?.length ?? 0) +
+    (report.updated?.length ?? 0) +
+    (report.left?.length ?? 0) +
+    (report.setAside?.length ?? 0);
+  if (entries > MAX_REPORT_ENTRIES) {
+    throw badRequest(
+      `processed, created, updated, left and setAside carry more than ${MAX_REPORT_ENTRIES} entries together`,
+    );
+  }
+
+  const phase = optionalPhase(record);
+  const total = optionalTotal(record);
+  const done = optionalDone(record);
+  if (phase === undefined && (total !== undefined || done !== undefined)) {
+    throw badRequest('total and done need a phase');
+  }
+  if (total !== undefined && done !== undefined && done > total) {
+    throw badRequest('done must not be more than total');
+  }
+  if (phase !== undefined) report.phase = phase;
+  if (total !== undefined) report.total = total;
+  if (done !== undefined) report.done = done;
+
   const added = optionalText(record, 'added');
   if (added !== undefined) report.added = added.slice(0, MAX_ADDED_LENGTH);
   const quarantined = optionalStringArray(record, 'quarantined');
@@ -452,10 +601,21 @@ function applyReport(
   if (runId !== undefined) run.runId = runId;
 
   if (report.state === 'running') {
+    const wasRunning = base.state === 'running';
     run.startedAt =
-      base.state === 'running' && base.startedAt !== undefined
-        ? base.startedAt
-        : now;
+      wasRunning && base.startedAt !== undefined ? base.startedAt : now;
+    if (report.phase !== undefined) {
+      // Each phase report is news: the running-stale window starts again.
+      run.phase = report.phase;
+      run.phaseAt = now;
+      if (report.total !== undefined) run.total = report.total;
+      if (report.done !== undefined) run.done = report.done;
+    } else if (wasRunning && base.phase !== undefined) {
+      run.phase = base.phase;
+      if (base.phaseAt !== undefined) run.phaseAt = base.phaseAt;
+      if (base.total !== undefined) run.total = base.total;
+      if (base.done !== undefined) run.done = base.done;
+    }
     return run;
   }
 
@@ -465,6 +625,9 @@ function applyReport(
   if (report.processed !== undefined) run.processed = report.processed;
   if (report.items !== undefined) run.items = report.items;
   if (report.setAside !== undefined) run.setAside = report.setAside;
+  if (report.created !== undefined) run.created = report.created;
+  if (report.updated !== undefined) run.updated = report.updated;
+  if (report.left !== undefined) run.left = report.left;
   if (report.added !== undefined) run.added = report.added;
   if (report.quarantined !== undefined) run.quarantined = report.quarantined;
   if (report.refused !== undefined) run.refused = report.refused;
@@ -478,10 +641,8 @@ function applyReport(
 
 /**
  * The notification for a finished run. An ingest (or a run without `kind`)
- * says how many files were tidied up (`done`), that there was nothing to
- * do (`done` with none), or that the run failed, and opens `/`; a `done`
- * body gets a short " · n set aside" suffix when the run quarantined
- * anything. A lint says the health check is ready or failed, and opens
+ * says the four counts, partly done or did not finish (`runPushBody`), and
+ * opens `/`. A lint says the health check is ready or failed, and opens
  * `/health`. Never a file name or the summary.
  */
 export function runPushPayload(run: Run): PushPayload {
@@ -493,18 +654,7 @@ export function runPushPayload(run: Run): PushPayload {
       url: '/health',
     };
   }
-  let body: string;
-  if (run.state === 'failed') {
-    body = 'Something went wrong';
-  } else {
-    const count = run.processed?.length ?? 0;
-    body =
-      count === 0
-        ? 'Nothing new to tidy up'
-        : `${count} ${count === 1 ? 'file' : 'files'} tidied up`;
-    const quarantined = run.quarantined?.length ?? 0;
-    if (quarantined > 0) body += ` · ${quarantined} set aside`;
-  }
+  const body = runPushBody(run);
   return { title: 'Bower', body, url: '/' };
 }
 

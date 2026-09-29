@@ -4,6 +4,8 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { stubMatchMediaFor } from './helpers/match-media.js';
+
 import { BowerWorking } from '../src/components/bower-working.js';
 import { Bird } from '../src/components/bird.js';
 import type { BirdProps } from '../src/components/bird.js';
@@ -117,9 +119,7 @@ describe('Bird', () => {
   });
 
   it('holds still when the system asks for reduced motion', () => {
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query === '(prefers-reduced-motion: reduce)',
-    }));
+    stubMatchMediaFor('(prefers-reduced-motion: reduce)');
     try {
       expect(mount({ state: 'confused' }).getAttribute('class')).toBe(
         'b e-worried',

@@ -206,6 +206,17 @@ export interface SetAsideItem {
   reason: SetAsideReason;
 }
 
+/** Where a running run stands (spec R-RUNNER-4); mirrors `RunPhase` in
+ * `api/src/types.ts`. */
+export type RunPhase = 'queued' | 'reading' | 'writing' | 'saving';
+
+/** One note a run changed that existed before (spec R-RUNNER-1), with an
+ * optional one-line note of what changed. */
+export interface UpdatedItem {
+  path: string;
+  what?: string;
+}
+
 /** Mirrors `Run` in `api/src/types.ts`. */
 export interface Run {
   state: RunState;
@@ -219,6 +230,20 @@ export interface Run {
   items?: RunItem[];
   /** Items the run set aside, each with its reason (report v2, #583). */
   setAside?: SetAsideItem[];
+  /** Paths the run added that are not a move destination (#728, spec
+   * R-RUNNER-1). Absent from an older runner; kept on failed runs too. */
+  created?: string[];
+  /** Paths that existed before and changed (#728). */
+  updated?: UpdatedItem[];
+  /** Pending inbox paths still there at the end (#728). */
+  left?: string[];
+  /** The step a running run last reported (#728, spec R-RUNNER-4), with
+   * `total` and `done` counts when known. Only on a running run. */
+  phase?: RunPhase;
+  total?: number;
+  done?: number;
+  /** When the running run last reported a phase (ISO-8601). */
+  phaseAt?: string;
   /** One short clause about what Bower added besides filing ("I added bike
    * times to the flats"); Home's "All tidy" bubble shows it (report v2). */
   added?: string;
