@@ -62,15 +62,17 @@
   border-radius: var(--radius-md);
 }
 
-/* The "?" tip: a dashed card, open the first time and on request. */
+/* The "?" tip: a disclosure with the hint look (`hint.css`: surface fill,
+   1 px border, 12 px radius, 15 px text), open on request. */
 
 .bower-tip {
-  padding: var(--space-2) var(--space-3);
-  border: 1px dashed var(--color-border-strong);
-  border-radius: var(--radius-md);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-body);
+  padding: var(--space-1) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  line-height: 1.45;
 }
 
 .bower-tip-toggle {
@@ -422,31 +424,6 @@
   gap: var(--space-1);
 }
 
-.rules-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px dashed var(--color-border-strong);
-  border-radius: var(--radius-md);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-body);
-}
-
-.rules-tip b {
-  color: var(--color-text);
-}
-
-.rules-tip .icon {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
-  color: var(--color-link);
-}
-
 .rules-status {
   margin: 0 0 var(--space-2);
   color: var(--color-text);
@@ -752,21 +729,4 @@
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-}
-
-.activity-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: var(--space-3) 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-body);
-}
-
-.activity-tip > .icon {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
 }

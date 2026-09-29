@@ -249,6 +249,8 @@ interface TreeProps {
    * scrolls the tree to the top (R-REVEAL-2).
    */
   topOnTabTap?: boolean;
+  /** "Ask Bower about this" in the pin menu; the host opens the sheet. */
+  onAsk?: (name: string) => void;
 }
 
 export function Tree({
@@ -264,6 +266,7 @@ export function Tree({
   currentId,
   onOpenChange,
   topOnTabTap = false,
+  onAsk,
 }: TreeProps): JSX.Element {
   const { pinNote, unpinNote, pinFolder, unpinFolder } = useVault();
   // Makes the description ids unique when two trees are on screen.
@@ -605,9 +608,7 @@ export function Tree({
         openHref={folderHref(
           row.kind === 'note' ? folderOf(row.path) : row.path,
         )}
-        tellHref={`/bower?text=${encodeURIComponent(
-          row.kind === 'note' ? `[[${name}]] ` : `${name} `,
-        )}`}
+        onAsk={() => onAsk?.(name)}
         driveHref={driveHref}
         onTogglePin={() => void togglePin(row)}
         onClose={() => setOpenRow(null)}

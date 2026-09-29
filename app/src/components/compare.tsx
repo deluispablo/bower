@@ -13,8 +13,8 @@ import { loadViewSettings, saveViewSettings } from '../cache.js';
 import type { ViewSettings } from '../cache.js';
 import {
   applyFilters,
-  askHref,
-  askTip,
+  askQuestion,
+  askSubject,
   bookingsTimeline,
   cellText,
   compareColumns,
@@ -58,8 +58,10 @@ import { showToast } from '../toast-store.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
 import { OriginSquare } from './folder-mark.js';
-import { IconClose } from './icons.js';
+import { Hint } from './hint.js';
+import { IconClose, IconSparkle } from './icons.js';
 import { Overlay } from './overlay.js';
+import { openSendToBower } from './send-to-bower.js';
 
 import '../styles/compare.css';
 
@@ -557,9 +559,30 @@ export function CompareView({
           reorder.
         </span>
       </div>
-      <a class="compare-ask" href={askHref(current.length, kind)}>
-        {askTip(current.length, kind)}
-      </a>
+      <Hint
+        id="compare-ask"
+        variant="suggestion"
+        icon={<IconSparkle />}
+        actions={
+          <button
+            type="button"
+            class="chip"
+            onClick={() =>
+              openSendToBower({
+                mode: 'ask',
+                about: askSubject(current.length),
+                initialText: askQuestion(kind),
+                buildText: (value) =>
+                  `About ${askSubject(current.length)}: ${value}`,
+              })
+            }
+          >
+            {askQuestion(kind)}
+          </button>
+        }
+      >
+        Ask Bower about {askSubject(current.length)}.
+      </Hint>
     </section>
   );
 }

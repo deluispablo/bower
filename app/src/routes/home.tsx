@@ -21,6 +21,7 @@ import type { Run } from '../api.js';
 import { Bird } from '../components/bird.js';
 import { ONCE_STATES } from '../components/bird-classes.js';
 import type { BirdState } from '../components/bird-classes.js';
+import { Hint } from '../components/hint.js';
 import { HEALTH_PATH, useHealthFindings } from '../components/explorer.js';
 import {
   IconClock,
@@ -752,14 +753,11 @@ export function Home(): JSX.Element {
       </div>
 
       {state === 'empty' && (
-        <div class="home-tip">
-          <IconSparkle />
-          <p>
-            <b>Not sure where to start?</b> Add the thing that has been sitting
-            in your downloads for a month. Or the last three receipts. Or a
-            photo of a letter.
-          </p>
-        </div>
+        <Hint id="home-start" variant="tip" icon={<IconSparkle />}>
+          <b>Not sure where to start?</b> Add the thing that has been sitting in
+          your downloads for a month. Or the last three receipts. Or a photo of
+          a letter.
+        </Hint>
       )}
 
       <PinnedSection

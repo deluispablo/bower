@@ -374,7 +374,11 @@ function FolderBody({
           Ask Bower about it
         </HeaderAction>
         {file !== undefined && topBarPath && !isDemo() && (
-          <HeaderAction icon={<IconExternalLink />} href={driveFolderUrl(file)}>
+          <HeaderAction
+            icon={<IconExternalLink />}
+            href={driveFolderUrl(file)}
+            external
+          >
             Open in Drive
           </HeaderAction>
         )}

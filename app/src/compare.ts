@@ -676,16 +676,9 @@ export function askQuestion(kind: Kind): string {
   return ASK_QUESTIONS[kind.id] ?? 'Which one should I look at first, and why?';
 }
 
-/** The Bower box link the tip opens, prefilled with the question. */
-export function askHref(count: number, kind: Kind): string {
-  return `/bower?text=${encodeURIComponent(
-    `About these ${countWord(count)}: ${askQuestion(kind)}`,
-  )}`;
-}
-
-/** The desktop tip text. */
-export function askTip(count: number, kind: Kind): string {
-  return `Ask Bower about these ${countWord(count)}: “${askQuestion(kind)}”`;
+/** What the suggestion is about: "these five". */
+export function askSubject(count: number): string {
+  return `these ${countWord(count)}`;
 }
 
 // --- Editing the status ------------------------------------------------------
