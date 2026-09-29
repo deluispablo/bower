@@ -146,7 +146,7 @@ async function mount(id: string): Promise<void> {
   await act(() => {
     render(h(Note, {}), root);
   });
-  await waitFor(() => root.querySelector('.bower-note') !== null);
+  await waitFor(() => root.querySelector('.bower-note-box') !== null);
 }
 
 beforeEach(() => {
@@ -161,7 +161,7 @@ afterEach(() => {
 });
 
 describe('Note screen (#609)', () => {
-  it('lays out props line, box, key facts with a caption, and Details folded', async () => {
+  it('lays out props line, then one box with key facts once and Details open', async () => {
     await mount(LISTING.id);
 
     const props = root.querySelector('.note-props');
@@ -172,17 +172,24 @@ describe('Note screen (#609)', () => {
     expect(original?.textContent).toBe('Original: PDF, 2 pages');
     expect(props?.textContent).toContain('Flat hunt');
 
-    expect(root.querySelector('.bower-note')).not.toBeNull();
-    expect(root.querySelector('.note-keyfacts-caption')?.textContent).toBe(
-      'Key facts for a rental listing: set in your rules, the same for every listing',
-    );
-    expect(root.querySelector('.key-facts')).not.toBeNull();
-    const toggle = root.querySelector('.details-toggle');
-    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-    expect(toggle?.textContent).toContain('rental listing');
+    expect(root.querySelector('.bower-note-box')).not.toBeNull();
+    // R-INS-2: no caption, and the key facts are in the box only.
+    expect(root.querySelector('.note-keyfacts-caption')).toBeNull();
+    expect(root.querySelectorAll('.key-facts')).toHaveLength(1);
+    expect(root.querySelector('.bower-note-box .key-facts')).not.toBeNull();
+    // R-INS-7: no Details toggle; the fields are shown while the box is open.
+    expect(root.querySelector('.details-toggle')).toBeNull();
+    expect(root.querySelector('.bower-note-box .details')).not.toBeNull();
+    const head = root.querySelector('.bower-note-box-head');
+    expect(head?.getAttribute('aria-expanded')).toBe('true');
 
-    // Box, then key facts, then Details, then the body: in that order.
-    const order = ['.bower-note', '.key-facts', '.details', '.markdown h2'];
+    // Box (summary, key facts, details), then the body: in that order.
+    const order = [
+      '.bower-note-box-summary',
+      '.key-facts',
+      '.details',
+      '.markdown h2',
+    ];
     const positions = order.map((selector) => {
       const element = root.querySelector(selector);
       return element === null
@@ -208,7 +215,7 @@ describe('Note screen (#609)', () => {
     expect(root.querySelector('.note-asked-text')?.textContent).toBe(
       'Which two should we view first?',
     );
-    expect(root.querySelector('.bower-note')).not.toBeNull();
+    expect(root.querySelector('.bower-note-box')).not.toBeNull();
     expect(root.textContent).toContain('At the viewing, check');
     expect(
       root.querySelector(`a[href="/note/${CHECKLIST.id}"]`)?.textContent,

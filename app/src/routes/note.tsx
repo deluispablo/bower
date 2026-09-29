@@ -11,9 +11,12 @@ import { isBowerWritten } from '../bower-written.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
 import { BackLink } from '../components/back-link.js';
-import { Details } from '../components/details.js';
+import {
+  BowerNoteBox,
+  splitOpening,
+  takeCheckSection,
+} from '../components/bower-note-box.js';
 import { FolderMark } from '../components/folder-mark.js';
-import { KeyFacts } from '../components/key-facts.js';
 import { MoreButton } from '../components/more-button.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
@@ -24,7 +27,6 @@ import { BowerTag } from '../components/tags.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import { isProtectedNote } from '../drive.js';
 import type { DriveFile, SaveOptions } from '../drive.js';
-import { keyFactsFor, kindById } from '../kinds.js';
 import { propertiesFor } from '../markdown/frontmatter.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
@@ -175,41 +177,6 @@ export function walkFolder(
     position: at + 1,
     total: inFolder.length,
   };
-}
-
-/**
- * Splits a rendered note at the end of its opening Bower boxes: what comes
- * first (Bower's note and "Joined from") and the rest (the contents strip
- * and the body). Key facts and Details sit between the two (board
- * `Phone-Note-Details`). A note that does not open with a box has an empty
- * `top`.
- */
-export function splitOpening(html: string): { top: string; rest: string } {
-  const template = document.createElement('template');
-  template.innerHTML = html;
-  const top: string[] = [];
-  const children = Array.from(template.content.children);
-  let taken = 0;
-  for (const child of children) {
-    if (
-      !child.classList.contains('bower-note') &&
-      !child.classList.contains('bower-joined')
-    ) {
-      break;
-    }
-    top.push(child.outerHTML);
-    taken += 1;
-  }
-  const rest = children
-    .slice(taken)
-    .map((child) => child.outerHTML)
-    .join('\n');
-  return { top: top.join('\n'), rest };
-}
-
-/** "a rental listing" / "an invoice". */
-function withArticle(name: string): string {
-  return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 }
 
 function PropsLine({
@@ -456,11 +423,9 @@ export function Note() {
     load.status === 'ready' && load.id === id
       ? noteMetaFrom(load.rendered.frontmatter)
       : null;
-  const kind = meta?.kind === undefined ? undefined : kindById(meta.kind);
-  const facts =
-    kind === undefined || meta === null ? [] : keyFactsFor(kind, meta.fields);
   const opening =
     load.status === 'ready' ? splitOpening(load.rendered.html) : null;
+  const checked = opening === null ? null : takeCheckSection(opening.rest);
   const question =
     meta?.type === 'answer' && typeof meta.fields.question === 'string'
       ? meta.fields.question
@@ -601,20 +566,23 @@ export function Note() {
             </div>
           )}
           {opening !== null && opening.top !== '' && (
-            <NoteBody html={opening.top} />
+            <BowerNoteBox
+              html={opening.top}
+              frontmatter={
+                load.status === 'ready' ? load.rendered.frontmatter : {}
+              }
+              checkSection={checked?.items ?? []}
+            />
           )}
-          {kind !== undefined && meta !== null && facts.length > 0 && (
-            <>
-              <p class="note-keyfacts-caption">
-                {`Key facts for ${withArticle(kind.name)}: set in your rules, the same for every ${kind.name.split(' ').pop() ?? kind.name}`}
+          {opening !== null &&
+            opening.top === '' &&
+            meta !== null &&
+            isBowerNote(meta) && (
+              <p class="note-no-box">
+                Bower adds its insights next time it touches this note.
               </p>
-              <KeyFacts facts={facts} />
-            </>
-          )}
-          {kind !== undefined && meta !== null && (
-            <Details kind={kind} meta={meta} />
-          )}
-          <NoteBody html={opening?.rest ?? ''} />
+            )}
+          <NoteBody html={checked?.rest ?? opening?.rest ?? ''} />
           {canAppend && appendOpen && (
             <AppendForm key={id} onAppend={handleAppend} />
           )}
