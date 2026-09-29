@@ -151,7 +151,7 @@ async function click(button: HTMLButtonElement): Promise<void> {
 }
 
 function sheet(): HTMLElement | null {
-  return root.querySelector<HTMLElement>('[role="dialog"]');
+  return document.body.querySelector<HTMLElement>('[role="dialog"]');
 }
 
 beforeEach(() => {

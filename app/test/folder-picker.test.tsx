@@ -74,7 +74,7 @@ function mount(vnode: ComponentChild): void {
 }
 
 function button(text: string): HTMLButtonElement {
-  const found = [...root.querySelectorAll('button')].find(
+  const found = [...document.body.querySelectorAll('button')].find(
     (b) => b.textContent?.trim() === text,
   );
   if (found === undefined) throw new Error(`button "${text}" missing`);
@@ -82,7 +82,7 @@ function button(text: string): HTMLButtonElement {
 }
 
 function radios(): HTMLButtonElement[] {
-  return [...root.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+  return [...document.body.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
 }
 
 function radio(name: string): HTMLButtonElement {
@@ -142,15 +142,35 @@ function picker(onChoose = vi.fn(), onClose = vi.fn()): void {
 }
 
 describe('FolderPicker', () => {
+  it('is an Overlay dialog: the shell goes inert and Escape closes it', () => {
+    const shell = document.createElement('div');
+    shell.id = 'app';
+    const inner = document.createElement('div');
+    inner.className = 'shell';
+    shell.append(inner);
+    document.body.append(shell);
+    const onClose = vi.fn();
+    picker(vi.fn(), onClose);
+    const panel = document.body.querySelector('.overlay-panel');
+    expect(panel?.getAttribute('role')).toBe('dialog');
+    expect(panel?.getAttribute('aria-modal')).toBe('true');
+    expect(inner.hasAttribute('inert')).toBe(true);
+    expect(document.body.querySelector('.folder-picker-backdrop')).toBeNull();
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it('shows the title, the search field, the landmarks with their lines and the footer', () => {
     picker();
-    expect(root.querySelector('h2')?.textContent).toBe(
+    expect(document.body.querySelector('h2')?.textContent).toBe(
       'Move “Lease agreement 2026” to…',
     );
-    expect(root.querySelector('input')?.getAttribute('placeholder')).toBe(
+    expect(document.body.querySelector('input')?.getAttribute('placeholder')).toBe(
       'Find a folder',
     );
-    const text = root.textContent ?? '';
+    const text = document.body.textContent ?? '';
     expect(text).toContain('Things with an end date');
     expect(text).toContain('Parts of life that go on');
     expect(text).toContain('Things to keep');
@@ -185,19 +205,19 @@ describe('FolderPicker', () => {
 
   it('expands a landmark with its chevron', () => {
     picker();
-    click(root.querySelector('[aria-label="Expand Projects"]') as Element);
+    click(document.body.querySelector('[aria-label="Expand Projects"]') as Element);
     expect(radio('Flat hunt')).toBeTruthy();
   });
 
   it('filters by "Find a folder"', () => {
     picker();
-    type(root.querySelector('input') as HTMLInputElement, 'gard');
+    type(document.body.querySelector('input') as HTMLInputElement, 'gard');
     expect(
       radios().map((r) => r.querySelector('.folder-picker-name')?.textContent),
     ).toEqual(['Garden']);
-    type(root.querySelector('input') as HTMLInputElement, 'zzz');
+    type(document.body.querySelector('input') as HTMLInputElement, 'zzz');
     expect(radios()).toHaveLength(0);
-    expect(root.textContent).toContain('No folder has that in its name.');
+    expect(document.body.textContent).toContain('No folder has that in its name.');
   });
 
   it('keeps both buttons off until a folder is chosen, then reports the choice', () => {
@@ -281,7 +301,7 @@ describe('MoveFlow', () => {
     click(radio('Resources'));
     click(button('Move it now'));
     await flush();
-    expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toBe(
       'Could not send that. Try again.',
     );
     expect(mocks.process).not.toHaveBeenCalled();
