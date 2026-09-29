@@ -215,11 +215,6 @@ export interface HelpSheetProps {
   onClose: () => void;
   /** "Show me around": the caller starts the tour. */
   onShowMeAround: () => void;
-  /**
-   * Where the Ideas button goes (`IDEAS_PATH`, #332); left out, there is
-   * no Ideas button. `layout.tsx` passes it on every screen.
-   */
-  ideasHref?: string;
 }
 
 /** A tip that can be dismissed on a screen, with its own words. */
@@ -263,7 +258,6 @@ export function HelpSheet({
   screen,
   onClose,
   onShowMeAround,
-  ideasHref,
 }: HelpSheetProps): JSX.Element {
   const copy = helpSheet(screen, isDemo());
   const [tips, setTips] = useState<ScreenTip[]>(() => dismissedTips(screen));
@@ -324,12 +318,6 @@ export function HelpSheet({
               <IconPlay />
               Show me around
             </button>
-            {ideasHref !== undefined && (
-              <a class="button help-secondary" href={ideasHref}>
-                <IconSparkle />
-                Ideas
-              </a>
-            )}
           </div>
           <a class="help-intro-link" href={INTRO_AGAIN_HREF}>
             What is Bower, from the start

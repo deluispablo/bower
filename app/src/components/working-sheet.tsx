@@ -64,8 +64,10 @@ import {
   IconNote,
   IconPdf,
 } from './icons.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { Overlay } from './overlay.js';
-import { RunSummary } from './run-summary.js';
+import { Queued } from './queued-overlay.js';
+import { RunSummary, summaryTiles } from './run-summary.js';
 import '../styles/tidy-confirm-sheet.css';
 
 /** How long the sheet stays up after the day's limit is reached. */
@@ -487,6 +489,33 @@ export function partialFolder(outcome: RunOutcome): string | null {
 export const FINISH_LINE =
   'Finish the tidy-up files them without writing the notes again.';
 
+/**
+ * A partly done run's two tiles, as the board draws them (RunSheet-Partial):
+ * the new notes it wrote and what is still in the inbox. The filed and
+ * updated counts are the bubble's and the rows' to tell.
+ */
+function PartialTiles({ outcome }: { outcome: RunOutcome }): JSX.Element {
+  const tiles = summaryTiles(outcome).filter(
+    (tile) => tile.key === 'new' || tile.key === 'left',
+  );
+  return (
+    <ul
+      class="run-summary-stats working-sheet-tiles"
+      aria-label="What this tidy-up did"
+    >
+      {tiles.map((tile) => (
+        <li
+          key={tile.key}
+          class={`run-summary-tile${tile.value === 0 ? ' run-summary-zero' : ''}${tile.warn ? ' run-summary-warn' : ''}`}
+        >
+          <span class="run-summary-value">{tile.value}</span>{' '}
+          <span class="run-summary-label">{tile.label}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export interface WorkingSheetProps {
   phase: RunPhase;
   /** The current run, for its outcome. */
@@ -743,138 +772,148 @@ export function WorkingSheet({
   const folder = outcome === null ? null : partialFolder(outcome);
 
   return (
-    <Overlay kind="sheet" label={sheetLabel(state)} onClose={onDismiss}>
-      <div class={`working-sheet working-sheet-${state}`}>
-        <div class="working-sheet-head">
-          <StatusIcon state={state} />
-          <div class="working-sheet-heading">
-            <h2 class="working-sheet-title">{heading}</h2>
-            {timeLine !== '' && <p class="working-sheet-subline">{timeLine}</p>}
-          </div>
-          <button
-            type="button"
-            class="working-sheet-close"
-            aria-label="Close"
-            onClick={onDismiss}
-          >
-            <IconClose />
-          </button>
-        </div>
-
-        {state === 'running' && (
-          <>
-            <div
-              class="working-sheet-stage"
-              style={{ height: `${WORKING_STAGE_HEIGHT}px` }}
+    <Queued id="working-sheet" priority={OVERLAY_PRIORITY.run}>
+      <Overlay kind="sheet" label={sheetLabel(state)} onClose={onDismiss}>
+        <div class={`working-sheet working-sheet-${state}`}>
+          <div class="working-sheet-head">
+            <StatusIcon state={state} />
+            <div class="working-sheet-heading">
+              <h2 class="working-sheet-title">{heading}</h2>
+              {timeLine !== '' && (
+                <p class="working-sheet-subline">{timeLine}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              class="working-sheet-close"
+              aria-label="Close"
+              onClick={onDismiss}
             >
-              <span class="working-sheet-stage-line" aria-hidden="true" />
-              <span class="working-sheet-stage-from">Inbox</span>
-              <span class="working-sheet-stage-to">
-                {destinationsLabel(liveSource) ?? FOLDERS_FALLBACK}
-              </span>
-              <BowerWorking
-                state={
-                  phase === 'starting' || phase === 'queued'
-                    ? 'queued'
-                    : 'running'
-                }
-                overlay
-              />
-            </div>
-            <Steps steps={steps} />
-            <Rows rows={liveRows} />
-            <p class="working-sheet-note">
-              {isDemo() ? (
-                <>
-                  <b class="working-sheet-note-lead">{DEMO_REASSURANCE_LEAD}</b>{' '}
-                  {DEMO_REASSURANCE_REST}
-                </>
-              ) : (
-                runningNote(desktop)
-              )}
-            </p>
-            <div class="working-sheet-actions">{close}</div>
-          </>
-        )}
+              <IconClose />
+            </button>
+          </div>
 
-        {(state === 'done' || state === 'partial') && outcome !== null && (
-          <>
-            <RunSummary outcome={outcome} size="stats" />
-            {state === 'done' && outcome.quote !== undefined && (
-              <div class="working-sheet-say">
-                <Bird state="done" size={44} overlay />
-                <p class="working-sheet-say-text">{`${outcome.quote}.`}</p>
+          {state === 'running' && (
+            <>
+              <div
+                class="working-sheet-stage"
+                style={{ height: `${WORKING_STAGE_HEIGHT}px` }}
+              >
+                <span class="working-sheet-stage-line" aria-hidden="true" />
+                <span class="working-sheet-stage-from">Inbox</span>
+                <span class="working-sheet-stage-to">
+                  {destinationsLabel(liveSource) ?? FOLDERS_FALLBACK}
+                </span>
+                <BowerWorking
+                  state={
+                    phase === 'starting' || phase === 'queued'
+                      ? 'queued'
+                      : 'running'
+                  }
+                  overlay
+                />
               </div>
-            )}
-            {state === 'done' &&
-              doneNotes(run).map((note) => (
-                <p key={note} class="working-sheet-detail">
-                  {note}
-                </p>
-              ))}
-            {state === 'partial' && (
-              <div class="working-sheet-warn" role="note">
-                <p>{runSentence(outcome, { voice: 'third' })}</p>
-                {folder !== null && (
-                  <p>
-                    {'The new notes are in '}
-                    <a href={folderHref(folder)} onClick={onDismiss}>
-                      {displayPath(folder, ' › ')}
-                    </a>
-                    {'; your things are still in the inbox. '}
-                    {FINISH_LINE}
-                  </p>
+              <Steps steps={steps} />
+              <Rows rows={liveRows} />
+              <p class="working-sheet-note">
+                {isDemo() ? (
+                  <>
+                    <b class="working-sheet-note-lead">
+                      {DEMO_REASSURANCE_LEAD}
+                    </b>{' '}
+                    {DEMO_REASSURANCE_REST}
+                  </>
+                ) : (
+                  runningNote(desktop)
                 )}
-                {folder === null && <p>{FINISH_LINE}</p>}
-              </div>
-            )}
-            <Steps steps={steps} />
-            {finished !== null && <Rows rows={finished.rows} />}
-            <div class="working-sheet-actions">
-              {state === 'done' ? (
-                <>
-                  <a
-                    class="tidy-confirm-button"
-                    href={`${JUST_FILED_PATH}?run=${encodeURIComponent(run === null ? '' : runKey(run))}`}
-                    onClick={onDismiss}
-                  >
-                    See everything
-                  </a>
-                  {close}
-                </>
+              </p>
+              <div class="working-sheet-actions">{close}</div>
+            </>
+          )}
+
+          {(state === 'done' || state === 'partial') && outcome !== null && (
+            <>
+              {state === 'partial' ? (
+                <PartialTiles outcome={outcome} />
               ) : (
-                <>
-                  {again('Finish the tidy-up')}
-                  {notNow}
-                </>
+                <RunSummary outcome={outcome} size="stats" />
               )}
-            </div>
-          </>
-        )}
+              {state === 'done' && outcome.quote !== undefined && (
+                <div class="working-sheet-say">
+                  <Bird state="done" size={44} overlay />
+                  <p class="working-sheet-say-text">{`${outcome.quote}.`}</p>
+                </div>
+              )}
+              {state === 'done' &&
+                doneNotes(run).map((note) => (
+                  <p key={note} class="working-sheet-detail">
+                    {note}
+                  </p>
+                ))}
+              {state === 'partial' && (
+                <div class="working-sheet-warn" role="note">
+                  <p>{runSentence(outcome, { voice: 'third' })}</p>
+                  {folder !== null && (
+                    <p>
+                      {'The new notes are in '}
+                      <a href={folderHref(folder)} onClick={onDismiss}>
+                        {displayPath(folder, ' › ')}
+                      </a>
+                      {'; your things are still in the inbox. '}
+                      {FINISH_LINE}
+                    </p>
+                  )}
+                  {folder === null && <p>{FINISH_LINE}</p>}
+                </div>
+              )}
+              <Steps steps={steps} />
+              {finished !== null && <Rows rows={finished.rows} />}
+              <div class="working-sheet-actions">
+                {state === 'done' ? (
+                  <>
+                    <a
+                      class="tidy-confirm-button"
+                      href={`${JUST_FILED_PATH}?run=${encodeURIComponent(run === null ? '' : runKey(run))}`}
+                      onClick={onDismiss}
+                    >
+                      See everything
+                    </a>
+                    {close}
+                  </>
+                ) : (
+                  <>
+                    {again('Finish the tidy-up')}
+                    {notNow}
+                  </>
+                )}
+              </div>
+            </>
+          )}
 
-        {state === 'failed' && (
-          <>
-            <p class="working-sheet-detail">{reason.sentence}</p>
-            <p class="working-sheet-detail">
-              {stillIn > 0 ? nothingLost(stillIn) : 'Nothing changed.'}
-            </p>
-            <p class="working-sheet-note">{reason.hint}</p>
-            <div class="working-sheet-actions">
-              {again('Tidy up again')}
-              {notNow}
-            </div>
-          </>
-        )}
+          {state === 'failed' && (
+            <>
+              <p class="working-sheet-detail">{reason.sentence}</p>
+              <p class="working-sheet-detail">
+                {stillIn > 0 ? nothingLost(stillIn) : 'Nothing changed.'}
+              </p>
+              <p class="working-sheet-note">{reason.hint}</p>
+              <div class="working-sheet-actions">
+                {again('Tidy up again')}
+                {notNow}
+              </div>
+            </>
+          )}
 
-        {state === 'quota' && (
-          <>
-            <p class="working-sheet-detail">
-              {message ?? workingLabel('quota')}
-            </p>
-            <div class="working-sheet-actions">{close}</div>
-          </>
-        )}
-      </div>
-    </Overlay>
+          {state === 'quota' && (
+            <>
+              <p class="working-sheet-detail">
+                {message ?? workingLabel('quota')}
+              </p>
+              <div class="working-sheet-actions">{close}</div>
+            </>
+          )}
+        </div>
+      </Overlay>
+    </Queued>
   );
 }

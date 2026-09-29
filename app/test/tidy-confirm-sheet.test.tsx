@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { useState } from 'preact/hooks';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { OverlayHost } from '../src/components/overlay.js';
+import { resetOverlayQueue } from '../src/overlay-queue.js';
 
 const state = vi.hoisted(() => ({ demo: false }));
 
@@ -61,7 +64,7 @@ function mount(
   document.body.append(container);
   root = container;
   void act(() => {
-    render(h(Harness, {}), container);
+    render(h(Fragment, null, h(Harness, {}), h(OverlayHost, null)), container);
   });
   return { onConfirm, onDismiss };
 }
@@ -95,6 +98,7 @@ afterEach(() => {
     });
   }
   document.body.replaceChildren();
+  resetOverlayQueue();
   root = undefined;
   state.demo = false;
 });

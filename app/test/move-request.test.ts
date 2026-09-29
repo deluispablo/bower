@@ -188,6 +188,14 @@ describe('sendMoveRequest', () => {
 });
 
 describe('requestRowText', () => {
+  it('reads a Rename request as the old name and the new one (#859)', () => {
+    expect(
+      requestRowText(
+        'Rename 2-Areas/Home/Boiler receipt.pdf to Boiler 2026.pdf',
+      ),
+    ).toBe('Rename Boiler receipt.pdf to Boiler 2026.pdf');
+  });
+
   it('leaves the numeric prefixes off the folders shown', () => {
     expect(
       requestRowText(

@@ -6,7 +6,7 @@
  * Done sheet's "See where everything went" link.
  */
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,6 +38,8 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 }));
 
 const { WorkingSheet } = await import('../src/components/working-sheet.js');
+const { OverlayHost } = await import('../src/components/overlay.js');
+const { resetOverlayQueue } = await import('../src/overlay-queue.js');
 
 const NOW = new Date('2026-09-27T10:44:00+01:00').getTime();
 
@@ -272,6 +274,7 @@ describe('the Done sheet', () => {
       render(null, root);
     });
     document.body.replaceChildren();
+    resetOverlayQueue();
   });
 
   it('links to Just filed', () => {
@@ -279,13 +282,18 @@ describe('the Done sheet', () => {
     document.body.append(root);
     void act(() => {
       render(
-        h(WorkingSheet, {
-          phase: 'done',
-          run,
-          now: NOW,
-          open: true,
-          onDismiss: vi.fn(),
-        }),
+        h(
+          Fragment,
+          null,
+          h(WorkingSheet, {
+            phase: 'done',
+            run,
+            now: NOW,
+            open: true,
+            onDismiss: vi.fn(),
+          }),
+          h(OverlayHost, null),
+        ),
         root,
       );
     });

@@ -1491,10 +1491,11 @@ test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#33
     }),
   ).toHaveValue('How much did I spend on groceries this month?');
 
-  // Also reachable from the "?" tip: the Ideas button on a help sheet.
+  // The help sheet has no Ideas button (#859): Ideas has no help-sheet link.
   await page.getByRole('button', { name: 'About this screen' }).click();
-  await visible(page.getByRole('link', { name: 'Ideas' })).click();
-  await expect(page).toHaveURL(/\/ideas$/);
+  await expect(page.getByRole('link', { name: 'Ideas' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.goto('/ideas');
 
   // Back in the bar is phone-only (#318): the desktop shell has no Back
   // link, so this only applies there.

@@ -10,9 +10,12 @@
  * `settings-demo.test.ts` and `demo-banner.test.ts` use.
  */
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { OverlayHost } from '../src/components/overlay.js';
+import { resetOverlayQueue } from '../src/overlay-queue.js';
 
 import type { Run } from '../src/api.js';
 
@@ -49,13 +52,18 @@ function mount(phase: 'running' | 'done' = 'running'): void {
   document.body.append(root);
   void act(() => {
     render(
-      h(WorkingSheet, {
-        phase,
-        run,
-        now: Date.now(),
-        open: true,
-        onDismiss: vi.fn(),
-      }),
+      h(
+        Fragment,
+        null,
+        h(WorkingSheet, {
+          phase,
+          run,
+          now: Date.now(),
+          open: true,
+          onDismiss: vi.fn(),
+        }),
+        h(OverlayHost, null),
+      ),
       root,
     );
   });
@@ -66,6 +74,7 @@ afterEach(() => {
     render(null, root);
   });
   document.body.replaceChildren();
+  resetOverlayQueue();
   state.demo = false;
 });
 

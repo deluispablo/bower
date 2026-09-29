@@ -73,6 +73,23 @@ export function homeStateFor(input: HomeStateInput): HomeState {
   return loading ? 'loading' : 'empty';
 }
 
+/**
+ * The run Home speaks about (bubble, cards, state). The run store keeps its
+ * `lastFinished` in an effect, so on the first render after a run that
+ * ended is read (a reload, a held demo run) it is still `null`: the run
+ * itself stands in, so a partly done run never shows the failed state for
+ * a moment, and every surface reads the same `RunOutcome`.
+ */
+export function finishedRunFor(
+  phase: RunPhase,
+  run: Run | null,
+  lastFinished: Run | null,
+): Run | null {
+  if (lastFinished !== null) return lastFinished;
+  const ended = phase === 'failed' || phase === 'stale' || phase === 'done';
+  return ended && run !== null && run.state !== 'running' ? run : null;
+}
+
 type DayPart = 'morning' | 'afternoon' | 'evening';
 
 /** Morning before noon, afternoon before 6 pm, evening after. */

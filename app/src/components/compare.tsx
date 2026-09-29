@@ -38,6 +38,7 @@ import {
   receiptsByMonth,
   receiptsExplainer,
   setFrontmatterValue,
+  SCORE_LABEL,
   sortButtonText,
   sortNotes,
   sortStyle,
@@ -444,7 +445,8 @@ export function CompareView({
     const sortColumn =
       columns.find((column) => column.id === effectiveSort.column) ??
       columns[0];
-    const shownCount = sorted.length - hidden.length;
+    // The list shows every note (the filtered ones faded), so the button counts them all.
+    const shownCount = sorted.length;
     return (
       <section class="compare compare-phone" aria-label="Compare">
         <p class="compare-explainer">{phoneExplainer(kind, current.length)}</p>
@@ -768,7 +770,9 @@ function BodyCell({
     );
   }
   const origin = note.bowerOrigins[column.id];
-  const text = cellText(kind, note, column);
+  const score =
+    column.id === 'fit' || column.label === SCORE_LABEL ? scoreOf(note) : null;
+  const text = score === null ? cellText(kind, note, column) : `${score}/100`;
   return (
     <td class="compare-td">
       {text}

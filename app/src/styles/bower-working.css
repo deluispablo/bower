@@ -477,3 +477,21 @@
 .working-sheet-actions a.tidy-confirm-button {
   text-decoration: none;
 }
+
+/* A partly done run: two tiles (RunSheet-Partial), and the buttons stay in
+   view at the bottom of the sheet so "Finish the tidy-up" is never below the
+   fold on a phone. */
+.working-sheet-tiles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.working-sheet-partial .working-sheet-actions {
+  position: sticky;
+  bottom: calc(-1 * var(--space-4));
+  z-index: 1;
+  align-self: stretch;
+  margin-top: var(--space-1);
+  padding: var(--space-2) 0 var(--space-4);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}

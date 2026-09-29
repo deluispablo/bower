@@ -98,8 +98,7 @@ describe('HELP_ROWS', () => {
     expect(HELP_ROWS.home.rows.map((r) => r.lead)).toEqual([
       'Inbox',
       'Last tidy-up',
-      'Pinned',
-      'Recent',
+      'The tidy-up bar',
     ]);
     expect(HELP_ROWS.notes.rows.map((r) => r.lead)).toEqual([
       'Four folders',
@@ -286,15 +285,14 @@ describe('Tour', () => {
 });
 
 describe('HelpSheet', () => {
-  function mount(
-    screen: 'home' | 'folder',
-    ideasHref?: string,
-  ): { onClose: () => void; onShowMeAround: () => void } {
+  function mount(screen: 'home' | 'folder'): {
+    onClose: () => void;
+    onShowMeAround: () => void;
+  } {
     const props = {
       screen,
       onClose: vi.fn(),
       onShowMeAround: vi.fn(),
-      ideasHref,
     };
     void act(() => {
       render(
@@ -309,7 +307,7 @@ describe('HelpSheet', () => {
     mount('home');
     expect(dialog().textContent).toContain('About this screen');
     expect(dialog().querySelector('h2')?.textContent).toBe('Home');
-    expect(dialog().querySelectorAll('li')).toHaveLength(4);
+    expect(dialog().querySelectorAll('li')).toHaveLength(3);
     expect(dialog().textContent).not.toContain('top-left');
     expect(dialog().textContent).not.toContain('Tour ·');
     expect(link('What is Bower, from the start')?.getAttribute('href')).toBe(
@@ -365,14 +363,9 @@ describe('HelpSheet', () => {
     expect(props.onShowMeAround).toHaveBeenCalledTimes(1);
   });
 
-  it('shows Ideas only when there is somewhere to go', () => {
+  it('has no Ideas button (#859)', () => {
     mount('home');
     expect(link('Ideas')).toBeUndefined();
-    void act(() => {
-      render(null, root);
-    });
-    mount('home', '/ideas');
-    expect(link('Ideas')?.getAttribute('href')).toBe('/ideas');
   });
 });
 
