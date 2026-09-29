@@ -49,21 +49,49 @@ describe('RunSummary', () => {
     expect(el.textContent).toBe('');
   });
 
-  it('stats: four tiles, zeros greyed, needs you amber', () => {
+  const names = (el: HTMLElement): string[] =>
+    [...el.querySelectorAll('.run-summary-tile')].map(
+      (t) => t.textContent ?? '',
+    );
+
+  it('stats: a labelled list, one "{n} {label}" item per tile', () => {
+    const el = mount(<RunSummary outcome={done} size="stats" />);
+    const list = el.querySelector('ul');
+    expect(list?.getAttribute('aria-label')).toBe('What this tidy-up did');
+    expect(names(el)).toEqual([
+      '2 filed',
+      '1 new note',
+      '1 updated',
+      '1 needs you',
+    ]);
+  });
+
+  it('stats: zeros greyed (no opacity), needs you amber', () => {
     const noFiling = { ...done, filed: 0 };
     const el = mount(<RunSummary outcome={noFiling} size="stats" />);
     const tiles = el.querySelectorAll('.run-summary-tile');
     expect(tiles).toHaveLength(4);
     expect(tiles[0]?.classList.contains('run-summary-zero')).toBe(true);
     expect(tiles[3]?.classList.contains('run-summary-warn')).toBe(true);
-    expect(tiles[3]?.textContent).toContain('Needs you');
   });
 
-  it('stats: a partly done run labels the last tile "Still in your inbox"', () => {
+  it('stats: a partly done run counts the inbox left, tiles equal the inline line', () => {
     const partial = outcomeFromRun(buildRun('partial'));
-    const el = mount(<RunSummary outcome={partial} size="stats" />);
-    const last = el.querySelectorAll('.run-summary-tile')[3];
-    expect(last?.textContent).toContain('Still in your inbox');
+    const stats = mount(<RunSummary outcome={partial} size="stats" />);
+    const tiles = names(stats).filter((t) => !t.startsWith('0 '));
+    const inline = mount(<RunSummary outcome={partial} size="inline" />);
+    expect(tiles.join(' · ')).toBe(inline.textContent);
+    const last = stats.querySelectorAll('.run-summary-tile')[3];
+    expect(last?.textContent).toMatch(/^\d+ still in your inbox$/);
     expect(last?.classList.contains('run-summary-warn')).toBe(true);
+  });
+
+  it('stats: things set aside on a partly done run get their own tile', () => {
+    const base = outcomeFromRun(buildRun('partial'));
+    const partial = { ...base, left: 5, needsYou: 6 };
+    const el = mount(<RunSummary outcome={partial} size="stats" />);
+    const all = names(el);
+    expect(all).toHaveLength(5);
+    expect(all.slice(3)).toEqual(['5 still in your inbox', '1 needs you']);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { FolderState } from '../src/folder-state.js';
 import { decideRedirect } from '../src/session.js';
 
 // Components are UI smoke only when cheap; `decideRedirect` is the pure
@@ -117,5 +118,51 @@ describe('decideRedirect', () => {
     it('does not apply outside a demo build', () => {
       expect(decideRedirect('signed-in', true, '/', false, false)).toBeNull();
     });
+  });
+});
+
+// R-VAULT-2: a missing, trashed or unreachable Bower folder.
+describe('decideRedirect with the folder state', () => {
+  const at = (path: string, folder: FolderState, query = ''): string | null =>
+    decideRedirect('signed-in', true, path, true, false, folder, query);
+
+  it.each(['missing', 'trashed', 'no-access'] as const)(
+    'sends %s to /recover from Home, with no Home paint first',
+    (folder) => {
+      expect(at('/', folder)).toBe(`/recover?reason=${folder}`);
+      expect(at('/notes', folder)).toBe(`/recover?reason=${folder}`);
+    },
+  );
+
+  it('leaves ok and unknown where they are', () => {
+    expect(at('/', 'ok')).toBeNull();
+    expect(at('/', 'unknown')).toBeNull();
+  });
+
+  it('stays on /recover when the reason in the query matches', () => {
+    expect(at('/recover', 'trashed', 'reason=trashed')).toBeNull();
+    expect(at('/recover', 'trashed', '?reason=trashed')).toBeNull();
+  });
+
+  it('corrects a /recover reason that does not match the state', () => {
+    expect(at('/recover', 'missing', 'reason=trashed')).toBe(
+      '/recover?reason=missing',
+    );
+    expect(at('/recover', 'no-access')).toBe('/recover?reason=no-access');
+  });
+
+  it('sends /recover to / when the folder is ok or unknown', () => {
+    expect(at('/recover', 'ok', 'reason=trashed')).toBe('/');
+    expect(at('/recover', 'unknown', 'reason=trashed')).toBe('/');
+  });
+
+  it('never sends /recover to /onboarding', () => {
+    expect(
+      decideRedirect('signed-in', false, '/recover', true, false, 'missing'),
+    ).toBe('/');
+  });
+
+  it('leaves the public paths alone', () => {
+    expect(at('/privacy', 'missing')).toBeNull();
   });
 });

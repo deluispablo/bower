@@ -7,16 +7,16 @@
  * to `Rules.md` through `rules.ts` (`applyRuleEdit`, via the vault's
  * `editRule`).
  *
- * Mounted fresh on each open like the pin sheet, so its focus trap always
- * attaches; Escape and a backdrop tap close it.
+ * An `Overlay` sheet (R-OVL-2): the scrim, focus trap, Escape, inert page and
+ * scroll lock come from `overlay.tsx`; Escape and a scrim tap close it. It
+ * portals into `document.body`, outside the inert shell.
  */
 
-import { useRef } from 'preact/hooks';
+import { createPortal } from 'preact/compat';
 import type { JSX } from 'preact';
 
 import { IconClock, IconClose, IconEdit, IconRedo } from './icons.js';
-import { useDismissGuard } from './use-dismiss-guard.js';
-import { useFocusTrap } from './use-focus-trap.js';
+import { Overlay } from './overlay.js';
 import { ruleSheetLabel } from '../rules.js';
 import type { Rule } from '../rules.js';
 import '../styles/rule-sheet.css';
@@ -79,25 +79,9 @@ export function RuleSheet({
   onPick,
   onClose,
 }: RuleSheetProps): JSX.Element {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(panelRef, onClose);
-  const guardedClose = useDismissGuard(onClose);
-
-  return (
-    <div class="rule-sheet">
-      <div
-        class="rule-sheet-backdrop"
-        aria-hidden="true"
-        onClick={guardedClose}
-      />
-      <div
-        ref={panelRef}
-        class="rule-sheet-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label={rule.text}
-        tabIndex={-1}
-      >
+  return createPortal(
+    <Overlay kind="sheet" label={rule.text} onClose={onClose}>
+      <div class="rule-sheet-body">
         <div class="rule-sheet-head">
           <p class="rule-sheet-label">{ruleSheetLabel(topic, rule)}</p>
           <p class="rule-sheet-text">{rule.text}</p>
@@ -122,6 +106,7 @@ export function RuleSheet({
           Cancel
         </button>
       </div>
-    </div>
+    </Overlay>,
+    document.body,
   );
 }

@@ -1,5 +1,5 @@
 /*
- * The bird (spec §4), drawing v8.2. Colours, transform origins, one class per
+ * The bird (spec §4), drawing v9 (D29, spec §6.21 and Appendix A). Colours, transform origins, one class per
  * state (`p-*`), the still faces (`e-*`) and the keyframes, copied from the
  * design canvas (its `CSS`) with the class names unchanged.
  * The component (`components/bird.tsx`) only picks the classes; everything
@@ -24,6 +24,8 @@
   overflow: visible;
   display: block;
   flex-shrink: 0;
+  /* Rule 4 (spec §6.21): a bird never blocks a tap. The nap button (D30) sets it back. */
+  pointer-events: none;
 }
 .b .bd,
 .b .hc,
@@ -40,9 +42,26 @@
   fill: #b9ece2;
   opacity: 0.9;
 }
-.b .ck {
-  fill: #b9ece2;
-  opacity: 0.8;
+.b .bl {
+  fill: #ff9fb4;
+  opacity: 0.6;
+}
+.b .ir {
+  fill: none;
+  stroke: #8e7cf3;
+  stroke-width: 1.4;
+}
+.b .bcap {
+  fill: #3b82f6;
+}
+.b .bcap .bci {
+  fill: #93c5fd;
+}
+.b.e-happy .bl,
+.b.p-done .bl,
+.b.p-hello .bl,
+.b.p-dance .bl {
+  opacity: 0.9;
 }
 .b .ec {
   fill: #1b2233;
@@ -71,7 +90,7 @@
 .b .ex {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 16px;
+  font-size: 22px;
   fill: #f0b64f;
 }
 .b .ld,
@@ -121,7 +140,7 @@
 .b .nt {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 17px;
   fill: #5eead4;
 }
 .b .qm,
@@ -131,10 +150,10 @@
   fill: var(--color-text);
 }
 .b .qm {
-  font-size: 18px;
+  font-size: 24px;
 }
 .b .zz {
-  font-size: 12px;
+  font-size: 15px;
 }
 .b .sp {
   fill: #f0b64f;
@@ -160,12 +179,6 @@
 }
 .b .tray {
   fill: #334155;
-}
-.b .sgem {
-  fill: #38bdf8;
-}
-.b .sgemhl {
-  fill: #e0f2fe;
 }
 .b .rig,
 .b .turn {
@@ -280,8 +293,7 @@
 .p-shiny .tl {
   animation: tailwag 0.5s ease-in-out infinite alternate;
 }
-.p-shiny .sgem,
-.p-shiny .sgemhl {
+.p-shiny .bcap {
   opacity: 1;
 }
 .p-shiny .sspark {
@@ -557,6 +569,167 @@
 .p-done .tl {
   animation: tailwag 0.5s ease-in-out 4 alternate;
 }
+/* Round 7: new poses on the same rig (spec §6.21, Appendix A). */
+.b .wv {
+  fill: none;
+  stroke: #8fe0d2;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  transform-box: view-box;
+}
+.b .rdp {
+  fill: #fff;
+  stroke: #9fabbf;
+  stroke-width: 1;
+}
+.b .rdl {
+  fill: none;
+  stroke: #9fabbf;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.b .pdot {
+  fill: #f0b64f;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.p-listen .rig {
+  animation: breathe 3.2s ease-in-out infinite;
+}
+.p-listen .hd {
+  animation: listenhead 2.8s ease-in-out infinite;
+}
+.p-listen .ey {
+  animation: blink 5s infinite;
+}
+.p-listen .lb {
+  transform: translateY(-3px);
+}
+.p-listen .tl {
+  animation: tailflick 5s ease-in-out infinite;
+}
+.p-listen .wv {
+  animation: wavein 1.6s ease-out infinite;
+}
+.p-listen .w2 {
+  animation-delay: 0.25s;
+}
+.p-listen .w3 {
+  animation-delay: 0.5s;
+}
+/* The point angle is bird-local: --pa is the PARA Areas colour. */
+.p-point {
+  --bird-point-angle: 214deg;
+}
+.p-point.pd {
+  --bird-point-angle: 242deg;
+}
+.p-point .rig {
+  animation: breathe 3.2s ease-in-out infinite;
+}
+.p-point .wg {
+  animation:
+    wingup 0.45s ease-out both,
+    wingtap 1.6s 0.45s ease-in-out infinite;
+}
+.p-point .hd {
+  transform: rotate(6deg);
+}
+.p-point .lb {
+  transform: translateY(-5px);
+}
+.p-point .jw {
+  transform: rotate(10deg);
+}
+.p-point .ey {
+  animation: blink 4.5s infinite;
+}
+.p-point .p1 {
+  animation: ptpulse 1.6s 0.45s ease-in-out infinite;
+}
+.p-point.pd .p1 {
+  animation: none;
+  opacity: 0;
+}
+.p-point.pd .p2 {
+  animation: ptpulse 1.6s 0.45s ease-in-out infinite;
+}
+.p-read .rig {
+  animation: breathe 3.6s ease-in-out infinite;
+}
+.p-read .hd {
+  animation: readhead 3.6s ease-in-out infinite;
+}
+.p-read .wg {
+  transform: rotate(212deg);
+}
+.p-read .ld {
+  transform: translateY(2px);
+}
+.p-read .ey {
+  animation: readeye 3.6s linear infinite;
+}
+.p-read .rd {
+  opacity: 1;
+}
+.p-read .rl1 {
+  animation: rline 3.6s linear infinite;
+}
+.p-read .rl2 {
+  animation: rline 3.6s -2.4s linear infinite;
+}
+.p-read .rl3 {
+  animation: rline 3.6s -1.2s linear infinite;
+}
+.p-perch .rig {
+  animation: breathe 4s ease-in-out infinite;
+}
+.p-perch .hd {
+  animation: idlelook 11s ease-in-out infinite;
+}
+.p-perch .tl {
+  animation: tailswing 3.6s ease-in-out infinite;
+}
+.p-perch .ey {
+  animation: blink 5s infinite;
+}
+.p-perch .lb {
+  transform: translateY(-2px);
+}
+/* Still classes: the key pose held, used under reduced motion. */
+.s-point {
+  --bird-point-angle: 214deg;
+}
+.s-point.pd {
+  --bird-point-angle: 242deg;
+}
+.s-point .wg {
+  transform: rotate(var(--bird-point-angle));
+}
+.s-point .lb {
+  transform: translateY(-5px);
+}
+.s-point .p1 {
+  opacity: 1;
+}
+.s-point.pd .p1 {
+  opacity: 0;
+}
+.s-point.pd .p2 {
+  opacity: 1;
+}
+.s-read .wg {
+  transform: rotate(212deg);
+}
+.s-read .hd {
+  transform: rotate(14deg);
+}
+.s-read .rd {
+  opacity: 1;
+}
+.s-perch .lb {
+  transform: translateY(-2px);
+}
 .e-happy .jw {
   transform: rotate(16deg);
 }
@@ -637,18 +810,125 @@
     transform: scaleY(0.1);
   }
 }
+/* The turn-round of Looking is a quick hop-turn (no thin sliver). */
 @keyframes turnaround {
   0%,
   60% {
-    transform: scaleX(1);
+    transform: none;
   }
-  63%,
+  60.6% {
+    transform: translateY(-6px) scaleX(0.5);
+  }
+  61.2% {
+    transform: translateY(-7px) scaleX(-0.5);
+  }
+  62%,
   86% {
     transform: scaleX(-1);
   }
-  89%,
+  86.6% {
+    transform: translateY(-6px) scaleX(-0.5);
+  }
+  87.2% {
+    transform: translateY(-7px) scaleX(0.5);
+  }
+  88%,
   100% {
-    transform: scaleX(1);
+    transform: none;
+  }
+}
+@keyframes listenhead {
+  0%,
+  100% {
+    transform: rotate(7deg) translate(2px, 1px);
+  }
+  50% {
+    transform: rotate(11deg) translate(3px, 2px);
+  }
+}
+@keyframes wavein {
+  0% {
+    opacity: 0;
+    transform: translateX(7px);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-3px);
+  }
+}
+@keyframes wingup {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(var(--bird-point-angle));
+  }
+}
+@keyframes wingtap {
+  0%,
+  100% {
+    transform: rotate(var(--bird-point-angle));
+  }
+  50% {
+    transform: rotate(calc(var(--bird-point-angle) + 8deg));
+  }
+}
+@keyframes ptpulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+@keyframes readhead {
+  0%,
+  100% {
+    transform: rotate(12deg);
+  }
+  33% {
+    transform: rotate(14deg);
+  }
+  66% {
+    transform: rotate(16deg);
+  }
+}
+@keyframes readeye {
+  0%,
+  33%,
+  66%,
+  100% {
+    transform: translateX(-1.5px);
+  }
+  30%,
+  63%,
+  96% {
+    transform: translateX(1.5px);
+  }
+}
+@keyframes rline {
+  0%,
+  32% {
+    stroke: #5fcfbc;
+  }
+  34%,
+  100% {
+    stroke: #9fabbf;
+  }
+}
+@keyframes tailswing {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(10deg);
   }
 }
 @keyframes idlelook {

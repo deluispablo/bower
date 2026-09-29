@@ -4,7 +4,8 @@
  * and the Web Share Target use, the in-memory Drive token, the per-user
  * local preferences (keeping `theme`, a device setting rather than a user
  * one), the list of sent sentences older versions kept, and the
- * recent-searches and opened-lately lists.
+ * recent-searches and opened-lately lists, and the upload queue (every
+ * user's files still waiting on this device, R-UPL-7).
  *
  * `forgetDevice` takes its work as injected dependencies so it is
  * unit-tested hermetically, without a real IndexedDB, Cache Storage or
@@ -26,6 +27,7 @@ import { clearRecentSearches } from './search.js';
 import { SHARE_CACHE_NAME } from './share-target.js';
 import { clearOpened } from './switcher-store.js';
 import { clearSent } from './tell.js';
+import { clearUploadQueue } from './upload-queue.js';
 
 /** Matches the Worker cache the service worker registers in `sw.ts`. */
 const API_CACHE_NAME = 'bower-api';
@@ -45,6 +47,8 @@ export interface ForgetDeviceDeps {
   clearRecentSearches: () => void;
   /** Drops the opened-lately list (`clearOpened` in `switcher-store.ts`). */
   clearOpened: () => void;
+  /** Stops the upload queue and drops its device copies (`upload-queue.ts`). */
+  clearUploadQueue: () => Promise<void>;
 }
 
 /** Runs `task`, sending anything it throws or rejects with to `console.error`. */
@@ -71,6 +75,7 @@ export async function forgetDevice(deps: ForgetDeviceDeps): Promise<void> {
     runSafely(() => deps.clearSent()),
     runSafely(() => deps.clearRecentSearches()),
     runSafely(() => deps.clearOpened()),
+    runSafely(() => deps.clearUploadQueue()),
   ]);
 }
 
@@ -83,5 +88,6 @@ export default function forgetThisDevice(): Promise<void> {
     clearSent,
     clearRecentSearches,
     clearOpened,
+    clearUploadQueue: () => clearUploadQueue(),
   });
 }

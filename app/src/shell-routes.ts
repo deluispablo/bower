@@ -18,6 +18,7 @@ const BARE_PATHS = new Set([
   '/terms',
   '/onboarding',
   '/welcome',
+  '/recover',
 ]);
 
 /**

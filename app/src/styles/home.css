@@ -129,7 +129,7 @@
 /* Waiting and Running: the card that wants a look is outlined in teal;
    after a failure, in the danger colour (Phone-Home, -Running, -Failed). */
 .home-card-active {
-  border-color: var(--color-brand);
+  border-color: var(--color-accent-line);
 }
 
 .home-card-failed {

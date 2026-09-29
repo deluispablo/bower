@@ -16,7 +16,7 @@ import {
   filedCount,
   hasDestinations,
   JUST_FILED_PATH,
-  latestRun,
+  pickRun,
   rowLabel,
   rowSub,
   unseenIds,
@@ -45,8 +45,12 @@ export interface JustFiledState {
  * The latest tidy-up, what is new in it and, with `withRuns`, the earlier
  * ones. `GET /runs` is only read when it is needed: for the earlier list, or
  * because the run store has no finished run yet (the demo, a new device).
+ * `runKey` is `?run=` (R-JUST-5): an unknown key opens the latest.
  */
-export function useJustFiled(withRuns = false): JustFiledState {
+export function useJustFiled(
+  withRuns = false,
+  runKey?: string,
+): JustFiledState {
   const { lastFinished, now } = useRun();
   const { index } = useVault();
   const [runs, setRuns] = useState<Run[]>([]);
@@ -83,7 +87,7 @@ export function useJustFiled(withRuns = false): JustFiledState {
     };
   }, [needRuns, finishedKey]);
 
-  const latest = latestRun(lastFinished, runs);
+  const latest = pickRun(runKey, lastFinished, runs);
   const unseen = useMemo(
     () =>
       latest === null ? new Set<string>() : unseenIds(latest, index, seen),

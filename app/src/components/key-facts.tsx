@@ -43,6 +43,12 @@ export function inlineFactsText(facts: readonly KeyFact[]): string {
     .join(' · ');
 }
 
+/** The accessible name of a score pill: "Your score 82 of 100". */
+export function scoreName(value: string): string | undefined {
+  const n = Number.parseInt(value, 10);
+  return Number.isNaN(n) ? undefined : `Your score ${n} of 100`;
+}
+
 export function KeyFacts({
   facts,
   inline = false,
@@ -59,18 +65,22 @@ export function KeyFacts({
       <dl class={`key-facts key-facts-${shown.length}`}>
         {shown.map((fact, index) => (
           <div class="key-fact" key={fact.key ?? index}>
+            {fact.label !== '' && (
+              <dt class="key-fact-label">{clipLabel(fact.label)}</dt>
+            )}
             <dd class="key-fact-value" title={fact.value}>
               {fact.tone === undefined ? (
                 fact.value
               ) : (
-                <span class={`key-fact-pill key-fact-pill-${fact.tone}`}>
+                <span
+                  class={`key-fact-pill key-fact-pill-${fact.tone}`}
+                  role="img"
+                  aria-label={scoreName(fact.value)}
+                >
                   {fact.value}
                 </span>
               )}
             </dd>
-            {fact.label !== '' && (
-              <dt class="key-fact-label">{clipLabel(fact.label)}</dt>
-            )}
           </div>
         ))}
       </dl>

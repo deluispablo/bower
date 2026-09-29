@@ -1,9 +1,9 @@
 /**
  * The quick switcher (#142, spec §5.1/§5.2; rebuilt for v4 in #593, boards
  * `Phone-Search-Start`, `Phone-Search`, `Phone-Search-None`): one field that
- * finds a folder, a note or a file, or runs a command. `role="dialog"`, a
- * sheet under the phone's top bar or a centred dialog on desktop (same
- * markup, `styles/switcher.css` tells them apart per breakpoint). Every
+ * finds a folder, a note or a file, or runs a command. An `Overlay` dialog
+ * (R-OVL-2): a full screen on the phone, a centred dialog on desktop
+ * (`styles/switcher.css` sizes the overlay's panel per breakpoint). Every
  * opener goes through `openSwitcher()` (`switcher-store.ts`).
  *
  * Search: the session's index (`search-index.ts`, kept by
@@ -20,14 +20,16 @@
  * No results offers "Ask Bower where it is".
  *
  * Mounted once in `layout.tsx`; only actually rendered while open, so every
- * open starts from a clean field. Focus (trap, Escape, return-to-opener) is
- * `use-focus-trap.ts`'s hook; arrow keys and Enter are this component's own,
+ * open starts from a clean field. The scrim, focus trap, Escape, inert page,
+ * scroll lock and return-to-opener come from `overlay.tsx` (it portals into
+ * `document.body`, outside the inert shell); arrow keys and Enter are this component's own,
  * over the flat list of rows. The bird never sits over the field or Close
  * (R-SEARCH-9): the phone hides it.
  */
 
 import { Fragment } from 'preact';
 import type { JSX } from 'preact';
+import { createPortal } from 'preact/compat';
 import {
   useCallback,
   useEffect,
@@ -56,7 +58,8 @@ import type { ParaKind } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { getPref } from '../prefs.js';
-import { pendingCount, useRun } from '../run-store.js';
+import { inboxCount, inboxTotal } from '../inbox-count.js';
+import { useRun } from '../run-store.js';
 import { pathSegments, mergeFullText, searchVault } from '../search-index.js';
 import type {
   HitKind,
@@ -106,7 +109,7 @@ import {
   IconSun,
 } from './icons.js';
 import { KindBadge } from './kind-badge.js';
-import { useFocusTrap } from './use-focus-trap.js';
+import { Overlay } from './overlay.js';
 import '../styles/switcher.css';
 
 const MIN_QUERY_LENGTH = 2;
@@ -830,8 +833,6 @@ function SwitcherPanel({
   // The clock is read once per open: rows say "yesterday", not a live counter.
   const [now] = useState(() => Date.now());
 
-  useFocusTrap(panelRef, closeSwitcher);
-
   useEffect(() => {
     if (seenRun !== null) return;
     let cancelled = false;
@@ -914,7 +915,7 @@ function SwitcherPanel({
   }, [query, runSearch]);
 
   const commands = useMemo(
-    () => commandsFor({ pending: pendingCount(files), theme }),
+    () => commandsFor({ pending: inboxTotal(inboxCount(files, false)), theme }),
     [files, theme],
   );
 
@@ -1204,20 +1205,9 @@ function SwitcherPanel({
             ? `No results for ${trimmed}.`
             : `${total} result${total === 1 ? '' : 's'}.`;
 
-  return (
-    <>
-      <div
-        class="switcher-backdrop"
-        aria-hidden="true"
-        onClick={closeSwitcher}
-      />
-      <div
-        ref={panelRef}
-        class="switcher-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Quick switcher"
-      >
+  return createPortal(
+    <Overlay kind="dialog" label="Quick switcher" onClose={closeSwitcher}>
+      <div ref={panelRef} class="switcher-panel">
         <div class="switcher-field">
           <IconSearch />
           <input
@@ -1554,7 +1544,8 @@ function SwitcherPanel({
           )}
         </div>
       </div>
-    </>
+    </Overlay>,
+    document.body,
   );
 }
 

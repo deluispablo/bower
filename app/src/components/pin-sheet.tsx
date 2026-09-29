@@ -10,18 +10,16 @@
  * either way, since a folder row only toggles open/closed here), Ask Bower
  * about this note/folder, Open in Drive, Cancel.
  *
- * The sheet gets `role="dialog"` with `aria-label={name}` (a screen reader
- * needs the held row's own name, not just "dialog"); the menu gets
- * `role="menu"` like the note menu's popover. Focus is trapped inside
- * either way (`use-focus-trap.ts`); Escape and a backdrop click close it.
+ * It is an `Overlay` menu named by the row (`aria-label={name}`): the scrim,
+ * focus trap, Escape, inert page and scroll lock come from `overlay.tsx`
+ * (R-OVL-2). It portals into `document.body`, outside the inert shell.
  */
 
-import { useRef } from 'preact/hooks';
+import { createPortal } from 'preact/compat';
 import type { JSX } from 'preact';
 
 import { IconChat, IconExternalLink, IconFolder, IconPin } from './icons.js';
-import { useDismissGuard } from './use-dismiss-guard.js';
-import { useFocusTrap } from './use-focus-trap.js';
+import { Overlay } from './overlay.js';
 import '../styles/pin-sheet.css';
 
 export interface PinSheetProps {
@@ -49,10 +47,6 @@ export function PinSheet({
   onTogglePin,
   onClose,
 }: PinSheetProps): JSX.Element {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(panelRef, onClose);
-  const guardedClose = useDismissGuard(onClose);
-
   function selectAndClose(action: () => void): () => void {
     return () => {
       onClose();
@@ -60,21 +54,9 @@ export function PinSheet({
     };
   }
 
-  return (
-    <div class="pin-sheet">
-      <div
-        class="pin-sheet-backdrop"
-        aria-hidden="true"
-        onClick={guardedClose}
-      />
-      <div
-        ref={panelRef}
-        class="pin-sheet-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label={name}
-        tabIndex={-1}
-      >
+  return createPortal(
+    <Overlay kind="menu" label={name} onClose={onClose}>
+      <div class="pin-sheet-rows">
         <button
           type="button"
           role="menuitem"
@@ -122,6 +104,7 @@ export function PinSheet({
           Cancel
         </button>
       </div>
-    </div>
+    </Overlay>,
+    document.body,
   );
 }

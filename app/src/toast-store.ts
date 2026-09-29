@@ -22,9 +22,16 @@ export interface ToastLink {
   label: string;
 }
 
+/** A button on the toast (Undo): `run` is called once, then the toast goes. */
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 export interface ToastState {
   message: string;
   link?: ToastLink;
+  action?: ToastAction;
   /** Bumped on every `showToast`, so the same text twice is a new toast. */
   id: number;
 }
@@ -45,12 +52,23 @@ function clearTimer(): void {
   timer = null;
 }
 
-/** Shows `message` (and `link`, if any) for `TOAST_LIFETIME_MS`. */
-export function showToast(message: string, link?: ToastLink): void {
+/**
+ * Shows `message` (and `link` or `action`, if any) for `TOAST_LIFETIME_MS`.
+ */
+export function showToast(
+  message: string,
+  link?: ToastLink,
+  action?: ToastAction,
+): void {
   clearTimer();
   const id = nextId;
   nextId += 1;
-  set(link === undefined ? { message, id } : { message, link, id });
+  set({
+    message,
+    id,
+    ...(link === undefined ? {} : { link }),
+    ...(action === undefined ? {} : { action }),
+  });
   timer = setTimeout(() => {
     timer = null;
     if (current?.id === id) set(null);

@@ -1,7 +1,7 @@
 /**
  * The Move to… folder picker (#608, spec §6.9 R-MOVE-1 to R-MOVE-4, board
- * Phone-Move-Picker): a bottom sheet under 900 px, a centred dialog from
- * 900 px up. The app never moves anything itself (D1): choosing a folder
+ * Phone-Move-Picker): an `Overlay` dialog (R-OVL-2): a bottom sheet under
+ * 900 px, a centred dialog from 900 px up. The app never moves anything itself (D1): choosing a folder
  * and pressing "Move it now" or "With the next tidy-up" writes a request
  * for Bower (`move-request.ts`).
  *
@@ -15,7 +15,8 @@
  * one ticked. "Find a folder" swaps the tree for a flat list of matches.
  */
 
-import { useMemo, useRef, useState } from 'preact/hooks';
+import { createPortal } from 'preact/compat';
+import { useMemo, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { createTextFile } from '../drive.js';
@@ -42,7 +43,7 @@ import { showToast } from '../toast-store.js';
 import { useVault } from '../vault-store.js';
 import { FolderIcon, FolderMark } from './folder-mark.js';
 import { IconCheck, IconChevronRight, IconSearch } from './icons.js';
-import { useFocusTrap } from './use-focus-trap.js';
+import { Overlay } from './overlay.js';
 import '../styles/folder-picker.css';
 
 export type MoveWhen = 'now' | 'later';
@@ -78,8 +79,6 @@ export function FolderPicker({
   onChoose,
   onClose,
 }: FolderPickerProps): JSX.Element {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(panelRef, onClose);
   const current = currentFolderOf(subject);
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<string | null>(null);
@@ -173,21 +172,9 @@ export function FolderPicker({
     ]);
   }
 
-  return (
-    <div class="folder-picker">
-      <div
-        class="folder-picker-backdrop"
-        aria-hidden="true"
-        onClick={onClose}
-      />
-      <div
-        ref={panelRef}
-        class="folder-picker-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Move to"
-        tabIndex={-1}
-      >
+  return createPortal(
+    <Overlay kind="dialog" label="Move to" onClose={onClose}>
+      <div class="folder-picker-body">
         <h2 class="folder-picker-title">
           Move “
           {subject.isFolder ? name : name.replace(/\.[A-Za-z0-9]{1,5}$/, '')}”
@@ -242,7 +229,8 @@ export function FolderPicker({
           </button>
         </div>
       </div>
-    </div>
+    </Overlay>,
+    document.body,
   );
 }
 

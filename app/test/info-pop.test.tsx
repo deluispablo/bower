@@ -4,7 +4,7 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { InfoPop } from '../src/components/info-pop.js';
+import { InfoPop, popOffset } from '../src/components/info-pop.js';
 
 let host: HTMLElement | undefined;
 
@@ -77,5 +77,15 @@ describe('InfoPop (issue #742)', () => {
       document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     });
     expect(root.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('popOffset keeps the panel inside a 375 px viewport', () => {
+    // Fits: no shift.
+    expect(popOffset(16, 200, 375)).toBe(0);
+    // Button at the far end: shifted so the panel ends 16 px from the edge.
+    const shift = popOffset(320, 300, 375);
+    expect(320 + shift + 300).toBe(375 - 16);
+    // Never past the start gutter, even for a panel wider than the space.
+    expect(320 + popOffset(320, 400, 375)).toBe(16);
   });
 });

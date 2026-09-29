@@ -4,14 +4,17 @@
  * names; `birdClasses` (`bird-classes.ts`) picks the pose and face classes and
  * `styles/bird.css` does all the moving, so no JavaScript timer runs.
  *
- * The drawing is v8.2 (spec §4.1): round body and belly, a head on a neck,
- * one eye with an upper and a lower lid (the lids carry the mood), a pill
- * beak with a jaw, one wing hinged at the shoulder, three tail feathers and
- * two feet. Every part is always in the markup, props included; CSS hides
- * the ones a state does not show. `scene` adds the inbox tray and nest of
- * `tidying`, the twig pile and growing nest of `building`, the sleeping nest
- * of `asleep` and the gem of `shiny` (partly drawn outside the 100 x 100
- * box, so leave room around the bird).
+ * The drawing is v9 (D29, spec §6.21 and Appendix A): the v8.2 rig (round
+ * body and belly, a head on a neck, one eye with an upper and a lower lid that
+ * carry the mood, a pill beak with a jaw, one wing hinged at the shoulder,
+ * three tail feathers and two feet) with a bigger head and eye, a blush, a
+ * violet iris ring, a shorter beak and bigger props. Every part is always in
+ * the markup, props included (the sound arcs, the page and the pointer dots of
+ * the round 7 poses too); CSS hides the ones a state does not show. `scene`
+ * adds the inbox tray and nest of `tidying`, the twig pile and growing nest of
+ * `building`, the sleeping nest of `asleep` and the sparkles of `shiny`
+ * (partly drawn outside the 100 x 100 box, so leave room around the bird);
+ * the blue bottle cap `shiny` reaches for sits in the beak, always drawn.
  *
  * `hello`, `showoff` and `done` play once: when the `rig`'s own animation
  * ends the component calls `onDone`, and the caller switches to `looking`.
@@ -39,9 +42,11 @@ export interface BirdProps {
   size?: number;
   /** Faces left instead of right. */
   flip?: boolean;
+  /** For `pointing`: the wing points down (`pd`) instead of up and out. */
+  down?: boolean;
   /** Forces the still bird; `prefers-reduced-motion: reduce` does too. */
   reducedMotion?: boolean;
-  /** Draws the scene: tray, nests, twig pile and gem (see above). */
+  /** Draws the scene: tray, nests, twig pile and sparkles (see above). */
   scene?: boolean;
   /** Called once when a plays-once state (`hello`, `showoff`, `done`) ends. */
   onDone?: () => void;
@@ -58,7 +63,7 @@ function prefersReducedMotion(): boolean {
 
 /**
  * The scene of `tidying`, `building` and `shiny`: the inbox tray and its
- * paper, the nest and its pile, the twig pile and the growing nest, the gem.
+ * paper, the nest and its pile, the twig pile and the growing nest, the sparkles.
  * Drawn outside the bird's rig, so it stays put while the bird moves.
  */
 function Scene(): JSX.Element {
@@ -86,8 +91,6 @@ function Scene(): JSX.Element {
       <path class="x bn bt1" d="M72 87L98 91" />
       <path class="x bn bt2" d="M68 83L90 87" />
       <path class="x bn bt3" d="M80 82L104 88" />
-      <circle class="x sgem" cx="108" cy="30" r="7" />
-      <circle class="x sgemhl" cx="105.5" cy="27.5" r="2.2" />
       <path
         class="x sp sspark"
         d="M120 14l1.6 3.4 3.4 1.6-3.4 1.6-1.6 3.4-1.6-3.4-3.4-1.6 3.4-1.6z"
@@ -105,6 +108,7 @@ export function Bird({
   face,
   size = 32,
   flip = false,
+  down = false,
   reducedMotion = false,
   scene = false,
   onDone,
@@ -144,7 +148,7 @@ export function Bird({
 
   return (
     <svg
-      class={birdClasses(state, face, flip, still)}
+      class={birdClasses(state, face, flip, still, down)}
       viewBox="0 0 100 100"
       width={size}
       height={size}
@@ -193,22 +197,23 @@ export function Bird({
           <ellipse class="ch" cx="52" cy="72" rx="13" ry="10" />
           <g class="hd">
             <rect class="nk" x="52" y="34" width="16" height="38" rx="8" />
-            <circle class="hc" cx="62" cy="40" r="19" />
-            <circle class="ck" cx="72" cy="47" r="3.2" />
+            <circle class="hc" cx="62" cy="39" r="21" />
             <g class="ey">
-              <circle class="ec" cx="68" cy="37" r="5.2" />
-              <circle class="eh" cx="70" cy="35" r="1.9" />
-              <circle class="eh" cx="66.4" cy="39.2" r=".9" />
+              <circle class="ec" cx="69" cy="37" r="6.3" />
+              <circle class="ir" cx="69" cy="37" r="5.6" />
+              <circle class="eh" cx="71.4" cy="34.6" r="2.3" />
+              <circle class="eh" cx="66.8" cy="39.6" r="1.1" />
             </g>
-            <circle class="ld" cx="68" cy="24.5" r="6.5" />
-            <circle class="lb" cx="68" cy="49" r="6.5" />
-            <rect class="bk" x="79" y="35" width="13" height="6" rx="3" />
+            <circle class="ld" cx="69" cy="23.2" r="7.6" />
+            <circle class="lb" cx="69" cy="51" r="7.6" />
+            <ellipse class="bl" cx="78" cy="49" rx="3.4" ry="2.3" />
+            <rect class="bk" x="80" y="35" width="11" height="6" rx="3" />
             <g class="jw">
               <rect
                 class="bj"
-                x="79"
+                x="80"
                 y="40"
-                width="10"
+                width="8.5"
                 height="4.5"
                 rx="2.25"
               />
@@ -223,6 +228,10 @@ export function Bird({
               rx="1"
               transform="rotate(14 92 42)"
             />
+            <g class="x bcap">
+              <circle cx="97" cy="47" r="5.2" />
+              <circle class="bci" cx="97" cy="47" r="3.1" />
+            </g>
             <text class="x ex" x="74" y="16">
               !
             </text>
@@ -233,6 +242,26 @@ export function Bird({
               d="M54 56C64 58 65 68 58 74C44 78 28 78 18 72C28 64 42 56 54 56Z"
             />
           </g>
+          {/* The round 7 props: sound arcs, the page and the pointer dots. */}
+          <g class="x wv w1">
+            <path d="M95 14q4 6 0 12" />
+          </g>
+          <g class="x wv w2">
+            <path d="M100 11q6 9 0 18" />
+          </g>
+          <g class="x wv w3">
+            <path d="M105 8q8 12 0 24" />
+          </g>
+          <g class="x rd">
+            <g transform="rotate(-6 80 62)">
+              <rect class="rdp" x="70" y="50" width="20" height="24" rx="2" />
+              <path class="rdl rl1" d="M73 57H87" />
+              <path class="rdl rl2" d="M73 62H86" />
+              <path class="rdl rl3" d="M73 67H82" />
+            </g>
+          </g>
+          <circle class="x pdot p1" cx="101" cy="66" r="2.6" />
+          <circle class="x pdot p2" cx="92" cy="87" r="2.6" />
           <circle class="x dd d1" cx="50" cy="20" r="1.6" />
           <circle class="x dd d2" cx="56" cy="16" r="1.6" />
           <circle class="x dd d3" cx="62" cy="14" r="1.6" />

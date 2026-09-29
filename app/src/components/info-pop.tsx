@@ -6,7 +6,13 @@
  */
 
 import type { ComponentChildren, JSX } from 'preact';
-import { useEffect, useId, useRef, useState } from 'preact/hooks';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'preact/hooks';
 
 import '../styles/info-pop.css';
 
@@ -14,6 +20,24 @@ export interface InfoPopProps {
   /** The accessible name of the (i) button, e.g. "What By Bower means". */
   label: string;
   children: ComponentChildren;
+}
+
+/** The space kept between the panel and the viewport edge, in px. */
+export const POP_GUTTER = 16;
+
+/**
+ * How far to shift the panel from the button's inline start so it stays
+ * inside the viewport: 0 when it fits, negative when the button is near the
+ * inline end (never pushes it past the start gutter).
+ */
+export function popOffset(
+  buttonLeft: number,
+  panelWidth: number,
+  viewportWidth: number,
+): number {
+  const maxLeft = viewportWidth - POP_GUTTER - panelWidth;
+  const left = Math.max(POP_GUTTER, Math.min(buttonLeft, maxLeft));
+  return left - buttonLeft;
 }
 
 function IconInfo(): JSX.Element {
@@ -40,7 +64,26 @@ export function InfoPop({ label, children }: InfoPopProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState(0);
   const popId = useId();
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setOffset(0);
+      return;
+    }
+    const b = button.current;
+    const p = panel.current;
+    if (b === null || p === null) return;
+    setOffset(
+      popOffset(
+        b.getBoundingClientRect().left,
+        p.getBoundingClientRect().width,
+        document.documentElement.clientWidth,
+      ),
+    );
+  }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -80,7 +123,14 @@ export function InfoPop({ label, children }: InfoPopProps): JSX.Element {
         <IconInfo />
       </button>
       {open && (
-        <div class="info-pop-panel" role="dialog" aria-label={label} id={popId}>
+        <div
+          class="info-pop-panel"
+          role="dialog"
+          aria-label={label}
+          id={popId}
+          ref={panel}
+          style={offset === 0 ? undefined : { insetInlineStart: `${offset}px` }}
+        >
           {children}
         </div>
       )}

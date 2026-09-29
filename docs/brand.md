@@ -4,7 +4,7 @@ Bower is named after the bowerbird, which builds and decorates a bower from twig
 
 ## Mark and files
 
-One drawing (v8.2, approved 2026-09-28; spec §4.1) on a 100 × 100 grid, facing right, feet on y = 91: a round teal body (`#5fcfbc`) with a lighter belly (`#b9ece2`); a round head on a same-colour neck; one big navy eye (`#1b2233`) with two white highlights and a faint lighter cheek; an upper and a lower eyelid in head colour; a pill-shaped amber beak (`#f0b64f`) with a darker jaw (`#d9952e`); one long leaf-shaped dark-teal wing (`#2f9c8d`) lying along the flank, hinged at the shoulder; three thin dark-teal tail feathers fanning back and up from the rump; two amber stick legs with flat pill feet. No gradients, no outlines, no raster. It holds a twig, paper or gem only while carrying one, so the mark has none. The lockups, icon sizes, one-colour version and clear space were drawn on the approved design canvas.
+One drawing (v9, a satin bowerbird, D29 of the v5 spec; the v8.2 rig with a head 10 % bigger, an eye 20 % bigger, a pink blush `#ff9fb4`, a violet iris ring `#8e7cf3`, a shorter beak and props 30 % bigger; the bottle cap the bird reaches for in Shiny is blue, `#3b82f6`) on a 100 × 100 grid, facing right, feet on y = 91: a round teal body (`#5fcfbc`) with a lighter belly (`#b9ece2`); a round head on a same-colour neck; one big navy eye (`#1b2233`) with two white highlights and a faint pink blush; an upper and a lower eyelid in head colour; a pill-shaped amber beak (`#f0b64f`) with a darker jaw (`#d9952e`); one long leaf-shaped dark-teal wing (`#2f9c8d`) lying along the flank, hinged at the shoulder; three thin dark-teal tail feathers fanning back and up from the rump; two amber stick legs with flat pill feet. No gradients, no outlines, no raster. It holds a twig, paper or gem only while carrying one, so the mark has none. The lockups, icon sizes, one-colour version and clear space were drawn on the approved design canvas.
 
 | File | Use |
 | --- | --- |
@@ -28,7 +28,7 @@ In every icon the bird's bounding box is centred on the canvas. Clear space arou
 | --- | --- | --- |
 | `rig` | feet | breathe, hop, squash on landing, strut, fly |
 | `turn` | feet | faces left or right (`scaleX(-1)`) |
-| `hd` head (neck, eye, lids, cheek, beak) | base of the neck, 60 64 | turns, stretches up, leans, tucks |
+| `hd` head (neck, eye, lids, blush, beak) | base of the neck, 60 64 | turns, stretches up, leans, tucks |
 | `ey` eye | centre | blink, wink, dilate, look left or right |
 | `ld`, `lb` upper and lower lid | centre | upper comes down (worried, sleepy, asleep, offline, confused), lower comes up (happy, proud and the lively states) |
 | `jw` jaw | hinge | chirp, sing |
@@ -38,7 +38,7 @@ In every icon the bird's bounding box is centred on the canvas. Clear space arou
 
 Joints pivot in drawing units (`transform-box: view-box`, the numbers above are grid units), so no rotation can detach a part.
 
-Props (twig `tw`, paper `pp`, notes `nt`, question mark `qm`, z `zz`, sparkles `sp`, cloud `cl` and rain `rn`, scan dots `dd`, the "!" `ex`) are separate elements, hidden unless a state shows them. `scene` adds the inbox tray and the nest (`tray`, `nest`) of Tidying up, the twig pile and the growing nest (`bp`, `bn`) of Building, the sleeping nest (`nest2`) of Asleep and the gem of Shiny.
+Props (the blue cap `bcap`, the sound arcs `wv` of Listening, the page `rd` of Reading, the pointer dots `pdot` of Pointing, twig `tw`, paper `pp`, notes `nt`, question mark `qm`, z `zz`, sparkles `sp`, cloud `cl` and rain `rn`, scan dots `dd`, the "!" `ex`) are separate elements, hidden unless a state shows them. `scene` adds the inbox tray and the nest (`tray`, `nest`) of Tidying up, the twig pile and the growing nest (`bp`, `bn`) of Building, the sleeping nest (`nest2`) of Asleep and the gem of Shiny.
 
 | State | Where | Motion | Plays |
 | --- | --- | --- | --- |
@@ -59,7 +59,7 @@ Five still faces from the same dials (lids, jaw, eye, head): happy (lower lid up
 
 ### Regenerating
 
-The shapes come from the design canvas (`BIRD_CORE` and `SCENE`); the app's component (`app/src/components/bird.tsx`, with `styles/bird.css` from the canvas's `CSS`) and `scripts/brand/build.py` each carry a copy, so change all three together. Then run `python3 scripts/brand/build.py`. It rewrites every file above except `docs/assets/logo.svg` (a committed drawing), centres the bird by its measured bounding box, and fails if an icon is off-centre, the maskable bird leaves the safe zone, the bird fills less than 12 px of the 16 px favicon or `logo.svg` reaches 6 KB. It needs Pillow, fontTools, Playwright with Chromium and Poppins Bold on the developer machine (a system `Poppins-Bold.ttf`, else the app's own `poppins-700.woff2` with brotli installed; see the script header); none of these are app dependencies. After changing colours in `tokens.css`, run `python3 scripts/brand/contrast.py` (standard library only) and update the contrast table below.
+The shapes come from the design canvas (`BIRD_CORE` and `SCENE`); the app's component (`app/src/components/bird.tsx`, with `styles/bird.css` from the canvas's `CSS`) and `scripts/brand/build.py` each carry a copy, so change all three together. Then run `python3 scripts/brand/build.py`, which redraws the logo, both wordmarks and every icon from the v9 drawing. It rewrites every file above except `docs/assets/logo.svg` (a committed drawing), centres the bird by its measured bounding box, and fails if an icon is off-centre, the maskable bird leaves the safe zone, the bird fills less than 12 px of the 16 px favicon or `logo.svg` reaches 6 KB. It needs Pillow, fontTools, Playwright with Chromium and Poppins Bold on the developer machine (a system `Poppins-Bold.ttf`, else the app's own `poppins-700.woff2` with brotli installed; see the script header); none of these are app dependencies. After changing colours in `tokens.css`, run `python3 scripts/brand/contrast.py` (standard library only) and update the contrast table below.
 
 ## Palette
 
@@ -85,7 +85,7 @@ Brand colours: teal `#5fcfbc`, deep navy `#0b1220`, amber `#f0b64f`. Light is wa
 | `--color-focus` | Focus ring (the same values as `--color-accent-line`) | `#278074` | `#5fcfbc` |
 | `--color-danger` | Errors | `#e12020` | `#ef8a8a` |
 | `--color-on-danger` | Text on a `--color-danger` fill (e.g. the danger button) | `#ffffff` | `#0b1220` |
-| `--color-success` | Confirmations | `#2d8250` | `#7ed3a1` |
+| `--color-success` | Confirmations | `#256f43` | `#7ed3a1` |
 | `--color-on-success` | Text on a `--color-success` fill (e.g. the "done" button) | `#ffffff` | `#0b1220` |
 
 The soft set (the design canvas's Brand board, spec §14) gives one accent value each for teal, amber, success and danger; on light, `--color-link`/`--color-focus` and `--color-danger`/`--color-success` are a darker shade of the same hue instead of the literal accent, because the accent value alone fails AA as text or a fill's own text on the light (warm) page — see the contrast table. Dark uses the literal accent values throughout.
@@ -103,7 +103,7 @@ Contrast (WCAG 2.1; AA needs 4.5:1 for body text, 3:1 for control outlines):
 | link on bg | 4.51 | 9.23 |
 | link on surface | 4.74 | 8.16 |
 | danger on bg | 4.50 | 7.19 |
-| success on bg | 4.51 | 9.71 |
+| success on bg | 5.81 | 9.71 |
 | on-brand on brand | 9.93 | 9.93 |
 | on-accent on accent | 10.26 | 10.26 |
 | border-strong on bg | 4.52 | 3.66 |
@@ -118,13 +118,13 @@ Added for the v5 screens (runs, notes, folders). Values are in `app/src/styles/t
 | Token | Light | Dark | Use | Contrast check |
 | --- | --- | --- | --- | --- |
 | `--color-scrim` | `rgb(7 12 22 / .5)` | `rgb(5 9 18 / .62)` | Every scrim (replaces the hard-coded ones) | none, not text |
-| `--color-warn` | `#9a6408` | `#f0b64f` | Partly done, Needs you, Check | 4.75:1 on bg, 5.00:1 on surface; 9.54:1 on bg, 8.43:1 on surface |
-| `--color-warn-bg` | `rgb(154 100 8 / .1)` | `rgb(240 182 79 / .12)` | Warn boxes | text uses `--color-text`: 13.10:1 and 10.88:1 on bg |
+| `--color-warn` | `#865605` | `#f0b64f` | Partly done, Needs you, Check | 5.96:1 on bg, 6.27:1 on surface (5.18:1 on its tint over bg, 5.43:1 over surface); 9.54:1 on bg, 8.43:1 on surface |
+| `--color-warn-bg` | `rgb(134 86 5 / .1)` | `rgb(240 182 79 / .12)` | Warn boxes | text uses `--color-text`: 12.97:1 and 10.88:1 on bg |
 | `--color-danger-bg` | `rgb(225 32 32 / .08)` | `rgb(239 138 138 / .12)` | Did not finish | text uses `--color-danger-text` |
 | `--color-danger-text` | `#c21b1b` | `#ef8a8a` | Small text on `--color-danger-bg` | 5.10:1 on the tint over bg; 5.98:1 dark |
-| `--color-success-bg` | `rgb(45 130 80 / .1)` | `rgb(126 211 161 / .12)` | Done steps, high score | text uses `--color-text`: 13.17:1 and 10.79:1 on bg |
-| `--color-updated` | `#2f63b8` | `#93c5fd` | The "Updated" tag and the rule-change line (same as `--color-origin-web`) | 5.54:1 and 9.65:1 on bg |
-| `--color-updated-bg` | `rgb(47 99 184 / .18)` | `rgb(147 197 253 / .2)` | Tint behind `--color-updated` | none; use it for large or bold text only |
+| `--color-success-bg` | `rgb(37 111 67 / .1)` | `rgb(126 211 161 / .12)` | Done steps, high score | text uses `--color-text`: 12.96:1 and 10.79:1 on bg |
+| `--color-updated` | `#2859a8` | `#93c5fd` | The "Updated" tag and the rule-change line (same as `--color-origin-web`) | 6.47:1 (5.02:1 on its tint over bg, 5.27:1 over surface) and 9.65:1 on bg |
+| `--color-updated-bg` | `rgb(47 99 184 / .18)` | `rgb(147 197 253 / .2)` | Tint behind `--color-updated` | `--color-updated` text reaches 5.02:1 (bg) and 5.27:1 (surface) |
 | `--color-accent-line` | `#278074` | `#5fcfbc` | Strokes, see below | 4.51:1 on bg, 4.74:1 on surface, 4.13:1 on sidebar (light); 9.23:1 on bg (dark) |
 | `--z-chip` `--z-toast` `--z-scrim` `--z-overlay` `--z-viewer` | 30, 35, 40, 41, 100 | same | The stacking order | none |
 | `--radius-sheet` | `20px` | same | The sheet's top corners | none |

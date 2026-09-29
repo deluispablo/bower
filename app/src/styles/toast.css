@@ -72,3 +72,13 @@
     );
   }
 }
+
+.toast-action {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  background: none;
+  border: 0;
+  font: inherit;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}

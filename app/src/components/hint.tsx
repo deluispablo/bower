@@ -68,7 +68,10 @@ export function Hint({
   );
   if (dismissed) return null;
   return (
-    <div class={`hint hint-${variant}`}>
+    <div
+      class={`hint hint-${variant}`}
+      role={variant === 'state' ? 'status' : undefined}
+    >
       <span class="hint-icon" aria-hidden="true">
         {icon}
       </span>

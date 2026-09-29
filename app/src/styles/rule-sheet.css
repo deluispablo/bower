@@ -1,34 +1,14 @@
 /*
- * A rule, tapped (#342, board Phone-Rule-Menu): the bottom sheet on the
- * phone, a centred card from 900 px up, with a dimming backdrop, the same
- * pattern as the "Is that everything?" sheet (`tidy-confirm-sheet.css`).
+ * A rule, tapped (#342, board Phone-Rule-Menu): the rows inside an `Overlay`
+ * sheet (`overlay.css` owns the scrim, the phone sheet and the desktop
+ * panel).
  */
 
-.rule-sheet-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 45;
-  background: var(--color-scrim);
-}
-
-.rule-sheet-panel {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 45;
+.rule-sheet-body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: var(--space-4) var(--space-4)
-    calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
-  background: var(--color-surface);
-  color: var(--color-text);
-  border-top: 1px solid var(--color-border);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  box-shadow: var(--shadow-md);
-  outline: none;
-  animation: rule-sheet-in var(--motion-base) var(--ease-out);
+  padding: var(--space-2) var(--space-4);
 }
 
 .rule-sheet-head {
@@ -108,47 +88,4 @@
 .rule-sheet-cancel:focus-visible {
   outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
-}
-
-@media (min-width: 900px) {
-  .rule-sheet-panel {
-    top: 50%;
-    right: auto;
-    bottom: auto;
-    left: 50%;
-    width: 400px;
-    padding: var(--space-4);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    transform: translate(-50%, -50%);
-    animation-name: rule-sheet-card-in;
-  }
-}
-
-@keyframes rule-sheet-in {
-  from {
-    transform: translateY(100%);
-  }
-
-  to {
-    transform: translateY(0);
-  }
-}
-
-@keyframes rule-sheet-card-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -46%);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rule-sheet-panel {
-    animation: none;
-  }
 }

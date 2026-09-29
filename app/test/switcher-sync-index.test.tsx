@@ -124,7 +124,7 @@ async function flush(): Promise<void> {
 }
 
 function optionTexts(): string[] {
-  return Array.from(root.querySelectorAll('[role="option"]')).map(
+  return Array.from(document.body.querySelectorAll('[role="option"]')).map(
     (el) => el.textContent ?? '',
   );
 }
@@ -152,10 +152,26 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('the switcher as an Overlay dialog (R-OVL-2)', () => {
+  it('is a named modal dialog with the overlay scrim, and Escape closes it', async () => {
+    await flush();
+    const panel = document.body.querySelector('.overlay-panel');
+    expect(panel?.getAttribute('role')).toBe('dialog');
+    expect(panel?.getAttribute('aria-modal')).toBe('true');
+    expect(panel?.getAttribute('aria-label')).toBe('Quick switcher');
+    expect(document.body.querySelector('.overlay-scrim')).not.toBeNull();
+    expect(document.body.querySelector('.switcher-backdrop')).toBeNull();
+    void act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(document.body.querySelector('.overlay-panel')).toBeNull();
+  });
+});
+
 describe('the switcher, against a Drive search that never resolves', () => {
   it('shows a matching note name before any Drive request completes', async () => {
     await flush();
-    const field = root.querySelector('input') as HTMLInputElement;
+    const field = document.body.querySelector('input') as HTMLInputElement;
 
     void act(() => {
       type(field, 'lisbon');
@@ -175,7 +191,7 @@ describe('the switcher, against a Drive search that never resolves', () => {
 
   it('keeps showing the match once the never-resolving search is actually in flight', async () => {
     await flush();
-    const field = root.querySelector('input') as HTMLInputElement;
+    const field = document.body.querySelector('input') as HTMLInputElement;
 
     void act(() => {
       type(field, 'lisbon');
@@ -193,21 +209,21 @@ describe('the switcher, against a Drive search that never resolves', () => {
     );
     // The status line never falsely claims no notes match while the
     // request is still pending.
-    expect(root.textContent).not.toContain('No notes contain');
+    expect(document.body.textContent).not.toContain('No notes contain');
   });
 });
 
 describe('the Tidy up command (#320)', () => {
   it('goes through the same tidyUp as the Inbox card and Add, never process', async () => {
     await flush();
-    const field = root.querySelector('input') as HTMLInputElement;
+    const field = document.body.querySelector('input') as HTMLInputElement;
     void act(() => {
       type(field, 'tidy');
     });
     await flush();
 
     const row = Array.from(
-      root.querySelectorAll<HTMLElement>(
+      document.body.querySelectorAll<HTMLElement>(
         '[role="option"] a, [role="option"] button',
       ),
     ).find((el) => (el.textContent ?? '').includes('Tidy up the inbox'));
@@ -222,7 +238,7 @@ describe('the Tidy up command (#320)', () => {
 });
 
 function buttonNames(): string[] {
-  return Array.from(root.querySelectorAll('button')).map((el) =>
+  return Array.from(document.body.querySelectorAll('button')).map((el) =>
     (el.textContent ?? '').trim(),
   );
 }
@@ -258,7 +274,7 @@ describe('the empty query (#593, board Phone-Search-Start)', () => {
       expect(chips).toContain(label);
     }
     expect(chips).not.toContain('Inbox');
-    const text = root.textContent ?? '';
+    const text = document.body.textContent ?? '';
     expect(text).toContain('Opened lately');
     expect(text).toContain('Lease agreement 2026');
     expect(text).toContain('Filed in the last tidy-up');
@@ -270,14 +286,14 @@ describe('the empty query (#593, board Phone-Search-Start)', () => {
 
   it('scopes the search to a PARA folder when its chip is tapped', async () => {
     await flush();
-    const chip = Array.from(root.querySelectorAll('button')).find((el) =>
-      (el.textContent ?? '').trim().endsWith('Areas'),
+    const chip = Array.from(document.body.querySelectorAll('button')).find(
+      (el) => (el.textContent ?? '').trim().endsWith('Areas'),
     );
     if (chip === undefined) throw new Error('Areas chip missing');
     void act(() => {
       chip.click();
     });
-    const field = root.querySelector('input') as HTMLInputElement;
+    const field = document.body.querySelector('input') as HTMLInputElement;
     expect(field.placeholder).toBe('Search in Areas');
 
     void act(() => {
@@ -299,27 +315,27 @@ describe('the empty query (#593, board Phone-Search-Start)', () => {
 describe('results (#593, board Phone-Search)', () => {
   it('groups folders, notes and files, with counts and the fuzzy hint', async () => {
     await flush();
-    const field = root.querySelector('input') as HTMLInputElement;
+    const field = document.body.querySelector('input') as HTMLInputElement;
     void act(() => {
       type(field, 'flat hnt');
     });
     await flush();
 
-    const headings = Array.from(root.querySelectorAll('.switcher-heading')).map(
-      (el) => el.textContent,
-    );
+    const headings = Array.from(
+      document.body.querySelectorAll('.switcher-heading'),
+    ).map((el) => el.textContent);
     expect(headings).toEqual(['Folder', 'Notes', 'Files']);
     expect(buttonNames()).toContain('All 3');
-    expect(root.textContent).toContain(
+    expect(document.body.textContent).toContain(
       'Close enough counts: “flat hnt” finds Flat hunt.',
     );
-    expect(root.querySelector('.switcher-match')).not.toBeNull();
+    expect(document.body.querySelector('.switcher-match')).not.toBeNull();
   });
 
   it('offers Ask Bower where it is when nothing matches', async () => {
     searchFullText.mockResolvedValueOnce([]);
     await flush();
-    const field = root.querySelector('input') as HTMLInputElement;
+    const field = document.body.querySelector('input') as HTMLInputElement;
     void act(() => {
       type(field, 'boiler warranty');
     });
@@ -327,11 +343,13 @@ describe('results (#593, board Phone-Search)', () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
-    expect(root.textContent).toContain('Nothing called “boiler warranty”');
-    expect(root.textContent).toContain(
+    expect(document.body.textContent).toContain(
+      'Nothing called “boiler warranty”',
+    );
+    expect(document.body.textContent).toContain(
       'No folder, note or file has those words in its name or its text.',
     );
-    const ask = Array.from(root.querySelectorAll('a')).find(
+    const ask = Array.from(document.body.querySelectorAll('a')).find(
       (el) => el.textContent === 'Ask Bower where it is',
     );
     expect(ask?.getAttribute('href')).toBe(
@@ -368,7 +386,7 @@ describe('rows learn a photo thumbnail and a PDF page count (#594)', () => {
     loadNoteMeta.mockResolvedValue({ pages: 6 });
     loadThumbnail.mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
     await flush();
-    const field = root.querySelector('input') as HTMLInputElement;
+    const field = document.body.querySelector('input') as HTMLInputElement;
     void act(() => {
       type(field, 'lease');
     });
@@ -384,14 +402,16 @@ describe('rows learn a photo thumbnail and a PDF page count (#594)', () => {
     await flush();
     await flush();
     expect(
-      root.querySelector('.switcher-row-thumb img')?.getAttribute('src'),
+      document.body
+        .querySelector('.switcher-row-thumb img')
+        ?.getAttribute('src'),
     ).toBe('blob:thumb');
   });
 
   it('leaves the PDF row without a count when the note does not say', async () => {
     loadNoteMeta.mockResolvedValue({});
     await flush();
-    const field = root.querySelector('input') as HTMLInputElement;
+    const field = document.body.querySelector('input') as HTMLInputElement;
     void act(() => {
       type(field, 'lease');
     });
@@ -406,13 +426,15 @@ describe('the multi-word query (#594)', () => {
   it('shows the none state when only one of the words exists', async () => {
     searchFullText.mockResolvedValue([]);
     await flush();
-    const field = root.querySelector('input') as HTMLInputElement;
+    const field = document.body.querySelector('input') as HTMLInputElement;
     void act(() => {
       type(field, 'curry warranty');
     });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(root.textContent).toContain('Nothing called “curry warranty”');
+    expect(document.body.textContent).toContain(
+      'Nothing called “curry warranty”',
+    );
   });
 });

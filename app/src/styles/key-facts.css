@@ -29,7 +29,10 @@
   --key-facts-columns: 4;
 }
 
+/* The term (dt) comes first in the markup; the value (dd) shows above it. */
 .key-fact {
+  display: flex;
+  flex-direction: column-reverse;
   min-width: 0;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);

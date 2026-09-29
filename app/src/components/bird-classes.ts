@@ -19,7 +19,11 @@ export type BirdState =
   | 'asleep'
   | 'peeking'
   | 'offline'
-  | 'done';
+  | 'done'
+  | 'listening'
+  | 'pointing'
+  | 'reading'
+  | 'perched';
 
 /**
  * A still face (`e-*` in `styles/bird.css`). Since drawing v8.2 the lids carry
@@ -46,6 +50,11 @@ const POSES: Record<BirdState, string> = {
   peeking: 'p-peek',
   offline: 'p-offline',
   done: 'p-done',
+  // Round 7 poses (spec §6.21, R-BIRD-1).
+  listening: 'p-listen',
+  pointing: 'p-point',
+  reading: 'p-read',
+  perched: 'p-perch',
 };
 
 /** The face a state holds instead of its pose when motion is off. */
@@ -55,6 +64,18 @@ const STILL_FACES: Partial<Record<BirdState, BirdFace>> = {
   confused: 'worried',
   asleep: 'sleepy',
   showoff: 'proud',
+  listening: 'curious',
+};
+
+/**
+ * The still class of a held pose (`s-*` in `styles/bird.css`): with motion
+ * off, the wing or the page stays where the pose puts it. A state that has
+ * one uses it instead of a face.
+ */
+const STILL_CLASSES: Partial<Record<BirdState, string>> = {
+  pointing: 's-point',
+  reading: 's-read',
+  perched: 's-perch',
 };
 
 /**
@@ -71,18 +92,25 @@ export const BIRD_STATES: readonly BirdState[] = Object.keys(
 export const ONCE_STATES: readonly BirdState[] = ['hello', 'showoff', 'done'];
 
 /**
- * The class list for the bird's `<svg>`: `b`, then the state's pose (none
- * when `reducedMotion`), then a face (`face`, or with `reducedMotion` the
- * state's still face), then `flip`.
+ * The class list for the bird's `<svg>`: `b`, then the state's pose (with
+ * `reducedMotion` its still class, if it has one, instead), then `pd` for a
+ * pointing bird that points down, then a face (`face`, or with
+ * `reducedMotion` the state's still face), then `flip`.
  */
 export function birdClasses(
   state: BirdState,
   face: BirdFace | undefined,
   flip: boolean,
   reducedMotion: boolean,
+  down = false,
 ): string {
   const classes = ['b'];
   if (!reducedMotion) classes.push(POSES[state]);
+  else {
+    const held = STILL_CLASSES[state];
+    if (held !== undefined) classes.push(held);
+  }
+  if (down && state === 'pointing') classes.push('pd');
   const shown = face ?? (reducedMotion ? STILL_FACES[state] : undefined);
   if (shown !== undefined) classes.push(`e-${shown}`);
   if (flip) classes.push('flip');

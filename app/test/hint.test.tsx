@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+
 import { h, render } from 'preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -92,5 +94,22 @@ describe('Hint (issue #742)', () => {
     const root = mount('tip');
     expect(root.querySelector('.hint')).not.toBeNull();
     expect(log).toHaveBeenCalled();
+  });
+
+  it('only the state variant announces itself as a status', () => {
+    expect(mount('state').querySelector('.hint')?.getAttribute('role')).toBe(
+      'status',
+    );
+    document.body.innerHTML = '';
+    expect(mount('tip').querySelector('.hint')?.hasAttribute('role')).toBe(
+      false,
+    );
+  });
+
+  it('the suggestion border is 1 px brand tint', () => {
+    const css = readFileSync('src/styles/hint.css', 'utf8');
+    expect(css).toMatch(
+      /\.hint-suggestion\s*\{[^}]*border:\s*1px solid var\(--color-brand-tint\)/,
+    );
   });
 });

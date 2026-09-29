@@ -1,0 +1,53 @@
+/*
+ * The recovery screens (routes/recover.tsx): the auth column (auth.css) with
+ * a 26/32 title, a state notice, the foot line and quiet Help · Sign out.
+ */
+
+.recover-title {
+  margin: 0;
+  font-size: 26px;
+  line-height: 32px;
+  text-align: center;
+  outline: none;
+}
+
+.recover .auth-note {
+  text-align: center;
+}
+
+.recover-notice {
+  margin: 0;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.recover-paste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.recover-foot {
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text-muted);
+}
+
+.recover-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text-muted);
+}
+
+.recover-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-link);
+}
