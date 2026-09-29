@@ -169,7 +169,7 @@ ensure_local_config() {
       printf '
 # The weekly health check (added by scripts/deploy-api.sh, #292).
 [triggers]
-crons = ["17 6 * * 0"]
+crons = ["17 6 * * SUN"]
 ' >>"$LOCAL_TOML"
       log "Added the weekly cron trigger to api/$LOCAL_CONFIG_NAME."
     fi
