@@ -208,7 +208,7 @@
 /* Phone: a bottom sheet, not a popover under the (hidden) desktop button. */
 @media (max-width: 899.98px) {
   .note-menu-backdrop {
-    background: rgb(7 12 22 / 0.5);
+    background: var(--color-scrim);
   }
 
   .note-menu-panel {

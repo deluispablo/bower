@@ -95,7 +95,7 @@
    nav row (`--color-brand`); its `.b` briefly replaces the pin icon with
    the bird's `done` pose right after a successful toggle. */
 .folder-chips .chip[aria-pressed='true'] {
-  border-color: var(--color-brand);
+  border-color: var(--color-accent-line);
   color: var(--color-link);
 }
 
@@ -135,7 +135,7 @@
 }
 
 .folder-row:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: -2px;
 }
 
@@ -341,7 +341,7 @@
 
 .folder-seg-btn:focus-visible,
 .folder-select:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 
@@ -452,7 +452,7 @@
 }
 
 .folder-layout-btn:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: -2px;
 }
 
@@ -595,13 +595,13 @@
 }
 
 .folder-tab[aria-selected='true'] {
-  border-bottom-color: var(--color-brand);
+  border-bottom-color: var(--color-accent-line);
   color: var(--color-text);
 }
 
 .folder-tab:focus-visible,
 .folder-compare-btn:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: -2px;
 }
 

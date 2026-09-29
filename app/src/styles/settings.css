@@ -108,12 +108,12 @@
 }
 
 .settings-segment[aria-checked='true'] {
-  border-color: var(--color-brand);
+  border-color: var(--color-accent-line);
   color: var(--color-link);
 }
 
 .settings-segment:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 
@@ -187,7 +187,7 @@
 }
 
 .settings-field input[type='password']:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 

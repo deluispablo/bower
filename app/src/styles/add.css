@@ -80,7 +80,7 @@
 
 .add-dropzone-active {
   background: var(--color-surface);
-  border-color: var(--color-focus);
+  border-color: var(--color-accent-line);
 }
 
 /* The bird sits half over the drop zone's own top edge. */
@@ -155,7 +155,7 @@
 }
 
 .add-field-row input:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 
@@ -202,7 +202,7 @@
 }
 
 .add-context textarea:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 

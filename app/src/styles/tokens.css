@@ -152,6 +152,32 @@
   --color-origin-you: #9a6408;
   --color-new: #278074;
   --color-new-on: #ffffff;
+
+  --color-scrim: rgb(7 12 22 / 0.5);
+  --color-warn: #9a6408;
+  --color-warn-bg: rgb(154 100 8 / 0.1);
+  --color-danger-bg: rgb(225 32 32 / 0.08);
+  /* Text on --color-danger-bg; #e12020 stays for fills (v5 spec Q3). */
+  --color-danger-text: #c21b1b;
+  --color-success-bg: rgb(45 130 80 / 0.1);
+  --color-updated: #2f63b8;
+  --color-updated-bg: rgb(47 99 184 / 0.18);
+  /* Strokes: focus rings, selected outlines, the current row's bar, the
+     spinner arc, the progress bar, the selected radio. #5fcfbc on cream is
+     about 1.9:1, under WCAG 1.4.11's 3:1; fills keep --color-brand. */
+  --color-accent-line: #278074;
+
+  /* Stacking order */
+  --z-chip: 30;
+  --z-toast: 35;
+  --z-scrim: 40;
+  --z-overlay: 41;
+  --z-viewer: 100;
+
+  /* Sheet top corners and the explorer's width (set from a preference,
+     clamped 200 to 480). */
+  --radius-sheet: 20px;
+  --sidebar-width: 264px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -202,6 +228,15 @@
     --color-origin-you: #f0b64f;
     --color-new: #5fcfbc;
     --color-new-on: #0b1220;
+    --color-scrim: rgb(5 9 18 / 0.62);
+    --color-warn: #f0b64f;
+    --color-warn-bg: rgb(240 182 79 / 0.12);
+    --color-danger-bg: rgb(239 138 138 / 0.12);
+    --color-danger-text: #ef8a8a;
+    --color-success-bg: rgb(126 211 161 / 0.12);
+    --color-updated: #93c5fd;
+    --color-updated-bg: rgb(147 197 253 / 0.2);
+    --color-accent-line: #5fcfbc;
   }
 }
 
@@ -252,4 +287,13 @@
   --color-origin-you: #f0b64f;
   --color-new: #5fcfbc;
   --color-new-on: #0b1220;
+  --color-scrim: rgb(5 9 18 / 0.62);
+  --color-warn: #f0b64f;
+  --color-warn-bg: rgb(240 182 79 / 0.12);
+  --color-danger-bg: rgb(239 138 138 / 0.12);
+  --color-danger-text: #ef8a8a;
+  --color-success-bg: rgb(126 211 161 / 0.12);
+  --color-updated: #93c5fd;
+  --color-updated-bg: rgb(147 197 253 / 0.2);
+  --color-accent-line: #5fcfbc;
 }

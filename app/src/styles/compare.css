@@ -37,14 +37,14 @@
 
 .compare-chip[aria-pressed='true'] {
   background: var(--color-brand-tint);
-  border-color: var(--color-brand);
+  border-color: var(--color-accent-line);
 }
 
 .compare-chip:focus-visible,
 .compare-th button:focus-visible,
 .compare-status:focus-visible,
 .compare-card:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 

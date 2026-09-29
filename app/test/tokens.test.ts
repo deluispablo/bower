@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -142,4 +142,93 @@ describe('PARA tokens (spec §5)', () => {
       }
     },
   );
+});
+
+describe('v5 tokens (spec §5)', () => {
+  const css = readFileSync('src/styles/tokens.css', 'utf8').replace(
+    /\/\*.*?\*\//gs,
+    '',
+  );
+  const themes = {
+    light: block(css, ':root'),
+    dark: block(css, ":root[data-theme='dark']"),
+  };
+  const THEMED = [
+    'scrim',
+    'warn',
+    'warn-bg',
+    'danger-bg',
+    'danger-text',
+    'success-bg',
+    'updated',
+    'updated-bg',
+    'accent-line',
+  ];
+
+  it.each(THEMED)('--color-%s exists in light and dark', (name) => {
+    for (const theme of ['light', 'dark'] as const) {
+      expect(themes[theme]).toContain(`--color-${name}:`);
+    }
+  });
+
+  it.each(['chip', 'toast', 'scrim', 'overlay', 'viewer'])(
+    '--z-%s, the stacking order, exists',
+    (name) => {
+      expect(themes.light).toContain(`--z-${name}:`);
+    },
+  );
+
+  it('the stacking order rises chip < toast < scrim < overlay < viewer', () => {
+    const z = ['chip', 'toast', 'scrim', 'overlay', 'viewer'].map((n) =>
+      Number(valueOf(themes.light, `--z-${n}`)),
+    );
+    expect([...z].sort((a, b) => a - b)).toEqual(z);
+  });
+
+  it('danger text is #c21b1b on the light tint and reaches 4.5:1', () => {
+    expect(valueOf(themes.light, '--color-danger-text')).toBe('#c21b1b');
+    expect(valueOf(themes.light, '--color-danger')).toBe('#e12020');
+    // rgb(225 32 32 / .08) flattened over the page.
+    const tint = '#f6ebe8';
+    expect(ratio('#c21b1b', tint)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the accent line is #278074 in light and reaches 3:1 on page and surface', () => {
+    expect(valueOf(themes.light, '--color-accent-line')).toBe('#278074');
+    expect(valueOf(themes.dark, '--color-accent-line')).toBe('#5fcfbc');
+    for (const theme of ['light', 'dark'] as const) {
+      const line = valueOf(themes[theme], '--color-accent-line');
+      expect(ratio(line, PAGE[theme])).toBeGreaterThanOrEqual(3);
+      expect(
+        ratio(line, valueOf(themes[theme], '--color-surface')),
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it.each(['warn', 'updated'])('%s text reaches 4.5:1 on the page', (name) => {
+    for (const theme of ['light', 'dark'] as const) {
+      const fg = valueOf(themes[theme], `--color-${name}`);
+      expect(ratio(fg, PAGE[theme])).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+describe('scrims', () => {
+  it('no stylesheet hard-codes a scrim colour', () => {
+    const offenders: string[] = [];
+    for (const file of readdirSync('src/styles')) {
+      if (!file.endsWith('.css') || file === 'tokens.css') {
+        continue;
+      }
+      const text = readFileSync(`src/styles/${file}`, 'utf8');
+      if (
+        /background:\s*rgb\((7 12 22|5 9 18|11 18 32)\s*\/\s*0?\.(5|55|6|62)\d*\)/.test(
+          text,
+        )
+      ) {
+        offenders.push(file);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });

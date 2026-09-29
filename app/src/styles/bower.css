@@ -144,7 +144,7 @@
 .bower-tip-toggle:focus-visible,
 .bower-example:focus-visible,
 .bower-segment:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 
@@ -283,7 +283,7 @@
 }
 
 .bower-request-link:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 
@@ -547,7 +547,7 @@
 .rules-rule:focus-visible,
 .rules-more:focus-visible,
 .bower-changing-cancel:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 
@@ -706,7 +706,7 @@
 }
 
 .activity-link:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 

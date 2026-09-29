@@ -22,7 +22,7 @@
 }
 
 .onb-title:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 4px;
 }
 
@@ -235,7 +235,7 @@
   position: absolute;
   inset: 0;
   border-radius: 3px;
-  background: var(--color-brand);
+  background: var(--color-accent-line);
   transform: translateX(-60%) scaleX(0.4);
   transform-origin: left;
   animation: onb-progress 1.6s var(--ease-in-out) infinite;
