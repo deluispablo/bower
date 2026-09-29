@@ -50,10 +50,10 @@ This spec only asks the runner for the data the screens need (section 7).
 | D3 | A run that wrote work and then failed is **Partly done** (amber) with one action, **Finish the tidy-up**. **Did not finish** (red) is only for a run that changed nothing. | 1.9: "Nothing was lost … before Bower could finish" hides work that exists. |
 | D4 | Two overlay kinds only. A **modal** (a bottom sheet on phones; a 440 px right panel or a centred 440 px dialog on desktop) or the **non-blocking tidy-up chip**. One modal at a time; later ones wait in a queue. | 1.7 and the round 5 log (tour over the run card, two overlays at once). |
 | D5 | The desktop floating run card is removed. The chip lives in the desktop top bar and docks above the tab bar on phones, and the page makes room for it. | 1.7, and the card covering Compare's columns at about 800 px. |
-| D6 | Every note Bower writes opens with **Bower's insights**: summary (up to three lines with origins), key facts (1 to 4), what to check. Originals are never changed. The whole box folds to one line (score, key facts, how many to check) and the fold is remembered on the device for every note. | Owner ruling 3.4; owner round 2: the box must fold. |
-| D7 | When a rule or a fact changes, Bower rewrites the insights box to the present. A blue "Updated … · what changed" line keeps one line of the past behind a disclosure. | 3.8: a note must read true top-down. |
-| D8 | Key facts appear **once**, inside the insights box. The separate Key facts block, its caption and the desktop panel's copy go. | 3.14: key facts appear two or three times on one page. |
-| D9 | A Bower note's header says what it was **made from**: the original file and the web page, as two buttons. It folds to one button ("Made from your clip and a job advert"), remembered like the insights box. The desktop About panel no longer repeats the sources. | 1.13, 3.2, the owner's ruling on 3.2; owner round 2: fold it too. |
+| D6 | Every note Bower writes opens with **Bower's note**: summary (up to three lines with origins), key facts (1 to 4), what to check. Originals are never changed. The whole box folds to one line (score, key facts, how many to check) and the fold is remembered on the device for every note. | Owner ruling 3.4; owner round 2: the box must fold. |
+| D7 | When a rule or a fact changes, Bower rewrites the Bower's note box to the present. A blue "Updated … · what changed" line keeps one line of the past behind a disclosure. | 3.8: a note must read true top-down. |
+| D8 | Key facts appear **once**, inside the Bower's note box. The separate Key facts block, its caption and the desktop panel's copy go. | 3.14: key facts appear two or three times on one page. |
+| D9 | A Bower note's header says what it was **made from**: the original file and the web page, as two buttons. It folds to one button ("Made from your clip and a job advert"), remembered like the Bower's note box. The desktop About panel no longer repeats the sources. | 1.13, 3.2, the owner's ruling on 3.2; owner round 2: fold it too. |
 | D10 | "By Bower" has one rule. The rulebook writes `by: bower`, and the app uses a single `isBowerWritten()` for rows, filters, counts, preview and page. | 1.3: three rules disagree today. |
 | D11 | Folder order: header, header actions, view switch, filters and sort, then **one list with folders first**. | 3.9, following Drive and Finder. |
 | D12 | Desktop shows the path **once**, in the top bar. The in-content path bar goes on desktop and stays on phones only. | 3.13. |
@@ -63,7 +63,10 @@ This spec only asks the runner for the data the screens need (section 7).
 | D16 | Tips, suggestions and explanations are one `Hint` component. It sits next to what it explains, one per screen, and is dismissed for good on each device. Explanations at the end of lists become an (i) popover. | 3.11. |
 | D17 | Add works in **piles**: a pile is the files and links you add together plus what you say about them ("What is this pile?"). Each pile is a context note in the inbox from its first file, so it survives closing the app and waits, with its own note, until the tidy-up. Several piles can wait at once. | Owner round 2: a batch of 5 job offers with their note, close, later 3 rental listings with theirs, then one tidy-up. |
 | D20 | Uploads are durable: a file is copied into the device's storage when it is attached and sent with Drive's resumable upload, so switching tab never stops it and closing the app only pauses it until the next open. Closing or signing out while uploads are unfinished warns first. | Owner round 2: the person must not lose files by closing too early; report 1.2. |
-| D21 | A document of **no listed kind** (a CV, a letter, a manual) keeps its original untouched, and gets a text copy (`.md`) that opens with Bower's insights and its extracted properties, then carries the document's full text, unchanged. The insights and properties are the copy's metadata: the person folds them and forgets them, but they show that Bower understood the file. | Owner ruling on Q1, 29 Sep. |
+| D21 | A document of **no listed kind** (a CV, a letter, a manual) keeps its original untouched, and gets a text copy (`.md`) that opens with Bower's note and its extracted properties, then carries the document's full text, unchanged. The insights and properties are the copy's metadata: the person folds them and forgets them, but they show that Bower understood the file. | Owner ruling on Q1, 29 Sep. |
+| D22 | Everything that asks Bower to do something waits in the inbox for the next tidy-up: a request typed in the Bower tab, a tapped suggestion, Ask Bower about it, Rename and Move. One button starts work: Tidy up. "Just this, now" stays as a secondary choice where waiting hurts, shows the run it spends ("uses 1 of your 20 runs today") and is off while a run is going. A request that did not finish is still in the inbox; there is no "Try again" that starts a run. | Owner round 3; tech-lead review: fewer runs, no race between an edit and Do it now, one model for everything. |
+| D23 | The box on a note is called **Bower's note**, as the rulebook, Just filed and the file page already call it. Open shows everything (summary, key facts, details, what to check); folded shows one line. Each summary line keeps its origin square with its symbol. | Owner round 3. |
+| D24 | The tidy-up chip is on every screen while a run goes and until its result is seen: in the top bar on desktop, docked above the tab bar on phones (part of the layout, never floating over it). Tapping it opens the tidy-up sheet. | Owner round 3: "will I still see it while I browse, and can I tap it?" |
 | D18 | A microphone for dictation in every box where people write sentences, where the browser supports speech recognition. Where it does not, a one-time tip points to the keyboard's own microphone. | Owner idea (report section 6). |
 | D19 | Bower note titles: at most 40 characters, most specific word first. Lists wrap a title to two lines on phones instead of cutting it at one. | 3.6. |
 
@@ -127,7 +130,7 @@ My own walkthrough (29 Sep, 375 and 1280, new and experienced personas), on top 
 - Automatic retry.
 - ✓ Steps as in CI.
 - A live log.
-- ✓ The insights box on every Bower note.
+- ✓ The Bower's note box on every Bower note.
 - A separate "Bower's view" tab.
 - Side-by-side original and insights.
 - ✓ Made-from buttons.
@@ -272,7 +275,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - 14 px semibold label, 17 px icon, no underline;
   - `aria-pressed` when it toggles.
 - **`dictate-button.tsx`**. It wraps a textarea. States: ready, asking, listening, blocked, not available. See R-DICT.
-- **`insights-box.tsx`**. Replaces the top `.bower-note` rendering for the page. It takes the parsed callout lines, the key facts, the "What to check" items, `bowerUpdated`, `bowerChange` and `detailsCount`.
+- **`bower-note-box.tsx`**. Replaces the top `.bower-note` rendering for the page. It takes the parsed callout lines, the key facts, the "What to check" items, `bowerUpdated`, `bowerChange` and `detailsCount`.
 - **`made-from.tsx`**. Up to two source buttons, the original and the web page.
 
 **Changed components:**
@@ -336,8 +339,9 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
 
 - **Route.** Every signed-in route. Hidden in onboarding and on `/welcome`.
 - **Layout:**
-  - **Phone:** fixed, 12 px from the sides, 8 px above the tab bar, 52 px high. The content area gets `padding-bottom: 60px` while the chip shows.
-  - **Desktop (≥900):** inside the top bar, before help. It is a pill 36 px high in a 44 px target.
+  - **Phone:** a docked row between the page and the tab bar (a flex item of the shell, not `position: fixed`), 52 px high with 12 px side margins and 8 px below it. The page's scroll area ends above it, so it can never cover content or the tab bar (boards Home-Partial-375, Note-Running-375).
+  - **Desktop (≥900):** inside the top bar, before help: a pill 40 px high with the status icon, the bold state, the counts in muted text and a chevron that says it opens (boards Home-Done-1280, Folder-Running-1280).
+  - It is part of the shell, so it stays on every route: Home, folders, notes, files, Bower, Settings.
 - **States and content:**
 
   | State | Phone text | Desktop text | Action | Accessible name |
@@ -473,25 +477,36 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - [ ] R-JUST-4: link items list the written note's location.
   - [ ] R-JUST-5: `?run=` selects a run; an unknown key falls back to the latest with no error.
 
-### 6.7 Requests (Bower tab) — R-REQ (boards Requests-*, Dictate-Bower-375)
+### 6.7 Requests (Bower tab) — R-REQ (boards Requests-*, Requests-Menu-375, Dictate-Bower-375)
+
+**The model (D22).** A request is an instruction note in the inbox from the moment it is sent. It waits there, and the next tidy-up does it with everything else. Nothing on a request row starts a run by default.
+
+Under the Bower box, one line explains this: "What you ask waits in your inbox and Bower does it at the next tidy-up."
 
 - **States:**
 
   | State | Icon | Chip | Meta | Action |
   |---|---|---|---|---|
-  | waiting | empty circle | "Waiting" | "goes with the next tidy-up" | "Do it now" (secondary button, visible, not behind a tap) |
-  | running | spinner | "Running" | "started 13:52" | — |
-  | done | check | "Done" | "today, 13:26 · 4 new · 4 updated" | "See what came of it" (to Just filed `?run=`), or "Read the answer" for a question |
-  | failed | cross | "Did not finish" | "today, 12:59 · nothing changed" | "Try again" |
+  | waiting | inbox symbol on a grey circle | "In your inbox" | "Bower does it at the next tidy-up" | More (…): Edit · Just this, now ("uses 1 of your 20 runs today") · Remove from the inbox |
+  | running | spinner | "Being done now" | "started 13:52" | — |
+  | done | check | "Done" | "today, 13:26 · 4 new · 4 updated" | "See what came of it" (Just filed `?run=`), or "Read the answer" for a question |
+  | did not finish | cross | "Did not finish" | "today, 12:59 · still in your inbox for the next tidy-up" | More (…): Edit · Just this, now · Remove from the inbox |
   | rule kept | shield | "Rule kept" | "In your rules" | — (unchanged) |
 
-- **Data.** A request is matched to the run that processed it through the run's `items[kind=request].path`, the instruction note's path. Done requests stay 30 days (runs history, max 20 runs; older ones drop out silently).
-- **Box.** The Bower box gets the dictation button (R-DICT). "Do it now" moves out of the hidden row tap.
+- **"Just this, now":**
+  - It writes nothing new. It awaits any pending save of the note, then calls `startRun('instructions')` through one shared helper (the same helper Rename, Move and Ask Bower use).
+  - It is disabled while any run is in flight, offline, or when the day's quota is used up. The item's hint then says why: "A tidy-up is running", "No signal", or "No runs left today".
+- **A request that did not finish** is not re-dispatched. Its instruction note is still in the inbox (a failed run leaves originals where they were), so only its row changes back to waiting at the next listing.
+- **Data.**
+  - A request is matched to its run by the run's id **and** the instruction note's path, both taken from `items[kind=request]`.
+  - Done and failed rows are shown for the runs in `/runs`, which keeps the last 20 runs. Older rows drop out; there is no 30-day promise.
+- **Tidy up while a run is going.** The Tidy up button reads "Tidy up after this one" and queues nothing. It is disabled with that label, so a tap never silently joins an instructions-only run.
 - **Acceptance criteria:**
   - [ ] R-REQ-1: a processed request shows as Done or Did not finish with its run's counts; it never vanishes (fixes 1.11, W3).
-  - [ ] R-REQ-2: "Do it now" is visible on waiting rows when online and no run is in flight.
-  - [ ] R-REQ-3: "See what came of it" opens Just filed for that run.
-  - [ ] R-REQ-4: Activity cards use `RunOutcome` (counts, states, no raw Moved lines).
+  - [ ] R-REQ-2: waiting and did-not-finish rows carry the More menu with "Just this, now" and its quota line; no row has a button that starts a run on its own.
+  - [ ] R-REQ-3: "Just this, now" awaits the note write before `/process` (unit test: an edit then "Just this, now" produces a run that includes the edited note).
+  - [ ] R-REQ-4: "See what came of it" opens Just filed for that run; Activity cards use `RunOutcome` (counts, states, no raw Moved lines).
+  - [ ] R-REQ-5: the Tidy up button during a run reads "Tidy up after this one" and is disabled.
 
 ### 6.8 Overlays — R-OVL (System-Overlays, Tour-375, Help-1280)
 
@@ -530,8 +545,8 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
      - Each is a 40 px button. The original opens `/file/:id` or `/note/:id`; the web page opens in a new tab with `rel="noopener"`.
      - Resolved from `original` **by path first**, then by name in the same folder, then by `companion.ts` logic (the same function as the folder pairing), and from `source` when it is a URL.
      - A missing target shows the name as plain text with "not found".
-  6. **Bower's insights** (`insights-box.tsx`, R-INS):
-     - head: bird, "Bower's insights", the origin legend (only the origins used);
+  6. **Bower's note** (`bower-note-box.tsx`, R-INS):
+     - head: bird, "Bower's note", the origin legend (only the origins used);
      - the rule-change line (R-INS-3);
      - **Summary**: the callout lines with origin squares and "Check";
      - **Key facts**: 1 to 4 tiles (4 across on desktop, 2 on the phone) and the button "All {n} details" opening Details in place;
@@ -544,7 +559,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - no box yet (a note written before the rulebook change): today's rendering, plus a hint "Bower adds its insights next time it touches this note";
   - no key facts: the Key facts section is hidden;
   - rule changed: the blue line, with "What changed" open showing "Before today" and the reason (Note-RuleChanged-375);
-  - text copy of a document of no listed kind (Note-Converted-*): kind chip "Word document, as text" ("PDF, as text", "Web page, as text"); Made from lists the original; the insights box with its key facts from `facts:`; then a divider "The document · the text of {original}, unchanged" and the full text.
+  - text copy of a document of no listed kind (Note-Converted-*): kind chip "Word document, as text" ("PDF, as text", "Web page, as text"); Made from lists the original; the Bower's note box with its key facts from `facts:`; then a divider "The document · the text of {original}, unchanged" and the full text.
 - **Copy:**
 
   | ID | Text |
@@ -554,7 +569,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   | NOTE-3 | "the original" |
   | NOTE-4 | "advert" |
   | NOTE-5 | "not found" |
-  | INS-1 | "Bower's insights" |
+  | INS-1 | "Bower's note" (the box keeps the name the rulebook, Just filed and the file page already use) |
   | INS-2 | "Summary" |
   | INS-3 | "Key facts" |
   | INS-4 | "What to check" |
@@ -572,13 +587,15 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - [ ] R-NOTE-3: Made from resolves `original` by path, then name in folder, then `companion.ts`; `source` URLs are rendered; a wikilink in `original` is never shown raw (fixes 1.13, W6).
   - [ ] R-NOTE-4: the pager moves after the body and counts the same kind (fixes 3.14 pager).
   - [ ] R-NOTE-5: the About panel drops Key facts and shows resolved names.
-  - [ ] R-NOTE-8: the text copy of a document of no listed kind renders as on Note-Converted-*: header, Made from (the original), the insights box, the divider, the full text. Its title is the original's base name ("CV 2026"), never its first heading (fixes 3.2). Folding the box and Made from leaves the header and the document.
+  - [ ] R-NOTE-8: the text copy of a document of no listed kind renders as on Note-Converted-*: header, Made from (the original), the Bower's note box, the divider, the full text. Its title is the original's base name ("CV 2026"), never its first heading (fixes 3.2). Folding the box and Made from leaves the header and the document.
   - [ ] R-NOTE-6: phone lists wrap titles to two lines (`-webkit-line-clamp: 2`) in the folder list, Recent, Compare cards and the tree's phone view.
-  - [ ] R-INS-1: `insights-box.tsx` replaces the top-box rendering on the note page; the file page's `BowerNote` uses the same component.
+  - [ ] R-INS-1: `bower-note-box.tsx` replaces the top-box rendering on the note page; the file page's `BowerNote` uses the same component.
   - [ ] R-INS-2: key facts are rendered only in the box; the caption "Key facts for a … set in your rules" is removed (fixes 3.14).
   - [ ] R-INS-3: `bower_updated` (a date) and `bower_change` (one line) in the frontmatter render the blue line; `bower_before` (one line) fills "Before today". All three are absent means no line.
   - [ ] R-INS-4: "What to check" reads `not_stated` or the named section; the copy button copies one question per line.
-  - [ ] R-INS-5: the insights box folds (boards Note-Folded-*). Its head is a `<button aria-expanded aria-controls>` of 48 px with the bird, "Bower's insights" and a chevron. Folded, it shows one line under the head: the score pill when there is one, then the first key facts inline ("£72,000 a year · starts 3 Nov · reply by 14 Oct") and a "{n} to check" tag; the summary lines are hidden. The choice is one device preference for every note (`bower:pref:insightsFolded`), open by default, never per note. The same fold applies to the insights on the file page. Height is not animated; the chevron turns in `--motion-fast` (not at all under reduced motion).
+  - [ ] R-INS-5: the Bower's note box folds (boards Note-Folded-*). Its head is a `<button aria-expanded aria-controls>` of 48 px with the bird, "Bower's note" and a chevron. Folded, it shows one line under the head: the score pill when there is one, then the first key facts inline ("£72,000 a year · starts 3 Nov · reply by 14 Oct") and a "{n} to check" tag; the summary lines are hidden. The choice is one device preference for every note (`bower:pref:noteFolded`), open by default, never per note. The same fold applies to the insights on the file page. Height is not animated; the chevron turns in `--motion-fast` (not at all under reduced motion).
+  - [ ] R-INS-6: each summary line keeps the app's origin square: 20 px, the origin's tint, and its symbol (file, notes, globe, person), as `.bower-origin` draws it today; the legend under the title names the origins used in their colours ("from the file, your notes"). "Check" stays at the end of the line.
+  - [ ] R-INS-7: open shows everything, with no second fold inside: Summary, Key facts (1 to 4 tiles), Details (every other field of the kind or of `facts:`, label and value, with its origin square when not from the file), What to check. The "All {n} details" link and the separate Details toggle on the note page go.
   - [ ] R-NOTE-7: Made from folds the same way. Open: a small "Made from" caption button with a chevron above the source buttons. Folded: one 44 px button "Made from your clip and a job advert" that opens it. Preference `bower:pref:sourcesFolded`, open by default. The folded label names the sources in plain words ("your clip", "a job advert", "your Word document", "a web page").
   - [ ] R-KF-1: money values keep their period. When the value contains a period ("a week", "/week", "per week", "pw", "a month", "/month", "pcm", "a year", "/year", "per annum"), the tile shows the amount as the value and the normalised period ("a week", "a month", "a year") as the label. Otherwise the kind's `factLabel`. Unit tests with "£340 a week", "AUD 350/week", "£1,450 pcm" and "£72,000". Fixes 1.12.
   - [ ] R-KF-2: a numeric rule field named `score` or `fit` (0 to 100) becomes the first key-fact tile as a pill ("79", "your score"). It is green at 70 and up, amber from 50 to 69, grey below 50.
@@ -589,7 +606,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   1. Phone top bar: back, folder name, More.
   2. Header: the PARA mark (28), h1 (24 on the phone, 30 on desktop), and the meta line "7 things · last filed today".
   3. Header actions (`header-action.tsx`): "Pin to Home" / "Pinned", "Ask Bower about it", and on desktop "Open in Drive" (on the phone it moves to More).
-  4. Suggestion hint (R-HINT): "Ask Bower about this folder, for example:" plus two chips that fill the Bower box. Shown until dismissed.
+  4. Suggestion hint (R-HINT): "Ask Bower about this folder. Your question waits in the inbox for the next tidy-up." plus two chips; a chip opens the send-to-Bower sheet with its text (R-ASK). Shown until dismissed.
   5. View switch, when comparable: segmented "List" / "Compare {n} {plural}" (`role="tablist"`).
   6. Filters and tools:
      - All / Originals {n} / By Bower {n}, with an (i) info-pop "By Bower is what Bower wrote…";
@@ -647,24 +664,50 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - [ ] R-CMP-4: the sort persists per folder; "Default order" is removed.
   - [ ] R-CMP-5: phone card values wrap instead of being cut (W5).
 
-### 6.13 More and Rename — R-MORE (boards More-Rename-375, Rename-*)
+### 6.13 More, Rename and Ask Bower — R-MORE, R-ASK (boards More-Rename-375, Rename-*, Ask-*)
 
-- More gets "Rename…" after "Pin to Home", with the hint "Bower does it", for notes, files and folders. It is not shown for Bower's own files (`isAppFile`) or the five PARA roots.
-- **Rename dialog:**
-  - the field "New name", prefilled, with the extension shown locked after the field (".md", ".pdf");
-  - the radiogroup "Now" (subtitle "A short run on its own; uses one run of your plan") / "With the next tidy-up" (subtitle "Free; happens next time you tidy up");
-  - the buttons "Rename" and "Cancel".
+**One sheet for everything sent to Bower** (`send-to-bower.tsx`, boards Rename-*, Ask-*).
+
+Rename, Move, "Ask Bower about it" on a folder, "Ask Bower about this" in More, and a tapped suggestion chip all open the same Overlay sheet (a dialog on desktop). From top to bottom:
+
+1. **Title and subtitle:** "Rename" / "Ask Bower"; "About {PARA mark} Applications".
+2. **The one field:**
+   - "New name" with the extension locked after it, or "Your question" with dictation (R-DICT). It is prefilled with the suggestion's text.
+3. **A plain explanation box** with the inbox symbol:
+   - title "It waits in your inbox";
+   - one sentence saying when and where: "Bower answers at the next tidy-up and puts the answer in Applications." or "Bower renames it at the next tidy-up; until then it keeps its name."
+4. **Primary button:** "Put in the inbox".
+5. **Secondary text button:** "Ask now, on its own" / "Rename now, on its own", with the line "Uses 1 of your 20 runs today; the rest of the inbox waits." Its disabled states are the same as "Just this, now" (R-REQ).
+
+After "Put in the inbox", a toast above the tab bar says "In your inbox. Bower answers at the next tidy-up." with "Undo" (board Ask-Done-375). Undo deletes the instruction note it just wrote. The request then shows in the Bower tab's Requests and in the inbox count ("and 1 request").
+
+**Suggestion chips.** A chip in a suggestion hint (R-HINT) opens this sheet with its text in the field. It never sends by itself, and never fills the Bower tab's box and leaves the page.
+
+**Rename:**
+
+- More lists "Rename…" after "Pin to Home", with the hint "waits for the tidy-up". Move gets the same hint.
+- It is offered for **notes and files only**.
+  - Folders are left out: a folder renamed by the agent becomes a new folder (its Drive id and its pins change), and `find_moves` only keeps ids for files.
+  - Rename is not shown for Bower's own files (`isAppFile`) or the PARA roots.
 - **Validation:**
-  - empty → "Give it a name.";
-  - the same name → "That is already its name.";
-  - a name taken in the folder → "Something in this folder already has that name.";
-  - characters `/ \ : * ? " < > |` → "Names can't contain / \ : * ? " < > |".
-- **Effect.** The app writes an instruction note like Move (`move-request.ts`), with the title "Rename {old} to {new}" and the frontmatter `op: rename`, `target_id`, `new_name`. "Now" dispatches an instructions-only run. The runner renames through `rclone moveto` (keeping the id) and rewrites the links (the existing bookkeeping, #595).
-- **Acceptance criteria:**
-  - [ ] R-MORE-1: the menu item and dialog as on the boards; validation messages.
-  - [ ] R-MORE-2: `rename-request.ts` writes the instruction note; unit test for its content.
-  - [ ] R-MORE-3: the rulebook handles `op: rename` instructions (R-AG-7); the runner books the rename (existing path).
-  - [ ] R-MORE-4: after "Now", the chip shows the run; after it, the note's name updates and its old links still open it.
+
+  | Case | Message |
+  |---|---|
+  | Empty | "Give it a name." |
+  | The same name | "That is already its name." |
+  | A name taken in the folder | "Something in this folder already has that name." |
+  | Characters `/ \ : * ? " < > \|` | "Names can't contain / \ : * ? " < > \|" |
+
+- **Format.** The instruction note is written in plain words plus the path, like Move (`moveRequestText`): "Rename {path} to {new name}". It has no `op:` fields, because the agent works on local paths and never sees Drive ids. The runner keeps the file's id because `find_moves` sees a same-content path change, and books the rename in `index.md`, the links and `log.md` (#595).
+
+**Acceptance criteria:**
+
+- [ ] R-ASK-1: `send-to-bower.tsx` is on Overlay, with the layout and copy above; it is used by Rename, Move, Ask Bower about it/this and suggestion chips.
+- [ ] R-ASK-2: "Put in the inbox" writes the instruction note (`INSTRUCTION_APP_PROPERTIES`, so the runner does not quarantine it) and shows the toast with Undo; Undo deletes that note.
+- [ ] R-ASK-3: the "…now, on its own" button uses the shared helper of R-REQ-3 and its disabled states.
+- [ ] R-MORE-1: Rename for notes and files only, with validation.
+- [ ] R-MORE-2: `rename-request.ts` writes "Rename {path} to {new name}" (unit test).
+- [ ] R-MORE-3: the rulebook handles rename requests like move requests (R-AG-7); after the run the note's name updates and its old links still open it.
 
 ### 6.14 Hints — R-HINT (System-Hints)
 
@@ -683,7 +726,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - the Bower tab's "Things you can ask" stays a disclosure, with the hint look.
 - [ ] R-HINT-3: at most one tip or suggestion per screen (the first undismissed one in document order); state hints are exempt.
 - [ ] R-HINT-4: dismissed ids are listed in help's "Tips on this screen" with "Show again".
-- [ ] R-HINT-5: suggestion chips fill the Bower box (`/bower?text=`) and never send.
+- [ ] R-HINT-5: suggestion chips open the send-to-Bower sheet (R-ASK) with their text; nothing is sent until "Put in the inbox".
 
 ### 6.15 Add as piles — R-ADD, R-PILE (boards Explore-*, Add-*, Confirm-Piles-*)
 
@@ -935,7 +978,7 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
     - frontmatter `by: bower`, `original: "[[<file name>]]"`, `tags`, `created`;
     - `facts:`, the properties Bower extracted (at most 6; the first four are key facts), with `bower_origins` for any that do not come from the file;
     - the `> [!bower] Bower's note` box and, when there is something to check, `## What to check`;
-    - then `## The document` and the full text, as converted, never edited or shortened.
+    - then `## The document` and the full text, as converted, never edited or shortened: `run.sh` appends it after the agent has written the rest (T9); the agent never copies it.
   - This replaces "No summary note, no converted copy, no analysis … unless" for documents. Photos and files Bower cannot read are still only filed. The runner already makes the text of Word, ODT, HTML, EPUB and RTF files (pandoc).
 - **R-AG-3.** When Bower changes a note it wrote because a rule or a fact changed, it rewrites the box and the key facts to the present, then sets:
   - `bower_updated: YYYY-MM-DD`;
@@ -953,8 +996,9 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
   - `added.txt` is plain words for the owner with no internal words (index, hub, orphaned, crashed, run, frontmatter), in the first person, with no final full stop.
   - Serves 1.12, 2.2.
 - **R-AG-7.** Instructions with `op: rename` rename the target keeping its id, and the runner books it like a move.
-- **R-AG-9 (runner, proposed).** PDFs get the same treatment. `run.sh` converts a text PDF with `pdftotext -layout` (poppler-utils, installed in the job like pandoc) so the agent reads and copies the text instead of transcribing it. A scanned PDF with no text layer gets the copy with metadata and insights, and the line "Scanned: no text to copy" under `## The document`.
+- **R-AG-9 (runner, proposed).** PDFs get the same treatment. `run.sh` converts a text PDF with `pdftotext -layout` (poppler-utils, installed in the job like pandoc) so the runner can append the text as it does for Word files (T9). A scanned PDF with no text layer gets the copy with its properties and Bower's note, and the line "Scanned: no text to copy" under `## The document`.
   - Escalation: a new tool in the runner job (apt package, no runtime dependency in the app). Without it, PDFs get the metadata and insights only.
+- **R-AG-10.** Finishing a partly done tidy-up: a pending inbox file that already has a note whose `original:` names it, or that a context note's `pile_note` lists as done, is filed only; its note is not written again. The runner lists the previous failed run's `created[]` in the prompt as "already written this morning; do not write these again". Serves R-SHEET-4 and D3.
 - **R-AG-8.** Piles:
   - Each context note applies only to the files in its own `## Applies to` list. A file named in two context notes goes with the newest note.
   - A context note with an empty text only groups its files: file them as usual, with no extra note.
@@ -977,38 +1021,67 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
 - `tree.tsx`, `layout.tsx`;
 - `tour-store.ts`, `help-sheet.tsx`.
 
+## 7b. Technical review (tech lead, 29 Sep) and how it is resolved
+
+A tech-lead review of this spec (read-only, no code) raised the points below. Each has become a requirement here.
+
+| # | Point | Resolution |
+|---|---|---|
+| T1 | "Finish the tidy-up" had no contract: the next run would write the pending files' notes again. | **R-AG-10:** a pending inbox file that already has a note whose `original:` names it (or whose `pile_note` lists it) is filed only; its note is not written again. The runner also passes the last failed run's `created[]` to the agent in the prompt, as "already written". |
+| T2 | Pile note against a run: a context note moved to `Processed/` by `rclone moveto` keeps its id, so the app's next rewrite would land in `Processed/`, and late files would wait with no note. | **R-PILE-7:** "Yes, tidy up" closes and flushes every open pile (final `## Applies to`, awaited) before `/process`. **R-PILE-8:** before any rewrite, the app checks that the note's parent is still `0-Inbox/`; if it is not, it starts a continuation note with the same `pile:`. **R-RUNNER-6:** the runner holds back a context note modified after `requestedAt`, together with the files it lists, for the next tidy-up. |
+| T3 | Duplicate names across piles: rclone skips duplicate names in one Drive folder, so a file would be silently left out. | **R-UPL-6:** names are reserved against the inbox listing **and** the upload queue (`uniqueName`). |
+| T4 | The upload queue needs a user scope, one tab at a time, a schema step, and to be cleared with the account. | **R-UPL-7:** the queue is keyed by user id; `navigator.locks` gives one tab the queue; IndexedDB `DB_VERSION` goes to 3; the queue is cleared on sign-out, `DELETE /me` and "Forget this device". |
+| T5 | Resent uploads could duplicate; small files would jump from 0 to 100%. | **R-UPL-8:** every durable upload uses Drive's resumable session (a resend is idempotent). After a reload, the status is asked with `PUT` and `Content-Range: bytes */<size>`, and a 200/201 there means done. Progress comes from XHR `upload.onprogress`, or 1 MiB chunks (a multiple of 256 KiB). |
+| T6 | iOS storage limits. | **R-UPL-9:** the durable copy is capped at 200 MB per file; `QuotaExceededError` falls back to "Keep Bower open until this one is in"; `beforeunload` is best effort (iOS and installed apps often ignore it) and PILE-6 says so. |
+| T7 | A "From now on…" sentence in the pile note would add a rule on every autosave. | **R-PILE-9:** rule sentences are read once, when the pile closes. |
+| T8 | "Remove this pile" trashes the person's uploads from the app. | Kept as a person's action, documented in `ARCHITECTURE.md` next to request Remove. **R-PILE-10:** it is disabled while a run is in flight. |
+| T9 | Writing a document's full text is output-heavy for the agent. | **R-AG-2 (changed):** `run.sh` appends `## The document` and the converted text mechanically after the agent writes the header, facts and Bower's note. The agent never copies the text. |
+| T10 | `bower_before` and the other new fields must not become Compare columns. | **R-INS-8:** `bower_updated`, `bower_change`, `bower_before`, `by`, `pile_note` and `facts` join `BOOKKEEPING_KEYS`. |
+| T11 | "A note with `kind` is Bower's" would flag a person's own Obsidian note that uses `kind:`. | Accepted and stated in R-NOTE-1: `by: bower` is the reliable mark; the others are fallbacks for notes written before it. |
+| T12 | Compare's extra numeric columns could make tables unreadable. | **R-CMP-6:** at most 3 extra columns, `score` first. |
+| T13 | Runner and Worker limits. | **R-RUNNER-1 (added):** `left[]` is empty when the run fails before sync down, and the Worker caps the **sum** of `processed`, `created`, `updated`, `left` and `setAside` at 400 entries. **R-RUNNER-4 (added):** each phase report resets the running-stale timer, and the KV write budget is noted in the runbook. **R-RUNNER-3 (added):** push copy for an instructions-only run: "Done: your request, 4 new notes". |
+| T14 | Hot spots with many owners. | One issue owns `layout.tsx`'s shell slots (chip, upload chip, breadcrumb, OverlayHost, sidebar variable) and lands before the others. One module (`inbox-count.ts`) owns `pendingCount` for Home, Add and the confirm dialog. |
+| T15 | The sidebar width must be set before first paint. | **R-SIDE-2 (added):** a CSS custom property is set from `localStorage` by a small inline script allowed by the CSP hash in `_headers`, or by reading it in the app's first render with the sidebar hidden until then. The lead picks one. |
+| T16 | Which e2e tests are required. | Required e2e: R-UPL-1, R-PILE-6, R-OVL-6, R-CHIP-2. Everything else can be a unit test. |
+
 ## 8. Order and dependencies
 
-1. **Contracts first:**
-   - R-RUNNER-1, R-RUNNER-2 and R-RUNNER-4, with the Worker validation and `api.ts` types;
-   - the rulebook bump R-AG-1 to R-AG-7, as one PR;
-   - the tokens (section 5).
-2. **Primitives, in parallel:**
-   - Overlay and the queue (R-OVL-1);
-   - `hint.tsx` and `info-pop.tsx`;
-   - `header-action.tsx`;
-   - `run-outcome.ts` and `run-summary.tsx`;
-   - `bower-written.ts`;
-   - the money period (R-KF-1).
-3. **Run screens:** chip, sheet, confirm, Home, Just filed, Requests, Activity. They need 1 and 2 and degrade when the new runner fields are absent.
-4. **Notes:** made-from, insights box, pager, About panel, titles wrap. They need `bower-written` and the rulebook for new notes; old notes keep working.
+Milestones, in shipping order (from the tech-lead review):
+
+1. **Contracts.**
+   - R-RUNNER-1/2/4/5/6, with the Worker validation and `api.ts` types.
+   - The rulebook bump to version 21 (R-AG-1 to R-AG-10), including the mechanical full text (T9) and the Finish contract (T1).
+   - The tokens.
+   - T1 and the pile hold rules (T2) are settled before anything else.
+2. **Primitives**, in parallel, with one owner for `layout.tsx` (T14):
+   - Overlay and its queue;
+   - `hint`, `info-pop`, `header-action`;
+   - `run-outcome`, `run-summary`;
+   - `bower-written`;
+   - the money period;
+   - `send-to-bower` and the shared "now" helper.
+3. **Run story:** chip, sheet (Partly done → Finish), confirm, Home, Just filed, Requests and Activity with the inbox model (D22), push copy.
+4. **Bower's notes:** Made from, Bower's note box and folding, pager, About panel, title wrap.
 5. **Folders:**
    - order, header, a single path, the sidebar resize;
    - Compare sort and score;
-   - Rename (needs R-AG-7).
-6. **Add**, in this order:
-   1. the upload queue (R-UPL);
-   2. piles (R-PILE), which need R-AG-8;
-   3. dictation (Q2 answered: yes).
-7. **Migration of every remaining overlay** onto Overlay (R-OVL-2), the tour and help (R-OVL-3, R-OVL-4).
+   - Rename, last.
+6. **Durable uploads (R-UPL)**, then **piles (R-PILE)**, strictly in that order. Piles ship only after the runner hold for context notes (R-RUNNER-6).
+7. **Overlay migration, tour and help** (R-OVL-2 to 6), split into three or four issues.
+8. **Dictation (R-DICT).** It is independent and can run alongside 4 and 5.
 
-Groups 3 to 6 can run in parallel once 1 and 2 have landed. The rulebook bump and the runner change deploy in the usual order: Worker, then runner, then app.
+The rulebook bump and the runner change deploy in the usual order: Worker, then runner, then app.
+
+**Escalations before dispatch:**
+
+- `pdftotext` in the runner (R-AG-9);
+- trashing a whole pile's files from the app (T8), recorded in `ARCHITECTURE.md`.
 
 ## 9. Open questions
 
 | # | Question | Status |
 |---|---|---|
-| Q1 | Should a document of **no listed kind** (a CV, a profile, a letter, a manual) get Bower's insights without being asked? | **Answered 29 Sep: yes.** Its text copy carries the full text plus the extracted properties and Bower's note as foldable metadata (D21, R-AG-2, R-NOTE-8). PDFs through R-AG-9, which the lead should confirm. |
+| Q1 | Should a document of **no listed kind** (a CV, a profile, a letter, a manual) get Bower's note without being asked? | **Answered 29 Sep: yes.** Its text copy carries the full text plus the extracted properties and Bower's note as foldable metadata (D21, R-AG-2, R-NOTE-8). PDFs through R-AG-9, which the lead should confirm. |
 | Q2 | Dictation sends audio to the browser vendor's speech service. | **Answered 29 Sep: yes**, with a Privacy line and the first-use hint (R-DICT-4). |
 | Q3 | The light `--color-danger` fails 4.5:1 for small text on its tinted background. | **Answered 29 Sep: yes**, darken to `#c21b1b` for text; keep `#e12020` for fills. |
 
