@@ -949,6 +949,8 @@ export function uploadQueue(): UploadQueue {
 export async function clearUploadQueue(userId?: string): Promise<void> {
   await uploadQueue().clear(userId);
   resumedIds = [];
+  starting = null;
+  startingFor = null;
   for (const listener of resumedListeners) listener();
 }
 
@@ -983,7 +985,7 @@ function askBeforeLeaving(event: Event): void {
   // The browser shows its own words; only `preventDefault` (and the legacy
   // empty `returnValue`) asks it to.
   event.preventDefault();
-  if ('returnValue' in event) event.returnValue = '';
+  (event as BeforeUnloadEvent).returnValue = '';
 }
 
 /**
@@ -1015,6 +1017,8 @@ export function guardUnload(
 
 let resumedIds: string[] = [];
 let guardStop: (() => void) | null = null;
+let starting: Promise<QueueRole> | null = null;
+let startingFor: string | null = null;
 const resumedListeners = new Set<() => void>();
 
 /** Ids of the files an earlier visit left unfinished, found when the queue started. */
@@ -1034,16 +1038,21 @@ export function subscribeResumed(listener: () => void): () => void {
  * found from last time, and sets the `beforeunload` guard once. Safe to call
  * again (a new render, the same user).
  */
-export async function startUploads(userId: string): Promise<QueueRole> {
+export function startUploads(userId: string): Promise<QueueRole> {
+  if (starting !== null && startingFor === userId) return starting;
   const queue = uploadQueue();
   const first = queue.role() === 'idle';
-  const role = await queue.start(userId);
-  if (first && typeof window !== 'undefined') {
-    resumedIds = activeItems(queue.items()).map((i) => i.id);
-    for (const listener of resumedListeners) listener();
-    if (guardStop === null) guardStop = guardUnload(queue, window);
-  }
-  return role;
+  startingFor = userId;
+  const run = queue.start(userId).then((role) => {
+    if (first && typeof window !== 'undefined') {
+      resumedIds = activeItems(queue.items()).map((i) => i.id);
+      for (const listener of resumedListeners) listener();
+      if (guardStop === null) guardStop = guardUnload(queue, window);
+    }
+    return role;
+  });
+  starting = run;
+  return run;
 }
 
 /**

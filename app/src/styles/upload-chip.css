@@ -1,0 +1,126 @@
+/*
+ * The upload chip (R-UPL-2). It sits in the shell's `uploadChip` slot, which
+ * shares the tidy-up bar's place (`layout.css`), and reuses the run chip's
+ * button and text (`run-chip.css`); this is only what differs: the amber
+ * offline state, the thin progress bar along the foot, the moving dot.
+ */
+
+.upload-chip-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-chip--offline .run-chip-button {
+  border-color: var(--color-warn);
+  background: var(--color-warn-bg);
+}
+
+.upload-chip-icon {
+  display: inline-flex;
+  color: var(--color-warn);
+}
+
+.upload-chip-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-accent-line);
+}
+
+.upload-chip-dot[data-moving='true'] {
+  animation: upload-chip-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes upload-chip-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.upload-chip-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--color-accent-line);
+  transition: width var(--motion-fast) linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-chip-dot[data-moving='true'] {
+    animation: none;
+  }
+
+  .upload-chip-bar {
+    transition: none;
+  }
+}
+
+/* Add's notes about uploads. */
+.upload-notes {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.upload-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.upload-note-resumed {
+  padding: var(--space-3);
+  border: 1px solid var(--color-warn);
+  border-radius: var(--radius-lg);
+  background: var(--color-warn-bg);
+  color: var(--color-text);
+}
+
+/* Sign-out with unfinished uploads (R-UPL-4). */
+.signout-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(0 0 0 / 45%);
+}
+
+.signout-dialog {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.signout-title {
+  margin: 0 0 var(--space-2);
+  font-size: 18px;
+}
+
+.signout-text {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.signout-actions {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.signout-actions .settings-button {
+  min-height: 44px;
+}
+
+.signout-wait {
+  border-color: var(--color-accent-line);
+  background: var(--color-accent-line);
+  color: #fff;
+}
