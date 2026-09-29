@@ -97,10 +97,8 @@ describe('HELP_ROWS', () => {
   it('has the rows of every board, in order', () => {
     expect(HELP_ROWS.home.rows.map((r) => r.lead)).toEqual([
       'Inbox',
-      'The tidy-up bar',
       'Last tidy-up',
-      'Pinned',
-      'Recent',
+      'The tidy-up bar',
     ]);
     expect(HELP_ROWS.notes.rows.map((r) => r.lead)).toEqual([
       'Four folders',
@@ -308,7 +306,7 @@ describe('HelpSheet', () => {
     mount('home');
     expect(dialog().textContent).toContain('About this screen');
     expect(dialog().querySelector('h2')?.textContent).toBe('Home');
-    expect(dialog().querySelectorAll('li')).toHaveLength(5);
+    expect(dialog().querySelectorAll('li')).toHaveLength(3);
     expect(dialog().textContent).not.toContain('top-left');
     expect(dialog().textContent).not.toContain('Tour ·');
     expect(link('What is Bower, from the start')?.getAttribute('href')).toBe(

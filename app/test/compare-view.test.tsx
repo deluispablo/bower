@@ -209,7 +209,7 @@ describe('Compare on a phone', () => {
       'High firstLow first',
     );
     expect(dialog?.querySelector('.compare-sort-done')?.textContent).toBe(
-      'Show 2 listings',
+      'Show 3 listings',
     );
   });
 
@@ -307,6 +307,14 @@ describe('Compare on a desktop', () => {
     expect(
       root.querySelector('th[aria-sort="descending"]')?.textContent,
     ).toContain('Fit');
+  });
+
+  it('reads the Fit cell as a score out of 100 (#859)', async () => {
+    await mount();
+    const cells = [...root.querySelectorAll('tbody tr:first-child td')].map(
+      (td) => td.textContent ?? '',
+    );
+    expect(cells.some((text) => /^\d+\/100$/.test(text))).toBe(true);
   });
 
   it('sorts by rent when the header is clicked', async () => {

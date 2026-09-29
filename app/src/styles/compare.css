@@ -531,3 +531,11 @@
 .compare ~ .folder-tip {
   display: none;
 }
+
+/* Below 900 px the List/Compare tabs and the filter chips are tap targets. */
+@media (max-width: 899px) {
+  .folder-tabs .folder-tab,
+  .compare-chips .compare-chip {
+    min-height: 44px;
+  }
+}
