@@ -2,61 +2,24 @@
 # setup script (M4). This public repo never runs it: these files live
 # under agent/workflows/, not .github/workflows/, so CI never picks them up.
 #
-# Runs agent/run.sh in lint mode (the weekly health check), in two parts
-# that never share a credential (issue #259):
-#
-# - `dispatch`, on schedule (every Sunday at 06:17 UTC) or by hand, asks the
-#   Worker (POST /runner/lint/dispatch, with BOWER_API_KEY) to start one lint
-#   run per vault, or for the one vault given by hand. The Worker mints a
-#   ticket for each and sends one repository_dispatch (bower-lint) per
-#   vault. This job alone holds BOWER_API_KEY, and it never runs the agent.
-# - `lint`, on that repository_dispatch, runs the agent over that one vault
-#   with that one run's ticket; it never sees BOWER_API_KEY.
+# Runs agent/run.sh in lint mode (the weekly health check). Started only by
+# the Worker: its cron trigger (Sundays at 06:17 UTC, api/wrangler.toml)
+# sends one repository_dispatch (bower-lint) per vault, each with that
+# run's own ticket (issues #259 and #292). This workflow has no schedule, no
+# manual trigger and holds no Worker key: anyone who can edit it can run the
+# agent on a vault only when the Worker dispatches it, and can never make the
+# Worker dispatch. To lint one vault by hand, call POST /runner/lint/dispatch
+# with the admin key (docs/runbook.md).
 #
 # Each vault's run is its own workflow run, so they run side by side rather
 # than one at a time.
 name: Lint vault
 
 on:
-  schedule:
-    - cron: '17 6 * * 0'
-  workflow_dispatch:
-    inputs:
-      vault_id:
-        description: Vault to lint (the user id from the Worker); empty for every vault
-        required: false
-        type: string
   repository_dispatch:
     types: [bower-lint]
 
 jobs:
-  dispatch:
-    if: github.event_name != 'repository_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      # The body carries the vault id given by hand (through jq, never
-      # interpolated into the script), or nothing for every vault. The
-      # answer is a count; the log prints only that.
-      - name: Start the health checks
-        env:
-          BOWER_API_URL: ${{ vars.BOWER_API_URL }}
-          BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}
-          VAULT_ID: ${{ inputs.vault_id }}
-        run: |
-          if [ -n "$VAULT_ID" ]; then
-            body=$(jq -cn --arg id "$VAULT_ID" '{vaultId: $id}')
-          else
-            body='{}'
-          fi
-          curl -fsS -o dispatched.json -X POST \
-            -H "Authorization: Bearer $BOWER_API_KEY" \
-            -H 'Content-Type: application/json' \
-            --data "$body" \
-            "${BOWER_API_URL%/}/runner/lint/dispatch"
-          echo "$(jq .dispatched dispatched.json) health checks started"
-
   lint:
     if: github.event_name == 'repository_dispatch'
     concurrency:

@@ -123,17 +123,15 @@ echo "ok ingest.yml hands the user's web switch from the dispatch to run.sh"
 echo 'ok ingest.yml holds no BOWER_API_KEY'
 lint_job=$(job "$WORKFLOWS_DIR/lint.yml" lint)
 [ -n "$lint_job" ] || die "lint.yml: no 'lint' job"
-! grep -q 'BOWER_API_KEY' <<<"$lint_job" || die "lint.yml: the 'lint' job mentions BOWER_API_KEY"
+! grep -q 'BOWER_API_KEY' "$WORKFLOWS_DIR/lint.yml" || die 'lint.yml: mentions BOWER_API_KEY'
 grep -Fq "if: github.event_name == 'repository_dispatch'" <<<"$lint_job" ||
   die "lint.yml: the 'lint' job runs on something other than the Worker's dispatch"
-dispatch_job=$(job "$WORKFLOWS_DIR/lint.yml" dispatch)
-grep -Fq 'BOWER_API_KEY: ${{ secrets.BOWER_API_KEY }}' <<<"$dispatch_job" ||
-  die "lint.yml: the 'dispatch' job does not get BOWER_API_KEY"
-grep -Fq '/runner/lint/dispatch' <<<"$dispatch_job" ||
-  die "lint.yml: the 'dispatch' job does not call /runner/lint/dispatch"
-! grep -q 'run.sh' <<<"$dispatch_job" || die "lint.yml: the 'dispatch' job runs the agent"
-[ "$(grep -c 'secrets.BOWER_API_KEY' "$WORKFLOWS_DIR/lint.yml")" = 1 ] ||
-  die 'lint.yml: BOWER_API_KEY is passed somewhere other than the dispatch job'
-echo "ok lint.yml gives BOWER_API_KEY to the 'dispatch' job only"
+# Only the Worker starts a lint (issue #292): no schedule, no manual run, no
+# job that calls the Worker.
+! grep -v '^ *#' "$WORKFLOWS_DIR/lint.yml" | grep -q 'schedule\|workflow_dispatch\|/runner/lint/dispatch' ||
+  die 'lint.yml: has a schedule, a manual run or a call to the Worker'
+[ "$(grep -c '^  [a-z_-]*:$' <<<"$(sed -n '/^jobs:/,$p' "$WORKFLOWS_DIR/lint.yml")")" = 1 ] ||
+  die "lint.yml: more than the 'lint' job"
+echo 'ok lint.yml holds no BOWER_API_KEY and starts only from the Worker'
 
 echo DONE
