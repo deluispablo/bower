@@ -98,4 +98,20 @@ describe('KeyFacts (issue #603)', () => {
     expect(root.textContent).toBe('£2,150 · 2 bed · 1 Nov · 14 min');
     expect(root.querySelector('dl')).toBeNull();
   });
+
+  it('a score pill is named "Your score {n} of 100" and the term comes before the value', () => {
+    host = document.createElement('div');
+    document.body.append(host);
+    render(
+      h(KeyFacts, {
+        facts: [{ key: 'score', value: '82', label: 'match', tone: 'good' }],
+      }),
+      host,
+    );
+    const pill = host.querySelector('.key-fact-pill');
+    expect(pill?.getAttribute('role')).toBe('img');
+    expect(pill?.getAttribute('aria-label')).toBe('Your score 82 of 100');
+    const kids = [...(host.querySelector('.key-fact')?.children ?? [])];
+    expect(kids.map((k) => k.tagName)).toEqual(['DT', 'DD']);
+  });
 });
