@@ -11,9 +11,10 @@
  */
 
 import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 
 import { isDemo } from '../api.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import type { DriveFile } from '../drive.js';
 import { formatSize } from '../file-preview.js';
 import type { Origin } from '../file-origin.js';
@@ -30,8 +31,8 @@ import { KeyFacts } from './key-facts.js';
 import type { KeyFact } from './key-facts.js';
 import { KindBadge } from './kind-badge.js';
 import { NoteBody } from './note-body.js';
-import { useDismissGuard } from './use-dismiss-guard.js';
-import { useFocusTrap } from './use-focus-trap.js';
+import { Overlay } from './overlay.js';
+import { Queued } from './queued-overlay.js';
 import '../styles/quick-look.css';
 
 /** The demo's fixture ids are not real Drive ids (as on the folder chip). */
@@ -124,9 +125,6 @@ export function QuickLook({
   now,
   onClose,
 }: QuickLookProps): JSX.Element {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(panelRef, onClose);
-  const guardedClose = useDismissGuard(onClose);
   const [drag, setDrag] = useState<{ from: number; dy: number } | null>(null);
 
   const shown = original ?? file;
@@ -137,95 +135,92 @@ export function QuickLook({
   const demo = isDemo();
 
   return (
-    <div class="quick-look">
-      <div
-        class="quick-look-backdrop"
-        aria-hidden="true"
-        onClick={guardedClose}
-      />
-      <div
-        ref={panelRef}
-        class="quick-look-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Quick look: ${title}`}
-        tabIndex={-1}
-        style={
-          drag === null || drag.dy <= 0
-            ? undefined
-            : { transform: `translateY(${drag.dy}px)`, animation: 'none' }
-        }
+    <Queued id="quick-look" priority={OVERLAY_PRIORITY.own}>
+      <Overlay
+        kind="dialog"
+        label={`Quick look: ${title}`}
+        onClose={onClose}
+        scrimGuardMs={300}
       >
         <div
-          class="quick-look-grip"
-          aria-hidden="true"
-          onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture?.(event.pointerId);
-            setDrag({ from: event.clientY, dy: 0 });
-          }}
-          onPointerMove={(event) => {
-            if (drag !== null)
-              setDrag({ from: drag.from, dy: event.clientY - drag.from });
-          }}
-          onPointerUp={() => {
-            if (drag !== null && drag.dy > SWIPE_CLOSE_PX) onClose();
-            else setDrag(null);
-          }}
-          onPointerCancel={() => setDrag(null)}
-        />
-        <div class="quick-look-preview">
-          {isNote ? (
-            <NoteLines id={file.id} max={6} class="quick-look-note" />
-          ) : (
-            <Thumb
-              file={shown}
-              kind={kind}
-              alt={`Preview of ${title}`}
-              fallback={
-                <span class="quick-look-icon">{previewIcon(kind)}</span>
-              }
-            />
-          )}
-          {!isNote && <KindBadge kind={kind} file={shown} />}
-        </div>
-        <h2 class="quick-look-title">{title}</h2>
-        <p class="quick-look-kind">{kindLine(kind, pages, shown.size)}</p>
-        <p class="quick-look-path">
-          {para !== null && <FolderMark kind={para} size={18} />}
-          <span class="quick-look-path-text">
-            {segments.map(displayName).join(' › ')}
-          </span>
-        </p>
-        {filed !== null && <p class="quick-look-filed">{filed}</p>}
-        <div class="quick-look-actions">
-          <a class="quick-look-open" href={href} onClick={onClose}>
-            Open
-          </a>
-          {demo ? (
-            <button
-              type="button"
-              class="quick-look-drive"
-              disabled
-              aria-disabled
-              title={NOT_IN_DEMO_DRIVE}
-            >
-              Open in Drive
-            </button>
-          ) : (
-            <a
-              class="quick-look-drive"
-              href={driveFileUrl(shown)}
-              target="_blank"
-              rel="noopener"
-              onClick={onClose}
-            >
-              Open in Drive
+          class="quick-look-panel"
+          style={
+            drag === null || drag.dy <= 0
+              ? undefined
+              : { transform: `translateY(${drag.dy}px)` }
+          }
+        >
+          <div
+            class="quick-look-grip"
+            aria-hidden="true"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+              setDrag({ from: event.clientY, dy: 0 });
+            }}
+            onPointerMove={(event) => {
+              if (drag !== null)
+                setDrag({ from: drag.from, dy: event.clientY - drag.from });
+            }}
+            onPointerUp={() => {
+              if (drag !== null && drag.dy > SWIPE_CLOSE_PX) onClose();
+              else setDrag(null);
+            }}
+            onPointerCancel={() => setDrag(null)}
+          />
+          <div class="quick-look-preview">
+            {isNote ? (
+              <NoteLines id={file.id} max={6} class="quick-look-note" />
+            ) : (
+              <Thumb
+                file={shown}
+                kind={kind}
+                alt={`Preview of ${title}`}
+                fallback={
+                  <span class="quick-look-icon">{previewIcon(kind)}</span>
+                }
+              />
+            )}
+            {!isNote && <KindBadge kind={kind} file={shown} />}
+          </div>
+          <h2 class="quick-look-title">{title}</h2>
+          <p class="quick-look-kind">{kindLine(kind, pages, shown.size)}</p>
+          <p class="quick-look-path">
+            {para !== null && <FolderMark kind={para} size={18} />}
+            <span class="quick-look-path-text">
+              {segments.map(displayName).join(' › ')}
+            </span>
+          </p>
+          {filed !== null && <p class="quick-look-filed">{filed}</p>}
+          <div class="quick-look-actions">
+            <a class="quick-look-open" href={href} onClick={onClose}>
+              Open
             </a>
-          )}
+            {demo ? (
+              <button
+                type="button"
+                class="quick-look-drive"
+                disabled
+                aria-disabled
+                title={NOT_IN_DEMO_DRIVE}
+              >
+                Open in Drive
+              </button>
+            ) : (
+              <a
+                class="quick-look-drive"
+                href={driveFileUrl(shown)}
+                target="_blank"
+                rel="noopener"
+                onClick={onClose}
+              >
+                Open in Drive
+              </a>
+            )}
+          </div>
+          {demo && <p class="quick-look-demo">{NOT_IN_DEMO_DRIVE}</p>}
         </div>
-        {demo && <p class="quick-look-demo">{NOT_IN_DEMO_DRIVE}</p>}
-      </div>
-    </div>
+      </Overlay>
+    </Queued>
   );
 }
 

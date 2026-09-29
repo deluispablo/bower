@@ -1,36 +1,13 @@
 /*
- * Quick look (#613, board `Phone-Folder-QuickLook`): a bottom sheet on the
- * phone, a centred card from 900 px, like the "Is that everything?" sheet
- * (`tidy-confirm-sheet.css`) with the pin sheet's dimming backdrop.
+ * Quick look (#613, board `Phone-Folder-QuickLook`): an `Overlay` dialog, a
+ * bottom sheet on the phone and a centred card from 900 px (`overlay.css`).
  */
 
-.quick-look-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 45;
-  background: var(--color-scrim);
-}
-
 .quick-look-panel {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 46;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: 88vh;
-  padding: var(--space-2) var(--space-4)
-    calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
-  overflow-y: auto;
-  background: var(--color-surface);
-  color: var(--color-text);
-  border-top: 1px solid var(--color-border);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  box-shadow: var(--shadow-md);
-  outline: none;
-  animation: quick-look-in var(--motion-base) var(--ease-out);
+  padding: 0 var(--space-4);
 }
 
 /* The handle: drag it down to close. */
@@ -161,37 +138,14 @@
   cursor: not-allowed;
 }
 
-@media (min-width: 900px) {
-  .quick-look-panel {
-    top: 50%;
-    right: auto;
-    bottom: auto;
-    left: 50%;
-    width: min(420px, 90vw);
-    transform: translate(-50%, -50%);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    animation: none;
-  }
+/* The sheet's own handle (`overlay.css`) gives way to the swipe handle. */
+.overlay-panel:has(.quick-look-panel) .overlay-grab {
+  display: none;
+}
 
+@media (min-width: 900px) {
   .quick-look-grip {
     display: none;
-  }
-}
-
-@keyframes quick-look-in {
-  from {
-    transform: translateY(100%);
-  }
-
-  to {
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .quick-look-panel {
-    animation: none;
   }
 }
 
