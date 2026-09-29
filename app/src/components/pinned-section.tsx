@@ -17,7 +17,7 @@ import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 
 import type { DriveFile } from '../drive.js';
-import { folderHref, folderOf } from '../navigation.js';
+import { displayPath, folderHref, folderOf } from '../navigation.js';
 import { noteTitle } from '../note-title.js';
 import { openSwitcher } from '../switcher-store.js';
 import type { PinnedItem } from '../vault-store.js';
@@ -39,13 +39,13 @@ interface Tile {
 
 function noteMeta(path: string): string {
   const folder = folderOf(path);
-  return folder === '' ? '' : folder.split('/').join(' / ');
+  return folder === '' ? '' : displayPath(folder);
 }
 
 function folderMeta(path: string, count: number): string {
   const parent = folderOf(path);
   const notes = `${count} ${count === 1 ? 'note' : 'notes'}`;
-  return parent === '' ? notes : `${parent.split('/').join(' / ')} · ${notes}`;
+  return parent === '' ? notes : `${displayPath(parent)} · ${notes}`;
 }
 
 function tileFor(

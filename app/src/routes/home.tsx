@@ -58,6 +58,7 @@ import { hasDestinations, JUST_FILED_PATH } from '../just-filed.js';
 import { keyFactsFor, kindById } from '../kinds.js';
 import {
   folderCounts,
+  displayPath,
   folderOf,
   recentNotes,
   relativeTime,
@@ -82,7 +83,8 @@ import {
 } from '../tour-store.js';
 import { useNew } from '../use-new.js';
 import { fileKind, isAppFile } from '../vault-index.js';
-import type { FileKind } from '../vault-index.js';
+import type { FileKind, VaultIndex } from '../vault-index.js';
+import { originalFileOf } from '../components/about-panel.js';
 import { isBowerNote } from './note.js';
 import { pinned, useVault } from '../vault-store.js';
 import '../styles/home.css';
@@ -313,6 +315,8 @@ interface RecentInfo {
   badgeFile?: { name: string; mimeType: string };
   /** "£2,150 · 2 bed · 14 min by bike", `''` when the note has none. */
   facts: string;
+  /** The original file's id (its New state is what the tidy-up tracks). */
+  originalId?: string;
 }
 
 /** What each Recent row shows beyond its title, read from the note's
@@ -320,6 +324,7 @@ interface RecentInfo {
  * keeps the plain row. */
 function useRecentInfo(
   notes: readonly DriveFile[],
+  index: VaultIndex | null,
 ): ReadonlyMap<string, RecentInfo> {
   const [info, setInfo] = useState<ReadonlyMap<string, RecentInfo>>(new Map());
   const key = notes
@@ -341,9 +346,14 @@ function useRecentInfo(
             original === undefined || original === ''
               ? undefined
               : { name: original, mimeType: '' };
+          const originalId =
+            index === null
+              ? undefined
+              : originalFileOf(index, note, meta.original)?.id;
           return [
             note.id,
             {
+              ...(originalId !== undefined && { originalId }),
               bower: isBowerNote(meta),
               kind:
                 badgeFile !== undefined
@@ -373,7 +383,7 @@ function useRecentInfo(
       cancelled = true;
     };
     // `key` stands for `notes`, which is a new array on every render.
-  }, [key]);
+  }, [key, index]);
   return info;
 }
 
@@ -388,13 +398,16 @@ export function RecentRows({
   titles,
   isNew,
   now,
+  index = null,
 }: {
   notes: readonly DriveFile[];
   titles: ReadonlyMap<string, string>;
   isNew: (id: string) => boolean;
   now: number;
+  /** Lets a note's New follow its original file (a filed PDF). */
+  index?: VaultIndex | null;
 }): JSX.Element {
-  const info = useRecentInfo(notes);
+  const info = useRecentInfo(notes, index);
   return (
     <ul class="home-notes">
       {notes.map((note) => {
@@ -416,16 +429,16 @@ export function RecentRows({
                   <b class="home-note-title">
                     {titles.get(note.id) ?? noteTitle(note)}
                   </b>
-                  {isNew(note.id) && <NewTag />}
+                  {(isNew(note.id) ||
+                    (extra?.originalId !== undefined &&
+                      isNew(extra.originalId))) && <NewTag />}
                   {extra?.bower === true && <BowerTag />}
                 </span>
                 {extra !== undefined && extra.facts !== '' && (
                   <span class="home-note-facts">{extra.facts}</span>
                 )}
                 {folder !== '' && (
-                  <span class="home-note-meta">
-                    {folder.split('/').join(' / ')}
-                  </span>
+                  <span class="home-note-meta">{displayPath(folder)}</span>
                 )}
               </span>
               {note.modifiedTime !== undefined && (
@@ -666,6 +679,7 @@ export function Home(): JSX.Element {
             titles={recentTitles}
             isNew={(id) => news.isNew(id)}
             now={now}
+            index={index}
           />
         </div>
       )}
