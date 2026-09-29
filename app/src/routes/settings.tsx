@@ -12,6 +12,7 @@ import {
 } from '../api.js';
 import { IconExternalLink } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { useGuardedSignOut } from '../components/upload-chip.js';
 import { Toggle } from '../components/toggle.js';
 import { getPref, setPref } from '../prefs.js';
 import type { ThemePref } from '../prefs.js';
@@ -558,16 +559,19 @@ function AdvancedSection({ me }: { me: Me }) {
  * "Sign out everywhere" (moved under Advanced, #309). */
 function SignOutSection() {
   const { signOut } = useSession();
+  // With files still uploading, Sign out first asks (R-UPL-4).
+  const { request, dialog } = useGuardedSignOut(signOut);
 
   return (
     <div class="settings-section">
       <button
         type="button"
         class="settings-button settings-button-secondary"
-        onClick={() => void signOut()}
+        onClick={request}
       >
         Sign out
       </button>
+      {dialog}
     </div>
   );
 }

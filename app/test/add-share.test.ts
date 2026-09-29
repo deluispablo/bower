@@ -55,6 +55,20 @@ vi.mock('../src/online.js', () => ({
   useOnline: () => true,
   offlineReason: () => '',
 }));
+vi.mock('../src/components/upload-chip.js', () => ({
+  UploadNotes: () => null,
+}));
+// Add sends files through the durable queue (#768); these tests are about
+// Add, so the queue hands each file straight to the `upload` mock.
+vi.mock('../src/upload-queue.js', () => ({
+  startUploads: () => Promise.resolve('owner'),
+  uploadQueue: () => ({}),
+  uploadThroughQueue: (
+    _queue: unknown,
+    input: { blob: Blob; name: string; parentId: string },
+    onProgress?: (sent: number, total: number) => void,
+  ) => upload(input.parentId, new File([input.blob], input.name), onProgress),
+}));
 vi.mock('../src/drive.js', () => ({
   listFolder,
   upload,
