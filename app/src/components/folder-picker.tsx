@@ -188,7 +188,11 @@ export function FolderPicker({
         aria-label="Move to"
         tabIndex={-1}
       >
-        <h2 class="folder-picker-title">Move “{name}” to…</h2>
+        <h2 class="folder-picker-title">
+          Move “
+          {subject.isFolder ? name : name.replace(/\.[A-Za-z0-9]{1,5}$/, '')}”
+          to…
+        </h2>
         <label class="folder-picker-search">
           <IconSearch />
           <input

@@ -115,7 +115,7 @@ function PinnedFolder({
       <span class="explorer-row-label">
         {name}
         {variant === 'sidebar' && fresh > 0 && (
-          <span class="explorer-pinned-new"> · {fresh} new</span>
+          <span class="explorer-pinned-new">{fresh} new</span>
         )}
       </span>
       {variant === 'page' && count > 0 && (
