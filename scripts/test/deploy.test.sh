@@ -332,6 +332,9 @@ echo "ok first run creates everything"
 
 # --- second run: updates, skips what exists ------------------------------------
 
+grep -q '^crons = \["17 6 \* \* 0"\]$' "$REPO/api/wrangler.local.toml" || die 'no weekly cron trigger in the local config'
+# A config from before #292 has none: the rerun adds it.
+sed -i '/^\[triggers\]$/d;/^crons = /d' "$REPO/api/wrangler.local.toml"
 run_script second_run ok deploy.sh /dev/null
 expect_eq "$RC" 0 'exit code'
 expect_no_secret_in_output
@@ -344,6 +347,8 @@ expect_eq "$(count '^wrangler deploy -c wrangler.local.toml$')" 1 'worker deploy
 expect_eq "$(count '^wrangler pages deploy ')" 1 'pages deploy'
 expect_eq "$(count '^gh variable set BOWER_API_URL')" 1 'variable refreshed'
 expect_contains 'skipped secrets' 'already set'
+expect_contains 'cron added to an old config' 'Added the weekly cron trigger'
+grep -q '^crons = \["17 6 \* \* 0"\]$' "$REPO/api/wrangler.local.toml" || die 'the weekly cron trigger was not added back'
 expect_contains 'repo up to date' 'already up to date'
 echo "ok second run updates and skips what exists"
 

@@ -163,6 +163,16 @@ check_login() {
 ensure_local_config() {
   if [ -f "$LOCAL_TOML" ]; then
     log "Using api/$LOCAL_CONFIG_NAME."
+    # A config written before #292 has no cron trigger, so the weekly health
+    # check would silently stop: add the block from api/wrangler.toml.
+    if ! grep -q '^crons = ' "$LOCAL_TOML"; then
+      printf '
+# The weekly health check (added by scripts/deploy-api.sh, #292).
+[triggers]
+crons = ["17 6 * * 0"]
+' >>"$LOCAL_TOML"
+      log "Added the weekly cron trigger to api/$LOCAL_CONFIG_NAME."
+    fi
     return
   fi
   log "api/$LOCAL_CONFIG_NAME not found: creating it from api/wrangler.toml."
