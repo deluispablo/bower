@@ -26,10 +26,16 @@ export interface BowerWorkingProps {
   state: WorkingState;
   /** Forces the still variant; the CSS media query covers the system setting. */
   reducedMotion?: boolean;
+  /** The bird is the one an overlay shows (spec 6.21 rule 1): the sheet's stage. */
+  overlay?: boolean;
 }
 
 /** Bird size in the sheet, px. */
 export const WORKING_BIRD_SIZE = 104;
+
+/** Height of the tidy-up sheet's stage while a run goes, px (R-BIRD-8: it
+ * was 150 before the bird got its 166 px stage on the Tidying pose). */
+export const WORKING_STAGE_HEIGHT = 166;
 
 const LABELS: Record<WorkingState, string> = {
   queued: 'Tidying up…',
@@ -71,6 +77,7 @@ export function workingClasses(
 export function BowerWorking({
   state,
   reducedMotion = false,
+  overlay = false,
 }: BowerWorkingProps): JSX.Element {
   // Show-off plays once; then the bird goes back to looking around until
   // the run state changes again. Each state change is a new play, counted
@@ -95,6 +102,7 @@ export function BowerWorking({
           size={WORKING_BIRD_SIZE}
           scene={bird === 'tidying'}
           reducedMotion={reducedMotion}
+          overlay={overlay}
           onDone={() => setRestedPlay(playId)}
         />
       </div>
