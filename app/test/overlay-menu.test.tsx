@@ -132,9 +132,7 @@ describe('menu placement', () => {
     });
     openMenu();
     const panel = document.querySelector<HTMLElement>('.overlay-panel');
-    expect(panel?.style.getPropertyValue('--overlay-anchor-top')).toBe(
-      '416px',
-    );
+    expect(panel?.style.getPropertyValue('--overlay-anchor-top')).toBe('416px');
     Reflect.deleteProperty(HTMLElement.prototype, 'offsetHeight');
   });
 });

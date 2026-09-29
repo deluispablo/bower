@@ -163,7 +163,9 @@ export function Overlay(props: OverlayProps): JSX.Element {
   );
 
   // WAI-ARIA menu: arrows, Home and End rove; Tab closes the menu.
-  const onMenuKey = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>): void => {
+  const onMenuKey = (
+    event: JSX.TargetedKeyboardEvent<HTMLDivElement>,
+  ): void => {
     if (kind !== 'menu') return;
     if (event.key === 'Tab') {
       event.preventDefault();
