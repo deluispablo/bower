@@ -375,14 +375,15 @@ function FolderBody({
           </HeaderAction>
         )}
         {file !== undefined && topBarPath && isDemo() && (
-          <HeaderAction icon={<IconExternalLink />} disabled>
+          <HeaderAction
+            icon={<IconExternalLink />}
+            disabled
+            title={NOT_IN_DEMO_DRIVE}
+          >
             Open in Drive
           </HeaderAction>
         )}
       </div>
-      {file !== undefined && topBarPath && isDemo() && (
-        <p class="folder-demo-note">{NOT_IN_DEMO_DRIVE}</p>
-      )}
 
       {parentName !== null && !comparing && (
         <Hint

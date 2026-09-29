@@ -100,7 +100,7 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   // Open in Drive is desktop only.
   await expect(page.locator('.folder-chips')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.locator('.folder-demo-note')).toBeHidden();
+  await expect(page.locator('.folder-demo-note')).toHaveCount(0);
   await expect(
     page.locator('.folder-item', { hasText: 'Flat budget' }),
   ).toContainText('Spreadsheet (CSV) · copy of your Google Sheet');
