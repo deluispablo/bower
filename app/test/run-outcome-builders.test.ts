@@ -21,7 +21,10 @@ describe('run outcome fixture builders (spec 7c item 5)', () => {
     expect(run.state).toBe('failed');
     expect((run.created?.length ?? 0) + (run.updated?.length ?? 0)).toBe(2);
     expect(buildRun('failed').created).toEqual([]);
-    expect(buildRun('stale')).toMatchObject({ state: 'failed', error: 'stale' });
+    expect(buildRun('stale')).toMatchObject({
+      state: 'failed',
+      error: 'stale',
+    });
     expect(buildRun('running', { done: 2 })).toMatchObject({
       phase: 'writing',
       done: 2,

@@ -11,7 +11,8 @@
 
 import type { Run, RunItem, UpdatedItem } from '../../src/types.js';
 
-export type RunFixtureState = 'running' | 'done' | 'partial' | 'failed' | 'stale';
+export type RunFixtureState =
+  'running' | 'done' | 'partial' | 'failed' | 'stale';
 
 export const FIXTURE_RUN_ID = 'run-1';
 export const FIXTURE_REQUESTED_AT = '2026-09-29T10:00:00.000Z';

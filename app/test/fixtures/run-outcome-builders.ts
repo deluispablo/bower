@@ -13,7 +13,12 @@
 import type { Run, RunItem, UpdatedItem } from '../../src/api.js';
 import type { LastRunOutcome } from '../../src/last-run.js';
 
-export type RunFixtureState = 'running' | 'done' | 'partial' | 'failed' | 'stale';
+export type RunFixtureState =
+  | 'running'
+  | 'done'
+  | 'partial'
+  | 'failed'
+  | 'stale';
 
 export const FIXTURE_RUN_ID = 'run-1';
 export const FIXTURE_REQUESTED_AT = '2026-09-29T10:00:00.000Z';
@@ -39,7 +44,10 @@ const UPDATED: UpdatedItem[] = [
 const LEFT: string[] = ['0-Inbox/Lease.pdf'];
 
 /** A Worker `Run` in `state`, with `overrides` on top. */
-export function buildRun(state: RunFixtureState, overrides: Partial<Run> = {}): Run {
+export function buildRun(
+  state: RunFixtureState,
+  overrides: Partial<Run> = {},
+): Run {
   const base: Run = {
     state: 'running',
     requestedAt: FIXTURE_REQUESTED_AT,

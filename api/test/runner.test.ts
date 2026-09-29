@@ -1300,7 +1300,9 @@ describe('POST /runner/vaults/:id/status', () => {
 
       // Past the window from startedAt, inside it from the last phase.
       vi.setSystemTime(start.getTime() + RUNNING_STALE_MS + 60_000);
-      const status = await (await getStatus()).json<{
+      const status = await (
+        await getStatus()
+      ).json<{
         run: Run;
         stale: boolean;
       }>();
@@ -1312,7 +1314,9 @@ describe('POST /runner/vaults/:id/status', () => {
       });
 
       vi.setSystemTime(start.getTime() + 2 * RUNNING_STALE_MS);
-      const later = await (await getStatus()).json<{
+      const later = await (
+        await getStatus()
+      ).json<{
         run: Run;
         stale: boolean;
       }>();
@@ -1328,7 +1332,9 @@ describe('POST /runner/vaults/:id/status', () => {
       await postStatus({ state: 'running' });
 
       vi.setSystemTime(start.getTime() + RUNNING_STALE_MS + 60_000);
-      const status = await (await getStatus()).json<{
+      const status = await (
+        await getStatus()
+      ).json<{
         run: Run;
         stale: boolean;
       }>();
