@@ -1265,7 +1265,7 @@ grep -Fq 'Write no summary note unless something asks for one' <<<"$INGEST_PROMP
 grep -Fq '   Filed: <n> files' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt report has no Filed line (#368)'
 RULEBOOK=$(cat "$HERE/../../vault-template/CLAUDE.md")
-grep -Fq 'Bower only files, by default' <<<"$RULEBOOK" ||
+grep -Fq 'Bower files, by default' <<<"$RULEBOOK" ||
   die 'the rulebook Ingest does not file by default (#368)'
 grep -Fq '· <type> · filed by Bower' <<<"$RULEBOOK" ||
   die 'the rulebook does not index filed originals with their type (#368)'
