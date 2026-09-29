@@ -9,6 +9,7 @@
 import type { JSX } from 'preact';
 
 import type { NoteProperties } from '../markdown/frontmatter.js';
+import { shortDate } from '../file-preview.js';
 import { kindById } from '../kinds.js';
 import type { NoteMeta } from '../note-meta.js';
 import { Details } from './details.js';
@@ -82,8 +83,8 @@ export function NotePropertiesList({
       )}
       {properties.created !== undefined && (
         <span class="note-property">
-          <span class="note-property-label">Created</span>
-          {properties.created}
+          <span class="note-property-label">Written</span>
+          {shortDate(properties.created) ?? properties.created}
         </span>
       )}
       {properties.source !== undefined && (
