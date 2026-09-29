@@ -6,6 +6,7 @@
  * (`test/bower-tab.test.ts`); `routes/bower.tsx` renders them.
  */
 
+import type { Run } from './api.js';
 import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { relativeTime } from './navigation.js';
@@ -65,11 +66,17 @@ export interface KeptSentence {
 }
 
 /**
- * Where a request stands (#344, spec C.7, board Phone-Bower-Requests):
- * waiting for the next tidy-up, in the run in flight, answered, or kept
- * as a rule.
+ * Where a request stands (#344, #756, spec §6.7): waiting for the next
+ * tidy-up, in the run in flight, done or did not finish (with its run's
+ * counts, R-REQ-1), answered, or kept as a rule.
  */
-export type RequestState = 'waiting' | 'tidying' | 'answered' | 'kept';
+export type RequestState =
+  | 'waiting'
+  | 'tidying'
+  | 'done'
+  | 'failed'
+  | 'answered'
+  | 'kept';
 
 export interface RequestRow {
   /** Unique within the list, and the same for a sentence before and
@@ -89,6 +96,9 @@ export interface RequestRow {
    * tidying up) or the answer (answered); `null` for a rule, or for a
    * sentence the listing does not have yet. */
   fileId: string | null;
+  /** Done and did-not-finish rows: the run that did or dropped it
+   * (`runKey`, what Just filed's `?run=` names). */
+  runKey?: string;
 }
 
 /** How Requests names Add's context note (#335): it is about a batch of
@@ -208,6 +218,19 @@ export interface RequestsInput {
   rules: readonly Rule[];
   /** Rule sentences kept from this screen since it opened. */
   justKept: readonly KeptSentence[];
+  /** `GET /runs`, newest first (`[]` before it is read): a request that a
+   * run did, or dropped, stays listed as Done or Did not finish (R-REQ-1). */
+  runs?: readonly Run[];
+}
+
+/** What a run key is: the run id, else when it was asked for (the same rule
+ * as `runKey` in `just-filed.ts`, which cannot be imported from here). */
+function keyOfRun(run: Run): string {
+  return run.runId ?? run.requestedAt;
+}
+
+function baseName(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
 }
 
 /**
@@ -234,6 +257,7 @@ export function requestRows({
   runSince,
   rules,
   justKept,
+  runs = [],
 }: RequestsInput): RequestRow[] {
   const sentByName = new Map(justSent.map((item) => [item.name, item]));
   const runMs = runSince === null ? null : Date.parse(runSince);
@@ -241,6 +265,31 @@ export function requestRows({
     runMs !== null && Date.parse(since) <= runMs ? 'tidying' : 'waiting';
   const rows: RequestRow[] = [];
   const listed = new Set<string>();
+  const finished = runs.filter(
+    (run) => run.state === 'done' || run.state === 'failed',
+  );
+  // A run and a request are matched by the run's id and the instruction
+  // note's path, taken from `items[kind=request]` (R-REQ, spec §6.7).
+  const doneNames = new Set<string>();
+  for (const run of finished) {
+    if (run.state !== 'done') continue;
+    for (const item of run.items ?? []) {
+      if (item.kind === 'request') doneNames.add(baseName(item.path));
+    }
+  }
+  /** The newest run that tried this waiting note and did not finish it. */
+  const failedRunFor = (path: string, since: string): Run | undefined =>
+    finished.find(
+      (run) =>
+        Date.parse(since) <= Date.parse(run.finishedAt ?? run.requestedAt) &&
+        ((run.state === 'failed' &&
+          (run.items ?? []).some(
+            (item) =>
+              item.path === path &&
+              (item.kind === 'request' || item.kind === 'question'),
+          )) ||
+          (run.left ?? []).includes(path)),
+    );
 
   for (const file of waitingNotes(files)) {
     const match = REQUEST_NAME.exec(file.name);
@@ -255,19 +304,55 @@ export function requestRows({
       note === undefined ? (sent?.text ?? title) : instructionBody(note);
     const since =
       sent?.sentAt ?? sinceFromName(match) ?? file.modifiedTime ?? '';
+    const state = stateAt(since);
+    const failedRun =
+      state === 'waiting' ? failedRunFor(file.path, since) : undefined;
     rows.push({
       key: `request-${file.name}`,
-      state: stateAt(since),
+      state: failedRun === undefined ? state : 'failed',
       text: context ? CONTEXT_TITLE : firstLine(words),
       kind: context ? 'context' : sentenceKind(words),
-      since,
+      since:
+        failedRun === undefined
+          ? since
+          : (failedRun.finishedAt ?? failedRun.requestedAt),
       fileId: file.id,
+      ...(failedRun === undefined ? {} : { runKey: keyOfRun(failedRun) }),
     });
+  }
+
+  // Done: the run took the note out of the inbox. It stays listed with the
+  // run's counts and never vanishes (R-REQ-1, fixes 1.11 and W3).
+  for (const run of finished) {
+    if (run.state !== 'done') continue;
+    for (const item of run.items ?? []) {
+      if (item.kind !== 'request') continue;
+      const name = baseName(item.path);
+      if (listed.has(name)) continue;
+      listed.add(name);
+      const title = REQUEST_NAME.exec(name)?.[6] ?? name.replace(/\.md$/i, '');
+      const words = sentByName.get(name)?.text ?? title;
+      rows.push({
+        key: `done-${keyOfRun(run)}-${name}`,
+        state: 'done',
+        text: firstLine(words),
+        kind: sentenceKind(words),
+        since: run.finishedAt ?? run.requestedAt,
+        fileId: null,
+        runKey: keyOfRun(run),
+      });
+    }
   }
 
   const fetchedMs = fetchedAt === null ? null : Date.parse(fetchedAt);
   for (const item of justSent) {
-    if (listed.has(item.name) || item.seen === true) continue;
+    if (
+      listed.has(item.name) ||
+      doneNames.has(item.name) ||
+      item.seen === true
+    ) {
+      continue;
+    }
     // Drive lists a note it has just created only after a while, and a
     // refresh already in flight when the note was written ends after the
     // send without it: only a listing fetched well after the send says the
@@ -397,17 +482,20 @@ export function ruleSentences(text: string): string[] {
 }
 
 /**
- * The state chip on a request (board Phone-Bower-Requests): `Waiting ·
- * job`, `Tidying up · question`, `Answered`, `Rule kept`. Add's context
- * note is about files, not a sentence, so its chip has no kind.
+ * The state chip on a request (spec §6.7, boards Requests-*): "In your
+ * inbox", "Being done now", "Done", "Did not finish", "Rule kept". An
+ * answered question reads "Answered".
  */
-export function stateLabel(row: Pick<RequestRow, 'state' | 'kind'>): string {
-  const kind = row.kind === 'context' ? '' : ` · ${row.kind}`;
+export function stateLabel(row: Pick<RequestRow, 'state'>): string {
   switch (row.state) {
     case 'waiting':
-      return `Waiting${kind}`;
+      return 'In your inbox';
     case 'tidying':
-      return `Tidying up${kind}`;
+      return 'Being done now';
+    case 'done':
+      return 'Done';
+    case 'failed':
+      return 'Did not finish';
     case 'answered':
       return 'Answered';
     case 'kept':
@@ -417,6 +505,82 @@ export function stateLabel(row: Pick<RequestRow, 'state' | 'kind'>): string {
       return exhaustive;
     }
   }
+}
+
+/** The line under a request that says what happened, in the board's words. */
+export interface RequestMetaInput {
+  /** "today, 13:26" (`cardWhen`, lower-cased at its start). */
+  when: string;
+  /** The run's counts ("4 new · 4 updated"), `''` when there are none. */
+  counts?: string;
+  /** "13:52": when the run in flight started, on this device's clock. */
+  startedAt?: string;
+}
+
+/** Lower-cases the first letter: "Today, 13:26" reads "today, 13:26". */
+export function lowerFirst(text: string): string {
+  return text === '' ? text : text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/**
+ * The meta line of a waiting, running, done, did-not-finish or answered
+ * row (spec §6.7 states table); a kept rule has its own link line.
+ */
+export function requestMeta(
+  row: Pick<RequestRow, 'state'>,
+  { when, counts = '', startedAt = '' }: RequestMetaInput,
+): string {
+  switch (row.state) {
+    case 'waiting':
+      return 'Bower does it at the next tidy-up';
+    case 'tidying':
+      return startedAt === '' ? 'being done now' : `started ${startedAt}`;
+    case 'done':
+      return counts === '' ? when : `${when} · ${counts}`;
+    case 'failed':
+      return `${when} · still in your inbox for the next tidy-up`;
+    case 'answered':
+      return `answered ${when}`;
+    case 'kept':
+      return 'In your rules';
+    default: {
+      const exhaustive: never = row.state;
+      return exhaustive;
+    }
+  }
+}
+
+/** "13:52" on this device's clock; empty for a date it cannot read. */
+export function clockLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** The path a Move request names: `Move “name” (path) to folder.` (the
+ * words `moveRequestText` writes), else `null`. */
+export function requestTargetPath(text: string): string | null {
+  return /^Move “.+” \((.+)\) to .+\.$/.exec(text)?.[1] ?? null;
+}
+
+/**
+ * The requests that are about each file or folder, by its path: what a
+ * note's "Moving to … at the next tidy-up" line and a row's clock badge
+ * read (R-MORE-4; #765, #784). Kept rules, answers and rows with no target
+ * are left out.
+ */
+export function requestsByTargetPath(
+  rows: readonly RequestRow[],
+): Map<string, RequestRow[]> {
+  const byPath = new Map<string, RequestRow[]>();
+  for (const row of rows) {
+    if (row.state === 'kept' || row.state === 'answered') continue;
+    const path = requestTargetPath(row.text);
+    if (path === null) continue;
+    byPath.set(path, [...(byPath.get(path) ?? []), row]);
+  }
+  return byPath;
 }
 
 /** The day of `iso` on this device, as the Rules screen writes it
