@@ -288,6 +288,13 @@ async function selectVault(
       'That folder is in your Drive Bin. Put it back first, or choose another folder.',
     );
   }
+  if (folder.canAddChildren === false || folder.driveId !== undefined) {
+    throw new HttpError(
+      400,
+      'folder_not_supported',
+      'Bower cannot use that folder: it is in a shared drive or closed to new files. Choose a folder in My Drive.',
+    );
+  }
   const { inboxFolderId } = await copyTemplate(drive, folder.id, false);
   return { folderId: folder.id, inboxFolderId, name: folder.name };
 }

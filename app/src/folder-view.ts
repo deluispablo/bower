@@ -15,7 +15,11 @@ import { CATALOGUE_PATH, originLine, originOf } from './file-origin.js';
 import type { Origin } from './file-origin.js';
 import { kindById } from './kinds.js';
 import type { NoteMeta } from './note-meta.js';
-import { FILE_KIND_LABELS, fileKind } from './vault-index.js';
+import {
+  FILE_KIND_LABELS,
+  FILE_KIND_PLURALS,
+  fileKind,
+} from './vault-index.js';
 import type { FileKind } from './vault-index.js';
 
 /** Which of the folder's things the list shows. */
@@ -218,6 +222,8 @@ export function sortRows(
 export interface KindOption {
   kind: FileKind;
   label: string;
+  /** Plural, "Notes". */
+  plural: string;
   count: number;
 }
 
@@ -226,7 +232,12 @@ export function kindOptions(rows: readonly FolderRow[]): KindOption[] {
   const counts = new Map<FileKind, number>();
   for (const row of rows) counts.set(row.kind, (counts.get(row.kind) ?? 0) + 1);
   return [...counts.entries()]
-    .map(([kind, count]) => ({ kind, label: FILE_KIND_LABELS[kind], count }))
+    .map(([kind, count]) => ({
+      kind,
+      label: FILE_KIND_LABELS[kind],
+      plural: FILE_KIND_PLURALS[kind],
+      count,
+    }))
     .sort((a, b) => b.count - a.count || compareText(a.label, b.label));
 }
 

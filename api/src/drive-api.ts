@@ -22,6 +22,8 @@ export interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
+  /** Only `getFile` asks for it. */
+  trashed?: boolean;
 }
 
 export interface DriveApi {
@@ -67,7 +69,13 @@ function toDriveFile(op: string, value: unknown): DriveFile {
     typeof value.name === 'string' &&
     typeof value.mimeType === 'string'
   ) {
-    return { id: value.id, name: value.name, mimeType: value.mimeType };
+    const file: DriveFile = {
+      id: value.id,
+      name: value.name,
+      mimeType: value.mimeType,
+    };
+    if (typeof value.trashed === 'boolean') file.trashed = value.trashed;
+    return file;
   }
   throw invalidJson(op);
 }
@@ -165,7 +173,7 @@ export function createDriveApi(
     },
 
     async getFile(id) {
-      const params = new URLSearchParams({ fields: FILE_FIELDS });
+      const params = new URLSearchParams({ fields: `${FILE_FIELDS},trashed` });
       const response = await send(
         'get',
         `${DRIVE_FILES_URL}/${encodeURIComponent(id)}?${params.toString()}`,

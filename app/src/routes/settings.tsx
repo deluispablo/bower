@@ -481,10 +481,6 @@ function SignOutEverywhereRow() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // One combined sentence for the whole Advanced section (#364), not one
-  // per control — see `AdvancedSection` below.
-  if (isDemo()) return null;
-
   const signOutEverywhere = async (): Promise<void> => {
     setBusy(true);
     setError(null);
@@ -500,6 +496,12 @@ function SignOutEverywhereRow() {
     }
     await signOut();
   };
+  // Like "Sign out": unfinished uploads ask first.
+  const { request, dialog } = useGuardedSignOut(signOutEverywhere);
+
+  // One combined sentence for the whole Advanced section (#364), not one
+  // per control — see `AdvancedSection` below.
+  if (isDemo()) return null;
 
   return (
     <>
@@ -507,7 +509,7 @@ function SignOutEverywhereRow() {
         type="button"
         class="settings-row"
         disabled={busy}
-        onClick={() => void signOutEverywhere()}
+        onClick={request}
       >
         <span class="settings-row-text">
           <span class="settings-row-label">Sign out everywhere</span>
@@ -517,6 +519,7 @@ function SignOutEverywhereRow() {
         </span>
       </button>
       {error && <p class="settings-error">{error}</p>}
+      {dialog}
     </>
   );
 }

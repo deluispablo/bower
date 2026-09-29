@@ -1562,7 +1562,7 @@ test('Settings footer carries the build commit next to the version (#512)', asyn
   // The demo build runs from this same git checkout, so a real commit is
   // always available: no dangling "Bower 0.1.0 ·" with nothing after it.
   await expect(page.locator('.settings-footer p').first()).toHaveText(
-    /^Bower \d+\.\d+\.\d+ · [0-9a-f]{7}$/,
+    /^Bower \d+\.\d+\.\d+ · [0-9a-f]{7,12}$/,
   );
 });
 

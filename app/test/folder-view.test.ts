@@ -207,10 +207,15 @@ describe('sort, kind filter and date groups', () => {
 
   it('lists only the kinds present, with counts', () => {
     expect(kindOptions(rows)).toEqual([
-      { kind: 'note', label: 'Note', count: 2 },
-      { kind: 'pdf', label: 'PDF', count: 2 },
-      { kind: 'photo', label: 'Photo', count: 1 },
-      { kind: 'csv', label: 'Spreadsheet (CSV)', count: 1 },
+      { kind: 'note', label: 'Note', plural: 'Notes', count: 2 },
+      { kind: 'pdf', label: 'PDF', plural: 'PDFs', count: 2 },
+      { kind: 'photo', label: 'Photo', plural: 'Photos', count: 1 },
+      {
+        kind: 'csv',
+        label: 'Spreadsheet (CSV)',
+        plural: 'Spreadsheets (CSV)',
+        count: 1,
+      },
     ]);
     expect(filterKind(rows, 'pdf')).toHaveLength(2);
     expect(filterKind(rows, null)).toHaveLength(6);

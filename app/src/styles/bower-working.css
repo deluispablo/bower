@@ -464,6 +464,15 @@
   margin-top: var(--space-2);
 }
 
+/* The folder link is a tap target on a phone (44 px). */
+@media (max-width: 899px) {
+  .working-sheet-warn a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
 /* The choices: the main one, then the quiet one, stacked and centred like
    the confirmation's. */
 .working-sheet-actions {

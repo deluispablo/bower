@@ -893,7 +893,9 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       };
     },
     hasUnfinished: () =>
-      [...entries.values()].some((e) => e.item.state !== 'done'),
+      [...entries.values()].some(
+        (e) => e.item.state === 'waiting' || e.item.state === 'uploading',
+      ),
     queuedNames,
     reserveName: (parentId, preferred, inboxNames) =>
       uniqueName(preferred, inboxNames, queuedNames(parentId)),
