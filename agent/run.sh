@@ -346,6 +346,11 @@ readonly REPORT_FILTER='def n($v): $v | if type == "array" then .[0:$list] | len
         + n(.left) - $max) as $over
       | if $over > 0 then .[$k] |= .[0:([length - $over, 0] | max)] else . end
     else . end)'
+# R-AG-10: the non-empty created[] paths of a failed last-run.json, one per
+# line (a line break inside a path becomes a space); nothing for any other
+# state.
+readonly ALREADY_WRITTEN_FILTER='if type == "object" and .state == "failed" and (.created | type) == "array"
+  then .created[] | strings | select(length > 0) | gsub("[\r\n]"; " ") else empty end'
 # "<path>" or "<path><TAB><what>" lines as updated entries (R-RUNNER-1),
 # `what` cut to $cut characters.
 readonly UPDATED_FILTER='[inputs | . as $line | split("\t") as $p | {path: $p[0]}
@@ -1131,6 +1136,25 @@ hold_cutoff() {
   printf '@%s\n' "$((secs + HOLD_GRACE))"
 }
 
+# R-AG-10: finishing a tidy-up that stopped partway. When the previous
+# run's .bower/last-run.json (R-RUNNER-2, as sync down brought it from
+# Drive; the runner itself keeps nothing) says failed, prints the prompt
+# block that lists its created[] paths as already written, so the agent
+# files their originals and does not write those notes again. Prints
+# nothing when the file is missing, says anything but failed (an
+# instructions-only run in between overwrites it; the `original:` rule
+# alone still prevents duplicates) or lists nothing. An unreadable file is
+# a failure (return 1) and prints nothing: the caller logs it and goes on
+# without a list. Names paths in the prompt only, never in the log.
+already_written_block() {
+  local file="$VAULT_DIR/.bower/last-run.json" paths
+  [ -f "$file" ] || return 0
+  paths=$(jq -r "$ALREADY_WRITTEN_FILTER" "$file" 2>/dev/null) || return 1
+  [ -n "$paths" ] || return 0
+  printf '%s\n' 'Finishing a tidy-up that stopped partway: the last run wrote the notes below before it stopped. They are already written; do not write these again. A pending file one of them names in its `original:` is filed only.'
+  sed 's/.*/- `&`/' <<<"$paths"
+}
+
 # Whether pending path $1 belongs to an instructions-only run: an
 # instruction-shaped note directly in 0-Inbox/ (`Bower - *.md`, any letter
 # case, as the instruction-origin step below matches them) that is not a
@@ -1861,6 +1885,19 @@ readonly AGENT_TIME_LIMIT=900
 STEP='agent run'
 log "$STEP"
 PROMPT=$(cat "$PROMPT_FILE")
+# R-AG-10: the notes a failed run already wrote, in the ingest prompt's
+# placeholder line; without them the line goes, blank line and all.
+if [ "$MODE" = ingest ]; then
+  already_written=$(already_written_block) || {
+    already_written=''
+    log "previous run report unreadable: no already-written list"
+  }
+  if [ -n "$already_written" ]; then
+    PROMPT=${PROMPT//'{{ALREADY_WRITTEN}}'/"$already_written"}
+  else
+    PROMPT=${PROMPT//$'{{ALREADY_WRITTEN}}\n\n'/}
+  fi
+fi
 # R-RUNNER-4: writing, as the agent starts, with the number of things it
 # was given for an ingest (the pending list after the pre-scan). No `done`
 # count: the agent does not report its progress.
