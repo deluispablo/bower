@@ -108,6 +108,13 @@ describe('buildHeaders', () => {
     );
     expect(lines).toContain('Referrer-Policy: strict-origin-when-cross-origin');
   });
+
+  it('removes the default Access-Control-Allow-Origin header that Cloudflare Pages sets', () => {
+    const headers = buildHeaders({ apiUrl: API_URL, googleApiKey: undefined });
+    const lines = headers.split('\n').map((line) => line.trim());
+
+    expect(lines).toContain('! Access-Control-Allow-Origin');
+  });
 });
 
 describe('apiUrlWarning', () => {

@@ -125,6 +125,7 @@ export function buildHeaders({ apiUrl, googleApiKey }) {
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Referrer-Policy: strict-origin-when-cross-origin
+  ! Access-Control-Allow-Origin
 `;
 }
 
