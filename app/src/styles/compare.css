@@ -164,7 +164,7 @@
 }
 
 .compare-th-over {
-  box-shadow: inset 3px 0 0 var(--color-brand);
+  box-shadow: inset 3px 0 0 var(--color-accent-line);
 }
 
 .compare-th-sort {

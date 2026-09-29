@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 import { h, render } from 'preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -108,10 +107,7 @@ describe('Hint (issue #742)', () => {
   });
 
   it('the suggestion border is 1 px brand tint', () => {
-    const css = readFileSync(
-      resolve(process.cwd(), 'src/styles/hint.css'),
-      'utf8',
-    );
+    const css = readFileSync('src/styles/hint.css', 'utf8');
     expect(css).toMatch(
       /\.hint-suggestion\s*\{[^}]*border:\s*1px solid var\(--color-brand-tint\)/,
     );
