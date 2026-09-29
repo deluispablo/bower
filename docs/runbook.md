@@ -420,6 +420,23 @@ In order:
 | A file the user added to `0-Inbox/` or `Clippings/` ends up moved to `0-Inbox/Quarantine/`, untouched by the agent, and the app says Bower "set aside" a file | The pre-scan (`agent/scan.sh`, spec A.5) matched an injection heuristic in it (an instruction aimed at an assistant, a role marker, hidden or zero-width characters, a long base64 blob) and moved it aside before Claude ran, so an untrusted note can't steer the agent; the run reports it under `quarantined` | Open the file in Drive; if it is a false positive, move it out of `Quarantine/` back into the folder it came from and run Tidy up again. The heuristics are intentionally narrow, so this should be rare |
 | A note sent from Tell Bower (`Bower - <date> <time> <title>.md`) ends up in `0-Inbox/Quarantine/` instead of being carried out, and the run's log shows `instruction origin: <n> of <m> not written by the app` | Before Claude runs, the runner asks Drive which inbox notes the app itself wrote (the `bower=instruction` app property) and sets aside every other instruction-shaped note (#255). A note of that shape added through Add, copied from Drive or dropped in the folder by hand is set aside on purpose. When the log also says `listing failed, none trusted`, the Drive call failed and every such note was set aside; curl's message is in `drive.log` in the `bower-logs` artifact of a failed run | For a note that really came from Tell Bower: if the log says `listing failed` (a transient Drive error, or a Drive API outage), send the instruction again from Tell Bower once Drive answers; otherwise check that the app build in use sets the property (`createTextFile` with `appProperties` in `app/src/drive.ts`). Moving a set-aside note back by hand does not help: it will be set aside again, since only the app can mark a note |
 
+### Your Bower folder was deleted
+
+The app checks the Bower folder when it opens, when a tab comes back to the front after ten minutes, and when a tidy-up fails because the folder is gone. If the folder is in Drive's Bin, gone, or no longer reachable, the person sees one of three full-page screens instead of Home. Nothing is changed until they choose.
+
+| Screen | What happened | What the person can do |
+| --- | --- | --- |
+| "Your Bower folder is in the Bin" | The folder is in Drive's Bin (Drive empties it after 30 days). | "Put it back" takes it out of the Bin and carries on where it was. Or start a new folder, or use another one. |
+| "Your Bower folder is gone" | Drive answers 404: it was deleted, Bin included. | Start a new Bower folder, or use another folder. If it was emptied from the Bin, Google Drive support may still be able to get it back, so ask them before starting again. |
+| "Bower can't open your folder" | The folder is in a shared drive, or someone stopped sharing it. | Ask for access and choose "Try again". Or use another folder, or start a new one (the old notes stay where they are). |
+
+What you, the operator, can do:
+
+- A person who asks for help with a missing folder: send them to the screen's own buttons. Do not edit their pointer in KV by hand.
+- A tidy-up that finds the folder gone fails with the reason `vault_missing`. It uploads nothing, so a restored folder is not overwritten. The app then shows the screens above, not the failure sheet.
+- The Worker marks the folder missing (`vault.missingAt` on `/me`) and skips it in the weekly health check until it is found again. "Put it back" and "Use another folder" clear the mark.
+- A drive or Google Workspace admin can restore a deleted file for a limited time (Google says about 25 days). Ask before starting a new folder if the notes matter.
+
 ## 9. Hardening your instance
 
 Optional, but recommended once your instance is running (sections 1–5) and before you invite anyone beyond yourself. Nothing below is automated: every step is a setting in someone else's dashboard (Cloudflare, GitHub, Google), not something a script can safely click for you — `scripts/deploy.sh` only prints a pointer to this section at the end of a run.
