@@ -14,11 +14,8 @@
  * (same wording `help-rows.ts` and `Phone-Add.dc.html` already use
  * elsewhere), so this follows it — see the PR's "Left out"/notes.
  *
- * The demo build (`isDemo()`) swaps in its own sentence instead
- * (`demoConfirmSentenceParts`, #489, `Demo-Tidy-Confirm` board): "in the
- * inbox" rather than "waiting", "In your own Bower..." rather than "A
- * tidy-up...", since what follows is a recording. That swap is for the
- * whole-inbox tidy-up only; a waiting request's own "Do it now" (#501,
+ * The demo build (`isDemo()`) shows the same CONF-2 to CONF-5 copy, with
+ * its amber "recording" line on top (#825). A waiting request's own "Do it now" (#501,
  * `Phone-Bower-Requests` board item 2.4) opens this sheet with
  * `kind="request"` instead — its own title, count line and button, about
  * the request rather than a pile of files, in the demo or not.
@@ -81,27 +78,6 @@ export function confirmBreakdownLine(b: ConfirmBreakdown): string | null {
 }
 
 /**
- * The demo's own confirmation sentence (#489, `Demo-Tidy-Confirm` board):
- * "in the inbox", not "waiting", and "In your own Bower..." rather than
- * "A tidy-up...", since what follows is a recording, not a real one.
- * Demo build only (`isDemo()`); the real sentence above is unchanged. Only
- * for the whole-inbox tidy-up (`kind === 'tidy'`) — a request's own "Do
- * it now" below keeps its own copy in the demo too.
- */
-export function demoConfirmSentenceParts(count: number): {
-  lead: string;
-  rest: string;
-} {
-  const lead = `${count} ${count === 1 ? 'thing' : 'things'}`;
-  return {
-    lead,
-    rest:
-      'in the inbox. In your own Bower this takes a few minutes and uses ' +
-      'one run of your plan, so once is better than five times.',
-  };
-}
-
-/**
  * The same split for "Do it now" on a request (#501, `Phone-Bower-Requests`
  * board, item 2.4): the count is the request or requests themselves, not
  * files waiting in the inbox, and the run is instructions-only, so the
@@ -156,9 +132,7 @@ export function TidyConfirmSheet({
   onDismiss,
 }: TidyConfirmSheetProps): JSX.Element {
   const isRequest = kind === 'request';
-  const { lead, rest } = isRequest
-    ? requestConfirmSentenceParts(count)
-    : demoConfirmSentenceParts(count);
+  const { lead, rest } = requestConfirmSentenceParts(count);
   const title = isRequest ? 'Run this now?' : 'Is that everything?';
   const demoTidy = !isRequest && isDemo();
   const breakdownLine =
@@ -167,11 +141,11 @@ export function TidyConfirmSheet({
   return (
     <Overlay kind="dialog" labelledBy={TITLE_ID} onClose={onDismiss}>
       <div class="tidy-confirm">
-        <Bird state="idle" face="curious" size={56} />
+        <Bird state="looking" size={56} />
         <h2 id={TITLE_ID} class="tidy-confirm-title">
           {title}
         </h2>
-        {isRequest || demoTidy ? (
+        {isRequest ? (
           <p class="tidy-confirm-text" aria-busy={loading}>
             {loading ? (
               <span
@@ -187,6 +161,9 @@ export function TidyConfirmSheet({
           </p>
         ) : (
           <>
+            {demoTidy && (
+              <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>
+            )}
             <p class="tidy-confirm-text">{CONFIRM_SUB}</p>
             <div class="tidy-confirm-row" aria-busy={loading}>
               {loading ? (
@@ -205,7 +182,6 @@ export function TidyConfirmSheet({
             <p class="tidy-confirm-text">{CONFIRM_COST}</p>
           </>
         )}
-        {demoTidy && <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>}
         <button
           type="button"
           class="tidy-confirm-button"
