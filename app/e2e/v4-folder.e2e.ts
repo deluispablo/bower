@@ -56,13 +56,11 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   await expect(pair.locator('.bower-tag')).toContainText('Bower');
   await expect(pair.locator('.kind-badge')).toHaveText('PDF');
 
-  // The phone header is the path bar and the meta line: no large title, no
-  // chip row, no demo sentence (#702). The heading stays for screen readers.
-  await expect(page.locator('.folder-head > .icon')).toBeHidden();
-  await expect(page.locator('.folder-chips')).toBeHidden();
+  // The phone header shows the mark, the name and the actions (R-FOLD-1);
+  // Open in Drive is desktop only.
+  await expect(page.locator('.folder-chips')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.locator('.folder-demo-note')).toBeHidden();
-  const title = await page.getByRole('heading', { level: 1 }).boundingBox();
-  expect(title?.width ?? 0).toBeLessThanOrEqual(1);
   await expect(
     page.locator('.folder-item', { hasText: 'Flat budget' }),
   ).toContainText('Spreadsheet (CSV) · copy of your Google Sheet');
@@ -71,7 +69,8 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   ).toContainText('Note · written by you');
 
   // The list tip, the board's copy.
-  await expect(page.locator('.folder-list-tip')).toContainText(
+  await page.getByRole('button', { name: 'What By Bower means' }).click();
+  await expect(page.locator('.info-pop-panel')).toContainText(
     'Bower marks what Bower wrote. Everything else is yours: what you added or wrote. An original and the note Bower wrote about it share one row.',
   );
   await shot(page, testInfo, 'folder-list');
@@ -87,8 +86,8 @@ test('By Bower shows only what Bower wrote, with its key facts (#611)', async ({
     'aria-pressed',
     'true',
   );
-  await expect(page.locator('.folder-list-tip')).toHaveText(
-    'Only what Bower wrote, with its key facts, so you can skim a folder without opening the originals. Tap All to see them again.',
+  await expect(page.locator('.hint-state')).toContainText(
+    'Showing only By Bower.',
   );
   const rows = page.locator('.folder-item');
   await expect(rows.first()).toBeVisible();
@@ -310,11 +309,8 @@ test('Flat hunt has the Compare tab on the phone (#613)', async ({
   test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
   await page.goto(FLAT);
   const tabs = page.getByRole('tablist', { name: 'Folder content' });
-  await expect(tabs.getByRole('tab')).toHaveText([
-    'Everything',
-    'Compare 4 flats',
-  ]);
-  await expect(tabs.getByRole('tab', { name: 'Everything' })).toHaveAttribute(
+  await expect(tabs.getByRole('tab')).toHaveText(['List', 'Compare 4 flats']);
+  await expect(tabs.getByRole('tab', { name: 'List' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
@@ -322,7 +318,7 @@ test('Flat hunt has the Compare tab on the phone (#613)', async ({
   await expect(page.getByRole('region', { name: 'Compare' })).toBeVisible();
   await expect(page.locator('.folder-item')).toHaveCount(0);
   await shot(page, testInfo, 'folder-compare');
-  await tabs.getByRole('tab', { name: 'Everything' }).click();
+  await tabs.getByRole('tab', { name: 'List' }).click();
   await expect(page.locator('.folder-item').first()).toBeVisible();
 });
 
@@ -333,5 +329,5 @@ test('Flat hunt has the Compare button on the desktop (#613)', async ({
   await page.goto(FLAT);
   await page.getByRole('button', { name: 'Compare 4 flats' }).click();
   await expect(page.locator('table').first()).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Everything' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'List' })).toBeVisible();
 });

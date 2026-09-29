@@ -2382,7 +2382,7 @@ test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)'
   await expect(
     page.getByRole('heading', { name: 'Lisbon Trip' }),
   ).toBeVisible();
-  const chips = page.locator('.folder-chips .chip');
+  const chips = page.locator('.folder-chips .header-action');
   const ys = await chips.evaluateAll((els) =>
     els.map((el) => el.getBoundingClientRect().y),
   );
@@ -2459,22 +2459,26 @@ test('a project folder lists its files and notes together, newest first, with wh
   // The end-of-folder tip is generic (#464): it used to name "the flats I
   // saved" and "rent and size" on every project folder, Kitchen Refresh
   // included, hard-coding the board's own Flat hunt example.
-  await expect(page.locator('.folder-tip')).toHaveText(
-    'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.',
+  await expect(page.locator('.hint-suggestion')).toContainText(
+    'Try asking. Your question waits in the inbox for the next tidy-up.',
   );
 
-  // The phone has no chip row (#702); the Drive and Ask Bower chips are the
-  // desktop header's.
-  test.skip(testInfo.project.name === 'phone', 'no chip row on the phone');
+  // "Open in Drive" is the desktop header's; the phone has it in More.
+  test.skip(testInfo.project.name === 'phone', 'no Drive action on the phone');
   // The Drive chip is greyed in the demo (#555): the fixture ids are not
   // real Drive ids, so it never opens a broken Drive page.
-  const drive = page.getByRole('button', { name: 'Drive', exact: true });
+  const drive = page.getByRole('button', {
+    name: 'Open in Drive',
+    exact: true,
+  });
   await expect(drive).toBeVisible();
   await expect(drive).toBeDisabled();
   await expect(
     page.getByText('Not in the demo. Run your own Bower to use it.'),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Drive' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Open in Drive' })).toHaveCount(
+    0,
+  );
 
   // The Ask Bower chip opens the Bower tab's box with the folder named,
   // and nothing else from the folder (#354).

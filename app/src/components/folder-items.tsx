@@ -1020,28 +1020,28 @@ export function FolderItems({
         {filed !== null && <p class="folder-filed">{filed}</p>}
       </div>
       <div class="folder-filter-row">
-      <div class="folder-seg" role="group" aria-label="Show">
-        {(['all', 'originals', 'bower'] as const).map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            class="folder-seg-btn"
-            aria-pressed={view.origin === filter}
-            onClick={() => onView({ origin: filter, kind: null })}
-          >
-            {FILTER_LABELS[filter]}
-            {counts[filter] !== null && (
-              <span class="folder-seg-count"> {counts[filter]}</span>
-            )}
-          </button>
-        ))}
-      </div>
-      <InfoPop label="What By Bower means">
-        <p>
-          <BowerTag /> {TIP_LIST}
-        </p>
-        <p>{TIP_BOWER}</p>
-      </InfoPop>
+        <div class="folder-seg" role="group" aria-label="Show">
+          {(['all', 'originals', 'bower'] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              class="folder-seg-btn"
+              aria-pressed={view.origin === filter}
+              onClick={() => onView({ origin: filter, kind: null })}
+            >
+              {FILTER_LABELS[filter]}
+              {counts[filter] !== null && (
+                <span class="folder-seg-count"> {counts[filter]}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <InfoPop label="What By Bower means">
+          <p>
+            <BowerTag /> {TIP_LIST}
+          </p>
+          <p>{TIP_BOWER}</p>
+        </InfoPop>
       </div>
       {view.origin !== 'all' && (
         <Hint
@@ -1142,11 +1142,7 @@ export function FolderItems({
         </p>
       ) : layout === 'grid' ? (
         <>
-          <SubfolderList
-            contents={subContents}
-            now={now}
-            detailed={false}
-          />
+          <SubfolderList contents={subContents} now={now} detailed={false} />
           <ul class="folder-grid">
             {rows.map((row) => (
               <li key={row.key}>{renderTile(row)}</li>
@@ -1155,19 +1151,19 @@ export function FolderItems({
         </>
       ) : wantsVirtual && VirtualList !== undefined ? (
         <>
-        <SubfolderList contents={subContents} now={now} detailed={false} />
-        <VirtualList
-          as="ul"
-          rowAs="li"
-          class="folder-list folder-virtual"
-          items={entries}
-          estimateSize={(at) =>
-            entries[at]?.type === 'group' ? GROUP_ESTIMATE : ROW_ESTIMATE
-          }
-          overscan={10}
-          getKey={entryKey}
-          renderRow={renderEntry}
-        />
+          <SubfolderList contents={subContents} now={now} detailed={false} />
+          <VirtualList
+            as="ul"
+            rowAs="li"
+            class="folder-list folder-virtual"
+            items={entries}
+            estimateSize={(at) =>
+              entries[at]?.type === 'group' ? GROUP_ESTIMATE : ROW_ESTIMATE
+            }
+            overscan={10}
+            getKey={entryKey}
+            renderRow={renderEntry}
+          />
         </>
       ) : (
         <ul class="folder-list" role="list" aria-label={`In ${contents.name}`}>

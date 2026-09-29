@@ -370,10 +370,7 @@ function FolderBody({
           Ask Bower about it
         </HeaderAction>
         {file !== undefined && topBarPath && !isDemo() && (
-          <HeaderAction
-            icon={<IconExternalLink />}
-            href={driveFolderUrl(file)}
-          >
+          <HeaderAction icon={<IconExternalLink />} href={driveFolderUrl(file)}>
             Open in Drive
           </HeaderAction>
         )}
@@ -387,7 +384,7 @@ function FolderBody({
         <p class="folder-demo-note">{NOT_IN_DEMO_DRIVE}</p>
       )}
 
-      {parentName !== null && (
+      {parentName !== null && !comparing && (
         <Hint
           id="folder-ask"
           variant="suggestion"
@@ -503,7 +500,6 @@ function FolderBody({
           />
         )
       )}
-
     </section>
   );
 }
