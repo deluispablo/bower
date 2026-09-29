@@ -129,4 +129,23 @@ describe('prefs', () => {
       resetPrefs();
     }).not.toThrow();
   });
+
+  it('dictationLang defaults to the device and round-trips', () => {
+    stubLocalStorage();
+
+    expect(getPref('dictationLang')).toBe('');
+    setPref('dictationLang', 'es-ES');
+    expect(getPref('dictationLang')).toBe('es-ES');
+  });
+
+  it('resetPrefs clears the dictation language and the used flag', () => {
+    const store = stubLocalStorage();
+    setPref('dictationLang', 'fr-FR');
+    store.set('bower:dictation:used', '1');
+
+    resetPrefs();
+
+    expect(store.has('bower:pref:dictationLang')).toBe(false);
+    expect(store.has('bower:dictation:used')).toBe(false);
+  });
 });

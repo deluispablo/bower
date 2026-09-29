@@ -37,6 +37,11 @@ export interface Prefs {
    * separately (spec §5.3). Off by default: users see only their notes.
    */
   showAppFiles: boolean;
+  /**
+   * The language dictation listens for (a BCP 47 tag such as `es-ES`);
+   * `''` = match the device. Shared with the dictate button.
+   */
+  dictationLang: string;
 }
 
 const DEFAULTS: Prefs = {
@@ -47,6 +52,7 @@ const DEFAULTS: Prefs = {
   proposalsSeenAt: '',
   explorerSort: 'name',
   showAppFiles: false,
+  dictationLang: '',
 };
 
 const STORAGE_PREFIX = 'bower:pref:';
@@ -76,7 +82,11 @@ const PER_USER_PREFS: ReadonlyArray<Exclude<keyof Prefs, 'theme'>> = [
   'pushPromptShown',
   'explorerSort',
   'showAppFiles',
+  'dictationLang',
 ];
+
+/** Set once the dictate button has been used; not a `Prefs` key. */
+const DICTATION_USED_KEY = 'bower:dictation:used';
 
 /**
  * Drops every per-user preference so the next person on this device starts
@@ -90,5 +100,10 @@ export function resetPrefs(): void {
     } catch {
       // Storage blocked: nothing to remove.
     }
+  }
+  try {
+    localStorage.removeItem(DICTATION_USED_KEY);
+  } catch {
+    // Storage blocked: nothing to remove.
   }
 }

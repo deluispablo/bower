@@ -101,6 +101,14 @@ describe('Settings section order', () => {
     expect(bower?.textContent).not.toContain("Show Bower's own files");
   });
 
+  it('has a Dictation language row in Advanced defaulting to Match my device', () => {
+    mount(baseMe);
+    const select = root.querySelector('select.settings-select');
+    expect(select).not.toBeNull();
+    expect((select as HTMLSelectElement).value).toBe('');
+    expect(select?.textContent).toContain('Match my device');
+  });
+
   it('keeps Sign out on its own, apart from Sign out everywhere', () => {
     mount(baseMe);
     expect(textsOf('.settings-button-secondary')).toContain('Sign out');
