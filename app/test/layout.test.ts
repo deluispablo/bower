@@ -360,6 +360,52 @@ describe('Layout', () => {
     const slot = query('[data-slot="actions"]');
     expect(slot.querySelector('button')?.textContent).toBe('Open in Drive');
   });
+
+  it('marks a folder route for its three panes and labels the pane Preview (#614)', () => {
+    location.path = '/folder/1-Projects/Flat%20hunt';
+    const preview = h('p', null, 'Selected');
+    function FillAside() {
+      useShellSlot('aside', preview);
+      return null;
+    }
+
+    root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(
+        h(ShellSlotsProvider, null, h(Layout, null, h(FillAside, null))),
+        root,
+      );
+    });
+
+    expect(query('.shell').classList.contains('shell-folder')).toBe(true);
+    expect(query('aside.shell-aside').getAttribute('aria-label')).toBe(
+      'Preview',
+    );
+  });
+
+  it('keeps About this note as the pane label on a note (#614)', () => {
+    location.path = '/note/id-1';
+    const about = h('p', null, 'About');
+    function FillAside() {
+      useShellSlot('aside', about);
+      return null;
+    }
+
+    root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(
+        h(ShellSlotsProvider, null, h(Layout, null, h(FillAside, null))),
+        root,
+      );
+    });
+
+    expect(query('.shell').classList.contains('shell-folder')).toBe(false);
+    expect(query('aside.shell-aside').getAttribute('aria-label')).toBe(
+      'About this note',
+    );
+  });
 });
 
 describe('usesShell', () => {

@@ -29,7 +29,7 @@
 
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { useRoute } from 'preact-iso';
+import { useLocation, useRoute } from 'preact-iso';
 
 import { isDemo } from '../api.js';
 import { Bird } from '../components/bird.js';
@@ -43,6 +43,8 @@ import {
 import { BackLink } from '../components/back-link.js';
 import { MoreButton } from '../components/more-button.js';
 import { NoteMenu } from '../components/note-menu.js';
+import { QuickLookPane } from '../components/quick-look.js';
+import type { PanePreview } from '../components/quick-look.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
@@ -68,9 +70,13 @@ import type {
 } from '../navigation.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
 import { NotFound } from './not-found.js';
 import '../styles/folder.css';
+
+/** From here the folder has three panes (#614, D13, R-DESK-2). */
+export const PANES_QUERY = '(min-width: 1200px)';
 
 /** "1 note" / "3 notes", "1 folder" / "2 folders" — the header's count line. */
 function plural(n: number, word: string): string {
@@ -258,6 +264,12 @@ interface FolderBodyProps {
   menuOpen: boolean;
   onToggleMenu: () => void;
   onCloseMenu: () => void;
+  /** Three panes (#614): the selection, the keys and the chips. */
+  desktop: boolean;
+  onPreview: (item: PanePreview | null) => void;
+  /** The parent folder's address; `undefined` at a top-level folder. */
+  upHref: string | undefined;
+  onNavigate: (href: string) => void;
 }
 
 function FolderBody({
@@ -274,6 +286,10 @@ function FolderBody({
   menuOpen,
   onToggleMenu,
   onCloseMenu,
+  desktop,
+  onPreview,
+  upHref,
+  onNavigate,
 }: FolderBodyProps): JSX.Element {
   // "About <folder>: " and nothing else from the folder (#354), through
   // the same `/bower?text=` link the More menu's rows use.
@@ -467,6 +483,10 @@ function FolderBody({
             titles={titles}
             catalogue={catalogue}
             now={now}
+            desktop={desktop}
+            onPreview={onPreview}
+            onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
+            onOpen={onNavigate}
             {...(compare !== null && {
               compare: {
                 label: compare.label,
@@ -507,6 +527,9 @@ export function Folder(): JSX.Element {
   );
   const ancestors = useMemo(() => breadcrumb(path), [path]);
   const parent = ancestors[ancestors.length - 1];
+  const { route } = useLocation();
+  const wide = useMediaQuery(PANES_QUERY);
+  const [preview, setPreview] = useState<PanePreview | null>(null);
 
   // The phone top bar's Back (#318): the parent folder, or Home for a
   // top-level one.
@@ -542,6 +565,13 @@ export function Folder(): JSX.Element {
     [hasFile, menuOpen],
   );
   useShellSlot('actions', actionsContent);
+
+  // The preview pane (#614): the shell's right-hand column, as on a note.
+  const asideContent = useMemo(
+    () => (wide ? <QuickLookPane item={preview} /> : null),
+    [wide, preview],
+  );
+  useShellSlot('aside', asideContent);
 
   const catalogue = useCatalogueOrigins(
     index?.byPath.get(CATALOGUE_PATH),
@@ -588,6 +618,10 @@ export function Folder(): JSX.Element {
       menuOpen={menuOpen}
       onToggleMenu={() => setMenuOpen((open) => !open)}
       onCloseMenu={() => setMenuOpen(false)}
+      desktop={wide}
+      onPreview={setPreview}
+      onNavigate={route}
+      upHref={parent === undefined ? undefined : folderHref(parent.path)}
     />
   );
 }

@@ -194,3 +194,42 @@
     animation: none;
   }
 }
+
+/* The desktop's preview pane (#614): the same details in the right-hand
+   column instead of a sheet. */
+.quick-look-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.quick-look-pane .quick-look-title {
+  margin: 0;
+}
+
+.quick-look-pane-actions {
+  flex-direction: row;
+  margin-top: 0;
+}
+
+.quick-look-pane-actions .quick-look-open,
+.quick-look-pane-actions .quick-look-drive {
+  min-height: 40px;
+}
+
+.quick-look-pane-note {
+  padding: var(--space-3);
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+}
+
+.quick-look-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

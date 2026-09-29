@@ -983,3 +983,27 @@ button.page-bare-back {
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-border);
 }
+
+/*
+ * The folder's three panes from 1200 px (#614, D13, R-DESK-2, boards
+ * Desktop-Explorer and Desktop-Folder): the sidebar tree | the folder, 560 px
+ * | the preview of the selected row. The preview is the shell's aside slot,
+ * filled by the folder route only from this width, so below it the v3 single
+ * column (#355) is untouched.
+ */
+@media (min-width: 1200px) {
+  .shell-folder.shell-with-aside .shell-container {
+    max-width: none;
+  }
+
+  .shell-folder.shell-with-aside .shell-body {
+    display: grid;
+    grid-template-columns: calc(560px + 2 * var(--space-6)) minmax(320px, 560px);
+    align-items: start;
+    justify-content: start;
+  }
+
+  .shell-folder.shell-with-aside .content {
+    min-width: 0;
+  }
+}

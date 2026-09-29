@@ -205,6 +205,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         aside !== null && 'shell-with-aside',
         // The Bower tab's wider column for its three columns (#357).
         path === BOWER_PATH && 'shell-bower',
+        // The folder's three panes from 1200 px (#614, D13).
+        path.startsWith('/folder/') && 'shell-folder',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -262,7 +264,12 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           <div class="shell-body">
             <main class="content">{children}</main>
             {aside !== null && (
-              <aside class="shell-aside" aria-label="About this note">
+              <aside
+                class="shell-aside"
+                aria-label={
+                  path.startsWith('/folder/') ? 'Preview' : 'About this note'
+                }
+              >
                 {aside}
               </aside>
             )}

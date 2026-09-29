@@ -2501,7 +2501,7 @@ test('a project folder lists its files and notes together, newest first, with wh
 
   // The Drive chip is greyed in the demo (#555): the fixture ids are not
   // real Drive ids, so it never opens a broken Drive page.
-  const drive = page.getByRole('button', { name: 'Drive' });
+  const drive = page.getByRole('button', { name: 'Drive', exact: true });
   await expect(drive).toBeVisible();
   await expect(drive).toBeDisabled();
   await expect(

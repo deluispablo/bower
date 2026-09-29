@@ -63,6 +63,7 @@ const files: DriveFile[] = [
 
 vi.mock('preact-iso', () => ({
   useRoute: () => route,
+  useLocation: () => ({ route: vi.fn() }),
 }));
 
 let index: ReturnType<typeof buildVaultIndex> | undefined;
