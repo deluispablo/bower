@@ -27,10 +27,7 @@ const STORAGE_KEY = 'bower:pref:sidebarWidth';
 /** `px` kept to 200 to 480 and to what leaves the main column 560 px in a
  * window `viewport` px wide (the 200 floor wins). */
 export function clampWidth(px: number, viewport: number): number {
-  const max = Math.max(
-    SIDEBAR_MIN,
-    Math.min(SIDEBAR_MAX, viewport - MAIN_MIN),
-  );
+  const max = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, viewport - MAIN_MIN));
   return Math.min(max, Math.max(SIDEBAR_MIN, Math.round(px)));
 }
 
@@ -110,7 +107,9 @@ export function SidebarSeparator(): JSX.Element {
     storeWidth(px);
   }
 
-  function onPointerDown(event: JSX.TargetedPointerEvent<HTMLDivElement>): void {
+  function onPointerDown(
+    event: JSX.TargetedPointerEvent<HTMLDivElement>,
+  ): void {
     if (event.button !== 0) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -124,7 +123,9 @@ export function SidebarSeparator(): JSX.Element {
     setDragging(true);
   }
 
-  function onPointerMove(event: JSX.TargetedPointerEvent<HTMLDivElement>): void {
+  function onPointerMove(
+    event: JSX.TargetedPointerEvent<HTMLDivElement>,
+  ): void {
     const state = drag.current;
     if (state === null) return;
     state.latest = clampWidth(
