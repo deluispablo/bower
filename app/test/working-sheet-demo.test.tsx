@@ -30,7 +30,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 
 const {
   WorkingSheet,
-  REASSURANCE,
+  runningNote,
   DEMO_REASSURANCE_LEAD,
   DEMO_REASSURANCE_REST,
   DEMO_PLAYING_BACK,
@@ -70,12 +70,12 @@ afterEach(() => {
 });
 
 describe('WorkingSheet outside the demo', () => {
-  it('shows the footer and "started just now" in the header', () => {
+  it('shows the note and the time line', () => {
     state.demo = false;
     mount();
-    expect(root.textContent).toContain(REASSURANCE);
-    expect(root.textContent).toContain('started just now');
-    expect(root.textContent).not.toContain(DEMO_PLAYING_BACK.toLowerCase());
+    expect(document.body.textContent).toContain(runningNote(false));
+    expect(document.body.textContent).toContain('so far · usually 3 to 6 min');
+    expect(document.body.textContent).not.toContain(DEMO_PLAYING_BACK);
   });
 });
 
@@ -83,22 +83,22 @@ describe('WorkingSheet in a demo build', () => {
   it('replaces the reassurance line with the recording sentence', () => {
     state.demo = true;
     mount();
-    expect(root.textContent).toContain(DEMO_REASSURANCE_LEAD);
-    expect(root.textContent).toContain(DEMO_REASSURANCE_REST);
-    expect(root.textContent).not.toContain(REASSURANCE);
+    expect(document.body.textContent).toContain(DEMO_REASSURANCE_LEAD);
+    expect(document.body.textContent).toContain(DEMO_REASSURANCE_REST);
+    expect(document.body.textContent).not.toContain(runningNote(false));
   });
 
   it('replaces the started-ago badge with "Playing back"', () => {
     state.demo = true;
     mount();
-    expect(root.textContent).toContain(DEMO_PLAYING_BACK.toLowerCase());
-    expect(root.textContent).not.toContain('tarted');
+    expect(document.body.textContent).toContain(DEMO_PLAYING_BACK);
+    expect(document.body.textContent).not.toContain('Started');
   });
 
-  it('leaves the done state alone (no reassurance line at all)', () => {
+  it('leaves the done state alone (no running note at all)', () => {
     state.demo = true;
     mount('done');
-    expect(root.textContent).not.toContain(DEMO_REASSURANCE_LEAD);
-    expect(root.textContent).not.toContain(DEMO_PLAYING_BACK.toLowerCase());
+    expect(document.body.textContent).not.toContain(DEMO_REASSURANCE_LEAD);
+    expect(document.body.textContent).not.toContain(DEMO_PLAYING_BACK);
   });
 });

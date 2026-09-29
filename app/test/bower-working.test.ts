@@ -9,8 +9,6 @@ import {
 } from '../src/components/bower-working.js';
 import {
   doneNotes,
-  headerSubline,
-  REASSURANCE,
   SHEET_LINGER_MS,
   nothingLost,
   sheetVisible,
@@ -169,21 +167,5 @@ describe('startedAgo', () => {
     expect(label).toBe('3 min ago');
     expect(startedAgo(requestedAt, at)).toBe(`Started ${label}`);
     expect(tidyUpAgo(requestedAt, at)).toBe(label);
-  });
-});
-
-describe('the header and footer copy (board Flow-04-Working)', () => {
-  it('header: the count, then when it started', () => {
-    expect(headerSubline({ filed: 4, total: 5 }, 'Started 1 min ago')).toBe(
-      '4 of 5 · started 1 min ago',
-    );
-    expect(headerSubline(null, 'Started just now')).toBe('started just now');
-    expect(headerSubline(null, undefined)).toBe('');
-  });
-
-  it('footer: close it, Bower carries on', () => {
-    expect(REASSURANCE).toBe(
-      'You can close this; Bower carries on and tells you when it is done.',
-    );
   });
 });

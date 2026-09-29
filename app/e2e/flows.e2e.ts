@@ -21,6 +21,9 @@ import {
 } from './demo.js';
 import type { Locator, Page } from '@playwright/test';
 
+/** The tidy-up sheet, whichever of its states it is in (#752). */
+const SHEET_NAME = /^(Tidying up|Tidy-up (done|partly done|did not finish))$/;
+
 test.describe('open Home', () => {
   test.use({ introSeen: false });
 
@@ -663,9 +666,11 @@ test('Add: the queue and "Added to your inbox." clear once a tidy-up finishes (#
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
 
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await expect(sheet.getByText(/processed/)).toBeVisible({ timeout: 20_000 });
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
+  await expect(sheet.getByRole('heading', { name: 'Done' })).toBeVisible({
+    timeout: 20_000,
+  });
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
   await expect(sheet).toBeHidden();
 
   // Home already says "All tidy" by now (#321); back on Add nothing
@@ -831,9 +836,9 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(confirm).toBeHidden();
 
   // Running: the bubble says so; the card has no button, only its line.
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
   await expect(
-    sheet.getByRole('heading', { name: 'Tidying up' }),
+    sheet.getByRole('heading', { name: /^Tidying up/ }),
   ).toBeVisible();
   await expect(bubble).toHaveText(
     "Tidying up 3 things. Takes a few minutes; I'll say when I'm done. You can keep adding.",
@@ -850,12 +855,12 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toContainText(
     'In the demo the bird plays back a real run in twenty seconds',
   );
-  await expect(sheet).toContainText('playing back');
+  await expect(sheet).toContainText('Playing back');
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed
   // and one was a question Bower answered.
-  await expect(sheet.getByText('6 files processed')).toBeVisible({
+  await expect(sheet.getByRole('heading', { name: 'Done' })).toBeVisible({
     timeout: 20_000,
   });
   await expect(bubble).toHaveText(
@@ -871,7 +876,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   // — so the rows and where things went stay readable until Close/Escape.
   await page.waitForTimeout(9_000);
   await expect(sheet).toBeVisible();
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
   await expect(sheet).toBeHidden();
 });
 
@@ -891,8 +896,8 @@ test('a filed link reads by its host and path, on the Done sheet and in Recent, 
   ).click();
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await expect(sheet.getByText('7 files processed')).toBeVisible({
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
+  await expect(sheet.getByRole('heading', { name: 'Done' })).toBeVisible({
     timeout: 20_000,
   });
 
@@ -906,7 +911,7 @@ test('a filed link reads by its host and path, on the Done sheet and in Recent, 
   await expect(row).toBeVisible();
   await expect(row).toContainText('Resources');
   await expect(sheet.getByText(/^Link - /)).toHaveCount(0);
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
 
   // Home's Recent (#306: titles, never file names) reads it the same way.
   await expect(
@@ -926,11 +931,11 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   ).click();
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await expect(sheet.getByText('6 files processed')).toBeVisible({
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
+  await expect(sheet.getByRole('heading', { name: 'Done' })).toBeVisible({
     timeout: 20_000,
   });
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
   // The one-time push prompt (#39) can slide up over the bottom of the
   // screen at the same moment as this first `done`; dismiss it so it
   // never intercepts a later click.
@@ -978,10 +983,9 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   // Running: the scene, the count against the three things waiting, the
   // demo's own copy in place of "Started just now" and the reassurance
   // line (#363), and the item being read.
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
-  await expect(sheet.getByText(/^[0-3] of 3 · playing back$/)).toBeVisible();
-  await expect(sheet.getByText(/playing back/)).toBeVisible();
+  await expect(sheet.getByText('Playing back')).toBeVisible();
   await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(
@@ -990,11 +994,11 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
     ),
   ).toBeVisible();
   const rows = sheet.locator('.working-sheet-row');
-  await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(1);
+  await expect(rows.filter({ hasText: 'Reading…' })).toHaveCount(1);
 
   // The scripted run files one item after another (`src/demo/server.ts`);
   // the app polls every five seconds, so some land before the run ends.
-  await expect(sheet.getByText(/^[12] of 3 · playing back$/)).toBeVisible({
+  await expect(rows.filter({ hasText: 'Filed' }).first()).toBeVisible({
     timeout: 15_000,
   });
   await expect(
@@ -1003,8 +1007,8 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   await shot(page, testInfo, 'run-working-rows');
 
   // Done: the listing is read again and the rows name where things went;
-  // the request went to the processed folder, so it only says filed.
-  await expect(sheet.getByText('6 files processed')).toBeVisible({
+  // a request is answered, not filed, so it has no row here.
+  await expect(sheet.getByRole('heading', { name: 'Done' })).toBeVisible({
     timeout: 20_000,
   });
   await expect(
@@ -1013,10 +1017,7 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   await expect(rows.filter({ hasText: 'Tomato seedlings' })).toContainText(
     'Areas › Garden',
   );
-  await expect(
-    rows.filter({ hasText: 'What do I still need for Lisbon' }),
-  ).toContainText('Inbox › Processed');
-  await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(0);
+  await expect(rows.filter({ hasText: 'Reading…' })).toHaveCount(0);
 });
 
 test('Home loading state: dimmed cards and skeleton rows, never Empty (#322)', async ({
@@ -1063,10 +1064,10 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
 
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
   await expect(sheet).toBeVisible();
   await shot(page, testInfo, 'run-working');
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
   await expect(sheet).toBeHidden();
 
   // Home → Add → Home while the scripted run is still going: no screen
@@ -1086,7 +1087,7 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   // Done is announced once, in a toast that closes; the sheet stays closed
   // and the Inbox card, now empty, points at Add.
   const toast = page.getByRole('status').filter({
-    hasText: '6 files processed',
+    hasText: /^Done/,
   });
   await expect(toast).toBeVisible({ timeout: 20_000 });
   await expect(sheet).toBeHidden();
@@ -1150,9 +1151,7 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
 
   // No run started: no working sheet, and the note waits in the inbox
   // with the other three (the Inbox card reads the refreshed listing).
-  await expect(
-    page.getByRole('dialog', { name: 'Tidying up status' }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: SHEET_NAME })).toHaveCount(0);
   await navigate(page, /^Home$/);
   await expect(
     visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
@@ -1172,7 +1171,7 @@ test('the working sheet dismissed with Escape stays closed after sending a reque
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(confirm).toBeHidden();
 
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
   await expect(sheet).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
@@ -1276,9 +1275,7 @@ test('a "from now on" sentence is kept at once as a rule, no run (#343)', async 
     .filter({ hasText: 'From now on, receipts go under Finance' });
   await expect(row.getByText('Rule kept', { exact: true })).toBeVisible();
   await shot(page, testInfo, 'bower-rule-kept');
-  await expect(
-    page.getByRole('dialog', { name: 'Tidying up status' }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: SHEET_NAME })).toHaveCount(0);
   await row.getByRole('button', { name: 'In your rules' }).click();
   // Under 1200 px it switches to the Rules tab; from 1200 the Rules
   // column is already on screen (#357).
@@ -1377,15 +1374,15 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
   ).toContainText('uses one run of your Claude plan');
   await shot(page, testInfo, 'bower-requests-do-it-now');
   await page.getByRole('menuitem', { name: /Just this, now/ }).click();
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
   await expect(sheet).toBeHidden();
   await expect(
     edited.getByText('Being done now', { exact: true }),
   ).toBeVisible();
   // One file: the request, not the two other things in the inbox.
   const toast = page.getByRole('status').filter({
-    hasText: '1 file processed',
+    hasText: /^Done/,
   });
   await expect(toast).toBeVisible({ timeout: 20_000 });
   // The row keeps the exact sentence sent (the edit) once answered too --
@@ -1418,8 +1415,8 @@ test('a request sent while a run is in flight says it goes with the next tidy-up
   const first = rowWith('Draft an itinerary for the weekend');
   await openMore(first);
   await page.getByRole('menuitem', { name: /Just this, now/ }).click();
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
   await expect(sheet).toBeHidden();
 
   await box.fill('Summarise the lease in Flat hunt');
@@ -1811,7 +1808,7 @@ test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
   await expect(
     sheet.getByRole('link', { name: 'What is Bower, from the start' }),
   ).toBeVisible();
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
   await expect(sheet).toBeHidden();
 
   await visible(page.getByRole('link', { name: /^Bower$/ })).click();
@@ -2609,11 +2606,11 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
     .getByRole('dialog', { name: 'Is that everything?' })
     .getByRole('button', { name: 'Yes, tidy up' })
     .click();
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await expect(sheet.getByText('6 files processed')).toBeVisible({
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
+  await expect(sheet.getByRole('heading', { name: 'Done' })).toBeVisible({
     timeout: 20_000,
   });
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
 
   // Home's Last tidy-up card opens Just filed (#617); Activity in the Bower
   // tab stays the full history, with that run's card first.

@@ -43,6 +43,9 @@ export interface RunOutcome {
   updated: number;
   /** Things the person must deal with: set aside plus left in the inbox. */
   needsYou: number;
+  /** Requests (Bower notes) the run answered or kept: a request-only run is
+   * still a done run, never "Nothing new". */
+  requests: number;
   /** Pending inbox things the run did not get to. Part of `needsYou`. */
   left: number;
   items: OutcomeItem[];
@@ -61,6 +64,8 @@ interface RawOutcome {
   startedAt: string;
   finishedAt?: string;
   items: readonly RunItem[];
+  /** Inbox paths the run filed, from a runner that reports no `to`. */
+  processed?: readonly string[];
   setAside: readonly SetAsideItem[];
   created: readonly string[];
   updated: readonly { path: string; what?: string }[];
@@ -96,18 +101,33 @@ function titleOf(path: string): string {
 
 function buildItems(raw: RawOutcome): OutcomeItem[] {
   const items: OutcomeItem[] = [];
+  const asideKeys = new Set(raw.setAside.map((aside) => aside.path));
+  const seen = new Set<string>();
   for (const item of raw.items) {
-    if (item.kind !== 'file' || item.to === undefined || item.to === '') {
-      continue;
-    }
+    if (item.kind !== 'file') continue;
+    const to = item.to === undefined || item.to === '' ? undefined : item.to;
+    // A runner from before report v2 says an item was filed but not where:
+    // it still counts as filed, so a done run never reads "Nothing new".
+    // One it set aside is not filed.
+    if (to === undefined && asideKeys.has(item.path)) continue;
+    seen.add(item.path);
     const entry: OutcomeItem = {
       action: 'filed',
-      title: baseName(item.to),
+      title: baseName(to ?? item.path),
       path: item.path,
-      to: item.to,
     };
+    if (to !== undefined) entry.to = to;
     if (item.renamedFrom !== undefined) entry.from = item.renamedFrom;
     items.push(entry);
+  }
+  if (raw.ended === 'done') {
+    for (const path of raw.processed ?? []) {
+      if (seen.has(path) || asideKeys.has(path) || isContextNote(path)) {
+        continue;
+      }
+      seen.add(path);
+      items.push({ action: 'filed', title: baseName(path), path });
+    }
   }
   for (const path of raw.created) {
     if (isContextNote(path)) continue;
@@ -145,6 +165,7 @@ function build(raw: RawOutcome): RunOutcome {
   const created = count('new');
   const updated = count('updated');
   const left = raw.left.length;
+  const requests = raw.items.filter((item) => item.kind === 'request').length;
   let state: OutcomeState;
   if (raw.ended === 'running') state = 'running';
   else if (raw.ended === 'done') state = 'done';
@@ -157,6 +178,7 @@ function build(raw: RawOutcome): RunOutcome {
     created,
     updated,
     needsYou: raw.setAside.length + left,
+    requests,
     left,
     items,
   };
@@ -190,6 +212,10 @@ export function outcomeFromRun(run: Run): RunOutcome {
   };
   if (run.finishedAt !== undefined) raw.finishedAt = run.finishedAt;
   if (run.added !== undefined) raw.added = run.added;
+  // A runner from before `items` reports only which inbox paths it filed.
+  if (run.items === undefined && run.processed !== undefined) {
+    raw.processed = run.processed;
+  }
   if (run.total !== undefined) raw.total = run.total;
   if (run.phase !== undefined) raw.phase = run.phase;
   return build(raw);
@@ -281,13 +307,19 @@ export function runSentence(
       return `${first ? 'Tidying' : 'Bower is tidying'} up ${what}. It takes a few minutes; you can keep adding.`;
     }
     case 'done': {
-      const counts = outcomeCounts(outcome);
+      // Requests are not counted with the files, but a run of only requests
+      // did something: it never reads "Nothing new".
+      const counts =
+        outcomeCounts(outcome) ||
+        (outcome.requests > 0 ? plural(outcome.requests, 'request') : '');
       if (counts === '') return 'Nothing new: the inbox was empty.';
       const ago =
         outcome.finishedAt === undefined
           ? ''
           : sinceLabel(outcome.finishedAt, options.now ?? Date.now());
-      return `Done${ago === '' ? '' : ` ${ago}`}: ${counts}.`;
+      const only = counts === plural(outcome.requests, 'request');
+      const said = only && outcome.requests === 1 ? 'your request' : counts;
+      return `Done${ago === '' ? '' : ` ${ago}`}: ${said}.`;
     }
     case 'partial': {
       const did =

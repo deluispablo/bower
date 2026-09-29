@@ -8,6 +8,9 @@ import type { Locator, Page } from '@playwright/test';
 
 import { expect, navigate, openHome, test, visible } from './demo.js';
 
+/** The tidy-up sheet, whichever of its states it is in (#752). */
+const SHEET_NAME = /^(Tidying up|Tidy-up (done|partly done|did not finish))$/;
+
 /** The tree the Notes tab shows (phone) or the sidebar (desktop). */
 function tree(page: Page): Locator {
   return visible(page.locator('[role="tree"]'));
@@ -126,11 +129,11 @@ test('after a tidy-up, the folder it filed into shows "<n> new" and its new rows
     .getByRole('dialog', { name: 'Is that everything?' })
     .getByRole('button', { name: 'Yes, tidy up' })
     .click();
-  const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await expect(sheet.getByText('6 files processed')).toBeVisible({
+  const sheet = page.getByRole('dialog', { name: SHEET_NAME });
+  await expect(sheet.getByRole('heading', { name: 'Done' })).toBeVisible({
     timeout: 20_000,
   });
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
   // The phone's notifications prompt follows a first tidy-up.
   const gotIt = page.getByRole('button', { name: 'Got it' });
   if (await gotIt.isVisible()) await gotIt.click();

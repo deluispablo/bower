@@ -19,6 +19,7 @@ export function RunSheets(): JSX.Element | null {
   const {
     phase,
     run,
+    lastFinished,
     message,
     now,
     sheetOpen,
@@ -27,6 +28,8 @@ export function RunSheets(): JSX.Element | null {
     sheetReopenKey,
     confirmOpen,
     confirmCount,
+    confirmLoading,
+    confirmBreakdown,
     confirmScope,
     confirmTidyUp,
     dismissConfirm,
@@ -35,20 +38,32 @@ export function RunSheets(): JSX.Element | null {
   // No run before the account has a folder (login, onboarding).
   if (me?.vault == null) return null;
 
+  // The chip opens the sheet on a result the run store has already put away
+  // (`idle`, its run kept): the sheet shows that last finished run.
+  const finishedOpen = phase === 'idle' && sheetOpen && lastFinished !== null;
+  const shownPhase = finishedOpen
+    ? lastFinished.state === 'done'
+      ? 'done'
+      : 'failed'
+    : phase;
+  const shownRun = finishedOpen ? lastFinished : run;
+
   return (
     <>
       <PushPrompt />
       {confirmOpen && (
         <TidyConfirmSheet
           count={confirmCount}
+          loading={confirmLoading}
+          breakdown={confirmBreakdown}
           kind={confirmScope === 'instructions' ? 'request' : 'tidy'}
           onConfirm={confirmTidyUp}
           onDismiss={dismissConfirm}
         />
       )}
       <WorkingSheet
-        phase={phase}
-        run={run}
+        phase={shownPhase}
+        run={shownRun}
         message={message}
         now={now}
         open={sheetOpen}

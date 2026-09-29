@@ -46,13 +46,18 @@ import {
 } from 'preact/hooks';
 
 import { writeContextNote } from './add-context.js';
+import { linkTitleFromFileName } from './add.js';
 import { ApiError, getStatus, startProcess } from './api.js';
 import type { Run, RunScope } from './api.js';
+import type { ConfirmBreakdown } from './components/tidy-confirm-sheet.js';
+import type { DriveFile } from './drive.js';
 import { ANSWERS_FOLDER } from './home.js';
 import type { LastRunOutcome } from './last-run.js';
 import { folderHref } from './navigation.js';
 import { failureCopy } from './run-failure.js';
 import { inboxCount, inboxTotal } from './inbox-count.js';
+import type { InboxCount } from './inbox-count.js';
+import { outcomeFromRun, runSentence } from './run-outcome.js';
 import { processedKind, visiblePendingCount } from './run-progress.js';
 import { useSession } from './session.js';
 import { showToast } from './toast-store.js';
@@ -189,17 +194,12 @@ export function writeRunSeen(storage: RunSheetStorage, key: string): void {
 }
 
 /**
- * "N files processed" / "1 file processed" / "Nothing new to process": the
- * same wording as the push notification body (`api/src/runner.ts`). Add's
- * "What is this?" context note (#446) applies to its own batch, not a
- * file processed, so it never counts here.
+ * What a finished run says in the toast and the sheet's state message: the
+ * one sentence `runSentence` makes from its outcome (R-RUN-4), in the third
+ * person. Add's "What is this?" context note never counts (`RunOutcome`).
  */
 export function resultMessage(run: Run): string {
-  const count = (run.processed ?? []).filter(
-    (path) => processedKind(path, run.items) !== 'context',
-  ).length;
-  if (count === 0) return 'Nothing new to process';
-  return `${count} ${count === 1 ? 'file' : 'files'} processed`;
+  return runSentence(outcomeFromRun(run), { voice: 'third' });
 }
 
 /**
@@ -410,6 +410,26 @@ export function reduce(state: RunState, event: RunEvent): RunState {
  */
 export const pendingCount = visiblePendingCount;
 
+/**
+ * What the inbox holds, for the confirmation's second line (R-CONF-4): files,
+ * links and requests, counted with the same rule as `inboxCount`, so the
+ * three add up to the number the dialog shows.
+ */
+export function inboxBreakdown(files: readonly DriveFile[]): ConfirmBreakdown {
+  const breakdown: ConfirmBreakdown = { files: 0, links: 0, requests: 0 };
+  for (const file of files) {
+    if (visiblePendingCount([file]) !== 1) continue;
+    if (processedKind(file.path, undefined) === 'request') {
+      breakdown.requests += 1;
+    } else if (linkTitleFromFileName(file.name) !== null) {
+      breakdown.links += 1;
+    } else {
+      breakdown.files += 1;
+    }
+  }
+  return breakdown;
+}
+
 export interface RunStore extends RunState {
   /** Starts a run: a whole tidy-up, or `instructions` only (`startProcess`). */
   process: (scope?: RunScope) => Promise<boolean>;
@@ -451,6 +471,11 @@ export interface RunStore extends RunState {
   confirmOpen: boolean;
   /** The count the confirmation shows (see `tidyUp`). */
   confirmCount: number;
+  /** The inbox listing has not resolved yet: the dialog shows a skeleton,
+   * never 0 (R-CONF-3). Always false for a request's own "Do it now". */
+  confirmLoading: boolean;
+  /** Files, links and requests behind `confirmCount` (tidy-up only). */
+  confirmBreakdown: ConfirmBreakdown | undefined;
   /**
    * `'all'` for `tidyUp()`'s whole-inbox confirmation, `'instructions'` for
    * `doItNow()`'s (#501): which copy `TidyConfirmSheet` shows
@@ -479,7 +504,7 @@ interface RunProviderProps {
 
 export function RunProvider({ children }: RunProviderProps) {
   const { me } = useSession();
-  const { files, refresh, keepRule } = useVault();
+  const { files, refresh, keepRule, status: vaultStatus } = useVault();
   const hasVault = me?.vault != null;
   const folderId = me?.vault?.folderId ?? null;
 
@@ -720,17 +745,27 @@ export function RunProvider({ children }: RunProviderProps) {
   // "Yes, tidy up") goes on to open the working sheet and start the run,
   // with the scope the sheet was opened for.
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmCount, setConfirmCount] = useState(0);
+  const [requestCount, setRequestCount] = useState(0);
   const [confirmScope, setConfirmScope] = useState<RunScope>('all');
 
+  // A tidy-up's count reads the listing as it is now, so it fills in when
+  // the listing resolves while the dialog is open (R-CONF-2, R-CONF-3).
+  const inbox: InboxCount = inboxCount(files, vaultStatus === 'loading');
+  const confirmCount =
+    confirmScope === 'instructions' ? requestCount : inboxTotal(inbox);
+  const confirmLoading = confirmScope === 'all' && inbox.status === 'loading';
+  const confirmBreakdown =
+    confirmScope === 'all' && inbox.status === 'ready'
+      ? inboxBreakdown(files)
+      : undefined;
+
   const tidyUp = useCallback((): void => {
-    setConfirmCount(inboxTotal(inboxCount(files, false)));
     setConfirmScope('all');
     setConfirmOpen(true);
-  }, [files]);
+  }, []);
 
   const doItNow = useCallback((count: number): void => {
-    setConfirmCount(count);
+    setRequestCount(count);
     setConfirmScope('instructions');
     setConfirmOpen(true);
   }, []);
@@ -771,6 +806,8 @@ export function RunProvider({ children }: RunProviderProps) {
     dismissSheet,
     confirmOpen,
     confirmCount,
+    confirmLoading,
+    confirmBreakdown,
     confirmScope,
     confirmTidyUp,
     dismissConfirm,

@@ -69,36 +69,79 @@
   }
 }
 
-/* The sheet: bottom sheet on mobile, a card under the header on desktop. */
+/* The sheet's content, inside the Overlay panel (`overlay.css` places the
+   panel: a bottom sheet on phones, a 440 px right panel from 900 px). */
 
 .working-sheet {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 40;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: var(--space-4) var(--space-4)
-    calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
-  background: var(--color-surface);
-  color: var(--color-text);
-  border-top: 1px solid var(--color-border);
-  border-radius: 20px 20px 0 0;
-  box-shadow: var(--shadow-md);
-  animation: working-sheet-in var(--motion-base) var(--ease-out);
+  gap: 14px;
+  padding: var(--space-2) var(--space-4) var(--space-4);
 }
 
 .working-sheet-head {
   display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.working-sheet-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.working-sheet-status {
+  display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+}
+
+.working-sheet-status .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.working-sheet-status-running {
+  background: var(--color-bg);
+}
+
+.working-sheet-status-done {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.working-sheet-status-partial,
+.working-sheet-status-quota {
+  background: var(--color-warn-bg);
+  color: var(--color-warn);
+}
+
+.working-sheet-status-failed {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.working-sheet-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-brand);
+  border-radius: var(--radius-full);
+  animation: working-spin 0.9s linear infinite;
+}
+
+@keyframes working-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .working-sheet-subline {
-  margin-right: auto;
+  margin: 2px 0 0;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
@@ -139,7 +182,7 @@
 
 .working-sheet-stage {
   position: relative;
-  height: 150px;
+  flex: none;
   border-radius: 14px;
   background: var(--color-bg);
   overflow: hidden;
@@ -206,61 +249,9 @@
   margin: var(--space-1) 0 0;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-  text-align: center;
 }
 
-/* The bar and the reassurance line — shown
-   only while a run is queued or running. */
-
-.working-sheet-progress {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.working-sheet-bar {
-  position: relative;
-  height: 6px;
-  border-radius: var(--radius-full);
-  background: var(--color-bg);
-  overflow: hidden;
-}
-
-.working-sheet-bar-fill {
-  height: 100%;
-  background: var(--color-accent-line);
-  transition: width var(--motion-base) var(--ease-out);
-}
-
-/* Indeterminate: a highlight slides across, since there is no ratio to draw
-   yet (today's runner never reports a total — see `run-progress.ts`). */
-.working-sheet-bar[data-indeterminate]::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  width: 40%;
-  background: var(--color-accent-line);
-  border-radius: var(--radius-full);
-  animation: working-bar-slide 1.4s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .working-sheet-bar[data-indeterminate]::after {
-    animation: none !important;
-  }
-}
-
-@keyframes working-bar-slide {
-  0% {
-    transform: translateX(-100%);
-  }
-
-  100% {
-    transform: translateX(250%);
-  }
-}
-
-.working-sheet-reassurance {
+.working-sheet-note {
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
@@ -268,12 +259,79 @@
 }
 
 /* The demo's "A recording." lead (#363, `Demo-Working` board). */
-.working-sheet-reassurance-lead {
+.working-sheet-note-lead {
   color: var(--color-accent);
 }
 
-/* One row per item (`runRows`): its type icon, its title, then where it
-   went or "reading…". */
+.working-sheet-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The steps: a mark, a name and a detail. */
+
+.working-sheet-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.working-sheet-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.working-sheet-step-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+.working-sheet-step-done .working-sheet-step-mark {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.working-sheet-step-active {
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+}
+
+.working-sheet-step-active .working-sheet-step-mark {
+  border-top-color: var(--color-brand);
+  animation: working-spin 0.9s linear infinite;
+}
+
+.working-sheet-step-stopped {
+  color: var(--color-danger-text);
+}
+
+.working-sheet-step-stopped .working-sheet-step-mark {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.working-sheet-step-detail {
+  margin-left: auto;
+  font-size: var(--text-xs);
+}
+
+/* Rows (R-SHEET-3): left-aligned, the name wraps to two lines, the where-line
+   under it and the action tag at the end. */
 
 .working-sheet-rows {
   display: flex;
@@ -282,31 +340,39 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
 .working-sheet-row {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 26px;
+  align-items: flex-start;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   background: var(--color-surface);
   color: var(--color-text-muted);
   font-size: 13.5px;
+  text-align: left;
+}
+
+.working-sheet-row[data-action='needs'] {
+  border-color: var(--color-warn);
 }
 
 .working-sheet-row-icon {
   display: inline-flex;
-  flex-shrink: 0;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--color-bg);
 }
 
 .working-sheet-row-icon .icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .working-sheet-row-icon.tone-pdf {
@@ -322,45 +388,92 @@
   color: var(--color-text-muted);
 }
 
-.working-sheet-row-title {
+.working-sheet-row-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+}
+
+.working-sheet-row-title {
+  display: -webkit-box;
   overflow: hidden;
   color: var(--color-text);
+  overflow-wrap: anywhere;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
-.working-sheet-row {
-  flex-wrap: wrap;
-}
-
-/* Under the title, with the folder's mark, "read: …" and "was …". */
 .working-sheet-row-where {
-  flex-basis: 100%;
-  padding-left: 24px;
   font-size: 12.5px;
+  overflow-wrap: anywhere;
 }
 
 .working-sheet-row-where .folder-mark {
   vertical-align: middle;
 }
 
-@keyframes working-sheet-in {
-  from {
-    transform: translateY(100%);
-  }
-
-  to {
-    transform: translateY(0);
-  }
+.working-sheet-tag {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
 }
 
-/* The failure's two choices (Phone-Working-Failed, #316): Try again, then
-   Not now, stacked and centred like the confirmation sheet's. */
+.working-sheet-tag-needs {
+  background: var(--color-warn-bg);
+  color: var(--color-warn);
+}
+
+/* Done: the bird says what it added. */
+.working-sheet-say {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.working-sheet-say-text {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+/* Partly done: what happened, and what Finish the tidy-up does. */
+.working-sheet-warn {
+  padding: var(--space-3);
+  border: 1px solid var(--color-warn);
+  border-radius: 12px;
+  background: var(--color-warn-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.working-sheet-warn p {
+  margin: 0;
+}
+
+.working-sheet-warn p + p {
+  margin-top: var(--space-2);
+}
+
+/* The choices: the main one, then the quiet one, stacked and centred like
+   the confirmation's. */
 .working-sheet-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.working-sheet-actions a.tidy-confirm-button {
+  text-decoration: none;
 }

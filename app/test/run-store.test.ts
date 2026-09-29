@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { FOLDER_MIME } from '../src/drive.js';
-import type { DriveFile } from '../src/drive.js';
 import {
   lastFinishedRun,
   nextPollDelay,
@@ -10,6 +9,7 @@ import {
   quotaMessage,
   readSeenRunKey,
   reduce,
+  inboxBreakdown,
   resultMessage,
   runKey,
   STARTING_MESSAGE,
@@ -17,6 +17,8 @@ import {
 } from '../src/run-store.js';
 import type { RunSheetStorage, RunState } from '../src/run-store.js';
 import type { Run } from '../src/api.js';
+import type { DriveFile } from '../src/drive.js';
+import { inboxCount } from '../src/inbox-count.js';
 
 /** A plain in-memory stand-in for `sessionStorage` (`RunSheetStorage`). */
 function fakeStorage(initial: Record<string, string> = {}): RunSheetStorage {
@@ -64,22 +66,19 @@ describe('quotaMessage', () => {
 describe('resultMessage', () => {
   const base: Run = { state: 'done', requestedAt: '2026-01-01T00:00:00.000Z' };
 
-  it('says "Nothing new to process" for an empty or absent list', () => {
-    expect(resultMessage(base)).toBe('Nothing new to process');
+  it('says the inbox was empty for an empty or absent list', () => {
+    expect(resultMessage(base)).toBe('Nothing new: the inbox was empty.');
     expect(resultMessage({ ...base, processed: [] })).toBe(
-      'Nothing new to process',
+      'Nothing new: the inbox was empty.',
     );
   });
 
-  it('uses the singular for one file', () => {
+  it('counts processed files as filed when the runner reported no `to`', () => {
     expect(resultMessage({ ...base, processed: ['a.md'] })).toBe(
-      '1 file processed',
+      'Done: 1 filed.',
     );
-  });
-
-  it('uses the plural for more than one', () => {
     expect(resultMessage({ ...base, processed: ['a.md', 'b.md'] })).toBe(
-      '2 files processed',
+      'Done: 2 filed.',
     );
   });
 
@@ -89,13 +88,40 @@ describe('resultMessage', () => {
         ...base,
         processed: ['a.md', '0-Inbox/Bower - 2026-09-27 0815 Context.md'],
       }),
-    ).toBe('1 file processed');
+    ).toBe('Done: 1 filed.');
     expect(
       resultMessage({
         ...base,
         processed: ['0-Inbox/Bower - 2026-09-27 0815 Context.md'],
       }),
-    ).toBe('Nothing new to process');
+    ).toBe('Nothing new: the inbox was empty.');
+  });
+});
+
+describe('inboxBreakdown (R-CONF-4)', () => {
+  const file = (path: string): DriveFile => ({
+    id: path,
+    name: path.slice(path.lastIndexOf('/') + 1),
+    mimeType: 'application/octet-stream',
+    parents: [],
+    path,
+  });
+
+  it('splits files, links and requests, leaving the context note out', () => {
+    const files = [
+      file('0-Inbox/Lease.pdf'),
+      file('0-Inbox/Photo.jpg'),
+      file('0-Inbox/Link - rentals.example 2026-09-27 0815.md'),
+      file('0-Inbox/Bower - 2026-09-27 0815 Rule.md'),
+      file('0-Inbox/Bower - 2026-09-27 0815 Context.md'),
+      file('1-Projects/Flat/Note.md'),
+    ];
+    const total = inboxCount(files, false);
+    const breakdown = inboxBreakdown(files);
+    expect(breakdown.requests).toBe(1);
+    expect(breakdown.files + breakdown.links + breakdown.requests).toBe(
+      total.status === 'ready' ? total.total : -1,
+    );
   });
 });
 
@@ -376,7 +402,7 @@ describe('reduce', () => {
     ).toEqual({
       phase: 'done',
       run: doneRun,
-      message: '2 files processed',
+      message: 'Done: 2 filed.',
       ...openFor,
     });
   });
@@ -387,7 +413,7 @@ describe('reduce', () => {
     ).toEqual({
       phase: 'idle',
       run: doneRun,
-      message: '2 files processed',
+      message: 'Done: 2 filed.',
       ...closed,
     });
   });
@@ -529,13 +555,13 @@ describe('reduce', () => {
     const state: RunState = {
       phase: 'done',
       run: doneRun,
-      message: '2 files processed',
+      message: 'Done: 2 filed.',
       ...openFor,
     };
     expect(reduce(state, { type: 'sheet-dismissed' })).toEqual({
       phase: 'idle',
       run: doneRun,
-      message: '2 files processed',
+      message: 'Done: 2 filed.',
       sheetOpen: false,
       sheetRunId: openFor.sheetRunId,
     });
@@ -609,7 +635,7 @@ describe('reduce', () => {
     // sheet itself is dismissed, however long that takes.
     state = reduce(state, { type: 'sheet-dismissed' });
     expect(state.phase).toBe('idle');
-    expect(state.message).toBe('2 files processed');
+    expect(state.message).toBe('Done: 2 filed.');
   });
 
   it('reset always goes back to a clean idle state', () => {

@@ -289,7 +289,10 @@ describe('the Done sheet', () => {
         root,
       );
     });
-    const link = root.querySelector('a[href="/just-filed"]');
-    expect(link?.textContent).toBe('See where everything went');
+    const link = document.body.querySelector('a[href^="/just-filed"]');
+    expect(link?.textContent).toBe('See everything');
+    expect(link?.getAttribute('href')).toBe(
+      `/just-filed?run=${encodeURIComponent(run.requestedAt)}`,
+    );
   });
 });
