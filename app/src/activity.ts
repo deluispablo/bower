@@ -23,6 +23,8 @@ import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { displayPath } from './navigation.js';
 import { failureCopy } from './run-failure.js';
+import { outcomeCounts, outcomeFromRun, runSentence } from './run-outcome.js';
+import type { RunOutcome } from './run-outcome.js';
 import { processedKind } from './run-progress.js';
 import { shortDay } from './rules.js';
 import { fileTitle } from './vault-index.js';
@@ -170,6 +172,8 @@ export type ActivityTone =
   | 'file'
   | 'question'
   | 'rule'
+  // No card row is a move any more (R-JUST-1); the tone stays only because
+  // `just-filed.ts` still filters on it.
   | 'move'
   | 'set-aside';
 
@@ -202,6 +206,12 @@ export interface ActivityCard {
   /** The chip: "Done", "One thing set aside", "Failed · Took too long". */
   status: string;
   failed: boolean;
+  /** What the run did, from the one place that reads a report (R-RUN-4). */
+  outcome: RunOutcome;
+  /** The counts, "2 filed · 3 new notes · 1 needs you"; `''` when none. */
+  counts: string;
+  /** The card's sentence, in the third person ("Done 3 h ago: …"). */
+  sentence: string;
   rows: ActivityRow[];
 }
 
@@ -432,23 +442,11 @@ export function activityCard(
         : requestRow(path, kind, answers),
     );
   }
+  // Moves and corrections are not rows: the card says what the run did in
+  // counts (`RunOutcome`), never as raw "Moved" lines (R-JUST-1, R-REQ-4).
   for (const entry of entries) {
     if (entry.at === null || !fits(entry.at, run, lastOfDay)) continue;
-    if (entry.type === 'correction') {
-      rows.push({
-        key: `correction:${entry.from}:${entry.to}`,
-        tone: 'move',
-        title: `Moved from ${folderLabel(entry.from)}`,
-        destination: folderLabel(entry.to),
-      });
-    } else if (entry.type === 'moved') {
-      rows.push({
-        key: `moved:${entry.from}:${entry.to}`,
-        tone: 'move',
-        title: `${entry.byYou ? 'Moved by you' : 'Moved'}: ${displayPath(entry.from)}`,
-        destination: displayPath(entry.to),
-      });
-    } else if (entry.type === 'rule') {
+    if (entry.type === 'rule') {
       rows.push({
         key: `rule:${entry.text}`,
         tone: 'rule',
@@ -473,12 +471,16 @@ export function activityCard(
     : setAside > 0
       ? setAsideStatus(setAside)
       : 'Done';
+  const outcome = outcomeFromRun(run);
   return {
     key: run.requestedAt,
     when: cardWhen(run.finishedAt ?? run.requestedAt, now),
     duration: cardDuration(run),
     status,
     failed,
+    outcome,
+    counts: outcomeCounts(outcome),
+    sentence: runSentence(outcome, { now, voice: 'third' }),
     rows,
   };
 }

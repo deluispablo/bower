@@ -178,13 +178,37 @@ describe('activityCards (#345)', () => {
         title: 'Receipts go to Finance, named by shop and date',
         outcome: 'your rule, applied',
       },
-      {
-        key: 'correction:1-Projects/Flat hunt:2-Areas/Home',
-        tone: 'move',
-        title: 'Moved from Projects / Flat hunt',
-        destination: 'Areas / Home',
-      },
     ]);
+  });
+
+  it('a card carries the run outcome: counts and a sentence, no raw Moved lines (R-REQ-4)', () => {
+    expect(today?.outcome.state).toBe('done');
+    for (const row of today?.rows ?? []) {
+      expect(row.title).not.toMatch(/^Moved/);
+    }
+    const [reported] = activityCards({
+      runs: [
+        {
+          ...TODAY,
+          items: [
+            {
+              path: '0-Inbox/Lease agreement 2026.pdf',
+              kind: 'file',
+              to: '1-Projects/Flat hunt/Lease agreement 2026.pdf',
+            },
+          ],
+          created: ['1-Projects/Flat hunt/Summary.md'],
+          updated: [{ path: '3-Resources/Lists.md' }],
+        },
+      ],
+      log: '',
+      files: [],
+      now: NOW,
+    });
+    expect(reported?.counts).toBe('1 filed · 1 new note · 1 updated');
+    expect(reported?.sentence).toMatch(
+      /^Done .*: 1 filed · 1 new note · 1 updated\.$/,
+    );
   });
 
   it('set aside, in people words: a document that could not be read and a quarantined file', () => {
@@ -228,8 +252,9 @@ describe('activityCards (#345)', () => {
     });
     expect(failed?.failed).toBe(true);
     expect(failed?.status).toBe('Failed · Took too long');
-    // Only the day-only Correction line: this is the last run of that day.
-    expect(failed?.rows.map((row) => row.tone)).toEqual(['move']);
+    // A Correction line is no row any more, so nothing is left.
+    expect(failed?.rows).toEqual([]);
+    expect(failed?.outcome.state).toBe('failed');
   });
 
   it('a request with no answer is done; a report without kinds falls back to the name', () => {
@@ -321,22 +346,9 @@ describe('Moved lines (#643)', () => {
     ]);
   });
 
-  it('shows a row per move with display paths, the person own move labelled', () => {
+  it('shows no row for a move: no raw "Moved" line anywhere (R-JUST-1)', () => {
     const [card] = activityCards({ runs: [TODAY], log, files: [], now: NOW });
-    const moves = card?.rows.filter((row) => row.tone === 'move');
-    expect(moves).toEqual([
-      {
-        key: 'moved:3-Resources/Recipes/soup.md:2-Areas/Home/Cooking/soup.md',
-        tone: 'move',
-        title: 'Moved: Resources / Recipes / soup.md',
-        destination: 'Areas / Home / Cooking / soup.md',
-      },
-      {
-        key: 'moved:1-Projects/Flat hunt/plan.pdf:4-Archives/Flat hunt/plan.pdf',
-        tone: 'move',
-        title: 'Moved by you: Projects / Flat hunt / plan.pdf',
-        destination: 'Archives / Flat hunt / plan.pdf',
-      },
-    ]);
+    expect(card?.rows.filter((row) => row.tone === 'move')).toEqual([]);
+    expect(JSON.stringify(card?.rows)).not.toMatch(/Moved/);
   });
 });
