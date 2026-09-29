@@ -2569,7 +2569,8 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
     page.getByRole('link', { name: /Summarise this/ }),
   ).toHaveAttribute('href', /^\/bower\?text=Summarise/);
 
-  // The More menu, in its file version: Open in Drive greyed (#555), no Pin.
+  // The More menu, in its file version: Open in Drive greyed (#555), Pin to
+  // Home present (#688).
   await visible(page.getByRole('button', { name: 'More' })).click();
   const menu = page.getByRole('menu', { name: 'File actions' });
   const openInDrive = menu.getByRole('menuitem', { name: /Open in Drive/ });
@@ -2578,9 +2579,9 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(
     menu.getByText('Not in the demo. Run your own Bower to use it.'),
   ).toBeVisible();
-  await expect(menu.getByRole('menuitem', { name: /Pin to Home/ })).toHaveCount(
-    0,
-  );
+  await expect(
+    menu.getByRole('menuitem', { name: /Pin to Home/ }),
+  ).toBeVisible();
   // The one More menu (#352): the board's header, then Ask Bower first.
   await expect(menu.locator('.note-menu-meta')).toContainText('PDF');
   await expect(menu.locator('.note-menu-meta')).toContainText(

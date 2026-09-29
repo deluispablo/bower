@@ -58,6 +58,7 @@ import {
   clearFilePinned,
   clearPinned,
   folderNoteName,
+  folderNotePath,
   pinnedFilesOf,
   pinnedOf,
   setFilePinned,
@@ -1244,7 +1245,9 @@ export function VaultProvider({ children }: VaultProviderProps) {
     ): Promise<void> => {
       const previous = stateRef.current.index?.folderNotes.get(path);
       const files = stateRef.current.files.filter((f) => f.id !== previous?.id);
-      if (file !== null) files.push(file);
+      // A file Drive just created or updated carries only its name as its
+      // path; the folder note lives inside `path`, so `folderNotes` finds it.
+      if (file !== null) files.push({ ...file, path: folderNotePath(path) });
       const fetchedAt = stateRef.current.fetchedAt ?? new Date().toISOString();
       const builtIndex = buildVaultIndex(files);
       const folderPinnedAt = new Map(
