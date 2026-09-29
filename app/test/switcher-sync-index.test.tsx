@@ -282,8 +282,8 @@ describe('the empty query (#593, board Phone-Search-Start)', () => {
 
   it('scopes the search to a PARA folder when its chip is tapped', async () => {
     await flush();
-    const chip = Array.from(document.body.querySelectorAll('button')).find((el) =>
-      (el.textContent ?? '').trim().endsWith('Areas'),
+    const chip = Array.from(document.body.querySelectorAll('button')).find(
+      (el) => (el.textContent ?? '').trim().endsWith('Areas'),
     );
     if (chip === undefined) throw new Error('Areas chip missing');
     void act(() => {
@@ -317,9 +317,9 @@ describe('results (#593, board Phone-Search)', () => {
     });
     await flush();
 
-    const headings = Array.from(document.body.querySelectorAll('.switcher-heading')).map(
-      (el) => el.textContent,
-    );
+    const headings = Array.from(
+      document.body.querySelectorAll('.switcher-heading'),
+    ).map((el) => el.textContent);
     expect(headings).toEqual(['Folder', 'Notes', 'Files']);
     expect(buttonNames()).toContain('All 3');
     expect(document.body.textContent).toContain(
@@ -339,7 +339,9 @@ describe('results (#593, board Phone-Search)', () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
-    expect(document.body.textContent).toContain('Nothing called “boiler warranty”');
+    expect(document.body.textContent).toContain(
+      'Nothing called “boiler warranty”',
+    );
     expect(document.body.textContent).toContain(
       'No folder, note or file has those words in its name or its text.',
     );
@@ -396,7 +398,9 @@ describe('rows learn a photo thumbnail and a PDF page count (#594)', () => {
     await flush();
     await flush();
     expect(
-      document.body.querySelector('.switcher-row-thumb img')?.getAttribute('src'),
+      document.body
+        .querySelector('.switcher-row-thumb img')
+        ?.getAttribute('src'),
     ).toBe('blob:thumb');
   });
 
@@ -425,6 +429,8 @@ describe('the multi-word query (#594)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(document.body.textContent).toContain('Nothing called “curry warranty”');
+    expect(document.body.textContent).toContain(
+      'Nothing called “curry warranty”',
+    );
   });
 });

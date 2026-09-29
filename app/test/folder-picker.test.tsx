@@ -82,7 +82,9 @@ function button(text: string): HTMLButtonElement {
 }
 
 function radios(): HTMLButtonElement[] {
-  return [...document.body.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+  return [
+    ...document.body.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
+  ];
 }
 
 function radio(name: string): HTMLButtonElement {
@@ -167,9 +169,9 @@ describe('FolderPicker', () => {
     expect(document.body.querySelector('h2')?.textContent).toBe(
       'Move “Lease agreement 2026” to…',
     );
-    expect(document.body.querySelector('input')?.getAttribute('placeholder')).toBe(
-      'Find a folder',
-    );
+    expect(
+      document.body.querySelector('input')?.getAttribute('placeholder'),
+    ).toBe('Find a folder');
     const text = document.body.textContent ?? '';
     expect(text).toContain('Things with an end date');
     expect(text).toContain('Parts of life that go on');
@@ -205,7 +207,9 @@ describe('FolderPicker', () => {
 
   it('expands a landmark with its chevron', () => {
     picker();
-    click(document.body.querySelector('[aria-label="Expand Projects"]') as Element);
+    click(
+      document.body.querySelector('[aria-label="Expand Projects"]') as Element,
+    );
     expect(radio('Flat hunt')).toBeTruthy();
   });
 
@@ -217,7 +221,9 @@ describe('FolderPicker', () => {
     ).toEqual(['Garden']);
     type(document.body.querySelector('input') as HTMLInputElement, 'zzz');
     expect(radios()).toHaveLength(0);
-    expect(document.body.textContent).toContain('No folder has that in its name.');
+    expect(document.body.textContent).toContain(
+      'No folder has that in its name.',
+    );
   });
 
   it('keeps both buttons off until a folder is chosen, then reports the choice', () => {
