@@ -239,6 +239,14 @@ readonly QUARANTINED_FILE="$WORK_DIR/quarantined.txt"
 readonly KINDS_FILE="$WORK_DIR/kinds.txt"
 readonly UNCONVERTED_FILE="$WORK_DIR/unconverted.txt"
 readonly SET_ASIDE_FILE="$WORK_DIR/set-aside.txt"
+# The text of each pending document (R-RUNNER-7, R-AG-9), kept before the agent
+# runs so nothing it writes can change it: one "<file name><TAB><text file or
+# ->" line per document in DOC_TEXT_MAP (the text files are in DOC_TEXT_DIR;
+# "-" means a PDF with no text layer), appended to the document's text copy
+# after the run. AUDIT_WARNING is the name audit's one-line warning.
+readonly DOC_TEXT_DIR="$WORK_DIR/doc-text"
+readonly DOC_TEXT_MAP="$WORK_DIR/doc-text-map.txt"
+AUDIT_WARNING=''
 # In the vault: the pending files over the size limit, for the agent to file
 # by name and date without reading them (written before the agent starts),
 # and the one clause the agent may write about what it added besides filing
@@ -702,6 +710,113 @@ find_moves() {
   local count
   count=$(cat "$ambiguous")
   [ "$count" -eq 0 ] || log "$count moves not guessed: the same content twice"
+}
+
+# The frontmatter of the note $1 as one "<by><TAB><kind><TAB><original>" line,
+# "-" for a field it lacks. `original` is cut to the file name a link names
+# ("[[Folder/Report.docx|alias]]" gives "Report.docx").
+note_meta() {
+  awk '{ sub(/\r$/, "") }
+    NR == 1 { if ($0 != "---") exit; next }
+    /^---[ \t]*$/ { exit }
+    /^by:/ { by = $0; sub(/^by:/, "", by) }
+    /^kind:/ { kind = $0; sub(/^kind:/, "", kind) }
+    /^original:/ { orig = $0; sub(/^original:/, "", orig) }
+    END {
+      gsub(/[ \t"\047]/, "", by)
+      gsub(/[ \t"\047]/, "", kind)
+      sub(/^[ \t"\047]*(\[\[)?/, "", orig)
+      sub(/(\]\])?["\047 \t]*$/, "", orig)
+      sub(/[|#].*$/, "", orig)
+      sub(/^.*\//, "", orig)
+      printf "%s\t%s\t%s\n", (by == "" ? "-" : by), (kind == "" ? "-" : kind), (orig == "" ? "-" : orig)
+    }' "$1"
+}
+
+# R-RUNNER-7, R-AG-9 (T9), after the move detection: appends "## The document"
+# and the text kept before the run (DOC_TEXT_MAP) to each document's text
+# copy, an accepted note the agent wrote (`by: bower`) whose `original:` names
+# the document, whose name is the document's base name, and which has no
+# "## The document" yet. The agent's rename of an original is followed
+# through MOVES_FILE. A document with no kept text writes nothing: no empty
+# section. A scan (no text layer) gets "Scanned: no text to copy". The
+# document's name must be unique among the pending ones, else nothing is
+# guessed. Logs a count only.
+append_document_text() {
+  [ "$TOO_MANY_CHANGES" -eq 0 ] && [ -s "$DOC_TEXT_MAP" ] || return 0
+  local map="$WORK_DIR/doc-text-names.txt" path base by kind orig file n appended=0
+  {
+    cat "$DOC_TEXT_MAP"
+    awk -F '\t' 'FILENAME == ARGV[1] { p = $1; sub(/^.*\//, "", p); f[p] = $2; next }
+      { q = $2; sub(/^.*\//, "", q); p = $1; sub(/^.*\//, "", p); if (p in f) print q "\t" f[p] }' \
+      "$DOC_TEXT_MAP" "$MOVES_FILE"
+  } | LC_ALL=C sort -u >"$map" || return 1
+  while IFS= read -r path; do
+    case "$path" in *.md) ;; *) continue ;; esac
+    [ -f "$VAULT_DIR/$path" ] || continue
+    IFS=$'\t' read -r by kind orig < <(note_meta "$VAULT_DIR/$path")
+    [ "$by" = bower ] && [ "$kind" = - ] && [ "$orig" != - ] || continue
+    base=${path##*/}
+    [ "${base%.md}" = "${orig%.*}" ] || continue
+    if grep -qxF '## The document' "$VAULT_DIR/$path"; then continue; fi
+    n=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"]' "$map" | grep -c . || true)
+    [ "$n" -eq 1 ] || continue
+    file=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"] { print $2 }' "$map")
+    {
+      [ -z "$(tail -c1 "$VAULT_DIR/$path")" ] || printf '\n'
+      printf '\n## The document\n\n'
+      if [ "$file" = - ]; then
+        printf 'Scanned: no text to copy\n'
+      else
+        cat "$file"
+      fi
+    } >>"$VAULT_DIR/$path" || return 1
+    appended=$((appended + 1))
+  done <"$CHANGED_FILE"
+  [ "$appended" -eq 0 ] || log "$appended text copies completed"
+  # The appended text changed those files: the manifest must say so.
+  manifest >"$MANIFEST_AFTER"
+}
+
+# R-AG-4 and R-AG-5, after the audit: a note the agent created that is named
+# over 40 characters, or that is a companion note (it has a `kind`) named like
+# its original's base name, is a warning in the run's summary (the status
+# callback), never a refusal. A text copy (no `kind`, named like its
+# original) is exempt, and so are hub notes, answers, the log and the index.
+# Only counts are logged: no note name or path.
+audit_note_names() {
+  AUDIT_WARNING=''
+  [ "$TOO_MANY_CHANGES" -eq 0 ] || return 0
+  local before="$WORK_DIR/before-paths-audit.txt" path base by kind orig long=0 same=0 chars parts=()
+  cut -d ' ' -f 3- "$MANIFEST_BEFORE" | LC_ALL=C sort -u >"$before" || return 1
+  while IFS= read -r path; do
+    case "$path" in
+      *.md) ;;
+      *) continue ;;
+    esac
+    case "$path" in
+      index.md | log.md | Rules.md | README.md | Answers/* | .bower/* | */_*.md | _*.md | CLAUDE.md | */CLAUDE.md) continue ;;
+    esac
+    [ -f "$VAULT_DIR/$path" ] || continue
+    ! grep -qxF -- "$path" "$before" || continue
+    IFS=$'\t' read -r by kind orig < <(note_meta "$VAULT_DIR/$path")
+    [ "$by" = bower ] || continue
+    base=${path##*/}
+    base=${base%.md}
+    if [ "$orig" != - ] && [ "$base" = "${orig%.*}" ] && [ "${orig##*.}" != md ]; then
+      # Named like its original: fine for a text copy, a violation for a
+      # companion note.
+      [ "$kind" = - ] || same=$((same + 1))
+      continue
+    fi
+    chars=$(LC_ALL=C.UTF-8 bash -c 'printf "%s" "${#1}"' _ "$base" 2>/dev/null) || chars=${#base}
+    [ "$chars" -le 40 ] || long=$((long + 1))
+  done <"$CHANGED_FILE"
+  [ "$long" -eq 0 ] || parts+=("$long note $([ "$long" -eq 1 ] && echo name || echo names) over 40 characters")
+  [ "$same" -eq 0 ] || parts+=("$same $([ "$same" -eq 1 ] && echo note || echo notes) named like $([ "$same" -eq 1 ] && echo its || echo their) original")
+  [ "${#parts[@]}" -gt 0 ] || return 0
+  AUDIT_WARNING="Warning: ${parts[0]}${parts[1]:+; ${parts[1]}}."
+  log "note name audit: $long over 40 characters, $same named like their original"
 }
 
 # The move phase (#595): each move in MOVES_FILE is done in Drive itself, as
@@ -1688,6 +1803,37 @@ if ! keep_pre_run_copy; then
   fail "$STEP: keeping a pre-run copy failed"
 fi
 
+# Keeps a copy of the text file $2 (a document's converted text) as the text
+# of the original $1, for its text copy (R-RUNNER-7). An empty text is not
+# kept: with no conversion, nothing is written.
+keep_doc_text() {
+  local n out
+  [ -n "$(tr -d '[:space:]' <"$2")" ] || return 0
+  n=$(grep -c . "$DOC_TEXT_MAP" || true)
+  out="$DOC_TEXT_DIR/$((n + 1)).txt"
+  cp "$2" "$out" || return 0
+  printf '%s\t%s\n' "${1##*/}" "$out" >>"$DOC_TEXT_MAP"
+}
+
+# R-AG-9: the text of the pending PDF $1, by pdftotext -layout (poppler-utils,
+# installed in the job). A PDF over the size limits is not converted (it is
+# only kept), nor is one pdftotext cannot read: nothing is written for it.
+# One with no text on any page (a scan) is listed with "-" instead of a text
+# file. The vault gets no file: the agent reads the PDF itself.
+pdf_text() {
+  local out="$WORK_DIR/pdf-text.tmp"
+  command -v pdftotext >/dev/null 2>&1 || return 0
+  ! too_large "$VAULT_DIR/$1" || return 0
+  timeout 120 pdftotext -layout "$VAULT_DIR/$1" "$out" </dev/null >>"$PANDOC_LOG" 2>&1 || return 0
+  if [ -z "$(tr -d '[:space:]' <"$out")" ]; then
+    printf '%s\t-\n' "${1##*/}" >>"$DOC_TEXT_MAP"
+  else
+    tr -d '\f' <"$out" >"$out.clean" && mv "$out.clean" "$out" || return 0
+    keep_doc_text "$1" "$out"
+  fi
+  rm -f "$out"
+}
+
 # --- convert documents ------------------------------------------------------
 # The agent has no pandoc, so Office, HTML and EPUB files pending in 0-Inbox/
 # and Clippings/ are converted here, before it runs: each becomes a Markdown
@@ -1702,6 +1848,8 @@ fi
 # to a private log file.
 STEP='convert documents'
 : >"$UNCONVERTED_FILE"
+: >"$DOC_TEXT_MAP"
+mkdir -p "$DOC_TEXT_DIR"
 if [ "$MODE" = ingest ]; then
   converted=0
   unconverted=0
@@ -1712,12 +1860,17 @@ if [ "$MODE" = ingest ]; then
       *.[hH][tT][mM][lL] | *.[hH][tT][mM]) from=html ;;
       *.[eE][pP][uU][bB]) from=epub ;;
       *.[rR][tT][fF]) from=rtf ;;
+      *.[pP][dD][fF])
+        pdf_text "$path"
+        continue
+        ;;
       *) continue ;;
     esac
     sibling="${path%.*}.md"
     [ ! -e "$VAULT_DIR/$sibling" ] || continue
     if (cd "$VAULT_DIR" && pandoc --sandbox -f "$from" -t gfm --wrap=none \
       -o "$sibling" -- "$path") </dev/null >>"$PANDOC_LOG" 2>&1; then
+      keep_doc_text "$path" "$VAULT_DIR/$sibling"
       converted=$((converted + 1))
     else
       rm -f "$VAULT_DIR/$sibling"
@@ -1954,6 +2107,11 @@ fi
 if ! find_moves; then
   fail "$STEP: move failed"
 fi
+# R-RUNNER-7: the documents' full text goes into their text copies now that
+# the renames are known, then the names are audited.
+if ! append_document_text || ! audit_note_names; then
+  fail "$STEP: text copy failed"
+fi
 if ! move_up; then
   fail "$STEP: move failed"
 fi
@@ -2016,6 +2174,8 @@ if [ "$TOO_MANY_CHANGES" -eq 1 ]; then
   ADDED=''
   write_outcome done 'Nothing was saved: the tidy-up changed too many files.'
 else
+  [ -z "$AUDIT_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
+'}$AUDIT_WARNING"
   filed=$(count_lines "$WORK_DIR/pending-after-scan.txt")
   [ -f "$WORK_DIR/pending-after-scan.txt" ] || filed=$(count_lines "$PENDING_FILE")
   write_outcome done "Tidied up $filed $([ "$filed" -eq 1 ] && echo thing || echo things)."
