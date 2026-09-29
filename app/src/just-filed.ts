@@ -62,6 +62,28 @@ export function wasLabel(name: string): string {
   return `was “${name}”`;
 }
 
+/**
+ * The address a saved link shows in the desktop table's "You added" cell
+ * (board `Desktop-JustFiled`): host and path, the middle of a long path
+ * elided, "rightmove.co.uk/…/kentish-town". `null` when `source` is not an
+ * http(s) address.
+ */
+export function linkAddress(source: unknown): string | null {
+  if (typeof source !== 'string') return null;
+  let url: URL;
+  try {
+    url = new URL(source.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  const host = url.hostname.replace(/^www\./i, '');
+  const parts = url.pathname.split('/').filter((part) => part !== '');
+  if (parts.length === 0) return host;
+  const last = parts[parts.length - 1] ?? '';
+  return parts.length === 1 ? `${host}/${last}` : `${host}/…/${last}`;
+}
+
 function baseName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
 }
@@ -135,7 +157,7 @@ function rowOf(item: RunItem & { to: string }, index: VaultIndex | null) {
     para: paraOf(item.to),
     notePath: kind === 'note' ? item.to : item.to.replace(/\.[^./]+$/, '.md'),
   };
-  if (item.renamedFrom !== undefined && item.renamedFrom !== name) {
+  if (item.renamedFrom !== undefined && item.renamedFrom !== '') {
     row.oldName = item.renamedFrom;
   }
   if (file !== undefined) {

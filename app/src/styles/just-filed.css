@@ -47,6 +47,12 @@
   color: var(--color-text-muted);
 }
 
+/* The board's small type: the intro at 14 px, the count line a 12 px caps
+   label. */
+.just-filed-intro {
+  font-size: var(--text-sm);
+}
+
 .just-filed-group {
   display: flex;
   flex-direction: column;
@@ -62,9 +68,11 @@
 
 .just-filed-heading {
   margin: 0;
-  color: var(--color-heading);
-  font-size: var(--text-base, 1rem);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .just-filed-markall,
@@ -137,7 +145,7 @@
 .just-filed-was,
 .just-filed-note {
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
+  font-size: 0.78rem;
 }
 
 .just-filed-to,

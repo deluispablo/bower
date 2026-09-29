@@ -124,6 +124,10 @@ test('at 1280 px the list is a table with Earlier tidy-ups', async ({
   await expect(first).toContainText('Arlington Road, 2 bed.pdf');
   await expect(first).toContainText('Projects › Flat hunt');
   await expect(first.locator('.new-tag')).toHaveText('New');
+  // A saved link's "You added" cell is its address, not the old file name.
+  await expect(
+    table.getByRole('row').filter({ hasText: 'Kentish Town photos' }),
+  ).toContainText('rightmove.example.com/…/kentish-town');
 
   await expect(list.getByRole('heading', { name: /^Set aside/ })).toBeVisible();
   await expect(
