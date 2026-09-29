@@ -201,17 +201,17 @@ button.page-bare-back {
 
 /* `auto`, not `0`, as the basis: the title keeps its own width while Back's
    label shrinks first (see `.topbar-back`), then grows to push "?" and the
-   avatar to the right edge. A 130px floor (#426): on a note whose own
+   avatar to the right edge. A 96px floor (#426, #847): on a note whose own
    title is close in length to wherever Back points (its own folder, say),
    proportional flex-shrink alone let both give up a slice of the deficit
    at once, each landing at only a few letters. Below this floor the
    flexbox algorithm freezes the title and pushes the rest of the deficit
    onto Back instead, which still has its own 44px floor to fall back on.
-   130px keeps a title readable to around a dozen characters before it
+   96px keeps a title readable to around a dozen characters before it
    has to give any further. */
 .topbar-crumb {
   flex: 1 1 auto;
-  min-width: 130px;
+  min-width: 96px;
 }
 
 /* The screen title, phone only (#318): the crumb slot's content, or the
@@ -247,10 +247,11 @@ button.page-bare-back {
 
 /* Back on an inner screen (#318, `back-link.tsx`): it shrinks a thousand
    times faster than the title, so its label gives way (down to the bare
-   arrow) before the title starts to truncate. */
+   arrow) before the title starts to truncate. On a phone the label takes
+   the free space and ellipsizes (#847), so it is never a 5 px sliver. */
 .topbar-back {
   display: flex;
-  flex: 0 1000 auto;
+  flex: 0 1 auto;
   align-items: center;
   /* 11 + 22 (the arrow) + 11 = 44: at its narrowest the link is exactly
      the arrow's tap target, with no sliver of the label left showing. */
@@ -733,6 +734,17 @@ button.page-bare-back {
     height: auto;
   }
 
+  /* The tree keeps four 44 px rows however much sits above it (#847); when
+     the window is too short for that, the column scrolls. */
+  .shell-sidebar-nav {
+    overflow-y: auto;
+  }
+
+  .shell-sidebar .explorer-tree {
+    flex-shrink: 0;
+    min-height: 176px;
+  }
+
   .shell-ledge {
     flex: 0 0 66px;
     height: 66px;
@@ -741,6 +753,15 @@ button.page-bare-back {
 
   .shell-ledge:empty {
     display: none;
+  }
+
+  /* A window shorter than 800 px trims the ledge's room (#847); the bird
+     (7 px up, 52 px tall) still fits. */
+  @media (max-height: 799px) {
+    .shell-ledge {
+      flex-basis: 60px;
+      height: 60px;
+    }
   }
 
   /* Empty slots take no room, not even a flex gap (#741). */

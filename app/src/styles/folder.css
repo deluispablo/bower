@@ -57,15 +57,6 @@
   gap: var(--space-1);
 }
 
-/* #555: "Not in the demo…" under the greyed Drive chip. Own class from
-   `.folder-explainer` (the root folder's meaning line above the chips) so
-   an e2e assertion scoped to one never picks up the other. */
-.folder-demo-note {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
 /* Pinned's toggled look comes from `header-action.css` (R-FOLD-2); only
    the bird's confirmation is sized here. */
 .folder-chips .header-action .b {
@@ -304,6 +295,7 @@
 
 .folder-seg-btn {
   flex: 1;
+  white-space: nowrap;
   min-height: 36px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -335,6 +327,34 @@
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
+}
+
+/* From 900 px the tools are one row that never wraps or clips: the sort and
+   the List/Grid switch keep their size, the kind chips take what is left
+   and scroll sideways rather than pushing the sort into their rows. */
+@media (min-width: 900px) {
+  .folder-tools {
+    flex-wrap: nowrap;
+  }
+
+  .folder-tools > .folder-select,
+  .folder-tools > .folder-layout,
+  .folder-tools > .folder-compare-btn {
+    flex-shrink: 0;
+  }
+
+  .folder-tools > .folder-kind-chips {
+    flex: 1 1 0;
+    flex-wrap: nowrap;
+    min-width: 0;
+    padding-block: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .folder-tools > .folder-layout {
+    margin-left: auto;
+  }
 }
 
 .folder-select {
@@ -378,6 +398,9 @@
 }
 
 .folder-row-detail {
+  /* The bird mark keeps its 12% room (R-BIRD-6): nothing here clips it. */
+  overflow: visible;
+  text-overflow: clip;
   white-space: normal;
 }
 
@@ -650,7 +673,9 @@
 }
 
 .folder-kind-chip {
+  flex-shrink: 0;
   min-height: 32px;
+  white-space: nowrap;
   padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);

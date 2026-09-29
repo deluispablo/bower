@@ -19,6 +19,8 @@ export interface HeaderActionProps {
   /** Set for a toggle; it becomes `aria-pressed`. */
   pressed?: boolean;
   disabled?: boolean;
+  /** The tooltip, e.g. why a disabled action is disabled. */
+  title?: string;
 }
 
 export function HeaderAction(props: HeaderActionProps): JSX.Element {
@@ -36,7 +38,7 @@ export function HeaderAction(props: HeaderActionProps): JSX.Element {
   );
   if (props.href !== undefined) {
     return (
-      <a class={className} href={props.href}>
+      <a class={className} href={props.href} title={props.title}>
         {content}
       </a>
     );
@@ -47,6 +49,7 @@ export function HeaderAction(props: HeaderActionProps): JSX.Element {
       class={className}
       aria-pressed={props.pressed}
       disabled={props.disabled}
+      title={props.title}
       onClick={props.onClick}
     >
       {content}

@@ -2480,9 +2480,11 @@ test('a project folder lists its files and notes together, newest first, with wh
   });
   await expect(drive).toBeVisible();
   await expect(drive).toBeDisabled();
-  await expect(
-    page.getByText('Not in the demo. Run your own Bower to use it.'),
-  ).toBeVisible();
+  // #847: the demo line is the button's tooltip, no longer a line in the header.
+  await expect(drive).toHaveAttribute(
+    'title',
+    'Not in the demo. Run your own Bower to use it.',
+  );
   await expect(page.getByRole('link', { name: 'Open in Drive' })).toHaveCount(
     0,
   );

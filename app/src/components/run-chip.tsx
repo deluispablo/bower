@@ -95,6 +95,18 @@ function runningModel(input: ChipInput): ChipModel {
   });
 }
 
+/**
+ * The phone's partial meta line leads with what is left, so the count that
+ * matters is never the part a narrow bar cuts (#847): "1 still in your
+ * inbox · 1 filed · 1 new".
+ */
+export function phonePartialDetail(left: number, counts: string): string {
+  if (left <= 0) return counts;
+  const tail = `${left} still in your inbox`;
+  const rest = counts.split(' · ').filter((part) => part !== tail);
+  return [tail, ...rest].join(' · ');
+}
+
 function finishedModel(run: Run, input: ChipInput): ChipModel | null {
   const outcome = outcomeFromRun(run);
   if (outcome.state === 'running') return null;
@@ -121,7 +133,7 @@ function finishedModel(run: Run, input: ChipInput): ChipModel | null {
     return finish({
       state: 'partial',
       title: 'Partly done',
-      detail: input.desktop ? inbox : counts,
+      detail: input.desktop ? inbox : phonePartialDetail(outcome.left, counts),
       name,
       announce: name,
     });

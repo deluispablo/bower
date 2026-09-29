@@ -90,7 +90,7 @@ describe('chipModel: the four states', () => {
     expect(phone).toMatchObject({
       state: 'partial',
       title: 'Partly done',
-      detail: '1 filed · 1 new · 1 updated · 1 still in your inbox',
+      detail: '1 still in your inbox · 1 filed · 1 new · 1 updated',
       name: 'Tidy-up partly done, 1 thing still in your inbox. See what happened',
     });
     const desktop = chipModel(input({ lastFinished: run, desktop: true }));
