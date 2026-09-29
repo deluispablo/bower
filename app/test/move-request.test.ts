@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { INSTRUCTION_APP_PROPERTIES } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import {
   currentFolderOf,
@@ -8,6 +9,8 @@ import {
   pickerFolders,
   requestRowText,
   sendMoveRequest,
+  undoRequestNote,
+  writeRequestNote,
 } from '../src/move-request.js';
 import { buildTree } from '../src/navigation.js';
 import type { TreeNode } from '../src/navigation.js';
@@ -197,6 +200,71 @@ describe('requestRowText', () => {
   it('returns other text unchanged', () => {
     expect(requestRowText('Keep tax forms in 3-Resources')).toBe(
       'Keep tax forms in 3-Resources',
+    );
+  });
+});
+
+describe('writeRequestNote and undoRequestNote', () => {
+  const now = new Date(2026, 8, 29, 10, 5);
+
+  it('writes one request note the runner will not quarantine', async () => {
+    const createTextFile = vi.fn().mockResolvedValue({ id: 'NOTE_ID' });
+    const id = await writeRequestNote(
+      { createTextFile },
+      { inboxFolderId: 'INBOX_ID', text: 'Rename a.pdf to b.pdf', now },
+    );
+    expect(id).toBe('NOTE_ID');
+    const [, , content, options] = createTextFile.mock.calls[0] as [
+      string,
+      string,
+      string,
+      { appProperties: Record<string, string> },
+    ];
+    expect(content).toContain('Rename a.pdf to b.pdf');
+    expect(options.appProperties).toEqual(INSTRUCTION_APP_PROPERTIES);
+  });
+
+  it('a "now" send starts the run only after the note is written', async () => {
+    const order: string[] = [];
+    const createTextFile = vi.fn().mockImplementation(async () => {
+      await Promise.resolve();
+      order.push('written');
+      return { id: 'NOTE_ID' };
+    });
+    const startRun = vi.fn().mockImplementation(async () => {
+      order.push('run');
+      return true;
+    });
+    await sendMoveRequest(
+      { createTextFile, startRun },
+      { inboxFolderId: 'INBOX_ID', text: 'x', when: 'now', now },
+    );
+    expect(order).toEqual(['written', 'run']);
+  });
+
+  it('a "now" send whose write fails starts no run', async () => {
+    const createTextFile = vi.fn().mockRejectedValue(new Error('offline'));
+    const startRun = vi.fn().mockResolvedValue(true);
+    await expect(
+      sendMoveRequest(
+        { createTextFile, startRun },
+        { inboxFolderId: 'INBOX_ID', text: 'x', when: 'now', now },
+      ),
+    ).rejects.toThrow('offline');
+    expect(startRun).not.toHaveBeenCalled();
+  });
+
+  it('Undo sends the note to the Bin', async () => {
+    const deleteFile = vi.fn().mockResolvedValue(undefined);
+    await expect(undoRequestNote(deleteFile, 'NOTE_ID')).resolves.toBe('undone');
+    expect(deleteFile).toHaveBeenCalledWith('NOTE_ID');
+  });
+
+  it('Undo that cannot trash says failed and does not throw', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const deleteFile = vi.fn().mockRejectedValue(new Error('offline'));
+    await expect(undoRequestNote(deleteFile, 'NOTE_ID')).resolves.toBe(
+      'failed',
     );
   });
 });
