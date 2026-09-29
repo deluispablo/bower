@@ -24,14 +24,12 @@
  * the request rather than a pile of files, in the demo or not.
  */
 
-import { useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { isDemo } from '../api.js';
 import { Bird } from './bird.js';
 import { IconSparkle } from './icons.js';
-import { useDismissGuard } from './use-dismiss-guard.js';
-import { useFocusTrap } from './use-focus-trap.js';
+import { Overlay } from './overlay.js';
 
 import '../styles/tidy-confirm-sheet.css';
 
@@ -44,23 +42,40 @@ import '../styles/tidy-confirm-sheet.css';
 export const DEMO_RECORDING_NOTICE =
   'Demo: what follows is a recording. Nothing is sent to Claude, nothing is saved.';
 
+/** CONF-2: the line under the title (tidy-up only). */
+export const CONFIRM_SUB = 'Tidy up now, or add the rest of the pile first.';
+
+/** CONF-5: what a tidy-up costs; no number (Q4). */
+export const CONFIRM_COST =
+  'A tidy-up takes a few minutes and uses one run of your Claude plan.';
+
+/** CONF-3: "5 things in your inbox" / "1 thing in your inbox". */
+export function confirmCountLine(count: number): string {
+  return `${count} ${count === 1 ? 'thing' : 'things'} in your inbox`;
+}
+
+/** What the inbox holds, for the CONF-4 line. */
+export interface ConfirmBreakdown {
+  files: number;
+  links: number;
+  requests: number;
+}
+
 /**
- * The count phrase ("1 thing" / "3 things") and the rest of the sentence,
- * split so the count can be bold as on the board. Pure, so it is
- * unit-tested without rendering anything.
+ * CONF-4: "3 files, 2 links · and 1 request". Zero parts are left out;
+ * requests come after the dot; null when there is nothing to break down.
  */
-export function confirmSentenceParts(count: number): {
-  lead: string;
-  rest: string;
-} {
-  const lead = `${count} ${count === 1 ? 'thing' : 'things'}`;
-  const verb = count === 1 ? 'is' : 'are';
-  return {
-    lead,
-    rest:
-      `${verb} waiting. A tidy-up takes a few minutes and uses one run ` +
-      'of your Claude plan, so it is better to add the whole pile first.',
-  };
+export function confirmBreakdownLine(b: ConfirmBreakdown): string | null {
+  const things: string[] = [];
+  if (b.files > 0) things.push(`${b.files} ${b.files === 1 ? 'file' : 'files'}`);
+  if (b.links > 0) things.push(`${b.links} ${b.links === 1 ? 'link' : 'links'}`);
+  const request =
+    b.requests > 0
+      ? `${b.requests} ${b.requests === 1 ? 'request' : 'requests'}`
+      : null;
+  if (request === null) return things.length > 0 ? things.join(', ') : null;
+  if (things.length === 0) return request;
+  return `${things.join(', ')} · and ${request}`;
 }
 
 /**
@@ -104,14 +119,24 @@ export function requestConfirmSentenceParts(count: number): {
   };
 }
 
+const TITLE_ID = 'tidy-confirm-title';
+
 /** "tidy": the whole-inbox confirmation every Tidy up opens (unchanged).
  * "request": a waiting request's own "Do it now" (#501) — its own title,
  * count line and button, about the request rather than a pile of files. */
 export type TidyConfirmKind = 'tidy' | 'request';
 
 export interface TidyConfirmSheetProps {
-  /** How many things the sentence counts (see `run-store.ts#tidyUp`/`doItNow`). */
+  /**
+   * How many things the sentence counts (see `run-store.ts#tidyUp`/
+   * `doItNow`): the shared `inboxCount` total, the same number Add and
+   * Home show (R-CONF-2).
+   */
   count: number;
+  /** The inbox listing has not resolved: a skeleton, never 0 (R-CONF-3). */
+  loading?: boolean;
+  /** Files, links and requests behind `count`, for the CONF-4 line. */
+  breakdown?: ConfirmBreakdown;
   /** Which copy to show (see `TidyConfirmKind`). Defaults to `'tidy'`. */
   kind?: TidyConfirmKind;
   /** "Yes, tidy up"/"Yes, do it now": starts the run. */
@@ -122,44 +147,69 @@ export interface TidyConfirmSheetProps {
 
 export function TidyConfirmSheet({
   count,
+  loading = false,
+  breakdown,
   kind = 'tidy',
   onConfirm,
   onDismiss,
 }: TidyConfirmSheetProps): JSX.Element {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(panelRef, onDismiss);
-  const guardedDismiss = useDismissGuard(onDismiss);
-
   const isRequest = kind === 'request';
   const { lead, rest } = isRequest
     ? requestConfirmSentenceParts(count)
-    : isDemo()
-      ? demoConfirmSentenceParts(count)
-      : confirmSentenceParts(count);
+    : demoConfirmSentenceParts(count);
   const title = isRequest ? 'Run this now?' : 'Is that everything?';
+  const demoTidy = !isRequest && isDemo();
+  const breakdownLine =
+    breakdown === undefined ? null : confirmBreakdownLine(breakdown);
 
   return (
-    <div class="tidy-confirm">
-      <div
-        class="tidy-confirm-backdrop"
-        aria-hidden="true"
-        onClick={guardedDismiss}
-      />
-      <div
-        ref={panelRef}
-        class="tidy-confirm-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        tabIndex={-1}
-      >
-        <Bird state="idle" face="curious" size={84} />
-        <h2 class="tidy-confirm-title">{title}</h2>
-        <p class="tidy-confirm-text">
-          <b>{lead}</b> {rest}
-        </p>
-        {isDemo() && <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>}
-        <button type="button" class="tidy-confirm-button" onClick={onConfirm}>
+    <Overlay kind="dialog" labelledBy={TITLE_ID} onClose={onDismiss}>
+      <div class="tidy-confirm">
+        <Bird state="idle" face="curious" size={56} />
+        <h2 id={TITLE_ID} class="tidy-confirm-title">
+          {title}
+        </h2>
+        {isRequest || demoTidy ? (
+          <p class="tidy-confirm-text" aria-busy={loading}>
+            {loading ? (
+              <span
+                class="tidy-confirm-skeleton"
+                role="status"
+                aria-label="Counting your inbox"
+              />
+            ) : (
+              <>
+                <b>{lead}</b> {rest}
+              </>
+            )}
+          </p>
+        ) : (
+          <>
+            <p class="tidy-confirm-text">{CONFIRM_SUB}</p>
+            <div class="tidy-confirm-row" aria-busy={loading}>
+              {loading ? (
+                <span
+                  class="tidy-confirm-skeleton"
+                  role="status"
+                  aria-label="Counting your inbox"
+                />
+              ) : (
+                <>
+                  <b>{confirmCountLine(count)}</b>
+                  {breakdownLine !== null && <span>{breakdownLine}</span>}
+                </>
+              )}
+            </div>
+            <p class="tidy-confirm-text">{CONFIRM_COST}</p>
+          </>
+        )}
+        {demoTidy && <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>}
+        <button
+          type="button"
+          class="tidy-confirm-button"
+          disabled={loading}
+          onClick={onConfirm}
+        >
           <IconSparkle />
           {isRequest ? 'Yes, do it now' : 'Yes, tidy up'}
         </button>
@@ -171,6 +221,6 @@ export function TidyConfirmSheet({
           {isRequest ? 'Not now' : 'Add more first'}
         </button>
       </div>
-    </div>
+    </Overlay>
   );
 }
