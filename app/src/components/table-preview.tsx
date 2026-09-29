@@ -6,9 +6,33 @@
  */
 
 import type { JSX } from 'preact';
+import { useState } from 'preact/hooks';
+
+import { useMediaQuery } from '../use-media-query.js';
 
 /** How many data rows the table shows. */
 export const MAX_TABLE_ROWS = 200;
+
+/** How many data rows the phone shows before "Show all rows". */
+export const PHONE_TABLE_ROWS = 5;
+
+const DESKTOP_QUERY = '(min-width: 900px)';
+
+/**
+ * A cell with a thousands separator ("2150" becomes "2,150"). Only purely
+ * numeric cells of 1,000 or more change; 4-digit years (1900 to 2099) and
+ * anything else (text, leading zeros, ids) stay as they are.
+ */
+export function formatCell(cell: string): string {
+  const m = /^(-?)([1-9]\d{3,})(\.\d+)?$/.exec(cell);
+  if (m === null) return cell;
+  const [, sign = '', int = '', frac = ''] = m;
+  if (frac === '' && int.length === 4) {
+    const n = Number(int);
+    if (n >= 1900 && n <= 2099) return cell;
+  }
+  return `${sign}${int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${frac}`;
+}
 
 /**
  * The rows of CSV `text`, each a list of cells. Handles quoted cells (with
@@ -73,12 +97,17 @@ export function TablePreview({
 }: {
   rows: readonly string[][];
 }): JSX.Element {
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const [showAll, setShowAll] = useState(false);
   const header = rows[0];
   if (header === undefined) {
     return <p class="file-preview-note">This spreadsheet is empty.</p>;
   }
   const total = dataRowCount(rows);
-  const body = rows.slice(1, 1 + MAX_TABLE_ROWS);
+  const limit = isDesktop || showAll ? MAX_TABLE_ROWS : PHONE_TABLE_ROWS;
+  const body = rows.slice(1, 1 + limit);
+  const canShowMore =
+    !isDesktop && !showAll && Math.min(total, MAX_TABLE_ROWS) > body.length;
   return (
     <div class="table-preview">
       <div class="table-preview-scroll">
@@ -96,7 +125,7 @@ export function TablePreview({
             {body.map((row, r) => (
               <tr key={r}>
                 {header.map((_, c) => (
-                  <td key={c}>{row[c] ?? ''}</td>
+                  <td key={c}>{formatCell(row[c] ?? '')}</td>
                 ))}
               </tr>
             ))}
@@ -104,6 +133,17 @@ export function TablePreview({
         </table>
       </div>
       <p class="table-preview-note">{rowsLine(body.length, total)}</p>
+      {canShowMore && (
+        <button
+          type="button"
+          class="table-preview-more"
+          onClick={() => {
+            setShowAll(true);
+          }}
+        >
+          Show all rows
+        </button>
+      )}
     </div>
   );
 }
