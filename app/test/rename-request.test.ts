@@ -8,10 +8,7 @@ import {
   validateRename,
 } from '../src/rename-request.js';
 
-function row(
-  text: string,
-  over: Partial<RequestRow> = {},
-): RequestRow {
+function row(text: string, over: Partial<RequestRow> = {}): RequestRow {
   return {
     key: text,
     state: 'waiting',
@@ -25,14 +22,14 @@ function row(
 
 describe('renameRequestText', () => {
   it('writes plain words plus the path, with no op fields', () => {
-    expect(renameRequestText('1-Projects/Flat hunt/Offer.md', 'Offer 2.md')).toBe(
-      'Rename 1-Projects/Flat hunt/Offer.md to Offer 2.md',
-    );
+    expect(
+      renameRequestText('1-Projects/Flat hunt/Offer.md', 'Offer 2.md'),
+    ).toBe('Rename 1-Projects/Flat hunt/Offer.md to Offer 2.md');
   });
 });
 
 describe('splitFileName', () => {
-  it('drops a note\'s .md and locks a file\'s extension', () => {
+  it("drops a note's .md and locks a file's extension", () => {
     expect(splitFileName('Offer.md', true)).toEqual({
       base: 'Offer',
       extension: '.md',

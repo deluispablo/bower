@@ -891,7 +891,9 @@ export function FileScreen(): JSX.Element {
               onTogglePin={
                 folder === '' ? undefined : () => void handleTogglePin()
               }
-              siblingNames={index === null ? undefined : siblingNames(index, file.path)}
+              siblingNames={
+                index === null ? undefined : siblingNames(index, file.path)
+              }
               onClose={() => setMenuOpen(false)}
             />
           )}

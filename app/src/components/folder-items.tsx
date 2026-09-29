@@ -849,15 +849,13 @@ export function FolderItems({
         class="folder-row folder-item"
         href={href}
         aria-labelledby={domId('row-name', row.key)}
-        aria-describedby={
-          [
-            domId('row-detail', row.key),
-            isNew ? domId('row-new', row.key) : null,
-            isWaiting ? domId('row-wait', row.key) : null,
-          ]
-            .filter((id) => id !== null)
-            .join(' ')
-        }
+        aria-describedby={[
+          domId('row-detail', row.key),
+          isNew ? domId('row-new', row.key) : null,
+          isWaiting ? domId('row-wait', row.key) : null,
+        ]
+          .filter((id) => id !== null)
+          .join(' ')}
         {...holdProps(row)}
       >
         <KindIcon

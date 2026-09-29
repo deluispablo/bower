@@ -48,7 +48,11 @@ import {
 } from '../more-menu.js';
 import type { MoreMenuKind } from '../more-menu.js';
 import { driveFolderUrl } from '../navigation.js';
-import { renameRequestText, splitFileName, validateRename } from '../rename-request.js';
+import {
+  renameRequestText,
+  splitFileName,
+  validateRename,
+} from '../rename-request.js';
 import { showToast } from '../toast-store.js';
 import { isAppFile } from '../vault-index.js';
 import { mediaMatches } from '../use-media-query.js';

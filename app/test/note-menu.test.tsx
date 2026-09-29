@@ -163,14 +163,23 @@ describe('NoteMenu', () => {
     };
     expect(call.mode).toBe('rename');
     expect(call.initialText).toBe('Shopping list');
-    expect(call.buildText(' Groceries ')).toBe('Rename Shopping list.md to Groceries.md');
-    expect(call.validate('Todo')).toBe('Something in this folder already has that name.');
+    expect(call.buildText(' Groceries ')).toBe(
+      'Rename Shopping list.md to Groceries.md',
+    );
+    expect(call.validate('Todo')).toBe(
+      'Something in this folder already has that name.',
+    );
     expect(call.validate('Groceries')).toBeNull();
   });
 
   it('leaves Rename… out for a folder, for the app files and without names (#765)', () => {
     const base = { title: 'X', typeLabel: 'Note', askName: 'X' };
-    mountFor({ ...base, kind: 'folder', file: file('Garden'), siblingNames: [] });
+    mountFor({
+      ...base,
+      kind: 'folder',
+      file: file('Garden'),
+      siblingNames: [],
+    });
     expect(rows().some((r) => r.textContent?.includes('Rename…'))).toBe(false);
     void act(() => render(null, root));
     mountFor({ ...base, file: file('Rules.md'), siblingNames: [] });
