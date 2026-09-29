@@ -101,7 +101,7 @@ const NOW = new Date(2026, 8, 30, 10, 42);
 
 function notesIn(folder: string): FakeFile[] {
   return [...files.values()].filter(
-    (f) => f.parent === folder && !f.trashed && f.name.endsWith('Context.md'),
+    (f) => f.parent === folder && !f.trashed && f.name.startsWith('Bower - '),
   );
 }
 
@@ -156,6 +156,17 @@ describe('pileNote', () => {
   });
 });
 
+describe('pileNoteName', () => {
+  it('has seconds and a short suffix after the runner-readable prefix', () => {
+    expect(store.pileNoteName(new Date(2026, 8, 30, 14, 12, 37), '3f')).toBe(
+      'Bower - 2026-09-30 1412-37 Context 3f.md',
+    );
+    expect(store.pileNoteName(new Date(2026, 8, 30, 14, 12, 37))).toMatch(
+      /^Bower - 2026-09-30 1412-37 Context [0-9a-f]{2}\.md$/,
+    );
+  });
+});
+
 describe('R-PILE-1: the pile note', () => {
   it('is created in the inbox on the first attach, before any text', async () => {
     const pile = store.startPile(INBOX, NOW, 'p1');
@@ -164,7 +175,9 @@ describe('R-PILE-1: the pile note', () => {
     await store.attachToPile(pile.id, { name: 'a.pdf', state: 'uploading' });
 
     const note = onlyNote();
-    expect(note.name).toMatch(/^Bower - \d{4}-\d{2}-\d{2} \d{4} Context\.md$/);
+    expect(note.name).toMatch(
+      /^Bower - \d{4}-\d{2}-\d{2} \d{4}-\d{2} Context [0-9a-f]{2}\.md$/,
+    );
     expect(note.text).toContain('kind: context\npile: p1\n');
     expect(note.text).toContain('## Applies to\n\n\n');
     expect(store.getPiles()[0]?.noteFileId).toBe(note.id);

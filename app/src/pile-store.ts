@@ -21,7 +21,7 @@
 
 import { useEffect, useState } from 'preact/hooks';
 
-import { contextNote, contextNoteName } from './add.js';
+import { contextNote } from './add.js';
 import { setPileHandOff } from './add-queue-store.js';
 import {
   createTextFile,
@@ -151,6 +151,27 @@ export function pileNote(pile: Pile, fileNames: readonly string[]): string {
     'kind: context\n',
     `kind: context\npile: ${pile.id}\n`,
   );
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+/**
+ * A pile note's file name: `Bower - YYYY-MM-DD HHmm-ss Context <xx>.md`, the
+ * instruction-note prefix the runner lists (`Bower - *.md`), with seconds
+ * and two random hex characters so two piles started in the same minute (or
+ * a continuation note) never share a name in the inbox.
+ */
+export function pileNoteName(
+  now: Date,
+  suffix: string = Math.floor(Math.random() * 256)
+    .toString(16)
+    .padStart(2, '0'),
+): string {
+  const date = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  const time = `${pad2(now.getHours())}${pad2(now.getMinutes())}-${pad2(now.getSeconds())}`;
+  return `Bower - ${date} ${time} Context ${suffix}.md`;
 }
 
 /** The names a pile's note lists: its items already in the inbox. */
@@ -285,7 +306,7 @@ async function createNote(
   m: NoteMeta,
   names: readonly string[],
 ): Promise<void> {
-  const name = contextNoteName(new Date());
+  const name = pileNoteName(new Date());
   const file = await createTextFile(
     m.inboxFolderId,
     name,
