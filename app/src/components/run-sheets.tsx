@@ -27,6 +27,8 @@ export function RunSheets(): JSX.Element | null {
     sheetReopenKey,
     confirmOpen,
     confirmCount,
+    confirmLoading,
+    confirmBreakdown,
     confirmScope,
     confirmTidyUp,
     dismissConfirm,
@@ -41,6 +43,8 @@ export function RunSheets(): JSX.Element | null {
       {confirmOpen && (
         <TidyConfirmSheet
           count={confirmCount}
+          loading={confirmLoading}
+          breakdown={confirmBreakdown}
           kind={confirmScope === 'instructions' ? 'request' : 'tidy'}
           onConfirm={confirmTidyUp}
           onDismiss={dismissConfirm}

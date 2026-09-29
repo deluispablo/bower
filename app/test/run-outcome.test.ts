@@ -112,6 +112,32 @@ describe('outcomeFromRun (R-RUN-1)', () => {
     expect(outcome.items).toEqual([]);
   });
 
+  it('counts items without `to` (an old runner) as filed, so a done run never reads "Nothing new"', () => {
+    const items = [
+      { path: '0-Inbox/Lease.pdf', kind: 'file' as const },
+      { path: '0-Inbox/Old.pages', kind: 'file' as const },
+    ];
+    const outcome = outcomeFromRun(
+      buildRun('done', {
+        items,
+        setAside: [{ path: '0-Inbox/Old.pages', reason: 'kept-not-read' }],
+        created: [],
+        updated: [],
+      }),
+    );
+    expect(outcome.filed).toBe(1);
+    expect(runSentence(outcome, { now: NOW })).not.toContain('Nothing new');
+    const bare = outcomeFromRun(
+      buildRun('done', {
+        items: undefined,
+        processed: ['0-Inbox/A.pdf', '0-Inbox/B.pdf'],
+        created: [],
+        updated: [],
+      }),
+    );
+    expect(bare.filed).toBe(2);
+  });
+
   it('counts set-aside files and what is left as needs you', () => {
     const outcome = outcomeFromRun(
       buildRun('done', {

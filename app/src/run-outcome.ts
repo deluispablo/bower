@@ -61,6 +61,8 @@ interface RawOutcome {
   startedAt: string;
   finishedAt?: string;
   items: readonly RunItem[];
+  /** Inbox paths the run filed, from a runner that reports no `to`. */
+  processed?: readonly string[];
   setAside: readonly SetAsideItem[];
   created: readonly string[];
   updated: readonly { path: string; what?: string }[];
@@ -96,18 +98,33 @@ function titleOf(path: string): string {
 
 function buildItems(raw: RawOutcome): OutcomeItem[] {
   const items: OutcomeItem[] = [];
+  const asideKeys = new Set(raw.setAside.map((aside) => aside.path));
+  const seen = new Set<string>();
   for (const item of raw.items) {
-    if (item.kind !== 'file' || item.to === undefined || item.to === '') {
-      continue;
-    }
+    if (item.kind !== 'file') continue;
+    const to = item.to === undefined || item.to === '' ? undefined : item.to;
+    // A runner from before report v2 says an item was filed but not where:
+    // it still counts as filed, so a done run never reads "Nothing new".
+    // One it set aside is not filed.
+    if (to === undefined && asideKeys.has(item.path)) continue;
+    seen.add(item.path);
     const entry: OutcomeItem = {
       action: 'filed',
-      title: baseName(item.to),
+      title: baseName(to ?? item.path),
       path: item.path,
-      to: item.to,
     };
+    if (to !== undefined) entry.to = to;
     if (item.renamedFrom !== undefined) entry.from = item.renamedFrom;
     items.push(entry);
+  }
+  if (raw.ended === 'done') {
+    for (const path of raw.processed ?? []) {
+      if (seen.has(path) || asideKeys.has(path) || isContextNote(path)) {
+        continue;
+      }
+      seen.add(path);
+      items.push({ action: 'filed', title: baseName(path), path });
+    }
   }
   for (const path of raw.created) {
     if (isContextNote(path)) continue;
@@ -190,6 +207,10 @@ export function outcomeFromRun(run: Run): RunOutcome {
   };
   if (run.finishedAt !== undefined) raw.finishedAt = run.finishedAt;
   if (run.added !== undefined) raw.added = run.added;
+  // A runner from before `items` reports only which inbox paths it filed.
+  if (run.items === undefined && run.processed !== undefined) {
+    raw.processed = run.processed;
+  }
   if (run.total !== undefined) raw.total = run.total;
   if (run.phase !== undefined) raw.phase = run.phase;
   return build(raw);
