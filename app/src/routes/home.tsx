@@ -70,7 +70,7 @@ import { tourOnScreen } from '../onboarding.js';
 import { useOnline } from '../online.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
-import { visiblePendingCount } from '../run-progress.js';
+import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import type { DriveFile } from '../drive.js';
@@ -477,7 +477,7 @@ export function Home(): JSX.Element {
   // #506: the same total the working sheet counts against, so "N things"
   // here never runs one ahead of it — the context note Add may have left
   // in the inbox is not one of the "things" either place counts.
-  const pending = visiblePendingCount(files);
+  const pending = inboxTotal(inboxCount(files, status === 'loading'));
   const noteCounts =
     index === null ? new Map<string, number>() : folderCounts(index);
   const pinnedItems = index === null ? [] : pinned(index);
