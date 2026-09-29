@@ -120,9 +120,9 @@ describe('outcomeFromRun (R-RUN-1)', () => {
       }),
     );
     expect(outcome.needsYou).toBe(2);
-    expect(outcome.items.filter((item) => item.action === 'needs')).toHaveLength(
-      2,
-    );
+    expect(
+      outcome.items.filter((item) => item.action === 'needs'),
+    ).toHaveLength(2);
   });
 
   it('falls back to requestedAt when the run has no start', () => {
