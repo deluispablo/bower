@@ -272,6 +272,7 @@ export function bubbleFor(input: BubbleInput): BubblePart[] {
             created: 0,
             updated: 0,
             needsYou: 0,
+            requests: 0,
             left: 0,
             items: [],
             ...(pending > 0 && { total: pending }),
