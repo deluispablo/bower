@@ -12,7 +12,7 @@ It replaces nothing on main: the v4 boards and specs were removed in #726, so th
 - the rulebook (`vault-template/CLAUDE.md`, `bower_rules_version: 20`, and `agent/prompts/`);
 - the live instance at the build Settings reports.
 
-**Boards.** Design canvas "Bower v5: runs, notes, folders", https://claude.ai/artifact/7tsURtgvEUuFrZQQWtZ7vx. It has 90 artboards on seven pages (Brief, System, Tidy-up results, Bower's notes, Folders and Compare, Add and dictation, Wireframes). It is private to the owner until they share it. The boards were not exported to the repo, because #726 removed boards from main. **Tie-break: the board wins over this text.**
+**Boards.** Design canvas "Bower v5: runs, notes, folders", https://claude.ai/artifact/7tsURtgvEUuFrZQQWtZ7vx. It has 109 artboards on nine pages (Brief, System, Tidy-up results, Bower's notes, Folders and Compare, Add and dictation, Intro and Learn Bower, Missing folder, Wireframes). It is private to the owner until they share it. The boards were not exported to the repo, because #726 removed boards from main. **Tie-break: the board wins over this text.**
 
 **Verified in the live app** (29 Sep, signed in as the test user, read-only: no run, upload, edit or status change):
 
@@ -67,6 +67,9 @@ This spec only asks the runner for the data the screens need (section 7).
 | D22 | Everything that asks Bower to do something waits in the inbox for the next tidy-up: a request typed in the Bower tab, a tapped suggestion, Ask Bower about it, Rename and Move. One button starts work: Tidy up. "Just this, now" stays as a secondary choice where waiting hurts, says it spends a run ("uses one run of your Claude plan") and is off while a run is going. A request that did not finish is still in the inbox; there is no "Try again" that starts a run. | Owner round 3; tech-lead review: fewer runs, no race between an edit and Do it now, one model for everything. |
 | D23 | The box on a note is called **Bower's note**, as the rulebook, Just filed and the file page already call it. Open shows everything (summary, key facts, details, what to check); folded shows one line. Each summary line keeps its origin square with its symbol. | Owner round 3. |
 | D24 | The tidy-up chip is on every screen while a run goes and until its result is seen: in the top bar on desktop, docked above the tab bar on phones (part of the layout, never floating over it). Tapping it opens the tidy-up sheet. | Owner round 3: "will I still see it while I browse, and can I tap it?" |
+| D25 | Bower takes the logic of the owner's old vault, not its content: decision first (score and verdict), reuse the project's reference tables, cross-check and flag disagreements, next steps, an append-only history, update rather than duplicate. In the app: a project front page, the verdict and Apply first, "Things that disagree" and "Next for you" after a run, a history in each note, a richer Compare. Nothing specific to one person (scoring weights, CVs, company research) is built in. | Owner round 5, after tech-lead and app-tester reviews of the old vault. |
+| D26 | The intro is five screens with one idea each, true to what ships, accessible, and resumable by URL; a separate "Learn Bower" page holds how it works, six examples and ideas. Both are reachable from the sign-in page and a "Learn Bower" group in Settings. | Owner round 5; NN/g on deck tutorials; tester and tech-lead reviews. |
+| D27 | The app checks the Bower folder on every load and before writing. A missing, trashed or unreachable folder gets a recovery screen (put it back, start a new one, use another); offline is never treated as missing. The Worker lets `create` replace a pointer it verified dead. | Round 5 finding 1.1 (P0); owner approved the API changes on 29 Sep. |
 | D18 | A microphone for dictation in every box where people write sentences, where the browser supports speech recognition. Where it does not, a one-time tip points to the keyboard's own microphone. | Owner idea (report section 6). |
 | D19 | Bower note titles: at most 40 characters, most specific word first. Lists wrap a title to two lines on phones instead of cutting it at one. | 3.6. |
 
@@ -219,7 +222,9 @@ Canvas pages and artboards. Every screen × state below is **changed** against t
 | System | Home-Done-375-Light, RunSheet-Done-375-Light, Note-JobOffer-375-Light, Folder-List-1280-Light; System-Overlays, System-Hints, System-RunResult, System-Insights, System-HeaderActions; Tour-375, Help-1280 | the light theme for the chip, sheet, note and folder; the overlay model and queue, the z and scrim tokens, the hint variants, bar states and counts, Bower's note anatomy and the rule-change line, header buttons before and after, the tour as a modal, help as a right panel |
 | Tidy-up results | Home-Running/Done/Partial ×375, ×1280; Confirm-Tidy ×2; RunSheet-Running/Done/Partial ×2; JustFiled ×2; Requests ×2; Requests-Menu-375 | running, done (bar until seen), partly done; confirm; run sheet over the matching Home on the phone and as a desktop panel; Just filed as a table with Needs you first; requests in the inbox, being done, done and did not finish; the request's More menu |
 | Bower's notes | Note-JobOffer ×2, Note-Rental ×2, Note-Summary ×2 (an answer, "Job fit ratings"), Note-RuleChanged ×2, Note-Converted ×2, Note-Converted-Closed-375, Note-Folded ×2, Note-Running-375 | a kind with score, a kind with a weekly price, a note of no kind, the rule change with "What changed" open (375), the text copy of a document of no listed kind (open and folded), Bower's note and Made from folded, the tidy-up bar while reading |
-| Folders and Compare | Folder-List ×2, Folder-Running-1280, Sidebar-Default-1280, Sidebar-Resize-1280, Compare-Cards-375, Compare-Sort-375, Compare-Table-1280, More-Rename-375, Rename ×2, Ask-Sheet-375, Ask-Dialog-1280, Ask-Done-375 | folder with a subfolder first, the suggestion hint, the bar while browsing, the resize handle idle and dragging with a tooltip, phone sort, desktop Score column, More with Rename, the send-to-Bower sheet for Rename and Ask, the toast with Undo |
+| Folders and Compare | Project-Front-375, Project-Front-1280, Folder-List ×2, Folder-Running-1280, Sidebar-Default-1280, Sidebar-Resize-1280, Compare-Cards-375, Compare-Sort-375, Compare-Table-1280, More-Rename-375, Rename ×2, Ask-Sheet-375, Ask-Dialog-1280, Ask-Done-375 | folder with a subfolder first, the suggestion hint, the bar while browsing, the resize handle idle and dragging with a tooltip, phone sort, desktop Score column, More with Rename, the send-to-Bower sheet for Rename and Ask, the toast with Undo |
+| Intro and Learn Bower | Intro-1…5-375, Intro-2-1280, Intro-5-1280, Login-375, Settings-Learn-375, Learn-375, Learn-1280, Example-FlatHunt-375 | the five intro screens (phone) and two on desktop, the sign-in and Settings entry points, Learn Bower and one example |
+| Missing folder | Folder-Trashed-375, Folder-Trashed-1280, Folder-Gone-375, Folder-NoAccess-375, Offline-375 | the three recovery screens and offline, which is not missing |
 | Add and dictation | Explore-A/B/C-375 (grey sketches of three directions); Home-Uploading-375, Add-Resume-375, SignOut-Uploading-375; Add-PileEmpty-375, Add-PileFilling-375, Add-Dictating-375, Add-PileOpen-375, Add-Piles-1280; Confirm-Piles-375, Confirm-Piles-1280; Dictate-Bower-375, System-Dictate | the directions compared; a pile uploading while the person is on Home; uploads resumed after the app was closed; sign-out with unfinished uploads; a new pile empty and filling (uploaded, uploading, queued); dictating the pile's note; an earlier pile opened to edit; piles on desktop; Is that everything? with piles; the five dictation states |
 | Wireframes | Wire-* (16) | the grey structure of Home, run sheet, Just filed, Requests, job note, folder, Compare and Add at both widths |
 
@@ -976,6 +981,229 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
   - [ ] R-DICT-3: the language preference in Settings ("Dictation language: Match my device") and in the status line.
   - [ ] R-DICT-4: the Privacy page and `docs/privacy.md` state where the audio goes when the browser's recognizer is online (Q2 answered: yes).
 
+### 6.18 What Bower learned from the owner's old vault — R-FRONT, R-VERDICT, R-HIST, R-MEAN, R-CMP (boards Project-Front-*, Note-JobOffer-*, RunSheet-Done-*, JustFiled-*, Compare-Table-1280)
+
+**Where this comes from.** Before the app existed, the owner kept an Obsidian vault run by Claude Code. The tech-lead and app-tester reviewed it on 29 Sep (read-only, no personal data copied). The owner then chose what Bower should take from it:
+
+- a project front page;
+- the verdict and Apply first;
+- a run result that says what it means;
+- a history in each note;
+- a richer Compare;
+- **its logic, "how it thinks", but nothing specific to one person** (no job-market or visa rules, no automatic CVs, no company research by default).
+
+**How Bower thinks** (rulebook section, generic, about 25 lines; R-AG-11):
+
+1. **Decision first.** When a note has a score (a rule's `score`, or `fit`), the first line of Bower's note gives the score and a one-word verdict ("Apply first", "Worth a look", "Skip"), then one line of why.
+2. **Reuse before looking up.** Read the project note's `## Reference` tables (a price guide, local medians, recurring gaps) before writing a note in that project, and cite them (`from your notes: [[Hub]]`). Append a row only for a value actually looked up, dated, and never reorder or rewrite existing rows.
+3. **Cross-check.** When a new item disagrees with a note already kept (a date, an amount, an address), add one line naming both notes, ending `— Check`, and never pick a winner silently.
+4. **Say what is next.** A line that needs the person becomes an item in the project note's `## Next steps` checklist (at most three per run, never duplicated).
+5. **Keep history.** A `## History` section at the end of each note Bower writes is append-only: dated lines for "filed", "scored", "written for it", and status changes. Rewriting Bower's note to the present (R-AG-3) never touches History or Reference.
+6. **Update, do not duplicate.** The same thing from another site (the same employer and role, the same address) updates the note already kept.
+7. **Say what is missing.** What the document leaves out goes to "What to check"; a clip with no body is not written up but reported as "needs you" with the reason.
+8. **Never invent.** Only what the files, the notes, the web (when allowed) or the person said, each line with its origin.
+9. **Learn patterns.** After three of the same kind of document with no rule for it, propose a rule (existing proposals).
+
+These are mechanisms. The content of the old vault's rules (scoring weights, visa lines, salary asks, CV generation) stays the person's own rules in `Rules.md`.
+
+**Project front page** (boards Project-Front-375, Project-Front-1280):
+
+- Opening a project folder shows its project note on top, as a card:
+  - the PARA mark, the title, a one-line goal and a status pill ("Active");
+  - **Next steps** as a checklist the person ticks. Ticking writes `- [x]` into the project note, with the same `modifiedTime` guard as Edit a note;
+  - **Best so far**: the top three items by score, each with its verdict or status, and "Compare all {n} {plural}";
+  - **Reference**: the project note's reference tables, folded, with "used by 4 offers" or "updated today".
+- The folder list follows, under "In this folder".
+- A line at the foot of the card says it comes from the project note, which Bower keeps current and the person can edit anywhere.
+- A project with no project note shows no card (no empty state).
+- On desktop the card uses two columns: Next steps, then Best so far.
+- **Acceptance criteria:**
+  - [ ] R-FRONT-1: the card renders from the project note's sections (`## Next steps`, a status in frontmatter, `## Reference`) and the scored notes in the folder; it never needs a run.
+  - [ ] R-FRONT-2: ticking a step writes the checkbox to the project note, with the `modifiedTime` guard, and rolls back with a toast on conflict.
+  - [ ] R-FRONT-3: "Best so far" uses the same sort as Compare (`score`, then `fit`) and the same verdict words as the note.
+
+**Verdict and Apply first** (board Note-JobOffer-*):
+
+- Bower's note opens with the verdict row: the score pill, the verdict word in bold, and one line of why, on a success tint.
+- Under "Made from", an **Apply** button when the note has `apply_link` (a new job-offer field, `link` type). The advert itself stays in Made from, never twice.
+- "Made for it:" lists the notes Bower wrote for this item (a tailored CV, a letter), as buttons. They come from the item's `made_for` frontmatter, which lists notes, or from notes whose `made_for` names this one.
+- **Acceptance criteria:**
+  - [ ] R-VERDICT-1: the verdict row appears only when the note has a score, and its words come from the note (rulebook R-AG-11), never computed in the app.
+  - [ ] R-VERDICT-2: `apply_link` is added to the job-offer kind in `kinds.ts` and the rulebook together (the existing parity test), and renders as the Apply button.
+  - [ ] R-VERDICT-3: "Made for it" renders the linked notes; CVs and letters named "CV · {employer}" and "Letter · {employer}" (R-AG-4).
+
+**History** (board Note-JobOffer-*):
+
+- A "History" section at the foot of a note Bower wrote: dated lines, newest last.
+- Changing the status in the note header or in Compare appends "{date} · Status {old} → {new}, by you" in the same Drive write.
+- **Acceptance criteria:**
+  - [ ] R-HIST-1: the status change appends to `## History`, creating it if missing, and writes nothing when the status is unchanged (a unit test on the pure text transform).
+  - [ ] R-HIST-2: the agent never rewrites `## History` (rulebook).
+
+**What a run means** (boards RunSheet-Done-*, JustFiled-*):
+
+- Under the four counts, the sheet and Just filed show two short parts:
+  - "Things that disagree" (warn box, each line linking both notes);
+  - "Next for you" (at most three lines).
+- Both come from the run, never free text:
+  - the agent writes `.bower/checks.txt` (one line per disagreement, with both note paths) and `.bower/next.txt` (at most three actions);
+  - the runner reads and removes them like `added.txt`, and reports them as `disagree[]` and `next[]`, which the Worker validates for count and length.
+- When both are empty, neither part is shown.
+- **Acceptance criteria:**
+  - [ ] R-MEAN-1: runner, Worker and `api.ts` carry `disagree[]` (at most 5) and `next[]` (at most 3).
+  - [ ] R-MEAN-2: the sheet, Just filed and the run's Activity card show them; each link opens the note.
+
+**Richer Compare** (board Compare-Table-1280):
+
+- A "Columns" button picks which fields show, including text fields a rule added.
+- A "Made for it" column shows a badge when the item has notes made for it.
+- An "Apply" column carries the link.
+- "Copy as table" copies the visible columns and sort as Markdown.
+- **Acceptance criteria:**
+  - [ ] R-CMP-7: the column choice persists per folder, next to the column order.
+  - [ ] R-CMP-8: the Made for it badge and the Apply column come from `made_for` and `apply_link`.
+  - [ ] R-CMP-9: "Copy as table" matches the visible columns and sort (unit test).
+
+### 6.19 The intro and Learn Bower — R-INTRO, R-LEARN (boards Intro-*, Login-375, Settings-Learn-375, Learn-*, Example-FlatHunt-375)
+
+**Why it changes.** The tech-lead and app-tester found about fifteen lines in today's nine pages that are untrue or out of date. Examples:
+
+- "Nothing else happens unless you ask."
+- "files them … and stops there"
+- "Bower asks once and moves it to the archive" (no such behaviour exists)
+- "The files never leave your Drive", where a temporary copy does leave it
+- "4-Archive", which is actually "4-Archives"
+- "Settings keeps … an Ideas list", which lives in the help sheet
+
+There are also accessibility faults:
+
+- focus stays on the previous page's Next;
+- the hidden pages are not inert;
+- there is no Back button on phones;
+- browser back leaves the intro;
+- a reload restarts it;
+- the animations loop with no pause;
+- there are nine `h1`s.
+
+Research agrees that long deck tutorials make an app look harder without making people better at it, so the owner chose a short intro plus a separate "Learn Bower".
+
+**The intro: five screens, one idea each** (Intro-1…5-375, Intro-2-1280, Intro-5-1280):
+
+| # | Heading | Body | Illustration (CSS only, a static resting frame, no loop) |
+|---|---|---|---|
+| 1 | "Drop a pile.\nBower files it." | "Add files and links, say in a line what they are, and tap Tidy up. Bower puts each thing in the right folder of your own Google Drive." | a pile with its one-line note, the bird, three PARA chips |
+| 2 | "Every file gets\nBower's note" | "A short summary, the key facts and what to check, with where each line comes from. Your original stays exactly as it was. Fold the note away when you do not need it." | an original file above a small Bower's note with origin squares, a Check and two key facts |
+| 3 | "It joins\nthe dots" | "Bower checks each new thing against what you already keep, adds what follows from it, and tells you when two notes disagree." | two notes joining into a "from your notes" line |
+| 4 | "Ask in your\nown words" | "A question, a job or a rule ("from now on…"). It waits in your inbox and Bower does it at the next tidy-up; the tidy-up bar shows how it goes." | a request bubble, "Waits in your inbox", the done bar with the four counts |
+| 5 | "Only your Drive" | "Your notes live in a folder you own, readable in Drive and Obsidian. A tidy-up works on a temporary copy that is deleted when it ends; Claude reads the text to write Bower's notes." | the same folder in Drive, Obsidian and Bower |
+
+- **Controls:**
+  - page dots with "Page n of 5";
+  - Skip (Close on the last page);
+  - a visible **Back** from page 2;
+  - Next;
+  - on the last page, "Sign in with Google" when signed out (or "Done" when opened from Settings), and "See examples and use cases" to Learn Bower.
+- **Desktop:** one page at a time, illustration left and text right, in a 1040 px frame.
+- **Behaviour:**
+  - The page is in the URL (`/welcome?page=3`), so browser back goes to the previous page and a reload resumes.
+  - On Next and Back, focus moves to the new page's `h1` (`tabindex=-1`).
+  - Pages other than the current one are `inert`.
+  - A polite live region says "Page 3 of 5".
+  - There is one `h1` per page.
+  - Reduced motion shows the resting frame.
+- **Gating** (tech-lead):
+  - Per device, before sign-in, as today (`bower:intro:seen`). It is not shown after sign-in; onboarding's welcome and the tour cover that.
+  - `from=login` returns Close to `/login`; `from=settings` returns to Settings.
+- **Truth guard:**
+  - Page 2 (Bower's note on every file and the text copy) needs R-AG-2 and R-AG-9 to have shipped.
+  - Page 4 (inbox model and the bar) needs D22 and R-CHIP to have shipped.
+  - Page 3's "tells you when two notes disagree" needs R-AG-11 and R-MEAN to have shipped.
+  - The intro ships last, in the same release as those.
+- **Acceptance criteria:**
+  - [ ] R-INTRO-1: the five pages, copy as above, in `intro.ts` (a 5-tuple); tests updated (`intro.test.ts`, `help-sheet.test.ts`, the demo e2e).
+  - [ ] R-INTRO-2: `?page=` in the URL; back and reload behave as described (e2e).
+  - [ ] R-INTRO-3: focus moves to the page heading, other pages are inert, the live region is present, and there is a visible Back on phones (a11y unit test and e2e).
+  - [ ] R-INTRO-4: `from=login` and `from=settings` return correctly.
+  - [ ] R-INTRO-5: the illustrations are CSS only, with no infinite loop; reduced motion shows the resting frame.
+  - [ ] R-INTRO-6: the truth guard is tracked as issue dependencies.
+
+**Where to find it** (Login-375, Settings-Learn-375):
+
+- **Sign-in:** a secondary button under "Sign in with Google": "What is Bower? · 2 min".
+- **Settings:** a "Learn Bower" group with four rows:
+  - What is Bower (the intro);
+  - Show me around (the tour);
+  - Examples and use cases (Learn Bower);
+  - Ideas to try.
+- The help sheet keeps "What is Bower, from the start".
+- The old "What is Bower" row is replaced by this group.
+
+**Learn Bower** (Learn-375, Learn-1280, Example-FlatHunt-375), route `/learn`, public (signed in or not):
+
+- An intro line: "What Bower does, and what people use it for. Open this any time from Settings or the sign-in page."
+- A card, "The intro again · Five screens, two minutes".
+- **How it works:** four cards (Add a pile, Tidy up, Read Bower's note, Ask).
+- **Examples:** six cases, each opening one page:
+  - Flat hunting (P);
+  - A job search (P);
+  - Health papers (A);
+  - Money (A);
+  - Things you read (R);
+  - Finished things (A, Archives).
+- **Ideas to try:** a link to the Ideas list.
+- **An example page** (Example-FlatHunt-375) has four acts: "You add", "Bower files and writes", "You ask", "You get". It closes with the hint "Examples show what Bower can do; your own Bower learns your way from what you add and ask."
+- The examples reuse the case content of today's pages 5–8, rewritten to the new behaviour. The health example is a neutral summary (no named doctor, no values presented as advice). The archive example drops "asks once".
+- **Acceptance criteria:**
+  - [ ] R-LEARN-1: `/learn` and `/learn/:example` render at 375 and 1280, reachable signed out.
+  - [ ] R-LEARN-2: the six examples' copy is in one module (`learn.ts`), tested for every claim tied to a shipped feature, like R-INTRO-6.
+  - [ ] R-LEARN-3: the sign-in button, the Settings group and the help-sheet link all reach it.
+
+### 6.20 When the Bower folder is missing — R-VAULT (boards Folder-Trashed-*, Folder-Gone-375, Folder-NoAccess-375, Offline-375)
+
+**Today** (test round 5, finding 1.1, P0; tech-lead and app-tester reviews):
+
+- The app never checks that the folder still exists.
+- A trashed or deleted folder looks like an empty Bower.
+- Adds can land in the Bin without a word.
+- "Make a new Bower folder" fails with a silent 409.
+- A tidy-up fails with a wrong reason.
+- The owner approved the API changes below on 29 Sep.
+
+**Screens** (a full page, no tab bar; phone and desktop):
+
+| State | Bird | Title | Text | Buttons (in order) | Foot line |
+|---|---|---|---|---|---|
+| In the Bin (`trashed`) | confused | "Your Bower folder is in the Bin" | "It is in your Google Drive Bin, with everything in it. Put it back and Bower carries on where it was." | Put it back (primary) · Start a new Bower folder · Use another folder (text) | "Nothing is changed until you choose. Drive empties its Bin after 30 days." |
+| Gone (404) | confused | "Your Bower folder is gone" | "It was deleted from your Drive, Bin included, so Bower cannot bring it back. Your notes, your rules and About me were in it." | Start a new Bower folder (primary) · Use another folder | "Google can sometimes restore files deleted in the last 25 days: ask Drive support before starting again." |
+| No access | looking | "Bower can't open your folder" | "It may be in a shared drive, or shared by someone who no longer lets you open it. Ask them for access, then try again." | Try again (primary) · Use another folder · Start a new Bower folder (text) | "Starting a new folder leaves your notes where they are, split across two folders." |
+
+- **Offline is not missing** (Offline-375): Home with a state hint, "You are offline. Showing what is on this device; Bower checks your folder when you are back." Never a redirect to sign-in or recovery.
+- **"Put it back"** sets `trashed:false`, reads the state again, then goes Home. It is never automatic.
+- **"Use another folder"** opens the folder picker, or accepts a pasted link, and refuses a trashed folder.
+- **A tidy-up that finds the folder missing** fails with the reason `vault_missing`. The app then shows these screens, not the run-failure sheet, with the sentence "Your Bower folder is no longer in your Drive. Nothing was changed."
+- **Acceptance criteria** (from the tech-lead's review):
+  - [ ] R-VAULT-1: `folderState()` runs `files.get(folderId, fields=id,name,trashed,parents,capabilities/canAddChildren, supportsAllDrives=true)` in these cases:
+    - on load, in parallel with the listing;
+    - on a Drive 404;
+    - when the root has no `CLAUDE.md`;
+    - on focus after 10 minutes;
+    - before Add, Tidy up and Just this, now.
+
+    Its results: 404 means `missing`; `trashed` means `trashed`; `canAddChildren:false` means `no-access`; 403, 5xx or offline mean `unknown`, with no redirect (unit tests).
+  - [ ] R-VAULT-2: `decideRedirect` takes the state and routes `missing`, `trashed` and `no-access` to `/recover?reason=…`, with no stale Home paint (pure tests).
+  - [ ] R-VAULT-3: the recovery screens and copy as above; "Put it back" re-checks before going Home.
+  - [ ] R-VAULT-4 (API): `POST /vault {mode:'create'}` succeeds when the Worker itself verifies the current pointer is dead (404, trashed, or not a folder); a live pointer still answers 409.
+  - [ ] R-VAULT-5 (API): `select` refuses a trashed folder with 400 `folder_trashed`.
+  - [ ] R-VAULT-6: a re-point retires the old run tickets, clears the run history and records `vaultSetAt`.
+  - [ ] R-VAULT-7 (runner): one `files.get` before sync down and before sync up. When the folder is missing or trashed, the run fails with `vault_missing` and uploads nothing (smoke test).
+  - [ ] R-VAULT-8 (API): the Worker marks the vault missing, `/me` exposes it, and the weekly lint skips it.
+  - [ ] R-VAULT-9: the cached index is keyed by `folderId` and cleared when the folder is missing.
+  - [ ] R-VAULT-10: a `folderId` mismatch from `/drive/token` triggers a refresh, so other tabs and devices follow a re-point.
+  - [ ] R-VAULT-11: the folder's display name comes from Drive, not the stored `vault.name`.
+  - [ ] R-VAULT-12: no "vault" in the copy; the runbook gets a "Your Bower folder was deleted" section.
+  - [ ] R-VAULT-13: offline never redirects: `/me` failing offline keeps the signed-in shell with the offline hint (it was routed to `/login` before).
+- **Spike first** (tech-lead): what rclone does when `root_folder_id` answers 404.
+
 ## 7. Behind the screens
 
 - **R-RUNNER-1 (runner and Worker).** The status report and `.bower/last-run.json` gain:
@@ -1024,6 +1252,7 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
 - **R-AG-7.** A rename request is written in words plus a path, like a move request ("Rename {path} to {new name}"), and handled the same way: the agent renames the file, and the runner keeps its id and books the rename. There are no `op:` fields.
 - **R-AG-9 (runner; owner approved 29 Sep).** PDFs get the same treatment. `run.sh` converts a text PDF with `pdftotext -layout` (poppler-utils, installed in the job like pandoc) so the runner can append the text as it does for Word files (T9). A scanned PDF with no text layer gets the copy with its properties and Bower's note, and the line "Scanned: no text to copy" under `## The document`.
   - Owner approved on 29 Sep: poppler-utils is installed in the runner job (an apt package; no runtime dependency in the app).
+- **R-AG-11.** "How Bower thinks": the nine principles of 6.18, as one rulebook section of about 25 lines, plus `apply_link` on job-offer, `made_for`, `## Reference`, `## Next steps` and `## History` handling, and `.bower/checks.txt` and `.bower/next.txt` (R-MEAN). One bump with R-AG-1 to R-AG-10.
 - **R-AG-10.** Finishing a partly done tidy-up: a pending inbox file that already has a note whose `original:` names it is filed only; its note is not written again. The runner reads the previous run's `created[]` from `.bower/last-run.json` in the vault, only when that file's state is failed (an instructions-only run in between overwrites it; the `original:` rule alone still prevents duplicates) (written by R-RUNNER-2; the runner itself keeps nothing) and lists those paths in the prompt as "already written; do not write these again". Serves R-SHEET-4 and D3.
 - **R-AG-8.** Piles:
   - Each context note applies only to the files in its own `## Applies to` list. A file named in two context notes goes with the newest note.
