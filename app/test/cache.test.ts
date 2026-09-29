@@ -62,6 +62,9 @@ const {
   saveBlob,
   saveIndex,
   saveNote,
+  setIndexFolder,
+  indexBelongsTo,
+  parseCachedMe,
 } = await import('../src/cache.js');
 
 function file(id: string, path = `${id}.md`): DriveFile {
@@ -94,6 +97,49 @@ describe('index', () => {
     await invalidateIndex();
 
     expect(await loadIndex()).toBeUndefined();
+  });
+});
+
+describe('index keyed by folder (R-VAULT-9)', () => {
+  afterEach(() => {
+    setIndexFolder(null);
+  });
+
+  it('is read back for the folder it was saved under', async () => {
+    setIndexFolder('FOLDER_A');
+    await saveIndex([file('a')], '2026-01-01T00:00:00.000Z');
+
+    await expect(loadIndex()).resolves.toMatchObject({ folderId: 'FOLDER_A' });
+  });
+
+  it('is never shown for another folder and is dropped', async () => {
+    setIndexFolder('FOLDER_A');
+    await saveIndex([file('a')], '2026-01-01T00:00:00.000Z');
+
+    setIndexFolder('FOLDER_B');
+    expect(await loadIndex()).toBeUndefined();
+
+    setIndexFolder('FOLDER_A');
+    expect(await loadIndex()).toBeUndefined();
+  });
+
+  it('indexBelongsTo is pure', () => {
+    const entry = { files: [], fetchedAt: 'x', folderId: 'A' };
+    expect(indexBelongsTo(entry, 'A')).toBe(true);
+    expect(indexBelongsTo(entry, 'B')).toBe(false);
+    expect(indexBelongsTo(entry, null)).toBe(true);
+    expect(indexBelongsTo({ files: [], fetchedAt: 'x' }, 'A')).toBe(false);
+  });
+});
+
+describe('parseCachedMe', () => {
+  it('reads a saved me and refuses anything else', () => {
+    expect(
+      parseCachedMe(JSON.stringify({ email: 'you@example.com', vault: null })),
+    ).toMatchObject({ email: 'you@example.com' });
+    expect(parseCachedMe(null)).toBeUndefined();
+    expect(parseCachedMe('not json')).toBeUndefined();
+    expect(parseCachedMe('{"vault":null}')).toBeUndefined();
   });
 });
 
