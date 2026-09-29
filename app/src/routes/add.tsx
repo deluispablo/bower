@@ -695,9 +695,7 @@ export function Add() {
     const item = pile?.items.find((i) => i.name === name);
     if (item === undefined) return;
     setQueue(
-      getQueue().filter(
-        (row) => !(row.pileId === pileId && row.name === name),
-      ),
+      getQueue().filter((row) => !(row.pileId === pileId && row.name === name)),
     );
     const id = fileIdOf(name, item.fileId);
     await removeFromPile(pileId, name);

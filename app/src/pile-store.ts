@@ -443,7 +443,8 @@ export function adoptPile(
   const items: PileItem[] = [];
   for (const name of fields.names) {
     const file = present.get(name);
-    if (file !== undefined) items.push({ name, fileId: file.id, state: 'done' });
+    if (file !== undefined)
+      items.push({ name, fileId: file.id, state: 'done' });
   }
   if (items.length === 0) return undefined;
   const pile: Pile = {

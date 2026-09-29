@@ -216,8 +216,6 @@ describe('Add: the camera door', () => {
     void act(() => {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect(root.querySelector('.pile-row-name')?.textContent).toBe(
-      'photo.jpg',
-    );
+    expect(root.querySelector('.pile-row-name')?.textContent).toBe('photo.jpg');
   });
 });

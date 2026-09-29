@@ -475,7 +475,9 @@ describe('Add', () => {
     expect(root.querySelector('.add-tidy-note')?.textContent).toBe(
       '1 still uploading will wait for the next tidy-up',
     );
-    expect(root.textContent).toContain('1 thing · 0 in your inbox, 1 uploading');
+    expect(root.textContent).toContain(
+      '1 thing · 0 in your inbox, 1 uploading',
+    );
   });
 
   // R-ADD-1: no "Waiting" state; every attached file starts uploading.

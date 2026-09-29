@@ -201,7 +201,10 @@ export function PileRows({
         const kept = row.note ?? formatPolicy(row.kind).queueLine;
         return (
           <li key={row.name} class={`pile-row pile-row-${row.state}`}>
-            <KindBadge kind={row.kind} file={{ name: row.name, mimeType: '' }} />
+            <KindBadge
+              kind={row.kind}
+              file={{ name: row.name, mimeType: '' }}
+            />
             <span class="pile-row-body">
               <span class="pile-row-name">{row.label}</span>
               {row.state === 'uploading' && (
@@ -353,8 +356,7 @@ export function PileSheet({
           </p>
 
           <label class="pile-note-label" for="pile-sheet-note">
-            {PILE_NOTE_LABEL}{' '}
-            <span class="add-context-optional">optional</span>
+            {PILE_NOTE_LABEL} <span class="add-context-optional">optional</span>
           </label>
           <textarea
             id="pile-sheet-note"
@@ -395,7 +397,11 @@ export function PileSheet({
           </button>
 
           {confirming ? (
-            <div class="pile-confirm" role="group" aria-label="Remove this pile">
+            <div
+              class="pile-confirm"
+              role="group"
+              aria-label="Remove this pile"
+            >
               <p class="pile-confirm-text">
                 {`Remove this pile? Its ${count} ${count === 1 ? 'file goes' : 'files go'} to the Bin in Drive.`}
               </p>
