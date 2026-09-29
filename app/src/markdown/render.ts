@@ -221,7 +221,9 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
       const link = parseWikilink(raw);
       const file = resolveWikilink(link.target, index);
       if (file === undefined) return '';
-      const top = file.path.includes('/') ? (file.path.split('/')[0] ?? '') : '';
+      const top = file.path.includes('/')
+        ? (file.path.split('/')[0] ?? '')
+        : '';
       const where = top === '' ? '' : ` · in ${displayName(top)}`;
       const href = `/note/${encodeURIComponent(file.id)}${headingFragment(link.heading)}`;
       return (
