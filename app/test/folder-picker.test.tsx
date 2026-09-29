@@ -110,8 +110,8 @@ function type(input: HTMLInputElement, value: string): void {
 
 async function flush(): Promise<void> {
   await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
+    // The send now goes through the shared run-now helper: a few more hops.
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
   });
 }
 

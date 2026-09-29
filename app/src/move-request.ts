@@ -10,6 +10,7 @@
 
 import type { RunScope } from './api.js';
 import { INSTRUCTION_APP_PROPERTIES } from './drive.js';
+import { runNow } from './run-now.js';
 import {
   displayName,
   displayPath,
@@ -108,25 +109,65 @@ export function findFolders(
 /** How a send ended: `run-failed` means the note is written, the run is not. */
 export type MoveOutcome = 'sent' | 'run-failed';
 
-/** What `sendMoveRequest` needs from Drive and the Worker, so tests stub it. */
-export interface MoveDeps {
+/** What the request writers need from Drive, so tests stub it. */
+export interface RequestNoteDeps {
   createTextFile: (
     parentId: string,
     name: string,
     content: string,
     options: { appProperties: Readonly<Record<string, string>> },
-  ) => Promise<unknown>;
+  ) => Promise<{ id?: string }>;
+}
+
+/** What `sendMoveRequest` needs from Drive and the Worker, so tests stub it. */
+export interface MoveDeps extends RequestNoteDeps {
   /** Starts a run (`POST /process`); called with `instructions`. */
   startRun: (scope: RunScope) => Promise<boolean>;
 }
 
 /**
+ * Writes one request note into the inbox (R-ASK-2). It carries
+ * `INSTRUCTION_APP_PROPERTIES`, so the runner does not quarantine it.
+ * Throws when the note could not be written. Resolves to the new file's id
+ * (`null` when Drive did not say), which Undo needs.
+ */
+export async function writeRequestNote(
+  deps: RequestNoteDeps,
+  input: { inboxFolderId: string; text: string; now: Date },
+): Promise<string | null> {
+  const name = instructionFileName(input.text, '', input.now);
+  const content = instructionNote(input.text, input.now, 'request');
+  const file = await deps.createTextFile(input.inboxFolderId, name, content, {
+    appProperties: INSTRUCTION_APP_PROPERTIES,
+  });
+  return file.id ?? null;
+}
+
+/**
+ * Undo (R-ASK-2): sends the note just written to Drive's Bin
+ * (`deleteFile` only trashes). Never throws: `failed` means the note is
+ * still in the inbox, and the caller says so in one sentence.
+ */
+export async function undoRequestNote(
+  deleteFile: (id: string) => Promise<void>,
+  id: string,
+): Promise<'undone' | 'failed'> {
+  try {
+    await deleteFile(id);
+    return 'undone';
+  } catch (err) {
+    console.error(err);
+    return 'failed';
+  }
+}
+
+/**
  * Writes the request note into the inbox and, for `now`, starts an
- * instructions-only run; `later` only writes it (it goes with the next
+ * instructions-only run through the shared helper (`runNow`, which awaits
+ * the write first); `later` only writes it (it goes with the next
  * tidy-up). Throws when the note could not be written, and then no run is
- * Resolves to `run-failed` when the note is written but the run did not
- * start (it then goes with the next tidy-up), else `sent`.
- * started.
+ * started. Resolves to `run-failed` when the note is written but the run
+ * did not start (it then goes with the next tidy-up), else `sent`.
  */
 export async function sendMoveRequest(
   deps: MoveDeps,
@@ -137,13 +178,14 @@ export async function sendMoveRequest(
     now: Date;
   },
 ): Promise<MoveOutcome> {
-  const name = instructionFileName(input.text, '', input.now);
-  const content = instructionNote(input.text, input.now, 'request');
-  await deps.createTextFile(input.inboxFolderId, name, content, {
-    appProperties: INSTRUCTION_APP_PROPERTIES,
-  });
-  if (input.when === 'now' && !(await deps.startRun('instructions'))) {
-    return 'run-failed';
+  const written = writeRequestNote(deps, input);
+  if (input.when === 'now') {
+    const started = await runNow({
+      settle: () => written,
+      startRun: deps.startRun,
+    });
+    return started ? 'sent' : 'run-failed';
   }
+  await written;
   return 'sent';
 }

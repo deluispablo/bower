@@ -1,0 +1,137 @@
+/* The send-to-Bower sheet (`components/send-to-bower.tsx`). */
+
+.send-to-bower {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.send-to-bower-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.send-to-bower-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--color-heading);
+}
+
+.send-to-bower-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+}
+
+.send-to-bower-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.send-to-bower-label {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-sm);
+}
+
+.send-to-bower-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.send-to-bower-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: inherit;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  resize: vertical;
+}
+
+.send-to-bower-input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.send-to-bower-ext {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+}
+
+.send-to-bower-box {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-brand-tint);
+  border-radius: var(--radius-md);
+}
+
+.send-to-bower-box-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.send-to-bower-box-title,
+.send-to-bower-box-text {
+  margin: 0;
+}
+
+.send-to-bower-box-title {
+  font-weight: var(--weight-bold);
+}
+
+.send-to-bower-box-text {
+  font-size: var(--text-sm);
+}
+
+.send-to-bower-error {
+  margin: 0;
+  color: var(--color-danger-text);
+  font-size: var(--text-sm);
+}
+
+.send-to-bower-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+}
+
+.send-to-bower-now {
+  min-height: 44px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-weight: var(--weight-bold);
+  color: var(--color-link);
+  cursor: pointer;
+}
+
+.send-to-bower-now:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.send-to-bower-line {
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-sm);
+}
