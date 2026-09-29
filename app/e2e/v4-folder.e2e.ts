@@ -5,11 +5,50 @@
  * the phone; Flat hunt is the demo's sample folder.
  */
 
+import type { Page } from '@playwright/test';
+
 import { expect, shot, test } from './demo.js';
 
 const FLAT = '/folder/1-Projects/Flat%20hunt';
 
 const PHONE_ONLY = 'the boards are the phone';
+
+/** The phone's one Filter & sort button (R-FOLD-6): opens its sheet. */
+function filterButton(page: Page): ReturnType<Page['getByRole']> {
+  return page.getByRole('button', { name: /^Filter and sort/ });
+}
+
+async function openFilterSheet(
+  page: Page,
+): Promise<ReturnType<Page['getByRole']>> {
+  await filterButton(page).click();
+  return page.getByRole('dialog', { name: 'Filter & sort' });
+}
+
+/** Picks `name` in the sheet's `group` ("Sort by", "Show", "Layout"). */
+async function pick(
+  page: Page,
+  group: string,
+  name: string | RegExp,
+): Promise<void> {
+  const sheet = await openFilterSheet(page);
+  await sheet
+    .getByRole('radiogroup', { name: group })
+    .getByRole('radio', { name })
+    .first()
+    .click();
+  await sheet.getByRole('button', { name: 'Close' }).click();
+}
+
+async function expectLayout(page: Page, name: 'List' | 'Grid'): Promise<void> {
+  const sheet = await openFilterSheet(page);
+  await expect(
+    sheet
+      .getByRole('radiogroup', { name: 'Layout' })
+      .getByRole('radio', { name }),
+  ).toHaveAttribute('aria-checked', 'true');
+  await sheet.getByRole('button', { name: 'Close' }).click();
+}
 
 test('Flat hunt lists its things as the board does (#611)', async ({
   page,
@@ -43,8 +82,9 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   );
 
   // Tool row: sort and kind filter.
-  await expect(page.getByLabel('Sort')).toHaveValue('newest');
-  await expect(page.getByLabel('Kind')).toHaveValue('');
+  await expect(filterButton(page)).toHaveAccessibleName(
+    'Filter and sort: newest first, all kinds',
+  );
 
   // Date groups, newest first, and rows with their one-line detail.
   const groups = page.locator('.folder-group');
@@ -119,22 +159,18 @@ test('sort, kind filter and origin filter survive a reload, per folder (#611)', 
   await page.goto(FLAT);
   await expect(page.locator('.folder-item').first()).toBeVisible();
 
-  await page.getByLabel('Sort').selectOption('name');
+  await pick(page, 'Sort by', 'Name');
   await expect(page.locator('.folder-group')).toHaveCount(0);
   await page.getByRole('button', { name: /^Originals/ }).click();
-  const kind = page.getByLabel('Kind');
-  const first = await kind.locator('option').nth(1).getAttribute('value');
-  expect(first).toBeTruthy();
-  await kind.selectOption(first ?? '');
-  const chosen = await kind.inputValue();
-  expect(chosen).not.toBe('');
+  await pick(page, 'Show', /^(?!All kinds)/);
+  const chosen = await filterButton(page).getAttribute('aria-label');
+  expect(chosen).toMatch(/^Filter and sort: name, (?!all kinds)/);
 
   // The write is asynchronous (IndexedDB): give it a moment before reloading.
   await page.waitForTimeout(300);
   await page.reload();
 
-  await expect(page.getByLabel('Sort')).toHaveValue('name');
-  await expect(page.getByLabel('Kind')).toHaveValue(chosen);
+  await expect(filterButton(page)).toHaveAccessibleName(chosen ?? '');
   await expect(
     page.getByRole('button', { name: /^Originals/ }),
   ).toHaveAttribute('aria-pressed', 'true');
@@ -142,11 +178,12 @@ test('sort, kind filter and origin filter survive a reload, per folder (#611)', 
   // Another folder is not affected.
   await page.goto('/folder/1-Projects/Kitchen%20Refresh');
   await expect(page.locator('.folder-item').first()).toBeVisible();
-  await expect(page.getByLabel('Sort')).toHaveValue('newest');
-  await expect(page.getByRole('button', { name: 'All' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
+  await expect(filterButton(page)).toHaveAccessibleName(
+    'Filter and sort: newest first, all kinds',
   );
+  await expect(
+    page.getByRole('button', { name: 'All', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
 });
 
 const GARDEN = '/folder/2-Areas/Garden';
@@ -157,32 +194,21 @@ test('a folder of photos opens in Grid and the toggle is remembered (#613)', asy
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
   await page.goto(GARDEN);
-  const view = page.getByRole('group', { name: 'View' });
   await expect(page.locator('.folder-grid')).toBeVisible();
-  await expect(view.getByRole('button', { name: 'Grid' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expectLayout(page, 'Grid');
 
-  await view.getByRole('button', { name: 'List' }).click();
+  await pick(page, 'Layout', 'List');
   await expect(page.locator('.folder-grid')).toHaveCount(0);
   await page.waitForTimeout(300);
   await page.reload();
-  await expect(
-    page
-      .getByRole('group', { name: 'View' })
-      .getByRole('button', { name: 'List' }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await expectLayout(page, 'List');
   await expect(page.locator('.folder-grid')).toHaveCount(0);
 
   // Flat hunt is mostly not photos: List, until it is switched to Grid.
   await page.goto(FLAT);
   await expect(page.locator('.folder-item').first()).toBeVisible();
   await expect(page.locator('.folder-grid')).toHaveCount(0);
-  await page
-    .getByRole('group', { name: 'View' })
-    .getByRole('button', { name: 'Grid' })
-    .click();
+  await pick(page, 'Layout', 'Grid');
   await expect(page.locator('.folder-grid')).toBeVisible();
   await page.waitForTimeout(300);
   await page.reload();
@@ -196,10 +222,7 @@ test('tiles show thumbnails online and the kind icon offline (#613)', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
   await page.goto(FLAT);
-  await page
-    .getByRole('group', { name: 'View' })
-    .getByRole('button', { name: 'Grid' })
-    .click();
+  await pick(page, 'Layout', 'Grid');
   // A pair shows Bower's note: its name and its first lines.
   const pair = page
     .locator('.folder-tile', { hasText: 'Arlington Road, 2 bed' })
@@ -217,10 +240,9 @@ test('tiles show thumbnails online and the kind icon offline (#613)', async ({
 
   // Offline, inside the app (no reload): the tiles are drawn again and show
   // the kind icon instead of the picture.
-  const view = page.getByRole('group', { name: 'View' });
   await context.setOffline(true);
-  await view.getByRole('button', { name: 'List' }).click();
-  await view.getByRole('button', { name: 'Grid' }).click();
+  await pick(page, 'Layout', 'List');
+  await pick(page, 'Layout', 'Grid');
   await expect(sign).toBeVisible();
   await expect(sign.locator('img.thumb-img')).toHaveCount(0);
   await expect(sign.locator('.folder-row-icon .icon')).toBeVisible();
@@ -262,11 +284,14 @@ test('holding a row or a tile opens quick look (#613)', async ({
   await expect(page).toHaveURL(/\/folder\//);
 
   // A tile the same way, then Open.
-  await page
-    .getByRole('group', { name: 'View' })
-    .getByRole('button', { name: 'Grid' })
-    .click();
-  const tile = page.locator('.folder-tile', { hasText: 'Lease agreement' });
+  await pick(page, 'Layout', 'Grid');
+  // By its name, not its text: once Bower's note lines load, another tile
+  // mentions the lease too.
+  const tile = page.locator('.folder-tile').filter({
+    has: page.locator('[id^="row-name-"]', {
+      hasText: /^Lease agreement 2026$/,
+    }),
+  });
   await tile.hover();
   await page.mouse.down();
   await page.waitForTimeout(650);

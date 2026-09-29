@@ -52,6 +52,7 @@ import type { FolderContents, FolderSubfolder } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
@@ -75,7 +76,8 @@ import {
   IconPdf,
 } from './icons.js';
 import { InfoPop } from './info-pop.js';
-import { KeyFacts } from './key-facts.js';
+import { FilterSortSheet } from './filter-sort-sheet.js';
+import { KeyFacts, scoreName } from './key-facts.js';
 import { KindBadge } from './kind-badge.js';
 import { QuickLook } from './quick-look.js';
 import type { PanePreview } from './quick-look.js';
@@ -257,6 +259,9 @@ const NO_FILES: ReadonlyMap<string, DriveFile> = new Map();
 const VIRTUAL_FROM_ROWS = 150;
 
 /** A row's and a date heading's height in px before they are measured. */
+/** From here the folder keeps its toolbar (R-FOLD-6). */
+const TOOLBAR_QUERY = '(min-width: 900px)';
+
 const ROW_ESTIMATE = 62;
 const GROUP_ESTIMATE = 34;
 
@@ -553,6 +558,12 @@ function RowDetail({
     kind === undefined || meta === undefined
       ? []
       : keyFactsFor(kind, meta.fields);
+  const score =
+    kind === undefined || meta === undefined
+      ? undefined
+      : keyFactsFor(kind, meta.fields, { score: true }).find(
+          (fact) => fact.tone !== undefined,
+        );
   const about =
     row.original === undefined ? 'note' : `note on the ${subjectOf(meta)}`;
   const original = row.original === undefined ? '' : FILE_KIND_LABELS[row.kind];
@@ -566,6 +577,18 @@ function RowDetail({
           <>
             {' '}
             <KeyFacts facts={facts} inline />
+          </>
+        )}
+        {score !== undefined && (
+          <>
+            {' · '}
+            <span
+              class="folder-row-score"
+              role="img"
+              aria-label={scoreName(score.value)}
+            >
+              {score.value}/100
+            </span>
           </>
         )}
       </span>
@@ -710,6 +733,8 @@ export function FolderItems({
     };
   }, [wantsVirtual, loaded]);
 
+  // Below 900 px the sort, kind and layout controls are one button (D34).
+  const toolbar = useMediaQuery(TOOLBAR_QUERY);
   const showTime = view.sort === 'name' || view.sort === 'kind';
 
   // Grid when the person chose it, else when most of the folder is photos.
@@ -1062,63 +1087,78 @@ export function FolderItems({
         </Hint>
       )}
       <div class="folder-tools">
-        <select
-          class="folder-select"
-          aria-label="Sort"
-          value={view.sort}
-          onChange={(event) =>
-            onView({ sort: event.currentTarget.value as FolderSort })
-          }
-        >
-          {FOLDER_SORTS.map((sort) => (
-            <option key={sort} value={sort}>
-              {SORT_LABELS[sort]}
-            </option>
-          ))}
-        </select>
-        {desktop ? (
-          <div class="folder-kind-chips" role="group" aria-label="Kind">
-            <button
-              type="button"
-              class="folder-kind-chip"
-              aria-pressed={kind === null}
-              onClick={() => onView({ kind: null })}
+        {toolbar ? (
+          <>
+            <select
+              class="folder-select"
+              aria-label="Sort"
+              value={view.sort}
+              onChange={(event) =>
+                onView({ sort: event.currentTarget.value as FolderSort })
+              }
             >
-              All {originRows.length}
-            </button>
-            {options.map((option) => (
-              <button
-                key={option.kind}
-                type="button"
-                class="folder-kind-chip"
-                aria-pressed={kind === option.kind}
-                onClick={() => onView({ kind: option.kind })}
+              {FOLDER_SORTS.map((sort) => (
+                <option key={sort} value={sort}>
+                  {SORT_LABELS[sort]}
+                </option>
+              ))}
+            </select>
+            {desktop ? (
+              <div class="folder-kind-chips" role="group" aria-label="Kind">
+                <button
+                  type="button"
+                  class="folder-kind-chip"
+                  aria-pressed={kind === null}
+                  onClick={() => onView({ kind: null })}
+                >
+                  All {originRows.length}
+                </button>
+                {options.map((option) => (
+                  <button
+                    key={option.kind}
+                    type="button"
+                    class="folder-kind-chip"
+                    aria-pressed={kind === option.kind}
+                    onClick={() => onView({ kind: option.kind })}
+                  >
+                    {option.label}s {option.count}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <select
+                class="folder-select"
+                aria-label="Kind"
+                value={kind ?? ''}
+                onChange={(event) =>
+                  onView({
+                    kind:
+                      event.currentTarget.value === ''
+                        ? null
+                        : (event.currentTarget.value as FileKind),
+                  })
+                }
               >
-                {option.label}s {option.count}
-              </button>
-            ))}
-          </div>
+                <option value="">All kinds</option>
+                {options.map((option) => (
+                  <option key={option.kind} value={option.kind}>
+                    {option.label} {option.count}
+                  </option>
+                ))}
+              </select>
+            )}
+          </>
         ) : (
-          <select
-            class="folder-select"
-            aria-label="Kind"
-            value={kind ?? ''}
-            onChange={(event) =>
-              onView({
-                kind:
-                  event.currentTarget.value === ''
-                    ? null
-                    : (event.currentTarget.value as FileKind),
-              })
-            }
-          >
-            <option value="">All kinds</option>
-            {options.map((option) => (
-              <option key={option.kind} value={option.kind}>
-                {option.label} {option.count}
-              </option>
-            ))}
-          </select>
+          <FilterSortSheet
+            sort={view.sort}
+            kind={kind}
+            kinds={options}
+            layout={layout}
+            total={rows.length}
+            onSort={(sort) => onView({ sort })}
+            onKind={(next) => onView({ kind: next as FileKind | null })}
+            onLayout={(next) => onView({ layout: next })}
+          />
         )}
         {compare !== undefined && (
           <button
@@ -1129,10 +1169,12 @@ export function FolderItems({
             {compare.label}
           </button>
         )}
-        <LayoutToggle
-          layout={layout}
-          onChange={(next) => onView({ layout: next })}
-        />
+        {toolbar && (
+          <LayoutToggle
+            layout={layout}
+            onChange={(next) => onView({ layout: next })}
+          />
+        )}
       </div>
       {rows.length === 0 && subs.length === 0 ? (
         <p class="folder-elsewhere">

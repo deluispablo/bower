@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyFilters,
+  cellText,
   bookingsTimeline,
   receiptsByMonth,
   compareColumns,
@@ -283,5 +284,31 @@ describe('bookingsTimeline', () => {
     expect(
       bookingsTimeline(bookings, new Date('2026-09-28T20:00:00Z'))[2]?.past,
     ).toBe(true);
+  });
+});
+
+describe('Compare wording (R-FOLD-6)', () => {
+  const kind = kindById('job-offer');
+  if (kind === undefined) throw new Error('no job-offer kind');
+
+  it('heads the office column "Where"', () => {
+    const labels = compareColumns(kind).map((column) => column.label);
+    expect(labels).toContain('Where');
+    expect(labels).not.toContain('Office');
+  });
+
+  it('says "No date" for a date the note does not have', () => {
+    const column = compareColumns(kind).find((c) => c.id === 'reply_by');
+    if (column === undefined) throw new Error('no reply_by column');
+    expect(cellText(kind, note('Offer', 'job-offer', {}), column)).toBe(
+      'No date',
+    );
+    expect(
+      cellText(
+        kind,
+        note('Offer', 'job-offer', { reply_by: '2026-10-14' }),
+        column,
+      ),
+    ).not.toBe('No date');
   });
 });

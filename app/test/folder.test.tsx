@@ -504,6 +504,7 @@ describe('Folder list mode (#611)', () => {
   });
 
   it('remembers the filters per folder and keeps the Compare columns', async () => {
+    stubMatchMedia((query) => query === '(min-width: 900px)');
     useFlatHuntWithPair();
     viewStore.set(DIR, {
       sort: 'name',
@@ -598,5 +599,64 @@ describe('One list, path once, names (R-FOLD-1, 3, 5)', () => {
     mount();
     await listReady();
     expect(root.querySelector('.folder-path')).toBeNull();
+  });
+});
+
+describe('Phone Filter & sort (R-FOLD-6, D34)', () => {
+  const filterButton = (): HTMLButtonElement | null =>
+    root.querySelector<HTMLButtonElement>('.filter-sort-btn');
+
+  it('replaces the sort, kind and layout controls with one named button', async () => {
+    stubMatchMedia(false);
+    useFlatHuntWithPair();
+    mount();
+    await listReady();
+    expect(root.querySelector('select[aria-label="Sort"]')).toBeNull();
+    expect(root.querySelector('.folder-layout')).toBeNull();
+    expect(filterButton()?.getAttribute('aria-label')).toBe(
+      'Filter and sort: newest first, all kinds',
+    );
+    expect(filterButton()?.getAttribute('aria-haspopup')).toBe('dialog');
+  });
+
+  it('opens a sheet whose choices apply and rename the button', async () => {
+    stubMatchMedia(false);
+    useFlatHuntWithPair();
+    mount();
+    await listReady();
+    void act(() => filterButton()?.click());
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+    const oldest = [
+      ...document.body.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
+    ].find((button) => button.textContent === 'Oldest first');
+    void act(() => oldest?.click());
+    await waitUntil(() => viewStore.get(DIR)?.folderSort === 'oldest');
+    expect(filterButton()?.getAttribute('aria-label')).toBe(
+      'Filter and sort: oldest first, all kinds',
+    );
+  });
+
+  it('keeps the toolbar from 900 px up', async () => {
+    stubMatchMedia((query) => query === '(min-width: 900px)');
+    useFlatHuntWithPair();
+    mount();
+    await listReady();
+    expect(filterButton()).toBeNull();
+    expect(root.querySelector('select[aria-label="Sort"]')).not.toBeNull();
+  });
+
+  it('reads a row score as 79/100 with a spoken name', async () => {
+    stubMatchMedia(false);
+    useFlatHuntWithPair();
+    metaStore.set(listingNote.id, {
+      ...metaStore.get(listingNote.id),
+      fit: 79,
+    });
+    mount();
+    await listReady();
+    await waitUntil(() => root.querySelector('.folder-row-score') !== null);
+    const score = root.querySelector('.folder-row-score');
+    expect(score?.textContent).toBe('79/100');
+    expect(score?.getAttribute('aria-label')).toBe('Your score 79 of 100');
   });
 });
