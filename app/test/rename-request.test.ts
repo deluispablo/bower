@@ -66,6 +66,12 @@ describe('validateRename', () => {
       'Names can\'t contain / \\ : * ? " < > |',
     );
   });
+  it('caps a name at 120 characters (#872)', () => {
+    expect(validateRename({ ...base, input: 'a'.repeat(120) })).toBeNull();
+    expect(validateRename({ ...base, input: 'a'.repeat(121) })).toBe(
+      'Keep it under 120 characters.',
+    );
+  });
 });
 
 describe('pendingByPath', () => {
