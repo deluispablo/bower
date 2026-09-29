@@ -374,6 +374,12 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
     # A log.md already in Drive, which the run's outcome line joins (#315).
     case "$SMOKE_SCENARIO" in
       retry | fail) echo '- 2026-01-01 · Vault created from the Bower template.' >"$remote/log.md" ;;
+      # "bookfail": a folder where log.md should be, so the bookkeeping
+      # cannot append its line after the move phase moved the original.
+      bookfail)
+        mkdir -p "$remote/log.md"
+        echo keep >"$remote/log.md/keep.txt"
+        ;;
     esac
     if [ "$SMOKE_SCENARIO" = scope ]; then
       # Add's context note (#335), written by the app for a batch of files:
@@ -2654,6 +2660,26 @@ expect_eq "$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.ar
 expect_content_free
 expect_cleaned_up
 echo "ok a run failing after the copy up reports what was uploaded"
+
+# 37. R-RUNNER-5: a run that fails at the bookkeeping, after the move phase
+# moved the filed original in Drive, reports that item with its `to` (so the
+# app reads it as partly done, not "nothing changed"), in last-run.json too;
+# the original is not left in the inbox.
+run_case bookfail
+expect_eq "$RC" 2 'exit code'
+expect_eq "$(post 2 p.state)" failed 'final state'
+grep -q '^sync up: bookkeeping failed' <<<"$(post 2 p.error)" || die 'error does not name the bookkeeping'
+expect_eq "$(cat "$STATE/moved.txt")" '0-Inbox/a.pdf -> 0-Inbox/Processed/a.pdf' 'moved in Drive before the failure'
+expect_eq "$(post 2 'JSON.stringify(p.processed)')" \
+  '[{"path":"0-Inbox/a.pdf","kind":"file","to":"0-Inbox/Processed/a.pdf"}]' 'the moved item, with its to'
+expect_eq "$(post 2 'p.left.join("|")')" 'Clippings/Bower trick.md|Clippings/b.md' 'left, without the moved original'
+expect_eq "$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(JSON.stringify([o.state, o.items]))' "$STATE/remote/.bower/last-run.json")" \
+  "$(post 2 'JSON.stringify(["failed", p.processed])')" 'last-run.json of the failed run carries the moved item'
+[ -s "$STATE/runner-temp/bower-logs/bookkeeping.err" ] || die "the bookkeeping's error not kept in the logs dir"
+expect_content_free
+expect_cleaned_up
+echo "ok a run failing after the move phase reports what was moved"
 
 # File facts (#610): after a run .bower/file-facts.json holds the pages of
 # the PDF, the sheets of the workbook and the entries of the archive (files,

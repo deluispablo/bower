@@ -355,10 +355,11 @@ on_exit() {
     REPORTED=1
     copy_up_after_failure
     report_lists >/dev/null 2>&1 || true
+    PROCESSED_JSON=$(moved_items_json 2>/dev/null) || PROCESSED_JSON=''
     REASON=unknown
     write_outcome failed "$(failed_sentence)" >/dev/null 2>&1 || true
     write_paths >/dev/null 2>&1 || true
-    PROCESSED_JSON='' SUMMARY='' report_final failed "$STEP: unexpected error" >/dev/null 2>&1 || true
+    SUMMARY='' report_final failed "$STEP: unexpected error" >/dev/null 2>&1 || true
     log "failed at $STEP"
     rc=2
   fi
@@ -484,6 +485,9 @@ write_outcome() {
     [ -z "${PROCESSED_JSON:-}" ] || args+=(--argjson items "$PROCESSED_JSON")
     [ -z "$SET_ASIDE_JSON" ] || args+=(--argjson setAside "$SET_ASIDE_JSON")
     [ -z "$ADDED" ] || args+=(--arg added "$ADDED")
+  elif [ "$state" = failed ]; then
+    # The items already moved in Drive, as the failed report (R-RUNNER-5).
+    [ -z "${PROCESSED_JSON:-}" ] || args+=(--argjson items "$PROCESSED_JSON")
   fi
   # R-RUNNER-2: the same created, updated and left as the final report, on
   # a failed run too, so a recovered stale run tells the full story.
@@ -1075,9 +1079,13 @@ fail() {
   copy_up_after_failure
   # R-RUNNER-1: a failed run says what it created, updated and left too.
   report_lists || log "report lists not built"
+  # R-RUNNER-5: a run that fails after the move phase already moved
+  # originals in Drive (for example at the bookkeeping) sends those items,
+  # each with its `to`, so it reads as partly done; otherwise no processed.
+  PROCESSED_JSON=$(moved_items_json) || PROCESSED_JSON=''
   write_outcome failed "$(failed_sentence)"
   write_paths
-  PROCESSED_JSON='' SUMMARY='' report_final failed "$error" || log "report failed: API unreachable"
+  SUMMARY='' report_final failed "$error" || log "report failed: API unreachable"
   log "failed: $error"
   exit 2
 }
@@ -1143,10 +1151,11 @@ processed_json() {
 # item that moved also carries `to` (its new path) and, when its file name
 # changed, `renamedFrom` (the old name).
 items_json() {
-  local path kind to moves=${1:-} args
+  local path kind to='' moves=${1:-} only_moved=${2:-} args
   while IFS=$'\t' read -r path kind; do
     [ -n "$path" ] || continue
     args=(--arg path "$path" --arg kind "$kind")
+    to=''
     if [ -n "$moves" ] && [ -f "$moves" ]; then
       to=$(P="$path" awk -F '\t' '$1 == ENVIRON["P"] { print $2; exit }' "$moves")
       if [ -n "$to" ]; then
@@ -1154,6 +1163,8 @@ items_json() {
         [ "${path##*/}" = "${to##*/}" ] || args+=(--arg renamedFrom "${path##*/}")
       fi
     fi
+    # With a second argument, only the items that moved.
+    [ -z "$only_moved" ] || [ -n "$to" ] || continue
     jq -cn "${args[@]}" '$ARGS.named'
   done <"$KINDS_FILE" | {
     local items
@@ -1312,6 +1323,19 @@ report_lists() {
       { print (($0 in what) ? $0 "\t" what[$0] : $0) }' "$UPDATED_WHAT_FILE" - |
     jq -Rn --argjson cut "$MAX_WHAT_LENGTH" "$UPDATED_FILTER")
   LEFT_JSON=$(left_paths | jq -Rn '[inputs]')
+}
+
+# The processed items the move phase already moved in Drive (MOVED_OLD),
+# each with its `to` (R-RUNNER-5), as a JSON array; empty output when none
+# moved, for a lint, or before the move phase.
+moved_items_json() {
+  local pairs="$WORK_DIR/moved-pairs.txt"
+  [ "$MODE" = ingest ] && [ -s "$MOVED_OLD" ] && [ -f "$MOVES_FILE" ] &&
+    [ -f "$KINDS_FILE" ] || return 0
+  awk -F '\t' 'FILENAME == ARGV[1] { done[$0] = 1; next } ($1 in done)' \
+    "$MOVED_OLD" "$MOVES_FILE" >"$pairs" || return 1
+  [ -s "$pairs" ] || return 0
+  items_json "$pairs" moved
 }
 
 # A running report with its phase (R-RUNNER-4) and, when known, a total.
@@ -1854,7 +1878,9 @@ fi
 if ! move_up; then
   fail "$STEP: move failed"
 fi
-if ! book_moves "$VAULT_DIR" "$BOOKED_OLD" "$BOOKED_NEW" "$(date -u '+%F %H:%M')"; then
+# A failing tool's own message names vault paths: it goes to a private log.
+if ! book_moves "$VAULT_DIR" "$BOOKED_OLD" "$BOOKED_NEW" "$(date -u '+%F %H:%M')" \
+  2>>"$LOG_DIR/bookkeeping.err"; then
   fail "$STEP: bookkeeping failed"
 fi
 # Report v2 (#598): each processed item that moved carries where it went.
