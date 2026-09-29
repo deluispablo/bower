@@ -156,7 +156,11 @@ describe('Overlay', () => {
       if (closeWith === 'escape') press('Escape');
       else {
         void act(() => {
-          [...document.querySelectorAll<HTMLButtonElement>('.overlay-panel button')]
+          [
+            ...document.querySelectorAll<HTMLButtonElement>(
+              '.overlay-panel button',
+            ),
+          ]
             .find((b) => b.textContent === 'Cancel')
             ?.click();
         });

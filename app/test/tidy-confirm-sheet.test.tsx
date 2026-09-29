@@ -67,11 +67,6 @@ function mount(
   return { onConfirm, onDismiss };
 }
 
-function currentRoot(): HTMLDivElement {
-  if (root === undefined) throw new Error('not mounted');
-  return root;
-}
-
 function dialog(): HTMLElement {
   const el = document.querySelector('[role="dialog"]');
   if (el === null) throw new Error('dialog missing');
@@ -216,7 +211,7 @@ describe('TidyConfirmSheet', () => {
     // about the backdrop's own dismiss wiring, once that window has
     // passed.
     vi.advanceTimersByTime(350);
-    const backdrop = currentRoot().querySelector('.overlay-scrim');
+    const backdrop = document.querySelector('.overlay-scrim');
     if (backdrop === null) throw new Error('backdrop missing');
     click(backdrop);
     expect(onDismiss).toHaveBeenCalledOnce();
