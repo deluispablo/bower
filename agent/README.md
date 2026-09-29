@@ -57,7 +57,7 @@ Either way, `run.sh` un-exports these names before anything else, so a value nev
 | `RUNNER_TEMP` | No | Set by GitHub Actions; the runner settings file, the work dir and the logs are under it |
 | `GITHUB_RUN_ID` | No | Set by GitHub Actions; used as `runId`, otherwise a random hex id |
 
-Tools on `PATH`: `bash`, `curl`, `jq` (1.6 or later), `rclone`, `pandoc` (2.15 or later, for `--sandbox`), `claude`. GitHub's `ubuntu-latest` has `bash`, `curl` and `jq`; the workflow installs the other three (Ubuntu 24.04's `pandoc` is 3.1).
+Tools on `PATH`: `bash`, `curl`, `jq` (1.6 or later), `rclone`, `pandoc` (2.15 or later, for `--sandbox`), `pdftotext` (poppler-utils; without it PDFs get no text in their text copy), `claude`. GitHub's `ubuntu-latest` has `bash`, `curl` and `jq`; the workflow installs the others (Ubuntu 24.04's `pandoc` is 3.1).
 
 ### Tools and web access
 
@@ -76,6 +76,8 @@ For an ingest, after the manifest and before Claude, `run.sh` converts every pen
 - A document whose `.md` sibling already exists is not converted again.
 - A document pandoc cannot read is left as it is, with no sibling; the log shows only the counts (`convert documents: <n> converted, <n> could not be converted`), and pandoc's own messages go to `pandoc.log`. The run goes on.
 - The siblings are new against the manifest, so they are uploaded with the agent's changes like any file it adds.
+- Text copies (R-RUNNER-7, R-AG-9): before the agent runs, `run.sh` keeps the converted text of each document, and the text of each pending PDF made by `pdftotext -layout` (poppler-utils, installed in the job like pandoc; a PDF over the size limits or one `pdftotext` cannot read is skipped). After the run, the text is appended under `## The document` to the document's text copy: a note the agent wrote (`by: bower`, no `kind`) named like the original, whose `original:` names it, following a rename of the original. A scan (a PDF with no text) gets `Scanned: no text to copy` there. With no conversion, nothing is written. The agent never copies the text.
+- Name audit (R-AG-4, R-AG-5): a new note of Bower's named over 40 characters, or a companion note (it has a `kind`) named like its original, is a warning on the last line of the final report's `summary`; only counts reach the log. A text copy, a hub note, an answer, `log.md` and `index.md` are exempt.
 - `prompts/ingest.md` tells the agent to file the document from its sibling and move the pair to `0-Inbox/Processed/` together, and to move an unconvertible document there as it is and mention it under `Problems`.
 
 A lint processes no inbox, so it converts nothing. PDFs and images are not converted: the agent reads them itself, as before.

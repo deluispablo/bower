@@ -154,7 +154,7 @@ Settings' footer shows which commit is live (`Bower 0.1.0 · a1b2c3d`, #512): `v
 
 The instance repo is a private repo of the operator's own that only holds the agent's workflows and its own secrets — never this repo's code, never a user's vault content (see "Two repositories per deployment" in `ARCHITECTURE.md`).
 
-Each run installs what the runner needs on GitHub's `ubuntu-latest`: `rclone`, `pandoc` and Claude Code. `pandoc` stays even though the agent can no longer call it: `agent/run.sh` itself uses it, in sandbox mode, to turn the Word, OpenDocument, HTML, EPUB and RTF files waiting in the inbox into Markdown before the agent starts (see "Document conversion" in `agent/README.md`).
+Each run installs what the runner needs on GitHub's `ubuntu-latest`: `rclone`, `pandoc`, `poppler-utils` (for `pdftotext`, which reads the text of PDFs so `run.sh` can append it to each document's text copy after the run) and Claude Code. `pandoc` stays even though the agent can no longer call it: `agent/run.sh` itself uses it, in sandbox mode, to turn the Word, OpenDocument, HTML, EPUB and RTF files waiting in the inbox into Markdown before the agent starts (see "Document conversion" in `agent/README.md`).
 
 There are two ways to get one:
 

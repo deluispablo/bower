@@ -330,6 +330,19 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       echo odt >"$remote/0-Inbox/already.odt"
       echo mine >"$remote/0-Inbox/already.md"
     fi
+    if [ "$SMOKE_SCENARIO" = textcopy ]; then
+      # Text copies (R-RUNNER-7, R-AG-9): a Word file and a text PDF the
+      # agent writes copies for, a PDF it renames, a scan, a PDF pdftotext
+      # cannot read, a Word file pandoc cannot read, and a PDF the agent
+      # gives a companion note named like it.
+      echo docx >"$remote/0-Inbox/offer-letter.docx"
+      echo pdf-a >"$remote/0-Inbox/plan.pdf"
+      echo pdf-b >"$remote/0-Inbox/scan001.pdf"
+      echo SCANNED >"$remote/0-Inbox/receipt-photo.pdf"
+      echo CORRUPT >"$remote/0-Inbox/broken.pdf"
+      echo CORRUPT >"$remote/0-Inbox/damaged.docx"
+      echo pdf-c >"$remote/0-Inbox/lease.pdf"
+    fi
     case "$SMOKE_SCENARIO" in
       # The owner's own rules, which only a run given an instruction note
       # the app wrote may change (issue #263).
@@ -644,6 +657,25 @@ fi
 echo 'converted by pandoc' >"$out"
 STUB
 
+cat >"$STUBS/pdftotext" <<'STUB'
+#!/usr/bin/env bash
+# pdftotext stub: records its arguments and writes the text of "<in>" to
+# "<out>" as pdftotext does (a page break after it); nothing but the page
+# break for a file that says SCANNED (no text layer); a failure for CORRUPT.
+set -euo pipefail
+printf '%s\n' "$*" >>"$SMOKE_STATE/pdftotext-calls.log"
+[ "$#" -eq 3 ] && [ "$1" = -layout ] || { echo 'pdftotext stub: expected -layout <in> <out>' >&2; exit 90; }
+if grep -q CORRUPT "$2"; then
+  echo 'PDFTOTEXT-MARKER Syntax Error' >&2
+  exit 1
+fi
+if grep -q SCANNED "$2"; then
+  printf '\f\n' >"$3"
+else
+  printf 'PDF TEXT LINE 1\n  PDF TEXT LINE 2\n\f' >"$3"
+fi
+STUB
+
 cat >"$STUBS/claude" <<'STUB'
 #!/usr/bin/env bash
 # claude stub: records its flags and credentials, prints a summary, moves
@@ -702,6 +734,24 @@ grep -rlF -- '0900 Tidy up' . >"$SMOKE_STATE/claude-grep.txt" || true
 # original and its Markdown sibling together.
 if [ "$SMOKE_SCENARIO" = convert ]; then
   mv 0-Inbox/quarterly-report.docx 0-Inbox/quarterly-report.md 0-Inbox/Processed/
+fi
+# "textcopy": the agent writes the text copies and two more notes; it never
+# copies the text of a document.
+if [ "$SMOKE_SCENARIO" = textcopy ]; then
+  copy() { # <note path> <original's file name> [one more frontmatter line]
+    printf -- '---\nby: bower\noriginal: "[[%s]]"\n%s---\n\n> [!bower] Bower'"'"'s note\n> A note.\n' \
+      "$2" "${3:+$3$'\n'}" >"$1"
+  }
+  copy 0-Inbox/offer-letter.md offer-letter.docx
+  copy 0-Inbox/plan.md plan.pdf
+  copy 0-Inbox/receipt-photo.md receipt-photo.pdf
+  copy 0-Inbox/broken.md broken.pdf
+  copy 0-Inbox/damaged.md damaged.docx
+  copy 0-Inbox/lease.md lease.pdf 'kind: lease'
+  mkdir -p 1-Projects/Flat
+  mv 0-Inbox/scan001.pdf '1-Projects/Flat/Floor plan.pdf'
+  copy '1-Projects/Flat/Floor plan.md' 'Floor plan.pdf'
+  copy '0-Inbox/A very long note name that goes past forty characters.md' unrelated.txt
 fi
 echo late >"$SMOKE_STATE/remote/0-Inbox/late.pdf"
 echo late >"$SMOKE_STATE/remote/Clippings/late.md"
@@ -2761,3 +2811,44 @@ expect_eq "$(facts_json)" \
 expect_eq "$(wc -l <"$STATE/pdfinfo-calls.txt" | tr -d ' ')" 1 'only the corrupt PDF is tried again'
 echo "ok the runner counts pages, sheets and archive entries, and skips what it cannot read"
 
+
+# 38. Text copies (R-RUNNER-7, R-AG-9): after the run, the full text of a
+# document is appended under "## The document" to the text copy the agent
+# wrote (a Word file's pandoc text, a text PDF's pdftotext -layout text, a
+# renamed original followed); a scan gets "Scanned: no text to copy"; with no
+# conversion nothing is written; a companion note is left alone. Note names
+# over 40 characters and a companion note named like its original are a
+# warning in the summary, and only counts reach the log.
+MODE=ingest
+run_case textcopy
+expect_eq "$RC" 0 'exit code (text copy)'
+expect_eq "$(post 2 p.state)" done 'final state (text copy)'
+remote="$STATE/remote"
+while IFS= read -r args; do
+  case "$args" in
+    '-layout '*) ;;
+    *) die "pdftotext ran without -layout: $args" ;;
+  esac
+done <"$STATE/pdftotext-calls.log"
+expect_eq "$(tail -n 3 "$remote/0-Inbox/offer-letter.md")" \
+  "$(printf '## The document\n\nconverted by pandoc')" 'the Word text is appended to its text copy'
+expect_eq "$(grep -c '^## The document$' "$remote/0-Inbox/offer-letter.md")" 1 'one section only'
+expect_eq "$(tail -n 4 "$remote/0-Inbox/plan.md")" \
+  "$(printf '## The document\n\nPDF TEXT LINE 1\n  PDF TEXT LINE 2')" 'the PDF text is appended, layout kept'
+if grep -q "$(printf '\f')" "$remote/0-Inbox/plan.md"; then die 'a page break was copied into the text copy'; fi
+expect_eq "$(tail -n 3 "$remote/0-Inbox/receipt-photo.md")" \
+  "$(printf '## The document\n\nScanned: no text to copy')" 'a scan says there is no text'
+if grep -q '^## The document$' "$remote/0-Inbox/broken.md"; then die 'a PDF pdftotext cannot read got a section'; fi
+if grep -q '^## The document$' "$remote/0-Inbox/damaged.md"; then die 'a Word file pandoc cannot read got a section'; fi
+if grep -q '^## The document$' "$remote/0-Inbox/lease.md"; then die 'a companion note got the document text'; fi
+grep -q '^PDF TEXT LINE 1$' "$remote/1-Projects/Flat/Floor plan.md" ||
+  die 'the text of a renamed original was not appended'
+grep -q ' 4 text copies completed$' "$STATE/out.log" || die 'text copies not counted in the log'
+expect_eq "$(post 2 'p.summary.split("\n").pop()')" \
+  'Warning: 1 note name over 40 characters; 1 note named like its original.' 'the name audit warning'
+grep -q ' note name audit: 1 over 40 characters, 1 named like their original$' "$STATE/out.log" ||
+  die 'name audit counts not logged'
+if grep -Eq 'forty|lease|Floor plan|offer-letter' "$STATE/out.log"; then die 'the log names a note or a path'; fi
+expect_content_free
+expect_cleaned_up
+echo "ok the document text is appended to its text copy, scans say so, names are audited"
