@@ -97,3 +97,59 @@
     animation: none;
   }
 }
+
+/* The sidebar's resize handle (R-SIDE-1): a 10 px hit area straddling the
+   sidebar's right edge, a 2 px brand line on hover and drag, a 36 px knob on
+   hover or focus. Desktop only: the phone has no sidebar. */
+.sidebar-separator {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .sidebar-separator {
+    position: absolute;
+    top: 0;
+    right: -5px;
+    bottom: 0;
+    z-index: 2;
+    display: block;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
+    outline: none;
+  }
+
+  .sidebar-separator::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 2px;
+    background: var(--color-accent-line);
+    opacity: 0;
+    content: '';
+  }
+
+  .sidebar-separator::after {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 10px;
+    height: 36px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-accent-line);
+    border-radius: 5px;
+    opacity: 0;
+    transform: translateY(-50%);
+    content: '';
+  }
+
+  .sidebar-separator:hover::before,
+  .sidebar-separator:focus-visible::before,
+  .sidebar-separator-dragging::before,
+  .sidebar-separator:hover::after,
+  .sidebar-separator:focus-visible::after,
+  .sidebar-separator-dragging::after {
+    opacity: 1;
+  }
+}
