@@ -193,7 +193,9 @@ describe('Compare on a phone', () => {
     );
   const radio = (label: string): HTMLElement | undefined =>
     [
-      ...document.body.querySelectorAll<HTMLElement>('.compare-sort [role=radio]'),
+      ...document.body.querySelectorAll<HTMLElement>(
+        '.compare-sort [role=radio]',
+      ),
     ].find((el) => el.textContent?.startsWith(label));
 
   it('names the sort on the button and opens the Sort sheet on Overlay', async () => {
@@ -203,9 +205,9 @@ describe('Compare on a phone', () => {
     const dialog = document.body.querySelector('.overlay [role=dialog]');
     expect(dialog?.getAttribute('aria-modal')).toBe('true');
     expect(dialog?.querySelector('h2')?.textContent).toBe('Sort listings by');
-    expect(
-      dialog?.querySelector('[aria-label="Order"]')?.textContent,
-    ).toBe('High firstLow first');
+    expect(dialog?.querySelector('[aria-label="Order"]')?.textContent).toBe(
+      'High firstLow first',
+    );
     expect(dialog?.querySelector('.compare-sort-done')?.textContent).toBe(
       'Show 2 listings',
     );

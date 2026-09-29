@@ -228,27 +228,27 @@ function SortSheet({
             );
           })}
         </div>
-        <div
-          class="compare-sort-order"
-          role="radiogroup"
-          aria-label="Order"
-        >
+        <div class="compare-sort-order" role="radiogroup" aria-label="Order">
           {directions.map((direction) => (
-              <button
-                key={direction}
-                type="button"
-                role="radio"
-                class="compare-sort-dir"
-                aria-checked={sort.direction === direction}
-                onClick={() => {
-                  onSort({ column: sort.column, direction });
-                }}
-              >
-                {labels[direction]}
-              </button>
-            ))}
+            <button
+              key={direction}
+              type="button"
+              role="radio"
+              class="compare-sort-dir"
+              aria-checked={sort.direction === direction}
+              onClick={() => {
+                onSort({ column: sort.column, direction });
+              }}
+            >
+              {labels[direction]}
+            </button>
+          ))}
         </div>
-        <button type="button" class="button compare-sort-done" onClick={onClose}>
+        <button
+          type="button"
+          class="button compare-sort-done"
+          onClick={onClose}
+        >
           {`Show ${count} ${offerWord(kind, count)}`}
         </button>
       </div>
