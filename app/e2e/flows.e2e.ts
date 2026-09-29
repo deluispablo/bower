@@ -2540,7 +2540,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   const props = page.locator('.file-props');
   await expect(props).toContainText('Photo ·');
   await expect(
-    props.getByRole('link', { name: 'Projects / Kitchen Refresh' }),
+    props.getByRole('link', { name: 'Kitchen Refresh' }),
   ).toBeVisible();
   await expect(props).toContainText('Filed by Bower ·');
   // The photo viewer (#605, #606): the photo fitted, tap to see it whole.
