@@ -553,7 +553,7 @@ function useLastRun(lastFinished: Run | null): Run | null {
 
 export function Home(): JSX.Element {
   const { me } = useSession();
-  const { index, files, status, unpinNote, unpinFolder, unpinFile, refresh } =
+  const { index, files, status, unpinNote, unpinFolder, unpinFile } =
     useVault();
   // #513: `now` is the run store's own shared clock, so this card, the
   // Last tidy-up card and the working sheet always agree on how long ago
@@ -562,14 +562,9 @@ export function Home(): JSX.Element {
   const online = useOnline();
   const [editing, setEditing] = useState(false);
 
-  // Recent lists what Add just uploaded (report F6): read the folder again
-  // when Home opens, so a file added a moment ago is not missing.
-  useEffect(() => {
-    refresh().catch((err: unknown) => {
-      console.error('Refreshing the listing for Home failed', err);
-    });
-    // Once per visit: `refresh` changes with the folder, not with the visit.
-  }, []);
+  // Recent lists what Add just uploaded (report F6): Add already reads the
+  // folder again after its upload (`add.tsx`), and Home reads the same index.
+  // Refreshing again on open dropped a pin that was still being saved.
   // R-HOME-3: a session that has not seen a run finish still has the history.
   const lastRun = useLastRun(lastFinished);
 
