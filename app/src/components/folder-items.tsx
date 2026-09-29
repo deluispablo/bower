@@ -75,6 +75,7 @@ import {
   IconPdf,
 } from './icons.js';
 import { InfoPop } from './info-pop.js';
+import { FilterSortSheet } from './filter-sort-sheet.js';
 import { KeyFacts } from './key-facts.js';
 import { KindBadge } from './kind-badge.js';
 import { QuickLook } from './quick-look.js';
@@ -1062,63 +1063,55 @@ export function FolderItems({
         </Hint>
       )}
       <div class="folder-tools">
-        <select
-          class="folder-select"
-          aria-label="Sort"
-          value={view.sort}
-          onChange={(event) =>
-            onView({ sort: event.currentTarget.value as FolderSort })
-          }
-        >
-          {FOLDER_SORTS.map((sort) => (
-            <option key={sort} value={sort}>
-              {SORT_LABELS[sort]}
-            </option>
-          ))}
-        </select>
         {desktop ? (
-          <div class="folder-kind-chips" role="group" aria-label="Kind">
-            <button
-              type="button"
-              class="folder-kind-chip"
-              aria-pressed={kind === null}
-              onClick={() => onView({ kind: null })}
+          <>
+            <select
+              class="folder-select"
+              aria-label="Sort"
+              value={view.sort}
+              onChange={(event) =>
+                onView({ sort: event.currentTarget.value as FolderSort })
+              }
             >
-              All {originRows.length}
-            </button>
-            {options.map((option) => (
+              {FOLDER_SORTS.map((sort) => (
+                <option key={sort} value={sort}>
+                  {SORT_LABELS[sort]}
+                </option>
+              ))}
+            </select>
+            <div class="folder-kind-chips" role="group" aria-label="Kind">
               <button
-                key={option.kind}
                 type="button"
                 class="folder-kind-chip"
-                aria-pressed={kind === option.kind}
-                onClick={() => onView({ kind: option.kind })}
+                aria-pressed={kind === null}
+                onClick={() => onView({ kind: null })}
               >
-                {option.label}s {option.count}
+                All {originRows.length}
               </button>
-            ))}
-          </div>
+              {options.map((option) => (
+                <button
+                  key={option.kind}
+                  type="button"
+                  class="folder-kind-chip"
+                  aria-pressed={kind === option.kind}
+                  onClick={() => onView({ kind: option.kind })}
+                >
+                  {option.label}s {option.count}
+                </button>
+              ))}
+            </div>
+          </>
         ) : (
-          <select
-            class="folder-select"
-            aria-label="Kind"
-            value={kind ?? ''}
-            onChange={(event) =>
-              onView({
-                kind:
-                  event.currentTarget.value === ''
-                    ? null
-                    : (event.currentTarget.value as FileKind),
-              })
-            }
-          >
-            <option value="">All kinds</option>
-            {options.map((option) => (
-              <option key={option.kind} value={option.kind}>
-                {option.label} {option.count}
-              </option>
-            ))}
-          </select>
+          <FilterSortSheet
+            sort={view.sort}
+            kind={kind}
+            kinds={options}
+            layout={layout}
+            total={rows.length}
+            onSort={(sort) => onView({ sort })}
+            onKind={(next) => onView({ kind: next as FileKind | null })}
+            onLayout={(next) => onView({ layout: next })}
+          />
         )}
         {compare !== undefined && (
           <button
@@ -1129,10 +1122,12 @@ export function FolderItems({
             {compare.label}
           </button>
         )}
-        <LayoutToggle
-          layout={layout}
-          onChange={(next) => onView({ layout: next })}
-        />
+        {desktop && (
+          <LayoutToggle
+            layout={layout}
+            onChange={(next) => onView({ layout: next })}
+          />
+        )}
       </div>
       {rows.length === 0 && subs.length === 0 ? (
         <p class="folder-elsewhere">
