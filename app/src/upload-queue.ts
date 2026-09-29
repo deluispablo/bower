@@ -411,8 +411,29 @@ export interface StorageLike {
   estimate?: () => Promise<{ quota?: number; usage?: number }>;
 }
 
+/** Tells the other tabs of this device that the queue changed. */
+export interface QueueBus {
+  post: () => void;
+  listen: (onMessage: () => void) => void;
+}
+
+/** A `BroadcastChannel` bus, or `undefined` where there is none. */
+export function broadcastBus(): QueueBus | undefined {
+  if (typeof BroadcastChannel === 'undefined') return undefined;
+  const channel = new BroadcastChannel('bower-uploads');
+  return {
+    post: () => channel.postMessage('changed'),
+    listen: (onMessage) => {
+      channel.onmessage = () => onMessage();
+    },
+  };
+}
+
 export interface UploadQueueDeps {
   store: UploadStore;
+  /** Wakes the owner when another tab adds a file, and tells the others
+   * when a file is in. */
+  bus?: QueueBus;
   transport: ResumableTransport;
   /** `undefined` where the browser has no Web Locks: this tab runs the queue. */
   locks?: LocksLike;
@@ -507,7 +528,7 @@ export function isQuotaError(error: unknown): boolean {
 }
 
 export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
-  const { store, transport, locks, storage } = deps;
+  const { store, transport, locks, storage, bus } = deps;
   const chunkSize = deps.chunkSize ?? RESUMABLE_CHUNK_BYTES;
   const newId = deps.newId ?? ((): string => crypto.randomUUID());
   const now = deps.now ?? ((): Date => new Date());
@@ -625,7 +646,10 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         },
         chunkSize,
       );
-      if (entry.item.durable) await store.remove(uid, entry.item.id);
+      if (entry.item.durable) {
+        await store.remove(uid, entry.item.id);
+        bus?.post();
+      }
       entry.item.state = 'done';
       entry.item.fileId = fileId;
       entry.item.sent = entry.item.size;
@@ -646,6 +670,33 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       notify();
     }
   }
+
+  /** Another tab owns the queue: learn which files it has finished. */
+  async function sync(uid: string): Promise<void> {
+    const records = await store.list(uid);
+    if (userId !== uid || role === 'owner') return;
+    const ids = new Set(records.map((r) => r.id));
+    for (const { item } of entries.values()) {
+      if (item.durable && item.state !== 'done' && !ids.has(item.id)) {
+        item.state = 'done';
+        item.sent = item.size;
+      }
+    }
+    for (const r of records) {
+      if (!entries.has(r.id)) entries.set(r.id, fromRecord(r));
+    }
+    notify();
+  }
+
+  bus?.listen(() => {
+    const uid = userId;
+    if (uid === null) return;
+    if (role === 'owner') {
+      void pump();
+    } else {
+      sync(uid).catch((error: unknown) => console.error(error));
+    }
+  });
 
   function pump(): Promise<void> {
     if (pumping !== null) return pumping;
@@ -828,6 +879,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       if (userId !== uid) throw new Error('The upload queue has stopped.');
       entries.set(entry.item.id, entry);
       notify();
+      if (entry.item.durable && role !== 'owner') bus?.post();
       void pump();
       return { ...entry.item };
     },
@@ -880,6 +932,7 @@ export function uploadQueue(): UploadQueue {
     transport: xhrTransport(),
     locks: nav?.locks as LocksLike | undefined,
     storage: nav?.storage,
+    bus: broadcastBus(),
   });
   if (typeof window !== 'undefined') {
     window.addEventListener('online', () => queue.retry());
