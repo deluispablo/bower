@@ -1,12 +1,11 @@
 /**
  * The one More menu for a note, a file and a folder (#210, #352, #608, board
  * Phone-More): a bottom sheet under 900 px, a popover pinned under the More
- * button from 900 px up — one component, `note-menu.css`'s breakpoint
- * switches the presentation the same way `layout.css` already does for the
- * drawer vs the sidebar. `role="menu"`, each row `role="menuitem"`; focus
- * is trapped inside while open (`use-focus-trap.ts`, the same pattern as
- * the explorer drawer), Escape, Cancel and a backdrop tap close it and hand
- * focus back to the More button that opened it.
+ * button from 900 px up — one component: an `Overlay` of kind `menu` on the
+ * queue (R-OVL-2), which switches the presentation at 900 px. `role="menu"`,
+ * each row `role="menuitem"`; the page behind is inert and focus is trapped
+ * inside while open; Escape, Cancel and a scrim tap close it and hand focus
+ * back to the More button that opened it.
  *
  * Three callers: `routes/note.tsx`, `routes/file.tsx` and
  * `routes/folder.tsx`. The board's order: a header (the title, then the
@@ -34,7 +33,7 @@
  * (`!isProtectedNote`, `routes/note.tsx`).
  */
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { isDemo } from '../api.js';
@@ -54,10 +53,13 @@ import {
   splitFileName,
   validateRename,
 } from '../rename-request.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { showToast } from '../toast-store.js';
 import { isAppFile } from '../vault-index.js';
 import { mediaMatches } from '../use-media-query.js';
 import { FolderMark } from './folder-mark.js';
+import { Overlay } from './overlay.js';
+import { Queued } from './queued-overlay.js';
 import { openSendToBower } from './send-to-bower.js';
 import {
   IconChat,
@@ -68,7 +70,6 @@ import {
   IconPin,
   IconPlus,
 } from './icons.js';
-import { useFocusTrap } from './use-focus-trap.js';
 import '../styles/note-menu.css';
 
 const MENU_LABELS: Readonly<Record<MoreMenuKind, string>> = {
@@ -189,14 +190,7 @@ export function NoteMenu({
   siblingNames,
   onClose,
 }: NoteMenuProps): JSX.Element {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const linkInputRef = useRef<HTMLInputElement>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
-  useFocusTrap(panelRef, onClose);
-
-  useEffect(() => {
-    if (copyState === 'manual') linkInputRef.current?.select();
-  }, [copyState]);
 
   async function handleCopyLink(): Promise<void> {
     setCopyState((await copyToClipboard(location.href)) ? 'copied' : 'manual');
@@ -290,15 +284,8 @@ export function NoteMenu({
     kind === 'folder' ? driveFolderUrl(file) : driveViewUrl(file);
 
   return (
-    <div class="note-menu">
-      <div class="note-menu-backdrop" aria-hidden="true" onClick={onClose} />
-      <div
-        ref={panelRef}
-        class="note-menu-panel"
-        role="menu"
-        aria-label={MENU_LABELS[kind]}
-        tabIndex={-1}
-      >
+    <Queued id="note-menu" priority={OVERLAY_PRIORITY.own}>
+      <Overlay kind="menu" label={MENU_LABELS[kind]} onClose={onClose}>
         <div class="note-menu-head" role="presentation">
           <span class="note-menu-title">{title}</span>
           <span class="note-menu-meta">
@@ -440,7 +427,7 @@ export function NoteMenu({
         </button>
         {copyState === 'manual' && (
           <input
-            ref={linkInputRef}
+            ref={(input) => input?.select()}
             class="note-menu-copy-fallback"
             aria-label={`This ${kind}'s link`}
             readOnly
@@ -487,7 +474,7 @@ export function NoteMenu({
         >
           Cancel
         </button>
-      </div>
-    </div>
+      </Overlay>
+    </Queued>
   );
 }

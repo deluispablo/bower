@@ -136,7 +136,13 @@ test('after a tidy-up, the folder it filed into shows "<n> new" and its new rows
   await sheet.getByRole('button', { name: 'Close' }).first().click();
   // The phone's notifications prompt follows a first tidy-up.
   const gotIt = page.getByRole('button', { name: 'Got it' });
-  if (await gotIt.isVisible()) await gotIt.click();
+  // #774: the prompt now waits for the run sheet on the overlay queue, so it
+  // shows a moment after the sheet closes, not with it.
+  const prompted = await gotIt
+    .waitFor({ state: 'visible', timeout: 3_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (prompted) await gotIt.click();
   // In-app navigation: a reload would forget the run.
   // On desktop the sidebar is the tree already.
   if (testInfo.project.name === 'phone') await navigate(page, /^Notes$/);

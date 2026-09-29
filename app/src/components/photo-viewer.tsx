@@ -17,8 +17,10 @@
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
+import { Overlay } from './overlay.js';
+import { Queued } from './queued-overlay.js';
 import '../styles/photo-viewer.css';
-import { useFocusTrap } from './use-focus-trap.js';
 
 /** One item of the folder's walk: a photo or a file. */
 export interface PhotoSibling {
@@ -110,8 +112,6 @@ function FullScreen(props: FullScreenProps): JSX.Element {
   onCloseRef.current = onClose;
   const total = siblings.length;
 
-  useFocusTrap(rootRef, onClose);
-
   // The black overlay is always there; the Fullscreen API is an extra.
   useEffect(() => {
     const root = rootRef.current;
@@ -199,13 +199,7 @@ function FullScreen(props: FullScreenProps): JSX.Element {
   const scale = (doubled ? 2 : 1) * pinch;
 
   return (
-    <div
-      ref={rootRef}
-      class="photo-viewer-full"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
+    <div ref={rootRef} class="photo-viewer-full">
       <header class="photo-viewer-bar">
         <button
           type="button"
@@ -334,7 +328,13 @@ export function PhotoViewer(props: PhotoViewerProps): JSX.Element {
           Tap to see it whole
         </span>
       </button>
-      {open && <FullScreen {...props} onClose={close} />}
+      {open && (
+        <Queued id="photo-viewer" priority={OVERLAY_PRIORITY.own}>
+          <Overlay kind="dialog" label={title} onClose={close}>
+            <FullScreen {...props} onClose={close} />
+          </Overlay>
+        </Queued>
+      )}
     </div>
   );
 }

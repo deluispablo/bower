@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { OverlayHost } from '../src/components/overlay.js';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { RequestRow } from '../src/bower-tab.js';
 import type { DriveFile } from '../src/drive.js';
@@ -128,7 +129,7 @@ function mount(): void {
   root = document.createElement('div');
   document.body.append(root);
   void act(() => {
-    render(h(Folder, null), root);
+    render(h(Fragment, null, h(Folder, null), h(OverlayHost, null)), root);
   });
 }
 
@@ -206,13 +207,13 @@ describe('Folder More menu (#352)', () => {
     void act(() => {
       more.click();
     });
-    const menu = root.querySelector('[role="menu"]');
+    const menu = document.querySelector('[role="menu"]');
     expect(menu?.getAttribute('aria-label')).toBe('Folder actions');
-    expect(root.querySelector('.note-menu-title')?.textContent).toBe(
+    expect(document.querySelector('.note-menu-title')?.textContent).toBe(
       'Flat hunt',
     );
     const labels = Array.from(
-      root.querySelectorAll('.note-menu-row-label'),
+      document.querySelectorAll('.note-menu-row-label'),
       (el) => el.textContent,
     );
     expect(labels).toContain('Pin to Home');

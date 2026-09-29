@@ -8,6 +8,7 @@
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
 
+import { OverlayHost } from '../src/components/overlay.js';
 import { PhotoViewer } from '../src/components/photo-viewer.js';
 
 const NAMES = [
@@ -38,6 +39,7 @@ function Harness(): preact.JSX.Element {
         folderName="Flat hunt"
         onNavigate={setIndex}
       />
+      <OverlayHost />
     </main>
   );
 }
