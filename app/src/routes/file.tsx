@@ -930,19 +930,21 @@ export function FileScreen(): JSX.Element {
         <BowerNote file={file} companion={companion} index={index} />
       )}
 
-      {policy.bowerReads === 'yes' && companion === null && (
-        <p class="file-tip">
-          <IconSparkle />
-          <span>
-            <b>Want a note on it?</b>{' '}
-            {origin === 'filed' ? 'Bower filed this as it is. ' : ''}Ask for
-            one:{' '}
-            <a href={askHref}>
-              &ldquo;Summarise this and list what matters&rdquo;
-            </a>
-          </span>
-        </p>
-      )}
+      {policy.bowerReads === 'yes' &&
+        companion === null &&
+        source === undefined && (
+          <p class="file-tip">
+            <IconSparkle />
+            <span>
+              <b>Want a note on it?</b>{' '}
+              {origin === 'filed' ? 'Bower filed this as it is. ' : ''}Ask for
+              one:{' '}
+              <a href={askHref}>
+                &ldquo;Summarise this and list what matters&rdquo;
+              </a>
+            </span>
+          </p>
+        )}
     </section>
   );
 }
