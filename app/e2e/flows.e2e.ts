@@ -2559,9 +2559,12 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(
     none.getByRole('link', { name: 'open it in Drive' }),
   ).toHaveCount(0);
+  // #777: the suggestion is a chip that opens the send sheet, prefilled.
+  await page.getByRole('button', { name: /Summarise this/ }).click();
   await expect(
-    page.getByRole('link', { name: /Summarise this/ }),
-  ).toHaveAttribute('href', /^\/bower\?text=Summarise/);
+    page.getByRole('textbox', { name: 'Your question' }),
+  ).toHaveValue(/^Summarise this/);
+  await page.getByRole('button', { name: 'Close' }).click();
 
   // The More menu, in its file version: Open in Drive greyed (#555), Pin to
   // Home present (#688).
