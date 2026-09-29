@@ -41,13 +41,14 @@ import {
   timelineExplainer,
 } from '../compare.js';
 import type { CompareColumn, CompareNote, CompareSort } from '../compare.js';
-import { getText, saveNoteText } from '../drive.js';
+import { getText } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { keyFactsFor, statusLabel } from '../kinds.js';
 import type { Kind } from '../kinds.js';
-import { loadNoteMeta } from '../note-meta.js';
+import { loadNoteMeta, recordNoteMeta } from '../note-meta.js';
 import { showToast } from '../toast-store.js';
 import { useMediaQuery } from '../use-media-query.js';
+import { useVault } from '../vault-store.js';
 import { OriginSquare } from './folder-mark.js';
 
 import '../styles/compare.css';
@@ -113,6 +114,7 @@ export function CompareView({
   kindId,
 }: CompareViewProps): JSX.Element | null {
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const { saveEditedNote } = useVault();
   const kinds = useMemo(() => compareKinds(notes), [notes]);
   const kind = kinds.find((candidate) => candidate.id === kindId) ?? kinds[0];
 
@@ -203,16 +205,22 @@ export function CompareView({
     }));
     try {
       const text = await getText(note.id);
-      const saved = await saveNoteText(
-        { id: note.id, name: note.name, mimeType: 'text/markdown' },
-        setFrontmatterValue(text, 'status', status),
-        { baseModifiedTime: note.modifiedTime },
-      );
+      const next = setFrontmatterValue(text, 'status', status);
+      // Through the vault store, so the index gets the new `modifiedTime`
+      // and the folder shows the new status when you come back to it.
+      const saved = await saveEditedNote(note.id, next, {
+        baseModifiedTime: note.modifiedTime,
+      });
+      try {
+        await recordNoteMeta(note.id, saved.modifiedTime ?? undefined, next);
+      } catch (error: unknown) {
+        console.error('Caching the new status failed', error);
+      }
       setOverrides((now) => ({
         ...now,
         [note.id]: {
           status,
-          modifiedTime: saved.file.modifiedTime ?? note.modifiedTime,
+          modifiedTime: saved.modifiedTime ?? note.modifiedTime,
         },
       }));
     } catch (error: unknown) {
