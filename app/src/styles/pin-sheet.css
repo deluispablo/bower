@@ -1,34 +1,20 @@
 /*
- * The pin sheet/menu (#216, spec §14): a popover pinned under the held row
- * from 900 px up, a bottom sheet under it — the row that opens it
- * (`.tree-row-wrap`, `tree.css` rules in `layout.css`) is `position:
- * relative` so the popover can anchor to it, the same pattern
- * `note-menu.css` already uses for the note's own menu.
+ * The pin sheet/menu (#216, spec §14): the rows inside an `Overlay` menu
+ * (`overlay.css` owns the scrim, the phone sheet and the desktop popover).
  */
 
-.pin-sheet-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 45;
-  background: transparent;
-}
-
-.pin-sheet-panel {
-  position: absolute;
-  top: calc(100% + var(--space-1));
-  left: 0;
-  z-index: 45;
+.pin-sheet-rows {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: min(280px, 88vw);
-  padding: var(--space-2);
-  background: var(--color-sidebar);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  outline: none;
-  animation: pin-sheet-in var(--motion-base) var(--ease-out);
+  padding: 0 var(--space-2);
+}
+
+@media (min-width: 900px) {
+  /* The desktop menu panel already pads itself. */
+  .pin-sheet-rows {
+    padding: 0;
+  }
 }
 
 .pin-sheet-row {
@@ -57,60 +43,4 @@
 
 .pin-sheet-cancel {
   color: var(--color-text-muted);
-}
-
-@keyframes pin-sheet-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pin-sheet-panel {
-    animation: none;
-  }
-}
-
-/* Phone (the drawer's held row): a bottom sheet, not a popover. */
-@media (max-width: 899.98px) {
-  .pin-sheet-backdrop {
-    background: var(--color-scrim);
-  }
-
-  .pin-sheet-panel {
-    position: fixed;
-    top: auto;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    width: auto;
-    max-height: 80vh;
-    padding-bottom: var(--space-4);
-    overflow-y: auto;
-    border-width: 1px 0 0;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    animation: pin-sheet-sheet-in var(--motion-base) var(--ease-out);
-  }
-
-  @keyframes pin-sheet-sheet-in {
-    from {
-      transform: translateY(100%);
-    }
-
-    to {
-      transform: none;
-    }
-  }
-}
-
-@media (max-width: 899.98px) and (prefers-reduced-motion: reduce) {
-  .pin-sheet-panel {
-    animation: none;
-  }
 }

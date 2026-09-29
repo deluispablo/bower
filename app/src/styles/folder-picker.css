@@ -1,47 +1,16 @@
 /*
- * The Move to… folder picker (#608, board Phone-Move-Picker): a bottom
- * sheet under 900 px, a centred dialog from 900 px up. Colours are tokens
- * only; the marks come from `marks.css`.
+ * The Move to… folder picker (#608, board Phone-Move-Picker): the content
+ * of an `Overlay` dialog (`overlay.css` owns the scrim, the phone sheet and
+ * the centred desktop dialog). Colours are tokens only; the marks come from
+ * `marks.css`.
  */
 
-.folder-picker-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: var(--color-scrim);
-}
-
-.folder-picker-panel {
-  position: fixed;
-  z-index: 50;
-  right: 0;
-  bottom: 0;
-  left: 0;
+.folder-picker-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: 72vh;
-  padding: var(--space-3) var(--space-3) var(--space-4);
-  background: var(--color-sidebar);
-  border: 1px solid var(--color-border);
-  border-width: 1px 0 0;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  box-shadow: var(--shadow-md);
-  outline: none;
-}
-
-@media (min-width: 900px) {
-  .folder-picker-panel {
-    top: 50%;
-    right: auto;
-    bottom: auto;
-    left: 50%;
-    width: min(440px, 92vw);
-    max-height: 80vh;
-    border-width: 1px;
-    border-radius: var(--radius-lg);
-    transform: translate(-50%, -50%);
-  }
+  min-height: 0;
+  padding: var(--space-1) var(--space-3);
 }
 
 .folder-picker-title {

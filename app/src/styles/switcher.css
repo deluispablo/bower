@@ -1,34 +1,34 @@
-/* The quick switcher (#142): a sheet under the phone's top bar by default,
-   a centred dialog from 900 px (`layout.css`'s own breakpoint). */
+/* The quick switcher (#142): the content of an `Overlay` dialog, a full
+   screen on the phone and a centred dialog from 900 px. */
 
-.switcher-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: var(--color-scrim);
-  animation: switcher-fade var(--motion-base) var(--ease-out);
+/* The overlay's own panel (`overlay.css`) takes the switcher's size: a full
+   screen on the phone, a wide dialog from 900 px. The scrim, the animation
+   and the focus trap are the overlay's. */
+.overlay .overlay-panel:has(> .switcher-panel) {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  max-height: none;
+  margin: 0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  overflow: hidden;
+  background: var(--color-bg);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.overlay .overlay-panel:has(> .switcher-panel) > .overlay-grab {
+  display: none;
 }
 
 .switcher-panel {
-  position: fixed;
-  z-index: 50;
-  left: var(--space-3);
-  right: var(--space-3);
-  /* The header's (and any banner's) live bottom edge, set by `layout.tsx`
-     on `<html>`; 76px is only the fallback before that first measurement
-     (spec §14 — no more guessing a fixed offset that a banner can sit
-     under). */
-  top: var(--switcher-top, 76px);
-  bottom: var(--space-4);
   display: flex;
+  flex: 1;
   flex-direction: column;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  min-height: 0;
   overflow: hidden;
-  outline: none;
-  animation: switcher-in var(--motion-base) var(--ease-out);
 }
 
 .switcher-field {
@@ -282,16 +282,6 @@
     display: none;
   }
 
-  /* Board Phone-Search: the switcher is a full screen, not a sheet. */
-  .switcher-panel {
-    inset: 0;
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
   /* The chip row scrolls sideways; the last chip ("Any time") never clips. */
   .switcher-chips {
     max-width: 100%;
@@ -305,42 +295,19 @@
   }
 }
 
-@keyframes switcher-in {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes switcher-fade {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .switcher-backdrop,
-  .switcher-panel {
-    animation: none;
-  }
-}
-
 @media (min-width: 900px) {
-  .switcher-panel {
-    left: 50%;
-    right: auto;
+  .overlay .overlay-panel:has(> .switcher-panel) {
     top: var(--switcher-top, 96px);
+    right: 0;
     bottom: auto;
+    left: 0;
     width: min(920px, calc(100vw - var(--space-8)));
     height: min(600px, calc(100vh - 160px));
-    transform: translateX(-50%);
+    margin: 0 auto;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
   }
 
   /* #594, board Desktop-Search: the list on the left, the highlighted
