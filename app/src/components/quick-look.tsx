@@ -152,7 +152,8 @@ export function QuickLook({
             setDrag({ from: event.clientY, dy: 0 });
           }}
           onPointerMove={(event) => {
-            if (drag !== null) setDrag({ from: drag.from, dy: event.clientY - drag.from });
+            if (drag !== null)
+              setDrag({ from: drag.from, dy: event.clientY - drag.from });
           }}
           onPointerUp={() => {
             if (drag !== null && drag.dy > SWIPE_CLOSE_PX) onClose();

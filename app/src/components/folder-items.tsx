@@ -461,11 +461,9 @@ export interface FolderItemsProps {
 
 /** A tile's line under its title: "PDF · Bower's note", "Photo",
  * "PDF · 6 pages", "Spreadsheet (CSV)", "Note". */
-export function tileLine(
-  row: FolderRow,
-  pages: number | undefined,
-): string {
-  const label = row.kind === 'csv' ? 'Spreadsheet (CSV)' : FILE_KIND_LABELS[row.kind];
+export function tileLine(row: FolderRow, pages: number | undefined): string {
+  const label =
+    row.kind === 'csv' ? 'Spreadsheet (CSV)' : FILE_KIND_LABELS[row.kind];
   if (row.original !== undefined) return `${label} · Bower's note`;
   if (row.kind === 'note') return row.bower ? "Bower's note" : label;
   if (pages !== undefined && pages > 0) {
@@ -618,11 +616,7 @@ export function FolderItems({
       <KindIcon file={shown} origin={originOf(row.file, catalogue)} />
     );
     return (
-      <a
-        class="folder-tile folder-item"
-        href={hrefOf(row)}
-        {...holdProps(row)}
-      >
+      <a class="folder-tile folder-item" href={hrefOf(row)} {...holdProps(row)}>
         <span class="folder-tile-thumb">
           {showsNote ? (
             <span class="folder-tile-note">

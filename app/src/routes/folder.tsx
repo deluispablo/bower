@@ -46,6 +46,8 @@ import { NoteMenu } from '../components/note-menu.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
+import { compareKinds, notesOfKind } from '../compare.js';
+import type { CompareNote } from '../compare.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
@@ -163,6 +165,70 @@ function useFolderItems(): ItemsModule | null {
   return loaded;
 }
 
+/** The Bower box, prefilled to ask for things to be moved into this folder
+ * (R-FOLDER-9). */
+function moveHereHref(name: string): string {
+  return `/bower?text=${encodeURIComponent(`Move things into ${name}: `)}`;
+}
+
+type CompareModule = typeof import('../components/compare.js');
+
+interface FolderCompare {
+  module: CompareModule;
+  notes: CompareNote[];
+  /** "Compare 4 flats": the tab's and the desktop button's words. */
+  label: string;
+}
+
+/** The board says "flats" for rental listings, where the spec's
+ * `kind.plural` says "rental listings" (the board wins). */
+const TAB_NOUN: Readonly<Record<string, string>> = {
+  'rental-listing': 'flats',
+};
+
+/** The Compare tab (#612, R-COMP-1): the folder's notes that name a kind,
+ * once at least two of one comparable kind are there. Loaded on demand, so
+ * the Compare view stays out of the startup chunk. */
+function useFolderCompare(notes: readonly DriveFile[]): FolderCompare | null {
+  const [found, setFound] = useState<FolderCompare | null>(null);
+  const key = notes
+    .map((note) => `${note.id}:${note.modifiedTime ?? ''}`)
+    .join('|');
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (notes.length < 2) {
+          if (!cancelled) setFound(null);
+          return;
+        }
+        const module = await import('../components/compare.js');
+        const loaded = await module.loadCompareNotes(notes);
+        if (cancelled) return;
+        const kind = compareKinds(loaded)[0];
+        if (kind === undefined) {
+          setFound(null);
+          return;
+        }
+        const count = notesOfKind(loaded, kind).length;
+        setFound({
+          module,
+          notes: loaded,
+          label: `Compare ${count} ${TAB_NOUN[kind.id] ?? kind.plural}`,
+        });
+      } catch (err) {
+        console.error('Could not read the notes for Compare', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+
+  return found;
+}
+
 interface FolderBodyProps {
   contents: FolderContents;
   parentName: string | null;
@@ -216,6 +282,10 @@ function FolderBody({
   const titles = useNoteTitles(contents.notes);
   const emptyState = folderEmptyState(contents);
   const items = useFolderItems();
+  const compare = useFolderCompare(contents.notes);
+  const [tab, setTab] = useState<'everything' | 'compare'>('everything');
+  useEffect(() => setTab('everything'), [contents.path]);
+  const comparing = tab === 'compare' && compare !== null;
   // The board's header (#611) for a folder with things in it; a root folder
   // and an empty one keep the counts line they have always had.
   const boardHeader = parentName !== null && contents.items.length > 0;
@@ -296,7 +366,41 @@ function FolderBody({
         <p class="folder-demo-note">{NOT_IN_DEMO_DRIVE}</p>
       )}
 
-      {contents.subfolders.length > 0 && (
+      {compare !== null && (
+        <div
+          class={`folder-tabs${comparing ? ' is-compare' : ''}`}
+          role="tablist"
+          aria-label="Folder content"
+        >
+          <button
+            type="button"
+            role="tab"
+            class="folder-tab"
+            aria-selected={!comparing}
+            onClick={() => setTab('everything')}
+          >
+            Everything
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="folder-tab"
+            aria-selected={comparing}
+            onClick={() => setTab('compare')}
+          >
+            {compare.label}
+          </button>
+        </div>
+      )}
+
+      {comparing && (
+        <compare.module.CompareView
+          notes={compare.notes}
+          folderPath={contents.path}
+        />
+      )}
+
+      {!comparing && contents.subfolders.length > 0 && (
         <div class="folder-section">
           <h2 class="folder-label">Folders</h2>
           <ul class="folder-list">
@@ -329,7 +433,7 @@ function FolderBody({
         </div>
       )}
 
-      {contents.items.length === 0 ? (
+      {comparing ? null : contents.items.length === 0 ? (
         <div class="folder-section">
           {emptyState.elsewhere !== null ? (
             <p class="folder-elsewhere">
@@ -342,9 +446,16 @@ function FolderBody({
           ) : (
             <div class="folder-empty">
               <Bird state="idle" size={40} />
-              <p>Nothing here yet.</p>
+              <p class="folder-empty-title">Nothing in {contents.name} yet</p>
+              <p class="folder-empty-text">
+                Add tickets, bookings or ideas and Bower files them here at the
+                next tidy-up.
+              </p>
               <a class="button" href="/add">
-                Add
+                Add something
+              </a>
+              <a class="folder-empty-ask" href={moveHereHref(contents.name)}>
+                Ask Bower to move things here
               </a>
             </div>
           )}
@@ -356,6 +467,12 @@ function FolderBody({
             titles={titles}
             catalogue={catalogue}
             now={now}
+            {...(compare !== null && {
+              compare: {
+                label: compare.label,
+                onOpen: () => setTab('compare'),
+              },
+            })}
           />
         )
       )}

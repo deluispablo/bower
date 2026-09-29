@@ -76,9 +76,7 @@ export function noteLines(text: string, max = 3): string[] {
 /** True once the element is (about to be) on screen; without
  * `IntersectionObserver` it is always true. */
 function useInView(ref: { current: HTMLElement | null }): boolean {
-  const [seen, setSeen] = useState(
-    typeof IntersectionObserver === 'undefined',
-  );
+  const [seen, setSeen] = useState(typeof IntersectionObserver === 'undefined');
   useEffect(() => {
     const element = ref.current;
     if (seen || element === null) return;
