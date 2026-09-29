@@ -6,7 +6,11 @@ import type { Env } from '../src/env.js';
 import { GOOGLE_TOKEN_URL } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
-import { RUN_TICKET_TTL_MS, RUNNING_STALE_MS } from '../src/process.js';
+import {
+  RUN_TICKET_TTL_MS,
+  RUNNING_STALE_MS,
+  runStaleness,
+} from '../src/process.js';
 import { hashTicket, issueRunTicket } from '../src/run-ticket.js';
 import {
   MAX_ADDED_LENGTH,
@@ -29,6 +33,7 @@ import {
   putUser,
 } from '../src/store.js';
 import type { Run, RunKind, User } from '../src/types.js';
+import { buildRun } from './fixtures/run-outcome-builders.js';
 
 /**
  * `Cloudflare.Env` is empty in this repo (no `wrangler types`), so the
@@ -1328,6 +1333,24 @@ describe('POST /runner/vaults/:id/status', () => {
         stale: boolean;
       }>();
       expect(status.stale).toBe(true);
+    });
+  });
+
+  it('keeps every fixture run whole in KV and the run history (spec 7c item 5)', async () => {
+    const at = (iso: string): Date => new Date(Date.parse(iso) + 60_000);
+    const running = buildRun('running');
+    expect(runStaleness(running, at(running.phaseAt ?? '')).active).toBe(true);
+
+    for (const state of ['done', 'partial', 'failed', 'stale'] as const) {
+      await kv.delete(`runs:${USER_ID}`);
+      const run = buildRun(state);
+      await putRun(kv, USER_ID, run);
+      expect(await getRun(kv, USER_ID)).toEqual(run);
+      expect(await listRuns(kv, USER_ID)).toEqual([run]);
+    }
+    expect(buildRun('partial')).toMatchObject({
+      state: 'failed',
+      created: ['3-Resources/Boiler receipt summary.md'],
     });
   });
 
