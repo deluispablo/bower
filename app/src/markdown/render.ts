@@ -20,11 +20,15 @@ import { bowerNoteExtensions, transformBowerSections } from './bower-note.js';
 import { parseFrontmatter } from './frontmatter.js';
 import { driveFileIdOf, embedKind, imagePlaceholder } from './embeds.js';
 import { escapeHtml, slugify } from './html.js';
+import { displayName } from '../navigation.js';
 import {
   headingFragment,
+  parseWikilink,
   renderFileLink,
   renderWikilink,
   resolveMarkdownLink,
+  resolveWikilink,
+  wikilinkText,
 } from './wikilinks.js';
 import type { EmbedOptions } from './wikilinks.js';
 
@@ -192,6 +196,44 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
     },
   };
 
+  // In an answer, a paragraph that is only a link to a note ("More in
+  // [[X]]." or just "[[X]]") is the board's checklist pill: "X · in
+  // <top folder>" linking to the note (`Flow-07-Answer`, #708).
+  const isAnswer = notePath.startsWith('Answers/');
+  const notePill: TokenizerAndRendererExtension = {
+    name: 'notePill',
+    level: 'block',
+    start: (src) => src.match(/^ {0,3}(?:More in[ \t]+)?\[\[/im)?.index,
+    tokenizer(src) {
+      if (!isAnswer) return undefined;
+      const match =
+        /^ {0,3}(?:More in[ \t]+)?(\[\[[^[\]\n]+?\]\])\.?[ \t]*(?:\n+|$)/i.exec(
+          src,
+        );
+      if (match === null) return undefined;
+      const link = parseWikilink(match[1] ?? '');
+      const file = resolveWikilink(link.target, index);
+      if (file === undefined || embedKind(file) !== 'note') return undefined;
+      return { type: 'notePill', raw: match[0], link: match[1] };
+    },
+    renderer(token) {
+      const raw = typeof token.link === 'string' ? token.link : '';
+      const link = parseWikilink(raw);
+      const file = resolveWikilink(link.target, index);
+      if (file === undefined) return '';
+      const top = file.path.includes('/')
+        ? (file.path.split('/')[0] ?? '')
+        : '';
+      const where = top === '' ? '' : ` · in ${displayName(top)}`;
+      const href = `/note/${encodeURIComponent(file.id)}${headingFragment(link.heading)}`;
+      return (
+        `<p class="wikilink-pill-row"><a class="wikilink-pill" ` +
+        `href="${escapeHtml(href)}">` +
+        `${escapeHtml(wikilinkText(link) + where)}</a></p>\n`
+      );
+    },
+  };
+
   const wikilink: TokenizerAndRendererExtension = {
     name: 'wikilink',
     level: 'inline',
@@ -270,6 +312,7 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
   marked.use({
     extensions: [
       embedBlock,
+      notePill,
       wikilink,
       highlight,
       callout,
