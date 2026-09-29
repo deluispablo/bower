@@ -6,10 +6,10 @@ compatibility_date = "2026-08-22"
 binding = "BOWER_KV"
 id = "KV_NAMESPACE_ID"
 
-# The weekly lint: Sundays 06:17 UTC. Runs the same dispatch as
+# The weekly lint: Sundays 06:17 UTC (Cloudflare cron: use SUN, not 0). Runs the same dispatch as
 # POST /runner/lint/dispatch (api/src/runner.ts, `scheduled` in index.ts).
 [triggers]
-crons = ["17 6 * * 0"]
+crons = ["17 6 * * SUN"]
 
 [vars]
 # Secrets (SESSION_SECRET, SESSION_SECRET_PREVIOUS, TOKEN_ENC_KEY, ...) are
