@@ -9,6 +9,7 @@ import {
   MAX_TABLE_ROWS,
   TablePreview,
   dataRowCount,
+  formatCell,
   parseCsv,
   rowsLine,
 } from '../src/components/table-preview.js';
@@ -55,6 +56,24 @@ describe('rowsLine and dataRowCount', () => {
   });
 });
 
+describe('formatCell', () => {
+  it('adds a thousands separator to numbers of 1,000 or more', () => {
+    expect(formatCell('2150')).toBe('2,150');
+    expect(formatCell('1234567')).toBe('1,234,567');
+    expect(formatCell('12345.5')).toBe('12,345.5');
+    expect(formatCell('-2150')).toBe('-2,150');
+  });
+
+  it('leaves years, small numbers and non-numeric cells alone', () => {
+    expect(formatCell('1999')).toBe('1999');
+    expect(formatCell('2026')).toBe('2026');
+    expect(formatCell('999')).toBe('999');
+    expect(formatCell('2150 EUR')).toBe('2150 EUR');
+    expect(formatCell('007000')).toBe('007000');
+    expect(formatCell('')).toBe('');
+  });
+});
+
 describe('TablePreview', () => {
   let host: HTMLElement | null = null;
   afterEach(() => {
@@ -83,14 +102,28 @@ describe('TablePreview', () => {
     ).toEqual(['Month', 'Rent']);
     expect(el.querySelectorAll('tbody tr')).toHaveLength(2);
     expect(el.textContent).toContain('Showing 2 of 2 rows.');
+    expect(el.textContent).toContain('2,150');
   });
 
-  it('shows only the first 200 rows', () => {
+  it('on the phone shows 5 rows, then up to 200 after Show all rows', () => {
     const rows = [['n']];
     for (let i = 0; i < 250; i++) rows.push([String(i)]);
     const el = mount(rows);
+    expect(el.querySelectorAll('tbody tr')).toHaveLength(5);
+    expect(el.textContent).toContain('Showing 5 of 250 rows.');
+    const button = el.querySelector('button.table-preview-more');
+    expect(button?.textContent).toBe('Show all rows');
+    void act(() => {
+      (button as HTMLElement).click();
+    });
     expect(el.querySelectorAll('tbody tr')).toHaveLength(MAX_TABLE_ROWS);
     expect(el.textContent).toContain('Showing 200 of 250 rows.');
+    expect(el.querySelector('button.table-preview-more')).toBeNull();
+  });
+
+  it('shows no button when every row already fits', () => {
+    const el = mount([['n'], ['1'], ['2']]);
+    expect(el.querySelector('button.table-preview-more')).toBeNull();
   });
 
   it('says so when the file is empty', () => {

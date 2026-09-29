@@ -34,6 +34,7 @@ async function gotoOriginals(page: Page, folder: string): Promise<void> {
 test('a CSV is a table with its row count, and a meta line with its kind word (#604)', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await openFile(page, FLAT, 'Flat budget', 'Flat budget');
   const props = page.locator('.file-props');
   await expect(props).toContainText('Spreadsheet (CSV) · 3 KB · 24 rows');
@@ -48,6 +49,26 @@ test('a CSV is a table with its row count, and a meta line with its kind word (#
   await expect(table.locator('tbody tr')).toHaveCount(24);
   await expect(page.locator('.table-preview-note')).toHaveText(
     'Showing 24 of 24 rows. Scroll the table sideways for more columns.',
+  );
+});
+
+test('on the phone a CSV shows 5 rows, then Show all rows, and numbers get separators (#706)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openFile(page, FLAT, 'Flat budget', 'Flat budget');
+  const table = page.locator('.table-preview table');
+  await expect(table.locator('tbody tr')).toHaveCount(5);
+  await expect(page.locator('.table-preview-note')).toHaveText(
+    'Showing 5 of 24 rows. Scroll the table sideways for more columns.',
+  );
+  await expect(
+    table.locator('tbody td', { hasText: /^2,\d{3}$/ }).first(),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Show all rows' }).click();
+  await expect(table.locator('tbody tr')).toHaveCount(24);
+  await expect(page.getByRole('button', { name: 'Show all rows' })).toHaveCount(
+    0,
   );
 });
 
