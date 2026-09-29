@@ -63,10 +63,13 @@ export function noteLines(text: string, max = 3): string[] {
   const lines: string[] = [];
   for (const raw of body.split(/\r\n|\r|\n/)) {
     const line = raw
+      .replace(/^\s*(?:>\s*)+/, '')
       .replace(/^\s*(?:[-*+]|\d+\.)\s+/, '')
       .replace(/[*_`]/g, '')
       .trim();
+    // Blank lines, headings, rules and a callout's own marker (`[!bower]`).
     if (line === '' || line.startsWith('#') || line === '---') continue;
+    if (/^\[![\w-]+\]/.test(line)) continue;
     lines.push(line);
     if (lines.length === max) break;
   }
