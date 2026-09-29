@@ -10,9 +10,8 @@ import type { JSX } from 'preact';
 
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
-import { activeItems } from '../upload-queue.js';
+import { usePiles } from '../pile-store.js';
 import { PushPrompt } from './push-prompt.js';
-import { useUploadItems } from './upload-chip.js';
 import { lazyOverlay } from '../lazy-overlay.js';
 
 const LazyConfirm = lazyOverlay(() =>
@@ -52,7 +51,12 @@ export function RunSheets(): JSX.Element | null {
     dismissConfirm,
   } = useRun();
 
-  const uploading = activeItems(useUploadItems()).length;
+  // Files of a pile still on their way; they wait for the next tidy-up.
+  const uploading = usePiles()
+    .flatMap((pile) => pile.items)
+    .filter(
+      (item) => item.state === 'waiting' || item.state === 'uploading',
+    ).length;
 
   // No run before the account has a folder (login, onboarding).
   if (me?.vault == null) return null;
