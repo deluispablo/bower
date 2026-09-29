@@ -32,6 +32,7 @@ import {
   updateFileText,
   type DriveFile,
 } from './drive.js';
+import { clearPileOrigins } from './pile-groups.js';
 import { instructionBody } from './tell.js';
 import { ruleSentences } from './bower-tab.js';
 import { showToast } from './toast-store.js';
@@ -531,8 +532,29 @@ export function pileWriteFailed(pileId: string): boolean {
   return meta.get(pileId)?.failed === true;
 }
 
+/**
+ * A run is done: forgets the closed piles the run took entirely (every one
+ * of their files is among `processed`, the names they had in the inbox). A
+ * pile with a file the run held back stays, still waiting with its note.
+ * Returns how many piles were dropped.
+ */
+export function prunePiles(processed: ReadonlySet<string>): number {
+  const gone = piles.filter(
+    (pile) =>
+      pile.closed &&
+      pile.items.length > 0 &&
+      pile.items.every((item) => processed.has(item.name)),
+  );
+  if (gone.length === 0) return 0;
+  const ids = new Set(gone.map((pile) => pile.id));
+  for (const id of ids) meta.delete(id);
+  publish(piles.filter((pile) => !ids.has(pile.id)));
+  return gone.length;
+}
+
 /** Forgets every pile. Tests and sign-out only. */
 export function resetPiles(): void {
   meta.clear();
+  clearPileOrigins();
   publish([]);
 }

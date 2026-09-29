@@ -27,6 +27,8 @@ import { isDemo } from '../api.js';
 import { Bird } from './bird.js';
 import { IconSparkle } from './icons.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
+import { pileConfirmLine } from '../pile-groups.js';
+import type { PileConfirm } from '../pile-groups.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
 
@@ -47,6 +49,9 @@ export const CONFIRM_SUB = 'Tidy up now, or add the rest of the pile first.';
 /** CONF-5: what a tidy-up costs; no number (Q4). */
 export const CONFIRM_COST =
   'A tidy-up takes a few minutes and uses one run of your Claude plan.';
+
+/** The piles variant's line under the count (R-PILE-5). */
+export const CONFIRM_PILES_NOTE = 'Bower reads each pile with its own note.';
 
 /** CONF-3: "5 things in your inbox" / "1 thing in your inbox". */
 export function confirmCountLine(count: number): string {
@@ -117,6 +122,11 @@ export interface TidyConfirmSheetProps {
   loading?: boolean;
   /** Files, links and requests behind `count`, for the CONF-4 line. */
   breakdown?: ConfirmBreakdown;
+  /**
+   * The piles behind `count` (R-PILE-5): the line names how many, and each
+   * gets a row ("From your pile: “…”"). Absent: the plain dialog.
+   */
+  piles?: PileConfirm;
   /** Which copy to show (see `TidyConfirmKind`). Defaults to `'tidy'`. */
   kind?: TidyConfirmKind;
   /** "Yes, tidy up"/"Yes, do it now": starts the run. */
@@ -129,6 +139,7 @@ export function TidyConfirmSheet({
   count,
   loading = false,
   breakdown,
+  piles,
   kind = 'tidy',
   onConfirm,
   onDismiss,
@@ -182,11 +193,31 @@ export function TidyConfirmSheet({
                   />
                 ) : (
                   <>
-                    <b>{confirmCountLine(count)}</b>
-                    {breakdownLine !== null && <span>{breakdownLine}</span>}
+                    <b>
+                      {piles === undefined
+                        ? confirmCountLine(count)
+                        : pileConfirmLine(count, piles)}
+                    </b>
+                    {piles === undefined ? (
+                      breakdownLine !== null && <span>{breakdownLine}</span>
+                    ) : (
+                      <span>{CONFIRM_PILES_NOTE}</span>
+                    )}
                   </>
                 )}
               </div>
+              {!loading && piles !== undefined && (
+                <ul class="tidy-confirm-piles" aria-label="Your piles">
+                  {piles.piles.map((pile) => (
+                    <li key={pile.id}>
+                      <span class="tidy-confirm-pile-label">{pile.label}</span>
+                      <span class="tidy-confirm-pile-count">
+                        {`${pile.count} ${pile.count === 1 ? 'thing' : 'things'}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <p class="tidy-confirm-text">{CONFIRM_COST}</p>
             </>
           )}

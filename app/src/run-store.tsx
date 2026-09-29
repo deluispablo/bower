@@ -54,6 +54,9 @@ import type { DriveFile } from './drive.js';
 import type { LastRunOutcome } from './last-run.js';
 import { failureCopy } from './run-failure.js';
 import { inboxCount, inboxTotal } from './inbox-count.js';
+import { pileConfirm, rememberPileOrigins } from './pile-groups.js';
+import type { PileConfirm } from './pile-groups.js';
+import { getPiles, prunePiles, usePiles } from './pile-store.js';
 import type { InboxCount } from './inbox-count.js';
 import { outcomeFromRun, runSentence } from './run-outcome.js';
 import { processedKind, visiblePendingCount } from './run-progress.js';
@@ -466,6 +469,15 @@ export function inboxBreakdown(files: readonly DriveFile[]): ConfirmBreakdown {
   return breakdown;
 }
 
+/**
+ * The names the run took out of the inbox, as they were there: the
+ * basename of each processed path (R-PILE-5, `prunePiles`).
+ */
+export function processedNames(run: Run): Set<string> {
+  const paths = run.items?.map((item) => item.path) ?? run.processed ?? [];
+  return new Set(paths.map((path) => path.slice(path.lastIndexOf('/') + 1)));
+}
+
 export interface RunStore extends RunState {
   /** Starts a run: a whole tidy-up, or `instructions` only (`startProcess`). */
   process: (scope?: RunScope) => Promise<boolean>;
@@ -512,6 +524,9 @@ export interface RunStore extends RunState {
   confirmLoading: boolean;
   /** Files, links and requests behind `confirmCount` (tidy-up only). */
   confirmBreakdown: ConfirmBreakdown | undefined;
+  /** The piles behind `confirmCount`, one row each, when the inbox holds
+   * any (R-PILE-5); `undefined` for the plain dialog. */
+  confirmPiles: PileConfirm | undefined;
   /**
    * `'all'` for `tidyUp()`'s whole-inbox confirmation, `'instructions'` for
    * `doItNow()`'s (#501): which copy `TidyConfirmSheet` shows
@@ -613,6 +628,11 @@ export function RunProvider({ children }: RunProviderProps) {
       state.phase !== 'stale'
     ) {
       return;
+    }
+    // A finished run took its closed piles away: forget them, so Add lists
+    // only the piles still waiting (a pile with a file held back stays).
+    if (state.phase === 'done' && state.run !== null) {
+      prunePiles(processedNames(state.run));
     }
     void invalidateAfterRun().then(() => refresh());
   }, [state.phase, state.run, refresh]);
@@ -778,6 +798,12 @@ export function RunProvider({ children }: RunProviderProps) {
       ? inboxBreakdown(files)
       : undefined;
 
+  const piles = usePiles();
+  const confirmPiles =
+    confirmScope === 'all' && inbox.status === 'ready'
+      ? pileConfirm(files, piles)
+      : undefined;
+
   const tidyUp = useCallback((): void => {
     setConfirmScope('all');
     setConfirmOpen(true);
@@ -803,6 +829,9 @@ export function RunProvider({ children }: RunProviderProps) {
   const confirmTidyUp = useCallback((): void => {
     setConfirmOpen(false);
     setSheetReopenKey((key) => key + 1);
+    // The run moves the files away and the store forgets their piles, so
+    // Just filed and the sheet name the pile from this snapshot (R-PILE-5).
+    if (confirmScope === 'all') rememberPileOrigins(getPiles());
     void startConfirmedTidyUp(
       apply,
       (start) => tidyUpWhenFlushed(start, inboxFolderId, keepRule),
@@ -832,6 +861,7 @@ export function RunProvider({ children }: RunProviderProps) {
     confirmCount,
     confirmLoading,
     confirmBreakdown,
+    confirmPiles,
     confirmScope,
     confirmTidyUp,
     dismissConfirm,

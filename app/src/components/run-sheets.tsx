@@ -44,6 +44,7 @@ export function RunSheets(): JSX.Element | null {
     confirmCount,
     confirmLoading,
     confirmBreakdown,
+    confirmPiles,
     confirmScope,
     confirmTidyUp,
     dismissConfirm,
@@ -70,6 +71,7 @@ export function RunSheets(): JSX.Element | null {
           count={confirmCount}
           loading={confirmLoading}
           breakdown={confirmBreakdown}
+          piles={confirmPiles}
           kind={confirmScope === 'instructions' ? 'request' : 'tidy'}
           onConfirm={confirmTidyUp}
           onDismiss={dismissConfirm}
