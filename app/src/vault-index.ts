@@ -320,7 +320,7 @@ export const FILE_KIND_LABELS: Readonly<Record<FileKind, string>> = {
   sheet: 'Google Sheet',
   slides: 'Google Slides',
   excel: 'Excel spreadsheet',
-  csv: 'Spreadsheet',
+  csv: 'Spreadsheet (CSV)',
   word: 'Word document',
   powerpoint: 'PowerPoint',
   opendocument: 'OpenDocument',
