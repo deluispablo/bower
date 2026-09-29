@@ -378,7 +378,6 @@ function useRecentInfo(
       cancelled = true;
     };
     // `key` stands for `notes`, which is a new array on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, index]);
   return info;
 }
@@ -434,9 +433,7 @@ export function RecentRows({
                   <span class="home-note-facts">{extra.facts}</span>
                 )}
                 {folder !== '' && (
-                  <span class="home-note-meta">
-                    {displayPath(folder)}
-                  </span>
+                  <span class="home-note-meta">{displayPath(folder)}</span>
                 )}
               </span>
               {note.modifiedTime !== undefined && (
