@@ -72,7 +72,9 @@ function files(n: number): string {
 }
 
 /** What the chip shows, or `null` when nothing is on its way. */
-export function uploadChipModel(input: UploadChipInput): UploadChipModel | null {
+export function uploadChipModel(
+  input: UploadChipInput,
+): UploadChipModel | null {
   const active = activeItems(input.items);
   if (active.length === 0) return null;
 
@@ -110,7 +112,8 @@ export function uploadChipModel(input: UploadChipInput): UploadChipModel | null 
 
   const total = active.reduce((sum, i) => sum + i.size, 0);
   const sent = active.reduce((sum, i) => sum + Math.min(i.sent, i.size), 0);
-  const percent = total > 0 ? Math.min(99, Math.floor((sent / total) * 100)) : 0;
+  const percent =
+    total > 0 ? Math.min(99, Math.floor((sent / total) * 100)) : 0;
   const lead = `Adding ${files(active.length)}`;
   return {
     state: 'uploading',
@@ -261,7 +264,8 @@ export function UploadChipFiller(): JSX.Element {
       console.error('The upload queue did not start', error);
     });
   }, [userKey]);
-  const hidden = path === '/' || !usesShell(path, isDemo()) || (!desktop && typing);
+  const hidden =
+    path === '/' || !usesShell(path, isDemo()) || (!desktop && typing);
   return <UploadChipSlot hidden={hidden} onShow={() => route('/add')} />;
 }
 

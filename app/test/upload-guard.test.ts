@@ -48,7 +48,10 @@ function fakeQueue(initial: QueueItem[] = []): {
         return () => listeners.delete(l);
       },
       add: (input: AddUpload) => {
-        const created = item('NEW', { name: input.name, size: input.blob.size });
+        const created = item('NEW', {
+          name: input.name,
+          size: input.blob.size,
+        });
         items = [...items, created];
         return Promise.resolve(created);
       },

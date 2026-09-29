@@ -982,10 +982,10 @@ export interface UnloadTarget {
 }
 
 function askBeforeLeaving(event: Event): void {
-  // The browser shows its own words; only `preventDefault` (and the legacy
-  // empty `returnValue`) asks it to.
+  // The browser shows its own words; only `preventDefault` (and the
+  // `returnValue` of older browsers) asks it to.
   event.preventDefault();
-  (event as BeforeUnloadEvent).returnValue = '';
+  event.returnValue = false;
 }
 
 /**
@@ -1088,7 +1088,7 @@ export function uploadThroughQueue(
       },
       (error: unknown) => {
         unsubscribe();
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       },
     );
   });

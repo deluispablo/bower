@@ -131,8 +131,11 @@ describe('uploadChipModel', () => {
 
   it('the announcement does not change with the percentage', () => {
     const at = (sent: number): string | undefined =>
-      uploadChipModel({ items: [item('a', { sent })], resumed: [], online: true })
-        ?.announce;
+      uploadChipModel({
+        items: [item('a', { sent })],
+        resumed: [],
+        online: true,
+      })?.announce;
     expect(at(10)).toBe(at(80));
   });
 });
