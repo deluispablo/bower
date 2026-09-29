@@ -2378,10 +2378,13 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
   await expect(explainer).toHaveText('Things with an end date');
   // The meaning line sits between the header and the chip row, above the
   // subfolders — same words as the intro (#319).
+  // The phone has no chip row (#702); from 900 px it follows the line.
   const chips = page.locator('.folder-chips');
-  const explainerBox = await explainer.boundingBox();
-  const chipsBox = await chips.boundingBox();
-  expect((explainerBox?.y ?? 0) < (chipsBox?.y ?? 0)).toBe(true);
+  if (await chips.isVisible()) {
+    const explainerBox = await explainer.boundingBox();
+    const chipsBox = await chips.boundingBox();
+    expect((explainerBox?.y ?? 0) < (chipsBox?.y ?? 0)).toBe(true);
+  }
   // The Phone-Folder board's details (#431): the heading without the
   // numeric prefix, "N projects · N things", a second line on each
   // subfolder row.
@@ -2409,6 +2412,8 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
 test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)', async ({
   page,
 }, testInfo) => {
+  // The phone has no chip row (#702): those actions live in its More menu.
+  test.skip(testInfo.project.name === 'phone', 'no chip row on the phone');
   await openHome(page);
 
   // Chips: Pin to Home / Ask Bower about it / Open in Drive, at 13 px,
@@ -2499,6 +2504,9 @@ test('a project folder lists its files and notes together, newest first, with wh
     'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.',
   );
 
+  // The phone has no chip row (#702); the Drive and Ask Bower chips are the
+  // desktop header's.
+  test.skip(testInfo.project.name === 'phone', 'no chip row on the phone');
   // The Drive chip is greyed in the demo (#555): the fixture ids are not
   // real Drive ids, so it never opens a broken Drive page.
   const drive = page.getByRole('button', { name: 'Drive', exact: true });

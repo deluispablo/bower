@@ -53,10 +53,19 @@ test('Flat hunt lists its things as the board does (#611)', async ({
     .locator('.folder-item', { hasText: 'Arlington Road, 2 bed' })
     .first();
   await expect(pair).toContainText('note on the listing');
+  await expect(pair.locator('.bower-tag')).toContainText('Bower');
   await expect(pair.locator('.kind-badge')).toHaveText('PDF');
+
+  // The phone header is the path bar and the meta line: no large title, no
+  // chip row, no demo sentence (#702). The heading stays for screen readers.
+  await expect(page.locator('.folder-head > .icon')).toBeHidden();
+  await expect(page.locator('.folder-chips')).toBeHidden();
+  await expect(page.locator('.folder-demo-note')).toBeHidden();
+  const title = await page.getByRole('heading', { level: 1 }).boundingBox();
+  expect(title?.width ?? 0).toBeLessThanOrEqual(1);
   await expect(
     page.locator('.folder-item', { hasText: 'Flat budget' }),
-  ).toContainText('Spreadsheet · 3 KB');
+  ).toContainText('Spreadsheet (CSV) · copy of your Google Sheet');
   await expect(
     page.locator('.folder-item', { hasText: 'Notes from the viewing' }),
   ).toContainText('Note · written by you');
