@@ -11,20 +11,25 @@
  */
 
 import type { JSX } from 'preact';
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { isDemo } from '../api.js';
 import type { DriveFile } from '../drive.js';
 import { formatSize } from '../file-preview.js';
 import type { Origin } from '../file-origin.js';
 import { whenWords } from '../folder-view.js';
+import { renderNote } from '../markdown/render.js';
+import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
 import { displayName, driveFileUrl, paraKindOf } from '../navigation.js';
 import { FolderMark } from './folder-mark.js';
 import { Thumb, NoteLines } from './folder-grid.js';
 import { IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
+import { KeyFacts } from './key-facts.js';
+import type { KeyFact } from './key-facts.js';
 import { KindBadge } from './kind-badge.js';
+import { NoteBody } from './note-body.js';
 import { useDismissGuard } from './use-dismiss-guard.js';
 import { useFocusTrap } from './use-focus-trap.js';
 import '../styles/quick-look.css';
@@ -213,6 +218,118 @@ export function QuickLook({
         </div>
         {demo && <p class="quick-look-demo">{NOT_IN_DEMO_DRIVE}</p>}
       </div>
+    </div>
+  );
+}
+
+/** What the desktop's preview pane shows: a quick look's own details, plus
+ * a companion note's key facts. */
+export type PanePreview = Omit<QuickLookProps, 'onClose'> & {
+  facts: readonly KeyFact[];
+};
+
+/** A note's text, rendered, once it is read; `null` until then. */
+function useNoteHtml(id: string | null, path: string): string | null {
+  const { index, getNoteText } = useVault();
+  const [html, setHtml] = useState<string | null>(null);
+  useEffect(() => {
+    setHtml(null);
+    if (id === null || index === null) return;
+    let cancelled = false;
+    getNoteText(id).then(
+      (text) => {
+        if (!cancelled) setHtml(renderNote(text, index, { path }).html);
+      },
+      (err: unknown) => console.error('Could not read a note', err),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [id, index, getNoteText, path]);
+  return html;
+}
+
+/**
+ * Quick look's pane variant (#614, board `Desktop-Explorer` and
+ * `Desktop-Folder`): the same details in the desktop's right-hand column,
+ * with Bower's note rendered under them, in place of the phone's sheet.
+ * `item` is `null` when nothing is selected.
+ */
+export function QuickLookPane({
+  item,
+}: {
+  item: PanePreview | null;
+}): JSX.Element {
+  const noteId =
+    item === null
+      ? null
+      : item.original !== undefined || item.kind === 'note'
+        ? item.file.id
+        : null;
+  const notePath = item === null ? '' : item.file.path;
+  const html = useNoteHtml(noteId, notePath);
+  if (item === null) {
+    return <p class="quick-look-empty">Select something to preview it.</p>;
+  }
+  const { title, href, file, original, kind, pages, origin, now } = item;
+  const shown = original ?? file;
+  const isNote = shown === file && kind === 'note';
+  const filed = filedLine(origin, shown.modifiedTime, now);
+  const demo = isDemo();
+  const line =
+    original === undefined
+      ? kindLine(kind, pages, shown.size)
+      : `Bower · Original: ${kindLine(kind, pages, undefined)}`;
+
+  return (
+    <div class="quick-look-pane">
+      <h2 class="quick-look-title">{title}</h2>
+      <div class="quick-look-actions quick-look-pane-actions">
+        <a class="quick-look-open" href={href}>
+          Open
+        </a>
+        {demo ? (
+          <button
+            type="button"
+            class="quick-look-drive"
+            disabled
+            aria-disabled
+            title={NOT_IN_DEMO_DRIVE}
+          >
+            Open in Drive
+          </button>
+        ) : (
+          <a
+            class="quick-look-drive"
+            href={driveFileUrl(shown)}
+            target="_blank"
+            rel="noopener"
+          >
+            Open in Drive
+          </a>
+        )}
+      </div>
+      <p class="quick-look-kind">
+        {line}
+        {filed !== null && original === undefined && ` · ${filed}`}
+      </p>
+      {original !== undefined && <KeyFacts facts={item.facts} />}
+      {noteId !== null && html !== null && (
+        <div class="quick-look-pane-note">
+          <NoteBody html={html} />
+        </div>
+      )}
+      {!isNote && (
+        <div class="quick-look-preview">
+          <Thumb
+            file={shown}
+            kind={kind}
+            alt={`Preview of ${title}`}
+            fallback={<span class="quick-look-icon">{previewIcon(kind)}</span>}
+          />
+          <KindBadge kind={kind} file={shown} />
+        </div>
+      )}
     </div>
   );
 }

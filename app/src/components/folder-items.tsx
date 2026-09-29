@@ -11,6 +11,7 @@
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import { KEY_HINT, folderKeyAction, rowDate } from '../folder-keys.js';
 import { loadViewSettings, saveViewSettings } from '../cache.js';
 import type { ViewSettings } from '../cache.js';
 import { parseCatalogueFiles } from '../companion.js';
@@ -67,6 +68,7 @@ import { IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
 import { KeyFacts } from './key-facts.js';
 import { KindBadge } from './kind-badge.js';
 import { QuickLook } from './quick-look.js';
+import type { PanePreview } from './quick-look.js';
 import { useLongPress } from './use-long-press.js';
 import { BowerTag, NewTag } from './tags.js';
 
@@ -457,6 +459,15 @@ export interface FolderItemsProps {
   /** The desktop's "Compare <n> <plural>" button beside the kind filter
    * (#613, R-COMP-1); `undefined` when the folder has nothing to compare. */
   compare?: { label: string; onOpen: () => void };
+  /** From 1200 px (#614): a selection that follows the arrow keys, the
+   * kind chips, the right-hand dates and the key hint. */
+  desktop?: boolean;
+  /** Tells the preview pane what is selected (desktop only). */
+  onPreview?: (item: PanePreview | null) => void;
+  /** Takes the person up a folder (Backspace); absent at a top level. */
+  onUp?: (() => void) | undefined;
+  /** Opens a row's address (Enter). */
+  onOpen?: (href: string) => void;
 }
 
 /** A tile's line under its title: "PDF · Bower's note", "Photo",
@@ -486,8 +497,13 @@ export function FolderItems({
   catalogue,
   now,
   compare,
+  desktop = false,
+  onPreview,
+  onUp,
+  onOpen,
 }: FolderItemsProps): JSX.Element {
   const fresh = useNew();
+  const newHere = fresh.newCountIn(contents.path);
   const [quick, setQuick] = useState<FolderRow | null>(null);
   const { index, getNoteText } = useVault();
   const byPath = index?.byPath ?? NO_FILES;
@@ -591,6 +607,13 @@ export function FolderItems({
   const holdProps = (row: FolderRow): Record<string, unknown> => ({
     ...press,
     'data-row-key': row.key,
+    ...(desktop && {
+      'data-selected': row.key === selected?.key ? 'true' : undefined,
+      onFocus: (): void => setSelectedKey(row.key),
+      onPointerEnter: (event: PointerEvent): void => {
+        if (event.pointerType === 'mouse') setSelectedKey(row.key);
+      },
+    }),
     onClick: (event: Event): void => {
       if (consumeLongPress()) event.preventDefault();
     },
@@ -680,7 +703,12 @@ export function FolderItems({
             firstLine={firstLines.get(row.file.id)}
           />
         </span>
-        {showTime && row.file.modifiedTime !== undefined && (
+        {desktop && row.file.modifiedTime !== undefined && (
+          <time class="folder-row-date" dateTime={row.file.modifiedTime}>
+            {rowDate(row.file.modifiedTime, now)}
+          </time>
+        )}
+        {!desktop && showTime && row.file.modifiedTime !== undefined && (
           <time class="folder-row-meta" dateTime={row.file.modifiedTime}>
             {shortAge(row.file.modifiedTime, now)}
           </time>
@@ -688,6 +716,108 @@ export function FolderItems({
       </a>
     );
   }
+
+  // The desktop's selection (#614): the preview pane shows this row, the
+  // arrow keys move it, Space and Enter act on it.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const selected = desktop
+    ? (rows.find((row) => row.key === selectedKey) ?? rows[0] ?? null)
+    : null;
+  const orderedRows = useMemo(
+    () =>
+      layout === 'grid'
+        ? rows
+        : entries.flatMap((entry) => (entry.type === 'row' ? [entry.row] : [])),
+    [layout, rows, entries],
+  );
+
+  function panePropsOf(row: FolderRow): PanePreview {
+    const shown = row.original ?? row.file;
+    const meta = model.metas.get(row.file.id);
+    const noteKind = meta?.kind === undefined ? undefined : kindById(meta.kind);
+    return {
+      title: titleOf(row),
+      href: hrefOf(row),
+      file: row.file,
+      original: row.original,
+      kind: row.kind,
+      pages: pages.get(shown.id),
+      origin: originOf(shown, catalogue),
+      folderPath: contents.path,
+      now: Date.now(),
+      facts:
+        noteKind === undefined || meta === undefined
+          ? []
+          : keyFactsFor(noteKind, meta.fields),
+    };
+  }
+
+  const selectedRowKey = selected?.key ?? null;
+  useEffect(() => {
+    if (!desktop || onPreview === undefined) return;
+    onPreview(selected === null ? null : panePropsOf(selected));
+    // The selected row's key names it; the rest follow the model.
+  }, [desktop, selectedRowKey, model, titles, catalogue, pages]);
+  useEffect(
+    () => () => {
+      if (onPreview !== undefined) onPreview(null);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!desktop) return;
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.defaultPrevented || quick !== null) return;
+      const target = event.target;
+      const element = target instanceof HTMLElement ? target : null;
+      if (element?.closest('[role="dialog"]') != null) return;
+      const typing =
+        element !== null &&
+        (element.tagName === 'INPUT' ||
+          element.tagName === 'TEXTAREA' ||
+          element.tagName === 'SELECT' ||
+          element.isContentEditable);
+      const onControl =
+        element !== null && element.closest('a, button, summary') !== null;
+      const grid = document.querySelector('.folder-grid');
+      const columns =
+        layout === 'grid' && grid !== null
+          ? Math.max(
+              1,
+              getComputedStyle(grid)
+                .gridTemplateColumns.split(' ')
+                .filter(Boolean).length,
+            )
+          : 1;
+      const action = folderKeyAction(event, {
+        selected: orderedRows.findIndex((row) => row.key === selected?.key),
+        count: orderedRows.length,
+        columns,
+        canGoUp: onUp !== undefined,
+        typing,
+        onControl,
+      });
+      // Search is the switcher's own key handling.
+      if (action === null || action.type === 'search') return;
+      event.preventDefault();
+      if (action.type === 'up') {
+        onUp?.();
+      } else if (action.type === 'select') {
+        const next = orderedRows[action.index];
+        if (next === undefined) return;
+        setSelectedKey(next.key);
+        document
+          .querySelector(`[data-row-key="${CSS.escape(next.key)}"]`)
+          ?.scrollIntoView?.({ block: 'nearest' });
+      } else if (selected !== null) {
+        if (action.type === 'quick-look') setQuick(selected);
+        else onOpen?.(hrefOf(selected));
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  });
 
   const VirtualList = loaded?.VirtualList;
   const counts: Record<OriginFilter, number | null> = {
@@ -699,7 +829,13 @@ export function FolderItems({
   return (
     <div class="folder-section">
       <div class="folder-facts">
-        <p class="folder-counts">{metaCounts(model)}</p>
+        <p class="folder-counts">
+          {desktop
+            ? `${model.items.length} ${model.items.length === 1 ? 'thing' : 'things'}${
+                newHere > 0 ? ` · ${newHere} new` : ''
+              }`
+            : metaCounts(model)}
+        </p>
         {filed !== null && <p class="folder-filed">{filed}</p>}
       </div>
       <div class="folder-seg" role="group" aria-label="Show">
@@ -733,26 +869,50 @@ export function FolderItems({
             </option>
           ))}
         </select>
-        <select
-          class="folder-select"
-          aria-label="Kind"
-          value={kind ?? ''}
-          onChange={(event) =>
-            onView({
-              kind:
-                event.currentTarget.value === ''
-                  ? null
-                  : (event.currentTarget.value as FileKind),
-            })
-          }
-        >
-          <option value="">All kinds</option>
-          {options.map((option) => (
-            <option key={option.kind} value={option.kind}>
-              {option.label} {option.count}
-            </option>
-          ))}
-        </select>
+        {desktop ? (
+          <div class="folder-kind-chips" role="group" aria-label="Kind">
+            <button
+              type="button"
+              class="folder-kind-chip"
+              aria-pressed={kind === null}
+              onClick={() => onView({ kind: null })}
+            >
+              All {originRows.length}
+            </button>
+            {options.map((option) => (
+              <button
+                key={option.kind}
+                type="button"
+                class="folder-kind-chip"
+                aria-pressed={kind === option.kind}
+                onClick={() => onView({ kind: option.kind })}
+              >
+                {option.label}s {option.count}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <select
+            class="folder-select"
+            aria-label="Kind"
+            value={kind ?? ''}
+            onChange={(event) =>
+              onView({
+                kind:
+                  event.currentTarget.value === ''
+                    ? null
+                    : (event.currentTarget.value as FileKind),
+              })
+            }
+          >
+            <option value="">All kinds</option>
+            {options.map((option) => (
+              <option key={option.kind} value={option.kind}>
+                {option.label} {option.count}
+              </option>
+            ))}
+          </select>
+        )}
         {compare !== undefined && (
           <button
             type="button"
@@ -808,6 +968,7 @@ export function FolderItems({
           </span>
         )}
       </p>
+      {desktop && <p class="folder-keys-hint">{KEY_HINT}</p>}
       {quick !== null && (
         <QuickLook
           title={titleOf(quick)}
