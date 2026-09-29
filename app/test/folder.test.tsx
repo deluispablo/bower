@@ -688,4 +688,23 @@ describe('Phone Filter & sort (R-FOLD-6, D34)', () => {
       'Waiting for the next tidy-up',
     );
   });
+
+  it('puts the same clock badge on the row of a file with a Move waiting (#866)', async () => {
+    stubMatchMedia(false);
+    useFlatHuntWithPair();
+    requestRows.list = [
+      {
+        key: 'k',
+        state: 'waiting',
+        text: `Move “Flat” (${listingNote.path}) to 3-Resources.`,
+        kind: 'job',
+        since: '2026-09-29T10:00:00Z',
+        fileId: 'NOTE_ID',
+      },
+    ];
+    mount();
+    await listReady();
+    await waitUntil(() => root.querySelector('.folder-row-waiting') !== null);
+    expect(root.querySelectorAll('.folder-row-waiting')).toHaveLength(1);
+  });
 });

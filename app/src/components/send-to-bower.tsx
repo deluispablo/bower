@@ -9,16 +9,23 @@
  * Open it with `openSendToBower`; it lives on the Overlay queue.
  */
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { deleteFile, createTextFile } from '../drive.js';
-import { undoRequestNote, writeRequestNote } from '../move-request.js';
+import {
+  pickerFolders,
+  undoRequestNote,
+  writeRequestNote,
+} from '../move-request.js';
+import type { MoveSubject } from '../move-request.js';
+import { buildTree } from '../navigation.js';
 import { close, open, OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { RUN_NOW_LABEL, RUN_NOW_LINE, useRunNow } from '../run-now.js';
 import { useSession } from '../session.js';
 import { showToast } from '../toast-store.js';
 import { useVault } from '../vault-store.js';
+import { FolderChoice } from './folder-picker.js';
 import { FolderMark } from './folder-mark.js';
 import type { ParaKind } from './folder-mark.js';
 import { IconClose, IconInbox } from './icons.js';
@@ -29,8 +36,11 @@ import '../styles/send-to-bower.css';
 export const SEND_TO_BOWER_ID = 'send-to-bower';
 
 export interface SendToBowerProps {
-  /** `rename` asks for a new name, `ask` for a question. */
-  mode: 'rename' | 'ask';
+  /** `rename` asks for a new name, `ask` for a question, `move` for a
+   * folder (the field's value is then the chosen folder's vault path). */
+  mode: 'rename' | 'ask' | 'move';
+  /** Move mode: what is being moved, for the folder choice. */
+  moveSubject?: MoveSubject;
   /** What it is about: "About {mark} Applications". */
   about: string;
   aboutKind?: ParaKind;
@@ -60,12 +70,25 @@ const COPY = {
     label: 'Your question',
     when: 'Bower answers at the next tidy-up and puts the answer in {about}.',
   },
+  move: {
+    title: 'Move',
+    sub: 'Bower moves it and keeps its links straight.',
+    label: 'Move to',
+    when: 'Bower moves it at the next tidy-up; until then it stays where it is.',
+  },
+} as const;
+
+const LATER_TOAST = {
+  rename: 'In your inbox. Bower renames it at the next tidy-up.',
+  ask: 'In your inbox. Bower answers at the next tidy-up.',
+  move: 'In your inbox. Bower moves it at the next tidy-up.',
 } as const;
 
 export function SendToBower({
   mode,
   about,
   aboutKind,
+  moveSubject,
   initialText = '',
   extension,
   buildText,
@@ -74,8 +97,15 @@ export function SendToBower({
 }: SendToBowerProps): JSX.Element {
   const copy = COPY[mode];
   const { me } = useSession();
-  const { refresh } = useVault();
+  const { index, refresh } = useVault();
   const runNow = useRunNow();
+  const folders = useMemo(
+    () =>
+      mode !== 'move' || moveSubject === undefined || index === null
+        ? []
+        : pickerFolders(buildTree(index), moveSubject),
+    [mode, index, moveSubject?.path, moveSubject?.isFolder],
+  );
   const [value, setValue] = useState(initialText);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +119,7 @@ export function SendToBower({
   const blocked = validate === undefined && empty;
 
   useEffect(() => {
-    field.current?.focus();
+    if (mode !== 'move') field.current?.focus();
   }, []);
 
   async function undo(id: string): Promise<void> {
@@ -128,9 +158,7 @@ export function SendToBower({
     void refresh();
     if (when === 'later') {
       showToast(
-        mode === 'ask'
-          ? 'In your inbox. Bower answers at the next tidy-up.'
-          : 'In your inbox. Bower renames it at the next tidy-up.',
+        LATER_TOAST[mode],
         undefined,
         id === null ? undefined : { label: 'Undo', run: () => void undo(id) },
       );
@@ -185,21 +213,44 @@ export function SendToBower({
             <IconClose />
           </button>
         </header>
-        <label class="send-to-bower-label" htmlFor="send-to-bower-field">
-          {copy.label}
-        </label>
-        <div class="send-to-bower-field">
-          {mode === 'rename' ? (
-            <>
-              <input type="text" class="send-to-bower-input" {...fieldProps} />
-              {extension !== undefined && (
-                <span class="send-to-bower-ext">{extension}</span>
-              )}
-            </>
-          ) : (
-            <textarea class="send-to-bower-input" rows={3} {...fieldProps} />
-          )}
-        </div>
+        {mode === 'move' ? (
+          <>
+            <p class="send-to-bower-label">{copy.label}</p>
+            {moveSubject !== undefined && (
+              <FolderChoice
+                subject={moveSubject}
+                folders={folders}
+                chosen={value}
+                onChoose={(path) => {
+                  setError(null);
+                  setValue(path);
+                }}
+              />
+            )}
+          </>
+        ) : (
+          <label class="send-to-bower-label" htmlFor="send-to-bower-field">
+            {copy.label}
+          </label>
+        )}
+        {mode !== 'move' && (
+          <div class="send-to-bower-field">
+            {mode === 'rename' ? (
+              <>
+                <input
+                  type="text"
+                  class="send-to-bower-input"
+                  {...fieldProps}
+                />
+                {extension !== undefined && (
+                  <span class="send-to-bower-ext">{extension}</span>
+                )}
+              </>
+            ) : (
+              <textarea class="send-to-bower-input" rows={3} {...fieldProps} />
+            )}
+          </div>
+        )}
         <div class="send-to-bower-box">
           <span class="send-to-bower-box-icon" aria-hidden="true">
             <IconInbox />

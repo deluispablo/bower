@@ -9,17 +9,6 @@ import { NoteMenu } from '../src/components/note-menu.js';
 import type { NoteMenuProps } from '../src/components/note-menu.js';
 import type { DriveFile } from '../src/drive.js';
 
-// The picker has its own test; here only that the row opens it.
-vi.mock('../src/components/folder-picker.js', () => ({
-  MoveFlow: (props: { name: string; path: string; isFolder: boolean }) =>
-    h('div', {
-      class: 'move-flow-stub',
-      'data-name': props.name,
-      'data-path': props.path,
-      'data-folder': String(props.isFolder),
-    }),
-}));
-
 const openSendToBower = vi.hoisted(() => vi.fn());
 vi.mock('../src/components/send-to-bower.js', () => ({ openSendToBower }));
 
@@ -267,18 +256,28 @@ describe('NoteMenu', () => {
     );
   });
 
-  it('says "waits for the tidy-up" under Move to…, which opens the folder picker for this note (#608)', () => {
-    mount(true);
+  it('says "waits for the tidy-up" under Move to…, which opens the send sheet in move mode for this note (#866)', () => {
+    openSendToBower.mockClear();
+    const { onClose } = mount(true);
     const move = rowByText('Move to…');
     expect(move.textContent).toContain('waits for the tidy-up');
-    expect(root.querySelector('.move-flow-stub')).toBeNull();
+    expect(openSendToBower).not.toHaveBeenCalled();
     click(move);
-    const flow = root.querySelector('.move-flow-stub');
-    expect(flow?.getAttribute('data-name')).toBe('Shopping list');
-    expect(flow?.getAttribute('data-path')).toBe('Shopping list.md');
-    expect(flow?.getAttribute('data-folder')).toBe('false');
-    // The menu steps aside while the picker is up.
-    expect(root.querySelector<HTMLElement>('[role="menu"]')?.hidden).toBe(true);
+    const call = openSendToBower.mock.calls[0]?.[0] as {
+      mode: string;
+      moveSubject: { path: string; isFolder: boolean };
+      buildText: (destination: string) => string;
+    };
+    expect(call.mode).toBe('move');
+    expect(call.moveSubject).toEqual({
+      path: 'Shopping list.md',
+      isFolder: false,
+    });
+    expect(call.buildText('3-Resources')).toBe(
+      'Move “Shopping list” (Shopping list.md) to 3-Resources.',
+    );
+    // The menu closes; the sheet takes over.
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('draws the NEW pill next to Show in folders, which reveals the note (#608)', () => {
@@ -381,9 +380,14 @@ describe('NoteMenu', () => {
     expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
       `/bower?text=${encodeURIComponent('[[Lease 2026.pdf]] ')}`,
     );
+    openSendToBower.mockClear();
     click(rowByText('Move to…'));
     expect(
-      root.querySelector('.move-flow-stub')?.getAttribute('data-path'),
+      (
+        openSendToBower.mock.calls[0]?.[0] as {
+          moveSubject: { path: string };
+        }
+      ).moveSubject.path,
     ).toBe('1-Projects/Flat hunt/Lease 2026.pdf');
   });
 

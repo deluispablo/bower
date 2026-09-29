@@ -1,7 +1,6 @@
 /**
  * More menu and Move to… (#608): Show in folders reveals the open note in the
- * tree, and the folder picker asks Bower to move it, now or with the next
- * tidy-up. Runs on the demo's sample folder.
+ * tree, and Move to… opens the send sheet with a folder choice (#866). Runs on the demo's sample folder.
  */
 
 import type { Page } from '@playwright/test';
@@ -47,37 +46,39 @@ test('Show in folders reveals the note in the tree', async ({
   ).toHaveCount(1);
 });
 
-test('Move to… offers folders but not Inbox, and With the next tidy-up sends the request', async ({
+test('Move to… opens the send sheet with a folder choice, not Inbox, and Put in the inbox sends the request', async ({
   page,
 }) => {
   await openMenu(page);
   await page.getByRole('menuitem', { name: /Move to…/ }).click();
-  const picker = page.getByRole('dialog', { name: 'Move to' });
-  await expect(picker).toBeVisible();
+  const sheet = page.getByRole('dialog', { name: 'Move' });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole('radio', { name: /^Inbox/ })).toHaveCount(0);
   await expect(
-    picker.getByRole('heading', { name: /^Move “.+” to…$/ }),
-  ).toBeVisible();
-  await expect(picker.getByRole('radio', { name: /^Inbox/ })).toHaveCount(0);
-  await expect(
-    picker.getByRole('button', { name: 'Move it now' }),
+    sheet.getByRole('button', { name: 'Put in the inbox' }),
   ).toBeDisabled();
-
-  await picker.getByRole('searchbox', { name: 'Find a folder' }).fill('resour');
-  await picker.getByRole('radio', { name: /Resources/ }).click();
-  await picker.getByRole('button', { name: 'With the next tidy-up' }).click();
-  await expect(picker).toHaveCount(0);
   await expect(
-    page.getByText('Asked Bower to move it with the next tidy-up.'),
+    sheet.getByText('Uses one run of your Claude plan.'),
+  ).toBeVisible();
+
+  await sheet.getByRole('searchbox', { name: 'Find a folder' }).fill('resour');
+  await sheet.getByRole('radio', { name: /Resources/ }).click();
+  await sheet.getByRole('button', { name: 'Put in the inbox' }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByText('In your inbox. Bower moves it at the next tidy-up.'),
   ).toBeVisible();
 });
 
-test('Move it now sends the request and starts a run', async ({ page }) => {
+test('Just this, now sends the move request and starts a run', async ({
+  page,
+}) => {
   await openMenu(page);
   await page.getByRole('menuitem', { name: /Move to…/ }).click();
-  const picker = page.getByRole('dialog', { name: 'Move to' });
-  await picker.getByRole('searchbox', { name: 'Find a folder' }).fill('resour');
-  await picker.getByRole('radio', { name: /Resources/ }).click();
-  await picker.getByRole('button', { name: 'Move it now' }).click();
-  await expect(picker).toHaveCount(0);
-  await expect(page.getByText('Asked Bower to move it now.')).toBeVisible();
+  const sheet = page.getByRole('dialog', { name: 'Move' });
+  await sheet.getByRole('searchbox', { name: 'Find a folder' }).fill('resour');
+  await sheet.getByRole('radio', { name: /Resources/ }).click();
+  await sheet.getByRole('button', { name: 'Just this, now' }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.getByText('Bower is on it now.')).toBeVisible();
 });
