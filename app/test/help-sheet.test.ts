@@ -10,6 +10,7 @@ import {
   helpSheet,
   tourLabel,
   tourNextLabel,
+  tourSheet,
 } from '../src/help-rows.js';
 
 const state = vi.hoisted(() => ({ demo: false }));
@@ -144,6 +145,17 @@ describe('HELP_ROWS', () => {
       'Next: Bower',
       "Let's go",
     ]);
+  });
+
+  it('gives tour step 2 the Tour-375 board copy and nothing else', () => {
+    for (const demo of [false, true]) {
+      const notes = tourSheet('notes', demo);
+      expect(notes.lede).toBe(
+        'Everything Bower filed, in your folders. Search at the top finds any note or file.',
+      );
+      expect(notes.rows).toEqual([]);
+    }
+    expect(tourSheet('home', false)).toEqual(helpSheet('home', false));
   });
 });
 
@@ -398,7 +410,8 @@ describe('placeTour', () => {
       1440,
       900,
     );
-    expect(place.bird).toEqual({ left: '92px', bottom: '700px' });
+    // Just past the row's right edge, level with its bottom.
+    expect(place.bird).toEqual({ left: '260px', bottom: '656px' });
   });
 
   it('has no ring or bird when the tab is not on screen', () => {

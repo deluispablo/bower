@@ -487,7 +487,7 @@ export function partialFolder(outcome: RunOutcome): string | null {
 }
 
 export const FINISH_LINE =
-  'Finish the tidy-up files them without writing the notes again.';
+  'Finishing the tidy-up files them, without writing the notes again.';
 
 /**
  * A partly done run's two tiles, as the board draws them (RunSheet-Partial):

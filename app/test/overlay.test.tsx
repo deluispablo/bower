@@ -170,6 +170,22 @@ describe('Overlay', () => {
     }
   });
 
+  it('with the opener gone, focus lands on the heading that is on screen, never BODY (#872)', async () => {
+    const hidden = document.createElement('h1');
+    hidden.textContent = 'Desktop heading';
+    hidden.style.display = 'none';
+    const title = document.createElement('span');
+    title.className = 'topbar-title';
+    title.textContent = 'Bower';
+    shell.append(hidden, title);
+    openDialog('rename');
+    opener.remove();
+    press('Escape');
+    await Promise.resolve();
+    expect(panel()).toBeNull();
+    expect(document.activeElement).toBe(title);
+  });
+
   it('closes on a tap on the scrim', () => {
     openDialog('rename');
     void act(() => {

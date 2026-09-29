@@ -32,6 +32,7 @@ import {
   helpSheet,
   tourLabel,
   tourNextLabel,
+  tourSheet,
 } from '../help-rows.js';
 import type { HelpIcon, HelpRow, HelpScreen, HelpTab } from '../help-rows.js';
 import { Bird } from './bird.js';
@@ -112,8 +113,8 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Where the ring and Bower go for the lit `tab` in a `width` x `height`
  * viewport. On a bottom tab bar (`bar` in the lower half) the bird's feet
- * stand on the bar's top edge, over the tab; beside a desktop sidebar they
- * stand on the tab's own top edge. Either way it points down at the tab.
+ * stand on the bar's top edge, over the tab; beside a desktop sidebar it
+ * stands just past the right edge of the lit row, level with it.
  */
 export function placeTour(
   tab: Box | null,
@@ -132,7 +133,30 @@ export function placeTour(
   };
   const onBottomBar =
     bar !== null && bar.height > 0 && bar.top + bar.height / 2 > height / 2;
-  const feet = onBottomBar ? bar.top : tab.top;
+  if (!onBottomBar) {
+    // Beside a desktop sidebar the bird stands just past the right edge of
+    // the lit row, level with it, so it never covers the Search field or a
+    // neighbouring row. It stays inside the viewport.
+    const feetLevel = clamp(
+      tab.top + tab.height,
+      TOUR_BIRD_SIZE + EDGE,
+      height - EDGE,
+    );
+    return {
+      spot,
+      bird: {
+        left: px(
+          clamp(
+            tab.left + tab.width + SPOT_PAD + EDGE,
+            EDGE,
+            width - TOUR_BIRD_SIZE - EDGE,
+          ),
+        ),
+        bottom: px(height - feetLevel),
+      },
+    };
+  }
+  const feet = bar?.top ?? tab.top;
   const left = clamp(
     tab.left + (tab.width - TOUR_BIRD_SIZE) / 2,
     EDGE,
@@ -349,7 +373,7 @@ function TourCard({
 }: TourCardProps): JSX.Element {
   const next = useRef<HTMLButtonElement>(null);
   const tab = TOUR_TABS[index] ?? 'home';
-  const copy = helpSheet(tab, isDemo());
+  const copy = tourSheet(tab, isDemo());
   const place = useTourPlacement(tab);
 
   // Every step starts with its main button focused. The overlay's trap
@@ -392,7 +416,7 @@ function TourCard({
             Skip
           </button>
         </div>
-        <HelpRows rows={copy.rows} />
+        {copy.rows.length > 0 && <HelpRows rows={copy.rows} />}
         <div class="help-actions">
           {index > 0 && (
             <button

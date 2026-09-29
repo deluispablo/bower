@@ -267,25 +267,27 @@ export function SendToBower({
             {error ?? problem}
           </p>
         )}
-        <button
-          type="button"
-          class="button send-to-bower-primary"
-          disabled={busy || blocked}
-          onClick={() => void send('later')}
-        >
-          <IconInbox /> Put in the inbox
-        </button>
-        <button
-          type="button"
-          class="send-to-bower-now"
-          disabled={busy || blocked || runNow.block !== null}
-          onClick={() => void send('now')}
-        >
-          {RUN_NOW_LABEL}
-        </button>
-        <p class="send-to-bower-line">
-          {runNow.reason ?? `${RUN_NOW_LINE} The rest of the inbox waits.`}
-        </p>
+        <div class="send-to-bower-actions">
+          <button
+            type="button"
+            class="button send-to-bower-primary"
+            disabled={busy || blocked}
+            onClick={() => void send('later')}
+          >
+            <IconInbox /> Put in the inbox
+          </button>
+          <button
+            type="button"
+            class="send-to-bower-now"
+            disabled={busy || blocked || runNow.block !== null}
+            onClick={() => void send('now')}
+          >
+            {RUN_NOW_LABEL}
+          </button>
+          <p class="send-to-bower-line">
+            {runNow.reason ?? `${RUN_NOW_LINE} The rest of the inbox waits.`}
+          </p>
+        </div>
       </div>
     </Overlay>
   );

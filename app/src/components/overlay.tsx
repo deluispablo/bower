@@ -108,20 +108,44 @@ const MENU_ITEMS =
   '[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"]';
 
 /** Where focus goes when the control that opened an overlay is gone. */
+/** False when the element or an ancestor is `display: none`. */
+function isDisplayed(el: HTMLElement): boolean {
+  for (
+    let node: HTMLElement | null = el;
+    node !== null;
+    node = node.parentElement
+  ) {
+    if (window.getComputedStyle(node).display === 'none') return false;
+  }
+  return true;
+}
+
+function firstShown(selector: string): HTMLElement | null {
+  const all = document.querySelectorAll<HTMLElement>(selector);
+  for (const el of Array.from(all)) {
+    // Skip what is not on screen: focusing a `display: none` element does
+    // nothing and would leave BODY focused (the phone hides the desktop
+    // heading and sidebar).
+    if (!isDisplayed(el)) continue;
+    return el;
+  }
+  return null;
+}
+
 function focusFallback(): void {
   const active = document.activeElement;
   if (active !== null && active !== document.body) return;
-  const heading = document.querySelector<HTMLElement>('#app h1');
+  // The page heading: the screen's h1, or on a phone, where the header bar
+  // carries the title, that title.
+  const heading = firstShown('#app h1, #app .topbar-title');
   if (heading !== null) {
     if (!heading.hasAttribute('tabindex')) heading.tabIndex = -1;
     heading.focus();
-    return;
+    if (document.activeElement === heading) return;
   }
-  document
-    .querySelector<HTMLElement>(
-      '#app a[href], #app button:not([disabled]), #app input:not([disabled])',
-    )
-    ?.focus();
+  firstShown(
+    '#app a[href], #app button:not([disabled]), #app input:not([disabled])',
+  )?.focus();
 }
 
 export function Overlay(props: OverlayProps): JSX.Element {

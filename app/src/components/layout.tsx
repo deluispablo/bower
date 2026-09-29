@@ -333,9 +333,9 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           : { '--sidebar-width': `${sidebarWidth}px` }
       }
     >
-      {/* `data-tour` sits on the whole column, as it did on the old nav: the
-          help sheet lights the target's box and places itself by it. */}
-      <div class="shell-sidebar" data-tour="notes">
+      {/* The tour's Notes step lights the "Your folders" header row inside the
+          explorer (`data-tour` in explorer.tsx), not this whole column. */}
+      <div class="shell-sidebar">
         <nav class="shell-sidebar-nav" aria-label="Your notes">
           <Explorer
             variant="sidebar"

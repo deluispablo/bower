@@ -39,6 +39,11 @@ export function labelFor(phase: RunPhase): string {
   }
 }
 
+/** The label on Home's Inbox card: "Finish the tidy-up" after a partly done run. */
+export function buttonLabel(phase: RunPhase, finish: boolean): string {
+  return finish && startsRun(phase) ? 'Finish the tidy-up' : labelFor(phase);
+}
+
 /** Whether a tap in `phase` starts a run (else it reopens the sheet). */
 export function startsRun(phase: RunPhase): boolean {
   return (
@@ -54,7 +59,14 @@ export function isRunning(phase: RunPhase): boolean {
   return phase === 'starting' || phase === 'queued' || phase === 'running';
 }
 
-export function ProcessButton(): JSX.Element | null {
+export interface ProcessButtonProps {
+  /** A partly done run: the action reads "Finish the tidy-up", in teal. */
+  finish?: boolean;
+}
+
+export function ProcessButton({
+  finish = false,
+}: ProcessButtonProps = {}): JSX.Element | null {
   const { me } = useSession();
   const { phase, tidyUp, openSheet } = useRun();
   const online = useOnline();
@@ -68,12 +80,15 @@ export function ProcessButton(): JSX.Element | null {
   // an instructions-only run, and cannot reopen the "Is that everything?"
   // confirmation for a run already under way. The tidy-up bar shows the run.
   const starting = isRunning(phase);
+  const finishing = finish && starts;
 
   return (
     <div class="process">
       <button
         type="button"
-        class="process-button"
+        class={
+          finishing ? 'process-button process-button-finish' : 'process-button'
+        }
         data-phase={phase}
         data-tour="tidy"
         aria-haspopup={starts ? undefined : 'dialog'}
@@ -86,7 +101,7 @@ export function ProcessButton(): JSX.Element | null {
         ) : (
           <IconSparkle />
         )}
-        <span aria-live="polite">{labelFor(phase)}</span>
+        <span aria-live="polite">{buttonLabel(phase, finish)}</span>
       </button>
       {!online && (
         <span class="process-offline-reason">{offlineReason('process')}</span>

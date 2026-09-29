@@ -404,7 +404,10 @@ export function Explorer({
       {index !== null && (
         <PinnedSidebar items={pinned(index)} variant={variant} />
       )}
-      <div class="explorer-section">
+      <div
+        class="explorer-section"
+        data-tour={variant === 'sidebar' ? 'notes' : undefined}
+      >
         <h2 class="explorer-label">Your folders</h2>
         {variant === 'sidebar' && tools}
       </div>

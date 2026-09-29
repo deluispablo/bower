@@ -49,7 +49,11 @@ export const RENAME_MESSAGES = {
   same: 'That is already its name.',
   taken: 'Something in this folder already has that name.',
   characters: 'Names can\'t contain / \\ : * ? " < > |',
+  tooLong: 'Keep it under 120 characters.',
 } as const;
+
+/** The longest name Rename takes, in characters (without the extension). */
+export const RENAME_MAX_LENGTH = 120;
 
 export interface RenameCheck {
   /** The file's current full name. */
@@ -66,6 +70,7 @@ export function validateRename(check: RenameCheck): string | null {
   const typed = check.input.trim();
   if (typed === '') return RENAME_MESSAGES.empty;
   if (FORBIDDEN.test(typed)) return RENAME_MESSAGES.characters;
+  if (typed.length > RENAME_MAX_LENGTH) return RENAME_MESSAGES.tooLong;
   const full = (typed + check.extension).toLowerCase();
   if (full === check.currentName.toLowerCase()) return RENAME_MESSAGES.same;
   if (check.siblingNames.some((name) => name.toLowerCase() === full)) {

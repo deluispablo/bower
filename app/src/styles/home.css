@@ -356,6 +356,13 @@
   -webkit-line-clamp: 2;
 }
 
+/* Phone row titles are 15.5px; the two-line clamp stays. */
+@media (max-width: 899.98px) {
+  .home-note-title {
+    font-size: 15.5px;
+  }
+}
+
 @media (min-width: 900px) {
   .home-note-title {
     display: block;

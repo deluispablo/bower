@@ -212,6 +212,19 @@ export function helpSheet(screen: HelpScreen, demo: boolean): HelpSheetCopy {
   return { ...sheet, lede: swap.lede ?? sheet.lede, rows };
 }
 
+/**
+ * What a tour step shows. Step 2 is the Tour-375 board's two sentences and
+ * nothing else; the other steps are the tab's help sheet.
+ */
+export function tourSheet(tab: HelpTab, demo: boolean): HelpSheetCopy {
+  if (tab !== 'notes') return helpSheet(tab, demo);
+  return {
+    ...HELP_ROWS.notes,
+    lede: 'Everything Bower filed, in your folders. Search at the top finds any note or file.',
+    rows: [],
+  };
+}
+
 /** The kicker over a tour sheet: "Tour · 2 of 4". */
 export function tourLabel(index: number): string {
   return `Tour · ${index + 1} of ${TOUR_TABS.length}`;
