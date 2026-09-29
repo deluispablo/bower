@@ -108,7 +108,7 @@ if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
       ;;
     # Drive's search has not caught up with the request sent at 09:05 yet.
     midrun)
-      body='{"files":[{"name":"Bower - 2026-01-15 0850 Old question.md"},{"name":"Bower - 2026-01-15 0906 Context.md"}]}'
+      body='{"files":[{"name":"Bower - 2026-01-15 0850 Old question.md"},{"name":"Bower - 2026-01-15 0900 Pile.md"},{"name":"Bower - 2026-01-15 0906 Context.md"}]}'
       ;;
   esac
   printf '%s' "$body" >"$out"
@@ -473,18 +473,33 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       echo jpg >"$remote/0-Inbox/receipt.jpg"
     fi
     if [ "$SMOKE_SCENARIO" = midrun ]; then
-      # A run asked for at 09:00 (#491): a request sent before it, one sent
-      # at 09:05 while the run was queued (in Drive before sync down), and
-      # Add's context note for files added at 09:06, which goes with them.
+      # A run asked for at 09:00 (#491, R-RUNNER-6): a request sent before
+      # it; a pile note and a photo saved 10 s after it by Drive's clock
+      # (inside the 15 s grace, so they go with this run); a request sent
+      # at 09:05 while the run was queued (in Drive before sync down); a
+      # photo that landed 20 s after it; and Add's context note rewritten at
+      # 09:06, which holds back the older receipt it lists.
       printf -- '---\ntags: [instruction]\nvia: app\n---\n\nWhat is left for Lisbon?\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0850 Old question.md"
+      printf -- '---\ntags: [instruction]\nvia: app\nkind: context\n---\n\nFile this as a lease.\n\n## Applies to\n\n- a.pdf\n' \
+        >"$remote/0-Inbox/Bower - 2026-01-15 0900 Pile.md"
+      echo jpg >"$remote/0-Inbox/scan-10s.jpg"
       printf -- '---\ntags: [instruction]\nvia: app\n---\n\nWhen does the lease end?\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0905 Sent during the run.md"
-      printf -- '---\ntags: [instruction]\nvia: app\nkind: context\n---\n\nFile these as receipts.\n' \
+      echo jpg >"$remote/0-Inbox/photo-20s.jpg"
+      echo jpg >"$remote/0-Inbox/receipt.jpg"
+      printf -- '---\ntags: [instruction]\nvia: app\nkind: context\n---\n\nFile these as receipts.\n\n## Applies to\n\n- receipt.jpg\n- photo-20s.jpg\n' \
         >"$remote/0-Inbox/Bower - 2026-01-15 0906 Context.md"
+      # R-AG-10: the previous run failed after writing one note.
+      mkdir -p "$remote/.bower"
+      printf -- '%s\n' '{"state":"failed","kind":"ingest","processed":0,"created":["3-Resources/Lease.md"],"updated":[],"left":[]}' \
+        >"$remote/.bower/last-run.json"
       find "$remote" -exec touch -d '2026-01-15T08:00:00Z' {} +
       touch -d '2026-01-15T08:50:00Z' "$remote/0-Inbox/Bower - 2026-01-15 0850 Old question.md"
+      touch -d '2026-01-15T09:00:10Z' "$remote/0-Inbox/Bower - 2026-01-15 0900 Pile.md"
+      touch -d '2026-01-15T09:00:10Z' "$remote/0-Inbox/scan-10s.jpg"
       touch -d '2026-01-15T09:05:00Z' "$remote/0-Inbox/Bower - 2026-01-15 0905 Sent during the run.md"
+      touch -d '2026-01-15T09:00:20Z' "$remote/0-Inbox/photo-20s.jpg"
       touch -d '2026-01-15T09:06:00Z' "$remote/0-Inbox/Bower - 2026-01-15 0906 Context.md"
     fi
     if [ "$SMOKE_SCENARIO" = quarantine ]; then
@@ -2229,39 +2244,41 @@ expect_content_free
 expect_cleaned_up
 echo "ok a photo whose name says nothing is renamed and indexed"
 
-# 31. A request sent while a run is queued or running is left for the next
-# tidy-up (#491): the one written at 09:05, after the run was asked for at
-# 09:00 but before sync down, never reaches the agent and is neither
-# quarantined (Drive's search does not list it yet) nor processed nor
-# deleted; the one sent while the agent works, between the listing and the
-# upload, stays too. The request sent before the run and Add's context note
-# (it goes with its files) are processed as usual. The log counts, never
+# 31. Files sent while a run is queued or running are left for the next
+# tidy-up (#491, R-RUNNER-6): everything created or modified more than
+# 15 s after the run was asked for at 09:00 never reaches the agent and is
+# neither quarantined (Drive's search does not list the 09:05 request yet)
+# nor processed nor deleted: the request written at 09:05, the photo that
+# landed at 09:00:20, and Add's context note rewritten at 09:06 together
+# with the older receipt it lists. The request sent while the agent works,
+# between the listing and the upload, stays too. The request sent before
+# the run, and the pile note and photo saved 10 s after 09:00 by Drive's
+# clock (inside the grace), are processed as usual. The log counts, never
 # names.
 run_case midrun
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
-expect_eq "$(post 2 'p.processed.map((i) => i.path)')" \
-  '["0-Inbox/Bower - 2026-01-15 0850 Old question.md","0-Inbox/Bower - 2026-01-15 0906 Context.md","0-Inbox/a.pdf","Clippings/Bower trick.md","Clippings/b.md"]' \
-  'processed leaves out the request sent during the run'
+expect_eq "$(post 2 'p.processed.map((i) => i.path)')"   '["0-Inbox/Bower - 2026-01-15 0850 Old question.md","0-Inbox/Bower - 2026-01-15 0900 Pile.md","0-Inbox/a.pdf","0-Inbox/scan-10s.jpg","Clippings/Bower trick.md","Clippings/b.md"]'   'processed leaves out what was sent during the run'
 # Each item carries its kind (#345): the app never guesses from a name.
-expect_eq "$(post 2 'p.processed.map((i) => i.kind)')" \
-  '["request","context","file","file","file"]' 'processed kinds'
+expect_eq "$(post 2 'p.processed.map((i) => i.kind)')"   '["request","context","file","file","file","file"]' 'processed kinds'
 expect_eq "$(post 2 p.quarantined)" '[]' 'quarantined'
 saw=$(cat "$STATE/claude-saw.txt")
-grep -Fxq '0-Inbox/Bower - 2026-01-15 0850 Old question.md' <<<"$saw" ||
-  die 'the agent did not find the request sent before the run'
-! grep -Fq 'Sent during the run' <<<"$saw" || die 'the agent saw the request sent during the run'
-for late in '0-Inbox/Bower - 2026-01-15 0905 Sent during the run.md' \
-  '0-Inbox/Bower - 2026-01-15 0910 Late request.md'; do
-  [ -f "$STATE/remote/$late" ] || die "a request sent during the run left 0-Inbox/ in Drive: $late"
-  ! grep -Fxq -- "$late" "$STATE/uploaded.txt" || die "a request sent during the run was uploaded: $late"
-  ! grep -Fq -- "deletefile vault:$late" "$STATE/calls.log" || die "a request sent during the run was deleted: $late"
+for early in '0-Inbox/Bower - 2026-01-15 0850 Old question.md'   '0-Inbox/Bower - 2026-01-15 0900 Pile.md' '0-Inbox/scan-10s.jpg'; do
+  grep -Fxq -- "$early" <<<"$saw" || die "the agent did not find a file saved before the cutoff: $early"
 done
-grep -q ' 1 requests sent during the run left for the next tidy-up$' "$STATE/out.log" ||
+for late in '0-Inbox/Bower - 2026-01-15 0905 Sent during the run.md'   '0-Inbox/Bower - 2026-01-15 0906 Context.md' '0-Inbox/receipt.jpg' '0-Inbox/photo-20s.jpg'; do
+  ! grep -Fxq -- "$late" <<<"$saw" || die "the agent saw a file sent during the run: $late"
+done
+for late in '0-Inbox/Bower - 2026-01-15 0905 Sent during the run.md'   '0-Inbox/Bower - 2026-01-15 0906 Context.md' '0-Inbox/receipt.jpg' '0-Inbox/photo-20s.jpg'   '0-Inbox/Bower - 2026-01-15 0910 Late request.md'; do
+  [ -f "$STATE/remote/$late" ] || die "a file sent during the run left 0-Inbox/ in Drive: $late"
+  ! grep -Fxq -- "$late" "$STATE/uploaded.txt" || die "a file sent during the run was uploaded: $late"
+  ! grep -Fq -- "deletefile vault:$late" "$STATE/calls.log" || die "a file sent during the run was deleted: $late"
+done
+grep -q ' 4 files sent during the run left for the next tidy-up$' "$STATE/out.log" ||
   die 'held count not logged'
 expect_content_free
 expect_cleaned_up
-echo "ok a request sent during a run waits for the next tidy-up"
+echo "ok files, requests and context notes sent during a run wait for the next tidy-up"
 
 # 32. A note from Bower (issue #371): a question sent from the app is
 # answered with a note that starts with Bower's note (callout lines, each

@@ -296,6 +296,9 @@ mkdir -p "$VAULT_DIR" "$LOG_DIR"
 # that keep them out of the manifest and the pending list. The patterns mirror
 # SYSTEM_FILE_PATTERNS in app/src/vault-index.ts: keep the two in step.
 # Matching is case-insensitive (--ignore-case, -iname).
+# Seconds added to requestedAt before a pending file counts as sent during
+# the run (R-RUNNER-6): the gap between Drive's clock and the Worker's.
+readonly HOLD_GRACE=15
 readonly SYSTEM_FILTER_FILE="$WORK_DIR/system-files.filter"
 {
   printf '%s\n' '- desktop.ini' '- Thumbs.db' '- ehthumbs.db' '- .DS_Store'
@@ -1101,6 +1104,33 @@ is_context_note() {
     END { exit !found }' "$VAULT_DIR/$1"
 }
 
+# The files context note $1 (a vault path) applies to: each bullet of its
+# `## Applies to` list (app/src/add.ts contextNote), a name as it is in
+# 0-Inbox/, printed as a vault path; a bullet that already names 0-Inbox/
+# or Clippings/ is printed as it is.
+applies_to() {
+  awk '{ sub(/\r$/, "") }
+    /^## / { inlist = ($0 ~ /^## Applies to[[:space:]]*$/); next }
+    inlist && /^- / {
+      name = substr($0, 3)
+      sub(/[[:space:]]+$/, "", name)
+      if (name == "") next
+      if (name ~ /^(0-Inbox|Clippings)\//) print name
+      else print "0-Inbox/" name
+    }' "$VAULT_DIR/$1"
+}
+
+# The moment after which a pending file waits for the next tidy-up
+# (R-RUNNER-6): requestedAt $1 (ISO-8601, UTC) plus HOLD_GRACE seconds, as
+# `@<epoch seconds>` for find -newermt. A fraction of a second rounds up, so
+# nothing saved before the true cutoff is ever held.
+hold_cutoff() {
+  local secs
+  secs=$(date -u -d "$1" +%s) || return 1
+  [[ ! "$1" =~ \.[0-9]*[1-9][0-9]*Z$ ]] || secs=$((secs + 1))
+  printf '@%s\n' "$((secs + HOLD_GRACE))"
+}
+
 # Whether pending path $1 belongs to an instructions-only run: an
 # instruction-shaped note directly in 0-Inbox/ (`Bower - *.md`, any letter
 # case, as the instruction-origin step below matches them) that is not a
@@ -1543,36 +1573,48 @@ if [ "$MODE" = ingest ] && [ "$SCOPE" = instructions ]; then
   mv "$WORK_DIR/in-scope.txt" "$PENDING_FILE"
   log "instructions only: $held files left for the next tidy-up"
 fi
-# --- sent during this run ---------------------------------------------------
-# A request the owner sends while this run is queued or running (a
-# `Bower - *.md` instruction note directly in 0-Inbox/, not Add's context
-# note, which goes with its files) belongs to the next tidy-up, as the app
-# shows it: Waiting (#491). Sync down gives each local file Drive's
-# modifiedTime, so a note written or edited after the run was asked for
-# (REQUESTED_AT) is removed from the local copy and the pending list here,
-# exactly like the files an instructions-only run holds back: the agent
-# never sees it, the upload never touches it and the pending-original
-# deletes never name it, so in Drive it stays where it is. Without this,
-# such a note written just before sync down was taken by this run, and
-# one Drive did not list yet as the app's own (its search catches up with
-# a new file only after a while) was quarantined as not written by the
-# app, out of the owner's sight. No REQUESTED_AT (an older Worker), no hold.
-# The log counts, never names.
+# --- held for the next tidy-up (R-RUNNER-6) ---------------------------------
+# Everything that reached the inbox after the run was asked for belongs to
+# the next tidy-up, as the app shows it: Waiting (#491). Sync down gives each
+# local file Drive's modifiedTime, so every pending file created or modified
+# after REQUESTED_AT plus HOLD_GRACE seconds is held: a request sent while
+# the run is queued, a file still uploading when the run was asked for
+# (R-UPL), a pile or context note rewritten after it. The grace covers the
+# gap between Drive's clock and the Worker's, so a pile note or request
+# note saved just before "Yes, tidy up" or "Just this, now" is never
+# skipped. A held context note (Add's "What is this?" note or a pile note)
+# takes the files its `## Applies to` list names with it, so they wait
+# together for the next tidy-up. A held file is removed from the local
+# copy and the pending list, exactly like the files an instructions-only
+# run holds back: the agent never sees it, the upload never touches it and
+# the pending-original deletes never name it, so in Drive it stays where it
+# is. No REQUESTED_AT (an older Worker), no hold. The log counts, never
+# names.
 if [ "$MODE" = ingest ] && [[ "$REQUESTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$ ]]; then
-  : >"$WORK_DIR/not-sent-during.txt"
+  cutoff=$(hold_cutoff "$REQUESTED_AT") || fail "$STEP: could not read when the run was asked for"
+  : >"$WORK_DIR/held.txt"
+  while IFS= read -r path <&3; do
+    [ -n "$path" ] || continue
+    if [ -n "$(find "$VAULT_DIR/$path" -maxdepth 0 -newermt "$cutoff" 2>/dev/null)" ]; then
+      printf '%s\n' "$path" >>"$WORK_DIR/held.txt"
+      if is_context_note "$path"; then
+        applies_to "$path" >>"$WORK_DIR/held.txt" || fail "$STEP: could not read a context note"
+      fi
+    fi
+  done 3<"$PENDING_FILE"
+  : >"$WORK_DIR/not-held.txt"
   held=0
   while IFS= read -r path <&3; do
     [ -n "$path" ] || continue
-    if in_instructions_scope "$path" &&
-      [ -n "$(find "$VAULT_DIR/$path" -maxdepth 0 -newermt "$REQUESTED_AT" 2>/dev/null)" ]; then
+    if grep -Fxq -- "$path" "$WORK_DIR/held.txt"; then
       rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside"
       held=$((held + 1))
     else
-      printf '%s\n' "$path" >>"$WORK_DIR/not-sent-during.txt"
+      printf '%s\n' "$path" >>"$WORK_DIR/not-held.txt"
     fi
   done 3<"$PENDING_FILE"
-  mv "$WORK_DIR/not-sent-during.txt" "$PENDING_FILE"
-  [ "$held" -eq 0 ] || log "$held requests sent during the run left for the next tidy-up"
+  mv "$WORK_DIR/not-held.txt" "$PENDING_FILE"
+  [ "$held" -eq 0 ] || log "$held files sent during the run left for the next tidy-up"
 fi
 PENDING_COUNT=$(grep -c . "$PENDING_FILE" || true)
 # Only an ingest processes the pending files; a lint reports its summary
