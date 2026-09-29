@@ -47,6 +47,9 @@ export interface VaultIndex {
   /** `pinned` timestamp by folder path, for every folder known to be pinned.
    * Same caveat as `notePinnedAt`. */
   folderPinnedAt: Map<string, string>;
+  /** Pin timestamp by file id, for every file pinned through its folder's
+   * note (`pinned_files`, #688). Same caveat as `notePinnedAt`. */
+  filePinnedAt: Map<string, string>;
   /**
    * The vault's `bower_rules_version`, from the frontmatter of its
    * `CLAUDE.md` (`rulesVersionOf`, #197), or `null` while unknown: not read
@@ -397,6 +400,7 @@ export function buildVaultIndex(files: DriveFile[]): VaultIndex {
     folderNotes: new Map(),
     notePinnedAt: new Map(),
     folderPinnedAt: new Map(),
+    filePinnedAt: new Map(),
     bowerRulesVersion: null,
   };
 
@@ -437,8 +441,9 @@ export function withPinnedAt(
   index: VaultIndex,
   notePinnedAt: Map<string, string>,
   folderPinnedAt: Map<string, string>,
+  filePinnedAt: Map<string, string> = index.filePinnedAt,
 ): VaultIndex {
-  return { ...index, notePinnedAt, folderPinnedAt };
+  return { ...index, notePinnedAt, folderPinnedAt, filePinnedAt };
 }
 
 /** `index` with `bowerRulesVersion` set; everything else kept as is. Pure. */

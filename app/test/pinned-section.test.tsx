@@ -23,7 +23,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PinnedSection } from '../src/components/pinned-section.js';
 import type { DriveFile } from '../src/drive.js';
-import type { PinnedFolder, PinnedNote } from '../src/vault-store.js';
+import type {
+  PinnedFile,
+  PinnedFolder,
+  PinnedNote,
+} from '../src/vault-store.js';
 
 function noteFile(id: string, name: string, path: string): DriveFile {
   return {
@@ -62,10 +66,11 @@ const PINNED_FOLDER: PinnedFolder = {
 let root: HTMLDivElement;
 
 function mount(
-  items: (PinnedNote | PinnedFolder)[],
+  items: (PinnedNote | PinnedFolder | PinnedFile)[],
   overrides: {
     onUnpinNote?: (id: string) => Promise<void>;
     onUnpinFolder?: (path: string) => Promise<void>;
+    onUnpinFile?: (id: string) => Promise<void>;
     runUnpin?: (unpin: () => Promise<void>) => Promise<boolean>;
   } = {},
 ): void {
@@ -79,6 +84,7 @@ function mount(
         onUnpinNote: overrides.onUnpinNote ?? vi.fn(() => Promise.resolve()),
         onUnpinFolder:
           overrides.onUnpinFolder ?? vi.fn(() => Promise.resolve()),
+        onUnpinFile: overrides.onUnpinFile ?? vi.fn(() => Promise.resolve()),
         runUnpin:
           overrides.runUnpin ??
           (async (unpin) => {
@@ -112,6 +118,25 @@ describe('PinnedSection', () => {
     ).map((el) => el.textContent);
     expect(names).toEqual(['Flat hunt', 'Shopping list']);
     expect(root.textContent).toContain('12 notes');
+  });
+
+  it('shows a pinned file as a tile with its title that opens /file/:id', () => {
+    const pdf: PinnedFile = {
+      kind: 'file',
+      file: {
+        id: 'pdf-1',
+        name: 'Lease agreement 2026.pdf',
+        mimeType: 'application/pdf',
+        parents: ['P'],
+        path: '2-Areas/Home/Lease agreement 2026.pdf',
+      },
+      pinnedAt: '2026-01-02T00:00:00.000Z',
+    };
+    mount([pdf]);
+    const tile = root.querySelector('a.home-pinned-tile');
+    expect(tile?.getAttribute('href')).toBe('/file/pdf-1');
+    expect(tile?.textContent).toContain('Lease agreement 2026');
+    expect(tile?.querySelector('.kind-badge')).not.toBeNull();
   });
 
   it("has no Edit toggle's unpin buttons until Edit is pressed", () => {

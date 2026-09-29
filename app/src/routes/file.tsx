@@ -78,6 +78,7 @@ import {
 import type { BreadcrumbSegment } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
+import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
 import { useVault } from '../vault-store.js';
@@ -725,7 +726,7 @@ export function FileScreen(): JSX.Element {
   const { params } = useRoute();
   const { route } = useLocation();
   const id = params.id ?? '';
-  const { index, getNoteText, fileFacts } = useVault();
+  const { index, getNoteText, fileFacts, pinFile, unpinFile } = useVault();
   const [menuOpen, setMenuOpen] = useState(false);
   const [thumbnailBroken, setThumbnailBroken] = useState(false);
 
@@ -804,6 +805,15 @@ export function FileScreen(): JSX.Element {
 
   const origin = originOf(file, catalogue);
   const folder = folderOf(file.path);
+  const filePinned = index.filePinnedAt.has(file.id);
+
+  const fileId = file.id;
+  async function handleTogglePin(): Promise<void> {
+    await runPinAction(
+      () => (filePinned ? unpinFile(fileId) : pinFile(fileId)),
+      filePinned ? 'Unpinned' : 'Pinned to Home',
+    );
+  }
   const kind = fileKind(file);
   const shows = previewKind(file);
   const policy = formatPolicy(kind);
@@ -845,6 +855,10 @@ export function FileScreen(): JSX.Element {
               title={title}
               typeLabel={FILE_KIND_LABELS[kind]}
               askName={file.name}
+              pinned={filePinned}
+              onTogglePin={
+                folder === '' ? undefined : () => void handleTogglePin()
+              }
               onClose={() => setMenuOpen(false)}
             />
           )}

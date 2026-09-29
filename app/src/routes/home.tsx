@@ -456,7 +456,8 @@ export function RecentRows({
 
 export function Home(): JSX.Element {
   const { me } = useSession();
-  const { index, files, status, unpinNote, unpinFolder } = useVault();
+  const { index, files, status, unpinNote, unpinFolder, unpinFile } =
+    useVault();
   // #513: `now` is the run store's own shared clock, so this card, the
   // Last tidy-up card and the working sheet always agree on how long ago
   // something happened, down to the same minute boundary.
@@ -647,6 +648,7 @@ export function Home(): JSX.Element {
         noteCounts={noteCounts}
         onUnpinNote={unpinNote}
         onUnpinFolder={unpinFolder}
+        onUnpinFile={unpinFile}
         runUnpin={(unpin) => runPinAction(unpin, 'Unpinned')}
         editing={editingPins}
         onEditingChange={setEditing}

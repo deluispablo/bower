@@ -14,11 +14,12 @@
  * this, Show in folders, Pin to Home, Move to… ("Bower does it"), Open in
  * Drive, Download (files), Copy link, Edit the text (notes only), Cancel.
  *
- * The Pin row (#216) toggles `pinned`/`onTogglePin`, which the note and
- * folder screens wire to `useVault()`'s pin actions (#215) through
- * `pin-action.ts`'s shared toast. A file has no pin handler (pins live in a
- * note's frontmatter or `index.md`'s folder list, and a PDF has neither),
- * so its menu leaves the row out.
+ * The Pin row (#216) toggles `pinned`/`onTogglePin`, which the note, file
+ * and folder screens wire to `useVault()`'s pin actions (#215, #688)
+ * through `pin-action.ts`'s shared toast. A note's pin lives in its own
+ * frontmatter, a folder's and a file's in the folder note (`pinned_files`
+ * for a file, `pins.ts`). A file at the top level has no folder note, so
+ * its screen passes no handler and the row is left out.
  *
  * "Ask Bower about this" opens the Bower tab's box prefilled through
  * `/bower?text=` (`more-menu.ts`) with the thing's name and nothing else.
