@@ -8,8 +8,10 @@ import { OverlayHost } from '../src/components/overlay.js';
 import { close, open, resetOverlayQueue } from '../src/overlay-queue.js';
 
 const run = vi.hoisted(() => ({
-  phase: 'done' as 'idle' | 'done',
+  phase: 'done',
   resultSeen: true,
+  sheetOpen: false,
+  confirmOpen: false,
 }));
 const push = vi.hoisted(() => ({ prompted: false, markPrompted: vi.fn() }));
 
@@ -42,6 +44,8 @@ beforeEach(() => {
   document.body.append(root);
   run.phase = 'done';
   run.resultSeen = true;
+  run.sheetOpen = false;
+  run.confirmOpen = false;
   push.prompted = false;
   push.markPrompted.mockClear();
 });
@@ -63,6 +67,12 @@ describe('PushPrompt on Overlay', () => {
 
   it('does not show while the chip is still in the done state', () => {
     run.resultSeen = false;
+    mount();
+    expect(dialog()).toBeNull();
+  });
+
+  it('does not show over the working sheet or the confirmation', () => {
+    run.sheetOpen = true;
     mount();
     expect(dialog()).toBeNull();
   });

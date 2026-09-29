@@ -26,7 +26,7 @@ import { Queued } from './queued-overlay.js';
 type Variant = 'ask' | 'ios-hint';
 
 export function PushPrompt() {
-  const { phase, resultSeen } = useRun();
+  const { phase, resultSeen, sheetOpen, confirmOpen } = useRun();
   const [variant, setVariant] = useState<Variant | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,8 +49,9 @@ export function PushPrompt() {
   }, [phase]);
 
   // Not while the chip still shows the result (R-OVL-5): the person reads
-  // that first. `Queued` also holds it back while any overlay is open.
-  if (variant === null || !resultSeen) return null;
+  // that first, and not over the working sheet or the confirmation, which do
+  // not use the queue yet. `Queued` holds it back behind any queued overlay.
+  if (variant === null || !resultSeen || sheetOpen || confirmOpen) return null;
 
   const dismiss = (): void => {
     markPrompted();
