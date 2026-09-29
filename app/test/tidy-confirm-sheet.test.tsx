@@ -18,7 +18,6 @@ const {
   confirmBreakdownLine,
   CONFIRM_SUB,
   CONFIRM_COST,
-  demoConfirmSentenceParts,
   requestConfirmSentenceParts,
   DEMO_RECORDING_NOTICE,
 } = await import('../src/components/tidy-confirm-sheet.js');
@@ -125,26 +124,6 @@ describe('confirmCountLine and confirmBreakdownLine (CONF-3, CONF-4)', () => {
   });
 });
 
-describe('demoConfirmSentenceParts (#489, Demo-Tidy-Confirm board)', () => {
-  it('singular: "1 thing in the inbox…"', () => {
-    expect(demoConfirmSentenceParts(1)).toEqual({
-      lead: '1 thing',
-      rest:
-        'in the inbox. In your own Bower this takes a few minutes and ' +
-        'uses one run of your plan, so once is better than five times.',
-    });
-  });
-
-  it('plural: "3 things in the inbox…"', () => {
-    expect(demoConfirmSentenceParts(3)).toEqual({
-      lead: '3 things',
-      rest:
-        'in the inbox. In your own Bower this takes a few minutes and ' +
-        'uses one run of your plan, so once is better than five times.',
-    });
-  });
-});
-
 describe('TidyConfirmSheet', () => {
   it('shows the bird, the heading, the count and the two buttons, no "Don\'t ask again"', () => {
     mount(3);
@@ -242,13 +221,25 @@ describe('TidyConfirmSheet', () => {
     expect(document.body.textContent).toContain(DEMO_RECORDING_NOTICE);
   });
 
-  it("the demo build reads the board's own sentence, not the real one (#489)", () => {
+  it('the demo build shows the same CONF copy under the amber line (#825)', () => {
     state.demo = true;
     mount(3);
-    expect(document.body.textContent).toContain('3 things');
-    expect(document.body.textContent).toContain('in the inbox');
-    expect(document.body.textContent).toContain('In your own Bower');
-    expect(document.body.textContent).not.toContain('are waiting');
+    const text = document.body.textContent ?? '';
+    expect(text).toContain(DEMO_RECORDING_NOTICE);
+    expect(text).toContain(CONFIRM_SUB);
+    expect(text).toContain('3 things in your inbox');
+    expect(text).toContain(CONFIRM_COST);
+    expect(text.indexOf(DEMO_RECORDING_NOTICE)).toBeLessThan(
+      text.indexOf(CONFIRM_SUB),
+    );
+    expect(text).not.toContain('In your own Bower');
+  });
+
+  it('the bird is looking, not idle or curious (#825)', () => {
+    mount(2);
+    const bird = dialog().querySelector('svg');
+    expect(bird?.getAttribute('class')).toContain('p-look');
+    expect(bird?.getAttribute('class')).not.toContain('curious');
   });
 });
 

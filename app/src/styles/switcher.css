@@ -28,7 +28,6 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
 }
 
 .switcher-field {
@@ -62,6 +61,8 @@
 }
 
 .switcher-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -297,6 +298,9 @@
 
 @media (min-width: 900px) {
   .overlay .overlay-panel:has(> .switcher-panel) {
+    /* The bird above the field needs room (R-BIRD-6): only the results
+       list scrolls, never the panel or the overlay panel. */
+    overflow: visible;
     top: var(--switcher-top, 96px);
     right: 0;
     bottom: auto;
@@ -321,6 +325,7 @@
 
   .switcher-body {
     min-height: 0;
+    overflow-y: auto;
   }
 
   .switcher-preview {

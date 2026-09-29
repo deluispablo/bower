@@ -258,3 +258,24 @@
 .just-filed-table td {
   min-height: 44px;
 }
+
+/* Desktop columns (#825): "What Bower did" never wraps, "Now called" is at
+   least 30% of the table. */
+.just-filed-table th:first-child,
+.just-filed-table td:first-child {
+  white-space: nowrap;
+}
+
+.just-filed-table th:nth-child(2),
+.just-filed-table td:nth-child(2) {
+  min-width: 30%;
+}
+
+/* Phone (#825): the name link fills its cell, a 44 px target. */
+@media (max-width: 899.98px) {
+  .just-filed-item .just-filed-title a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
