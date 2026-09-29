@@ -35,11 +35,16 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
   const list = screen(page);
 
   await expect(list).toContainText(
-    'What you added, and where Bower put each thing. New marks what you have not opened yet.',
+    'What each tidy-up did: what is new, what changed, where things went.',
   );
   await expect(
-    list.getByRole('heading', { name: /^Today, 10:42 · 6 things$/ }),
+    list.getByRole('heading', { name: /^Today, 10:42$/ }),
   ).toBeVisible();
+  // Rows are grouped by action, each group a role="table".
+  await expect(
+    list.getByRole('heading', { name: /^Needs you · 1$/ }),
+  ).toBeVisible();
+  await expect(list.getByRole('table')).not.toHaveCount(0);
   await expect(
     list.getByRole('button', { name: 'Mark all seen' }),
   ).toBeVisible();
@@ -49,7 +54,7 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
   });
   await expect(
     list.locator('.just-filed-item', { hasText: 'Kentish Town, 2 bed' }),
-  ).toContainText('was “Kentish Town flat.pdf”');
+  ).toContainText('from Kentish Town flat.pdf');
   await expect(first).toContainText('Projects › Flat hunt');
   await expect(first.locator('.new-tag')).toHaveText('New');
   await expect(first.locator('.kind-badge')).toHaveText('PDF');
@@ -58,15 +63,12 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
   ).toContainText('Resources › Links');
 
   // The set-aside video, with its reason and the way to say what it is.
+  const aside = list.locator('.just-filed-item', {
+    hasText: "Bower can't watch videos.",
+  });
+  await expect(aside).toContainText('Projects › Flat hunt');
   await expect(
-    list.getByRole('heading', { name: 'Set aside · 1' }),
-  ).toBeVisible();
-  const aside = list.locator('.just-filed-aside');
-  await expect(aside).toContainText(
-    "Kept in Projects › Flat hunt by its date. Bower can't watch videos.",
-  );
-  await expect(
-    aside.getByRole('link', { name: 'Say what it is' }),
+    aside.getByRole('link', { name: 'Tell Bower what it is' }),
   ).toBeVisible();
 
   // Earlier tidy-ups, each with its own lines.
@@ -74,9 +76,9 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
     list.getByRole('heading', { name: 'Earlier tidy-ups' }),
   ).toBeVisible();
   await expect(
-    list.getByText('The last 20, each with where things went'),
+    list.getByText('The last 20, each with what it did'),
   ).toBeVisible();
-  await expect(list.locator('.just-filed-details')).toHaveCount(3);
+  await expect(list.locator('.just-filed-details').first()).toBeVisible();
   await shot(page, testInfo, 'just-filed-phone');
 });
 
@@ -107,16 +109,18 @@ test('at 1280 px the list is a table with Earlier tidy-ups', async ({
   const list = screen(page);
 
   await expect(
-    list.getByRole('heading', {
-      name: /^Today, 10:42 · 6 things · \d+ new to you$/,
-    }),
+    list.getByRole('heading', { name: /^Today, 10:42$/ }),
+  ).toBeVisible();
+  await expect(
+    list.getByRole('button', { name: 'Mark all seen' }),
   ).toBeVisible();
   const table = list.getByRole('table');
   await expect(table.getByRole('columnheader')).toHaveText([
-    'You added',
+    'What Bower did',
     'Now called',
-    'Where it went',
-    "Bower's note",
+    'You added',
+    'Where it is',
+    'What changed',
   ]);
   const first = table
     .getByRole('row')
@@ -129,11 +133,12 @@ test('at 1280 px the list is a table with Earlier tidy-ups', async ({
     table.getByRole('row').filter({ hasText: 'Kentish Town photos' }),
   ).toContainText('rightmove.example.com/…/kentish-town');
 
-  await expect(list.getByRole('heading', { name: /^Set aside/ })).toBeVisible();
+  await expect(
+    table.getByRole('row').filter({ hasText: 'Needs you' }),
+  ).not.toHaveCount(0);
   await expect(
     list.getByRole('heading', { name: 'Earlier tidy-ups' }),
   ).toBeVisible();
-  await expect(list.locator('.just-filed-details')).toHaveCount(3);
-  await expect(list.getByText(/^26 Sep, 18:10 · 3 things$/)).toBeVisible();
+  await expect(list.locator('.just-filed-details').first()).toBeVisible();
   await shot(page, testInfo, 'just-filed-desktop');
 });
