@@ -13,11 +13,7 @@ import {
   MAX_PROCESSED,
   MAX_TEXT_LENGTH,
 } from '../src/runner.js';
-import type {
-  LintDispatchResult,
-  RunnerVault,
-  RunnerVaultList,
-} from '../src/runner.js';
+import type { LintDispatchResult, RunnerVault } from '../src/runner.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import {
   getRun,
@@ -45,11 +41,8 @@ const ACCESS_TOKEN = 'test-access-token';
 /** What the default Google stub mints for a run. */
 const RUN_ACCESS_TOKEN = 'test-run-access-token';
 const API_KEY = 'test-claude-api-key';
-/** The operator key: only `POST /runner/lint/dispatch`, or the legacy flag. */
+/** The operator key: only `POST /runner/lint/dispatch`. */
 const RUNNER_AUTH = `Bearer ${env.BOWER_API_KEY}`;
-
-/** The same bindings with the transition flag on. */
-const legacyEnv: Env = { ...env, RUNNER_ACCEPT_LEGACY_KEY: '1' };
 
 interface Call {
   url: string;
@@ -424,7 +417,7 @@ describe('run tickets', () => {
     ).toBe(200);
   });
 
-  it('refuses the operator key on GET and POST status when the legacy flag is off', async () => {
+  it('refuses the operator key on GET and POST status', async () => {
     await seedUser();
     await seedDriveToken();
 
@@ -434,27 +427,6 @@ describe('run tickets', () => {
     expect(vault.status).toBe(401);
     expect(status.status).toBe(401);
     expect(await getRun(kv, USER_ID)).toBeUndefined();
-  });
-
-  it('accepts the operator key on GET and POST status while the legacy flag is 1', async () => {
-    await seedUser();
-    await seedDriveToken();
-
-    const vault = await getVault(
-      stub().fetchImpl,
-      RUNNER_AUTH,
-      USER_ID,
-      legacyEnv,
-    );
-    const status = await postStatus(
-      { state: 'done' },
-      RUNNER_AUTH,
-      USER_ID,
-      legacyEnv,
-    );
-
-    expect(vault.status).toBe(200);
-    expect(status.status).toBe(200);
   });
 
   it('stores only the hash of a ticket', async () => {
@@ -610,79 +582,17 @@ describe('POST /runner/lint/dispatch', () => {
   });
 });
 
-/** `GET /runner/vaults`, with the legacy flag on unless `requestEnv` says otherwise. */
-async function listVaults(
-  authorization: string | null = RUNNER_AUTH,
-  requestEnv: Env = legacyEnv,
-): Promise<Response> {
-  return createApp({ fetchImpl: stub().fetchImpl }).request(
-    `${API}/runner/vaults`,
-    { headers: authorization === null ? {} : { authorization } },
-    requestEnv,
-  );
-}
-
-describe('GET /runner/vaults (legacy flag)', () => {
-  it('answers 401 unauthorized to the operator key when the legacy flag is off', async () => {
+describe('GET /runner/vaults (removed, #291)', () => {
+  it('is gone: not even the operator key lists the vaults', async () => {
     await seedUser();
 
-    const response = await listVaults(RUNNER_AUTH, env);
-
-    expect(response.status).toBe(401);
-  });
-
-  it('lists the id of every user with a vault, and nothing else', async () => {
-    await seedUser();
-    await putUser(kv, {
-      id: 'user-2',
-      email: 'alex@example.com',
-      createdAt: '2026-01-02T00:00:00.000Z',
-      encRefreshToken: 'unused',
-      vault: {
-        folderId: 'FOLDER_ID',
-        inboxFolderId: 'INBOX_FOLDER_ID',
-        name: 'Bower',
-      },
-    });
-    await putUser(kv, {
-      id: 'user-3',
-      email: 'no-vault@example.com',
-      createdAt: '2026-01-03T00:00:00.000Z',
-      encRefreshToken: 'unused',
-    });
-
-    const response = await listVaults();
-
-    expect(response.status).toBe(200);
-    const body = await response.json<RunnerVaultList>();
-    expect(body.vaults.map((vault) => vault.id).sort()).toEqual([
-      USER_ID,
-      'user-2',
-    ]);
-    expect(body.vaults.every((vault) => Object.keys(vault).length === 1)).toBe(
-      true,
+    const response = await createApp({ fetchImpl: stub().fetchImpl }).request(
+      `${API}/runner/vaults`,
+      { headers: { authorization: RUNNER_AUTH } },
+      env,
     );
-    expect(JSON.stringify(body)).not.toContain('@');
-  });
 
-  it('answers an empty list when nobody has a vault', async () => {
-    const response = await listVaults();
-
-    expect(response.status).toBe(200);
-    expect(await response.json<RunnerVaultList>()).toEqual({ vaults: [] });
-  });
-
-  it.each([
-    ['missing', null],
-    ['wrong', 'Bearer not-the-key'],
-    ['admin', `Bearer ${env.ADMIN_KEY}`],
-  ])('answers 401 unauthorized with a %s key', async (_, auth) => {
-    await seedUser();
-
-    const response = await listVaults(auth);
-
-    expect(response.status).toBe(401);
-    expect((await response.json<ErrorBody>()).error.code).toBe('unauthorized');
+    expect(response.status).toBe(404);
   });
 });
 

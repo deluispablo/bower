@@ -231,7 +231,7 @@ Response: `{ "runs": Run[] }`, status 200 (`[]` when there is none).
 Called by the GitHub Actions runner of the instance repo, never by the app (`api/src/runner.ts`, `api/src/run-ticket.ts`). Two credentials, each sent as `Authorization: Bearer <credential>`; anything else is a 401 `unauthorized`. `:id` is the user id, the `vault_id` of the dispatch. Nothing here logs a key, a ticket, a token, the user's API key, file names or summaries.
 
 - **A run ticket** for `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status`. Each run gets its own: `POST /process` mints one for an ingest, `POST /runner/lint/dispatch` one per vault for a lint, and sends it in the `repository_dispatch`. The Worker keeps only its SHA-256 (`runticket:<id>`, `lintticket:<id>`) and compares hashes in constant time. A ticket works only for its own `:id` and its own kind of run (an ingest's ticket cannot report a lint, nor the other way round), and stops working when the run reports `done` or `failed`, when a newer run of the same kind on the same vault gets a ticket, or 55 min after it was minted (`RUN_TICKET_TTL_MS`: the 25 min queued window plus the 30 min running window).
-- **The operator key `BOWER_API_KEY`**, compared in constant time, for `POST /runner/lint/dispatch` only. While the Worker var `RUNNER_ACCEPT_LEGACY_KEY` is `1`, a transition flag that is off by default, it is also accepted wherever a ticket is, and by `GET /runner/vaults`, so an instance repo whose workflows predate run tickets keeps working (`docs/runbook.md`, "Upgrading to run tickets"). With the flag off, the key is a 401 there.
+- **The operator key `BOWER_API_KEY`**, compared in constant time, for `POST /runner/lint/dispatch` only. It is a 401 on the ticketed routes (#291 removed the transition flag that once let it through).
 
 ### `POST /runner/lint/dispatch`
 
@@ -248,16 +248,6 @@ Response, status 200: `{ "dispatched": <number> }`.
 | 404 | `not_found` | `vaultId` names no user, or a user without a vault |
 | 502 | `dispatch` | GitHub did not accept at least one dispatch; the message says how many of how many |
 
-### `GET /runner/vaults`
-
-Legacy: only while `RUNNER_ACCEPT_LEGACY_KEY` is `1`, for the old `lint.yml` whose `list` job still calls it. The id of every user who has a vault. The Worker pages through the `user:` keys (`listVaultIds`); users without a vault yet are left out.
-
-Response, status 200: `{ "vaults": [{ "id": "<user id>" }] }` (an empty array when nobody has a vault). Ids only: never an email, a folder id or a token.
-
-| Status | `error.code` | When |
-| --- | --- | --- |
-| 401 | `unauthorized` | Missing or wrong operator key, or the legacy flag is off |
-
 ### `GET /runner/vaults/:id`
 
 What one run needs:
@@ -273,7 +263,7 @@ What one run needs:
 
 | Status | `error.code` | When |
 | --- | --- | --- |
-| 401 | `unauthorized` | Missing, retired or expired ticket, or a ticket for another vault (or the operator key while the legacy flag is off) |
+| 401 | `unauthorized` | Missing, retired or expired ticket, or a ticket for another vault (the operator key included) |
 | 404 | `not_found` | No user with that id, or the user has no vault yet |
 | 409 | `reauth` | Google refused the user's refresh token (`invalid_grant`). The user is flagged `needsReauth` (the app asks them to sign in again); the runner reports `failed` with this reason and stops. A 409, not a 401, so it is not mistaken for a bad ticket |
 | 502 | `google_error` | Any other Google failure |
@@ -306,7 +296,7 @@ Response: `{ "run": Run }`, status 200.
 | Status | `error.code` | When |
 | --- | --- | --- |
 | 400 | `bad_request` | The body is not a JSON object matching the table above |
-| 401 | `unauthorized` | Missing, retired or expired ticket, a ticket for another vault, or one for the other kind of run (or the operator key while the legacy flag is off) |
+| 401 | `unauthorized` | Missing, retired or expired ticket, a ticket for another vault, or one for the other kind of run (the operator key included) |
 | 404 | `not_found` | No user with that id, or the user has no vault yet |
 
 ## Web push

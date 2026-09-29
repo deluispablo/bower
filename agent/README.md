@@ -38,7 +38,6 @@ Either way, `run.sh` un-exports these names before anything else, so a value nev
 | --- | --- | --- |
 | `BOWER_API_URL` | Yes | Runner settings file (or environment). The Worker's origin, e.g. `https://api.example.com` |
 | `BOWER_RUN_TICKET` | Yes | Runner settings file (or environment). This run's ticket, sent as `Authorization: Bearer`: the Worker minted it for this vault and this run, and it stops working when the run reports `done` or `failed` (issue #259) |
-| `BOWER_API_KEY` | No | Only without `BOWER_RUN_TICKET` (a local run, or an instance repo whose workflows predate run tickets): the operator key, sent instead, with the warning `warning: no run ticket, using the operator key`. The Worker accepts it only while `RUNNER_ACCEPT_LEGACY_KEY=1` |
 | `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` | Yes, unless the user set their own key | Environment. When the API returns `apiKey`, it becomes `ANTHROPIC_API_KEY` for the run and `CLAUDE_CODE_OAUTH_TOKEN` is unset |
 | `BOWER_MAX_TURNS` | No | Runner settings file (or environment). Overrides the API's `maxTurns` |
 | `BOWER_ALLOW_WEB` | No | Runner settings file (or environment). The instance's switch: `1` gives the agent `WebSearch` and `WebFetch` when `BOWER_RUN_ALLOW_WEB` is `1` too; unset (the default) or any other value denies them |

@@ -28,10 +28,6 @@
 #   BOWER_RUN_TICKET         this run's ticket (Authorization: Bearer): the
 #                            Worker minted it for this vault and this run
 #                            only, and sent it in the repository_dispatch
-#   BOWER_API_KEY            only without BOWER_RUN_TICKET: the operator key,
-#                            for a local run or an instance repo whose
-#                            workflows predate run tickets; the Worker takes
-#                            it only while RUNNER_ACCEPT_LEGACY_KEY=1
 #   BOWER_MAX_TURNS          optional; defaults to the API's maxTurns
 #   BOWER_ALLOW_WEB          optional; the instance's switch: 1 lets the
 #                            agent use WebSearch and WebFetch when the run
@@ -156,14 +152,10 @@ if [ -z "${BOWER_API_URL:-}" ]; then
   log "missing setting BOWER_API_URL"
   exit 2
 fi
-# The one credential sent to the Worker: this run's ticket. The operator key
-# is only a fallback for a local run or an old instance repo, and works only
-# while the Worker's transition flag is on.
+# The one credential sent to the Worker: this run's ticket. There is no
+# fallback: the Worker refuses the operator key on these routes.
 if [ -n "${BOWER_RUN_TICKET:-}" ]; then
   API_CREDENTIAL=$BOWER_RUN_TICKET
-elif [ -n "${BOWER_API_KEY:-}" ]; then
-  log 'warning: no run ticket, using the operator key (needs RUNNER_ACCEPT_LEGACY_KEY=1 on the Worker)'
-  API_CREDENTIAL=$BOWER_API_KEY
 else
   log "missing setting BOWER_RUN_TICKET"
   exit 2
