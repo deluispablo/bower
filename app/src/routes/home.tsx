@@ -613,7 +613,9 @@ export function Home(): JSX.Element {
   const state = homeStateFor({
     phase,
     pending,
-    lastFinished: lastRun,
+    // The history read is not a reason to leave Loading: only a run this
+    // session already saw finish is.
+    lastFinished: loading ? lastFinished : lastRun,
     loading,
   });
 

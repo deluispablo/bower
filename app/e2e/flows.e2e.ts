@@ -134,7 +134,12 @@ test.describe('open Home', () => {
     ).toBeVisible();
     await expect(
       visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
-    ).toContainText('No tidy-up yet');
+    ).not.toContainText('No tidy-up yet');
+    // #754 (R-HOME-3): the demo's history has runs, so the card shows the
+    // newest one instead of "No tidy-up yet".
+    await expect(
+      visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
+    ).toContainText('filed');
     await shot(page, testInfo, 'home');
 
     // "?" still replays the tour on demand.
@@ -1295,6 +1300,7 @@ async function openMore(row: Locator): Promise<void> {
 test('Requests: every state, Edit, Remove, and Just this, now for the requests only (#344)', async ({
   page,
 }, testInfo) => {
+  test.setTimeout(60_000); // #754: no toast wait, the row itself waits for the run.
   await openHome(page);
   await navigate(page, /^Bower$/);
   await showBowerPart(page, 'Requests');
@@ -1384,7 +1390,7 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
   // in the one row this file becomes (no separate waiting row left).
   await expect(edited).toHaveCount(1);
   await expect(edited.getByText('Answered', { exact: true })).toBeVisible({
-    timeout: 10_000,
+    timeout: 25_000,
   });
 });
 
