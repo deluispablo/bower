@@ -123,7 +123,7 @@ export function CompareView({
   >({});
   const [storedOrder, setStoredOrder] = useState<string[] | undefined>();
   const [sort, setSort] = useState<CompareSort | undefined>();
-  const [activeChips, setActiveChips] = useState<string[]>([]);
+  const [chosenChips, setChosenChips] = useState<string[] | undefined>();
 
   useEffect(() => {
     let live = true;
@@ -164,6 +164,11 @@ export function CompareView({
   const order = orderedColumnIds(kind, storedOrder);
   const columns = compareColumns(kind, order);
   const chips = filterChips(kind, current);
+  // The phone opens with its one filter on, as the board draws it (the
+  // faded card and the line under the cards); the desktop starts unfiltered.
+  const first = chips[0];
+  const activeChips =
+    chosenChips ?? (!isDesktop && first !== undefined ? [first.id] : []);
   const active = chips.filter((chip) => activeChips.includes(chip.id));
   const effectiveSort = sort ?? defaultSort(kind);
   const sorted = sortNotes(kind, current, effectiveSort);
@@ -171,8 +176,10 @@ export function CompareView({
   const hiddenIds = new Set(hidden.map((note) => note.id));
 
   const toggleChip = (id: string): void => {
-    setActiveChips((now) =>
-      now.includes(id) ? now.filter((chip) => chip !== id) : [...now, id],
+    setChosenChips(
+      activeChips.includes(id)
+        ? activeChips.filter((chip) => chip !== id)
+        : [...activeChips, id],
     );
   };
 
@@ -249,7 +256,7 @@ export function CompareView({
           ? 'Best fit first'
           : 'Default order'}
       </button>
-      {chips.map((chip) => (
+      {(isDesktop ? chips : chips.slice(0, 1)).map((chip) => (
         <button
           key={chip.id}
           type="button"
@@ -384,6 +391,7 @@ function PhoneCard({
 }): JSX.Element {
   const facts = keyFactsFor(kind, note.fields).slice(0, 3);
   const status = statusLabel(kind, note.fields);
+  const highlight = note.fields.highlight;
   const fit = note.fields.fit;
   return (
     <a
@@ -402,7 +410,11 @@ function PhoneCard({
         {facts.map((fact, index) => (
           <span class="compare-card-fact" key={fact.key}>
             <b>{fact.value}</b>
-            {index === 2 && status !== '' ? status : fact.label}
+            {index === 2 && status !== ''
+              ? status
+              : index === 1 && typeof highlight === 'string' && highlight !== ''
+                ? highlight
+                : fact.label}
           </span>
         ))}
       </span>

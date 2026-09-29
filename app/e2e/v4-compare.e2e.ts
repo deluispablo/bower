@@ -51,3 +51,30 @@ test.describe('Compare (#612)', () => {
     await expect(headers.nth(5)).toHaveText(/^Fit/);
   });
 });
+
+test.describe('Compare on a phone (#701)', () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test('draws the board: one filter chip, highlights, the faded line, no tip', async ({
+    page,
+  }) => {
+    await openHome(page);
+    await page.goto('/folder/1-Projects/Flat%20hunt');
+    await page.getByRole('tab', { name: /^Compare \d+ / }).click();
+
+    await expect(page.locator('.compare-chip')).toHaveText([
+      'Best fit first',
+      'Under £2,300',
+    ]);
+    const cards = page.locator('.compare-card');
+    await expect(cards.nth(0)).toContainText('garden');
+    await expect(cards.nth(1)).toContainText('2nd floor');
+    await expect(cards.nth(2)).toContainText('ground');
+    await expect(cards.nth(3)).toContainText('main road');
+    await expect(page.locator('.compare-card-faded')).toHaveCount(1);
+    await expect(page.locator('.compare-foot')).toContainText(
+      'Kentish Town is over £2,300, shown faded.',
+    );
+    await expect(page.locator('.folder-tip')).toBeHidden();
+  });
+});

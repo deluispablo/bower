@@ -396,3 +396,10 @@
 .compare-step-ref {
   color: var(--color-text-muted);
 }
+
+/* The Compare tab draws no "Want more from this folder?" tip (boards
+ * `Phone-Folder-Compare`, `Desktop-Compare`): the tip is the folder's, so it
+ * is hidden when the Compare view sits before it. */
+.compare ~ .folder-tip {
+  display: none;
+}
