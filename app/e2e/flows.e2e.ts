@@ -1888,7 +1888,8 @@ test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
     0,
   );
   await expect(bar.getByRole('link', { name: /^Back to / })).toBeVisible();
-  await expect(bar.locator('.topbar-title')).toHaveText('Lisbon Trip');
+  // The title is on the page, not in the bar (#704).
+  await expect(bar.locator('.topbar-title')).toHaveCount(0);
   await shot(page, testInfo, 'bar-note');
 });
 
@@ -1915,10 +1916,7 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
     .click();
   await expect(page).toHaveURL(/\/note\//);
 
-  // The title keeps its 130px floor: Back gives way to it, not the other
-  // way round, and the bar itself never grows past the viewport.
-  const crumbBox = await bar.locator('.topbar-crumb').boundingBox();
-  expect(crumbBox?.width ?? 0).toBeGreaterThanOrEqual(130);
+  // The bar has Back only (#704), and never grows past the viewport.
   await expect
     .poll(async () => page.evaluate(() => document.body.scrollWidth))
     .toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
