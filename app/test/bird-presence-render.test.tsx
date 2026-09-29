@@ -1,18 +1,26 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 
 import { h, render } from 'preact';
+import type { ComponentChild } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { birdCount, resetBirdPresence, usePerchVisible } from '../src/bird-presence.js';
+import {
+  birdCount,
+  resetBirdPresence,
+  usePerchVisible,
+} from '../src/bird-presence.js';
 import { Bird, BowerMark } from '../src/components/bird.js';
 import type { BirdProps } from '../src/components/bird.js';
 
-function Perch(): ReturnType<typeof h> | null {
+function Perch(): ComponentChild {
   return usePerchVisible() ? h('i', { 'data-perch': '' }) : null;
 }
 
-function mount(node: ReturnType<typeof h>): { root: HTMLElement; unmount: () => void } {
+function mount(node: ComponentChild): {
+  root: HTMLElement;
+  unmount: () => void;
+} {
   const root = document.createElement('div');
   document.body.append(root);
   void act(() => {
@@ -28,7 +36,7 @@ function mount(node: ReturnType<typeof h>): { root: HTMLElement; unmount: () => 
   };
 }
 
-function bird(props: Partial<BirdProps> = {}): ReturnType<typeof h> {
+function bird(props: Partial<BirdProps> = {}): ComponentChild {
   return h(Bird, { state: 'looking', size: 88, ...props });
 }
 
@@ -36,7 +44,10 @@ afterEach(() => {
   document.body.replaceChildren();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    value: false,
+  });
   resetBirdPresence();
 });
 
@@ -59,19 +70,27 @@ describe('bird presence in the render', () => {
   });
 
   it('never counts the mark, the perch or a bird under 40 px', () => {
-    mount(h(BowerMark, {}));
+    mount(h(BowerMark, { size: 24 }));
     mount(bird({ state: 'perched' }));
     expect(birdCount()).toBe(0);
   });
 
   it('holds other birds still while an overlay shows Bower', () => {
     const other = mount(bird({ state: 'hello' }));
-    expect(other.root.querySelector('svg')?.getAttribute('class')).toContain('p-hello');
+    expect(other.root.querySelector('svg')?.getAttribute('class')).toContain(
+      'p-hello',
+    );
     const overlay = mount(bird({ state: 'hello', overlay: true }));
-    expect(other.root.querySelector('svg')?.getAttribute('class')).not.toContain('p-hello');
-    expect(overlay.root.querySelector('svg')?.getAttribute('class')).toContain('p-hello');
+    expect(
+      other.root.querySelector('svg')?.getAttribute('class'),
+    ).not.toContain('p-hello');
+    expect(overlay.root.querySelector('svg')?.getAttribute('class')).toContain(
+      'p-hello',
+    );
     overlay.unmount();
-    expect(other.root.querySelector('svg')?.getAttribute('class')).toContain('p-hello');
+    expect(other.root.querySelector('svg')?.getAttribute('class')).toContain(
+      'p-hello',
+    );
   });
 });
 
@@ -80,7 +99,10 @@ describe('bird pause', () => {
     const { root } = mount(bird());
     const svg = root.querySelector('svg');
     expect(svg?.getAttribute('class')).not.toContain('paused');
-    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      value: true,
+    });
     void act(() => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
@@ -104,7 +126,10 @@ describe('bird pause', () => {
     const svg = root.querySelector('svg');
     const report = (isIntersecting: boolean): void => {
       void act(() => {
-        callback([{ isIntersecting } as IntersectionObserverEntry], {} as IntersectionObserver);
+        callback(
+          [{ isIntersecting } as IntersectionObserverEntry],
+          {} as IntersectionObserver,
+        );
       });
     };
     report(false);
