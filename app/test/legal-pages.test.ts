@@ -50,6 +50,12 @@ describe('Privacy', () => {
     expect(root.querySelector('h1')?.textContent).toBe('Privacy');
   });
 
+  it('says where dictated audio goes', () => {
+    const root = mount(Privacy);
+    expect(root.textContent).toContain('Bower never receives the audio');
+    expect(root.textContent).toContain("Google's");
+  });
+
   it('signed out, Back is a link to /login', () => {
     state.status = 'signed-out';
     const root = mount(Privacy);
