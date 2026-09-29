@@ -8,7 +8,7 @@
  * folder listing are mocked; nothing leaves the test.
  */
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -142,13 +142,16 @@ const { Bower } = await import('../src/routes/bower.js');
 const { buildVaultIndex } = await import('../src/vault-index.js');
 const { cardWhen } = await import('../src/activity.js');
 
+import { OverlayHost } from '../src/components/overlay.js';
+import { resetOverlayQueue } from '../src/overlay-queue.js';
+
 let root: HTMLDivElement;
 
 async function mount(): Promise<void> {
   root = document.createElement('div');
   document.body.append(root);
   await act(() => {
-    render(h(Bower, null), root);
+    render(h(Fragment, null, h(Bower, null), h(OverlayHost, null)), root);
   });
 }
 
@@ -187,6 +190,7 @@ beforeEach(() => {
 
 afterEach(() => {
   render(null, root);
+  resetOverlayQueue();
   root.remove();
 });
 

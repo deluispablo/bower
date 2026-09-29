@@ -10,7 +10,7 @@
  * waiting on the debounced Drive call.
  */
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,6 +34,9 @@ function file(id: string, path: string, mimeType: string): DriveFile {
   const name = path.split('/').pop() ?? path;
   return { id, name, mimeType, parents: ['PARENT'], path };
 }
+
+import { OverlayHost } from '../src/components/overlay.js';
+import { resetOverlayQueue } from '../src/overlay-queue.js';
 
 const LISBON = note('lisbon', '2-Areas/Travel/Lisbon Trip.md');
 const CURRY = note('curry', 'Weeknight curry.md');
@@ -137,12 +140,13 @@ beforeEach(() => {
   document.body.append(root);
   openSwitcher();
   void act(() => {
-    render(h(Switcher, {}), root);
+    render(h(Fragment, null, h(Switcher, {}), h(OverlayHost, null)), root);
   });
 });
 
 afterEach(() => {
   closeSwitcher();
+  resetOverlayQueue();
   // Unmount, so no effect or timer of the switcher outlives the test.
   void act(() => {
     render(null, root);

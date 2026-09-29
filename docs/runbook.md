@@ -288,6 +288,8 @@ Worker first, then the runner, then the app:
 
 Each user then gets the new rulebook from **Settings → Advanced → "Update Bower's rules"** (`bower_rules_version` in `vault-template/CLAUDE.md` is the current number).
 
+**Rulebook v21** (#732): `by: bower` on every note Bower writes, Bower's note on every note it generates, a text copy next to each document of no listed kind, notes rewritten to the present when a rule or fact changes (`bower_updated`, `bower_change`, `bower_before`), short note names, `pile_note`, rename requests, `.bower/updated.txt`, and finishing a tidy-up without writing a note twice. Deploy the runner first (it reads `.bower/updated.txt` and appends a text copy's `## The document`), then each owner applies v21 from **Settings → Advanced → "Update Bower's rules"**.
+
 ### What a tidy-up does with each file
 
 Since rulebook version 7 (#368), Bower only files by default. Each original (a PDF, a photo, a spreadsheet) moves into its project, area or resource folder as it is, with one line in the folder's hub note, one row in `index.md` (`- [[<path>]] · <type> · filed by Bower`) and one `Filed:` line in `log.md`; no summary note, no copy, no translation. A note is still written for a web clip or saved link (the raw clip then goes to `0-Inbox/Processed/`), for an item an instruction note or a rule in `Rules.md` asks something for, and for a converted Word, OpenDocument, HTML, EPUB or RTF document, whose `.md` is filed next to the original. `0-Inbox/Processed/` now keeps only instruction notes, raw clips, unconvertible items and duplicates.

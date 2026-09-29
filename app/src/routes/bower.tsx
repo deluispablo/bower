@@ -30,7 +30,6 @@
  * its own.
  */
 
-import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
@@ -69,6 +68,8 @@ import {
   IconSparkle,
 } from '../components/icons.js';
 import { Overlay } from '../components/overlay.js';
+import { Queued } from '../components/queued-overlay.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import {
   RulesPanel,
   useFileText,
@@ -367,52 +368,53 @@ function RequestMenu({
     };
   }
   const blocked = runNow.block !== null;
-  return createPortal(
-    <Overlay kind="menu" label="Request actions" onClose={onClose}>
-      <div class="pin-sheet-rows">
-        {row.kind !== 'context' && (
+  return (
+    <Queued id="request-menu" priority={OVERLAY_PRIORITY.own}>
+      <Overlay kind="menu" label="Request actions" onClose={onClose}>
+        <div class="pin-sheet-rows">
+          {row.kind !== 'context' && (
+            <button
+              type="button"
+              role="menuitem"
+              class="pin-sheet-row"
+              onClick={choose(() => {
+                onEdit(row);
+              })}
+            >
+              <span>Edit</span>
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"
-            class="pin-sheet-row"
+            class="pin-sheet-row bower-menu-now"
+            disabled={blocked}
+            aria-disabled={blocked}
+            onClick={choose(onRunNow)}
+          >
+            <span>{RUN_NOW_LABEL}</span>
+            <small>
+              {runNow.reason ?? lowerFirst(RUN_NOW_LINE).replace(/\.$/, '')}
+            </small>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            class="pin-sheet-row bower-menu-danger"
             onClick={choose(() => {
-              onEdit(row);
+              onRemove(row);
             })}
           >
-            <span>Edit</span>
+            <span>Remove from the inbox</span>
           </button>
-        )}
-        <button
-          type="button"
-          role="menuitem"
-          class="pin-sheet-row bower-menu-now"
-          disabled={blocked}
-          aria-disabled={blocked}
-          onClick={choose(onRunNow)}
-        >
-          <span>{RUN_NOW_LABEL}</span>
-          <small>
-            {runNow.reason ?? lowerFirst(RUN_NOW_LINE).replace(/\.$/, '')}
-          </small>
-        </button>
-        <button
-          type="button"
-          role="menuitem"
-          class="pin-sheet-row bower-menu-danger"
-          onClick={choose(() => {
-            onRemove(row);
-          })}
-        >
-          <span>Remove from the inbox</span>
-        </button>
-      </div>
-      <p class="bower-menu-foot">
-        &ldquo;{RUN_NOW_LABEL}&rdquo; runs only this request and leaves
-        everything else in the inbox for the tidy-up. It is off while a tidy-up
-        is running.
-      </p>
-    </Overlay>,
-    document.body,
+        </div>
+        <p class="bower-menu-foot">
+          &ldquo;{RUN_NOW_LABEL}&rdquo; runs only this request and leaves
+          everything else in the inbox for the tidy-up. It is off while a
+          tidy-up is running.
+        </p>
+      </Overlay>
+    </Queued>
   );
 }
 

@@ -24,6 +24,22 @@ import type { Locator, Page } from '@playwright/test';
 /** The tidy-up sheet, whichever of its states it is in (#752). */
 const SHEET_NAME = /^(Tidying up|Tidy-up (done|partly done|did not finish))$/;
 
+/**
+ * The one-time push prompt (#39) is a modal overlay (#773): it comes up once
+ * a finished run's result has been seen, and it makes the page inert, so a
+ * flow dismisses it before the next click. Only some builds can ask for push
+ * at all, so a short wait, then on.
+ */
+async function dismissPushPrompt(page: Page): Promise<void> {
+  const later = page
+    .getByRole('dialog')
+    .getByRole('button', { name: /Not now|Got it/ });
+  await later.waitFor({ state: 'visible', timeout: 2_000 }).then(
+    () => later.click(),
+    () => undefined,
+  );
+}
+
 test.describe('open Home', () => {
   test.use({ introSeen: false });
 
@@ -943,13 +959,7 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
     timeout: 20_000,
   });
   await sheet.getByRole('button', { name: 'Close' }).first().click();
-  // The one-time push prompt (#39) can slide up over the bottom of the
-  // screen at the same moment as this first `done`; dismiss it so it
-  // never intercepts a later click.
-  const pushPrompt = page.locator('.push-prompt');
-  if (await pushPrompt.isVisible()) {
-    await pushPrompt.getByRole('button', { name: /Not now|Got it/ }).click();
-  }
+  await dismissPushPrompt(page);
 
   const lastCard = visible(
     page.locator('.home-card', { hasText: 'Last tidy-up' }),
@@ -2610,6 +2620,7 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
     timeout: 20_000,
   });
   await sheet.getByRole('button', { name: 'Close' }).first().click();
+  await dismissPushPrompt(page);
 
   // Home's Last tidy-up card opens Just filed (#617); Activity in the Bower
   // tab stays the full history, with that run's card first.

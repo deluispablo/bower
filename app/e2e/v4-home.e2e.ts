@@ -22,6 +22,15 @@ async function tidyUp(page: Page): Promise<void> {
     { timeout: 30_000 },
   );
   await page.keyboard.press('Escape');
+  // #773: the one-time push prompt is a modal overlay that comes up once the
+  // result has been seen (where push can be asked for at all); dismiss it.
+  const later = page
+    .getByRole('dialog')
+    .getByRole('button', { name: /Not now|Got it/ });
+  await later.waitFor({ state: 'visible', timeout: 2_000 }).then(
+    () => later.click(),
+    () => undefined,
+  );
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 

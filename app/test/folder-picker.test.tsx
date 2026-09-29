@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { Fragment, h, render } from 'preact';
 import type { ComponentChild } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,8 @@ import { currentToast, dismissToast } from '../src/toast-store.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 import type { VaultIndex } from '../src/vault-index.js';
 
+import { OverlayHost } from '../src/components/overlay.js';
+import { resetOverlayQueue } from '../src/overlay-queue.js';
 const mocks = vi.hoisted(() => ({
   createTextFile: vi.fn(),
   process: vi.fn(),
@@ -69,7 +71,7 @@ function mount(vnode: ComponentChild): void {
   root = document.createElement('div');
   document.body.append(root);
   void act(() => {
-    render(vnode, root);
+    render(h(Fragment, null, vnode, h(OverlayHost, null)), root);
   });
 }
 
@@ -128,6 +130,7 @@ afterEach(() => {
   void act(() => {
     render(null, root);
   });
+  resetOverlayQueue();
   document.body.replaceChildren();
 });
 

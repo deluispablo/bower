@@ -113,13 +113,121 @@
   color: var(--color-text-muted);
 }
 
+/* Values wrap, up to two lines, never cut with an ellipsis (R-CMP-5). */
 .compare-card-fact b {
   display: block;
-  overflow: hidden;
   font-size: var(--text-sm);
   color: var(--color-heading);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* --- Phone: Sort button and sheet (R-CMP-1) --- */
+
+.compare-sort-btn {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.compare-sort {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.compare-sort-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.compare-sort-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--color-heading);
+}
+
+.compare-sort-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.compare-sort-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.compare-sort-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.compare-sort-option small {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.compare-sort-option[aria-checked='true'],
+.compare-sort-dir[aria-checked='true'] {
+  background: var(--color-brand-tint);
+  font-weight: var(--weight-bold);
+}
+
+.compare-sort-order {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.compare-sort-dir {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.compare-sort-done {
+  min-height: 44px;
+}
+
+.compare-sort-btn:focus-visible,
+.compare-sort-option:focus-visible,
+.compare-sort-dir:focus-visible,
+.compare-sort-close:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 2px;
 }
 
 .compare-card-status {
@@ -253,6 +361,14 @@
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
+}
+
+/* Below 900 px a select is a tap target (the table itself is a desktop
+ * view, but a narrow desktop window can still show it). */
+@media (max-width: 899px) {
+  .compare-status {
+    min-height: 44px;
+  }
 }
 
 .compare-hidden {
