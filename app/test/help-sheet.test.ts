@@ -153,10 +153,7 @@ describe('Tour', () => {
     onEnd = vi.fn<(finished: boolean) => void>(),
   ): Promise<typeof onEnd> {
     await act(async () => {
-      render(
-        h(Fragment, null, h(Tour, { onEnd }), h(OverlayHost, null)),
-        root,
-      );
+      render(h(Fragment, null, h(Tour, { onEnd }), h(OverlayHost, null)), root);
       await Promise.resolve();
     });
     return onEnd;
@@ -196,11 +193,11 @@ describe('Tour', () => {
         (b) => b.textContent === 'Back',
       ),
     ).toBe(false);
-    await act(async () => {
+    void act(() => {
       button('Next: Notes').click();
     });
     expect(dialog().querySelector('h2')?.textContent).toBe('Notes');
-    await act(async () => {
+    void act(() => {
       button('Back').click();
     });
     expect(dialog().querySelector('h2')?.textContent).toBe('Home');
@@ -219,10 +216,10 @@ describe('Tour', () => {
 
   it('skips on Skip and on Escape with the toast once, and leaves no highlight', async () => {
     const onEnd = await mountTour();
-    await act(async () => {
+    void act(() => {
       button('Next: Notes').click();
     });
-    await act(async () => {
+    void act(() => {
       button('Skip').click();
     });
     expect(onEnd).toHaveBeenCalledWith(false);
@@ -236,7 +233,7 @@ describe('Tour', () => {
     expect(onEnd).toHaveBeenCalledWith(false);
     expect(currentToast()).toBeNull();
 
-    await act(async () => {
+    void act(() => {
       render(null, root);
     });
     expect(tabs.querySelector('.help-tab-on')).toBeNull();

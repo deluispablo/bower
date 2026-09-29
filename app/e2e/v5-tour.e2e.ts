@@ -12,7 +12,10 @@ test.describe('the tour', () => {
   test('stands an 80 px bird on the tab bar, pointing down, with the card 150 px up', async ({
     page,
   }, testInfo) => {
-    test.skip(testInfo.project.name !== 'phone', 'the tab bar is a phone thing');
+    test.skip(
+      testInfo.project.name !== 'phone',
+      'the tab bar is a phone thing',
+    );
     await page.goto('/');
     const tour = page.getByRole('dialog', { name: 'Home' });
     await expect(tour.getByText('Tour · 1 of 4')).toBeVisible();
@@ -63,7 +66,9 @@ test.describe('the tour', () => {
     await expect(page.getByText(SKIP_TOAST)).toBeVisible();
   });
 
-  test('on a desktop, "Let\'s go" goes to Bower', async ({ page }, testInfo) => {
+  test('on a desktop, "Let\'s go" goes to Bower', async ({
+    page,
+  }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'phones stay on Home');
     await page.goto('/');
     const tour = page.getByRole('dialog');

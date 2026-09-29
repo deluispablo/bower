@@ -33,13 +33,7 @@ import {
   tourLabel,
   tourNextLabel,
 } from '../help-rows.js';
-import type {
-  HelpIcon,
-  HelpRow,
-  HelpScreen,
-  HelpSheetCopy,
-  HelpTab,
-} from '../help-rows.js';
+import type { HelpIcon, HelpRow, HelpScreen, HelpTab } from '../help-rows.js';
 import { Bird } from './bird.js';
 import {
   IconChat,
