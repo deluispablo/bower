@@ -12,7 +12,7 @@ It replaces nothing on main: the v4 boards and specs were removed in #726, so th
 - the rulebook (`vault-template/CLAUDE.md`, `bower_rules_version: 20`, and `agent/prompts/`);
 - the live instance at the build Settings reports.
 
-**Boards.** Design canvas "Bower v5: runs, notes, folders", https://claude.ai/artifact/7tsURtgvEUuFrZQQWtZ7vx. It has 67 artboards on seven pages (Brief, System, Tidy-up results, Bower's notes, Folders and Compare, Add and dictation, Wireframes). It is private to the owner until they share it. The boards were not exported to the repo, because #726 removed boards from main. **Tie-break: the board wins over this text.**
+**Boards.** Design canvas "Bower v5: runs, notes, folders", https://claude.ai/artifact/7tsURtgvEUuFrZQQWtZ7vx. It has 90 artboards on seven pages (Brief, System, Tidy-up results, Bower's notes, Folders and Compare, Add and dictation, Wireframes). It is private to the owner until they share it. The boards were not exported to the repo, because #726 removed boards from main. **Tie-break: the board wins over this text.**
 
 **Verified in the live app** (29 Sep, signed in as the test user, read-only: no run, upload, edit or status change):
 
@@ -216,10 +216,10 @@ Canvas pages and artboards. Every screen × state below is **changed** against t
 | Page | Artboards | States covered |
 |---|---|---|
 | Brief | Brief (`Main`) | the brief and D1 to D19 |
-| System | System-Overlays, System-Hints, System-RunResult, System-Insights, System-HeaderActions, Tour-375, Help-1280 | the overlay model and queue, the z and scrim tokens, the hint variants, chip states and counts, insights anatomy and the rule-change line, header buttons before and after, the tour as a modal, help as a right panel |
-| Tidy-up results | Home-Running/Done/Partial ×375, ×1280; Confirm-Tidy ×2; RunSheet-Running/Done/Partial ×2; JustFiled ×2; Requests ×2 | running, done, partly done; confirm; run sheet on the phone and desktop panel; Just filed as a table; requests waiting, running, done, failed |
-| Bower's notes | Note-JobOffer ×2, Note-Rental ×2, Note-Summary ×2, Note-RuleChanged ×2, Note-Converted-375, Note-Converted-1280, Note-Converted-Closed-375, Note-Folded ×2 | a kind with score, a kind with a weekly price, a kind-less note, the rule change with "What changed" open (375), the text copy of a document of no listed kind with its insights and properties (open and folded), insights and Made from folded |
-| Folders and Compare | Folder-List ×2, Sidebar-Default-1280, Sidebar-Resize-1280, Compare-Cards-375, Compare-Sort-375, Compare-Table-1280, More-Rename-375, Rename ×2 | folder with a subfolder first, the suggestion hint, the resize handle idle and dragging with a tooltip, phone sort, desktop Score column, More with Rename, the Rename dialog |
+| System | Home-Done-375-Light, RunSheet-Done-375-Light, Note-JobOffer-375-Light, Folder-List-1280-Light; System-Overlays, System-Hints, System-RunResult, System-Insights, System-HeaderActions; Tour-375, Help-1280 | the light theme for the chip, sheet, note and folder; the overlay model and queue, the z and scrim tokens, the hint variants, bar states and counts, Bower's note anatomy and the rule-change line, header buttons before and after, the tour as a modal, help as a right panel |
+| Tidy-up results | Home-Running/Done/Partial ×375, ×1280; Confirm-Tidy ×2; RunSheet-Running/Done/Partial ×2; JustFiled ×2; Requests ×2; Requests-Menu-375 | running, done (bar until seen), partly done; confirm; run sheet over the matching Home on the phone and as a desktop panel; Just filed as a table with Needs you first; requests in the inbox, being done, done and did not finish; the request's More menu |
+| Bower's notes | Note-JobOffer ×2, Note-Rental ×2, Note-Summary ×2 (an answer, "Job fit ratings"), Note-RuleChanged ×2, Note-Converted ×2, Note-Converted-Closed-375, Note-Folded ×2, Note-Running-375 | a kind with score, a kind with a weekly price, a note of no kind, the rule change with "What changed" open (375), the text copy of a document of no listed kind (open and folded), Bower's note and Made from folded, the tidy-up bar while reading |
+| Folders and Compare | Folder-List ×2, Folder-Running-1280, Sidebar-Default-1280, Sidebar-Resize-1280, Compare-Cards-375, Compare-Sort-375, Compare-Table-1280, More-Rename-375, Rename ×2, Ask-Sheet-375, Ask-Dialog-1280, Ask-Done-375 | folder with a subfolder first, the suggestion hint, the bar while browsing, the resize handle idle and dragging with a tooltip, phone sort, desktop Score column, More with Rename, the send-to-Bower sheet for Rename and Ask, the toast with Undo |
 | Add and dictation | Explore-A/B/C-375 (grey sketches of three directions); Home-Uploading-375, Add-Resume-375, SignOut-Uploading-375; Add-PileEmpty-375, Add-PileFilling-375, Add-Dictating-375, Add-PileOpen-375, Add-Piles-1280; Confirm-Piles-375, Confirm-Piles-1280; Dictate-Bower-375, System-Dictate | the directions compared; a pile uploading while the person is on Home; uploads resumed after the app was closed; sign-out with unfinished uploads; a new pile empty and filling (uploaded, uploading, queued); dictating the pile's note; an earlier pile opened to edit; piles on desktop; Is that everything? with piles; the five dictation states |
 | Wireframes | Wire-* (16) | the grey structure of Home, run sheet, Just filed, Requests, job note, folder, Compare and Add at both widths |
 
@@ -317,6 +317,8 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - `state` is `partial` when the run failed and `created + updated + filed > 0`.
   - The context note and instruction notes are never items or counts.
   - Unit tests: done, done with no filing but with updates (the 1.11 case), partial (the 1.9 case), failed with nothing, a recovered stale run from `last-run.json` with full items (R-RUNNER-2).
+- [ ] **R-RUN-5.** A partly done run keeps the four counts; the things left in the inbox count as "needs you" ("0 filed · 3 new notes · 0 updated · 5 needs you"), and the warn box says what they are.
+- [ ] **R-RUN-6.** Voice: the bird's bubble on Home speaks as Bower ("I wrote 3 notes…"); every other surface speaks about Bower ("Bower wrote 3 notes…"). This is the app's existing rule.
 - [ ] **R-RUN-2.** `runSentence(outcome)` is the only source of result text. Copy table:
 
   | ID | State | Text |
@@ -325,6 +327,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   | RUN-S2 | done, all zero | "Nothing new: the inbox was empty." |
   | RUN-S3 | partial | "I wrote {created} notes, then stopped before filing your {left} things." |
   | RUN-S4 | failed | "{reason sentence} Nothing changed; your {n} things are still in the inbox." |
+  | RUN-S6 | short form | Where space is tight (the bar, the Last tidy-up card) "new notes" is shortened to "new": "2 filed · 3 new · 2 updated · 1 needs you". No count is ever dropped except a zero; "needs you" is always shown when above zero. On a phone the bar shows the state on one line and the counts on a second. |
   | RUN-S5 | running | "Tidying up {n} things. It takes a few minutes; you can keep adding." |
 
 - [ ] **R-RUN-3.** `cleanQuote(added)`:
@@ -379,13 +382,13 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   6. Done and partial: `run-summary` stats (four tiles; "needs you" and "still in inbox" are amber when above 0).
   7. Done: the quote with the bird (RUN-quote), when `quote` is present.
   8. Partial: a warn box with RUN-S3, the link to the folder that holds the new notes, and "**Finish the tidy-up** files them without writing the notes again." Then the steps, with the failed one marked "stopped".
-  9. The rows (done, and running once known): an icon (34 px); the name, wrapping to 2 lines, left-aligned, then ellipsis; the where-line with a PARA mark and a path; an action tag (New note, Updated, Filed, Needs you). This replaces the centred bubbles of 2.3. On the phone at most 4 rows, then "See everything".
+  9. The rows (done, and running once known), with **Needs you first**: an icon (34 px); the name, wrapping to 2 lines, left-aligned, then ellipsis; the where-line with a PARA mark and a path; an action tag (New note, Updated, Filed, Needs you). This replaces the centred bubbles of 2.3. On the phone at most 4 rows, then "See everything".
   10. Actions:
       - Running: "Close".
       - Done: "See everything" (goes to `/just-filed?run=<key>`) and "Close".
       - Partial: "Finish the tidy-up" and "Not now".
-      - Failed: "Try again" and "Not now".
-  11. Running only: the note "You can close this. Bower carries on; the bar at the bottom shows how it goes." On desktop it reads "the chip at the top".
+      - Failed: "Tidy up again" (opens the confirm dialog) and "Not now".
+  11. Running only: the note "You can close this. Bower carries on; the tidy-up bar above the tabs shows how it goes." On desktop it reads "the tidy-up bar at the top". In people's words the chip is always "the tidy-up bar".
 - **Interactions:**
   - "Finish the tidy-up" and "Try again" go straight to the confirm dialog with the counts filled in. This is two steps, not three (round 5 log J1).
   - Closing is optimistic, and the run continues.
@@ -422,7 +425,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   | CONF-2 | "Tidy up now, or add the rest of the pile first." |
   | CONF-3 | "{n} things in your inbox" |
   | CONF-4 | "{files} files, {links} links · and {r} request(s)" |
-  | CONF-5 | "A tidy-up takes a few minutes and uses one run of your Claude plan." |
+  | CONF-5 | "A tidy-up takes a few minutes and uses 1 of your {limit} runs today." (the same quota sentence as "Just this, now"; its numbers come from the Worker, Q4) |
 
   Buttons: "Yes, tidy up" and "Add more first".
 - **Acceptance criteria:**
@@ -459,7 +462,9 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - Header: "Just filed", the line "What each tidy-up did: what is new, what changed, where things went.", and "Mark all seen" (desktop in the header, phone at the end).
   - A summary card: when ("Today, 13:57"), duration, state, `run-summary stats`.
   - **A table at every width.**
-    - Desktop: a real `<table>` with the columns "What Bower did", "Now called", "You added", "Where it is", "Bower's note".
+    - Desktop: a real `<table>` with the columns "What Bower did", "Now called", "You added", "Where it is", "What changed". Under it, the pile it came from: "From your pile: …".
+    - Phone: the intro line, the summary card with the pile line, the rows grouped Needs you, New notes, Updated, Filed, then "Mark all seen" and "Earlier tidy-ups" at the end.
+    - A row's origin reads "from your clip (rentals.example)", never "from clip from…". An earlier partly done run finished later reads "Partly done · 3 new · completed with Finish at 13:01".
     - Phone: the same table with `role="table"` rows laid out as stacked cells (name; where-line; "from {old name}" or the change note), grouped by action: New notes, Updated, Filed, Needs you.
   - "Earlier tidy-ups": `<details>` per run with when, duration, state (Done, Partly done in warn, Did not finish in danger) and inline counts. Failed and partial runs are listed. A Do-it-now run reads "1 request · 4 new · 4 updated", never "0 things".
 - **Rows:**
@@ -549,7 +554,8 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
      - head: bird, "Bower's note", the origin legend (only the origins used);
      - the rule-change line (R-INS-3);
      - **Summary**: the callout lines with origin squares and "Check";
-     - **Key facts**: 1 to 4 tiles (4 across on desktop, 2 on the phone) and the button "All {n} details" opening Details in place;
+     - **Key facts**: 1 to 4 tiles (4 across on desktop, 2 on the phone);
+     - **Details**: every other field, always shown when the box is open (R-INS-7);
      - **What to check**: items from `not_stated` (a kind) or the note's `## What to check` / `## Before you apply, check` section, with "Copy as questions for the {who}" (the agent, the employer, …).
   7. **Body**: the rest of the note. The top callout, the key-facts caption and the separate KeyFacts block are not rendered again.
   8. **Pager**: at the very end, after the body, separated by a rule. "‹ {prev}" · "{i} of {n} {kind plural}" · "{next} ›". It counts notes **of the same kind** in the folder, or all notes when the note has no kind. Desktop keys `[` and `]`.
@@ -573,7 +579,6 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
   | INS-2 | "Summary" |
   | INS-3 | "Key facts" |
   | INS-4 | "What to check" |
-  | INS-5 | "All {n} details" |
   | INS-6 | "Copy as questions for the {who}" |
   | INS-7 | "Updated {date} · {change}" |
   | INS-8 | "What changed" / "Hide" |
@@ -588,6 +593,8 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
   - [ ] R-NOTE-4: the pager moves after the body and counts the same kind (fixes 3.14 pager).
   - [ ] R-NOTE-5: the About panel drops Key facts and shows resolved names.
   - [ ] R-NOTE-8: the text copy of a document of no listed kind renders as on Note-Converted-*: header, Made from (the original), the Bower's note box, the divider, the full text. Its title is the original's base name ("CV 2026"), never its first heading (fixes 3.2). Folding the box and Made from leaves the header and the document.
+  - [ ] R-NOTE-9: small text controls ("What changed", "Hide", "Change" next to the dictation language) have a 44 px hit area; where-lines and reasons in the run sheet and Just filed wrap to two lines; file names in a pile wrap to two lines.
+  - [ ] R-NOTE-10: on a phone, a note's top bar shows the folder's name next to the back chevron ("‹ Applications"), as the boards do.
   - [ ] R-NOTE-6: phone lists wrap titles to two lines (`-webkit-line-clamp: 2`) in the folder list, Recent, Compare cards and the tree's phone view.
   - [ ] R-INS-1: `bower-note-box.tsx` replaces the top-box rendering on the note page; the file page's `BowerNote` uses the same component.
   - [ ] R-INS-2: key facts are rendered only in the box; the caption "Key facts for a … set in your rules" is removed (fixes 3.14).
@@ -595,6 +602,7 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
   - [ ] R-INS-4: "What to check" reads `not_stated` or the named section; the copy button copies one question per line.
   - [ ] R-INS-5: the Bower's note box folds (boards Note-Folded-*). Its head is a `<button aria-expanded aria-controls>` of 48 px with the bird, "Bower's note" and a chevron. Folded, it shows one line under the head: the score pill when there is one, then the first key facts inline ("£72,000 a year · starts 3 Nov · reply by 14 Oct") and a "{n} to check" tag; the summary lines are hidden. The choice is one device preference for every note (`bower:pref:noteFolded`), open by default, never per note. The same fold applies to the insights on the file page. Height is not animated; the chevron turns in `--motion-fast` (not at all under reduced motion).
   - [ ] R-INS-6: each summary line keeps the app's origin square: 20 px, the origin's tint, and its symbol (file, notes, globe, person), as `.bower-origin` draws it today; the legend under the title names the origins used in their colours ("from the file, your notes"). "Check" stays at the end of the line.
+  - [ ] R-INS-8: `bower_updated`, `bower_change`, `bower_before`, `by`, `pile_note` and `facts` join `BOOKKEEPING_KEYS` (`details.tsx`), so they never become Details rows or Compare columns.
   - [ ] R-INS-7: open shows everything, with no second fold inside: Summary, Key facts (1 to 4 tiles), Details (every other field of the kind or of `facts:`, label and value, with its origin square when not from the file), What to check. The "All {n} details" link and the separate Details toggle on the note page go.
   - [ ] R-NOTE-7: Made from folds the same way. Open: a small "Made from" caption button with a chevron above the source buttons. Folded: one 44 px button "Made from your clip and a job advert" that opens it. Preference `bower:pref:sourcesFolded`, open by default. The folded label names the sources in plain words ("your clip", "a job advert", "your Word document", "a web page").
   - [ ] R-KF-1: money values keep their period. When the value contains a period ("a week", "/week", "per week", "pw", "a month", "/month", "pcm", "a year", "/year", "per annum"), the tile shows the amount as the value and the normalised period ("a week", "a month", "a year") as the label. Otherwise the kind's `factLabel`. Unit tests with "£340 a week", "AUD 350/week", "£1,450 pcm" and "£72,000". Fixes 1.12.
@@ -606,7 +614,7 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
   1. Phone top bar: back, folder name, More.
   2. Header: the PARA mark (28), h1 (24 on the phone, 30 on desktop), and the meta line "7 things · last filed today".
   3. Header actions (`header-action.tsx`): "Pin to Home" / "Pinned", "Ask Bower about it", and on desktop "Open in Drive" (on the phone it moves to More).
-  4. Suggestion hint (R-HINT): "Ask Bower about this folder. Your question waits in the inbox for the next tidy-up." plus two chips; a chip opens the send-to-Bower sheet with its text (R-ASK). Shown until dismissed.
+  4. Suggestion hint (R-HINT): "Try asking. Your question waits in the inbox for the next tidy-up." plus two chips; a chip opens the send-to-Bower sheet with its text (R-ASK). Shown until dismissed.
   5. View switch, when comparable: segmented "List" / "Compare {n} {plural}" (`role="tablist"`).
   6. Filters and tools:
      - All / Originals {n} / By Bower {n}, with an (i) info-pop "By Bower is what Bower wrote…";
@@ -647,7 +655,7 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
 - **Phone:**
   - The toolbar holds a "Sort: {field}, {direction}" button (full width) and "Filter".
   - Sort opens a Dialog (`Compare-Sort-375`):
-    - radio list: Your score (when present, subtitle "added by your rule"), then the kind's compare fields in order, Status, Name;
+    - radio list: Your score (when present, subtitle "added by your rule"), then every compare field the desktop table shows (text fields such as Office sort A to Z), Status, Name;
     - segmented "High first" / "Low first" (for text fields "A to Z" / "Z to A"; for dates "Soonest first" / "Latest first");
     - button "Show {n} {plural}".
   - The "Default order" chip is removed.
@@ -663,6 +671,7 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
   - [ ] R-CMP-3: extra numeric fields as columns (unit test in `compare.ts`).
   - [ ] R-CMP-4: the sort persists per folder; "Default order" is removed.
   - [ ] R-CMP-5: phone card values wrap instead of being cut (W5).
+  - [ ] R-CMP-6: at most 3 extra numeric columns, `score` first.
 
 ### 6.13 More, Rename and Ask Bower — R-MORE, R-ASK (boards More-Rename-375, Rename-*, Ask-*)
 
@@ -679,7 +688,7 @@ Rename, Move, "Ask Bower about it" on a folder, "Ask Bower about this" in More, 
 4. **Primary button:** "Put in the inbox".
 5. **Secondary text button:** "Ask now, on its own" / "Rename now, on its own", with the line "Uses 1 of your 20 runs today; the rest of the inbox waits." Its disabled states are the same as "Just this, now" (R-REQ).
 
-After "Put in the inbox", a toast above the tab bar says "In your inbox. Bower answers at the next tidy-up." with "Undo" (board Ask-Done-375). Undo deletes the instruction note it just wrote. The request then shows in the Bower tab's Requests and in the inbox count ("and 1 request").
+After "Put in the inbox", a toast above the tab bar says "In your inbox. Bower answers at the next tidy-up." with "Undo" (board Ask-Done-375). Undo sends the instruction note it just wrote to Drive's Bin. The request then shows in the Bower tab's Requests and in the inbox count ("and 1 request").
 
 **Suggestion chips.** A chip in a suggestion hint (R-HINT) opens this sheet with its text in the field. It never sends by itself, and never fills the Bower tab's box and leaves the page.
 
@@ -690,6 +699,8 @@ After "Put in the inbox", a toast above the tab bar says "In your inbox. Bower a
   - Folders are left out: a folder renamed by the agent becomes a new folder (its Drive id and its pins change), and `find_moves` only keeps ids for files.
   - Rename is not shown for Bower's own files (`isAppFile`) or the PARA roots.
 - **Validation:**
+
+  - The field shows the name without extension for a note; a file shows its extension locked after the field.
 
   | Case | Message |
   |---|---|
@@ -703,7 +714,7 @@ After "Put in the inbox", a toast above the tab bar says "In your inbox. Bower a
 **Acceptance criteria:**
 
 - [ ] R-ASK-1: `send-to-bower.tsx` is on Overlay, with the layout and copy above; it is used by Rename, Move, Ask Bower about it/this and suggestion chips.
-- [ ] R-ASK-2: "Put in the inbox" writes the instruction note (`INSTRUCTION_APP_PROPERTIES`, so the runner does not quarantine it) and shows the toast with Undo; Undo deletes that note.
+- [ ] R-ASK-2: "Put in the inbox" writes the instruction note (`INSTRUCTION_APP_PROPERTIES`, so the runner does not quarantine it) and shows the toast with Undo; Undo sends that note to Drive's Bin (`deleteFileHttp`, which only trashes).
 - [ ] R-ASK-3: the "…now, on its own" button uses the shared helper of R-REQ-3 and its disabled states.
 - [ ] R-MORE-1: Rename for notes and files only, with validation.
 - [ ] R-MORE-2: `rename-request.ts` writes "Rename {path} to {new name}" (unit test).
@@ -851,6 +862,11 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
   3. Make a second pile of one file with another note.
   4. Reload.
   5. Check that both piles are there with their notes, and that the inbox holds two context notes, each listing only its own files.
+- [ ] **R-PILE-7:** "Yes, tidy up" closes and flushes every open pile (the final `## Applies to`, awaited) before calling `/process`.
+- [ ] **R-PILE-8:** before rewriting a pile note, the app checks that its parent is still `0-Inbox/`; when it is not, it writes a continuation note with the same `pile:`.
+- [ ] **R-PILE-9:** "From now on…" sentences in a pile note are read once, when the pile closes, not on every save.
+- [ ] **R-PILE-10:** "Remove this pile from the inbox" sends its files and note to Drive's Bin (`deleteFileHttp`, which only trashes) and is disabled while a run is in flight; `ARCHITECTURE.md` records this next to request Remove.
+- [ ] **R-PILE-11:** the pile note is created with `INSTRUCTION_APP_PROPERTIES`, so the runner does not quarantine it.
 - [ ] **R-ADD-1:** the "Waiting" state (a picked file held in memory) is gone; every attached file starts uploading at once.
 - [ ] **R-ADD-2:** Add, Home and the confirm dialog show the same count.
 
@@ -883,6 +899,8 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
 - While any upload is unfinished, `beforeunload` is set. The browser then shows its own "Leave site?" question; its words cannot be changed.
 - On the next open, the queue resumes and Add shows a hint: "2 files did not finish uploading last time. Bower is finishing them now; they stay in their pile."
 
+**Home while a pile uploads.** The bird says "Adding your pile. You can keep going; I'll say when it is all in." (HOME-UP-1). The upload bar's "Show" opens Add scrolled to that pile.
+
 **Signing out.** With unfinished uploads, sign-out first shows an alert dialog:
 
 - Title: "2 files are still uploading".
@@ -910,6 +928,10 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
 - [ ] **R-UPL-3:** `beforeunload` is set only while uploads are unfinished; no in-app navigation is blocked.
 - [ ] **R-UPL-4:** the sign-out dialog works, and "Sign out anyway" clears the queue (unit test on the store).
 - [ ] **R-UPL-5:** the resumable protocol: a 308 answer resumes from the confirmed byte, and a 404 restarts the file (unit test with a mocked fetch).
+- [ ] **R-UPL-6:** upload names are reserved against the inbox listing and the upload queue (`uniqueName`), so two files never share a name in `0-Inbox/`.
+- [ ] **R-UPL-7:** the queue is keyed by user id; `navigator.locks` gives one tab the queue; IndexedDB `DB_VERSION` goes to 3; one function, `clearUploadQueue(userId)`, clears it on sign-out (R-UPL-4), `DELETE /me` and "Forget this device".
+- [ ] **R-UPL-8:** every durable upload uses Drive's resumable session; after a reload the status is asked with `PUT` and `Content-Range: bytes */<size>` (200/201 means done, take the file id from the answer); progress comes from XHR `upload.onprogress` on each 8 MiB chunk.
+- [ ] **R-UPL-9:** the durable copy is capped at 200 MB per file; `QuotaExceededError` falls back to "Keep Bower open until this one is in"; PILE-6 notes that `beforeunload` is best effort on iOS and in installed apps.
 
 **Cost:** M.
 
@@ -931,7 +953,7 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
   | State | Visual | Text | Live region |
   |---|---|---|---|
   | ready | mic icon, muted | — | — |
-  | asking (first use) | mic highlighted | hint: "Allow the microphone when your browser asks. Bower never keeps the sound." | — |
+  | asking (first use) | mic highlighted | hint: "Allow the microphone when your browser asks. Your browser turns speech into text; Bower never keeps the sound." | — |
   | listening | brand-filled square stop icon, 4 px focus ring; box border brand | status line: "Listening in English (UK) · Change"; interim words in muted colour at the cursor | `role="status"`: "Listening" / "Stopped" |
   | blocked | mic muted | "The microphone is blocked. Allow it in your browser's site settings, then tap the mic again." (danger, `role="alert"`) | — |
   | not available | no button | the one-time tip | — |
@@ -966,6 +988,8 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
 - **R-RUNNER-2.** `last-run.json` carries the same `items`, `created`, `updated`, `left`, `setAside` and `added` as the report, so a recovered stale run is complete (inventory A1 gap 4). Cost S.
 - **R-RUNNER-3 (Worker).** The push body uses the four counts: "Done: 6 filed, 6 new notes, 2 updated" / "Partly done: 5 still in your inbox" / "Did not finish: nothing changed". Cost S.
 - **R-RUNNER-4.** A `phase` field on running reports: `queued`, `reading`, `writing`, `saving`, plus `total` and `done` counts when known. `run.sh` reports `reading` after conversion, `writing` when the agent starts, and `saving` before copy up. A `done` count while writing needs the agent to report progress. That is out of scope, so the step shows "Writing notes" without "k of n" unless it is cheap. Cost S to M.
+- **R-RUNNER-6.** The runner holds back, for the next tidy-up, every pending inbox file created or modified after `requestedAt` **plus a grace of 15 seconds**, and every context note modified in that window together with the files it lists. The grace covers the gap between Drive's clock and the Worker's: a pile note or request note saved just before "Yes, tidy up" or "Just this, now" is never skipped. Files that land later, including files still uploading when the run was asked for, wait for the next tidy-up (R-UPL). Serves R-PILE-7 and R-REQ-3.
+- **R-RUNNER-7.** `run.sh` appends `## The document` and the converted text to a document's text copy (R-AG-2, T9) by finding pandoc's output for that original's path. When there is no conversion, it writes nothing (no empty section).
 - **R-RUNNER-5.** A run is `partial` when it failed and `created + updated + items.to > 0`. The Worker keeps `state: failed`, and the app derives partial (no API change beyond the new arrays).
 
 **Rulebook** (`vault-template/CLAUDE.md`; bump `bower_rules_version` once for all of these; the prompts in `agent/prompts/ingest.md` point to the new rules):
@@ -995,10 +1019,10 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
   - Money fields are written with their period when the source states one ("£340 a week", "£1,450 a month").
   - `added.txt` is plain words for the owner with no internal words (index, hub, orphaned, crashed, run, frontmatter), in the first person, with no final full stop.
   - Serves 1.12, 2.2.
-- **R-AG-7.** Instructions with `op: rename` rename the target keeping its id, and the runner books it like a move.
+- **R-AG-7.** A rename request is written in words plus a path, like a move request ("Rename {path} to {new name}"), and handled the same way: the agent renames the file, and the runner keeps its id and books the rename. There are no `op:` fields.
 - **R-AG-9 (runner, proposed).** PDFs get the same treatment. `run.sh` converts a text PDF with `pdftotext -layout` (poppler-utils, installed in the job like pandoc) so the runner can append the text as it does for Word files (T9). A scanned PDF with no text layer gets the copy with its properties and Bower's note, and the line "Scanned: no text to copy" under `## The document`.
   - Escalation: a new tool in the runner job (apt package, no runtime dependency in the app). Without it, PDFs get the metadata and insights only.
-- **R-AG-10.** Finishing a partly done tidy-up: a pending inbox file that already has a note whose `original:` names it, or that a context note's `pile_note` lists as done, is filed only; its note is not written again. The runner lists the previous failed run's `created[]` in the prompt as "already written this morning; do not write these again". Serves R-SHEET-4 and D3.
+- **R-AG-10.** Finishing a partly done tidy-up: a pending inbox file that already has a note whose `original:` names it is filed only; its note is not written again. The runner reads the previous failed run's `created[]` from `.bower/last-run.json` in the vault (written by R-RUNNER-2; the runner itself keeps nothing) and lists those paths in the prompt as "already written; do not write these again". Serves R-SHEET-4 and D3.
 - **R-AG-8.** Piles:
   - Each context note applies only to the files in its own `## Applies to` list. A file named in two context notes goes with the newest note.
   - A context note with an empty text only groups its files: file them as usual, with no extra note.
@@ -1028,10 +1052,10 @@ A tech-lead review of this spec (read-only, no code) raised the points below. Ea
 | # | Point | Resolution |
 |---|---|---|
 | T1 | "Finish the tidy-up" had no contract: the next run would write the pending files' notes again. | **R-AG-10:** a pending inbox file that already has a note whose `original:` names it (or whose `pile_note` lists it) is filed only; its note is not written again. The runner also passes the last failed run's `created[]` to the agent in the prompt, as "already written". |
-| T2 | Pile note against a run: a context note moved to `Processed/` by `rclone moveto` keeps its id, so the app's next rewrite would land in `Processed/`, and late files would wait with no note. | **R-PILE-7:** "Yes, tidy up" closes and flushes every open pile (final `## Applies to`, awaited) before `/process`. **R-PILE-8:** before any rewrite, the app checks that the note's parent is still `0-Inbox/`; if it is not, it starts a continuation note with the same `pile:`. **R-RUNNER-6:** the runner holds back a context note modified after `requestedAt`, together with the files it lists, for the next tidy-up. |
+| T2 | Pile note against a run (and the clock gap between Drive and the Worker): a context note moved to `Processed/` by `rclone moveto` keeps its id, so the app's next rewrite would land in `Processed/`, and late files would wait with no note. | **R-PILE-7:** "Yes, tidy up" closes and flushes every open pile (final `## Applies to`, awaited) before `/process`. **R-PILE-8:** before any rewrite, the app checks that the note's parent is still `0-Inbox/`; if it is not, it starts a continuation note with the same `pile:`. **R-RUNNER-6:** the runner holds back every pending inbox file and context note created or modified after `requestedAt` plus 15 seconds of grace, with the files a held note lists. The small window where a run moves a note between the app's parent check and its write is accepted: R-RUNNER-6 makes the late file wait with its continuation note. |
 | T3 | Duplicate names across piles: rclone skips duplicate names in one Drive folder, so a file would be silently left out. | **R-UPL-6:** names are reserved against the inbox listing **and** the upload queue (`uniqueName`). |
 | T4 | The upload queue needs a user scope, one tab at a time, a schema step, and to be cleared with the account. | **R-UPL-7:** the queue is keyed by user id; `navigator.locks` gives one tab the queue; IndexedDB `DB_VERSION` goes to 3; the queue is cleared on sign-out, `DELETE /me` and "Forget this device". |
-| T5 | Resent uploads could duplicate; small files would jump from 0 to 100%. | **R-UPL-8:** every durable upload uses Drive's resumable session (a resend is idempotent). After a reload, the status is asked with `PUT` and `Content-Range: bytes */<size>`, and a 200/201 there means done. Progress comes from XHR `upload.onprogress`, or 1 MiB chunks (a multiple of 256 KiB). |
+| T5 | Resent uploads could duplicate; small files would jump from 0 to 100%. | **R-UPL-8:** every durable upload uses Drive's resumable session (a resend is idempotent). After a reload, the status is asked with `PUT` and `Content-Range: bytes */<size>`, and a 200/201 there means done. Progress comes from XHR `upload.onprogress` on each chunk, with today's 8 MiB chunks. |
 | T6 | iOS storage limits. | **R-UPL-9:** the durable copy is capped at 200 MB per file; `QuotaExceededError` falls back to "Keep Bower open until this one is in"; `beforeunload` is best effort (iOS and installed apps often ignore it) and PILE-6 says so. |
 | T7 | A "From now on…" sentence in the pile note would add a rule on every autosave. | **R-PILE-9:** rule sentences are read once, when the pile closes. |
 | T8 | "Remove this pile" trashes the person's uploads from the app. | Kept as a person's action, documented in `ARCHITECTURE.md` next to request Remove. **R-PILE-10:** it is disabled while a run is in flight. |
@@ -1084,6 +1108,10 @@ The rulebook bump and the runner change deploy in the usual order: Worker, then 
 | Q1 | Should a document of **no listed kind** (a CV, a profile, a letter, a manual) get Bower's note without being asked? | **Answered 29 Sep: yes.** Its text copy carries the full text plus the extracted properties and Bower's note as foldable metadata (D21, R-AG-2, R-NOTE-8). PDFs through R-AG-9, which the lead should confirm. |
 | Q2 | Dictation sends audio to the browser vendor's speech service. | **Answered 29 Sep: yes**, with a Privacy line and the first-use hint (R-DICT-4). |
 | Q3 | The light `--color-danger` fails 4.5:1 for small text on its tinted background. | **Answered 29 Sep: yes**, darken to `#c21b1b` for text; keep `#e12020` for fills. |
+| Q4 | "Uses 1 of your 20 runs today" needs the Worker to return runs used and the daily limit (`DAILY_RUN_LIMIT` is set by the operator). This is a small API change. | **OPEN** (asked 29 Sep). Recommended: add `runsToday` and `dailyLimit` to `/status`. Otherwise the copy says "uses one run of your Claude plan" with no number. |
+| Q5 | On phones, hide the docked tidy-up bar while the on-screen keyboard is open, so it does not squeeze the Bower box or the pile note. | **OPEN** (asked 29 Sep). Recommended: hide it while a text field has focus. |
+| Q6 | The Tidy up button while a run is going reads "Tidy up after this one" and is disabled; a disabled button that promises a queued action can mislead. | **OPEN** (asked 29 Sep). Recommended: "Tidy-up running…" (disabled); the bar shows the run. |
+| Q7 | The partly done bar says "Finish", but a tap opens the sheet, then Finish, then the confirm dialog. | **OPEN** (asked 29 Sep). Recommended: the bar says "See" like the done bar; the sheet's "Finish the tidy-up" goes straight to the confirm dialog. |
 
 ## 10. Completeness check
 
