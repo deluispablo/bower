@@ -4,11 +4,11 @@ import { useRoute } from 'preact-iso';
 
 import { AboutPanel } from '../components/about-panel.js';
 import { isBowerWritten } from '../bower-written.js';
-import { resolveOriginal } from '../companion.js';
+import { originalDisplayName, resolveOriginal } from '../companion.js';
 import { kindById, statusLabel } from '../kinds.js';
 import type { Kind } from '../kinds.js';
 import { setFrontmatterValue, statusOptionLabel } from '../compare.js';
-import { IconChat, IconNote } from '../components/icons.js';
+import { IconChat, IconFile, IconNote } from '../components/icons.js';
 import { MadeFrom, madeFromSources } from '../components/made-from.js';
 import { showToast } from '../toast-store.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
@@ -83,10 +83,10 @@ function Crumb({ crumbs }: CrumbProps): JSX.Element {
     <>
       {crumbs.length > 0 && (
         <nav class="breadcrumb" aria-label="Folder">
-          {crumbs.map((crumb) => (
+          {crumbs.map((crumb, at) => (
             <span key={crumb.path}>
+              {at > 0 && <span aria-hidden="true"> / </span>}
               <a href={folderHref(crumb.path)}>{crumb.name}</a>
-              <span aria-hidden="true"> / </span>
             </span>
           ))}
         </nav>
@@ -296,24 +296,106 @@ function StatusSelect({
   );
 }
 
+/** What a text copy of a document shows in place of a kind (R-NOTE-8). */
+export interface TextCopy {
+  /** The original's file name: "CV 2026.docx". */
+  original: string;
+  /** The original's base name, the page's title: "CV 2026". */
+  title: string;
+  /** The kind chip: "Word document, as text". */
+  label: string;
+}
+
+function documentWord(fileName: string): string {
+  const ext = /\.([^./]+)$/.exec(fileName)?.[1]?.toLowerCase() ?? '';
+  if (ext === 'pdf') return 'PDF';
+  if (ext === 'html' || ext === 'htm') return 'Web page';
+  if (ext === 'epub') return 'Book';
+  if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return 'Word document';
+  return 'Document';
+}
+
+/**
+ * The text copy of a document of no listed kind (R-NOTE-8, D21): a note that
+ * names a file that is not a note as its `original`, and has no kind. `null`
+ * for anything else. Its title is the original's base name, never a heading.
+ */
+export function textCopyOf(meta: NoteMeta): TextCopy | null {
+  if (meta.kind !== undefined || meta.type === 'answer') return null;
+  if (meta.original === undefined) return null;
+  const original = originalDisplayName(meta.original);
+  if (original === '' || /\.md$/i.test(original)) return null;
+  return {
+    original,
+    title: original.replace(/\.[^./]+$/, ''),
+    label: `${documentWord(original)}, as text`,
+  };
+}
+
+/**
+ * Splits a rendered note at the runner's "The document" heading: what comes
+ * before it, and the document's text after it (the heading itself goes; the
+ * page draws its own divider). `null` when the note has no such heading.
+ */
+export function splitDocument(
+  html: string,
+): { before: string; after: string } | null {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const children = Array.from(template.content.children);
+  const at = children.findIndex(
+    (child) =>
+      /^H[1-6]$/.test(child.tagName) &&
+      (child.textContent ?? '').trim().toLowerCase() === 'the document',
+  );
+  if (at === -1) return null;
+  const join = (nodes: Element[]): string =>
+    nodes.map((child) => child.outerHTML).join('\n');
+  return {
+    before: join(children.slice(0, at)),
+    after: join(children.slice(at + 1)),
+  };
+}
+
+/** The divider before a text copy's document. */
+function DocumentDivider({ original }: { original: string }): JSX.Element {
+  return (
+    <h2 class="note-document-divider">
+      <span>The document</span>
+      <span aria-hidden="true">·</span>
+      <span class="note-document-caption">
+        {`the text of ${original}, unchanged`}
+      </span>
+    </h2>
+  );
+}
+
 /** The kind row of a note Bower wrote: kind chip, By Bower tag, status. */
 function KindRow({
   meta,
   status,
   onStatus,
+  copy,
 }: {
   meta: NoteMeta;
   status: string;
   onStatus: (status: string) => void;
+  copy: TextCopy | null;
 }): JSX.Element {
   const kind = meta.kind === undefined ? undefined : kindById(meta.kind);
   return (
     <div class="note-kind-row">
       <span class="note-kind-chip">
         <span class="note-kind-icon" aria-hidden="true">
-          {meta.type === 'answer' ? <IconChat /> : <IconNote />}
+          {copy !== null ? (
+            <IconFile />
+          ) : meta.type === 'answer' ? (
+            <IconChat />
+          ) : (
+            <IconNote />
+          )}
         </span>
-        {kindChipLabel(meta)}
+        {copy !== null ? copy.label : kindChipLabel(meta)}
       </span>
       <BowerTag />
       {kind !== undefined && kind.statuses.length > 0 && (
@@ -689,7 +771,13 @@ export function Note() {
       : null;
   const opening =
     load.status === 'ready' ? splitOpening(load.rendered.html) : null;
-  const checked = opening === null ? null : takeCheckSection(opening.rest);
+  const documentParts = opening === null ? null : splitDocument(opening.rest);
+  const textCopy =
+    meta !== null && documentParts !== null ? textCopyOf(meta) : null;
+  const checked =
+    opening === null
+      ? null
+      : takeCheckSection(documentParts?.before ?? opening.rest);
   const question =
     meta?.type === 'answer' && typeof meta.fields.question === 'string'
       ? meta.fields.question
@@ -769,9 +857,10 @@ export function Note() {
 
   const isEditing = editing !== null && editing.id === id;
   const title =
-    load.status === 'ready' && load.id === id
+    textCopy?.title ??
+    (load.status === 'ready' && load.id === id
       ? computeNoteTitle(file, load.text)
-      : computeNoteTitle(file);
+      : computeNoteTitle(file));
   // "Edit the text" (the note menu) is left out for Bower's own files (spec
   // §14) — a broader set than `isProtectedNote`, which only blocks the
   // actual save (drive.ts): About-Me.md and README.md, say, are technically
@@ -793,6 +882,7 @@ export function Note() {
           meta={meta}
           status={(statusPick ?? meta.status ?? '').toLowerCase()}
           onStatus={(status) => void handleStatus(status)}
+          copy={textCopy}
         />
       )}
       <div class="note-edit-header">
@@ -842,7 +932,11 @@ export function Note() {
               source: meta.fields.source,
               kind: meta.kind,
               lookup: index,
-            })}
+            }).map((source) =>
+              textCopy !== null && source.key.startsWith('original:')
+                ? { ...source, role: 'the original' }
+                : source,
+            )}
           />
         </>
       )}
@@ -906,6 +1000,12 @@ export function Note() {
               </p>
             )}
           <NoteBody html={checked?.rest ?? opening?.rest ?? ''} />
+          {textCopy !== null && documentParts !== null && (
+            <>
+              <DocumentDivider original={textCopy.original} />
+              <NoteBody html={documentParts.after} />
+            </>
+          )}
           {canAppend && appendOpen && (
             <AppendForm key={id} onAppend={handleAppend} />
           )}

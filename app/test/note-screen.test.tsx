@@ -38,7 +38,39 @@ const SCAN: DriveFile = {
   modifiedTime: '2026-09-26T10:00:00Z',
 };
 
+const COPY = md('2-Areas/Work/CV 2026.md');
+const CV: DriveFile = {
+  id: 'id-cv',
+  name: 'CV 2026.docx',
+  mimeType:
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  parents: ['FOLDER_ID'],
+  path: '2-Areas/Work/CV 2026.docx',
+  modifiedTime: '2026-09-25T10:00:00Z',
+};
+
 const texts = new Map<string, string>([
+  [
+    COPY.id,
+    `---
+by: bower
+tags: [work]
+created: 2026-09-25
+original: "[[CV 2026.docx]]"
+---
+
+> [!bower] Bower's note
+> A CV: six years in data engineering. (from the file)
+
+## The document
+
+# Alex, data engineer
+
+### Professional summary
+
+Six years of experience.
+`,
+  ],
   [
     LISTING.id,
     `---
@@ -101,7 +133,7 @@ const markSeen = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
 vi.mock('../src/seen.js', () => ({ markSeen }));
 vi.mock('../src/use-request-rows.js', () => ({ useRequestRows: () => [] }));
 
-const index = buildVaultIndex([LISTING, ANSWER, CHECKLIST, SCAN]);
+const index = buildVaultIndex([LISTING, ANSWER, CHECKLIST, SCAN, COPY, CV]);
 const noop = (): Promise<void> => Promise.resolve();
 const saveEditedNote =
   vi.fn<
@@ -126,7 +158,8 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
   }),
 }));
 
-const { Note } = await import('../src/routes/note.js');
+const { Note, splitDocument, textCopyOf } =
+  await import('../src/routes/note.js');
 const { AboutPanel } = await import('../src/components/about-panel.js');
 const { renderNote } = await import('../src/markdown/render.js');
 const { noteMetaFrom } = await import('../src/note-meta.js');
@@ -277,6 +310,74 @@ describe('Note screen (#609)', () => {
     await mount(LISTING.id);
     await waitFor(() => markSeen.mock.calls.some(([id]) => id === SCAN.id));
     expect(markSeen).toHaveBeenCalledWith(SCAN.id);
+  });
+});
+
+describe('Text copy of a document (#760, R-NOTE-8)', () => {
+  it('shows the original as the title, Made from, the box, the divider and the text', async () => {
+    await mount(COPY.id);
+
+    expect(root.querySelector('h1')?.textContent).toBe('CV 2026');
+    expect(root.querySelector('.note-kind-chip')?.textContent).toBe(
+      'Word document, as text',
+    );
+    const original = root.querySelector('.made-from a[href="/file/id-cv"]');
+    expect(original?.textContent).toContain('CV 2026.docx');
+    expect(original?.textContent).toContain('the original');
+
+    const divider = root.querySelector('.note-document-divider');
+    expect(divider?.textContent).toContain('The document');
+    expect(divider?.textContent).toContain(
+      'the text of CV 2026.docx, unchanged',
+    );
+    // The runner's own heading is gone: one "The document" only.
+    expect(root.textContent?.match(/The document/g)).toHaveLength(1);
+    expect(root.textContent).toContain('Professional summary');
+    expect(root.textContent).toContain('Six years of experience.');
+
+    const order = [
+      '.note-kind-row',
+      '.made-from',
+      '.bower-note-box',
+      '.note-document-divider',
+      '.markdown h3',
+    ];
+    const positions = order.map((selector) => {
+      const element = root.querySelector(selector);
+      return element === null
+        ? -1
+        : Array.from(root.querySelectorAll('*')).indexOf(element);
+    });
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  });
+
+  it('does not treat a note of a listed kind, or a note of a note, as a text copy', () => {
+    const kind = noteMetaFrom({ kind: 'job-offer', original: '[[CV.docx]]' });
+    expect(textCopyOf(kind)).toBeNull();
+    const clip = noteMetaFrom({ original: '[[Some clip.md]]' });
+    expect(textCopyOf(clip)).toBeNull();
+    const plain = noteMetaFrom({ tags: ['x'] });
+    expect(textCopyOf(plain)).toBeNull();
+  });
+
+  it('names the chip after the original: PDF, Web page, Word document', () => {
+    const label = (original: string): string | undefined =>
+      textCopyOf(noteMetaFrom({ original: `[[${original}]]` }))?.label;
+    expect(label('Manual.pdf')).toBe('PDF, as text');
+    expect(label('Page.html')).toBe('Web page, as text');
+    expect(label('Letter.docx')).toBe('Word document, as text');
+  });
+
+  it('splits at "The document" and leaves the text untouched', () => {
+    const parts = splitDocument(
+      '<p>a</p><h2>The document</h2><h3>Skills</h3><p>SQL</p>',
+    );
+    expect(parts).toEqual({
+      before: '<p>a</p>',
+      after: '<h3>Skills</h3>\n<p>SQL</p>',
+    });
+    expect(splitDocument('<p>a</p><h2>Other</h2>')).toBeNull();
   });
 });
 
