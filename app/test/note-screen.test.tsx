@@ -335,9 +335,9 @@ describe('About panel names (R-NOTE-5)', () => {
 
   it('resolves the original the way the folder screen does', async () => {
     const { originalFileOf } = await import('../src/components/about-panel.js');
-    expect(originalFileOf(index, LISTING, '[[Arlington Road, 2 bed.pdf]]')).toBe(
-      index.byPath.get(SCAN.path),
-    );
+    expect(
+      originalFileOf(index, LISTING, '[[Arlington Road, 2 bed.pdf]]'),
+    ).toBe(index.byPath.get(SCAN.path));
     expect(originalFileOf(index, ANSWER, '[[Missing.pdf]]')).toBeUndefined();
   });
 });

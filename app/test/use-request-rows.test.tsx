@@ -80,7 +80,9 @@ describe('useRequestRows', () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]?.state).toBe('tidying');
     expect(
-      requestsForNote(seen, '1-Projects/Jobs/offer.md', ['Data Lead, Northwind']),
+      requestsForNote(seen, '1-Projects/Jobs/offer.md', [
+        'Data Lead, Northwind',
+      ]),
     ).toHaveLength(1);
     expect(requestsForNote(seen, '1-Projects/Jobs/offer.md')).toHaveLength(0);
   });

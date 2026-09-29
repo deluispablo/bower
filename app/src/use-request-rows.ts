@@ -13,7 +13,9 @@ const RULES_PATH = 'Rules.md';
 
 /** The words of the instruction and answer notes, by file id, through the
  * vault's note cache; a note that cannot be read is left out. */
-function useNoteTexts(notes: readonly DriveFile[]): ReadonlyMap<string, string> {
+function useNoteTexts(
+  notes: readonly DriveFile[],
+): ReadonlyMap<string, string> {
   const { getNoteText } = useVault();
   const [texts, setTexts] = useState<ReadonlyMap<string, string>>(
     () => new Map(),

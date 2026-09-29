@@ -91,9 +91,8 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
   }),
 }));
 
-const { Note, walkFolder, pagerCount, pagerLabel } = await import(
-  '../src/routes/note.js'
-);
+const { Note, walkFolder, pagerCount, pagerLabel } =
+  await import('../src/routes/note.js');
 const { kindById } = await import('../src/kinds.js');
 const { noteMetaFrom } = await import('../src/note-meta.js');
 

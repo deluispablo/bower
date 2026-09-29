@@ -482,7 +482,9 @@ describe('requestsByTargetPath (#756, for #765 and #784)', () => {
     const move = row('waiting', 'Move “x” (1-Projects/Jobs/offer.md) to Done.');
     const rows = [ask, other, move];
     expect(
-      requestsForNote(rows, '1-Projects/Jobs/offer.md', ['data lead, Northwind']),
+      requestsForNote(rows, '1-Projects/Jobs/offer.md', [
+        'data lead, Northwind',
+      ]),
     ).toEqual([ask, move]);
     expect(requestsForNote(rows, '1-Projects/Jobs/offer.md')).toEqual([move]);
     expect(
