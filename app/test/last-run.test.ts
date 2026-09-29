@@ -128,3 +128,35 @@ describe('parseLastRun (#564)', () => {
     expect(parseLastRun(JSON.stringify(data))).toBeNull();
   });
 });
+
+describe('parseLastRun report fields (#743, R-RUNNER-2)', () => {
+  const base = JSON.parse(DONE_JSON) as Record<string, unknown>;
+
+  it('reads created, updated and left', () => {
+    const parsed = parseLastRun(
+      JSON.stringify({
+        ...base,
+        created: ['3-Resources/A.md', '', 7],
+        updated: [
+          { path: '2-Areas/B.md', what: 'Added a date' },
+          { path: 'C.md' },
+          { what: 'no path' },
+        ],
+        left: ['0-Inbox/D.pdf'],
+      }),
+    );
+    expect(parsed?.created).toEqual(['3-Resources/A.md']);
+    expect(parsed?.updated).toEqual([
+      { path: '2-Areas/B.md', what: 'Added a date' },
+      { path: 'C.md' },
+    ]);
+    expect(parsed?.left).toEqual(['0-Inbox/D.pdf']);
+  });
+
+  it('leaves them absent from an older runner', () => {
+    const parsed = parseLastRun(DONE_JSON);
+    expect(parsed).not.toHaveProperty('created');
+    expect(parsed).not.toHaveProperty('updated');
+    expect(parsed).not.toHaveProperty('left');
+  });
+});
