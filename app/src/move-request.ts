@@ -38,6 +38,13 @@ export function moveRequestText(
  * the real paths; only the display changes. Other text is returned as is.
  */
 export function requestRowText(text: string): string {
+  // Rename request (`Rename {path} to {new name}`): the old name, not the path.
+  const rename = /^Rename (.+?) to ([^/]+)$/.exec(text);
+  if (rename !== null) {
+    const [, path = '', name = ''] = rename;
+    const old = path.split('/').pop() ?? path;
+    return `Rename ${old} to ${name}`;
+  }
   const match = /^Move “(.+)” \((.+)\) to (.+)\.$/.exec(text);
   if (match === null) return text;
   const [, name = '', path = '', destination = ''] = match;
