@@ -12,6 +12,7 @@ bower/
 │   │   ├── api.ts              # typed client for the Worker (cookie session)
 │   │   ├── drive.ts            # typed client for Google Drive (1 h token from the Worker)
 │   │   ├── markdown/           # marked + wikilinks + frontmatter + sanitizer
+│   │   ├── kinds.ts, formats.ts, vault-index.ts, …   # see "App modules (v4)"
 │   │   ├── components/, routes/, styles/tokens.css
 │   │   └── sw.ts               # service worker: shell cache, share target, push
 │   ├── public/                 # icons, logo, manifest assets
@@ -26,7 +27,7 @@ bower/
 │   ├── wrangler.toml, .dev.vars.example   # placeholders; the real deploy config is the git-ignored wrangler.local.toml
 │   └── test/
 ├── agent/
-│   ├── run.sh                  # sync down → claude -p → copy up → status
+│   ├── run.sh                  # sync down → reconcile → claude -p → moves → bookkeeping → copy up → file facts → status
 │   ├── prompts/                # ingest.md, lint.md (short; rules live in the vault)
 │   ├── workflows/              # ingest.yml, lint.yml: copied into the operator's instance repo
 │   └── test/smoke.sh           # stubbed rclone/claude/curl
@@ -53,9 +54,9 @@ Vault content never enters either repository.
 
 | Component | Runs on | Responsibility | Never does |
 | --- | --- | --- | --- |
-| **App** | Cloudflare Pages, in the user's browser | Sign in; list and render the vault by reading Drive directly; search (`fullText contains`); upload to `0-Inbox/`; create `Bower - …md` instruction notes; append to and edit notes; call `/process`; show status and the working animation; push notifications | Store notes; write the notes the agent maintains; hold refresh tokens |
+| **App** | Cloudflare Pages, in the user's browser | Sign in; list and render the vault by reading Drive directly; search it from a local index; show what is new and what a tidy-up just filed; compare notes of one kind; upload to `0-Inbox/`; create `Bower - …md` instruction notes; append to and edit notes; call `/process`; show status and the working animation; push notifications | Store notes; write the notes the agent maintains; hold refresh tokens |
 | **Worker** (`api/`) | Cloudflare Workers + KV | OAuth callback and allowlist; encrypted refresh tokens; vault provisioning from the template; `/process` with quota and single-active-run; `/status`; runner endpoints; push sending | Store content; watch Drive; run on a schedule |
-| **Agent** (`agent/`) | GitHub Actions runner of the instance repo | `rclone` sync down with a 1 h token; `pandoc --sandbox` conversion of pending Office, HTML and EPUB files to Markdown; `claude -p` inside the vault following its `CLAUDE.md`; `rclone copy` up of only the files the agent added or changed (never deletes), then `rclone deletefile` only for the pending originals the agent moved away; status report | Keep state; print vault content to logs; change rules without an instruction note |
+| **Agent** (`agent/`) | GitHub Actions runner of the instance repo | `rclone` sync down with a 1 h token; `pandoc --sandbox` conversion of pending Office, HTML and EPUB files to Markdown; `claude -p` inside the vault following its `CLAUDE.md`; reconcile the moves the person made in Drive; `rclone moveto` in Drive for each file the agent moved (the file keeps its Drive id); index, link and log bookkeeping for those moves without AI; `rclone copy` up of only the files the agent added or changed (never deletes), then `rclone deletefile` only for the pending originals the move step did not move; file facts counted without AI; status report | Keep state; print vault content to logs; change rules without an instruction note |
 | **Vault** | The user's Google Drive | The only state: notes, originals, rulebook, catalogue, journal | Leave the user's account |
 
 ## Data flows
@@ -69,8 +70,8 @@ User (browser) ── POST /process ──▶ Worker ── repository_dispatch 
 Lint dispatch job (Sundays) ── POST /runner/lint/dispatch (Bearer BOWER_API_KEY) ──▶ Worker ── repository_dispatch bower-lint {vault_id, ticket}, one per vault ──▶ Instance repo (Actions)
 Runner ── GET /runner/vaults/:id (Bearer that run's ticket) ──▶ Worker ── 1 h Drive token, folder id, maxTurns, apiKey?, requestedAt
 Runner ── rclone sync ↓, manifest, pandoc --sandbox, claude -p, rclone copy ↑ (files new or changed since the manifest only), rclone deletefile ↑ (processed originals only) ──▶ Google Drive
-Runner ── .bower/last-run.json + one log.md line (the outcome, counts only) ──▶ Google Drive
-Runner ── POST /runner/vaults/:id/status {state, counts, reason} (Bearer that run's ticket; the final one tried three times) ──▶ Worker ── web push ──▶ User's devices
+Runner ── .bower/last-run.json (the outcome and the paths of what was filed) + one log.md line (counts only) + .bower/paths.json + .bower/file-facts.json ──▶ Google Drive
+Runner ── POST /runner/vaults/:id/status {state, counts, reason, processed[] with to and renamedFrom, setAside[], added} (Bearer that run's ticket; the final one tried three times) ──▶ Worker ── web push ──▶ User's devices
 User (browser) ── GET /status ──▶ Worker ── a running run silent for 5 min: GET actions/runs/:runId ──▶ GitHub (the job's conclusion settles it)
 User (browser) ── DELETE /me ──▶ Worker ── best-effort revoke at Google, deletes the user's KV data, clears the session cookie ──▶ (the Drive folder itself is never touched)
 ```
@@ -85,6 +86,37 @@ User (browser) ── DELETE /me ──▶ Worker ── best-effort revoke at G
 - **Delete account**: `DELETE /me` revokes the Google grant (best effort — a user can always leave even if Google does not cooperate), deletes every KV key for that user (profile, quota counters, cached Drive token, push subscriptions, session generation), keeps only a `deleted:<id>` tombstone of the random id so the account can never come back, and clears the cookie. The Drive folder and its content are never touched; the user keeps their notes.
 
 Trigger model: **button only**. The app calls `/process` when the user taps Tidy up (or its switcher command); Add and the Bower tab only put notes in the inbox, where they wait for that tap, like anything that arrived through Drive, Obsidian or another path. No cron for processing, no change watching, no state about "what is new" outside the vault itself. The one scheduled run is the weekly health check (`lint.yml`, Sundays): it checks the notes, makes only safe mechanical fixes and writes `Lint Report.md`.
+
+## App modules (v4)
+
+Each module's own header comment says what it holds; this table only says where things live. Most are pure, so they are unit tested without a browser.
+
+| Module | What it does | Read by |
+| --- | --- | --- |
+| `app/src/kinds.ts` | The eight kinds of document Bower recognises, the fields each writes into a companion note's frontmatter, which are key facts, how Details groups them, the status values, how Compare uses the kind. The agent's rulebook states the same contract. | `note-meta.ts`, `compare.ts`, `key-facts.tsx`, `kind-badge.tsx` |
+| `app/src/formats.ts` | The formats policy: per kind of file, whether Bower reads it, how the app shows it and what the person is told. | Add, the file screen, search, `just-filed.ts` |
+| `app/src/vault-index.ts` | The in-memory index of the Bower folder. Hides dot-folders, `Processed/`, `_*.md` folder notes and system files (`SYSTEM_FILE_PATTERNS`, mirrored by the runner's rclone filter: change both together). | every screen |
+| `app/src/search-index.ts`, `search.ts` | One MiniSearch index over every visible folder, note and file (name, path, kind word, and the text of notes already read), with typo tolerance from four letters. Kept in IndexedDB (`searchIndex` store, `cache.ts`). | the search screen and overlay |
+| `app/src/seen.ts`, `use-new.ts` | "New" per device: the last tidy-up's `items[].to` minus what this device has opened. The set lives in the `seen` IndexedDB store and never leaves the device. | Home, the tree, folder rows |
+| `app/src/just-filed.ts`, `routes/just-filed.tsx` | What a tidy-up filed: the old name, the new name, the folder; what was set aside and why. Falls back to Activity for a report without `to`. | Home, Notes, the working sheet |
+| `app/src/compare.ts`, `components/compare.tsx` | Notes of one kind lined up from their frontmatter, without AI: columns, sort, filter chips. A table on the desktop, cards on the phone; receipts by month, bookings as a timeline. | the folder screen |
+| `app/src/companion.ts` | Finds the note Bower wrote about a file: by its `original` field, by an `index.md` row naming both, by sharing the file's name. | the file screen, folder rows, Just filed |
+| `app/src/note-meta.ts`, `folder-view.ts` | Lazy frontmatter for rows (cached in the `noteMeta` store by `modifiedTime`); the folder list's origin filter, pairs, sorts, kind filter and date groups. | the folder and Notes screens |
+| `app/src/reveal.ts` | The tree follows what the person opens: the folders above a target, joined to the ones already open. | the tree, the explorer |
+| `app/src/move-request.ts`, `more-menu.ts` | "Move to…" and the More menu. The app never moves a file itself: a move is an instruction note in the inbox, then an instructions-only run or the next tidy-up. | the note, file and folder screens |
+| `app/src/file-facts.ts` | Reads `.bower/file-facts.json`: PDF pages, Excel sheets, ZIP entries. | the file screen's meta line |
+| `app/src/last-run.ts` | Reads `.bower/last-run.json`, the run's own report: state, sentence, counts and, since report v2, `items`, `setAside` and `added`. | the run store, Home, Just filed |
+| `app/src/components/virtual-list.tsx` | The TanStack Virtual adapter: the tree past 150 rows and long folder lists render only what is on screen. | the tree, the folder screen |
+| `app/src/components/explorer.tsx`, `tree.tsx` | The one explorer: the desktop sidebar and the phone's Notes tab, with Pinned, the five landmarks and Expand all. There is no separate phone folder menu. | `layout.tsx`, `routes/notes.tsx` |
+
+## v4 data flows
+
+- **Search.** Everything runs on the device. When the vault index changes, `syncSearchIndex` adds, removes and updates entries in the MiniSearch index and saves it to IndexedDB; a note's text is added the first time it is read. A query never calls Drive or the Worker.
+- **New.** After a tidy-up the run report (`GET /runs`, or `.bower/last-run.json` when the Worker never heard) lists `items[].to`; `useNew` looks them up in the vault index and drops the ids in the device's `seen` set. Opening a note or a file adds its id to that set. Nothing is sent anywhere.
+- **Just filed.** `just-filed.ts` groups the last run's `items` by folder with each item's `renamedFrom`, then adds `setAside` (with its reason) and `added`. Entry points: Home's bubble, the Notes tab, the sidebar and the working sheet's Done state.
+- **Compare.** The folder screen reads the frontmatter of its notes (`note-meta.ts`), asks `compare.ts` whether they share a kind that can be compared (`kinds.ts`) and renders the columns that kind defines. No Worker or runner call.
+- **Companion notes.** For a listed kind of document the agent writes a note with the kind's frontmatter and an `original` field, plus a catalogue row in `index.md`. The file screen finds it with `companion.ts` and shows its key facts and Bower's note; the folder screen pairs the original with it.
+- **A tidy-up, in order.** The runner syncs down; reconciles the moves the person made (`.bower/paths.json` against Drive ids); converts documents, pre-scans and sets aside; runs the agent; audits; moves in Drive each file the agent moved; books each move in `index.md`, the links and `log.md` without AI; copies up what was added or changed and deletes the pending originals the move step did not move; counts file facts (`.bower/file-facts.json`), writes `.bower/paths.json` and `.bower/last-run.json`; reports to the Worker. `docs/runbook.md` has the detail.
 
 ## Credentials
 
