@@ -6,6 +6,7 @@ import {
   findFolders,
   moveRequestText,
   pickerFolders,
+  requestRowText,
   sendMoveRequest,
 } from '../src/move-request.js';
 import { buildTree } from '../src/navigation.js';
@@ -180,5 +181,22 @@ describe('sendMoveRequest', () => {
       ),
     ).rejects.toThrow('offline');
     expect(startRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('requestRowText', () => {
+  it('leaves the numeric prefixes off the folders shown', () => {
+    expect(
+      requestRowText(
+        'Move “Lease.pdf” (1-Projects/Flat hunt/Lease.pdf) to 1-Projects/Half Marathon.',
+      ),
+    ).toBe(
+      'Move “Lease.pdf” (Projects/Flat hunt/Lease.pdf) to Projects/Half Marathon.',
+    );
+  });
+  it('returns other text unchanged', () => {
+    expect(requestRowText('Keep tax forms in 3-Resources')).toBe(
+      'Keep tax forms in 3-Resources',
+    );
   });
 });

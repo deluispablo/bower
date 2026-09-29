@@ -63,7 +63,7 @@ import {
   relativeTime,
 } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
-import { noteTitle } from '../note-title.js';
+import { isLinkNote, noteTitle } from '../note-title.js';
 import { tourOnScreen } from '../onboarding.js';
 import { useOnline } from '../online.js';
 import { runPinAction } from '../pin-action.js';
@@ -345,7 +345,12 @@ function useRecentInfo(
             note.id,
             {
               bower: isBowerNote(meta),
-              kind: badgeFile === undefined ? 'note' : fileKind(badgeFile),
+              kind:
+                badgeFile !== undefined
+                  ? fileKind(badgeFile)
+                  : isLinkNote(note.name, meta.fields)
+                    ? 'doc'
+                    : 'note',
               ...(badgeFile !== undefined && { badgeFile }),
               facts:
                 kind === undefined

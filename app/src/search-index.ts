@@ -20,7 +20,7 @@ import type { DriveFile } from './drive.js';
 import { FOLDER_MIME } from './drive.js';
 import { displayName, paraKindOf } from './navigation.js';
 import type { ParaKind } from './navigation.js';
-import { noteTitle } from './note-title.js';
+import { isLinkNote, noteTitle } from './note-title.js';
 import { snippet, toPlainWords } from './search.js';
 import {
   FILE_KIND_LABELS,
@@ -460,7 +460,12 @@ function hitFor(
     path,
     pathText: formatPath(path),
     kindWord: kindWordOf(file, kind),
-    badge: kind === 'folder' ? '' : kindBadge(fileKind(file), file),
+    badge:
+      kind === 'folder'
+        ? ''
+        : isLinkNote(file.name)
+          ? kindBadge('doc')
+          : kindBadge(fileKind(file), file),
     snippet: found,
     score,
   };
