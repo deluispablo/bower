@@ -14,6 +14,7 @@ function stubDeps(overrides: Partial<ForgetDeviceDeps> = {}): ForgetDeviceDeps {
     clearRecentSearches: vi.fn(),
     clearOpened: vi.fn(),
     clearUploadQueue: vi.fn(() => Promise.resolve()),
+    clearMe: vi.fn(),
     ...overrides,
   };
 }
@@ -37,6 +38,7 @@ describe('forgetDevice', () => {
     expect(deps.clearRecentSearches).toHaveBeenCalledOnce();
     expect(deps.clearOpened).toHaveBeenCalledOnce();
     expect(deps.clearUploadQueue).toHaveBeenCalledOnce();
+    expect(deps.clearMe).toHaveBeenCalledOnce();
   });
 
   it('still runs the rest when clearIdb rejects', async () => {

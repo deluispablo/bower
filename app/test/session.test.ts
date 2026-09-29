@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FolderState } from '../src/folder-state.js';
-import { decideRedirect } from '../src/session.js';
+import { ApiError } from '../src/api.js';
+import type { Me } from '../src/api.js';
+import { decideRedirect, offlineMe } from '../src/session.js';
 
 // Components are UI smoke only when cheap; `decideRedirect` is the pure
 // logic that decides routing on load, so it is unit-tested directly.
@@ -164,5 +166,29 @@ describe('decideRedirect with the folder state', () => {
 
   it('leaves the public paths alone', () => {
     expect(at('/privacy', 'missing')).toBeNull();
+  });
+});
+
+describe('offlineMe (R-VAULT-13)', () => {
+  const cached = { email: 'you@example.com', vault: null } as unknown as Me;
+  const network = new ApiError(0, 'network', 'Could not reach the server.');
+
+  it('keeps the cached me when the network is out', () => {
+    expect(offlineMe(network, false, cached)).toBe(cached);
+    expect(offlineMe(network, true, cached)).toBe(cached);
+    expect(offlineMe(new TypeError('x'), false, cached)).toBe(cached);
+  });
+
+  it('never covers for a 401 or a server answer while online', () => {
+    expect(
+      offlineMe(new ApiError(401, 'reauth', 'x'), false, cached),
+    ).toBeUndefined();
+    expect(
+      offlineMe(new ApiError(500, 'boom', 'x'), true, cached),
+    ).toBeUndefined();
+  });
+
+  it('has nothing to show without a cached me', () => {
+    expect(offlineMe(network, false, undefined)).toBeUndefined();
   });
 });
