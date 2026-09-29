@@ -9,11 +9,14 @@ import {
   NOTE_FOLDED_KEY,
   boxParts,
   checkItems,
+  readingRequest,
+  readingText,
   ruleChange,
   takeCheckSection,
   updatedWhen,
   whoFor,
 } from '../src/components/bower-note-box.js';
+import type { RequestRow } from '../src/bower-tab.js';
 import { kindById } from '../src/kinds.js';
 import { noteMetaFrom } from '../src/note-meta.js';
 import { currentToast, dismissToast } from '../src/toast-store.js';
@@ -237,5 +240,95 @@ describe('BowerNoteBox (issue #757)', () => {
     mount({ kind: 'job-offer', salary: 72000 });
     expect(host.querySelector('.bower-note-box-check')).toBeNull();
     expect(host.querySelector('.bower-note-box-line')).toBeNull();
+  });
+});
+
+describe('Bower reads inside the note box (issue #784, R-BIRD-10)', () => {
+  const NOTE = 'Housing/Offer.md';
+  const SINCE = '2026-09-29T10:00:00.000Z';
+  const row = (state: RequestRow['state']): RequestRow => ({
+    key: 'a',
+    state,
+    text: `Move “Offer” (${NOTE}) to Jobs.`,
+    kind: 'job',
+    since: SINCE,
+    fileId: null,
+  });
+  const at = (minutes: number): number => Date.parse(SINCE) + minutes * 60_000;
+
+  function mountReading(
+    requests: RequestRow[],
+    extra: Partial<Parameters<typeof BowerNoteBox>[0]> = {},
+  ): void {
+    void act(() => {
+      render(
+        h(BowerNoteBox, {
+          html: TOP,
+          frontmatter: OFFER,
+          path: NOTE,
+          requests,
+          ...extra,
+        }),
+        host,
+      );
+    });
+  }
+
+  it('finds a fresh running request for this path only', () => {
+    expect(readingRequest([row('tidying')], NOTE, at(1))?.row.state).toBe(
+      'tidying',
+    );
+    expect(readingRequest([row('waiting')], NOTE, at(1))).toBeNull();
+    expect(readingRequest([row('done')], NOTE, at(1))).toBeNull();
+    expect(readingRequest([row('tidying')], 'Other.md', at(1))).toBeNull();
+  });
+
+  it('drops out after 10 minutes without an update', () => {
+    expect(readingRequest([row('tidying')], NOTE, at(9.9))).not.toBeNull();
+    expect(readingRequest([row('tidying')], NOTE, at(10))).toBeNull();
+    // A later update keeps it going.
+    expect(
+      readingRequest(
+        [row('tidying')],
+        NOTE,
+        at(12),
+        new Date(at(5)).toISOString(),
+      ),
+    ).not.toBeNull();
+  });
+
+  it('writes the line for the kind and up to two sources', () => {
+    const offer = kindById('job-offer');
+    expect(readingText(offer, ['your CV'])).toBe(
+      'Reading the offer and your CV. About a minute; you can keep reading.',
+    );
+    expect(readingText(offer)).toBe(
+      'Reading the offer. About a minute; you can keep reading.',
+    );
+    expect(readingText(offer, ['your CV', 'your notes', 'a third'])).toContain(
+      'and your CV and your notes.',
+    );
+    expect(readingText(kindById('rental-listing'))).toContain('the listing');
+    expect(readingText(undefined)).toContain('the document');
+  });
+
+  it('shows the reading bird and status instead of the content', () => {
+    mountReading([row('tidying')], {
+      sources: ['your CV'],
+      updatedAt: new Date().toISOString(),
+    });
+    const status = host.querySelector('[role="status"]');
+    expect(status?.textContent).toContain(
+      'Reading the offer and your CV. About a minute; you can keep reading.',
+    );
+    expect(host.textContent).toContain('Writing now');
+    expect(host.querySelector('.bower-note-box-facts-block')).toBeNull();
+    expect(host.querySelector('.bower-origin')).toBeNull();
+  });
+
+  it('shows the normal box when the request is not running', () => {
+    mountReading([row('done')]);
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    expect(host.querySelector('.key-facts')).not.toBeNull();
   });
 });

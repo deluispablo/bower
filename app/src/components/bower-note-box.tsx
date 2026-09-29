@@ -11,12 +11,14 @@
 import { useEffect, useId, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
+import { requestsByTargetPath } from '../bower-tab.js';
+import type { RequestRow } from '../bower-tab.js';
 import { keyFactsFor, kindById } from '../kinds.js';
 import type { Kind } from '../kinds.js';
 import { noteMetaFrom } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { showToast } from '../toast-store.js';
-import { BowerMark } from './bird.js';
+import { Bird, BowerMark } from './bird.js';
 import { chipLabel, Details, questionsFor } from './details.js';
 import { inlineFactsText, KeyFacts, scoreName } from './key-facts.js';
 import { NoteBody } from './note-body.js';
@@ -211,6 +213,55 @@ export function checkItems(
   };
 }
 
+/** Without an update for this long, a running request no longer counts
+ * (R-BIRD-10). */
+export const READING_STALE_MS = 10 * 60_000;
+
+/**
+ * The running request whose target is this note, while it is fresh: the row
+ * and when it stops counting. `null` when nothing is writing the note, the
+ * request ended, or it went 10 minutes without an update (R-BIRD-10).
+ * `updatedAt` is the request's last update (ISO-8601); the row's own
+ * `since` stands in for it.
+ */
+export function readingRequest(
+  rows: readonly RequestRow[],
+  path: string,
+  now: number,
+  updatedAt?: string,
+): { row: RequestRow; expiresAt: number } | null {
+  const running = (requestsByTargetPath(rows).get(path) ?? []).find(
+    (row) => row.state === 'tidying',
+  );
+  if (running === undefined) return null;
+  const last = Date.parse(updatedAt ?? running.since);
+  if (Number.isNaN(last)) return null;
+  const expiresAt = last + READING_STALE_MS;
+  return now < expiresAt ? { row: running, expiresAt } : null;
+}
+
+/** "the offer", "the listing", "the document": what the kind's "Not in the
+ * …" label names. */
+export function readingNoun(kind: Kind | undefined): string {
+  const match = /^Not (?:in|on) (.+)$/.exec(kind?.notStatedLabel ?? '');
+  return match?.[1] ?? 'the document';
+}
+
+/** The status line: "Reading the offer and your CV. About a minute; you can
+ * keep reading." (up to two sources). */
+export function readingText(
+  kind: Kind | undefined,
+  sources: readonly string[] = [],
+): string {
+  const named = sources
+    .map((source) => source.trim())
+    .filter((source) => source !== '')
+    .slice(0, 2);
+  const what = readingNoun(kind);
+  const from = named.length === 0 ? '' : ` and ${named.join(' and ')}`;
+  return `Reading ${what}${from}. About a minute; you can keep reading.`;
+}
+
 function copyLines(lines: readonly string[]): void {
   const clipboard =
     typeof navigator === 'undefined' ? undefined : navigator.clipboard;
@@ -239,6 +290,15 @@ export interface BowerNoteBoxProps {
   checkSection?: readonly string[];
   /** Extra class, for the page that hosts the box. */
   class?: string;
+  /** This note's path, to find the request writing it (R-BIRD-10). */
+  path?: string;
+  /** The requests store's rows; a running one aimed at `path` shows the
+   * reading state. */
+  requests?: readonly RequestRow[];
+  /** What the request also reads ("your CV"), at most two are shown. */
+  sources?: readonly string[];
+  /** The request's last update (ISO-8601), for the 10-minute limit. */
+  updatedAt?: string;
 }
 
 export function BowerNoteBox({
@@ -246,11 +306,35 @@ export function BowerNoteBox({
   frontmatter,
   checkSection = [],
   class: extra,
+  path,
+  requests = [],
+  sources = [],
+  updatedAt,
 }: BowerNoteBoxProps): JSX.Element {
   const [folded, setFolded] = useState<boolean>(readNoteFolded);
   const [changed, setChanged] = useState(false);
   const bodyId = useId();
   const changeId = useId();
+  const [clock, setClock] = useState(() => Date.now());
+  const reading =
+    path === undefined
+      ? null
+      : readingRequest(requests, path, clock, updatedAt);
+  const expiresAt = reading?.expiresAt ?? null;
+
+  // Back to the normal box once the request has gone 10 minutes quiet.
+  useEffect(() => {
+    if (expiresAt === null) return undefined;
+    const timer = setTimeout(
+      () => {
+        setClock(Date.now());
+      },
+      Math.max(0, expiresAt - Date.now()) + 1,
+    );
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [expiresAt]);
 
   // Another box on the page (or another tab) folded: follow it.
   useEffect(() => {
@@ -278,6 +362,35 @@ export function BowerNoteBox({
     setFolded(next);
     writeNoteFolded(next);
   };
+
+  if (reading !== null) {
+    return (
+      <section
+        class={`bower-note-box is-reading${extra === undefined ? '' : ` ${extra}`}`}
+        aria-label="Bower's note"
+      >
+        <div class="bower-note-box-head">
+          <BowerMark size={20} />
+          <span class="bower-note-box-name">{"Bower's note"}</span>
+          <span class="bower-note-box-writing">Writing now</span>
+        </div>
+        <div class="bower-note-box-body bower-note-box-reading" role="status">
+          <Bird state="reading" size={64} />
+          <p>{readingText(kind, sources)}</p>
+          <span
+            class="bower-note-box-skeleton"
+            aria-hidden="true"
+            style="display:block;height:12px;border-radius:6px;background:currentColor;opacity:.12;margin-top:8px"
+          />
+          <span
+            class="bower-note-box-skeleton"
+            aria-hidden="true"
+            style="display:block;height:12px;width:70%;border-radius:6px;background:currentColor;opacity:.12;margin-top:8px"
+          />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
