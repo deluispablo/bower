@@ -817,10 +817,11 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await expect(confirm).toBeVisible();
   await expect(confirm).toContainText('3 things');
-  // The demo's own main sentence (#489, `Demo-Tidy-Confirm` board): "in
-  // the inbox", "In your own Bower...", not the real build's wording.
+  // One confirm copy for the demo and the real build (#825, #829): the
+  // count line and what a tidy-up costs; the demo-only sentence of #489 is gone.
+  await expect(confirm).toContainText('3 things in your inbox');
   await expect(confirm).toContainText(
-    'in the inbox. In your own Bower this takes a few minutes and uses one run of your plan, so once is better than five times.',
+    'A tidy-up takes a few minutes and uses one run of your Claude plan.',
   );
   // The demo's amber line (#363, `Demo-Tidy-Confirm` board, handover
   // C.10): tidy up here never runs the model.
@@ -2380,9 +2381,9 @@ test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)'
   // fit the phone's 343 px content width in one row (2.14) instead of
   // wrapping to two.
   await page.goto('/folder/1-Projects/Lisbon%20Trip');
-  await expect(
-    page.getByRole('heading', { name: 'Lisbon Trip' }),
-  ).toBeVisible();
+  // The h1 only: on desktop the preview pane can open with the same title as
+  // an h2 (#812), which made the role query ambiguous.
+  await expect(page.locator('h1', { hasText: 'Lisbon Trip' })).toBeVisible();
   const chips = page.locator('.folder-chips .header-action');
   const ys = await chips.evaluateAll((els) =>
     els.map((el) => el.getBoundingClientRect().y),
