@@ -157,6 +157,13 @@ sequenceDiagram
     Worker-->>App: web push
 ```
 
+What happens after the agent has filed, in the order it runs (details in `docs/runbook.md`, "One tidy-up, phase by phase"):
+
+- **Reconcile.** Before anything else the runner lists the Bower folder with Drive ids and compares it with the list it saved last time. A file you moved in Drive or Obsidian gets its row in `index.md` rewritten and a line in `log.md`.
+- **Moves by script.** The agent never moves a file in Drive. When it finishes, the runner moves each file it filed or renamed in Drive itself, so the file keeps its Drive id and any link to it keeps working.
+- **Bookkeeping.** Without AI, the runner then records each move in `index.md`, in the links that name the file and in `log.md`.
+- **Report.** The run ends with a report of what went where, which the app shows as **Just filed** and marks **New** on what you have not opened yet.
+
 ### Components
 
 | Component | Tech | Runs on |
