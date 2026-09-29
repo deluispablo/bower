@@ -81,7 +81,7 @@ describe('PhotoViewer (issue #605)', () => {
   });
 
   it('opens full screen on tap with a named Close and a text counter', () => {
-    const { root, photo } = mount();
+    const { photo } = mount();
     void act(() => photo.click());
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog).not.toBeNull();
@@ -96,7 +96,7 @@ describe('PhotoViewer (issue #605)', () => {
 
   it('walks with the arrow keys and the buttons', () => {
     const onNavigate = vi.fn();
-    const { root, photo } = mount(onNavigate);
+    const { photo } = mount(onNavigate);
     void act(() => photo.click());
     key('ArrowRight');
     expect(onNavigate).toHaveBeenLastCalledWith(2);
@@ -149,7 +149,7 @@ describe('PhotoViewer (issue #605)', () => {
   });
 
   it('traps focus in full screen and returns it to the photo on close', () => {
-    const { root, photo } = mount();
+    const { photo } = mount();
     photo.focus();
     void act(() => photo.click());
     const close = document.querySelector<HTMLElement>('[aria-label="Close"]');
@@ -187,7 +187,7 @@ describe('PhotoViewer (issue #605)', () => {
   });
 
   it('closes with the Close button', () => {
-    const { root, photo } = mount();
+    const { photo } = mount();
     void act(() => photo.click());
     void act(() =>
       document.querySelector<HTMLElement>('[aria-label="Close"]')?.click(),
@@ -196,7 +196,7 @@ describe('PhotoViewer (issue #605)', () => {
   });
 
   it('a double tap toggles 2x and shows the badge', () => {
-    const { root, photo } = mount();
+    const { photo } = mount();
     void act(() => photo.click());
     const img = document.querySelector<HTMLElement>('.photo-viewer-img');
     expect(document.querySelector('.photo-viewer-badge')).toBeNull();
