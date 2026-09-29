@@ -156,7 +156,7 @@ Bower files, by default: an original lands in its PARA folder as it is, sensibly
 4. Add one line to the folder's hub note (`- [[<file name>]] <five-word description>`) and one row to `index.md`, under the folder's section: `- [[<path from the top of the folder>]] · <type> · filed by Bower`: the path carries the folder and the extension, the type is one word as the app names it (PDF, Photo, Image, Spreadsheet, Document, Audio, Video, File), and the origin is always `filed by Bower` (`index.md` lists files as well as notes, so the app can find them).
 5. Write no `log.md` line for the filing and never edit an `index.md` row or a link for a move: after the run, the runner appends the `Filed:` line (`Filed: <file name> → <folder>`, ending `, renamed from <old name>` for a rename), updates the moved file's `index.md` row and rewrites the links to a renamed file.
 6. **Exceptions that still produce a note** (use the templates above, link the note from the hub note and `index.md`, and translate it to English if needed):
-   - A web clip or a saved link: the clip is the content. Write it up as a note and move the raw clip to `0-Inbox/Processed/`.
+   - A web clip or a saved link: the clip is the content. Write it up as a note and move the raw clip to `0-Inbox/Processed/`. The note keeps `source: <URL>` whenever the clip has one, and `original: "[[<path of the raw clip>]]"` with its folder path (`0-Inbox/Processed/…`).
    - An item the owner asked something for, in a context note (see Instructions), an instruction note or a rule in `Rules.md` ("receipts: one note per month with the totals"): file the original as above, then write what was asked next to it.
    - A document of a listed kind (see **Kinds**, below): file the original as above, then write its companion note next to it.
    - A converted document (DOCX, ODT, HTML, EPUB, RTF): file the original and its converted `.md` together, both in the folder with the same base name, and give the `.md` frontmatter tags; nothing goes to `0-Inbox/Processed/`.
@@ -245,7 +245,7 @@ Bower recognises eight kinds of document. For each, the list gives the `kind` va
 - Join the dots first (see **A note from Bower**): check the document against the owner's notes and add the `for you` fields and box lines that follow, with the notes named in their origin.
 - Body: the `> [!bower] Bower's note` box, exactly as in **A note from Bower** (at most three lines, each with its origin, `— Check` when it needs the person), then a short body: what it is and what it means for the owner, in a few lines with `[[wikilinks]]`. The fields live in the frontmatter: never repeat them as a table.
 - Leave sensitive IDs (passport, tax, account numbers) in the original, never in a field.
-- A web clip of a listed kind: the note written from the clip is its companion note, with `source` the page's URL instead of `original`.
+- A web clip of a listed kind: the note written from the clip is its companion note, with `source` the page's URL and `original` the raw clip's path (Ingest step 6).
 - A converted document of a listed kind keeps its converted `.md` as it is; the companion note is a separate note whose `original` names the original, not the `.md`.
 
 **No note, and the owner's changes.**
