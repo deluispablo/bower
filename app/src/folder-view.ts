@@ -7,6 +7,7 @@
  * Drive, the clock or the locale.
  */
 
+import { isBowerWritten } from './bower-written.js';
 import { findCompanion } from './companion.js';
 import type { DriveFile } from './drive.js';
 import { formatSize } from './file-preview.js';
@@ -77,12 +78,7 @@ function writtenByBower(
   if (file.path === CATALOGUE_PATH) return true;
   if (fileKind(file) !== 'note') return false;
   if (originOf(file, origins) === 'asked') return true;
-  if (meta === undefined) return false;
-  return (
-    meta.type === 'answer' ||
-    meta.original !== undefined ||
-    meta.fields.bower !== undefined
-  );
+  return isBowerWritten(meta);
 }
 
 /**

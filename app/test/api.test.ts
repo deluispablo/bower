@@ -17,6 +17,7 @@ import {
   unsubscribePush,
   updateSettings,
 } from '../src/api.js';
+import type { Run } from '../src/api.js';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -140,6 +141,43 @@ describe('getStatus', () => {
     await expect(getStatus()).resolves.toEqual({ run, stale: false });
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toMatch(/\/status$/);
+  });
+
+  it('parses the report fields of #728, and a run from before them', async () => {
+    const run: Run = {
+      state: 'failed',
+      requestedAt: '2026-01-01T00:00:00.000Z',
+      finishedAt: '2026-01-01T00:10:00.000Z',
+      created: ['3-Resources/A.md'],
+      updated: [{ path: '2-Areas/B.md', what: 'Added a date' }],
+      left: ['0-Inbox/c.pdf'],
+    };
+    const running: Run = {
+      state: 'running',
+      requestedAt: '2026-01-01T00:00:00.000Z',
+      phase: 'writing',
+      total: 3,
+      done: 1,
+      phaseAt: '2026-01-01T00:02:00.000Z',
+    };
+    const old = {
+      state: 'done' as const,
+      requestedAt: '2026-01-01T00:00:00.000Z',
+      processed: ['0-Inbox/a.md'],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { run, stale: false }))
+      .mockResolvedValueOnce(jsonResponse(200, { run: running, stale: false }))
+      .mockResolvedValueOnce(jsonResponse(200, { run: old, stale: false }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getStatus()).resolves.toEqual({ run, stale: false });
+    await expect(getStatus()).resolves.toEqual({ run: running, stale: false });
+    const parsed = await getStatus();
+    expect(parsed.run).toEqual(old);
+    expect(parsed.run?.created).toBeUndefined();
+    expect(parsed.run?.phase).toBeUndefined();
   });
 
   it('parses a null run', async () => {

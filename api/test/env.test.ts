@@ -60,7 +60,7 @@ describe('assertEnv', () => {
     const result = assertEnv(validRawEnv());
 
     expect(result.GOOGLE_CLIENT_ID).toBe('test-google-client-id');
-    expect(result.DAILY_RUN_LIMIT).toBe('20');
+    expect(result.DAILY_RUN_LIMIT).toBe('100');
     expect(result.DEFAULT_MAX_TURNS).toBe('30');
     expect(result.TEMPLATE_FOLDER_NAME).toBe('Bower');
   });
@@ -115,7 +115,7 @@ describe('env in context', () => {
       validRawEnv(),
     );
 
-    await expect(response.json()).resolves.toEqual({ dailyRunLimit: '20' });
+    await expect(response.json()).resolves.toEqual({ dailyRunLimit: '100' });
   });
 });
 

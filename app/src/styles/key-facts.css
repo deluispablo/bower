@@ -46,6 +46,25 @@
   white-space: nowrap;
 }
 
+/* The score pill (R-KF-2): green from 70, amber from 50, grey below. */
+.key-fact-pill {
+  display: inline-block;
+  padding: 0 var(--space-3);
+  border-radius: 999px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+}
+
+.key-fact-pill-good {
+  background: var(--color-success);
+  color: var(--color-on-success);
+}
+
+.key-fact-pill-fair {
+  background: var(--color-para-areas);
+  color: var(--color-para-areas-on);
+}
+
 .key-fact-label {
   overflow: hidden;
   color: var(--color-text-muted);

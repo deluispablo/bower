@@ -43,7 +43,8 @@ import {
   type PickedItem,
 } from '../picker.js';
 import { formatPolicy } from '../formats.js';
-import { pendingCount, runKey, useRun } from '../run-store.js';
+import { inboxCount, inboxTotal } from '../inbox-count.js';
+import { runKey, useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
@@ -490,7 +491,7 @@ export function Add() {
   const waiting = queue.filter((item) => item.status === 'waiting');
   // The inbox's own count plus what is chosen but not yet uploaded: the same
   // number the "Is that everything?" sheet shows once the pile is in.
-  const total = pendingCount(files) + waiting.length;
+  const total = inboxTotal(inboxCount(files, false)) + waiting.length;
   const linkDisabled = inboxFolderId === null || !online;
   const driveShown = GOOGLE_API_KEY !== '' || isDemo();
   const driveDisabled =
