@@ -26,6 +26,7 @@ import {
   DEMO_NAME,
   DEMO_QUOTA_LIMIT,
   DEMO_RUNS,
+  DEMO_RUN_STATES,
   FIXTURE_FILES,
   FIXTURE_FOLDERS,
   SCRIPTED_ADDED,
@@ -91,6 +92,9 @@ function isInstruction(path: string, name: string, text: string): boolean {
 function isContext(text: string): boolean {
   return /kind:\s*context/.test(text);
 }
+
+/** The session-storage switch that holds the demo's current run. */
+export const DEMO_RUN_KEY = 'bower:demo:run';
 
 export class DemoServer {
   readonly vault: DemoVault;
@@ -183,10 +187,35 @@ export class DemoServer {
     return { ...run, processed: [], items: [] };
   }
 
+  /**
+   * A test can hold the current run in one of the states `DEMO_RUN_STATES`
+   * has (running, done, partial, failed) by setting `bower:demo:run` in the
+   * page's session storage; the times are put relative to the demo clock.
+   */
+  private heldRun(): Run | null {
+    if (this.storage === null) return null;
+    let held: string | null;
+    try {
+      held = this.storage.getItem(DEMO_RUN_KEY);
+    } catch {
+      return null;
+    }
+    if (held === null || !(held in DEMO_RUN_STATES)) return null;
+    const run = copyRun(DEMO_RUN_STATES[held as keyof typeof DEMO_RUN_STATES]);
+    const now = this.now();
+    const minutes = (n: number): string => this.iso(now - n * 60_000);
+    run.requestedAt = minutes(held === 'running' ? 2 : 6);
+    if (run.startedAt !== undefined) {
+      run.startedAt = minutes(held === 'running' ? 2 : 5);
+    }
+    if (run.finishedAt !== undefined) run.finishedAt = minutes(1);
+    return run;
+  }
+
   /** `GET /status`. */
   status(): StatusResponse {
     this.advance();
-    const run = this.active?.run ?? this.last;
+    const run = this.active?.run ?? this.heldRun() ?? this.last;
     return { run: run === null ? null : copyRun(run), stale: false };
   }
 

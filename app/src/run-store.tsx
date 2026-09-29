@@ -164,6 +164,30 @@ export function writeSeenRunKey(
   }
 }
 
+/** The tidy-up chip's "seen" flag, per device and run (R-CHIP, D24). */
+export const RUN_SEEN_PREFIX = 'bower:run-seen:';
+
+/** How long a finished run's chip stays when nobody opens the sheet. */
+export const RUN_CHIP_LIFETIME_MS = 24 * 60 * 60_000;
+
+/** Whether the run with `key` has had its result seen (sheet opened). */
+export function readRunSeen(storage: RunSheetStorage, key: string): boolean {
+  try {
+    return storage.getItem(`${RUN_SEEN_PREFIX}${key}`) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** Marks the run with `key` seen; storage trouble only means the chip stays. */
+export function writeRunSeen(storage: RunSheetStorage, key: string): void {
+  try {
+    storage.setItem(`${RUN_SEEN_PREFIX}${key}`, '1');
+  } catch {
+    // Nothing user-facing: the chip stays until its 24 hours are up.
+  }
+}
+
 /**
  * "N files processed" / "1 file processed" / "Nothing new to process": the
  * same wording as the push notification body (`api/src/runner.ts`). Add's
@@ -416,6 +440,11 @@ export interface RunStore extends RunState {
    * the next run goes, so the card can still say how the one before went.
    */
   lastFinished: Run | null;
+  /**
+   * Whether `lastFinished`'s result has been seen on this device (its sheet
+   * opened, `bower:run-seen:<runKey>`): the tidy-up chip hides once true.
+   */
+  resultSeen: boolean;
   /** Closes the working sheet; a `done` run goes back to `idle` with it. */
   dismissSheet: () => void;
   /** Whether the "Is that everything?" confirmation is open. */
@@ -658,6 +687,24 @@ export function RunProvider({ children }: RunProviderProps) {
     setLastFinished((previous) => lastFinishedRun(previous, state.run));
   }, [state.run]);
 
+  // The result counts as seen once the sheet is open on a finished run: the
+  // chip's only job is to lead there (R-CHIP, D24).
+  const [seenTick, setSeenTick] = useState(0);
+  useEffect(() => {
+    if (!state.sheetOpen || lastFinished === null || isActive(state.phase)) {
+      return;
+    }
+    if (state.phase === 'starting') return;
+    if (typeof localStorage === 'undefined') return;
+    writeRunSeen(localStorage, runKey(lastFinished));
+    setSeenTick((tick) => tick + 1);
+  }, [state.sheetOpen, state.phase, lastFinished]);
+  const resultSeen =
+    seenTick >= 0 &&
+    lastFinished !== null &&
+    typeof localStorage !== 'undefined' &&
+    readRunSeen(localStorage, runKey(lastFinished));
+
   const openSheet = useCallback((): void => {
     apply({ type: 'sheet-opened' });
     setSheetReopenKey((key) => key + 1);
@@ -720,6 +767,7 @@ export function RunProvider({ children }: RunProviderProps) {
     openSheet,
     sheetReopenKey,
     lastFinished,
+    resultSeen,
     dismissSheet,
     confirmOpen,
     confirmCount,
