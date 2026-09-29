@@ -560,19 +560,97 @@ function fillLabel(
     .trim();
 }
 
+/** A key fact as the tiles take it. */
+export interface KeyFactData {
+  value: string;
+  label: string;
+  key: string;
+  /** Set on the score pill: how good the number is (R-KF-2). */
+  tone?: 'good' | 'fair' | 'low';
+}
+
+const PERIODS: Readonly<Record<string, string>> = {
+  week: 'a week',
+  pw: 'a week',
+  month: 'a month',
+  pcm: 'a month',
+  year: 'a year',
+  annum: 'a year',
+};
+
+const PERIOD_PATTERN =
+  /\s*(?:\/\s*|\bper\s+|\ba\s+)(week|month|year|annum)\b|\s*\b(pw|pcm)\b/i;
+
+/** "£340 a week", "AUD 350/week", "£1,450 pcm", "per annum": the amount
+ * and the period in the words a tile's label uses ("a week", "a month",
+ * "a year"); `null` when the value names no period (R-KF-1). */
+export function splitPeriod(
+  value: string,
+): { amount: string; period: string } | null {
+  const match = PERIOD_PATTERN.exec(value);
+  if (match === null) return null;
+  const period = PERIODS[(match[1] ?? match[2] ?? '').toLowerCase()];
+  const amount = (
+    value.slice(0, match.index) + value.slice(match.index + match[0].length)
+  ).trim();
+  if (period === undefined || amount === '') return null;
+  return { amount, period };
+}
+
+/** The score pill's tone: green from 70, amber from 50, grey below. */
+export function scoreTone(score: number): 'good' | 'fair' | 'low' {
+  if (score >= 70) return 'good';
+  if (score >= 50) return 'fair';
+  return 'low';
+}
+
+/** The first key fact when a numeric `score` or `fit` (0 to 100) is
+ * present (R-KF-2); `null` otherwise. */
+function scoreFact(frontmatter: Record<string, unknown>): KeyFactData | null {
+  for (const key of ['score', 'fit']) {
+    const raw = frontmatter[key];
+    const n =
+      typeof raw === 'number'
+        ? raw
+        : typeof raw === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(raw)
+          ? Number(raw)
+          : Number.NaN;
+    if (!Number.isFinite(n) || n < 0 || n > 100) continue;
+    return {
+      value: String(Math.round(n)),
+      label: 'your score',
+      key,
+      tone: scoreTone(n),
+    };
+  }
+  return null;
+}
+
 /** The note's key facts: the kind's key fields actually present, in the
  * kind's order, at most four. A missing field is left out, never shown
  * empty or as "—". */
 export function keyFactsFor(
   kind: Kind,
   frontmatter: Record<string, unknown>,
-): { value: string; label: string; key: string }[] {
-  const facts: { value: string; label: string; key: string }[] = [];
+): KeyFactData[] {
+  const facts: KeyFactData[] = [];
+  const score = scoreFact(frontmatter);
+  if (score !== null) facts.push(score);
   for (const key of kind.keyFacts) {
+    if (facts.length === 4) break;
     const field = kind.fields.find((candidate) => candidate.key === key);
     if (field === undefined) continue;
     const value = formatFieldValue(field, frontmatter[key]);
     if (value === '') continue;
+    const period = field.type === 'money' ? splitPeriod(value) : null;
+    if (period !== null) {
+      facts.push({
+        value: formatMoney(period.amount),
+        label: period.period,
+        key,
+      });
+      continue;
+    }
     const template = field.factLabel ?? field.label.toLowerCase();
     if (template === '{rest}') {
       const comma = value.indexOf(', ');

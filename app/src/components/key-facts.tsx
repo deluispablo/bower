@@ -14,6 +14,8 @@ export interface KeyFact {
   value: string;
   label: string;
   key?: string;
+  /** The value is a score pill, tinted by how good it is (R-KF-2). */
+  tone?: 'good' | 'fair' | 'low';
 }
 
 export interface KeyFactsProps {
@@ -58,7 +60,13 @@ export function KeyFacts({
         {shown.map((fact, index) => (
           <div class="key-fact" key={fact.key ?? index}>
             <dd class="key-fact-value" title={fact.value}>
-              {fact.value}
+              {fact.tone === undefined ? (
+                fact.value
+              ) : (
+                <span class={`key-fact-pill key-fact-pill-${fact.tone}`}>
+                  {fact.value}
+                </span>
+              )}
             </dd>
             {fact.label !== '' && (
               <dt class="key-fact-label">{clipLabel(fact.label)}</dt>
