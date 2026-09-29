@@ -2,7 +2,7 @@
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-29
-bower_rules_version: 18
+bower_rules_version: 19
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -167,7 +167,7 @@ Bower recognises eight kinds of document. For each, the list gives the `kind` va
 - Key facts: `rent`, `rooms`, `available`, `bike_to_office`
 - Status: `new`, `to view`, `viewed`, `applied`, `rejected`
 - Compare: table
-- The place: `address` Address (text); `type` Type (text); `rooms` Rooms (text)
+- The place: `address` Address (text); `type` Type (text); `highlight` Highlight (text); `rooms` Rooms (text)
 - Money: `rent` Rent (money); `deposit` Deposit (money); `against_area` Against the area (text)
 - Terms and dates: `available` Available (date); `lease` Lease (text); `listed` Listed (date); `viewing` Viewing (date)
 - For you: `bike_to_office` Bike to the office (text, for you); `fit` Fit (number, for you)

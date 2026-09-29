@@ -382,6 +382,7 @@ interface Listing {
   type: string;
   rent: number;
   rooms: string;
+  highlight: string;
   available: string;
   against: string;
   bike: string;
@@ -403,6 +404,7 @@ export const FLAT_LISTINGS: readonly Listing[] = [
     type: 'Flat with a garden',
     rent: 2400,
     rooms: '2 bed',
+    highlight: 'garden',
     available: '2026-11-15',
     against: '+1 %',
     bike: '22 min',
@@ -423,6 +425,7 @@ export const FLAT_LISTINGS: readonly Listing[] = [
     type: 'Flat, second floor, no lift',
     rent: 2150,
     rooms: '2 bed',
+    highlight: '2nd floor',
     available: '2026-11-01',
     against: '−10 %',
     bike: '14 min',
@@ -447,6 +450,7 @@ export const FLAT_LISTINGS: readonly Listing[] = [
     type: 'Ground-floor flat',
     rent: 1850,
     rooms: '1 bed',
+    highlight: 'ground',
     available: 'Now',
     against: '−4 %',
     bike: '18 min',
@@ -466,6 +470,7 @@ export const FLAT_LISTINGS: readonly Listing[] = [
     type: 'Flat on a main road',
     rent: 1990,
     rooms: '2 bed',
+    highlight: 'main road',
     available: '2026-12-01',
     against: '−12 %',
     bike: '27 min',
@@ -506,6 +511,7 @@ function listingFiles(): FixtureFile[] {
           type: listing.type,
           rent: listing.rent,
           rooms: listing.rooms,
+          highlight: listing.highlight,
           available: listing.available,
           against_area: listing.against,
           bike_to_office: listing.bike,

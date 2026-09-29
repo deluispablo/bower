@@ -215,6 +215,18 @@ forget_id() {
 # own arguments; filter-calls.log records it whole, and the filter file's
 # lines are kept once for the "sysfiles" case.
 full="rclone $*"
+# Like real rclone: filters cannot be combined with an explicit file list or a
+# single-file target (the ingest run of 2026-09-29 failed this way).
+case " $* " in
+  *' --filter-from '*)
+    case " $1 $* " in
+      *' --files-from-raw '* | ' copyto '* | ' moveto '* | ' deletefile '* | ' mkdir '*)
+        echo "CRITICAL: can't limit to single files when using filters" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+esac
 plain=$(printf '%s' "$full" | sed 's/ --filter-from [^ ]* --ignore-case$//; s/ --filter-from [^ ]* --ignore-case / /')
 printf '%s\n' "$full" >>"$SMOKE_STATE/filter-calls.log"
 prev=''
@@ -2308,8 +2320,15 @@ fi
 expect_eq "$(calls rclone | grep -c '^rclone deletefile ')" 0 'rclone deletefile calls'
 expect_eq "$(cat "$STATE/moved.txt")" '0-Inbox/a.pdf -> 1-Projects/Flat hunt/a.pdf' 'the PDF moved in Drive'
 [ -s "$STATE/filter-calls.log" ] || die 'no rclone calls recorded'
-if grep -v -- ' --filter-from [^ ]* --ignore-case' "$STATE/filter-calls.log" | grep -q '^rclone'; then
-  die 'an rclone call ran without the system-file filter'
+# The filter goes on every call that walks a tree (sync down, listings); calls
+# on an exact path or list (copy --files-from-raw, copyto, moveto, deletefile,
+# mkdir) take paths from the manifest, which already leaves system files out,
+# and real rclone refuses a filter on them.
+if grep -E '^rclone (sync|lsjson|lsf|ls) ' "$STATE/filter-calls.log" | grep -qv -- ' --filter-from [^ ]* --ignore-case'; then
+  die 'a tree walk ran without the system-file filter'
+fi
+if grep -E -- '--files-from-raw|^rclone (copyto|moveto|deletefile|mkdir) ' "$STATE/filter-calls.log" | grep -q -- ' --filter-from '; then
+  die 'an exact-path rclone call carried the filter'
 fi
 for line in '- desktop.ini' '- Thumbs.db' '- ehthumbs.db' '- .DS_Store' '- Icon[\r]' '- ~$*' \
   '- .~lock.*#' '- .tmp.driveupload/**'; do

@@ -346,7 +346,7 @@ describe('fileKind', () => {
       'Excel spreadsheet',
     ],
     ['a.xls', 'application/vnd.ms-excel', 'excel', 'Excel spreadsheet'],
-    ['a.csv', 'text/csv', 'csv', 'Spreadsheet'],
+    ['a.csv', 'text/csv', 'csv', 'Spreadsheet (CSV)'],
     [
       'a.docx',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

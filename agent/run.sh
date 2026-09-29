@@ -278,7 +278,9 @@ mkdir -p "$VAULT_DIR" "$LOG_DIR"
 
 # System and sync files (desktop.ini, Thumbs.db, ~$Offer.docx, ...) are never
 # downloaded, uploaded, deleted, read, filed, moved or listed (#581). One list,
-# used twice: as an rclone filter file on every rclone call, and as find tests
+# used twice: as an rclone filter file on every call that walks a tree (sync down,
+# listings; calls on an exact path or list take manifest paths and real rclone
+# refuses a filter on them), and as find tests
 # that keep them out of the manifest and the pending list. The patterns mirror
 # SYSTEM_FILE_PATTERNS in app/src/vault-index.ts: keep the two in step.
 # Matching is case-insensitive (--ignore-case, -iname).
@@ -434,12 +436,12 @@ write_outcome() {
   fi
   echo '.bower/last-run.json' >"$dir/files.txt"
   if rclone copyto vault:log.md "$dir/log.md" --retries 1 --low-level-retries 2 \
-    "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; then
+    </dev/null >>"$RCLONE_LOG" 2>&1; then
     echo "- $(date -u '+%F %H:%M') · Tidy-up $state · $sentence ($processed filed, $quarantined set aside, $refused refused)" >>"$dir/log.md"
     echo 'log.md' >>"$dir/files.txt"
   fi
   if ! rclone copy "$dir" vault: --files-from-raw "$dir/files.txt" --retries 1 \
-    --low-level-retries 2 "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; then
+    --low-level-retries 2 </dev/null >>"$RCLONE_LOG" 2>&1; then
     log "outcome not saved to Drive"
   fi
 }
@@ -569,7 +571,7 @@ record_saved_keys() {
 copy_up() {
   [ -s "$1" ] || return 0
   rclone copy "$VAULT_DIR" vault: --files-from-raw "$1" \
-    "${RCLONE_FILTER[@]}" >>"$RCLONE_LOG" 2>&1
+    >>"$RCLONE_LOG" 2>&1
 }
 
 # Audit, then copy up only the accepted files (no move phase: used after a
@@ -651,8 +653,8 @@ move_up() {
     printf '%s
 ' "$new" >>"$BOOKED_NEW"
     if { [ "$dir" = . ] ||
-      rclone mkdir "vault:$dir" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; } &&
-      rclone moveto "vault:$old" "vault:$new" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; then
+      rclone mkdir "vault:$dir" </dev/null >>"$RCLONE_LOG" 2>&1; } &&
+      rclone moveto "vault:$old" "vault:$new" </dev/null >>"$RCLONE_LOG" 2>&1; then
       printf '%s\n' "$old" >>"$MOVED_OLD"
       printf '%s\n' "$new" >>"$MOVED_NEW"
       moved=$((moved + 1))
@@ -881,7 +883,7 @@ write_paths() {
       jq -Rn "$PATHS_WRITE_FILTER" <"$WORK_DIR/listing-after.tsv" >"$dir/$PATHS_FILE" &&
       printf '%s\n' "$PATHS_FILE" >"$dir/files.txt" &&
       rclone copy "$dir" vault: --files-from-raw "$dir/files.txt" \
-        "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1
+        </dev/null >>"$RCLONE_LOG" 2>&1
   }; then
     log "paths file not saved"
   fi
@@ -976,7 +978,7 @@ write_file_facts() {
   if ! {
     printf '%s\n' "$FACTS_FILE" >"$dir/files.txt" &&
       rclone copy "$dir" vault: --files-from-raw "$dir/files.txt" \
-        "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1
+        </dev/null >>"$RCLONE_LOG" 2>&1
   }; then
     log "file facts not saved"
   fi
@@ -1716,7 +1718,7 @@ while IFS= read -r path <&3; do
     continue
   fi
   delete_rc=0
-  rclone deletefile "vault:$path" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1 || delete_rc=$?
+  rclone deletefile "vault:$path" </dev/null >>"$RCLONE_LOG" 2>&1 || delete_rc=$?
   # 4 is rclone's "file not found": someone removed it from Drive during the
   # run, so it is already gone.
   if [ "$delete_rc" -ne 0 ] && [ "$delete_rc" -ne 4 ]; then

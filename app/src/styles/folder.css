@@ -702,3 +702,27 @@
   color: var(--color-text-muted);
   font-size: var(--text-xs);
 }
+
+/* The phone's folder screen (#702, boards Phone-Folder-List and
+   Phone-Folder-Grid): the top bar and the path bar already name the folder,
+   and the More menu carries Pin to Home, Ask Bower and Drive, so the large
+   title, the icon, the chip row and the demo sentence stay out. The heading
+   is hidden visually only, so the screen keeps its `<h1>`. From 900 px the
+   header is the desktop boards' (Pinned and Ask Bower). */
+@media (max-width: 899.98px) {
+  .folder-head > .icon,
+  .folder-chips,
+  .folder-demo-note {
+    display: none;
+  }
+
+  .folder-head-text h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}

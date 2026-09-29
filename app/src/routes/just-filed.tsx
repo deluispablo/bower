@@ -33,6 +33,7 @@ import {
   JUST_INTRO,
   JUST_MARK_ALL,
   justFiledRows,
+  linkAddress,
   setAsideRows,
   wasLabel,
 } from '../just-filed.js';
@@ -51,44 +52,74 @@ const LOG_PATH = 'log.md';
 const BACK = <BackLink href="/notes" label="Notes" />;
 const CRUMB = <span class="topbar-title">Just filed</span>;
 
+interface NoteInfo {
+  /** `notePath` → "£2,150 · 2 bed · 14 min by bike". A note that cannot be
+   * read, or names no kind, has none. */
+  facts: ReadonlyMap<string, string>;
+  /** `notePath` → the address of a saved link ("host/…/page"). */
+  addresses: ReadonlyMap<string, string>;
+}
+
 /** The key facts of the note beside each row (or the row's own note), as the
- * inline line: `notePath` → "£2,150 · 2 bed · 14 min by bike". A note that
- * cannot be read, or names no kind, has none. */
+ * inline line, and the address of a saved link's source. */
 function useNoteFacts(
   rows: readonly JustFiledRow[],
   index: VaultIndex | null,
-): ReadonlyMap<string, string> {
-  const [facts, setFacts] = useState<ReadonlyMap<string, string>>(new Map());
+): NoteInfo {
+  const [info, setInfo] = useState<NoteInfo>({
+    facts: new Map(),
+    addresses: new Map(),
+  });
   const key = rows.map((row) => row.notePath).join('\n');
   useEffect(() => {
     if (index === null) return;
     let cancelled = false;
+    interface Read {
+      path: string;
+      facts: string | null;
+      address: string | null;
+    }
     void Promise.all(
-      rows.map(async (row): Promise<[string, string] | null> => {
+      rows.map(async (row): Promise<Read | null> => {
         const file = index.byPath.get(row.notePath);
         if (file === undefined) return null;
         try {
           const meta = await loadNoteMeta(file);
           const kind =
             meta.kind === undefined ? undefined : kindById(meta.kind);
-          if (kind === undefined) return null;
-          const text = inlineFactsText(keyFactsFor(kind, meta.fields));
-          return text === '' ? null : [row.notePath, text];
+          const text =
+            kind === undefined
+              ? ''
+              : inlineFactsText(keyFactsFor(kind, meta.fields));
+          return {
+            path: row.notePath,
+            facts: text === '' ? null : text,
+            address: isLinkNote(row.name, meta.fields)
+              ? linkAddress(meta.fields.source)
+              : null,
+          };
         } catch (err: unknown) {
           console.error('Reading a note for Just filed failed', err);
           return null;
         }
       }),
-    ).then((pairs) => {
+    ).then((reads) => {
       if (cancelled) return;
-      setFacts(new Map(pairs.filter((p): p is [string, string] => p !== null)));
+      const facts = new Map<string, string>();
+      const addresses = new Map<string, string>();
+      for (const read of reads) {
+        if (read === null) continue;
+        if (read.facts !== null) facts.set(read.path, read.facts);
+        if (read.address !== null) addresses.set(read.path, read.address);
+      }
+      setInfo({ facts, addresses });
     });
     return () => {
       cancelled = true;
     };
     // `key` stands for `rows`, which is a new array on every render.
   }, [key, index]);
-  return facts;
+  return info;
 }
 
 function Where({ row }: { row: JustFiledRow }): JSX.Element {
@@ -170,11 +201,11 @@ function PhoneRows({
 function DesktopTable({
   rows,
   unseen,
-  facts,
+  info,
 }: {
   rows: readonly JustFiledRow[];
   unseen: ReadonlySet<string>;
-  facts: ReadonlyMap<string, string>;
+  info: NoteInfo;
 }): JSX.Element {
   return (
     <table class="just-filed-table">
@@ -189,7 +220,9 @@ function DesktopTable({
       <tbody>
         {rows.map((row) => (
           <tr key={row.key}>
-            <td class="just-filed-was-cell">{row.oldName ?? row.name}</td>
+            <td class="just-filed-was-cell">
+              {info.addresses.get(row.notePath) ?? row.oldName ?? row.name}
+            </td>
             <td>
               <span class="just-filed-cell-title">
                 <Badge row={row} />
@@ -203,7 +236,7 @@ function DesktopTable({
               <Where row={row} />
             </td>
             <td class="just-filed-note-cell">
-              {facts.get(row.notePath) ?? '—'}
+              {info.facts.get(row.notePath) ?? '—'}
             </td>
           </tr>
         ))}
@@ -330,7 +363,7 @@ export function JustFiled(): JSX.Element {
   const withTo = latest !== null && hasDestinations(latest);
   const rows = latest !== null && withTo ? justFiledRows(latest, index) : [];
   const aside = latest !== null && withTo ? setAsideRows(latest, index) : [];
-  const facts = useNoteFacts(rows, index);
+  const info = useNoteFacts(rows, index);
 
   function markAll(): void {
     markAllSeen(unseen).catch((err: unknown) => console.error(err));
@@ -366,9 +399,9 @@ export function JustFiled(): JSX.Element {
           {!withTo ? (
             <FallbackList run={latest} log={log} now={now} />
           ) : desktop ? (
-            <DesktopTable rows={rows} unseen={unseen} facts={facts} />
+            <DesktopTable rows={rows} unseen={unseen} info={info} />
           ) : (
-            <PhoneRows rows={rows} unseen={unseen} facts={facts} />
+            <PhoneRows rows={rows} unseen={unseen} facts={info.facts} />
           )}
         </section>
         <AsideGroup rows={aside} />
