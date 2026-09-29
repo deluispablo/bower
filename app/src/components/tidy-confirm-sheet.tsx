@@ -26,7 +26,9 @@ import type { JSX } from 'preact';
 import { isDemo } from '../api.js';
 import { Bird } from './bird.js';
 import { IconSparkle } from './icons.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { Overlay } from './overlay.js';
+import { Queued } from './queued-overlay.js';
 
 import '../styles/tidy-confirm-sheet.css';
 
@@ -139,38 +141,20 @@ export function TidyConfirmSheet({
     breakdown === undefined ? null : confirmBreakdownLine(breakdown);
 
   return (
-    <Overlay
-      kind="dialog"
-      labelledBy={TITLE_ID}
-      onClose={onDismiss}
-      scrimGuardMs={350}
-    >
-      <div class="tidy-confirm">
-        <Bird state="looking" size={56} />
-        <h2 id={TITLE_ID} class="tidy-confirm-title">
-          {title}
-        </h2>
-        {isRequest ? (
-          <p class="tidy-confirm-text" aria-busy={loading}>
-            {loading ? (
-              <span
-                class="tidy-confirm-skeleton"
-                role="status"
-                aria-label="Counting your inbox"
-              />
-            ) : (
-              <>
-                <b>{lead}</b> {rest}
-              </>
-            )}
-          </p>
-        ) : (
-          <>
-            {demoTidy && (
-              <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>
-            )}
-            <p class="tidy-confirm-text">{CONFIRM_SUB}</p>
-            <div class="tidy-confirm-row" aria-busy={loading}>
+    <Queued id="tidy-confirm" priority={OVERLAY_PRIORITY.run}>
+      <Overlay
+        kind="dialog"
+        labelledBy={TITLE_ID}
+        onClose={onDismiss}
+        scrimGuardMs={350}
+      >
+        <div class="tidy-confirm">
+          <Bird state="looking" size={56} />
+          <h2 id={TITLE_ID} class="tidy-confirm-title">
+            {title}
+          </h2>
+          {isRequest ? (
+            <p class="tidy-confirm-text" aria-busy={loading}>
               {loading ? (
                 <span
                   class="tidy-confirm-skeleton"
@@ -179,31 +163,51 @@ export function TidyConfirmSheet({
                 />
               ) : (
                 <>
-                  <b>{confirmCountLine(count)}</b>
-                  {breakdownLine !== null && <span>{breakdownLine}</span>}
+                  <b>{lead}</b> {rest}
                 </>
               )}
-            </div>
-            <p class="tidy-confirm-text">{CONFIRM_COST}</p>
-          </>
-        )}
-        <button
-          type="button"
-          class="tidy-confirm-button"
-          disabled={loading}
-          onClick={onConfirm}
-        >
-          <IconSparkle />
-          {isRequest ? 'Yes, do it now' : 'Yes, tidy up'}
-        </button>
-        <button
-          type="button"
-          class="tidy-confirm-button tidy-confirm-button-secondary"
-          onClick={onDismiss}
-        >
-          {isRequest ? 'Not now' : 'Add more first'}
-        </button>
-      </div>
-    </Overlay>
+            </p>
+          ) : (
+            <>
+              {demoTidy && (
+                <p class="tidy-confirm-demo">{DEMO_RECORDING_NOTICE}</p>
+              )}
+              <p class="tidy-confirm-text">{CONFIRM_SUB}</p>
+              <div class="tidy-confirm-row" aria-busy={loading}>
+                {loading ? (
+                  <span
+                    class="tidy-confirm-skeleton"
+                    role="status"
+                    aria-label="Counting your inbox"
+                  />
+                ) : (
+                  <>
+                    <b>{confirmCountLine(count)}</b>
+                    {breakdownLine !== null && <span>{breakdownLine}</span>}
+                  </>
+                )}
+              </div>
+              <p class="tidy-confirm-text">{CONFIRM_COST}</p>
+            </>
+          )}
+          <button
+            type="button"
+            class="tidy-confirm-button"
+            disabled={loading}
+            onClick={onConfirm}
+          >
+            <IconSparkle />
+            {isRequest ? 'Yes, do it now' : 'Yes, tidy up'}
+          </button>
+          <button
+            type="button"
+            class="tidy-confirm-button tidy-confirm-button-secondary"
+            onClick={onDismiss}
+          >
+            {isRequest ? 'Not now' : 'Add more first'}
+          </button>
+        </div>
+      </Overlay>
+    </Queued>
   );
 }
