@@ -1022,8 +1022,8 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
   - `added.txt` is plain words for the owner with no internal words (index, hub, orphaned, crashed, run, frontmatter), in the first person, with no final full stop.
   - Serves 1.12, 2.2.
 - **R-AG-7.** A rename request is written in words plus a path, like a move request ("Rename {path} to {new name}"), and handled the same way: the agent renames the file, and the runner keeps its id and books the rename. There are no `op:` fields.
-- **R-AG-9 (runner, proposed).** PDFs get the same treatment. `run.sh` converts a text PDF with `pdftotext -layout` (poppler-utils, installed in the job like pandoc) so the runner can append the text as it does for Word files (T9). A scanned PDF with no text layer gets the copy with its properties and Bower's note, and the line "Scanned: no text to copy" under `## The document`.
-  - Escalation: a new tool in the runner job (apt package, no runtime dependency in the app). Without it, PDFs get the metadata and insights only.
+- **R-AG-9 (runner; owner approved 29 Sep).** PDFs get the same treatment. `run.sh` converts a text PDF with `pdftotext -layout` (poppler-utils, installed in the job like pandoc) so the runner can append the text as it does for Word files (T9). A scanned PDF with no text layer gets the copy with its properties and Bower's note, and the line "Scanned: no text to copy" under `## The document`.
+  - Owner approved on 29 Sep: poppler-utils is installed in the runner job (an apt package; no runtime dependency in the app).
 - **R-AG-10.** Finishing a partly done tidy-up: a pending inbox file that already has a note whose `original:` names it is filed only; its note is not written again. The runner reads the previous run's `created[]` from `.bower/last-run.json` in the vault, only when that file's state is failed (an instructions-only run in between overwrites it; the `original:` rule alone still prevents duplicates) (written by R-RUNNER-2; the runner itself keeps nothing) and lists those paths in the prompt as "already written; do not write these again". Serves R-SHEET-4 and D3.
 - **R-AG-8.** Piles:
   - Each context note applies only to the files in its own `## Applies to` list. A file named in two context notes goes with the newest note.
@@ -1098,10 +1098,10 @@ Milestones, in shipping order (from the tech-lead review):
 
 The rulebook bump and the runner change deploy in the usual order: Worker, then runner, then app.
 
-**Escalations before dispatch:**
+**Escalations:** both approved by the owner on 29 Sep:
 
 - `pdftotext` in the runner (R-AG-9);
-- trashing a whole pile's files from the app (T8), recorded in `ARCHITECTURE.md`.
+- trashing a whole pile's files from the app (T8), recorded in `ARCHITECTURE.md` next to request Remove.
 
 ## 9. Open questions
 
