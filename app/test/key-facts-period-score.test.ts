@@ -74,10 +74,9 @@ describe('keyFactsFor periods (R-KF-1)', () => {
 
 describe('keyFactsFor score (R-KF-2)', () => {
   it('leads with a score pill, toned by the number', () => {
-    const facts = keyFactsFor(kind('job-offer'), {
-      salary: '£72,000',
-      score: 79,
-    });
+    const fields = { salary: '£72,000', score: 79 };
+    expect(keyFactsFor(kind('job-offer'), fields)[0]?.key).toBe('salary');
+    const facts = keyFactsFor(kind('job-offer'), fields, { score: true });
     expect(facts[0]).toEqual({
       value: '79',
       label: 'your score',
@@ -85,7 +84,9 @@ describe('keyFactsFor score (R-KF-2)', () => {
       tone: 'good',
     });
     expect(facts.length).toBeLessThanOrEqual(4);
-    expect(keyFactsFor(kind('job-offer'), { fit: '45' })[0]).toMatchObject({
+    expect(
+      keyFactsFor(kind('job-offer'), { fit: '45' }, { score: true })[0],
+    ).toMatchObject({
       value: '45',
       tone: 'low',
     });
@@ -99,7 +100,8 @@ describe('keyFactsFor score (R-KF-2)', () => {
   });
 
   it('ignores a score outside 0 to 100 or not a number', () => {
-    expect(keyFactsFor(kind('job-offer'), { score: 120 })).toEqual([]);
-    expect(keyFactsFor(kind('job-offer'), { score: 'high' })).toEqual([]);
+    const on = { score: true };
+    expect(keyFactsFor(kind('job-offer'), { score: 120 }, on)).toEqual([]);
+    expect(keyFactsFor(kind('job-offer'), { score: 'high' }, on)).toEqual([]);
   });
 });

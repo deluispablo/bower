@@ -112,12 +112,11 @@ describe('keyFactsFor', () => {
   };
 
   it('finds four facts for a full listing, labelled as board System-KeyFacts', () => {
-    // The score pill leads (R-KF-2), so the fourth key field drops off.
     expect(keyFactsFor(kind('rental-listing'), listingNote)).toEqual([
-      { value: '72', label: 'your score', key: 'fit', tone: 'good' },
       { value: '£2,150', label: 'a month', key: 'rent' },
       { value: '2 bed', label: '1 bath', key: 'rooms' },
       { value: '1 Nov', label: 'available', key: 'available' },
+      { value: '14 min', label: 'bike to work', key: 'bike_to_office' },
     ]);
   });
 
@@ -168,14 +167,14 @@ describe('keyFactsFor', () => {
     delete noRooms.rooms;
     expect(
       keyFactsFor(kind('rental-listing'), noRooms).map((f) => f.key),
-    ).toEqual(['fit', 'rent', 'available', 'bike_to_office']);
+    ).toEqual(['rent', 'available', 'bike_to_office']);
     expect(
       keyFactsFor(kind('rental-listing'), {
         ...listingNote,
         available: '',
         rooms: null,
       }).map((f) => f.key),
-    ).toEqual(['fit', 'rent', 'bike_to_office']);
+    ).toEqual(['rent', 'bike_to_office']);
   });
 
   it('never returns an empty value, and nothing when no key field is present', () => {

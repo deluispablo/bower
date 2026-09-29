@@ -628,13 +628,17 @@ function scoreFact(frontmatter: Record<string, unknown>): KeyFactData | null {
 
 /** The note's key facts: the kind's key fields actually present, in the
  * kind's order, at most four. A missing field is left out, never shown
- * empty or as "—". */
+ * empty or as "—". With `score: true` a numeric `score` or `fit` leads
+ * as a pill (R-KF-2); it is for the key-facts tiles only. Compare cards,
+ * inline rows and Just filed already show the fit their own way, so they
+ * leave it off. */
 export function keyFactsFor(
   kind: Kind,
   frontmatter: Record<string, unknown>,
+  options: { score?: boolean } = {},
 ): KeyFactData[] {
   const facts: KeyFactData[] = [];
-  const score = scoreFact(frontmatter);
+  const score = options.score === true ? scoreFact(frontmatter) : null;
   if (score !== null) facts.push(score);
   for (const key of kind.keyFacts) {
     if (facts.length === 4) break;
