@@ -99,6 +99,7 @@ vi.mock('../src/cache.js', () => ({
 }));
 const markSeen = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
 vi.mock('../src/seen.js', () => ({ markSeen }));
+vi.mock('../src/use-request-rows.js', () => ({ useRequestRows: () => [] }));
 
 const index = buildVaultIndex([LISTING, ANSWER, CHECKLIST, SCAN]);
 const noop = (): Promise<void> => Promise.resolve();

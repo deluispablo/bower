@@ -11,7 +11,7 @@
 import { useEffect, useId, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
-import { requestsByTargetPath } from '../bower-tab.js';
+import { requestsForNote } from '../bower-tab.js';
 import type { RequestRow } from '../bower-tab.js';
 import { keyFactsFor, kindById } from '../kinds.js';
 import type { Kind } from '../kinds.js';
@@ -229,8 +229,9 @@ export function readingRequest(
   path: string,
   now: number,
   updatedAt?: string,
+  names: readonly string[] = [],
 ): { row: RequestRow; expiresAt: number } | null {
-  const running = (requestsByTargetPath(rows).get(path) ?? []).find(
+  const running = requestsForNote(rows, path, names).find(
     (row) => row.state === 'tidying',
   );
   if (running === undefined) return null;
@@ -299,6 +300,9 @@ export interface BowerNoteBoxProps {
   sources?: readonly string[];
   /** The request's last update (ISO-8601), for the 10-minute limit. */
   updatedAt?: string;
+  /** Other names the note is asked about by, such as its title: an Ask or
+   * Rename request names a note as `[[title]]`. */
+  names?: readonly string[];
 }
 
 export function BowerNoteBox({
@@ -310,6 +314,7 @@ export function BowerNoteBox({
   requests = [],
   sources = [],
   updatedAt,
+  names,
 }: BowerNoteBoxProps): JSX.Element {
   const [folded, setFolded] = useState<boolean>(readNoteFolded);
   const [changed, setChanged] = useState(false);
@@ -319,7 +324,7 @@ export function BowerNoteBox({
   const reading =
     path === undefined
       ? null
-      : readingRequest(requests, path, clock, updatedAt);
+      : readingRequest(requests, path, clock, updatedAt, names);
   const expiresAt = reading?.expiresAt ?? null;
 
   // Back to the normal box once the request has gone 10 minutes quiet.
@@ -377,15 +382,10 @@ export function BowerNoteBox({
         <div class="bower-note-box-body bower-note-box-reading" role="status">
           <Bird state="reading" size={64} />
           <p>{readingText(kind, sources)}</p>
+          <span class="bower-note-box-skeleton" aria-hidden="true" />
           <span
-            class="bower-note-box-skeleton"
+            class="bower-note-box-skeleton bower-note-box-skeleton-short"
             aria-hidden="true"
-            style="display:block;height:12px;border-radius:6px;background:currentColor;opacity:.12;margin-top:8px"
-          />
-          <span
-            class="bower-note-box-skeleton"
-            aria-hidden="true"
-            style="display:block;height:12px;width:70%;border-radius:6px;background:currentColor;opacity:.12;margin-top:8px"
           />
         </div>
       </section>

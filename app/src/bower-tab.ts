@@ -553,10 +553,38 @@ export function clockLabel(iso: string): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-/** The path a Move request names: `Move “name” (path) to folder.` (the
- * words `moveRequestText` writes), else `null`. */
+/** What a request is about: the path a Move request names (`Move “name”
+ * (path) to folder.`, the words `moveRequestText` writes), else the note an
+ * Ask or Rename request names as a `[[wikilink]]` (its target, without the
+ * brackets, alias or heading), else `null`. */
 export function requestTargetPath(text: string): string | null {
-  return /^Move “.+” \((.+)\) to .+\.$/.exec(text)?.[1] ?? null;
+  const move = /^Move “.+” \((.+)\) to .+\.$/.exec(text)?.[1];
+  if (move !== undefined) return move;
+  const link = /\[\[([^\]|#]+)/.exec(text)?.[1]?.trim();
+  return link === undefined || link === '' ? null : link;
+}
+
+/**
+ * The requests that are about one note: those that name its path, its file
+ * name (with or without `.md`) or any of `names` (its title), by the words
+ * `requestTargetPath` reads, ignoring case.
+ */
+export function requestsForNote(
+  rows: readonly RequestRow[],
+  path: string,
+  names: readonly string[] = [],
+): RequestRow[] {
+  const fileName = path.split('/').pop() ?? path;
+  const wanted = new Set(
+    [path, fileName, fileName.replace(/\.md$/i, ''), ...names]
+      .map((name) => name.trim().toLowerCase())
+      .filter((name) => name !== ''),
+  );
+  const out: RequestRow[] = [];
+  for (const [target, list] of requestsByTargetPath(rows)) {
+    if (wanted.has(target.toLowerCase())) out.push(...list);
+  }
+  return out;
 }
 
 /**

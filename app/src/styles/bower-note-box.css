@@ -154,3 +154,17 @@
   border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-md);
 }
+
+/* The two grey lines under "Reading …" while Bower writes the note. */
+.bower-note-box-skeleton {
+  display: block;
+  height: 12px;
+  margin-top: 8px;
+  border-radius: 6px;
+  background: currentColor;
+  opacity: 0.12;
+}
+
+.bower-note-box-skeleton-short {
+  width: 70%;
+}
