@@ -4,7 +4,7 @@ Bower is named after the bowerbird, which builds and decorates a bower from twig
 
 ## Mark and files
 
-One drawing (v8.2, approved 2026-09-28; spec §4.1) on a 100 × 100 grid, facing right, feet on y = 91: a round teal body (`#5fcfbc`) with a lighter belly (`#b9ece2`); a round head on a same-colour neck; one big navy eye (`#1b2233`) with two white highlights and a faint lighter cheek; an upper and a lower eyelid in head colour; a pill-shaped amber beak (`#f0b64f`) with a darker jaw (`#d9952e`); one long leaf-shaped dark-teal wing (`#2f9c8d`) lying along the flank, hinged at the shoulder; three thin dark-teal tail feathers fanning back and up from the rump; two amber stick legs with flat pill feet. No gradients, no outlines, no raster. It holds a twig, paper or gem only while carrying one, so the mark has none. The lockups, icon sizes, one-colour version and clear space were drawn on the approved design canvas.
+One drawing (v9, a satin bowerbird, D29 of the v5 spec; the v8.2 rig with a head 10 % bigger, an eye 20 % bigger, a pink blush `#ff9fb4`, a violet iris ring `#8e7cf3`, a shorter beak and props 30 % bigger; the bottle cap the bird reaches for in Shiny is blue, `#3b82f6`) on a 100 × 100 grid, facing right, feet on y = 91: a round teal body (`#5fcfbc`) with a lighter belly (`#b9ece2`); a round head on a same-colour neck; one big navy eye (`#1b2233`) with two white highlights and a faint pink blush; an upper and a lower eyelid in head colour; a pill-shaped amber beak (`#f0b64f`) with a darker jaw (`#d9952e`); one long leaf-shaped dark-teal wing (`#2f9c8d`) lying along the flank, hinged at the shoulder; three thin dark-teal tail feathers fanning back and up from the rump; two amber stick legs with flat pill feet. No gradients, no outlines, no raster. It holds a twig, paper or gem only while carrying one, so the mark has none. The lockups, icon sizes, one-colour version and clear space were drawn on the approved design canvas.
 
 | File | Use |
 | --- | --- |
@@ -28,7 +28,7 @@ In every icon the bird's bounding box is centred on the canvas. Clear space arou
 | --- | --- | --- |
 | `rig` | feet | breathe, hop, squash on landing, strut, fly |
 | `turn` | feet | faces left or right (`scaleX(-1)`) |
-| `hd` head (neck, eye, lids, cheek, beak) | base of the neck, 60 64 | turns, stretches up, leans, tucks |
+| `hd` head (neck, eye, lids, blush, beak) | base of the neck, 60 64 | turns, stretches up, leans, tucks |
 | `ey` eye | centre | blink, wink, dilate, look left or right |
 | `ld`, `lb` upper and lower lid | centre | upper comes down (worried, sleepy, asleep, offline, confused), lower comes up (happy, proud and the lively states) |
 | `jw` jaw | hinge | chirp, sing |
@@ -38,7 +38,7 @@ In every icon the bird's bounding box is centred on the canvas. Clear space arou
 
 Joints pivot in drawing units (`transform-box: view-box`, the numbers above are grid units), so no rotation can detach a part.
 
-Props (twig `tw`, paper `pp`, notes `nt`, question mark `qm`, z `zz`, sparkles `sp`, cloud `cl` and rain `rn`, scan dots `dd`, the "!" `ex`) are separate elements, hidden unless a state shows them. `scene` adds the inbox tray and the nest (`tray`, `nest`) of Tidying up, the twig pile and the growing nest (`bp`, `bn`) of Building, the sleeping nest (`nest2`) of Asleep and the gem of Shiny.
+Props (the blue cap `bcap`, the sound arcs `wv` of Listening, the page `rd` of Reading, the pointer dots `pdot` of Pointing, twig `tw`, paper `pp`, notes `nt`, question mark `qm`, z `zz`, sparkles `sp`, cloud `cl` and rain `rn`, scan dots `dd`, the "!" `ex`) are separate elements, hidden unless a state shows them. `scene` adds the inbox tray and the nest (`tray`, `nest`) of Tidying up, the twig pile and the growing nest (`bp`, `bn`) of Building, the sleeping nest (`nest2`) of Asleep and the gem of Shiny.
 
 | State | Where | Motion | Plays |
 | --- | --- | --- | --- |
@@ -59,7 +59,7 @@ Five still faces from the same dials (lids, jaw, eye, head): happy (lower lid up
 
 ### Regenerating
 
-The shapes come from the design canvas (`BIRD_CORE` and `SCENE`); the app's component (`app/src/components/bird.tsx`, with `styles/bird.css` from the canvas's `CSS`) and `scripts/brand/build.py` each carry a copy, so change all three together. Then run `python3 scripts/brand/build.py`. It rewrites every file above except `docs/assets/logo.svg` (a committed drawing), centres the bird by its measured bounding box, and fails if an icon is off-centre, the maskable bird leaves the safe zone, the bird fills less than 12 px of the 16 px favicon or `logo.svg` reaches 6 KB. It needs Pillow, fontTools, Playwright with Chromium and Poppins Bold on the developer machine (a system `Poppins-Bold.ttf`, else the app's own `poppins-700.woff2` with brotli installed; see the script header); none of these are app dependencies. After changing colours in `tokens.css`, run `python3 scripts/brand/contrast.py` (standard library only) and update the contrast table below.
+The shapes come from the design canvas (`BIRD_CORE` and `SCENE`); the app's component (`app/src/components/bird.tsx`, with `styles/bird.css` from the canvas's `CSS`) and `scripts/brand/build.py` each carry a copy, so change all three together. Then run `python3 scripts/brand/build.py`, which redraws the logo, both wordmarks and every icon from the v9 drawing. It rewrites every file above except `docs/assets/logo.svg` (a committed drawing), centres the bird by its measured bounding box, and fails if an icon is off-centre, the maskable bird leaves the safe zone, the bird fills less than 12 px of the 16 px favicon or `logo.svg` reaches 6 KB. It needs Pillow, fontTools, Playwright with Chromium and Poppins Bold on the developer machine (a system `Poppins-Bold.ttf`, else the app's own `poppins-700.woff2` with brotli installed; see the script header); none of these are app dependencies. After changing colours in `tokens.css`, run `python3 scripts/brand/contrast.py` (standard library only) and update the contrast table below.
 
 ## Palette
 
