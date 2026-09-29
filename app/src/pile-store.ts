@@ -389,6 +389,86 @@ export function pileText(note: string): string {
     .trim();
 }
 
+/** What a pile note says about its pile (R-PILE-3). */
+export interface PileNoteFields {
+  id: string;
+  text: string;
+  /** The file names under `## Applies to`. */
+  names: string[];
+  /** The `date` of the note's frontmatter: when the pile started. */
+  date: string | null;
+}
+
+/** The file names a context note lists under `## Applies to`. */
+export function appliesTo(note: string): string[] {
+  const section = /(?:^|\n)## Applies to[^\n]*\n([\s\S]*)$/.exec(note)?.[1];
+  if (section === undefined) return [];
+  const names: string[] = [];
+  for (const line of section.split('\n')) {
+    const name = /^- (.+?)\s*$/.exec(line)?.[1];
+    if (name !== undefined) names.push(name);
+  }
+  return names;
+}
+
+/** A pile note's fields, or `null` when the note has no `pile:` (an older
+ * batch note, an instruction, anything else). */
+export function parsePileNote(note: string): PileNoteFields | null {
+  const head = /^---\r?\n([\s\S]*?)\r?\n---/.exec(note)?.[1];
+  if (head === undefined) return null;
+  const id = /^pile:\s*(\S+)\s*$/m.exec(head)?.[1];
+  if (id === undefined) return null;
+  return {
+    id,
+    text: pileText(note),
+    names: appliesTo(note),
+    date: /^date:\s*(\S+)\s*$/m.exec(head)?.[1] ?? null,
+  };
+}
+
+/**
+ * R-PILE-3: takes a pile the inbox listing already holds (a pile note left by
+ * an earlier visit) into the store, closed, so Add lists it with its note.
+ * `present` maps the inbox's file names to their files: a name the note
+ * lists that is no longer there (a tidy-up moved it) is left out. Returns
+ * `undefined` for a pile the store already has, or one with nothing left.
+ */
+export function adoptPile(
+  inboxFolderId: string,
+  note: DriveFile,
+  fields: PileNoteFields,
+  present: ReadonlyMap<string, DriveFile>,
+): Pile | undefined {
+  if (findPile(fields.id) !== undefined) return undefined;
+  const items: PileItem[] = [];
+  for (const name of fields.names) {
+    const file = present.get(name);
+    if (file !== undefined) items.push({ name, fileId: file.id, state: 'done' });
+  }
+  if (items.length === 0) return undefined;
+  const pile: Pile = {
+    id: fields.id,
+    noteFileId: note.id,
+    createdAt: fields.date ?? note.modifiedTime ?? new Date().toISOString(),
+    text: fields.text,
+    items,
+    closed: true,
+  };
+  meta.set(pile.id, {
+    inboxFolderId,
+    name: note.name,
+    modifiedTime: note.modifiedTime ?? null,
+    writtenText: fields.text,
+    chain: Promise.resolve(),
+    queued: false,
+    failed: false,
+  });
+  publish(
+    [...piles, pile].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+  );
+  return pile;
+}
+
 /**
  * Closes a pile: files attached from now on start another one. Its "From
  * now on…" sentences (`ruleSentences`) go to `Rules.md` through `keepRule`

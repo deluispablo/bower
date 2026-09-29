@@ -3,21 +3,17 @@ import type { JSX } from 'preact';
 
 import { useHasCamera } from '../add-camera.js';
 import {
-  setContextText,
-  useContextText,
-  writeContextNote,
-} from '../add-context.js';
-import {
   clearFiledAfterRun,
+  followUploads,
   getQueue,
   setQueue,
+  uploadPileId,
   useAddQueue,
   type QueueItem,
 } from '../add-queue-store.js';
 import { linkDisplayTitle, linkNoteName } from '../add.js';
 import { isDemo } from '../api.js';
-import { Bird } from '../components/bird.js';
-import { UploadNotes } from '../components/upload-chip.js';
+import { UploadNotes, useUploadItems } from '../components/upload-chip.js';
 import {
   IconCamera,
   IconDrive,
@@ -25,31 +21,69 @@ import {
   IconSparkle,
 } from '../components/icons.js';
 import { KindBadge } from '../components/kind-badge.js';
+import {
+  PileRows,
+  PileSheet,
+  PILE_NOTE_LABEL,
+  PILE_NOTE_PLACEHOLDER,
+  PILE_SAVED_LINE,
+  addedFromElsewhere,
+  inboxNameSet,
+  kindOfName,
+  pileDay,
+  pileNames,
+  pileTime,
+  rowState,
+  splitPiles,
+  thingsText,
+  uploadingCount,
+  useDebouncedSave,
+  type PileRow,
+} from '../components/pile-sheet.js';
 import { labelFor, startsRun } from '../components/process-button.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import {
   copyOrExportIntoInbox,
   createTextFile,
+  deleteFile,
   exportPlanFor,
   FOLDER_MIME,
+  getText,
   getToken,
   listFolder,
   upload,
+  type DriveFile,
 } from '../drive.js';
+import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { offlineReason, useOnline } from '../online.js';
+import {
+  adoptPile,
+  appliesTo,
+  attachToPile,
+  closePile,
+  getPiles,
+  openPile,
+  parsePileNote,
+  removeFromPile,
+  setPileText,
+  startPile,
+  usePiles,
+  type Pile,
+} from '../pile-store.js';
 import {
   filesFromPickerResponse,
   loadPicker,
   openFilePicker,
   type PickedItem,
 } from '../picker.js';
-import { formatPolicy } from '../formats.js';
-import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { runKey, useRun } from '../run-store.js';
+import { isContextNote, processedKind } from '../run-progress.js';
+import { pendingCount } from '../navigation.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
 import { uniqueName } from '../upload-names.js';
 import {
+  activeItems,
   startUploads,
   uploadQueue,
   uploadThroughQueue,
@@ -76,8 +110,23 @@ const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
  * existing `NOT_IN_DEMO`, rather than a cross-route import. */
 const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
 
-/** The "What is this?" box's placeholder (`Flow-03-Add` board). */
-const CONTEXT_PLACEHOLDER = 'Flats for November.';
+/** PILE-14, the drop line under the desktop title. */
+const DROP_LINE =
+  'Drop files anywhere on this page: they join the pile you are making.';
+
+/** PILE-6, the foot of the new pile card. While uploads run, `UploadNotes`
+ * says it (with the phone caveat), so the card does not repeat it. */
+const CLOSE_NOTE =
+  'Uploads carry on if you switch tabs. If you close Bower, they finish next time you open it.';
+
+/** What the person typed in "What is this pile?" before its first file was
+ * attached. Module level, so leaving Add and coming back keeps it. */
+let draftText = '';
+
+/** Forgets the note box's text. Tests only. */
+export function resetAddDraft(): void {
+  draftText = '';
+}
 
 /** Files copied from one picked Drive folder, at most. */
 export const MAX_FOLDER_FILES = 50;
@@ -135,19 +184,6 @@ function queueKind(item: QueueItem): FileKind {
   });
 }
 
-/** The sources present in the queue, in the order the boards list them. */
-function queueSources(queue: readonly QueueItem[], desktop: boolean): string {
-  const parts: string[] = [];
-  if (queue.some((it) => it.kind === 'file')) {
-    parts.push(desktop ? 'drop' : 'Files');
-  }
-  if (queue.some((it) => it.kind === 'drive')) parts.push('Drive');
-  if (queue.some((it) => it.kind === 'link')) parts.push('a link');
-  if (!desktop) return `Shared from ${parts.join(', ')}`;
-  const last = parts.pop();
-  return `From ${parts.length > 0 ? `${parts.join(', ')} and ` : ''}${last ?? ''}`;
-}
-
 /** `file` renamed to `name`, or `file` itself when the name did not change. */
 function withName(file: File, name: string): File {
   return name === file.name
@@ -155,10 +191,9 @@ function withName(file: File, name: string): File {
     : new File([file], name, { type: file.type });
 }
 
-/** The queue row's state text for a finished `kind: 'drive'` item (#334,
- * issue 21.2): a plain copy only says where it came from; an export also
- * says what it was saved as (#218). While it is still copying, the row
- * shows a percentage instead, the same as any other kind. */
+/** The row's line for a finished `kind: 'drive'` item (#334, issue 21.2): a
+ * plain copy only says where it came from; an export also says what it was
+ * saved as (#218). */
 function driveStateText(mimeType: string | undefined): string {
   const plan = exportPlanFor(mimeType ?? '');
   if (plan.action !== 'export') return 'From your Drive';
@@ -171,9 +206,45 @@ function driveStateText(mimeType: string | undefined): string {
   return `From your Drive · ${savedAs}`;
 }
 
+/** The Link door's icon (`icons.tsx` has none for a pasted address). */
+function LinkIcon(): JSX.Element {
+  return (
+    <svg
+      class="icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+    </svg>
+  );
+}
+
+/** Follows the durable upload queue for the life of the app, so a file of a
+ * pile that lands while Add is closed still rewrites its pile's note
+ * (R-PILE-1). Started again after piles were read back, so a file the last
+ * visit left unfinished finds its pile. */
+let stopFollowing: (() => void) | null = null;
+function followPileUploads(): void {
+  if (isDemo()) return;
+  stopFollowing?.();
+  stopFollowing = followUploads(uploadQueue());
+}
+
+/** The words a waiting pile's card shows for its note. */
+function noteLine(pile: Pile): string {
+  return pile.text.trim();
+}
+
 export function Add() {
   const { me } = useSession();
-  const { index, files, refresh, keepRule } = useVault();
+  const { index, files, refresh, keepRule, status } = useVault();
   const online = useOnline();
   const hasCamera = useHasCamera();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
@@ -191,34 +262,40 @@ export function Add() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const sharedHandledRef = useRef(false);
 
-  // The queue itself lives in `add-queue-store.js`, outside this
-  // component, so it survives navigating away and back within the
-  // session (#334): `queue` here is just this render's snapshot.
+  // The queue itself lives in `add-queue-store.js`, outside this component,
+  // so it survives navigating away and back within the session (#334):
+  // `queue` here is just this render's snapshot. Piles live in
+  // `pile-store.js`, and the durable uploads in `upload-queue.js`.
   const queue = useAddQueue();
+  const piles = usePiles();
+  const uploads = useUploadItems();
   const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
   const [pickerOpening, setPickerOpening] = useState(false);
   const [driveNotes, setDriveNotes] = useState<string[]>([]);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [draft, setDraft] = useState(draftText);
+  const [sheetPileId, setSheetPileId] = useState<string | null>(null);
+  /** File names any context note in the inbox lists, once read (R-PILE-3);
+   * `null` until the first read, so nothing shows as "from elsewhere" early. */
+  const [noted, setNoted] = useState<Set<string> | null>(null);
 
   useShellSlot('crumb', CRUMB);
 
   // #493: once a tidy-up this session finishes `done`, the rows it just
-  // filed (and the "Added to your inbox." line about them) are stale —
-  // Home already says "All tidy" by then. `clearFiledAfterRun` is the
-  // single source of truth for which run this queue has already caught up
-  // with, so this fires safely even if Add was not mounted when the run
-  // actually finished.
+  // filed are stale — Home already says "All tidy" by then.
+  // `clearFiledAfterRun` is the single source of truth for which run this
+  // queue has already caught up with, so this fires safely even if Add was
+  // not mounted when the run actually finished.
   const { lastFinished, phase, tidyUp, openSheet } = useRun();
-  // `tidyUp` closes over the vault listing of its own render; after the
-  // waiting files upload, the button waits for the next render's copy so the
-  // "Is that everything?" sheet counts them.
   const tidyUpRef = useRef(tidyUp);
   tidyUpRef.current = tidyUp;
   useEffect(() => {
@@ -226,23 +303,24 @@ export function Add() {
     if (clearFiledAfterRun(runKey(lastFinished))) setMessage(null);
   }, [lastFinished]);
 
-  // "What is this?" (#335): leaving Add with text in the box and a batch in
-  // the inbox writes its context note now, so it is there for whichever
-  // Tidy up comes next (a tidy-up started from Add writes it first,
-  // `run-store.tsx`). The listing catches up afterwards, as after an add.
-  const contextText = useContextText();
-  const leaveRef = useRef({ inboxFolderId, refresh, keepRule });
-  leaveRef.current = { inboxFolderId, refresh, keepRule };
+  // The note box saves into the open pile's context note as the person types
+  // (debounced 1 s, and on blur). Declared before the leave effect below, so
+  // its own cleanup (the last save) runs first.
+  const saver = useDebouncedSave((text) => {
+    const open = openPile();
+    if (open !== undefined) void setPileText(open.id, text);
+  });
+
+  // R-PILE-2: leaving Add closes the open pile: its "From now on…" lines are
+  // kept once, and its note is written for the last time.
+  const leaveRef = useRef({ refresh, keepRule });
+  leaveRef.current = { refresh, keepRule };
   useEffect(
     () => () => {
-      const {
-        inboxFolderId: inbox,
-        refresh: refreshVault,
-        keepRule: keep,
-      } = leaveRef.current;
-      void writeContextNote(inbox, keep).then((written) => {
-        if (written) void refreshVault();
-      });
+      const open = openPile();
+      if (open === undefined) return;
+      const { refresh: refreshVault, keepRule: keep } = leaveRef.current;
+      void closePile(open.id, keep).then(() => refreshVault());
     },
     [],
   );
@@ -265,10 +343,84 @@ export function Add() {
     };
   }, [inboxFolderId]);
 
+  // R-PILE-3: the waiting piles come from the inbox listing (its context
+  // notes with `pile:`), never from device storage. Each note is read once
+  // per change of its own; the store adopts the piles it does not know.
+  const readNotes = useRef(new Map<string, string>());
+  const noteNames = useRef(new Map<string, string[]>());
+  useEffect(() => {
+    if (inboxFolderId === null || status === 'loading') return;
+    let cancelled = false;
+    const present = new Map<string, DriveFile>();
+    const notes: DriveFile[] = [];
+    for (const file of files) {
+      if (file.path !== `0-Inbox/${file.name}`) continue;
+      present.set(file.name, file);
+      if (isContextNote(file.path)) notes.push(file);
+    }
+    void (async () => {
+      let adopted = false;
+      for (const note of notes) {
+        const seen = readNotes.current.get(note.id);
+        if (seen !== undefined && seen === (note.modifiedTime ?? '')) continue;
+        try {
+          const text = await getText(note.id);
+          if (cancelled) return;
+          readNotes.current.set(note.id, note.modifiedTime ?? '');
+          const fields = parsePileNote(text);
+          if (fields === null) {
+            noteNames.current.set(note.id, appliesTo(text));
+            continue;
+          }
+          noteNames.current.set(note.id, fields.names);
+          if (adoptPile(inboxFolderId, note, fields, present) !== undefined) {
+            adopted = true;
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      if (cancelled) return;
+      const ids = new Set(notes.map((note) => note.id));
+      for (const id of [...noteNames.current.keys()]) {
+        if (!ids.has(id)) noteNames.current.delete(id);
+      }
+      setNoted(new Set([...noteNames.current.values()].flat()));
+      if (adopted) followPileUploads();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [files, inboxFolderId, status]);
+
+  // Files of a pile that land while Add is closed still rewrite its note.
+  useEffect(() => {
+    followPileUploads();
+  }, []);
+
+  // "Show" on the upload chip opens Add: the pile with uploads is brought
+  // into view.
+  useEffect(() => {
+    if (getPiles().some((pile) => uploadingCount(pile) > 0)) {
+      cardRef.current?.scrollIntoView?.({ block: 'start' });
+    }
+  }, []);
+
+  // The note box starts empty again once its pile closed (tidy-up, another
+  // pile started).
+  const openId = openPile()?.id ?? null;
+  const lastOpenId = useRef(openId);
+  useEffect(() => {
+    if (lastOpenId.current !== null && openId === null) {
+      draftText = '';
+      setDraft('');
+    }
+    lastOpenId.current = openId;
+  }, [openId]);
+
   // Web Share Target: the service worker redirected here with the shared
-  // files waiting in Cache Storage. They join the queue as waiting cards,
-  // same as chosen or dropped files: nothing uploads until the person taps
-  // "Add to Bower" (#262/M3).
+  // files waiting in Cache Storage. They join the pile being made and start
+  // uploading at once (R-ADD-1).
   useEffect(() => {
     if (sharedHandledRef.current) return;
     if (typeof window === 'undefined') return;
@@ -300,15 +452,26 @@ export function Add() {
     return unique;
   }
 
+  /** The pile a new file joins: `explicit` (the pile sheet's "Add more"),
+   * else the one being made, else a new one (R-PILE-1: its note is written
+   * with the first file). */
+  function pileIdForNew(explicit?: string): string | null {
+    if (explicit !== undefined) return explicit;
+    if (inboxFolderId === null) return null;
+    const open = openPile();
+    if (open !== undefined) return open.id;
+    const started = startPile(inboxFolderId);
+    if (draftText.trim() !== '') void setPileText(started.id, draftText);
+    return started.id;
+  }
+
   // `setQueue` (`add-queue-store.js`) is the single writer for the queue:
   // it updates the module-level array synchronously, so `getQueue()`
-  // right after it is never a render behind. `runQueue` reads `getQueue()`
-  // right after its last `await`, in the same tick as the last item's
-  // final status change, so a render behind was exactly one render too
-  // many -- the demo's uploads settle over a plain microtask with no real
-  // I/O, so that render never caught up in time and `finish()` (the vault
-  // refresh included) never ran (#289).
-  function addFiles(newFiles: File[]): QueueItem[] {
+  // right after it is never a render behind, and hands each row that joined
+  // a pile to the pile store.
+  function addFiles(newFiles: File[], pileId?: string): void {
+    const joined = pileIdForNew(pileId);
+    if (joined === null) return;
     const created: QueueItem[] = newFiles.map((file) => ({
       id: crypto.randomUUID(),
       kind: 'file',
@@ -316,12 +479,15 @@ export function Add() {
       name: claimName(file.name),
       status: 'waiting',
       progress: 0,
+      pileId: joined,
     }));
     setQueue([...getQueue(), ...created]);
-    return created;
+    void runQueue(created);
   }
 
   function addDriveItems(picked: PickedItem[]): QueueItem[] {
+    const joined = pileIdForNew();
+    if (joined === null) return [];
     const created: QueueItem[] = picked.map((item) => ({
       id: crypto.randomUUID(),
       kind: 'drive',
@@ -330,6 +496,7 @@ export function Add() {
       name: claimName(item.name),
       status: 'waiting',
       progress: 0,
+      pileId: joined,
     }));
     setQueue([...getQueue(), ...created]);
     return created;
@@ -354,20 +521,22 @@ export function Add() {
           // The durable queue (R-UPL-1): the file is copied to this device
           // first, so it still finishes if Bower is closed or reloaded.
           await startUploads(me.email);
-          await uploadThroughQueue(
+          const landed = await uploadThroughQueue(
             uploadQueue(),
             {
               blob: item.file,
               name: item.name,
               type: item.file.type,
-              pileId: 'inbox',
+              pileId: uploadPileId(item),
               parentId: folderId,
             },
             onProgress,
           );
+          updateItem(item.id, { fileId: landed.fileId });
         }
       } else if (item.kind === 'link' && item.url !== undefined) {
-        await createTextFile(folderId, item.name, item.url);
+        const created = await createTextFile(folderId, item.name, item.url);
+        updateItem(item.id, { fileId: created.id });
       } else if (item.kind === 'drive' && item.driveId !== undefined) {
         await copyOrExportIntoInbox(
           {
@@ -395,34 +564,17 @@ export function Add() {
     }
   }
 
-  /** After a batch's worth of uploads: report the add. Stays on Add (#421,
-   * C.6/#334): adding is meant to take the whole pile before a tidy-up, so
-   * leaving for Home after the first row would work against that. Add only
-   * ever fills the inbox; the run itself is started by a tap on Tidy up
-   * (the hint below, Home's Inbox card, the switcher command), never by
-   * adding. */
-  function finish(): void {
-    setMessage('Added to your inbox.');
-    // The vault index otherwise only catches up on its next background
-    // revalidation, so the switcher's Tidy up count and Home's Inbox card would
-    // read stale until then (#289).
-    void refresh();
-  }
-
-  /** Runs whatever in `list` is not already `done`, then `finish()`s if,
-   * across the whole queue added so far, all of it now is. */
+  /** Runs whatever in `list` is not already `done`, then has the vault
+   * listing catch up, so the switcher's Tidy up count and Home's Inbox card
+   * do not read stale (#289). Stays on Add (#421): adding is meant to take
+   * the whole pile before a tidy-up. */
   async function runQueue(list: QueueItem[]): Promise<void> {
     if (inboxFolderId === null || list.length === 0) return;
-    setBusy(true);
-    setMessage(null);
     for (const item of list) {
       if (item.status === 'done') continue;
       await runOne(item, inboxFolderId);
     }
-    setBusy(false);
-    if (getQueue().length === 0) return;
-    if (!getQueue().every((it) => it.status === 'done')) return;
-    finish();
+    void refresh();
   }
 
   async function onDrivePicked(
@@ -435,7 +587,7 @@ export function Add() {
       notes.push('That is already in your Bower folder.');
     }
     const expanded = await expandPicks(items, notes);
-    const files = expanded.filter((item) => {
+    const picked = expanded.filter((item) => {
       if (exportPlanFor(item.mimeType).action !== 'skip') return true;
       notes.push(
         `${item.name} is a Google Drawing or Form: there is no format to save it as, so it was left out.`,
@@ -443,8 +595,8 @@ export function Add() {
       return false;
     });
     setDriveNotes(notes);
-    if (files.length === 0) return;
-    await runQueue(addDriveItems(files));
+    if (picked.length === 0) return;
+    await runQueue(addDriveItems(picked));
   }
 
   /** Loads the Picker (only now, never before the button is pressed) and
@@ -472,14 +624,14 @@ export function Add() {
     input.value = '';
   }
 
-  function onDrop(event: JSX.TargetedDragEvent<HTMLDivElement>): void {
+  function onDrop(event: JSX.TargetedDragEvent<HTMLElement>): void {
     event.preventDefault();
     setDragOver(false);
     const dropped = event.dataTransfer?.files;
     if (dropped && dropped.length > 0) addFiles(Array.from(dropped));
   }
 
-  function onDragOver(event: JSX.TargetedDragEvent<HTMLDivElement>): void {
+  function onDragOver(event: JSX.TargetedDragEvent<HTMLElement>): void {
     event.preventDefault();
     setDragOver(true);
   }
@@ -491,6 +643,8 @@ export function Add() {
       setLinkError('Enter a link starting with http:// or https://.');
       return;
     }
+    const joined = pileIdForNew();
+    if (joined === null) return;
     setLinkError(null);
     const item: QueueItem = {
       id: crypto.randomUUID(),
@@ -499,51 +653,217 @@ export function Add() {
       name: claimName(name),
       status: 'waiting',
       progress: 0,
+      pileId: joined,
     };
     setQueue([...getQueue(), item]);
     // #493: the field clears and Save greys out again — a second press on
-    // a still-full field was re-saving the same link as "… (2).md". The
-    // queue row below is the record of the save now, not the field.
+    // a still-full field was re-saving the same link as "… (2).md".
     setLinkUrl('');
     void runQueue([item]);
   }
 
-  const waiting = queue.filter((item) => item.status === 'waiting');
-  // The inbox's own count plus what is chosen but not yet uploaded: the same
-  // number the "Is that everything?" sheet shows once the pile is in.
-  const total = inboxTotal(inboxCount(files, false)) + waiting.length;
+  function retry(name: string, pileId: string): void {
+    const row = getQueue().find(
+      (item) => item.name === name && item.pileId === pileId,
+    );
+    if (row !== undefined && row.status === 'failed') {
+      void runQueue([row]);
+      return;
+    }
+    uploadQueue().retry();
+  }
+
+  /** The inbox file behind a pile item: its own id, or the listing's. */
+  function fileIdOf(name: string, known: string | undefined): string | null {
+    if (known !== undefined) return known;
+    return files.find((f) => f.path === `0-Inbox/${name}`)?.id ?? null;
+  }
+
+  /** Takes one file out of its pile and sends it to the Bin in Drive. */
+  async function removeItem(pileId: string, name: string): Promise<void> {
+    const pile = getPiles().find((p) => p.id === pileId);
+    const item = pile?.items.find((i) => i.name === name);
+    if (item === undefined) return;
+    setQueue(
+      getQueue().filter(
+        (row) => !(row.pileId === pileId && row.name === name),
+      ),
+    );
+    const id = fileIdOf(name, item.fileId);
+    await removeFromPile(pileId, name);
+    if (id !== null) {
+      try {
+        await deleteFile(id);
+      } catch (err) {
+        console.error(err);
+        setMessage('Could not remove that file from your inbox. Try again.');
+      }
+    }
+    void refresh();
+  }
+
+  /** R-PILE-10: a pile's files and note go to Drive's Bin (`deleteFile`
+   * only trashes). Resolves `false` when some file could not be removed;
+   * those stay in the pile. */
+  async function removePile(pileId: string): Promise<boolean> {
+    const pile = getPiles().find((p) => p.id === pileId);
+    if (pile === undefined) return true;
+    setQueue(getQueue().filter((row) => row.pileId !== pileId));
+    let ok = true;
+    for (const item of [...pile.items]) {
+      const id = fileIdOf(item.name, item.fileId);
+      try {
+        if (id !== null) await deleteFile(id);
+      } catch (err) {
+        console.error(err);
+        ok = false;
+        continue;
+      }
+      await removeFromPile(pileId, item.name);
+    }
+    void refresh();
+    return ok;
+  }
+
+  /** "Start another pile": the open pile closes and waits, with its note. */
+  async function startAnother(): Promise<void> {
+    saver.flush();
+    const open = openPile();
+    draftText = '';
+    setDraft('');
+    if (open !== undefined) await closePile(open.id, keepRule);
+    void refresh();
+  }
+
+  /** R-PILE-4: "Say what they are" opens a new pile with the files no pile
+   * names; the note box takes focus. */
+  async function sayWhatTheyAre(things: readonly DriveFile[]): Promise<void> {
+    if (inboxFolderId === null || things.length === 0) return;
+    saver.flush();
+    const current = openPile();
+    if (current !== undefined && current.items.length > 0) {
+      await closePile(current.id, keepRule);
+    }
+    draftText = '';
+    setDraft('');
+    const pile = openPile() ?? startPile(inboxFolderId);
+    noteRef.current?.focus();
+    for (const thing of things) {
+      await attachToPile(pile.id, {
+        name: thing.name,
+        fileId: thing.id,
+        state: 'done',
+      });
+    }
+  }
+
+  const { open, waiting } = splitPiles(piles, inboxNameSet(files));
+  const loading = status === 'loading';
+  // The inbox's own count: the same number Home's card and the "Is that
+  // everything?" sheet show (R-ADD-2).
+  const total = inboxTotal(inboxCount(files, loading));
+  const stillUploading = [...(open === undefined ? [] : [open]), ...waiting]
+    .map(uploadingCount)
+    .reduce((sum, n) => sum + n, 0);
+  const uploadsActive = activeItems(uploads).length > 0;
   const linkDisabled = inboxFolderId === null || !online;
   const driveShown = GOOGLE_API_KEY !== '' || isDemo();
   const driveDisabled =
     isDemo() || inboxFolderId === null || !online || pickerOpening;
 
-  /** The one button: uploads what is still waiting, then asks the run store
-   * for the "Is that everything?" confirmation (or reopens the working sheet
-   * while a run is going). */
-  async function onTidyUp(): Promise<void> {
+  const elsewhere =
+    noted === null
+      ? []
+      : addedFromElsewhere(
+          files.filter(
+            (file) =>
+              file.path === `0-Inbox/${file.name}` &&
+              pendingCount([file]) === 1 &&
+              processedKind(file.path, undefined) === 'file',
+          ),
+          new Set([...pileNames(piles), ...noted]),
+        );
+
+  /** A pile's rows: its own items, with the progress and the connection
+   * laid over them. */
+  function rowsFor(pile: Pile): PileRow[] {
+    return pile.items.map((item) => {
+      const row = queue.find(
+        (q) => q.name === item.name && q.pileId === pile.id,
+      );
+      const upload = uploads.find(
+        (u) => u.name === item.name && u.pileId === pile.id,
+      );
+      const percent =
+        row?.progress ??
+        (upload !== undefined && upload.size > 0
+          ? Math.round((upload.sent / upload.size) * 100)
+          : 0);
+      const kind = row === undefined ? kindOfName(item.name) : queueKind(row);
+      const state = rowState({
+        state: item.state,
+        online,
+        offlineError: upload?.error === 'offline',
+        percent,
+      });
+      return {
+        name: item.name,
+        label:
+          row?.kind === 'link' && row.url !== undefined
+            ? linkDisplayTitle(row.url)
+            : item.name,
+        kind,
+        state,
+        percent,
+        ...(row?.kind === 'drive'
+          ? { note: driveStateText(row.driveMimeType) }
+          : {}),
+        ...(row !== undefined && row.kind !== 'file' && row.error !== undefined
+          ? { error: row.error }
+          : {}),
+      };
+    });
+  }
+
+  /** The one button: asks the run store for the "Is that everything?"
+   * confirmation (or reopens the working sheet while a run is going). The
+   * note box is saved first; the run store closes and flushes every open
+   * pile before it starts (R-PILE-7). */
+  function onTidyUp(): void {
+    saver.flush();
     if (!startsRun(phase)) {
       openSheet();
       return;
     }
-    if (waiting.length > 0) {
-      await runQueue(waiting);
-      if (getQueue().some((item) => item.status !== 'done')) return;
-      await refresh();
-      // Let the render that carries the refreshed listing land first.
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    }
     tidyUpRef.current();
   }
-  const tidyDisabled = busy || phase === 'starting' || !online;
-  const tidyLabel = busy
-    ? 'Adding…'
-    : startsRun(phase)
-      ? `Tidy up ${total} ${total === 1 ? 'thing' : 'things'}`
-      : labelFor(phase);
+  const tidyDisabled = phase === 'starting' || !online;
+  const tidyLabel = startsRun(phase)
+    ? loading
+      ? 'Tidy up'
+      : `Tidy up ${thingsText(total)}`
+    : labelFor(phase);
+  const running = !startsRun(phase);
+
+  const openItems = open?.items ?? [];
+  const inInbox = openItems.filter((item) => item.state === 'done').length;
+  const openUploading = open === undefined ? 0 : uploadingCount(open);
+  const sheetPile =
+    sheetPileId === null
+      ? undefined
+      : piles.find((pile) => pile.id === sheetPileId);
 
   return (
-    <section class="add-screen">
+    <section
+      class={`add-screen${dragOver ? ' add-screen-drop' : ''}`}
+      onDragOver={onDragOver}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target) setDragOver(false);
+      }}
+      onDrop={onDrop}
+    >
       <h1 class="screen-title">Add</h1>
+      <p class="add-drop-line">{DROP_LINE}</p>
 
       <UploadNotes />
 
@@ -565,226 +885,274 @@ export function Add() {
         onChange={onFileInputChange}
       />
 
-      {/* Phone: three doors in one row, no drop square (spec R-ADD-1).
-       * Desktop hides them and shows the drop zone below instead
-       * (`add.css`'s 900 px breakpoint, the same one `layout.css` uses for
-       * the sidebar). Both live in the DOM at once so neither needs its own
-       * copy of the file inputs or the disabled/online rules. The visible
-       * word is short; the accessible name keeps the long one. */}
-      <div class="add-doors">
-        {hasCamera && (
-          <button
-            type="button"
-            class="add-door"
-            aria-label="Take a photo"
-            onClick={() => cameraInputRef.current?.click()}
-          >
-            <IconCamera />
-            <span>Photo</span>
-          </button>
-        )}
-        <button
-          type="button"
-          class="add-door"
-          aria-label="Choose files"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <IconFile />
-          <span>Files</span>
-        </button>
-        {driveShown && (
-          <button
-            type="button"
-            class="add-door"
-            aria-label="From your Drive"
-            disabled={driveDisabled}
-            aria-disabled={driveDisabled}
-            onClick={() => void onFromDrive()}
-          >
-            <IconDrive />
-            <span>Drive</span>
-          </button>
-        )}
-      </div>
-      {isDemo() && (
-        <p class="add-drive-note add-doors-note">{NOT_IN_DEMO_DRIVE}</p>
-      )}
+      <div class="add-columns">
+        <div class="add-col add-col-new">
+          <div ref={cardRef} class="pile-card pile-card-new">
+            <div class="pile-card-head">
+              <h2 class="pile-card-title">New pile</h2>
+              <span class="pile-card-count">
+                {openItems.length === 0
+                  ? 'Add files or links, and say what they are'
+                  : `${thingsText(openItems.length)} · ${inInbox} in your inbox${openUploading > 0 ? `, ${openUploading} uploading` : ''}`}
+              </span>
+            </div>
 
-      <div
-        class={`add-dropzone${dragOver ? ' add-dropzone-active' : ''}`}
-        onDragOver={onDragOver}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-      >
-        <div class="add-dropzone-bird">
-          <Bird state={dragOver ? 'shiny' : 'peeking'} size={64} />
-        </div>
-        <p class="add-dropzone-title">Drop files here</p>
-        <div class="add-actions">
-          <button
-            type="button"
-            class="button"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Choose files
-          </button>
-          {driveShown && (
-            <button
-              type="button"
-              class="button button-secondary"
-              disabled={driveDisabled}
-              aria-disabled={driveDisabled}
-              onClick={() => void onFromDrive()}
-            >
-              From your Drive
-            </button>
-          )}
-        </div>
-        {driveShown && (
-          <p class="add-drive-note">
-            {isDemo()
-              ? NOT_IN_DEMO_DRIVE
-              : 'Docs become Markdown, Sheets a table, Slides a PDF. Everything else is copied as it is.'}
-          </p>
-        )}
-      </div>
+            <div class="add-context">
+              <label for="add-context">
+                {PILE_NOTE_LABEL}{' '}
+                <span class="add-context-optional">optional</span>
+              </label>
+              <textarea
+                id="add-context"
+                ref={noteRef}
+                rows={3}
+                placeholder={PILE_NOTE_PLACEHOLDER}
+                value={draft}
+                onInput={(e) => {
+                  const next = e.currentTarget.value;
+                  draftText = next;
+                  setDraft(next);
+                  saver.schedule(next);
+                }}
+                onBlur={saver.flush}
+              />
+              {draft.trim() !== '' && openItems.length > 0 && (
+                <p class="pile-saved">{PILE_SAVED_LINE}</p>
+              )}
+            </div>
 
-      <div class="add-field">
-        <div class="add-field-row">
-          <input
-            id="add-link"
-            type="url"
-            placeholder="Paste a link"
-            aria-label="Paste a link"
-            value={linkUrl}
-            disabled={linkDisabled}
-            onInput={(e) => setLinkUrl(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onSaveLink();
-            }}
-          />
-          <button
-            type="button"
-            class="button button-secondary"
-            disabled={linkDisabled || linkUrl.trim() === ''}
-            onClick={onSaveLink}
-          >
-            Save
-          </button>
-        </div>
-        {linkError !== null && <p class="add-field-error">{linkError}</p>}
-      </div>
+            {open !== undefined && openItems.length > 0 && (
+              <PileRows
+                rows={rowsFor(open)}
+                onRemove={(name) => void removeItem(open.id, name)}
+                onRetry={(name) => retry(name, open.id)}
+              />
+            )}
 
-      {queue.length > 0 && (
-        <div class="add-queue-section">
-          <h2 class="add-queue-head">In your inbox · {queue.length}</h2>
-          <p class="add-queue-sources">
-            <span class="add-sources-phone">{queueSources(queue, false)}</span>
-            <span class="add-sources-desktop">{queueSources(queue, true)}</span>
-          </p>
-          <ul class="add-queue">
-            {queue.map((item) => (
-              <li
-                key={item.id}
-                class={`add-queue-card${item.status === 'waiting' ? ' add-queue-card-waiting' : ''}`}
+            <div class="add-doors">
+              {hasCamera && (
+                <button
+                  type="button"
+                  class="add-door"
+                  aria-label="Take a photo"
+                  disabled={inboxFolderId === null}
+                  onClick={() => cameraInputRef.current?.click()}
+                >
+                  <IconCamera />
+                  <span>Photo</span>
+                </button>
+              )}
+              <button
+                type="button"
+                class="add-door"
+                aria-label="Choose files"
+                disabled={inboxFolderId === null}
+                onClick={() => fileInputRef.current?.click()}
               >
-                <span class="add-queue-body">
-                  <span class="add-queue-name">
-                    {item.kind === 'link' && item.url !== undefined
-                      ? linkDisplayTitle(item.url)
-                      : item.name}
-                  </span>
-                  {item.status === 'uploading' && item.kind !== 'drive' && (
-                    <span class="add-queue-bar">
-                      <span
-                        class="add-queue-bar-fill"
-                        style={{ width: `${item.progress}%` }}
-                      />
-                    </span>
-                  )}
-                  <span class="add-queue-status">
-                    {item.status === 'waiting' && 'Waiting'}
-                    {item.status === 'uploading' && `${item.progress}%`}
-                    {item.status === 'done' &&
-                      (item.kind === 'drive'
-                        ? driveStateText(item.driveMimeType)
-                        : 'In your inbox')}
-                    {item.status === 'failed' && (item.error ?? 'Failed')}
-                  </span>
-                  {formatPolicy(queueKind(item)).queueLine !== null && (
-                    <span class="add-queue-kept">
-                      {formatPolicy(queueKind(item)).queueLine}
-                    </span>
-                  )}
-                </span>
-                <KindBadge
-                  kind={queueKind(item)}
-                  file={{
-                    name: item.name,
-                    mimeType: item.file?.type ?? item.driveMimeType ?? '',
-                  }}
-                />
-                {item.status === 'failed' && (
+                <IconFile />
+                <span>Files</span>
+              </button>
+              {driveShown && (
+                <button
+                  type="button"
+                  class="add-door"
+                  aria-label="From your Drive"
+                  disabled={driveDisabled}
+                  aria-disabled={driveDisabled}
+                  onClick={() => void onFromDrive()}
+                >
+                  <IconDrive />
+                  <span>Drive</span>
+                </button>
+              )}
+              <button
+                type="button"
+                class="add-door"
+                aria-label="Paste a link"
+                aria-expanded={linkOpen}
+                disabled={linkDisabled}
+                onClick={() => setLinkOpen(!linkOpen)}
+              >
+                <LinkIcon />
+                <span>Link</span>
+              </button>
+            </div>
+            {driveShown && (
+              <p class="add-drive-note add-doors-note">
+                {isDemo()
+                  ? NOT_IN_DEMO_DRIVE
+                  : 'Docs become Markdown, Sheets a table, Slides a PDF. Everything else is copied as it is.'}
+              </p>
+            )}
+
+            {linkOpen && (
+              <div class="add-field">
+                <div class="add-field-row">
+                  <input
+                    id="add-link"
+                    type="url"
+                    placeholder="Paste a link"
+                    aria-label="Link address"
+                    value={linkUrl}
+                    disabled={linkDisabled}
+                    onInput={(e) => setLinkUrl(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') onSaveLink();
+                    }}
+                  />
                   <button
                     type="button"
-                    class="button-link"
-                    onClick={() => void runQueue([item])}
+                    class="button button-secondary"
+                    disabled={linkDisabled || linkUrl.trim() === ''}
+                    onClick={onSaveLink}
                   >
-                    Retry
+                    Save
                   </button>
+                </div>
+                {linkError !== null && (
+                  <p class="add-field-error">{linkError}</p>
                 )}
-              </li>
+              </div>
+            )}
+
+            {driveNotes.map((note) => (
+              <p key={note} class="add-drive-note">
+                {note}
+              </p>
             ))}
-          </ul>
+            {message !== null && <p class="add-field-error">{message}</p>}
+            {!online && <p class="offline-reason">{offlineReason('add')}</p>}
+
+            <div class="pile-card-foot">
+              {open !== undefined && openItems.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    class="button-link pile-another"
+                    onClick={() => void startAnother()}
+                  >
+                    Start another pile
+                  </button>
+                  <span class="pile-saved">This pile is saved as you go.</span>
+                </>
+              )}
+              {!uploadsActive && <p class="pile-saved">{CLOSE_NOTE}</p>}
+            </div>
+          </div>
         </div>
-      )}
 
-      {queue.length > 0 && (
-        <div class="add-context">
-          <label for="add-context">
-            What is this? <span class="add-context-optional">optional</span>
-          </label>
-          <textarea
-            id="add-context"
-            rows={2}
-            placeholder={CONTEXT_PLACEHOLDER}
-            value={contextText}
-            onInput={(e) => setContextText(e.currentTarget.value)}
-          />
+        <div class="add-col add-col-waiting">
+          {waiting.length > 0 && (
+            <section class="pile-waiting" aria-labelledby="pile-waiting-title">
+              <div class="pile-waiting-head">
+                <h2 id="pile-waiting-title" class="pile-waiting-title">
+                  Waiting for the tidy-up
+                </h2>
+                {!loading && (
+                  <span class="pile-card-count">
+                    {thingsText(total)} in your inbox
+                  </span>
+                )}
+              </div>
+              <ul class="pile-list">
+                {waiting.map((pile) => {
+                  const note = noteLine(pile);
+                  const uploading = uploadingCount(pile);
+                  const kinds = [
+                    ...new Set(pile.items.map((i) => kindOfName(i.name))),
+                  ].slice(0, 4);
+                  return (
+                    <li key={pile.id}>
+                      <button
+                        type="button"
+                        class="pile-card pile-card-waiting"
+                        onClick={() => setSheetPileId(pile.id)}
+                      >
+                        {note === '' ? (
+                          <span class="pile-card-note pile-card-none">
+                            No note
+                          </span>
+                        ) : (
+                          <span class="pile-card-note">{note}</span>
+                        )}
+                        <span class="pile-card-kinds" aria-hidden="true">
+                          {kinds.map((kind) => (
+                            <KindBadge key={kind} kind={kind} />
+                          ))}
+                        </span>
+                        <span class="pile-card-meta">
+                          {thingsText(pile.items.length)} ·{' '}
+                          {uploading > 0
+                            ? `${uploading} uploading`
+                            : `${pileDay(pile.createdAt)} ${pileTime(pile.createdAt)}`}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
+          {elsewhere.length > 0 && (
+            <section class="pile-elsewhere">
+              <h2 class="pile-waiting-title">Added from elsewhere</h2>
+              <div class="pile-card pile-card-elsewhere">
+                <span class="pile-card-meta">
+                  {thingsText(elsewhere.length)}
+                </span>
+                <button
+                  type="button"
+                  class="button-link"
+                  onClick={() => void sayWhatTheyAre(elsewhere)}
+                >
+                  Say what they are
+                </button>
+              </div>
+            </section>
+          )}
         </div>
-      )}
+      </div>
 
-      {driveNotes.map((note) => (
-        <p key={note} class="add-drive-note">
-          {note}
-        </p>
-      ))}
-
-      {message !== null && <p class="add-message">{message}</p>}
-
-      {!online && <p class="offline-reason">{offlineReason('add')}</p>}
-
-      {/* The one button (R-ADD-5): the count in its label, always in the
-       * same place above the tabs. It uploads whatever is still waiting
-       * (chosen, dropped, photographed or shared files), then opens the
-       * "Is that everything?" sheet. Hidden when nothing is waiting: there
-       * is nothing to tidy. */}
+      {/* The one filled button on Add (R-ADD-0, D33): the count in its label,
+       * pinned above the tabs. Hidden when nothing is waiting: there is
+       * nothing to tidy. */}
       {total > 0 && (
         <div class="add-tidy">
           <button
             type="button"
             class="process-button add-tidy-button"
-            data-phase={busy ? 'running' : phase}
+            data-phase={phase}
             data-tour="tidy"
             aria-haspopup={startsRun(phase) ? undefined : 'dialog'}
+            aria-busy={loading}
             disabled={tidyDisabled}
             aria-disabled={tidyDisabled}
-            onClick={() => void onTidyUp()}
+            onClick={onTidyUp}
           >
             <IconSparkle />
             <span aria-live="polite">{tidyLabel}</span>
           </button>
+          {stillUploading > 0 && (
+            <p class="add-tidy-note">
+              {`${stillUploading} still uploading will wait for the next tidy-up`}
+            </p>
+          )}
         </div>
+      )}
+
+      {sheetPile !== undefined && (
+        <PileSheet
+          pile={sheetPile}
+          rows={rowsFor(sheetPile)}
+          running={running}
+          onText={(text) => void setPileText(sheetPile.id, text)}
+          onAddFiles={(picked) => addFiles(picked, sheetPile.id)}
+          onRemoveItem={(name) => void removeItem(sheetPile.id, name)}
+          onRetry={(name) => retry(name, sheetPile.id)}
+          onRemovePile={() => removePile(sheetPile.id)}
+          onClose={() => setSheetPileId(null)}
+        />
       )}
     </section>
   );
