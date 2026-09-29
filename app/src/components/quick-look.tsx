@@ -89,11 +89,11 @@ export interface QuickLookProps {
   /** The row's own file: the note for a pair. */
   file: DriveFile;
   /** The original a note is about, when it is in the folder. */
-  original?: DriveFile;
+  original?: DriveFile | undefined;
   /** The kind the badge shows: the original's for a pair. */
   kind: FileKind;
   /** The page count a companion note recorded. */
-  pages?: number;
+  pages?: number | undefined;
   origin: Origin | null;
   folderPath: string;
   now: number;
