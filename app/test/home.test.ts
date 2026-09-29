@@ -251,7 +251,7 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
     );
   });
 
-  it('Done: what it filed and answered, and See what I did', () => {
+  it('Done: what it filed and answered, and See what I did (no destinations)', () => {
     const parts = bubbleFor({
       ...base,
       state: 'done',
@@ -259,7 +259,7 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
       lastFinished: DONE_RUN,
     });
     expect(text(parts)).toBe(
-      'All tidy. 3 things filed and 1 question answered. See what I did.',
+      'All tidy. 3 filed and 1 question answered. See what I did.',
     );
     expect(links(parts)).toEqual(['activity:See what I did']);
     expect(
@@ -270,10 +270,57 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
           lastFinished: run('done', ['0-Inbox/a.pdf']),
         }),
       ),
-    ).toBe('All tidy. 1 thing filed. See what I did.');
+    ).toBe('All tidy. 1 filed. See what I did.');
     expect(
       text(bubbleFor({ ...base, state: 'done', lastFinished: run('done') })),
     ).toBe('All tidy. Nothing new this time. See what I did.');
+  });
+
+  describe('Done with a report that says where things went (#617)', () => {
+    const files = [
+      '0-Inbox/a.pdf',
+      '0-Inbox/b.pdf',
+      '0-Inbox/c.pdf',
+      '0-Inbox/d.pdf',
+      '0-Inbox/e.pdf',
+    ];
+    const filed: Run = {
+      ...run('done', files),
+      items: files.map((path) => ({
+        path,
+        kind: 'file' as const,
+        to: `1-Projects/Flat hunt/${path.slice(8)}`,
+      })),
+    };
+
+    it('says how many were filed, what Bower added, and links to Just filed', () => {
+      const parts = bubbleFor({
+        ...base,
+        state: 'done',
+        pending: 0,
+        lastFinished: { ...filed, added: 'I added bike times to the flats' },
+      });
+      expect(text(parts)).toBe(
+        'All tidy. 5 filed, and I added bike times to the flats. See where they went.',
+      );
+      expect(links(parts)).toEqual(['just-filed:See where they went']);
+    });
+
+    it('drops the clause when the report has no added', () => {
+      const parts = bubbleFor({
+        ...base,
+        state: 'done',
+        pending: 0,
+        lastFinished: filed,
+      });
+      expect(text(parts)).toBe('All tidy. 5 filed. See where they went.');
+      expect(links(parts)).toEqual(['just-filed:See where they went']);
+    });
+
+    it('the Last tidy-up line counts what is new to you', () => {
+      expect(lastTidyUpLine(filed, 4)).toBe('5 filed · 4 new to you');
+      expect(lastTidyUpLine(filed, 0)).toBe('5 filed');
+    });
   });
 
   it('Done: adds what the run set aside or had refused (spec A.3/A.5)', () => {
@@ -283,7 +330,7 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
       lastFinished: { ...DONE_RUN, quarantined: ['a'], refused: ['b', 'c'] },
     });
     expect(text(parts)).toBe(
-      'All tidy. 3 things filed and 1 question answered. See what I did. ' +
+      'All tidy. 3 filed and 1 question answered. See what I did. ' +
         `${quarantinedMessage(1)} ${refusedMessage(2)}`,
     );
   });

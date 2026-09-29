@@ -250,6 +250,19 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
     [ "$SMOKE_SCENARIO" = nocfg ] || echo '# rules' >"$remote/CLAUDE.md"
     case "$SMOKE_SCENARIO" in
       empty | reauth) ;;
+      facts)
+        # File facts (#610): a PDF, a workbook and an archive to count, a
+        # corrupt PDF and a corrupt archive, and a facts file from an
+        # earlier run that names a file that is gone.
+        mkdir -p "$remote/3-Resources" "$remote/.bower"
+        printf 'pages=42\n' >"$remote/3-Resources/big.pdf"
+        printf '%s\n' xl/workbook.xml xl/worksheets/sheet1.xml xl/worksheets/sheet2.xml \
+          xl/worksheets/sheet3.xml xl/worksheets/_rels/sheet1.xml.rels >"$remote/3-Resources/budget.xlsx"
+        printf '%s\n' a.jpg photos/ photos/b.jpg photos/c.jpg d.txt >"$remote/3-Resources/photos.zip"
+        printf 'junk\n' >"$remote/3-Resources/bad.pdf"
+        printf 'CORRUPT\n' >"$remote/3-Resources/bad.zip"
+        printf '{"3-Resources/gone.pdf":{"k":"1 2","pages":9}}\n' >"$remote/.bower/file-facts.json"
+        ;;
       paths)
         # Nothing pending, a few filed files, a system file and index.md
         # rows naming two of them (#597): the person moves and deletes
@@ -730,10 +743,9 @@ case "$SMOKE_SCENARIO" in
     mkdir -p '1-Projects/Job hunt'
     mv 0-Inbox/offer-north.pdf 0-Inbox/offer-south.pdf '1-Projects/Job hunt/'
     printf -- '%s\n' '---' 'title: Job offers, salary, location and deadline' 'type: answer' \
-      'tags: [answer, career]' 'created: 2026-01-15' '---' "## Bower's note" \
-      '- ✅ Both offers list a salary and a deadline.' '' '## Why' 'Read from the two offers.' '' \
-      '## What Bower used' '- [[offer-north.pdf]] (from the file)' '- [[offer-south.pdf]] (from the file)' \
-      '' '## Table' '| Offer | Salary | Location | Deadline |' '| --- | --- | --- | --- |' \
+      'tags: [answer, career]' 'created: 2026-01-15' '---' "> [!bower] Bower's note" \
+      '> Both offers list a salary and a deadline. (from the file)' '' '## Why' 'Read from the two offers.' '' \
+      '## Table' '| Offer | Salary | Location | Deadline |' '| --- | --- | --- | --- |' \
       >'1-Projects/Job hunt/Job offers, salary and deadline.md'
     echo "- File job offers under 1-Projects/Job hunt. (owner's request, 2026-01-15)" >>Rules.md
     printf -- '%s\n' 'Context: offer-west.pdf is not in the inbox' 'Rule added/changed: file job offers under 1-Projects/Job hunt' \
@@ -763,14 +775,11 @@ case "$SMOKE_SCENARIO" in
   answer)
     mkdir -p Answers
     printf -- '%s\n' '---' 'title: Which flat should I visit first?' 'type: answer' \
-      'tags: [answer, home]' 'created: 2026-01-15' '---' "## Bower's note" \
-      '- ✅ Arlington Road is 10 % under the area average.' \
-      '- ⚠️ The Kingsland Road listing leaves out the deposit.' \
-      '- ❌ The Camden lease asks for five weeks of deposit.' '' '## Why' \
-      'Rent and deposit compared from the two listings.' '' '## What Bower used' \
-      '- [[Lease agreement 2026.pdf]] (from the file)' \
-      '- Camden Town average rent (looked up on the web)' \
-      '- Bike time to the office (reasoned)' >'Answers/2026-01-15 Which flat first.md'
+      'tags: [answer, home]' 'created: 2026-01-15' '---' "> [!bower] Bower's note" \
+      '> Arlington Road is 10 % under the area average. (looked up)' \
+      '> The Kingsland Road listing leaves out the deposit. (from the file) — Check' \
+      '> Bike time to the office is 14 minutes. (from your notes: [[Offer letter]])' '' '## Why' \
+      'Rent and deposit compared from the two listings.' >'Answers/2026-01-15 Which flat first.md'
     mv '0-Inbox/Bower - 2026-01-15 0900 Tidy up.md' 0-Inbox/Processed/
     ;;
   # Report v2 (#598): the agent files the kinds it only keeps and the files
@@ -850,6 +859,24 @@ printf '%s\n' 'Working on 0-Inbox/a.pdf' 'Reading Clippings/b.md' \
   'Filed: 1 files' 'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5' 'SUMMARY-MARKER 6'
 STUB
 
+# pdfinfo and unzip stubs for the file facts (#610). pdfinfo reads a
+# "pages=N" line from the fake PDF and fails on anything else (like a corrupt
+# file); unzip -Z1 prints the fake archive's lines, one entry each, and fails
+# when its first line is CORRUPT. Every pdfinfo call is recorded.
+cat >"$STUBS/pdfinfo" <<'STUB'
+#!/usr/bin/env bash
+echo call >>"$SMOKE_STATE/pdfinfo-calls.txt"
+n=$(sed -n 's/^pages=//p' "$1")
+[ -n "$n" ] || { echo 'Syntax Error: cannot read xref table' >&2; exit 1; }
+printf 'Title:          x\nPages:          %s\nPage size:      612 x 792 pts\n' "$n"
+STUB
+cat >"$STUBS/unzip" <<'STUB'
+#!/usr/bin/env bash
+[ "$1" = -Z1 ] || exit 2
+[ "$(head -n 1 "$2")" != CORRUPT ] || { echo 'End-of-central-directory signature not found' >&2; exit 9; }
+cat "$2"
+STUB
+
 if ! command -v jq >/dev/null 2>&1; then
   cat >"$STUBS/jq.js" <<'STUB'
 // Stand-in for jq, covering only the filters run.sh uses:
@@ -888,7 +915,7 @@ if (filter === '$ARGS.named') {
     if (o.IsDir || typeof o.ID !== 'string' || /[\t\n]/.test(o.ID + o.Path)) continue;
     process.stdout.write(o.ID + '\t' + o.Path + '\n');
   }
-} else if (filter.startsWith('to_entries[]') && flags.has('r')) {
+} else if (filter.startsWith('to_entries[] | select((.value | type) == "string"') && flags.has('r')) {
   // run.sh's PATHS_READ_FILTER (#597).
   const m = JSON.parse(input());
   if (m === null || typeof m !== 'object' || Array.isArray(m)) {
@@ -905,6 +932,28 @@ if (filter === '$ARGS.named') {
   const m = {};
   for (const l of lines) { const parts = l.split('\t'); m[parts[0]] = parts[1]; }
   process.stdout.write(JSON.stringify(m) + '\n');
+} else if (filter.startsWith('to_entries[] | select((.value | type) == "object"') && flags.has('r')) {
+  // run.sh's FACTS_KEYS_FILTER (#610).
+  const m = JSON.parse(input());
+  if (m === null || typeof m !== 'object' || Array.isArray(m)) {
+    process.stderr.write('jq stand-in: not an object\n');
+    process.exit(5);
+  }
+  for (const [k, v] of Object.entries(m)) {
+    if (v !== null && typeof v === 'object' && typeof v.k === 'string' && !/[\t\n]/.test(k + v.k)) {
+      process.stdout.write(k + '\t' + v.k + '\n');
+    }
+  }
+} else if (filter.startsWith('$prev as $p | [inputs') && flags.has('R')) {
+  // run.sh's FACTS_WRITE_FILTER (#610).
+  const lines = fs.readFileSync(0, 'utf8').split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  const m = {};
+  for (const l of lines) {
+    const [path, key, kind, n] = l.split('\t');
+    m[path] = kind === 'keep' ? named.prev[path] : { k: key, [kind]: Number(n) };
+  }
+  process.stdout.write(JSON.stringify(m, null, 2) + '\n');
 } else if (filter === '.[$k] // empty' && flags.has('r')) {
   const v = JSON.parse(input())[named.k];
   if (v !== undefined && v !== null && v !== false) {
@@ -1098,44 +1147,40 @@ expect_no_copy_or_convert_tool() {
 }
 
 
-# The shape of "A note from Bower" (issue #371): `type: answer` in the
-# frontmatter; `## Bower's note` as the first section, bullets only, each
-# starting with exactly one of the three markers; then `## Why`; then
-# `## What Bower used`, each source bullet ending with its origin in
-# brackets. Later sections (the body of a job's result) are not checked.
+# The shape of "A note from Bower" (issues #371, #599): `type: answer` in
+# the frontmatter; `> [!bower] Bower's note` (or a `> [!bower]- ...` section
+# box) with at most three lines, each ending with one of the four origins and
+# optionally ` — Check`; the box comes before `## Why`. Other sections (the
+# body of a job's result) are not checked.
 # Usage: expect_bower_note <label> <text>
 expect_bower_note() {
-  local label=$1 text=$2 line section='' seen=''
+  local label=$1 text=$2 line inbox='' count=0 seen_box='' seen_why=''
   grep -Fxq 'type: answer' <<<"$text" || die "$label: no type: answer"
   while IFS= read -r line; do
     case "$line" in
-      '## '*)
-        section=$line
-        seen="$seen|$line"
+      "> [!bower] Bower's note" | '> [!bower]- '*)
+        inbox=1
+        count=0
+        seen_box=1
         continue
         ;;
-      '' | '```'*) continue ;;
-    esac
-    case "$section" in
-      "## Bower's note")
-        case "$line" in
-          '- ✅ '* | '- ⚠'* | '- ❌ '*) ;;
-          *) die "$label: a line in Bower's note without one of the three markers" ;;
-        esac
+      '> '*)
+        [ -n "$inbox" ] || continue
+        count=$((count + 1))
+        [ "$count" -le 3 ] || die "$label: more than three lines in a Bower callout"
+        grep -Eq ' \((from the file|from your notes: .+|looked up|from what you told me)\)( — Check)?$' <<<"$line" ||
+          die "$label: a callout line without one of the four origins"
+        continue
         ;;
-      '## What Bower used')
-        case "$line" in
-          '- '*' (from the file)' | '- '*' (looked up on the web)' | \
-            '- '*' (from what you told me)' | '- '*' (reasoned)') ;;
-          '- '*) die "$label: a source without its origin in brackets" ;;
-        esac
+      '## Why')
+        [ -n "$seen_box" ] || die "$label: ## Why before Bower's note"
+        seen_why=1
         ;;
     esac
+    inbox=''
   done <<<"$text"
-  case "$seen" in
-    "|## Bower's note|## Why|## What Bower used" | "|## Bower's note|## Why|## What Bower used|"*) ;;
-    *) die "$label: sections are not Bower's note, Why, What Bower used" ;;
-  esac
+  [ -n "$seen_box" ] || die "$label: no > [!bower] Bower's note box"
+  [ -n "$seen_why" ] || die "$label: no ## Why section"
 }
 # --- scenarios --------------------------------------------------------------
 
@@ -1201,15 +1246,19 @@ grep -Fq 'starts "from now on", "always" or "every time" is also a permanent rul
   die 'the rulebook does not turn a from-now-on sentence in a context note into a rule (#370)'
 grep -Fq 'Context: <file name> is not in the inbox' <<<"$RULEBOOK" ||
   die 'the rulebook does not log a named file missing from the inbox (#370)'
-# The shape check itself rejects a fourth marker and a source with no origin.
-if (expect_bower_note 'bad marker' "$(printf -- '%s\n' 'type: answer' "## Bower's note" '- 🟡 Maybe.' '## Why' 'x' '## What Bower used' '- [[a]] (reasoned)')") 2>/dev/null; then
-  die 'the note shape check accepted a marker other than the three'
+# The shape check itself rejects a verdict marker, a line with no origin
+# and a fourth line.
+if (expect_bower_note 'bad marker' "$(printf -- '%s\n' 'type: answer' "> [!bower] Bower's note" '> ✅ Fine.' '' '## Why' 'x')") 2>/dev/null; then
+  die 'the note shape check accepted a verdict marker'
 fi
-if (expect_bower_note 'no origin' "$(printf -- '%s\n' 'type: answer' "## Bower's note" '- ✅ Fine.' '## Why' 'x' '## What Bower used' '- [[a]]')") 2>/dev/null; then
-  die 'the note shape check accepted a source with no origin'
+if (expect_bower_note 'no origin' "$(printf -- '%s\n' 'type: answer' "> [!bower] Bower's note" '> Fine.' '' '## Why' 'x')") 2>/dev/null; then
+  die 'the note shape check accepted a line with no origin'
 fi
-grep -Fq 'no other marker or emoji' <<<"$RULEBOOK" ||
-  die 'the rulebook does not keep Bower'"'"'s note to the three markers (#371)'
+if (expect_bower_note 'four lines' "$(printf -- '%s\n' 'type: answer' "> [!bower] Bower's note" '> A. (looked up)' '> B. (looked up)' '> C. (looked up)' '> D. (looked up)' '' '## Why' 'x')") 2>/dev/null; then
+  die 'the note shape check accepted four lines'
+fi
+grep -Fq 'at most three lines' <<<"$RULEBOOK" ||
+  die 'the rulebook does not cap Bower'"'"'s note at three lines (#599)'
 grep -Fq '`0-Inbox/Quarantine/`' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not tell the agent to leave Quarantine/ alone'
 grep -Fq 'listed by the runner' <<<"$INGEST_PROMPT" ||
@@ -1459,7 +1508,10 @@ expect_eq "$(post 2 'p.summary.split("\n")[5]')" 'SUMMARY-MARKER 6' 'summary end
 # The server-side move finds nothing (#595), so the original falls back to
 # the copy up and its delete.
 grep -q ' 1 moves copied up instead$' "$STATE/out.log" || die 'the failed move was not counted'
-expect_eq "$(cat "$STATE/uploaded.txt")" '0-Inbox/Processed/a.pdf' 'the failed move is copied up'
+expect_eq "$(cat "$STATE/uploaded.txt")" "$(printf '0-Inbox/Processed/a.pdf\nlog.md')" \
+  'the failed move is copied up, and booked (#643)'
+grep -qE ' · Moved: 0-Inbox/a\.pdf → 0-Inbox/Processed/a\.pdf$' "$STATE/remote/log.md" ||
+  die 'the failed move is not booked in log.md'
 expect_eq "$(calls rclone | grep -c '^rclone deletefile vault:0-Inbox/a.pdf$')" 1 'rclone deletefile calls'
 [ ! -e "$STATE/remote/0-Inbox/a.pdf" ] || die 'original back in 0-Inbox/ in Drive'
 [ -f "$STATE/remote/0-Inbox/late.pdf" ] || die 'mid-run arrival gone from Drive'
@@ -2150,9 +2202,8 @@ expect_cleaned_up
 echo "ok a request sent during a run waits for the next tidy-up"
 
 # 32. A note from Bower (issue #371): a question sent from the app is
-# answered with a note that starts with Bower's note (only the three
-# markers), then Why, then What Bower used with each source's origin; it
-# reaches Drive like any other change.
+# answered with a note that starts with Bower's note (callout lines, each
+# with its origin), then Why; it reaches Drive like any other change.
 run_case answer
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
@@ -2162,7 +2213,7 @@ expect_bower_note 'the stubbed answer' "$(cat "$answer_note")"
 grep -Fxq 'Answers/2026-01-15 Which flat first.md' "$STATE/uploaded.txt" || die 'the answer was not uploaded'
 expect_content_free
 expect_cleaned_up
-echo "ok an answer starts with Bower's note, Why and What Bower used"
+echo "ok an answer starts with Bower's note, then Why"
 
 # 33. A context note (issue #370): the app-written note from Add's "What is
 # this?" box is an instruction, so the run may change Rules.md; its two
@@ -2480,4 +2531,37 @@ done
 expect_content_free
 expect_cleaned_up
 echo "ok the report says where each thing went, what was set aside and why, and what Bower added"
+
+# File facts (#610): after a run .bower/file-facts.json holds the pages of
+# the PDF, the sheets of the workbook and the entries of the archive (files,
+# not folders), a fact of a file that is gone is dropped, a corrupt PDF and
+# a corrupt archive get no fact and the run still succeeds, and the log
+# counts what was skipped without naming it. A file that did not change is
+# not counted again.
+facts_json() {
+  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(JSON.stringify(Object.keys(m).sort().map((k) => {
+      const { k: _key, ...rest } = m[k];
+      return [k, rest];
+    })))' "$STATE/remote/.bower/file-facts.json"
+}
+MODE=ingest
+run_case facts
+expect_eq "$RC" 0 'exit code (facts)'
+expect_eq "$(facts_json)" \
+  '[["3-Resources/big.pdf",{"pages":42}],["3-Resources/budget.xlsx",{"sheets":3}],["3-Resources/photos.zip",{"entries":4}]]' \
+  'file facts'
+grep -q ' 2 file facts skipped$' "$STATE/out.log" || die 'the log does not count the skipped facts'
+if grep -q 'bad\.' "$STATE/out.log"; then die 'the log names a file whose fact was skipped'; fi
+expect_eq "$(wc -l <"$STATE/pdfinfo-calls.txt" | tr -d ' ')" 2 'PDFs counted on the first run'
+expect_content_free
+# Second run: one archive is removed, nothing else changes.
+rm "$STATE/remote/3-Resources/photos.zip" "$STATE/pdfinfo-calls.txt"
+run_case facts
+expect_eq "$RC" 0 'exit code (facts, second run)'
+expect_eq "$(facts_json)" \
+  '[["3-Resources/big.pdf",{"pages":42}],["3-Resources/budget.xlsx",{"sheets":3}]]' \
+  'file facts after a file was removed'
+expect_eq "$(wc -l <"$STATE/pdfinfo-calls.txt" | tr -d ' ')" 1 'only the corrupt PDF is tried again'
+echo "ok the runner counts pages, sheets and archive entries, and skips what it cannot read"
 

@@ -232,6 +232,9 @@ readonly REFUSED_FILE="$WORK_DIR/refused.txt"
 readonly MOVES_FILE="$WORK_DIR/moves.txt"
 readonly MOVED_OLD="$WORK_DIR/moved-old.txt"
 readonly MOVED_NEW="$WORK_DIR/moved-new.txt"
+# Every move to book: those Drive did and those that fell back to a copy up.
+readonly BOOKED_OLD="$WORK_DIR/booked-old.txt"
+readonly BOOKED_NEW="$WORK_DIR/booked-new.txt"
 readonly UPLOAD_FILE="$WORK_DIR/upload.txt"
 # The map of Drive id to path each run leaves in the vault for the next
 # one's reconcile phase (see reconcile below, #597).
@@ -630,15 +633,23 @@ find_moves() {
 # file keeps its id and leaves no copy at its old path. A move Drive could
 # not do (for example: the file was moved or removed in Drive during the
 # run) falls back to the copy up. Writes the paths Drive moved to MOVED_OLD
-# and MOVED_NEW, and the accepted paths left to copy up to UPLOAD_FILE.
+# and MOVED_NEW, every move, fallbacks included, to BOOKED_OLD and BOOKED_NEW
+# (all of them are booked, #643), and the accepted paths left to copy up to
+# UPLOAD_FILE.
 # Logs counts only.
 move_up() {
   : >"$MOVED_OLD"
   : >"$MOVED_NEW"
+  : >"$BOOKED_OLD"
+  : >"$BOOKED_NEW"
   local old new dir moved=0 fell_back=0
   while IFS=$'\t' read -r old new <&3; do
     [ -n "$old" ] && [ -n "$new" ] || continue
     dir=$(dirname "$new")
+    printf '%s
+' "$old" >>"$BOOKED_OLD"
+    printf '%s
+' "$new" >>"$BOOKED_NEW"
     if { [ "$dir" = . ] ||
       rclone mkdir "vault:$dir" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; } &&
       rclone moveto "vault:$old" "vault:$new" "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1; then
@@ -656,7 +667,7 @@ move_up() {
 }
 
 # The bookkeeping phase (#596), after the move phase, without AI: for each
-# move Drive did (MOVED_OLD and MOVED_NEW, line by line), the links that
+# move (BOOKED_OLD and BOOKED_NEW, line by line: Drive moves and fallbacks), the links that
 # name the file are rewritten in every Markdown file the agent may write
 # (index.md's row among them): a link by path ([[<old path>]], and for a
 # note the path without .md) always, a link by name ([[<old name>]], for a
@@ -873,6 +884,101 @@ write_paths() {
         "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1
   }; then
     log "paths file not saved"
+  fi
+}
+
+# File facts (#610): what Drive's metadata does not say and the boards show,
+# counted here without AI and left in .bower/file-facts.json for the app: a
+# PDF's `pages` (pdfinfo, when the runner image has it), an Excel file's
+# `sheets` (the worksheet entries of its archive listing) and a ZIP's
+# `entries` (files, not folders). "k" is the file's checksum and size, so a
+# fact is counted again only for a new or changed file; a fact whose file is
+# gone is dropped. Only `pdfinfo` and an `unzip` listing (nothing is
+# extracted) ever touch file contents, each under `timeout`. A file whose
+# count fails simply has no fact; the log says how many, never which.
+readonly FACTS_FILE='.bower/file-facts.json'
+readonly FACTS_TIME_LIMIT=20
+readonly FACTS_KEYS_FILTER='to_entries[] | select((.value | type) == "object" and (.value.k | type) == "string" and ((.key + .value.k) | test("[\t\n]") | not)) | "\(.key)\t\(.value.k)"'
+readonly FACTS_WRITE_FILTER='$prev as $p | [inputs | split("\t") | if .[2] == "keep" then {key: .[0], value: $p[.[0]]} else {key: .[0], value: ({k: .[1]} + {(.[2]): (.[3] | tonumber)})} end] | from_entries'
+
+# Prints the count of kind $1 ("pages", "sheets" or "entries") for file $2,
+# or fails.
+count_fact() {
+  local n
+  case "$1" in
+    pages)
+      command -v pdfinfo >/dev/null 2>&1 || return 1
+      n=$(timeout -k 5 "$FACTS_TIME_LIMIT" pdfinfo "$2" 2>/dev/null </dev/null |
+        awk '/^Pages:/ { n = $2 } END { print n }') || return 1
+      ;;
+    sheets)
+      n=$(timeout -k 5 "$FACTS_TIME_LIMIT" unzip -Z1 "$2" 2>/dev/null </dev/null |
+        grep -c '^xl/worksheets/[^/]*\.xml$') || return 1
+      ;;
+    entries)
+      n=$(timeout -k 5 "$FACTS_TIME_LIMIT" unzip -Z1 "$2" 2>/dev/null </dev/null |
+        grep -vc '/$') || return 1
+      ;;
+  esac
+  case "$n" in '' | *[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$n"
+}
+
+# Best effort at the end of a run: never fails it.
+write_file_facts() {
+  command -v unzip >/dev/null 2>&1 || command -v pdfinfo >/dev/null 2>&1 || return 0
+  local dir="$WORK_DIR/facts-out" old="$WORK_DIR/facts-old.json"
+  local keys="$WORK_DIR/facts-keys.tsv" rows="$WORK_DIR/facts-rows.tsv"
+  local path key kind n skipped=0 base
+  mkdir -p "$dir/.bower" || return 0
+  : >"$keys"
+  : >"$rows"
+  printf '{}\n' >"$old"
+  # A previous file that is not a JSON object is ignored, as if absent.
+  if [ -f "$VAULT_DIR/$FACTS_FILE" ] &&
+    jq -r "$FACTS_KEYS_FILTER" "$VAULT_DIR/$FACTS_FILE" >"$keys.new" 2>/dev/null; then
+    mv "$keys.new" "$keys"
+    cp "$VAULT_DIR/$FACTS_FILE" "$old"
+  fi
+  while IFS= read -r path; do
+    case "$path" in *$'\t'*) continue ;; esac
+    base=${path##*/}
+    case "${base##*.}" in
+      pdf | PDF | Pdf) kind=pages ;;
+      xlsx | XLSX) kind=sheets ;;
+      zip | ZIP) kind=entries ;;
+      *) continue ;;
+    esac
+    key=$(cksum <"$VAULT_DIR/$path" | awk '{ print $1 " " $2 }') || continue
+    if grep -qxF -- "$path"$'\t'"$key" "$keys"; then
+      printf '%s\t%s\tkeep\t\n' "$path" "$key" >>"$rows"
+      continue
+    fi
+    if n=$(count_fact "$kind" "$VAULT_DIR/$path"); then
+      printf '%s\t%s\t%s\t%s\n' "$path" "$key" "$kind" "$n" >>"$rows"
+    else
+      skipped=$((skipped + 1))
+    fi
+  done < <(cd "$VAULT_DIR" && find . -type f ! -path './.obsidian/*' ! -path './.claude/*' \
+    ! -path './.bower/*' "${SYSTEM_FIND_TESTS[@]}" | sed 's|^\./||' | LC_ALL=C sort)
+  [ "$skipped" -eq 0 ] || log "$skipped file facts skipped"
+  if ! jq -Rn --argjson prev "$(cat "$old")" "$FACTS_WRITE_FILTER" <"$rows" >"$dir/$FACTS_FILE" 2>>"$RCLONE_LOG"; then
+    log "file facts not saved"
+    return 0
+  fi
+  # Nothing to say and nothing said before, or nothing new: no upload.
+  if [ ! -f "$VAULT_DIR/$FACTS_FILE" ] && [ "$(tr -d ' \n' <"$dir/$FACTS_FILE")" = '{}' ]; then
+    return 0
+  fi
+  if [ -f "$VAULT_DIR/$FACTS_FILE" ] && cmp -s "$dir/$FACTS_FILE" "$VAULT_DIR/$FACTS_FILE"; then
+    return 0
+  fi
+  if ! {
+    printf '%s\n' "$FACTS_FILE" >"$dir/files.txt" &&
+      rclone copy "$dir" vault: --files-from-raw "$dir/files.txt" \
+        "${RCLONE_FILTER[@]}" </dev/null >>"$RCLONE_LOG" 2>&1
+  }; then
+    log "file facts not saved"
   fi
 }
 
@@ -1317,6 +1423,7 @@ if [ "$MODE" = ingest ] && [ "$PENDING_COUNT" -eq 0 ]; then
   STEP='report done'
   log "$STEP"
   write_outcome done 'Nothing new to tidy up.'
+  write_file_facts
   write_paths
   if ! report_final done; then
     REPORTED=1
@@ -1585,7 +1692,7 @@ fi
 if ! move_up; then
   fail "$STEP: move failed"
 fi
-if ! book_moves "$VAULT_DIR" "$MOVED_OLD" "$MOVED_NEW" "$(date -u '+%F %H:%M')"; then
+if ! book_moves "$VAULT_DIR" "$BOOKED_OLD" "$BOOKED_NEW" "$(date -u '+%F %H:%M')"; then
   fail "$STEP: bookkeeping failed"
 fi
 # Report v2 (#598): each processed item that moved carries where it went.
@@ -1641,6 +1748,7 @@ else
   [ -f "$WORK_DIR/pending-after-scan.txt" ] || filed=$(count_lines "$PENDING_FILE")
   write_outcome done "Tidied up $filed $([ "$filed" -eq 1 ] && echo thing || echo things)."
 fi
+write_file_facts
 write_paths
 if ! report_final done; then
   REPORTED=1

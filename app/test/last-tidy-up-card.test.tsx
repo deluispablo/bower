@@ -37,11 +37,20 @@ afterEach(() => {
 async function mount(
   state: Parameters<typeof LastTidyUpCard>[0]['state'],
   run: Run | null,
+  newCount?: number,
 ): Promise<void> {
   root = document.createElement('div');
   document.body.append(root);
   await act(() => {
-    render(h(LastTidyUpCard, { state, run, now: Date.now() }), root);
+    render(
+      h(LastTidyUpCard, {
+        state,
+        run,
+        now: Date.now(),
+        ...(newCount !== undefined && { newCount }),
+      }),
+      root,
+    );
   });
 }
 
@@ -68,5 +77,29 @@ describe('LastTidyUpCard', () => {
     await mount('loading', null);
     expect(root.textContent).not.toContain('No tidy-up yet');
     expect(root.querySelector('.home-skeleton-line')).not.toBeNull();
+  });
+
+  it('counts what is new to you and opens Just filed (#617)', async () => {
+    const withWhere: Run = {
+      ...DONE_RUN,
+      items: [
+        {
+          path: '0-Inbox/Lease agreement 2026.pdf',
+          kind: 'file',
+          to: '2-Areas/Home/Lease agreement 2026.pdf',
+        },
+      ],
+    };
+    await mount('done', withWhere, 1);
+    expect(root.textContent).toContain('new to you');
+    expect(root.querySelector('a')?.getAttribute('href')).toBe('/just-filed');
+  });
+
+  it('keeps the Bower tab for a run with no destinations (#617)', async () => {
+    await mount('done', DONE_RUN, 0);
+    expect(root.textContent).not.toContain('new to you');
+    expect(root.querySelector('a')?.getAttribute('href')).toBe(
+      '/bower?show=activity',
+    );
   });
 });

@@ -334,7 +334,7 @@ test('Run your own Bower: the rows, the runbook, and the nine screens with Close
 test('the quick switcher opens a note', async ({ page }, testInfo) => {
   await openHome(page);
   await visible(
-    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('Lisbon');
@@ -386,7 +386,7 @@ test("a note Bower wrote opens with Bower's note and the Used line (#351, #602)"
 }, testInfo) => {
   await openHome(page);
   await visible(
-    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('subscriptions renew');
@@ -904,21 +904,21 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toContainText(
     'In the demo the bird plays back a real run in twenty seconds',
   );
-  await expect(sheet).toContainText('Playing back');
+  await expect(sheet).toContainText('playing back');
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed
   // and one was a question Bower answered.
-  await expect(sheet.getByText('3 files processed')).toBeVisible({
+  await expect(sheet.getByText('6 files processed')).toBeVisible({
     timeout: 20_000,
   });
   await expect(bubble).toHaveText(
-    'All tidy. 2 things filed and 1 question answered. See what I did.',
+    'All tidy. 5 filed and 1 question answered, and I added bike times to the flats. See where they went.',
   );
   await expect(inbox).toContainText('Nothing waiting. Add something.');
   await expect(
     visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
-  ).toContainText('2 filed · 1 answered');
+  ).toContainText('5 filed · 1 answered');
   await shot(page, testInfo, 'tidy-up');
 
   // #506: Done no longer closes itself on a timer — it used to, within 8 s
@@ -946,7 +946,7 @@ test('a filed link reads by its host and path, on the Done sheet and in Recent, 
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await expect(sheet.getByText('4 files processed')).toBeVisible({
+  await expect(sheet.getByText('7 files processed')).toBeVisible({
     timeout: 20_000,
   });
 
@@ -958,7 +958,7 @@ test('a filed link reads by its host and path, on the Done sheet and in Recent, 
     hasText: 'example.org',
   });
   await expect(row).toBeVisible();
-  await expect(row).toContainText('3-Resources');
+  await expect(row).toContainText('Resources');
   await expect(sheet.getByText(/^Link - /)).toHaveCount(0);
   await sheet.getByRole('button', { name: 'Close' }).click();
 
@@ -981,7 +981,7 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await expect(sheet.getByText('3 files processed')).toBeVisible({
+  await expect(sheet.getByText('6 files processed')).toBeVisible({
     timeout: 20_000,
   });
   await sheet.getByRole('button', { name: 'Close' }).click();
@@ -996,7 +996,7 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   const lastCard = visible(
     page.locator('.home-card', { hasText: 'Last tidy-up' }),
   );
-  await expect(lastCard).toContainText('2 filed · 1 answered');
+  await expect(lastCard).toContainText('5 filed · 1 answered');
 
   // A second batch, then a second tidy-up: while it goes, the card must
   // still read the first run's line, not "No tidy-up yet" — the board
@@ -1013,7 +1013,7 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   ).click();
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(sheet).toBeVisible();
-  await expect(lastCard).toContainText('2 filed · 1 answered');
+  await expect(lastCard).toContainText('5 filed · 1 answered');
   await expect(lastCard).not.toContainText('No tidy-up yet');
   await shot(page, testInfo, 'last-tidy-up-during-next-run');
 });
@@ -1034,8 +1034,8 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   // line (#363), and the item being read.
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
-  await expect(sheet.getByText(/^[0-3] of 3 filed$/)).toBeVisible();
-  await expect(sheet.getByText('Playing back')).toBeVisible();
+  await expect(sheet.getByText(/^[0-3] of 3 · playing back$/)).toBeVisible();
+  await expect(sheet.getByText(/playing back/)).toBeVisible();
   await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(
@@ -1048,28 +1048,28 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
 
   // The scripted run files one item after another (`src/demo/server.ts`);
   // the app polls every five seconds, so some land before the run ends.
-  await expect(sheet.getByText(/^[12] of 3 filed$/)).toBeVisible({
+  await expect(sheet.getByText(/^[12] of 3 · playing back$/)).toBeVisible({
     timeout: 15_000,
   });
   await expect(
     rows.filter({ hasText: 'Boiler service invoice' }),
-  ).toContainText('filed');
+  ).toContainText('Areas › Home');
   await shot(page, testInfo, 'run-working-rows');
 
   // Done: the listing is read again and the rows name where things went;
   // the request went to the processed folder, so it only says filed.
-  await expect(sheet.getByText('3 files processed')).toBeVisible({
+  await expect(sheet.getByText('6 files processed')).toBeVisible({
     timeout: 20_000,
   });
   await expect(
     rows.filter({ hasText: 'Boiler service invoice' }),
-  ).toContainText('→ Home');
+  ).toContainText('Areas › Home');
   await expect(rows.filter({ hasText: 'Tomato seedlings' })).toContainText(
-    '→ Garden',
+    'Areas › Garden',
   );
   await expect(
     rows.filter({ hasText: 'What do I still need for Lisbon' }),
-  ).toContainText('filed');
+  ).toContainText('Inbox › Processed');
   await expect(rows.filter({ hasText: 'reading…' })).toHaveCount(0);
 });
 
@@ -1140,7 +1140,7 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   // Done is announced once, in a toast that closes; the sheet stays closed
   // and the Inbox card, now empty, points at Add.
   const toast = page.getByRole('status').filter({
-    hasText: '3 files processed',
+    hasText: '6 files processed',
   });
   await expect(toast).toBeVisible({ timeout: 20_000 });
   await expect(sheet).toBeHidden();
@@ -1873,7 +1873,7 @@ test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
   // with no tour to skip.
   await page.goto('/');
   await visible(
-    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('Lisbon');
@@ -1903,7 +1903,7 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
   // long as the title itself -- the exact shape that used to leave both
   // cut to a few letters (#426).
   await visible(
-    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('Lisbon');
@@ -1937,7 +1937,7 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
   // Home opens with no tour to skip.
   await page.goto('/');
   await visible(
-    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
   ).click();
   await switcher.getByRole('combobox').fill('subscriptions renew');
   await switcher
@@ -2043,7 +2043,7 @@ test('At 1920 the content stays in one centred container, away from the right ed
 
   // A note, with its About panel: the container grows to 1200, still centred.
   await visible(
-    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('subscriptions renew');
@@ -2212,7 +2212,7 @@ test('At 1920 a note and its About panel are one row next to the measure, centre
   await page.setViewportSize({ width: 1920, height: 1080 });
   await openHome(page);
   await visible(
-    page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
   ).click();
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await switcher.getByRole('combobox').fill('subscriptions renew');
@@ -2267,7 +2267,9 @@ test('Home, a note, Add, the Bower tab and Settings at 1024, 1280, 1440 and 1920
       'note',
       async () => {
         await visible(
-          page.getByRole('button', { name: /^Search( or jump to a note)?$/ }),
+          page.getByRole('button', {
+            name: /^Search( folders, notes and files)?$/,
+          }),
         ).click();
         const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
         await switcher.getByRole('combobox').fill('subscriptions renew');
@@ -2580,7 +2582,10 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
     0,
   );
   // The one More menu (#352): the board's header, then Ask Bower first.
-  await expect(menu).toContainText('PDF · Projects / Kitchen Refresh');
+  await expect(menu.locator('.note-menu-meta')).toContainText('PDF');
+  await expect(menu.locator('.note-menu-meta')).toContainText(
+    'Projects › Kitchen Refresh',
+  );
   await expect(menu.getByRole('menuitem').first()).toContainText(
     'Ask Bower about this',
   );
@@ -2633,16 +2638,24 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
     .getByRole('button', { name: 'Yes, tidy up' })
     .click();
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await expect(sheet.getByText('3 files processed')).toBeVisible({
+  await expect(sheet.getByText('6 files processed')).toBeVisible({
     timeout: 20_000,
   });
   await sheet.getByRole('button', { name: 'Close' }).click();
 
-  // Home's Last tidy-up card opens Activity, on that card.
+  // Home's Last tidy-up card opens Just filed (#617); Activity in the Bower
+  // tab stays the full history, with that run's card first.
   await visible(
     page.locator('.home-card', { hasText: 'Last tidy-up' }),
   ).click();
-  await expect(page).toHaveURL(/\/bower\?show=activity$/);
+  await expect(page).toHaveURL(/\/just-filed$/);
+  // The push prompt a finished run raises covers the phone's tab bar.
+  const prompt = page.locator('.push-prompt');
+  if (await prompt.isVisible()) {
+    await prompt.getByRole('button', { name: /Not now|Got it/ }).click();
+  }
+  await navigate(page, /^Bower$/);
+  await showBowerPart(page, 'Activity');
   await expect(bowerPart(page, 'Activity')).toBeVisible();
   await expect(cards).toHaveCount(5);
   await expect(cards.nth(0)).toContainText('Today, 10:44 · 1 min');

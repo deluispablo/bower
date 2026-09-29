@@ -1,0 +1,211 @@
+/*
+ * The Move to… folder picker (#608, board Phone-Move-Picker): a bottom
+ * sheet under 900 px, a centred dialog from 900 px up. Colours are tokens
+ * only; the marks come from `marks.css`.
+ */
+
+.folder-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(7 12 22 / 0.5);
+}
+
+.folder-picker-panel {
+  position: fixed;
+  z-index: 50;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 88vh;
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  background: var(--color-sidebar);
+  border: 1px solid var(--color-border);
+  border-width: 1px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-md);
+  outline: none;
+}
+
+@media (min-width: 900px) {
+  .folder-picker-panel {
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    width: min(440px, 92vw);
+    max-height: 80vh;
+    border-width: 1px;
+    border-radius: var(--radius-lg);
+    transform: translate(-50%, -50%);
+  }
+}
+
+.folder-picker-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+
+.folder-picker-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.folder-picker-search input {
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  outline: none;
+}
+
+.folder-picker-search:focus-within {
+  border-color: var(--color-accent);
+}
+
+.folder-picker-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.folder-picker-row {
+  display: flex;
+  align-items: center;
+}
+
+.folder-picker-chevron,
+.folder-picker-chevron-gap {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-height: 44px;
+}
+
+.folder-picker-chevron {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.folder-picker-open {
+  display: inline-flex;
+  transform: rotate(90deg);
+}
+
+.folder-picker-choice {
+  display: flex;
+  flex-grow: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-picker-landmark .folder-picker-choice {
+  min-height: 56px;
+}
+
+.folder-picker-choice:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.folder-picker-choice:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.folder-picker-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.folder-picker-landmark .folder-picker-name {
+  font-weight: var(--weight-bold);
+}
+
+.folder-picker-meaning {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.folder-picker-tick {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--color-accent);
+}
+
+.folder-picker-empty,
+.folder-picker-note {
+  margin: 0;
+  padding: var(--space-1) 2px;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.folder-picker-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.folder-picker-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.folder-picker-primary {
+  flex-grow: 1;
+  min-height: 48px;
+}
+
+.folder-picker-secondary {
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.folder-picker-secondary:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.folder-picker-secondary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
