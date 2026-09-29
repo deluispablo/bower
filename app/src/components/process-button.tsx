@@ -30,7 +30,7 @@ export function labelFor(phase: RunPhase): string {
     case 'starting':
     case 'queued':
     case 'running':
-      return 'Tidying up…';
+      return 'Tidy-up running…';
     case 'failed':
     case 'stale':
       return 'Try again';
@@ -49,6 +49,11 @@ export function startsRun(phase: RunPhase): boolean {
   );
 }
 
+/** Whether a run is under way in `phase`: the button is off (R-REQ-5). */
+export function isRunning(phase: RunPhase): boolean {
+  return phase === 'starting' || phase === 'queued' || phase === 'running';
+}
+
 export function ProcessButton(): JSX.Element | null {
   const { me } = useSession();
   const { phase, tidyUp, openSheet } = useRun();
@@ -58,10 +63,11 @@ export function ProcessButton(): JSX.Element | null {
   if (me?.vault == null) return null;
 
   const starts = startsRun(phase);
-  // #505: disabled for the gap between "Yes, tidy up" and the
-  // `POST /process` answer, so a tap here cannot reopen the "Is that
-  // everything?" confirmation for a run that is already starting.
-  const starting = phase === 'starting';
+  // #505, R-REQ-5: disabled from "Yes, tidy up" until the run ends. It reads
+  // "Tidy-up running…" and queues nothing, so a tap never silently joins
+  // an instructions-only run, and cannot reopen the "Is that everything?"
+  // confirmation for a run already under way. The tidy-up bar shows the run.
+  const starting = isRunning(phase);
 
   return (
     <div class="process">
@@ -75,7 +81,7 @@ export function ProcessButton(): JSX.Element | null {
         aria-disabled={!online || starting}
         onClick={starts ? () => tidyUp() : openSheet}
       >
-        {phase === 'running' || phase === 'queued' || starting ? (
+        {starting ? (
           <span class="process-spinner" aria-hidden="true" />
         ) : (
           <IconSparkle />
