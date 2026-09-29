@@ -43,6 +43,9 @@ export interface RunOutcome {
   updated: number;
   /** Things the person must deal with: set aside plus left in the inbox. */
   needsYou: number;
+  /** Requests (Bower notes) the run answered or kept: a request-only run is
+   * still a done run, never "Nothing new". */
+  requests: number;
   /** Pending inbox things the run did not get to. Part of `needsYou`. */
   left: number;
   items: OutcomeItem[];
@@ -162,6 +165,7 @@ function build(raw: RawOutcome): RunOutcome {
   const created = count('new');
   const updated = count('updated');
   const left = raw.left.length;
+  const requests = raw.items.filter((item) => item.kind === 'request').length;
   let state: OutcomeState;
   if (raw.ended === 'running') state = 'running';
   else if (raw.ended === 'done') state = 'done';
@@ -174,6 +178,7 @@ function build(raw: RawOutcome): RunOutcome {
     created,
     updated,
     needsYou: raw.setAside.length + left,
+    requests,
     left,
     items,
   };
@@ -302,13 +307,19 @@ export function runSentence(
       return `${first ? 'Tidying' : 'Bower is tidying'} up ${what}. It takes a few minutes; you can keep adding.`;
     }
     case 'done': {
-      const counts = outcomeCounts(outcome);
+      // Requests are not counted with the files, but a run of only requests
+      // did something: it never reads "Nothing new".
+      const counts =
+        outcomeCounts(outcome) ||
+        (outcome.requests > 0 ? plural(outcome.requests, 'request') : '');
       if (counts === '') return 'Nothing new: the inbox was empty.';
       const ago =
         outcome.finishedAt === undefined
           ? ''
           : sinceLabel(outcome.finishedAt, options.now ?? Date.now());
-      return `Done${ago === '' ? '' : ` ${ago}`}: ${counts}.`;
+      const only = counts === plural(outcome.requests, 'request');
+      const said = only && outcome.requests === 1 ? 'your request' : counts;
+      return `Done${ago === '' ? '' : ` ${ago}`}: ${said}.`;
     }
     case 'partial': {
       const did =

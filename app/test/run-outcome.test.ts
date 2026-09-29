@@ -138,6 +138,31 @@ describe('outcomeFromRun (R-RUN-1)', () => {
     expect(bare.filed).toBe(2);
   });
 
+  it('a run of only requests reads "your request", never "Nothing new"', () => {
+    const one = outcomeFromRun(
+      buildRun('done', {
+        items: [{ path: '0-Inbox/Bower - Q.md', kind: 'request' }],
+        created: [],
+        updated: [],
+      }),
+    );
+    expect(one.requests).toBe(1);
+    expect(runSentence(one, { now: NOW, voice: 'third' })).toMatch(
+      /^Done.*: your request\.$/,
+    );
+    const two = outcomeFromRun(
+      buildRun('done', {
+        items: [
+          { path: '0-Inbox/Bower - A.md', kind: 'request' },
+          { path: '0-Inbox/Bower - B.md', kind: 'request' },
+        ],
+        created: [],
+        updated: [],
+      }),
+    );
+    expect(runSentence(two, { now: NOW })).toMatch(/: 2 requests\.$/);
+  });
+
   it('counts set-aside files and what is left as needs you', () => {
     const outcome = outcomeFromRun(
       buildRun('done', {

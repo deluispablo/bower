@@ -1382,7 +1382,7 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
   ).toBeVisible();
   // One file: the request, not the two other things in the inbox.
   const toast = page.getByRole('status').filter({
-    hasText: /^Done|^Nothing new/,
+    hasText: /^Done/,
   });
   await expect(toast).toBeVisible({ timeout: 20_000 });
   // The row keeps the exact sentence sent (the edit) once answered too --
