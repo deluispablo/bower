@@ -768,10 +768,32 @@ export function FolderItems({
     [],
   );
 
+  // The key handler is set once and reads what the last render left here, so
+  // a key pressed before a render has settled still sees the newest state.
+  const live = useRef({
+    selectedKey: null as string | null,
+    orderedRows,
+    selected,
+    layout,
+    onUp,
+    onOpen,
+  });
+  live.current = {
+    selectedKey: selected?.key ?? null,
+    orderedRows,
+    selected,
+    layout,
+    onUp,
+    onOpen,
+  };
+
   useEffect(() => {
     if (!desktop) return;
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.defaultPrevented || quick !== null) return;
+      const { orderedRows, layout, onUp, onOpen } = live.current;
+      if (event.defaultPrevented) return;
+      // Quick look is a dialog; it has the keys while it is open.
+      if (document.querySelector('.quick-look-panel') !== null) return;
       const target = event.target;
       const element = target instanceof HTMLElement ? target : null;
       if (element?.closest('[role="dialog"]') != null) return;
@@ -794,7 +816,9 @@ export function FolderItems({
             )
           : 1;
       const action = folderKeyAction(event, {
-        selected: orderedRows.findIndex((row) => row.key === selected?.key),
+        selected: orderedRows.findIndex(
+          (row) => row.key === live.current.selectedKey,
+        ),
         count: orderedRows.length,
         columns,
         canGoUp: onUp !== undefined,
@@ -809,18 +833,20 @@ export function FolderItems({
       } else if (action.type === 'select') {
         const next = orderedRows[action.index];
         if (next === undefined) return;
+        live.current.selectedKey = next.key;
+        live.current.selected = next;
         setSelectedKey(next.key);
         document
           .querySelector(`[data-row-key="${CSS.escape(next.key)}"]`)
           ?.scrollIntoView?.({ block: 'nearest' });
-      } else if (selected !== null) {
-        if (action.type === 'quick-look') setQuick(selected);
-        else onOpen?.(hrefOf(selected));
+      } else if (live.current.selected !== null) {
+        if (action.type === 'quick-look') setQuick(live.current.selected);
+        else onOpen?.(hrefOf(live.current.selected));
       }
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  });
+  }, [desktop]);
 
   const VirtualList = loaded?.VirtualList;
   const counts: Record<OriginFilter, number | null> = {

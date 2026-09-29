@@ -17,8 +17,9 @@ async function open(page: Page, width: number): Promise<void> {
   await expect(page.locator('.folder-item').first()).toBeVisible();
 }
 
-test.beforeEach(({}, testInfo) => {
+test.beforeEach(async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'desktop layout');
+  await page.setViewportSize({ width: 1280, height: 800 });
 });
 
 test('1280 px: three panes, and the preview follows the selected row', async ({
@@ -40,9 +41,7 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
   const firstTitle = (
     await first.locator('.folder-row-name').innerText()
   ).trim();
-  await expect(preview.getByRole('heading', { level: 2 })).toHaveText(
-    firstTitle,
-  );
+  await expect(preview.locator('.quick-look-title')).toHaveText(firstTitle);
   await expect(
     preview.getByRole('link', { name: 'Open', exact: true }),
   ).toBeVisible();
@@ -54,9 +53,7 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
   const secondTitle = (
     await rows.nth(1).locator('.folder-row-name').innerText()
   ).trim();
-  await expect(preview.getByRole('heading', { level: 2 })).toHaveText(
-    secondTitle,
-  );
+  await expect(preview.locator('.quick-look-title')).toHaveText(secondTitle);
 
   // The header, the dates and the hint line.
   await expect(
@@ -86,7 +83,7 @@ test('the pair on the preview: Bower and the original, the note rendered', async
     .locator('.folder-item', { hasText: 'Arlington Road, 2 bed' })
     .first()
     .hover();
-  await expect(preview.getByRole('heading', { level: 2 })).toContainText(
+  await expect(preview.locator('.quick-look-title')).toContainText(
     'Arlington Road',
   );
   await expect(preview.locator('.quick-look-kind')).toContainText(
