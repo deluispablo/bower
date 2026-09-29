@@ -52,6 +52,7 @@ import type { FolderContents, FolderSubfolder } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
+import type { PendingRequest } from '../rename-request.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
@@ -69,6 +70,7 @@ import type { FolderLayout } from './folder-grid.js';
 import { Hint } from './hint.js';
 import {
   IconChevronRight,
+  IconClock,
   IconDoc,
   IconFolder,
   IconImage,
@@ -597,6 +599,8 @@ function RowDetail({
   );
 }
 
+const NO_WAITING: ReadonlyMap<string, PendingRequest> = new Map();
+
 export interface FolderItemsProps {
   contents: FolderContents;
   titles: ReadonlyMap<string, string>;
@@ -608,6 +612,9 @@ export interface FolderItemsProps {
   /** From 1200 px (#614): a selection that follows the arrow keys, the
    * kind chips, the right-hand dates and the key hint. */
   desktop?: boolean;
+  /** The Rename and Move requests that wait, by path (`pendingByPath`):
+   * their rows carry a clock badge (#765, R-MORE-4, D32). */
+  waiting?: ReadonlyMap<string, PendingRequest>;
   /** Tells the preview pane what is selected (desktop only). */
   onPreview?: (item: PanePreview | null) => void;
   /** Takes the person up a folder (Backspace); absent at a top level. */
@@ -643,6 +650,7 @@ export function FolderItems({
   now,
   compare,
   desktop = false,
+  waiting = NO_WAITING,
   onPreview,
   onUp,
   onOpen,
@@ -830,6 +838,9 @@ export function FolderItems({
     }
     const { row } = entry;
     const href = hrefOf(row);
+    const isWaiting =
+      waiting.has(row.file.path) ||
+      (row.original !== undefined && waiting.has(row.original.path));
     const isNew =
       fresh.isNew(row.file.id) ||
       (row.original !== undefined && fresh.isNew(row.original.id));
@@ -838,11 +849,13 @@ export function FolderItems({
         class="folder-row folder-item"
         href={href}
         aria-labelledby={domId('row-name', row.key)}
-        aria-describedby={
-          isNew
-            ? `${domId('row-detail', row.key)} ${domId('row-new', row.key)}`
-            : domId('row-detail', row.key)
-        }
+        aria-describedby={[
+          domId('row-detail', row.key),
+          isNew ? domId('row-new', row.key) : null,
+          isWaiting ? domId('row-wait', row.key) : null,
+        ]
+          .filter((id) => id !== null)
+          .join(' ')}
         {...holdProps(row)}
       >
         <KindIcon
@@ -858,6 +871,16 @@ export function FolderItems({
             {isNew && (
               <span class="folder-row-describe" id={domId('row-new', row.key)}>
                 <NewTag />
+              </span>
+            )}
+            {isWaiting && (
+              <span
+                class="folder-row-describe folder-row-waiting"
+                id={domId('row-wait', row.key)}
+                role="img"
+                aria-label="Waiting for the next tidy-up"
+              >
+                <IconClock />
               </span>
             )}
           </span>

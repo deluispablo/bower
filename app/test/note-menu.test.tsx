@@ -20,6 +20,9 @@ vi.mock('../src/components/folder-picker.js', () => ({
     }),
 }));
 
+const openSendToBower = vi.hoisted(() => vi.fn());
+vi.mock('../src/components/send-to-bower.js', () => ({ openSendToBower }));
+
 function file(name: string): DriveFile {
   return {
     id: 'note-1',
@@ -136,6 +139,56 @@ afterEach(() => {
 });
 
 describe('NoteMenu', () => {
+  it('offers Rename… for a note that has its folder names, and opens the send sheet (#765)', () => {
+    openSendToBower.mockClear();
+    mountFor({
+      file: NOTE,
+      title: 'Shopping list',
+      typeLabel: 'Note',
+      askName: 'Shopping list',
+      siblingNames: ['Shopping list.md', 'Todo.md'],
+    });
+    const labels = rows().map(
+      (r) => r.querySelector('.note-menu-row-label')?.textContent,
+    );
+    expect(labels.indexOf('Rename…')).toBe(labels.indexOf('Move to…') - 1);
+    const rename = rowByText('Rename…');
+    expect(rename.textContent).toContain('waits for the tidy-up');
+    click(rename);
+    const call = openSendToBower.mock.calls[0]?.[0] as {
+      mode: string;
+      initialText: string;
+      buildText: (v: string) => string;
+      validate: (v: string) => string | null;
+    };
+    expect(call.mode).toBe('rename');
+    expect(call.initialText).toBe('Shopping list');
+    expect(call.buildText(' Groceries ')).toBe(
+      'Rename Shopping list.md to Groceries.md',
+    );
+    expect(call.validate('Todo')).toBe(
+      'Something in this folder already has that name.',
+    );
+    expect(call.validate('Groceries')).toBeNull();
+  });
+
+  it('leaves Rename… out for a folder, for the app files and without names (#765)', () => {
+    const base = { title: 'X', typeLabel: 'Note', askName: 'X' };
+    mountFor({
+      ...base,
+      kind: 'folder',
+      file: file('Garden'),
+      siblingNames: [],
+    });
+    expect(rows().some((r) => r.textContent?.includes('Rename…'))).toBe(false);
+    void act(() => render(null, root));
+    mountFor({ ...base, file: file('Rules.md'), siblingNames: [] });
+    expect(rows().some((r) => r.textContent?.includes('Rename…'))).toBe(false);
+    void act(() => render(null, root));
+    mountFor({ ...base, file: NOTE });
+    expect(rows().some((r) => r.textContent?.includes('Rename…'))).toBe(false);
+  });
+
   it('lists eight rows for a normal note, in the board order', () => {
     mount(true);
     expect(
@@ -214,10 +267,10 @@ describe('NoteMenu', () => {
     );
   });
 
-  it('says "Bower does it" under Move to…, which opens the folder picker for this note (#608)', () => {
+  it('says "waits for the tidy-up" under Move to…, which opens the folder picker for this note (#608)', () => {
     mount(true);
     const move = rowByText('Move to…');
-    expect(move.textContent).toContain('Bower does it');
+    expect(move.textContent).toContain('waits for the tidy-up');
     expect(root.querySelector('.move-flow-stub')).toBeNull();
     click(move);
     const flow = root.querySelector('.move-flow-stub');

@@ -24,6 +24,7 @@ import { MoreButton } from '../components/more-button.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
 import { NoteMenu } from '../components/note-menu.js';
+import { PendingRequestLine } from '../components/pending-request-line.js';
 import type { NoteFolderLink } from '../components/note-properties.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { BowerTag } from '../components/tags.js';
@@ -48,6 +49,7 @@ import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
+import { siblingNames } from '../rename-request.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { isAppFile } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
@@ -905,11 +907,13 @@ export function Note() {
               onTogglePin={() => void handleTogglePin()}
               onAddParagraph={() => setAppendOpen(true)}
               onEdit={() => void handleEdit()}
+              siblingNames={siblingNames(index, file.path)}
               onClose={() => setMenuOpen(false)}
             />
           )}
         </div>
       </div>
+      <PendingRequestLine path={file.path} rows={requests} />
       {editError !== null && (
         <p class="auth-error" role="alert">
           {editError}

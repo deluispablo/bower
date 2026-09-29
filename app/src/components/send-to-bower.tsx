@@ -40,6 +40,10 @@ export interface SendToBowerProps {
   extension?: string;
   /** The words of the request note for what is in the field. */
   buildText: (value: string) => string;
+  /** The message for a value that cannot be sent, else `null` (Rename's
+   * name check). Shown under the field once the person has typed, and on
+   * any send. */
+  validate?: (value: string) => string | null;
   onClose: () => void;
 }
 
@@ -65,6 +69,7 @@ export function SendToBower({
   initialText = '',
   extension,
   buildText,
+  validate,
   onClose,
 }: SendToBowerProps): JSX.Element {
   const copy = COPY[mode];
@@ -77,6 +82,11 @@ export function SendToBower({
   const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const empty = value.trim() === '';
+  const problem = validate?.(value) ?? null;
+  const showProblem = problem !== null && value !== initialText;
+  // A field with a name check says what is wrong; one without has nothing
+  // to say, so its buttons wait for text.
+  const blocked = validate === undefined && empty;
 
   useEffect(() => {
     field.current?.focus();
@@ -93,6 +103,10 @@ export function SendToBower({
   }
 
   async function send(when: 'later' | 'now'): Promise<void> {
+    if (problem !== null) {
+      setError(problem);
+      return;
+    }
     if (inboxFolderId === null || empty) {
       setError('Could not send that. Try again.');
       return;
@@ -138,9 +152,13 @@ export function SendToBower({
     ref: field,
     value,
     'aria-label': copy.label,
+    'aria-invalid': showProblem || undefined,
     onInput: (
       event: JSX.TargetedEvent<HTMLInputElement | HTMLTextAreaElement>,
-    ) => setValue(event.currentTarget.value),
+    ) => {
+      setError(null);
+      setValue(event.currentTarget.value);
+    },
   };
 
   return (
@@ -193,15 +211,15 @@ export function SendToBower({
             </p>
           </div>
         </div>
-        {error !== null && (
+        {(error ?? (showProblem ? problem : null)) !== null && (
           <p class="send-to-bower-error" role="alert">
-            {error}
+            {error ?? problem}
           </p>
         )}
         <button
           type="button"
           class="button send-to-bower-primary"
-          disabled={busy || empty}
+          disabled={busy || blocked}
           onClick={() => void send('later')}
         >
           <IconInbox /> Put in the inbox
@@ -209,7 +227,7 @@ export function SendToBower({
         <button
           type="button"
           class="send-to-bower-now"
-          disabled={busy || empty || runNow.block !== null}
+          disabled={busy || blocked || runNow.block !== null}
           onClick={() => void send('now')}
         >
           {RUN_NOW_LABEL}

@@ -5,6 +5,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FOLDER_MIME } from '../src/drive.js';
+import type { RequestRow } from '../src/bower-tab.js';
 import type { DriveFile } from '../src/drive.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 import { stubMatchMedia } from './helpers/match-media.js';
@@ -71,6 +72,10 @@ let index: ReturnType<typeof buildVaultIndex> | undefined;
 // Stable references: an unstable `getNoteText` would retrigger
 // `useCatalogueOrigins`'s effect (deps include it) on every render.
 const openSheet = vi.fn();
+const requestRows = vi.hoisted(() => ({ list: [] as RequestRow[] }));
+vi.mock('../src/use-request-rows.js', () => ({
+  useRequestRows: () => requestRows.list,
+}));
 vi.mock('../src/components/send-to-bower.js', () => ({
   openSendToBower: openSheet,
 }));
@@ -128,6 +133,7 @@ function mount(): void {
 }
 
 beforeEach(() => {
+  requestRows.list = [];
   viewStore.clear();
   metaStore.clear();
   index = undefined;
@@ -658,5 +664,28 @@ describe('Phone Filter & sort (R-FOLD-6, D34)', () => {
     const score = root.querySelector('.folder-row-score');
     expect(score?.textContent).toBe('79/100');
     expect(score?.getAttribute('aria-label')).toBe('Your score 79 of 100');
+  });
+
+  it('puts a clock badge on the row of a file with a Rename waiting (#765, D32)', async () => {
+    stubMatchMedia(false);
+    useFlatHuntWithPair();
+    requestRows.list = [
+      {
+        key: 'k',
+        state: 'waiting',
+        text: `Rename ${listingNote.path} to Flat.md`,
+        kind: 'job',
+        since: '2026-09-29T10:00:00Z',
+        fileId: 'NOTE_ID',
+      },
+    ];
+    mount();
+    await listReady();
+    await waitUntil(() => root.querySelector('.folder-row-waiting') !== null);
+    const badges = root.querySelectorAll('.folder-row-waiting');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]?.getAttribute('aria-label')).toBe(
+      'Waiting for the next tidy-up',
+    );
   });
 });

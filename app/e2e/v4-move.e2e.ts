@@ -22,7 +22,7 @@ async function openMenu(page: Page): Promise<void> {
   await expect(page.getByRole('menu')).toBeVisible();
 }
 
-test('the More menu lists Show in folders and Move to… with "Bower does it"', async ({
+test('the More menu lists Show in folders and Move to… with "waits for the tidy-up"', async ({
   page,
 }) => {
   await openMenu(page);
@@ -31,7 +31,7 @@ test('the More menu lists Show in folders and Move to… with "Bower does it"', 
     menu.getByRole('menuitem', { name: /Show in folders/ }),
   ).toContainText('NEW');
   await expect(menu.getByRole('menuitem', { name: /Move to…/ })).toContainText(
-    'Bower does it',
+    'waits for the tidy-up',
   );
 });
 

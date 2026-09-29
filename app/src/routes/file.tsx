@@ -30,6 +30,7 @@ import {
 } from '../components/bower-note-box.js';
 import { NoteBody, loadImage } from '../components/note-body.js';
 import { NoteMenu } from '../components/note-menu.js';
+import { PendingRequestLine } from '../components/pending-request-line.js';
 import { PhotoViewer } from '../components/photo-viewer.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import {
@@ -86,6 +87,7 @@ import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
+import { siblingNames } from '../rename-request.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
@@ -750,6 +752,7 @@ export function FileScreen(): JSX.Element {
   const id = params.id ?? '';
   const { index, getNoteText, fileFacts, pinFile, unpinFile } = useVault();
   const [menuOpen, setMenuOpen] = useState(false);
+  const requests = useRequestRows();
   const [thumbnailBroken, setThumbnailBroken] = useState(false);
 
   const file = index?.byId.get(id);
@@ -888,11 +891,15 @@ export function FileScreen(): JSX.Element {
               onTogglePin={
                 folder === '' ? undefined : () => void handleTogglePin()
               }
+              siblingNames={
+                index === null ? undefined : siblingNames(index, file.path)
+              }
               onClose={() => setMenuOpen(false)}
             />
           )}
         </div>
       </div>
+      <PendingRequestLine path={file.path} rows={requests} />
 
       <ul class="file-props">
         <li>
