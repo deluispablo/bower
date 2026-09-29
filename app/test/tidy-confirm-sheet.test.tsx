@@ -14,7 +14,10 @@ vi.mock('../src/api.js', async (importOriginal) => ({
 
 const {
   TidyConfirmSheet,
-  confirmSentenceParts,
+  confirmCountLine,
+  confirmBreakdownLine,
+  CONFIRM_SUB,
+  CONFIRM_COST,
   demoConfirmSentenceParts,
   requestConfirmSentenceParts,
   DEMO_RECORDING_NOTICE,
@@ -33,6 +36,8 @@ function mount(
   onConfirm = vi.fn(),
   onDismiss = vi.fn(),
   kind?: TidyConfirmKind,
+  loading = false,
+  breakdown?: { files: number; links: number; requests: number },
 ): { onConfirm: () => void; onDismiss: () => void } {
   function Harness() {
     const [open, setOpen] = useState(true);
@@ -40,6 +45,8 @@ function mount(
     return h(TidyConfirmSheet, {
       count,
       kind,
+      loading,
+      breakdown,
       onConfirm: () => {
         onConfirm();
         setOpen(false);
@@ -66,13 +73,13 @@ function currentRoot(): HTMLDivElement {
 }
 
 function dialog(): HTMLElement {
-  const el = currentRoot().querySelector('[role="dialog"]');
+  const el = document.querySelector('[role="dialog"]');
   if (el === null) throw new Error('dialog missing');
   return el as HTMLElement;
 }
 
 function buttonByText(text: string): HTMLButtonElement {
-  const buttons = Array.from(currentRoot().querySelectorAll('button'));
+  const buttons = Array.from(document.querySelectorAll('button'));
   const button = buttons.find((b) => b.textContent?.includes(text));
   if (button === undefined) throw new Error(`button "${text}" missing`);
   return button;
@@ -98,27 +105,28 @@ afterEach(() => {
   state.demo = false;
 });
 
-describe('confirmSentenceParts', () => {
-  it('singular: "1 thing is waiting…"', () => {
-    expect(confirmSentenceParts(1)).toEqual({
-      lead: '1 thing',
-      rest:
-        'is waiting. A tidy-up takes a few minutes and uses one run of ' +
-        'your Claude plan, so it is better to add the whole pile first.',
-    });
+describe('confirmCountLine and confirmBreakdownLine (CONF-3, CONF-4)', () => {
+  it('singular and plural count', () => {
+    expect(confirmCountLine(1)).toBe('1 thing in your inbox');
+    expect(confirmCountLine(5)).toBe('5 things in your inbox');
   });
 
-  it('plural: "3 things are waiting…"', () => {
-    expect(confirmSentenceParts(3)).toEqual({
-      lead: '3 things',
-      rest:
-        'are waiting. A tidy-up takes a few minutes and uses one run of ' +
-        'your Claude plan, so it is better to add the whole pile first.',
-    });
-  });
-
-  it('zero counts as plural ("0 things are waiting")', () => {
-    expect(confirmSentenceParts(0).lead).toBe('0 things');
+  it('breakdown: files, links, then requests after a dot', () => {
+    expect(confirmBreakdownLine({ files: 3, links: 2, requests: 1 })).toBe(
+      '3 files, 2 links · and 1 request',
+    );
+    expect(confirmBreakdownLine({ files: 1, links: 0, requests: 2 })).toBe(
+      '1 file · and 2 requests',
+    );
+    expect(confirmBreakdownLine({ files: 0, links: 0, requests: 1 })).toBe(
+      '1 request',
+    );
+    expect(confirmBreakdownLine({ files: 2, links: 0, requests: 0 })).toBe(
+      '2 files',
+    );
+    expect(
+      confirmBreakdownLine({ files: 0, links: 0, requests: 0 }),
+    ).toBeNull();
   });
 });
 
@@ -146,22 +154,44 @@ describe('TidyConfirmSheet', () => {
   it('shows the bird, the heading, the count and the two buttons, no "Don\'t ask again"', () => {
     mount(3);
     const el = dialog();
-    expect(el.getAttribute('aria-label')).toBe('Is that everything?');
+    const labelId = el.getAttribute('aria-labelledby');
+    expect(labelId).not.toBeNull();
+    expect(document.getElementById(labelId ?? '')?.textContent).toBe(
+      'Is that everything?',
+    );
     expect(el.querySelector('svg')).toBeDefined();
-    expect(currentRoot().textContent).toContain('Is that everything?');
-    expect(currentRoot().textContent).toContain('3 things');
-    expect(currentRoot().textContent).toContain('are waiting');
+    expect(document.body.textContent).toContain('Is that everything?');
+    expect(document.body.textContent).toContain(CONFIRM_SUB);
+    expect(document.body.textContent).toContain('3 things in your inbox');
+    expect(document.body.textContent).toContain(CONFIRM_COST);
     expect(buttonByText('Yes, tidy up')).toBeDefined();
     expect(buttonByText('Add more first')).toBeDefined();
-    expect(currentRoot().textContent?.toLowerCase()).not.toContain(
+    expect(document.body.textContent?.toLowerCase()).not.toContain(
       "don't ask again",
     );
   });
 
-  it('singular count reads "1 thing is waiting"', () => {
+  it('singular count reads "1 thing in your inbox"', () => {
     mount(1);
-    expect(currentRoot().textContent).toContain('1 thing');
-    expect(currentRoot().textContent).toContain('is waiting');
+    expect(document.body.textContent).toContain('1 thing in your inbox');
+  });
+
+  it('shows a skeleton, never 0, while the listing loads (R-CONF-3)', () => {
+    mount(0, vi.fn(), vi.fn(), undefined, true);
+    expect(document.body.textContent).not.toContain('0 things');
+    expect(document.querySelector('.tidy-confirm-skeleton')).not.toBeNull();
+    expect(buttonByText('Yes, tidy up').disabled).toBe(true);
+  });
+
+  it('shows the CONF-4 breakdown when given', () => {
+    mount(6, vi.fn(), vi.fn(), undefined, false, {
+      files: 3,
+      links: 2,
+      requests: 1,
+    });
+    expect(document.body.textContent).toContain(
+      '3 files, 2 links · and 1 request',
+    );
   });
 
   it('"Yes, tidy up" calls onConfirm', () => {
@@ -178,7 +208,7 @@ describe('TidyConfirmSheet', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it('the backdrop dismisses without confirming, once its open-tap guard has passed (#510)', () => {
+  it('the scrim dismisses without confirming', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const { onConfirm, onDismiss } = mount(2);
     // Past useDismissGuard's window: a tap right after opening (#510) must
@@ -186,7 +216,7 @@ describe('TidyConfirmSheet', () => {
     // about the backdrop's own dismiss wiring, once that window has
     // passed.
     vi.advanceTimersByTime(350);
-    const backdrop = currentRoot().querySelector('.tidy-confirm-backdrop');
+    const backdrop = currentRoot().querySelector('.overlay-scrim');
     if (backdrop === null) throw new Error('backdrop missing');
     click(backdrop);
     expect(onDismiss).toHaveBeenCalledOnce();
@@ -208,22 +238,22 @@ describe('TidyConfirmSheet', () => {
   it('no amber recording notice outside the demo', () => {
     state.demo = false;
     mount(2);
-    expect(currentRoot().textContent).not.toContain(DEMO_RECORDING_NOTICE);
+    expect(document.body.textContent).not.toContain(DEMO_RECORDING_NOTICE);
   });
 
   it('shows the amber recording notice in a demo build (#363)', () => {
     state.demo = true;
     mount(2);
-    expect(currentRoot().textContent).toContain(DEMO_RECORDING_NOTICE);
+    expect(document.body.textContent).toContain(DEMO_RECORDING_NOTICE);
   });
 
   it("the demo build reads the board's own sentence, not the real one (#489)", () => {
     state.demo = true;
     mount(3);
-    expect(currentRoot().textContent).toContain('3 things');
-    expect(currentRoot().textContent).toContain('in the inbox');
-    expect(currentRoot().textContent).toContain('In your own Bower');
-    expect(currentRoot().textContent).not.toContain('are waiting');
+    expect(document.body.textContent).toContain('3 things');
+    expect(document.body.textContent).toContain('in the inbox');
+    expect(document.body.textContent).toContain('In your own Bower');
+    expect(document.body.textContent).not.toContain('are waiting');
   });
 });
 
@@ -247,12 +277,12 @@ describe('TidyConfirmSheet, kind="request" (#501)', () => {
   it('shows a request-specific title, count line and button, not the tidy-up copy', () => {
     mount(1, vi.fn(), vi.fn(), 'request');
     const el = dialog();
-    expect(el.getAttribute('aria-label')).toBe('Run this now?');
-    expect(currentRoot().textContent).toContain('Run this now?');
-    expect(currentRoot().textContent).toContain('1 request');
-    expect(currentRoot().textContent).toContain('is waiting');
-    expect(currentRoot().textContent).not.toContain('Is that everything?');
-    expect(currentRoot().textContent).not.toContain('the whole pile');
+    expect(el.getAttribute('aria-labelledby')).toBe('tidy-confirm-title');
+    expect(document.body.textContent).toContain('Run this now?');
+    expect(document.body.textContent).toContain('1 request');
+    expect(document.body.textContent).toContain('is waiting');
+    expect(document.body.textContent).not.toContain('Is that everything?');
+    expect(document.body.textContent).not.toContain('the rest of the pile');
     expect(buttonByText('Yes, do it now')).toBeDefined();
     expect(buttonByText('Not now')).toBeDefined();
   });
@@ -275,7 +305,7 @@ describe('TidyConfirmSheet, kind="request" (#501)', () => {
 describe('TidyConfirmSheet, kind="tidy" (default, unchanged)', () => {
   it('still shows the whole-inbox copy when kind is left out', () => {
     mount(3);
-    expect(currentRoot().textContent).toContain('Is that everything?');
-    expect(currentRoot().textContent).toContain('the whole pile');
+    expect(document.body.textContent).toContain('Is that everything?');
+    expect(document.body.textContent).toContain('the rest of the pile');
   });
 });
