@@ -4,13 +4,14 @@ Resume point for the tech lead: v5, runs, notes, folders and Bower on screen (mi
 
 GitHub issues #728 to #799 are the source of truth for detail. This file holds the order, the process and the state. The v4 plan (M27 to M33) is in this file's git history (#622).
 
-## State (2026-09-29)
+## State (2026-09-29, evening)
 
-Planned, not started. Nothing is dispatched until the owner's OK.
+Dispatched on the owner's OK. The owner gave the lead full control: merges, production deploys at the batch points (Worker, then runner, then app), the #789 measurement run and applying rulebooks v21 and v22 on the instance, and escalations (decided on zero cost and security, reported at the end).
 
-- PR #727 (the spec) is open with `needs-review`.
-- Production is at main 905ed7d.
-- The round 5 test report stays untracked on the owner's machine.
+- Specs #727, PLAN #800 and the README #801 are merged; production is at main 905ed7d.
+- Up to ten agents at once: eight developers, one designer and one app-tester. The designer and the tester review what lands against the boards and the spec, walk the demo locally per batch and production read-only after each deploy, and report findings to the lead, who files them as issues.
+- Issues that are small, disjoint and in the same area are bundled into one PR (one branch, "Closes" per issue) to save CI and review rounds. The rounds below are the dependency order, not a limit of three slots.
+- In flight: #728 (opus), #734, and the bundle #744 + #745 + #747.
 
 ## Milestones
 
@@ -110,7 +111,7 @@ Wave = depth in the dependency graph. Budgets are the agent's own ceilings.
 | Z2 | #799 | M46 | Deploy v5 and walk every v5 board on the phone and the desktop in production | sonnet/medium | 14 | #798 | 120 tool calls / 90 minutes | pending |
 ## Dispatch queue
 
-At most three agents at once: two app slots (A, B) and the agent/Worker slot (C). Slot C takes app issues when the agent chain waits.
+Superseded on dispatch: up to eight developers run at once, filling any issue whose dependencies are merged; the rounds keep the dependency order and the hotspot rule.
 
 - A round starts when its issues' dependencies are merged, not when the whole previous round is done.
 - Issues that share a hotspot file never run at the same time.
