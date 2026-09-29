@@ -1287,7 +1287,7 @@ left_paths() {
 
 # Sets CREATED_JSON, UPDATED_JSON and LEFT_JSON (R-RUNNER-1) from what the
 # copies up actually uploaded (UPLOADED_FILE, the upload list, not the
-# intent): created is an uploaded path not in MANIFEST_BEFORE and not a
+# intent), Bower's bookkeeping files left out: created is an uploaded path not in MANIFEST_BEFORE and not a
 # move destination (MOVES_FILE), updated one in MANIFEST_BEFORE, with the
 # agent's `what` when it wrote one; left is left_paths. Names paths, never
 # logged.
@@ -1299,7 +1299,12 @@ report_lists() {
   [ ! -f "$MANIFEST_BEFORE" ] ||
     cut -d ' ' -f 3- "$MANIFEST_BEFORE" | LC_ALL=C sort -u >"$before"
   [ ! -f "$MOVES_FILE" ] || cut -f 2 "$MOVES_FILE" | LC_ALL=C sort -u >"$dests"
-  { grep -v '^$' "$UPLOADED_FILE" || true; } | LC_ALL=C sort -u >"$uploaded"
+  # Only the person's notes count: Bower's bookkeeping (log.md, index.md,
+  # Rules.md, any CLAUDE.md, anything under .bower/ and the folders' own
+  # _<Folder>.md pages) is neither created nor updated for the app.
+  { grep -v '^$' "$UPLOADED_FILE" || true; } |
+    awk '!/^(log|index|Rules)\.md$/ && !/(^|\/)CLAUDE\.md$/ && !/^\.bower\// && !/(^|\/)_[^\/]*\.md$/' |
+    LC_ALL=C sort -u >"$uploaded"
   CREATED_JSON=$(LC_ALL=C comm -23 "$uploaded" "$before" | LC_ALL=C comm -23 - "$dests" |
     jq -Rn '[inputs]')
   UPDATED_JSON=$(LC_ALL=C comm -12 "$uploaded" "$before" |

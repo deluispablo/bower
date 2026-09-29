@@ -820,6 +820,7 @@ case "$SMOKE_SCENARIO" in
   # line with no `what`, which are not sent. The two clippings stay.
   lists | deletefail)
     echo '# New note' >'3-Resources/New note.md'
+    echo '- [[3-Resources/New note]] · Note · by Bower' >>index.md
     echo 'v2 from the agent' >3-Resources/agent.md
     echo 'Renewal is in March.' >>2-Areas/Insurance.md
     mkdir -p .bower
@@ -2603,8 +2604,13 @@ run_case lists
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(posts_count)" 2 'status posts besides the phases'
 expect_eq "$(post 2 p.state)" done 'final state'
-expect_eq "$(post 2 'p.created.join("|")')" '3-Resources/New note.md|log.md' \
-  'created (the new note and the log.md the move bookkeeping started, not the filed original)'
+expect_eq "$(post 2 'p.created.join("|")')" '3-Resources/New note.md' \
+  'created (the new note, not the filed original nor the bookkeeping)'
+# The bookkeeping started log.md (the move) and index.md (the agent's row):
+# both were uploaded, and neither is a note the person created or updated.
+expect_eq "$(grep -Ec '^(log|index)\.md$' "$STATE/uploaded.txt")" 2 'log.md and index.md uploaded'
+expect_eq "$(post 2 '[...p.created, ...p.updated.map((u) => u.path)].filter((x) => /^(log|index)\.md$/.test(x)).length')" 0 \
+  'log.md and index.md are neither created nor updated'
 expect_eq "$(post 2 'JSON.stringify(p.updated)')" \
   '[{"path":"2-Areas/Insurance.md"},{"path":"3-Resources/agent.md","what":"Added the renewal date"}]' \
   'updated, with the one line the agent wrote'
@@ -2636,12 +2642,12 @@ run_case deletefail
 expect_eq "$RC" 2 'exit code'
 expect_eq "$(post 2 p.state)" failed 'final state'
 expect_eq "$(post 2 p.reason)" drive_unavailable 'reason'
-expect_eq "$(post 2 'p.created.join("|")')" '3-Resources/New note.md|log.md' 'created (the copied-up original is a move destination)'
+expect_eq "$(post 2 'p.created.join("|")')" '3-Resources/New note.md' 'created (the copied-up original is a move destination)'
 expect_eq "$(post 2 'p.updated.map((u) => u.path + ":" + (u.what ?? "")).join("|")')" \
   '2-Areas/Insurance.md:|3-Resources/agent.md:Added the renewal date' 'updated'
 expect_eq "$(post 2 'p.left.join("|")')" '0-Inbox/a.pdf|Clippings/Bower trick.md|Clippings/b.md' 'left, the original among them'
 expect_eq "$(LC_ALL=C sort "$STATE/uploaded.txt" | tr '\n' '|')" \
-  '0-Inbox/Processed/a.pdf|2-Areas/Insurance.md|3-Resources/New note.md|3-Resources/agent.md|log.md|' 'what the copy up uploaded'
+  '0-Inbox/Processed/a.pdf|2-Areas/Insurance.md|3-Resources/New note.md|3-Resources/agent.md|index.md|log.md|' 'what the copy up uploaded'
 expect_eq "$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
   process.stdout.write(JSON.stringify([o.state, o.created, o.updated, o.left]))' "$STATE/remote/.bower/last-run.json")" \
   "$(post 2 'JSON.stringify(["failed", p.created, p.updated, p.left])')" 'last-run.json of the failed run'
