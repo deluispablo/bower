@@ -108,7 +108,6 @@ describe('Bird', () => {
     const wing = svg.querySelector('.wg');
     const arcs = svg.querySelector('.w1');
     if (wing === null || arcs === null) throw new Error('parts missing');
-    // eslint-disable-next-line no-bitwise
     expect(wing.compareDocumentPosition(arcs) & 4).toBe(4);
   });
 

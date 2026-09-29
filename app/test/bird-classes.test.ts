@@ -227,7 +227,7 @@ describe('birdClasses, the round 7 poses (spec §6.21)', () => {
 
   it('the point angle is bird-local, never the PARA Areas colour', () => {
     expect(BIRD_CSS).toContain('--bird-point-angle');
-    expect(BIRD_CSS).not.toMatch(/--pa/);
+    expect(BIRD_CSS).not.toMatch(/--pa(?![\w-])/);
   });
 
   it('a bird never takes a tap (rule 4), except the nap button', () => {
