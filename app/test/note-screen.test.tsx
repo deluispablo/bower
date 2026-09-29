@@ -102,6 +102,13 @@ vi.mock('../src/seen.js', () => ({ markSeen }));
 
 const index = buildVaultIndex([LISTING, ANSWER, CHECKLIST, SCAN]);
 const noop = (): Promise<void> => Promise.resolve();
+const saveEditedNote =
+  vi.fn<
+    (
+      id: string,
+      text: string,
+    ) => Promise<{ text: string; modifiedTime: string }>
+  >();
 const getNoteText = (id: string): Promise<string> =>
   Promise.resolve(texts.get(id) ?? '');
 
@@ -112,7 +119,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
     getNoteText,
     appendToNote: getNoteText,
     openNoteForEdit: () => Promise.reject(new Error('not used')),
-    saveEditedNote: () => Promise.reject(new Error('not used')),
+    saveEditedNote,
     pinNote: noop,
     unpinNote: noop,
   }),
@@ -164,13 +171,21 @@ describe('Note screen (#609)', () => {
   it('lays out props line, then one box with key facts once and Details open', async () => {
     await mount(LISTING.id);
 
-    const props = root.querySelector('.note-props');
-    expect(props?.textContent).toContain('Bower');
-    expect(props?.textContent).toContain('#housing');
-    expect(props?.textContent).toContain('26 Sep');
-    const original = props?.querySelector('a[href="/file/id-scan"]');
-    expect(original?.textContent).toBe('Original: PDF, 2 pages');
-    expect(props?.textContent).toContain('Flat hunt');
+    // R-NOTE-2: kind row, meta line, Made from (the original by name).
+    const row = root.querySelector('.note-kind-row');
+    expect(row?.querySelector('.note-kind-chip')?.textContent).toBe(
+      'Rental listing',
+    );
+    expect(row?.textContent).toContain('Bower');
+    expect(
+      row?.querySelector('select')?.getAttribute('aria-label'),
+    ).toBe('Status: To view. Change');
+    const meta = root.querySelector('.note-meta-line');
+    expect(meta?.textContent).toContain('Flat hunt');
+    expect(meta?.textContent).toContain('Filed 26 Sep');
+    const original = root.querySelector('.made-from a[href="/file/id-scan"]');
+    expect(original?.textContent).toContain('Arlington Road, 2 bed.pdf');
+    expect(root.querySelector('.note-props')).toBeNull();
 
     expect(root.querySelector('.bower-note-box')).not.toBeNull();
     // R-INS-2: no caption, and the key facts are in the box only.
@@ -222,6 +237,34 @@ describe('Note screen (#609)', () => {
     ).toBe('Viewing checklist · in Resources');
     expect(root.textContent).toContain('Used: the four listings.');
     expect(root.querySelectorAll('h1')).toHaveLength(1);
+  });
+
+  it('names an answer "Answer" with no status select, and "Written" in its meta line', async () => {
+    await mount(ANSWER.id);
+    expect(root.querySelector('.note-kind-chip')?.textContent).toBe('Answer');
+    expect(root.querySelector('.note-status')).toBeNull();
+    expect(root.querySelector('.note-meta-line')?.textContent).toContain(
+      'Written 28 Sep',
+    );
+    expect(root.querySelector('.made-from')).toBeNull();
+  });
+
+  it('writes the chosen status to the note (R-NOTE-2)', async () => {
+    await mount(LISTING.id);
+    const select = root.querySelector<HTMLSelectElement>('.note-status');
+    if (select === null) throw new Error('no status select');
+    saveEditedNote.mockImplementation((_id: string, text: string) =>
+      Promise.resolve({ text, modifiedTime: '2026-09-29T09:00:00Z' }),
+    );
+    await act(() => {
+      select.value = 'viewed';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await flush();
+    expect(saveEditedNote).toHaveBeenCalledTimes(1);
+    const saved = saveEditedNote.mock.calls[0]?.[1] ?? '';
+    expect(saved).toContain('status: viewed');
+    expect(saved).not.toContain('status: to view');
   });
 
   it('marks the note seen when it opens', async () => {
