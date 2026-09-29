@@ -22,7 +22,7 @@ import type { Env } from './env.js';
 import { HttpError } from './errors.js';
 import type { FetchLike } from './google.js';
 import { deletePushSub, listPushSubs } from './store.js';
-import type { PushSubscription } from './types.js';
+import type { PushSubscription, Run } from './types.js';
 
 /** What the service worker receives, as JSON, in the push message. */
 export interface PushPayload {
@@ -30,6 +30,52 @@ export interface PushPayload {
   body: string;
   /** App path to open when the notification is clicked. */
   url: string;
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/**
+ * The push body for a finished tidy-up, in the same words as the app (spec
+ * R-RUNNER-3, D1): "Done: 6 filed, 6 new notes, 2 updated", "Partly done:
+ * 5 still in your inbox" or "Did not finish: nothing changed". Zeros are
+ * left out, in the order filed, request, new notes, updated, needs you.
+ * A run that failed after writing work is partly done (D3). Never a file
+ * name or the summary.
+ */
+export function runPushBody(run: Run): string {
+  const items = run.items;
+  const filed =
+    items === undefined
+      ? (run.processed?.length ?? 0)
+      : items.filter((item) => item.kind === 'file').length;
+  const requests = items?.filter((item) => item.kind === 'request').length ?? 0;
+  const created = run.created?.length ?? 0;
+  const updated = run.updated?.length ?? 0;
+  const left = run.left?.length ?? 0;
+  const needsYou = (run.setAside?.length ?? 0) + left;
+
+  const counts: string[] = [];
+  if (filed > 0) counts.push(`${filed} filed`);
+  if (requests > 0) {
+    counts.push(requests === 1 ? 'your request' : `${requests} requests`);
+  }
+  if (created > 0) counts.push(plural(created, 'new note', 'new notes'));
+  if (updated > 0) counts.push(`${updated} updated`);
+
+  if (run.state === 'failed') {
+    if (counts.length === 0) return 'Did not finish: nothing changed';
+    return left > 0
+      ? `Partly done: ${left} still in your inbox`
+      : `Partly done: ${counts.join(', ')}`;
+  }
+  if (needsYou > 0) {
+    counts.push(`${needsYou} ${needsYou === 1 ? 'needs' : 'need'} you`);
+  }
+  return counts.length === 0
+    ? 'Done: nothing new'
+    : `Done: ${counts.join(', ')}`;
 }
 
 /**
