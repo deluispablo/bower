@@ -303,7 +303,10 @@ async function rewriteNote(pile: Pile, m: NoteMeta): Promise<void> {
   if (noteId === null) return;
   const inbox = await listFolder(m.inboxFolderId);
   const entry = inbox.find((file) => file.id === noteId);
-  if (entry === undefined) return;
+  if (entry === undefined) {
+    await continueNote(pile, m, inbox);
+    return;
+  }
   if (m.modifiedTime !== null && entry.modifiedTime !== m.modifiedTime) {
     // Changed elsewhere since the app last wrote it (another tab or
     // device). Its words win unless the person has typed here since; the
@@ -320,6 +323,33 @@ async function rewriteNote(pile: Pile, m: NoteMeta): Promise<void> {
     pileNote(current, landedNames(current)),
   );
   remember(pile.id, m, file, current.text);
+}
+
+/**
+ * R-PILE-8: the note is no longer directly in the inbox (a tidy-up moved it
+ * to `Processed/`, keeping its id, or it was trashed), so rewriting it would
+ * land outside the inbox. A continuation note with the same `pile:` takes
+ * over, listing only the landed files still in the inbox: the ones the old
+ * note named went with it. The run holds a late file and its continuation
+ * note together for the next tidy-up (R-RUNNER-6).
+ */
+async function continueNote(
+  pile: Pile,
+  m: NoteMeta,
+  inbox: readonly DriveFile[],
+): Promise<void> {
+  const present = new Set(inbox.map((file) => file.name));
+  const current = findPile(pile.id) ?? pile;
+  const items = current.items.filter(
+    (item) => item.state !== 'done' || present.has(item.name),
+  );
+  patchPile(pile.id, { items, noteFileId: null });
+  m.name = null;
+  m.modifiedTime = null;
+  m.writtenText = null;
+  if (items.length === 0) return;
+  const next = findPile(pile.id) ?? current;
+  await createNote(next, m, landedNames(next));
 }
 
 /** The words of a pile note: its body before `## Applies to`. */

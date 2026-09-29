@@ -100,7 +100,23 @@ const INBOX = 'FOLDER_ID';
 const NOW = new Date(2026, 8, 30, 10, 42);
 
 function notesIn(folder: string): FakeFile[] {
-  return [...files.values()].filter((f) => f.parent === folder && !f.trashed);
+  return [...files.values()].filter(
+    (f) => f.parent === folder && !f.trashed && f.name.endsWith('Context.md'),
+  );
+}
+
+/** An uploaded file, as the queue leaves it in the inbox. */
+function land(name: string): FakeFile {
+  const file: FakeFile = {
+    id: `FILE_${name}`,
+    name,
+    parent: INBOX,
+    text: '',
+    modifiedTime: tick(),
+    trashed: false,
+  };
+  files.set(file.id, file);
+  return file;
 }
 
 function onlyNote(): FakeFile {
@@ -224,5 +240,34 @@ describe('R-PILE-1: the pile note', () => {
     expect(store.pileWriteFailed(pile.id)).toBe(false);
     expect(onlyNote().text).toContain('- a.pdf\n');
     error.mockRestore();
+  });
+});
+
+describe('R-PILE-8: a note moved out of the inbox', () => {
+  it('starts a continuation note with the same pile id', async () => {
+    const pile = store.startPile(INBOX, NOW, 'p1');
+    const a = land('a.pdf');
+    await store.attachToPile(pile.id, { name: 'a.pdf', state: 'done' });
+    await store.setPileText(pile.id, 'Offers.');
+    await store.attachToPile(pile.id, { name: 'b.pdf', state: 'uploading' });
+    // A tidy-up files a.pdf and moves the note to Processed/, keeping its id.
+    const moved = onlyNote();
+    moved.parent = 'PROCESSED_ID';
+    a.parent = 'RESOURCES_ID';
+    updateFileText.mockClear();
+
+    land('b.pdf');
+    await store.attachToPile(pile.id, { name: 'b.pdf', state: 'done' });
+
+    expect(updateFileText).not.toHaveBeenCalled();
+    expect(moved.text).not.toContain('b.pdf');
+    const next = onlyNote();
+    expect(next.id).not.toBe(moved.id);
+    expect(next.text).toContain('pile: p1\n');
+    expect(next.text).toContain('Offers.');
+    expect(next.text).toMatch(/## Applies to\n\n- b\.pdf\n$/);
+    expect(next.appProperties).toEqual({ bower: 'instruction' });
+    expect(store.getPiles()[0]?.noteFileId).toBe(next.id);
+    expect(store.getPiles()[0]?.items.map((i) => i.name)).toEqual(['b.pdf']);
   });
 });
