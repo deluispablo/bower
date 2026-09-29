@@ -21,7 +21,6 @@ import {
   recentNotes,
   relativeTime,
   shortAge,
-  siblings,
 } from '../src/navigation.js';
 import type { TreeRow } from '../src/navigation.js';
 import { buildVaultIndex } from '../src/vault-index.js';
@@ -926,80 +925,6 @@ describe('breadcrumb', () => {
 
   it('is empty for a top-level note', () => {
     expect(breadcrumb('index.md')).toEqual([]);
-  });
-});
-
-describe('siblings', () => {
-  const index = buildVaultIndex([
-    dir('1-Projects'),
-    entry('1-Projects/Amendments.md'),
-    entry('1-Projects/Garden.md'),
-    entry('1-Projects/Seed List.md'),
-    entry('index.md'),
-  ]);
-
-  it('finds the previous and next note in the same folder, by name', () => {
-    const garden = index.byPath.get('1-Projects/Garden.md');
-    expect(garden).toBeDefined();
-    const result = siblings(index, garden?.id ?? '');
-    expect(result.prev?.name).toBe('Amendments.md');
-    expect(result.next?.name).toBe('Seed List.md');
-  });
-
-  it('has no prev at the start and no next at the end of the folder', () => {
-    const first = index.byPath.get('1-Projects/Amendments.md');
-    const last = index.byPath.get('1-Projects/Seed List.md');
-    expect(siblings(index, first?.id ?? '').prev).toBeNull();
-    expect(siblings(index, last?.id ?? '').next).toBeNull();
-  });
-
-  it('is null/null for an unknown id', () => {
-    expect(siblings(index, 'nope')).toEqual({ prev: null, next: null });
-  });
-
-  it('does not cross folder boundaries', () => {
-    const root = index.byPath.get('index.md');
-    const result = siblings(index, root?.id ?? '');
-    expect(result).toEqual({ prev: null, next: null });
-  });
-
-  // #423: the folder screen hides Bower's own files unless `showAppFiles`
-  // is on, so the previous/next walk must skip them the same way, rather
-  // than land on one.
-  describe("with one of Bower's own files in the folder", () => {
-    const withAppFile = buildVaultIndex([
-      dir('Answers'),
-      entry('Answers/Bower - Proposals.md'),
-      entry('Answers/Which subscriptions renew this autumn.md'),
-    ]);
-
-    it('skips it by default', () => {
-      const note = withAppFile.byPath.get(
-        'Answers/Which subscriptions renew this autumn.md',
-      );
-      const result = siblings(withAppFile, note?.id ?? '');
-      expect(result).toEqual({ prev: null, next: null });
-    });
-
-    it('walks it when showAppFiles is on', () => {
-      const note = withAppFile.byPath.get(
-        'Answers/Which subscriptions renew this autumn.md',
-      );
-      const result = siblings(withAppFile, note?.id ?? '', true);
-      expect(result.prev?.name).toBe('Bower - Proposals.md');
-      expect(result.next).toBeNull();
-    });
-
-    it("still finds the note even when it is itself one of Bower's own files", () => {
-      // The anchor stays in the walk even though it would otherwise be
-      // filtered out; the real note next to it (by name) is still found.
-      const proposals = withAppFile.byPath.get('Answers/Bower - Proposals.md');
-      const result = siblings(withAppFile, proposals?.id ?? '');
-      expect(result.prev).toBeNull();
-      expect(result.next?.name).toBe(
-        'Which subscriptions renew this autumn.md',
-      );
-    });
   });
 });
 

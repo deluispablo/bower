@@ -3,10 +3,10 @@
  * for as long as the calling component is mounted: focus moves to the
  * panel's first control on mount, Tab and Shift+Tab wrap at its edges,
  * Escape calls `onEscape`, and on unmount focus goes back to whatever had
- * it before (the menu button that opened the drawer).
+ * it before (the button that opened the panel).
  *
- * Traps nest: a pin sheet opened from a row of the folder menu traps focus
- * inside the menu's own trap. Only the innermost open trap answers a key,
+ * Traps nest: a pin sheet opened from a row of a panel that already traps
+ * focus traps it inside that panel's own trap. Only the innermost open trap answers a key,
  * so Escape closes the sheet alone and Tab wraps inside the sheet.
  */
 

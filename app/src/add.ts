@@ -69,39 +69,6 @@ export function linkTitleFromFileName(name: string): string | null {
 }
 
 /**
- * The hint's bold lead on Add (#336, `Phone-Add` board, handover C.6):
- * "3 things waiting." — `count` is the inbox's pending files, the same
- * count Home's Inbox card and the "Is that everything?" sheet show. The
- * caller hides the hint at zero, so this never says "0 things".
- */
-export function addHintLead(count: number): string {
-  return `${count} ${count === 1 ? 'thing' : 'things'} waiting.`;
-}
-
-/** The rest of the hint's sentence, word for word from the board. */
-export const ADD_HINT_TEXT =
-  'Add the whole pile first: a tidy-up takes a few minutes and uses one run of your plan, so once is better than five times.';
-
-/**
- * The demo's own rest of the hint sentence (#489, `Demo-Add` board): a
- * recorded run, not a real tidy-up, so nothing costs anything. The bold
- * lead (`addHintLead`) is unchanged — the board uses the same "n things
- * waiting." for both. `routes/add.tsx` picks this over `ADD_HINT_TEXT`
- * with `isDemo()`.
- */
-export const DEMO_ADD_HINT_TEXT =
-  'Tap Tidy up and watch a recorded run: in the demo the bird does not really think, so nothing costs anything.';
-
-/**
- * The "What is this?" box's placeholder (#335, `Phone-Add` board; #508:
- * shortened to one example, board copy agreed with the lead — the
- * board's own two-example text overflowed the three-line box at 375 px,
- * cut off mid-sentence).
- */
-export const CONTEXT_PLACEHOLDER =
-  'Just filing is fine. Or tell Bower what to do: "Job offers: pull out salary and deadline".';
-
-/**
  * The name of the context note Add's "What is this?" box writes (#335,
  * handover D.2): `Bower - YYYY-MM-DD HHmm Context.md`, `now`'s local date
  * and time, the same shape as the Bower tab's notes.

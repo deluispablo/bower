@@ -173,14 +173,6 @@ export function IconHelp(): JSX.Element {
   );
 }
 
-export function IconMenu(): JSX.Element {
-  return (
-    <Svg>
-      <path d="M4 7h16M4 12h16M4 17h16" />
-    </Svg>
-  );
-}
-
 export function IconClose(): JSX.Element {
   return (
     <Svg>
