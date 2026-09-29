@@ -12,10 +12,16 @@ import {
   languageLabel,
 } from '../src/components/dictate-button.js';
 import {
+  FakeSpeechRecognition,
   installSpeechRecognition,
   removeSpeechRecognition,
   type SpeechRecognitionStub,
 } from './helpers/speech-recognition.js';
+
+/** Runs `fn` and lets Preact settle (a sync callback flushes at once). */
+function flush(fn: () => void): void {
+  void act(fn);
+}
 
 let host: HTMLElement | undefined;
 let stub: SpeechRecognitionStub;
@@ -102,7 +108,7 @@ describe('DictateButton', () => {
 
   it('listens with continuous, interim results and the device language', () => {
     const root = mount();
-    act(() => button(root).click());
+    flush(() => button(root).click());
     const r = stub.latest();
     expect(r.starts).toBe(1);
     expect(r.continuous).toBe(true);
@@ -121,11 +127,11 @@ describe('DictateButton', () => {
 
   it('shows interim words muted and inserts final words with a space', () => {
     const root = mount('Hello');
-    act(() => button(root).click());
-    act(() => stub.latest().say('for Nov', false));
+    flush(() => button(root).click());
+    flush(() => stub.latest().say('for Nov', false));
     expect(root.querySelector('.dictate-interim')?.textContent).toBe('for Nov');
     expect(text).toBe('Hello');
-    act(() => stub.latest().say('for November', true));
+    flush(() => stub.latest().say('for November', true));
     expect(text).toBe('Hello for November');
     expect(root.querySelector('.dictate-interim')).toBeNull();
     expect(root.querySelector('textarea')?.value).toBe('Hello for November');
@@ -133,8 +139,8 @@ describe('DictateButton', () => {
 
   it('stops on a tap and says Stopped', () => {
     const root = mount();
-    act(() => button(root).click());
-    act(() => button(root).click());
+    flush(() => button(root).click());
+    flush(() => button(root).click());
     expect(stub.latest().stops).toBe(1);
     expect(button(root).getAttribute('aria-pressed')).toBe('false');
     expect(root.querySelector('[role="status"]')?.textContent).toBe('Stopped');
@@ -143,17 +149,17 @@ describe('DictateButton', () => {
   it('stops after 3 s of silence', () => {
     vi.useFakeTimers();
     const root = mount();
-    act(() => button(root).click());
-    act(() => {
+    flush(() => button(root).click());
+    flush(() => {
       vi.advanceTimersByTime(SILENCE_MS - 1);
     });
     expect(stub.latest().stops).toBe(0);
-    act(() => stub.latest().say('still here', true));
-    act(() => {
+    flush(() => stub.latest().say('still here', true));
+    flush(() => {
       vi.advanceTimersByTime(SILENCE_MS - 1);
     });
     expect(stub.latest().stops).toBe(0);
-    act(() => {
+    flush(() => {
       vi.advanceTimersByTime(2);
     });
     expect(stub.latest().stops).toBe(1);
@@ -162,47 +168,39 @@ describe('DictateButton', () => {
 
   it('stops when focus leaves the box, and on leaving the route', () => {
     const root = mount();
-    act(() => button(root).click());
-    act(() => {
+    flush(() => button(root).click());
+    flush(() => {
       root
         .querySelector('.dictate')
         ?.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
     });
     expect(stub.latest().stops).toBe(1);
-    act(() => button(root).click());
+    flush(() => button(root).click());
     const second = stub.latest();
-    act(() => render(null, root));
+    flush(() => render(null, root));
     expect(second.aborts).toBe(1);
   });
 
   it('shows the first-use hint while asking, and not after the first listen', () => {
     const root = mount();
     // Hold onstart back so the browser is still "asking".
-    const proto = Object.getPrototypeOf(
-      new (
-        globalThis as unknown as {
-          SpeechRecognition: new () => { start(): void };
-        }
-      ).SpeechRecognition(),
-    ) as { start(): void };
-    const start = proto.start;
-    proto.start = function (this: { starts: number }): void {
-      this.starts += 1;
-    };
-    act(() => button(root).click());
+    const hold = vi
+      .spyOn(FakeSpeechRecognition.prototype, 'start')
+      .mockImplementation(() => undefined);
+    flush(() => button(root).click());
     expect(root.querySelector('.hint')?.textContent).toContain(
       'Allow the microphone when your browser asks.',
     );
-    proto.start = start;
-    act(() => stub.latest().onstart?.());
+    hold.mockRestore();
+    flush(() => stub.latest().onstart?.());
     expect(root.querySelector('.hint')).toBeNull();
     expect(localStorage.getItem('bower:dictation:used')).not.toBeNull();
   });
 
   it('shows a danger alert when the microphone is blocked', () => {
     const root = mount();
-    act(() => button(root).click());
-    act(() => stub.latest().fail('not-allowed'));
+    flush(() => button(root).click());
+    flush(() => stub.latest().fail('not-allowed'));
     const alert = root.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain('The microphone is blocked.');
     expect(button(root).getAttribute('aria-pressed')).toBe('false');
@@ -211,11 +209,11 @@ describe('DictateButton', () => {
 
   it('says a short sentence for another failure, and stays quiet for no-speech', () => {
     const root = mount();
-    act(() => button(root).click());
-    act(() => stub.latest().fail('no-speech'));
+    flush(() => button(root).click());
+    flush(() => stub.latest().fail('no-speech'));
     expect(root.querySelector('[role="alert"]')).toBeNull();
-    act(() => button(root).click());
-    act(() => stub.latest().fail('network'));
+    flush(() => button(root).click());
+    flush(() => stub.latest().fail('network'));
     expect(root.querySelector('[role="alert"]')?.textContent).toContain(
       'Dictation stopped.',
     );
@@ -223,8 +221,8 @@ describe('DictateButton', () => {
 
   it('keeps a language chosen in the menu and restarts with it', () => {
     const root = mount();
-    act(() => button(root).click());
-    act(() => {
+    flush(() => button(root).click());
+    flush(() => {
       root.querySelector<HTMLButtonElement>('.dictate-change')?.click();
     });
     const items = root.querySelectorAll<HTMLButtonElement>(
@@ -232,7 +230,7 @@ describe('DictateButton', () => {
     );
     expect(items[0]?.textContent).toBe('Match my device');
     const es = [...items].find((i) => i.textContent === languageLabel('es-ES'));
-    act(() => es?.click());
+    flush(() => es?.click());
     expect(JSON.parse(localStorage.getItem(DICTATION_LANG_KEY) ?? 'null')).toBe(
       'es-ES',
     );
@@ -246,7 +244,7 @@ describe('DictateButton', () => {
   it('uses the stored language for a new dictation', () => {
     localStorage.setItem(DICTATION_LANG_KEY, JSON.stringify('fr-FR'));
     const root = mount();
-    act(() => button(root).click());
+    flush(() => button(root).click());
     expect(stub.latest().lang).toBe('fr-FR');
   });
 
@@ -269,7 +267,7 @@ describe('DictateButton', () => {
     expect(root.querySelector('.hint-tip')?.textContent).toContain(
       "Long text? Use the microphone key on your phone's keyboard to dictate.",
     );
-    act(() => {
+    flush(() => {
       root.querySelector<HTMLButtonElement>('.hint button')?.click();
     });
     expect(root.querySelector('.hint')).toBeNull();
