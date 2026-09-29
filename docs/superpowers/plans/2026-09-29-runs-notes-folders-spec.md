@@ -666,7 +666,7 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
   - `role="separator"`, `aria-orientation="vertical"`, `aria-valuenow`, `aria-valuemin="200"`, `aria-valuemax="480"`, `tabindex="0"`;
   - Left and Right arrows move 16 px, Home and End jump to min and max;
   - double-click or Enter resets to 264.
-- [ ] R-SIDE-2: the width is kept in `localStorage` `bower:pref:sidebarWidth`, applied as `--sidebar-width` before first paint (inline in `layout.tsx`), and clamped so the main column stays at least 560 px.
+- [ ] R-SIDE-2: the width is kept in `localStorage` `bower:pref:sidebarWidth`, applied as `--sidebar-width` in the app's first render, with the sidebar hidden until then (T15; no inline script, no CSP change), and clamped so the main column stays at least 560 px.
 - [ ] R-SIDE-3: tree links carry the item's name as their accessible name and `title` (tooltip); counts and "New" are in `aria-describedby` (fixes 3.12, W8).
 - [ ] R-SIDE-4: pointer drag uses pointer capture and `requestAnimationFrame`, with no layout thrash; the tree does not re-render on each move (CSS variable only).
 - Cost S. Risk: the virtualised tree must re-measure its width on resize; TanStack Virtual measures height only, so no change is expected.
@@ -1238,7 +1238,7 @@ Research agrees that long deck tutorials make an app look harder without making 
 - **Spikes before splitting** (tech-lead):
   - what rclone does when `root_folder_id` answers 404 (it decides R-VAULT-7's failure path);
   - the turn baseline of R-RUNNER-9.
-- **Shared files, one owning issue each:** `details.tsx` (`BOOKKEEPING_KEYS`), `kinds.ts`, the rulebook bump (R-AG-1 to R-AG-11 in one bump), `session.tsx`, `api/src/types.ts`.
+- **Shared files, one owning issue each:** `details.tsx` (`BOOKKEEPING_KEYS`), `kinds.ts`, the rulebook bumps (v21: R-AG-1 to R-AG-10; v22: R-AG-11, D35), `session.tsx`, `api/src/types.ts`.
 
 ### 6.21 Bower on screen — R-BIRD (boards Bower-Rules-1280, Bower-Poses-1280, Bower-Fixes-1280, Bar-Bird-375, Perch-Rest-1280, Perch-Running-1280, Note-Reading-375, Tour-375, Dictate-Bower-375)
 
@@ -1338,7 +1338,7 @@ The new props are three sound arcs (`wv`), the page with three lines (`rd`), two
 - **R-RUNNER-8.** The default daily run limit goes from 20 to 100 (`DAILY_RUN_LIMIT` in `api/src/env.ts`, the runbook table and the Limits table in `ARCHITECTURE.md`); an operator can still set another value. The app shows no run count (Q4). The runbook's Limits note adds one line: at 100 runs a day, one busy person can use a real share of the instance repo's 2,000 free Actions minutes a month. Serves D22.
 - **R-RUNNER-5.** A run is `partial` when it failed and `created + updated + items.to > 0`. The Worker keeps `state: failed`, and the app derives partial (no API change beyond the new arrays).
 
-**Rulebook** (`vault-template/CLAUDE.md`; bump `bower_rules_version` once for all of these; the prompts in `agent/prompts/ingest.md` point to the new rules):
+**Rulebook** (`vault-template/CLAUDE.md`; bump `bower_rules_version` to 21 for R-AG-1 to R-AG-10 and to 22 for R-AG-11 (D35); the prompts in `agent/prompts/ingest.md` point to the new rules):
 
 - **R-AG-1.** Every note Bower writes carries `by: bower` in its frontmatter: companion notes, answers, job results, summaries, converted documents' `.md`, and hub and project notes Bower creates. Serves R-NOTE-1.
 - **R-AG-2.** Every note Bower **generates** (not a converted `.md`, not a hub note that only lists) opens with the `> [!bower] Bower's note` box. This extends "A note from Bower" beyond listed kinds and asked-for notes, per the owner's ruling (3.4):
@@ -1368,7 +1368,7 @@ The new props are three sound arcs (`wv`), the page with three lines (`rd`), two
 - **R-AG-7.** A rename request is written in words plus a path, like a move request ("Rename {path} to {new name}"), and handled the same way: the agent renames the file, and the runner keeps its id and books the rename. There are no `op:` fields.
 - **R-AG-9 (runner; owner approved 29 Sep).** PDFs get the same treatment. `run.sh` converts a text PDF with `pdftotext -layout` (poppler-utils, installed in the job like pandoc) so the runner can append the text as it does for Word files (T9). A scanned PDF with no text layer gets the copy with its properties and Bower's note, and the line "Scanned: no text to copy" under `## The document`.
   - Owner approved on 29 Sep: poppler-utils is installed in the runner job (an apt package; no runtime dependency in the app).
-- **R-AG-11.** "How Bower thinks": the nine principles of 6.18, as one rulebook section of about 25 lines, plus `apply_link` on job-offer, `made_for`, `## Reference`, `## Next steps` and `## History` handling, and `.bower/checks.txt` and `.bower/next.txt` (R-MEAN). One bump with R-AG-1 to R-AG-10.
+- **R-AG-11.** "How Bower thinks": the nine principles of 6.18, as one rulebook section of about 25 lines, plus `apply_link` on job-offer, `made_for`, `## Reference`, `## Next steps` and `## History` handling, and `.bower/checks.txt` and `.bower/next.txt` (R-MEAN). Its own bump, v22, after the R-RUNNER-9 measurement (D35).
 - **R-AG-10.** Finishing a partly done tidy-up: a pending inbox file that already has a note whose `original:` names it is filed only; its note is not written again. The runner reads the previous run's `created[]` from `.bower/last-run.json` in the vault, only when that file's state is failed (an instructions-only run in between overwrites it; the `original:` rule alone still prevents duplicates) (written by R-RUNNER-2; the runner itself keeps nothing) and lists those paths in the prompt as "already written; do not write these again". Serves R-SHEET-4 and D3.
 - **R-AG-8.** Piles:
   - Each context note applies only to the files in its own `## Applies to` list. A file named in two context notes goes with the newest note.
@@ -1509,7 +1509,7 @@ The rulebook bump and the runner change deploy in the usual order: Worker, then 
 - [x] Every L has an M alternative or is split: the `run.sh` changes and the Overlay migration are each L in total, so section 8 splits them into three and four issues of M.
 - [x] `inbox-count.ts` has its own ID, R-INBOX-1 (the single source of the inbox number, with things and requests counted apart), in the primitives group.
 - [x] Every owner question (Q1 to Q12) is answered.
-- [x] Every escalation is in section 7 or 9: the rulebook bump (R-AG-1 to R-AG-8); runner and Worker fields; the `pdftotext` tool for the runner (R-AG-9). Q1, Q2 and Q3 are answered. There are no new dependencies, OAuth scopes or secrets. IndexedDB, storage persistence and Drive resumable uploads use APIs the app already has.
+- [x] Every escalation is in section 7 or 9: the rulebook bumps v21 (R-AG-1 to R-AG-10) and v22 (R-AG-11); runner and Worker fields; the `pdftotext` tool for the runner (R-AG-9). Q1, Q2 and Q3 are answered. There are no new dependencies, OAuth scopes or secrets. IndexedDB, storage persistence and Drive resumable uploads use APIs the app already has.
 - [x] Every open-source pointer has a licence: there are none.
 - [x] Every acceptance criterion can be checked by a test or by opening the app.
 - [x] Nothing in the boards contradicts this text. Known simplifications on the boards: the Requests desktop board shows the chip in the running state, while the list shows one running request. Board data (names, amounts) is fictional.
@@ -1591,3 +1591,19 @@ These are the exact values drawn in the canvas. `bird.css` keeps its existing co
 .b.e-happy .bl,.b.p-done .bl,.b.p-hello .bl,.b.p-dance .bl{opacity:.9}
 .b .nt{font-size:17px}.b .qm{font-size:24px}.b .zz{font-size:15px}.b .ex{font-size:22px}
 ```
+
+**CSS: the mark, the still classes, settled and the nap (R-BIRD-2, 12)**
+
+```css
+/* The mark: the still drawing, no small details. */
+.b.mark .x,.b.mark .eh,.b.mark .ld,.b.mark .lb,.b.mark .bj,.b.mark .bl,.b.mark .ir{display:none}
+/* Still classes: the key pose held, used under reduced motion and when settled. */
+.s-point{--bird-point-angle:214deg}.s-point.pd{--bird-point-angle:242deg}
+.s-point .wg{transform:rotate(var(--bird-point-angle))}.s-point .lb{transform:translateY(-5px)}.s-point .p1{opacity:1}.s-point.pd .p1{opacity:0}.s-point.pd .p2{opacity:1}
+.s-read .wg{transform:rotate(212deg)}.s-read .hd{transform:rotate(14deg)}.s-read .rd{opacity:1}
+.s-perch .lb{transform:translateY(-2px)}
+/* Settled (D30): the component swaps the pose class for its still class (s-* or the state's e-* face) and adds .settled. */
+.b.settled *{animation:none!important}
+```
+
+The nap (D30): a tap plays Asleep for one cycle (`p-sleep`), then the bird shows `e-sleepy` with `.settled` until the next tap or page load. Each looping pose's still class: Looking and Perched `s-perch`, Listening `e-curious`, Pointing `s-point`, Reading `s-read`, Singing and Shiny `e-happy`, Tidying and Flying `s-read` with the paper hidden (`e-happy`), Asleep `e-sleepy`, Confused `e-worried`, Offline `e-worried`.
