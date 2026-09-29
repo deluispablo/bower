@@ -41,6 +41,9 @@ import {
   IconSparkle,
 } from '../components/icons.js';
 import { BackLink } from '../components/back-link.js';
+import { FolderMark } from '../components/folder-mark.js';
+import { HeaderAction } from '../components/header-action.js';
+import { Hint } from '../components/hint.js';
 import { MoreButton } from '../components/more-button.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { QuickLookPane } from '../components/quick-look.js';
@@ -54,6 +57,7 @@ import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
+import { openSendToBower } from '../components/send-to-bower.js';
 import { askBowerHref } from '../more-menu.js';
 import {
   breadcrumb,
@@ -62,13 +66,9 @@ import {
   folderContents,
   folderEmptyState,
   folderHref,
-  shortAge,
+  paraKindOf,
 } from '../navigation.js';
-import type {
-  BreadcrumbSegment,
-  FolderContents,
-  FolderSubfolder,
-} from '../navigation.js';
+import type { BreadcrumbSegment, FolderContents } from '../navigation.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { useMediaQuery } from '../use-media-query.js';
@@ -78,6 +78,16 @@ import '../styles/folder.css';
 
 /** From here the folder has three panes (#614, D13, R-DESK-2). */
 export const PANES_QUERY = '(min-width: 1200px)';
+
+/** From here the top bar carries the path and the in-content bar goes
+ * (R-FOLD-3, D12). */
+export const DESKTOP_QUERY = '(min-width: 900px)';
+
+/** The two questions the suggestion offers (R-FOLD, board Ask-*). */
+const ASK_CHIPS: readonly string[] = [
+  'Which offer fits me best?',
+  'Pull out every closing date',
+];
 
 /** "1 note" / "3 notes", "1 folder" / "2 folders" — the header's count line. */
 function plural(n: number, word: string): string {
@@ -118,18 +128,6 @@ function metaLine(
   return parts.join(' · ');
 }
 
-/** A root folder screen's subfolder second line (#431, Phone-Folder
- * board): "6 things · updated today", "3 things · 5 d". Empty (#502): a
- * subfolder with nothing in it has no `updated` either, and the tree
- * already hides a zero count (#310) rather than say "0 things". */
-function subfolderLine(folder: FolderSubfolder, now: number): string {
-  if (folder.things === 0) return '';
-  const things = plural(folder.things, 'thing');
-  if (folder.updated === undefined) return things;
-  const age = shortAge(folder.updated, now);
-  return `${things} · ${age === 'today' ? 'updated today' : age}`;
-}
-
 interface FolderCrumbProps {
   /** This folder's ancestors only (`breadcrumb`), nearest last. */
   ancestors: BreadcrumbSegment[];
@@ -149,7 +147,9 @@ function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
             <span aria-hidden="true"> / </span>
           </span>
         ))}
-        <span class="breadcrumb-current">{name}</span>
+        <span class="breadcrumb-current" aria-current="page">
+          {name}
+        </span>
       </nav>
     </>
   );
@@ -267,6 +267,8 @@ interface FolderBodyProps {
   onCloseMenu: () => void;
   /** Three panes (#614): the selection, the keys and the chips. */
   desktop: boolean;
+  /** 900 px and wider: no PathBar, and Drive shows in the header. */
+  topBarPath: boolean;
   onPreview: (item: PanePreview | null) => void;
   /** The parent folder's address; `undefined` at a top-level folder. */
   upHref: string | undefined;
@@ -288,6 +290,7 @@ function FolderBody({
   onToggleMenu,
   onCloseMenu,
   desktop,
+  topBarPath,
   onPreview,
   upHref,
   onNavigate,
@@ -312,13 +315,18 @@ function FolderBody({
   const comparing = tab === 'compare' && compare !== null;
   // The board's header (#611) for a folder with things in it; a root folder
   // and an empty one keep the counts line they have always had.
+  const paraOfFolder = paraKindOf(contents.path.split('/')[0] ?? '');
   const boardHeader = parentName !== null && contents.items.length > 0;
 
   return (
     <section class="folder-view">
-      {items !== null && <items.PathBar path={contents.path} />}
+      {items !== null && !topBarPath && <items.PathBar path={contents.path} />}
       <div class="folder-head">
-        <IconFolder />
+        {paraOfFolder === null ? (
+          <IconFolder />
+        ) : (
+          <FolderMark kind={paraOfFolder} size={28} />
+        )}
         <div class="folder-head-text">
           <h1>{heading}</h1>
           {!boardHeader && (
@@ -351,39 +359,57 @@ function FolderBody({
       {meaning !== undefined && <p class="folder-explainer">{meaning}</p>}
 
       <div class="folder-chips">
-        <button
-          type="button"
-          class="chip"
-          aria-pressed={pinned}
+        <HeaderAction
+          icon={justChanged ? <BowerMark size={16} /> : <IconPin />}
+          pressed={pinned}
           onClick={onTogglePin}
         >
-          {justChanged ? <BowerMark size={16} /> : <IconPin />}
           {pinned ? 'Pinned' : 'Pin to Home'}
-        </button>
-        <a class="chip" href={tellHref}>
-          <IconChat />
+        </HeaderAction>
+        <HeaderAction icon={<IconChat />} href={tellHref}>
           Ask Bower about it
-        </a>
-        {file !== undefined && !isDemo() && (
-          <a
-            class="chip"
-            href={driveFolderUrl(file)}
-            target="_blank"
-            rel="noopener"
-          >
-            <IconExternalLink />
-            Drive
-          </a>
+        </HeaderAction>
+        {file !== undefined && topBarPath && !isDemo() && (
+          <HeaderAction icon={<IconExternalLink />} href={driveFolderUrl(file)}>
+            Open in Drive
+          </HeaderAction>
         )}
-        {file !== undefined && isDemo() && (
-          <button type="button" class="chip" disabled aria-disabled>
-            <IconExternalLink />
-            Drive
-          </button>
+        {file !== undefined && topBarPath && isDemo() && (
+          <HeaderAction icon={<IconExternalLink />} disabled>
+            Open in Drive
+          </HeaderAction>
         )}
       </div>
-      {file !== undefined && isDemo() && (
+      {file !== undefined && topBarPath && isDemo() && (
         <p class="folder-demo-note">{NOT_IN_DEMO_DRIVE}</p>
+      )}
+
+      {parentName !== null && !comparing && (
+        <Hint
+          id="folder-ask"
+          variant="suggestion"
+          icon={<IconSparkle />}
+          actions={ASK_CHIPS.map((question) => (
+            <button
+              key={question}
+              type="button"
+              class="chip"
+              onClick={() =>
+                openSendToBower({
+                  mode: 'ask',
+                  about: contents.name,
+                  ...(paraOfFolder !== null && { aboutKind: paraOfFolder }),
+                  initialText: question,
+                  buildText: (value) => `About ${contents.name}: ${value}`,
+                })
+              }
+            >
+              {question}
+            </button>
+          ))}
+        >
+          Try asking. Your question waits in the inbox for the next tidy-up.
+        </Hint>
       )}
 
       {compare !== null && (
@@ -399,7 +425,7 @@ function FolderBody({
             aria-selected={!comparing}
             onClick={() => setTab('everything')}
           >
-            Everything
+            List
           </button>
           <button
             type="button"
@@ -420,41 +446,15 @@ function FolderBody({
         />
       )}
 
-      {!comparing && contents.subfolders.length > 0 && (
-        <div class="folder-section">
-          <h2 class="folder-label">Folders</h2>
-          <ul class="folder-list">
-            {contents.subfolders.map((folder) => {
-              const detail = subfolderLine(folder, now);
-              return (
-                <li key={folder.path}>
-                  <a class="folder-row" href={folderHref(folder.path)}>
-                    <IconFolder />
-                    {parentName === null ? (
-                      <span class="folder-row-text">
-                        <span class="folder-row-name">{folder.name}</span>
-                        {detail !== '' && (
-                          <span class="folder-row-detail">{detail}</span>
-                        )}
-                      </span>
-                    ) : (
-                      <>
-                        <span class="folder-row-name">{folder.name}</span>
-                        {folder.things > 0 && (
-                          <span class="folder-row-count">{folder.things}</span>
-                        )}
-                      </>
-                    )}
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-
       {comparing ? null : contents.items.length === 0 ? (
         <div class="folder-section">
+          {items !== null && (
+            <items.SubfolderList
+              contents={contents}
+              now={now}
+              detailed={parentName === null}
+            />
+          )}
           {emptyState.elsewhere !== null ? (
             <p class="folder-elsewhere">
               {plural(
@@ -500,17 +500,6 @@ function FolderBody({
           />
         )
       )}
-
-      {parentName !== null && (
-        <p class="folder-tip">
-          <IconSparkle />
-          <span>
-            Want more from this folder? Ask Bower: &ldquo;Compare what I saved
-            here&rdquo; or &ldquo;From now on, pull the dates out of everything
-            in this folder&rdquo;.
-          </span>
-        </p>
-      )}
     </section>
   );
 }
@@ -533,6 +522,7 @@ export function Folder(): JSX.Element {
   const parent = ancestors[ancestors.length - 1];
   const { route } = useLocation();
   const wide = useMediaQuery(PANES_QUERY);
+  const topBarPath = useMediaQuery(DESKTOP_QUERY);
   const [preview, setPreview] = useState<PanePreview | null>(null);
 
   // The phone top bar's Back (#318): the parent folder, or Home for a
@@ -623,6 +613,7 @@ export function Folder(): JSX.Element {
       onToggleMenu={() => setMenuOpen((open) => !open)}
       onCloseMenu={() => setMenuOpen(false)}
       desktop={wide}
+      topBarPath={topBarPath}
       onPreview={setPreview}
       onNavigate={route}
       upHref={parent === undefined ? undefined : folderHref(parent.path)}

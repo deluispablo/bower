@@ -12,6 +12,7 @@ import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { KEY_HINT, folderKeyAction, rowDate } from '../folder-keys.js';
+import { isBowerWritten } from '../bower-written.js';
 import { loadViewSettings, saveViewSettings } from '../cache.js';
 import type { ViewSettings } from '../cache.js';
 import { parseCatalogueFiles } from '../companion.js';
@@ -47,7 +48,7 @@ import {
   paraKindOf,
   shortAge,
 } from '../navigation.js';
-import type { FolderContents } from '../navigation.js';
+import type { FolderContents, FolderSubfolder } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
@@ -64,7 +65,16 @@ import {
   defaultLayout,
 } from './folder-grid.js';
 import type { FolderLayout } from './folder-grid.js';
-import { IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
+import { Hint } from './hint.js';
+import {
+  IconChevronRight,
+  IconDoc,
+  IconFolder,
+  IconImage,
+  IconNote,
+  IconPdf,
+} from './icons.js';
+import { InfoPop } from './info-pop.js';
 import { KeyFacts } from './key-facts.js';
 import { KindBadge } from './kind-badge.js';
 import { QuickLook } from './quick-look.js';
@@ -139,6 +149,104 @@ export function PathBar({ path }: { path: string }): JSX.Element {
         );
       })}
     </nav>
+  );
+}
+
+/** "1 thing" / "3 things". */
+function things(n: number): string {
+  return `${n} ${n === 1 ? 'thing' : 'things'}`;
+}
+
+/** A subfolder row's second line on a root folder's screen (#431): "6
+ * things · updated today", "3 things · 5 d". Empty when nothing is in it
+ * (#502). */
+export function subfolderLine(folder: FolderSubfolder, now: number): string {
+  if (folder.things === 0) return '';
+  const count = things(folder.things);
+  if (folder.updated === undefined) return count;
+  const age = shortAge(folder.updated, now);
+  return `${count} · ${age === 'today' ? 'updated today' : age}`;
+}
+
+/** An id for `aria-labelledby` / `aria-describedby` from a row's key. */
+function domId(prefix: string, key: string): string {
+  return `${prefix}-${key.replace(/\s+/g, '_')}`;
+}
+
+/** A subfolder as a row of the one list (R-FOLD-1): the folder icon, its
+ * name (the accessible name, R-FOLD-5), "{n} things" as its description and
+ * a chevron. `detailed` is the root folder's two-line version. */
+export function SubfolderRow({
+  folder,
+  now,
+  detailed,
+}: {
+  folder: FolderSubfolder;
+  now: number;
+  detailed: boolean;
+}): JSX.Element {
+  const nameId = domId('folder-name', folder.path);
+  const countId = domId('folder-count', folder.path);
+  const detail = detailed ? subfolderLine(folder, now) : '';
+  const count = folder.things > 0 ? things(folder.things) : '';
+  const describedBy = detailed ? detail : count;
+  return (
+    <a
+      class="folder-row"
+      href={folderHref(folder.path)}
+      aria-labelledby={nameId}
+      aria-describedby={describedBy === '' ? undefined : countId}
+    >
+      <IconFolder />
+      {detailed ? (
+        <span class="folder-row-text">
+          <span class="folder-row-name" id={nameId}>
+            {folder.name}
+          </span>
+          {detail !== '' && (
+            <span class="folder-row-detail" id={countId}>
+              {detail}
+            </span>
+          )}
+        </span>
+      ) : (
+        <>
+          <span class="folder-row-name" id={nameId}>
+            {folder.name}
+          </span>
+          {count !== '' && (
+            <span class="folder-row-count" id={countId}>
+              {count}
+            </span>
+          )}
+        </>
+      )}
+      <span class="folder-row-chevron" aria-hidden="true">
+        <IconChevronRight />
+      </span>
+    </a>
+  );
+}
+
+/** The subfolders of a folder as the top rows of its one list. */
+export function SubfolderList({
+  contents,
+  now,
+  detailed,
+}: {
+  contents: FolderContents;
+  now: number;
+  detailed: boolean;
+}): JSX.Element | null {
+  if (contents.subfolders.length === 0) return null;
+  return (
+    <ul class="folder-list" role="list" aria-label={`In ${contents.name}`}>
+      {contents.subfolders.map((folder) => (
+        <li key={folder.path}>
+          <SubfolderRow folder={folder} now={now} detailed={detailed} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -653,7 +761,12 @@ export function FolderItems({
       <KindIcon file={shown} origin={originOf(row.file, catalogue)} />
     );
     return (
-      <a class="folder-tile folder-item" href={hrefOf(row)} {...holdProps(row)}>
+      <a
+        class="folder-tile folder-item"
+        href={hrefOf(row)}
+        aria-labelledby={domId('row-name', row.key)}
+        {...holdProps(row)}
+      >
         <span class="folder-tile-thumb">
           {showsNote ? (
             <span class="folder-tile-note">
@@ -671,7 +784,7 @@ export function FolderItems({
           {row.kind !== 'note' && <KindBadge kind={row.kind} file={shown} />}
         </span>
         <span class="folder-tile-title">
-          {titleOf(row)}
+          <span id={domId('row-name', row.key)}>{titleOf(row)}</span>
           {isNew && (
             <>
               {' '}
@@ -696,7 +809,17 @@ export function FolderItems({
       fresh.isNew(row.file.id) ||
       (row.original !== undefined && fresh.isNew(row.original.id));
     return (
-      <a class="folder-row folder-item" href={href} {...holdProps(row)}>
+      <a
+        class="folder-row folder-item"
+        href={href}
+        aria-labelledby={domId('row-name', row.key)}
+        aria-describedby={
+          isNew
+            ? `${domId('row-detail', row.key)} ${domId('row-new', row.key)}`
+            : domId('row-detail', row.key)
+        }
+        {...holdProps(row)}
+      >
         <KindIcon
           file={row.original ?? row.file}
           origin={originOf(row.file, catalogue)}
@@ -704,18 +827,26 @@ export function FolderItems({
         />
         <span class="folder-row-text">
           <span class="folder-row-title">
-            <span class="folder-row-name">{titleOf(row)}</span>
-            {isNew && <NewTag />}
+            <span class="folder-row-name" id={domId('row-name', row.key)}>
+              {titleOf(row)}
+            </span>
+            {isNew && (
+              <span class="folder-row-describe" id={domId('row-new', row.key)}>
+                <NewTag />
+              </span>
+            )}
           </span>
-          <RowDetail
-            row={row}
-            view={view}
-            model={model}
-            catalogue={catalogue}
-            pages={pages}
-            now={now}
-            firstLine={firstLines.get(row.file.id)}
-          />
+          <span class="folder-row-describe" id={domId('row-detail', row.key)}>
+            <RowDetail
+              row={row}
+              view={view}
+              model={model}
+              catalogue={catalogue}
+              pages={pages}
+              now={now}
+              firstLine={firstLines.get(row.file.id)}
+            />
+          </span>
         </span>
         {desktop && row.file.modifiedTime !== undefined && (
           <time class="folder-row-date" dateTime={row.file.modifiedTime}>
@@ -759,6 +890,7 @@ export function FolderItems({
       origin: originOf(shown, catalogue),
       folderPath: contents.path,
       now: Date.now(),
+      bower: isBowerWritten(meta),
       facts:
         noteKind === undefined || meta === undefined
           ? []
@@ -863,6 +995,10 @@ export function FolderItems({
   }, [desktop]);
 
   const VirtualList = loaded?.VirtualList;
+  // Subfolders are rows of the list until a filter narrows it (R-FOLD-1).
+  const subs =
+    view.origin === 'all' && kind === null ? contents.subfolders : [];
+  const subContents: FolderContents = { ...contents, subfolders: subs };
   const counts: Record<OriginFilter, number | null> = {
     all: null,
     originals: model.originals.length,
@@ -873,31 +1009,58 @@ export function FolderItems({
     <div class="folder-section">
       <div class="folder-facts">
         <p class="folder-counts">
-          {desktop && newHere > 0
-            ? metaCounts(model).replace(
-                /^\d+ things?/,
-                (things) => `${things} · ${newHere} new`,
-              )
-            : metaCounts(model)}
+          {metaCounts(model).replace(
+            /^\d+ things?/,
+            (head) =>
+              `${things(parseInt(head, 10) + contents.subfolders.length)}${
+                desktop && newHere > 0 ? ` · ${newHere} new` : ''
+              }`,
+          )}
         </p>
         {filed !== null && <p class="folder-filed">{filed}</p>}
       </div>
-      <div class="folder-seg" role="group" aria-label="Show">
-        {(['all', 'originals', 'bower'] as const).map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            class="folder-seg-btn"
-            aria-pressed={view.origin === filter}
-            onClick={() => onView({ origin: filter, kind: null })}
-          >
-            {FILTER_LABELS[filter]}
-            {counts[filter] !== null && (
-              <span class="folder-seg-count"> {counts[filter]}</span>
-            )}
-          </button>
-        ))}
+      <div class="folder-filter-row">
+        <div class="folder-seg" role="group" aria-label="Show">
+          {(['all', 'originals', 'bower'] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              class="folder-seg-btn"
+              aria-pressed={view.origin === filter}
+              onClick={() => onView({ origin: filter, kind: null })}
+            >
+              {FILTER_LABELS[filter]}
+              {counts[filter] !== null && (
+                <span class="folder-seg-count"> {counts[filter]}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <InfoPop label="What By Bower means">
+          <p>
+            <BowerTag /> {TIP_LIST}
+          </p>
+          <p>{TIP_BOWER}</p>
+        </InfoPop>
       </div>
+      {view.origin !== 'all' && (
+        <Hint
+          id="folder-filter"
+          variant="state"
+          icon={<IconFolder />}
+          actions={
+            <button
+              type="button"
+              class="folder-show-all"
+              onClick={() => onView({ origin: 'all', kind: null })}
+            >
+              Show all
+            </button>
+          }
+        >
+          Showing only {FILTER_LABELS[view.origin]}.
+        </Hint>
+      )}
       <div class="folder-tools">
         <select
           class="folder-select"
@@ -971,47 +1134,49 @@ export function FolderItems({
           onChange={(next) => onView({ layout: next })}
         />
       </div>
-      {rows.length === 0 ? (
+      {rows.length === 0 && subs.length === 0 ? (
         <p class="folder-elsewhere">
           {view.origin === 'bower'
             ? `Bower has not written anything in ${contents.name} yet.`
             : 'Nothing of that kind here.'}
         </p>
       ) : layout === 'grid' ? (
-        <ul class="folder-grid">
-          {rows.map((row) => (
-            <li key={row.key}>{renderTile(row)}</li>
-          ))}
-        </ul>
+        <>
+          <SubfolderList contents={subContents} now={now} detailed={false} />
+          <ul class="folder-grid">
+            {rows.map((row) => (
+              <li key={row.key}>{renderTile(row)}</li>
+            ))}
+          </ul>
+        </>
       ) : wantsVirtual && VirtualList !== undefined ? (
-        <VirtualList
-          as="ul"
-          rowAs="li"
-          class="folder-list folder-virtual"
-          items={entries}
-          estimateSize={(at) =>
-            entries[at]?.type === 'group' ? GROUP_ESTIMATE : ROW_ESTIMATE
-          }
-          overscan={10}
-          getKey={entryKey}
-          renderRow={renderEntry}
-        />
+        <>
+          <SubfolderList contents={subContents} now={now} detailed={false} />
+          <VirtualList
+            as="ul"
+            rowAs="li"
+            class="folder-list folder-virtual"
+            items={entries}
+            estimateSize={(at) =>
+              entries[at]?.type === 'group' ? GROUP_ESTIMATE : ROW_ESTIMATE
+            }
+            overscan={10}
+            getKey={entryKey}
+            renderRow={renderEntry}
+          />
+        </>
       ) : (
-        <ul class="folder-list">
+        <ul class="folder-list" role="list" aria-label={`In ${contents.name}`}>
+          {subs.map((folder) => (
+            <li key={folder.path}>
+              <SubfolderRow folder={folder} now={now} detailed={false} />
+            </li>
+          ))}
           {entries.map((entry) => (
             <li key={entryKey(entry)}>{renderEntry(entry)}</li>
           ))}
         </ul>
       )}
-      <p class="folder-list-tip">
-        {view.origin === 'bower' ? (
-          <span>{TIP_BOWER}</span>
-        ) : (
-          <span>
-            <BowerTag /> {TIP_LIST}
-          </span>
-        )}
-      </p>
       {desktop && <p class="folder-keys-hint">{KEY_HINT}</p>}
       {quick !== null && (
         <QuickLook
@@ -1022,6 +1187,7 @@ export function FolderItems({
           kind={quick.kind}
           pages={pages.get((quick.original ?? quick.file).id)}
           origin={originOf(quick.original ?? quick.file, catalogue)}
+          bower={isBowerWritten(model.metas.get(quick.file.id))}
           folderPath={contents.path}
           now={now}
           onClose={() => setQuick(null)}

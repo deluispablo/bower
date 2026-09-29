@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import { buildVaultIndex } from '../src/vault-index.js';
+import { stubMatchMedia } from './helpers/match-media.js';
 
 const route = { params: { path: '1-Projects' } };
 
@@ -69,6 +70,10 @@ vi.mock('preact-iso', () => ({
 let index: ReturnType<typeof buildVaultIndex> | undefined;
 // Stable references: an unstable `getNoteText` would retrigger
 // `useCatalogueOrigins`'s effect (deps include it) on every render.
+const openSheet = vi.fn();
+vi.mock('../src/components/send-to-bower.js', () => ({
+  openSendToBower: openSheet,
+}));
 const pinFolder = vi.fn(() => Promise.resolve());
 const unpinFolder = vi.fn(() => Promise.resolve());
 const getNoteText = (): Promise<string> => Promise.resolve('');
@@ -132,6 +137,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+  openSheet.mockClear();
   vi.useRealTimers();
   void act(() => {
     render(null, root);
@@ -169,8 +177,9 @@ describe('Folder (#348)', () => {
     );
   });
 
-  it('still shows subfolders and files under the meaning line', () => {
+  it('still shows subfolders and files under the meaning line', async () => {
     mount();
+    await subfoldersReady();
     const explainer = root.querySelector('.folder-explainer');
     const subfolder = root.querySelector(
       'a.folder-row[href="/folder/1-Projects/Flat%20hunt"]',
@@ -239,8 +248,9 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
     expect(meta()).toBe('1 note · 1 folder');
   });
 
-  it('gives each subfolder row a second line: things and when updated', () => {
+  it('gives each subfolder row a second line: things and when updated', async () => {
     mount();
+    await subfoldersReady();
     const row = root.querySelector(
       'a.folder-row[href="/folder/1-Projects/Flat%20hunt"]',
     );
@@ -250,6 +260,7 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
     expect(row?.querySelector('.folder-row-count')).toBeNull();
     route.params.path = '2-Areas';
     mount();
+    await subfoldersReady();
     const cooking = root.querySelector(
       'a.folder-row[href="/folder/2-Areas/Cooking"]',
     );
@@ -258,8 +269,9 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
     );
   });
 
-  it('shows no count line for an empty subfolder, not "0 things" (#502)', () => {
+  it('shows no count line for an empty subfolder, not "0 things" (#502)', async () => {
     mount();
+    await subfoldersReady();
     const empty = root.querySelector(
       'a.folder-row[href="/folder/1-Projects/Empty%20project"]',
     );
@@ -272,20 +284,24 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
 // used to read `FolderSubfolder.count`, notes only -- the same disagreement
 // #425 already fixed for the folder menu, the Notes tree and the sidebar.
 describe('Subfolder rows on a non-root folder screen count files too (#457)', () => {
-  it('counts files and notes together, matching the folder menu/tree/sidebar definition', () => {
+  it('counts files and notes together, matching the folder menu/tree/sidebar definition', async () => {
     route.params.path = '1-Projects/Flat hunt';
     mount();
+    await subfoldersReady();
     const row = root.querySelector(
       'a.folder-row[href="/folder/1-Projects/Flat%20hunt/Viewings"]',
     );
     // Viewings holds one note and one file: 2, not 1 (notes only).
-    expect(row?.querySelector('.folder-row-count')?.textContent).toBe('2');
+    expect(row?.querySelector('.folder-row-count')?.textContent).toBe(
+      '2 things',
+    );
     expect(row?.querySelector('.folder-row-detail')).toBeNull();
   });
 
-  it('shows no count badge for an empty subfolder, not "0" (#502)', () => {
+  it('shows no count badge for an empty subfolder, not "0" (#502)', async () => {
     route.params.path = '1-Projects/Flat hunt';
     mount();
+    await subfoldersReady();
     const empty = root.querySelector(
       'a.folder-row[href="/folder/1-Projects/Flat%20hunt/Empty"]',
     );
@@ -298,7 +314,7 @@ describe('Ask Bower about it chip (#354)', () => {
     route.params.path = '1-Projects/Flat hunt';
     mount();
     const chip = Array.from(
-      root.querySelectorAll<HTMLAnchorElement>('.folder-chips a.chip'),
+      root.querySelectorAll<HTMLAnchorElement>('.folder-chips a.header-action'),
     ).find((a) => a.textContent?.includes('Ask Bower about it'));
     expect(chip?.getAttribute('href')).toBe(
       `/bower?text=${encodeURIComponent('About Flat hunt: ')}`,
@@ -306,38 +322,73 @@ describe('Ask Bower about it chip (#354)', () => {
   });
 });
 
-describe('Drive chip and end-of-folder tip (#453, Phone-Folder-Project board)', () => {
-  it('labels the Drive chip "Drive", not "Open in Drive"', () => {
+describe('Header actions, Drive and the Ask suggestion (R-FOLD-2, R-HINT-2)', () => {
+  it('shows "Open in Drive" from 900 px only, as a header action', () => {
     route.params.path = '1-Projects/Flat hunt';
     mount();
-    const chip = Array.from(
-      root.querySelectorAll<HTMLAnchorElement>('.folder-chips a.chip'),
-    ).find((a) => a.getAttribute('href')?.includes('drive.google.com'));
-    expect(chip?.textContent).toBe('Drive');
+    expect(
+      root.querySelector('.folder-chips a[href*="drive.google"]'),
+    ).toBeNull();
+    void act(() => {
+      render(null, root);
+    });
+    stubMatchMedia((query) => query === '(min-width: 900px)');
+    mount();
+    const chip = root.querySelector<HTMLAnchorElement>(
+      '.folder-chips a.header-action[href*="drive.google.com"]',
+    );
+    expect(chip?.textContent).toBe('Open in Drive');
   });
 
-  // #464: the copy used to name "the flats I saved" and "rent and size"
-  // regardless of which folder it sat under -- a hard-coded reference to
-  // the board's own Flat hunt example. The two examples are generic now,
-  // so the exact same tip fits a different folder ("Cooking") too.
-  it('ends the screen with a generic tip to ask Bower for more, on any project folder', () => {
+  it('pins with the same HeaderAction, as a pressed toggle', () => {
     route.params.path = '1-Projects/Flat hunt';
     mount();
-    const tip =
-      'Want more from this folder? Ask Bower: “Compare what I saved here” or “From now on, pull the dates out of everything in this folder”.';
-    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
-    expect(tip).not.toMatch(/flat|rent|listing/i);
-
-    route.params.path = '2-Areas/Cooking';
-    mount();
-    expect(root.querySelector('.folder-tip')?.textContent).toBe(tip);
+    const pin = root.querySelector<HTMLButtonElement>(
+      '.folder-chips button.header-action',
+    );
+    expect(pin?.textContent).toBe('Pin to Home');
+    expect(pin?.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('has no tip on a root folder', () => {
+  it('offers a suggestion under the actions, with two chips that open the ask sheet', () => {
+    route.params.path = '1-Projects/Flat hunt';
     mount();
     expect(root.querySelector('.folder-tip')).toBeNull();
+    const hint = root.querySelector('.hint-suggestion');
+    expect(hint?.textContent).toContain('Try asking.');
+    const chips = hint?.querySelectorAll<HTMLButtonElement>('.chip') ?? [];
+    expect([...chips].map((chip) => chip.textContent)).toEqual([
+      'Which offer fits me best?',
+      'Pull out every closing date',
+    ]);
+    void act(() => chips[1]?.click());
+    expect(openSheet).toHaveBeenCalledTimes(1);
+    const call = openSheet.mock.calls[0]?.[0] as {
+      mode: string;
+      initialText: string;
+      buildText: (value: string) => string;
+    };
+    expect(call.mode).toBe('ask');
+    expect(call.initialText).toBe('Pull out every closing date');
+    expect(call.buildText('Q')).toBe('About Flat hunt: Q');
+  });
+
+  it('has no suggestion on a root folder, and none once dismissed', () => {
+    mount();
+    expect(root.querySelector('.hint-suggestion')).toBeNull();
+    route.params.path = '1-Projects/Flat hunt';
+    mount();
+    void act(() => {
+      root.querySelector<HTMLButtonElement>('.hint-dismiss')?.click();
+    });
+    expect(root.querySelector('.hint-suggestion')).toBeNull();
   });
 });
+
+/** The list module has loaded and drawn its subfolder rows. */
+async function subfoldersReady(): Promise<void> {
+  await waitUntil(() => root.querySelector('a.folder-row') !== null);
+}
 
 /** Polls until `done()` holds (5 s at most): the list mode is loaded on
  * demand and its notes' frontmatter arrives after the first render, so a
@@ -401,7 +452,7 @@ describe('Folder list mode (#611)', () => {
     expect(texts('.folder-path')[0]).toBe('PProjects›Flat hunt');
     expect(root.querySelector('.folder-path b')?.textContent).toBe('Flat hunt');
     expect(root.querySelector('.folder-counts')?.textContent).toBe(
-      '4 things · 3 originals, 1 by Bower',
+      '6 things · 3 originals, 1 by Bower',
     );
     expect(root.querySelector('.folder-filed')?.textContent).toBe(
       'Last filed today',
@@ -437,9 +488,19 @@ describe('Folder list mode (#611)', () => {
     void act(() => buttons[2]?.click());
     await waitUntil(has('note on the listing PDF'));
     expect(root.textContent).toContain('note on the listing PDF');
-    expect(root.textContent).toContain(
+    expect(root.querySelector('.hint-state')?.textContent).toContain(
+      'Showing only By Bower.',
+    );
+    void act(() => {
+      root.querySelector<HTMLButtonElement>('.info-pop-button')?.click();
+    });
+    expect(root.querySelector('.info-pop-panel')?.textContent).toContain(
       'Only what Bower wrote, with its key facts',
     );
+    void act(() => {
+      root.querySelector<HTMLButtonElement>('.folder-show-all')?.click();
+    });
+    await waitUntil(() => root.querySelector('.hint-state') === null);
   });
 
   it('remembers the filters per folder and keeps the Compare columns', async () => {
@@ -492,5 +553,50 @@ describe('Folder list mode (#611)', () => {
     const rendered = root.querySelectorAll('.folder-item').length;
     expect(rendered).toBeGreaterThan(0);
     expect(rendered).toBeLessThan(500);
+  });
+});
+
+describe('One list, path once, names (R-FOLD-1, 3, 5)', () => {
+  it('lists the subfolders first, in the same role="list" as the rows', async () => {
+    useFlatHuntWithPair();
+    mount();
+    await listReady();
+    await waitUntil(has('note on the listing'));
+    const lists = root.querySelectorAll('ul[role="list"]');
+    expect(lists).toHaveLength(1);
+    expect(lists[0]?.getAttribute('aria-label')).toBe('In Flat hunt');
+    const links = [...lists[0]!.querySelectorAll('a')];
+    expect(links[0]?.getAttribute('href')).toBe(
+      '/folder/1-Projects/Flat%20hunt/Empty',
+    );
+    expect(root.querySelector('.folder-label')).toBeNull();
+  });
+
+  it('names a row by the item only; the detail is its description', async () => {
+    useFlatHuntWithPair();
+    mount();
+    await listReady();
+    await waitUntil(has('note on the listing'));
+    const row = root.querySelector<HTMLAnchorElement>('a.folder-item');
+    const nameId = row?.getAttribute('aria-labelledby') ?? '';
+    expect(document.getElementById(nameId)?.textContent).toBe(
+      row?.querySelector('.folder-row-name')?.textContent,
+    );
+    expect(row?.getAttribute('aria-describedby')).toContain('row-detail');
+    const folder = root.querySelector<HTMLAnchorElement>(
+      'a.folder-row:not(.folder-item)',
+    );
+    expect(
+      document.getElementById(folder?.getAttribute('aria-labelledby') ?? '')
+        ?.textContent,
+    ).toBe('Empty');
+  });
+
+  it('draws no PathBar from 900 px, where the top bar carries the path', async () => {
+    stubMatchMedia((query) => query === '(min-width: 900px)');
+    useFlatHuntWithPair();
+    mount();
+    await listReady();
+    expect(root.querySelector('.folder-path')).toBeNull();
   });
 });

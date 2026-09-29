@@ -75,6 +75,6 @@ test.describe('Compare on a phone (#701)', () => {
     await expect(page.locator('.compare-foot')).toContainText(
       'Kentish Town is over £2,300, shown faded.',
     );
-    await expect(page.locator('.folder-tip')).toBeHidden();
+    await expect(page.locator('.hint-suggestion')).toBeHidden();
   });
 });
