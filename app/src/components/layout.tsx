@@ -52,11 +52,7 @@ import { isDemo, loginUrl } from '../api.js';
 import { tourOnScreen } from '../onboarding.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { useSession } from '../session.js';
-import {
-  BOWER_PATH,
-  helpScreenFor,
-  isInnerScreen,
-} from '../shell-routes.js';
+import { BOWER_PATH, helpScreenFor, isInnerScreen } from '../shell-routes.js';
 import { lazyOverlay, whenIdle } from '../lazy-overlay.js';
 import { replayTour, useTour } from '../tour-store.js';
 import { useVault } from '../vault-store.js';
