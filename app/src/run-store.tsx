@@ -21,8 +21,8 @@
  * After a run (#304, #506): `done` stays until the working sheet is
  * dismissed (Close or Escape) — never on a timer, so there is always time
  * to read what went where before it closes. The result message stays on
- * the state for the sheet, and is announced once, in the toast
- * (`toast-store.ts`). A run that was already over when the app first heard
+ * the state for the sheet; the chip announces it (R-CHIP), there is no toast
+ * (R-HOME-4). A run that was already over when the app first heard
  * of it (a reload hours later) is not announced at all: it goes straight
  * to `idle`.
  *
@@ -51,16 +51,13 @@ import { ApiError, getStatus, startProcess } from './api.js';
 import type { Run, RunScope } from './api.js';
 import type { ConfirmBreakdown } from './components/tidy-confirm-sheet.js';
 import type { DriveFile } from './drive.js';
-import { ANSWERS_FOLDER } from './home.js';
 import type { LastRunOutcome } from './last-run.js';
-import { folderHref } from './navigation.js';
 import { failureCopy } from './run-failure.js';
 import { inboxCount, inboxTotal } from './inbox-count.js';
 import type { InboxCount } from './inbox-count.js';
 import { outcomeFromRun, runSentence } from './run-outcome.js';
 import { processedKind, visiblePendingCount } from './run-progress.js';
 import { useSession } from './session.js';
-import { showToast } from './toast-store.js';
 import {
   invalidateAfterRun,
   readLastRunOutcome,
@@ -564,21 +561,6 @@ export function RunProvider({ children }: RunProviderProps) {
     // Intentionally once per mount / once a vault becomes available: the
     // interval effect below takes over from there.
   }, [hasVault, poll]);
-
-  // A finished run announces itself once, in the toast, with a link to the
-  // answers. Keyed on the run so a second `done` for the same run (or this
-  // effect running again) never shows it twice.
-  const announcedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (state.phase !== 'done' || state.run === null) return;
-    const key = runKey(state.run);
-    if (announcedRef.current === key) return;
-    announcedRef.current = key;
-    showToast(state.message ?? resultMessage(state.run), {
-      href: folderHref(ANSWERS_FOLDER),
-      label: 'See',
-    });
-  }, [state.phase, state.run, state.message]);
 
   // On `done`, and on `stale` after the Worker's timeout (the run may have
   // filed part of the inbox before it stopped answering): the vault content

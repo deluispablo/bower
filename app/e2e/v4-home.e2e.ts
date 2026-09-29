@@ -18,7 +18,7 @@ async function tidyUp(page: Page): Promise<void> {
   const confirm = page.getByRole('dialog', { name: 'Is that everything?' });
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(visible(page.locator('.home-bubble'))).toContainText(
-    'All tidy.',
+    'Done just now',
     { timeout: 30_000 },
   );
   await page.keyboard.press('Escape');
@@ -41,10 +41,12 @@ test('the bubble says what was filed and links to Just filed', async ({
   await tidyUp(page);
   const bubble = visible(page.locator('.home-bubble'));
   await expect(bubble).toContainText(
-    'All tidy. 5 filed and 1 question answered, and I added bike times to the flats. See where they went.',
+    // #754: the run sentence, what Bower added, then See what changed.
+    'Done just now: 5 filed',
   );
+  await expect(bubble).toContainText('I added bike times to the flats.');
   await shot(page, testInfo, 'home-after-tidy');
-  await bubble.getByRole('link', { name: 'See where they went' }).click();
+  await bubble.getByRole('link', { name: 'See what changed' }).click();
   await expect(page).toHaveURL(/\/just-filed$/);
 });
 
@@ -54,8 +56,9 @@ test('Last tidy-up counts what is new and opens Just filed; Health and Notes sit
   await openHome(page);
   await tidyUp(page);
   const card = visible(page.locator('.home-card', { hasText: 'Last tidy-up' }));
-  await expect(card).toContainText('filed · ');
-  await expect(card).toContainText('new to you');
+  // #754: the card is the time and the counts line only.
+  await expect(card).toContainText('5 filed');
+  await expect(card).not.toContainText('new to you');
   if (testInfo.project.name === 'desktop') {
     const tidy = await card.boundingBox();
     for (const title of ['Health', 'Notes']) {

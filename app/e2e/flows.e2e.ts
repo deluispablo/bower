@@ -150,7 +150,12 @@ test.describe('open Home', () => {
     ).toBeVisible();
     await expect(
       visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
-    ).toContainText('No tidy-up yet');
+    ).not.toContainText('No tidy-up yet');
+    // #754 (R-HOME-3): the demo's history has runs, so the card shows the
+    // newest one instead of "No tidy-up yet".
+    await expect(
+      visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
+    ).toContainText('filed');
     await shot(page, testInfo, 'home');
 
     // "?" still replays the tour on demand.
@@ -857,10 +862,10 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
     sheet.getByRole('heading', { name: /^Tidying up/ }),
   ).toBeVisible();
   await expect(bubble).toHaveText(
-    "Tidying up 3 things. Takes a few minutes; I'll say when I'm done. You can keep adding.",
+    'Tidying up 3 things. It takes a few minutes; you can keep adding.',
   );
   await expect(
-    inbox.getByRole('button', { name: /^Tidying up… started/ }),
+    inbox.getByRole('button', { name: 'Being tidied up' }),
   ).toBeVisible();
   await expect(inbox.getByRole('button', { name: 'Tidy up' })).toHaveCount(0);
 
@@ -879,13 +884,15 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet.getByRole('heading', { name: 'Done' })).toBeVisible({
     timeout: 20_000,
   });
-  await expect(bubble).toHaveText(
-    'All tidy. 5 filed and 1 question answered, and I added bike times to the flats. See where they went.',
-  );
+  // R-HOME-0/1: the greeting carries the run (`runSentence`, then what Bower
+  // added as a second sentence), the card only the time and the counts.
+  await expect(bubble).toContainText(/^Done just now: 5 filed/);
+  await expect(bubble).toContainText('I added bike times to the flats.');
+  await expect(bubble).not.toContainText('..');
   await expect(inbox).toContainText('Nothing waiting. Add something.');
   await expect(
     visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
-  ).toContainText('5 filed · 1 answered');
+  ).toContainText('5 filed');
   await shot(page, testInfo, 'tidy-up');
 
   // #506: Done no longer closes itself on a timer — it used to, within 8 s
@@ -957,11 +964,10 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   const lastCard = visible(
     page.locator('.home-card', { hasText: 'Last tidy-up' }),
   );
-  await expect(lastCard).toContainText('5 filed · 1 answered');
+  await expect(lastCard).toContainText('5 filed');
 
-  // A second batch, then a second tidy-up: while it goes, the card must
-  // still read the first run's line, not "No tidy-up yet" — the board
-  // (Phone-Home-Running) keeps it on screen the whole time.
+  // A second batch, then a second tidy-up: while it goes, the card reads
+  // "Tidy-up / Running · n min" (Home-Running board), never "No tidy-up yet".
   await navigate(page, /^Add$/);
   await page.locator('#add-link').fill('https://example.com/second');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -974,8 +980,11 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   ).click();
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(sheet).toBeVisible();
-  await expect(lastCard).toContainText('5 filed · 1 answered');
-  await expect(lastCard).not.toContainText('No tidy-up yet');
+  const runningCard = visible(
+    page.locator('.home-card', { hasText: 'Running ·' }),
+  );
+  await expect(runningCard).toContainText('Tidy-up');
+  await expect(runningCard).not.toContainText('No tidy-up yet');
   await shot(page, testInfo, 'last-tidy-up-during-next-run');
 });
 
@@ -1088,31 +1097,24 @@ test('the working sheet opens once per run, and the run ends back at Tidy up', a
   await navigate(page, /^Home$/);
   await expect(page).toHaveURL('/');
   await expect(
-    visible(page.getByRole('button', { name: /^Tidying up… started/ })),
+    visible(page.getByRole('button', { name: 'Being tidied up' })),
   ).toBeVisible();
   await expect(sheet).toBeHidden();
   // The bar shows nothing while the run goes; Home's Inbox card does (#320).
   await expect(page.locator('header.topbar')).not.toContainText('Tidy');
 
-  // Done is announced once, in a toast that closes; the sheet stays closed
-  // and the Inbox card, now empty, points at Add.
-  const toast = page.getByRole('status').filter({
-    hasText: /^Done/,
-  });
-  await expect(toast).toBeVisible({ timeout: 20_000 });
-  await expect(sheet).toBeHidden();
-  await shot(page, testInfo, 'run-done');
-  // By keyboard: on the phone the one-time notifications prompt slides up
-  // over the bottom of the screen at the same moment.
-  await toast.getByRole('button', { name: 'Close' }).focus();
-  await page.keyboard.press('Enter');
-  await expect(toast).toBeHidden();
+  // Done is not announced by a toast any more (R-HOME-4): the greeting says
+  // so, the sheet stays closed and the Inbox card, now empty, points at Add.
   await expect(
     visible(
       page.getByRole('link', { name: /Nothing waiting\. Add something\./ }),
     ),
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 25_000 });
+  await expect(
+    page.getByRole('status').filter({ hasText: 'processed' }),
+  ).toHaveCount(0);
   await expect(sheet).toBeHidden();
+  await shot(page, testInfo, 'run-done');
 });
 
 test('the Bower tab sends a request that waits for the next tidy-up', async ({
@@ -1190,7 +1192,7 @@ test('the working sheet dismissed with Escape stays closed after sending a reque
   await expect(
     visible(page.locator('.home-card', { hasText: 'Inbox' })).getByRole(
       'button',
-      { name: /^Tidying up… started/ },
+      { name: 'Being tidied up' },
     ),
   ).toBeVisible();
 
@@ -1308,6 +1310,7 @@ async function openMore(row: Locator): Promise<void> {
 test('Requests: every state, Edit, Remove, and Just this, now for the requests only (#344)', async ({
   page,
 }, testInfo) => {
+  test.setTimeout(60_000); // #754: no toast wait, the row itself waits for the run.
   await openHome(page);
   await navigate(page, /^Bower$/);
   await showBowerPart(page, 'Requests');
@@ -1391,17 +1394,13 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
     edited.getByText('Being done now', { exact: true }),
   ).toBeVisible();
   // One file: the request, not the two other things in the inbox.
-  const toast = page.getByRole('status').filter({
-    hasText: /^Done/,
-  });
-  await expect(toast).toBeVisible({ timeout: 20_000 });
   // The row keeps the exact sentence sent (the edit) once answered too --
   // not "What do I still need for Lisbon", the file name's own short title
   // (#465). Same text as `edited` matched while it was still waiting, now
   // in the one row this file becomes (no separate waiting row left).
   await expect(edited).toHaveCount(1);
   await expect(edited.getByText('Answered', { exact: true })).toBeVisible({
-    timeout: 10_000,
+    timeout: 25_000,
   });
 });
 

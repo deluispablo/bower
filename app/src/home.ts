@@ -8,13 +8,11 @@
 import type { Run } from './api.js';
 import { sinceLabel } from './bower-tab.js';
 import type { BirdState } from './components/bird-classes.js';
-import { hasDestinations } from './just-filed.js';
+import { outcomeCounts, outcomeFromRun, runSentence } from './run-outcome.js';
+import type { RunOutcome } from './run-outcome.js';
 import { processedKind } from './run-progress.js';
 import type { RunPhase } from './run-store.js';
 import { failureCopy } from './run-failure.js';
-
-/** The folder Bower writes answers to (spec §6, Home and Tell Bower rows). */
-export const ANSWERS_FOLDER = 'Answers';
 
 /**
  * Home's states (C.4): things waiting, the first day (nothing waiting and
@@ -26,7 +24,7 @@ export const ANSWERS_FOLDER = 'Answers';
  * fact before we know it is one.
  */
 export type HomeState =
-  'waiting' | 'empty' | 'running' | 'done' | 'failed' | 'loading';
+  'waiting' | 'empty' | 'running' | 'done' | 'partial' | 'failed' | 'loading';
 
 export interface HomeStateInput {
   /** The run store's phase (`run-store.tsx`). */
@@ -51,10 +49,27 @@ export interface HomeStateInput {
 export function homeStateFor(input: HomeStateInput): HomeState {
   const { phase, pending, lastFinished, loading } = input;
   if (phase === 'queued' || phase === 'running') return 'running';
-  if (phase === 'failed' || phase === 'stale') return 'failed';
+  const outcome = lastFinished === null ? null : outcomeFromRun(lastFinished);
+  if (phase === 'failed' || phase === 'stale') {
+    return outcome?.state === 'partial' ? 'partial' : 'failed';
+  }
   if (phase === 'done') return 'done';
-  if (pending > 0) return 'waiting';
-  if (lastFinished !== null) return 'done';
+  if (pending > 0) {
+    // D31: with no bar on Home, the greeting keeps telling the result while
+    // the only things waiting are the ones the run left for the person.
+    if (
+      outcome !== null &&
+      outcome.needsYou > 0 &&
+      pending <= outcome.needsYou
+    ) {
+      if (outcome.state === 'done') return 'done';
+      if (outcome.state === 'partial') return 'partial';
+    }
+    return 'waiting';
+  }
+  if (lastFinished !== null) {
+    return outcome?.state === 'partial' ? 'partial' : 'done';
+  }
   return loading ? 'loading' : 'empty';
 }
 
@@ -114,26 +129,26 @@ export function runCounts(run: Run): RunCounts {
   return { filed, answered };
 }
 
-/** The Last tidy-up card's line: "5 filed · 1 answered · 4 new to you"
- * (each part left out at zero; `newCount` is what this device has not
- * opened yet, #617), "Nothing new" when both are, "Failed · Drive did not answer"
- * for a failed run (its reason's short words, #316). A run recovered from
- * `.bower/last-run.json` after the Worker lost track (#564) has no
- * per-file `processed` list, only a count baked into its own `summary`
- * sentence — shown as is, since "N filed · M answered" cannot be rebuilt
- * from a count alone. */
-export function lastTidyUpLine(run: Run, newCount = 0): string {
-  if (run.state === 'failed')
+/**
+ * The Last tidy-up card's line when it is not the run's counts: "Failed ·
+ * Drive did not answer" for a failed run (its reason's short words, #316), or
+ * the sentence of a run recovered from `.bower/last-run.json` after the
+ * Worker lost track (#564), which has no per-file `processed` list to count.
+ * `null` for every other run: the card then shows `run-summary inline`.
+ */
+export function lastTidyUpOverride(run: Run): string | null {
+  if (run.state === 'failed' && outcomeFromRun(run).state === 'failed') {
     return `Failed · ${failureCopy(run.reason).short}`;
+  }
   if (run.processed === undefined && run.summary !== undefined) {
     return run.summary;
   }
-  const { filed, answered } = runCounts(run);
-  const parts: string[] = [];
-  if (filed > 0) parts.push(`${filed} filed`);
-  if (answered > 0) parts.push(`${answered} answered`);
-  if (newCount > 0) parts.push(`${newCount} new to you`);
-  return parts.length === 0 ? 'Nothing new' : parts.join(' · ');
+  return null;
+}
+
+/** The card's counts as text: "2 filed · 3 new · 2 updated · 1 needs you". */
+export function lastTidyUpCounts(run: Run): string {
+  return outcomeCounts(outcomeFromRun(run), { short: true });
 }
 
 /**
@@ -188,26 +203,24 @@ export interface BubbleInput {
   editingPins: boolean;
   /** The last finished run, for Done's counts (`RunStore.lastFinished`). */
   lastFinished: Run | null;
+  /** The clock, for "Done 4 min ago" (the run store's `now`). */
+  now: number;
 }
 
 /**
- * "5 filed, and I added bike times to the flats" (Flow-05-Home, #617):
- * what the run filed, then its `added` clause when the report has one
- * (report v2); "1 question answered" for the questions it answered.
- * Either half is left out at 0.
+ * The bubble's line for a run (R-HOME-1): `runSentence` in the bird's own
+ * voice, then what Bower added as a second sentence (R-RUN-3; `cleanQuote`
+ * already dropped its full stop, so there is exactly one here). A run
+ * recovered from `.bower/last-run.json` has no items to count and keeps its
+ * own sentence.
  */
-function doneCounts(run: Run | null): string {
-  const { filed, answered } =
-    run === null ? { filed: 0, answered: 0 } : runCounts(run);
-  const parts: string[] = [];
-  if (filed > 0) parts.push(`${filed} filed`);
-  if (answered > 0) {
-    parts.push(`${answered} ${plural(answered, 'question')} answered`);
-  }
-  const counts = parts.join(' and ');
-  const added = run?.added?.trim() ?? '';
-  if (added === '') return counts === '' ? 'Nothing new this time' : counts;
-  return counts === '' ? added : `${counts}, and ${added}`;
+function runLine(run: Run, outcome: RunOutcome, now: number): string {
+  const own = lastTidyUpOverride(run);
+  if (own !== null) return own;
+  const sentence = runSentence(outcome, { now, voice: 'first' });
+  return outcome.state === 'done' && outcome.quote !== undefined
+    ? `${sentence} ${outcome.quote}.`
+    : sentence;
 }
 
 /**
@@ -231,7 +244,8 @@ export function doneNotes(run: Run | null): string[] {
  * failed to load come first: nothing else can be said with confidence.
  */
 export function bubbleFor(input: BubbleInput): BubblePart[] {
-  const { state, pending, offline, error, editingPins, lastFinished } = input;
+  const { state, pending, offline, error, editingPins, lastFinished, now } =
+    input;
   if (offline) return ["No signal here. I'll keep an eye out."];
   if (error) return ['Could not load your notes.'];
   switch (state) {
@@ -250,22 +264,48 @@ export function bubbleFor(input: BubbleInput): BubblePart[] {
       ];
     case 'running':
       return [
-        `Tidying up ${things(pending)}. Takes a few minutes; I'll say when I'm done. You can keep adding.`,
+        runSentence(
+          {
+            state: 'running',
+            startedAt: '',
+            filed: 0,
+            created: 0,
+            updated: 0,
+            needsYou: 0,
+            requests: 0,
+            left: 0,
+            items: [],
+            ...(pending > 0 && { total: pending }),
+          },
+          { voice: 'first' },
+        ),
       ];
     case 'done': {
-      const notes = doneNotes(lastFinished);
-      // Just filed says where things went; a run with no destinations (only
-      // questions answered) has nothing to list there, so it keeps the
-      // Bower tab's history.
+      if (lastFinished === null) return ['Done.'];
+      const outcome = outcomeFromRun(lastFinished);
+      // Just filed says where things went; a run with nothing to list keeps
+      // the Bower tab's history.
       const where =
-        lastFinished !== null && hasDestinations(lastFinished)
-          ? ({ link: 'just-filed', text: 'See where they went' } as const)
+        outcome.items.length > 0
+          ? ({ link: 'just-filed', text: 'See what changed' } as const)
           : ({ link: 'activity', text: 'See what I did' } as const);
       return [
-        `All tidy. ${doneCounts(lastFinished)}. `,
+        `${runLine(lastFinished, outcome, now)} `,
         where,
-        '.',
-        ...notes.map((note) => ` ${note}`),
+        ...doneNotes(lastFinished).map((note) => ` ${note}`),
+      ];
+    }
+    case 'partial': {
+      if (lastFinished === null) return ['I stopped part way.'];
+      const outcome = outcomeFromRun(lastFinished);
+      const tail =
+        outcome.left > 0
+          ? ' and I file them without writing the notes again.'
+          : '.';
+      return [
+        `${runSentence(outcome, { now, voice: 'first' })} `,
+        { link: 'tidy-up', text: 'Finish the tidy-up' },
+        tail,
       ];
     }
     case 'failed': {
@@ -307,7 +347,8 @@ export function birdStateFor(input: BirdStateInput): BirdState {
     case 'running':
       return 'tidying';
     case 'done':
-      return input.justDone ? 'showoff' : 'looking';
+      return input.justDone ? 'showoff' : 'done';
+    case 'partial':
     case 'failed':
       return 'confused';
   }
@@ -320,10 +361,17 @@ export function restingBird(state: BirdState): BirdState {
     : state;
 }
 
-/** The Inbox card's line under the count, per state (C.4 and the boards). */
+/**
+ * The Inbox card's line under the count, per state (C.4 and the boards):
+ * "Being tidied up" while it runs, "Needs you" after a done run that left
+ * things for the person (Home-Done, the board wins over the spec's "Nothing
+ * waiting"), "Still waiting" after a partly done one.
+ */
 export function inboxLine(state: HomeState, pending: number): string {
-  if (state === 'running') return 'Tidying up…';
+  if (state === 'running') return 'Being tidied up';
+  if (state === 'partial') return 'Still waiting';
   if (state === 'failed') return 'still waiting';
+  if (state === 'done' && pending > 0) return 'Needs you';
   return pending > 0
     ? 'waiting to be filed'
     : 'Nothing waiting. Add something.';

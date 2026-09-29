@@ -16,6 +16,7 @@
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
+import { getRuns } from '../api.js';
 import type { Run } from '../api.js';
 import { Bird } from '../components/bird.js';
 import { ONCE_STATES } from '../components/bird-classes.js';
@@ -33,11 +34,11 @@ import { inlineFactsText } from '../components/key-facts.js';
 import { KindBadge } from '../components/kind-badge.js';
 import { PinnedSection } from '../components/pinned-section.js';
 import { ProcessButton } from '../components/process-button.js';
+import { RunSummary } from '../components/run-summary.js';
 import { Tour } from '../components/help-sheet.js';
 import { BowerTag, NewTag } from '../components/tags.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
-import { startedAgo } from '../components/working-sheet.js';
 import {
   findReport,
   healthCardLine,
@@ -50,15 +51,17 @@ import {
   greetingFor,
   homeStateFor,
   inboxLine,
-  lastTidyUpLine,
+  lastTidyUpOverride,
+  things,
   restingBird,
   tidyUpAgo,
 } from '../home.js';
 import type { BubblePart, HomeState } from '../home.js';
-import { hasDestinations, JUST_FILED_PATH } from '../just-filed.js';
+import { JUST_FILED_PATH } from '../just-filed.js';
 import { keyFactsFor, kindById } from '../kinds.js';
 import {
   folderCounts,
+  folderHref,
   displayPath,
   folderOf,
   recentNotes,
@@ -71,6 +74,7 @@ import { useOnline } from '../online.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
+import { outcomeCounts, outcomeFromRun } from '../run-outcome.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import type { DriveFile } from '../drive.js';
@@ -173,8 +177,6 @@ function Greeting({
 interface InboxCardProps {
   state: HomeState;
   pending: number;
-  run: Run | null;
-  now: number;
   onOpenSheet: () => void;
 }
 
@@ -182,8 +184,6 @@ interface InboxCardProps {
 function InboxCard({
   state,
   pending,
-  run,
-  now,
   onOpenSheet,
 }: InboxCardProps): JSX.Element {
   const head = (
@@ -211,10 +211,6 @@ function InboxCard({
   }
 
   if (state === 'running') {
-    const started =
-      run === null
-        ? ''
-        : ` ${startedAgo(run.startedAt ?? run.requestedAt, now).toLowerCase()}`;
     return (
       <div class="home-card home-card-active">
         {head}
@@ -224,13 +220,27 @@ function InboxCard({
           aria-haspopup="dialog"
           onClick={onOpenSheet}
         >
-          {`${inboxLine(state, pending)}${started}`}
+          {inboxLine(state, pending)}
         </button>
       </div>
     );
   }
 
-  if (state !== 'failed' && pending === 0) {
+  // A done run that left things for the person: "1 · Needs you" (R-HOME-0);
+  // the things are theirs to sort, so no Tidy up button.
+  if (state === 'done' && pending > 0) {
+    return (
+      <a
+        class="home-card home-card-link home-card-warn"
+        href={folderHref('0-Inbox')}
+      >
+        {head}
+        <p class="home-card-sub">{inboxLine(state, pending)}</p>
+      </a>
+    );
+  }
+
+  if (state !== 'failed' && state !== 'partial' && pending === 0) {
     return (
       <a class="home-card home-card-link" href="/add">
         {head}
@@ -244,7 +254,9 @@ function InboxCard({
       class={
         state === 'failed'
           ? 'home-card home-card-failed'
-          : 'home-card home-card-active'
+          : state === 'partial'
+            ? 'home-card home-card-warn'
+            : 'home-card home-card-active'
       }
     >
       {head}
@@ -254,60 +266,114 @@ function InboxCard({
   );
 }
 
+/** The run in flight, for the Last tidy-up card's "Running · 2 min". */
+export interface ActiveRun {
+  startedAt: string;
+  total: number;
+}
+
+/** "Running · 2 min": whole minutes since the run started, at least one. */
+function runningFor(startedAt: string, now: number): string {
+  const minutes = Math.max(
+    1,
+    Math.floor((now - new Date(startedAt).getTime()) / 60_000) || 1,
+  );
+  return `Running · ${minutes} min`;
+}
+
 /**
- * The Last tidy-up card (C.4): when, and what it did, or "No tidy-up yet".
- * `run` is the run store's `lastFinished` (#321), which already stays put
- * while the next run goes (`lastFinishedRun`, `run-store.tsx`) — so this
- * only ever reads "No tidy-up yet" when nothing has finished, `state`
- * notwithstanding; a run in progress (`state === 'running'`) is not
- * special-cased here on purpose (#498). Exported for its own render test.
+ * The Last tidy-up card (C.4, R-HOME-0): the time and the counts line, and
+ * nothing else; the greeting carries the sentence. While a run goes it reads
+ * "Tidy-up / Running · 2 min / 5 things"; after a partly done one "Partly
+ * done" in the warning colour, linking to the sheet; otherwise "No tidy-up
+ * yet" only when nothing has ever finished (R-HOME-3: `run` is the run
+ * store's `lastFinished`, or the newest of `GET /runs` when this session has
+ * not seen one). Exported for its own render test.
  */
 export function LastTidyUpCard({
   state,
   run,
   now,
-  newCount = 0,
+  active,
+  onOpenSheet,
 }: {
   state: HomeState;
   run: Run | null;
   now: number;
-  /** How many of the run's things this device has not opened (#617). */
-  newCount?: number;
+  /** The run in flight; the card shows it while `state` is `running`. */
+  active?: ActiveRun;
+  /** Opens the working sheet: where a partly done card leads. */
+  onOpenSheet?: () => void;
 }): JSX.Element {
-  const head = (
+  const head = (title: string): JSX.Element => (
     <h2>
       <IconClock />
-      Last tidy-up
+      {title}
     </h2>
   );
   // #322: until the folder index resolves, "No tidy-up yet" is not a fact.
   if (state === 'loading') {
     return (
       <div class="home-card home-card-loading" aria-hidden="true">
-        {head}
+        {head('Last tidy-up')}
         <span class="home-skeleton home-skeleton-line" />
         <span class="home-skeleton home-skeleton-line" />
+      </div>
+    );
+  }
+  if (state === 'running' && active !== undefined) {
+    return (
+      <div class="home-card home-card-active">
+        {head('Tidy-up')}
+        <p class="home-card-when">
+          <span class="home-card-spinner" aria-hidden="true" />
+          {runningFor(active.startedAt, now)}
+        </p>
+        <p class="home-card-sub">{things(active.total)}</p>
       </div>
     );
   }
   if (run === null) {
     return (
       <div class="home-card">
-        {head}
+        {head('Last tidy-up')}
         <p class="home-card-sub">No tidy-up yet</p>
       </div>
+    );
+  }
+  const outcome = outcomeFromRun(run);
+  const own = lastTidyUpOverride(run);
+  const counts =
+    own !== null ? (
+      own
+    ) : outcomeCounts(outcome, { short: true }) === '' ? (
+      'Nothing new'
+    ) : (
+      <RunSummary outcome={outcome} size="inline" short />
+    );
+  const when = tidyUpAgo(run.finishedAt ?? run.requestedAt, now);
+  if (outcome.state === 'partial') {
+    return (
+      <button
+        type="button"
+        class="home-card home-card-link home-card-warn home-card-button"
+        aria-haspopup="dialog"
+        onClick={onOpenSheet}
+      >
+        {head('Last tidy-up')}
+        <p class="home-card-when home-card-partial">Partly done</p>
+        <p class="home-card-sub">{counts}</p>
+      </button>
     );
   }
   return (
     <a
       class="home-card home-card-link"
-      href={hasDestinations(run) ? JUST_FILED_PATH : ACTIVITY_PATH}
+      href={outcome.items.length > 0 ? JUST_FILED_PATH : ACTIVITY_PATH}
     >
-      {head}
-      <p class="home-card-when">
-        {tidyUpAgo(run.finishedAt ?? run.requestedAt, now)}
-      </p>
-      <p class="home-card-sub">{lastTidyUpLine(run, newCount)}</p>
+      {head('Last tidy-up')}
+      <p class="home-card-when">{when}</p>
+      <p class="home-card-sub">{counts}</p>
     </a>
   );
 }
@@ -459,6 +525,32 @@ export function RecentRows({
   );
 }
 
+/**
+ * The run the Last tidy-up card and the greeting speak about: the run store's
+ * `lastFinished`, or, when this session has not seen one finish, the newest of
+ * the Worker's history (`GET /runs`), so the card never says "No tidy-up yet"
+ * while there are runs (R-HOME-3).
+ */
+function useLastRun(lastFinished: Run | null): Run | null {
+  const [history, setHistory] = useState<Run | null>(null);
+  const need = lastFinished === null;
+  useEffect(() => {
+    if (!need) return;
+    let cancelled = false;
+    getRuns()
+      .then(({ runs }) => {
+        if (!cancelled) setHistory(runs[0] ?? null);
+      })
+      .catch((err: unknown) => {
+        console.error('Reading the tidy-up history for Home failed', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [need]);
+  return lastFinished ?? history;
+}
+
 export function Home(): JSX.Element {
   const { me } = useSession();
   const { index, files, status, unpinNote, unpinFolder, unpinFile } =
@@ -469,6 +561,12 @@ export function Home(): JSX.Element {
   const { phase, run, lastFinished, now, tidyUp, openSheet } = useRun();
   const online = useOnline();
   const [editing, setEditing] = useState(false);
+
+  // Recent lists what Add just uploaded (report F6): Add already reads the
+  // folder again after its upload (`add.tsx`), and Home reads the same index.
+  // Refreshing again on open dropped a pin that was still being saved.
+  // R-HOME-3: a session that has not seen a run finish still has the history.
+  const lastRun = useLastRun(lastFinished);
 
   const showAppFiles = getPref('showAppFiles');
   const recent =
@@ -507,7 +605,14 @@ export function Home(): JSX.Element {
   // #322: the very first fetch, before the folder index has ever resolved —
   // not `refreshing`, which already has a cached index to show.
   const loading = status === 'loading';
-  const state = homeStateFor({ phase, pending, lastFinished, loading });
+  const state = homeStateFor({
+    phase,
+    pending,
+    // The history read is not a reason to leave Loading: only a run this
+    // session already saw finish is.
+    lastFinished: loading ? lastFinished : lastRun,
+    loading,
+  });
 
   // A play-once pose (the first day's hello, the dance after a run) plays
   // once per change of pose, then rests.
@@ -534,7 +639,8 @@ export function Home(): JSX.Element {
       offline,
       error: status === 'error',
       editingPins,
-      lastFinished,
+      lastFinished: lastRun,
+      now,
     }),
     onTidyUp: tidyUp,
     onFailure: openSheet,
@@ -581,18 +687,16 @@ export function Home(): JSX.Element {
       )}
 
       <div class="home-cards">
-        <InboxCard
-          state={state}
-          pending={pending}
-          run={run}
-          now={now}
-          onOpenSheet={openSheet}
-        />
+        <InboxCard state={state} pending={pending} onOpenSheet={openSheet} />
         <LastTidyUpCard
           state={state}
-          run={lastFinished}
+          run={lastRun}
           now={now}
-          newCount={news.ids.size}
+          active={{
+            startedAt: run?.startedAt ?? run?.requestedAt ?? '',
+            total: pending,
+          }}
+          onOpenSheet={openSheet}
         />
         {state === 'loading' ? (
           <div

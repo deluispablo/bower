@@ -13,7 +13,8 @@ import '../styles/offline-banner.css';
 
 export function OfflineBanner() {
   const online = useOnline();
-  if (online) return null;
+  // Home shows its own offline hint in the greeting (#754).
+  if (online || window.location.pathname === '/') return null;
 
   return (
     <div class="offline-banner" role="status" aria-live="polite">

@@ -28,7 +28,7 @@ const BANNED = [
  * the run store's done toast (`run-store.tsx`) move to `RunOutcome` with
  * their own issues. Remove each entry as it lands.
  */
-const NOT_YET_MIGRATED = new Set(['home.ts']);
+const NOT_YET_MIGRATED = new Set<string>();
 
 describe('R-RUN-4: no old result strings in app/src', () => {
   const files = Object.entries(SOURCES).map(([path, text]) => ({
