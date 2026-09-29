@@ -116,7 +116,14 @@ test.describe('open Home', () => {
       await tour.getByRole('button', { name: next }).click();
     }
     await expect(tour).toBeHidden();
-    await expect(page).toHaveURL(/\/$/);
+    if (testInfo.project.name === 'phone') {
+      await expect(page).toHaveURL(/\/$/);
+    } else {
+      // On a desktop "Let's go" lands on Bower (#776); back to Home.
+      await expect(page).toHaveURL(/\/bower$/);
+      await visible(page.locator('[data-tour="home"]')).click();
+      await expect(page).toHaveURL(/\/$/);
+    }
     await expect(visible(page.locator('.home-bubble'))).toBeVisible();
     // "?" opens the same sheet afterwards, without the step counter.
     await visible(
