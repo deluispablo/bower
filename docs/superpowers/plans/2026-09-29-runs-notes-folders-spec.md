@@ -1019,17 +1019,17 @@ These are mechanisms. The content of the old vault's rules (scoring weights, vis
 - On desktop the card uses two columns: Next steps, then Best so far.
 - **Acceptance criteria:**
   - [ ] R-FRONT-1: the card renders from the project note's sections (`## Next steps`, a status in frontmatter, `## Reference`) and the scored notes in the folder; it never needs a run.
-  - [ ] R-FRONT-2: ticking a step writes the checkbox to the project note, with the `modifiedTime` guard, and rolls back with a toast on conflict.
+  - [ ] R-FRONT-2: ticking a step writes the checkbox to the project note, with the `modifiedTime` guard, and rolls back with a toast on conflict. The rulebook's "never rewrite a note the owner edited today" exempts edits that only tick checkboxes, so Bower keeps adding Next steps that day.
   - [ ] R-FRONT-3: "Best so far" uses the same sort as Compare (`score`, then `fit`) and the same verdict words as the note.
 
 **Verdict and Apply first** (board Note-JobOffer-*):
 
 - Bower's note opens with the verdict row: the score pill, the verdict word in bold, and one line of why, on a success tint.
 - Under "Made from", an **Apply** button when the note has `apply_link` (a new job-offer field, `link` type). The advert itself stays in Made from, never twice.
-- "Made for it:" lists the notes Bower wrote for this item (a tailored CV, a letter), as buttons. They come from the item's `made_for` frontmatter, which lists notes, or from notes whose `made_for` names this one.
+- "Made for it:" lists the notes Bower wrote for this item (a tailored CV, a letter), as buttons. Only those notes carry `made_for: "[[<item>]]"`; the app works out the list from the notes it already indexes. The item itself stores nothing.
 - **Acceptance criteria:**
-  - [ ] R-VERDICT-1: the verdict row appears only when the note has a score, and its words come from the note (rulebook R-AG-11), never computed in the app.
-  - [ ] R-VERDICT-2: `apply_link` is added to the job-offer kind in `kinds.ts` and the rulebook together (the existing parity test), and renders as the Apply button.
+  - [ ] R-VERDICT-1: the verdict row appears only when the note has frontmatter `score` (or `fit`) and `verdict`, both written by the agent (R-AG-11). The app never parses the box text. `score`, `verdict` and `made_for` join `BOOKKEEPING_KEYS` (`details.tsx`), so none shows twice under More.
+  - [ ] R-VERDICT-2: `apply_link` becomes a `link` field of the job-offer kind in `kinds.ts` and the rulebook together (parity test `kinds-rulebook.test.ts`), and renders as the Apply button.
   - [ ] R-VERDICT-3: "Made for it" renders the linked notes; CVs and letters named "CV · {employer}" and "Letter · {employer}" (R-AG-4).
 
 **History** (board Note-JobOffer-*):
@@ -1050,7 +1050,11 @@ These are mechanisms. The content of the old vault's rules (scoring weights, vis
   - the runner reads and removes them like `added.txt`, and reports them as `disagree[]` and `next[]`, which the Worker validates for count and length.
 - When both are empty, neither part is shown.
 - **Acceptance criteria:**
-  - [ ] R-MEAN-1: runner, Worker and `api.ts` carry `disagree[]` (at most 5) and `next[]` (at most 3).
+  - [ ] R-MEAN-1: runner, Worker and `api.ts` carry `disagree[]` (at most 5) and `next[]` (at most 3). The lines have a fixed format that the Worker enforces:
+    - `checks.txt`: `<path A>\t<path B>\t<reason, 120 characters or fewer>`;
+    - `next.txt`: `<path or ->\t<action, 120 characters or fewer>`.
+
+    Anything else is dropped.
   - [ ] R-MEAN-2: the sheet, Just filed and the run's Activity card show them; each link opens the note.
 
 **Richer Compare** (board Compare-Table-1280):
@@ -1122,6 +1126,9 @@ Research agrees that long deck tutorials make an app look harder without making 
 - **Acceptance criteria:**
   - [ ] R-INTRO-1: the five pages, copy as above, in `intro.ts` (a 5-tuple); tests updated (`intro.test.ts`, `help-sheet.test.ts`, the demo e2e).
   - [ ] R-INTRO-2: `?page=` in the URL; back and reload behave as described (e2e).
+    - Next, Back and a swipe (kept on phones) push a history entry; Skip, Close and the first load replace it.
+    - Invalid values are clamped to 1–5.
+    - `markIntroSeen` fires on Skip, Close or reaching page 5 through the controls, not when `?page=5` is typed in.
   - [ ] R-INTRO-3: focus moves to the page heading, other pages are inert, the live region is present, and there is a visible Back on phones (a11y unit test and e2e).
   - [ ] R-INTRO-4: `from=login` and `from=settings` return correctly.
   - [ ] R-INTRO-5: the illustrations are CSS only, with no infinite loop; reduced motion shows the resting frame.
@@ -1154,7 +1161,7 @@ Research agrees that long deck tutorials make an app look harder without making 
 - **An example page** (Example-FlatHunt-375) has four acts: "You add", "Bower files and writes", "You ask", "You get". It closes with the hint "Examples show what Bower can do; your own Bower learns your way from what you add and ask."
 - The examples reuse the case content of today's pages 5–8, rewritten to the new behaviour. The health example is a neutral summary (no named doctor, no values presented as advice). The archive example drops "asks once".
 - **Acceptance criteria:**
-  - [ ] R-LEARN-1: `/learn` and `/learn/:example` render at 375 and 1280, reachable signed out.
+  - [ ] R-LEARN-1: `/learn` and `/learn/:example` render at 375 and 1280, reachable signed out. `decideRedirect` special-cases them like `/welcome` (a prefix match, since `PUBLIC_PATHS` is an exact-match set), so a signed-in person with no folder is not sent to `/onboarding`. They are added to `shell-routes.ts` and the demo build.
   - [ ] R-LEARN-2: the six examples' copy is in one module (`learn.ts`), tested for every claim tied to a shipped feature, like R-INTRO-6.
   - [ ] R-LEARN-3: the sign-in button, the Settings group and the help-sheet link all reach it.
 
@@ -1189,20 +1196,24 @@ Research agrees that long deck tutorials make an app look harder without making 
     - on focus after 10 minutes;
     - before Add, Tidy up and Just this, now.
 
-    Its results: 404 means `missing`; `trashed` means `trashed`; `canAddChildren:false` means `no-access`; 403, 5xx or offline mean `unknown`, with no redirect (unit tests).
-  - [ ] R-VAULT-2: `decideRedirect` takes the state and routes `missing`, `trashed` and `no-access` to `/recover?reason=…`, with no stale Home paint (pure tests).
+    The fields also include `driveId`. Its results: 404 means `missing`; `trashed` means `trashed`; `canAddChildren:false` or a `driveId` means `no-access`; 403, 5xx or offline mean `unknown`, with no redirect (unit tests).
+  - [ ] R-VAULT-2: `decideRedirect` takes the state and routes `missing`, `trashed` and `no-access` to `/recover?reason=…`, with no stale Home paint (pure tests). It never sends `/recover` to `/onboarding`; with state `ok` or `unknown`, `/recover` goes to `/`. The reason is read from the query, which the redirect logic receives next to the path.
   - [ ] R-VAULT-3: the recovery screens and copy as above; "Put it back" re-checks before going Home.
-  - [ ] R-VAULT-4 (API): `POST /vault {mode:'create'}` succeeds when the Worker itself verifies the current pointer is dead (404, trashed, or not a folder); a live pointer still answers 409.
+  - [ ] R-VAULT-4 (API): `POST /vault {mode:'create'}` succeeds when the Worker itself verifies the current pointer is dead: 404, trashed, not a folder, `capabilities.canAddChildren:false`, or a `driveId` (a shared drive, which the app and rclone do not support). A live pointer still answers 409.
   - [ ] R-VAULT-5 (API): `select` refuses a trashed folder with 400 `folder_trashed`.
   - [ ] R-VAULT-6: a re-point retires the old run tickets, clears the run history and records `vaultSetAt`.
   - [ ] R-VAULT-7 (runner): one `files.get` before sync down and before sync up. When the folder is missing or trashed, the run fails with `vault_missing` and uploads nothing (smoke test).
-  - [ ] R-VAULT-8 (API): the Worker marks the vault missing, `/me` exposes it, and the weekly lint skips it.
+  - [ ] R-VAULT-8 (API): the Worker marks the vault missing, `/me` exposes it, and the weekly lint skips it. `select` of the same folder id clears the mark; after "Put it back" re-checks the folder, the app calls it.
   - [ ] R-VAULT-9: the cached index is keyed by `folderId` and cleared when the folder is missing.
   - [ ] R-VAULT-10: a `folderId` mismatch from `/drive/token` triggers a refresh, so other tabs and devices follow a re-point.
   - [ ] R-VAULT-11: the folder's display name comes from Drive, not the stored `vault.name`.
   - [ ] R-VAULT-12: no "vault" in the copy; the runbook gets a "Your Bower folder was deleted" section.
-  - [ ] R-VAULT-13: offline never redirects: `/me` failing offline keeps the signed-in shell with the offline hint (it was routed to `/login` before).
-- **Spike first** (tech-lead): what rclone does when `root_folder_id` answers 404.
+  - [ ] R-VAULT-13: offline never redirects: `/me` failing offline keeps the signed-in shell with the offline hint (it was routed to `/login` before). The last `me` is cached in `localStorage` (not `sessionStorage`, which does not survive a new tab) and cleared in `forgetDevice`.
+  - [ ] R-VAULT-14: `vault_missing` is added in three places: `RUN_FAILURE_REASONS` (`api/src/types.ts`), `failed_sentence` in `run.sh`, and `app/src/run-failure.ts`.
+- **Spikes before splitting** (tech-lead):
+  - what rclone does when `root_folder_id` answers 404 (it decides R-VAULT-7's failure path);
+  - the turn baseline of R-RUNNER-9.
+- **Shared files, one owning issue each:** `details.tsx` (`BOOKKEEPING_KEYS`), `kinds.ts`, the rulebook bump (R-AG-1 to R-AG-11 in one bump), `session.tsx`, `api/src/types.ts`.
 
 ## 7. Behind the screens
 
@@ -1259,6 +1270,7 @@ Research agrees that long deck tutorials make an app look harder without making 
   - A context note with an empty text only groups its files: file them as usual, with no extra note.
   - The pile id (`pile:`) is copied into each resulting note as `pile_note: "[[<context note name>]]"`, so Just filed and the note header can say which pile a thing came from.
   - Serves R-PILE-5.
+- **R-RUNNER-9 (run budget for R-AG-11).** The runner writes the mechanical History lines itself ("filed", "moved", "status"), as it books moves today; the agent writes only "scored" and "written for it". Before R-AG-11 ships, a fixture pile of 10 mixed items is run and its turns are measured. The spec then records the result as turns per item, and `DEFAULT_MAX_TURNS` is raised to cover a pile of 10 with margin. The rulebook's growth is capped at about 3 KB over today's 36 KB, and the bump PR states it.
 
 **App modules touched** (in addition to the new `pile-store.ts` and `upload-queue.ts`):
 
