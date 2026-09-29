@@ -12,7 +12,16 @@ import type { Env } from '../src/env.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
-import { getUser, putDriveToken, putUser } from '../src/store.js';
+import {
+  getRun,
+  getRunTicket,
+  getUser,
+  listRuns,
+  putDriveToken,
+  putRun,
+  putRunTicket,
+  putUser,
+} from '../src/store.js';
 import { TEMPLATE_FILES } from '../src/template.generated.js';
 import type { User } from '../src/types.js';
 import { isDeadPointer, parseFolderCheck } from '../src/vault.js';
@@ -555,6 +564,112 @@ describe('POST /vault select', () => {
     const inbox = drive.find(folderId, '0-Inbox');
     expect(inbox?.mimeType).toBe(FOLDER_MIME_TYPE);
     expect(vault.inboxFolderId).toBe(inbox?.id);
+  });
+
+  it('answers 400 folder_trashed for a folder in the Bin and keeps the pointer', async () => {
+    const drive = new FakeDrive();
+    const oldId = drive.add('Bower', 'root');
+    const vault = { folderId: oldId, inboxFolderId: oldId, name: 'Bower' };
+    await seedUser({ vault });
+    const folderId = drive.add('Notes', 'root');
+    const item = drive.items.get(folderId);
+    if (item !== undefined) item.trashed = true;
+
+    const response = await postVault(
+      drive,
+      { mode: 'select', folderId },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json<ErrorBody>()).error.code).toBe(
+      'folder_trashed',
+    );
+    expect(drive.calls.every((call) => call.method === 'GET')).toBe(true);
+    expect((await getUser(kv, USER_ID))?.vault).toEqual(vault);
+  });
+
+  it('a re-point retires the old run tickets, clears the run history and records setAt', async () => {
+    const drive = new FakeDrive();
+    const oldId = drive.add('Bower', 'root');
+    await seedUser({
+      vault: {
+        folderId: oldId,
+        inboxFolderId: oldId,
+        name: 'Bower',
+        setAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const ticket = { hash: 'abc', expiresAt: '2099-01-01T00:00:00.000Z' };
+    await putRunTicket(kv, USER_ID, 'ingest', ticket, 3600);
+    await putRunTicket(kv, USER_ID, 'lint', ticket, 3600);
+    for (const at of ['2026-01-01T10:00:00.000Z', '2026-01-02T10:00:00.000Z']) {
+      await putRun(kv, USER_ID, { state: 'done', requestedAt: at });
+    }
+    await putRun(
+      kv,
+      USER_ID,
+      { state: 'done', kind: 'lint', requestedAt: '2026-01-03T10:00:00.000Z' },
+      'lint',
+    );
+    const folderId = drive.add('Notes', 'root');
+
+    const response = await postVault(
+      drive,
+      { mode: 'select', folderId },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(200);
+    const stored = (await getUser(kv, USER_ID))?.vault;
+    expect(stored?.folderId).toBe(folderId);
+    expect(stored?.setAt).not.toBe('2026-01-01T00:00:00.000Z');
+    expect(Date.parse(stored?.setAt ?? '')).not.toBeNaN();
+    expect(await getRunTicket(kv, USER_ID, 'ingest')).toBeUndefined();
+    expect(await getRunTicket(kv, USER_ID, 'lint')).toBeUndefined();
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+    expect(await getRun(kv, USER_ID, 'lint')).toBeUndefined();
+    expect(await listRuns(kv, USER_ID)).toEqual([]);
+    expect((await kv.list({ prefix: `runrec:${USER_ID}:` })).keys).toEqual([]);
+  });
+
+  it('the same folder again clears the missing mark and keeps the history', async () => {
+    const drive = new FakeDrive();
+    const folderId = drive.add('Bower', 'root');
+    const inboxId = drive.add('0-Inbox', folderId);
+    const setAt = '2026-01-01T00:00:00.000Z';
+    await seedUser({
+      vault: {
+        folderId,
+        inboxFolderId: inboxId,
+        name: 'Bower',
+        setAt,
+        missingAt: '2026-01-05T00:00:00.000Z',
+      },
+    });
+    const ticket = { hash: 'abc', expiresAt: '2099-01-01T00:00:00.000Z' };
+    await putRunTicket(kv, USER_ID, 'ingest', ticket, 3600);
+    await putRun(kv, USER_ID, {
+      state: 'failed',
+      reason: 'vault_missing',
+      requestedAt: '2026-01-05T00:00:00.000Z',
+    });
+
+    const response = await postVault(
+      drive,
+      { mode: 'select', folderId },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(200);
+    expect((await getUser(kv, USER_ID))?.vault).toEqual({
+      folderId,
+      inboxFolderId: inboxId,
+      name: 'Bower',
+      setAt,
+    });
+    expect(await getRunTicket(kv, USER_ID, 'ingest')).toEqual(ticket);
+    expect(await listRuns(kv, USER_ID)).toHaveLength(1);
   });
 
   it('answers 400 for a file that is not a folder, or no file at all', async () => {
