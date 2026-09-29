@@ -1103,27 +1103,50 @@ export function FolderItems({
                 </option>
               ))}
             </select>
-            <div class="folder-kind-chips" role="group" aria-label="Kind">
-              <button
-                type="button"
-                class="folder-kind-chip"
-                aria-pressed={kind === null}
-                onClick={() => onView({ kind: null })}
-              >
-                All {originRows.length}
-              </button>
-              {options.map((option) => (
+            {desktop ? (
+              <div class="folder-kind-chips" role="group" aria-label="Kind">
                 <button
-                  key={option.kind}
                   type="button"
                   class="folder-kind-chip"
-                  aria-pressed={kind === option.kind}
-                  onClick={() => onView({ kind: option.kind })}
+                  aria-pressed={kind === null}
+                  onClick={() => onView({ kind: null })}
                 >
-                  {option.label}s {option.count}
+                  All {originRows.length}
                 </button>
-              ))}
-            </div>
+                {options.map((option) => (
+                  <button
+                    key={option.kind}
+                    type="button"
+                    class="folder-kind-chip"
+                    aria-pressed={kind === option.kind}
+                    onClick={() => onView({ kind: option.kind })}
+                  >
+                    {option.label}s {option.count}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <select
+                class="folder-select"
+                aria-label="Kind"
+                value={kind ?? ''}
+                onChange={(event) =>
+                  onView({
+                    kind:
+                      event.currentTarget.value === ''
+                        ? null
+                        : (event.currentTarget.value as FileKind),
+                  })
+                }
+              >
+                <option value="">All kinds</option>
+                {options.map((option) => (
+                  <option key={option.kind} value={option.kind}>
+                    {option.label} {option.count}
+                  </option>
+                ))}
+              </select>
+            )}
           </>
         ) : (
           <FilterSortSheet
