@@ -592,9 +592,7 @@ test('a fast double-tap on Tidy up leaves the confirmation open, not opened-and-
   // A tap on the scrim still dismisses once the guard window has passed. The
   // guard moved onto Overlay's scrimGuardMs (#812, #830 dropped the old one).
   await page.waitForTimeout(400);
-  await page
-    .locator('.overlay-scrim')
-    .click({ position: { x: 5, y: 5 } });
+  await page.locator('.overlay-scrim').click({ position: { x: 5, y: 5 } });
   await expect(
     page.getByRole('dialog', { name: 'Is that everything?' }),
   ).toBeHidden();

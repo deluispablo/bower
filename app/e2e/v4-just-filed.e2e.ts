@@ -84,9 +84,7 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
   await shot(page, testInfo, 'just-filed-phone');
 });
 
-test('Mark all seen clears the Notes row', async ({
-  page,
-}, testInfo) => {
+test('Mark all seen clears the Notes row', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', 'the phone list');
   await openJustFiled(page, true);
   const list = screen(page);
