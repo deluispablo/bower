@@ -753,11 +753,14 @@ export function FolderItems({
   }
 
   const selectedRowKey = selected?.key ?? null;
+  // `titles` is a new map on every render, so the effect follows the one
+  // title it uses instead.
+  const selectedTitle = selected === null ? null : titleOf(selected);
   useEffect(() => {
     if (!desktop || onPreview === undefined) return;
     onPreview(selected === null ? null : panePropsOf(selected));
     // The selected row's key names it; the rest follow the model.
-  }, [desktop, selectedRowKey, model, titles, catalogue, pages]);
+  }, [desktop, selectedRowKey, selectedTitle, model, catalogue, pages]);
   useEffect(
     () => () => {
       if (onPreview !== undefined) onPreview(null);
