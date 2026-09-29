@@ -189,7 +189,10 @@ describe('Layout', () => {
     runState.phase = 'running';
     runState.sheetOpen = true;
     mount();
-    const sheets = root.querySelectorAll('[aria-label="Tidying up status"]');
+    // On the shared overlay it is in the body, outside the page (#752).
+    const sheets = document.body.querySelectorAll(
+      '[role="dialog"][aria-label="Tidying up"]',
+    );
     expect(sheets).toHaveLength(1);
     expect(query('.topbar').contains(sheets[0] ?? null)).toBe(false);
   });
