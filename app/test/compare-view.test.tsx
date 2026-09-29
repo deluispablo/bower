@@ -4,6 +4,8 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { stubMatchMedia } from './helpers/match-media.js';
+
 import type { CompareNote } from '../src/compare.js';
 
 const drive = vi.hoisted(() => ({
@@ -93,12 +95,7 @@ const notes = [
 let root: HTMLElement;
 
 function setDesktop(desktop: boolean): void {
-  window.matchMedia = ((query: string) => ({
-    matches: desktop && query.includes('900px'),
-    media: query,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  })) as unknown as typeof window.matchMedia;
+  stubMatchMedia((query) => desktop && query.includes('900px'));
 }
 
 async function mount(): Promise<void> {

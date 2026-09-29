@@ -12,6 +12,8 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { stubMatchMedia } from './helpers/match-media.js';
+
 import type { Me, Run } from '../src/api.js';
 import type { CreateTextFileOptions, DriveFile } from '../src/drive.js';
 
@@ -556,15 +558,7 @@ describe('Requests (#344)', () => {
 
 describe('three columns from 1200 px (#357)', () => {
   function stubWidth(wide: boolean): void {
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn((query: string) => ({
-        matches: wide && query === '(min-width: 1200px)',
-        media: query,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      })),
-    );
+    stubMatchMedia((query) => wide && query === '(min-width: 1200px)');
   }
 
   afterEach(() => {
