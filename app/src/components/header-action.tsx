@@ -1,0 +1,61 @@
+/**
+ * The header button style (spec §5 `header-action.tsx`, System-HeaderActions):
+ * an icon and a short label in a bordered 44 px button. Renders a `<button>`,
+ * or an `<a>` when `href` is given (no underline either way). A toggle passes
+ * `pressed` and gets `aria-pressed`.
+ */
+
+import type { ComponentChildren, JSX } from 'preact';
+
+import '../styles/header-action.css';
+
+interface HeaderActionBase {
+  icon: JSX.Element;
+  children: ComponentChildren;
+  class?: string;
+}
+
+export type HeaderActionProps = HeaderActionBase &
+  (
+    | {
+        href?: undefined;
+        onClick: () => void;
+        /** Set for a toggle; it becomes `aria-pressed`. */
+        pressed?: boolean;
+        disabled?: boolean;
+      }
+    | { href: string; onClick?: undefined; pressed?: undefined }
+  );
+
+export function HeaderAction(props: HeaderActionProps): JSX.Element {
+  const className =
+    props.class === undefined
+      ? 'header-action'
+      : `header-action ${props.class}`;
+  const content = (
+    <>
+      <span class="header-action-icon" aria-hidden="true">
+        {props.icon}
+      </span>
+      <span class="header-action-label">{props.children}</span>
+    </>
+  );
+  if (props.href !== undefined) {
+    return (
+      <a class={className} href={props.href}>
+        {content}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      class={className}
+      aria-pressed={props.pressed}
+      disabled={props.disabled}
+      onClick={props.onClick}
+    >
+      {content}
+    </button>
+  );
+}
