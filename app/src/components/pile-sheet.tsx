@@ -90,16 +90,6 @@ export function inboxNameSet(
   return names;
 }
 
-/** A context note's name in the inbox: the one a batch wrote (`Bower -
- * YYYY-MM-DD HHmm Context.md`) or a pile's (`... HHmm-ss Context <xx>.md`,
- * `pileNoteName`). Neither is a thing to tidy. */
-const CONTEXT_NOTE_NAME =
-  /^Bower - \d{4}-\d{2}-\d{2} \d{4}(?:-\d{2})? Context(?: [0-9a-f]{2})?\.md$/;
-
-export function isContextNoteName(name: string): boolean {
-  return CONTEXT_NOTE_NAME.test(name);
-}
-
 function isUnfinished(state: PileItemState): boolean {
   return state === 'waiting' || state === 'uploading';
 }

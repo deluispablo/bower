@@ -6,7 +6,7 @@
 
 import { expect, navigate, openHome, test } from './demo.js';
 
-test('the three doors fit one row at 375 px with 48 px targets (R-ADD-1)', async ({
+test('the four doors fit one row at 375 px with 44 px targets (R-ADD-1, #770)', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', 'the doors are a phone row');
@@ -15,8 +15,8 @@ test('the three doors fit one row at 375 px with 48 px targets (R-ADD-1)', async
   await navigate(page, /^Add$/);
 
   const doors = page.locator('.add-doors > button.add-door');
-  // Photo (the fake webcam gives the phone a camera), Files, Drive.
-  await expect(doors).toHaveCount(3);
+  // Photo (the fake webcam gives the phone a camera), Files, Drive, Link.
+  await expect(doors).toHaveCount(4);
   const boxes = await doors.evaluateAll((els) =>
     els.map((el) => {
       const r = el.getBoundingClientRect();
@@ -24,7 +24,7 @@ test('the three doors fit one row at 375 px with 48 px targets (R-ADD-1)', async
     }),
   );
   for (const box of boxes) {
-    expect(box.height).toBeGreaterThanOrEqual(48);
+    expect(box.height).toBeGreaterThanOrEqual(44);
     expect(box.top).toBeCloseTo(boxes[0]?.top ?? 0, 0);
     expect(box.right).toBeLessThanOrEqual(375);
   }
@@ -55,8 +55,10 @@ test('the button reads "Tidy up 5 things" with five items and opens the confirma
         `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
       ),
     );
-  await expect(page.locator('.add-queue-kept')).toHaveCount(0);
-  await expect(page.locator('.add-queue-card .kind-badge')).toHaveCount(2);
+  await expect(page.locator('.pile-row-ok')).toHaveCount(2, {
+    timeout: 15_000,
+  });
+  await expect(page.locator('.pile-row .kind-badge')).toHaveCount(2);
 
   const tidy = page.locator('.add-tidy-button');
   await expect(tidy).toHaveText('Tidy up 5 things');
@@ -69,20 +71,19 @@ test('the button reads "Tidy up 5 things" with five items and opens the confirma
   await expect(confirm).toBeHidden();
 });
 
-test('the desktop drop zone keeps working with the new queue (R-ADD-6)', async ({
+test('the desktop drop line, and a dropped file joins the new pile (R-ADD-6, #770)', async ({
   page,
 }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop', 'the drop zone is desktop');
+  test.skip(testInfo.project.name !== 'desktop', 'the drop line is desktop');
   await page.setViewportSize({ width: 1280, height: 800 });
   await openHome(page);
   await navigate(page, /^Add$/);
 
-  await expect(page.locator('.add-doors')).toBeHidden();
-  const zone = page.locator('.add-dropzone');
-  await expect(zone).toBeVisible();
-  await expect(zone).toContainText('Drop files here');
+  await expect(page.locator('.add-doors')).toBeVisible();
   await expect(
-    zone.getByRole('button', { name: 'Choose files' }),
+    page.getByText(
+      'Drop files anywhere on this page: they join the pile you are making.',
+    ),
   ).toBeVisible();
 
   await page.evaluate(() => {
@@ -90,7 +91,7 @@ test('the desktop drop zone keeps working with the new queue (R-ADD-6)', async (
     data.items.add(
       new File(['x'], 'Dropped flat.pdf', { type: 'application/pdf' }),
     );
-    const target = document.querySelector('.add-dropzone');
+    const target = document.querySelector('.add-screen');
     target?.dispatchEvent(
       new DragEvent('drop', {
         bubbles: true,
@@ -100,11 +101,13 @@ test('the desktop drop zone keeps working with the new queue (R-ADD-6)', async (
     );
   });
 
-  await expect(page.locator('.add-queue-head')).toHaveText('In your inbox · 1');
-  await expect(page.locator('.add-sources-desktop')).toHaveText('From drop');
-  await expect(page.locator('.add-queue-card .kind-badge')).toHaveText('PDF');
+  await expect(page.locator('.pile-row')).toHaveCount(1);
+  await expect(page.locator('.pile-row .kind-badge')).toHaveText('PDF');
   await expect(
-    page.getByRole('textbox', { name: 'What is this?' }),
+    page.getByRole('textbox', { name: 'What is this pile?' }),
   ).toBeVisible();
-  await expect(page.locator('.add-tidy-button')).toHaveText('Tidy up 4 things');
+  await expect(page.locator('.add-tidy-button')).toHaveText(
+    'Tidy up 4 things',
+    { timeout: 15_000 },
+  );
 });

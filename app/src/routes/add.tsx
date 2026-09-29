@@ -29,7 +29,6 @@ import {
   PILE_SAVED_LINE,
   addedFromElsewhere,
   inboxNameSet,
-  isContextNoteName,
   kindOfName,
   pileDay,
   pileNames,
@@ -78,7 +77,7 @@ import {
   type PickedItem,
 } from '../picker.js';
 import { runKey, useRun } from '../run-store.js';
-import { processedKind } from '../run-progress.js';
+import { isContextNote, processedKind } from '../run-progress.js';
 import { pendingCount } from '../navigation.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
@@ -274,7 +273,9 @@ export function Add() {
   const queue = useAddQueue();
   const piles = usePiles();
   const uploads = useUploadItems();
-  const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
+  // Names taken in the inbox, kept synchronously: several files chosen at
+  // once must each get their own name before any of them renders.
+  const takenNames = useRef(new Set<string>());
   const [dragOver, setDragOver] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -334,7 +335,7 @@ export function Add() {
     listFolder(inboxFolderId)
       .then((entries) => {
         if (cancelled) return;
-        setExistingNames(new Set(entries.map((entry) => entry.name)));
+        for (const entry of entries) takenNames.current.add(entry.name);
       })
       .catch((err: unknown) => {
         console.error(err);
@@ -357,7 +358,7 @@ export function Add() {
     for (const file of files) {
       if (file.path !== `0-Inbox/${file.name}`) continue;
       present.set(file.name, file);
-      if (isContextNoteName(file.name)) notes.push(file);
+      if (isContextNote(file.path)) notes.push(file);
     }
     void (async () => {
       let adopted = false;
@@ -457,8 +458,8 @@ export function Add() {
   }, []);
 
   function claimName(preferred: string): string {
-    const unique = uniqueName(preferred, existingNames);
-    setExistingNames((prev) => new Set(prev).add(unique));
+    const unique = uniqueName(preferred, takenNames.current);
+    takenNames.current.add(unique);
     return unique;
   }
 
@@ -769,14 +770,7 @@ export function Add() {
   const loading = status === 'loading';
   // The inbox's own count: the same number Home's card and the "Is that
   // everything?" sheet show (R-ADD-2).
-  // Pile notes are not things to tidy: `inboxCount` only knows the batch
-  // note's older name, so they are set aside here.
-  const total = inboxTotal(
-    inboxCount(
-      files.filter((file) => !isContextNoteName(file.name)),
-      loading,
-    ),
-  );
+  const total = inboxTotal(inboxCount(files, loading));
   const stillUploading = [...(open === undefined ? [] : [open]), ...waiting]
     .map(uploadingCount)
     .reduce((sum, n) => sum + n, 0);
@@ -793,7 +787,6 @@ export function Add() {
           files.filter(
             (file) =>
               file.path === `0-Inbox/${file.name}` &&
-              !isContextNoteName(file.name) &&
               pendingCount([file]) === 1 &&
               processedKind(file.path, undefined) === 'file',
           ),

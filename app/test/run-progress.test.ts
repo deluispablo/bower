@@ -397,3 +397,17 @@ describe('runRows: where it went, what Bower read (board Flow-04-Working)', () =
     ]);
   });
 });
+
+describe('isContextNote with a pile note name (#770)', () => {
+  it('knows a batch note and a pile note (seconds and a suffix) by name', () => {
+    expect(isContextNote('0-Inbox/Bower - 2026-09-27 0815 Context.md')).toBe(
+      true,
+    );
+    expect(
+      isContextNote('0-Inbox/Bower - 2026-09-30 1042-07 Context 3f.md'),
+    ).toBe(true);
+    expect(isContextNote('0-Inbox/Bower - 2026-09-30 1042 Flat tour.md')).toBe(
+      false,
+    );
+  });
+});

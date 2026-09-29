@@ -8,7 +8,6 @@ import {
   PileSheet,
   addedFromElsewhere,
   inboxNameSet,
-  isContextNoteName,
   kindOfName,
   pileDay,
   pileTime,
@@ -51,17 +50,6 @@ describe('pile times and counts', () => {
   it('says "thing" for one', () => {
     expect(thingsText(1)).toBe('1 thing');
     expect(thingsText(5)).toBe('5 things');
-  });
-
-  it('names a batch note and a pile note as context notes, not things', () => {
-    expect(isContextNoteName('Bower - 2026-09-30 1042 Context.md')).toBe(true);
-    expect(isContextNoteName('Bower - 2026-09-30 1042-07 Context 3f.md')).toBe(
-      true,
-    );
-    expect(isContextNoteName('Bower - 2026-09-30 1042 Flat tour.md')).toBe(
-      false,
-    );
-    expect(isContextNoteName('Lease.pdf')).toBe(false);
   });
 
   it('counts the inbox names at its top level only', () => {
