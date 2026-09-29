@@ -198,3 +198,14 @@
 .run-chip--desktop .run-chip-detail {
   max-width: 260px;
 }
+
+/* The phone bar's bird (R-BIRD-5): 40 px where the spinner and icon were,
+   with the room of rule 3 (12% above and at the sides, 2% below). */
+.run-chip-bird {
+  display: block;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  margin: 5px 0 1px;
+  pointer-events: none;
+}

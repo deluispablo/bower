@@ -25,7 +25,10 @@ import { outcomeCounts, outcomeFromRun } from '../run-outcome.js';
 import { RUN_CHIP_LIFETIME_MS, useRun } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import { usesShell } from '../shell-routes.js';
-import { useMediaQuery } from '../use-media-query.js';
+import { mediaMatches, useMediaQuery } from '../use-media-query.js';
+import { Bird } from './bird.js';
+import type { BirdState } from './bird.js';
+import { BowerLedgeFiller, useBirdRoom } from './bower-ledge.js';
 import { useShellSlot } from './shell-slots.js';
 
 import '../styles/run-chip.css';
@@ -266,6 +269,20 @@ function Chevron({ up }: { up: boolean }): JSX.Element {
   );
 }
 
+/** The bar bird's pose per chip state; none for "did not finish". */
+export function barBirdState(state: ChipState): BirdState | null {
+  switch (state) {
+    case 'running':
+      return 'flying';
+    case 'done':
+      return 'done';
+    case 'partial':
+      return 'confused';
+    case 'failed':
+      return null;
+  }
+}
+
 export interface RunChipProps {
   model: ChipModel;
   desktop: boolean;
@@ -280,6 +297,16 @@ export function RunChip({ model, desktop, onOpen }: RunChipProps): JSX.Element {
   }, [model.announce]);
   const seeLink =
     !desktop && model.state !== 'running' && model.state !== 'failed';
+  // The phone bar's bird (R-BIRD-5): only below 900 px (`desktop` comes from
+  // `use-media-query.ts`, so a hidden bird is never rendered), not under
+  // reduced motion, and only while no other bird is on screen.
+  const barBird = barBirdState(model.state);
+  const room = useBirdRoom(
+    !desktop &&
+      barBird !== null &&
+      !mediaMatches('(prefers-reduced-motion: reduce)'),
+    true,
+  );
   return (
     <div
       class={`run-chip run-chip--${model.state} run-chip--${desktop ? 'desktop' : 'phone'}`}
@@ -294,7 +321,13 @@ export function RunChip({ model, desktop, onOpen }: RunChipProps): JSX.Element {
         onClick={onOpen}
       >
         <span key={model.state} class="run-chip-face" aria-hidden="true">
-          <StateIcon state={model.state} />
+          {room && barBird !== null ? (
+            <span class="run-chip-bird">
+              <Bird state={barBird} size={40} />
+            </span>
+          ) : (
+            <StateIcon state={model.state} />
+          )}
           <span class="run-chip-text">
             <strong class="run-chip-title">{model.title}</strong>
             {model.detail !== '' && (
@@ -315,7 +348,7 @@ export function RunChip({ model, desktop, onOpen }: RunChipProps): JSX.Element {
  * which loads this module after start so the chip stays out of the startup
  * budget (#41).
  */
-export function RunChipFiller(): null {
+export function RunChipFiller(): JSX.Element {
   const { phase, run, lastFinished, resultSeen, now, openSheet } = useRun();
   const { path } = useLocation();
   const desktop = useMediaQuery('(min-width: 900px)');
@@ -346,5 +379,5 @@ export function RunChipFiller(): null {
     [signature, desktop, openSheet],
   );
   useShellSlot('tidyBar', content);
-  return null;
+  return <BowerLedgeFiller />;
 }
