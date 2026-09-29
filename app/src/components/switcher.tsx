@@ -45,6 +45,7 @@ import type { DriveFile } from '../drive.js';
 import { formatSize } from '../file-preview.js';
 import { things } from '../home.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
+import { plainText } from '../proposals.js';
 import {
   displayName,
   folderHref,
@@ -255,11 +256,17 @@ function useRowExtras(
   return { pages, thumbs };
 }
 
-/** The first lines of a note's own words (no frontmatter, no markup marks). */
-function previewLines(text: string): string[] {
+/** The first lines of a note's own words (no frontmatter, callout marks or link syntax). */
+export function previewLines(text: string): string[] {
   return parseFrontmatter(text)
     .body.split(/\r\n|\r|\n/)
-    .map((line) => line.replace(/^\s*(?:#{1,6}|[-*+>])\s*/, '').trim())
+    .map((line) =>
+      plainText(
+        line
+          .replace(/^\s*(?:#{1,6}|[-*+>])\s*/, '')
+          .replace(/^\[![\w-]+\][+-]?\s*/, ''),
+      ).trim(),
+    )
     .filter((line) => line !== '')
     .slice(0, PREVIEW_LINES);
 }
