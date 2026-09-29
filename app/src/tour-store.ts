@@ -16,6 +16,7 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { updateSettings } from './api.js';
 import type { Me } from './api.js';
+import { showToast } from './toast-store.js';
 
 export interface TourState {
   replay: boolean;
@@ -28,6 +29,8 @@ const INITIAL: TourState = { replay: false, dismissed: false, showoff: false };
 let state: TourState = INITIAL;
 /** `tourSeenAt` was saved in this session; `me` is not refetched after it. */
 let savedThisSession = false;
+/** The skip toast was shown in this session (R-OVL-3: once). */
+let skipToastShown = false;
 const listeners = new Set<(state: TourState) => void>();
 
 function set(next: TourState): void {
@@ -58,9 +61,17 @@ export function showoffPlayed(): void {
   if (state.showoff) set({ ...state, showoff: false });
 }
 
+/** Skip or Escape ended the tour: say where to find it again, once. */
+export function announceTourSkipped(): void {
+  if (skipToastShown) return;
+  skipToastShown = true;
+  showToast('Replay the tour any time from Settings.');
+}
+
 /** Back to a fresh session; for tests. */
 export function resetTourStore(): void {
   savedThisSession = false;
+  skipToastShown = false;
   set(INITIAL);
 }
 

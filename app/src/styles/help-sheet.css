@@ -1,44 +1,8 @@
 /*
- * The help sheets and the tour (#330, boards `Help-*` and `Help-Q-*`): the
- * dimmed screen with the tab bar left lit, the highlighted tab and the
- * sheet over it. `components/help-sheet.tsx` sets the positions; the
- * motion is transform and opacity only.
+ * The help panel and the tour (#330, boards `Help-*`, `Tour-375`): what sits
+ * inside the shared overlay, plus the tour's ring and bird, drawn above the
+ * scrim. `components/help-sheet.tsx` sets the positions.
  */
-
-.help {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  animation: help-fade var(--motion-base) var(--ease-out) both;
-}
-
-/* No tab on screen: dim the whole page instead of leaving the bar lit. */
-.help--no-spot {
-  background: rgb(8 13 24 / 0.6);
-}
-
-.help-spot {
-  position: fixed;
-  border-radius: var(--radius-lg);
-  box-shadow: 0 0 0 100vmax rgb(8 13 24 / 0.6);
-  pointer-events: none;
-}
-
-.help-sheet {
-  position: fixed;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-sizing: border-box;
-  padding: var(--space-4) var(--space-4) 20px;
-  overflow-y: auto;
-  border-radius: 20px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 -16px 48px rgb(0 0 0 / 0.5);
-  color: var(--color-text);
-  animation: help-rise var(--motion-bird) var(--ease-out) both;
-}
 
 .help-head {
   display: flex;
@@ -172,39 +136,11 @@
   text-decoration: underline;
 }
 
-/* The sheet's tab, lit inside the lit bar (the boards' outlined tab). */
+/* The lit tab. It sits in the inert page under the scrim, so the ring that
+ * shows is `.tour-spot`; this only keeps the tab itself readable. */
 .help-tab-on {
   border-radius: 14px;
   background: var(--color-surface);
-  outline: 2px solid var(--color-brand);
-  outline-offset: -2px;
-}
-
-@keyframes help-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes help-rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .help,
-  .help-sheet {
-    animation: none;
-  }
 }
 
 /* The help panel on the shared overlay: its scrim, inert page and slide come
@@ -259,4 +195,52 @@
 
 .help-tip-again:hover {
   text-decoration: underline;
+}
+
+/* The tour: the ring round the lit tab and Bower on the tab bar, above the
+ * scrim (Tour-375). Neither takes taps. */
+.tour-stage {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  pointer-events: none;
+}
+
+.tour-spot {
+  position: fixed;
+  box-sizing: border-box;
+  border-radius: 16px;
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 0;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.tour-bird {
+  position: fixed;
+  display: block;
+  width: 80px;
+  height: 80px;
+  line-height: 0;
+}
+
+.tour-bird svg {
+  overflow: visible;
+}
+
+/* On a phone the card floats 150 px above the bottom, over the bird's
+ * head room; from 900 px the shared dialog placement applies. */
+@media (max-width: 899.98px) {
+  .overlay-panel:has(.tour-card) {
+    right: var(--space-2);
+    bottom: 150px;
+    left: var(--space-2);
+    max-height: calc(100% - 150px - var(--space-2));
+    border-width: 1px;
+    border-radius: var(--radius-lg);
+    padding-bottom: 0;
+  }
+
+  .overlay-panel:has(.tour-card) .overlay-grab {
+    display: none;
+  }
 }

@@ -116,7 +116,14 @@ test.describe('open Home', () => {
       await tour.getByRole('button', { name: next }).click();
     }
     await expect(tour).toBeHidden();
-    await expect(page).toHaveURL(/\/$/);
+    if (testInfo.project.name === 'phone') {
+      await expect(page).toHaveURL(/\/$/);
+    } else {
+      // On a desktop "Let's go" lands on Bower (#776); back to Home.
+      await expect(page).toHaveURL(/\/bower$/);
+      await visible(page.locator('[data-tour="home"]')).click();
+      await expect(page).toHaveURL(/\/$/);
+    }
     await expect(visible(page.locator('.home-bubble'))).toBeVisible();
     // "?" opens the same sheet afterwards, without the step counter.
     await visible(
@@ -331,6 +338,13 @@ test('/search?q= lands on Home with the switcher open and prefilled (#495)', asy
   await page.goto('/search?q=viewing');
 
   await expect(page).toHaveURL(/\/$/);
+  // The demo's tour is a modal (#776) and makes the page, switcher included,
+  // inert until it ends; whether it or the switcher opens first is a race.
+  await page
+    .getByRole('dialog', { name: 'Home' })
+    .getByRole('button', { name: 'Skip' })
+    .click({ timeout: 3_000 })
+    .catch(() => undefined);
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
   await expect(switcher.getByRole('combobox')).toHaveValue('viewing');

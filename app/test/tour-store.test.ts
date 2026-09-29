@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me } from '../src/api.js';
+import { currentToast, dismissToast } from '../src/toast-store.js';
 import {
+  announceTourSkipped,
   endTour,
   getTourState,
   markTourSeen,
@@ -62,6 +64,20 @@ describe('tour store', () => {
       dismissed: true,
       showoff: false,
     });
+  });
+
+  it('says where to replay the tour once per session', () => {
+    announceTourSkipped();
+    expect(currentToast()?.message).toBe(
+      'Replay the tour any time from Settings.',
+    );
+    dismissToast();
+    announceTourSkipped();
+    expect(currentToast()).toBeNull();
+    resetTourStore();
+    announceTourSkipped();
+    expect(currentToast()).not.toBeNull();
+    dismissToast();
   });
 });
 

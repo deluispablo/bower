@@ -7,23 +7,23 @@
  *   screen", the rows, Close, "Show me around" (the tour), Ideas when the
  *   caller has somewhere to send it, and "What is Bower, from the start".
  * - `Tour`: the first-run tour after onboarding and Settings › Show me around
- *   again (`routes/home.tsx`, `tour-store.ts`). The four tab sheets in a
- *   row: "Tour · n of 4", Skip, "Next: <tab>" … "Let's go". It only reports
- *   how it ended (`onEnd`); saving `tourSeenAt` is the caller's.
+ *   again (`routes/home.tsx`, `tour-store.ts`). A queued dialog (R-OVL-3) that
+ *   steps through the four tabs: "Tour · n of 4", Skip, Back, "Next: <tab>" …
+ *   "Let's go". The lit tab gets `.help-tab-on` and a ring, and Bower stands
+ *   over it pointing down (R-BIRD-10). It only reports how it ended
+ *   (`onEnd`); saving `tourSeenAt` is the caller's.
  *
- * Either way the screen dims except for the bar the sheet's tab sits in
- * (the phone's bottom nav, the desktop sidebar), the tab itself gets the
- * highlight (`.help-tab-on`, added here and removed when the sheet goes)
- * and the sheet sits over it. Tabs are found by their `data-tour` attribute
- * (`home`, `notes`, `add`, `bower`); where two exist the one on screen
- * wins. The sheet is a `role="dialog"` with focus trapped; Escape closes
- * the help sheet or skips the tour.
+ * Tabs are found by their `data-tour` attribute (`home`, `notes`, `add`,
+ * `bower`); where two exist the one on screen wins. Focus, Escape and the
+ * inert page come from `Overlay`.
  *
  * In a demo build (`isDemo()`) the sheets carry the demo's lines
  * (`helpSheet`); nothing else changes.
  */
 
-import type { ComponentChildren, JSX } from 'preact';
+import type { JSX } from 'preact';
+import { createPortal } from 'preact/compat';
+import { useLocation } from 'preact-iso';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 import { isDemo } from '../api.js';
@@ -33,13 +33,7 @@ import {
   tourLabel,
   tourNextLabel,
 } from '../help-rows.js';
-import type {
-  HelpIcon,
-  HelpRow,
-  HelpScreen,
-  HelpSheetCopy,
-  HelpTab,
-} from '../help-rows.js';
+import type { HelpIcon, HelpRow, HelpScreen, HelpTab } from '../help-rows.js';
 import { Bird } from './bird.js';
 import {
   IconChat,
@@ -61,7 +55,8 @@ import { Queued } from './queued-overlay.js';
 import { Overlay } from './overlay.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { restoreHint, isHintDismissed } from './hint.js';
-import { useFocusTrap } from './use-focus-trap.js';
+import { announceTourSkipped } from '../tour-store.js';
+import { useMediaQuery } from '../use-media-query.js';
 
 import '../styles/help-sheet.css';
 
@@ -80,6 +75,8 @@ const ICONS: Readonly<Record<HelpIcon, () => JSX.Element>> = {
   shield: IconShield,
 };
 
+const DESKTOP_QUERY = '(min-width: 900px)';
+
 /** Where "What is Bower, from the start" goes: the intro, with Close. */
 export const INTRO_AGAIN_HREF = '/welcome?from=settings';
 
@@ -92,20 +89,17 @@ export interface Box {
 
 type Style = Record<string, string>;
 
-export interface SheetPlacement {
-  /** The hole in the dimmed screen; `null` when the tab is not on screen. */
+export interface TourPlacement {
+  /** The ring round the lit tab; `null` when the tab is not on screen. */
   spot: Style | null;
-  sheet: Style;
+  /** Where Bower stands (fixed, in px); `null` with no tab on screen. */
+  bird: Style | null;
 }
 
-const GAP = 16;
-/** Space between the sheet and the bar under it (the board's 86 px). */
-const BAR_GAP = 6;
+/** The tour bird's size (spec 6.21: tour 80). */
+export const TOUR_BIRD_SIZE = 80;
 const SPOT_PAD = 4;
-const SHEET_MAX = 520;
-const SIDE_SHEET = 400;
-/** Narrower than this beside the bar, the sheet goes along the bottom. */
-const SIDE_MIN = 280;
+const EDGE = 8;
 
 function px(value: number): string {
   return `${Math.round(value)}px`;
@@ -116,63 +110,35 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Where the hole and the sheet go for a bar at `bar` in a `width` x
- * `height` viewport. A bar in the lower half (the phone's bottom nav) gets
- * the sheet right above it, as wide as the screen up to 520 px; a bar on
- * the left (the desktop sidebar) gets it beside, level with the bar's top.
- * No bar on screen: the sheet at the bottom, centred.
+ * Where the ring and Bower go for the lit `tab` in a `width` x `height`
+ * viewport. On a bottom tab bar (`bar` in the lower half) the bird's feet
+ * stand on the bar's top edge, over the tab; beside a desktop sidebar they
+ * stand on the tab's own top edge. Either way it points down at the tab.
  */
-export function placeSheet(
+export function placeTour(
+  tab: Box | null,
   bar: Box | null,
   width: number,
   height: number,
-): SheetPlacement {
-  const bottomWidth = Math.min(width, SHEET_MAX);
-  const centred = px((width - bottomWidth) / 2);
-  if (bar === null || bar.width === 0 || bar.height === 0) {
-    return {
-      spot: null,
-      sheet: {
-        left: centred,
-        width: px(bottomWidth),
-        bottom: px(GAP),
-        maxHeight: px(height - 2 * GAP),
-      },
-    };
+): TourPlacement {
+  if (tab === null || tab.width === 0 || tab.height === 0) {
+    return { spot: null, bird: null };
   }
-
   const spot: Style = {
-    top: px(bar.top - SPOT_PAD),
-    left: px(bar.left - SPOT_PAD),
-    width: px(bar.width + 2 * SPOT_PAD),
-    height: px(bar.height + 2 * SPOT_PAD),
+    top: px(tab.top - SPOT_PAD),
+    left: px(tab.left - SPOT_PAD),
+    width: px(tab.width + 2 * SPOT_PAD),
+    height: px(tab.height + 2 * SPOT_PAD),
   };
-
-  const right = bar.left + bar.width + GAP;
-  const sideWidth = Math.min(SIDE_SHEET, width - right - GAP);
-  if (bar.top + bar.height / 2 > height / 2 || sideWidth < SIDE_MIN) {
-    const bottom = Math.max(height - bar.top + BAR_GAP, GAP);
-    return {
-      spot,
-      sheet: {
-        left: centred,
-        width: px(bottomWidth),
-        bottom: px(bottom),
-        maxHeight: px(height - bottom - GAP),
-      },
-    };
-  }
-
-  const top = clamp(bar.top, GAP, height - GAP);
-  return {
-    spot,
-    sheet: {
-      left: px(right),
-      width: px(sideWidth),
-      top: px(top),
-      maxHeight: px(height - top - GAP),
-    },
-  };
+  const onBottomBar =
+    bar !== null && bar.height > 0 && bar.top + bar.height / 2 > height / 2;
+  const feet = onBottomBar ? bar.top : tab.top;
+  const left = clamp(
+    tab.left + (tab.width - TOUR_BIRD_SIZE) / 2,
+    EDGE,
+    width - TOUR_BIRD_SIZE - EDGE,
+  );
+  return { spot, bird: { left: px(left), bottom: px(height - feet) } };
 }
 
 /** The tab on screen for `tab`, else the first one in the page. */
@@ -194,9 +160,12 @@ function measure(el: Element | null): Box | null {
   };
 }
 
-/** Highlights `tab` and keeps the placement on its bar as the page moves. */
-function usePlacement(tab: HelpTab): SheetPlacement {
-  const [bar, setBar] = useState<Box | null>(null);
+/** Highlights `tab` and keeps the ring and the bird on it as the page moves. */
+function useTourPlacement(tab: HelpTab): TourPlacement {
+  const [boxes, setBoxes] = useState<{ tab: Box | null; bar: Box | null }>({
+    tab: null,
+    bar: null,
+  });
   const [viewport, setViewport] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -205,10 +174,9 @@ function usePlacement(tab: HelpTab): SheetPlacement {
   useLayoutEffect(() => {
     const target = findTab(tab);
     target?.classList.add('help-tab-on');
-    // The whole bar stays lit, as on the boards; the tab carries the ring.
-    const lit = target?.closest('nav') ?? target;
+    const bar = target?.closest('nav') ?? target;
     const update = (): void => {
-      setBar(measure(lit));
+      setBoxes({ tab: measure(target), bar: measure(bar) });
       setViewport({ width: window.innerWidth, height: window.innerHeight });
     };
     update();
@@ -221,7 +189,7 @@ function usePlacement(tab: HelpTab): SheetPlacement {
     };
   }, [tab]);
 
-  return placeSheet(bar, viewport.width, viewport.height);
+  return placeTour(boxes.tab, boxes.bar, viewport.width, viewport.height);
 }
 
 function HelpRows({ rows }: { rows: readonly HelpRow[] }): JSX.Element {
@@ -239,65 +207,6 @@ function HelpRows({ rows }: { rows: readonly HelpRow[] }): JSX.Element {
         );
       })}
     </ul>
-  );
-}
-
-interface SheetFrameProps {
-  copy: HelpSheetCopy;
-  kicker: string;
-  /** Skip (tour) or Close (help), top-right. */
-  corner: JSX.Element;
-  onEscape: () => void;
-  /** The tour's text changes in place, so it is announced. */
-  live?: boolean;
-  children: ComponentChildren;
-}
-
-function SheetFrame({
-  copy,
-  kicker,
-  corner,
-  onEscape,
-  live = false,
-  children,
-}: SheetFrameProps): JSX.Element {
-  const sheet = useRef<HTMLDivElement>(null);
-  useFocusTrap(sheet, onEscape);
-  const place = usePlacement(copy.tab);
-
-  return (
-    <div class={place.spot === null ? 'help help--no-spot' : 'help'}>
-      {place.spot !== null && (
-        <div class="help-spot" style={place.spot} aria-hidden="true" />
-      )}
-      <div
-        ref={sheet}
-        class="help-sheet"
-        style={place.sheet}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="help-sheet-title"
-        aria-describedby="help-sheet-lede"
-      >
-        <div class="help-head">
-          <span class="help-bird" aria-hidden="true">
-            <Bird state="idle" face="happy" size={44} />
-          </span>
-          <div class="help-heading" aria-live={live ? 'polite' : undefined}>
-            <p class="help-kicker">{kicker}</p>
-            <h2 id="help-sheet-title" class="help-title">
-              {copy.title}
-            </h2>
-            <p id="help-sheet-lede" class="help-lede">
-              {copy.lede}
-            </p>
-          </div>
-          {corner}
-        </div>
-        <HelpRows rows={copy.rows} />
-        {children}
-      </div>
-    </div>
   );
 }
 
@@ -436,47 +345,120 @@ export interface TourProps {
   onEnd: (finished: boolean) => void;
 }
 
-/** The first-run tour: the four tab sheets, one after the other. */
-export function Tour({ onEnd }: TourProps): JSX.Element {
-  const [index, setIndex] = useState(0);
+interface TourCardProps {
+  index: number;
+  onBack: () => void;
+  onNext: () => void;
+  onSkip: () => void;
+}
+
+/** What shows while the tour is in front: the ring, the bird, the card. */
+function TourCard({
+  index,
+  onBack,
+  onNext,
+  onSkip,
+}: TourCardProps): JSX.Element {
   const next = useRef<HTMLButtonElement>(null);
   const tab = TOUR_TABS[index] ?? 'home';
-  const last = index === TOUR_TABS.length - 1;
+  const copy = helpSheet(tab, isDemo());
+  const place = useTourPlacement(tab);
 
-  const skip = (): void => {
-    onEnd(false);
-  };
-
-  // Every sheet starts with its main button focused.
+  // Every step starts with its main button focused. The overlay's trap
+  // focuses its first control when it opens; this runs after it.
   useEffect(() => {
-    next.current?.focus();
+    queueMicrotask(() => next.current?.focus());
   }, [index]);
 
   return (
-    <SheetFrame
-      copy={helpSheet(tab, isDemo())}
-      kicker={tourLabel(index)}
-      corner={
-        <button type="button" class="help-skip" onClick={skip}>
-          Skip
-        </button>
-      }
-      onEscape={skip}
-      live
-    >
-      <div class="help-actions">
-        <button
-          ref={next}
-          type="button"
-          class="button"
-          onClick={() => {
-            if (last) onEnd(true);
-            else setIndex(index + 1);
-          }}
-        >
-          {tourNextLabel(index)}
-        </button>
+    <>
+      {createPortal(
+        <div class="tour-stage" aria-hidden="true">
+          {place.spot !== null && <div class="tour-spot" style={place.spot} />}
+          {place.bird !== null && (
+            <span class="tour-bird" style={place.bird}>
+              <Bird
+                state="pointing"
+                face="happy"
+                size={TOUR_BIRD_SIZE}
+                down
+                overlay
+              />
+            </span>
+          )}
+        </div>,
+        document.body,
+      )}
+      <div class="help-panel tour-card">
+        <div class="help-head">
+          <div class="help-heading" aria-live="polite">
+            <p class="help-kicker">{tourLabel(index)}</p>
+            <h2 id="tour-title" class="help-title">
+              {copy.title}
+            </h2>
+            <p id="tour-lede" class="help-lede">
+              {copy.lede}
+            </p>
+          </div>
+          <button type="button" class="help-skip" onClick={onSkip}>
+            Skip
+          </button>
+        </div>
+        <HelpRows rows={copy.rows} />
+        <div class="help-actions">
+          {index > 0 && (
+            <button
+              type="button"
+              class="button help-secondary"
+              onClick={onBack}
+            >
+              Back
+            </button>
+          )}
+          <button ref={next} type="button" class="button" onClick={onNext}>
+            {tourNextLabel(index)}
+          </button>
+        </div>
       </div>
-    </SheetFrame>
+    </>
+  );
+}
+
+/**
+ * The first-run tour: a queued dialog (R-OVL-3) that steps through the four
+ * tabs. It waits while another overlay is open. Skip and Escape end it with
+ * a one-off toast; on a desktop, "Let's go" lands on Bower (report F8).
+ */
+export function Tour({ onEnd }: TourProps): JSX.Element {
+  const [index, setIndex] = useState(0);
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const { route } = useLocation() as Partial<ReturnType<typeof useLocation>>;
+
+  const skip = (): void => {
+    announceTourSkipped();
+    onEnd(false);
+  };
+  const next = (): void => {
+    if (index < TOUR_TABS.length - 1) {
+      setIndex(index + 1);
+      return;
+    }
+    onEnd(true);
+    if (desktop) route?.('/bower');
+  };
+
+  return (
+    <Queued id="tour" priority={OVERLAY_PRIORITY.tour}>
+      <Overlay kind="dialog" labelledBy="tour-title" onClose={skip}>
+        <TourCard
+          index={index}
+          onBack={() => {
+            setIndex(Math.max(0, index - 1));
+          }}
+          onNext={next}
+          onSkip={skip}
+        />
+      </Overlay>
+    </Queued>
   );
 }
