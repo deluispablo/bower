@@ -859,10 +859,11 @@ export function FolderItems({
     <div class="folder-section">
       <div class="folder-facts">
         <p class="folder-counts">
-          {desktop
-            ? `${model.items.length} ${model.items.length === 1 ? 'thing' : 'things'}${
-                newHere > 0 ? ` · ${newHere} new` : ''
-              }`
+          {desktop && newHere > 0
+            ? metaCounts(model).replace(
+                /^\d+ things?/,
+                (things) => `${things} · ${newHere} new`,
+              )
             : metaCounts(model)}
         </p>
         {filed !== null && <p class="folder-filed">{filed}</p>}

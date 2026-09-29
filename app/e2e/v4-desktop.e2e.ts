@@ -63,7 +63,7 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
     page.getByRole('link', { name: 'Ask Bower about it' }),
   ).toBeVisible();
   await expect(page.locator('.folder-counts')).toHaveText(
-    /^\d+ things( · \d+ new)?$/,
+    /^\d+ things?( · \d+ new)? · \d+ originals?, \d+ by Bower$/,
   );
   await expect(page.locator('.folder-row-date').first()).toHaveText(
     /^(\d\d:\d\d|[A-Z][a-z]{2} \d+)$/,
