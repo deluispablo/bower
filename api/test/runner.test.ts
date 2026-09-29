@@ -606,6 +606,24 @@ describe('weekly lint cron (#292)', () => {
     expect((await getVault(stub().fetchImpl, auth)).status).toBe(200);
   });
 
+  it('skips a vault marked missing (R-VAULT-8)', async () => {
+    await seedUser({
+      vault: {
+        folderId: 'FOLDER_ID',
+        inboxFolderId: 'INBOX_FOLDER_ID',
+        name: 'Bower',
+        missingAt: '2026-01-05T00:00:00.000Z',
+      },
+    });
+    const hub = stub();
+
+    await runScheduledLint(env, hub.fetchImpl);
+
+    expect(dispatches(hub.calls)).toEqual([]);
+    expect(await getRunTicket(kv, USER_ID, 'lint')).toBeUndefined();
+    expect(await getRun(kv, USER_ID, 'lint')).toBeUndefined();
+  });
+
   it('logs a dispatch failure with its code, retires the ticket and rethrows', async () => {
     await seedUser();
     const logged: string[] = [];
@@ -858,6 +876,38 @@ describe('POST /runner/vaults/:id/status', () => {
     const { run } = await response.json<RunBody>();
     expect(run.reason).toBe('drive_unavailable');
     expect((await getRun(kv, USER_ID))?.reason).toBe('drive_unavailable');
+  });
+
+  it('marks the vault missing on vault_missing, and GET /me shows it (R-VAULT-8)', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'failed',
+      error: 'folder check: missing',
+      reason: 'vault_missing',
+    });
+
+    expect(response.status).toBe(200);
+    const vault = (await getUser(kv, USER_ID))?.vault;
+    expect(Date.parse(vault?.missingAt ?? '')).not.toBeNaN();
+    expect(vault?.folderId).toBe('FOLDER_ID');
+
+    const token = await signSession({ userId: USER_ID }, env.SESSION_SECRET);
+    const me = await createApp({ fetchImpl: stub().fetchImpl }).request(
+      `${API}/me`,
+      { headers: { cookie: `${SESSION_COOKIE}=${token}` } },
+      env,
+    );
+    const body = await me.json<{ vault: { missingAt?: string } }>();
+    expect(body.vault.missingAt).toBe(vault?.missingAt);
+  });
+
+  it('leaves the vault unmarked on any other failure', async () => {
+    await seedUser();
+
+    await postStatus({ state: 'failed', reason: 'drive_unavailable' });
+
+    expect((await getUser(kv, USER_ID))?.vault?.missingAt).toBeUndefined();
   });
 
   it('keeps no reason on a done run (#375)', async () => {

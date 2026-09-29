@@ -13,6 +13,7 @@ export const RUN_FAILURE_REASONS = [
   'timeout',
   'model_unavailable',
   'vault_changed',
+  'vault_missing',
   'unknown',
 ] as const;
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
@@ -47,6 +48,12 @@ const COPY: Record<RunFailureReason, FailureCopy> = {
     sentence: 'Your Bower folder changed while Bower was working in it.',
     hint: 'If it happens again, check that your Bower folder is still where it was in Drive.',
     short: 'Your folder changed',
+  },
+  vault_missing: {
+    sentence:
+      'Your Bower folder is no longer in your Drive. Nothing was changed.',
+    hint: 'Open Bower to put it back from the Bin or start a new Bower folder.',
+    short: 'Your folder is missing',
   },
   unknown: {
     sentence: 'Something went wrong before Bower could finish.',

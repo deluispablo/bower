@@ -12,9 +12,19 @@ import type { Env } from '../src/env.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
-import { getUser, putDriveToken, putUser } from '../src/store.js';
+import {
+  getRun,
+  getRunTicket,
+  getUser,
+  listRuns,
+  putDriveToken,
+  putRun,
+  putRunTicket,
+  putUser,
+} from '../src/store.js';
 import { TEMPLATE_FILES } from '../src/template.generated.js';
 import type { User } from '../src/types.js';
+import { isDeadPointer, parseFolderCheck } from '../src/vault.js';
 
 /**
  * `Cloudflare.Env` is empty in this repo (no `wrangler types`), so the
@@ -34,6 +44,9 @@ interface FakeItem {
   mimeType: string;
   parent: string;
   content?: string;
+  trashed?: boolean;
+  driveId?: string;
+  canAddChildren?: boolean;
 }
 
 interface FakeCall {
@@ -157,6 +170,7 @@ class FakeDrive {
       const parent = unquote(match[1] ?? '');
       const name = match[2] === undefined ? undefined : unquote(match[2]);
       const files = this.childrenOf(parent)
+        .filter((item) => item.trashed !== true)
         .filter((item) => name === undefined || item.name === name)
         .map(({ id, name: itemName, mimeType }) => ({
           id,
@@ -173,6 +187,9 @@ class FakeDrive {
         id: item.id,
         name: item.name,
         mimeType: item.mimeType,
+        trashed: item.trashed === true,
+        ...(item.driveId === undefined ? {} : { driveId: item.driveId }),
+        capabilities: { canAddChildren: item.canAddChildren ?? true },
       });
     }
     if (base === DRIVE_FILES_URL && method === 'POST') {
@@ -254,7 +271,12 @@ async function postVault(
 }
 
 interface VaultBody {
-  vault: { folderId: string; inboxFolderId: string; name: string };
+  vault: {
+    folderId: string;
+    inboxFolderId: string;
+    name: string;
+    setAt?: string;
+  };
 }
 
 interface ErrorBody {
@@ -364,14 +386,11 @@ describe('POST /vault create', () => {
     expect((await getUser(kv, USER_ID))?.vault).toBeUndefined();
   });
 
-  it('answers 409 vault_exists when the user already has one', async () => {
-    const vault = {
-      folderId: 'FOLDER_ID',
-      inboxFolderId: 'FOLDER_ID',
-      name: 'Bower',
-    };
-    await seedUser({ vault });
+  it('answers 409 vault_exists when the current folder is alive', async () => {
     const drive = new FakeDrive();
+    const folderId = drive.add('Bower', 'root');
+    const vault = { folderId, inboxFolderId: folderId, name: 'Bower' };
+    await seedUser({ vault });
 
     const response = await postVault(
       drive,
@@ -381,8 +400,108 @@ describe('POST /vault create', () => {
 
     expect(response.status).toBe(409);
     expect((await response.json<ErrorBody>()).error.code).toBe('vault_exists');
-    expect(drive.calls).toHaveLength(0);
+    // One read of the current folder, nothing written.
+    expect(drive.calls.map((call) => call.method)).toEqual(['GET']);
+    expect(drive.calls[0]?.url).toContain('supportsAllDrives=true');
     expect((await getUser(kv, USER_ID))?.vault).toEqual(vault);
+  });
+
+  it.each<[string, (drive: FakeDrive) => string]>([
+    ['deleted (404)', () => 'gone-id'],
+    [
+      'in the Bin',
+      (drive) => {
+        const id = drive.add('Bower', 'root');
+        const item = drive.items.get(id);
+        if (item !== undefined) item.trashed = true;
+        return id;
+      },
+    ],
+    [
+      'not a folder',
+      (drive) => drive.add('Bower', 'root', 'text/markdown', 'Hello.'),
+    ],
+    [
+      'closed to new files',
+      (drive) => {
+        const id = drive.add('Shared', 'root');
+        const item = drive.items.get(id);
+        if (item !== undefined) item.canAddChildren = false;
+        return id;
+      },
+    ],
+    [
+      'in a shared drive',
+      (drive) => {
+        const id = drive.add('Team', 'root');
+        const item = drive.items.get(id);
+        if (item !== undefined) item.driveId = 'DRIVE_ID';
+        return id;
+      },
+    ],
+  ])('creates a new folder when the current one is %s', async (_, make) => {
+    const drive = new FakeDrive();
+    const oldId = make(drive);
+    await seedUser({
+      vault: {
+        folderId: oldId,
+        inboxFolderId: oldId,
+        name: 'Bower',
+        missingAt: '2026-01-02T00:00:00.000Z',
+      },
+    });
+
+    const response = await postVault(
+      drive,
+      { mode: 'create' },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(201);
+    const { vault } = await response.json<VaultBody>();
+    expect(vault.folderId).not.toBe(oldId);
+    const stored = (await getUser(kv, USER_ID))?.vault;
+    expect(stored).toEqual(vault);
+    expect(stored?.missingAt).toBeUndefined();
+    expect(stored?.setAt).toEqual(expect.any(String));
+  });
+});
+
+describe('isDeadPointer', () => {
+  const live = {
+    id: 'FOLDER_ID',
+    name: 'Bower',
+    mimeType: FOLDER_MIME_TYPE,
+    trashed: false,
+    canAddChildren: true,
+  };
+
+  it('keeps a live folder and refuses every dead one', () => {
+    expect(isDeadPointer(live)).toBe(false);
+    expect(isDeadPointer(undefined)).toBe(true);
+    expect(isDeadPointer({ ...live, trashed: true })).toBe(true);
+    expect(isDeadPointer({ ...live, mimeType: 'text/markdown' })).toBe(true);
+    expect(isDeadPointer({ ...live, canAddChildren: false })).toBe(true);
+    expect(isDeadPointer({ ...live, driveId: 'DRIVE_ID' })).toBe(true);
+  });
+
+  it('reads Drive fields strictly', () => {
+    expect(
+      parseFolderCheck({
+        id: 'FOLDER_ID',
+        name: 'Bower',
+        mimeType: FOLDER_MIME_TYPE,
+        trashed: 'yes',
+        driveId: '',
+        capabilities: { canAddChildren: 'no' },
+      }),
+    ).toEqual({
+      id: 'FOLDER_ID',
+      name: 'Bower',
+      mimeType: FOLDER_MIME_TYPE,
+      trashed: false,
+    });
+    expect(() => parseFolderCheck({ id: 1 })).toThrow();
   });
 });
 
@@ -406,7 +525,13 @@ describe('POST /vault select', () => {
 
     expect(response.status).toBe(200);
     const { vault } = await response.json<VaultBody>();
-    expect(vault).toEqual({ folderId, inboxFolderId: inboxId, name: 'Notes' });
+    const { setAt, ...pointer } = vault;
+    expect(pointer).toEqual({
+      folderId,
+      inboxFolderId: inboxId,
+      name: 'Notes',
+    });
+    expect(Date.parse(setAt ?? '')).not.toBeNaN();
     // Everything that existed is still there, unchanged.
     for (const item of before) expect(drive.items.get(item.id)).toEqual(item);
     // One item per name: nothing was added next to an existing file.
@@ -445,6 +570,112 @@ describe('POST /vault select', () => {
     const inbox = drive.find(folderId, '0-Inbox');
     expect(inbox?.mimeType).toBe(FOLDER_MIME_TYPE);
     expect(vault.inboxFolderId).toBe(inbox?.id);
+  });
+
+  it('answers 400 folder_trashed for a folder in the Bin and keeps the pointer', async () => {
+    const drive = new FakeDrive();
+    const oldId = drive.add('Bower', 'root');
+    const vault = { folderId: oldId, inboxFolderId: oldId, name: 'Bower' };
+    await seedUser({ vault });
+    const folderId = drive.add('Notes', 'root');
+    const item = drive.items.get(folderId);
+    if (item !== undefined) item.trashed = true;
+
+    const response = await postVault(
+      drive,
+      { mode: 'select', folderId },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json<ErrorBody>()).error.code).toBe(
+      'folder_trashed',
+    );
+    expect(drive.calls.every((call) => call.method === 'GET')).toBe(true);
+    expect((await getUser(kv, USER_ID))?.vault).toEqual(vault);
+  });
+
+  it('a re-point retires the old run tickets, clears the run history and records setAt', async () => {
+    const drive = new FakeDrive();
+    const oldId = drive.add('Bower', 'root');
+    await seedUser({
+      vault: {
+        folderId: oldId,
+        inboxFolderId: oldId,
+        name: 'Bower',
+        setAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const ticket = { hash: 'abc', expiresAt: '2099-01-01T00:00:00.000Z' };
+    await putRunTicket(kv, USER_ID, 'ingest', ticket, 3600);
+    await putRunTicket(kv, USER_ID, 'lint', ticket, 3600);
+    for (const at of ['2026-01-01T10:00:00.000Z', '2026-01-02T10:00:00.000Z']) {
+      await putRun(kv, USER_ID, { state: 'done', requestedAt: at });
+    }
+    await putRun(
+      kv,
+      USER_ID,
+      { state: 'done', kind: 'lint', requestedAt: '2026-01-03T10:00:00.000Z' },
+      'lint',
+    );
+    const folderId = drive.add('Notes', 'root');
+
+    const response = await postVault(
+      drive,
+      { mode: 'select', folderId },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(200);
+    const stored = (await getUser(kv, USER_ID))?.vault;
+    expect(stored?.folderId).toBe(folderId);
+    expect(stored?.setAt).not.toBe('2026-01-01T00:00:00.000Z');
+    expect(Date.parse(stored?.setAt ?? '')).not.toBeNaN();
+    expect(await getRunTicket(kv, USER_ID, 'ingest')).toBeUndefined();
+    expect(await getRunTicket(kv, USER_ID, 'lint')).toBeUndefined();
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+    expect(await getRun(kv, USER_ID, 'lint')).toBeUndefined();
+    expect(await listRuns(kv, USER_ID)).toEqual([]);
+    expect((await kv.list({ prefix: `runrec:${USER_ID}:` })).keys).toEqual([]);
+  });
+
+  it('the same folder again clears the missing mark and keeps the history', async () => {
+    const drive = new FakeDrive();
+    const folderId = drive.add('Bower', 'root');
+    const inboxId = drive.add('0-Inbox', folderId);
+    const setAt = '2026-01-01T00:00:00.000Z';
+    await seedUser({
+      vault: {
+        folderId,
+        inboxFolderId: inboxId,
+        name: 'Bower',
+        setAt,
+        missingAt: '2026-01-05T00:00:00.000Z',
+      },
+    });
+    const ticket = { hash: 'abc', expiresAt: '2099-01-01T00:00:00.000Z' };
+    await putRunTicket(kv, USER_ID, 'ingest', ticket, 3600);
+    await putRun(kv, USER_ID, {
+      state: 'failed',
+      reason: 'vault_missing',
+      requestedAt: '2026-01-05T00:00:00.000Z',
+    });
+
+    const response = await postVault(
+      drive,
+      { mode: 'select', folderId },
+      await sessionCookie(),
+    );
+
+    expect(response.status).toBe(200);
+    expect((await getUser(kv, USER_ID))?.vault).toEqual({
+      folderId,
+      inboxFolderId: inboxId,
+      name: 'Bower',
+      setAt,
+    });
+    expect(await getRunTicket(kv, USER_ID, 'ingest')).toEqual(ticket);
+    expect(await listRuns(kv, USER_ID)).toHaveLength(1);
   });
 
   it('answers 400 for a file that is not a folder, or no file at all', async () => {

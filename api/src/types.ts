@@ -18,6 +18,19 @@ export interface User {
     folderId: string;
     inboxFolderId: string;
     name: string;
+    /**
+     * ISO-8601; when this folder became the user's Bower folder (spec
+     * R-VAULT-6, `vaultSetAt`). Kept when the same folder is chosen again;
+     * absent on vaults set before #736.
+     */
+    setAt?: string;
+    /**
+     * ISO-8601; set when a run found the folder deleted or in the Bin
+     * (spec R-VAULT-8). `GET /me` returns it with the vault; the weekly
+     * lint skips the vault while it is set. Choosing a folder again (the
+     * same one after "Put it back", or another) clears it.
+     */
+    missingAt?: string;
   };
   /** AES-GCM envelope from `crypto.ts`; never plaintext. */
   encRefreshToken: string;
@@ -50,13 +63,15 @@ export type RunState = 'queued' | 'running' | 'done' | 'failed';
 /**
  * Why a run failed, in a word the app turns into a sentence for people
  * (#375): the runner classifies its own failure; anything it cannot tell
- * apart is `unknown`.
+ * apart is `unknown`. `vault_missing` (spec R-VAULT-14): the Bower folder
+ * was deleted or is in the Bin; the Worker then marks the vault missing.
  */
 export const RUN_FAILURE_REASONS = [
   'drive_unavailable',
   'timeout',
   'model_unavailable',
   'vault_changed',
+  'vault_missing',
   'unknown',
 ] as const;
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
