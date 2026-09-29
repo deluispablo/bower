@@ -29,6 +29,7 @@ import {
   PILE_SAVED_LINE,
   addedFromElsewhere,
   inboxNameSet,
+  isContextNoteName,
   kindOfName,
   pileDay,
   pileNames,
@@ -77,7 +78,7 @@ import {
   type PickedItem,
 } from '../picker.js';
 import { runKey, useRun } from '../run-store.js';
-import { isContextNote, processedKind } from '../run-progress.js';
+import { processedKind } from '../run-progress.js';
 import { pendingCount } from '../navigation.js';
 import { useSession } from '../session.js';
 import { takeSharedFiles } from '../share-target.js';
@@ -356,7 +357,7 @@ export function Add() {
     for (const file of files) {
       if (file.path !== `0-Inbox/${file.name}`) continue;
       present.set(file.name, file);
-      if (isContextNote(file.path)) notes.push(file);
+      if (isContextNoteName(file.name)) notes.push(file);
     }
     void (async () => {
       let adopted = false;
@@ -385,7 +386,16 @@ export function Add() {
       for (const id of [...noteNames.current.keys()]) {
         if (!ids.has(id)) noteNames.current.delete(id);
       }
-      setNoted(new Set([...noteNames.current.values()].flat()));
+      const next = new Set([...noteNames.current.values()].flat());
+      // Unchanged names keep the same set, so an effect that runs on every
+      // render (an unstable `files`) cannot loop.
+      setNoted((prev) =>
+        prev !== null &&
+        prev.size === next.size &&
+        [...next].every((name) => prev.has(name))
+          ? prev
+          : next,
+      );
       if (adopted) followPileUploads();
     })();
     return () => {
@@ -761,7 +771,14 @@ export function Add() {
   const loading = status === 'loading';
   // The inbox's own count: the same number Home's card and the "Is that
   // everything?" sheet show (R-ADD-2).
-  const total = inboxTotal(inboxCount(files, loading));
+  // Pile notes are not things to tidy: `inboxCount` only knows the batch
+  // note's older name, so they are set aside here.
+  const total = inboxTotal(
+    inboxCount(
+      files.filter((file) => !isContextNoteName(file.name)),
+      loading,
+    ),
+  );
   const stillUploading = [...(open === undefined ? [] : [open]), ...waiting]
     .map(uploadingCount)
     .reduce((sum, n) => sum + n, 0);
@@ -778,6 +795,7 @@ export function Add() {
           files.filter(
             (file) =>
               file.path === `0-Inbox/${file.name}` &&
+              !isContextNoteName(file.name) &&
               pendingCount([file]) === 1 &&
               processedKind(file.path, undefined) === 'file',
           ),
