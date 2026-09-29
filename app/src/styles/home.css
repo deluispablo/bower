@@ -36,24 +36,9 @@
   margin: 0;
 }
 
-/* One line at 24 px on the phone (#500, Phone-Home board): the shared
-   h1 rule (layout.css) leaves the browser default, 32 px, which wraps to
-   two or three lines. Desktop keeps that default — the board only draws
-   this size for the phone greeting. A long given name is truncated
-   rather than wrapping or overflowing the row. */
-.home-greeting--phone .home-h1 {
-  overflow: hidden;
-  font-size: var(--text-xl);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* #551: `.content`'s own padding (layout.css) plus the bird and the gap
-   leave only 243 px for the text at 375 px wide — 16 px short of even a
-   four-letter name like the fixture's ("Good afternoon, Alex") at 24 px,
-   so it was cut. The row bleeds into the page's right padding, the one
-   place with spare width, and the gap tightens a little, so a short name
-   never needs the ellipsis; a genuinely long one still gets it. */
+/* Phone (Flow-05-Home): no greeting heading, the top bar says Home; the
+   bird and its bubble are the whole row. The row bleeds into the page's
+   right padding and the gap tightens so the bubble gets the width. */
 .home-greeting--phone {
   gap: var(--space-2);
   margin-right: calc(-1 * var(--space-4));

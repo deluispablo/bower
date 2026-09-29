@@ -86,3 +86,19 @@ test('Recent rows show the kind badge, New for what was just filed, and the All 
   await expect(listing).toContainText('2 bed');
   await expect(page.locator('.home-recent-head a')).toHaveText('All');
 });
+
+test('phone Home: top bar says Home and there is no greeting heading; desktop keeps its heading (#699)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  const greeting = page.getByRole('heading', { name: /^Good \w+, Alex$/ });
+  if (testInfo.project.name === 'phone') {
+    await expect(
+      page.locator('header.topbar').getByText('Home', { exact: true }),
+    ).toBeVisible();
+    await expect(greeting).toHaveCount(0);
+    await expect(visible(page.locator('.home-bubble'))).toBeVisible();
+  } else {
+    await expect(greeting).toBeVisible();
+  }
+});
