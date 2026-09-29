@@ -87,6 +87,7 @@ export function pileOriginOf(name: string): string | undefined {
 
 /** Forgets every remembered origin (sign-out, `resetPiles`). */
 export function clearPileOrigins(): void {
+  if (typeof localStorage === 'undefined') return;
   try {
     localStorage.removeItem(PILE_ORIGINS_KEY);
   } catch (err) {

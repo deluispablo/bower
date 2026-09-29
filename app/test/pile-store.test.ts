@@ -496,3 +496,40 @@ describe('parsePileNote and adoptPile', () => {
     expect(store.getPiles()[0]?.items).toHaveLength(1);
   });
 });
+
+describe('prunePiles (#771)', () => {
+  it('forgets a closed pile the run took, keeps one with a file held back', async () => {
+    const a = store.startPile(INBOX, NOW, 'a');
+    await store.attachToPile(a.id, {
+      name: 'a1.pdf',
+      state: 'done',
+      fileId: '1',
+    });
+    const b = store.startPile(INBOX, NOW, 'b');
+    await store.attachToPile(b.id, {
+      name: 'b1.pdf',
+      state: 'done',
+      fileId: '2',
+    });
+    await store.attachToPile(b.id, {
+      name: 'b2.pdf',
+      state: 'done',
+      fileId: '3',
+    });
+    await store.flushPiles();
+
+    expect(store.prunePiles(new Set(['a1.pdf', 'b1.pdf']))).toBe(1);
+    expect(store.getPiles().map((pile) => pile.id)).toEqual(['b']);
+  });
+
+  it('never drops an open pile', async () => {
+    const a = store.startPile(INBOX, NOW, 'a');
+    await store.attachToPile(a.id, {
+      name: 'a1.pdf',
+      state: 'done',
+      fileId: '1',
+    });
+    expect(store.prunePiles(new Set(['a1.pdf']))).toBe(0);
+    expect(store.getPiles()).toHaveLength(1);
+  });
+});

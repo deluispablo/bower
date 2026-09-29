@@ -8,6 +8,8 @@ import {
   lowerFirst,
   requestMeta,
   requestRows,
+  isPileNoteName,
+  waitingNotes,
   requestTargetPath,
   requestsForNote,
   requestsByTargetPath,
@@ -404,6 +406,23 @@ describe('requests and their runs (#756, R-REQ-1)', () => {
   it('a note still in the inbox is not also listed as done', () => {
     const rows = requestRows(input([file(path)], [doneRun]));
     expect(rows.map((row) => row.state)).toEqual(['waiting']);
+  });
+
+  it('a pile note is never a request, waiting or done (#771)', () => {
+    const pileName = 'Bower - 2026-09-29 1042-07 Context ab.md';
+    const pileRun: Run = {
+      state: 'done',
+      requestedAt: '2026-09-29T13:20:00.000Z',
+      finishedAt: '2026-09-29T13:26:00.000Z',
+      runId: 'run-4',
+      items: [{ path: `0-Inbox/${pileName}`, kind: 'request' }],
+    };
+    expect(isPileNoteName(pileName)).toBe(true);
+    expect(isPileNoteName(name)).toBe(false);
+    expect(waitingNotes([file(`0-Inbox/${pileName}`)])).toEqual([]);
+    expect(requestRows(input([file(`0-Inbox/${pileName}`)], [pileRun]))).toEqual(
+      [],
+    );
   });
 
   it('the run in flight wins over an earlier failure', () => {

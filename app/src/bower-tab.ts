@@ -111,6 +111,19 @@ export const LISTING_CATCH_UP_MS = 2 * 60 * 1000;
 const REQUEST_NAME =
   /^Bower - (\d{4})-(\d{2})-(\d{2}) (\d{2})(\d{2}) (.+)\.md$/;
 
+/**
+ * A pile's own note (`pile-store.ts#pileNoteName`): `Bower - YYYY-MM-DD
+ * HHmm-ss Context <xx>.md`. It is the person's words about a pile of files,
+ * read with those files at the tidy-up, never a request of its own (#771).
+ */
+const PILE_NOTE_NAME =
+  /^Bower - \d{4}-\d{2}-\d{2} \d{4}-\d{2} Context(?: [0-9a-f]{2})?\.md$/;
+
+/** Whether `name` is a pile's note. */
+export function isPileNoteName(name: string): boolean {
+  return PILE_NOTE_NAME.test(name);
+}
+
 /** `YYYY-MM-DD <question>.md`, how the agent names an answer. */
 const ANSWER_NAME = /^(\d{4})-(\d{2})-(\d{2}) (.+)\.md$/;
 
@@ -160,7 +173,8 @@ export function waitingNotes(files: readonly DriveFile[]): DriveFile[] {
     (file) =>
       file.mimeType !== FOLDER_MIME &&
       file.path === `${INBOX}/${file.name}` &&
-      REQUEST_NAME.test(file.name),
+      REQUEST_NAME.test(file.name) &&
+      !isPileNoteName(file.name),
   );
 }
 
@@ -323,6 +337,7 @@ export function requestRows({
     for (const item of run.items ?? []) {
       if (item.kind !== 'request') continue;
       const name = baseName(item.path);
+      if (isPileNoteName(name)) continue;
       if (listed.has(name)) continue;
       listed.add(name);
       const title = REQUEST_NAME.exec(name)?.[6] ?? name.replace(/\.md$/i, '');
