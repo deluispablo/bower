@@ -47,3 +47,15 @@ describe('uniqueName', () => {
     expect(existing).toEqual(new Set(['photo.jpg']));
   });
 });
+
+describe('uniqueName against the upload queue (R-UPL-6)', () => {
+  it('skips names still on their way as well as the inbox listing', () => {
+    expect(
+      uniqueName('photo.jpg', new Set(['photo.jpg']), ['photo (2).jpg']),
+    ).toBe('photo (3).jpg');
+  });
+
+  it('treats a queued name as taken even when the inbox is empty', () => {
+    expect(uniqueName('Scan.PDF', [], ['scan.pdf'])).toBe('Scan (2).PDF');
+  });
+});

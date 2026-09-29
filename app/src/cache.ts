@@ -1,6 +1,6 @@
 /**
  * IndexedDB cache for the vault, via `idb-keyval` over one database
- * (`keyval-store`, version 2) with several object stores (#582). The
+ * (`keyval-store`, version 3) with several object stores (#582). The
  * original `keyval` store holds these kinds of entry:
  *
  * - `index`: the last `listVault` result.
@@ -19,9 +19,14 @@
  * scroll), `searchIndex` (a serialised MiniSearch, filled by #592) and
  * `noteMeta` (lazy frontmatter, see `note-meta.ts`). A blocked or missing
  * database (private windows) degrades to memory for the session.
+ *
+ * Version 3 adds `uploads`: the durable upload queue (`upload-queue.ts`),
+ * one record per file keyed by `[userId, id]`. Its writes never degrade to
+ * memory: a failed write (for example `QuotaExceededError`) is thrown, so
+ * the queue can tell the person to keep Bower open instead.
  */
 
-import { clear, del, get, set } from 'idb-keyval';
+import { clear, del, entries, get, set } from 'idb-keyval';
 import type { UseStore } from 'idb-keyval';
 
 import { thumbnailLinkOf } from './drive.js';
@@ -38,9 +43,10 @@ const BLOB_LRU_KEY = 'blob-lru';
 
 const DB_NAME = 'keyval-store';
 /** 1 was the single `keyval` store `idb-keyval` made on its own. */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
-/** `keyval` is the original store; the rest arrived with version 2. */
+/** `keyval` is the original store; `uploads` arrived with version 3, the
+ * rest with version 2. */
 export const STORE_NAMES = [
   'keyval',
   'seen',
@@ -48,6 +54,7 @@ export const STORE_NAMES = [
   'treeState',
   'searchIndex',
   'noteMeta',
+  'uploads',
 ] as const;
 
 export type StoreName = (typeof STORE_NAMES)[number];
@@ -405,6 +412,84 @@ export async function saveNoteMetaEntry(
   entry: unknown,
 ): Promise<void> {
   await kvSet('noteMeta', id, entry);
+}
+
+// --- Upload queue (version 3) ------------------------------------------------
+
+/** One file in the durable upload queue, as `upload-queue.ts` keeps it. */
+export interface UploadRecord {
+  /** The queue's own id for the file (not a Drive id). */
+  id: string;
+  /** The Bower user the file belongs to: the queue is per user. */
+  userId: string;
+  pileId: string;
+  /** The Drive folder it goes into (the inbox). */
+  parentId: string;
+  name: string;
+  type: string;
+  size: number;
+  blob: Blob;
+  /** Drive's resumable session address, `null` before it is opened. */
+  session: string | null;
+  /** Bytes Drive has confirmed. */
+  confirmed: number;
+  /** ISO timestamp of when the file was attached. */
+  addedAt: string;
+}
+
+function uploadKey(userId: string, id: string): [string, string] {
+  return [userId, id];
+}
+
+function isUploadKey(key: IDBValidKey): key is [string, string] {
+  return (
+    Array.isArray(key) &&
+    key.length === 2 &&
+    typeof key[0] === 'string' &&
+    typeof key[1] === 'string'
+  );
+}
+
+/** Every queued file of `userId`, oldest first. `[]` without IndexedDB. */
+export async function loadUploads(userId: string): Promise<UploadRecord[]> {
+  let all: [IDBValidKey, UploadRecord][];
+  try {
+    all = await entries<IDBValidKey, UploadRecord>(useStore('uploads'));
+  } catch (error) {
+    degraded(error);
+    return [];
+  }
+  return all
+    .filter(([key]) => isUploadKey(key) && key[0] === userId)
+    .map(([, record]) => record)
+    .sort((a, b) => a.addedAt.localeCompare(b.addedAt));
+}
+
+/**
+ * Writes one queued file. Throws whatever IndexedDB throws (for example a
+ * `DOMException` named `QuotaExceededError`): a durable copy that could
+ * not be written must not pretend to be one.
+ */
+export async function putUpload(record: UploadRecord): Promise<void> {
+  await set(uploadKey(record.userId, record.id), record, useStore('uploads'));
+}
+
+export async function deleteUpload(userId: string, id: string): Promise<void> {
+  try {
+    await del(uploadKey(userId, id), useStore('uploads'));
+  } catch (error) {
+    degraded(error);
+  }
+}
+
+/** Drops the queued files of `userId`, or of every user when omitted. */
+export async function clearUploads(userId?: string): Promise<void> {
+  if (userId === undefined) {
+    await kvClear('uploads');
+    return;
+  }
+  const records = await loadUploads(userId);
+  await Promise.all(records.map((r) => deleteUpload(userId, r.id)));
 }
 
 /** Drops everything cached on this device, in every store. */

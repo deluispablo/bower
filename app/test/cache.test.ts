@@ -5,17 +5,27 @@ import type { DriveFile } from '../src/drive.js';
 // `idb-keyval` needs a real IndexedDB; a `Map` is enough to exercise our
 // wrappers without one (vitest runs this suite in the node environment).
 const store = new Map<string, unknown>();
+// Array keys (the `uploads` store) are compared by value, as IndexedDB does.
+const k = (key: unknown): string =>
+  typeof key === 'string' ? key : `json:${JSON.stringify(key)}`;
 
 vi.mock('idb-keyval', () => ({
-  get: vi.fn((key: string) => Promise.resolve(store.get(key))),
-  set: vi.fn((key: string, value: unknown) => {
-    store.set(key, value);
+  get: vi.fn((key: string) => Promise.resolve(store.get(k(key)))),
+  set: vi.fn((key: unknown, value: unknown) => {
+    store.set(k(key), value);
     return Promise.resolve();
   }),
-  del: vi.fn((key: string) => {
-    store.delete(key);
+  del: vi.fn((key: unknown) => {
+    store.delete(k(key));
     return Promise.resolve();
   }),
+  entries: vi.fn(() =>
+    Promise.resolve(
+      [...store.entries()]
+        .filter(([key]) => key.startsWith('json:'))
+        .map(([key, value]) => [JSON.parse(key.slice(5)) as unknown, value]),
+    ),
+  ),
   clear: vi.fn(() => {
     store.clear();
     return Promise.resolve();
@@ -28,6 +38,11 @@ vi.mock('../src/drive.js', () => ({
 }));
 
 const {
+  DB_VERSION,
+  clearUploads,
+  deleteUpload,
+  loadUploads,
+  putUpload,
   BLOB_CACHE_CAP_BYTES,
   STORE_NAMES,
   clearAll,
@@ -242,7 +257,17 @@ describe('upgradeDb', () => {
       'treeState',
       'searchIndex',
       'noteMeta',
+      'uploads',
     ]);
+  });
+
+  it('adds only the uploads store to a version 2 database', () => {
+    const { db, created } = fakeDb(
+      STORE_NAMES.filter((name) => name !== 'uploads'),
+    );
+    expect(DB_VERSION).toBe(3);
+    expect(upgradeDb(db)).toEqual(['uploads']);
+    expect(created).toEqual(['uploads']);
   });
 
   it('builds every store in a fresh database and is idempotent', () => {
@@ -322,5 +347,49 @@ describe('loadThumbnail', () => {
     thumbnailLinkOf.mockResolvedValue(null);
 
     expect(await loadThumbnail({ id: 'p3' })).toBeUndefined();
+  });
+});
+
+describe('uploads store (R-UPL-7)', () => {
+  function upload(userId: string, id: string, addedAt: string) {
+    return {
+      id,
+      userId,
+      pileId: 'pile-1',
+      parentId: 'FOLDER_ID',
+      name: `${id}.jpg`,
+      type: 'image/jpeg',
+      size: 3,
+      blob: new Blob(['abc']),
+      session: null,
+      confirmed: 0,
+      addedAt,
+    };
+  }
+
+  it('keeps each user apart, oldest first, and clears one user', async () => {
+    await putUpload(upload('USER_1', 'b', '2026-01-01T00:00:02.000Z'));
+    await putUpload(upload('USER_1', 'a', '2026-01-01T00:00:01.000Z'));
+    await putUpload(upload('USER_2', 'c', '2026-01-01T00:00:03.000Z'));
+
+    expect((await loadUploads('USER_1')).map((r) => r.id)).toEqual(['a', 'b']);
+    await deleteUpload('USER_1', 'a');
+    expect((await loadUploads('USER_1')).map((r) => r.id)).toEqual(['b']);
+
+    await clearUploads('USER_1');
+    expect(await loadUploads('USER_1')).toEqual([]);
+    expect((await loadUploads('USER_2')).map((r) => r.id)).toEqual(['c']);
+  });
+
+  it('throws a failed write instead of keeping it in memory', async () => {
+    const { set } = await import('idb-keyval');
+    vi.mocked(set).mockRejectedValueOnce(
+      new DOMException('Full.', 'QuotaExceededError'),
+    );
+
+    await expect(
+      putUpload(upload('USER_1', 'a', '2026-01-01T00:00:01.000Z')),
+    ).rejects.toMatchObject({ name: 'QuotaExceededError' });
+    expect(await loadUploads('USER_1')).toEqual([]);
   });
 });
