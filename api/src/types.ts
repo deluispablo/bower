@@ -118,6 +118,22 @@ export interface SetAsideItem {
   reason: SetAsideReason;
 }
 
+/**
+ * Where a running run stands (spec R-RUNNER-4): waiting for its job,
+ * reading the inbox, writing notes, or saving to Drive.
+ */
+export const RUN_PHASES = ['queued', 'reading', 'writing', 'saving'] as const;
+export type RunPhase = (typeof RUN_PHASES)[number];
+
+/**
+ * One note a run changed that existed before (spec R-RUNNER-1), with an
+ * optional one-line note of what changed (at most 120 characters).
+ */
+export interface UpdatedItem {
+  path: string;
+  what?: string;
+}
+
 export interface Run {
   state: RunState;
   /** Absent on runs stored before kinds existed; read as `ingest`. */
@@ -142,6 +158,27 @@ export interface Run {
   setAside?: SetAsideItem[];
   /** Report v2: one short clause about what Bower added besides filing. */
   added?: string;
+  /**
+   * Spec R-RUNNER-1: paths the run added that are not a move destination.
+   * Kept on `failed` runs too (what was actually uploaded).
+   */
+  created?: string[];
+  /** Spec R-RUNNER-1: paths that existed before and changed. */
+  updated?: UpdatedItem[];
+  /** Spec R-RUNNER-1: pending inbox paths still there at the end. */
+  left?: string[];
+  /**
+   * Spec R-RUNNER-4: the step a `running` run last reported, with the
+   * `total` and `done` counts when known. Only on a running run.
+   */
+  phase?: RunPhase;
+  total?: number;
+  done?: number;
+  /**
+   * ISO-8601; when the running run last reported a `phase`. The
+   * running-stale window counts from here (T13), else from `startedAt`.
+   */
+  phaseAt?: string;
   /** Paths the pre-scan set aside under `0-Inbox/Quarantine/` this run. */
   quarantined?: string[];
   /** Paths (or `"*"` for the whole run) the post-run audit refused. */

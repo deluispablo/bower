@@ -374,7 +374,7 @@ The Bower tab's Activity (#345) shows one card per tidy-up. The Worker keeps eac
 Workers KV's free tier allows **1,000 writes a day per Cloudflare account** (every namespace and every Worker of the account together; deletes and lists have their own 1,000 a day), reset at 00:00 UTC. Past it, every KV write fails until then: sign-ins, Bower folder setup, Tidy up, run status reports and settings all answer errors, for every user. What still writes:
 
 - **Sign-in**: the user record and its email index (2 writes).
-- **Tidy up** (`POST /process`): the run and the day's counter (2), plus 1 when a stale run is first recorded as failed; then one write per status report from the runner (a few per run), and the same for the weekly health check, per user.
+- **Tidy up** (`POST /process`): the run and the day's counter (2), plus 1 when a stale run is first recorded as failed; then one write per status report from the runner, and the same for the weekly health check, per user. Since #728 a tidy-up reports up to five times (`running`, then its `reading`, `writing` and `saving` phases, then `done` or `failed`); a `queued` phase report adds one more. With the run history (2 writes when it ends) and `POST /process` (2), one tidy-up spends about 10 writes: one person at the default limit of 20 tidy-ups a day spends about 200 of the 1,000.
 - **Drive access**: the cached Drive token, about one write per hour a user has the app open.
 - **Settings and account**: a settings save that changes something, Bower folder setup, a push subscription per device, "Sign out everywhere" (1 each); deleting an account spends deletes, not writes.
 
