@@ -68,7 +68,7 @@ import { imageMimeType } from '../markdown/embeds.js';
 import { renderNote } from '../markdown/render.js';
 import {
   breadcrumb,
-  displayPath,
+  displayName,
   driveFileUrl,
   folderContents,
   folderHref,
@@ -263,15 +263,14 @@ function Preview({
 
 interface CrumbProps {
   crumbs: BreadcrumbSegment[];
-  title: string;
 }
 
-/** The shell header's `crumb` slot: the phone title and the desktop
- * breadcrumb, the same pair as a note's (`routes/note.tsx`). */
-function Crumb({ crumbs, title }: CrumbProps): JSX.Element {
+/** The shell header's `crumb` slot: the desktop breadcrumb, the same as a
+ * note's (`routes/note.tsx`). The phone bar has Back only (#704): the title
+ * is on the page. */
+function Crumb({ crumbs }: CrumbProps): JSX.Element {
   return (
     <>
-      <span class="topbar-title">{title}</span>
       {crumbs.length > 0 && (
         <nav class="breadcrumb" aria-label="Folder">
           {crumbs.map((crumb) => (
@@ -776,8 +775,8 @@ export function FileScreen(): JSX.Element {
   useShellSlot('back', backContent);
 
   const crumbContent = useMemo(
-    () => (file === undefined ? null : <Crumb crumbs={crumbs} title={title} />),
-    [file === undefined, crumbs, title],
+    () => (file === undefined ? null : <Crumb crumbs={crumbs} />),
+    [file === undefined, crumbs],
   );
   useShellSlot('crumb', crumbContent);
 
@@ -829,9 +828,16 @@ export function FileScreen(): JSX.Element {
   });
   const topFolder = folder.split('/')[0] ?? '';
   const para = paraKindOf(topFolder);
+  const folderName = displayName(folder.slice(folder.lastIndexOf('/') + 1));
   const walkSiblings =
     folderContents(index, folder, getPref('explorerSort'))?.items ?? [];
   const walk = walkOf(walkSiblings, file);
+  // The photo viewer's counter walks the folder's photos and files only, not
+  // its notes (#704).
+  const viewerSiblings = walkSiblings.filter(
+    (item) => fileKind(item) !== 'note',
+  );
+  const viewerAt = viewerSiblings.findIndex((item) => item.id === file.id);
   const sourceKind = sourceKindOf(file);
   const source = file.appProperties?.bowerSource;
   const askHref = `/bower?text=${encodeURIComponent(
@@ -877,7 +883,7 @@ export function FileScreen(): JSX.Element {
             ) : (
               <FolderMark kind={para} size={18} />
             )}
-            <a href={folderHref(folder)}>{displayPath(folder)}</a>
+            <a href={folderHref(folder)}>{folderName}</a>
           </li>
         )}
         <li>
@@ -897,14 +903,14 @@ export function FileScreen(): JSX.Element {
         <PhotoViewer
           src={preview.url}
           title={title}
-          siblings={(walk === null ? [file] : walkSiblings).map((item) => ({
+          siblings={(viewerAt === -1 ? [file] : viewerSiblings).map((item) => ({
             id: item.id,
             name: walkTitle(item),
           }))}
-          index={walk === null ? 0 : walk.position - 1}
-          folderName={folder === '' ? 'Bower' : displayPath(folder)}
+          index={viewerAt === -1 ? 0 : viewerAt}
+          folderName={folder === '' ? 'Bower' : folderName}
           onNavigate={(at) => {
-            const target = walkSiblings[at];
+            const target = viewerSiblings[at];
             if (target !== undefined) route(walkHref(target));
           }}
           onMore={() => setMenuOpen(true)}
@@ -923,8 +929,6 @@ export function FileScreen(): JSX.Element {
           <p class="file-caption">{KEPT_LINE_EXCEL}</p>
         </>
       )}
-
-      {walk !== null && walk.total > 1 && <WalkBar walk={walk} />}
 
       {companion !== null && companion !== undefined && (
         <BowerNote file={file} companion={companion} index={index} />
@@ -945,6 +949,8 @@ export function FileScreen(): JSX.Element {
             </span>
           </p>
         )}
+
+      {walk !== null && walk.total > 1 && <WalkBar walk={walk} />}
     </section>
   );
 }

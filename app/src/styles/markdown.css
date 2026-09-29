@@ -505,3 +505,19 @@
     max-width: 720px;
   }
 }
+
+.markdown .wikilink-pill-row {
+  margin: 0 0 var(--space-4);
+}
+
+.markdown .wikilink-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-link);
+  font-size: 0.9rem;
+  text-decoration: none;
+}

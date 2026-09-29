@@ -38,9 +38,7 @@ test('a CSV is a table with its row count, and a meta line with its kind word (#
   await openFile(page, FLAT, 'Flat budget', 'Flat budget');
   const props = page.locator('.file-props');
   await expect(props).toContainText('Spreadsheet (CSV) · 3 KB · 24 rows');
-  await expect(
-    props.getByRole('link', { name: 'Projects / Flat hunt' }),
-  ).toBeVisible();
+  await expect(props.getByRole('link', { name: 'Flat hunt' })).toBeVisible();
   const table = page.locator('.table-preview table');
   await expect(table.getByRole('columnheader')).toHaveText([
     'Month',
@@ -231,6 +229,19 @@ test('previous and next walk the folder in its list, with n of m (#606)', async 
     .click();
   const walk = page.locator('.file-walk');
   await expect(walk).toContainText(/\d+ of \d+/);
+  // The walk sits at the end of the page, after Bower's note (#704).
+  await expect
+    .poll(() =>
+      page.locator('.file-view').evaluate((view) => {
+        const last = view.lastElementChild;
+        return last?.classList.contains('file-walk') ?? false;
+      }),
+    )
+    .toBe(true);
+  // The meta line names the folder, not its path (#704).
+  await expect(page.locator('.file-props a[href^="/folder/"]')).toHaveText(
+    'Flat hunt',
+  );
   const where = /(\d+) of (\d+)/.exec(
     (await walk.locator('.file-walk-place').textContent()) ?? '',
   );
@@ -263,9 +274,25 @@ test('a photo opens the viewer, full screen with More (#606)', async ({
   });
   await expect(full).toBeVisible();
   await expect(full.locator('.photo-viewer-counter')).toContainText(
-    'in Projects / Flat hunt',
+    /^\d+ of \d+ in Flat hunt$/,
   );
   await full.getByRole('button', { name: 'More' }).click();
   await expect(full).toHaveCount(0);
   await expect(page.getByRole('menu')).toBeVisible();
+});
+
+test('the phone bar of a file has Back to the folder and no item title (#704)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'the phone top bar only');
+  await gotoOriginals(page, FLAT);
+  await page
+    .locator('.folder-item', { hasText: 'Flat budget' })
+    .first()
+    .click();
+  const bar = page.locator('header.topbar');
+  await expect(
+    bar.getByRole('link', { name: /^Back to Flat hunt/ }),
+  ).toBeVisible();
+  await expect(bar.locator('.topbar-title')).toHaveCount(0);
 });

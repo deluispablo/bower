@@ -212,7 +212,7 @@ describe('Note screen (#609)', () => {
     expect(root.textContent).toContain('At the viewing, check');
     expect(
       root.querySelector(`a[href="/note/${CHECKLIST.id}"]`)?.textContent,
-    ).toBe('Viewing checklist');
+    ).toBe('Viewing checklist · in Resources');
     expect(root.textContent).toContain('Used: the four listings.');
     expect(root.querySelectorAll('h1')).toHaveLength(1);
   });
