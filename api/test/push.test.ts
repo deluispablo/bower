@@ -390,59 +390,80 @@ describe('sendPush', () => {
 });
 
 describe('runPushPayload', () => {
-  it('counts the tidied-up files, or says there was nothing, or that it failed', () => {
-    const at = '2026-01-01T00:00:00.000Z';
-    expect(
-      runPushPayload({ state: 'done', requestedAt: at, processed: ['a', 'b'] }),
-    ).toEqual({ title: 'Bower', body: '2 files tidied up', url: '/' });
-    expect(
-      runPushPayload({ state: 'done', requestedAt: at, processed: ['a'] }).body,
-    ).toBe('1 file tidied up');
-    expect(runPushPayload({ state: 'done', requestedAt: at }).body).toBe(
-      'Nothing new to tidy up',
-    );
-    expect(
-      runPushPayload({ state: 'failed', requestedAt: at, error: 'x' }).body,
-    ).toBe('Something went wrong');
-    expect(
-      runPushPayload({
-        state: 'done',
-        kind: 'ingest',
-        requestedAt: at,
-        processed: ['a'],
-      }),
-    ).toEqual({ title: 'Bower', body: '1 file tidied up', url: '/' });
+  const at = '2026-01-01T00:00:00.000Z';
+  const file = (path: string): { path: string; kind: 'file' } => ({
+    path,
+    kind: 'file',
   });
 
-  it('adds a short suffix when the run quarantined anything', () => {
-    const at = '2026-01-01T00:00:00.000Z';
+  it('done: the counts, zeros left out', () => {
     expect(
       runPushPayload({
         state: 'done',
         requestedAt: at,
-        processed: ['a'],
-        quarantined: ['0-Inbox/Quarantine/b.md', '0-Inbox/Quarantine/c.md'],
-      }).body,
-    ).toBe('1 file tidied up · 2 set aside');
+        items: [file('a'), file('b')],
+        created: ['n1', 'n2', 'n3'],
+        updated: [{ path: 'u1' }, { path: 'u2' }],
+      }),
+    ).toEqual({
+      title: 'Bower',
+      body: 'Done: 2 filed, 3 new notes, 2 updated',
+      url: '/',
+    });
+    expect(
+      runPushPayload({ state: 'done', requestedAt: at, created: ['n'] }).body,
+    ).toBe('Done: 1 new note');
+    expect(runPushPayload({ state: 'done', requestedAt: at }).body).toBe(
+      'Done: nothing new',
+    );
+  });
+
+  it('done: things that need the person are counted last', () => {
     expect(
       runPushPayload({
         state: 'done',
         requestedAt: at,
-        quarantined: ['0-Inbox/Quarantine/b.md'],
+        items: [file('a')],
+        setAside: [{ path: 'x', reason: 'too-large' }],
+        left: ['y'],
       }).body,
-    ).toBe('Nothing new to tidy up · 1 set aside');
-    // Never for a lint, and never when nothing was quarantined.
+    ).toBe('Done: 1 filed, 2 need you');
+  });
+
+  it('partly done: a failed run that wrote work says what is left', () => {
+    expect(
+      runPushPayload({
+        state: 'failed',
+        requestedAt: at,
+        error: 'x',
+        created: ['n1'],
+        left: ['a', 'b', 'c', 'd', 'e'],
+      }).body,
+    ).toBe('Partly done: 5 still in your inbox');
+  });
+
+  it('did not finish: a failed run that changed nothing', () => {
+    expect(
+      runPushPayload({ state: 'failed', requestedAt: at, error: 'x' }).body,
+    ).toBe('Did not finish: nothing changed');
+  });
+
+  it('instructions-only: your request, then the new notes', () => {
     expect(
       runPushPayload({
         state: 'done',
-        kind: 'lint',
         requestedAt: at,
-        quarantined: ['x'],
+        items: [{ path: 'r', kind: 'request' }],
+        created: ['n1', 'n2', 'n3', 'n4'],
       }).body,
-    ).toBe('Health check ready');
+    ).toBe('Done: your request, 4 new notes');
+  });
+
+  it('a run from an older runner counts its processed files as filed', () => {
     expect(
-      runPushPayload({ state: 'done', requestedAt: at, processed: ['a'] }).body,
-    ).toBe('1 file tidied up');
+      runPushPayload({ state: 'done', requestedAt: at, processed: ['a', 'b'] })
+        .body,
+    ).toBe('Done: 2 filed');
   });
 
   it('says the health check is ready or failed for a lint, never a count', () => {
@@ -512,13 +533,13 @@ describe('runner status report', () => {
     return decrypt(request.body, alice);
   }
 
-  it('pushes "2 files tidied up" when a run is reported done', async () => {
+  it('pushes "Done: 2 filed" when a run is reported done', async () => {
     expect(
       await reportAndDecrypt({
         state: 'done',
         processed: ['one.md', 'two.md'],
       }),
-    ).toEqual({ title: 'Bower', body: '2 files tidied up', url: '/' });
+    ).toEqual({ title: 'Bower', body: 'Done: 2 filed', url: '/' });
   });
 
   it('pushes "Health check ready" when a lint is reported done', async () => {

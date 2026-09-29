@@ -79,7 +79,7 @@ const REQUIRED_VARS = [
 ] as const satisfies readonly (keyof Env)[];
 
 const DEFAULTS = {
-  DAILY_RUN_LIMIT: '20',
+  DAILY_RUN_LIMIT: '100',
   DEFAULT_MAX_TURNS: '30',
   TEMPLATE_FOLDER_NAME: 'Bower',
 } as const satisfies Partial<Record<keyof Env, string>>;

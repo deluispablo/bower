@@ -154,7 +154,7 @@ See `docs/decisions.md` for the full record, including what else was tried in th
 | Rate limit | 30 requests in any 60 s on `GET /auth/callback` (per client IP, once the OAuth cookie verifies) and `POST /process` (per user, after the session check); in memory, no KV write (`RATE_LIMIT_PER_MINUTE`, `api/src/security.ts`) | Slows abuse of the two public entry points that cost something (a Google token exchange, a workflow dispatch) |
 | Generic rate limit | 120 requests per client IP in any 60 s, across every cookie route; in memory, best-effort per isolate (`GENERIC_RATE_LIMIT_PER_MINUTE`, `api/src/security.ts`) | Caps any one client well above normal use (the busiest minute of Home plus Tidy up is about 16 calls) |
 | Request body | 64 KB, JSON only on writes (`MAX_BODY_BYTES`, `api/src/security.ts`) | Every body the Worker accepts is a small JSON object; anything bigger or of another type is refused before parsing |
-| Runs per user per day | 20 by default (`DAILY_RUN_LIMIT`, `api/src/env.ts`), operator-configurable | The runner spends the operator's Claude subscription; a soft cap keeps one user from exhausting it |
+| Runs per user per day | 100 by default (`DAILY_RUN_LIMIT`, `api/src/env.ts`), operator-configurable | The runner spends the operator's Claude subscription; a soft cap keeps one user from exhausting it |
 
 ## Threat model
 
