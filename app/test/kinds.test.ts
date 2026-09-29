@@ -50,7 +50,7 @@ describe('rental listing', () => {
         .map((f) => f.label),
     ]);
     expect(byGroup).toEqual([
-      ['The place', ['Address', 'Type', 'Rooms']],
+      ['The place', ['Address', 'Type', 'Highlight', 'Rooms']],
       ['Money', ['Rent', 'Deposit', 'Against the area']],
       ['Terms and dates', ['Available', 'Lease', 'Listed']],
       ['For you', ['Bike to the office', 'Fit']],
@@ -252,7 +252,7 @@ describe('every kind', () => {
     expect(k.id).toMatch(/^[a-z]+(-[a-z]+)*$/);
     expect(k.plural).not.toBe('');
     expect(k.fields.length).toBeGreaterThanOrEqual(4);
-    expect(k.fields.length).toBeLessThanOrEqual(12);
+    expect(k.fields.length).toBeLessThanOrEqual(13);
     expect(k.groups.length).toBeGreaterThanOrEqual(2);
     expect(k.groups.length).toBeLessThanOrEqual(4);
     expect(Array.isArray(k.statuses)).toBe(true);

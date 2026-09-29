@@ -62,7 +62,8 @@ function note(
 const notes = [
   note('Kentish Town, 2 bed', {
     rent: 2400,
-    rooms: '2 bed, garden',
+    rooms: '2 bed',
+    highlight: 'garden',
     available: '2026-11-15',
     fit: 81,
     status: 'to view',
@@ -70,14 +71,21 @@ const notes = [
   }),
   note('Arlington Road, 2 bed', {
     rent: 2150,
-    rooms: '2 bed, 2nd floor',
+    rooms: '2 bed',
+    highlight: '2nd floor',
     available: '2026-11-01',
     fit: 72,
     status: 'to view',
   }),
   note(
     'Camden Mews, 1 bed',
-    { rent: 1850, rooms: '1 bed, ground', available: 'Now', fit: 64 },
+    {
+      rent: 1850,
+      rooms: '1 bed',
+      highlight: 'ground',
+      available: 'Now',
+      fit: 64,
+    },
     { fit: 'you' },
   ),
 ];
@@ -151,15 +159,37 @@ describe('Compare on a phone', () => {
     );
   });
 
-  it('fades the cards a filter chip excludes and says which', async () => {
+  it('opens with the first filter on: the faded card and the line under the cards', async () => {
     await mount();
-    click(chip('Under £2,300'));
+    expect(chip('Under £2,300')?.getAttribute('aria-pressed')).toBe('true');
     const faded = root.querySelectorAll('.compare-card-faded');
     expect(faded).toHaveLength(1);
     expect(faded[0]?.textContent).toContain('Kentish Town');
     expect(root.querySelector('.compare-foot')?.textContent).toBe(
       'Kentish Town is over £2,300, shown faded. Bower read these details from each rental listing.',
     );
+  });
+
+  it('turns the filter off when its chip is pressed', async () => {
+    await mount();
+    click(chip('Under £2,300'));
+    expect(root.querySelectorAll('.compare-card-faded')).toHaveLength(0);
+    expect(root.querySelector('.compare-foot')?.textContent).toBe(
+      'Bower read these details from each rental listing.',
+    );
+  });
+
+  it('offers only Best fit first and one filter chip', async () => {
+    await mount();
+    expect(
+      [...root.querySelectorAll('.compare-chip')].map((el) => el.textContent),
+    ).toEqual(['Best fit first', 'Under £2,300']);
+  });
+
+  it('shows the highlight under the rooms', async () => {
+    await mount();
+    const facts = root.querySelector('.compare-card-facts');
+    expect(facts?.textContent).toContain('2 bedgarden');
   });
 });
 
