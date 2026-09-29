@@ -280,7 +280,7 @@ describe('Note screen (#609)', () => {
 });
 
 describe('About panel (#609)', () => {
-  it('holds key facts, Details, Original, In this folder and Outline', async () => {
+  it('holds About this note, Details, Original, Outline and In this folder, and no key facts (R-NOTE-5)', async () => {
     const text = texts.get(LISTING.id) ?? '';
     const rendered = renderNote(text, index, { path: LISTING.path });
     root = document.createElement('div');
@@ -303,12 +303,13 @@ describe('About panel (#609)', () => {
       (heading) => heading.textContent,
     );
     expect(headings).toEqual([
-      'Key facts · rental listing',
+      'About this note',
       'Details',
       'Original',
       'Outline',
       'In this folder',
     ]);
+    expect(root.querySelector('[aria-label="Key facts"]')).toBeNull();
     expect(root.querySelector('.about-not-stated')?.textContent).toContain(
       'pets, bills',
     );
@@ -316,5 +317,26 @@ describe('About panel (#609)', () => {
       'PDF, 2 pages',
     );
     expect(root.querySelector('.about-detail dt')?.textContent).toBeDefined();
+  });
+});
+
+describe('About panel names (R-NOTE-5)', () => {
+  it('reads wikilinks as the names they point to', async () => {
+    const { plainNames } = await import('../src/components/about-panel.js');
+    expect(plainNames('[[1-Projects/Flat/Lease.pdf|the lease]]')).toBe(
+      'the lease',
+    );
+    expect(plainNames('See [[1-Projects/Flat/Lease.pdf]] now')).toBe(
+      'See Lease.pdf now',
+    );
+    expect(plainNames('no links')).toBe('no links');
+  });
+
+  it('resolves the original the way the folder screen does', async () => {
+    const { originalFileOf } = await import('../src/components/about-panel.js');
+    expect(originalFileOf(index, LISTING, '[[Arlington Road, 2 bed.pdf]]')).toBe(
+      index.byPath.get(SCAN.path),
+    );
+    expect(originalFileOf(index, ANSWER, '[[Missing.pdf]]')).toBeUndefined();
   });
 });
