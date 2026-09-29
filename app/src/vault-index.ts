@@ -334,6 +334,31 @@ export const FILE_KIND_LABELS: Readonly<Record<FileKind, string>> = {
   file: 'File',
 };
 
+/** The kind names as a list heading or filter chip: "Notes", "Spreadsheets (CSV)". */
+export const FILE_KIND_PLURALS: Readonly<Record<FileKind, string>> = {
+  note: 'Notes',
+  pdf: 'PDFs',
+  photo: 'Photos',
+  heic: 'iPhone photos',
+  image: 'Images',
+  doc: 'Google Docs',
+  sheet: 'Google Sheets',
+  slides: 'Google Slides',
+  excel: 'Excel spreadsheets',
+  csv: 'Spreadsheets (CSV)',
+  word: 'Word documents',
+  powerpoint: 'PowerPoint files',
+  opendocument: 'OpenDocument files',
+  text: 'Text files',
+  markdown: 'Markdown files',
+  zip: 'ZIP archives',
+  email: 'Emails',
+  web: 'Web pages',
+  audio: 'Audio files',
+  video: 'Videos',
+  file: 'Files',
+};
+
 /** The badge each kind has when its file is not needed to tell (see `kindBadge`). */
 const KIND_BADGES: Readonly<Record<FileKind, string>> = {
   note: 'MD',

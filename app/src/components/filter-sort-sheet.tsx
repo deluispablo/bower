@@ -23,6 +23,8 @@ export interface KindChoice {
   kind: string;
   /** Singular, "Note". */
   label: string;
+  /** Plural, "Notes". */
+  plural: string;
   count: number;
 }
 
@@ -32,7 +34,7 @@ export function filterSortName(
   sort: FolderSort,
   kind: KindChoice | null,
 ): string {
-  const kindText = kind === null ? 'all kinds' : `${kind.label}s`;
+  const kindText = kind === null ? 'all kinds' : kind.plural;
   return `Filter and sort: ${SORT_LABELS[sort].toLowerCase()}, ${kindText.toLowerCase()}`;
 }
 
@@ -102,7 +104,7 @@ export function FilterSortSheet(props: FilterSortSheetProps): JSX.Element {
                   { value: '', text: 'All kinds' },
                   ...props.kinds.map((option) => ({
                     value: option.kind,
-                    text: `${option.label}s ${option.count}`,
+                    text: `${option.plural} ${option.count}`,
                   })),
                 ]}
                 onPick={(value) => props.onKind(value === '' ? null : value)}

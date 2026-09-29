@@ -1144,7 +1144,7 @@ export function FolderItems({
                     aria-pressed={kind === option.kind}
                     onClick={() => onView({ kind: option.kind })}
                   >
-                    {option.label}s {option.count}
+                    {option.plural} {option.count}
                   </button>
                 ))}
               </div>
