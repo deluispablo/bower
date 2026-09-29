@@ -35,6 +35,7 @@ interface State {
   run: Run | null;
   /** The run store's shared clock (#513, #537): epoch ms. */
   now: number;
+  runs: Run[];
 }
 
 const state = vi.hoisted((): State => ({
@@ -45,6 +46,7 @@ const state = vi.hoisted((): State => ({
   phase: 'idle',
   run: null,
   now: Date.parse('2026-09-27T09:00:00.000Z'),
+  runs: [],
 }));
 
 type CreateTextFile = (
@@ -76,7 +78,12 @@ const saveEditedNote = vi.fn(() =>
   Promise.resolve({ text: '', modifiedTime: 'T2' }),
 );
 const deleteFile = vi.fn(() => Promise.resolve());
-const doItNow = vi.fn();
+const processRun = vi.fn<(scope?: string) => Promise<boolean>>(() =>
+  Promise.resolve(true),
+);
+const getRuns = vi.fn<() => Promise<{ runs: Run[] }>>(() =>
+  Promise.resolve({ runs: state.runs }),
+);
 const editRule = vi.fn(() => Promise.resolve());
 const decideProposal = vi.fn(() => Promise.resolve());
 const keepRule = vi.fn<(sentence: string) => Promise<string>>(() =>
@@ -93,9 +100,15 @@ vi.mock('../src/run-store.js', () => ({
   useRun: () => ({
     phase: state.phase,
     run: state.run,
-    doItNow,
+    process: processRun,
+    lastFinished: null,
     now: state.now,
   }),
+}));
+
+vi.mock('../src/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/api.js')>()),
+  getRuns,
 }));
 
 vi.mock('preact-iso', () => ({
@@ -127,7 +140,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 
 const { Bower } = await import('../src/routes/bower.js');
 const { buildVaultIndex } = await import('../src/vault-index.js');
-const { sinceLabel } = await import('../src/bower-tab.js');
+const { cardWhen } = await import('../src/activity.js');
 
 let root: HTMLDivElement;
 
@@ -165,7 +178,9 @@ beforeEach(() => {
   createTextFile.mockClear();
   saveEditedNote.mockClear();
   deleteFile.mockClear();
-  doItNow.mockClear();
+  processRun.mockClear();
+  getRuns.mockClear();
+  state.runs = [];
   refresh.mockClear();
   keepRule.mockClear();
 });
@@ -191,6 +206,13 @@ describe('the Bower tab', () => {
       expect(buttonNamed(label)).toBeUndefined();
     }
     expect(text).not.toMatch(/\bvault\b/i);
+  });
+
+  it('draws the bird 56 px high above the composer (ruling, R-BIRD)', async () => {
+    await mount();
+    const bird = root.querySelector('.bower-box-intro svg');
+    expect(bird?.getAttribute('width')).toBe('56');
+    expect(bird?.getAttribute('height')).toBe('56');
   });
 
   it('the first time: the tip is open, and an example fills the box without sending', async () => {
@@ -258,7 +280,7 @@ describe('the Bower tab', () => {
     const requests = root.querySelector('#bower-panel-requests');
     expect(requests?.hasAttribute('hidden')).toBe(false);
     expect(requests?.textContent).toContain('Which flat should I visit first?');
-    expect(requests?.textContent).toContain('Waiting');
+    expect(requests?.textContent).toContain('In your inbox');
   });
 
   it('keeps the text and says so when Drive refuses the note', async () => {
@@ -329,8 +351,9 @@ describe('a rule kept at once (#343)', () => {
     expect(keepRule).not.toHaveBeenCalled();
     expect(createTextFile).toHaveBeenCalledTimes(2);
     const text = root.querySelector('#bower-panel-requests')?.textContent;
-    expect(text).toContain('Waiting · question');
-    expect(text).toContain('Waiting · job');
+    expect(text).toContain('Which flat should I visit first?');
+    expect(text).toContain('Make a packing list for my next trip');
+    expect(text?.match(/In your inbox/g)).toHaveLength(2);
   });
 
   it('keeps the sentence in the box and says so when the rule cannot be saved', async () => {
@@ -449,12 +472,6 @@ describe('Requests (#344)', () => {
     ) as HTMLLIElement | undefined;
   }
 
-  function button(within: Element | undefined, name: string) {
-    return [...(within?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent?.trim() === name,
-    );
-  }
-
   /** Mounts, then lets the notes' words load. */
   async function mountRead(): Promise<void> {
     await mount();
@@ -471,43 +488,155 @@ describe('Requests (#344)', () => {
     };
   });
 
-  it('shows each waiting note in its words, with Edit, Remove and Do it now', async () => {
+  /** Opens a row's More menu; its items are portalled to `document.body`. */
+  async function openMenu(text: string): Promise<void> {
+    await act(() => {
+      row(text)
+        ?.querySelector<HTMLButtonElement>(
+          'button[aria-label="More for this request"]',
+        )
+        ?.click();
+    });
+  }
+
+  function menuItem(name: string): HTMLButtonElement | undefined {
+    return [
+      ...document.body.querySelectorAll<HTMLButtonElement>(
+        '[role="menu"] [role="menuitem"]',
+      ),
+    ].find((item) => item.querySelector('span')?.textContent === name);
+  }
+
+  it('shows each waiting note in its words, with a More menu: Edit, Just this, now, Remove', async () => {
     await mountRead();
     const waiting = row('Which flat should I visit first?');
-    expect(waiting?.textContent).toContain('Waiting · question');
-    expect(waiting?.textContent).toContain('goes with the next tidy-up');
-    for (const name of ['Edit', 'Remove', 'Do it now']) {
-      expect(button(waiting, name)).toBeDefined();
+    expect(waiting?.textContent).toContain('In your inbox');
+    expect(waiting?.textContent).toContain('Bower does it at the next tidy-up');
+    // No row has a button that starts a run on its own (R-REQ-2).
+    expect(waiting?.querySelectorAll('button')).toHaveLength(1);
+    const more = waiting?.querySelector('button');
+    expect(more?.getAttribute('aria-label')).toBe('More for this request');
+    expect(more?.getAttribute('aria-haspopup')).toBe('menu');
+
+    await openMenu('Which flat should I visit first?');
+    const menu = document.body.querySelector('[role="menu"]');
+    expect(menu?.getAttribute('aria-label')).toBe('Request actions');
+    for (const name of ['Edit', 'Just this, now', 'Remove from the inbox']) {
+      expect(menuItem(name)).toBeDefined();
     }
-    // Add's context note: named for what it is, no Edit.
-    const about = row('About the files you added');
-    expect(about?.textContent).toContain('Waiting');
-    expect(button(about, 'Edit')).toBeUndefined();
-    expect(button(about, 'Remove')).toBeDefined();
+    expect(menuItem('Just this, now')?.textContent).toContain(
+      'uses one run of your Claude plan',
+    );
+    expect(menu?.textContent).toContain(
+      'runs only this request and leaves everything else in the inbox for the tidy-up. It is off while a tidy-up is running.',
+    );
   });
 
-  it("reads the run store's shared clock, so its label matches sinceLabel for the same instant (#513)", async () => {
-    // The row's `since` comes from the file name's own date and time
-    // ("2026-09-27 0815"), read as local time the same way `bower-tab.ts`'s
-    // `sinceFromName` does — not from `modifiedTime`.
-    const since = new Date(2026, 8, 27, 8, 15).toISOString();
+  it("Add's context note: named for what it is, no Edit in its menu", async () => {
     await mountRead();
-    const waiting = row('Which flat should I visit first?');
-    expect(waiting?.textContent).toContain(sinceLabel(since, state.now));
+    const about = row('About the files you added');
+    expect(about?.textContent).toContain('In your inbox');
+    await openMenu('About the files you added');
+    expect(menuItem('Edit')).toBeUndefined();
+    expect(menuItem('Remove from the inbox')).toBeDefined();
   });
 
-  it('Do it now opens the confirmation with the count of requests', async () => {
+  it("a done request reads the run store's shared clock, with its run's counts and a link to Just filed (#513, R-REQ-1, R-REQ-4)", async () => {
+    state.files = [];
+    state.notes = {};
+    const doneName = 'Bower - 2026-09-27 0815 Make a packing list.md';
+    const path = `0-Inbox/${doneName}`;
+    state.runs = [
+      {
+        state: 'done',
+        runId: 'RUN_ID',
+        requestedAt: '2026-09-27T08:20:00.000Z',
+        finishedAt: '2026-09-27T08:26:00.000Z',
+        items: [{ path, kind: 'request' }],
+        created: ['1-Projects/Trip/Packing list.md'],
+        updated: [{ path: '3-Resources/Lists.md' }],
+      },
+    ];
     await mountRead();
     await act(() => {
-      button(row('Which flat should I visit first?'), 'Do it now')?.click();
+      buttonNamed('Requests')?.click();
     });
-    expect(doItNow).toHaveBeenCalledWith(2);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const done = row('Make a packing list');
+    expect(done?.textContent).toContain('Done');
+    expect(done?.textContent).toContain(
+      `${cardWhen('2026-09-27T08:26:00.000Z', state.now)
+        .charAt(0)
+        .toLowerCase()}${cardWhen('2026-09-27T08:26:00.000Z', state.now).slice(1)} · 1 new · 1 updated`,
+    );
+    const link = done?.querySelector('a');
+    expect(link?.textContent).toBe('See what came of it');
+    expect(link?.getAttribute('href')).toBe('/just-filed?run=RUN_ID');
+    // Done: nothing to press, no menu.
+    expect(done?.querySelectorAll('button')).toHaveLength(0);
+  });
+
+  it('a request a run could not finish reads Did not finish and carries the menu', async () => {
+    state.runs = [
+      {
+        state: 'failed',
+        requestedAt: '2026-09-27T08:20:00.000Z',
+        finishedAt: '2026-09-27T08:26:00.000Z',
+        items: [{ path: question.path, kind: 'question' }],
+      },
+    ];
+    await mountRead();
+    await act(() => {
+      buttonNamed('Requests')?.click();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const failed = row('Which flat should I visit first?');
+    expect(failed?.textContent).toContain('Did not finish');
+    expect(failed?.textContent).toContain(
+      'still in your inbox for the next tidy-up',
+    );
+    await openMenu('Which flat should I visit first?');
+    expect(menuItem('Just this, now')).toBeDefined();
+  });
+
+  it('Just this, now starts an instructions-only run through the shared helper', async () => {
+    await mountRead();
+    await openMenu('Which flat should I visit first?');
+    await act(async () => {
+      menuItem('Just this, now')?.click();
+      await Promise.resolve();
+    });
+    expect(processRun).toHaveBeenCalledWith('instructions');
+  });
+
+  it('Just this, now is off while a tidy-up is running, and says why', async () => {
+    // The run was asked for before the note was sent: the note waits for
+    // the next tidy-up, and its menu is off.
+    state.phase = 'running';
+    state.run = {
+      state: 'running',
+      requestedAt: '2026-09-26T09:00:00.000Z',
+    };
+    await mountRead();
+    await openMenu('Which flat should I visit first?');
+    const item = menuItem('Just this, now');
+    expect(item?.disabled).toBe(true);
+    expect(item?.textContent).toContain('A tidy-up is running');
+    await act(() => {
+      item?.click();
+    });
+    expect(processRun).not.toHaveBeenCalled();
   });
 
   it('Edit fills the box, and Send rewrites the note with its frontmatter', async () => {
     await mountRead();
+    await openMenu('Which flat should I visit first?');
     await act(async () => {
-      button(row('Which flat should I visit first?'), 'Edit')?.click();
+      menuItem('Edit')?.click();
       await Promise.resolve();
     });
     expect(box().value).toBe('Which flat should I visit first?');
@@ -532,8 +661,9 @@ describe('Requests (#344)', () => {
 
   it('Remove sends the note to the Trash and takes it off the list', async () => {
     await mountRead();
+    await openMenu('Which flat should I visit first?');
     await act(async () => {
-      button(row('Which flat should I visit first?'), 'Remove')?.click();
+      menuItem('Remove from the inbox')?.click();
       await Promise.resolve();
     });
     expect(deleteFile).toHaveBeenCalledWith('Q_ID');
@@ -541,7 +671,7 @@ describe('Requests (#344)', () => {
     expect(row('Which flat should I visit first?')).toBeUndefined();
   });
 
-  it('while a run is in flight: Tidying up, and nothing to press', async () => {
+  it('while a run is in flight: Being done now, and nothing to press', async () => {
     state.phase = 'running';
     state.run = {
       state: 'running',
@@ -550,8 +680,8 @@ describe('Requests (#344)', () => {
     };
     await mountRead();
     const tidying = row('Which flat should I visit first?');
-    expect(tidying?.textContent).toContain('Tidying up · question');
-    expect(tidying?.textContent).toMatch(/started /);
+    expect(tidying?.textContent).toContain('Being done now');
+    expect(tidying?.textContent).toMatch(/started \d{2}:\d{2}/);
     expect(tidying?.querySelectorAll('button')).toHaveLength(0);
   });
 });

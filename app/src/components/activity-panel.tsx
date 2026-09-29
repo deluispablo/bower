@@ -31,7 +31,7 @@ import { useFileText } from './rules-panel.js';
 
 const LOG_PATH = 'log.md';
 
-type RunsLoad =
+export type RunsLoad =
   | { status: 'loading' }
   | { status: 'ready'; runs: Run[] }
   | { status: 'error' };
@@ -91,9 +91,8 @@ function Card({ card }: { card: ActivityCard }): JSX.Element {
         </b>
         <span class={`bower-state activity-state--${tone}`}>{card.status}</span>
       </p>
-      {card.rows.length === 0 ? (
-        <p class="activity-empty">Nothing new this time.</p>
-      ) : (
+      <p class="activity-counts">{card.sentence}</p>
+      {card.rows.length > 0 && (
         <ul class="activity-rows">
           {card.rows.map((row) => {
             const Icon = TONE_ICONS[row.tone];
@@ -114,15 +113,19 @@ function Card({ card }: { card: ActivityCard }): JSX.Element {
   );
 }
 
-export function ActivityPanel(): JSX.Element {
-  const { index, files } = useVault();
-  const { lastFinished, now } = useRun();
-  const logLoad = useFileText(index?.byPath.get(LOG_PATH));
+/**
+ * The finished runs (`GET /runs`), read when `enabled` and again whenever a
+ * run ends in this session (`finishedKey`, so the new card shows). Shared by
+ * Requests, which lists what each run did with its requests, and Activity's
+ * cards: the Bower tab makes the one call.
+ */
+export function useRuns(
+  enabled: boolean,
+  finishedKey: string | null,
+): RunsLoad {
   const [load, setLoad] = useState<RunsLoad>({ status: 'loading' });
-
-  // Read again whenever a run ends in this session, so the new card shows.
-  const finishedKey = lastFinished?.finishedAt ?? null;
   useEffect(() => {
+    if (!enabled) return undefined;
     let cancelled = false;
     getRuns()
       .then(({ runs }) => {
@@ -136,7 +139,14 @@ export function ActivityPanel(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [finishedKey]);
+  }, [enabled, finishedKey]);
+  return load;
+}
+
+export function ActivityPanel({ load }: { load: RunsLoad }): JSX.Element {
+  const { index, files } = useVault();
+  const { now } = useRun();
+  const logLoad = useFileText(index?.byPath.get(LOG_PATH));
 
   if (load.status === 'loading') {
     return <p class="bower-panel-note">Reading what Bower did…</p>;

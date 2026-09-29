@@ -19,7 +19,7 @@ import {
   test,
   visible,
 } from './demo.js';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 test.describe('open Home', () => {
   test.use({ introSeen: false });
@@ -1144,9 +1144,7 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
     .getByRole('listitem')
     .filter({ hasText: 'How much did I spend on the kitchen this year?' });
   await expect(row).toBeVisible();
-  await expect(
-    row.getByText('Waiting · question', { exact: true }),
-  ).toBeVisible();
+  await expect(row.getByText('In your inbox', { exact: true })).toBeVisible();
   await row.scrollIntoViewIfNeeded();
   await shot(page, testInfo, 'tell');
 
@@ -1291,7 +1289,16 @@ test('a "from now on" sentence is kept at once as a rule, no run (#343)', async 
   await expect(bowerPart(page, 'Rules')).toBeVisible();
 });
 
-test('Requests: every state, Edit, Remove, and Do it now for the requests only (#344)', async ({
+/** Opens a request's More menu. A desktop menu hangs under its button, so the
+ * row goes to the middle of the window first. */
+async function openMore(row: Locator): Promise<void> {
+  await row.evaluate((el) => {
+    el.scrollIntoView({ block: 'center' });
+  });
+  await row.getByRole('button', { name: 'More for this request' }).click();
+}
+
+test('Requests: every state, Edit, Remove, and Just this, now for the requests only (#344)', async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -1307,9 +1314,9 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
     'What do I still need to sort out for the Lisbon trip?',
   );
   await expect(
-    lisbon.getByText('Waiting · question', { exact: true }),
+    lisbon.getByText('In your inbox', { exact: true }),
   ).toBeVisible();
-  await expect(lisbon).toContainText('goes with the next tidy-up');
+  await expect(lisbon).toContainText('Bower does it at the next tidy-up');
   // The full sentence sent, not the file name's own short title (#465).
   const answered = rowWith('Which subscriptions renew this autumn?');
   await expect(answered.getByText('Answered', { exact: true })).toBeVisible();
@@ -1325,7 +1332,19 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
   await shot(page, testInfo, 'bower-requests');
 
   // Edit: the words in the box, Send rewrites the same note.
-  await lisbon.getByRole('button', { name: 'Edit' }).click();
+  const chooseFrom = async (
+    row: ReturnType<typeof rowWith>,
+    item: string,
+  ): Promise<void> => {
+    await openMore(row);
+    await page.getByRole('menuitem', { name: item }).click();
+  };
+  await openMore(lisbon);
+  await expect(
+    page.getByRole('menu', { name: 'Request actions' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await chooseFrom(lisbon, 'Edit');
   const box = page.getByRole('textbox', {
     name: 'Tell Bower what to do, or ask it something',
   });
@@ -1337,7 +1356,7 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
   await expect(box).toHaveValue('');
   const edited = rowWith('What do I still need to book for the Lisbon trip?');
   await expect(
-    edited.getByText('Waiting · question', { exact: true }),
+    edited.getByText('In your inbox', { exact: true }),
   ).toBeVisible();
   await expect(lisbon).toHaveCount(0);
 
@@ -1345,25 +1364,24 @@ test('Requests: every state, Edit, Remove, and Do it now for the requests only (
   await box.fill('Make a packing list for my next trip');
   await page.getByRole('button', { name: 'Send' }).click();
   const job = rowWith('Make a packing list for my next trip');
-  await expect(job.getByText('Waiting · job', { exact: true })).toBeVisible();
-  await job.getByRole('button', { name: 'Remove' }).click();
+  await expect(job.getByText('In your inbox', { exact: true })).toBeVisible();
+  await chooseFrom(job, 'Remove from the inbox');
   await expect(job).toHaveCount(0);
 
-  // Do it now: its own confirmation, about the request rather than a pile
-  // of files (#501), counts the requests, and the run files only them;
-  // the rest of the inbox stays for the next tidy-up.
-  await edited.getByRole('button', { name: 'Do it now' }).click();
-  // A request's own confirmation (#501) keeps its copy in the demo too,
-  // unlike the whole-inbox tidy-up's demo sentence (#489).
-  const confirm = page.getByRole('dialog', { name: 'Run this now?' });
-  await expect(confirm).toContainText('1 request is waiting.');
+  // Just this, now: no confirmation, the shared helper starts an
+  // instructions-only run, and the rest of the inbox stays for the next
+  // tidy-up.
+  await openMore(edited);
+  await expect(
+    page.getByRole('menuitem', { name: /Just this, now/ }),
+  ).toContainText('uses one run of your Claude plan');
   await shot(page, testInfo, 'bower-requests-do-it-now');
-  await confirm.getByRole('button', { name: 'Yes, do it now' }).click();
+  await page.getByRole('menuitem', { name: /Just this, now/ }).click();
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await sheet.getByRole('button', { name: 'Close' }).click();
   await expect(sheet).toBeHidden();
   await expect(
-    edited.getByText('Tidying up · question', { exact: true }),
+    edited.getByText('Being done now', { exact: true }),
   ).toBeVisible();
   // One file: the request, not the two other things in the inbox.
   const toast = page.getByRole('status').filter({
@@ -1398,11 +1416,8 @@ test('a request sent while a run is in flight says it goes with the next tidy-up
   await box.fill('Draft an itinerary for the weekend');
   await page.getByRole('button', { name: 'Send' }).click();
   const first = rowWith('Draft an itinerary for the weekend');
-  await first.getByRole('button', { name: 'Do it now' }).click();
-  await page
-    .getByRole('dialog', { name: 'Run this now?' })
-    .getByRole('button', { name: 'Yes, do it now' })
-    .click();
+  await openMore(first);
+  await page.getByRole('menuitem', { name: /Just this, now/ }).click();
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
   await sheet.getByRole('button', { name: 'Close' }).click();
   await expect(sheet).toBeHidden();
@@ -1417,7 +1432,7 @@ test('a request sent while a run is in flight says it goes with the next tidy-up
     'Will go with the next tidy-up',
   );
   const second = rowWith('Summarise the lease in Flat hunt');
-  await expect(second).toContainText('goes with the next tidy-up');
+  await expect(second).toContainText('Bower does it at the next tidy-up');
 });
 
 test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#332)', async ({

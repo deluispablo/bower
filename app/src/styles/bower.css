@@ -322,6 +322,44 @@
   margin-top: var(--space-2);
 }
 
+/* The More button on a waiting or did-not-finish request (R-REQ-2), and its
+   menu's "Just this, now" line, Remove and foot (#756). */
+.chip.bower-request-more {
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.bower-menu-now {
+  flex-wrap: wrap;
+}
+
+.bower-menu-now small {
+  flex-basis: 100%;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.bower-menu-now:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bower-menu-danger {
+  color: var(--color-danger);
+}
+
+.bower-menu-foot {
+  margin: var(--space-2) var(--space-3) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.activity-counts {
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
 .chip.bower-request-now {
   border-color: var(--color-brand);
   color: var(--color-link);

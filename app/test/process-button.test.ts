@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { labelFor, startsRun } from '../src/components/process-button.js';
+import {
+  isRunning,
+  labelFor,
+  startsRun,
+} from '../src/components/process-button.js';
 
 describe('labelFor', () => {
   it('idle and done: "Tidy up", with no count (the card carries it)', () => {
@@ -8,16 +12,27 @@ describe('labelFor', () => {
     expect(labelFor('done')).toBe('Tidy up');
   });
 
-  it('starting, queued and running: "Tidying up…"', () => {
-    expect(labelFor('starting')).toBe('Tidying up…');
-    expect(labelFor('queued')).toBe('Tidying up…');
-    expect(labelFor('running')).toBe('Tidying up…');
+  it('starting, queued and running: "Tidy-up running…" (R-REQ-5)', () => {
+    expect(labelFor('starting')).toBe('Tidy-up running…');
+    expect(labelFor('queued')).toBe('Tidy-up running…');
+    expect(labelFor('running')).toBe('Tidy-up running…');
   });
 
   it('failed and stale: "Try again"; quota: "Limit reached"', () => {
     expect(labelFor('failed')).toBe('Try again');
     expect(labelFor('stale')).toBe('Try again');
     expect(labelFor('quota')).toBe('Limit reached');
+  });
+});
+
+describe('isRunning', () => {
+  it('is true from "Yes, tidy up" until the run ends: the button is disabled (R-REQ-5)', () => {
+    for (const phase of ['starting', 'queued', 'running'] as const) {
+      expect(isRunning(phase)).toBe(true);
+    }
+    for (const phase of ['idle', 'done', 'failed', 'stale', 'quota'] as const) {
+      expect(isRunning(phase)).toBe(false);
+    }
   });
 });
 

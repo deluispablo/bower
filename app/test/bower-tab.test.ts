@@ -5,13 +5,22 @@ import {
   EXAMPLES,
   dayLabel,
   examplesFor,
+  lowerFirst,
+  requestMeta,
   requestRows,
+  requestTargetPath,
+  requestsByTargetPath,
   ruleSentences,
   sentenceKind,
   sinceLabel,
   stateLabel,
 } from '../src/bower-tab.js';
-import type { RequestsInput, SentRequest } from '../src/bower-tab.js';
+import type {
+  RequestRow,
+  RequestsInput,
+  SentRequest,
+} from '../src/bower-tab.js';
+import type { Run } from '../src/api.js';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import { allRules, parseRules } from '../src/rules.js';
@@ -299,16 +308,177 @@ describe('requestRows', () => {
 });
 
 describe('stateLabel', () => {
-  it('says the state, and the kind while it waits or runs', () => {
-    expect(stateLabel({ state: 'waiting', kind: 'job' })).toBe('Waiting · job');
-    expect(stateLabel({ state: 'tidying', kind: 'question' })).toBe(
-      'Tidying up · question',
+  it('says the state in the board words (spec §6.7)', () => {
+    expect(stateLabel({ state: 'waiting' })).toBe('In your inbox');
+    expect(stateLabel({ state: 'tidying' })).toBe('Being done now');
+    expect(stateLabel({ state: 'done' })).toBe('Done');
+    expect(stateLabel({ state: 'failed' })).toBe('Did not finish');
+    expect(stateLabel({ state: 'answered' })).toBe('Answered');
+    expect(stateLabel({ state: 'kept' })).toBe('Rule kept');
+  });
+});
+
+describe('requests and their runs (#756, R-REQ-1)', () => {
+  const name = 'Bower - 2026-09-28 1300 Make a packing list.md';
+  const path = `0-Inbox/${name}`;
+  const sentAt = new Date(2026, 8, 28, 13, 0).toISOString();
+  const doneRun: Run = {
+    state: 'done',
+    requestedAt: '2026-09-29T13:20:00.000Z',
+    finishedAt: '2026-09-29T13:26:00.000Z',
+    runId: 'run-2',
+    items: [
+      { path, kind: 'request' },
+      { path: '0-Inbox/Bower - 2026-09-29 1301 Context.md', kind: 'context' },
+    ],
+  };
+  const failedRun: Run = {
+    state: 'failed',
+    requestedAt: '2026-09-29T14:00:00.000Z',
+    finishedAt: '2026-09-29T14:05:00.000Z',
+    runId: 'run-3',
+    items: [{ path, kind: 'request' }],
+  };
+  const input = (
+    files: DriveFile[],
+    runs: Run[],
+    extra: Partial<RequestsInput> = {},
+  ): RequestsInput => ({
+    files,
+    fetchedAt: '2026-09-29T15:00:00.000Z',
+    texts: new Map(),
+    justSent: [],
+    runSince: null,
+    rules: [],
+    justKept: [],
+    runs,
+    ...extra,
+  });
+
+  it('a request a run did stays listed as Done with its run key, never vanishing', () => {
+    const rows = requestRows(
+      input([file('0-Inbox/Processed/' + name)], [doneRun]),
     );
-    expect(stateLabel({ state: 'waiting', kind: 'context' })).toBe('Waiting');
-    expect(stateLabel({ state: 'answered', kind: 'question' })).toBe(
-      'Answered',
+    expect(rows).toEqual([
+      {
+        key: `done-run-2-${name}`,
+        state: 'done',
+        text: 'Make a packing list',
+        kind: 'job',
+        since: '2026-09-29T13:26:00.000Z',
+        fileId: null,
+        runKey: 'run-2',
+      },
+    ]);
+  });
+
+  it('a done row uses the words this screen sent, once, without a waiting duplicate', () => {
+    const rows = requestRows(
+      input([], [doneRun], {
+        justSent: [{ name, text: 'Make a packing list for Lisbon', sentAt }],
+      }),
     );
-    expect(stateLabel({ state: 'kept', kind: 'rule' })).toBe('Rule kept');
+    expect(rows.map((row) => [row.state, row.text])).toEqual([
+      ['done', 'Make a packing list for Lisbon'],
+    ]);
+  });
+
+  it('a failed run leaves its note in the inbox as Did not finish, with the run key and its menu file', () => {
+    const rows = requestRows(input([file(path)], [failedRun]));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      state: 'failed',
+      fileId: path,
+      runKey: 'run-3',
+      since: '2026-09-29T14:05:00.000Z',
+    });
+  });
+
+  it('a note sent after the failed run is waiting, not failed', () => {
+    const later = 'Bower - 2026-09-30 1500 Another job.md';
+    const rows = requestRows(input([file(`0-Inbox/${later}`)], [failedRun]));
+    expect(rows.map((row) => row.state)).toEqual(['waiting']);
+  });
+
+  it('a note still in the inbox is not also listed as done', () => {
+    const rows = requestRows(input([file(path)], [doneRun]));
+    expect(rows.map((row) => row.state)).toEqual(['waiting']);
+  });
+
+  it('the run in flight wins over an earlier failure', () => {
+    const rows = requestRows(
+      input([file(path)], [failedRun], {
+        runSince: '2026-09-29T14:30:00.000Z',
+      }),
+    );
+    expect(rows.map((row) => row.state)).toEqual(['tidying']);
+  });
+});
+
+describe('requestMeta (#756)', () => {
+  it('says each state in the board words', () => {
+    expect(requestMeta({ state: 'waiting' }, { when: '' })).toBe(
+      'Bower does it at the next tidy-up',
+    );
+    expect(
+      requestMeta({ state: 'tidying' }, { when: '', startedAt: '13:52' }),
+    ).toBe('started 13:52');
+    expect(
+      requestMeta(
+        { state: 'done' },
+        { when: 'today, 13:26', counts: '4 new · 4 updated' },
+      ),
+    ).toBe('today, 13:26 · 4 new · 4 updated');
+    expect(requestMeta({ state: 'done' }, { when: 'today, 13:26' })).toBe(
+      'today, 13:26',
+    );
+    expect(requestMeta({ state: 'failed' }, { when: 'today, 12:59' })).toBe(
+      'today, 12:59 · still in your inbox for the next tidy-up',
+    );
+    expect(requestMeta({ state: 'answered' }, { when: 'today, 12:40' })).toBe(
+      'answered today, 12:40',
+    );
+    expect(requestMeta({ state: 'kept' }, { when: '' })).toBe('In your rules');
+  });
+
+  it('lowerFirst reads "Today, 13:26" as "today, 13:26"', () => {
+    expect(lowerFirst('Today, 13:26')).toBe('today, 13:26');
+    expect(lowerFirst('')).toBe('');
+  });
+});
+
+describe('requestsByTargetPath (#756, for #765 and #784)', () => {
+  const row = (state: RequestRow['state'], text: string): RequestRow => ({
+    key: text,
+    state,
+    text,
+    kind: 'job',
+    since: '',
+    fileId: null,
+  });
+
+  it('reads the path a Move request names', () => {
+    expect(
+      requestTargetPath(
+        'Move “Lease” (1-Projects/Flat/lease.pdf) to 4-Archives.',
+      ),
+    ).toBe('1-Projects/Flat/lease.pdf');
+    expect(requestTargetPath('Make a packing list')).toBeNull();
+  });
+
+  it('groups waiting, running, failed and done requests by target path', () => {
+    const move = 'Move “Lease” (1-Projects/Flat/lease.pdf) to 4-Archives.';
+    const map = requestsByTargetPath([
+      row('waiting', move),
+      row('failed', move),
+      row('kept', move),
+      row('waiting', 'Make a packing list'),
+    ]);
+    expect([...map.keys()]).toEqual(['1-Projects/Flat/lease.pdf']);
+    expect(map.get('1-Projects/Flat/lease.pdf')?.map((r) => r.state)).toEqual([
+      'waiting',
+      'failed',
+    ]);
   });
 });
 

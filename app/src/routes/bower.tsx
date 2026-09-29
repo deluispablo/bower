@@ -19,25 +19,32 @@
  * the three segments are three columns instead (#357, Desktop-Bower
  * board): the same header height and top line, the box spanning above.
  *
- * Requests (#344, board Phone-Bower-Requests) lists every request with its
- * state, all read from the Bower folder (`requestRows`): Waiting (with
- * Edit, Remove and Do it now), Tidying up, Answered, Rule kept. Edit fills
- * the box with the note's words and Send then rewrites that note; Remove
- * moves it to Drive's Trash; Do it now opens the "Is that everything?"
- * confirmation for an instructions-only run.
+ * Requests (#344, #756, spec §6.7) lists every request with its state, read
+ * from the Bower folder and the finished runs (`requestRows`): In your
+ * inbox, Being done now, Done and Did not finish (with the run's counts:
+ * a request never vanishes), Answered, Rule kept. A waiting or
+ * did-not-finish row has a More menu: Edit fills the box with the note's
+ * words and Send then rewrites that note; "Just this, now" starts an
+ * instructions-only run through the shared helper (`run-now.ts`); Remove
+ * from the inbox moves the note to Drive's Trash. No row starts a run on
+ * its own.
  */
 
+import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
+import { cardWhen } from '../activity.js';
+import type { Run } from '../api.js';
 import {
   answerNotes,
-  dayLabel,
+  clockLabel,
   examplesFor,
+  lowerFirst,
+  requestMeta,
   requestRows,
   sentenceKind,
-  sinceLabel,
   stateLabel,
   waitingNotes,
 } from '../bower-tab.js';
@@ -47,18 +54,21 @@ import type {
   RequestState,
   SentRequest,
 } from '../bower-tab.js';
-import { ActivityPanel } from '../components/activity-panel.js';
+import { ActivityPanel, useRuns } from '../components/activity-panel.js';
 import { Bird } from '../components/bird.js';
 import {
   IconChat,
   IconCheck,
   IconClock,
+  IconClose,
   IconHelp,
   IconInbox,
+  IconMore,
   IconSend,
   IconShield,
   IconSparkle,
 } from '../components/icons.js';
+import { Overlay } from '../components/overlay.js';
 import {
   RulesPanel,
   useFileText,
@@ -84,6 +94,10 @@ import {
   ruleBullet,
 } from '../rules.js';
 import type { Rule, RuleRef } from '../rules.js';
+import { JUST_FILED_PATH, runKey } from '../just-filed.js';
+import { outcomeCounts, outcomeFromRun } from '../run-outcome.js';
+import { RUN_NOW_LABEL, RUN_NOW_LINE, useRunNow } from '../run-now.js';
+import type { RunNow } from '../run-now.js';
 import { IDEAS_PATH } from '../shell-routes.js';
 import {
   instructionBody,
@@ -95,6 +109,7 @@ import { OfflineError, useVault } from '../vault-store.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { requestRowText } from '../move-request.js';
 import '../styles/bower.css';
+import '../styles/pin-sheet.css';
 
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
@@ -179,11 +194,21 @@ function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
 const RULES_PATH = 'Rules.md';
 
 /** The icon before a request, as on the board: a clock while it waits,
- * the inbox while the run has it, a tick once something came of it. */
+ * the inbox while the run has it, a cross when it did not finish, a tick
+ * once something came of it. */
 function StateIcon({ state }: { state: RequestState }): JSX.Element {
   if (state === 'waiting') return <IconClock />;
   if (state === 'tidying') return <IconInbox />;
+  if (state === 'failed') return <IconClose />;
   return <IconCheck />;
+}
+
+/** The CSS state a row is drawn in: a finished run reads like the green
+ * "something came of it", a run that did not finish like the amber wait. */
+function toneOf(state: RequestState): string {
+  if (state === 'done') return 'answered';
+  if (state === 'failed') return 'waiting';
+  return state;
 }
 
 /**
@@ -234,10 +259,12 @@ function useNoteTexts(notes: DriveFile[]): ReadonlyMap<string, string> {
 interface RequestsListProps {
   rows: RequestRow[];
   now: number;
-  /** When the run in flight started, for "started 2 min ago". */
+  /** When the run in flight started (ISO-8601), for "started 13:52". */
   runStarted: string | null;
-  /** Do it now is offered (no run in flight, online). */
-  canRunNow: boolean;
+  /** The finished runs, for a done row's counts. */
+  runs: readonly Run[];
+  /** "Just this, now": its disabled states and how to start it. */
+  runNow: RunNow;
   /** A write is under way: the row buttons wait. */
   busy: boolean;
   onRules: () => void;
@@ -250,41 +277,62 @@ function RequestMeta({
   row,
   now,
   runStarted,
+  runs,
   onRules,
-}: Pick<RequestsListProps, 'now' | 'runStarted' | 'onRules'> & {
+}: Pick<RequestsListProps, 'now' | 'runStarted' | 'runs' | 'onRules'> & {
   row: RequestRow;
 }): JSX.Element {
+  const when = lowerFirst(cardWhen(row.since, now));
+  const run = runs.find((item) => runKey(item) === row.runKey);
+  const counts =
+    row.state === 'done' && run !== undefined
+      ? outcomeCounts(outcomeFromRun(run), { short: true })
+      : '';
+  const meta = requestMeta(row, {
+    when,
+    counts,
+    startedAt: clockLabel(runStarted ?? row.since),
+  });
   switch (row.state) {
-    case 'waiting':
-      return (
-        <p class="bower-request-meta">
-          {sinceLabel(row.since, now)} · goes with the next tidy-up
-        </p>
-      );
-    case 'tidying':
-      return (
-        <p class="bower-request-meta">
-          started {sinceLabel(runStarted ?? row.since, now)}
-        </p>
-      );
     case 'answered':
       return (
         <p class="bower-request-meta">
-          {sinceLabel(row.since, now)} ·{' '}
+          {meta} ·{' '}
           <a class="bower-request-link" href={`/note/${row.fileId ?? ''}`}>
             Read the answer
           </a>
         </p>
       );
+    case 'done':
+      return (
+        <p class="bower-request-meta">
+          {meta}
+          {row.runKey !== undefined && (
+            <>
+              {' '}
+              ·{' '}
+              <a
+                class="bower-request-link"
+                href={`${JUST_FILED_PATH}?run=${encodeURIComponent(row.runKey)}`}
+              >
+                See what came of it
+              </a>
+            </>
+          )}
+        </p>
+      );
     case 'kept':
       return (
         <p class="bower-request-meta">
-          {dayLabel(row.since)} ·{' '}
           <button type="button" class="bower-request-link" onClick={onRules}>
-            In your rules
+            {meta}
           </button>
         </p>
       );
+    case 'waiting':
+    case 'tidying':
+    case 'failed':
+      return <p class="bower-request-meta">{meta}</p>;
     default: {
       const exhaustive: never = row.state;
       return exhaustive;
@@ -292,75 +340,156 @@ function RequestMeta({
   }
 }
 
+interface RequestMenuProps {
+  row: RequestRow;
+  runNow: RunNow;
+  onClose: () => void;
+  onEdit: (row: RequestRow) => void;
+  onRemove: (row: RequestRow) => void;
+  onRunNow: () => void;
+}
+
+/** The More menu on a waiting or did-not-finish request (R-REQ-2): Edit,
+ * "Just this, now" with what it costs, Remove from the inbox. Nothing on a
+ * row starts a run except this one item. */
+function RequestMenu({
+  row,
+  runNow,
+  onClose,
+  onEdit,
+  onRemove,
+  onRunNow,
+}: RequestMenuProps): JSX.Element {
+  function choose(action: () => void): () => void {
+    return () => {
+      onClose();
+      action();
+    };
+  }
+  const blocked = runNow.block !== null;
+  return createPortal(
+    <Overlay kind="menu" label="Request actions" onClose={onClose}>
+      <div class="pin-sheet-rows">
+        {row.kind !== 'context' && (
+          <button
+            type="button"
+            role="menuitem"
+            class="pin-sheet-row"
+            onClick={choose(() => {
+              onEdit(row);
+            })}
+          >
+            <span>Edit</span>
+          </button>
+        )}
+        <button
+          type="button"
+          role="menuitem"
+          class="pin-sheet-row bower-menu-now"
+          disabled={blocked}
+          aria-disabled={blocked}
+          onClick={choose(onRunNow)}
+        >
+          <span>{RUN_NOW_LABEL}</span>
+          <small>
+            {runNow.reason ?? lowerFirst(RUN_NOW_LINE).replace(/\.$/, '')}
+          </small>
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="pin-sheet-row bower-menu-danger"
+          onClick={choose(() => {
+            onRemove(row);
+          })}
+        >
+          <span>Remove from the inbox</span>
+        </button>
+      </div>
+      <p class="bower-menu-foot">
+        &ldquo;{RUN_NOW_LABEL}&rdquo; runs only this request and leaves
+        everything else in the inbox for the tidy-up. It is off while a tidy-up
+        is running.
+      </p>
+    </Overlay>,
+    document.body,
+  );
+}
+
 function RequestsList({
   rows,
   now,
   runStarted,
-  canRunNow,
+  runs,
+  runNow,
   busy,
   onRules,
   onEdit,
   onRemove,
   onRunNow,
 }: RequestsListProps): JSX.Element {
+  // The row whose More menu is open, by key.
+  const [menuKey, setMenuKey] = useState<string | null>(null);
+  const menuRow = rows.find((row) => row.key === menuKey) ?? null;
   return (
-    <ul class="bower-requests">
-      {rows.map((row) => (
-        <li key={row.key} class={`bower-request bower-request--${row.state}`}>
-          <StateIcon state={row.state} />
-          <div class="bower-request-body">
-            <p class="bower-request-head">
-              <span class="bower-request-text">{requestRowText(row.text)}</span>
-              <span class={`bower-state bower-state--${row.state}`}>
-                {stateLabel(row)}
-              </span>
-            </p>
-            <RequestMeta
-              row={row}
-              now={now}
-              runStarted={runStarted}
-              onRules={onRules}
-            />
-            {row.state === 'waiting' && row.fileId !== null && (
-              <div class="bower-request-actions">
-                {row.kind !== 'context' && (
-                  <button
-                    type="button"
-                    class="chip"
-                    disabled={busy}
-                    onClick={() => {
-                      onEdit(row);
-                    }}
-                  >
-                    Edit
-                  </button>
+    <>
+      <ul class="bower-requests">
+        {rows.map((row) => (
+          <li
+            key={row.key}
+            class={`bower-request bower-request--${toneOf(row.state)}`}
+          >
+            <StateIcon state={row.state} />
+            <div class="bower-request-body">
+              <p class="bower-request-head">
+                <span class="bower-request-text">
+                  {requestRowText(row.text)}
+                </span>
+                <span class={`bower-state bower-state--${toneOf(row.state)}`}>
+                  {stateLabel(row)}
+                </span>
+              </p>
+              <RequestMeta
+                row={row}
+                now={now}
+                runStarted={runStarted}
+                runs={runs}
+                onRules={onRules}
+              />
+              {(row.state === 'waiting' || row.state === 'failed') &&
+                row.fileId !== null && (
+                  <div class="bower-request-actions">
+                    <button
+                      type="button"
+                      class="chip bower-request-more"
+                      aria-label="More for this request"
+                      aria-haspopup="menu"
+                      disabled={busy}
+                      onClick={() => {
+                        setMenuKey(row.key);
+                      }}
+                    >
+                      <IconMore />
+                    </button>
+                  </div>
                 )}
-                <button
-                  type="button"
-                  class="chip"
-                  disabled={busy}
-                  onClick={() => {
-                    onRemove(row);
-                  }}
-                >
-                  Remove
-                </button>
-                {canRunNow && (
-                  <button
-                    type="button"
-                    class="chip bower-request-now"
-                    disabled={busy}
-                    onClick={onRunNow}
-                  >
-                    Do it now
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {menuRow !== null && (
+        <RequestMenu
+          row={menuRow}
+          runNow={runNow}
+          onClose={() => {
+            setMenuKey(null);
+          }}
+          onEdit={onEdit}
+          onRemove={onRemove}
+          onRunNow={onRunNow}
+        />
+      )}
+    </>
   );
 }
 
@@ -388,7 +517,8 @@ export function Bower(): JSX.Element {
   // #513: the run store's shared, minute-ticking clock (#537), so the
   // Requests rows' relative times agree with Home's cards and the working
   // sheet instead of each keeping (and rounding) their own.
-  const { phase, run, doItNow, now } = useRun();
+  const { phase, run, now, lastFinished } = useRun();
+  const runNow = useRunNow();
   const online = useOnline();
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const { query } = useLocation();
@@ -445,7 +575,16 @@ export function Bower(): JSX.Element {
   }, [files]);
   const rulesLoad = useFileText(index?.byPath.get(RULES_PATH));
   const inFlight = phase === 'queued' || phase === 'running';
+  // The finished runs: Requests shows what each one did or dropped
+  // (R-REQ-1), Activity its cards. Read only once Requests or Activity is
+  // on screen (`GET /runs` is a few KV reads).
+  const runsLoad = useRuns(
+    segment !== 'rules' || wide,
+    lastFinished?.finishedAt ?? null,
+  );
+  const runs = runsLoad.status === 'ready' ? runsLoad.runs : [];
   const rows = requestRows({
+    runs,
     files,
     fetchedAt,
     texts,
@@ -674,10 +813,22 @@ export function Bower(): JSX.Element {
     setSending(false);
   }
 
-  /** Do it now: the "Is that everything?" confirmation, counting the
-   * requests that would go, for an instructions-only run. */
-  function runNow(): void {
-    doItNow(rows.filter((row) => row.state === 'waiting').length);
+  /** "Just this, now" (R-REQ-3): the shared helper starts an
+   * instructions-only run. The note is written already (Edit saves before
+   * its Send returns), so there is no save left to wait for. */
+  async function runThisNow(): Promise<void> {
+    setRequestsMessage(null);
+    let started = false;
+    try {
+      started = await runNow.run();
+    } catch (err) {
+      console.error(err);
+    }
+    if (!started) {
+      setRequestsMessage(
+        "Couldn't start Bower now. Your request goes with the next tidy-up.",
+      );
+    }
   }
 
   async function applyRule(rule: Rule): Promise<void> {
@@ -743,9 +894,8 @@ export function Bower(): JSX.Element {
     requests: (
       <>
         <p class="bower-panel-note">
-          What you asked for, and what came of it. Bower decides what each one
-          is: a rule starts at once; a job or a question waits for the next
-          tidy-up, or runs on its own with &ldquo;Do it now&rdquo;.
+          What you ask waits in your inbox and Bower does it at the next
+          tidy-up.
         </p>
         {requestsMessage !== null && (
           <p class="auth-error" role="alert">
@@ -761,20 +911,26 @@ export function Bower(): JSX.Element {
                 ? (run.startedAt ?? run.requestedAt)
                 : null
             }
-            canRunNow={!inFlight && online}
+            runs={runs}
+            runNow={runNow}
             busy={sending}
             onRules={() => {
               selectSegment('rules', true);
             }}
             onEdit={(row) => void editRequest(row)}
             onRemove={(row) => void removeRequest(row)}
-            onRunNow={runNow}
+            onRunNow={() => void runThisNow()}
           />
         )}
       </>
     ),
     // Read only when shown: `GET /runs` is a few KV reads per visit.
-    activity: segment === 'activity' || wide ? <ActivityPanel /> : <></>,
+    activity:
+      segment === 'activity' || wide ? (
+        <ActivityPanel load={runsLoad} />
+      ) : (
+        <></>
+      ),
   };
 
   return (
@@ -783,7 +939,7 @@ export function Bower(): JSX.Element {
 
       <div class="bower-box">
         <div class="bower-box-intro">
-          <Bird state="looking" size={44} />
+          <Bird state="looking" size={56} />
           <p class="bower-bubble">
             Tell me what you want, in your words. I work out whether it is a
             rule, a job or a question.

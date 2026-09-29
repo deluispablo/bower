@@ -185,7 +185,7 @@ describe('the Activity fallback shows no raw Moved lines (R-JUST-1)', () => {
       '- 2026-09-28 17:44 · Moved by you: 1-Projects/A/p.pdf → 4-Archives/A/p.pdf',
       '- 2026-09-28 17:44 · Correction: 1-Projects/A -> 2-Areas/B (2026-09-28)',
     ].join('\n');
-    expect(parseLog(log).length).toBe(3);
+    expect(parseLog(log)).toEqual([]);
     expect(JSON.stringify(fallbackLines(old, log, NOW))).not.toMatch(/Moved/);
   });
 });
