@@ -35,7 +35,6 @@ import { KindBadge } from '../components/kind-badge.js';
 import { PinnedSection } from '../components/pinned-section.js';
 import { ProcessButton } from '../components/process-button.js';
 import { RunSummary } from '../components/run-summary.js';
-import { Tour } from '../components/help-sheet.js';
 import { BowerTag, NewTag } from '../components/tags.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
@@ -91,9 +90,16 @@ import { useMediaQuery } from '../use-media-query.js';
 import { fileKind, isAppFile } from '../vault-index.js';
 import type { FileKind, VaultIndex } from '../vault-index.js';
 import { originalFileOf } from '../components/about-panel.js';
-import { isBowerNote } from './note.js';
+import { isBowerWritten } from '../bower-written.js';
+import { lazyOverlay } from '../lazy-overlay.js';
 import { pinned, useVault } from '../vault-store.js';
 import '../styles/home.css';
+
+/** The first-run tour loads when it first shows (#834). */
+const LazyTour = lazyOverlay(() =>
+  import('../components/help-sheet.js').then((m) => m.Tour),
+);
+const Tour = LazyTour.Component;
 
 /** The phone top bar's title (Flow-05-Home): "Home", not the wordmark. */
 const CRUMB = <span class="topbar-title">Home</span>;
@@ -425,7 +431,7 @@ function useRecentInfo(
             note.id,
             {
               ...(originalId !== undefined && { originalId }),
-              bower: isBowerNote(meta),
+              bower: isBowerWritten(meta),
               kind:
                 badgeFile !== undefined
                   ? fileKind(badgeFile)

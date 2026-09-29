@@ -6,6 +6,7 @@ import { isDemo } from './api.js';
 import { Layout } from './components/layout.js';
 import { Home } from './routes/home.js';
 import { Login } from './routes/login.js';
+import { NotFound } from './routes/not-found.js';
 import { RunProvider, useRun } from './run-store.js';
 import { RunChipHost } from './components/run-chip-host.js';
 import { ShellSlotsProvider } from './components/shell-slots.js';
@@ -33,9 +34,6 @@ const JustFiled = lazy(() =>
   import('./routes/just-filed.js').then((m) => m.JustFiled),
 );
 const Note = lazy(() => import('./routes/note.js').then((m) => m.Note));
-const NotFound = lazy(() =>
-  import('./routes/not-found.js').then((m) => m.NotFound),
-);
 const Notes = lazy(() => import('./routes/notes.js').then((m) => m.Notes));
 const NotInvited = lazy(() =>
   import('./routes/not-invited.js').then((m) => m.NotInvited),
