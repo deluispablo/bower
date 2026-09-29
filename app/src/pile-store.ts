@@ -32,6 +32,8 @@ import {
   type DriveFile,
 } from './drive.js';
 import { instructionBody } from './tell.js';
+import { ruleSentences } from './bower-tab.js';
+import { showToast } from './toast-store.js';
 
 export type PileItemState = 'waiting' | 'uploading' | 'done' | 'failed';
 
@@ -357,6 +359,56 @@ export function pileText(note: string): string {
   return instructionBody(note)
     .replace(/(?:^|\n)## Applies to[\s\S]*$/, '')
     .trim();
+}
+
+/**
+ * Closes a pile: files attached from now on start another one. Its "From
+ * now on…" sentences (`ruleSentences`) go to `Rules.md` through `keepRule`
+ * here, once (R-PILE-9), never on each save; a rule that cannot be kept is
+ * logged and said once, and the note still carries the sentence. Then the
+ * note is written one last time (the final `## Applies to`) and awaited.
+ * Resolves whether the note is current in the inbox; never rejects.
+ */
+export async function closePile(
+  pileId: string,
+  keepRule?: (sentence: string) => Promise<unknown>,
+): Promise<boolean> {
+  const pile = findPile(pileId);
+  if (pile === undefined) return true;
+  if (!pile.closed) {
+    patchPile(pileId, { closed: true });
+    if (keepRule !== undefined) {
+      let told = false;
+      for (const sentence of ruleSentences(pile.text)) {
+        try {
+          await keepRule(sentence);
+        } catch (err) {
+          console.error(err);
+          if (!told) showToast('Could not add your rule yet. Bower still reads it.');
+          told = true;
+        }
+      }
+    }
+  }
+  if ((findPile(pileId)?.items.length ?? 0) === 0 && pile.noteFileId === null) {
+    return true;
+  }
+  await requestWrite(pileId);
+  return !pileWriteFailed(pileId);
+}
+
+/**
+ * R-PILE-7: closes every open pile and writes every pile's note once more,
+ * awaited, so the tidy-up reads each final `## Applies to`. Resolves `false`
+ * when any note could not be written; never rejects.
+ */
+export async function flushPiles(
+  keepRule?: (sentence: string) => Promise<unknown>,
+): Promise<boolean> {
+  const results = await Promise.all(
+    piles.map((pile) => closePile(pile.id, keepRule)),
+  );
+  return results.every(Boolean);
 }
 
 /** Whether the pile's last write failed. */

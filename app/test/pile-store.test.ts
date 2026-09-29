@@ -243,6 +243,57 @@ describe('R-PILE-1: the pile note', () => {
   });
 });
 
+describe('R-PILE-9: rule sentences', () => {
+  it('are kept once, when the pile closes, not on every save', async () => {
+    const keepRule = vi.fn(() => Promise.resolve());
+    const pile = store.startPile(INBOX, NOW, 'p1');
+    land('a.pdf');
+    await store.attachToPile(pile.id, { name: 'a.pdf', state: 'done' });
+    await store.setPileText(pile.id, 'From now on file offers under Work.');
+    await store.setPileText(pile.id, 'Offers. From now on file offers under Work.');
+    expect(keepRule).not.toHaveBeenCalled();
+
+    expect(await store.closePile(pile.id, keepRule)).toBe(true);
+    expect(await store.closePile(pile.id, keepRule)).toBe(true);
+    expect(keepRule).toHaveBeenCalledTimes(1);
+    expect(keepRule).toHaveBeenCalledWith('From now on file offers under Work.');
+    expect(store.openPile()).toBeUndefined();
+  });
+});
+
+describe('R-PILE-7: flushPiles', () => {
+  it('closes every open pile and writes each final Applies to, awaited', async () => {
+    const first = store.startPile(INBOX, NOW, 'p1');
+    land('a.pdf');
+    await store.attachToPile(first.id, { name: 'a.pdf', state: 'done' });
+    await store.closePile(first.id);
+    const second = store.startPile(INBOX, NOW, 'p2');
+    await store.attachToPile(second.id, { name: 'b.pdf', state: 'uploading' });
+    land('b.pdf');
+    void store.attachToPile(second.id, { name: 'b.pdf', state: 'done' });
+
+    expect(await store.flushPiles()).toBe(true);
+    const notes = notesIn(INBOX);
+    expect(notes).toHaveLength(2);
+    const byPile = (id: string): string =>
+      notes.find((n) => n.text.includes(`pile: ${id}\n`))?.text ?? '';
+    expect(byPile('p1')).toMatch(/## Applies to\n\n- a\.pdf\n$/);
+    expect(byPile('p2')).toMatch(/## Applies to\n\n- b\.pdf\n$/);
+    expect(store.getPiles().every((p) => p.closed)).toBe(true);
+  });
+
+  it('resolves false when a note cannot be written', async () => {
+    const pile = store.startPile(INBOX, NOW, 'p1');
+    land('a.pdf');
+    await store.attachToPile(pile.id, { name: 'a.pdf', state: 'done' });
+    updateFileText.mockRejectedValueOnce(new Error('offline'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await store.flushPiles()).toBe(false);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+});
+
 describe('R-PILE-8: a note moved out of the inbox', () => {
   it('starts a continuation note with the same pile id', async () => {
     const pile = store.startPile(INBOX, NOW, 'p1');
