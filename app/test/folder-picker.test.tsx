@@ -158,7 +158,7 @@ describe('FolderPicker', () => {
     expect(panel?.getAttribute('aria-modal')).toBe('true');
     expect(inner.hasAttribute('inert')).toBe(true);
     expect(document.body.querySelector('.folder-picker-backdrop')).toBeNull();
-    act(() => {
+    void act(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     expect(onClose).toHaveBeenCalled();

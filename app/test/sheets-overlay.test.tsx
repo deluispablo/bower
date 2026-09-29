@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 function escape(): void {
-  act(() => {
+  void act(() => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   });
 }
@@ -89,7 +89,7 @@ describe('RuleSheet on Overlay', () => {
     const pause = [...document.body.querySelectorAll('button')].find((b) =>
       b.textContent?.includes('Pause it'),
     );
-    act(() => {
+    void act(() => {
       pause?.click();
     });
     expect(onPick).toHaveBeenCalledWith('pause');
