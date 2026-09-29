@@ -97,6 +97,7 @@ describe('HELP_ROWS', () => {
   it('has the rows of every board, in order', () => {
     expect(HELP_ROWS.home.rows.map((r) => r.lead)).toEqual([
       'Inbox',
+      'The tidy-up bar',
       'Last tidy-up',
       'Pinned',
       'Recent',
@@ -288,13 +289,11 @@ describe('Tour', () => {
 describe('HelpSheet', () => {
   function mount(
     screen: 'home' | 'folder',
-    ideasHref?: string,
   ): { onClose: () => void; onShowMeAround: () => void } {
     const props = {
       screen,
       onClose: vi.fn(),
       onShowMeAround: vi.fn(),
-      ideasHref,
     };
     void act(() => {
       render(
@@ -365,14 +364,9 @@ describe('HelpSheet', () => {
     expect(props.onShowMeAround).toHaveBeenCalledTimes(1);
   });
 
-  it('shows Ideas only when there is somewhere to go', () => {
+  it('has no Ideas button (#859)', () => {
     mount('home');
     expect(link('Ideas')).toBeUndefined();
-    void act(() => {
-      render(null, root);
-    });
-    mount('home', '/ideas');
-    expect(link('Ideas')?.getAttribute('href')).toBe('/ideas');
   });
 });
 

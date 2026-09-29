@@ -54,7 +54,6 @@ import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { useSession } from '../session.js';
 import {
   BOWER_PATH,
-  IDEAS_PATH,
   helpScreenFor,
   isInnerScreen,
 } from '../shell-routes.js';
@@ -444,7 +443,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       {helpOpen && (
         <LazyHelpSheet
           screen={helpScreenFor(path)}
-          ideasHref={IDEAS_PATH}
           onClose={() => {
             setHelpOpen(false);
           }}

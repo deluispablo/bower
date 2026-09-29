@@ -64,9 +64,14 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
         text: 'is what you added and Bower has not filed yet. Its Tidy up button files it all, once, when you are ready.',
       },
       {
+        icon: 'sparkle',
+        lead: 'The tidy-up bar',
+        text: 'shows a tidy-up while it runs, and Tidy up starts one. Tap it to see how it is going.',
+      },
+      {
         icon: 'clock',
         lead: 'Last tidy-up',
-        text: 'shows what happened last time; tap it for the full list.',
+        text: 'shows what the last tidy-up did: filed, new notes, updated, needs you.',
       },
       {
         icon: 'pin',
