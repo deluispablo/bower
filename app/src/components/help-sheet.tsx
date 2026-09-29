@@ -101,6 +101,9 @@ export interface TourPlacement {
 export const TOUR_BIRD_SIZE = 80;
 const SPOT_PAD = 4;
 const EDGE = 8;
+/** A bar is a bottom tab bar only when it is short and wide. */
+const BOTTOM_BAR_MAX_HEIGHT = 120;
+const BOTTOM_BAR_MIN_WIDTH = 0.6;
 
 function px(value: number): string {
   return `${Math.round(value)}px`;
@@ -132,7 +135,11 @@ export function placeTour(
     height: px(tab.height + 2 * SPOT_PAD),
   };
   const onBottomBar =
-    bar !== null && bar.height > 0 && bar.top + bar.height / 2 > height / 2;
+    bar !== null &&
+    bar.height > 0 &&
+    bar.height < BOTTOM_BAR_MAX_HEIGHT &&
+    bar.width >= BOTTOM_BAR_MIN_WIDTH * width &&
+    bar.top + bar.height / 2 > height / 2;
   if (!onBottomBar) {
     // Beside a desktop sidebar the bird stands just past the right edge of
     // the lit row, level with it, so it never covers the Search field or a
