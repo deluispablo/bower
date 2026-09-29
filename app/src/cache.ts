@@ -333,6 +333,10 @@ export interface ViewSettings {
   /** An origin (`file-origin.ts`), or `null` for every origin. */
   originFilter: string | null;
   layout: 'list' | 'grid';
+  /** `layout` was picked by the person; without it the folder chooses (#613). */
+  layoutChosen?: boolean;
+  /** Compare's column order for the folder (#612). */
+  compareColumns?: string[];
 }
 
 export interface TreeState {
