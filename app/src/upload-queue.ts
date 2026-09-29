@@ -948,4 +948,139 @@ export function uploadQueue(): UploadQueue {
  */
 export async function clearUploadQueue(userId?: string): Promise<void> {
   await uploadQueue().clear(userId);
+  resumedIds = [];
+  for (const listener of resumedListeners) listener();
+}
+
+// --- Closing the app, and coming back (R-UPL-1, R-UPL-3) ------------------------
+
+/**
+ * PILE-6: what Add says about closing (spec §6.15b). The browser's own
+ * "Leave site?" question is best effort: iOS and installed apps often skip it.
+ */
+export const UPLOAD_CLOSE_NOTE =
+  'Uploads carry on if you switch tabs. If you close Bower, they finish next time you open it.';
+
+/** PILE-6's second sentence: `beforeunload` is best effort. */
+export const UPLOAD_CLOSE_NOTE_BEST_EFFORT =
+  'Some phones and installed apps close Bower without asking, so wait for the upload to finish if you can.';
+
+/** Files still on their way: waiting or sending, not the ones Drive refused. */
+export function activeItems(items: readonly QueueItem[]): QueueItem[] {
+  return items.filter((i) => i.state === 'waiting' || i.state === 'uploading');
+}
+
+/** The part of `window` the guard uses; a test passes its own. */
+export interface UnloadTarget {
+  addEventListener: (type: 'beforeunload', handler: (e: Event) => void) => void;
+  removeEventListener: (
+    type: 'beforeunload',
+    handler: (e: Event) => void,
+  ) => void;
+}
+
+function askBeforeLeaving(event: Event): void {
+  // The browser shows its own words; only `preventDefault` (and the legacy
+  // empty `returnValue`) asks it to.
+  event.preventDefault();
+  if ('returnValue' in event) event.returnValue = '';
+}
+
+/**
+ * Sets `beforeunload` only while a file is unfinished, and removes it the
+ * moment the last one is in (R-UPL-3). It never touches in-app navigation:
+ * only closing, reloading or leaving the site asks. Returns the stop function.
+ */
+export function guardUnload(
+  queue: Pick<UploadQueue, 'items' | 'subscribe'>,
+  target: UnloadTarget,
+): () => void {
+  let on = false;
+  const sync = (): void => {
+    const want = activeItems(queue.items()).length > 0;
+    if (want && !on) target.addEventListener('beforeunload', askBeforeLeaving);
+    if (!want && on) {
+      target.removeEventListener('beforeunload', askBeforeLeaving);
+    }
+    on = want;
+  };
+  const unsubscribe = queue.subscribe(sync);
+  sync();
+  return () => {
+    unsubscribe();
+    if (on) target.removeEventListener('beforeunload', askBeforeLeaving);
+    on = false;
+  };
+}
+
+let resumedIds: string[] = [];
+let guardStop: (() => void) | null = null;
+const resumedListeners = new Set<() => void>();
+
+/** Ids of the files an earlier visit left unfinished, found when the queue started. */
+export function resumedFromLastTime(): string[] {
+  return resumedIds;
+}
+
+export function subscribeResumed(listener: () => void): () => void {
+  resumedListeners.add(listener);
+  return () => {
+    resumedListeners.delete(listener);
+  };
+}
+
+/**
+ * Starts the app's queue for `userId` after sign-in, remembers which files it
+ * found from last time, and sets the `beforeunload` guard once. Safe to call
+ * again (a new render, the same user).
+ */
+export async function startUploads(userId: string): Promise<QueueRole> {
+  const queue = uploadQueue();
+  const first = queue.role() === 'idle';
+  const role = await queue.start(userId);
+  if (first && typeof window !== 'undefined') {
+    resumedIds = activeItems(queue.items()).map((i) => i.id);
+    for (const listener of resumedListeners) listener();
+    if (guardStop === null) guardStop = guardUnload(queue, window);
+  }
+  return role;
+}
+
+/**
+ * Adds a file to `queue` and settles when Drive has it, reporting progress
+ * as it goes; rejects with an `UploadError` if Drive refused it. A file that
+ * waits for a connection stays pending until the connection is back.
+ */
+export function uploadThroughQueue(
+  queue: UploadQueue,
+  input: AddUpload,
+  onProgress?: (sent: number, total: number) => void,
+): Promise<QueueItem> {
+  return new Promise<QueueItem>((resolve, reject) => {
+    let id: string | undefined;
+    const unsubscribe = queue.subscribe(() => check());
+    function check(): void {
+      if (id === undefined) return;
+      const item = queue.items().find((i) => i.id === id);
+      if (item === undefined) return;
+      onProgress?.(item.sent, item.size);
+      if (item.state === 'done') {
+        unsubscribe();
+        resolve(item);
+      } else if (item.state === 'failed') {
+        unsubscribe();
+        reject(new UploadError(1, 'Drive refused the file.'));
+      }
+    }
+    queue.add(input).then(
+      (item) => {
+        id = item.id;
+        check();
+      },
+      (error: unknown) => {
+        unsubscribe();
+        reject(error);
+      },
+    );
+  });
 }
