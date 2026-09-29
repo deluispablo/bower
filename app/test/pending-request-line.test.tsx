@@ -27,10 +27,10 @@ function rows(text: string, fileId: string | null = 'NOTE_ID'): RequestRow[] {
       key: 'k',
       state: 'waiting',
       text,
-      kind: 'request',
+      kind: 'job',
       since: '2026-09-29T10:00:00Z',
       fileId,
-    } as RequestRow,
+    },
   ];
 }
 

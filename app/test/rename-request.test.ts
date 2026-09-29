@@ -16,11 +16,11 @@ function row(
     key: text,
     state: 'waiting',
     text,
-    kind: 'request',
+    kind: 'job',
     since: '2026-09-29T10:00:00Z',
     fileId: 'NOTE_ID',
     ...over,
-  } as RequestRow;
+  };
 }
 
 describe('renameRequestText', () => {

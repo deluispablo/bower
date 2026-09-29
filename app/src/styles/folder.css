@@ -714,3 +714,15 @@
     font-size: 30px;
   }
 }
+
+/* The clock badge of a row with a Rename or Move waiting (#765, D32). */
+.folder-row-waiting {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2);
+}
+
+.folder-row-waiting .icon {
+  width: 16px;
+  height: 16px;
+}

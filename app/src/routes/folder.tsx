@@ -72,6 +72,8 @@ import type { BreadcrumbSegment, FolderContents } from '../navigation.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { useMediaQuery } from '../use-media-query.js';
+import { pendingByPath } from '../rename-request.js';
+import { useRequestRows } from '../use-request-rows.js';
 import { useVault } from '../vault-store.js';
 import { NotFound } from './not-found.js';
 import '../styles/folder.css';
@@ -302,6 +304,8 @@ function FolderBody({
   const titles = useNoteTitles(contents.notes);
   const emptyState = folderEmptyState(contents);
   const items = useFolderItems();
+  const requestRows = useRequestRows();
+  const waiting = useMemo(() => pendingByPath(requestRows), [requestRows]);
   const compare = useFolderCompare(contents.notes);
   const [tab, setTab] = useState<'everything' | 'compare'>('everything');
   useEffect(() => setTab('everything'), [contents.path]);
@@ -489,6 +493,7 @@ function FolderBody({
             catalogue={catalogue}
             now={now}
             desktop={desktop}
+            waiting={waiting}
             onPreview={onPreview}
             onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
             onOpen={onNavigate}
