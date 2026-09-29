@@ -8,9 +8,20 @@
  * `name` if it is not in `existing` (case-insensitive); otherwise the first
  * `name (2)`, `name (3)`, … not in `existing` either, with the number
  * inserted before the extension (`photo.jpg` → `photo (2).jpg`).
+ *
+ * `queued` holds the names already reserved by the upload queue
+ * (`upload-queue.ts`) for the same folder: files still on their way are not
+ * in the inbox listing yet, and two files with one name in `0-Inbox/` would
+ * make the runner skip one (R-UPL-6).
  */
-export function uniqueName(name: string, existing: Set<string>): string {
-  const taken = new Set(Array.from(existing, (n) => n.toLowerCase()));
+export function uniqueName(
+  name: string,
+  existing: Iterable<string>,
+  queued: Iterable<string> = [],
+): string {
+  const taken = new Set(
+    [...existing, ...queued].map((n) => n.toLowerCase()),
+  );
   if (!taken.has(name.toLowerCase())) return name;
 
   const dot = name.lastIndexOf('.');
