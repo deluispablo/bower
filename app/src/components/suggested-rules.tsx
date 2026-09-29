@@ -64,8 +64,8 @@ export function useOpenProposals(): ProposalsLoad {
 }
 
 const KIND_LABELS: Record<ProposalKind, string> = {
-  rule: 'New rule',
-  workflow: 'New way to file something',
+  rule: 'Bower suggests',
+  workflow: 'Bower suggests',
   tag: 'New tag',
 };
 
