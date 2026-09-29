@@ -333,12 +333,12 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             nav={sidebarNav}
           />
         </nav>
-        <SidebarSeparator />
         {/* The ledge (#741): a 66 px strip under the explorer, decoration
             only, so outside the landmark and hidden from assistive tech. */}
         <div class="shell-ledge" data-slot="ledge" aria-hidden="true">
           {ledge}
         </div>
+        <SidebarSeparator />
       </div>
       <div class="shell-main">
         {/* The one centred container (#355, Desktop-Responsive board): the
