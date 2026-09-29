@@ -251,3 +251,62 @@ export function walkOf(
     total: items.length,
   };
 }
+
+/** What a note's `original` names, without the wikilink brackets, alias or heading: `[[A/B.pdf|alias]]` → `A/B.pdf`. */
+export function originalTarget(original: string): string {
+  const inner = /\[\[([^\]|#]*)/.exec(original)?.[1] ?? original;
+  return inner.trim();
+}
+
+/** The last path segment of `originalTarget`, as written (`A/B.pdf` → `B.pdf`). */
+export function originalDisplayName(original: string): string {
+  const target = originalTarget(original);
+  return target.split('/').pop()?.trim() ?? '';
+}
+
+export interface OriginalLookup {
+  files: readonly DriveFile[];
+  byPath: ReadonlyMap<string, DriveFile>;
+}
+
+function baseOf(name: string): string {
+  return name.replace(/\.[^./]+$/, '');
+}
+
+/**
+ * The file a note's `original` points to (spec R-NOTE-3): by the path it
+ * names, then by name in the note's own folder, then by companion pairing
+ * (`Name.pdf` beside `Name.md`, the folder screen's rule), then by name
+ * anywhere. `undefined` when nothing matches.
+ */
+export function resolveOriginal(
+  note: Pick<DriveFile, 'path'>,
+  original: string | undefined,
+  lookup: OriginalLookup,
+): DriveFile | undefined {
+  if (original === undefined) return undefined;
+  const target = originalTarget(original);
+  if (target === '') return undefined;
+  const byPath = lookup.byPath.get(target);
+  if (byPath !== undefined) return byPath;
+
+  const folder = folderOf(note.path);
+  const name = originalDisplayName(original);
+  const beside = lookup.byPath.get(folder === '' ? name : `${folder}/${name}`);
+  if (beside !== undefined) return beside;
+  const wanted = lower(name);
+  const inFolder = lookup.files.filter(
+    (file) => folderOf(file.path) === folder,
+  );
+  const sameName = inFolder.find((file) => lower(file.name) === wanted);
+  if (sameName !== undefined) return sameName;
+
+  const noteBase = lower(baseOf(note.path.split('/').pop() ?? ''));
+  const paired = inFolder.find(
+    (file) =>
+      !/\.md$/i.test(file.name) && lower(baseOf(file.name)) === noteBase,
+  );
+  if (paired !== undefined) return paired;
+
+  return lookup.files.find((file) => lower(file.name) === wanted);
+}
