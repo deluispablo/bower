@@ -94,19 +94,26 @@ export function Overlay(props: OverlayProps): JSX.Element {
   const placement = props.desktopPlacement ?? DEFAULT_PLACEMENT[kind];
   const panel = useRef<HTMLDivElement>(null);
 
-  // Runs before the focus trap's effect, so the opener still has focus.
+  const opener = useRef<HTMLElement | null>(null);
+
+  // Runs before `lockPage()` makes the page inert (which blurs the opener)
+  // and before the focus trap's effect, so the opener is still focused.
   useLayoutEffect(() => {
+    const active = document.activeElement;
+    opener.current = active instanceof HTMLElement ? active : null;
     const element = panel.current;
     if (element !== null && placement === 'anchor') {
-      anchorTo(element, document.activeElement);
+      anchorTo(element, active);
     }
     return lockPage();
   }, [placement]);
 
-  useFocusTrap(panel, onClose);
+  useFocusTrap(panel, onClose, opener);
 
   const dialog = kind !== 'menu';
-  return (
+  // Always portalled to the body, whoever renders it: an overlay drawn
+  // inside `#app > .shell` would sit in the page it makes inert.
+  return createPortal(
     <div class={`overlay overlay--${kind} overlay--desktop-${placement}`}>
       <div class="overlay-scrim" aria-hidden="true" onClick={onClose} />
       <div
@@ -121,7 +128,8 @@ export function Overlay(props: OverlayProps): JSX.Element {
         <div class="overlay-grab" aria-hidden="true" />
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
