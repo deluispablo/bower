@@ -499,7 +499,7 @@
   width: 10px;
   height: 10px;
   border-radius: var(--radius-full);
-  background: var(--color-brand);
+  background: var(--color-accent-line);
 }
 
 .compare-step-past {

@@ -85,7 +85,7 @@
 }
 
 .interview-dots .is-on {
-  background: var(--color-brand);
+  background: var(--color-accent-line);
 }
 
 @media (prefers-reduced-motion: reduce) {

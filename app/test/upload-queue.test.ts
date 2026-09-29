@@ -439,6 +439,20 @@ describe('storage (R-UPL-9)', () => {
   });
 });
 
+describe('unfinished files', () => {
+  it('does not count a file Drive refused', async () => {
+    const w = world();
+    const a = w.tab('A');
+    await a.start(USER);
+    w.drive.failNext(403);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await a.add(file(3));
+    await settle(a);
+    expect(a.items()[0]?.state).toBe('failed');
+    expect(a.hasUnfinished()).toBe(false);
+  });
+});
+
 describe('offline', () => {
   it('waits for a connection and tries again on retry', async () => {
     const w = world();
