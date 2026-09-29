@@ -63,6 +63,7 @@ This spec only asks the runner for the data the screens need (section 7).
 | D16 | Tips, suggestions and explanations are one `Hint` component. It sits next to what it explains, one per screen, and is dismissed for good on each device. Explanations at the end of lists become an (i) popover. | 3.11. |
 | D17 | Add works in **piles**: a pile is the files and links you add together plus what you say about them ("What is this pile?"). Each pile is a context note in the inbox from its first file, so it survives closing the app and waits, with its own note, until the tidy-up. Several piles can wait at once. | Owner round 2: a batch of 5 job offers with their note, close, later 3 rental listings with theirs, then one tidy-up. |
 | D20 | Uploads are durable: a file is copied into the device's storage when it is attached and sent with Drive's resumable upload, so switching tab never stops it and closing the app only pauses it until the next open. Closing or signing out while uploads are unfinished warns first. | Owner round 2: the person must not lose files by closing too early; report 1.2. |
+| D21 | A document of **no listed kind** (a CV, a letter, a manual) keeps its original untouched, and gets a text copy (`.md`) that opens with Bower's insights and its extracted properties, then carries the document's full text, unchanged. The insights and properties are the copy's metadata: the person folds them and forgets them, but they show that Bower understood the file. | Owner ruling on Q1, 29 Sep. |
 | D18 | A microphone for dictation in every box where people write sentences, where the browser supports speech recognition. Where it does not, a one-time tip points to the keyboard's own microphone. | Owner idea (report section 6). |
 | D19 | Bower note titles: at most 40 characters, most specific word first. Lists wrap a title to two lines on phones instead of cutting it at one. | 3.6. |
 
@@ -214,7 +215,7 @@ Canvas pages and artboards. Every screen × state below is **changed** against t
 | Brief | Brief (`Main`) | the brief and D1 to D19 |
 | System | System-Overlays, System-Hints, System-RunResult, System-Insights, System-HeaderActions, Tour-375, Help-1280 | the overlay model and queue, the z and scrim tokens, the hint variants, chip states and counts, insights anatomy and the rule-change line, header buttons before and after, the tour as a modal, help as a right panel |
 | Tidy-up results | Home-Running/Done/Partial ×375, ×1280; Confirm-Tidy ×2; RunSheet-Running/Done/Partial ×2; JustFiled ×2; Requests ×2 | running, done, partly done; confirm; run sheet on the phone and desktop panel; Just filed as a table; requests waiting, running, done, failed |
-| Bower's notes | Note-JobOffer ×2, Note-Rental ×2, Note-Summary ×2, Note-RuleChanged ×2, Note-Converted-375, Note-Folded ×2 | a kind with score, a kind with a weekly price, a kind-less note, the rule change with "What changed" open (375), a converted document pointing to its insights, insights and Made from folded |
+| Bower's notes | Note-JobOffer ×2, Note-Rental ×2, Note-Summary ×2, Note-RuleChanged ×2, Note-Converted-375, Note-Converted-1280, Note-Converted-Closed-375, Note-Folded ×2 | a kind with score, a kind with a weekly price, a kind-less note, the rule change with "What changed" open (375), the text copy of a document of no listed kind with its insights and properties (open and folded), insights and Made from folded |
 | Folders and Compare | Folder-List ×2, Sidebar-Default-1280, Sidebar-Resize-1280, Compare-Cards-375, Compare-Sort-375, Compare-Table-1280, More-Rename-375, Rename ×2 | folder with a subfolder first, the suggestion hint, the resize handle idle and dragging with a tooltip, phone sort, desktop Score column, More with Rename, the Rename dialog |
 | Add and dictation | Explore-A/B/C-375 (grey sketches of three directions); Home-Uploading-375, Add-Resume-375, SignOut-Uploading-375; Add-PileEmpty-375, Add-PileFilling-375, Add-Dictating-375, Add-PileOpen-375, Add-Piles-1280; Confirm-Piles-375, Confirm-Piles-1280; Dictate-Bower-375, System-Dictate | the directions compared; a pile uploading while the person is on Home; uploads resumed after the app was closed; sign-out with unfinished uploads; a new pile empty and filling (uploaded, uploading, queued); dictating the pile's note; an earlier pile opened to edit; piles on desktop; Is that everything? with piles; the five dictation states |
 | Wireframes | Wire-* (16) | the grey structure of Home, run sheet, Just filed, Requests, job note, folder, Compare and Add at both widths |
@@ -543,7 +544,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - no box yet (a note written before the rulebook change): today's rendering, plus a hint "Bower adds its insights next time it touches this note";
   - no key facts: the Key facts section is hidden;
   - rule changed: the blue line, with "What changed" open showing "Before today" and the reason (Note-RuleChanged-375);
-  - converted document: no box; a `state` hint "This is the text of your Word document … Bower's insights are in {summary note}", with "Made from" listing the original and the summary note.
+  - text copy of a document of no listed kind (Note-Converted-*): kind chip "Word document, as text" ("PDF, as text", "Web page, as text"); Made from lists the original; the insights box with its key facts from `facts:`; then a divider "The document · the text of {original}, unchanged" and the full text.
 - **Copy:**
 
   | ID | Text |
@@ -563,7 +564,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   | INS-8 | "What changed" / "Hide" |
   | INS-9 | "Before today" |
   | INS-10 | "Bower adds its insights next time it touches this note." |
-  | NOTE-6 | "This is the text of your {format}, so you can search and read it here. Bower's insights are in {note}." |
+  | NOTE-6 | "The document" / "the text of {original}, unchanged" |
 
 - **Acceptance criteria:**
   - [ ] R-NOTE-1: `isBowerWritten(meta, file)` in `app/src/bower-written.ts`. A note is Bower's when any of these holds: `by: bower`, `type: answer`, `kind`, `original`, `bower_origins`, or the body starts with a `[!bower]` callout (legacy). `folder-view.ts` `writtenByBower`, `note.tsx` `isBowerNote`, the quick-look line and the counts all call it. Unit tests; the folder counts for the round 5 folders match the page tags.
@@ -571,6 +572,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - [ ] R-NOTE-3: Made from resolves `original` by path, then name in folder, then `companion.ts`; `source` URLs are rendered; a wikilink in `original` is never shown raw (fixes 1.13, W6).
   - [ ] R-NOTE-4: the pager moves after the body and counts the same kind (fixes 3.14 pager).
   - [ ] R-NOTE-5: the About panel drops Key facts and shows resolved names.
+  - [ ] R-NOTE-8: the text copy of a document of no listed kind renders as on Note-Converted-*: header, Made from (the original), the insights box, the divider, the full text. Its title is the original's base name ("CV 2026"), never its first heading (fixes 3.2). Folding the box and Made from leaves the header and the document.
   - [ ] R-NOTE-6: phone lists wrap titles to two lines (`-webkit-line-clamp: 2`) in the folder list, Recent, Compare cards and the tree's phone view.
   - [ ] R-INS-1: `insights-box.tsx` replaces the top-box rendering on the note page; the file page's `BowerNote` uses the same component.
   - [ ] R-INS-2: key facts are rendered only in the box; the caption "Key facts for a … set in your rules" is removed (fixes 3.14).
@@ -929,7 +931,12 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
 - **R-AG-2.** Every note Bower **generates** (not a converted `.md`, not a hub note that only lists) opens with the `> [!bower] Bower's note` box. This extends "A note from Bower" beyond listed kinds and asked-for notes, per the owner's ruling (3.4):
   - Kind-less notes (a CV summary, a profile note) also carry a `facts:` block map of at most 6 `label: value` pairs, where the first four are key facts;
   - and a `## What to check` section when there is something to check.
-  - The rule "No summary note … unless" stays for **originals**: an original of no listed kind is still only filed. What changes is that any note Bower does write has insights. **Open:** whether a document of no listed kind (a CV) gets a summary note by default; see Q1.
+  - **Documents of no listed kind** (Q1, answered): the original is filed untouched, and its text copy `<base name>.md` sits next to it with:
+    - frontmatter `by: bower`, `original: "[[<file name>]]"`, `tags`, `created`;
+    - `facts:`, the properties Bower extracted (at most 6; the first four are key facts), with `bower_origins` for any that do not come from the file;
+    - the `> [!bower] Bower's note` box and, when there is something to check, `## What to check`;
+    - then `## The document` and the full text, as converted, never edited or shortened.
+  - This replaces "No summary note, no converted copy, no analysis … unless" for documents. Photos and files Bower cannot read are still only filed. The runner already makes the text of Word, ODT, HTML, EPUB and RTF files (pandoc).
 - **R-AG-3.** When Bower changes a note it wrote because a rule or a fact changed, it rewrites the box and the key facts to the present, then sets:
   - `bower_updated: YYYY-MM-DD`;
   - `bower_change: <one line, the owner's words>`;
@@ -946,6 +953,8 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
   - `added.txt` is plain words for the owner with no internal words (index, hub, orphaned, crashed, run, frontmatter), in the first person, with no final full stop.
   - Serves 1.12, 2.2.
 - **R-AG-7.** Instructions with `op: rename` rename the target keeping its id, and the runner books it like a move.
+- **R-AG-9 (runner, proposed).** PDFs get the same treatment. `run.sh` converts a text PDF with `pdftotext -layout` (poppler-utils, installed in the job like pandoc) so the agent reads and copies the text instead of transcribing it. A scanned PDF with no text layer gets the copy with metadata and insights, and the line "Scanned: no text to copy" under `## The document`.
+  - Escalation: a new tool in the runner job (apt package, no runtime dependency in the app). Without it, PDFs get the metadata and insights only.
 - **R-AG-8.** Piles:
   - Each context note applies only to the files in its own `## Applies to` list. A file named in two context notes goes with the newest note.
   - A context note with an empty text only groups its files: file them as usual, with no extra note.
@@ -999,7 +1008,7 @@ Groups 3 to 6 can run in parallel once 1 and 2 have landed. The rulebook bump an
 
 | # | Question | Status |
 |---|---|---|
-| Q1 | Should a document of **no listed kind** (a CV, a profile, a letter, a manual) get Bower's insights without being asked? | **OPEN**, being explained to the owner with a worked example. Today such a document is only filed; a Word or HTML file also gets its converted text (`.md`), with no insights. Options: (a) insights inside the converted text for converted documents, nothing extra for PDFs; (b) a summary note for every document; (c) new listed kinds for CVs and profiles; (d) as today, plus an offer after the run. |
+| Q1 | Should a document of **no listed kind** (a CV, a profile, a letter, a manual) get Bower's insights without being asked? | **Answered 29 Sep: yes.** Its text copy carries the full text plus the extracted properties and Bower's note as foldable metadata (D21, R-AG-2, R-NOTE-8). PDFs through R-AG-9, which the lead should confirm. |
 | Q2 | Dictation sends audio to the browser vendor's speech service. | **Answered 29 Sep: yes**, with a Privacy line and the first-use hint (R-DICT-4). |
 | Q3 | The light `--color-danger` fails 4.5:1 for small text on its tinted background. | **Answered 29 Sep: yes**, darken to `#c21b1b` for text; keep `#e12020` for fills. |
 
@@ -1012,7 +1021,7 @@ Groups 3 to 6 can run in parallel once 1 and 2 have landed. The rulebook bump an
 - [x] Every token used exists in `tokens.css` or in section 5.
 - [x] Every element that needs data names its source and its empty and stale behaviour (RunOutcome without the new runner fields degrades to today's counts; missing `original` shows "not found"; no box shows the hint).
 - [x] Every L has an M alternative: there is no L. The largest items are the runner fields (M) and the Overlay migration (M, done incrementally).
-- [x] Every escalation is in section 7 or 9: the rulebook bump (R-AG-1 to R-AG-8); runner and Worker fields; the summary-by-default policy (Q1, open). Q2 and Q3 are answered. There are no new dependencies, OAuth scopes or secrets. IndexedDB, storage persistence and Drive resumable uploads use APIs the app already has.
+- [x] Every escalation is in section 7 or 9: the rulebook bump (R-AG-1 to R-AG-8); runner and Worker fields; the `pdftotext` tool for the runner (R-AG-9). Q1, Q2 and Q3 are answered. There are no new dependencies, OAuth scopes or secrets. IndexedDB, storage persistence and Drive resumable uploads use APIs the app already has.
 - [x] Every open-source pointer has a licence: there are none.
 - [x] Every acceptance criterion can be checked by a test or by opening the app.
 - [x] Nothing in the boards contradicts this text. Known simplifications on the boards: the Requests desktop board shows the chip in the running state, while the list shows one running request. Board data (names, amounts) is fictional.
