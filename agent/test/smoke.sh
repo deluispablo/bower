@@ -39,9 +39,8 @@ cat >"$STUBS/curl" <<'STUB'
 # to Drive's files.list (the instruction-origin listing) records its query
 # and answers per scenario. Like the real Worker (issue #259), a runner call
 # is accepted with the run's ticket only for its own vault (vault-1) and only
-# until the run has reported done or failed, and with the operator key only
-# while the legacy flag is on (SMOKE_LEGACY_KEY=1, "auth=legacy"); anything
-# else gets a 401 (issue #276): the run fails there instead of carrying on
+# until the run has reported done or failed; anything
+# else (the operator key included) gets a 401 (issue #276): the run fails there instead of carrying on
 # with a credential the Worker would refuse.
 set -euo pipefail
 # run.sh's children must not inherit a BOWER_* setting, the run ticket or
@@ -83,8 +82,6 @@ if [ "$bearer" = "$SMOKE_DRIVE_TOKEN" ]; then
 elif [ "$bearer" = "$SMOKE_RUN_TICKET" ] && [ "$own_vault" = yes ] &&
   [ ! -e "$SMOKE_STATE/ticket-retired" ]; then
   auth=ok
-elif [ "$bearer" = "$SMOKE_OPERATOR_KEY" ] && [ "${SMOKE_LEGACY_KEY:-}" = 1 ]; then
-  auth=legacy
 fi
 echo "curl $method $url auth=$auth" >>"$SMOKE_STATE/calls.log"
 if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
@@ -128,7 +125,7 @@ if [ "$SMOKE_SCENARIO" = edge ]; then
   [ "$fmt" != '%{http_code}' ] || printf '403'
   exit 0
 fi
-if [ "$auth" != ok ] && [ "$auth" != legacy ]; then
+if [ "$auth" != ok ]; then
   if [ "$method" = POST ]; then
     echo 'curl: (22) The requested URL returned error: 401' >&2
     exit 22
@@ -1907,27 +1904,15 @@ expect_cleaned_up
 echo "ok a ticket for another vault is refused"
 
 # 21c. No ticket, only the operator key (an instance repo whose workflows
-# predate run tickets): run.sh warns and sends the key, and the stub Worker,
-# with the legacy flag off, refuses it; the key is never printed.
-run_case legacyoff BOWER_RUN_TICKET= "BOWER_API_KEY=$OPERATOR_KEY"
+# predate run tickets, #291): run.sh has no fallback, so it fails cleanly at
+# once, before any call to the Worker, and never prints the key.
+run_case noticket BOWER_RUN_TICKET= "BOWER_API_KEY=$OPERATOR_KEY"
 expect_eq "$RC" 2 'exit code'
-expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=bad" 'vault info request'
-grep -q ' warning: no run ticket, using the operator key' "$STATE/out.log" || die 'no warning without a ticket'
-grep -q ' failed: fetch vault info: HTTP 401$' "$STATE/out.log" || die 'failure does not name the 401'
+expect_eq "$(calls curl)" '' 'curl calls'
+grep -q ' missing setting BOWER_RUN_TICKET$' "$STATE/out.log" || die 'no message about the missing ticket'
 grep -qF -- "$OPERATOR_KEY" "$STATE/out.log" && die 'script output contains the operator key'
 expect_cleaned_up
-echo "ok the operator key is refused while the legacy flag is off"
-
-# 21d. The same with the Worker's legacy flag on: the run goes through, and
-# the key still reaches no child's environment.
-run_case legacyon BOWER_RUN_TICKET= "BOWER_API_KEY=$OPERATOR_KEY" SMOKE_LEGACY_KEY=1
-expect_eq "$RC" 0 'exit code'
-expect_eq "$(post 2 p.state)" done 'second state'
-expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=legacy" 'vault info request'
-expect_curl_env_clean
-expect_content_free
-expect_cleaned_up
-echo "ok the operator key works while the legacy flag is on"
+echo "ok a run with no ticket fails cleanly, the operator key is not a fallback"
 
 # 22. Blocked before the Worker (issue #276): a 403 with an HTML page instead
 # of the Worker's JSON error. The failure says the Worker did not answer, so
