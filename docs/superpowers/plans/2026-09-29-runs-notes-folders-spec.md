@@ -1028,7 +1028,7 @@ These are mechanisms. The content of the old vault's rules (scoring weights, vis
 - Under "Made from", an **Apply** button when the note has `apply_link` (a new job-offer field, `link` type). The advert itself stays in Made from, never twice.
 - "Made for it:" lists the notes Bower wrote for this item (a tailored CV, a letter), as buttons. Only those notes carry `made_for: "[[<item>]]"`; the app works out the list from the notes it already indexes. The item itself stores nothing.
 - **Acceptance criteria:**
-  - [ ] R-VERDICT-1: the verdict row appears only when the note has frontmatter `score` (or `fit`) and `verdict`, both written by the agent (R-AG-11). The app never parses the box text. `score`, `verdict` and `made_for` join `BOOKKEEPING_KEYS` (`details.tsx`), so none shows twice under More.
+  - [ ] R-VERDICT-1: the verdict row appears only when the note has frontmatter `score` (or `fit`) and `verdict`, both written by the agent (R-AG-11). The app never parses the box text. `score`, `verdict` and `made_for` join `BOOKKEEPING_KEYS` (`details.tsx`), so none shows twice under More. `score` and `fit` are read explicitly by Compare (the "Your score" column, R-CMP-2) and the front page (R-FRONT-3); `BOOKKEEPING_KEYS` only keeps them out of Details' More group. `verdict` is never a Compare column.
   - [ ] R-VERDICT-2: `apply_link` becomes a `link` field of the job-offer kind in `kinds.ts` and the rulebook together (parity test `kinds-rulebook.test.ts`), and renders as the Apply button.
   - [ ] R-VERDICT-3: "Made for it" renders the linked notes; CVs and letters named "CV · {employer}" and "Letter · {employer}" (R-AG-4).
 
