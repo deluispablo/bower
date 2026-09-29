@@ -1597,7 +1597,7 @@ if [ "$MODE" = ingest ] && [ "$SCOPE" = instructions ]; then
   mv "$WORK_DIR/in-scope.txt" "$PENDING_FILE"
   log "instructions only: $held files left for the next tidy-up"
 fi
-# --- held for the next tidy-up (R-RUNNER-6) ---------------------------------
+# --- held for the next tidy-up (R-RUNNER-6) ---
 # Everything that reached the inbox after the run was asked for belongs to
 # the next tidy-up, as the app shows it: Waiting (#491). Sync down gives each
 # local file Drive's modifiedTime, so every pending file created or modified
