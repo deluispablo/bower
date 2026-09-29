@@ -24,8 +24,10 @@
  * meaning.
  */
 
-import type { JSX, Ref } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import type { JSX, Ref, RefObject } from 'preact';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+
+import { registerBird, useOverlayBird } from '../bird-presence.js';
 
 import { ONCE_STATES, birdClasses } from './bird-classes.js';
 import type { BirdFace, BirdState } from './bird-classes.js';
@@ -48,6 +50,8 @@ export interface BirdProps {
   reducedMotion?: boolean;
   /** Draws the scene: tray, nests, twig pile and sparkles (see above). */
   scene?: boolean;
+  /** This bird is the one an overlay shows: the others hold still meanwhile. */
+  overlay?: boolean;
   /** Called once when a plays-once state (`hello`, `showoff`, `done`) ends. */
   onDone?: () => void;
 }
@@ -267,6 +271,36 @@ function BirdRig({
   );
 }
 
+/**
+ * True while the tab is hidden or the element is off screen (an
+ * IntersectionObserver, where there is one); the bird pauses then.
+ */
+function useOffScreen(ref: RefObject<SVGSVGElement>): boolean {
+  const [hidden, setHidden] = useState(
+    () => typeof document !== 'undefined' && document.hidden,
+  );
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    function onVisibility(): void {
+      setHidden(document.hidden);
+    }
+    onVisibility();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null || typeof IntersectionObserver !== 'function') return;
+    const observer = new IntersectionObserver((entries) => {
+      const last = entries[entries.length - 1];
+      if (last !== undefined) setVisible(last.isIntersecting);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return hidden || !visible;
+}
+
 export function Bird({
   state,
   face,
@@ -275,6 +309,7 @@ export function Bird({
   down = false,
   reducedMotion = false,
   scene = false,
+  overlay = false,
   onDone,
 }: BirdProps): JSX.Element {
   if (import.meta.env.DEV && size < MARK_BELOW) {
@@ -282,7 +317,11 @@ export function Bird({
       `Bird: size ${size} is under ${MARK_BELOW} px; use BowerMark (spec 6.21 rule 2).`,
     );
   }
-  const still = reducedMotion || prefersReducedMotion();
+  // Presence (spec 6.21 rule 1): while an overlay shows Bower, every other
+  // bird holds its still pose.
+  const otherOverlay = useOverlayBird();
+  const still =
+    reducedMotion || prefersReducedMotion() || (otherOverlay && !overlay);
   const once = ONCE_STATES.includes(state);
   const playsOnce = !still && once;
 
@@ -302,6 +341,19 @@ export function Bird({
   // so it is the same event name wherever the element lacks the handler
   // property (jsdom in the tests).
   const rig = useRef<SVGGElement>(null);
+
+  // Counts as a bird on screen when it is drawn at 40 px or more and is not
+  // the perch; layout effect, so the perch never flashes for a frame.
+  const counts = state !== 'perched' && size >= MARK_BELOW;
+  useLayoutEffect(() => {
+    if (!counts) return;
+    return registerBird(overlay);
+  }, [counts, overlay]);
+
+  // Animations pause while the tab is hidden or the bird is off screen.
+  const svg = useRef<SVGSVGElement>(null);
+  const paused = useOffScreen(svg);
+
   useEffect(() => {
     const element = rig.current;
     if (element === null || !playsOnce || onDone === undefined) return;
@@ -317,7 +369,10 @@ export function Bird({
 
   return (
     <svg
-      class={birdClasses(state, face, flip, still, down)}
+      ref={svg}
+      class={
+        birdClasses(state, face, flip, still, down) + (paused ? ' paused' : '')
+      }
       viewBox="0 0 100 100"
       width={size}
       height={size}

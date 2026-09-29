@@ -83,6 +83,7 @@ import {
   useTour,
 } from '../tour-store.js';
 import { useNew } from '../use-new.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { fileKind, isAppFile } from '../vault-index.js';
 import type { FileKind, VaultIndex } from '../vault-index.js';
 import { originalFileOf } from '../components/about-panel.js';
@@ -545,22 +546,16 @@ export function Home(): JSX.Element {
   // "Let's go" ends it with one show-off on Home.
   const tour = useTour();
   const showTour = tourOnScreen(me, tour);
+  // One greeting, so one bird (spec 6.21 rule 1); 900 px is the CSS breakpoint.
+  const wide = useMediaQuery('(min-width: 900px)');
   const greetingBird: BirdState = tour.showoff ? 'showoff' : birdState;
   const onDone = tour.showoff ? showoffPlayed : () => setRestedPlay(playId);
 
   return (
     <section class="home" data-state={state} aria-busy={loading || undefined}>
       <Greeting
-        variant="phone"
-        size={88}
-        state={greetingBird}
-        greeting={greeting}
-        bubble={bubble}
-        onDone={onDone}
-      />
-      <Greeting
-        variant="desktop"
-        size={112}
+        variant={wide ? 'desktop' : 'phone'}
+        size={wide ? 112 : 88}
         state={greetingBird}
         greeting={greeting}
         bubble={bubble}
