@@ -19,6 +19,8 @@ import { useVault } from '../vault-store.js';
 import type { PinnedItem } from '../vault-store.js';
 import { FolderIcon } from './folder-mark.js';
 import { IconNote } from './icons.js';
+import { KindBadge } from './kind-badge.js';
+import { fileKind, fileTitle } from '../vault-index.js';
 import { useNoteTitles } from './use-note-titles.js';
 
 const ROW_LIMIT = 5;
@@ -57,7 +59,18 @@ export function PinnedSidebar({
       </div>
       <div class="explorer-rows">
         {shown.map((item) =>
-          item.kind === 'note' ? (
+          item.kind === 'file' ? (
+            <a
+              key={item.file.id}
+              href={`/file/${item.file.id}`}
+              class="explorer-row"
+            >
+              <KindBadge kind={fileKind(item.file)} file={item.file} />
+              <span class="explorer-row-label">
+                {fileTitle(item.file.name)}
+              </span>
+            </a>
+          ) : item.kind === 'note' ? (
             <a
               key={item.file.id}
               href={`/note/${item.file.id}`}

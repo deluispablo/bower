@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  clearFilePinned,
   clearPinned,
   folderNoteName,
   folderNotePath,
+  pinnedFilesOf,
   pinnedOf,
+  setFilePinned,
   setPinned,
   sortPinned,
 } from '../src/pins.js';
@@ -124,5 +127,45 @@ describe('folderNoteName / folderNotePath', () => {
     expect(folderNotePath('1-Projects/Move House')).toBe(
       '1-Projects/Move House/_Move House.md',
     );
+  });
+});
+
+describe('file pins (pinned_files)', () => {
+  const ISO = '2026-09-29T09:00:00.000Z';
+
+  it('adds a block map to a note with no frontmatter and reads it back', () => {
+    const text = setFilePinned('Body\n', 'FILE_1', ISO);
+    expect(text).toBe(`---\npinned_files:\n  FILE_1: ${ISO}\n---\nBody\n`);
+    expect([...pinnedFilesOf(text)]).toEqual([['FILE_1', ISO]]);
+  });
+
+  it('keeps other keys, the folder pin and other files', () => {
+    const start = `---\ntags: [a]\npinned: 2026-01-01T00:00:00.000Z\n---\nBody\n`;
+    const one = setFilePinned(start, 'FILE_1', ISO);
+    const two = setFilePinned(one, 'FILE_2', ISO);
+    expect(pinnedOf(two)).toBe('2026-01-01T00:00:00.000Z');
+    expect(two).toContain('tags: [a]');
+    expect([...pinnedFilesOf(two).keys()]).toEqual(['FILE_1', 'FILE_2']);
+    expect(clearPinned(two)).toContain('pinned_files:');
+  });
+
+  it('refreshes an id already pinned instead of duplicating it', () => {
+    const once = setFilePinned('', 'FILE_1', ISO);
+    const twice = setFilePinned(once, 'FILE_1', '2026-10-01T00:00:00.000Z');
+    expect(pinnedFilesOf(twice).size).toBe(1);
+    expect(pinnedFilesOf(twice).get('FILE_1')).toBe('2026-10-01T00:00:00.000Z');
+  });
+
+  it('clearing the last file removes the key, and the frontmatter with it', () => {
+    const pinned = setFilePinned('Body\n', 'FILE_1', ISO);
+    expect(clearFilePinned(pinned, 'FILE_1')).toBe('Body\n');
+    const withKey = setFilePinned('---\ntags: [a]\n---\nBody\n', 'F', ISO);
+    expect(clearFilePinned(withKey, 'F')).toBe('---\ntags: [a]\n---\nBody\n');
+  });
+
+  it('leaves the text alone when the id is not pinned', () => {
+    const text = setFilePinned('', 'FILE_1', ISO);
+    expect(clearFilePinned(text, 'OTHER')).toBe(text);
+    expect(pinnedFilesOf('no frontmatter').size).toBe(0);
   });
 });

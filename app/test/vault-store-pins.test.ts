@@ -96,6 +96,42 @@ describe('hydratePinnedAt', () => {
     expect(getTextMock).toHaveBeenCalledTimes(12);
   });
 
+  it('reads file pins from the folder note and drops a file that left the folder', async () => {
+    const files = buildFiles();
+    files.push(entry('2-Areas/Home/Lease.pdf', 'application/pdf'));
+    files.push(entry('2-Areas/Elsewhere.pdf', 'application/pdf'));
+    const index = buildVaultIndex(files);
+    const folderNoteFile = files.find((f) => f.name === '_Home.md');
+    const lease = files.find((f) => f.name === 'Lease.pdf');
+    const moved = files.find((f) => f.name === 'Elsewhere.pdf');
+    if (
+      folderNoteFile === undefined ||
+      lease === undefined ||
+      moved === undefined
+    ) {
+      throw new Error('fixture missing expected files');
+    }
+
+    searchFullTextMock.mockResolvedValue([folderNoteFile]);
+    getTextMock.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === folderNoteFile.id
+          ? `---
+pinned_files:
+  ${lease.id}: 2026-09-29T09:00:00.000Z
+  ${moved.id}: 2026-09-29T10:00:00.000Z
+---
+`
+          : UNPINNED,
+      ),
+    );
+
+    const { filePinnedAt, folderPinnedAt } = await hydratePinnedAt(index);
+
+    expect([...filePinnedAt.keys()]).toEqual([lease.id]);
+    expect(folderPinnedAt.size).toBe(0);
+  });
+
   it('spends the fetch cap on the newest notes first', async () => {
     const files = buildFiles();
     // The last path is the newest, so path order and newest-first disagree.

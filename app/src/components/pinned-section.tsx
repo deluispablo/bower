@@ -21,8 +21,10 @@ import { folderHref, folderOf } from '../navigation.js';
 import { noteTitle } from '../note-title.js';
 import { openSwitcher } from '../switcher-store.js';
 import type { PinnedItem } from '../vault-store.js';
+import { fileKind, fileTitle } from '../vault-index.js';
 import { Bird } from './bird.js';
 import { IconClose, IconFolder, IconNote } from './icons.js';
+import { KindBadge } from './kind-badge.js';
 import { useNoteTitles } from './use-note-titles.js';
 import '../styles/pinned-section.css';
 
@@ -54,6 +56,7 @@ function tileFor(
   titles: ReadonlyMap<string, string>,
   onUnpinNote: (id: string) => Promise<void>,
   onUnpinFolder: (path: string) => Promise<void>,
+  onUnpinFile: (id: string) => Promise<void>,
 ): Tile {
   if (item.kind === 'note') {
     return {
@@ -63,6 +66,16 @@ function tileFor(
       meta: noteMeta(item.file.path),
       icon: <IconNote />,
       unpin: () => onUnpinNote(item.file.id),
+    };
+  }
+  if (item.kind === 'file') {
+    return {
+      key: item.file.id,
+      href: `/file/${item.file.id}`,
+      name: fileTitle(item.file.name),
+      meta: noteMeta(item.file.path),
+      icon: <KindBadge kind={fileKind(item.file)} file={item.file} />,
+      unpin: () => onUnpinFile(item.file.id),
     };
   }
   return {
@@ -80,6 +93,7 @@ export interface PinnedSectionProps {
   noteCounts: ReadonlyMap<string, number>;
   onUnpinNote: (id: string) => Promise<void>;
   onUnpinFolder: (path: string) => Promise<void>;
+  onUnpinFile: (id: string) => Promise<void>;
   /** Runs an unpin through the shared toast (`pin-action.ts`); resolves to
    * whether it succeeded. Injected so this stays free of the toast import
    * and easy to mount in a smoke test with a plain fixture. */
@@ -98,6 +112,7 @@ export function PinnedSection({
   noteCounts,
   onUnpinNote,
   onUnpinFolder,
+  onUnpinFile,
   runUnpin,
   editing: editingProp,
   onEditingChange,
@@ -123,7 +138,7 @@ export function PinnedSection({
   if (items.length === 0) return null;
 
   const live = shown.map((item) =>
-    tileFor(item, noteCounts, titles, onUnpinNote, onUnpinFolder),
+    tileFor(item, noteCounts, titles, onUnpinNote, onUnpinFolder, onUnpinFile),
   );
   const tiles =
     pending !== null && !live.some((tile) => tile.key === pending.key)
