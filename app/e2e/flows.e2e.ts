@@ -2467,7 +2467,7 @@ test('a project folder lists its files and notes together, newest first, with wh
   test.skip(testInfo.project.name === 'phone', 'no Drive action on the phone');
   // The Drive chip is greyed in the demo (#555): the fixture ids are not
   // real Drive ids, so it never opens a broken Drive page.
-  const drive = page.getByRole('button', {
+  const drive = page.locator('.folder-chips').getByRole('button', {
     name: 'Open in Drive',
     exact: true,
   });

@@ -204,6 +204,9 @@ test('tiles show thumbnails online and the kind icon offline (#613)', async ({
   const pair = page
     .locator('.folder-tile', { hasText: 'Arlington Road, 2 bed' })
     .first();
+  // #761: the header and the suggestion push the tiles down; the note
+  // lines only load once a tile is in view.
+  await pair.scrollIntoViewIfNeeded();
   await expect(pair).toContainText('Bower’s note');
   await expect(pair.locator('.note-line').first()).toBeVisible();
   // Originals: the photo alone, with Drive's picture.
