@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { FOLDER_MIME } from '../src/drive.js';
 import {
@@ -12,10 +12,11 @@ import {
   inboxBreakdown,
   resultMessage,
   runKey,
+  startConfirmedTidyUp,
   STARTING_MESSAGE,
   writeSeenRunKey,
 } from '../src/run-store.js';
-import type { RunSheetStorage, RunState } from '../src/run-store.js';
+import type { RunEvent, RunSheetStorage, RunState } from '../src/run-store.js';
 import type { Run } from '../src/api.js';
 import type { DriveFile } from '../src/drive.js';
 import { inboxCount } from '../src/inbox-count.js';
@@ -670,5 +671,35 @@ describe('lastFinishedRun (#321)', () => {
     expect(lastFinishedRun(done, running)).toBe(done);
     expect(lastFinishedRun(done, null)).toBe(done);
     expect(lastFinishedRun(null, running)).toBeNull();
+  });
+});
+
+describe('startConfirmedTidyUp (#769, R-PILE-7)', () => {
+  it('asks for the run once every pile is flushed', async () => {
+    const apply = vi.fn<(event: RunEvent) => void>();
+    const process = vi.fn();
+    const flush = vi.fn((start: () => void) => {
+      start();
+      return Promise.resolve(true);
+    });
+
+    expect(await startConfirmedTidyUp(apply, flush, process)).toBe(true);
+    expect(process).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls.map((call) => call[0])).toEqual([
+      { type: 'starting' },
+    ]);
+  });
+
+  it('never calls /process when a pile fails to flush, and goes back to idle', async () => {
+    const apply = vi.fn<(event: RunEvent) => void>();
+    const process = vi.fn();
+    const flush = vi.fn(() => Promise.resolve(false));
+
+    expect(await startConfirmedTidyUp(apply, flush, process)).toBe(false);
+    expect(process).not.toHaveBeenCalled();
+    expect(apply.mock.calls.map((call) => call[0])).toEqual([
+      { type: 'starting' },
+      { type: 'reset' },
+    ]);
   });
 });
