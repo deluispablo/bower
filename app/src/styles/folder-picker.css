@@ -1,8 +1,7 @@
 /*
- * The Move to… folder picker (#608, board Phone-Move-Picker): the content
- * of an `Overlay` dialog (`overlay.css` owns the scrim, the phone sheet and
- * the centred desktop dialog). Colours are tokens only; the marks come from
- * `marks.css`.
+ * The folder choice in the Move sheet (#608, #866): the body of the
+ * send-to-Bower sheet in move mode. Colours are tokens only; the marks come
+ * from `marks.css`.
  */
 
 .folder-picker-body {
@@ -10,15 +9,7 @@
   flex-direction: column;
   gap: var(--space-2);
   min-height: 0;
-  padding: var(--space-1) var(--space-3);
-}
-
-.folder-picker-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
-  color: var(--color-text);
+  padding: 0;
 }
 
 .folder-picker-search {
@@ -52,6 +43,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: 40vh;
   overflow-y: auto;
 }
 
@@ -140,41 +132,4 @@
   font-size: var(--text-sm);
   line-height: 1.45;
   color: var(--color-text-muted);
-}
-
-.folder-picker-error {
-  margin: 0;
-  color: var(--color-danger);
-  font-size: var(--text-sm);
-}
-
-.folder-picker-actions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.folder-picker-primary {
-  flex-grow: 1;
-  min-height: 48px;
-}
-
-.folder-picker-secondary {
-  min-height: 48px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--weight-bold);
-  cursor: pointer;
-}
-
-.folder-picker-secondary:hover:not(:disabled) {
-  background: var(--color-surface-hover);
-}
-
-.folder-picker-secondary:disabled {
-  opacity: 0.55;
-  cursor: default;
 }

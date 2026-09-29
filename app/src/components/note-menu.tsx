@@ -24,9 +24,9 @@
  * "Ask Bower about this" opens the Bower tab's box prefilled through
  * `/bower?text=` (`more-menu.ts`) with the thing's name and nothing else.
  * "Show in folders" (#608) opens the Notes tab revealed at the item (phone)
- * or scrolls the sidebar to it (desktop). "Move to…" opens the folder
- * picker (`folder-picker.tsx`): the app never moves anything itself, it
- * writes a request for Bower.
+ * or scrolls the sidebar to it (desktop). "Move to…" opens the send sheet
+ * in move mode (`send-to-bower.tsx`, #866): the app never moves anything
+ * itself, it writes a request for Bower.
  *
  * "Add a paragraph…" (issue #307, Part E 18.4) reveals the append form
  * ("Add to this note"); it is a note-only row the board does not draw,
@@ -47,6 +47,7 @@ import {
   showInFoldersHref,
 } from '../more-menu.js';
 import type { MoreMenuKind } from '../more-menu.js';
+import { moveRequestText } from '../move-request.js';
 import { driveFolderUrl } from '../navigation.js';
 import {
   renameRequestText,
@@ -57,7 +58,6 @@ import { showToast } from '../toast-store.js';
 import { isAppFile } from '../vault-index.js';
 import { mediaMatches } from '../use-media-query.js';
 import { FolderMark } from './folder-mark.js';
-import { MoveFlow } from './folder-picker.js';
 import { openSendToBower } from './send-to-bower.js';
 import {
   IconChat,
@@ -192,7 +192,6 @@ export function NoteMenu({
   const panelRef = useRef<HTMLDivElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
-  const [moving, setMoving] = useState(false);
   useFocusTrap(panelRef, onClose);
 
   useEffect(() => {
@@ -260,6 +259,20 @@ export function NoteMenu({
     });
   }
 
+  /** Move to… (#866): the same send sheet, with a folder choice. */
+  function move(): void {
+    const place = moreMenuHeader(typeLabel, file.path).place;
+    onClose();
+    openSendToBower({
+      mode: 'move',
+      about: place?.label ?? 'your notes',
+      ...(place?.kind != null && { aboutKind: place.kind }),
+      moveSubject: { path: file.path, isFolder: kind === 'folder' },
+      buildText: (destination) =>
+        moveRequestText(askName, file.path, destination),
+    });
+  }
+
   function selectAndClose(action: () => void): () => void {
     return () => {
       onClose();
@@ -279,21 +292,12 @@ export function NoteMenu({
   return (
     <div class="note-menu">
       <div class="note-menu-backdrop" aria-hidden="true" onClick={onClose} />
-      {moving && (
-        <MoveFlow
-          name={askName}
-          path={file.path}
-          isFolder={kind === 'folder'}
-          onClose={onClose}
-        />
-      )}
       <div
         ref={panelRef}
         class="note-menu-panel"
         role="menu"
         aria-label={MENU_LABELS[kind]}
         tabIndex={-1}
-        hidden={moving}
       >
         <div class="note-menu-head" role="presentation">
           <span class="note-menu-title">{title}</span>
@@ -368,7 +372,7 @@ export function NoteMenu({
           type="button"
           role="menuitem"
           class="note-menu-row"
-          onClick={() => setMoving(true)}
+          onClick={move}
         >
           <IconFolder />
           <span class="note-menu-row-text">
