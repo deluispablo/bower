@@ -281,6 +281,28 @@
   .switcher-bird {
     display: none;
   }
+
+  /* Board Phone-Search: the switcher is a full screen, not a sheet. */
+  .switcher-panel {
+    inset: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* The chip row scrolls sideways; the last chip ("Any time") never clips. */
+  .switcher-chips {
+    max-width: 100%;
+    scroll-padding-inline: var(--space-3);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .switcher-chips::after {
+    content: '';
+    flex: 0 0 var(--space-1);
+  }
 }
 
 @keyframes switcher-in {
