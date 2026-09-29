@@ -93,6 +93,7 @@ import {
 } from '../tell.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import { useMediaQuery } from '../use-media-query.js';
+import { requestRowText } from '../move-request.js';
 import '../styles/bower.css';
 
 /** The phone top bar's title (spec §14): a stable element, so it never
@@ -309,7 +310,7 @@ function RequestsList({
           <StateIcon state={row.state} />
           <div class="bower-request-body">
             <p class="bower-request-head">
-              <span class="bower-request-text">{row.text}</span>
+              <span class="bower-request-text">{requestRowText(row.text)}</span>
               <span class={`bower-state bower-state--${row.state}`}>
                 {stateLabel(row)}
               </span>

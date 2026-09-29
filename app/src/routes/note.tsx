@@ -27,7 +27,13 @@ import { keyFactsFor, kindById } from '../kinds.js';
 import { propertiesFor } from '../markdown/frontmatter.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
-import { breadcrumb, folderHref, folderOf, paraKindOf } from '../navigation.js';
+import {
+  breadcrumb,
+  displayName,
+  folderHref,
+  folderOf,
+  paraKindOf,
+} from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
 import { noteMetaFrom } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
@@ -90,7 +96,7 @@ function Crumb({ crumbs, title }: CrumbProps): JSX.Element {
 function folderLinkFor(path: string): NoteFolderLink | undefined {
   const parent = folderOf(path);
   if (parent === '') return undefined;
-  const name = parent.slice(parent.lastIndexOf('/') + 1);
+  const name = displayName(parent.slice(parent.lastIndexOf('/') + 1));
   return { name, href: folderHref(parent) };
 }
 

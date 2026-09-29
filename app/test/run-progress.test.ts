@@ -302,6 +302,7 @@ describe('destinationsLabel', () => {
     });
     expect(destinationsLabel([])).toBeNull();
     expect(destinationsLabel([row(null)])).toBeNull();
+    expect(destinationsLabel([row('3-Resources')])).toBe('Resources');
     expect(
       destinationsLabel(
         ['Flat hunt', 'Finance', 'Flat hunt', 'Answers', 'Garden'].map(row),

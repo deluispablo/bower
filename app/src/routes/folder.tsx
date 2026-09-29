@@ -57,6 +57,7 @@ import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
 import { askBowerHref } from '../more-menu.js';
 import {
   breadcrumb,
+  displayName,
   driveFolderUrl,
   folderContents,
   folderEmptyState,
@@ -140,7 +141,7 @@ interface FolderCrumbProps {
 function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
   return (
     <>
-      <span class="topbar-title">{name}</span>
+      <span class="topbar-title">{displayName(name)}</span>
       <nav class="breadcrumb" aria-label="Folder">
         {ancestors.map((crumb) => (
           <span key={crumb.path}>

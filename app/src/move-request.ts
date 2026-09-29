@@ -10,7 +10,12 @@
 
 import type { RunScope } from './api.js';
 import { INSTRUCTION_APP_PROPERTIES } from './drive.js';
-import { displayName, folderOf, paraKindOf } from './navigation.js';
+import {
+  displayName,
+  displayPath,
+  folderOf,
+  paraKindOf,
+} from './navigation.js';
 import type { TreeNode } from './navigation.js';
 import { instructionFileName, instructionNote } from './tell.js';
 
@@ -24,6 +29,22 @@ export function moveRequestText(
   destination: string,
 ): string {
   return `Move “${name}” (${path}) to ${destination}.`;
+}
+
+/**
+ * A move request as the Requests row shows it: the same words with the
+ * numeric prefixes left off every folder in the two paths. The note keeps
+ * the real paths; only the display changes. Other text is returned as is.
+ */
+export function requestRowText(text: string): string {
+  const match = /^Move “(.+)” \((.+)\) to (.+)\.$/.exec(text);
+  if (match === null) return text;
+  const [, name = '', path = '', destination = ''] = match;
+  return moveRequestText(
+    name,
+    displayPath(path, '/'),
+    displayPath(destination, '/'),
+  );
 }
 
 /** What the picker is moving: a note, a file or a folder. */
