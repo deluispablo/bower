@@ -34,7 +34,7 @@
  * (`!isProtectedNote`, `routes/note.tsx`).
  */
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { isDemo } from '../api.js';
@@ -54,10 +54,13 @@ import {
   splitFileName,
   validateRename,
 } from '../rename-request.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { showToast } from '../toast-store.js';
 import { isAppFile } from '../vault-index.js';
 import { mediaMatches } from '../use-media-query.js';
 import { FolderMark } from './folder-mark.js';
+import { Overlay } from './overlay.js';
+import { Queued } from './queued-overlay.js';
 import { openSendToBower } from './send-to-bower.js';
 import {
   IconChat,
@@ -68,7 +71,6 @@ import {
   IconPin,
   IconPlus,
 } from './icons.js';
-import { useFocusTrap } from './use-focus-trap.js';
 import '../styles/note-menu.css';
 
 const MENU_LABELS: Readonly<Record<MoreMenuKind, string>> = {
@@ -189,14 +191,7 @@ export function NoteMenu({
   siblingNames,
   onClose,
 }: NoteMenuProps): JSX.Element {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const linkInputRef = useRef<HTMLInputElement>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
-  useFocusTrap(panelRef, onClose);
-
-  useEffect(() => {
-    if (copyState === 'manual') linkInputRef.current?.select();
-  }, [copyState]);
 
   async function handleCopyLink(): Promise<void> {
     setCopyState((await copyToClipboard(location.href)) ? 'copied' : 'manual');
@@ -289,16 +284,9 @@ export function NoteMenu({
   const driveHref =
     kind === 'folder' ? driveFolderUrl(file) : driveViewUrl(file);
 
-  return (
-    <div class="note-menu">
-      <div class="note-menu-backdrop" aria-hidden="true" onClick={onClose} />
-      <div
-        ref={panelRef}
-        class="note-menu-panel"
-        role="menu"
-        aria-label={MENU_LABELS[kind]}
-        tabIndex={-1}
-      >
+
+    <Queued id="note-menu" priority={OVERLAY_PRIORITY.own}>
+      <Overlay kind="menu" label={MENU_LABELS[kind]} onClose={onClose}>
         <div class="note-menu-head" role="presentation">
           <span class="note-menu-title">{title}</span>
           <span class="note-menu-meta">
@@ -440,7 +428,7 @@ export function NoteMenu({
         </button>
         {copyState === 'manual' && (
           <input
-            ref={linkInputRef}
+            ref={(input) => input?.select()}
             class="note-menu-copy-fallback"
             aria-label={`This ${kind}'s link`}
             readOnly
@@ -487,7 +475,9 @@ export function NoteMenu({
         >
           Cancel
         </button>
-      </div>
-    </div>
+      </Overlay>
+    </Queued>
   );
+
+  return menu;
 }
