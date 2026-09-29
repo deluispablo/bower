@@ -65,6 +65,7 @@ import { BackLink } from './back-link.js';
 import { DemoBanner } from './demo-banner.js';
 import { Explorer, useHealthIsNew } from './explorer.js';
 import { HelpSheet } from './help-sheet.js';
+import { SidebarSeparator } from './sidebar-separator.js';
 import { useShellSlots } from './shell-slots.js';
 import {
   IconChat,
@@ -193,15 +194,28 @@ function useDesktop(): boolean {
  * script, no CSP change) and kept clamped as the window resizes; `undefined`
  * means "no stored width", the stylesheet's 264 px. */
 function useSidebarWidth(): number | undefined {
-  const [stored] = useState(readStoredSidebarWidth);
+  const [stored, setStored] = useState(readStoredSidebarWidth);
   const [viewport, setViewport] = useState(() => window.innerWidth);
   useEffect(() => {
+    // The resize handle writes the new width when a drag (or a key press, or
+    // a double click) ends; reading it again keeps this state in step, so a
+    // window resize does not bring the old width back.
+    const reread = (): void => {
+      setStored(readStoredSidebarWidth());
+    };
     const update = (): void => {
       setViewport(window.innerWidth);
+      reread();
     };
     window.addEventListener('resize', update);
+    document.addEventListener('pointerup', reread);
+    document.addEventListener('keyup', reread);
+    document.addEventListener('dblclick', reread);
     return () => {
       window.removeEventListener('resize', update);
+      document.removeEventListener('pointerup', reread);
+      document.removeEventListener('keyup', reread);
+      document.removeEventListener('dblclick', reread);
     };
   }, []);
   return stored === null ? undefined : clampSidebarWidth(stored, viewport);
@@ -324,6 +338,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         <div class="shell-ledge" data-slot="ledge" aria-hidden="true">
           {ledge}
         </div>
+        <SidebarSeparator />
       </div>
       <div class="shell-main">
         {/* The one centred container (#355, Desktop-Responsive board): the
