@@ -40,6 +40,26 @@ test('"flat hnt" finds Flat hunt: chips with counts and the three groups in orde
   ).toBeVisible();
   await expect(chips.getByRole('button', { name: 'Any time' })).toBeVisible();
 
+  // Full screen below 900 px, and the chip row scrolls rather than clipping.
+  const viewport = page.viewportSize();
+  const box = await dialog.boundingBox();
+  expect(box).toMatchObject({
+    x: 0,
+    y: 0,
+    width: viewport?.width,
+    height: viewport?.height,
+  });
+  const time = chips.getByRole('button', { name: 'Any time' });
+  await time.scrollIntoViewIfNeeded();
+  const chipBox = await time.boundingBox();
+  expect(chipBox).not.toBeNull();
+  expect((chipBox?.x ?? 0) + (chipBox?.width ?? 0)).toBeLessThanOrEqual(
+    viewport?.width ?? 0,
+  );
+  expect(await chips.evaluate((el) => getComputedStyle(el).overflowX)).toBe(
+    'auto',
+  );
+
   await expect(
     dialog.locator('.switcher-heading').filter({ hasText: /^Folder$/ }),
   ).toBeVisible();

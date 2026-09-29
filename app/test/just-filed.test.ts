@@ -23,6 +23,7 @@ import {
   hasDestinations,
   justFiledRows,
   latestRun,
+  linkAddress,
   rowLabel,
   rowSub,
   setAsideRows,
@@ -104,6 +105,39 @@ const run: Run = {
     { path: '1-Projects/Flat hunt/Walk-through.mp4', reason: 'kept-not-read' },
   ],
 };
+
+describe('linkAddress', () => {
+  it('shows host and path, eliding the middle of a long path', () => {
+    expect(
+      linkAddress('https://www.rightmove.example.com/properties/kentish-town'),
+    ).toBe('rightmove.example.com/…/kentish-town');
+    expect(linkAddress('https://example.com/a')).toBe('example.com/a');
+    expect(linkAddress('https://example.com/')).toBe('example.com');
+  });
+
+  it('is null for a source that is not an http address', () => {
+    expect(linkAddress('not a url')).toBeNull();
+    expect(linkAddress('ftp://example.com/x')).toBeNull();
+    expect(linkAddress(undefined)).toBeNull();
+  });
+
+  it('keeps a rename whose old name equals the new file name', () => {
+    const same: Run = {
+      ...run,
+      items: [
+        {
+          path: '0-Inbox/x.pdf',
+          kind: 'file',
+          to: '1-Projects/Flat hunt/Arlington Road, 2 bed.pdf',
+          renamedFrom: 'Arlington Road, 2 bed.pdf',
+        },
+      ],
+    };
+    expect(justFiledRows(same, index)[0]?.oldName).toBe(
+      'Arlington Road, 2 bed.pdf',
+    );
+  });
+});
 
 describe('justFiledRows', () => {
   const rows = justFiledRows(run, index);
