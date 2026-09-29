@@ -26,20 +26,49 @@ interface Tile {
   warn: boolean;
 }
 
-/** The four tiles of the `stats` size, in order. */
+/**
+ * The tiles of the `stats` size, in order: filed, new notes, updated, then
+ * "needs you" (or, on a partly done run, "still in your inbox" and, only if
+ * some things were set aside, their own "needs you" tile). The numbers are the
+ * ones the inline line shows. Labels are lower case: the accessible text of a
+ * tile is "{n} {label}".
+ */
 export function summaryTiles(outcome: RunOutcome): Tile[] {
-  const partial = outcome.state === 'partial';
-  return [
-    { key: 'filed', value: outcome.filed, label: 'Filed', warn: false },
-    { key: 'new', value: outcome.created, label: 'New notes', warn: false },
-    { key: 'updated', value: outcome.updated, label: 'Updated', warn: false },
+  const tiles: Tile[] = [
+    { key: 'filed', value: outcome.filed, label: 'filed', warn: false },
     {
+      key: 'new',
+      value: outcome.created,
+      label: outcome.created === 1 ? 'new note' : 'new notes',
+      warn: false,
+    },
+    { key: 'updated', value: outcome.updated, label: 'updated', warn: false },
+  ];
+  if (outcome.state === 'partial') {
+    tiles.push({
+      key: 'left',
+      value: outcome.left,
+      label: 'still in your inbox',
+      warn: outcome.left > 0,
+    });
+    const setAside = outcome.needsYou - outcome.left;
+    if (setAside > 0) {
+      tiles.push({
+        key: 'needs',
+        value: setAside,
+        label: 'needs you',
+        warn: true,
+      });
+    }
+  } else {
+    tiles.push({
       key: 'needs',
       value: outcome.needsYou,
-      label: partial ? 'Still in your inbox' : 'Needs you',
+      label: 'needs you',
       warn: outcome.needsYou > 0,
-    },
-  ];
+    });
+  }
+  return tiles;
 }
 
 export function RunSummary({
@@ -53,19 +82,23 @@ export function RunSummary({
     return <span class="run-summary-inline">{text}</span>;
   }
 
+  const tiles = summaryTiles(outcome);
   return (
     <div class="run-summary-box">
-      <dl class="run-summary-stats">
-        {summaryTiles(outcome).map((tile) => (
-          <div
+      <ul
+        class={`run-summary-stats run-summary-stats-${tiles.length}`}
+        aria-label="What this tidy-up did"
+      >
+        {tiles.map((tile) => (
+          <li
             class={`run-summary-tile${tile.value === 0 ? ' run-summary-zero' : ''}${tile.warn ? ' run-summary-warn' : ''}`}
             key={tile.key}
           >
-            <dd class="run-summary-value">{tile.value}</dd>
-            <dt class="run-summary-label">{tile.label}</dt>
-          </div>
+            <span class="run-summary-value">{tile.value}</span>{' '}
+            <span class="run-summary-label">{tile.label}</span>
+          </li>
         ))}
-      </dl>
+      </ul>
     </div>
   );
 }
