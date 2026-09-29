@@ -32,6 +32,31 @@ describe('widthForKey', () => {
   });
 });
 
+describe('SidebarSeparator in a narrow window', () => {
+  it('reports the clamped width shown, not the stored one', async () => {
+    localStorage.setItem('bower:pref:sidebarWidth', '480');
+    Object.defineProperty(window, 'innerWidth', {
+      value: 1000,
+      configurable: true,
+    });
+    const host = document.createElement('div');
+    document.body.append(host);
+    await act(() => {
+      render(
+        h('div', { class: 'shell-sidebar' }, h(SidebarSeparator, {})),
+        host,
+      );
+    });
+    expect(
+      host.querySelector('[role="separator"]')?.getAttribute('aria-valuenow'),
+    ).toBe('440');
+    await act(() => {
+      render(null, host);
+    });
+    host.remove();
+  });
+});
+
 describe('SidebarSeparator', () => {
   let shell: HTMLElement;
   let handle: HTMLElement;

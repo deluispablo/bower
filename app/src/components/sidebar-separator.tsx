@@ -50,6 +50,18 @@ export function widthForKey(key: string, current: number): number | null {
   }
 }
 
+function readStoredWidth(): number {
+  try {
+    const value: unknown = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) ?? 'null',
+    );
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  } catch {
+    // Storage blocked or unreadable: the default applies.
+  }
+  return SIDEBAR_DEFAULT;
+}
+
 function storeWidth(px: number): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(px));
@@ -61,7 +73,12 @@ function storeWidth(px: number): void {
 
 export function SidebarSeparator(): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(SIDEBAR_DEFAULT);
+  // What was asked for (stored or dragged), and the window it must fit; the
+  // value shown is the clamped result, so a narrow window reports the width
+  // actually on screen.
+  const [stored, setStored] = useState(readStoredWidth);
+  const [viewport, setViewport] = useState(() => window.innerWidth);
+  const width = clampWidth(stored, viewport);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{
     startX: number;
@@ -84,7 +101,15 @@ export function SidebarSeparator(): JSX.Element {
 
   // Follow the stored width on mount and keep the handle's value in step.
   useEffect(() => {
-    setWidth(clampWidth(current(), window.innerWidth));
+    const measured = ref.current?.parentElement?.getBoundingClientRect().width;
+    if (measured !== undefined && measured > 0) setStored(Math.round(measured));
+    const onResize = (): void => {
+      setViewport(window.innerWidth);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+    };
   }, []);
 
   useEffect(
@@ -103,7 +128,7 @@ export function SidebarSeparator(): JSX.Element {
 
   function commit(px: number): void {
     paint(px);
-    setWidth(px);
+    setStored(px);
     storeWidth(px);
   }
 
