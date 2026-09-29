@@ -4,7 +4,8 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Tree } from '../src/components/tree.js';
+import { SidebarSeparator } from '../src/components/sidebar-separator.js';
+import { Tree, rowDescription } from '../src/components/tree.js';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import { folderHref } from '../src/navigation.js';
@@ -18,6 +19,7 @@ interface Saved {
 const state = vi.hoisted(() => ({
   saved: undefined as Saved | undefined,
   newIds: new Set<string>(),
+  renders: 0,
 }));
 
 vi.mock('../src/cache.js', async (importOriginal) => ({
@@ -39,16 +41,19 @@ vi.mock('../src/vault-store.js', () => ({
 }));
 
 vi.mock('../src/use-new.js', () => ({
-  useNew: () => ({
-    ids: state.newIds,
-    isNew: (id: string) => state.newIds.has(id),
-    newCountIn: (path: string) =>
-      path === '1-Projects/Flat hunt' || path === '1-Projects'
-        ? state.newIds.size
-        : 0,
-    markSeen: vi.fn(),
-    markAllSeen: vi.fn(),
-  }),
+  useNew: () => {
+    state.renders++;
+    return {
+      ids: state.newIds,
+      isNew: (id: string) => state.newIds.has(id),
+      newCountIn: (path: string) =>
+        path === '1-Projects/Flat hunt' || path === '1-Projects'
+          ? state.newIds.size
+          : 0,
+      markSeen: vi.fn(),
+      markAllSeen: vi.fn(),
+    };
+  },
 }));
 
 let nextId = 0;
@@ -247,5 +252,82 @@ describe('Tree v4', () => {
     );
     expect(tags).toContain('New');
     expect(tags).toContain('1 new');
+  });
+});
+
+describe('Tree names and descriptions (R-SIDE-3)', () => {
+  it('names each link by the item alone, with a tooltip and a description', async () => {
+    state.newIds = new Set(['id4']);
+    await mount();
+    const folder = host.querySelector<HTMLElement>(
+      `a[href="${folderHref('1-Projects')}"]`,
+    );
+    expect(folder?.getAttribute('aria-label')).toBe('Projects');
+    expect(folder?.getAttribute('title')).toBe('Projects');
+    const descId = folder?.getAttribute('aria-describedby') ?? '';
+    expect(host.querySelector(`#${descId}`)?.textContent).toBe(
+      '3 items, 1 new',
+    );
+    const inbox = host.querySelector<HTMLElement>(
+      `a[href="${folderHref('0-Inbox')}"]`,
+    );
+    expect(inbox?.getAttribute('aria-describedby')).toBeNull();
+  });
+
+  it('describes counts and New in words', () => {
+    expect(rowDescription(3, 0)).toBe('3 items');
+    expect(rowDescription(1, 2)).toBe('1 item, 2 new');
+    expect(rowDescription(0, 0)).toBeUndefined();
+    expect(rowDescription(undefined, 0, true)).toBe('New');
+  });
+});
+
+describe('Sidebar drag (R-SIDE-4)', () => {
+  it('does not re-render the tree while the pointer moves', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+    const shell = document.createElement('div');
+    shell.className = 'shell';
+    document.body.append(shell);
+    await act(() => {
+      render(
+        h(
+          'div',
+          { class: 'shell-sidebar' },
+          h(Tree, { index: buildVaultIndex(files) }),
+          h(SidebarSeparator, {}),
+        ),
+        shell,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const handle = shell.querySelector<HTMLElement>('[role="separator"]')!;
+    handle.setPointerCapture = vi.fn();
+    handle.releasePointerCapture = vi.fn();
+    handle.hasPointerCapture = () => true;
+    const fire = (type: string, clientX: number): void => {
+      const event = new MouseEvent(type, { clientX, bubbles: true });
+      Object.defineProperty(event, 'pointerId', { value: 1 });
+      handle.dispatchEvent(event);
+    };
+    const before = state.renders;
+    fire('pointerdown', 264);
+    for (let x = 270; x <= 360; x += 10) {
+      fire('pointermove', x);
+      frames.splice(0).forEach((cb) => {
+        cb(0);
+      });
+    }
+    expect(shell.style.getPropertyValue('--sidebar-width')).toBe('360px');
+    expect(state.renders).toBe(before);
+    render(null, shell);
+    shell.remove();
+    vi.unstubAllGlobals();
   });
 });
