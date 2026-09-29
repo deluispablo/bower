@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { noteTitle } from '../src/note-title.js';
+import { isLinkNote, noteTitle } from '../src/note-title.js';
 
 function lines(...rows: string[]): string {
   return rows.join('\n');
@@ -116,5 +116,27 @@ describe('noteTitle', () => {
     expect(noteTitle({ name: 'Note.md' }, 'mailto:you@example.com')).toBe(
       'Note',
     );
+  });
+});
+
+describe('saved links (#687)', () => {
+  const name = 'Link - example.com 2026-09-29 0252.md';
+
+  it('is a link by its generated name, or by source URL plus link tag', () => {
+    expect(isLinkNote(name)).toBe(true);
+    expect(
+      isLinkNote('Photos.md', {
+        source: 'https://example.com/a',
+        tags: ['link'],
+      }),
+    ).toBe(true);
+    expect(isLinkNote('Photos.md', { source: 'https://example.com/a' })).toBe(
+      false,
+    );
+    expect(isLinkNote('Lease.md')).toBe(false);
+  });
+
+  it('titles a link from its host, not its generated file name', () => {
+    expect(noteTitle({ name })).toBe('example.com');
   });
 });

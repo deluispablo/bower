@@ -11,6 +11,7 @@
  * (a list of many notes it never opened) gets the file-name fallback.
  */
 
+import { linkTitleFromFileName } from './add.js';
 import { parseFrontmatter } from './markdown/frontmatter.js';
 
 /** A fenced code block's opening or closing line: three or more backticks
@@ -62,6 +63,35 @@ function titleFromBareUrl(body: string): string | null {
   return `${host}${path}`;
 }
 
+/** `value` as a bare `http:`/`https:` URL, or `null`. */
+function httpUrl(value: unknown): URL | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const parsed = new URL(value.trim());
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a note is a saved link (#687): Add's generated `Link - host date
+ * time.md` name, or frontmatter with an `http(s)` `source` and a `link`
+ * tag. It gets the `LINK` badge and a title from its URL, never `MD`.
+ * `fields` is the note's frontmatter when the caller has it.
+ */
+export function isLinkNote(
+  name: string,
+  fields?: Readonly<Record<string, unknown>>,
+): boolean {
+  if (linkTitleFromFileName(name) !== null) return true;
+  if (fields === undefined || httpUrl(fields.source) === null) return false;
+  const tags = Array.isArray(fields.tags) ? fields.tags : [fields.tags];
+  return tags.some((t) => typeof t === 'string' && t.trim() === 'link');
+}
+
 /**
  * The first `# ` heading in `body` (the note's text, frontmatter already
  * removed), or `null` when it has none. A heading inside a fenced code
@@ -97,6 +127,12 @@ export function noteTitle(file: { name: string }, text?: string): string {
     if (fromHeading !== null) return fromHeading;
     const fromUrl = titleFromBareUrl(body);
     if (fromUrl !== null) return fromUrl;
+    const source = httpUrl(data.source);
+    if (source !== null && isLinkNote(file.name, data)) {
+      return titleFromBareUrl(source.href) ?? stripMdExtension(file.name);
+    }
   }
+  const fromName = linkTitleFromFileName(file.name);
+  if (fromName !== null) return fromName;
   return stripMdExtension(file.name);
 }

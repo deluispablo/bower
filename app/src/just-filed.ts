@@ -17,6 +17,7 @@ import { runCounts, things } from './home.js';
 import { shortDay } from './rules.js';
 import { displayPath, paraKindOf } from './navigation.js';
 import type { ParaKind } from './components/folder-mark.js';
+import { linkTitleFromFileName } from './add.js';
 import { fileKind, fileTitle } from './vault-index.js';
 import type { FileKind, VaultIndex } from './vault-index.js';
 
@@ -127,7 +128,7 @@ function rowOf(item: RunItem & { to: string }, index: VaultIndex | null) {
   const row: JustFiledRow = {
     key: item.path,
     to: item.to,
-    title: fileTitle(name),
+    title: linkTitleFromFileName(name) ?? fileTitle(name),
     kind,
     name,
     folder: folderLabel(folderOf(item.to)),
@@ -212,7 +213,7 @@ function asideRowOf(item: SetAsideItem, index: VaultIndex | null): SetAsideRow {
   const kind = file === undefined ? kindOfName(name) : fileKind(file);
   const row: SetAsideRow = {
     key: item.path,
-    title: fileTitle(name),
+    title: linkTitleFromFileName(name) ?? fileTitle(name),
     folder: folderLabel(folderOf(item.path)),
     reason: item.reason,
     sentence: setAsideSentence(item.reason, kind),
