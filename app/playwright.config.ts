@@ -14,8 +14,9 @@ declare const process: { env: Record<string, string | undefined> };
 const CI = process.env.CI !== undefined && process.env.CI !== '';
 
 // An unusual port, so `reuseExistingServer` never picks up another app's
-// preview on Vite's default 4173.
-const PORT = 4196;
+// preview on Vite's default 4173. `E2E_PORT` gives parallel worktrees each
+// their own server.
+const PORT = Number(process.env.E2E_PORT ?? '4196');
 const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({

@@ -34,6 +34,12 @@ interface OverlayBaseProps {
   children: ComponentChildren;
   /** Where it sits from 900 px up; the default follows `kind`. */
   desktopPlacement?: OverlayPlacement;
+  /**
+   * A scrim tap this many ms after the overlay opened is ignored (#510): a
+   * fast double-tap on the opener can land its second tap on the scrim that
+   * now covers the same spot. Off by default; Escape is never guarded.
+   */
+  scrimGuardMs?: number;
 }
 
 /** Named by a visible heading (`labelledBy`) or by a `label`, never neither. */
@@ -95,6 +101,14 @@ export function Overlay(props: OverlayProps): JSX.Element {
   const panel = useRef<HTMLDivElement>(null);
 
   const opener = useRef<HTMLElement | null>(null);
+  // Set on the first render, not in an effect, so a second tap that arrives
+  // before the next paint still reads the open time.
+  const openedAt = useRef(Date.now());
+  const guardMs = props.scrimGuardMs ?? 0;
+  const onScrim = (): void => {
+    if (Date.now() - openedAt.current < guardMs) return;
+    onClose();
+  };
 
   // Runs before `lockPage()` makes the page inert (which blurs the opener)
   // and before the focus trap's effect, so the opener is still focused.
@@ -115,7 +129,7 @@ export function Overlay(props: OverlayProps): JSX.Element {
   // inside `#app > .shell` would sit in the page it makes inert.
   return createPortal(
     <div class={`overlay overlay--${kind} overlay--desktop-${placement}`}>
-      <div class="overlay-scrim" aria-hidden="true" onClick={onClose} />
+      <div class="overlay-scrim" aria-hidden="true" onClick={onScrim} />
       <div
         ref={panel}
         class="overlay-panel"

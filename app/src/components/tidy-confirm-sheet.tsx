@@ -139,7 +139,12 @@ export function TidyConfirmSheet({
     breakdown === undefined ? null : confirmBreakdownLine(breakdown);
 
   return (
-    <Overlay kind="dialog" labelledBy={TITLE_ID} onClose={onDismiss}>
+    <Overlay
+      kind="dialog"
+      labelledBy={TITLE_ID}
+      onClose={onDismiss}
+      scrimGuardMs={350}
+    >
       <div class="tidy-confirm">
         <Bird state="looking" size={56} />
         <h2 id={TITLE_ID} class="tidy-confirm-title">
