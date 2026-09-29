@@ -133,6 +133,21 @@
   cursor: pointer;
 }
 
+.settings-row-select {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.settings-select {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+}
+
 .settings-row:disabled {
   opacity: 0.5;
   cursor: not-allowed;

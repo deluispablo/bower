@@ -10,6 +10,10 @@ import {
   logoutAll,
   updateSettings,
 } from '../api.js';
+import {
+  DICTATION_LANGUAGES,
+  languageLabel,
+} from '../components/dictate-button.js';
 import { IconExternalLink } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useGuardedSignOut } from '../components/upload-chip.js';
@@ -517,6 +521,38 @@ function SignOutEverywhereRow() {
   );
 }
 
+/** "Dictation language: Match my device", with a small menu to change it (R-DICT-3). */
+function DictationLanguageRow() {
+  const [lang, setLang] = useState(() => getPref('dictationLang'));
+
+  return (
+    <label class="settings-row settings-row-select">
+      <span class="settings-row-text">
+        <span class="settings-row-label">Dictation language</span>
+        <span class="settings-hint">
+          What the microphone listens for when you dictate.
+        </span>
+      </span>
+      <select
+        class="settings-select"
+        value={lang}
+        onChange={(e) => {
+          const next = e.currentTarget.value;
+          setLang(next);
+          setPref('dictationLang', next);
+        }}
+      >
+        <option value="">Match my device</option>
+        {DICTATION_LANGUAGES.map((tag) => (
+          <option key={tag} value={tag}>
+            {languageLabel(tag)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 /**
  * Settings › Advanced (spec C.8, board order — #379 review): the own
  * Claude API key form, "Show Bower's own files" (the same `showAppFiles`
@@ -549,6 +585,8 @@ function AdvancedSection({ me }: { me: Me }) {
           setPref('showAppFiles', checked);
         }}
       />
+
+      <DictationLanguageRow />
 
       <SignOutEverywhereRow />
     </div>
