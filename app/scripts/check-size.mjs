@@ -27,7 +27,7 @@ import { gzipSync } from 'node:zlib';
 
 const APP_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DIST_DIR = path.join(APP_DIR, 'dist');
-const BUDGET_BYTES = 170 * 1024; // 170 KB gzipped (raised for v5; see docs/decisions.md)
+const BUDGET_BYTES = 190 * 1024; // 190 KB gzipped, temporary until #834 code-splits (docs/decisions.md)
 
 /** The value of `name="..."` (single or double quoted) inside an HTML tag. */
 function extractAttr(tag, name) {
