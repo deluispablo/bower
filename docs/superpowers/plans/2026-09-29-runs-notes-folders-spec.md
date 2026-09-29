@@ -64,7 +64,7 @@ This spec only asks the runner for the data the screens need (section 7).
 | D17 | Add works in **piles**: a pile is the files and links you add together plus what you say about them ("What is this pile?"). Each pile is a context note in the inbox from its first file, so it survives closing the app and waits, with its own note, until the tidy-up. Several piles can wait at once. | Owner round 2: a batch of 5 job offers with their note, close, later 3 rental listings with theirs, then one tidy-up. |
 | D20 | Uploads are durable: a file is copied into the device's storage when it is attached and sent with Drive's resumable upload, so switching tab never stops it and closing the app only pauses it until the next open. Closing or signing out while uploads are unfinished warns first. | Owner round 2: the person must not lose files by closing too early; report 1.2. |
 | D21 | A document of **no listed kind** (a CV, a letter, a manual) keeps its original untouched, and gets a text copy (`.md`) that opens with Bower's note and its extracted properties, then carries the document's full text, unchanged. The insights and properties are the copy's metadata: the person folds them and forgets them, but they show that Bower understood the file. | Owner ruling on Q1, 29 Sep. |
-| D22 | Everything that asks Bower to do something waits in the inbox for the next tidy-up: a request typed in the Bower tab, a tapped suggestion, Ask Bower about it, Rename and Move. One button starts work: Tidy up. "Just this, now" stays as a secondary choice where waiting hurts, shows the run it spends ("uses 1 of your 20 runs today") and is off while a run is going. A request that did not finish is still in the inbox; there is no "Try again" that starts a run. | Owner round 3; tech-lead review: fewer runs, no race between an edit and Do it now, one model for everything. |
+| D22 | Everything that asks Bower to do something waits in the inbox for the next tidy-up: a request typed in the Bower tab, a tapped suggestion, Ask Bower about it, Rename and Move. One button starts work: Tidy up. "Just this, now" stays as a secondary choice where waiting hurts, says it spends a run ("uses one run of your Claude plan") and is off while a run is going. A request that did not finish is still in the inbox; there is no "Try again" that starts a run. | Owner round 3; tech-lead review: fewer runs, no race between an edit and Do it now, one model for everything. |
 | D23 | The box on a note is called **Bower's note**, as the rulebook, Just filed and the file page already call it. Open shows everything (summary, key facts, details, what to check); folded shows one line. Each summary line keeps its origin square with its symbol. | Owner round 3. |
 | D24 | The tidy-up chip is on every screen while a run goes and until its result is seen: in the top bar on desktop, docked above the tab bar on phones (part of the layout, never floating over it). Tapping it opens the tidy-up sheet. | Owner round 3: "will I still see it while I browse, and can I tap it?" |
 | D18 | A microphone for dictation in every box where people write sentences, where the browser supports speech recognition. Where it does not, a one-time tip points to the keyboard's own microphone. | Owner idea (report section 6). |
@@ -351,7 +351,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   |---|---|---|---|---|
   | running | "**Tidying up 6 things** · 2 min" | "**Tidying up** 6 things · 2 min" | opens the sheet | "Tidying up 6 things, 2 minutes so far. Show progress" |
   | done | "**Done** · 6 filed, 6 new, 2 updated" + "See" | "**Done** 6 filed · 6 new · 2 updated" | opens the sheet | "Tidy-up done: … See what changed" |
-  | partial | "**Partly done** · 5 still in your inbox" + "Finish" | same | opens the sheet | "Tidy-up partly done, 5 things still in your inbox. Finish it" |
+  | partial | "**Partly done**" over "3 new · 5 still in your inbox" + "See" | "**Partly done** 5 still in your inbox" | opens the sheet, where "Finish the tidy-up" goes straight to the confirm dialog | "Tidy-up partly done, 5 things still in your inbox. See what happened" |
   | failed | "**Did not finish** · nothing changed" | same | opens the sheet | "Tidy-up did not finish. Nothing changed. Show why" |
 
 - **Lifetime:**
@@ -365,6 +365,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - [ ] R-CHIP-3: desktop placement is in `layout.tsx`'s top bar; the old `.working-sheet` desktop card CSS (`bower-working.css` ≥900 block) is deleted.
   - [ ] R-CHIP-4: `role="status"`; the state change is announced once; the chip is a focusable control with the accessible name above.
   - [ ] R-CHIP-5: the chip hides on onboarding and the welcome routes.
+  - [ ] R-CHIP-6: on phones the docked bar hides while a text field has focus (the on-screen keyboard is open) and comes back when it loses focus, so it never squeezes the Bower box or a pile note. (Q5)
 
 ### 6.3 Tidy-up sheet — R-SHEET (boards RunSheet-*)
 
@@ -425,7 +426,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   | CONF-2 | "Tidy up now, or add the rest of the pile first." |
   | CONF-3 | "{n} things in your inbox" |
   | CONF-4 | "{files} files, {links} links · and {r} request(s)" |
-  | CONF-5 | "A tidy-up takes a few minutes and uses 1 of your {limit} runs today." (the same quota sentence as "Just this, now"; its numbers come from the Worker, Q4) |
+  | CONF-5 | "A tidy-up takes a few minutes and uses one run of your Claude plan." (the same sentence as "Just this, now"; no number, Q4) |
 
   Buttons: "Yes, tidy up" and "Add more first".
 - **Acceptance criteria:**
@@ -492,7 +493,7 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
 
   | State | Icon | Chip | Meta | Action |
   |---|---|---|---|---|
-  | waiting | inbox symbol on a grey circle | "In your inbox" | "Bower does it at the next tidy-up" | More (…): Edit · Just this, now ("uses 1 of your 20 runs today") · Remove from the inbox |
+  | waiting | inbox symbol on a grey circle | "In your inbox" | "Bower does it at the next tidy-up" | More (…): Edit · Just this, now ("uses one run of your plan") · Remove from the inbox |
   | running | spinner | "Being done now" | "started 13:52" | — |
   | done | check | "Done" | "today, 13:26 · 4 new · 4 updated" | "See what came of it" (Just filed `?run=`), or "Read the answer" for a question |
   | did not finish | cross | "Did not finish" | "today, 12:59 · still in your inbox for the next tidy-up" | More (…): Edit · Just this, now · Remove from the inbox |
@@ -505,13 +506,13 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
 - **Data.**
   - A request is matched to its run by the run's id **and** the instruction note's path, both taken from `items[kind=request]`.
   - Done and failed rows are shown for the runs in `/runs`, which keeps the last 20 runs. Older rows drop out; there is no 30-day promise.
-- **Tidy up while a run is going.** The Tidy up button reads "Tidy up after this one" and queues nothing. It is disabled with that label, so a tap never silently joins an instructions-only run.
+- **Tidy up while a run is going.** The Tidy up button reads "Tidy-up running…" and is disabled; it queues nothing, so a tap never silently joins an instructions-only run. The tidy-up bar shows the run. (Q6)
 - **Acceptance criteria:**
   - [ ] R-REQ-1: a processed request shows as Done or Did not finish with its run's counts; it never vanishes (fixes 1.11, W3).
   - [ ] R-REQ-2: waiting and did-not-finish rows carry the More menu with "Just this, now" and its quota line; no row has a button that starts a run on its own.
   - [ ] R-REQ-3: "Just this, now" awaits the note write before `/process` (unit test: an edit then "Just this, now" produces a run that includes the edited note).
   - [ ] R-REQ-4: "See what came of it" opens Just filed for that run; Activity cards use `RunOutcome` (counts, states, no raw Moved lines).
-  - [ ] R-REQ-5: the Tidy up button during a run reads "Tidy up after this one" and is disabled.
+  - [ ] R-REQ-5: the Tidy up button during a run reads "Tidy-up running…" and is disabled.
 
 ### 6.8 Overlays — R-OVL (System-Overlays, Tour-375, Help-1280)
 
@@ -686,7 +687,7 @@ Rename, Move, "Ask Bower about it" on a folder, "Ask Bower about this" in More, 
    - title "It waits in your inbox";
    - one sentence saying when and where: "Bower answers at the next tidy-up and puts the answer in Applications." or "Bower renames it at the next tidy-up; until then it keeps its name."
 4. **Primary button:** "Put in the inbox".
-5. **Secondary text button:** "Ask now, on its own" / "Rename now, on its own", with the line "Uses 1 of your 20 runs today; the rest of the inbox waits." Its disabled states are the same as "Just this, now" (R-REQ).
+5. **Secondary text button:** "Ask now, on its own" / "Rename now, on its own", with the line "Uses one run of your Claude plan; the rest of the inbox waits." Its disabled states are the same as "Just this, now" (R-REQ).
 
 After "Put in the inbox", a toast above the tab bar says "In your inbox. Bower answers at the next tidy-up." with "Undo" (board Ask-Done-375). Undo sends the instruction note it just wrote to Drive's Bin. The request then shows in the Bower tab's Requests and in the inbox count ("and 1 request").
 
@@ -990,6 +991,7 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
 - **R-RUNNER-4.** A `phase` field on running reports: `queued`, `reading`, `writing`, `saving`, plus `total` and `done` counts when known. `run.sh` reports `reading` after conversion, `writing` when the agent starts, and `saving` before copy up. A `done` count while writing needs the agent to report progress. That is out of scope, so the step shows "Writing notes" without "k of n" unless it is cheap. Cost S to M.
 - **R-RUNNER-6.** The runner holds back, for the next tidy-up, every pending inbox file created or modified after `requestedAt` **plus a grace of 15 seconds**, and every context note modified in that window together with the files it lists. The grace covers the gap between Drive's clock and the Worker's: a pile note or request note saved just before "Yes, tidy up" or "Just this, now" is never skipped. Files that land later, including files still uploading when the run was asked for, wait for the next tidy-up (R-UPL). Serves R-PILE-7 and R-REQ-3.
 - **R-RUNNER-7.** `run.sh` appends `## The document` and the converted text to a document's text copy (R-AG-2, T9) by finding pandoc's output for that original's path. When there is no conversion, it writes nothing (no empty section).
+- **R-RUNNER-8.** The default daily run limit goes from 20 to 100 (`DAILY_RUN_LIMIT` in `api/src/env.ts`, the runbook table and the Limits table in `ARCHITECTURE.md`); an operator can still set another value. The app shows no run count (Q4). Serves D22.
 - **R-RUNNER-5.** A run is `partial` when it failed and `created + updated + items.to > 0`. The Worker keeps `state: failed`, and the app derives partial (no API change beyond the new arrays).
 
 **Rulebook** (`vault-template/CLAUDE.md`; bump `bower_rules_version` once for all of these; the prompts in `agent/prompts/ingest.md` point to the new rules):
@@ -1108,10 +1110,10 @@ The rulebook bump and the runner change deploy in the usual order: Worker, then 
 | Q1 | Should a document of **no listed kind** (a CV, a profile, a letter, a manual) get Bower's note without being asked? | **Answered 29 Sep: yes.** Its text copy carries the full text plus the extracted properties and Bower's note as foldable metadata (D21, R-AG-2, R-NOTE-8). PDFs through R-AG-9, which the lead should confirm. |
 | Q2 | Dictation sends audio to the browser vendor's speech service. | **Answered 29 Sep: yes**, with a Privacy line and the first-use hint (R-DICT-4). |
 | Q3 | The light `--color-danger` fails 4.5:1 for small text on its tinted background. | **Answered 29 Sep: yes**, darken to `#c21b1b` for text; keep `#e12020` for fills. |
-| Q4 | "Uses 1 of your 20 runs today" needs the Worker to return runs used and the daily limit (`DAILY_RUN_LIMIT` is set by the operator). This is a small API change. | **OPEN** (asked 29 Sep). Recommended: add `runsToday` and `dailyLimit` to `/status`. Otherwise the copy says "uses one run of your Claude plan" with no number. |
-| Q5 | On phones, hide the docked tidy-up bar while the on-screen keyboard is open, so it does not squeeze the Bower box or the pile note. | **OPEN** (asked 29 Sep). Recommended: hide it while a text field has focus. |
-| Q6 | The Tidy up button while a run is going reads "Tidy up after this one" and is disabled; a disabled button that promises a queued action can mislead. | **OPEN** (asked 29 Sep). Recommended: "Tidy-up running…" (disabled); the bar shows the run. |
-| Q7 | The partly done bar says "Finish", but a tap opens the sheet, then Finish, then the confirm dialog. | **OPEN** (asked 29 Sep). Recommended: the bar says "See" like the done bar; the sheet's "Finish the tidy-up" goes straight to the confirm dialog. |
+| Q4 | Show the runs left today? | **Answered 29 Sep:** no number in the copy ("uses one run of your Claude plan"), and the default daily limit goes up to 100 (R-RUNNER-8). No API change. |
+| Q5 | Hide the docked tidy-up bar while the phone keyboard is open? | **Answered 29 Sep: yes** (R-CHIP-6). |
+| Q6 | Label of the disabled Tidy up button during a run. | **Answered 29 Sep:** "Tidy-up running…" (R-REQ-5). |
+| Q7 | The partly done bar's label. | **Answered 29 Sep:** "See", like the done bar; the sheet's "Finish the tidy-up" goes straight to the confirm dialog (R-CHIP, R-SHEET-4). |
 
 ## 10. Completeness check
 
@@ -1122,6 +1124,7 @@ The rulebook bump and the runner change deploy in the usual order: Worker, then 
 - [x] Every token used exists in `tokens.css` or in section 5.
 - [x] Every element that needs data names its source and its empty and stale behaviour (RunOutcome without the new runner fields degrades to today's counts; missing `original` shows "not found"; no box shows the hint).
 - [x] Every L has an M alternative: there is no L. The largest items are the runner fields (M) and the Overlay migration (M, done incrementally).
+- [x] Every owner question (Q1 to Q7) is answered.
 - [x] Every escalation is in section 7 or 9: the rulebook bump (R-AG-1 to R-AG-8); runner and Worker fields; the `pdftotext` tool for the runner (R-AG-9). Q1, Q2 and Q3 are answered. There are no new dependencies, OAuth scopes or secrets. IndexedDB, storage persistence and Drive resumable uploads use APIs the app already has.
 - [x] Every open-source pointer has a licence: there are none.
 - [x] Every acceptance criterion can be checked by a test or by opening the app.
