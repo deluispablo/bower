@@ -148,7 +148,9 @@ describe('Compare on a phone', () => {
       'Arlington Road, 2 bed',
       'Camden Mews, 1 bed',
     ]);
-    expect(cards[0]?.querySelector('.compare-fit')?.textContent).toBe('Fit 81');
+    const pill = cards[0]?.querySelector('.compare-fit');
+    expect(pill?.textContent).toBe('81/100');
+    expect(pill?.getAttribute('aria-label')).toBe('Your score 81 of 100');
     expect(cards[0]?.textContent).toContain('£2,400');
     expect(cards[0]?.textContent).toContain('Viewing Sat');
     expect(root.querySelector('.compare-explainer')?.textContent).toContain(
@@ -176,11 +178,94 @@ describe('Compare on a phone', () => {
     );
   });
 
-  it('offers only Best fit first and one filter chip', async () => {
+  it('offers one filter chip and no "Default order" chip', async () => {
     await mount();
     expect(
       [...root.querySelectorAll('.compare-chip')].map((el) => el.textContent),
-    ).toEqual(['Best fit first', 'Under £2,300']);
+    ).toEqual(['Under £2,300']);
+  });
+
+  const sortButton = (): HTMLElement | null =>
+    root.querySelector('.compare-sort-btn');
+  const titles = (): (string | null | undefined)[] =>
+    [...root.querySelectorAll('.compare-card')].map(
+      (c) => c.querySelector('.compare-card-title')?.textContent,
+    );
+  const radio = (label: string): HTMLElement | undefined =>
+    [
+      ...document.body.querySelectorAll<HTMLElement>('.compare-sort [role=radio]'),
+    ].find((el) => el.textContent?.startsWith(label));
+
+  it('names the sort on the button and opens the Sort sheet on Overlay', async () => {
+    await mount();
+    expect(sortButton()?.textContent).toBe('Sort: Fit, high first');
+    click(sortButton());
+    const dialog = document.body.querySelector('.overlay [role=dialog]');
+    expect(dialog?.getAttribute('aria-modal')).toBe('true');
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Sort listings by');
+    expect(
+      dialog?.querySelector('[aria-label="Order"]')?.textContent,
+    ).toBe('High firstLow first');
+    expect(dialog?.querySelector('.compare-sort-done')?.textContent).toBe(
+      'Show 2 listings',
+    );
+  });
+
+  it('sorts the cards from the sheet and remembers it for the folder', async () => {
+    await mount();
+    click(sortButton());
+    click(radio('Rent a month'));
+    expect(titles()).toEqual([
+      'Camden Mews, 1 bed',
+      'Arlington Road, 2 bed',
+      'Kentish Town, 2 bed',
+    ]);
+    click(radio('High first'));
+    expect(titles()[0]).toBe('Kentish Town, 2 bed');
+    expect(sortButton()?.textContent).toBe('Sort: Rent a month, high first');
+    await vi.waitFor(() => {
+      expect(cache.saveViewSettings).toHaveBeenCalled();
+    });
+    const last = cache.saveViewSettings.mock.calls.at(-1) as [
+      string,
+      { compareSort: { column: string; direction: string } },
+    ];
+    expect(last[0]).toBe('1-Projects/Flat hunt');
+    expect(last[1].compareSort).toEqual({ column: 'rent', direction: 'desc' });
+  });
+
+  it('starts from the sort remembered for the folder', async () => {
+    cache.loadViewSettings.mockResolvedValue({
+      sort: 'name',
+      kindFilter: null,
+      originFilter: null,
+      layout: 'list',
+      compareSort: { column: 'rent', direction: 'asc' },
+    });
+    await mount();
+    expect(sortButton()?.textContent).toBe('Sort: Rent a month, low first');
+    expect(titles()[0]).toBe('Camden Mews, 1 bed');
+  });
+
+  it('shows a rule score on the card and offers it first in the sheet', async () => {
+    render(
+      h(CompareView, {
+        notes: notes.map((n, i) => ({
+          ...n,
+          fields: { ...n.fields, score: [50, 90, 70][i], fit: undefined },
+        })),
+        folderPath: '1-Projects/Flat hunt',
+      }),
+      root,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(sortButton()?.textContent).toBe('Sort: Your score, high first');
+    expect(titles()[0]).toBe('Arlington Road, 2 bed');
+    click(sortButton());
+    const first = document.body.querySelector('.compare-sort [role=radio]');
+    expect(first?.textContent).toBe('Your scoreadded by your rule');
   });
 
   it('shows the highlight under the rooms', async () => {

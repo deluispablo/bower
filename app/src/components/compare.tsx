@@ -21,19 +21,26 @@ import {
   compareKinds,
   defaultSort,
   desktopExplainer,
+  directionLabels,
   dropColumn,
+  extraColumns,
   fadedLine,
+  firstDirection,
   filterChips,
   footerLine,
   moveColumn,
   noteTitle,
   notesOfKind,
+  numberOf,
+  offerWord,
   orderedColumnIds,
   phoneExplainer,
   receiptsByMonth,
   receiptsExplainer,
   setFrontmatterValue,
+  sortButtonText,
   sortNotes,
+  sortStyle,
   statusOptionLabel,
   STATUS_COLUMN,
   statusValue,
@@ -50,14 +57,29 @@ import { showToast } from '../toast-store.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
 import { OriginSquare } from './folder-mark.js';
+import { IconClose } from './icons.js';
+import { Overlay } from './overlay.js';
 
 import '../styles/compare.css';
 
 /** Where the table replaces the cards: the shell's desktop width. */
 const DESKTOP_QUERY = '(min-width: 900px)';
 
-/** The folder's `viewSettings` plus the Compare column order it remembers. */
-type CompareViewSettings = ViewSettings & { compareColumns?: string[] };
+/** The folder's `viewSettings` plus the Compare column order and sort it
+ * remembers (R-CMP-4). */
+type CompareViewSettings = ViewSettings & {
+  compareColumns?: string[];
+  compareSort?: CompareSort;
+};
+
+/** A stored sort, or `undefined` when it is not one. */
+function readSort(raw: unknown): CompareSort | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const { column, direction } = raw as Record<string, unknown>;
+  if (typeof column !== 'string') return undefined;
+  if (direction !== 'asc' && direction !== 'desc') return undefined;
+  return { column, direction };
+}
 
 /** The notes among `files` that name a kind, read from their frontmatter
  * (cached per note). A note that cannot be read is left out, with the
@@ -104,8 +126,134 @@ function noteHref(note: CompareNote): string {
   return `/note/${encodeURIComponent(note.id)}`;
 }
 
-function fitTone(value: unknown): 'good' | 'warm' {
-  return typeof value === 'number' && value >= 70 ? 'good' : 'warm';
+function fitTone(value: number): 'good' | 'warm' {
+  return value >= 70 ? 'good' : 'warm';
+}
+
+/** The note's score as the pill reads it: `score`, else `fit`, a whole
+ * number from 0 to 100; `null` when it has neither. */
+function scoreOf(note: CompareNote): number | null {
+  for (const key of ['score', 'fit']) {
+    const value = numberOf(note.fields[key]);
+    if (value !== null && value >= 0 && value <= 100) return Math.round(value);
+  }
+  return null;
+}
+
+/** The phone's Sort sheet (R-CMP-1, board `Compare-Sort-375`): what to sort
+ * by, which way, and a button that says how many notes it shows. Choices
+ * apply as they are made. */
+function SortSheet({
+  kind,
+  columns,
+  extras,
+  sort,
+  count,
+  onSort,
+  onClose,
+}: {
+  kind: Kind;
+  columns: readonly CompareColumn[];
+  extras: readonly CompareColumn[];
+  sort: CompareSort;
+  count: number;
+  onSort: (sort: CompareSort) => void;
+  onClose: () => void;
+}): JSX.Element {
+  const word = offerWord(kind, 2);
+  const options: CompareColumn[] = [
+    ...columns.filter((column) => column.id !== TITLE_COLUMN),
+    ...columns.filter((column) => column.id === TITLE_COLUMN),
+  ].map((column) =>
+    column.id === TITLE_COLUMN ? { ...column, label: 'Name' } : column,
+  );
+  const current = options.find((column) => column.id === sort.column);
+  const labels = directionLabels(
+    current === undefined ? 'number' : sortStyle(current),
+  );
+  // High first for numbers; A to Z and soonest first read ascending.
+  const style = current === undefined ? 'number' : sortStyle(current);
+  const directions: readonly ('asc' | 'desc')[] =
+    style === 'number' ? ['desc', 'asc'] : ['asc', 'desc'];
+  const isScore = (column: CompareColumn): boolean =>
+    extras[0] === column && column.label === 'Your score';
+  return (
+    <Overlay kind="sheet" labelledBy="compare-sort-title" onClose={onClose}>
+      <div class="compare-sort">
+        <header class="compare-sort-head">
+          <h2 id="compare-sort-title" class="compare-sort-title">
+            {`Sort ${word} by`}
+          </h2>
+          <button
+            type="button"
+            class="compare-sort-close"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <IconClose />
+          </button>
+        </header>
+        <div
+          class="compare-sort-list"
+          role="radiogroup"
+          aria-label={`Sort ${word} by`}
+        >
+          {options.map((column) => {
+            const sub = isScore(column)
+              ? 'added by your rule'
+              : sortStyle(column) === 'text' && column.id !== TITLE_COLUMN
+                ? 'A to Z'
+                : '';
+            return (
+              <button
+                key={column.id}
+                type="button"
+                role="radio"
+                class="compare-sort-option"
+                aria-checked={column.id === sort.column}
+                onClick={() => {
+                  onSort(
+                    column.id === sort.column
+                      ? sort
+                      : {
+                          column: column.id,
+                          direction: firstDirection(column.id, extras),
+                        },
+                  );
+                }}
+              >
+                <span>{column.label}</span>
+                {sub !== '' && <small>{sub}</small>}
+              </button>
+            );
+          })}
+        </div>
+        <div
+          class="compare-sort-order"
+          role="radiogroup"
+          aria-label="Order"
+        >
+          {directions.map((direction) => (
+              <button
+                key={direction}
+                type="button"
+                role="radio"
+                class="compare-sort-dir"
+                aria-checked={sort.direction === direction}
+                onClick={() => {
+                  onSort({ column: sort.column, direction });
+                }}
+              >
+                {labels[direction]}
+              </button>
+            ))}
+        </div>
+        <button type="button" class="button compare-sort-done" onClick={onClose}>
+          {`Show ${count} ${offerWord(kind, count)}`}
+        </button>
+      </div>
+    </Overlay>
+  );
 }
 
 export function CompareView({
@@ -124,6 +272,7 @@ export function CompareView({
   const [storedOrder, setStoredOrder] = useState<string[] | undefined>();
   const [sort, setSort] = useState<CompareSort | undefined>();
   const [chosenChips, setChosenChips] = useState<string[] | undefined>();
+  const [sortOpen, setSortOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -133,6 +282,8 @@ export function CompareView({
         const stored: CompareViewSettings | undefined = settings;
         const order = stored?.compareColumns;
         if (Array.isArray(order)) setStoredOrder(order);
+        const storedSort = readSort(stored?.compareSort);
+        if (storedSort !== undefined) setSort(storedSort);
       },
       (error: unknown) => {
         console.error('Reading the folder view settings failed', error);
@@ -161,8 +312,9 @@ export function CompareView({
           fields: { ...note.fields, status: override.status },
         };
   });
-  const order = orderedColumnIds(kind, storedOrder);
-  const columns = compareColumns(kind, order);
+  const extras = extraColumns(kind, current);
+  const order = orderedColumnIds(kind, storedOrder, extras);
+  const columns = compareColumns(kind, order, extras);
   const chips = filterChips(kind, current);
   // The phone opens with its one filter on, as the board draws it (the
   // faded card and the line under the cards); the desktop starts unfiltered.
@@ -170,8 +322,12 @@ export function CompareView({
   const activeChips =
     chosenChips ?? (!isDesktop && first !== undefined ? [first.id] : []);
   const active = chips.filter((chip) => activeChips.includes(chip.id));
-  const effectiveSort = sort ?? defaultSort(kind);
-  const sorted = sortNotes(kind, current, effectiveSort);
+  // A stored sort on a column that is gone (a rule changed) falls back.
+  const effectiveSort =
+    sort !== undefined && columns.some((column) => column.id === sort.column)
+      ? sort
+      : defaultSort(kind, extras);
+  const sorted = sortNotes(kind, current, effectiveSort, extras);
   const { hidden } = applyFilters(sorted, active);
   const hiddenIds = new Set(hidden.map((note) => note.id));
 
@@ -183,8 +339,10 @@ export function CompareView({
     );
   };
 
-  const saveOrder = (next: string[]): void => {
-    setStoredOrder(next);
+  const remember = (
+    patch: Partial<CompareViewSettings>,
+    what: string,
+  ): void => {
     loadViewSettings(folderPath)
       .then((settings) => {
         const base: ViewSettings = settings ?? {
@@ -193,12 +351,33 @@ export function CompareView({
           originFilter: null,
           layout: 'list',
         };
-        const merged: CompareViewSettings = { ...base, compareColumns: next };
+        const merged: CompareViewSettings = { ...base, ...patch };
         return saveViewSettings(folderPath, merged);
       })
       .catch((error: unknown) => {
-        console.error('Saving the column order failed', error);
+        console.error(`Saving the ${what} failed`, error);
       });
+  };
+
+  const saveOrder = (next: string[]): void => {
+    setStoredOrder(next);
+    remember({ compareColumns: next }, 'column order');
+  };
+
+  const chooseSort = (next: CompareSort): void => {
+    setSort(next);
+    remember({ compareSort: next }, 'sort');
+  };
+
+  const sortBy = (id: string): void => {
+    chooseSort(
+      effectiveSort.column === id
+        ? {
+            column: id,
+            direction: effectiveSort.direction === 'asc' ? 'desc' : 'asc',
+          }
+        : { column: id, direction: firstDirection(id, extras) },
+    );
   };
 
   const changeStatus = async (
@@ -243,19 +422,7 @@ export function CompareView({
   };
 
   const chipRow = (
-    <div class="compare-chips" role="group" aria-label="Sort and filter">
-      <button
-        type="button"
-        class="compare-chip"
-        aria-pressed={sort === undefined || sort.column === 'fit'}
-        onClick={() => {
-          setSort(defaultSort(kind));
-        }}
-      >
-        {kind.compareFields.includes('fit')
-          ? 'Best fit first'
-          : 'Default order'}
-      </button>
+    <div class="compare-chips" role="group" aria-label="Filter">
       {(isDesktop ? chips : chips.slice(0, 1)).map((chip) => (
         <button
           key={chip.id}
@@ -274,10 +441,40 @@ export function CompareView({
 
   if (!isDesktop) {
     const faded = fadedLine(hidden, active);
+    const sortColumn =
+      columns.find((column) => column.id === effectiveSort.column) ??
+      columns[0];
+    const shownCount = sorted.length - hidden.length;
     return (
       <section class="compare compare-phone" aria-label="Compare">
         <p class="compare-explainer">{phoneExplainer(kind, current.length)}</p>
+        {sortColumn !== undefined && (
+          <button
+            type="button"
+            class="compare-sort-btn"
+            aria-haspopup="dialog"
+            aria-expanded={sortOpen}
+            onClick={() => {
+              setSortOpen(true);
+            }}
+          >
+            {sortButtonText(sortColumn, effectiveSort.direction)}
+          </button>
+        )}
         {chipRow}
+        {sortOpen && (
+          <SortSheet
+            kind={kind}
+            columns={columns}
+            extras={extras}
+            sort={effectiveSort}
+            count={shownCount}
+            onSort={chooseSort}
+            onClose={() => {
+              setSortOpen(false);
+            }}
+          />
+        )}
         <ul class="compare-cards">
           {sorted.map((note) => (
             <li key={note.id}>
@@ -312,22 +509,7 @@ export function CompareView({
                   column={column}
                   order={order}
                   sort={effectiveSort}
-                  onSort={(id) => {
-                    setSort(
-                      effectiveSort.column === id
-                        ? {
-                            column: id,
-                            direction:
-                              effectiveSort.direction === 'asc'
-                                ? 'desc'
-                                : 'asc',
-                          }
-                        : {
-                            column: id,
-                            direction: id === 'fit' ? 'desc' : 'asc',
-                          },
-                    );
-                  }}
+                  onSort={sortBy}
                   onOrder={saveOrder}
                 />
               ))}
@@ -392,7 +574,7 @@ function PhoneCard({
   const facts = keyFactsFor(kind, note.fields).slice(0, 3);
   const status = statusLabel(kind, note.fields);
   const highlight = note.fields.highlight;
-  const fit = note.fields.fit;
+  const fit = scoreOf(note);
   return (
     <a
       class={`compare-card${faded ? ' compare-card-faded' : ''}`}
@@ -400,9 +582,13 @@ function PhoneCard({
     >
       <span class="compare-card-head">
         <b class="compare-card-title">{noteTitle(note)}</b>
-        {typeof fit === 'number' && (
-          <span class={`compare-fit compare-fit-${fitTone(fit)}`}>
-            {`Fit ${fit}`}
+        {fit !== null && (
+          <span
+            class={`compare-fit compare-fit-${fitTone(fit)}`}
+            role="img"
+            aria-label={`Your score ${fit} of 100`}
+          >
+            {`${fit}/100`}
           </span>
         )}
       </span>
