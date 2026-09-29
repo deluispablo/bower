@@ -25,6 +25,10 @@ const POSES: Record<BirdState, string> = {
   peeking: 'p-peek',
   offline: 'p-offline',
   done: 'p-done',
+  listening: 'p-listen',
+  pointing: 'p-point',
+  reading: 'p-read',
+  perched: 'p-perch',
 };
 
 /** The still face each state falls back to when motion is off. */
@@ -43,6 +47,17 @@ const STILL_FACES: Record<BirdState, BirdFace | undefined> = {
   peeking: undefined,
   offline: undefined,
   done: undefined,
+  listening: 'curious',
+  pointing: undefined,
+  reading: undefined,
+  perched: undefined,
+};
+
+/** The still class a held pose gets when motion is off (spec §6.21). */
+const STILL_CLASSES: Partial<Record<BirdState, string>> = {
+  pointing: 's-point',
+  reading: 's-read',
+  perched: 's-perch',
 };
 
 function classList(value: string): string[] {
@@ -80,7 +95,7 @@ function selectorsStartingWith(prefix: string): string[] {
 }
 
 describe('BIRD_STATES', () => {
-  it('lists the thirteen states once each', () => {
+  it('lists the eighteen states once each', () => {
     expect([...BIRD_STATES].sort()).toEqual(Object.keys(POSES).sort());
   });
 });
@@ -102,9 +117,12 @@ describe('birdClasses', () => {
 
     it(`${state}, reduced motion: no pose, its still face if it has one`, () => {
       const face = STILL_FACES[state];
-      expect(classList(birdClasses(state, undefined, false, true))).toEqual(
-        face === undefined ? ['b'] : ['b', `e-${face}`],
-      );
+      const held = STILL_CLASSES[state];
+      expect(classList(birdClasses(state, undefined, false, true))).toEqual([
+        'b',
+        ...(held === undefined ? [] : [held]),
+        ...(face === undefined ? [] : [`e-${face}`]),
+      ]);
     });
   }
 
@@ -146,6 +164,87 @@ describe('birdClasses', () => {
       'e-proud',
       'flip',
     ]);
+  });
+});
+
+describe('birdClasses, the round 7 poses (spec §6.21)', () => {
+  it('pointing down adds pd right after the pose', () => {
+    expect(
+      classList(birdClasses('pointing', undefined, false, false, true)),
+    ).toEqual(['b', 'p-point', 'pd']);
+    expect(
+      classList(birdClasses('pointing', undefined, false, false, false)),
+    ).toEqual(['b', 'p-point']);
+  });
+
+  it('only a pointing bird takes pd', () => {
+    expect(
+      classList(birdClasses('reading', undefined, false, false, true)),
+    ).toEqual(['b', 'p-read']);
+  });
+
+  it('with reduced motion, pointing holds s-point and keeps pd', () => {
+    expect(
+      classList(birdClasses('pointing', undefined, false, true, true)),
+    ).toEqual(['b', 's-point', 'pd']);
+    expect(classList(birdClasses('pointing', undefined, true, true))).toEqual([
+      'b',
+      's-point',
+      'flip',
+    ]);
+  });
+
+  it('with reduced motion, reading holds s-read and perched holds s-perch', () => {
+    expect(classList(birdClasses('reading', undefined, false, true))).toEqual([
+      'b',
+      's-read',
+    ]);
+    expect(classList(birdClasses('perched', undefined, false, true))).toEqual([
+      'b',
+      's-perch',
+    ]);
+  });
+
+  it('with reduced motion, listening holds the curious face and no pose', () => {
+    expect(classList(birdClasses('listening', undefined, false, true))).toEqual(
+      ['b', 'e-curious'],
+    );
+  });
+
+  it('the still classes exist in bird.css and hold the pose without motion', () => {
+    expect(declarations('.s-point .wg')).toMatch(
+      /rotate\(var\(--bird-point-angle\)\)/,
+    );
+    expect(declarations('.s-point')).toContain('--bird-point-angle: 214deg');
+    expect(declarations('.s-point.pd')).toContain('--bird-point-angle: 242deg');
+    expect(declarations('.s-read .rd')).toMatch(/opacity:\s*1/);
+    expect(declarations('.s-perch .lb')).toMatch(/translateY\(-2px\)/);
+    for (const still of ['.s-point', '.s-read', '.s-perch']) {
+      expect(selectorsStartingWith(still).join(' ')).not.toMatch(/animation/);
+      expect(declarations(`${still} .wg`)).not.toContain('animation');
+    }
+  });
+
+  it('the point angle is bird-local, never the PARA Areas colour', () => {
+    expect(BIRD_CSS).toContain('--bird-point-angle');
+    expect(BIRD_CSS).not.toMatch(/--pa(?![\w-])/);
+  });
+
+  it('a bird never takes a tap (rule 4), except the nap button', () => {
+    expect(declarations('.b')).toMatch(/pointer-events:\s*none/);
+  });
+
+  it('the hop-turn flips at the top of a 7 px hop, through 0.5 and -0.5 only', () => {
+    const turn = /@keyframes turnaround\s*\{(?:[^{}]*\{[^{}]*\})*/.exec(
+      BIRD_CSS,
+    );
+    const body = turn?.[0] ?? '';
+    expect(body).toMatch(/60\.6%[^}]*translateY\(-6px\) scaleX\(0\.5\)/);
+    expect(body).toMatch(/61\.2%[^}]*translateY\(-7px\) scaleX\(-0\.5\)/);
+    expect(body).toMatch(/86\.6%[^}]*translateY\(-6px\) scaleX\(-0\.5\)/);
+    expect(body).toMatch(/87\.2%[^}]*translateY\(-7px\) scaleX\(0\.5\)/);
+    // No stop sits between -0.5 and 0.5, so nothing rests on a sliver.
+    expect(body).not.toMatch(/scaleX\((?:-?0\.[0-4]\d*|0)\)/);
   });
 });
 

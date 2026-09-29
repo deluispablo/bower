@@ -3,7 +3,7 @@
 
 Writes app/public/logo.svg, the two wordmarks and app/public/icons/*. (docs/assets/logo.svg
 is a committed drawing.) The bird is defined once below on a 100 x 100 grid
-(drawing v8.2 of the design canvas, BIRD_CORE, still and without its props); every icon
+(drawing v9 of the design canvas, D29, BIRD_CORE, still and without its props); every icon
 places it by its measured bounding box, so it is centred in each icon. After rendering,
 the script checks centring, the maskable safe zone, how much of the 16 px favicon the bird
 fills and the size of logo.svg, and exits non-zero if any check fails.
@@ -34,16 +34,18 @@ ROOT = Path(__file__).resolve().parents[2]
 PUBLIC = ROOT / "app/public"
 ICONS = PUBLIC / "icons"
 
-# The v8.2 colours (design canvas, CSS): head and body, wing and tail, belly and
-# cheek, eye, beak and feet, jaw, highlights; navy behind the icons and for the word on
+# The v9 colours (design canvas, CSS): head and body, wing and tail, belly, eye,
+# beak and feet, jaw, highlights, blush and the violet iris ring; navy behind the icons and for the word on
 # light backgrounds, and the word on dark backgrounds.
 TEAL, TEAL_DARK, BELLY, EYE, AMBER, AMBER_DARK, WHITE = (
     "#5fcfbc", "#2f9c8d", "#b9ece2", "#1b2233", "#f0b64f", "#d9952e", "#ffffff")
+BLUSH, IRIS = "#ff9fb4", "#8e7cf3"
 NAVY, INK_DARK = "#0b1220", "#f1f5f9"
 
 # The bird on a 100 x 100 grid, facing right, feet on y = 91: three tail feathers, legs
-# and pill feet, round body with a lighter belly, neck and round head, cheek, eye with
-# two highlights, upper and lower lids at rest, pill beak and jaw, the leaf wing. Same
+# and pill feet, round body with a lighter belly, neck and round head, eye with a violet
+# ring and two highlights, upper and lower lids at rest, blush, pill beak and jaw, the
+# leaf wing. Same
 # shapes and order as BIRD_CORE in the design canvas (and the app's
 # components/bird.tsx), without the props it only holds while a state shows them.
 GRID = 100
@@ -59,15 +61,16 @@ BIRD = [
     f'<circle fill="{TEAL}" cx="46" cy="62" r="24"/>',
     f'<ellipse fill="{BELLY}" fill-opacity=".9" cx="52" cy="72" rx="13" ry="10"/>',
     f'<rect fill="{TEAL}" x="52" y="34" width="16" height="38" rx="8"/>',
-    f'<circle fill="{TEAL}" cx="62" cy="40" r="19"/>',
-    f'<circle fill="{BELLY}" fill-opacity=".8" cx="72" cy="47" r="3.2"/>',
-    f'<circle fill="{EYE}" cx="68" cy="37" r="5.2"/>',
-    f'<circle fill="{WHITE}" cx="70" cy="35" r="1.9"/>',
-    f'<circle fill="{WHITE}" cx="66.4" cy="39.2" r=".9"/>',
-    f'<circle fill="{TEAL}" cx="68" cy="24.5" r="6.5"/>',
-    f'<circle fill="{TEAL}" cx="68" cy="49" r="6.5"/>',
-    f'<rect fill="{AMBER}" x="79" y="35" width="13" height="6" rx="3"/>',
-    f'<rect fill="{AMBER_DARK}" x="79" y="40" width="10" height="4.5" rx="2.25"/>',
+    f'<circle fill="{TEAL}" cx="62" cy="39" r="21"/>',
+    f'<circle fill="{EYE}" cx="69" cy="37" r="6.3"/>',
+    f'<circle fill="none" stroke="{IRIS}" stroke-width="1.4" cx="69" cy="37" r="5.6"/>',
+    f'<circle fill="{WHITE}" cx="71.4" cy="34.6" r="2.3"/>',
+    f'<circle fill="{WHITE}" cx="66.8" cy="39.6" r="1.1"/>',
+    f'<circle fill="{TEAL}" cx="69" cy="23.2" r="7.6"/>',
+    f'<circle fill="{TEAL}" cx="69" cy="51" r="7.6"/>',
+    f'<ellipse fill="{BLUSH}" fill-opacity=".6" cx="78" cy="49" rx="3.4" ry="2.3"/>',
+    f'<rect fill="{AMBER}" x="80" y="35" width="11" height="6" rx="3"/>',
+    f'<rect fill="{AMBER_DARK}" x="80" y="40" width="8.5" height="4.5" rx="2.25"/>',
     f'<path fill="{TEAL_DARK}" d="M54 56C64 58 65 68 58 74C44 78 28 78 18 72C28 64 42 56 54 56Z"/>',
 ]
 
