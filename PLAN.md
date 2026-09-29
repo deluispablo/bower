@@ -11,7 +11,9 @@ Dispatched on the owner's OK. The owner gave the lead full control: merges, prod
 - Specs #727, PLAN #800 and the README #801 are merged; production is at main 905ed7d.
 - Up to ten agents at once: eight developers, one designer and one app-tester. The designer and the tester review what lands against the boards and the spec, walk the demo locally per batch and production read-only after each deploy, and report findings to the lead, who files them as issues.
 - Issues that are small, disjoint and in the same area are bundled into one PR (one branch, "Closes" per issue) to save CI and review rounds. The rounds below are the dependency order, not a limit of three slots.
-- In flight: #728 (opus), #734, and the bundle #744 + #745 + #747.
+- Merged (29 Sep, night): #728, #729, #733–#736, #738–#753, #755–#759, #761–#763, #767, #772, #775, #779, #782–#784, and the review fixes #811, #825, #826, #837 (e2e green again), #833 (startup budget 170 KB, follow-up #834).
+- In flight: #730, #732 (opus), #754, #760, #764, #768, #773, #847. Lead state (prompts, rulings, merge helpers, QA walk harness) lives in the lead session's scratchpad.
+- New issues from reviews: #811, #825, #826, #834, #837, #847. PRs are merged only when the e2e job is green, or fails only where main already fails.
 
 ## Milestones
 
