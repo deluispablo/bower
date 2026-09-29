@@ -12,6 +12,14 @@ import { MOTION_ON } from './motion.js';
 
 test.use(MOTION_ON);
 
+/** The demo opens the tidy-up sheet, and its own bird hides the others. */
+async function closeSheet(page: Page): Promise<void> {
+  await page
+    .getByRole('dialog', { name: 'Tidying up status' })
+    .getByRole('button', { name: 'Close' })
+    .click();
+}
+
 const FLAT = '/folder/1-Projects/Flat%20hunt';
 
 async function holdRun(page: Page, state: string): Promise<void> {
@@ -43,6 +51,7 @@ test('desktop: Bower flies with a paper while a run goes', async ({
   test.skip(testInfo.project.name !== 'desktop', 'the ledge is the computer');
   await holdRun(page, 'running');
   await page.goto(FLAT);
+  await closeSheet(page);
   await expect(page.locator('.shell-ledge svg.p-fly')).toBeVisible();
 });
 
@@ -52,6 +61,7 @@ test('phone: no ledge bird, the bar has its own', async ({
   test.skip(testInfo.project.name !== 'phone', 'the bar is the phone');
   await holdRun(page, 'running');
   await page.goto(FLAT);
+  await closeSheet(page);
   await expect(page.locator('.shell-ledge svg')).toHaveCount(0);
   await expect(
     page.locator('.shell-dock .run-chip-bird svg.p-fly'),
