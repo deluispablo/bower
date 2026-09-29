@@ -283,7 +283,7 @@ export function NoteMenu({
   const driveHref =
     kind === 'folder' ? driveFolderUrl(file) : driveViewUrl(file);
 
-
+  return (
     <Queued id="note-menu" priority={OVERLAY_PRIORITY.own}>
       <Overlay kind="menu" label={MENU_LABELS[kind]} onClose={onClose}>
         <div class="note-menu-head" role="presentation">
@@ -477,6 +477,4 @@ export function NoteMenu({
       </Overlay>
     </Queued>
   );
-
-  return menu;
 }
