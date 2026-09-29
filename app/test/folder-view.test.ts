@@ -210,7 +210,12 @@ describe('sort, kind filter and date groups', () => {
       { kind: 'note', label: 'Note', plural: 'Notes', count: 2 },
       { kind: 'pdf', label: 'PDF', plural: 'PDFs', count: 2 },
       { kind: 'photo', label: 'Photo', plural: 'Photos', count: 1 },
-      { kind: 'csv', label: 'Spreadsheet (CSV)', plural: 'Spreadsheets (CSV)', count: 1 },
+      {
+        kind: 'csv',
+        label: 'Spreadsheet (CSV)',
+        plural: 'Spreadsheets (CSV)',
+        count: 1,
+      },
     ]);
     expect(filterKind(rows, 'pdf')).toHaveLength(2);
     expect(filterKind(rows, null)).toHaveLength(6);

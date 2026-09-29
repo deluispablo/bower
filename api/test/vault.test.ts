@@ -598,28 +598,31 @@ describe('POST /vault select', () => {
   it.each([
     ['a shared-drive folder', { driveId: 'DRIVE_ID' }],
     ['a folder closed to new files', { canAddChildren: false }],
-  ])('answers 400 folder_not_supported for %s and keeps the pointer', async (_name, change) => {
-    const drive = new FakeDrive();
-    const oldId = drive.add('Bower', 'root');
-    const vault = { folderId: oldId, inboxFolderId: oldId, name: 'Bower' };
-    await seedUser({ vault });
-    const folderId = drive.add('Notes', 'root');
-    const item = drive.items.get(folderId);
-    if (item !== undefined) Object.assign(item, change);
+  ])(
+    'answers 400 folder_not_supported for %s and keeps the pointer',
+    async (_name, change) => {
+      const drive = new FakeDrive();
+      const oldId = drive.add('Bower', 'root');
+      const vault = { folderId: oldId, inboxFolderId: oldId, name: 'Bower' };
+      await seedUser({ vault });
+      const folderId = drive.add('Notes', 'root');
+      const item = drive.items.get(folderId);
+      if (item !== undefined) Object.assign(item, change);
 
-    const response = await postVault(
-      drive,
-      { mode: 'select', folderId },
-      await sessionCookie(),
-    );
+      const response = await postVault(
+        drive,
+        { mode: 'select', folderId },
+        await sessionCookie(),
+      );
 
-    expect(response.status).toBe(400);
-    expect((await response.json<ErrorBody>()).error.code).toBe(
-      'folder_not_supported',
-    );
-    expect(drive.calls.every((call) => call.method === 'GET')).toBe(true);
-    expect((await getUser(kv, USER_ID))?.vault).toEqual(vault);
-  });
+      expect(response.status).toBe(400);
+      expect((await response.json<ErrorBody>()).error.code).toBe(
+        'folder_not_supported',
+      );
+      expect(drive.calls.every((call) => call.method === 'GET')).toBe(true);
+      expect((await getUser(kv, USER_ID))?.vault).toEqual(vault);
+    },
+  );
 
   it('a re-point retires the old run tickets, clears the run history and records setAt', async () => {
     const drive = new FakeDrive();

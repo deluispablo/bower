@@ -15,7 +15,11 @@ import { CATALOGUE_PATH, originLine, originOf } from './file-origin.js';
 import type { Origin } from './file-origin.js';
 import { kindById } from './kinds.js';
 import type { NoteMeta } from './note-meta.js';
-import { FILE_KIND_LABELS, FILE_KIND_PLURALS, fileKind } from './vault-index.js';
+import {
+  FILE_KIND_LABELS,
+  FILE_KIND_PLURALS,
+  fileKind,
+} from './vault-index.js';
 import type { FileKind } from './vault-index.js';
 
 /** Which of the folder's things the list shows. */
