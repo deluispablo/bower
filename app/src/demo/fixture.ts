@@ -22,7 +22,7 @@ import answersNote from '../../../vault-template/Answers/_Answers.md?raw';
 import clippingsNote from '../../../vault-template/Clippings/_Clippings.md?raw';
 
 import type { Run, RunItem } from '../api.js';
-import { buildRun } from '../../test/fixtures/run-outcome-builders.js';
+import { buildRun } from './run-builders.js';
 import type { ImageMediaMetadata, VideoMediaMetadata } from '../drive.js';
 
 export const DEMO_NAME = 'Alex';
