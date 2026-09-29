@@ -578,6 +578,13 @@ export function Home(): JSX.Element {
         <span>Search folders, notes and files</span>
       </button>
 
+      {offline && (
+        <p class="home-card-sub home-offline-hint" role="status">
+          You are offline. Showing what is on this device; Bower checks your
+          folder when you are back.
+        </p>
+      )}
+
       <div class="home-cards">
         <InboxCard
           state={state}

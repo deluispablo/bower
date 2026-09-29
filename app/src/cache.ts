@@ -32,6 +32,7 @@ import type { UseStore } from 'idb-keyval';
 import { thumbnailLinkOf } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { thumbnailUrl } from './file-preview.js';
+import type { Me } from './api.js';
 import type { ExplorerSortPref } from './prefs.js';
 
 export const BLOB_CACHE_CAP_BYTES = 50 * 1024 * 1024;
@@ -189,6 +190,12 @@ export interface IndexCacheEntry {
   files: DriveFile[];
   /** ISO timestamp of when this listing was fetched. */
   fetchedAt: string;
+  /**
+   * The Bower folder this listing belongs to (R-VAULT-9). Absent on entries
+   * written before the folder was known, or with none set: those are read
+   * back as before.
+   */
+  folderId?: string;
 }
 
 export interface NoteCacheEntry {
@@ -214,21 +221,98 @@ export interface BlobLruEntry {
 
 // --- Index -------------------------------------------------------------
 
+let indexFolderId: string | null = null;
+
+/**
+ * Tells the cache which Bower folder is current (R-VAULT-9): `session.tsx`
+ * sets it from `me.vault` before anything reads the index. `null` keys
+ * nothing. A folder change makes the old listing unreadable at once.
+ */
+export function setIndexFolder(folderId: string | null): void {
+  indexFolderId = folderId;
+}
+
+/** Whether a cached listing may be shown for `folderId`. Pure. */
+export function indexBelongsTo(
+  entry: IndexCacheEntry,
+  folderId: string | null,
+): boolean {
+  return folderId === null || entry.folderId === folderId;
+}
+
 export async function loadIndex(): Promise<IndexCacheEntry | undefined> {
-  return kvGet('keyval', INDEX_KEY);
+  const entry = await kvGet<IndexCacheEntry>('keyval', INDEX_KEY);
+  if (entry === undefined || indexBelongsTo(entry, indexFolderId)) return entry;
+  // Another folder's listing (a re-point): never shown, dropped now.
+  await kvDel('keyval', INDEX_KEY);
+  return undefined;
 }
 
 export async function saveIndex(
   files: DriveFile[],
   fetchedAt: string,
 ): Promise<void> {
-  const entry: IndexCacheEntry = { files, fetchedAt };
+  const entry: IndexCacheEntry =
+    indexFolderId === null
+      ? { files, fetchedAt }
+      : { files, fetchedAt, folderId: indexFolderId };
   await kvSet('keyval', INDEX_KEY, entry);
 }
 
 /** Drops the cached index so the next load re-fetches from Drive. */
 export async function invalidateIndex(): Promise<void> {
   await kvDel('keyval', INDEX_KEY);
+}
+
+// --- Last me ---------------------------------------------------------------
+
+/**
+ * The last signed-in `me`, kept so an offline start still opens the shell
+ * (R-VAULT-13). `localStorage`, not `sessionStorage`: a new tab has to find
+ * it. Cleared by `forgetDevice`.
+ */
+export const ME_CACHE_KEY = 'bower:me';
+
+/** Parses what `saveCachedMe` wrote; anything else is `undefined`. Pure. */
+export function parseCachedMe(raw: string | null): Me | undefined {
+  if (raw === null) return undefined;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as { email?: unknown }).email === 'string'
+    ) {
+      return value as Me;
+    }
+  } catch {
+    // Not JSON: treated as nothing cached.
+  }
+  return undefined;
+}
+
+export function loadCachedMe(): Me | undefined {
+  try {
+    return parseCachedMe(localStorage.getItem(ME_CACHE_KEY));
+  } catch {
+    return undefined;
+  }
+}
+
+export function saveCachedMe(me: Me): void {
+  try {
+    localStorage.setItem(ME_CACHE_KEY, JSON.stringify(me));
+  } catch {
+    // Storage blocked or full: an offline start just has no cached me.
+  }
+}
+
+export function clearCachedMe(): void {
+  try {
+    localStorage.removeItem(ME_CACHE_KEY);
+  } catch {
+    // Nothing to clear.
+  }
 }
 
 // --- Notes ---------------------------------------------------------------

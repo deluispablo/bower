@@ -4,8 +4,9 @@
  * and the Web Share Target use, the in-memory Drive token, the per-user
  * local preferences (keeping `theme`, a device setting rather than a user
  * one), the list of sent sentences older versions kept, and the
- * recent-searches and opened-lately lists, and the upload queue (every
- * user's files still waiting on this device, R-UPL-7).
+ * recent-searches and opened-lately lists, the upload queue (every
+ * user's files still waiting on this device, R-UPL-7), and the last `me`
+ * kept for offline starts.
  *
  * `forgetDevice` takes its work as injected dependencies so it is
  * unit-tested hermetically, without a real IndexedDB, Cache Storage or
@@ -20,7 +21,7 @@
  * sign-out) actually call.
  */
 
-import { clearAll } from './cache.js';
+import { clearAll, clearCachedMe } from './cache.js';
 import { invalidateToken } from './drive.js';
 import { resetPrefs } from './prefs.js';
 import { clearRecentSearches } from './search.js';
@@ -49,6 +50,8 @@ export interface ForgetDeviceDeps {
   clearOpened: () => void;
   /** Stops the upload queue and drops its device copies (`upload-queue.ts`). */
   clearUploadQueue: () => Promise<void>;
+  /** Drops the last `me` kept for offline starts (`clearCachedMe` in `cache.ts`). */
+  clearMe: () => void;
 }
 
 /** Runs `task`, sending anything it throws or rejects with to `console.error`. */
@@ -76,6 +79,7 @@ export async function forgetDevice(deps: ForgetDeviceDeps): Promise<void> {
     runSafely(() => deps.clearRecentSearches()),
     runSafely(() => deps.clearOpened()),
     runSafely(() => deps.clearUploadQueue()),
+    runSafely(() => deps.clearMe()),
   ]);
 }
 
@@ -89,5 +93,6 @@ export default function forgetThisDevice(): Promise<void> {
     clearRecentSearches,
     clearOpened,
     clearUploadQueue: () => clearUploadQueue(),
+    clearMe: clearCachedMe,
   });
 }

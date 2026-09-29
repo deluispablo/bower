@@ -13,8 +13,19 @@ import { useLocation } from 'preact-iso';
 
 import { ApiError, getMe, isDemo, isNotInvited, logout } from './api.js';
 import type { Me, NotInvitedMe } from './api.js';
+import {
+  invalidateIndex,
+  loadCachedMe,
+  saveCachedMe,
+  setIndexFolder,
+} from './cache.js';
+import { driveFetch, folderNameOf, watchFolder } from './drive.js';
 import forgetDevice from './forget.js';
-import { FOLDER_RECHECK_MS, folderState } from './folder-state.js';
+import {
+  FOLDER_FIELDS,
+  FOLDER_RECHECK_MS,
+  folderState,
+} from './folder-state.js';
 import type { FolderState } from './folder-state.js';
 import { introSeen } from './intro.js';
 
@@ -35,6 +46,13 @@ export interface SessionState {
    * missing starts as `missing`, so Home is never painted first.
    */
   folder?: FolderState;
+  /**
+   * The Bower folder's name as Drive reports it (R-VAULT-11), never the
+   * stored `me.vault.name`. Unknown until the first check answers.
+   */
+  folderName?: string;
+  /** `me` came from this device because the Worker was out of reach (R-VAULT-13). */
+  offline?: boolean;
 }
 
 export interface Session extends SessionState {
@@ -70,12 +88,34 @@ function recoverTarget(folder: FolderState): string | null {
  */
 const HAD_SESSION_KEY = 'bower:had-session';
 
+/**
+ * The cached `me` to fall back on when `/me` fails (R-VAULT-13): only for a
+ * failure that means "no network" (never a 401 or a server answer), and only
+ * when one is cached. Pure.
+ */
+export function offlineMe(
+  err: unknown,
+  online: boolean,
+  cached: Me | undefined,
+): Me | undefined {
+  if (cached === undefined) return undefined;
+  if (err instanceof ApiError) {
+    return err.status === 0 || (!online && err.status !== 401)
+      ? cached
+      : undefined;
+  }
+  return online ? undefined : cached;
+}
+
 /** Session state for a `/me` answer: signed in, or turned away at sign-in. */
 function stateFromMe(me: Me | NotInvitedMe): SessionState {
   if (isNotInvited(me)) {
     return { status: 'signed-out', notInvitedEmail: me.email };
   }
   markHadSession();
+  // Before anything reads the index: it is keyed by this folder (R-VAULT-9).
+  setIndexFolder(me.vault?.folderId ?? null);
+  saveCachedMe(me);
   return {
     status: 'signed-in',
     me,
@@ -191,16 +231,31 @@ export function SessionProvider({ children }: SessionProviderProps) {
   const folderIdRef = useRef<string | null>(null);
   folderIdRef.current = folderId;
   const lastCheckRef = useRef(0);
+  const followingRef = useRef(false);
 
   const recheckFolder = async (): Promise<FolderState> => {
     const id = folderIdRef.current;
     if (id === null || isDemo()) return 'ok';
     lastCheckRef.current = Date.now();
-    const found = await folderState(id);
+    let name: string | null = null;
+    const found = await folderState(id, async (folderId) => {
+      const response = await driveFetch(
+        `/drive/v3/files/${encodeURIComponent(folderId)}?fields=${encodeURIComponent(FOLDER_FIELDS)}&supportsAllDrives=true`,
+      );
+      const file = (await response.json()) as unknown;
+      name = folderNameOf(file);
+      return file;
+    });
     // `unknown` (offline, Drive down) never overrides what is already known.
     if (found !== 'unknown' && folderIdRef.current === id) {
       setState((prev) =>
-        prev.status === 'signed-in' ? { ...prev, folder: found } : prev,
+        prev.status === 'signed-in'
+          ? {
+              ...prev,
+              folder: found,
+              ...(name !== null ? { folderName: name } : {}),
+            }
+          : prev,
       );
     }
     return found;
@@ -223,6 +278,18 @@ export function SessionProvider({ children }: SessionProviderProps) {
           // may still hold that user's notes. A plain visitor who was
           // never signed in here has nothing to forget.
           if (wasSignedIn) void forgetDevice();
+          return;
+        }
+        const cached = offlineMe(err, navigator.onLine, loadCachedMe());
+        if (cached !== undefined) {
+          // Offline is never "missing" or "signed out": keep the shell.
+          setIndexFolder(cached.vault?.folderId ?? null);
+          setState({
+            status: 'signed-in',
+            me: cached,
+            folder: 'ok',
+            offline: true,
+          });
           return;
         }
         console.error(err);
@@ -254,6 +321,39 @@ export function SessionProvider({ children }: SessionProviderProps) {
     if (state.status === 'signed-in' && folderId !== null) {
       void recheckFolder();
     }
+  }, [state.status, folderId]);
+
+  // R-VAULT-9: a folder that is gone leaves no cached listing behind.
+  useEffect(() => {
+    if (state.folder === 'missing' || state.folder === 'trashed') {
+      void invalidateIndex();
+    }
+  }, [state.folder]);
+
+  // R-VAULT-10: `/drive/token` naming another folder means another tab or
+  // device re-pointed: read `me` again and follow it.
+  useEffect(() => {
+    if (state.status !== 'signed-in' || folderId === null || isDemo()) {
+      watchFolder(null, null);
+      return;
+    }
+    watchFolder(folderId, () => {
+      if (followingRef.current) return;
+      followingRef.current = true;
+      getMe()
+        .then((me) => {
+          setState(stateFromMe(me));
+        })
+        .catch((err: unknown) => {
+          console.error(err);
+        })
+        .finally(() => {
+          followingRef.current = false;
+        });
+    });
+    return () => {
+      watchFolder(null, null);
+    };
   }, [state.status, folderId]);
 
   // R-VAULT-1: on focus after 10 minutes.
