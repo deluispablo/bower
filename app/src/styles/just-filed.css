@@ -185,3 +185,76 @@
 .just-filed-note-cell {
   color: var(--color-text-muted);
 }
+
+/* Table (#755): the summary card, action tags, state chips, phone badge cell. */
+.just-filed-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.just-filed-summary .just-filed-when {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: var(--text-lg);
+}
+
+.just-filed-summary-line {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.just-filed-tag {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.just-filed-tag-needs {
+  background: var(--color-warn-bg);
+  color: var(--color-warn);
+}
+
+.just-filed-details > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.just-filed-state {
+  font-weight: 600;
+}
+
+.just-filed-state-warn {
+  color: var(--color-warn);
+}
+
+.just-filed-state-danger,
+.just-filed-danger {
+  color: var(--color-danger);
+}
+
+.just-filed-counts {
+  color: var(--color-text-muted);
+}
+
+.just-filed-badge {
+  flex-shrink: 0;
+}
+
+.just-filed-list[role='table'] > [role='rowgroup'] {
+  display: flex;
+  flex-direction: column;
+}
+
+.just-filed-table td {
+  min-height: 44px;
+}
