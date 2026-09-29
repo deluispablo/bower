@@ -35,6 +35,7 @@ import {
 } from '../help-rows.js';
 import type {
   HelpIcon,
+  HelpRow,
   HelpScreen,
   HelpSheetCopy,
   HelpTab,
@@ -56,7 +57,10 @@ import {
   IconShield,
   IconSparkle,
 } from './icons.js';
-import { useDismissGuard } from './use-dismiss-guard.js';
+import { Queued } from './queued-overlay.js';
+import { Overlay } from './overlay.js';
+import { OVERLAY_PRIORITY } from '../overlay-queue.js';
+import { restoreHint, isHintDismissed } from './hint.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
 import '../styles/help-sheet.css';
@@ -220,14 +224,30 @@ function usePlacement(tab: HelpTab): SheetPlacement {
   return placeSheet(bar, viewport.width, viewport.height);
 }
 
+function HelpRows({ rows }: { rows: readonly HelpRow[] }): JSX.Element {
+  return (
+    <ul class="help-rows">
+      {rows.map(({ icon, lead, text }) => {
+        const Icon = ICONS[icon];
+        return (
+          <li key={lead} class="help-row">
+            <Icon />
+            <span>
+              <b>{lead}</b> {text}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 interface SheetFrameProps {
   copy: HelpSheetCopy;
   kicker: string;
   /** Skip (tour) or Close (help), top-right. */
   corner: JSX.Element;
   onEscape: () => void;
-  /** Help only: a tap on the dimmed screen closes the sheet. */
-  onBackdrop?: () => void;
   /** The tour's text changes in place, so it is announced. */
   live?: boolean;
   children: ComponentChildren;
@@ -238,22 +258,15 @@ function SheetFrame({
   kicker,
   corner,
   onEscape,
-  onBackdrop,
   live = false,
   children,
 }: SheetFrameProps): JSX.Element {
   const sheet = useRef<HTMLDivElement>(null);
   useFocusTrap(sheet, onEscape);
   const place = usePlacement(copy.tab);
-  const guardedBackdrop = useDismissGuard(() => onBackdrop?.());
 
   return (
-    <div
-      class={place.spot === null ? 'help help--no-spot' : 'help'}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) guardedBackdrop();
-      }}
-    >
+    <div class={place.spot === null ? 'help help--no-spot' : 'help'}>
       {place.spot !== null && (
         <div class="help-spot" style={place.spot} aria-hidden="true" />
       )}
@@ -281,19 +294,7 @@ function SheetFrame({
           </div>
           {corner}
         </div>
-        <ul class="help-rows">
-          {copy.rows.map(({ icon, lead, text }) => {
-            const Icon = ICONS[icon];
-            return (
-              <li key={lead} class="help-row">
-                <Icon />
-                <span>
-                  <b>{lead}</b> {text}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <HelpRows rows={copy.rows} />
         {children}
       </div>
     </div>
@@ -312,46 +313,121 @@ export interface HelpSheetProps {
   ideasHref?: string;
 }
 
-/** What "?" opens: the sheet about the screen on show. */
+/** A tip that can be dismissed on a screen, with its own words. */
+export interface ScreenTip {
+  /** The hint id: the choice lives at `bower:hint:<id>` (`hint.tsx`). */
+  id: string;
+  text: string;
+}
+
+/**
+ * The tips each screen can show (R-HINT-4). Help lists the dismissed ones
+ * under "Tips on this screen" with "Show again"; #777 adds the rest as
+ * their tips become hints.
+ */
+export const SCREEN_TIPS: Readonly<Partial<Record<HelpScreen, ScreenTip[]>>> = {
+  home: [
+    {
+      id: 'home',
+      text: 'Use Tidy up once, when you have added everything.',
+    },
+  ],
+  bower: [
+    {
+      id: 'dictate-keyboard',
+      text: 'Long text? Use the microphone key on your phone’s keyboard to dictate.',
+    },
+  ],
+};
+
+/** The tips of `screen` the person has dismissed on this device. */
+export function dismissedTips(screen: HelpScreen): ScreenTip[] {
+  return (SCREEN_TIPS[screen] ?? []).filter((tip) => isHintDismissed(tip.id));
+}
+
+/**
+ * What "?" opens: the sheet about the screen on show, queued as an own
+ * overlay (R-OVL-2): a bottom sheet on phones, a 440 px right panel from
+ * 900 px up (R-OVL-4).
+ */
 export function HelpSheet({
   screen,
   onClose,
   onShowMeAround,
   ideasHref,
 }: HelpSheetProps): JSX.Element {
+  const copy = helpSheet(screen, isDemo());
+  const [tips, setTips] = useState<ScreenTip[]>(() => dismissedTips(screen));
+
   return (
-    <SheetFrame
-      copy={helpSheet(screen, isDemo())}
-      kicker="About this screen"
-      corner={
-        <button
-          type="button"
-          class="icon-button help-close"
-          aria-label="Close"
-          onClick={onClose}
-        >
-          <IconClose />
-        </button>
-      }
-      onEscape={onClose}
-      onBackdrop={onClose}
-    >
-      <div class="help-actions">
-        <button type="button" class="button" onClick={onShowMeAround}>
-          <IconPlay />
-          Show me around
-        </button>
-        {ideasHref !== undefined && (
-          <a class="button help-secondary" href={ideasHref}>
-            <IconSparkle />
-            Ideas
+    <Queued id="help-sheet" priority={OVERLAY_PRIORITY.own}>
+      <Overlay kind="sheet" labelledBy="help-sheet-title" onClose={onClose}>
+        <div class="help-panel">
+          <div class="help-head">
+            <span class="help-bird" aria-hidden="true">
+              <Bird state="idle" face="happy" size={44} overlay />
+            </span>
+            <div class="help-heading">
+              <p class="help-kicker">About this screen</p>
+              <h2 id="help-sheet-title" class="help-title">
+                {copy.title}
+              </h2>
+              <p id="help-sheet-lede" class="help-lede">
+                {copy.lede}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="icon-button help-close"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <IconClose />
+            </button>
+          </div>
+          <HelpRows rows={copy.rows} />
+          {tips.length > 0 && (
+            <section class="help-tips" aria-labelledby="help-tips-title">
+              <p id="help-tips-title" class="help-kicker">
+                Tips on this screen
+              </p>
+              <ul class="help-tip-list">
+                {tips.map((tip) => (
+                  <li key={tip.id} class="help-tip">
+                    <span>{tip.text}</span>
+                    <button
+                      type="button"
+                      class="help-tip-again"
+                      onClick={() => {
+                        restoreHint(tip.id);
+                        setTips(dismissedTips(screen));
+                      }}
+                    >
+                      Show again
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          <div class="help-actions">
+            <button type="button" class="button" onClick={onShowMeAround}>
+              <IconPlay />
+              Show me around
+            </button>
+            {ideasHref !== undefined && (
+              <a class="button help-secondary" href={ideasHref}>
+                <IconSparkle />
+                Ideas
+              </a>
+            )}
+          </div>
+          <a class="help-intro-link" href={INTRO_AGAIN_HREF}>
+            What is Bower, from the start
           </a>
-        )}
-      </div>
-      <a class="help-intro-link" href={INTRO_AGAIN_HREF}>
-        What is Bower, from the start
-      </a>
-    </SheetFrame>
+        </div>
+      </Overlay>
+    </Queued>
   );
 }
 

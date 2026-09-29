@@ -257,13 +257,9 @@ describe('Layout', () => {
     location.path = '/bower';
     mount();
     click(query('.topbar-help'));
-    const dialog = query('[role="dialog"]');
-    expect(dialog.textContent).toContain('About this screen');
-    expect(dialog.querySelector('h2')?.textContent).toBe('Bower');
-    // jsdom lays nothing out, so the first Bower link (the sidebar's) wins.
-    expect(query('[data-tour="bower"]').classList.contains('help-tab-on')).toBe(
-      true,
-    );
+    const dialog = document.body.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('About this screen');
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Bower');
   });
 
   it('"Show me around" on the help sheet closes it and goes Home for the tour', () => {
@@ -271,12 +267,12 @@ describe('Layout', () => {
     location.route.mockClear();
     mount();
     click(query('.topbar-help'));
-    const showMe = Array.from(root.querySelectorAll('button')).find(
+    const showMe = Array.from(document.body.querySelectorAll('button')).find(
       (b) => b.textContent === 'Show me around',
     );
     if (showMe === undefined) throw new Error('Show me around missing');
     click(showMe);
-    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     expect(location.route).toHaveBeenCalledWith('/');
   });
 
