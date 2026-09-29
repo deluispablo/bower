@@ -484,6 +484,16 @@ The explorer, Recent, search and the switcher never show: any dot-folder at any 
 
 A folder opens at `/folder/<path>` (issue #214) — the path relative to the Bower folder, each segment percent-encoded on its own so a name with a `/`-unsafe character still round-trips (`app/src/navigation.ts#folderHref`, `app/src/routes/folder.tsx`). Reached from the Home Answers card, a note's breadcrumb, the desktop sidebar's tree (a folder's name opens it; the chevron still only expands or collapses it) and another Folder screen's own subfolder rows. The old `#folder=` hash, which only the tree understood, is gone.
 
+### On the folder screen (v4)
+
+- **List and grid.** Files show as rows in a list, or as tiles with thumbnails in a grid. The grid is chosen by the person, or comes up by itself when most of the folder is photos.
+- **Originals and By Bower.** A segmented control above the list: **All**, **Originals** (what you put there) and **By Bower** (what Bower wrote, each with the first line of its text), each with its count. The origin comes from `index.md`.
+- **Sort and kind.** **Sort** offers Newest first, Oldest first, Name and Kind, and is remembered. The kind filter is a select on a phone and a row of chips with counts on a desktop; picking an origin resets it.
+- **Quick look.** Tapping a file, or pressing Space on a desktop, opens it over the folder without leaving it; Enter opens the full screen.
+- **Empty state.** A folder with nothing in it says "Nothing in <name> yet", with **Add something** and **Ask Bower to move things here** (the Bower box prefilled). If the files are in subfolders, it says how many and where instead.
+- **Compare.** When the folder's notes name a kind (flats, jobs, and so on) a **Compare N <kind>** tab appears beside the list, and a button on a desktop. Its code loads only then.
+- **Desktop, three panes.** From 1200 px the folder screen shows the tree, the folder and a preview side by side. Keys, listed on the screen's bottom line: arrows move the selection, Space quick look, Enter open, Backspace up a folder, `/` or Ctrl K (Cmd K on a Mac) search. Below 1200 px it is one column; below 900 px the tree is the Notes tab.
+
 ## Pins
 
 A note is pinned when its frontmatter has `pinned: <ISO 8601 time>` — the time it was pinned, not a boolean. A folder is pinned the same way, through its own folder note (`_<Folder>.md`, created with frontmatter only if the folder had none yet, and already hidden from the tree above); unpinning removes the key and deletes that note again if pinning was the only reason it existed. Order everywhere is pin time, newest first; there is no manual reorder.

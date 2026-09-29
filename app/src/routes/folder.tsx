@@ -243,7 +243,7 @@ interface FolderBodyProps {
   heading: string;
   /**
    * A root folder's one-line meaning (#348, C.5), from the one table
-   * `folder-meanings.ts` — the same words the folder menu (#319) and the
+   * `folder-meanings.ts` — the same words the Notes tab and the
    * "What is Bower" intro use. `undefined` for any other folder.
    */
   meaning: string | undefined;
