@@ -279,10 +279,7 @@ function RequestMeta({
   runStarted,
   runsByKey,
   onRules,
-}: Pick<
-  RequestsListProps,
-  'now' | 'runStarted' | 'runsByKey' | 'onRules'
-> & {
+}: Pick<RequestsListProps, 'now' | 'runStarted' | 'runsByKey' | 'onRules'> & {
   row: RequestRow;
 }): JSX.Element {
   const when = lowerFirst(cardWhen(row.since, now));
@@ -936,7 +933,11 @@ export function Bower(): JSX.Element {
     ),
     // Read only when shown: `GET /runs` is a few KV reads per visit.
     activity:
-      segment === 'activity' || wide ? <ActivityPanel load={runsLoad} /> : <></>,
+      segment === 'activity' || wide ? (
+        <ActivityPanel load={runsLoad} />
+      ) : (
+        <></>
+      ),
   };
 
   return (

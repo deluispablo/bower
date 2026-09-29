@@ -78,7 +78,9 @@ const saveEditedNote = vi.fn(() =>
   Promise.resolve({ text: '', modifiedTime: 'T2' }),
 );
 const deleteFile = vi.fn(() => Promise.resolve());
-const processRun = vi.fn<(scope?: string) => Promise<boolean>>(() => Promise.resolve(true));
+const processRun = vi.fn<(scope?: string) => Promise<boolean>>(() =>
+  Promise.resolve(true),
+);
 const getRuns = vi.fn<() => Promise<{ runs: Run[] }>>(() =>
   Promise.resolve({ runs: state.runs }),
 );
@@ -461,12 +463,6 @@ describe('Requests (#344)', () => {
     return [...root.querySelectorAll('#bower-panel-requests li')].find((li) =>
       li.textContent?.includes(text),
     ) as HTMLLIElement | undefined;
-  }
-
-  function button(within: Element | undefined, name: string) {
-    return [...(within?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent?.trim() === name,
-    );
   }
 
   /** Mounts, then lets the notes' words load. */

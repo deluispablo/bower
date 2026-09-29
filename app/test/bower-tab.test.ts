@@ -356,7 +356,9 @@ describe('requests and their runs (#756, R-REQ-1)', () => {
   });
 
   it('a request a run did stays listed as Done with its run key, never vanishing', () => {
-    const rows = requestRows(input([file('0-Inbox/Processed/' + name)], [doneRun]));
+    const rows = requestRows(
+      input([file('0-Inbox/Processed/' + name)], [doneRun]),
+    );
     expect(rows).toEqual([
       {
         key: `done-run-2-${name}`,
@@ -405,7 +407,9 @@ describe('requests and their runs (#756, R-REQ-1)', () => {
 
   it('the run in flight wins over an earlier failure', () => {
     const rows = requestRows(
-      input([file(path)], [failedRun], { runSince: '2026-09-29T14:30:00.000Z' }),
+      input([file(path)], [failedRun], {
+        runSince: '2026-09-29T14:30:00.000Z',
+      }),
     );
     expect(rows.map((row) => row.state)).toEqual(['tidying']);
   });
@@ -455,7 +459,9 @@ describe('requestsByTargetPath (#756, for #765 and #784)', () => {
 
   it('reads the path a Move request names', () => {
     expect(
-      requestTargetPath('Move “Lease” (1-Projects/Flat/lease.pdf) to 4-Archives.'),
+      requestTargetPath(
+        'Move “Lease” (1-Projects/Flat/lease.pdf) to 4-Archives.',
+      ),
     ).toBe('1-Projects/Flat/lease.pdf');
     expect(requestTargetPath('Make a packing list')).toBeNull();
   });

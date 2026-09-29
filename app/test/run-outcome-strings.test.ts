@@ -3,19 +3,14 @@
  * `RunOutcome`, so the old ad-hoc result strings are gone from `app/src`.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const SRC = join(import.meta.dirname, '..', 'src');
-
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) return sourceFiles(path);
-    return /\.tsx?$/.test(entry.name) ? [path] : [];
-  });
-}
+/** Every source file of the app, as text, by its path under `src/`. */
+const SOURCES = import.meta.glob<string>('../src/**/*.{ts,tsx}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
 
 /** The code without its comments, so a doc line may still name the old words. */
 function withoutComments(text: string): string {
@@ -36,9 +31,9 @@ const BANNED = [
 const NOT_YET_MIGRATED = new Set(['home.ts', 'run-store.tsx']);
 
 describe('R-RUN-4: no old result strings in app/src', () => {
-  const files = sourceFiles(SRC).map((path) => ({
-    name: relative(SRC, path).replaceAll('\\', '/'),
-    code: withoutComments(readFileSync(path, 'utf8')),
+  const files = Object.entries(SOURCES).map(([path, text]) => ({
+    name: path.replace('../src/', ''),
+    code: withoutComments(text),
   }));
 
   it('finds the source files', () => {

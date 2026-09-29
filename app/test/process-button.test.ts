@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { isRunning, labelFor, startsRun } from '../src/components/process-button.js';
+import {
+  isRunning,
+  labelFor,
+  startsRun,
+} from '../src/components/process-button.js';
 
 describe('labelFor', () => {
   it('idle and done: "Tidy up", with no count (the card carries it)', () => {

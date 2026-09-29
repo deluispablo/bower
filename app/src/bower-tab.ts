@@ -71,12 +71,7 @@ export interface KeptSentence {
  * counts, R-REQ-1), answered, or kept as a rule.
  */
 export type RequestState =
-  | 'waiting'
-  | 'tidying'
-  | 'done'
-  | 'failed'
-  | 'answered'
-  | 'kept';
+  'waiting' | 'tidying' | 'done' | 'failed' | 'answered' | 'kept';
 
 export interface RequestRow {
   /** Unique within the list, and the same for a sentence before and
