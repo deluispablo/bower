@@ -78,7 +78,7 @@ test('an answer shows the question, the lists, the checklist link and Used', asy
   await expect(view.getByText('At the viewing, check')).toBeVisible();
   await expect(view.getByText('Ask the agent')).toBeVisible();
   await expect(
-    view.getByRole('link', { name: /Viewing checklist/ }),
+    view.getByRole('link', { name: 'Viewing checklist · in Resources' }),
   ).toBeVisible();
   await expect(
     view.locator('.bower-used, p:has-text("Used:")').first(),
