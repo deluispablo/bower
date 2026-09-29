@@ -114,6 +114,12 @@ export function orderedColumnIds(
   return [TITLE_COLUMN, ...new Set(kept), ...rest];
 }
 
+/** Column headings that differ from the field's label (R-FOLD-6: the job
+ * offer's "Office" reads "Where" here, as the boards draw it). */
+const COLUMN_LABELS: Readonly<Record<string, string>> = {
+  'job-offer:office': 'Where',
+};
+
 /** The columns of `kind` in `order` (or the default order). */
 export function compareColumns(
   kind: Kind,
@@ -130,7 +136,10 @@ export function compareColumns(
       if (field === undefined) continue;
       columns.push({
         id,
-        label: field.compareLabel ?? field.label,
+        label:
+          field.compareLabel ??
+          COLUMN_LABELS[`${kind.id}:${field.key}`] ??
+          field.label,
         field,
       });
     }
@@ -174,8 +183,12 @@ export function dropColumn(
 
 // --- Values, sorting ---------------------------------------------------------
 
+/** What a date cell says when the note has no readable date. */
+export const NO_DATE = 'No date';
+
 /** The cell's text: the title, the status the way Details says it, or the
  * field formatted as the boards draw it. */
+
 export function cellText(
   kind: Kind,
   note: CompareNote,
@@ -183,9 +196,9 @@ export function cellText(
 ): string {
   if (column.id === TITLE_COLUMN) return noteTitle(note);
   if (column.id === STATUS_COLUMN) return statusLabel(kind, note.fields);
-  return column.field === undefined
-    ? ''
-    : formatFieldValue(column.field, note.fields[column.id]);
+  if (column.field === undefined) return '';
+  const text = formatFieldValue(column.field, note.fields[column.id]);
+  return text === '' && column.field.type === 'date' ? NO_DATE : text;
 }
 
 /** A number out of "£2,150", "22 min", "−10 %" or 81, `null` when the value

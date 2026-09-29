@@ -52,6 +52,7 @@ import type { FolderContents, FolderSubfolder } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
@@ -76,7 +77,7 @@ import {
 } from './icons.js';
 import { InfoPop } from './info-pop.js';
 import { FilterSortSheet } from './filter-sort-sheet.js';
-import { KeyFacts } from './key-facts.js';
+import { KeyFacts, scoreName } from './key-facts.js';
 import { KindBadge } from './kind-badge.js';
 import { QuickLook } from './quick-look.js';
 import type { PanePreview } from './quick-look.js';
@@ -258,6 +259,9 @@ const NO_FILES: ReadonlyMap<string, DriveFile> = new Map();
 const VIRTUAL_FROM_ROWS = 150;
 
 /** A row's and a date heading's height in px before they are measured. */
+/** From here the folder keeps its toolbar (R-FOLD-6). */
+const TOOLBAR_QUERY = '(min-width: 900px)';
+
 const ROW_ESTIMATE = 62;
 const GROUP_ESTIMATE = 34;
 
@@ -554,6 +558,12 @@ function RowDetail({
     kind === undefined || meta === undefined
       ? []
       : keyFactsFor(kind, meta.fields);
+  const score =
+    kind === undefined || meta === undefined
+      ? undefined
+      : keyFactsFor(kind, meta.fields, { score: true }).find(
+          (fact) => fact.tone !== undefined,
+        );
   const about =
     row.original === undefined ? 'note' : `note on the ${subjectOf(meta)}`;
   const original = row.original === undefined ? '' : FILE_KIND_LABELS[row.kind];
@@ -567,6 +577,18 @@ function RowDetail({
           <>
             {' '}
             <KeyFacts facts={facts} inline />
+          </>
+        )}
+        {score !== undefined && (
+          <>
+            {' · '}
+            <span
+              class="folder-row-score"
+              role="img"
+              aria-label={scoreName(score.value)}
+            >
+              {score.value}/100
+            </span>
           </>
         )}
       </span>
@@ -711,6 +733,8 @@ export function FolderItems({
     };
   }, [wantsVirtual, loaded]);
 
+  // Below 900 px the sort, kind and layout controls are one button (D34).
+  const toolbar = useMediaQuery(TOOLBAR_QUERY);
   const showTime = view.sort === 'name' || view.sort === 'kind';
 
   // Grid when the person chose it, else when most of the folder is photos.
@@ -1063,7 +1087,7 @@ export function FolderItems({
         </Hint>
       )}
       <div class="folder-tools">
-        {desktop ? (
+        {toolbar ? (
           <>
             <select
               class="folder-select"
@@ -1122,7 +1146,7 @@ export function FolderItems({
             {compare.label}
           </button>
         )}
-        {desktop && (
+        {toolbar && (
           <LayoutToggle
             layout={layout}
             onChange={(next) => onView({ layout: next })}
