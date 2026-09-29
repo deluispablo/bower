@@ -1030,6 +1030,7 @@ These are mechanisms. The content of the old vault's rules (scoring weights, vis
 - **Acceptance criteria:**
   - [ ] R-VERDICT-1: the verdict row appears only when the note has frontmatter `score` (or `fit`) and `verdict`, both written by the agent (R-AG-11). The app never parses the box text. `score`, `verdict` and `made_for` join `BOOKKEEPING_KEYS` (`details.tsx`), so none shows twice under More. `score` and `fit` are read explicitly by Compare (the "Your score" column, R-CMP-2) and the front page (R-FRONT-3); `BOOKKEEPING_KEYS` only keeps them out of Details' More group. `verdict` is never a Compare column.
   - [ ] R-VERDICT-2: `apply_link` becomes a `link` field of the job-offer kind in `kinds.ts` and the rulebook together (parity test `kinds-rulebook.test.ts`), and renders as the Apply button.
+  - [ ] R-VERDICT-4: when the verdict row shows the score, the Key facts do not repeat it as a tile.
   - [ ] R-VERDICT-3: "Made for it" renders the linked notes; CVs and letters named "CV · {employer}" and "Letter · {employer}" (R-AG-4).
 
 **History** (board Note-JobOffer-*):
@@ -1038,7 +1039,7 @@ These are mechanisms. The content of the old vault's rules (scoring weights, vis
 - Changing the status in the note header or in Compare appends "{date} · Status {old} → {new}, by you" in the same Drive write.
 - **Acceptance criteria:**
   - [ ] R-HIST-1: the status change appends to `## History`, creating it if missing, and writes nothing when the status is unchanged (a unit test on the pure text transform).
-  - [ ] R-HIST-2: the agent never rewrites `## History` (rulebook).
+  - [ ] R-HIST-2: the agent never rewrites `## History` (rulebook). Lines Bower writes because of a rule say so ("CV and cover letter written (your rule)").
 
 **What a run means** (boards RunSheet-Done-*, JustFiled-*):
 
@@ -1095,11 +1096,11 @@ Research agrees that long deck tutorials make an app look harder without making 
 
 | # | Heading | Body | Illustration (CSS only, a static resting frame, no loop) |
 |---|---|---|---|
-| 1 | "Drop a pile.\nBower files it." | "Add files and links, say in a line what they are, and tap Tidy up. Bower puts each thing in the right folder of your own Google Drive." | a pile with its one-line note, the bird, three PARA chips |
+| 1 | "Drop a pile.\nBower files it." | "Add files and links, say in a line what they are, and tap Tidy up. Bower puts each thing in the right folder of your own Google Drive." | a pile with its one line ("My move: the new job and a flat near it"), the bird, two PARA chips |
 | 2 | "Every file gets\nBower's note" | "A short summary, the key facts and what to check, with where each line comes from. Your original stays exactly as it was. Fold the note away when you do not need it." | an original file above a small Bower's note with origin squares, a Check and two key facts |
 | 3 | "It joins\nthe dots" | "Bower checks each new thing against what you already keep, adds what follows from it, and tells you when two notes disagree." | two notes joining into a "from your notes" line |
-| 4 | "Ask in your\nown words" | "A question, a job or a rule ("from now on…"). It waits in your inbox and Bower does it at the next tidy-up; the tidy-up bar shows how it goes." | a request bubble, "Waits in your inbox", the done bar with the four counts |
-| 5 | "Only your Drive" | "Your notes live in a folder you own, readable in Drive and Obsidian. A tidy-up works on a temporary copy that is deleted when it ends; Claude reads the text to write Bower's notes." | the same folder in Drive, Obsidian and Bower |
+| 4 | "Ask in your\nown words" | "A question, a job or a rule (“from now on…”). It waits in your inbox and Bower does it at the next tidy-up; the tidy-up bar shows how it goes." | a request bubble, "Waits in your inbox", the done bar with the four counts |
+| 5 | "Only your Drive" | "Your notes live in a folder you own, readable in Drive and Obsidian. A tidy-up works on a temporary copy that is deleted when it ends; Claude, the AI behind Bower, reads your files to write Bower's notes." | the same folder in Drive and in Bower, with real folder names; "The same folder, in Drive, in Bower and in Obsidian." |
 
 - **Controls:**
   - page dots with "Page n of 5";
@@ -1129,7 +1130,7 @@ Research agrees that long deck tutorials make an app look harder without making 
     - Next, Back and a swipe (kept on phones) push a history entry; Skip, Close and the first load replace it.
     - Invalid values are clamped to 1–5.
     - `markIntroSeen` fires on Skip, Close or reaching page 5 through the controls, not when `?page=5` is typed in.
-  - [ ] R-INTRO-3: focus moves to the page heading, other pages are inert, the live region is present, and there is a visible Back on phones (a11y unit test and e2e).
+  - [ ] R-INTRO-3: focus moves to the page heading, other pages are inert, the live region is present (a visible "2 of 5" next to the dots), and there is a visible Back on phones (a11y unit test and e2e). Skip sits top right at every width.
   - [ ] R-INTRO-4: `from=login` and `from=settings` return correctly.
   - [ ] R-INTRO-5: the illustrations are CSS only, with no infinite loop; reduced motion shows the resting frame.
   - [ ] R-INTRO-6: the truth guard is tracked as issue dependencies.
@@ -1161,6 +1162,7 @@ Research agrees that long deck tutorials make an app look harder without making 
 - **An example page** (Example-FlatHunt-375) has four acts: "You add", "Bower files and writes", "You ask", "You get". It closes with the hint "Examples show what Bower can do; your own Bower learns your way from what you add and ask."
 - The examples reuse the case content of today's pages 5–8, rewritten to the new behaviour. The health example is a neutral summary (no named doctor, no values presented as advice). The archive example drops "asks once".
 - **Acceptance criteria:**
+  - [ ] R-LEARN-0: signed out, Learn Bower shows the same content with "Sign in with Google" at the end instead of the tab bar; the first card reads "The intro · Five screens, two minutes".
   - [ ] R-LEARN-1: `/learn` and `/learn/:example` render at 375 and 1280, reachable signed out. `decideRedirect` special-cases them like `/welcome` (a prefix match, since `PUBLIC_PATHS` is an exact-match set), so a signed-in person with no folder is not sent to `/onboarding`. They are added to `shell-routes.ts` and the demo build.
   - [ ] R-LEARN-2: the six examples' copy is in one module (`learn.ts`), tested for every claim tied to a shipped feature, like R-INTRO-6.
   - [ ] R-LEARN-3: the sign-in button, the Settings group and the help-sheet link all reach it.
@@ -1180,11 +1182,12 @@ Research agrees that long deck tutorials make an app look harder without making 
 
 | State | Bird | Title | Text | Buttons (in order) | Foot line |
 |---|---|---|---|---|---|
-| In the Bin (`trashed`) | confused | "Your Bower folder is in the Bin" | "It is in your Google Drive Bin, with everything in it. Put it back and Bower carries on where it was." | Put it back (primary) · Start a new Bower folder · Use another folder (text) | "Nothing is changed until you choose. Drive empties its Bin after 30 days." |
+| In the Bin (`trashed`) | confused | "Your Bower folder is in the Bin" | "It is in your Google Drive Bin, with everything in it. Put it back and Bower carries on where it was." | Put it back (primary) · Start a new Bower folder · Use another folder (text) | "Nothing is changed until you choose. A new folder leaves the old one in the Bin, which Drive empties after 30 days." |
 | Gone (404) | confused | "Your Bower folder is gone" | "It was deleted from your Drive, Bin included, so Bower cannot bring it back. Your notes, your rules and About me were in it." | Start a new Bower folder (primary) · Use another folder | "Google can sometimes restore files deleted in the last 25 days: ask Drive support before starting again." |
 | No access | looking | "Bower can't open your folder" | "It may be in a shared drive, or shared by someone who no longer lets you open it. Ask them for access, then try again." | Try again (primary) · Use another folder · Start a new Bower folder (text) | "Starting a new folder leaves your notes where they are, split across two folders." |
 
-- **Offline is not missing** (Offline-375): Home with a state hint, "You are offline. Showing what is on this device; Bower checks your folder when you are back." Never a redirect to sign-in or recovery.
+- **Offline is not missing** (Offline-375): Home with the cached content (last counts, recent notes marked "saved on this device") and a state hint, "You are offline. Showing what is on this device; Bower checks your folder when you are back." Never a redirect to sign-in or recovery.
+- Every recovery screen ends with quiet "Help · Sign out" links.
 - **"Put it back"** sets `trashed:false`, reads the state again, then goes Home. It is never automatic.
 - **"Use another folder"** opens the folder picker, or accepts a pasted link, and refuses a trashed folder.
 - **A tidy-up that finds the folder missing** fails with the reason `vault_missing`. The app then shows these screens, not the run-failure sheet, with the sentence "Your Bower folder is no longer in your Drive. Nothing was changed."
@@ -1361,6 +1364,7 @@ The rulebook bump and the runner change deploy in the usual order: Worker, then 
 - [x] Every artboard is in section 4, and every element on the changed boards is in an inventory (sections 6.2 to 6.16).
 - [x] Every state a person can meet has a board or an explicit "no visual change" (running, done, partial, failed; waiting, running, done, failed requests; upload states; dictation states; rule change; converted document). **Gap:** "Did not finish" on the run sheet has no board of its own. It is the partial layout with the danger colour, and the text is in 6.3.
 - [x] Every string is in a copy table or quoted in its requirement; every error has its next step.
+- [x] One `h1` per screen: the page heading, or the phone top bar's title when the page has none (Learn, Settings, Just filed, the run sheet's page behind). Repeated link labels carry their object ("Apply to {employer}"). Text in the sidebar and marks is at least 12 px.
 - [x] Every interactive element has an accessible name and a keyboard path (the separator, chip, sort dialog, dictate button, hints' dismiss, info-pop).
 - [x] Every token used exists in `tokens.css` or in section 5.
 - [x] Every element that needs data names its source and its empty and stale behaviour (RunOutcome without the new runner fields degrades to today's counts; missing `original` shows "not found"; no box shows the hint).
