@@ -9,18 +9,12 @@
  *   `failed` or the ticket expires.
  * - The operator key `BOWER_API_KEY`: only for `POST /runner/lint/dispatch`,
  *   called by the weekly lint's `dispatch` job, which never runs the agent.
- *   While `RUNNER_ACCEPT_LEGACY_KEY` is `1` (a transition flag, off by
- *   default) it is also accepted where a ticket is, and by
- *   `GET /runner/vaults`, so an instance repo with the old workflows keeps
- *   working until it is updated.
  *
  * Routes:
  *
  * - `POST /runner/lint/dispatch`: starts one lint run per vault (or for the
  *   one `vaultId` in the body), each with its own ticket, through one
  *   `repository_dispatch` (`bower-lint`) per vault.
- * - `GET /runner/vaults` (legacy flag only): the id of every user with a
- *   vault; ids only, never an email or a token.
  * - `GET /runner/vaults/:id`: what one run needs — the vault's folder ids,
  *   a 1 h Drive access token (never the refresh token), `maxTurns`, the
  *   user's own Claude API key when they set one, and when the run was asked
@@ -127,40 +121,18 @@ function isOperatorKey(credential: string, env: Env): boolean {
   return timingSafeEqual(credential, env.BOWER_API_KEY);
 }
 
-/** Whether the transition flag lets the operator key stand in for a ticket. */
-function acceptsLegacyKey(env: Env): boolean {
-  return env.RUNNER_ACCEPT_LEGACY_KEY === '1';
-}
-
-/**
- * `requireRunnerKey`, and only while `RUNNER_ACCEPT_LEGACY_KEY` is `1`: for
- * `GET /runner/vaults`, which only the old lint workflow calls.
- */
-const requireLegacyRunnerKey: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const env = c.get('env');
-  if (!acceptsLegacyKey(env) || !isOperatorKey(bearer(c), env)) {
-    throw unauthorized();
-  }
-  await next();
-};
-
 /**
  * What the request's credential may do for vault `id`: the kind of run
- * whose live ticket it is (an ingest's is checked first, then a lint's),
- * or `legacy` for the operator key while the transition flag is on.
+ * whose live ticket it is (an ingest's is checked first, then a lint's).
  * Anything else (no credential, a ticket for another vault, a retired or
- * expired ticket, the operator key with the flag off) is a 401
- * `unauthorized`.
+ * expired ticket, the operator key) is a 401 `unauthorized`.
  */
 async function authorizeRun(
   c: Context<AppEnv>,
   id: string,
-): Promise<RunKind | 'legacy'> {
+): Promise<RunKind> {
   const env = c.get('env');
   const credential = bearer(c);
-  if (acceptsLegacyKey(env) && isOperatorKey(credential, env)) {
-    return 'legacy';
-  }
   const now = new Date();
   for (const kind of ['ingest', 'lint'] as const) {
     if (await checkRunTicket(env.BOWER_KV, id, kind, credential, now)) {
@@ -168,11 +140,6 @@ async function authorizeRun(
     }
   }
   throw unauthorized();
-}
-
-/** What `GET /runner/vaults` answers: one entry per user with a vault. */
-export interface RunnerVaultList {
-  vaults: { id: string }[];
 }
 
 /** What `GET /runner/vaults/:id` answers. */
@@ -187,7 +154,7 @@ export interface RunnerVault {
   apiKey?: string;
   /** ISO-8601; when the run this ticket belongs to was asked for. The
    * runner leaves a request note written after it for the next tidy-up
-   * (#491). Absent for the legacy operator key or a run record gone. */
+   * (#491). Absent for a run record gone. */
   requestedAt?: string;
 }
 
@@ -649,12 +616,6 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     return c.json(result);
   });
 
-  runner.get('/runner/vaults', requireLegacyRunnerKey, async (c) => {
-    const ids = await listVaultIds(c.get('env').BOWER_KV);
-    const body: RunnerVaultList = { vaults: ids.map((id) => ({ id })) };
-    return c.json(body);
-  });
-
   runner.get('/runner/vaults/:id', async (c) => {
     const env = c.get('env');
     const id = c.req.param('id');
@@ -689,10 +650,8 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       expiresAt: token.expiresAt,
       maxTurns: Number(env.DEFAULT_MAX_TURNS),
     };
-    if (kind !== 'legacy') {
-      const run = await getRun(env.BOWER_KV, user.id, kind);
-      if (run !== undefined) vault.requestedAt = run.requestedAt;
-    }
+    const run = await getRun(env.BOWER_KV, user.id, kind);
+    if (run !== undefined) vault.requestedAt = run.requestedAt;
     if (user.encApiKey !== undefined) {
       const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
       vault.apiKey = await decrypt(user.encApiKey, key);
@@ -710,7 +669,7 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const report = parseStatusReport(body);
     // A ticket reports on its own run only: an ingest's ticket cannot
     // write the lint run, nor the other way round.
-    if (allowed !== 'legacy' && allowed !== report.kind) {
+    if (allowed !== report.kind) {
       throw unauthorized();
     }
 
@@ -723,9 +682,7 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     if (run.state === 'done' || run.state === 'failed') {
       // The run is over: its ticket is retired, so nothing can fetch a
       // Drive token or report again with it.
-      if (allowed !== 'legacy') {
-        await deleteRunTicket(kv, user.id, allowed);
-      }
+      await deleteRunTicket(kv, user.id, allowed);
       await sendPush(env, user.id, runPushPayload(run), fetchImpl);
     }
     return c.json({ run });
