@@ -477,11 +477,13 @@ export interface CatalogueFile {
 /** A list item starting with a wikilink: `- [[target|alias]] rest`. */
 const CATALOGUE_ROW = /^\s*[-*+]\s+\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\](.*)$/;
 
-const KIND_BY_LABEL: ReadonlyMap<string, FileKind> = new Map(
-  (Object.entries(FILE_KIND_LABELS) as [FileKind, string][]).map(
+const KIND_BY_LABEL: ReadonlyMap<string, FileKind> = new Map([
+  ...(Object.entries(FILE_KIND_LABELS) as [FileKind, string][]).map(
     ([kind, label]): [string, FileKind] => [label.toLowerCase(), kind],
   ),
-);
+  // What catalogues written before the label read "Spreadsheet (CSV)" say.
+  ['spreadsheet', 'csv'] as [string, FileKind],
+]);
 
 /** Whether a link target names a file that is not a note: an extension other than `.md`. */
 function isFileTarget(target: string): boolean {

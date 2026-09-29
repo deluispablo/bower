@@ -380,6 +380,21 @@ const TIP_LIST =
 const TIP_BOWER =
   'Only what Bower wrote, with its key facts, so you can skim a folder without opening the originals. Tap All to see them again.';
 
+/** A row's line for what the person added or wrote. A CSV that is the copy
+ * of a Google Sheet (`appProperties.bowerSource`, set when Bower exports one
+ * from Drive) says so, as the board has it. */
+export function addedLine(
+  file: DriveFile,
+  origin: Origin | null,
+  pages: number | undefined,
+): string {
+  const source = file.appProperties?.bowerSource;
+  if (fileKind(file) === 'csv' && source !== undefined && source !== '') {
+    return `${FILE_KIND_LABELS.csv} · copy of your Google Sheet`;
+  }
+  return fileLine(file, origin, pages);
+}
+
 /** What a row says under its title. */
 function RowDetail({
   row,
@@ -402,7 +417,7 @@ function RowDetail({
   if (!row.bower) {
     return (
       <span class="folder-row-detail">
-        {fileLine(
+        {addedLine(
           row.file,
           originOf(row.file, catalogue),
           pages.get(row.file.id),
@@ -473,8 +488,7 @@ export interface FolderItemsProps {
 /** A tile's line under its title: "PDF · Bower's note", "Photo",
  * "PDF · 6 pages", "Spreadsheet (CSV)", "Note". */
 export function tileLine(row: FolderRow, pages: number | undefined): string {
-  const label =
-    row.kind === 'csv' ? 'Spreadsheet (CSV)' : FILE_KIND_LABELS[row.kind];
+  const label = FILE_KIND_LABELS[row.kind];
   if (row.original !== undefined) return `${label} · Bower's note`;
   if (row.kind === 'note') return row.bower ? "Bower's note" : label;
   if (pages !== undefined && pages > 0) {
