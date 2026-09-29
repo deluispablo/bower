@@ -133,14 +133,7 @@ const markSeen = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
 vi.mock('../src/seen.js', () => ({ markSeen }));
 vi.mock('../src/use-request-rows.js', () => ({ useRequestRows: () => [] }));
 
-const index = buildVaultIndex([
-  LISTING,
-  ANSWER,
-  CHECKLIST,
-  SCAN,
-  COPY,
-  CV,
-]);
+const index = buildVaultIndex([LISTING, ANSWER, CHECKLIST, SCAN, COPY, CV]);
 const noop = (): Promise<void> => Promise.resolve();
 const saveEditedNote =
   vi.fn<
@@ -165,9 +158,8 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
   }),
 }));
 
-const { Note, splitDocument, textCopyOf } = await import(
-  '../src/routes/note.js'
-);
+const { Note, splitDocument, textCopyOf } =
+  await import('../src/routes/note.js');
 const { AboutPanel } = await import('../src/components/about-panel.js');
 const { renderNote } = await import('../src/markdown/render.js');
 const { noteMetaFrom } = await import('../src/note-meta.js');
@@ -381,7 +373,10 @@ describe('Text copy of a document (#760, R-NOTE-8)', () => {
     const parts = splitDocument(
       '<p>a</p><h2>The document</h2><h3>Skills</h3><p>SQL</p>',
     );
-    expect(parts).toEqual({ before: '<p>a</p>', after: '<h3>Skills</h3>\n<p>SQL</p>' });
+    expect(parts).toEqual({
+      before: '<p>a</p>',
+      after: '<h3>Skills</h3>\n<p>SQL</p>',
+    });
     expect(splitDocument('<p>a</p><h2>Other</h2>')).toBeNull();
   });
 });
