@@ -3,6 +3,7 @@
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 
 import {
   SidebarSeparator,
@@ -35,6 +36,8 @@ describe('SidebarSeparator', () => {
   let shell: HTMLElement;
   let handle: HTMLElement;
   let frames: FrameRequestCallback[];
+  let capture: Mock<(id: number) => void>;
+  let release: Mock<(id: number) => void>;
 
   beforeEach(async () => {
     localStorage.clear();
@@ -58,8 +61,10 @@ describe('SidebarSeparator', () => {
       );
     });
     handle = shell.querySelector<HTMLElement>('[role="separator"]')!;
-    handle.setPointerCapture = vi.fn();
-    handle.releasePointerCapture = vi.fn();
+    capture = vi.fn<(id: number) => void>();
+    release = vi.fn<(id: number) => void>();
+    handle.setPointerCapture = capture;
+    handle.releasePointerCapture = release;
     handle.hasPointerCapture = () => true;
   });
 
@@ -130,7 +135,7 @@ describe('SidebarSeparator', () => {
 
   it('drags with pointer capture, one write per frame, and commits at the end', async () => {
     pointer('pointerdown', 264);
-    expect(handle.setPointerCapture).toHaveBeenCalledWith(1);
+    expect(capture).toHaveBeenCalledWith(1);
     pointer('pointermove', 300);
     pointer('pointermove', 380);
     pointer('pointermove', 400);
@@ -142,7 +147,7 @@ describe('SidebarSeparator', () => {
     await act(() => {
       pointer('pointerup', 400);
     });
-    expect(handle.releasePointerCapture).toHaveBeenCalledWith(1);
+    expect(release).toHaveBeenCalledWith(1);
     expect(width()).toBe('400px');
     expect(stored()).toBe('400');
     expect(handle.getAttribute('aria-valuenow')).toBe('400');

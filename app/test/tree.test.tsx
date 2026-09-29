@@ -19,6 +19,7 @@ interface Saved {
 const state = vi.hoisted(() => ({
   saved: undefined as Saved | undefined,
   newIds: new Set<string>(),
+  renders: 0,
 }));
 
 vi.mock('../src/cache.js', async (importOriginal) => ({
@@ -264,7 +265,9 @@ describe('Tree names and descriptions (R-SIDE-3)', () => {
     expect(folder?.getAttribute('aria-label')).toBe('Projects');
     expect(folder?.getAttribute('title')).toBe('Projects');
     const descId = folder?.getAttribute('aria-describedby') ?? '';
-    expect(host.querySelector(`#${descId}`)?.textContent).toBe('3 items, 1 new');
+    expect(host.querySelector(`#${descId}`)?.textContent).toBe(
+      '3 items, 1 new',
+    );
     const inbox = host.querySelector<HTMLElement>(
       `a[href="${folderHref('0-Inbox')}"]`,
     );
