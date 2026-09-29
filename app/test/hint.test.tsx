@@ -112,4 +112,38 @@ describe('Hint (issue #742)', () => {
       /\.hint-suggestion\s*\{[^}]*border:\s*1px solid var\(--color-brand-tint\)/,
     );
   });
+
+  function tipOf(id: string, variant: 'tip' | 'suggestion' | 'state'): unknown {
+    return h(Hint, { id, variant, icon: h('svg', {}), children: id });
+  }
+
+  it('shows only the first tip or suggestion on a screen', async () => {
+    host = document.createElement('div');
+    document.body.append(host);
+    render(
+      h('div', null, [
+        tipOf('a', 'tip'),
+        tipOf('b', 'suggestion'),
+        tipOf('c', 'state'),
+      ] as never),
+      host,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const hints = [...host.querySelectorAll<HTMLElement>('.hint')];
+    expect(hints.map((el) => el.hidden)).toEqual([false, true, false]);
+  });
+
+  it('the next one shows once the first is dismissed', async () => {
+    host = document.createElement('div');
+    document.body.append(host);
+    render(
+      h('div', null, [tipOf('a', 'tip'), tipOf('b', 'tip')] as never),
+      host,
+    );
+    host.querySelector<HTMLButtonElement>('.hint-dismiss')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const left = [...host.querySelectorAll<HTMLElement>('.hint')];
+    expect(left).toHaveLength(1);
+    expect(left[0]?.hidden).toBe(false);
+  });
 });

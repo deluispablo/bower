@@ -7,7 +7,7 @@
  */
 
 import type { ComponentChildren, JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 import '../styles/hint.css';
 import { IconClose } from './icons.js';
@@ -55,6 +55,16 @@ export function restoreHint(id: string): void {
   }
 }
 
+/** Fired when a tip or suggestion appears or goes, so the others re-check
+ * which one is first (R-HINT-3). */
+const HINTS_CHANGED = 'bower:hints-changed';
+
+/** True when no other tip or suggestion comes before `el` in the document. */
+function isFirstHint(el: Element): boolean {
+  const first = document.querySelector('.hint-tip, .hint-suggestion');
+  return first === null || first === el;
+}
+
 export function Hint({
   id,
   variant,
@@ -66,9 +76,28 @@ export function Hint({
   const [dismissed, setDismissed] = useState<boolean>(
     () => dismissible && isHintDismissed(id),
   );
+  const root = useRef<HTMLDivElement>(null);
+  // At most one tip or suggestion per screen: the first one in document
+  // order shows, the others wait. State hints are exempt (R-HINT-3).
+  const [waiting, setWaiting] = useState(false);
+  useLayoutEffect(() => {
+    if (!dismissible) return undefined;
+    const check = (): void => {
+      if (root.current !== null) setWaiting(!isFirstHint(root.current));
+    };
+    check();
+    window.addEventListener(HINTS_CHANGED, check);
+    window.dispatchEvent(new Event(HINTS_CHANGED));
+    return () => {
+      window.removeEventListener(HINTS_CHANGED, check);
+      window.dispatchEvent(new Event(HINTS_CHANGED));
+    };
+  }, [dismissible, dismissed]);
   if (dismissed) return null;
   return (
     <div
+      ref={root}
+      hidden={waiting}
       class={`hint hint-${variant}`}
       role={variant === 'state' ? 'status' : undefined}
     >

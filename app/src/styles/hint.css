@@ -84,3 +84,15 @@
   width: 20px;
   height: 20px;
 }
+
+/* One tip or suggestion per screen (R-HINT-3): the others wait, hidden. */
+.hint[hidden] {
+  display: none;
+}
+
+/* Suggestion chips are 44 px high below 900 px (R-HINT-5). */
+@media (max-width: 899px) {
+  .hint-actions .chip {
+    min-height: 44px;
+  }
+}
