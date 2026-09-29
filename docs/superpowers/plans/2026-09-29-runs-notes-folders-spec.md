@@ -12,7 +12,7 @@ It replaces nothing on main: the v4 boards and specs were removed in #726, so th
 - the rulebook (`vault-template/CLAUDE.md`, `bower_rules_version: 20`, and `agent/prompts/`);
 - the live instance at the build Settings reports.
 
-**Boards.** Design canvas "Bower v5: runs, notes, folders", https://claude.ai/artifact/7tsURtgvEUuFrZQQWtZ7vx. It has 109 artboards on nine pages (Brief, System, Tidy-up results, Bower's notes, Folders and Compare, Add and dictation, Intro and Learn Bower, Missing folder, Wireframes). It is private to the owner until they share it. The boards were not exported to the repo, because #726 removed boards from main. **Tie-break: the board wins over this text.**
+**Boards.** Design canvas "Bower v5: runs, notes, folders", https://claude.ai/artifact/7tsURtgvEUuFrZQQWtZ7vx. It has 116 artboards on ten pages (Brief, System, Bower on screen, Tidy-up results, Bower's notes, Folders and Compare, Add and dictation, Intro and Learn Bower, Missing folder, Wireframes). It is private to the owner until they share it. The boards were not exported to the repo, because #726 removed boards from main. **Tie-break: the board wins over this text.**
 
 **Verified in the live app** (29 Sep, signed in as the test user, read-only: no run, upload, edit or status change):
 
@@ -70,6 +70,7 @@ This spec only asks the runner for the data the screens need (section 7).
 | D25 | Bower takes the logic of the owner's old vault, not its content: decision first (score and verdict), reuse the project's reference tables, cross-check and flag disagreements, next steps, an append-only history, update rather than duplicate. In the app: a project front page, the verdict and Apply first, "Things that disagree" and "Next for you" after a run, a history in each note, a richer Compare. Nothing specific to one person (scoring weights, CVs, company research) is built in. | Owner round 5, after tech-lead and app-tester reviews of the old vault. |
 | D26 | The intro is five screens with one idea each, true to what ships, accessible, and resumable by URL; a separate "Learn Bower" page holds how it works, six examples and ideas. Both are reachable from the sign-in page and a "Learn Bower" group in Settings. | Owner round 5; NN/g on deck tutorials; tester and tech-lead reviews. |
 | D27 | The app checks the Bower folder on every load and before writing. A missing, trashed or unreachable folder gets a recovery screen (put it back, start a new one, use another); offline is never treated as missing. The Worker lets `create` replace a pointer it verified dead. | Round 5 finding 1.1 (P0); owner approved the API changes on 29 Sep. |
+| D28 | **Bower on screen.** The bird is one character: one animated bird per screen, and he goes where the action is (Home's greeting, then the spot where something happens, then his perch). The perch is the sidebar ledge on a computer and the tidy-up bar on a phone. Under 40 px the still mark is used. Every bird has room around it that nothing clips. Four new poses: listening, pointing, reading, perched. There is no setting to calm him; the system's reduced motion is the only switch. | Owner round 7: "I like seeing Bower on screen, doing things; it keeps me company, like the old Office assistant", without being badly placed or cut by the UI. |
 | D18 | A microphone for dictation in every box where people write sentences, where the browser supports speech recognition. Where it does not, a one-time tip points to the keyboard's own microphone. | Owner idea (report section 6). |
 | D19 | Bower note titles: at most 40 characters, most specific word first. Lists wrap a title to two lines on phones instead of cutting it at one. | 3.6. |
 
@@ -223,6 +224,7 @@ Canvas pages and artboards. Every screen × state below is **changed** against t
 | Tidy-up results | Home-Running/Done/Partial ×375, ×1280; Confirm-Tidy ×2; RunSheet-Running/Done/Partial ×2; JustFiled ×2; Requests ×2; Requests-Menu-375 | running, done (bar until seen), partly done; confirm; run sheet over the matching Home on the phone and as a desktop panel; Just filed as a table with Needs you first; requests in the inbox, being done, done and did not finish; the request's More menu |
 | Bower's notes | Note-JobOffer ×2, Note-Rental ×2, Note-Summary ×2 (an answer, "Job fit ratings"), Note-RuleChanged ×2, Note-Converted ×2, Note-Converted-Closed-375, Note-Folded ×2, Note-Running-375 | a kind with score, a kind with a weekly price, a note of no kind, the rule change with "What changed" open (375), the text copy of a document of no listed kind (open and folded), Bower's note and Made from folded, the tidy-up bar while reading |
 | Folders and Compare | Project-Front-375, Project-Front-1280, Folder-List ×2, Folder-Running-1280, Sidebar-Default-1280, Sidebar-Resize-1280, Compare-Cards-375, Compare-Sort-375, Compare-Table-1280, More-Rename-375, Rename ×2, Ask-Sheet-375, Ask-Dialog-1280, Ask-Done-375 | folder with a subfolder first, the suggestion hint, the bar while browsing, the resize handle idle and dragging with a tooltip, phone sort, desktop Score column, More with Rename, the send-to-Bower sheet for Rename and Ask, the toast with Undo |
+| Bower on screen | Bower-Rules-1280, Bower-Poses-1280, Bower-Fixes-1280, Bar-Bird-375, Perch-Rest-1280, Perch-Running-1280, Note-Reading-375 | the four rules and where Bower is on every screen; the four new poses; the six placement faults in the live app with their fix; the bird in the phone tidy-up bar (running, done, partly done, and on Home where the greeting has him); the sidebar ledge at rest and during a run; reading inside Bower's note while Just this, now writes it. Also changed on other pages: Tour-375 (pointing), Dictate-Bower-375 (listening), every desktop board (the ledge), tags and Bower's note head (the mark). |
 | Intro and Learn Bower | Intro-1…5-375, Intro-2-1280, Intro-5-1280, Login-375, Settings-Learn-375, Learn-375, Learn-1280, Example-FlatHunt-375 | the five intro screens (phone) and two on desktop, the sign-in and Settings entry points, Learn Bower and one example |
 | Missing folder | Folder-Trashed-375, Folder-Trashed-1280, Folder-Gone-375, Folder-NoAccess-375, Offline-375 | the three recovery screens and offline, which is not missing |
 | Add and dictation | Explore-A/B/C-375 (grey sketches of three directions); Home-Uploading-375, Add-Resume-375, SignOut-Uploading-375; Add-PileEmpty-375, Add-PileFilling-375, Add-Dictating-375, Add-PileOpen-375, Add-Piles-1280; Confirm-Piles-375, Confirm-Piles-1280; Dictate-Bower-375, System-Dictate | the directions compared; a pile uploading while the person is on Home; uploads resumed after the app was closed; sign-out with unfinished uploads; a new pile empty and filling (uploaded, uploading, queued); dictating the pile's note; an earlier pile opened to edit; piles on desktop; Is that everything? with piles; the five dictation states |
@@ -1218,6 +1220,75 @@ Research agrees that long deck tutorials make an app look harder without making 
   - the turn baseline of R-RUNNER-9.
 - **Shared files, one owning issue each:** `details.tsx` (`BOOKKEEPING_KEYS`), `kinds.ts`, the rulebook bump (R-AG-1 to R-AG-11 in one bump), `session.tsx`, `api/src/types.ts`.
 
+### 6.21 Bower on screen — R-BIRD (boards Bower-Rules-1280, Bower-Poses-1280, Bower-Fixes-1280, Bar-Bird-375, Perch-Rest-1280, Perch-Running-1280, Note-Reading-375, Tour-375, Dictate-Bower-375)
+
+**Why.** The owner likes Bower present and doing things; he keeps them company, like the old Office assistant. The assistant was hated for one thing: it interrupted. Bower is present, never in the way. Today the bird is also badly placed in places (Bower-Fixes-1280, checked in the live app on 29 Sep):
+
+- the intro's big bird loses 5 px of its props at the top of page 1;
+- the flying bird is cut by the right edge of the intro's Drive window;
+- the tidy-up sheet's 150 px stage clips, and Hello flies in from outside it;
+- Looking turns round by squashing to a thin sliver for a third of a second every 11 s;
+- tags (14 px), the Just filed row (24 px), the sidebar logo (28 px) and Bower's note head (24 px) use a moving bird too small to read;
+- Home on a computer shows four birds at once.
+
+**The four rules** (Bower-Rules-1280):
+
+1. **One Bower per screen.** He is in one place at a time, in this order: Home's greeting; the spot where something happens (a drop, a dictation, an empty folder, an error, the tour); his perch. When an overlay shows him (the tidy-up sheet, Is that everything?), the perch hides. The mark does not count.
+2. **Animated at 40 px or more.** Smaller, the still mark: the same drawing with no pose, no eye highlights, cheek, lids or jaw.
+3. **Room around him.** 12% of the bird's size above and on each side, 2% below; 50% on each side for the scene states (tidying, building). No ancestor inside the room clips (no `overflow` other than visible, no scroll box, no rounded card edge).
+4. **Present, never in the way.** He never covers text or a control and never blocks a tap. Hello, Done and Show-off play once. Only Home's bubble speaks as him.
+
+**Where he is.** The table on Bower-Rules-1280 is the source; in short:
+
+| Screen | Where, size | Pose |
+|---|---|---|
+| Home | greeting, 88 phone, 112 computer | Looking; Tidying during a run; Done once; Confused when partly done |
+| Any other screen, computer | the sidebar ledge, 52 | Perched; Flying with a paper during a run |
+| Any other screen, phone | inside the tidy-up bar, 40, only while the bar shows | Flying with a paper; Done; Confused |
+| Add | top edge of the drop zone, 64 | Peeking; Shiny while a file is over it |
+| Search | beside the box, 64 | Peeking; Shiny while typing |
+| Bower tab | above the composer, 56 | Singing while typing; Listening while dictating |
+| A note, Just this, now | inside Bower's note, 64 | Reading |
+| Tour and hints | beside what is explained, 64 to 80 | Pointing |
+| Empty folder, empty inbox | the empty state, 64 | Asleep |
+| Offline | beside the offline line, 56 | Offline |
+| 404, not invited, failed tidy-up | page centre, 120 | Confused |
+| Sign-in, first open of the day | above the title, 96 | Hello, once |
+| Tags, rows, headers | the mark, 14 to 24 | still |
+
+**New poses** (Bower-Poses-1280). Same drawing and rig (v8.2); only `transform` and `opacity` move; each has a still face for reduced motion.
+
+- **Listening** (`listening`, class `p-listen`): head tilted towards the microphone (7 to 11 degrees), lower lid up a little, three sound arcs come in and fade (1.6 s, staggered 0.25 s), the tail flicks every 5 s. Loops while the microphone is on. Still face: curious.
+- **Pointing** (`pointing`, `p-point`; `p-point pd` points down): the wing comes up once (0.45 s) to 214 degrees (242 down), then taps 8 degrees (1.6 s); an amber dot pulses at the tip. The bird stands beside the thing, never on it. Still: the wing held out, no tap.
+- **Reading** (`reading`, `p-read`): holds a page (a new prop, drawn in front of the chest), head down 12 to 16 degrees, the eye moves along the lines, one line lights up at a time (3.6 s). Still: page held.
+- **Perched** (`perched`, `p-perch`): sits on the ledge, breathes (4 s), looks round (11 s), the tail swings between -6 and 10 degrees (3.6 s). Still: sitting.
+
+The new props are three sound arcs (`wv`), the page with three lines (`rd`) and two pointer dots (`pdot`). They live inside the `turn` group after the wing, so `flip` turns them too. The exact CSS is in the canvas (`base.py` of the generator, "Round 7" block).
+
+**Looking's turn-round** becomes a hop-turn: at the top of a 7 px hop, the bird flips in about 0.1 s (scaleX 0.5 to -0.5), instead of passing through a sliver for 0.33 s.
+
+**The phone bar** (Bar-Bird-375). While the tidy-up bar shows, a 40 px bird sits inside its left end, where the spinner and the state icon were: Flying with a paper (running), Done once then still (done), Confused (partly done). On Home, and whenever the screen or an open overlay already shows him, the bar keeps its spinner and icons. Under reduced motion the bar keeps its spinner and icons too: a still bird says nothing about progress. The phone has no resting perch.
+
+**The desktop ledge** (Perch-Rest-1280, Perch-Running-1280). A 66 px zone at the foot of the sidebar, kept free, with a 2 px line he sits on (52 px bird, 20 px from the left). Perched at rest; Flying with a paper while a run goes; the header chip stays the control. Hidden on Home and on every screen or overlay that already shows him. The ledge is `role="img"` with the name "Bower" ("Bower is tidying up" during a run); the bird inside stays `aria-hidden`.
+
+**Acceptance criteria:**
+
+- [ ] R-BIRD-1: `BirdState` gains `listening`, `pointing`, `reading` and `perched`, with `p-listen`, `p-point`, `p-read`, `p-perch`; `pointing` takes a `down` prop (`pd`). The props (`wv`, `rd`, `pdot`) are added to the markup in `bird.tsx`, inside `turn` after the wing. Still faces: listening curious, the others their held pose. Unit tests in `bird-classes.test.ts`.
+- [ ] R-BIRD-2: `BowerMark` (or `Bird` with `mark`) renders the still drawing without pose, highlights, cheek, lids or jaw. It replaces every bird under 40 px: `tags.tsx` (14), `about-panel.tsx` (14), `folder-items.tsx` (16), `folder.tsx:354` (16), `pinned-section.tsx` (20), `just-filed-row.tsx` (24), Bower's note head, the sidebar logo. A test fails when `Bird` gets a `size` under 40.
+- [ ] R-BIRD-3: one animated bird per screen: a small presence store (`bird-presence.ts`) counts the birds a screen or an overlay shows; the perch (ledge or bar bird) renders only when the count is zero. Home's greeting registers. Unit tests for the store.
+- [ ] R-BIRD-4: the desktop ledge in `layout.tsx`'s sidebar foot, 66 px, never covered by the tree (the tree scrolls above it). Perched at rest, Flying during a run.
+- [ ] R-BIRD-5: the phone bar bird in `run-chip.tsx`: running Flying, done Done (once), partly done Confused; spinner and icons under reduced motion and when the presence count is not zero.
+- [ ] R-BIRD-6: the room rule: every bird's wrapper has the room of rule 3 as padding or margin, and no ancestor inside it clips. An e2e check walks every route at 375 and 1280 and fails when a bird's box grown by the room crosses a clipping ancestor (the check used for this review: `getBoundingClientRect` against the nearest ancestor with `overflow` not visible).
+- [ ] R-BIRD-7: the intro fixes: page 1's hero bird gets its headroom; the Drive window's flying bird keeps inside the window's padding; the intro's sort strip keeps its intended exit, documented in a comment.
+- [ ] R-BIRD-8: the tidy-up sheet's stage never plays Hello or another fly-in; it opens on Tidying and grows by 16 px.
+- [ ] R-BIRD-9: the hop-turn replaces `turnaround` in `bird.css`.
+- [ ] R-BIRD-10: Listening replaces Singing while the microphone is on (R-DICT): Bower tab and Add. Reading shows inside Bower's note while Just this, now writes it (Note-Reading-375: "Reading the offer and your CV. About a minute; you can keep reading.", `role="status"`). Pointing replaces the tour card's arrow (Tour-375: the card sits 150 px from the bottom; an 80 px bird stands on the tab bar and points down at the tab).
+- [ ] R-BIRD-11: Asleep in the empty folder and empty inbox; Peeking and Shiny by the search box and the drop zone keep today's behaviour at 64 px, now with room.
+
+**Cost.** R-BIRD-1, 7, 8, 9: S (CSS and markup). R-BIRD-2, 5, 10, 11: S to M. R-BIRD-3, 4, 6: M (a small store, a layout slot, an e2e walk). No new dependency, token or API field.
+
+**Out of scope.** A setting to calm Bower: the owner said no on 29 Sep; reduced motion is the only switch. Speech bubbles away from Home.
+
 ## 7. Behind the screens
 
 - **R-RUNNER-1 (runner and Worker).** The status report and `.bower/last-run.json` gain:
@@ -1339,6 +1410,7 @@ Milestones, in shipping order (from the tech-lead review):
 6. **Durable uploads (R-UPL)**, then **piles (R-PILE)**, strictly in that order. Piles ship only after the runner hold for context notes (R-RUNNER-6).
 7. **Overlay migration, tour and help** (R-OVL-2 to 6), split into three or four issues.
 8. **Dictation (R-DICT).** It is independent and can run alongside 4 and 5.
+9. **Bower on screen (R-BIRD).** R-BIRD-1, 2, 7, 8, 9 first (CSS, markup, the mark); then the presence store, the ledge and the bar bird (R-BIRD-3 to 5), after the chip (group 3); R-BIRD-10 with dictation and the tour; the e2e room check (R-BIRD-6) last, as the gate.
 
 The rulebook bump and the runner change deploy in the usual order: Worker, then runner, then app.
 
@@ -1358,6 +1430,7 @@ The rulebook bump and the runner change deploy in the usual order: Worker, then 
 | Q5 | Hide the docked tidy-up bar while the phone keyboard is open? | **Answered 29 Sep: yes** (R-CHIP-6). |
 | Q6 | Label of the disabled Tidy up button during a run. | **Answered 29 Sep:** "Tidy-up running…" (R-REQ-5). |
 | Q7 | The partly done bar's label. | **Answered 29 Sep:** "See", like the done bar; the sheet's "Finish the tidy-up" goes straight to the confirm dialog (R-CHIP, R-SHEET-4). |
+| Q8 | A "Bower moves: lively / calm" switch in Settings? | **Answered 29 Sep: no.** The system's reduced motion is the only switch (R-BIRD). |
 
 ## 10. Completeness check
 
