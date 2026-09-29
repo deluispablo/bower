@@ -38,7 +38,7 @@ Notes:
 | `id` | `string` | |
 | `email` | `string` | |
 | `createdAt` | `string` | ISO-8601 |
-| `vault` | `{ folderId, inboxFolderId, name }` | optional; set once the vault is provisioned |
+| `vault` | `{ folderId, inboxFolderId, name, setAt?, missingAt? }` | optional; set once the vault is provisioned. `setAt` (ISO-8601): when this folder became the Bower folder, kept when the same folder is chosen again. `missingAt` (ISO-8601): the missing mark, set when a run fails with `vault_missing`, cleared by `POST /vault` |
 | `encRefreshToken` | `string` | AES-GCM envelope (`crypto.ts`); never plaintext |
 | `encApiKey` | `string` | optional; AES-GCM envelope (`crypto.ts`); never plaintext |
 | `needsReauth` | `boolean` | optional |
@@ -68,7 +68,7 @@ Notes:
 | `quarantined` | `string[]` | optional; paths the pre-scan set aside under `0-Inbox/Quarantine/` |
 | `refused` | `string[]` | optional; paths (or `"*"`) the post-run audit refused |
 | `error` | `string` | optional; for the operator (names the step), never shown to people |
-| `reason` | `'drive_unavailable' \| 'timeout' \| 'model_unavailable' \| 'vault_changed' \| 'unknown'` | optional; only on a `failed` run whose runner said why (#375). The app turns it into one sentence for people; a failed run without one reads as `unknown` |
+| `reason` | `'drive_unavailable' \| 'timeout' \| 'model_unavailable' \| 'vault_changed' \| 'vault_missing' \| 'unknown'` | optional; only on a `failed` run whose runner said why (#375). The app turns it into one sentence for people; a failed run without one reads as `unknown` |
 | `runId` | `string` | optional |
 
 ## `DriveToken`
@@ -138,14 +138,19 @@ Request body, one of:
 | `{ "mode": "create" }` | Creates a folder named `TEMPLATE_FOLDER_NAME` (default `Bower`) at the root of My Drive and copies the bundled `vault-template/` into it: every folder, every file uploaded as `text/markdown`. A `.gitkeep` becomes its (empty) folder; the file itself is not uploaded. |
 | `{ "mode": "select", "folderId": "FOLDER_ID" }` | Registers an existing Drive folder (for example an Obsidian vault). Adds only the template folders and files it lacks, matched by name folder by folder; an existing file is never replaced. Finds or creates `0-Inbox`. |
 
-Response: `{ "vault": { "folderId", "inboxFolderId", "name" } }`, status 201 for `create` and 200 for `select`. The same object is stored on the `User` and returned by `GET /me`.
+Response: `{ "vault": { "folderId", "inboxFolderId", "name", "setAt" } }`, status 201 for `create` and 200 for `select`. The same object is stored on the `User` and returned by `GET /me`.
+
+**Replacing a pointer.** `create` for a user who already has a vault succeeds only when the Worker itself reads the current folder (`files.get` with `trashed`, `driveId` and `capabilities/canAddChildren`, `supportsAllDrives=true`) and finds it dead: Drive answers 404, it is in the Bin, it is not a folder, `canAddChildren` is `false`, or it has a `driveId` (a shared drive, which the app and rclone do not support). A live folder still answers 409 `vault_exists`; a Drive failure while checking (403, 5xx, unreachable) is a 502, never taken for a dead folder. `select` refuses a folder in the Bin. Choosing a different folder than the current one (either mode) is a re-point: both run tickets are retired (a run still going on the old folder can neither fetch a token nor report), `run:<id>`, `lintrun:<id>`, `runs:<id>` and every `runrec:<id>:*` are deleted, and `setAt` is set to now. `select` of the current folder keeps the history and `setAt` and only clears `missingAt`: the app calls it after "Put it back" has re-checked the folder.
+
+**The missing mark.** A `failed` report with reason `vault_missing` sets `vault.missingAt` (only while that folder is still the user's). `GET /me` returns it inside `vault`; the weekly lint (and `POST /runner/lint/dispatch` without a `vaultId`) skips a vault that carries it.
 
 | Status | `error.code` | When |
 | --- | --- | --- |
 | 400 | `bad_request` | The body is not JSON, `mode` is neither `create` nor `select`, `folderId` is missing or empty, or `folderId` is not a folder Drive can find |
+| 400 | `folder_trashed` | `select` of a folder that is in the Drive Bin. Nothing is written |
 | 401 | `unauthenticated` | No valid session cookie |
 | 401 | `reauth` | Google refused the user's token; sign in again |
-| 409 | `vault_exists` | `create` when the user already has a vault |
+| 409 | `vault_exists` | `create` when the user already has a vault whose folder the Worker finds alive |
 | 409 | `folder_exists` | `create` when a folder with that name already exists at the root of My Drive; use `select` with it instead. Nothing is created. |
 | 502 | `drive_error` | Drive answered an unexpected status or was unreachable (the message names the operation and the status only) |
 
@@ -241,7 +246,7 @@ Called by the GitHub Actions runner of the instance repo, never by the app (`api
 
 ### `POST /runner/lint/dispatch`
 
-Starts a health check now: the manual "one vault by hand" call, authorized with `ADMIN_KEY`. The weekly run needs no call: the Worker's cron trigger (`[triggers] crons = ["17 6 * * SUN"]`, Sundays 06:17 UTC) runs the same dispatch for every vault (`scheduled` handler; a failure is logged as `Weekly lint failed: <code>` and never swallowed). Body optional: none or `{}` for every user with a vault (`listVaultIds`), or `{ "vaultId": "<user id>" }` for one. For each vault, in turn: a ticket is minted and its hash stored under `lintticket:<id>`; a `repository_dispatch` is sent with `event_type: "bower-lint"` and `client_payload: { "vault_id": "<id>", "ticket": "<ticket>" }`; and a `{ state: "queued", kind: "lint", requestedAt, runId }` run is stored under `lintrun:<id>`. One vault's failed dispatch does not stop the others: its ticket is deleted and nothing is stored for it.
+Starts a health check now: the manual "one vault by hand" call, authorized with `ADMIN_KEY`. The weekly run needs no call: the Worker's cron trigger (`[triggers] crons = ["17 6 * * SUN"]`, Sundays 06:17 UTC) runs the same dispatch for every vault (`scheduled` handler; a failure is logged as `Weekly lint failed: <code>` and never swallowed). Body optional: none or `{}` for every user with a vault not marked missing (`lintableVaultIds`), or `{ "vaultId": "<user id>" }` for one. For each vault, in turn: a ticket is minted and its hash stored under `lintticket:<id>`; a `repository_dispatch` is sent with `event_type: "bower-lint"` and `client_payload: { "vault_id": "<id>", "ticket": "<ticket>" }`; and a `{ state: "queued", kind: "lint", requestedAt, runId }` run is stored under `lintrun:<id>`. One vault's failed dispatch does not stop the others: its ticket is deleted and nothing is stored for it.
 
 Each vault costs about five subrequests: one GitHub call and four KV operations, which Workers count as subrequests too. The Workers free plan allows 50 subrequests per request, so one call starts about 10 health checks there; past that, the rest fail and the answer is a 502.
 
@@ -293,7 +298,7 @@ The runner's progress report. Body, validated strictly (an unknown field, a wron
 | `phase` | `'queued' \| 'reading' \| 'writing' \| 'saving'` | Optional (#728); anything else is a 400. Kept on a `running` run only |
 | `total`, `done` | `number` | Optional; whole numbers, 0 or more, and only with `phase` (else a 400); `done` over `total` is a 400 |
 | `error` | `string` | Optional; cut to 2,000 characters |
-| `reason` | `string` | Optional; one of `drive_unavailable` (Google Drive did not answer, or access to it is gone), `timeout` (the agent ran out of time or turns), `model_unavailable` (Claude could not be reached or refused the credential), `vault_changed` (the Bower folder is not what the run expected), `unknown` (#375). Anything else is a 400. Stored on a `failed` run only |
+| `reason` | `string` | Optional; one of `drive_unavailable` (Google Drive did not answer, or access to it is gone), `timeout` (the agent ran out of time or turns), `model_unavailable` (Claude could not be reached or refused the credential), `vault_changed` (the Bower folder is not what the run expected), `vault_missing` (the Bower folder is deleted or in the Bin; the Worker marks the vault missing), `unknown` (#375). Anything else is a 400. Stored on a `failed` run only |
 
 A report with `quarantined` and/or `refused` but no `processed` is still valid. `processed`, `created`, `updated`, `left` and `setAside` together may carry at most 400 entries, counted after each is cut to 200 (spec T13); more is a 400.
 
