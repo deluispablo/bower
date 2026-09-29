@@ -293,6 +293,7 @@ readonly AGENT_ERR="$LOG_DIR/agent.err"
 readonly RCLONE_LOG="$LOG_DIR/rclone.log"
 readonly PANDOC_LOG="$LOG_DIR/pandoc.log"
 readonly DRIVE_LOG="$LOG_DIR/drive.log"
+readonly DRIVE_FOLDER_JSON="$WORK_DIR/folder-check.json"
 readonly DRIVE_FILES_URL='https://www.googleapis.com/drive/v3/files'
 mkdir -p "$VAULT_DIR" "$LOG_DIR"
 
@@ -451,6 +452,7 @@ failed_sentence() {
     timeout) echo 'The tidy-up took too long and was stopped.' ;;
     model_unavailable) echo 'Claude was not available, so nothing could be read.' ;;
     vault_changed) echo 'Your Bower folder changed while Bower was working in it.' ;;
+    vault_missing) echo 'Your Bower folder is no longer in your Drive. Nothing was changed.' ;;
     *) echo 'Something went wrong before Bower could finish.' ;;
   esac
 }
@@ -1194,20 +1196,25 @@ copy_up_after_failure() {
 #   timeout            the agent ran out of time or turns
 #   model_unavailable  Claude could not be reached or refused the credential
 #   vault_changed      the Bower folder is not what the run expected
+#   vault_missing      the Bower folder is gone from Drive or in the Bin (R-VAULT-7)
 #   unknown            anything else (the default)
 fail() {
   local error=$1
   REASON=${2:-unknown}
   REPORTED=1
-  copy_up_after_failure
+  # R-VAULT-7: a missing folder gets nothing, not the agent's files, the
+  # outcome file, the log line or the paths file.
+  [ "$REASON" = vault_missing ] || copy_up_after_failure
   # R-RUNNER-1: a failed run says what it created, updated and left too.
   report_lists || log "report lists not built"
   # R-RUNNER-5: a run that fails after the move phase already moved
   # originals in Drive (for example at the bookkeeping) sends those items,
   # each with its `to`, so it reads as partly done; otherwise no processed.
   PROCESSED_JSON=$(moved_items_json) || PROCESSED_JSON=''
-  write_outcome failed "$(failed_sentence)"
-  write_paths
+  if [ "$REASON" != vault_missing ]; then
+    write_outcome failed "$(failed_sentence)"
+    write_paths
+  fi
   SUMMARY='' report_final failed "$error" || log "report failed: API unreachable"
   log "failed: $error"
   exit 2
@@ -1564,6 +1571,32 @@ list_instruction_notes() {
   fi
 }
 
+# R-VAULT-7: one Drive files.get on the Bower folder, made from this shell
+# with the Drive token. Fails the run with `vault_missing` when the folder
+# answers 404 or is in the Bin (`trashed`), which rclone would not notice:
+# it lists a trashed folder like any other, and a folder that is gone gives
+# an error that looks like any Drive outage. Any other answer that is not
+# a clean 200 (403, 5xx, no answer) is `drive_unavailable`, not a guess.
+# Usage: check_folder <step>. Nothing is uploaded by the failure.
+check_folder() {
+  local step=$1 code
+  case "$FOLDER_ID" in
+    '' | *[!A-Za-z0-9_-]*) fail "$step: folder id is not usable" vault_missing ;;
+  esac
+  if ! code=$(curl -sS --get -o "$DRIVE_FOLDER_JSON" -w '%{http_code}'     -H "Authorization: Bearer $ACCESS_TOKEN"     --data-urlencode 'fields=id,trashed' --data-urlencode 'supportsAllDrives=true'     "$DRIVE_FILES_URL/$FOLDER_ID" </dev/null 2>>"$DRIVE_LOG"); then
+    fail "$step: folder check failed" drive_unavailable
+  fi
+  case "$code" in
+    200)
+      if [ "$(jq -r --arg k trashed '.[$k] // empty' "$DRIVE_FOLDER_JSON" 2>>"$DRIVE_LOG")" = true ]; then
+        fail "$step: the Bower folder is in the Bin" vault_missing
+      fi
+      ;;
+    404) fail "$step: the Bower folder is gone" vault_missing ;;
+    *) fail "$step: folder check answered HTTP $code" drive_unavailable ;;
+  esac
+}
+
 # --- fetch vault info -------------------------------------------------------
 STEP='fetch vault info'
 log "$STEP"
@@ -1631,6 +1664,7 @@ export RCLONE_CONFIG_VAULT_EXPORT_FORMATS=txt
 # --- sync down --------------------------------------------------------------
 STEP='sync down'
 log "$STEP"
+check_folder "$STEP"
 if ! rclone sync vault: "$VAULT_DIR" --exclude '.obsidian/**' "${RCLONE_FILTER[@]}" >>"$RCLONE_LOG" 2>&1; then
   fail "$STEP: rclone failed" drive_unavailable
 fi
@@ -2097,6 +2131,7 @@ fi
 # Nothing else is removed or moved.
 STEP='sync up'
 log "$STEP"
+check_folder "$STEP"
 # R-RUNNER-4: saving, before the copy up.
 report_phase saving
 read_added
