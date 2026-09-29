@@ -1,6 +1,6 @@
 /*
- * Add screen (spec C.6; `docs/design/v3/boards/Phone-Add.dc.html`,
- * `Desktop-Add.dc.html`): phone-first, a list of doors and no drop
+ * Add screen (spec C.6; the v3 Phone-Add and
+ * Desktop-Add boards): phone-first, a list of doors and no drop
  * square. `.add-doors` is phone only;
  * `.add-dropzone` (the bird peeking over its top edge) and its own
  * Choose files/From your Drive pair take over from 900 px, the same

@@ -9,7 +9,7 @@ import {
 } from '../src/components/bird-classes.js';
 import type { BirdFace, BirdState } from '../src/components/bird-classes.js';
 
-/** The pose class each state plays, as named in docs/design/gen.py. */
+/** The pose class each state plays, as named in the design canvas. */
 const POSES: Record<BirdState, string> = {
   idle: 'p-idle',
   looking: 'p-look',

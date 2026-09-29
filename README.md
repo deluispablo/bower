@@ -92,7 +92,7 @@ Bower is a window onto one folder of your own Google Drive. Everything else foll
 
 ## The app
 
-One explorer, on every screen size: on a computer it is the left column, on a phone it is the **Notes** tab. It shows your notes and files as rows, starts with what you pinned and the five places Bower keeps things, opens to whatever you are reading, and hides the app's own files. Search finds a name, a folder or words inside a note, even with a typo, and works on the phone as well as the desktop. The screens are designed and committed under [`docs/design/`](docs/design/); open any of them in a browser. The screenshots at the top are the real app, running the demo.
+One explorer, on every screen size: on a computer it is the left column, on a phone it is the **Notes** tab. It shows your notes and files as rows, starts with what you pinned and the five places Bower keeps things, opens to whatever you are reading, and hides the app's own files. Search finds a name, a folder or words inside a note, even with a typo, and works on the phone as well as the desktop. The screenshots at the top are the real app, running the demo.
 
 | Screen | What you see |
 | --- | --- |
@@ -181,7 +181,7 @@ What happens after the agent has filed, in the order it runs (details in `docs/r
 - **Rules are data.** The agent's behaviour lives in the folder's own `CLAUDE.md`, changed only through a dated instruction note; it never edits its own rules unasked.
 - **On demand, never scheduled.** A tidy-up runs when you tap. The only scheduled job is a weekly health check that reports and never moves a file.
 
-Full module map, data flows, credentials and threat model: [`ARCHITECTURE.md`](ARCHITECTURE.md). The design of the app, screen by screen: [`docs/design/`](docs/design/) and the [spec](docs/superpowers/specs/2026-09-27-app-redesign-design.md).
+Full module map, data flows, credentials and threat model: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Cost
 
@@ -233,4 +233,4 @@ Why things are built this way: [`docs/decisions.md`](docs/decisions.md). What an
 
 ## Credits
 
-Built by [Pablo de Luis](https://github.com/deluispablo), with Claude Code doing the typing. MIT licensed. The bird is drawn from the bowerbird, which really does collect, sort and show off; the brand, the logo lockups and every screen are in [`docs/design/`](docs/design/).
+Built by [Pablo de Luis](https://github.com/deluispablo), with Claude Code doing the typing. MIT licensed. The bird is drawn from the bowerbird, which really does collect, sort and show off; the brand is described in [`docs/brand.md`](docs/brand.md).

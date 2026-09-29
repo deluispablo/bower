@@ -1,7 +1,7 @@
 /**
  * "What is Bower" (#207, #327): whether this device has already seen the
  * nine-page intro, and the intro's own copy — verbatim from the design
- * boards (`docs/design/v3/boards/Intro-1.dc.html` to `Intro-9.dc.html`) —
+ * boards (the v3 Intro boards) —
  * in one file, so `routes/intro.tsx` and any later README section say the
  * same thing.
  *

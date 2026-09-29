@@ -49,4 +49,4 @@ Of particular interest, given what Bower does:
 
 Out of scope: the trust the operator has by design (they run the Worker and can read every vault of their instance; see `docs/privacy.md`), Google's "unverified app" warning, denial of service by volume against Cloudflare or GitHub themselves, and the agent's judgement on note content (misfiling a note is a regular bug).
 
-The threat model, the security checklist and the latest independent review are in `docs/security.md` and `docs/security-review-2026-09-28.md`.
+The threat model, the security checklist and the latest independent review are in `docs/security.md` and, for the 2026-09-28 independent review, the repo's git history.

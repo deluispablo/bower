@@ -33,7 +33,7 @@ describe('Bird', () => {
     expect(svg.getAttribute('aria-hidden')).toBe('true');
     expect(svg.getAttribute('class')).toBe('b p-look');
     expect(svg.getAttribute('width')).toBe('32');
-    // The v8.2 drawing (docs/design/gen.py, BIRD_CORE): joints, then the
+    // The v8.2 drawing (the design canvas, BIRD_CORE): joints, then the
     // parts that only some states move (neck, lids, cheek, feet).
     for (const part of ['rig', 'turn', 'hd', 'ey', 'jw', 'wg', 'tl', 'ft']) {
       expect(svg.querySelector(`.${part}`)).not.toBeNull();

@@ -15,7 +15,7 @@
  *
  * Swiping moves the track on touch; Next, the desktop's side arrows and the
  * arrow keys move it everywhere. Every page is its board's resting frame
- * (`docs/design/v3/boards/Intro-1.dc.html` to `Intro-9`); `intro.css` plays
+ * (the v3 Intro boards); `intro.css` plays
  * the boards' loops over it (#328) and `prefers-reduced-motion` keeps the
  * resting frame. The copy is `intro.ts`'s, verbatim from the boards.
  */

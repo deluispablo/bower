@@ -1,7 +1,7 @@
 /**
  * The help sheets' copy (#330): one sheet per tab plus one for a folder
- * screen, verbatim from the boards (`docs/design/v3/boards/Help-Home`,
- * `Help-Notes`, `Help-Add`, `Help-Bower` and `Help-Q-Folder`). The top
+ * screen, verbatim from the boards (the v3 Help boards: Home,
+ * Notes, Add, Bower and Q-Folder). The top
  * bar's "?" opens the sheet for the screen on show; the tour after
  * onboarding is the four tab sheets in a row (`TOUR_TABS`). Plain data and
  * pure helpers, so the copy is unit-testable without rendering anything;

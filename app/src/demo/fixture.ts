@@ -283,7 +283,7 @@ const DEMO_RULES = `${rules.replace(/\s+$/, '')}
 
 // --- The v4 sample folder (#583) -------------------------------------------
 //
-// One story across the boards in `docs/design/v4/boards/`: Alex's flat hunt,
+// One story across the v4 design boards: Alex's flat hunt,
 // the papers Bower filed in June, a garden, household costs. Every file kind
 // the explorer shows is here once, plus the system files the app hides.
 
