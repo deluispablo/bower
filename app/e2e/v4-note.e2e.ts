@@ -85,7 +85,7 @@ test('an answer shows the question, the lists, the checklist link and Used', asy
   await expect(view.getByText('At the viewing, check')).toBeVisible();
   await expect(view.getByText('Ask the agent')).toBeVisible();
   await expect(
-    view.getByRole('link', { name: /Viewing checklist/ }),
+    view.getByRole('link', { name: 'Viewing checklist · in Resources' }),
   ).toBeVisible();
   await expect(
     view.locator('.bower-used, p:has-text("Used:")').first(),
@@ -115,4 +115,16 @@ test('the About panel holds key facts, Details, Original, the folder and the out
   await expect(page.locator('.about-original')).toContainText('PDF');
   await expect(page.locator('.about-not-stated')).toContainText('Not in the');
   await shot(page, testInfo, 'v4-note-desktop');
+});
+
+test('the phone bar of a note has Back to the folder and no item title (#704)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'the phone top bar only');
+  await openNote(page, 'Arlington Road, 2 bed', /Arlington Road, 2 bed/);
+  const bar = page.locator('header.topbar');
+  await expect(
+    bar.getByRole('link', { name: /^Back to Flat hunt/ }),
+  ).toBeVisible();
+  await expect(bar.locator('.topbar-title')).toHaveCount(0);
 });
