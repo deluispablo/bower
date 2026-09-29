@@ -12,11 +12,19 @@ import {
 
 let host: HTMLElement | undefined;
 
-function mount(variant: 'tip' | 'suggestion' | 'state', id = 'demo'): HTMLElement {
+function mount(
+  variant: 'tip' | 'suggestion' | 'state',
+  id = 'demo',
+): HTMLElement {
   host = document.createElement('div');
   document.body.append(host);
   render(
-    h(Hint, { id, variant, icon: h('svg', { class: 'icon' }) }, 'Some words'),
+    h(Hint, {
+      id,
+      variant,
+      icon: h('svg', { class: 'icon' }),
+      children: 'Some words',
+    }),
     host,
   );
   return host;
@@ -42,7 +50,9 @@ describe('Hint (issue #742)', () => {
     '%s has a dismiss button named "Dismiss this tip"',
     (variant) => {
       const root = mount(variant);
-      expect(root.querySelector('.hint')?.className).toBe(`hint hint-${variant}`);
+      expect(root.querySelector('.hint')?.className).toBe(
+        `hint hint-${variant}`,
+      );
       const button = root.querySelector('button');
       expect(button?.getAttribute('aria-label')).toBe('Dismiss this tip');
     },

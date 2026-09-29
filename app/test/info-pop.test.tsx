@@ -11,7 +11,10 @@ let host: HTMLElement | undefined;
 function mount(): HTMLElement {
   host = document.createElement('div');
   document.body.append(host);
-  render(h(InfoPop, { label: 'What By Bower means' }, 'Some words'), host);
+  render(
+    h(InfoPop, { label: 'What By Bower means', children: 'Some words' }),
+    host,
+  );
   return host;
 }
 

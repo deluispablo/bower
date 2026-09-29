@@ -9,23 +9,17 @@ import type { ComponentChildren, JSX } from 'preact';
 
 import '../styles/header-action.css';
 
-interface HeaderActionBase {
+export interface HeaderActionProps {
   icon: JSX.Element;
   children: ComponentChildren;
   class?: string;
+  /** Renders a link instead of a button. */
+  href?: string;
+  onClick?: () => void;
+  /** Set for a toggle; it becomes `aria-pressed`. */
+  pressed?: boolean;
+  disabled?: boolean;
 }
-
-export type HeaderActionProps = HeaderActionBase &
-  (
-    | {
-        href?: undefined;
-        onClick: () => void;
-        /** Set for a toggle; it becomes `aria-pressed`. */
-        pressed?: boolean;
-        disabled?: boolean;
-      }
-    | { href: string; onClick?: undefined; pressed?: undefined }
-  );
 
 export function HeaderAction(props: HeaderActionProps): JSX.Element {
   const className =

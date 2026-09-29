@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { h, render, type ComponentChild } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,7 +8,7 @@ import { HeaderAction } from '../src/components/header-action.js';
 
 let host: HTMLElement | undefined;
 
-function mount(vnode: ReturnType<typeof h>): HTMLElement {
+function mount(vnode: ComponentChild): HTMLElement {
   host = document.createElement('div');
   document.body.append(host);
   render(vnode, host);
@@ -26,7 +26,7 @@ const icon = h('svg', { class: 'icon' });
 describe('HeaderAction (issue #742)', () => {
   it('renders a labelled button and fires onClick', async () => {
     const onClick = vi.fn();
-    const root = mount(h(HeaderAction, { icon, onClick }, 'Pin'));
+    const root = mount(h(HeaderAction, { icon, onClick, children: 'Pin' }));
     const button = root.querySelector('button');
     expect(button?.className).toBe('header-action');
     expect(button?.textContent).toBe('Pin');
@@ -39,7 +39,12 @@ describe('HeaderAction (issue #742)', () => {
 
   it('a toggle exposes aria-pressed', () => {
     const root = mount(
-      h(HeaderAction, { icon, onClick: () => undefined, pressed: true }, 'Pinned'),
+      h(HeaderAction, {
+        icon,
+        onClick: () => undefined,
+        pressed: true,
+        children: 'Pinned',
+      }),
     );
     expect(root.querySelector('button')?.getAttribute('aria-pressed')).toBe(
       'true',
@@ -47,7 +52,9 @@ describe('HeaderAction (issue #742)', () => {
   });
 
   it('renders a link when given an href', () => {
-    const root = mount(h(HeaderAction, { icon, href: '/rules' }, 'Rules'));
+    const root = mount(
+      h(HeaderAction, { icon, href: '/rules', children: 'Rules' }),
+    );
     expect(root.querySelector('a')?.getAttribute('href')).toBe('/rules');
     expect(root.querySelector('button')).toBeNull();
   });
