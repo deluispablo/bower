@@ -50,13 +50,15 @@ export type RunState = 'queued' | 'running' | 'done' | 'failed';
 /**
  * Why a run failed, in a word the app turns into a sentence for people
  * (#375): the runner classifies its own failure; anything it cannot tell
- * apart is `unknown`.
+ * apart is `unknown`. `vault_missing` (spec R-VAULT-14): the Bower folder
+ * was deleted or is in the Bin; the Worker then marks the vault missing.
  */
 export const RUN_FAILURE_REASONS = [
   'drive_unavailable',
   'timeout',
   'model_unavailable',
   'vault_changed',
+  'vault_missing',
   'unknown',
 ] as const;
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];

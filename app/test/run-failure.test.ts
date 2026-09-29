@@ -26,6 +26,10 @@ describe('failure reasons for people (#375)', () => {
       'vault_changed',
       'Your Bower folder changed while Bower was working in it.',
     ],
+    [
+      'vault_missing',
+      'Your Bower folder is no longer in your Drive. Nothing was changed.',
+    ],
     ['unknown', 'Something went wrong before Bower could finish.'],
   ])('maps %s to one sentence', (reason, sentence) => {
     expect(failureCopy(reason).sentence).toBe(sentence);
