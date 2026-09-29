@@ -772,8 +772,7 @@ function BodyCell({
   const origin = note.bowerOrigins[column.id];
   const score =
     column.id === 'fit' || column.label === SCORE_LABEL ? scoreOf(note) : null;
-  const text =
-    score === null ? cellText(kind, note, column) : `${score}/100`;
+  const text = score === null ? cellText(kind, note, column) : `${score}/100`;
   return (
     <td class="compare-td">
       {text}

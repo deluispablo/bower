@@ -115,7 +115,7 @@ describe('#859: a partly done run', () => {
     expect(queuedOverlays().map((entry) => entry.id)).toEqual([
       'working-sheet',
     ]);
-    act(() => {
+    void act(() => {
       close('own');
     });
     expect(dialog()).not.toBeNull();

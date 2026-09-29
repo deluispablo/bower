@@ -285,9 +285,10 @@ describe('Tour', () => {
 });
 
 describe('HelpSheet', () => {
-  function mount(
-    screen: 'home' | 'folder',
-  ): { onClose: () => void; onShowMeAround: () => void } {
+  function mount(screen: 'home' | 'folder'): {
+    onClose: () => void;
+    onShowMeAround: () => void;
+  } {
     const props = {
       screen,
       onClose: vi.fn(),
