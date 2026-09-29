@@ -52,6 +52,7 @@ import { ANSWERS_FOLDER } from './home.js';
 import type { LastRunOutcome } from './last-run.js';
 import { folderHref } from './navigation.js';
 import { failureCopy } from './run-failure.js';
+import { inboxCount, inboxTotal } from './inbox-count.js';
 import { processedKind, visiblePendingCount } from './run-progress.js';
 import { useSession } from './session.js';
 import { showToast } from './toast-store.js';
@@ -676,7 +677,7 @@ export function RunProvider({ children }: RunProviderProps) {
   const [confirmScope, setConfirmScope] = useState<RunScope>('all');
 
   const tidyUp = useCallback((): void => {
-    setConfirmCount(pendingCount(files));
+    setConfirmCount(inboxTotal(inboxCount(files, false)));
     setConfirmScope('all');
     setConfirmOpen(true);
   }, [files]);

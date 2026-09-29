@@ -7,6 +7,7 @@ import {
   originalFileOf,
   originalSummary,
 } from '../components/about-panel.js';
+import { isBowerWritten } from '../bower-written.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
 import { BackLink } from '../components/back-link.js';
@@ -122,15 +123,9 @@ export function shortDay(value: string | undefined): string {
   return month === undefined ? value : `${String(Number(match[3]))} ${month}`;
 }
 
-/** Bower wrote this note: it has a kind, an original, origins or is an
- * answer. */
+/** Bower wrote this note (`isBowerWritten`, spec R-NOTE-1). */
 export function isBowerNote(meta: NoteMeta): boolean {
-  return (
-    meta.kind !== undefined ||
-    meta.original !== undefined ||
-    meta.type === 'answer' ||
-    Object.keys(meta.bowerOrigins).length > 0
-  );
+  return isBowerWritten(meta);
 }
 
 export interface FolderWalk {
