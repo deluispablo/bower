@@ -387,11 +387,13 @@ export interface UploadStore {
   clear: (userId?: string) => Promise<void>;
 }
 
+// Wrapped, not referenced, so importing this module reads nothing from
+// `cache.ts` until the queue runs.
 export const cacheUploadStore: UploadStore = {
-  list: loadUploads,
-  put: putUpload,
-  remove: deleteUpload,
-  clear: clearUploads,
+  list: (userId) => loadUploads(userId),
+  put: (record) => putUpload(record),
+  remove: (userId, id) => deleteUpload(userId, id),
+  clear: (userId) => clearUploads(userId),
 };
 
 /** The slice of `navigator.locks` the queue uses. */
