@@ -246,6 +246,26 @@ readonly SET_ASIDE_FILE="$WORK_DIR/set-aside.txt"
 # local copy before the audit.
 readonly TOO_LARGE_LIST='.bower/too-large.txt'
 readonly ADDED_NOTE='.bower/added.txt'
+# R-RUNNER-1: the agent's optional one line per note it updated
+# ("<path><TAB><what>"), read and removed like ADDED_NOTE, never uploaded.
+readonly UPDATED_NOTE='.bower/updated.txt'
+# In the work dir: the `what` lines kept from UPDATED_NOTE, every path a
+# copy up actually uploaded (the upload list, not the intent), and every
+# pending original deleted from Drive.
+readonly UPDATED_WHAT_FILE="$WORK_DIR/updated-what.txt"
+readonly UPLOADED_FILE="$WORK_DIR/uploaded.txt"
+readonly DELETED_FILE="$WORK_DIR/deleted.txt"
+: >"$UPDATED_WHAT_FILE"
+: >"$UPLOADED_FILE"
+: >"$DELETED_FILE"
+# The Worker's caps (api/src/runner.ts): an `updated[].what` is cut to
+# MAX_WHAT_LENGTH characters, each list to MAX_REPORT_LIST entries, and a
+# report carrying more than MAX_REPORT_ENTRIES entries across processed,
+# created, updated, left and setAside is refused. The runner cuts first, so
+# a final report is never refused for its size.
+readonly MAX_WHAT_LENGTH=120
+readonly MAX_REPORT_LIST=200
+readonly MAX_REPORT_ENTRIES=400
 # The size limits (R-SYS-10): a file over 50 MB, or a PDF over 300 pages, is
 # kept, not read.
 readonly MAX_READ_BYTES=$((50 * 1024 * 1024))
@@ -301,6 +321,32 @@ ADDED=''             # report v2: the agent's one clause about what it added
 TOO_MANY_CHANGES=0   # 1 when the audit refused the whole run
 RULES_WRITABLE=0     # 1 once an instruction note the app wrote reaches the agent
 RECONCILED=0         # 1 once the reconcile phase listed the tree (#597)
+# R-RUNNER-1: what the run created, updated and left in the inbox, JSON
+# arrays set by report_lists just before the final report.
+CREATED_JSON=''
+UPDATED_JSON=''
+LEFT_JSON=''
+
+# The jq filter a final report and last-run.json go through (R-RUNNER-1):
+# created, updated and left are each cut to MAX_REPORT_LIST entries, then,
+# while processed (or items), setAside, created, updated and left carry more
+# than MAX_REPORT_ENTRIES together (each counted after the Worker's own cut
+# to MAX_REPORT_LIST), left is cut first, then updated, then created.
+# `processed` in last-run.json is a count, not a list, and counts nothing.
+readonly REPORT_FILTER='def n($v): $v | if type == "array" then .[0:$list] | length else 0 end;
+  $ARGS.named | del(.list, .max)
+  | reduce ("created", "updated", "left") as $k (.;
+    if has($k) then .[$k] |= .[0:$list] else . end)
+  | reduce ("left", "updated", "created") as $k (.;
+    if has($k) then
+      (n(.processed) + n(.items) + n(.setAside) + n(.created) + n(.updated)
+        + n(.left) - $max) as $over
+      | if $over > 0 then .[$k] |= .[0:([length - $over, 0] | max)] else . end
+    else . end)'
+# "<path>" or "<path><TAB><what>" lines as updated entries (R-RUNNER-1),
+# `what` cut to $cut characters.
+readonly UPDATED_FILTER='[inputs | . as $line | split("\t") as $p | {path: $p[0]}
+  + (if ($p | length) > 1 then {what: ($p[1:] | join("\t") | .[0:$cut])} else {} end)]'
 
 on_exit() {
   local rc=$?
@@ -308,6 +354,7 @@ on_exit() {
     # An unexpected error that no explicit check caught.
     REPORTED=1
     copy_up_after_failure
+    report_lists >/dev/null 2>&1 || true
     REASON=unknown
     write_outcome failed "$(failed_sentence)" >/dev/null 2>&1 || true
     write_paths >/dev/null 2>&1 || true
@@ -339,7 +386,21 @@ report() {
     [ -n "$SET_ASIDE_JSON" ] && args+=(--argjson setAside "$SET_ASIDE_JSON")
     [ -n "$ADDED" ] && args+=(--arg added "$ADDED")
   fi
-  jq -cn "${args[@]}" '$ARGS.named' |
+  # R-RUNNER-1: a final report, done or failed, says what was created,
+  # updated and left in the inbox.
+  if [ "$state" != running ]; then
+    [ -n "$CREATED_JSON" ] && args+=(--argjson created "$CREATED_JSON")
+    [ -n "$UPDATED_JSON" ] && args+=(--argjson updated "$UPDATED_JSON")
+    [ -n "$LEFT_JSON" ] && args+=(--argjson left "$LEFT_JSON")
+  fi
+  # R-RUNNER-4: a running report may carry the phase, and a total when
+  # known (PHASE and TOTAL, set by report_phase).
+  if [ "$state" = running ] && [ -n "${PHASE:-}" ]; then
+    args+=(--arg phase "$PHASE")
+    [ -z "${TOTAL:-}" ] || args+=(--argjson total "$TOTAL")
+  fi
+  jq -cn --argjson list "$MAX_REPORT_LIST" --argjson max "$MAX_REPORT_ENTRIES" \
+    "${args[@]}" "$REPORT_FILTER" |
     curl -fsS -X POST \
       -H "Authorization: Bearer $API_CREDENTIAL" \
       -H 'Content-Type: application/json' \
@@ -396,6 +457,8 @@ count_lines() {
 # (each processed item with its kind, and `to` and `renamedFrom` when it
 # moved), `setAside` ({ path, reason }) and `added`, the same as the status
 # report; these name paths, because the app shows where each thing went.
+# Every run, a failed one too, also carries the final report's `created`,
+# `updated` and `left` (R-RUNNER-2), so a recovered stale run is complete.
 # The log.md line carries counts only, never a name. A failure here is
 # logged and never fails the run. Usage: write_outcome <done|failed> <sentence>.
 write_outcome() {
@@ -422,7 +485,13 @@ write_outcome() {
     [ -z "$SET_ASIDE_JSON" ] || args+=(--argjson setAside "$SET_ASIDE_JSON")
     [ -z "$ADDED" ] || args+=(--arg added "$ADDED")
   fi
-  if ! jq -cn "${args[@]}" '$ARGS.named' >"$dir/.bower/last-run.json"; then
+  # R-RUNNER-2: the same created, updated and left as the final report, on
+  # a failed run too, so a recovered stale run tells the full story.
+  [ -z "$CREATED_JSON" ] || args+=(--argjson created "$CREATED_JSON")
+  [ -z "$UPDATED_JSON" ] || args+=(--argjson updated "$UPDATED_JSON")
+  [ -z "$LEFT_JSON" ] || args+=(--argjson left "$LEFT_JSON")
+  if ! jq -cn --argjson list "$MAX_REPORT_LIST" --argjson max "$MAX_REPORT_ENTRIES" \
+    "${args[@]}" "$REPORT_FILTER" >"$dir/.bower/last-run.json"; then
     log "outcome not written"
     return 0
   fi
@@ -563,7 +632,9 @@ record_saved_keys() {
 copy_up() {
   [ -s "$1" ] || return 0
   rclone copy "$VAULT_DIR" vault: --files-from-raw "$1" \
-    >>"$RCLONE_LOG" 2>&1
+    >>"$RCLONE_LOG" 2>&1 || return 1
+  # R-RUNNER-1: only a copy that succeeded counts as uploaded.
+  cat "$1" >>"$UPLOADED_FILE"
 }
 
 # Audit, then copy up only the accepted files (no move phase: used after a
@@ -983,6 +1054,8 @@ copy_up_after_failure() {
     log "sync up (copy only)"
     # The agent's added note and the too-large list are never uploaded (#598).
     rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST"
+    # Its one line per updated note is kept for the report, never uploaded.
+    read_updated
     copy_changed_up || log "sync up (copy only) failed"
   fi
 }
@@ -1000,6 +1073,8 @@ fail() {
   REASON=${2:-unknown}
   REPORTED=1
   copy_up_after_failure
+  # R-RUNNER-1: a failed run says what it created, updated and left too.
+  report_lists || log "report lists not built"
   write_outcome failed "$(failed_sentence)"
   write_paths
   PROCESSED_JSON='' SUMMARY='' report_final failed "$error" || log "report failed: API unreachable"
@@ -1175,6 +1250,72 @@ read_added() {
   fi
   ADDED=${line:0:$MAX_ADDED_LENGTH}
   rm -f "$file" "$VAULT_DIR/$TOO_LARGE_LIST"
+}
+
+# The agent's one line per note it updated (R-RUNNER-1), from UPDATED_NOTE
+# ("<path><TAB><what>"): each line with a path and a non-empty `what`,
+# trimmed, is kept in UPDATED_WHAT_FILE (the first line for a path wins;
+# the Worker cuts `what` to MAX_WHAT_LENGTH, and so does report_lists). The
+# file is removed from the local copy either way, so it is never uploaded.
+# Its lines are never logged.
+read_updated() {
+  local file="$VAULT_DIR/$UPDATED_NOTE"
+  : >"$UPDATED_WHAT_FILE"
+  if [ -f "$file" ]; then
+    tr -d '\r' <"$file" | awk -F '\t' '
+      { path = $1; what = substr($0, length($1) + 2)
+        sub(/^[[:space:]]+/, "", path); sub(/[[:space:]]+$/, "", path)
+        sub(/^[[:space:]]+/, "", what); sub(/[[:space:]]+$/, "", what)
+        if (path != "" && what != "" && !(path in seen)) {
+          seen[path] = 1; print path "\t" what } }' >"$UPDATED_WHAT_FILE" || true
+  fi
+  rm -f "$file"
+}
+
+# The pending inbox paths still there at the end (R-RUNNER-1): the pending
+# list (after the pre-scan) minus the originals moved in Drive and those
+# deleted from it; none before the pending list exists (a run that failed
+# before or during sync down). Printed one per line, sorted.
+left_paths() {
+  local pending_now="$WORK_DIR/pending-after-scan.txt"
+  [ -f "$pending_now" ] || pending_now=$PENDING_FILE
+  [ "$MODE" = ingest ] && [ -f "$pending_now" ] || return 0
+  touch "$MOVED_OLD"
+  awk 'FILENAME != ARGV[3] { gone[$0] = 1; next } $0 != "" && !($0 in gone)' \
+    "$MOVED_OLD" "$DELETED_FILE" "$pending_now" | LC_ALL=C sort -u
+}
+
+# Sets CREATED_JSON, UPDATED_JSON and LEFT_JSON (R-RUNNER-1) from what the
+# copies up actually uploaded (UPLOADED_FILE, the upload list, not the
+# intent): created is an uploaded path not in MANIFEST_BEFORE and not a
+# move destination (MOVES_FILE), updated one in MANIFEST_BEFORE, with the
+# agent's `what` when it wrote one; left is left_paths. Names paths, never
+# logged.
+report_lists() {
+  local before="$WORK_DIR/before-paths.txt" dests="$WORK_DIR/move-dests.txt"
+  local uploaded="$WORK_DIR/uploaded-sorted.txt"
+  : >"$before"
+  : >"$dests"
+  [ ! -f "$MANIFEST_BEFORE" ] ||
+    cut -d ' ' -f 3- "$MANIFEST_BEFORE" | LC_ALL=C sort -u >"$before"
+  [ ! -f "$MOVES_FILE" ] || cut -f 2 "$MOVES_FILE" | LC_ALL=C sort -u >"$dests"
+  { grep -v '^$' "$UPLOADED_FILE" || true; } | LC_ALL=C sort -u >"$uploaded"
+  CREATED_JSON=$(LC_ALL=C comm -23 "$uploaded" "$before" | LC_ALL=C comm -23 - "$dests" |
+    jq -Rn '[inputs]')
+  UPDATED_JSON=$(LC_ALL=C comm -12 "$uploaded" "$before" |
+    awk -F '\t' 'FILENAME == ARGV[1] { what[$1] = $2; next }
+      { print (($0 in what) ? $0 "\t" what[$0] : $0) }' "$UPDATED_WHAT_FILE" - |
+    jq -Rn --argjson cut "$MAX_WHAT_LENGTH" "$UPDATED_FILTER")
+  LEFT_JSON=$(left_paths | jq -Rn '[inputs]')
+}
+
+# A running report with its phase (R-RUNNER-4) and, when known, a total.
+# Best effort: a lost phase report is logged and the run goes on. Usage:
+# report_phase <reading|writing|saving> [total].
+report_phase() {
+  if ! PROCESSED_JSON='' SUMMARY='' PHASE=$1 TOTAL=${2:-} report running; then
+    log "report $1 failed"
+  fi
 }
 
 # The reason for people behind a failed agent run: `timeout` when the
@@ -1416,6 +1557,7 @@ log "$PENDING_COUNT files pending"
 if [ "$MODE" = ingest ] && [ "$PENDING_COUNT" -eq 0 ]; then
   STEP='report done'
   log "$STEP"
+  report_lists || fail "$STEP: report lists not built"
   write_outcome done 'Nothing new to tidy up.'
   write_file_facts
   write_paths
@@ -1441,8 +1583,9 @@ fi
 STEP='manifest'
 log "$STEP"
 # Only this run's agent may say what it added (#598): a stale note in the
-# local copy is dropped before the manifest.
-rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST"
+# local copy is dropped before the manifest, and so is a stale list of
+# updated notes (R-RUNNER-1).
+rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST" "$VAULT_DIR/$UPDATED_NOTE"
 if ! manifest >"$MANIFEST_BEFORE"; then
   fail "$STEP: listing the local copy failed"
 fi
@@ -1490,6 +1633,13 @@ if [ "$MODE" = ingest ]; then
   if [ $((converted + unconverted)) -gt 0 ]; then
     log "$STEP: $converted converted, $unconverted could not be converted"
   fi
+fi
+# R-RUNNER-4: reading, after the conversion, with the number of things
+# pending for an ingest.
+if [ "$MODE" = ingest ]; then
+  report_phase reading "$PENDING_COUNT"
+else
+  report_phase reading
 fi
 
 # --- instruction origin -----------------------------------------------------
@@ -1640,6 +1790,16 @@ readonly AGENT_TIME_LIMIT=900
 STEP='agent run'
 log "$STEP"
 PROMPT=$(cat "$PROMPT_FILE")
+# R-RUNNER-4: writing, as the agent starts, with the number of things it
+# was given for an ingest (the pending list after the pre-scan). No `done`
+# count: the agent does not report its progress.
+if [ "$MODE" = ingest ]; then
+  pending_now="$WORK_DIR/pending-after-scan.txt"
+  [ -f "$pending_now" ] || pending_now=$PENDING_FILE
+  report_phase writing "$(count_lines "$pending_now")"
+else
+  report_phase writing
+fi
 RUN_STARTED=1
 set +e
 (
@@ -1676,7 +1836,10 @@ fi
 # Nothing else is removed or moved.
 STEP='sync up'
 log "$STEP"
+# R-RUNNER-4: saving, before the copy up.
+report_phase saving
 read_added
+read_updated
 if ! audit || ! record_saved_keys; then
   fail "$STEP: copy failed" drive_unavailable
 fi
@@ -1716,12 +1879,17 @@ while IFS= read -r path <&3; do
   if [ "$delete_rc" -ne 0 ] && [ "$delete_rc" -ne 4 ]; then
     fail "$STEP: delete failed" drive_unavailable
   fi
+  # Gone from the inbox in Drive: not `left` (R-RUNNER-1).
+  printf '%s\n' "$path" >>"$DELETED_FILE"
 done 3<"$PENDING_FILE"
 [ "$kept" -eq 0 ] || log "$kept originals kept in the inbox"
 
 # --- report done ------------------------------------------------------------
 STEP='report done'
 log "$STEP"
+if ! report_lists; then
+  fail "$STEP: report lists not built"
+fi
 # The agent's final report is its last lines: six for an ingest (Processed,
 # Filed, Created, Updated, Rules, Problems; issue #368), five for a lint (no
 # Filed line). The Filed count is logged as a number, nothing else.

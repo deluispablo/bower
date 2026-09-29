@@ -149,6 +149,11 @@ if [ "$method" = POST ]; then
         ;;
     esac
   fi
+  # A running report with a phase (R-RUNNER-4) goes to its own log, so the
+  # scenarios keep counting the first running report and the final one.
+  case "$payload" in
+    *'"phase":'*) printf '%s\n' "$payload" >>"$SMOKE_STATE/phases.log"; exit 0 ;;
+  esac
   printf '%s\n' "$payload" >>"$SMOKE_STATE/posts.log"
   # A final report retires the ticket, as the Worker does.
   case "$payload" in
@@ -963,6 +968,27 @@ if (filter === '$ARGS.named') {
     m[path] = kind === 'keep' ? named.prev[path] : { k: key, [kind]: Number(n) };
   }
   process.stdout.write(JSON.stringify(m, null, 2) + '\n');
+} else if (filter.startsWith('def n($v)')) {
+  // run.sh's REPORT_FILTER (R-RUNNER-1): the named arguments, created,
+  // updated and left cut to $list each, then left, updated and created cut
+  // until everything fits in $max.
+  const { list, max, ...r } = named;
+  const n = (v) => (Array.isArray(v) ? Math.min(v.length, list) : 0);
+  for (const k of ['created', 'updated', 'left']) if (k in r) r[k] = r[k].slice(0, list);
+  for (const k of ['left', 'updated', 'created']) {
+    if (!(k in r)) continue;
+    const over = n(r.processed) + n(r.items) + n(r.setAside) + n(r.created) + n(r.updated) + n(r.left) - max;
+    if (over > 0) r[k] = r[k].slice(0, Math.max(r[k].length - over, 0));
+  }
+  process.stdout.write(JSON.stringify(r) + '\n');
+} else if (filter.startsWith('[inputs | . as $line') && flags.has('R')) {
+  // run.sh's UPDATED_FILTER (R-RUNNER-1).
+  const lines = input().split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  process.stdout.write(JSON.stringify(lines.map((l) => {
+    const [path, ...what] = l.split('\t');
+    return what.length > 0 ? { path, what: [...what.join('\t')].slice(0, named.cut).join('') } : { path };
+  })) + '\n');
 } else if (filter === '.[$k] // empty' && flags.has('r')) {
   const v = JSON.parse(input())[named.k];
   if (v !== undefined && v !== null && v !== false) {
@@ -1020,6 +1046,7 @@ run_case() {
   printf '%s' "$CASE" >"$ROOT/current-scenario"
   : >"$STATE/calls.log"
   : >"$STATE/posts.log"
+  : >"$STATE/phases.log"
   : >"$STATE/uploaded.txt"
   : >"$STATE/moved.txt"
   : >"$STATE/paths-calls.log"
@@ -1345,7 +1372,7 @@ if grep -Fq '"Read(~/**)"' "$settings_seen"; then
   esac
 fi
 expect_eq "$(cat "$STATE/remote/.claude/settings.json")" '{"vault":"own"}' "the vault's own settings in Drive"
-expect_eq "$(calls curl | grep -c 'auth=ok')" 3 'curl calls with the run ticket'
+expect_eq "$(calls curl | grep -c 'auth=ok')" 6 'curl calls with the run ticket (vault info, running, three phases, done)'
 [ -e "$STATE/ticket-retired" ] || die 'the final report did not reach the stub Worker with the ticket'
 expect_eq "$(calls curl | sed -n 1p)" "curl GET $API_URL/runner/vaults/vault-1 auth=ok" 'vault info request'
 expect_eq "$(calls curl | sed -n 2p)" "curl POST $API_URL/runner/vaults/vault-1/status auth=ok" 'status request'
