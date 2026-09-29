@@ -82,7 +82,6 @@ import {
 } from './icons.js';
 import { KindBadge } from './kind-badge.js';
 import { PinSheet } from './pin-sheet.js';
-import { openSendToBower } from './send-to-bower.js';
 import { NewTag } from './tags.js';
 import { useNoteTitles } from './use-note-titles.js';
 import type { VirtualListHandle } from './virtual-list.js';
@@ -250,6 +249,8 @@ interface TreeProps {
    * scrolls the tree to the top (R-REVEAL-2).
    */
   topOnTabTap?: boolean;
+  /** "Ask Bower about this" in the pin menu; the host opens the sheet. */
+  onAsk?: (name: string) => void;
 }
 
 export function Tree({
@@ -265,6 +266,7 @@ export function Tree({
   currentId,
   onOpenChange,
   topOnTabTap = false,
+  onAsk,
 }: TreeProps): JSX.Element {
   const { pinNote, unpinNote, pinFolder, unpinFolder } = useVault();
   // Makes the description ids unique when two trees are on screen.
@@ -606,13 +608,7 @@ export function Tree({
         openHref={folderHref(
           row.kind === 'note' ? folderOf(row.path) : row.path,
         )}
-        onAsk={() =>
-          openSendToBower({
-            mode: 'ask',
-            about: name,
-            buildText: (value) => `About ${name}: ${value}`,
-          })
-        }
+        onAsk={() => onAsk?.(name)}
         driveHref={driveHref}
         onTogglePin={() => void togglePin(row)}
         onClose={() => setOpenRow(null)}

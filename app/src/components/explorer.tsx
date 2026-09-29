@@ -61,6 +61,7 @@ import {
 import { FolderMark } from './folder-mark.js';
 import { JustFiledRow } from './just-filed-row.js';
 import { PinnedSidebar } from './pinned-sidebar.js';
+import { openSendToBower } from './send-to-bower.js';
 import { Tree } from './tree.js';
 
 import '../styles/explorer.css';
@@ -254,6 +255,15 @@ function Tools({ expanded, onToggleExpand }: ToolsProps): JSX.Element {
   );
 }
 
+/** The pin menu's "Ask Bower about this": the send-to-Bower sheet. */
+function askAbout(name: string): void {
+  openSendToBower({
+    mode: 'ask',
+    about: name,
+    buildText: (value) => `About ${name}: ${value}`,
+  });
+}
+
 export function Explorer({
   variant,
   healthIsNew,
@@ -411,6 +421,7 @@ export function Explorer({
         {index !== null && (
           <Tree
             index={index}
+            onAsk={askAbout}
             sort={sort}
             collapseKey={
               variant === 'sidebar'
