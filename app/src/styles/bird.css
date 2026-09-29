@@ -2264,3 +2264,9 @@
 .b.mark .ir {
   display: none;
 }
+
+/* Off screen or tab hidden (#750): the bird pauses; `bird.tsx` adds the class. */
+.b.paused,
+.b.paused * {
+  animation-play-state: paused;
+}
