@@ -45,7 +45,7 @@ import {
   useState,
 } from 'preact/hooks';
 
-import { writeContextNote } from './add-context.js';
+import { tidyUpWhenFlushed } from './add-context.js';
 import { linkTitleFromFileName } from './add.js';
 import { ApiError, getStatus, startProcess } from './api.js';
 import type { Run, RunScope } from './api.js';
@@ -83,6 +83,24 @@ export interface RunState {
   sheetOpen: boolean;
   /** The run the sheet last opened by itself for (`runKey`), or `null`. */
   sheetRunId: string | null;
+}
+
+/**
+ * "Yes, tidy up" (R-PILE-7): the phase moves to `starting` at once, then
+ * `flushThenProcess` saves every pile's note and calls `process` only once
+ * they are all in the inbox. When a pile's note could not be saved, nothing
+ * starts: the phase goes back to idle (the flush already said one sentence).
+ * Resolves whether the run was asked for.
+ */
+export async function startConfirmedTidyUp(
+  apply: (event: RunEvent) => void,
+  flushThenProcess: (process: () => void) => Promise<boolean>,
+  process: () => void,
+): Promise<boolean> {
+  apply({ type: 'starting' });
+  const started = await flushThenProcess(process);
+  if (!started) apply({ type: 'reset' });
+  return started;
 }
 
 export type RunEvent =
@@ -777,17 +795,22 @@ export function RunProvider({ children }: RunProviderProps) {
   // there is something on screen at once — the `POST /process` answer that
   // moves it on to `queued`/`running` (or `failed`) can take four seconds
   // or more on the real instance.
-  // Add's "What is this?" note (#335) lands in the inbox before the run
-  // starts, so the run sees it, and a rule sentence in it is already in
-  // `Rules.md` (#435); `writeContextNote` never rejects and does
-  // nothing when the box is empty.
+  // Every pile's note (#769, R-PILE-7) and Add's "What is this?" note
+  // (#335) land in the inbox before the run starts, so the run sees them,
+  // and a rule sentence in them is already in `Rules.md` (#435). When a
+  // pile's note cannot be saved the run does not start (`startConfirmedTidyUp`).
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const confirmTidyUp = useCallback((): void => {
     setConfirmOpen(false);
-    apply({ type: 'starting' });
     setSheetReopenKey((key) => key + 1);
-    void writeContextNote(inboxFolderId, keepRule).then(() =>
-      process(confirmScope === 'instructions' ? confirmScope : undefined),
+    void startConfirmedTidyUp(
+      apply,
+      (start) => tidyUpWhenFlushed(start, inboxFolderId, keepRule),
+      () => {
+        void process(
+          confirmScope === 'instructions' ? confirmScope : undefined,
+        );
+      },
     );
   }, [apply, process, inboxFolderId, keepRule, confirmScope]);
 
