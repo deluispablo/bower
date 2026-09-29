@@ -115,6 +115,15 @@ function mount(): void {
   });
 }
 
+/** The sheets load on first use (#834): wait for their chunks to arrive. */
+async function lazyChunks(): Promise<void> {
+  await act(async () => {
+    await import('../src/components/help-sheet.js');
+    await import('../src/components/working-sheet.js');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 function query<T extends Element>(selector: string): T {
   const el = root.querySelector<T>(selector);
   if (el === null) throw new Error(`${selector} missing`);
@@ -185,10 +194,11 @@ describe('Layout', () => {
     expect(query('.topbar').textContent).not.toContain('Tidying');
   });
 
-  it('mounts the working sheet once, outside the bar, during a run (#320)', () => {
+  it('mounts the working sheet once, outside the bar, during a run (#320)', async () => {
     runState.phase = 'running';
     runState.sheetOpen = true;
     mount();
+    await lazyChunks();
     // On the shared overlay it is in the body, outside the page (#752).
     const sheets = document.body.querySelectorAll(
       '[role="dialog"][aria-label="Tidying up"]',
@@ -253,20 +263,22 @@ describe('Layout', () => {
     expect(back.getAttribute('href')).toBe('/folder/2-Areas');
   });
 
-  it('opens the help sheet for the tab on "?"', () => {
+  it('opens the help sheet for the tab on "?"', async () => {
     location.path = '/bower';
     mount();
     click(query('.topbar-help'));
+    await lazyChunks();
     const dialog = document.body.querySelector('[role="dialog"]');
     expect(dialog?.textContent).toContain('About this screen');
     expect(dialog?.querySelector('h2')?.textContent).toBe('Bower');
   });
 
-  it('"Show me around" on the help sheet closes it and goes Home for the tour', () => {
+  it('"Show me around" on the help sheet closes it and goes Home for the tour', async () => {
     location.path = '/notes';
     location.route.mockClear();
     mount();
     click(query('.topbar-help'));
+    await lazyChunks();
     const showMe = Array.from(document.body.querySelectorAll('button')).find(
       (b) => b.textContent === 'Show me around',
     );

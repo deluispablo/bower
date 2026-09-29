@@ -52,3 +52,6 @@ Bower, after the Australian bowerbird that collects objects and arranges them wi
 
 ## 2026-09-29 · Startup bundle budget 170 KB
 v5 adds the Overlay queue, the tidy-up bar and sheet, the send-to-Bower sheet, dictation and the new bird poses, which took the gzipped startup scripts just past 150 KB. The budget in `app/scripts/check-size.mjs` goes to 170 KB so v5 can land; an issue in M46 code-splits the sheets and overlays that are not needed on first paint, with the goal of coming back under 150 KB.
+
+## 2026-09-30 · Startup bundle budget back to 150 KB
+The switcher, the help sheet, the tidy-up sheets and the first-run tour now load on first use and are fetched when the browser is idle, so they open without a flash. The gzipped startup scripts are about 108 KB, and the budget in `app/scripts/check-size.mjs` is back at 150 KB. This closes the 170 KB entry above.

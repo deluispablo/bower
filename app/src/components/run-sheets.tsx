@@ -11,8 +11,22 @@ import type { JSX } from 'preact';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import { PushPrompt } from './push-prompt.js';
-import { TidyConfirmSheet } from './tidy-confirm-sheet.js';
-import { WorkingSheet } from './working-sheet.js';
+import { lazyOverlay } from '../lazy-overlay.js';
+
+const LazyConfirm = lazyOverlay(() =>
+  import('./tidy-confirm-sheet.js').then((m) => m.TidyConfirmSheet),
+);
+const LazyWorking = lazyOverlay(() =>
+  import('./working-sheet.js').then((m) => m.WorkingSheet),
+);
+const TidyConfirmSheet = LazyConfirm.Component;
+const WorkingSheet = LazyWorking.Component;
+
+/** Fetches both sheets' code ahead of their first use (#834). */
+export function preloadRunSheets(): void {
+  LazyConfirm.preload();
+  LazyWorking.preload();
+}
 
 export function RunSheets(): JSX.Element | null {
   const { me } = useSession();
@@ -61,16 +75,18 @@ export function RunSheets(): JSX.Element | null {
           onDismiss={dismissConfirm}
         />
       )}
-      <WorkingSheet
-        phase={shownPhase}
-        run={shownRun}
-        message={message}
-        now={now}
-        open={sheetOpen}
-        onDismiss={dismissSheet}
-        reopenKey={sheetReopenKey}
-        onTryAgain={tidyUp}
-      />
+      {(phase !== 'idle' || sheetOpen) && (
+        <WorkingSheet
+          phase={shownPhase}
+          run={shownRun}
+          message={message}
+          now={now}
+          open={sheetOpen}
+          onDismiss={dismissSheet}
+          reopenKey={sheetReopenKey}
+          onTryAgain={tidyUp}
+        />
+      )}
     </>
   );
 }
