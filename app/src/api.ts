@@ -120,6 +120,9 @@ export interface Vault {
   folderId: string;
   inboxFolderId: string;
   name: string;
+  /** ISO-8601; set by the Worker when it found the folder gone or in the
+   * Bin (#736). Absent while the folder is fine. */
+  missingAt?: string;
 }
 
 export interface Me {
