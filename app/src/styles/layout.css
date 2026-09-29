@@ -303,6 +303,11 @@ button.page-bare-back {
   flex-shrink: 0;
 }
 
+/* The desktop breadcrumb slot (#741); phone-only screens never see it. */
+.topbar-breadcrumb {
+  display: none;
+}
+
 .nav-badge {
   padding: 0 var(--space-2);
   border-radius: var(--radius-full);
@@ -343,6 +348,33 @@ button.page-bare-back {
 
 .bottom-nav a[aria-current='page'] {
   color: var(--color-link);
+}
+
+/*
+ * The phone's docked row (#741, `tidyBar` / `uploadChip`): a flex item of the
+ * shell between the page and the tab bar, 52 px high with 12 px sides and
+ * 8 px below. Sticky, so it rides just above the fixed tab bar; while it
+ * shows, `.shell-with-dock` gives the content room so the scroll area ends
+ * above it. Nothing renders while the slot is empty.
+ */
+.shell {
+  --bottom-nav-height: calc(60px + env(safe-area-inset-bottom, 0px));
+  --dock-height: 60px;
+}
+
+.shell-dock {
+  position: sticky;
+  bottom: var(--bottom-nav-height);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 52px;
+  margin: 0 12px 8px;
+}
+
+.shell-with-dock .content {
+  padding-bottom: calc(var(--space-16) + var(--space-6) + var(--dock-height));
 }
 
 .reauth-banner {
@@ -659,6 +691,13 @@ button.page-bare-back {
     max-width: 640px;
     margin-inline: auto;
   }
+
+  /* The docked row keeps its 12 px sides inside the same 640 px band. */
+  .shell-dock {
+    width: calc(100% - 24px);
+    max-width: 616px;
+    margin-inline: auto;
+  }
 }
 
 @media (min-width: 900px) {
@@ -679,6 +718,50 @@ button.page-bare-back {
     padding-top: var(--space-4);
     background: var(--color-sidebar);
     border-right: 1px solid var(--color-border);
+  }
+
+  /* The explorer fills the column; the ledge slot sits under it (#741). */
+  .shell-sidebar-nav {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .shell-sidebar-nav > .explorer {
+    flex: 1;
+    height: auto;
+  }
+
+  .shell-ledge {
+    flex: 0 0 66px;
+    height: 66px;
+    overflow: hidden;
+  }
+
+  .shell-ledge:empty {
+    display: none;
+  }
+
+  /* Empty slots take no room, not even a flex gap (#741). */
+  .topbar-slot:empty {
+    display: none;
+  }
+
+  .topbar-breadcrumb:not(:empty) {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .topbar-chip {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .shell-dock {
+    display: none;
   }
 
   /*
