@@ -92,16 +92,23 @@ Bower is a window onto one folder of your own Google Drive. Everything else foll
 
 ## The app
 
-A redesign is under way ([milestones M6 to M10](../../milestones)): an Obsidian-like look, a file explorer that hides the app's own files, a quick switcher, and the bird on every screen. The screens are designed and committed under [`docs/design/screens/`](docs/design/screens/); open any of them in a browser. The screenshots at the top are the real app, running the demo.
+One explorer, on every screen size: on a computer it is the left column, on a phone it is the **Notes** tab. It shows your notes and files as rows, starts with what you pinned and the five places Bower keeps things, opens to whatever you are reading, and hides the app's own files. Search finds a name, a folder or words inside a note, even with a typo, and works on the phone as well as the desktop. The screens are designed and committed under [`docs/design/`](docs/design/); open any of them in a browser. The screenshots at the top are the real app, running the demo.
 
 | Screen | What you see |
 | --- | --- |
-| Home | The bird greets you and tells you what is waiting. Inbox and Answers counts, recent notes, one search field. |
-| Note | Reading first: title, tags, dates, the body with a comfortable measure, the agent's note as a callout, previous and next in the folder. On desktop, an outline and linked mentions. |
-| Add | A drop zone the bird peeks over, camera, paste-a-link, upload progress. |
+| Home | The bird greets you and tells you what is waiting. After a tidy-up it says what it filed and links to **Just filed**. Inbox and Answers counts, recent notes with their key facts, one search field. |
+| Notes | Your notes and files as one explorer: pinned things first, your folders below, **New** on what the last tidy-up filed and you have not opened yet. |
+| Just filed | What the last tidy-up did: each thing with the name it had, the name it has now and the folder it went to, what Bower set aside and why, and what it added. |
+| A folder | Rows with a small mark for what each is, sorted and filtered by kind, grouped by date. A file and the note Bower wrote about it sit side by side. Notes of one kind, such as receipts or bookings, can be **compared** in a table, or as cards on a phone. |
+| A note | Reading first: the title, the key facts, Bower's note as a callout that says where each line came from, and **Check** when it needs you. Previous and next in the folder; on a desktop, an outline and an About panel. |
+| A file | A PDF, a photo, a spreadsheet, a video: shown as Drive allows, with its facts (pages, sheets, what is in a ZIP) and the note Bower wrote about it. **Move to…** asks Bower to file it somewhere else, now or at the next tidy-up. |
+| Search | Groups, kind chips and a scope. On a desktop, two columns with a preview of the highlighted result. |
+| Add | A drop zone the bird peeks over, camera, paste-a-link, upload progress, and a box for saying what a file is. |
 | Tell Bower | A conversation. The bird sings while you type. |
 | Tidying up | A sheet with the inbox-to-nest scene, what has been filed and where. |
-| First run | The bird builds your folder in front of you, then shows you around in three steps. Once per account. |
+| First run | The bird builds your Bower folder in front of you, then shows you around in three steps. Once per account. |
+
+Still to come (issues #613 and #614): a grid view of a folder, a quick look at a file without leaving the list, and side-by-side panes on the desktop.
 
 ## For engineers
 
