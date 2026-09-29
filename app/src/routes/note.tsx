@@ -325,6 +325,22 @@ export function Note() {
     });
   }, [id, file === undefined]);
 
+  // A folder row pairs an original with its Bower note and links to the note,
+  // so opening the note also counts as opening the original (#686).
+  useEffect(() => {
+    if (file === undefined || index === null) return;
+    if (load.status !== 'ready' || load.id !== id) return;
+    const original = originalFileOf(
+      index,
+      file,
+      noteMetaFrom(load.rendered.frontmatter).original,
+    );
+    if (original === undefined) return;
+    markSeen(original.id).catch((err: unknown) => {
+      console.error(err);
+    });
+  }, [id, file === undefined, load]);
+
   // The previous/next walk (#423): the same folder listing the folder
   // screen itself shows (Bower's own files hidden unless `showAppFiles` is
   // on), and their real titles (`noteTitle`, #306) resolved from the note

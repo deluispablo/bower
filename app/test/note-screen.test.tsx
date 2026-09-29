@@ -221,6 +221,12 @@ describe('Note screen (#609)', () => {
     await mount(LISTING.id);
     expect(markSeen).toHaveBeenCalledWith(LISTING.id);
   });
+
+  it("also marks the note's original seen, so its folder row stops saying New (#686)", async () => {
+    await mount(LISTING.id);
+    await waitFor(() => markSeen.mock.calls.some(([id]) => id === SCAN.id));
+    expect(markSeen).toHaveBeenCalledWith(SCAN.id);
+  });
 });
 
 describe('About panel (#609)', () => {
