@@ -75,11 +75,9 @@ import {
 import { BOWER_PATH } from '../shell-routes.js';
 import {
   closeSwitcher,
-  openSwitcher,
   feedCachedNoteText,
   knownNoteText,
   loadOpened,
-  recordOpened,
   restoreSavedSearchIndex,
   syncedSearchIndex,
   useSwitcherOpen,
@@ -1553,55 +1551,9 @@ function SwitcherPanel({
   );
 }
 
-/** Notes and files open on this device, most recent first: `/note/:id`, `/file/:id`. */
-function openedIdOf(location: string | undefined): string | null {
-  if (location === undefined) return null;
-  const match = /^\/(?:note|file)\/([^/?#]+)/.exec(location);
-  if (match?.[1] === undefined) return null;
-  try {
-    return decodeURIComponent(match[1]);
-  } catch {
-    return null;
-  }
-}
-
+/** The panel, mounted by `switcher-host.tsx` once the switcher has been opened. */
 export function Switcher(): JSX.Element | null {
   const { open, initialQuery } = useSwitcherOpen();
-  const { path } = useLocation();
-
-  // "/" opens search from anywhere that is not a text field (R-DESK-4);
-  // Ctrl/Cmd+K is `app.tsx`'s.
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) {
-        return;
-      }
-      if (open) return;
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      event.preventDefault();
-      openSwitcher();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
-
-  // Mounted for the whole session, so this sees every note or file opened.
-  useEffect(() => {
-    const id = openedIdOf(path);
-    if (id !== null) recordOpened(id);
-  }, [path]);
-
   if (!open) return null;
   return <SwitcherPanel initialQuery={initialQuery} />;
 }

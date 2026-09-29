@@ -58,13 +58,13 @@ import {
   helpScreenFor,
   isInnerScreen,
 } from '../shell-routes.js';
+import { lazyOverlay, whenIdle } from '../lazy-overlay.js';
 import { replayTour, useTour } from '../tour-store.js';
 import { useVault } from '../vault-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
 import { DemoBanner } from './demo-banner.js';
 import { Explorer, useHealthIsNew } from './explorer.js';
-import { HelpSheet } from './help-sheet.js';
 import { SidebarSeparator } from './sidebar-separator.js';
 import { useShellSlots } from './shell-slots.js';
 import {
@@ -77,8 +77,8 @@ import {
 } from './icons.js';
 import { OfflineBanner } from './offline-banner.js';
 import { OverlayHost } from './overlay.js';
-import { RunSheets } from './run-sheets.js';
-import { Switcher } from './switcher.js';
+import { RunSheets, preloadRunSheets } from './run-sheets.js';
+import { SwitcherHost, preloadSwitcher } from './switcher-host.js';
 import { Toast } from './toast.js';
 
 interface NavLink {
@@ -132,6 +132,11 @@ function currentFor(href: string, path: string): 'page' | undefined {
 }
 
 /** The avatar's letter: the first letter of the account's email. */
+const LazyHelp = lazyOverlay(() =>
+  import('./help-sheet.js').then((m) => m.HelpSheet),
+);
+const LazyHelpSheet = LazyHelp.Component;
+
 export function avatarInitial(email: string | undefined): string {
   const first = email?.trim().charAt(0) ?? '';
   return first === '' ? '?' : first.toUpperCase();
@@ -246,6 +251,16 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const sidebarWidth = useSidebarWidth();
   // "?" (About this screen): the help sheet for the screen on show (#330).
   const [helpOpen, setHelpOpen] = useState(false);
+  // The overlays' code is fetched once the page is idle, so each opens at once.
+  useEffect(
+    () =>
+      whenIdle(() => {
+        preloadSwitcher();
+        preloadRunSheets();
+        LazyHelp.preload();
+      }),
+    [],
+  );
   const inner = isInnerScreen(path, isDemo());
   const headRef = useRef<HTMLDivElement>(null);
   // The quick switcher's own top offset (spec §14, `switcher.css`'s
@@ -427,7 +442,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         ))}
       </nav>
       {helpOpen && (
-        <HelpSheet
+        <LazyHelpSheet
           screen={helpScreenFor(path)}
           ideasHref={IDEAS_PATH}
           onClose={() => {
@@ -440,7 +455,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           }}
         />
       )}
-      <Switcher />
+      <SwitcherHost />
       <RunSheets />
       {/* The one overlay host (#740): sheets, dialogs and menus queue here. */}
       <OverlayHost />
