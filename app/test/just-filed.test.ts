@@ -235,8 +235,8 @@ describe('latest and earlier runs', () => {
     expect(latestRun(null, [])).toBeNull();
   });
 
-  it('lists the others, done only, at most the last 20', () => {
-    expect(earlierRuns(run, [run, older, failed])).toEqual([older]);
+  it('lists the others, failed ones too, at most the last 20', () => {
+    expect(earlierRuns(run, [run, older, failed])).toEqual([older, failed]);
     const many = Array.from({ length: 30 }, (_, i) => ({
       ...run,
       requestedAt: `2026-08-${String(i + 1).padStart(2, '0')}T09:00:00.000Z`,
