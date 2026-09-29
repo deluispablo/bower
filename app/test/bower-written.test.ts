@@ -19,9 +19,9 @@ describe('isBowerWritten', () => {
 
   it('is true for a legacy body that opens with the callout', () => {
     const plain = meta({});
-    expect(isBowerWritten(plain, { body: "> [!bower] Bower's note\n> x" })).toBe(
-      true,
-    );
+    expect(
+      isBowerWritten(plain, { body: "> [!bower] Bower's note\n> x" }),
+    ).toBe(true);
     expect(isBowerWritten(plain, { body: "\n> [!bower]- Bower's note" })).toBe(
       true,
     );
