@@ -2,12 +2,15 @@ import type { JSX } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
-import {
-  AboutPanel,
-  originalFileOf,
-  originalSummary,
-} from '../components/about-panel.js';
+import { AboutPanel } from '../components/about-panel.js';
 import { isBowerWritten } from '../bower-written.js';
+import { resolveOriginal } from '../companion.js';
+import { kindById, statusLabel } from '../kinds.js';
+import type { Kind } from '../kinds.js';
+import { setFrontmatterValue, statusOptionLabel } from '../compare.js';
+import { IconChat, IconNote } from '../components/icons.js';
+import { MadeFrom, madeFromSources } from '../components/made-from.js';
+import { showToast } from '../toast-store.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
 import { BackLink } from '../components/back-link.js';
@@ -38,7 +41,7 @@ import {
   paraKindOf,
 } from '../navigation.js';
 import type { BreadcrumbSegment } from '../navigation.js';
-import { noteMetaFrom } from '../note-meta.js';
+import { noteMetaFrom, recordNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle as computeNoteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
@@ -52,6 +55,7 @@ import type { EditableNote } from '../vault-store.js';
 import { NotFound } from './not-found.js';
 import '../styles/about-panel.css';
 import '../styles/markdown.css';
+import '../styles/note-header.css';
 
 interface CrumbProps {
   crumbs: BreadcrumbSegment[];
@@ -64,7 +68,7 @@ function Back({ crumbs }: { crumbs: BreadcrumbSegment[] }): JSX.Element {
   return parent === undefined ? (
     <BackLink href="/" label="Home" />
   ) : (
-    <BackLink href={folderHref(parent.path)} label={parent.name} />
+    <BackLink href={folderHref(parent.path)} label={parent.name} named />
   );
 }
 
@@ -179,39 +183,136 @@ export function walkFolder(
   };
 }
 
-function PropsLine({
-  index,
+/** The kind chip's name (R-NOTE-2): the kind's own, "Answer" for an answer,
+ * "Summary" for any other note that names no kind (lead ruling on #758). */
+export function kindChipLabel(meta: NoteMeta): string {
+  if (meta.type === 'answer') return 'Answer';
+  const kind = meta.kind === undefined ? undefined : kindById(meta.kind);
+  if (kind === undefined) return 'Summary';
+  return kind.name.charAt(0).toUpperCase() + kind.name.slice(1);
+}
+
+/** A note's status select (R-NOTE-2): only for a kind that has statuses. */
+function StatusSelect({
+  kind,
+  meta,
+  value,
+  onChange,
+}: {
+  kind: Kind;
+  meta: NoteMeta;
+  value: string;
+  onChange: (status: string) => void;
+}): JSX.Element {
+  const options =
+    kind.statuses.includes(value) || value === ''
+      ? kind.statuses
+      : [...kind.statuses, value];
+  const shown = statusLabel(kind, { ...meta.fields, status: value });
+  return (
+    <select
+      class="note-status"
+      aria-label={
+        shown === '' ? 'Status: none. Change' : `Status: ${shown}. Change`
+      }
+      value={value}
+      onChange={(event) => {
+        onChange(event.currentTarget.value);
+      }}
+    >
+      {value === '' && <option value="">No status</option>}
+      {options.map((status) => (
+        <option key={status} value={status}>
+          {status === value && shown !== '' ? shown : statusOptionLabel(status)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** The kind row of a note Bower wrote: kind chip, By Bower tag, status. */
+function KindRow({
+  meta,
+  status,
+  onStatus,
+}: {
+  meta: NoteMeta;
+  status: string;
+  onStatus: (status: string) => void;
+}): JSX.Element {
+  const kind = meta.kind === undefined ? undefined : kindById(meta.kind);
+  return (
+    <div class="note-kind-row">
+      <span class="note-kind-chip">
+        <span class="note-kind-icon" aria-hidden="true">
+          {meta.type === 'answer' ? <IconChat /> : <IconNote />}
+        </span>
+        {kindChipLabel(meta)}
+      </span>
+      <BowerTag />
+      {kind !== undefined && kind.statuses.length > 0 && (
+        <StatusSelect
+          kind={kind}
+          meta={meta}
+          value={status}
+          onChange={onStatus}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Under the title of a note Bower wrote: the folder with its PARA mark, and
+ * "Filed {date}" when it was made from something, else "Written {date}". */
+function MetaLine({
   file,
   meta,
+  created,
+  folder,
+}: {
+  file: DriveFile;
+  meta: NoteMeta;
+  created: string | undefined;
+  folder: NoteFolderLink | undefined;
+}): JSX.Element | null {
+  const date = shortDay(created ?? file.modifiedTime);
+  const top = file.path.split('/')[0] ?? '';
+  const para = file.path.includes('/') ? paraKindOf(top) : null;
+  if (date === '' && folder === undefined) return null;
+  const verb = meta.original === undefined ? 'Written' : 'Filed';
+  return (
+    <p class="note-meta-line">
+      {folder !== undefined && (
+        <a class="note-props-folder" href={folder.href}>
+          {para !== null && <FolderMark kind={para} size={18} />}
+          {folder.name}
+        </a>
+      )}
+      {folder !== undefined && date !== '' && <span aria-hidden="true">·</span>}
+      {date !== '' && <span>{`${verb} ${date}`}</span>}
+    </p>
+  );
+}
+
+function PropsLine({
+  file,
   tags,
   created,
   folder,
 }: {
-  index: VaultIndex;
   file: DriveFile;
-  meta: NoteMeta;
   tags: string[];
   created: string | undefined;
   folder: NoteFolderLink | undefined;
 }): JSX.Element | null {
-  const original = originalFileOf(index, file, meta.original);
-  const summary = originalSummary(meta);
   const date = shortDay(created ?? file.modifiedTime);
   const top = file.path.split('/')[0] ?? '';
   const para = file.path.includes('/') ? paraKindOf(top) : null;
-  const bower = isBowerNote(meta);
-  if (
-    !bower &&
-    tags.length === 0 &&
-    date === '' &&
-    folder === undefined &&
-    meta.original === undefined
-  ) {
+  if (tags.length === 0 && date === '' && folder === undefined) {
     return null;
   }
   return (
     <p class="note-props">
-      {bower && <BowerTag />}
       {tags.map((tag) => (
         <a
           key={tag}
@@ -222,12 +323,6 @@ function PropsLine({
         </a>
       ))}
       {date !== '' && <span>{date}</span>}
-      {meta.original !== undefined &&
-        (original === undefined ? (
-          <span>{`Original: ${summary}`}</span>
-        ) : (
-          <a href={`/file/${original.id}`}>{`Original: ${summary}`}</a>
-        ))}
       {folder !== undefined && (
         <a class="note-props-folder" href={folder.href}>
           {para !== null && <FolderMark kind={para} size={18} />}
@@ -270,6 +365,8 @@ export function Note() {
   const [editError, setEditError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [appendOpen, setAppendOpen] = useState(false);
+  /** The status just chosen, shown until the save comes back (or fails). */
+  const [statusPick, setStatusPick] = useState<string | null>(null);
 
   // Leaving a note (after confirming, if there were unsaved changes) drops
   // its edit, so coming back shows the note rather than a stale editor.
@@ -278,6 +375,7 @@ export function Note() {
     setEditError(null);
     setMenuOpen(false);
     setAppendOpen(false);
+    setStatusPick(null);
   }, [id]);
 
   const file = index?.byId.get(id);
@@ -295,10 +393,10 @@ export function Note() {
   useEffect(() => {
     if (file === undefined || index === null) return;
     if (load.status !== 'ready' || load.id !== id) return;
-    const original = originalFileOf(
-      index,
+    const original = resolveOriginal(
       file,
       noteMetaFrom(load.rendered.frontmatter).original,
+      index,
     );
     if (original === undefined) return;
     markSeen(original.id).catch((err: unknown) => {
@@ -444,6 +542,30 @@ export function Note() {
     });
   }
 
+  /** The status select writes `status` in the note's frontmatter (R-NOTE-2). */
+  async function handleStatus(status: string): Promise<void> {
+    if (file === undefined || load.status !== 'ready' || load.id !== id) return;
+    const before = statusPick;
+    setStatusPick(status);
+    try {
+      const next = setFrontmatterValue(load.text, 'status', status);
+      const saved = await saveEditedNote(id, next, {
+        baseModifiedTime: file.modifiedTime ?? null,
+      });
+      try {
+        await recordNoteMeta(id, saved.modifiedTime ?? undefined, next);
+      } catch (error: unknown) {
+        console.error('Caching the new status failed', error);
+      }
+      showText(saved.text);
+      setStatusPick(null);
+    } catch (error: unknown) {
+      console.error('Changing a status failed', error);
+      showToast("Bower couldn't save that status. Try again.");
+      setStatusPick(before);
+    }
+  }
+
   async function handleAppend(text: string): Promise<void> {
     showText(await appendToNote(id, text));
   }
@@ -490,9 +612,23 @@ export function Note() {
   // writable but not offered here, on purpose.
   const canEdit = !isAppFile(file.path, file.name) && !isEditing;
   const canAppend = !isProtectedNote(file.name);
+  const bowerHeader = meta !== null && isBowerNote(meta);
+  const frontTitle = meta?.fields.title;
+  // The frontmatter title, when it says more than the name (R-NOTE-2).
+  const subtitle =
+    typeof frontTitle === 'string' && frontTitle.trim().length > title.length
+      ? frontTitle.trim()
+      : undefined;
 
   return (
     <section class="note-view">
+      {!isEditing && bowerHeader && meta !== null && (
+        <KindRow
+          meta={meta}
+          status={(statusPick ?? meta.status ?? '').toLowerCase()}
+          onStatus={(status) => void handleStatus(status)}
+        />
+      )}
       <div class="note-edit-header">
         <h1>{title}</h1>
         <div class="note-header-actions">
@@ -524,11 +660,29 @@ export function Note() {
         </p>
       )}
 
-      {!isEditing && meta !== null && properties !== null && (
+      {!isEditing && bowerHeader && meta !== null && properties !== null && (
+        <>
+          {subtitle !== undefined && <p class="note-subtitle">{subtitle}</p>}
+          <MetaLine
+            file={file}
+            meta={meta}
+            created={properties.created}
+            folder={folderLink}
+          />
+          <MadeFrom
+            sources={madeFromSources({
+              note: file,
+              original: meta.original,
+              source: meta.fields.source,
+              kind: meta.kind,
+              lookup: index,
+            })}
+          />
+        </>
+      )}
+      {!isEditing && !bowerHeader && meta !== null && properties !== null && (
         <PropsLine
-          index={index}
           file={file}
-          meta={meta}
           tags={properties.tags}
           created={properties.created}
           folder={folderLink}

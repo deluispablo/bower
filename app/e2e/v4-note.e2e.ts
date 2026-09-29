@@ -37,13 +37,15 @@ test('the Arlington Road note shows its props line, key facts and folded Details
   // The title is shown once on the page (the bar's copy is not in the view).
   await expect(view.getByRole('heading', { level: 1 })).toHaveCount(1);
 
-  const props = view.locator('.note-props');
-  await expect(props).toContainText('Bower');
-  await expect(props).toContainText('#housing');
+  const kindRow = view.locator('.note-kind-row');
+  await expect(kindRow).toContainText('Rental listing');
+  await expect(kindRow).toContainText('Bower');
   await expect(
-    props.getByRole('link', { name: /^Original: PDF, \d+ pages?$/ }),
+    view.locator('.made-from').getByRole('link', { name: /\.pdf/ }),
   ).toHaveAttribute('href', /^\/file\//);
-  await expect(props.getByRole('link', { name: /Flat hunt/ })).toBeVisible();
+  const metaLine = view.locator('.note-meta-line');
+  await expect(metaLine.getByRole('link', { name: /Flat hunt/ })).toBeVisible();
+  await expect(metaLine).toContainText('Filed');
 
   await expect(view.locator('.bower-note-box')).toBeVisible();
   await expect(view.locator('.bower-joined')).toContainText('Joined from:');

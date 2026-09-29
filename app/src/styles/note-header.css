@@ -1,0 +1,63 @@
+/* The header of a note Bower wrote (issue #758, boards Note-*): the kind
+   row, the subtitle and the meta line. Made from has its own stylesheet. */
+.note-kind-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.note-kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-heading);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.note-kind-icon {
+  display: inline-flex;
+}
+
+.note-kind-icon .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.note-status {
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.note-subtitle {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.note-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.note-meta-line a {
+  color: inherit;
+}
