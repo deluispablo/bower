@@ -67,8 +67,10 @@ export interface ConfirmBreakdown {
  */
 export function confirmBreakdownLine(b: ConfirmBreakdown): string | null {
   const things: string[] = [];
-  if (b.files > 0) things.push(`${b.files} ${b.files === 1 ? 'file' : 'files'}`);
-  if (b.links > 0) things.push(`${b.links} ${b.links === 1 ? 'link' : 'links'}`);
+  if (b.files > 0)
+    things.push(`${b.files} ${b.files === 1 ? 'file' : 'files'}`);
+  if (b.links > 0)
+    things.push(`${b.links} ${b.links === 1 ? 'link' : 'links'}`);
   const request =
     b.requests > 0
       ? `${b.requests} ${b.requests === 1 ? 'request' : 'requests'}`

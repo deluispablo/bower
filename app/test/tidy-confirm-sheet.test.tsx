@@ -124,7 +124,9 @@ describe('confirmCountLine and confirmBreakdownLine (CONF-3, CONF-4)', () => {
     expect(confirmBreakdownLine({ files: 2, links: 0, requests: 0 })).toBe(
       '2 files',
     );
-    expect(confirmBreakdownLine({ files: 0, links: 0, requests: 0 })).toBeNull();
+    expect(
+      confirmBreakdownLine({ files: 0, links: 0, requests: 0 }),
+    ).toBeNull();
   });
 });
 
