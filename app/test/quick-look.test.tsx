@@ -59,6 +59,15 @@ describe('filedLine', () => {
     );
   });
 
+  it("never says Bower filed a note that isn't Bower's", () => {
+    expect(filedLine(null, '2026-09-27T08:00:00Z', NOW, false)).toBe(
+      'Added by you yesterday',
+    );
+    expect(filedLine(null, '2026-09-27T08:00:00Z', NOW, true)).toBe(
+      'Filed by Bower yesterday',
+    );
+  });
+
   it('says nothing for a file with no date', () => {
     expect(filedLine('filed', undefined, NOW)).toBeNull();
   });

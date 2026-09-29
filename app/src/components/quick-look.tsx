@@ -57,14 +57,18 @@ export function kindLine(
 }
 
 /** "Filed by Bower yesterday", or the person's own version of it. `null`
- * when the file has no date. */
+ * when the file has no date. `bower` is `isBowerWritten` for the row's
+ * note: `false` with no known origin means the person's own file, so it
+ * never reads "Filed by Bower". Left out, the old default holds. */
 export function filedLine(
   origin: Origin | null,
   modified: string | undefined,
   now: number,
+  bower?: boolean,
 ): string | null {
   if (modified === undefined || modified === '') return null;
   const when = whenWords(modified, now);
+  if (origin === null && bower === false) return `Added by you ${when}`;
   switch (origin) {
     case 'yours':
       return `Added by you ${when}`;
@@ -100,6 +104,8 @@ export interface QuickLookProps {
   /** The page count a companion note recorded. */
   pages?: number | undefined;
   origin: Origin | null;
+  /** `isBowerWritten` for the row, when the folder knows it. */
+  bower?: boolean | undefined;
   folderPath: string;
   now: number;
   onClose: () => void;
@@ -113,6 +119,7 @@ export function QuickLook({
   kind,
   pages,
   origin,
+  bower,
   folderPath,
   now,
   onClose,
@@ -126,7 +133,7 @@ export function QuickLook({
   const isNote = shown === file && kind === 'note';
   const segments = folderPath.split('/').filter(Boolean);
   const para = paraKindOf(segments[0] ?? '');
-  const filed = filedLine(origin, shown.modifiedTime, now);
+  const filed = filedLine(origin, shown.modifiedTime, now, bower);
   const demo = isDemo();
 
   return (
@@ -271,10 +278,10 @@ export function QuickLookPane({
   if (item === null) {
     return <p class="quick-look-empty">Select something to preview it.</p>;
   }
-  const { title, href, file, original, kind, pages, origin, now } = item;
+  const { title, href, file, original, kind, pages, origin, bower, now } = item;
   const shown = original ?? file;
   const isNote = shown === file && kind === 'note';
-  const filed = filedLine(origin, shown.modifiedTime, now);
+  const filed = filedLine(origin, shown.modifiedTime, now, bower);
   const demo = isDemo();
   const line =
     original === undefined
