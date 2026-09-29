@@ -31,7 +31,7 @@ import { useLocation } from 'preact-iso';
 
 import { ApiError, createVault, loginUrl, selectVault } from '../api.js';
 import type { Vault } from '../api.js';
-import { Bird } from '../components/bird.js';
+import { Bird, BowerMark } from '../components/bird.js';
 import type { BirdState } from '../components/bird-classes.js';
 import {
   IconChat,
@@ -620,9 +620,7 @@ export function Onboarding(): JSX.Element {
             {driveQueue.map((item) => (
               <li key={item.id} class="onb-drive-queue-card">
                 <span class="onb-drive-queue-icon" aria-hidden="true">
-                  {item.status === 'copying' && (
-                    <Bird state="tidying" size={30} />
-                  )}
+                  {item.status === 'copying' && <BowerMark size={30} />}
                   {item.status === 'done' && (
                     <span class="onb-drive-queue-check">✓</span>
                   )}
