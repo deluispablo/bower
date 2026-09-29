@@ -23,12 +23,7 @@
  * empty it (sign-out, `DELETE /me`, "Forget this device").
  */
 
-import {
-  clearUploads,
-  deleteUpload,
-  loadUploads,
-  putUpload,
-} from './cache.js';
+import { clearUploads, deleteUpload, loadUploads, putUpload } from './cache.js';
 import type { UploadRecord } from './cache.js';
 import {
   DRIVE_BASE,
@@ -127,7 +122,10 @@ export function sessionStatus(response: ResumableResponse): SessionStatus {
     return { kind: 'done', fileId: fileIdFrom(response.body) };
   }
   if (status === 308) {
-    return { kind: 'partial', confirmed: confirmedFrom(response.header('Range')) };
+    return {
+      kind: 'partial',
+      confirmed: confirmedFrom(response.header('Range')),
+    };
   }
   if (status === 404 || status === 410) return { kind: 'expired' };
   throw new UploadError(status, `Drive upload failed (${status}).`);
@@ -930,7 +928,7 @@ export function uploadQueue(): UploadQueue {
   const queue = createUploadQueue({
     store: cacheUploadStore,
     transport: xhrTransport(),
-    locks: nav?.locks as LocksLike | undefined,
+    locks: nav?.locks,
     storage: nav?.storage,
     bus: broadcastBus(),
   });

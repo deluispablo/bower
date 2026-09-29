@@ -160,10 +160,7 @@ interface World {
 
 const queues: UploadQueue[] = [];
 
-function world(
-  options: FakeDriveOptions = {},
-  quotaBytes?: number,
-): World {
+function world(options: FakeDriveOptions = {}, quotaBytes?: number): World {
   const drive = fakeResumableDrive(options);
   const store = fakeUploadStore({ quotaBytes });
   const locks = fakeLocks();

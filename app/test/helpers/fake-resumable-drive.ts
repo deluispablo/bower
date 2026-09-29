@@ -205,7 +205,10 @@ export function fakeUploadStore(
         .reduce((sum, [, r]) => sum + r.size, 0);
       if (others + record.size > (options.quotaBytes ?? Infinity)) {
         return Promise.reject(
-          new DOMException('The quota has been exceeded.', 'QuotaExceededError'),
+          new DOMException(
+            'The quota has been exceeded.',
+            'QuotaExceededError',
+          ),
         );
       }
       records.set(key(record.userId, record.id), { ...record });

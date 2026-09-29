@@ -19,9 +19,7 @@ export function uniqueName(
   existing: Iterable<string>,
   queued: Iterable<string> = [],
 ): string {
-  const taken = new Set(
-    [...existing, ...queued].map((n) => n.toLowerCase()),
-  );
+  const taken = new Set([...existing, ...queued].map((n) => n.toLowerCase()));
   if (!taken.has(name.toLowerCase())) return name;
 
   const dot = name.lastIndexOf('.');

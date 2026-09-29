@@ -232,7 +232,10 @@ describe('xhrTransport (R-UPL-8)', () => {
     );
 
     expect(progress).toEqual([40, 100]);
-    expect(sessionStatus(response)).toEqual({ kind: 'partial', confirmed: 100 });
+    expect(sessionStatus(response)).toEqual({
+      kind: 'partial',
+      confirmed: 100,
+    });
     expect(sent[0]?.headers).toMatchObject({
       Authorization: 'Bearer TOKEN',
       'Content-Range': 'bytes 0-99/300',
