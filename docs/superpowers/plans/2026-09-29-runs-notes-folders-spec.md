@@ -50,10 +50,10 @@ This spec only asks the runner for the data the screens need (section 7).
 | D3 | A run that wrote work and then failed is **Partly done** (amber) with one action, **Finish the tidy-up**. **Did not finish** (red) is only for a run that changed nothing. | 1.9: "Nothing was lost … before Bower could finish" hides work that exists. |
 | D4 | Two overlay kinds only. A **modal** (a bottom sheet on phones; a 440 px right panel or a centred 440 px dialog on desktop) or the **non-blocking tidy-up chip**. One modal at a time; later ones wait in a queue. | 1.7 and the round 5 log (tour over the run card, two overlays at once). |
 | D5 | The desktop floating run card is removed. The chip lives in the desktop top bar and docks above the tab bar on phones, and the page makes room for it. | 1.7, and the card covering Compare's columns at about 800 px. |
-| D6 | Every note Bower writes opens with **Bower's insights**: summary (up to three lines with origins), key facts (1 to 4), what to check. Originals are never changed. | Owner ruling 3.4. |
+| D6 | Every note Bower writes opens with **Bower's insights**: summary (up to three lines with origins), key facts (1 to 4), what to check. Originals are never changed. The whole box folds to one line (score, key facts, how many to check) and the fold is remembered on the device for every note. | Owner ruling 3.4; owner round 2: the box must fold. |
 | D7 | When a rule or a fact changes, Bower rewrites the insights box to the present. A blue "Updated … · what changed" line keeps one line of the past behind a disclosure. | 3.8: a note must read true top-down. |
 | D8 | Key facts appear **once**, inside the insights box. The separate Key facts block, its caption and the desktop panel's copy go. | 3.14: key facts appear two or three times on one page. |
-| D9 | A Bower note's header says what it was **made from**: the original file and the web page, as two buttons. | 1.13, 3.2, and the owner's ruling on 3.2. |
+| D9 | A Bower note's header says what it was **made from**: the original file and the web page, as two buttons. It folds to one button ("Made from your clip and a job advert"), remembered like the insights box. The desktop About panel no longer repeats the sources. | 1.13, 3.2, the owner's ruling on 3.2; owner round 2: fold it too. |
 | D10 | "By Bower" has one rule. The rulebook writes `by: bower`, and the app uses a single `isBowerWritten()` for rows, filters, counts, preview and page. | 1.3: three rules disagree today. |
 | D11 | Folder order: header, header actions, view switch, filters and sort, then **one list with folders first**. | 3.9, following Drive and Finder. |
 | D12 | Desktop shows the path **once**, in the top bar. The in-content path bar goes on desktop and stays on phones only. | 3.13. |
@@ -61,7 +61,8 @@ This spec only asks the runner for the data the screens need (section 7).
 | D14 | **Rename…** is in More and works like Move: Bower renames, now (an instructions-only run) or at the next tidy-up, and keeps the id and links. | 3.5 within D1. |
 | D15 | Compare sorts on phones through a Sort sheet. A number a rule added (`score`) becomes a sortable **Your score** column and the first key fact. | 1.10. |
 | D16 | Tips, suggestions and explanations are one `Hint` component. It sits next to what it explains, one per screen, and is dismissed for good on each device. Explanations at the end of lists become an (i) popover. | 3.11. |
-| D17 | Add uploads a picked file at once, like a link. "What is this?" is a draft kept on the device until it is written as the context note. Leaving while an upload is in flight asks first. Every count on Add is the same number. | 1.2. |
+| D17 | Add works in **piles**: a pile is the files and links you add together plus what you say about them ("What is this pile?"). Each pile is a context note in the inbox from its first file, so it survives closing the app and waits, with its own note, until the tidy-up. Several piles can wait at once. | Owner round 2: a batch of 5 job offers with their note, close, later 3 rental listings with theirs, then one tidy-up. |
+| D20 | Uploads are durable: a file is copied into the device's storage when it is attached and sent with Drive's resumable upload, so switching tab never stops it and closing the app only pauses it until the next open. Closing or signing out while uploads are unfinished warns first. | Owner round 2: the person must not lose files by closing too early; report 1.2. |
 | D18 | A microphone for dictation in every box where people write sentences, where the browser supports speech recognition. Where it does not, a one-time tip points to the keyboard's own microphone. | Owner idea (report section 6). |
 | D19 | Bower note titles: at most 40 characters, most specific word first. Lists wrap a title to two lines on phones instead of cutting it at one. | 3.6. |
 
@@ -160,6 +161,9 @@ My own walkthrough (29 Sep, 375 and 1280, new and experienced personas), on top 
 | Result summary with counts | missing | partial ("3 uploads complete") | — | — | — | has (per-step status, summary) | has |
 | Partial failure named | missing | has ("2 failed", retry) | — | — | — | has (failed step, re-run failed jobs) | has |
 | Source of a derived note | missing | — | — | partial (links) | partial (a "Created from" property) | — | has |
+| A note for a group of files | partial (one box per visit, lost on reload) | — | — | — | — | Slack and WhatsApp: a message or caption with its attachments | has (piles) |
+| Uploads survive a closed tab | missing | partial (the upload panel resumes only while open) | — | — | — | Gutenberg's durable upload queue in IndexedDB | has |
+| Fold a properties block, remembered | missing | — | — | has (Properties fold; users ask for one global default) | has (toggles; collapsed by default makes pages feel empty) | — | has, open by default, one remembered choice |
 
 **References borrowed** (patterns only, no assets or copy):
 
@@ -168,10 +172,14 @@ My own walkthrough (29 Sep, 375 and 1280, new and experienced personas), on top 
 - **Google Drive**: the upload panel's per-file status and retry, and "Folders on top".
 - **Finder** and **Obsidian**: a draggable sidebar edge.
 - **Notion**: page properties at the top of a page for provenance.
+- **Slack and WhatsApp**: a message or caption travels with its attachments. That became the pile: the note belongs to the files added with it.
+- **Gutenberg's durable upload queue** and **Drive's resumable uploads**: files kept in IndexedDB until the server confirms them, and a session address that lets an upload resume for up to a week.
+- **Obsidian and Notion folding**: people want one remembered choice, and a folded block that is empty makes a page feel blank, so the folded box keeps one useful line.
 
 **Open-source pointers.**
 
 - None needed. Web Speech is a browser API.
+- The durable queue is IndexedDB (already used through `cache.ts`) plus Drive's resumable upload protocol. The Background Fetch API would let an upload continue after the app closes, but only in Chromium browsers, so it is not used.
 - The sidebar resize is about 60 lines of pointer events.
 - No dependency is proposed, so there is no licence question.
 
@@ -184,6 +192,12 @@ My own walkthrough (29 Sep, 375 and 1280, new and experienced personas), on top 
 | C. Full-page run view with a live log | medium | low (jargon) | L | logs leak internal words | every run | lost: too technical |
 
 **Sources.**
+
+- [Slack: add files to a message](https://slack.com/help/articles/201330736-Add-files-to-Slack)
+- [Gutenberg: durable upload queue](https://github.com/WordPress/gutenberg/pull/79389)
+- [Drive API: resumable uploads](https://developers.google.com/workspace/drive/api/guides/manage-uploads)
+- [Background Fetch support](https://caniuse.com/?search=Background+Fetch)
+- [Obsidian forum: collapse Properties by default](https://forum.obsidian.md/t/add-setting-to-collapse-fold-properties-across-all-notes-by-default/67943)
 
 - [GitHub job summaries](https://github.blog/news-insights/product-news/supercharging-github-actions-with-job-summaries/)
 - [Drive: view and reorder files and folders](https://support.google.com/drive/answer/2375177)
@@ -200,9 +214,9 @@ Canvas pages and artboards. Every screen × state below is **changed** against t
 | Brief | Brief (`Main`) | the brief and D1 to D19 |
 | System | System-Overlays, System-Hints, System-RunResult, System-Insights, System-HeaderActions, Tour-375, Help-1280 | the overlay model and queue, the z and scrim tokens, the hint variants, chip states and counts, insights anatomy and the rule-change line, header buttons before and after, the tour as a modal, help as a right panel |
 | Tidy-up results | Home-Running/Done/Partial ×375, ×1280; Confirm-Tidy ×2; RunSheet-Running/Done/Partial ×2; JustFiled ×2; Requests ×2 | running, done, partly done; confirm; run sheet on the phone and desktop panel; Just filed as a table; requests waiting, running, done, failed |
-| Bower's notes | Note-JobOffer ×2, Note-Rental ×2, Note-Summary ×2, Note-RuleChanged ×2, Note-Converted-375 | a kind with score, a kind with a weekly price, a kind-less note, the rule change with "What changed" open (375), a converted document pointing to its insights |
+| Bower's notes | Note-JobOffer ×2, Note-Rental ×2, Note-Summary ×2, Note-RuleChanged ×2, Note-Converted-375, Note-Folded ×2 | a kind with score, a kind with a weekly price, a kind-less note, the rule change with "What changed" open (375), a converted document pointing to its insights, insights and Made from folded |
 | Folders and Compare | Folder-List ×2, Sidebar-Default-1280, Sidebar-Resize-1280, Compare-Cards-375, Compare-Sort-375, Compare-Table-1280, More-Rename-375, Rename ×2 | folder with a subfolder first, the suggestion hint, the resize handle idle and dragging with a tooltip, phone sort, desktop Score column, More with Rename, the Rename dialog |
-| Add and dictation | Add-Uploading-375, Add-Dictating-375, Add-Leave-375, Add-Uploading-1280, Dictate-Bower-375, System-Dictate | uploading, in inbox, failed with retry, draft saved, leave warning, listening, first use, blocked, not available |
+| Add and dictation | Explore-A/B/C-375 (grey sketches of three directions); Home-Uploading-375, Add-Resume-375, SignOut-Uploading-375; Add-PileEmpty-375, Add-PileFilling-375, Add-Dictating-375, Add-PileOpen-375, Add-Piles-1280; Confirm-Piles-375, Confirm-Piles-1280; Dictate-Bower-375, System-Dictate | the directions compared; a pile uploading while the person is on Home; uploads resumed after the app was closed; sign-out with unfinished uploads; a new pile empty and filling (uploaded, uploading, queued); dictating the pile's note; an earlier pile opened to edit; piles on desktop; Is that everything? with piles; the five dictation states |
 | Wireframes | Wire-* (16) | the grey structure of Home, run sheet, Just filed, Requests, job note, folder, Compare and Add at both widths |
 
 **Unchanged and not drawn:**
@@ -272,7 +286,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
 - `compare.tsx`: the Sort sheet and extra columns.
 - `note.tsx`: the header, insights and pager.
 - `about-panel.tsx`: no key facts.
-- `add.tsx`: upload on pick and a draft.
+- `add.tsx`: piles and the upload queue (6.15, 6.15b).
 - `bower.tsx`: request states.
 
 **Motion.** The chip changes state with a 120 ms cross-fade. The spinner is replaced by a static icon under reduced motion. The sheet and panel use `--motion-base` and `--ease-out`.
@@ -523,7 +537,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
      - **What to check**: items from `not_stated` (a kind) or the note's `## What to check` / `## Before you apply, check` section, with "Copy as questions for the {who}" (the agent, the employer, …).
   7. **Body**: the rest of the note. The top callout, the key-facts caption and the separate KeyFacts block are not rendered again.
   8. **Pager**: at the very end, after the body, separated by a rule. "‹ {prev}" · "{i} of {n} {kind plural}" · "{next} ›". It counts notes **of the same kind** in the folder, or all notes when the note has no kind. Desktop keys `[` and `]`.
-  9. **About panel (desktop ≥1200)**: Original, Web page, Folder, Tags, Outline, In this folder. **No key facts.** It uses the names from `note-titles`, never a raw `[[…]]`.
+  9. **About panel (desktop ≥1200)**: Folder, Tags, Written and updated dates, Outline, In this folder. **No key facts and no sources** (both are in the note's header). It uses the names from `note-titles`, never a raw `[[…]]`.
 - **States:**
   - loading (header skeleton, box skeleton);
   - no box yet (a note written before the rulebook change): today's rendering, plus a hint "Bower adds its insights next time it touches this note";
@@ -562,6 +576,8 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - [ ] R-INS-2: key facts are rendered only in the box; the caption "Key facts for a … set in your rules" is removed (fixes 3.14).
   - [ ] R-INS-3: `bower_updated` (a date) and `bower_change` (one line) in the frontmatter render the blue line; `bower_before` (one line) fills "Before today". All three are absent means no line.
   - [ ] R-INS-4: "What to check" reads `not_stated` or the named section; the copy button copies one question per line.
+  - [ ] R-INS-5: the insights box folds (boards Note-Folded-*). Its head is a `<button aria-expanded aria-controls>` of 48 px with the bird, "Bower's insights" and a chevron. Folded, it shows one line under the head: the score pill when there is one, then the first key facts inline ("£72,000 a year · starts 3 Nov · reply by 14 Oct") and a "{n} to check" tag; the summary lines are hidden. The choice is one device preference for every note (`bower:pref:insightsFolded`), open by default, never per note. The same fold applies to the insights on the file page. Height is not animated; the chevron turns in `--motion-fast` (not at all under reduced motion).
+  - [ ] R-NOTE-7: Made from folds the same way. Open: a small "Made from" caption button with a chevron above the source buttons. Folded: one 44 px button "Made from your clip and a job advert" that opens it. Preference `bower:pref:sourcesFolded`, open by default. The folded label names the sources in plain words ("your clip", "a job advert", "your Word document", "a web page").
   - [ ] R-KF-1: money values keep their period. When the value contains a period ("a week", "/week", "per week", "pw", "a month", "/month", "pcm", "a year", "/year", "per annum"), the tile shows the amount as the value and the normalised period ("a week", "a month", "a year") as the label. Otherwise the kind's `factLabel`. Unit tests with "£340 a week", "AUD 350/week", "£1,450 pcm" and "£72,000". Fixes 1.12.
   - [ ] R-KF-2: a numeric rule field named `score` or `fit` (0 to 100) becomes the first key-fact tile as a pill ("79", "your score"). It is green at 70 and up, amber from 50 to 69, grey below 50.
 
@@ -667,38 +683,198 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
 - [ ] R-HINT-4: dismissed ids are listed in help's "Tips on this screen" with "Show again".
 - [ ] R-HINT-5: suggestion chips fill the Bower box (`/bower?text=`) and never send.
 
-### 6.15 Add — R-ADD (boards Add-*)
+### 6.15 Add as piles — R-ADD, R-PILE (boards Explore-*, Add-*, Confirm-Piles-*)
 
-- **Changes:**
-  - **Upload on pick.** Files from Files, Photo, drop and the share target start uploading at once. This is the same `runQueue` path links use.
-  - The "Tidy up" button no longer uploads.
-  - **Row states**:
-    - "Uploading · {pct}%", with a progress bar (`role="progressbar"`);
-    - "In your inbox", with a check; a kept-not-read line when the format policy says so;
-    - "Could not upload. Check your connection.", with "Retry".
-  - **Counts.** The h2 reads "In your inbox · {n}", where n is the files actually in `0-Inbox` and `Clippings` (`pendingCount`, the same number Home and Confirm show). The right side reads "{u} uploading · {f} failed" (zeros left out). The button reads "Tidy up {n} things"; while uploads are in flight, the line under it reads "The file still uploading joins them when it is done."
-  - **"What is this?"**:
-    - always shown when n > 0 or the queue is non-empty (after a reload too, fixes the report's "no way left to say what they are");
-    - its text is kept in `localStorage` `bower:add:context` on each input (debounced 300 ms), with the line "Saved on this device. Bower reads it with these things at the next tidy-up.";
-    - written as the context note on leaving Add, on sign-out, and on "Yes, tidy up" (as today);
-    - cleared from storage only after the note is written;
-    - `<label for>` fixes its accessible name.
-  - **Leaving:**
-    - When an upload is in flight and the person taps another tab or signs out, a Dialog (`role="alertdialog"`) asks: "1 file is still uploading" / "Orchard Row listing.pdf is at 64%. If you leave now it stops, and you add it again later. What you wrote in "What is this?" is kept." / "Stay" / "Leave anyway".
-    - `beforeunload` is set while uploads are in flight.
-  - The "Waiting" state is removed.
-- **Acceptance criteria:**
-  - [ ] R-ADD-1: picked, dropped and shared files upload at once; the e2e check from report 1.2 (pick, reload) finds the file in the inbox.
-  - [ ] R-ADD-2: one count, the same on Add, Home and Confirm (unit test on `pendingCount` use; e2e with a link and a file).
-  - [ ] R-ADD-3: the "What is this?" draft survives reload and sign-out, and is written as the context note on leaving Add (fixes the missing #335 note).
-  - [ ] R-ADD-4: the leave dialog and `beforeunload` only while uploads are in flight.
-  - [ ] R-ADD-5: the Settings sign-out asks the same when uploads are in flight.
+**The owner's case.**
+
+1. Add five job offers and say "these are offers, score them against my CV".
+2. Close the app without tidying up.
+3. Later, add three rental listings and say "these are flats, compare them with my budget".
+4. Tidy up once. Each note must go with its own files.
+
+Today there is one "What is this?" box per visit, held in page memory, and it is lost on reload (report 1.2).
+
+**Three directions were sketched** (page "Add and dictation", first row):
+
+| Direction | What it is | User value | Cost | Why it won or lost |
+|---|---|---|---|---|
+| A. One box per visit (today, fixed) | The note covers whatever is added until you leave Add. | Low: two piles added in one visit share one note. | S | Lost: it does not do what the owner asked. |
+| **B. Piles** | Each pile is its files and links plus its own note, kept in the inbox until the tidy-up. Many piles can wait. | High: exactly the owner's case. | M | **Chosen.** |
+| C. One composer for Add and Bower | Text with files is a pile; text alone is a request or a rule. | High, and fewer screens. | L (merges two tabs and their flows) | Kept for later: the right idea, but too big a change for this pass. |
+
+**The model.**
+
+- **A pile starts** when the first file or link is attached on Add, or arrives through the share target.
+  - At that moment the app writes the pile's context note to `0-Inbox/` (R-PILE-1), even before the person types anything.
+  - So the pile exists in the vault, not only in the page.
+- **While the pile is open:**
+  - files and links attached join it;
+  - "What is this pile?" is saved into its context note as the person types (debounced 1 s, and on blur).
+- **The pile closes** when the person taps **Done with this pile**, or leaves Add.
+  - A closed pile waits under "Waiting for the tidy-up" with its note.
+  - Opening it again (a sheet) lets the person edit the note, add more to it, remove a file, or remove the whole pile.
+- **Things that reached the inbox another way** (Drive, Obsidian, an older app) are listed as **Added from elsewhere**, with "Say what they are", which makes them a pile.
+- **The tidy-up reads each pile's note with its own files only.**
+  - The rulebook already handles each context note this way; R-AG-8 tightens it.
+  - Just filed and the tidy-up sheet name the pile each thing came from ("From your pile: Five job offers…").
+
+**Add screen, top to bottom** (Add-PileFilling-375, Add-Piles-1280):
+
+1. **Top of the page.**
+   - Phone: the top bar "Add".
+   - Desktop: the h1 "Add" and a drop line.
+2. **New pile card.**
+   - Brand-tinted border.
+   - Head: "New pile", with a count on the right, for example "5 things · 3 in your inbox, 2 uploading".
+   - While the pile is empty, the right side reads "Add files or links, and say what they are".
+   - The "What is this pile? optional" box, with the dictation button (R-DICT). Once there is text, a line under it says it is saved.
+   - The pile's items, one row each: kind icon, name, a state, and a remove button (40 px, "Remove {name} from this pile"). The states:
+
+     | State | Shows |
+     |---|---|
+     | Uploading | Progress bar and percentage |
+     | Queued | "queued" |
+     | In the inbox | A check, plus the format policy's line when Bower keeps the file without reading it |
+     | Failed | "Could not upload. Check your connection." and **Retry** |
+     | Offline | "no signal" |
+
+   - Four doors in one row: Photo, Files, Drive, Link. Link opens an inline field with Save.
+   - **Done with this pile** (primary), and a line saying uploads carry on.
+3. **Waiting for the tidy-up**, with the total ("10 things").
+   - One card per pile, showing:
+     - the first two lines of its note, or "No note" in italics;
+     - kind icons;
+     - "5 things · today 10:42";
+     - "1 uploading" while any file is.
+   - Then "Added from elsewhere", when there is any.
+4. **Tidy up {n} things** (primary, full width on the phone). n is the same number as on Home's inbox card and in the confirm dialog (R-CONF-2).
+
+On desktop the page has two columns: the new pile on the left, the waiting piles and the tidy-up button on the right.
+
+**Pile sheet** (Add-PileOpen-375): an Overlay sheet.
+
+- Title "Pile from today, 10:42", subtitle "5 things · waiting for the next tidy-up".
+- The note box: editable, saved as typed.
+- The items, with remove buttons.
+- "Add more to this pile".
+- A red text link "Remove this pile from the inbox". It asks once: "Remove this pile? Its 5 files go to the Bin in Drive." with "Remove" and "Keep".
+
+**Is that everything?** (Confirm-Piles-*):
+
+- The line "10 things in 3 piles. Bower reads each pile with its own note."
+- One row per pile.
+- Then the usual line and buttons.
+
+**Copy:**
+
+| ID | Text |
+|---|---|
+| PILE-1 | "New pile" |
+| PILE-2 | "What is this pile?" / "optional" |
+| PILE-3 | "For example: five job offers. Score them against my CV and write a CV for the best ones." |
+| PILE-4 | "Saved in your inbox as you type. Bower reads it with these files only." |
+| PILE-5 | "Done with this pile" |
+| PILE-6 | "Uploads carry on if you switch tabs. If you close Bower, they finish next time you open it." |
+| PILE-7 | "Waiting for the tidy-up" |
+| PILE-8 | "No note" |
+| PILE-9 | "Added from elsewhere" / "Say what they are" |
+| PILE-10 | "Pile from {day}, {time}" |
+| PILE-11 | "Add more to this pile" |
+| PILE-12 | "Remove this pile from the inbox" / "Remove this pile? Its {n} files go to the Bin in Drive." |
+| PILE-13 | "{n} things in {p} piles. Bower reads each pile with its own note." |
+| PILE-14 | "Drop files anywhere on this page: they join the pile you are making." |
+
+**Acceptance criteria:**
+
+- [ ] **R-PILE-1:** `pile-store.ts` (new).
+  - A pile is `{ id, noteFileId, createdAt, text, items: [{ name, fileId?, state }] }`.
+  - On the first attach, the app creates `0-Inbox/Bower - <date> <time> Context.md` with:
+    - frontmatter `tags: [instruction]`, `via: app`, `kind: context`, `pile: <id>`;
+    - then the text;
+    - then `## Applies to`, listing the files already uploaded.
+  - Each upload that lands, and each edit, rewrites the note, with the `modifiedTime` guard that Edit a note already uses.
+  - A pile left with no items deletes its note.
+- [ ] **R-PILE-2:** the Add screen and the pile sheet match the boards.
+  - Several piles can wait at once.
+  - "Done with this pile" and leaving Add both close the open pile.
+- [ ] **R-PILE-3:** after the app is closed, reopening Add lists the waiting piles with their notes. The list comes from the inbox listing (context notes with `pile:`), not from device storage.
+- [ ] **R-PILE-4:** "Added from elsewhere" lists inbox files named in no pile. "Say what they are" opens a new pile with them.
+- [ ] **R-PILE-5:** the confirm dialog, Just filed and the tidy-up sheet group things by pile ("From your pile: …").
+- [ ] **R-PILE-6:** e2e test, in this order:
+  1. Make a pile of two files with a note.
+  2. Leave Add.
+  3. Make a second pile of one file with another note.
+  4. Reload.
+  5. Check that both piles are there with their notes, and that the inbox holds two context notes, each listing only its own files.
+- [ ] **R-ADD-1:** the "Waiting" state (a picked file held in memory) is gone; every attached file starts uploading at once.
+- [ ] **R-ADD-2:** Add, Home and the confirm dialog show the same count.
+
+### 6.15b Durable uploads — R-UPL (boards Home-Uploading-375, Add-Resume-375, SignOut-Uploading-375)
+
+**The queue.** `upload-queue.ts` (new).
+
+- From the moment a file is attached, it is kept in IndexedDB, in an `uploads` store holding:
+  - the Blob, its name and size;
+  - the pile id;
+  - the Drive resumable session address;
+  - the bytes Drive has confirmed.
+- The file is deleted from the store only when Drive confirms it.
+- Uploads use Drive's resumable protocol:
+  - The session address is saved.
+  - After a reload, the queue asks Drive how much arrived and sends the rest.
+  - Drive keeps a session address for a week. If it has expired, that file restarts from the beginning.
+
+**In the app.**
+
+- The queue runs at module level, so changing tab never stops it.
+- A chip in the tidy-up chip's place shows it:
+  - "Adding 2 files · 64%", gone when done;
+  - "Finishing 2 uploads from last time";
+  - offline, "2 files wait for a connection" (amber).
+- When both apply, the tidy-up chip gets the slot, and the upload state shows inside the tidy-up sheet.
+
+**Closing the app.**
+
+- While any upload is unfinished, `beforeunload` is set. The browser then shows its own "Leave site?" question; its words cannot be changed.
+- On the next open, the queue resumes and Add shows a hint: "2 files did not finish uploading last time. Bower is finishing them now; they stay in their pile."
+
+**Signing out.** With unfinished uploads, sign-out first shows an alert dialog:
+
+- Title: "2 files are still uploading".
+- Text: "If you sign out now they stop, and this device forgets them. Wait a moment, or sign out and add them again later."
+- Buttons: "Wait" and "Sign out anyway".
+- "Sign out anyway" clears the queue, because a shared computer must not keep someone's files.
+
+**Storage.**
+
+- At the first attach, the app asks the browser to keep its storage (`navigator.storage.persist()`).
+- If a file is larger than the space the browser offers (`navigator.storage.estimate()`), it is uploaded directly without the durable copy. Its row then says "Keep Bower open until this one is in."
+
+**Tidying up with uploads unfinished.**
+
+- The button stays enabled.
+- The confirm dialog says "2 files are still uploading; they join the next tidy-up."
+- Those files are left out of this run's piles: each pile's note lists only what has landed.
+
+**Not used:** Background Fetch (it works in Chromium browsers only) and Background Sync. Both are noted for later.
+
+**Acceptance criteria:**
+
+- [ ] **R-UPL-1:** attach a file, reload mid-upload, and the file finishes after the reload without being picked again (e2e test with a mocked Drive).
+- [ ] **R-UPL-2:** the upload chip shows the states and texts above, and never covers content (same rules as R-CHIP-2).
+- [ ] **R-UPL-3:** `beforeunload` is set only while uploads are unfinished; no in-app navigation is blocked.
+- [ ] **R-UPL-4:** the sign-out dialog works, and "Sign out anyway" clears the queue (unit test on the store).
+- [ ] **R-UPL-5:** the resumable protocol: a 308 answer resumes from the confirmed byte, and a 404 restarts the file (unit test with a mocked fetch).
+
+**Cost:** M.
+
+**Risk:** iOS may evict storage for a site not added to the home screen. The persist request and the "Keep Bower open" line cover it.
 
 ### 6.16 Dictation — R-DICT (boards Add-Dictating-375, Dictate-Bower-375, System-Dictate)
 
 - **Where:**
   - the Bower box (`bower.tsx`);
-  - "What is this?" (`add.tsx`);
+  - "What is this pile?" (`add.tsx`, the pile sheet);
   - Add a paragraph (`append-form.tsx`);
   - Edit the text (`note-editor.tsx`);
   - the interview's "Or say it your way" text inputs (`interview.tsx`).
@@ -730,7 +906,7 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - [ ] R-DICT-1: `dictate-button.tsx` with the states above; unit tests with a mocked `SpeechRecognition`.
   - [ ] R-DICT-2: mounted in the five places listed and in no other.
   - [ ] R-DICT-3: the language preference in Settings ("Dictation language: Match my device") and in the status line.
-  - [ ] R-DICT-4: the Privacy page and `docs/privacy.md` state where the audio goes when the browser's recognizer is online (after Q2).
+  - [ ] R-DICT-4: the Privacy page and `docs/privacy.md` state where the audio goes when the browser's recognizer is online (Q2 answered: yes).
 
 ## 7. Behind the screens
 
@@ -770,8 +946,13 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
   - `added.txt` is plain words for the owner with no internal words (index, hub, orphaned, crashed, run, frontmatter), in the first person, with no final full stop.
   - Serves 1.12, 2.2.
 - **R-AG-7.** Instructions with `op: rename` rename the target keeping its id, and the runner books it like a move.
+- **R-AG-8.** Piles:
+  - Each context note applies only to the files in its own `## Applies to` list. A file named in two context notes goes with the newest note.
+  - A context note with an empty text only groups its files: file them as usual, with no extra note.
+  - The pile id (`pile:`) is copied into each resulting note as `pile_note: "[[<context note name>]]"`, so Just filed and the note header can say which pile a thing came from.
+  - Serves R-PILE-5.
 
-**App modules touched:**
+**App modules touched** (in addition to the new `pile-store.ts` and `upload-queue.ts`):
 
 - `run-store.tsx` (outcome, chip, no toast);
 - `last-run.ts`;
@@ -806,18 +987,21 @@ The light `--color-danger` #e12020 fails 4.5:1 for small text on `--color-danger
    - order, header, a single path, the sidebar resize;
    - Compare sort and score;
    - Rename (needs R-AG-7).
-6. **Add** (upload on pick, draft, leave), then **dictation** (after Q2).
+6. **Add**, in this order:
+   1. the upload queue (R-UPL);
+   2. piles (R-PILE), which need R-AG-8;
+   3. dictation (Q2 answered: yes).
 7. **Migration of every remaining overlay** onto Overlay (R-OVL-2), the tour and help (R-OVL-3, R-OVL-4).
 
 Groups 3 to 6 can run in parallel once 1 and 2 have landed. The rulebook bump and the runner change deploy in the usual order: Worker, then runner, then app.
 
 ## 9. Open questions
 
-| # | Question | Options | Recommendation |
-|---|---|---|---|
-| Q1 | Should a document of **no listed kind** (a CV, a profile, a letter) get a summary note with insights by default? The owner ruled that every note Bower **generates** has insights; round 5 shows a CV got none because nothing was generated. | (a) yes, every document gets a short summary note (more notes, more runs of the plan); (b) only when asked or when a rule says so, but the first run after onboarding offers it ("Want a summary of your CV?"); (c) add "CV" and "profile" as listed kinds | **(b)** plus **(c)** for CV: a CV is recurring and has stable fields. (a) doubles note count for receipts-like clutter. |
-| Q2 | Dictation sends audio to the browser vendor's speech service (Chrome: Google; Safari: Apple, on device where available). Is that acceptable, with a Privacy line? | (a) yes, with a Privacy line and the first-use hint; (b) only where on-device recognition is available (too little support today); (c) no mic, only the keyboard tip | **(a)**. The person chooses to tap the mic, nothing is kept by Bower, and the Privacy page says so. |
-| Q3 | The light `--color-danger` fails 4.5:1 for small text on its new tinted background. | darken to `#c21b1b` for text; keep #e12020 for fills | Darken for text only. |
+| # | Question | Status |
+|---|---|---|
+| Q1 | Should a document of **no listed kind** (a CV, a profile, a letter, a manual) get Bower's insights without being asked? | **OPEN**, being explained to the owner with a worked example. Today such a document is only filed; a Word or HTML file also gets its converted text (`.md`), with no insights. Options: (a) insights inside the converted text for converted documents, nothing extra for PDFs; (b) a summary note for every document; (c) new listed kinds for CVs and profiles; (d) as today, plus an offer after the run. |
+| Q2 | Dictation sends audio to the browser vendor's speech service. | **Answered 29 Sep: yes**, with a Privacy line and the first-use hint (R-DICT-4). |
+| Q3 | The light `--color-danger` fails 4.5:1 for small text on its tinted background. | **Answered 29 Sep: yes**, darken to `#c21b1b` for text; keep `#e12020` for fills. |
 
 ## 10. Completeness check
 
@@ -828,7 +1012,7 @@ Groups 3 to 6 can run in parallel once 1 and 2 have landed. The rulebook bump an
 - [x] Every token used exists in `tokens.css` or in section 5.
 - [x] Every element that needs data names its source and its empty and stale behaviour (RunOutcome without the new runner fields degrades to today's counts; missing `original` shows "not found"; no box shows the hint).
 - [x] Every L has an M alternative: there is no L. The largest items are the runner fields (M) and the Overlay migration (M, done incrementally).
-- [x] Every escalation is in section 7 or 9: rulebook bump; runner and Worker fields; the token value change (Q3); the privacy of dictation (Q2); the summary-by-default policy (Q1). There are no new dependencies, OAuth scopes or secrets.
+- [x] Every escalation is in section 7 or 9: the rulebook bump (R-AG-1 to R-AG-8); runner and Worker fields; the summary-by-default policy (Q1, open). Q2 and Q3 are answered. There are no new dependencies, OAuth scopes or secrets. IndexedDB, storage persistence and Drive resumable uploads use APIs the app already has.
 - [x] Every open-source pointer has a licence: there are none.
 - [x] Every acceptance criterion can be checked by a test or by opening the app.
 - [x] Nothing in the boards contradicts this text. Known simplifications on the boards: the Requests desktop board shows the chip in the running state, while the list shows one running request. Board data (names, amounts) is fictional.
