@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { h, render } from 'preact';
+import type { VNode } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,6 +21,7 @@ import {
 } from '../src/shell-routes.js';
 import type { RunPhase } from '../src/run-store.js';
 import { buildVaultIndex } from '../src/vault-index.js';
+import { stubMatchMedia } from './helpers/match-media.js';
 
 const location = { path: '/', route: vi.fn() };
 
@@ -100,7 +102,8 @@ vi.mock('../src/cache.js', () => ({
   saveTreeState: () => Promise.resolve(),
 }));
 
-const { Layout, avatarInitial } = await import('../src/components/layout.js');
+const { Layout, avatarInitial, clampSidebarWidth, readStoredSidebarWidth } =
+  await import('../src/components/layout.js');
 
 let root: HTMLDivElement;
 
@@ -405,6 +408,169 @@ describe('Layout', () => {
     expect(query('aside.shell-aside').getAttribute('aria-label')).toBe(
       'About this note',
     );
+  });
+});
+
+describe('Layout v5 slots (#741)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.removeAttribute('style');
+  });
+
+  type Fills = Partial<
+    Record<'tidyBar' | 'uploadChip' | 'breadcrumb' | 'ledge', VNode>
+  >;
+
+  function mountWith(fills: Fills): void {
+    function Fill(): null {
+      useShellSlot('tidyBar', fills.tidyBar ?? null);
+      useShellSlot('uploadChip', fills.uploadChip ?? null);
+      useShellSlot('breadcrumb', fills.breadcrumb ?? null);
+      useShellSlot('ledge', fills.ledge ?? null);
+      return null;
+    }
+    root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(h(ShellSlotsProvider, null, h(Layout, null, h(Fill, null))), root);
+    });
+  }
+
+  it('shows nothing extra with every slot empty', () => {
+    mount();
+    expect(root.querySelector('.shell-dock')).toBeNull();
+    expect(root.querySelector('.topbar-chip')).toBeNull();
+    expect(query('.shell').classList.contains('shell-with-dock')).toBe(false);
+    expect(query('.topbar-breadcrumb').childNodes).toHaveLength(0);
+    expect(query('.shell-ledge').childNodes).toHaveLength(0);
+  });
+
+  it('puts the ledge outside the nav landmark, aria-hidden, after the explorer', () => {
+    mount();
+    const ledge = query('.shell-ledge');
+    expect(ledge.getAttribute('aria-hidden')).toBe('true');
+    expect(ledge.closest('nav')).toBeNull();
+    const nav = query('nav[aria-label="Your notes"]');
+    expect(nav.nextElementSibling).toBe(ledge);
+    expect(ledge.parentElement).toBe(nav.parentElement);
+  });
+
+  it('docks the bar between the page and the tab bar on a phone', () => {
+    mountWith({ tidyBar: h('p', null, 'Tidy') });
+    const dock = query('.shell-dock');
+    expect(dock.textContent).toBe('Tidy');
+    expect(dock.nextElementSibling).toBe(query('nav.bottom-nav'));
+    expect(query('.shell').classList.contains('shell-with-dock')).toBe(true);
+    expect(root.querySelector('.topbar-chip')).toBeNull();
+  });
+
+  it('puts the same bar in the top bar from 900 px, before help', () => {
+    stubMatchMedia(true);
+    mountWith({ tidyBar: h('p', null, 'Tidy') });
+    const chip = query('.topbar-chip');
+    expect(chip.textContent).toBe('Tidy');
+    expect(chip.nextElementSibling).toBe(query('.topbar-help'));
+    expect(root.querySelector('.shell-dock')).toBeNull();
+    expect(query('.shell').classList.contains('shell-with-dock')).toBe(false);
+  });
+
+  it('lets the tidy-up bar win over the upload chip, and shows the chip alone', () => {
+    mountWith({
+      tidyBar: h('p', null, 'Tidy'),
+      uploadChip: h('p', null, 'Upload'),
+    });
+    expect(query('.shell-dock').textContent).toBe('Tidy');
+    void act(() => {
+      render(null, root);
+    });
+    document.body.replaceChildren();
+    mountWith({ uploadChip: h('p', null, 'Upload') });
+    expect(query('.shell-dock').textContent).toBe('Upload');
+  });
+
+  it('fills the breadcrumb and ledge slots', () => {
+    mountWith({
+      breadcrumb: h('span', null, 'Crumbs'),
+      ledge: h('span', null, 'Perch'),
+    });
+    expect(query('.topbar-breadcrumb').textContent).toBe('Crumbs');
+    expect(query('.shell-ledge').textContent).toBe('Perch');
+  });
+
+  it('mounts the overlay host once: an opened overlay renders in the body', async () => {
+    const queue = await import('../src/overlay-queue.js');
+    mount();
+    void act(() => {
+      queue.open({
+        id: 'test',
+        priority: queue.OVERLAY_PRIORITY.own,
+        render: () => h('p', { id: 'from-queue' }, 'Queued'),
+      });
+    });
+    expect(document.querySelectorAll('#from-queue')).toHaveLength(1);
+    void act(() => {
+      queue.resetOverlayQueue();
+    });
+  });
+
+  it('applies a stored sidebar width as --sidebar-width in the first render', () => {
+    localStorage.setItem('bower:pref:sidebarWidth', '320');
+    mount();
+    expect(
+      query<HTMLElement>('.shell').style.getPropertyValue('--sidebar-width'),
+    ).toBe(`${clampSidebarWidth(320, window.innerWidth)}px`);
+  });
+
+  it('leaves --sidebar-width to the stylesheet with nothing stored or a bad value', () => {
+    mount();
+    expect(
+      query<HTMLElement>('.shell').style.getPropertyValue('--sidebar-width'),
+    ).toBe('');
+    void act(() => {
+      render(null, root);
+    });
+    localStorage.setItem('bower:pref:sidebarWidth', '"wide"');
+    mount();
+    expect(
+      query<HTMLElement>('.shell').style.getPropertyValue('--sidebar-width'),
+    ).toBe('');
+  });
+});
+
+describe('clampSidebarWidth', () => {
+  it('keeps 200 to 480 px', () => {
+    expect(clampSidebarWidth(100, 1600)).toBe(200);
+    expect(clampSidebarWidth(320, 1600)).toBe(320);
+    expect(clampSidebarWidth(900, 1600)).toBe(480);
+  });
+
+  it('leaves the main column at least 560 px', () => {
+    expect(clampSidebarWidth(480, 900)).toBe(340);
+    expect(clampSidebarWidth(480, 1000)).toBe(440);
+    expect(clampSidebarWidth(480, 1040)).toBe(480);
+  });
+
+  it('never goes under 200, even in a window too narrow for both', () => {
+    expect(clampSidebarWidth(300, 700)).toBe(200);
+  });
+});
+
+describe('readStoredSidebarWidth', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('reads a stored number', () => {
+    localStorage.setItem('bower:pref:sidebarWidth', '300');
+    expect(readStoredSidebarWidth()).toBe(300);
+  });
+
+  it('is null when missing, not a number or unparseable', () => {
+    expect(readStoredSidebarWidth()).toBeNull();
+    localStorage.setItem('bower:pref:sidebarWidth', '"300"');
+    expect(readStoredSidebarWidth()).toBeNull();
+    localStorage.setItem('bower:pref:sidebarWidth', '{oops');
+    expect(readStoredSidebarWidth()).toBeNull();
   });
 });
 
