@@ -90,6 +90,40 @@ let cachedToken: DriveToken | null = null;
 let cachedUntil = 0;
 let pendingToken: Promise<DriveToken> | null = null;
 
+/**
+ * Whether the folder the Worker names in a token answer differs from the one
+ * this tab holds (R-VAULT-10): the Worker's pointer moved, so another tab or
+ * device re-pointed. A side that is not known never counts as a mismatch. Pure.
+ */
+export function isFolderMismatch(
+  expected: string | null,
+  actual: string | null,
+): boolean {
+  return expected !== null && actual !== null && expected !== actual;
+}
+
+/** The folder's display name from a Drive `files.get` answer, or `null` (R-VAULT-11). Pure. */
+export function folderNameOf(file: unknown): string | null {
+  if (typeof file !== 'object' || file === null) return null;
+  const name = (file as Record<string, unknown>).name;
+  return typeof name === 'string' && name !== '' ? name : null;
+}
+
+let expectedFolderId: string | null = null;
+let onFolderMismatch: (() => void) | null = null;
+
+/**
+ * Registers the folder this tab holds and what to do when `/drive/token`
+ * names another (`session.tsx`: re-read `me`). Pass `null` to stop watching.
+ */
+export function watchFolder(
+  folderId: string | null,
+  handler: (() => void) | null,
+): void {
+  expectedFolderId = folderId;
+  onFolderMismatch = handler;
+}
+
 export interface GetTokenOptions {
   /**
    * Skips the cache and asks the Worker for a fresh token (`?fresh=1`),
@@ -117,6 +151,12 @@ export function getToken(options: GetTokenOptions = {}): Promise<DriveToken> {
         cachedToken = token;
         cachedUntil = Date.parse(token.expiresAt) - TOKEN_MARGIN_MS;
         pendingToken = null;
+        if (
+          onFolderMismatch !== null &&
+          isFolderMismatch(expectedFolderId, token.folderId)
+        ) {
+          onFolderMismatch();
+        }
       }
       return token;
     },

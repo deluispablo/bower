@@ -13,7 +13,10 @@ import {
   DriveError,
   exportPlanFor,
   FOLDER_MIME,
+  folderNameOf,
   getBlob,
+  isFolderMismatch,
+  watchFolder,
   getText,
   getToken,
   invalidateToken,
@@ -185,6 +188,47 @@ describe('getToken', () => {
       name: 'ApiError',
       code: 'reauth',
     });
+  });
+});
+
+describe('folder mismatch (R-VAULT-10)', () => {
+  afterEach(() => {
+    watchFolder(null, null);
+  });
+
+  it('isFolderMismatch only counts two known, different ids', () => {
+    expect(isFolderMismatch('A', 'B')).toBe(true);
+    expect(isFolderMismatch('A', 'A')).toBe(false);
+    expect(isFolderMismatch(null, 'B')).toBe(false);
+    expect(isFolderMismatch('A', null)).toBe(false);
+  });
+
+  it('calls the handler when the token names another folder', async () => {
+    stubFetch(() => jsonResponse(500, {}));
+    const handler = vi.fn();
+    watchFolder('OTHER_FOLDER_ID', handler);
+
+    await getToken();
+
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('stays quiet when the folder matches', async () => {
+    stubFetch(() => jsonResponse(500, {}));
+    const handler = vi.fn();
+    watchFolder('FOLDER_ID', handler);
+
+    await getToken();
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+});
+
+describe('folderNameOf (R-VAULT-11)', () => {
+  it('reads the name Drive reports', () => {
+    expect(folderNameOf({ id: 'FOLDER_ID', name: 'Bower' })).toBe('Bower');
+    expect(folderNameOf({ name: '' })).toBeNull();
+    expect(folderNameOf(null)).toBeNull();
   });
 });
 
