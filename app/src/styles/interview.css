@@ -27,7 +27,7 @@
 
 .interview-chip.is-on {
   background: var(--color-brand-tint);
-  border-color: var(--color-brand);
+  border-color: var(--color-accent-line);
   color: var(--color-link);
 }
 

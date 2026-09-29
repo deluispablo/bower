@@ -29,14 +29,14 @@
   bottom: 8px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--color-scrim);
   color: #f1f5f9;
   font-size: 0.8125rem;
 }
 
 .photo-viewer-open:focus-visible,
 .photo-viewer-button:focus-visible {
-  outline: 2px solid #5fcfbc;
+  outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 

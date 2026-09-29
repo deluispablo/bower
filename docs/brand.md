@@ -85,7 +85,7 @@ Brand colours: teal `#5fcfbc`, deep navy `#0b1220`, amber `#f0b64f`. Light is wa
 | `--color-focus` | Focus ring (the same values as `--color-accent-line`) | `#278074` | `#5fcfbc` |
 | `--color-danger` | Errors | `#e12020` | `#ef8a8a` |
 | `--color-on-danger` | Text on a `--color-danger` fill (e.g. the danger button) | `#ffffff` | `#0b1220` |
-| `--color-success` | Confirmations | `#2d8250` | `#7ed3a1` |
+| `--color-success` | Confirmations | `#256f43` | `#7ed3a1` |
 | `--color-on-success` | Text on a `--color-success` fill (e.g. the "done" button) | `#ffffff` | `#0b1220` |
 
 The soft set (the design canvas's Brand board, spec §14) gives one accent value each for teal, amber, success and danger; on light, `--color-link`/`--color-focus` and `--color-danger`/`--color-success` are a darker shade of the same hue instead of the literal accent, because the accent value alone fails AA as text or a fill's own text on the light (warm) page — see the contrast table. Dark uses the literal accent values throughout.
@@ -103,7 +103,7 @@ Contrast (WCAG 2.1; AA needs 4.5:1 for body text, 3:1 for control outlines):
 | link on bg | 4.51 | 9.23 |
 | link on surface | 4.74 | 8.16 |
 | danger on bg | 4.50 | 7.19 |
-| success on bg | 4.51 | 9.71 |
+| success on bg | 5.81 | 9.71 |
 | on-brand on brand | 9.93 | 9.93 |
 | on-accent on accent | 10.26 | 10.26 |
 | border-strong on bg | 4.52 | 3.66 |
@@ -118,13 +118,13 @@ Added for the v5 screens (runs, notes, folders). Values are in `app/src/styles/t
 | Token | Light | Dark | Use | Contrast check |
 | --- | --- | --- | --- | --- |
 | `--color-scrim` | `rgb(7 12 22 / .5)` | `rgb(5 9 18 / .62)` | Every scrim (replaces the hard-coded ones) | none, not text |
-| `--color-warn` | `#9a6408` | `#f0b64f` | Partly done, Needs you, Check | 4.75:1 on bg, 5.00:1 on surface; 9.54:1 on bg, 8.43:1 on surface |
-| `--color-warn-bg` | `rgb(154 100 8 / .1)` | `rgb(240 182 79 / .12)` | Warn boxes | text uses `--color-text`: 13.10:1 and 10.88:1 on bg |
+| `--color-warn` | `#865605` | `#f0b64f` | Partly done, Needs you, Check | 5.96:1 on bg, 6.27:1 on surface (5.18:1 on its tint over bg, 5.43:1 over surface); 9.54:1 on bg, 8.43:1 on surface |
+| `--color-warn-bg` | `rgb(134 86 5 / .1)` | `rgb(240 182 79 / .12)` | Warn boxes | text uses `--color-text`: 12.97:1 and 10.88:1 on bg |
 | `--color-danger-bg` | `rgb(225 32 32 / .08)` | `rgb(239 138 138 / .12)` | Did not finish | text uses `--color-danger-text` |
 | `--color-danger-text` | `#c21b1b` | `#ef8a8a` | Small text on `--color-danger-bg` | 5.10:1 on the tint over bg; 5.98:1 dark |
-| `--color-success-bg` | `rgb(45 130 80 / .1)` | `rgb(126 211 161 / .12)` | Done steps, high score | text uses `--color-text`: 13.17:1 and 10.79:1 on bg |
-| `--color-updated` | `#2f63b8` | `#93c5fd` | The "Updated" tag and the rule-change line (same as `--color-origin-web`) | 5.54:1 and 9.65:1 on bg |
-| `--color-updated-bg` | `rgb(47 99 184 / .18)` | `rgb(147 197 253 / .2)` | Tint behind `--color-updated` | none; use it for large or bold text only |
+| `--color-success-bg` | `rgb(37 111 67 / .1)` | `rgb(126 211 161 / .12)` | Done steps, high score | text uses `--color-text`: 12.96:1 and 10.79:1 on bg |
+| `--color-updated` | `#2859a8` | `#93c5fd` | The "Updated" tag and the rule-change line (same as `--color-origin-web`) | 6.47:1 (5.02:1 on its tint over bg, 5.27:1 over surface) and 9.65:1 on bg |
+| `--color-updated-bg` | `rgb(47 99 184 / .18)` | `rgb(147 197 253 / .2)` | Tint behind `--color-updated` | `--color-updated` text reaches 5.02:1 (bg) and 5.27:1 (surface) |
 | `--color-accent-line` | `#278074` | `#5fcfbc` | Strokes, see below | 4.51:1 on bg, 4.74:1 on surface, 4.13:1 on sidebar (light); 9.23:1 on bg (dark) |
 | `--z-chip` `--z-toast` `--z-scrim` `--z-overlay` `--z-viewer` | 30, 35, 40, 41, 100 | same | The stacking order | none |
 | `--radius-sheet` | `20px` | same | The sheet's top corners | none |
