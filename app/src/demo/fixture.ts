@@ -863,6 +863,51 @@ Used: the four listings, your offer letter and Cycle to Work agreement, routes a
 `,
   },
 
+  // --- A text copy of a document of no listed kind (R-NOTE-8, D21) ----------
+  {
+    path: '2-Areas/Work/CV 2026.docx',
+    mimeType:
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    modifiedTime: at(25, '0900'),
+    content: stub('CV 2026', 'application/octet-stream'),
+    size: 48 * KIB,
+    appProperties: { bowerOrigin: 'filed' },
+  },
+  {
+    path: '2-Areas/Work/CV 2026.md',
+    modifiedTime: at(25, '0905'),
+    content: `---
+by: bower
+tags: [work]
+created: 2026-09-25
+updated: 2026-09-25
+original: "[[CV 2026.docx]]"
+facts:
+  Role: Data engineer
+  Years: 6
+---
+
+> [!bower] Bower's note
+> Alex's CV: six years in data engineering, the last three at one company. (from the file)
+
+## The document
+
+# Alex, data engineer
+
+### Professional summary
+
+Data engineer with six years of experience building reporting pipelines.
+
+### Experience
+
+Three years at Fictional Retail Ltd, before that two at a small analytics firm.
+
+### Skills
+
+SQL, Python, dbt.
+`,
+  },
+
   // --- Written by Alex -------------------------------------------------------
   // (`Notes from the viewing.md` is in the Projects block above.)
 
