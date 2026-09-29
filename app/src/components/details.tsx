@@ -41,6 +41,9 @@ const BOOKKEEPING_KEYS: ReadonlySet<string> = new Set([
   'cssclasses',
   'title',
   'created',
+  'updated',
+  'date',
+  'type',
   'source',
   'pages',
 ]);
@@ -85,6 +88,18 @@ function originOf(
   return origins[key] ?? (field?.forYou === true ? 'notes' : 'file');
 }
 
+/** The value with its companion `<key>_note` from frontmatter, when there is
+ * one: "14 min, from your offer letter". Fit is a score out of 100 (board
+ * `Phone-Note-Details-Open`: "72 of 100: cheap, close"). */
+function withNote(key: string, value: string, meta: NoteMeta): string {
+  const note = formatFieldValue(
+    { key, label: key, type: 'text', group: MORE_GROUP },
+    meta.fields[`${key}_note`],
+  );
+  if (note === '') return value;
+  return key === 'fit' ? `${value} of 100: ${note}` : `${value}, ${note}`;
+}
+
 /** The rows Details shows, by group in the kind's order, then "More". */
 export function detailsGroups(
   kind: Kind,
@@ -105,14 +120,16 @@ export function detailsGroups(
       ?.rows.push({
         key: field.key,
         label: field.label,
-        value,
+        value: withNote(field.key, value, meta),
         origin: originOf(field, field.key, origins),
       });
   }
 
   const more: Row[] = [];
   for (const [key, raw] of Object.entries(meta.fields)) {
-    if (known.has(key) || BOOKKEEPING_KEYS.has(key)) continue;
+    if (known.has(key) || BOOKKEEPING_KEYS.has(key) || key.endsWith('_note')) {
+      continue;
+    }
     const value = formatFieldValue(
       { key, label: key, type: 'text', group: MORE_GROUP },
       raw,

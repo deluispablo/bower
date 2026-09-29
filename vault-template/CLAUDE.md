@@ -2,7 +2,7 @@
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-29
-bower_rules_version: 19
+bower_rules_version: 20
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -160,7 +160,7 @@ Bower only files, by default: an original lands in its PARA folder as it is, sen
 ### Kinds (the documents that get a companion note)
 Bower recognises eight kinds of document. For each, the list gives the `kind` value and its name; the key facts, in order (at most four); the status values, in order (`none` when the kind has none); how the app compares notes of that kind; then its fields, grouped and ordered as the app's Details shows them, each as the frontmatter key, the label the app shows and the type. The app keeps the same list: never invent a kind, and never write a field key the kind does not have unless a rule adds it.
 - Types: `text` plain words; `number` a bare number (`72`); `money` the amount with its currency (`£2,150`, `€38.40`); `date` `YYYY-MM-DD`, or `YYYY-MM` when only the month is known; `link` a web address; `note-link` a `[[wikilink]]` to another note.
-- A field marked `for you` comes from the owner's own notes, never from the document.
+- A field marked `for you` comes from the owner's own notes, never from the document. When a `for you` field needs a reason, add a companion `<key>_note` of at most 12 words after it in the frontmatter (`bike_to_office: 14 min` then `bike_to_office_note: from your offer letter and Cycle to Work agreement`); the app reads the two as one line.
 - `rooms` is written `2 bed, 1 bath`: the app shows the part before the comma as the key fact.
 
 **rental-listing** (rental listing)

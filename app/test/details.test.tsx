@@ -137,3 +137,27 @@ describe('Details (issue #603)', () => {
     expect(titles()).not.toContain('More');
   });
 });
+
+describe('Details notes and bookkeeping (issue #705)', () => {
+  it('writes a value with its companion note and hides bookkeeping keys', async () => {
+    mount({
+      ...SAMPLE,
+      bike_to_office: '14 min',
+      bike_to_office_note: 'from your offer letter',
+      fit: 72,
+      fit_note: 'cheap, close',
+      updated: '2026-09-29',
+      date: '2026-09-29',
+      type: 'Flat',
+      extra_note: 'stray',
+      pet_policy: 'No pets',
+    });
+    await click('.details-toggle');
+    const text = host.textContent ?? '';
+    expect(text).toContain('14 min, from your offer letter');
+    expect(text).toContain('72 of 100: cheap, close');
+    expect(text).toContain('No pets');
+    expect(text).not.toContain('stray');
+    expect(text).not.toContain('2026-09-29');
+  });
+});
