@@ -31,6 +31,10 @@ PAIRS = [
     ("danger-text", "danger-bg@bg", 4.5), ("danger-text", "danger-bg@surface", 4.5),
     ("text", "success-bg@bg", 4.5),
     ("updated", "bg", 4.5), ("updated", "surface", 4.5),
+    # Tinted text (12-14 px): the text colour on its own tint, over the page and the surface.
+    ("warn", "warn-bg@bg", 4.5), ("warn", "warn-bg@surface", 4.5),
+    ("updated", "updated-bg@bg", 4.5), ("updated", "updated-bg@surface", 4.5),
+    ("success", "success-bg@bg", 4.5), ("success", "success-bg@surface", 4.5),
     # Strokes (WCAG 1.4.11): the accent line and the focus ring.
     ("accent-line", "bg", 3.0), ("accent-line", "surface", 3.0),
     ("accent-line", "sidebar", 3.0), ("focus", "bg", 3.0),

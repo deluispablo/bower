@@ -76,7 +76,7 @@
   --color-focus: #278074;
   --color-danger: #e12020;
   --color-on-danger: #ffffff;
-  --color-success: #2d8250;
+  --color-success: #256f43;
   --color-on-success: #ffffff;
   /* Recent's type icons (handover C.4): an answer Bower wrote is purple. */
   --color-type-answer: #6d4bc2;
@@ -154,13 +154,13 @@
   --color-new-on: #ffffff;
 
   --color-scrim: rgb(7 12 22 / 0.5);
-  --color-warn: #9a6408;
-  --color-warn-bg: rgb(154 100 8 / 0.1);
+  --color-warn: #865605;
+  --color-warn-bg: rgb(134 86 5 / 0.1);
   --color-danger-bg: rgb(225 32 32 / 0.08);
   /* Text on --color-danger-bg; #e12020 stays for fills (v5 spec Q3). */
   --color-danger-text: #c21b1b;
-  --color-success-bg: rgb(45 130 80 / 0.1);
-  --color-updated: #2f63b8;
+  --color-success-bg: rgb(37 111 67 / 0.1);
+  --color-updated: #2859a8;
   --color-updated-bg: rgb(47 99 184 / 0.18);
   /* Strokes: focus rings, selected outlines, the current row's bar, the
      spinner arc, the progress bar, the selected radio. #5fcfbc on cream is
