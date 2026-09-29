@@ -7,7 +7,7 @@ import { Layout } from './components/layout.js';
 import { Home } from './routes/home.js';
 import { Login } from './routes/login.js';
 import { RunProvider, useRun } from './run-store.js';
-import { RunChipHost } from './components/run-chip.js';
+import { RunChipHost } from './components/run-chip-host.js';
 import { ShellSlotsProvider } from './components/shell-slots.js';
 import { SessionProvider, useSession } from './session.js';
 import { JUST_FILED_PATH } from './just-filed.js';

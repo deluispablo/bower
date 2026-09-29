@@ -1,14 +1,11 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { render } from 'preact';
+import type { VNode } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  RunChip,
-  chipModel,
-  isTextField,
-} from '../src/components/run-chip.js';
+import { RunChip, chipModel, isTextField } from '../src/components/run-chip.js';
 import type { ChipInput } from '../src/components/run-chip.js';
 import {
   RUN_CHIP_LIFETIME_MS,
@@ -34,10 +31,10 @@ function input(overrides: Partial<ChipInput>): ChipInput {
 
 let host: HTMLElement | undefined;
 
-function mount(vnode: ReturnType<typeof h>): HTMLElement {
+function mount(vnode: VNode): HTMLElement {
   host = document.createElement('div');
   document.body.append(host);
-  act(() => {
+  void act(() => {
     render(vnode, host as HTMLElement);
   });
   return host;
@@ -117,7 +114,9 @@ describe('chipModel: the four states', () => {
 describe('chipModel: lifetime', () => {
   it('a seen result has no chip', () => {
     const run = buildRun('done');
-    expect(chipModel(input({ lastFinished: run, resultSeen: true }))).toBeNull();
+    expect(
+      chipModel(input({ lastFinished: run, resultSeen: true })),
+    ).toBeNull();
   });
 
   it('a result goes after 24 hours', () => {
@@ -169,7 +168,9 @@ describe('RunChip', () => {
   if (model === null) throw new Error('fixture has no chip');
 
   it('is a polite status with one button named in full', () => {
-    const root = mount(h(RunChip, { model, desktop: false, onOpen: vi.fn() }));
+    const root = mount(
+      <RunChip model={model} desktop={false} onOpen={vi.fn()} />,
+    );
     const status = root.querySelector('[role="status"]');
     expect(status?.getAttribute('aria-live')).toBe('polite');
     const button = root.querySelector('button');
@@ -191,12 +192,14 @@ describe('RunChip', () => {
       return m;
     };
     const onOpen = vi.fn();
-    const root = mount(h(RunChip, { model: at(1), desktop: false, onOpen }));
+    const root = mount(
+      <RunChip model={at(1)} desktop={false} onOpen={onOpen} />,
+    );
     const said = (): string =>
       root.querySelector('.run-chip-announce')?.textContent ?? '';
     expect(said()).toBe('Tidying up 2 things');
-    act(() => {
-      render(h(RunChip, { model: at(3), desktop: false, onOpen }), root);
+    void act(() => {
+      render(<RunChip model={at(3)} desktop={false} onOpen={onOpen} />, root);
     });
     expect(said()).toBe('Tidying up 2 things');
     expect(root.querySelector('button')?.getAttribute('aria-label')).toContain(
@@ -206,8 +209,10 @@ describe('RunChip', () => {
 
   it('opens the sheet on a click', () => {
     const onOpen = vi.fn();
-    const root = mount(h(RunChip, { model, desktop: true, onOpen }));
-    act(() => {
+    const root = mount(
+      <RunChip model={model} desktop={true} onOpen={onOpen} />,
+    );
+    void act(() => {
       root.querySelector('button')?.click();
     });
     expect(onOpen).toHaveBeenCalledOnce();

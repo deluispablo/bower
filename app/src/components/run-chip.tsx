@@ -3,7 +3,7 @@
  * states (running, done, partly done, did not finish). On a phone it is the
  * docked row above the tab bar, from 900 px a pill in the top bar; both are
  * the shell's `tidyBar` slot (#741), so placement is the layout's job and
- * this file only fills the slot. `RunChipHost` does that, once, for the whole
+ * this file only fills the slot. `RunChipFiller` does that, once, for the whole
  * app: it hides on Home (the greeting carries the run there), on the routes
  * with no shell, and on a phone while a text field has focus (the on-screen
  * keyboard is open, R-CHIP-6).
@@ -272,11 +272,7 @@ export interface RunChipProps {
   onOpen: () => void;
 }
 
-export function RunChip({
-  model,
-  desktop,
-  onOpen,
-}: RunChipProps): JSX.Element {
+export function RunChip({ model, desktop, onOpen }: RunChipProps): JSX.Element {
   // Set after mount, so a chip that appears is announced like one that changes.
   const [said, setSaid] = useState('');
   useEffect(() => {
@@ -315,9 +311,11 @@ export function RunChip({
 
 /**
  * Fills the shell's `tidyBar` slot; renders nothing itself. Mounted once,
- * inside the shell slots provider (`app.tsx`).
+ * inside the shell slots provider, by `RunChipHost` (`run-chip-host.tsx`),
+ * which loads this module after start so the chip stays out of the startup
+ * budget (#41).
  */
-export function RunChipHost(): null {
+export function RunChipFiller(): null {
   const { phase, run, lastFinished, resultSeen, now, openSheet } = useRun();
   const { path } = useLocation();
   const desktop = useMediaQuery('(min-width: 900px)');
@@ -345,7 +343,6 @@ export function RunChipHost(): null {
         <RunChip model={model} desktop={desktop} onOpen={openSheet} />
       ),
     // `model` is rebuilt every tick; `signature` says when it really changed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [signature, desktop, openSheet],
   );
   useShellSlot('tidyBar', content);

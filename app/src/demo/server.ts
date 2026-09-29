@@ -194,7 +194,7 @@ export class DemoServer {
    */
   private heldRun(): Run | null {
     if (this.storage === null) return null;
-    let held: string | null = null;
+    let held: string | null;
     try {
       held = this.storage.getItem(DEMO_RUN_KEY);
     } catch {
