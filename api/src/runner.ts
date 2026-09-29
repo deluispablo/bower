@@ -46,7 +46,7 @@ import { HttpError } from './errors.js';
 import { dispatchLint } from './github.js';
 import type { FetchLike } from './google.js';
 import { RUN_TICKET_TTL_MS } from './process.js';
-import { sendPush } from './push.js';
+import { runPushBody, sendPush } from './push.js';
 import type { PushPayload } from './push.js';
 import { checkRunTicket, issueRunTicket } from './run-ticket.js';
 import {
@@ -641,10 +641,8 @@ function applyReport(
 
 /**
  * The notification for a finished run. An ingest (or a run without `kind`)
- * says how many files were tidied up (`done`), that there was nothing to
- * do (`done` with none), or that the run failed, and opens `/`; a `done`
- * body gets a short " · n set aside" suffix when the run quarantined
- * anything. A lint says the health check is ready or failed, and opens
+ * says the four counts, partly done or did not finish (`runPushBody`), and
+ * opens `/`. A lint says the health check is ready or failed, and opens
  * `/health`. Never a file name or the summary.
  */
 export function runPushPayload(run: Run): PushPayload {
@@ -656,18 +654,7 @@ export function runPushPayload(run: Run): PushPayload {
       url: '/health',
     };
   }
-  let body: string;
-  if (run.state === 'failed') {
-    body = 'Something went wrong';
-  } else {
-    const count = run.processed?.length ?? 0;
-    body =
-      count === 0
-        ? 'Nothing new to tidy up'
-        : `${count} ${count === 1 ? 'file' : 'files'} tidied up`;
-    const quarantined = run.quarantined?.length ?? 0;
-    if (quarantined > 0) body += ` · ${quarantined} set aside`;
-  }
+  const body = runPushBody(run);
   return { title: 'Bower', body, url: '/' };
 }
 
