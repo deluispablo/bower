@@ -356,8 +356,8 @@ export function readingLine(path: string): string {
 export function destinationsLabel(rows: readonly RunRow[]): string | null {
   const names: string[] = [];
   for (const { destination } of rows) {
-    if (destination !== null && !names.includes(destination)) {
-      names.push(destination);
+    if (destination !== null && !names.includes(displayName(destination))) {
+      names.push(displayName(destination));
     }
   }
   return names.length === 0 ? null : names.slice(0, 3).join(' · ');
