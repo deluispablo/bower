@@ -413,6 +413,17 @@ const GROUP_HEADING: Readonly<Record<OutcomeAction, string>> = {
   filed: 'Filed',
 };
 
+/**
+ * The New chip shows only on a row whose action is a new note that this
+ * device has not opened; a Filed row already carries its Filed tag.
+ */
+export function showsNewChip(
+  row: Pick<TableRow, 'action' | 'id'>,
+  unseen: ReadonlySet<string>,
+): boolean {
+  return row.action === 'new' && row.id !== undefined && unseen.has(row.id);
+}
+
 export const SAY_LABEL = 'Tell Bower what it is';
 export const NO_CHANGE = '—';
 const STILL_WAITING = 'Still in your inbox for the next tidy-up.';

@@ -38,6 +38,7 @@ import {
   runKey,
   runLine,
   SAY_LABEL,
+  showsNewChip,
   stateLabel,
   tableRows,
   youAdded,
@@ -146,7 +147,7 @@ interface ViewProps {
 }
 
 function isUnseen(row: TableRow, unseen: ReadonlySet<string>): boolean {
-  return row.id !== undefined && unseen.has(row.id);
+  return showsNewChip(row, unseen);
 }
 
 function Changed({ row }: { row: TableRow }): JSX.Element {
