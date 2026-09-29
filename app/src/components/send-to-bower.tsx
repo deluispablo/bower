@@ -118,9 +118,7 @@ export function SendToBower({
           ? 'In your inbox. Bower answers at the next tidy-up.'
           : 'In your inbox. Bower renames it at the next tidy-up.',
         undefined,
-        id === null
-          ? undefined
-          : { label: 'Undo', run: () => void undo(id as string) },
+        id === null ? undefined : { label: 'Undo', run: () => void undo(id) },
       );
       onClose();
       return;
@@ -140,8 +138,9 @@ export function SendToBower({
     ref: field,
     value,
     'aria-label': copy.label,
-    onInput: (event: JSX.TargetedEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setValue(event.currentTarget.value),
+    onInput: (
+      event: JSX.TargetedEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) => setValue(event.currentTarget.value),
   };
 
   return (
@@ -224,7 +223,9 @@ export function SendToBower({
 }
 
 /** Opens the sheet on the overlay queue; it closes with `onClose`. */
-export function openSendToBower(props: Omit<SendToBowerProps, 'onClose'>): void {
+export function openSendToBower(
+  props: Omit<SendToBowerProps, 'onClose'>,
+): void {
   open({
     id: SEND_TO_BOWER_ID,
     priority: OVERLAY_PRIORITY.own,

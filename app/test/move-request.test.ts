@@ -231,9 +231,9 @@ describe('writeRequestNote and undoRequestNote', () => {
       order.push('written');
       return { id: 'NOTE_ID' };
     });
-    const startRun = vi.fn().mockImplementation(async () => {
+    const startRun = vi.fn().mockImplementation(() => {
       order.push('run');
-      return true;
+      return Promise.resolve(true);
     });
     await sendMoveRequest(
       { createTextFile, startRun },
@@ -256,7 +256,9 @@ describe('writeRequestNote and undoRequestNote', () => {
 
   it('Undo sends the note to the Bin', async () => {
     const deleteFile = vi.fn().mockResolvedValue(undefined);
-    await expect(undoRequestNote(deleteFile, 'NOTE_ID')).resolves.toBe('undone');
+    await expect(undoRequestNote(deleteFile, 'NOTE_ID')).resolves.toBe(
+      'undone',
+    );
     expect(deleteFile).toHaveBeenCalledWith('NOTE_ID');
   });
 
