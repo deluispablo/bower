@@ -88,7 +88,7 @@ async function mountAdd(): Promise<void> {
 
 function driveButtons(): HTMLButtonElement[] {
   return Array.from(root.querySelectorAll('button')).filter(
-    (b) => b.textContent?.includes('From your Drive') ?? false,
+    (b) => b.getAttribute('aria-label') === 'From your Drive',
   );
 }
 
@@ -122,21 +122,22 @@ describe('Add from your Drive in a demo build', () => {
   it('leaves the other doors working', async () => {
     state.demo = true;
     await mountAdd();
-    const chooseFiles = Array.from(root.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('Choose files'),
+    const chooseFiles = Array.from(root.querySelectorAll('button')).find(
+      (b) => b.getAttribute('aria-label') === 'Choose files',
     );
+    expect(chooseFiles).toBeDefined();
     expect(chooseFiles?.disabled).toBeFalsy();
   });
 });
 
 describe('Add doors per the boards (R-ADD-1)', () => {
-  it('reads the three short door words, with no subtitles', async () => {
+  it('reads the four short door words, with no subtitles', async () => {
     state.demo = false;
     await mountAdd();
     const words = Array.from(
       root.querySelectorAll('.add-doors > button.add-door'),
     ).map((b) => b.textContent);
-    expect(words).toContain('Files');
+    expect(words).toEqual(expect.arrayContaining(['Files', 'Link']));
     expect(root.textContent).not.toContain('voice memos');
     expect(root.textContent).not.toContain('In the demo it stays in the page');
   });

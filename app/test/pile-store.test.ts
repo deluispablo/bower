@@ -389,3 +389,110 @@ describe('R-PILE-8: a note moved out of the inbox', () => {
     expect(store.getPiles()[0]?.items.map((i) => i.name)).toEqual(['b.pdf']);
   });
 });
+
+// #770 (R-PILE-3): the waiting piles come back from the inbox listing.
+describe('parsePileNote and adoptPile', () => {
+  const NOTE = [
+    '---',
+    'tags: [instruction]',
+    'date: 2026-09-29T09:00:00.000Z',
+    'via: app',
+    'kind: context',
+    'pile: PILE_1',
+    '---',
+    '',
+    'Five job offers.',
+    '',
+    '## Applies to',
+    '',
+    '- a.pdf',
+    '- b.pdf',
+    '',
+  ].join('\n');
+
+  function noteFile(): DriveFile {
+    return {
+      id: 'NOTE_OLD',
+      name: 'Bower - 2026-09-29 0900-00 Context ab.md',
+      mimeType: 'text/markdown',
+      parents: [INBOX],
+      modifiedTime: '2026-09-29T09:00:00.000Z',
+      path: 'Bower - 2026-09-29 0900-00 Context ab.md',
+    };
+  }
+
+  function present(...names: string[]): Map<string, DriveFile> {
+    return new Map(
+      names.map((name) => [
+        name,
+        {
+          id: `FILE_${name}`,
+          name,
+          mimeType: 'application/pdf',
+          parents: [INBOX],
+          path: name,
+        },
+      ]),
+    );
+  }
+
+  it('reads the id, the words, the files and the start time', () => {
+    expect(store.parsePileNote(NOTE)).toEqual({
+      id: 'PILE_1',
+      text: 'Five job offers.',
+      names: ['a.pdf', 'b.pdf'],
+      date: '2026-09-29T09:00:00.000Z',
+    });
+  });
+
+  it('is null for a note with no pile id', () => {
+    expect(store.parsePileNote(NOTE.replace('pile: PILE_1\n', ''))).toBeNull();
+    expect(store.parsePileNote('Just some words.')).toBeNull();
+  });
+
+  it('adopts the pile closed, with the files the listing still has', () => {
+    const fields = store.parsePileNote(NOTE);
+    if (fields === null) throw new Error('note not parsed');
+    const pile = store.adoptPile(
+      INBOX,
+      noteFile(),
+      fields,
+      present('a.pdf', 'b.pdf'),
+    );
+    expect(pile).toMatchObject({
+      id: 'PILE_1',
+      noteFileId: 'NOTE_OLD',
+      text: 'Five job offers.',
+      closed: true,
+    });
+    expect(pile?.items.map((i) => [i.name, i.fileId, i.state])).toEqual([
+      ['a.pdf', 'FILE_a.pdf', 'done'],
+      ['b.pdf', 'FILE_b.pdf', 'done'],
+    ]);
+    expect(store.getPiles()).toHaveLength(1);
+    expect(store.openPile()).toBeUndefined();
+  });
+
+  it('leaves out a file a tidy-up already moved, and a pile with none left', () => {
+    const fields = store.parsePileNote(NOTE);
+    if (fields === null) throw new Error('note not parsed');
+    expect(
+      store.adoptPile(INBOX, noteFile(), fields, present('b.pdf'))?.items,
+    ).toHaveLength(1);
+    store.resetPiles();
+    expect(
+      store.adoptPile(INBOX, noteFile(), fields, present()),
+    ).toBeUndefined();
+    expect(store.getPiles()).toHaveLength(0);
+  });
+
+  it('does not adopt a pile the store already has', () => {
+    const fields = store.parsePileNote(NOTE);
+    if (fields === null) throw new Error('note not parsed');
+    store.adoptPile(INBOX, noteFile(), fields, present('a.pdf'));
+    expect(
+      store.adoptPile(INBOX, noteFile(), fields, present('a.pdf', 'b.pdf')),
+    ).toBeUndefined();
+    expect(store.getPiles()[0]?.items).toHaveLength(1);
+  });
+});

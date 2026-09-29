@@ -1,23 +1,341 @@
 /*
- * Add screen (spec C.6; the v3 Phone-Add and
- * Desktop-Add boards): phone-first, a list of doors and no drop
- * square. `.add-doors` is phone only;
- * `.add-dropzone` (the bird peeking over its top edge) and its own
- * Choose files/From your Drive pair take over from 900 px, the same
- * breakpoint `layout.css` uses for the sidebar. Both live in the DOM at
- * once, so the queue, the link field and the file inputs never need a
- * second copy. The one Tidy up button is `.add-tidy` below. Motion is
- * transform/opacity only, on the motion tokens, and turned off under
- * `prefers-reduced-motion` below.
+ * Add screen (spec §6.15, boards Add-PileEmpty/Filling/Open-375 and
+ * Add-Piles-1280): the new pile card (its note, its files, four doors), the
+ * piles waiting for the tidy-up, and the one filled button, sticky at the
+ * bottom. Phone: one column. From 900 px (the breakpoint `layout.css` uses
+ * for the sidebar): two columns, the new pile on the left, the waiting piles
+ * on the right, and the h1 with its drop line. Motion is transform/opacity
+ * only, on the motion tokens, and turned off under `prefers-reduced-motion`.
  */
 
+.add-drop-line {
+  display: none;
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.add-screen-drop {
+  outline: 2px dashed var(--color-accent-line);
+  outline-offset: 4px;
+  border-radius: var(--radius-md);
+}
+
+.add-columns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.add-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .add-drop-line {
+    display: block;
+  }
+
+  .add-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    gap: var(--space-6);
+  }
+}
+
+/* A pile: the new pile card has the brand border; a waiting pile is a
+ * plain card the person taps to open. */
+.pile-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.pile-card-new {
+  border-color: var(--color-accent-line);
+}
+
+button.pile-card {
+  cursor: pointer;
+}
+
+button.pile-card:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 2px;
+}
+
+.pile-card-head,
+.pile-waiting-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.pile-card-title,
+.pile-waiting-title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.pile-card-count,
+.pile-card-meta,
+.pile-saved {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.pile-saved {
+  margin: 0;
+}
+
+.pile-card-note {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-weight: var(--weight-medium);
+  line-height: 1.4;
+}
+
+.pile-card-none {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.pile-card-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.pile-waiting,
+.pile-elsewhere {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pile-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pile-card-elsewhere {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pile-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.pile-card-foot .pile-saved {
+  flex-basis: 100%;
+}
+
+.pile-another {
+  min-height: 44px;
+}
+
+/* The pile's items: one row each, in the card and in the sheet. */
+.pile-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pile-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+
+.pile-row-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.pile-row-name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.pile-row-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pile-row-progress .add-queue-bar {
+  flex: 1;
+}
+
+.pile-row-state {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.pile-row-ok {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pile-row-ok svg {
+  width: 16px;
+  height: 16px;
+  color: var(--color-success);
+}
+
+.pile-row-error {
+  color: var(--color-danger);
+}
+
+.pile-row-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.pile-row-remove {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.pile-row-remove:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 2px;
+}
+
+/* The pile sheet (Add-PileOpen-375). */
+.pile-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.pile-sheet-title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.pile-sheet-sub {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.pile-note-label {
+  font-weight: 600;
+}
+
+.pile-note {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.4;
+  resize: none;
+}
+
+.pile-note:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 2px;
+}
+
+.pile-more {
+  align-self: flex-start;
+  min-height: 44px;
+}
+
+.pile-remove {
+  align-self: flex-start;
+  min-height: 44px;
+  color: var(--color-danger);
+}
+
+.pile-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pile-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pile-confirm-text {
+  margin: 0;
+  font-weight: var(--weight-medium);
+}
+
+.pile-confirm-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Four doors in one row: 44 px tall, the icon beside its one word. */
 .add-doors {
   display: flex;
   gap: var(--space-2);
-  margin: var(--space-4) 0 var(--space-3);
+  margin: var(--space-2) 0;
 }
 
-/* One row of three (R-ADD-1): 48 px tall, the icon beside its one word. */
 .add-door {
   display: flex;
   flex: 1;
@@ -25,9 +343,9 @@
   justify-content: center;
   gap: var(--space-2);
   min-width: 0;
-  min-height: 48px;
+  min-height: 44px;
   padding: 0 var(--space-2);
-  background: var(--color-surface);
+  background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   color: inherit;
@@ -50,75 +368,8 @@
   margin-top: calc(-1 * var(--space-1));
 }
 
-.add-dropzone {
-  display: none;
-  position: relative;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 12rem;
-  margin: var(--space-6) 0 var(--space-3);
-  padding: calc(var(--space-8) + 2rem) var(--space-4) var(--space-4);
-  border: 2px dashed var(--color-border-strong);
-  border-radius: var(--radius-md);
-  text-align: center;
-  transition:
-    background var(--motion-fast) var(--ease-out),
-    border-color var(--motion-fast) var(--ease-out);
-}
-
-@media (min-width: 900px) {
-  .add-doors,
-  .add-doors-note {
-    display: none;
-  }
-
-  .add-dropzone {
-    display: flex;
-  }
-}
-
-.add-dropzone-active {
-  background: var(--color-surface);
-  border-color: var(--color-accent-line);
-}
-
-/* The bird sits half over the drop zone's own top edge. */
-.add-dropzone-bird {
-  position: absolute;
-  top: -1.25rem;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.add-dropzone-title {
-  margin: 0;
-  font-weight: var(--weight-medium);
-  font-size: var(--text-lg);
-  color: var(--color-heading);
-}
-
-.add-dropzone-hint {
-  max-width: 26rem;
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  line-height: 1.45;
-}
-
-.add-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-}
-
 /* An outline twin of `.button` (`styles/layout.css`), for a screen's second
- * action: Photo next to Choose files, Save next to the link field. */
+ * action: Save next to the link field, Keep next to Remove. */
 .button-secondary {
   background: transparent;
   color: var(--color-text);
@@ -134,7 +385,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  margin: var(--space-3) 0;
+  margin: var(--space-1) 0;
 }
 
 .add-field-row {
@@ -165,17 +416,11 @@
   font-size: var(--text-sm);
 }
 
-/* "What is this?" (#335, Phone-Add board): one optional box under the
- * queue, in its own card. */
+/* "What is this pile?": one optional box at the top of the new pile card. */
 .add-context {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: var(--space-3) 0;
-  padding: 12px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
 }
 
 .add-context label {
@@ -190,7 +435,7 @@
 .add-context textarea {
   box-sizing: border-box;
   width: 100%;
-  min-height: 52px;
+  min-height: 72px;
   padding: 10px 12px;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
@@ -204,70 +449,6 @@
 .add-context textarea:focus-visible {
   outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
-}
-
-.add-queue-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: var(--space-3) 0;
-}
-
-.add-queue-head {
-  margin: 0;
-  font-size: var(--text-lg);
-}
-
-.add-queue {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.add-queue-card {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-}
-
-.add-queue-card-waiting {
-  opacity: 0.7;
-}
-
-.add-queue-icon {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  color: var(--color-text-muted);
-}
-
-.add-queue-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.add-queue-name {
-  overflow: hidden;
-  font-weight: var(--weight-medium);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.add-queue-status {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
 }
 
 .add-queue-bar {
@@ -285,23 +466,8 @@
   transition: width var(--motion-base) var(--ease-out);
 }
 
-.add-queue-sources {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.add-sources-desktop {
-  display: none;
-}
-
-.add-queue-kept {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-/* The one Tidy up button (R-ADD-5): pinned above the bottom tabs on phone,
- * at the foot of the column on desktop. */
+/* The one filled button (R-ADD-0): pinned above the bottom tabs on phone,
+ * at the foot of the page, under the right column, on desktop. */
 .add-tidy {
   position: sticky;
   bottom: calc(64px + env(safe-area-inset-bottom, 0px));
@@ -318,17 +484,18 @@
   font-size: var(--text-base, 16px);
 }
 
+.add-tidy-note {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
 @media (min-width: 900px) {
-  .add-sources-phone {
-    display: none;
-  }
-
-  .add-sources-desktop {
-    display: inline;
-  }
-
   .add-tidy {
     bottom: 0;
+    width: calc(50% - var(--space-3));
+    margin-left: auto;
   }
 }
 
@@ -338,12 +505,7 @@
   font-size: var(--text-sm);
 }
 
-.add-message {
-  color: var(--color-success);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .add-dropzone,
   .add-queue-bar-fill {
     transition: none;
   }

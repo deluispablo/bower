@@ -24,8 +24,15 @@ const fakeFile: DriveFile = {
 };
 
 const location = { path: '/add', route: vi.fn() };
+const noteEntry: DriveFile = {
+  id: 'NOTE_ID',
+  name: 'Bower - note.md',
+  mimeType: 'text/markdown',
+  parents: ['FOLDER_ID'],
+  path: '0-Inbox/Bower - note.md',
+};
 const listFolder = vi.fn<(folderId: string) => Promise<DriveFile[]>>(() =>
-  Promise.resolve([]),
+  Promise.resolve([noteEntry]),
 );
 const upload = vi.fn<
   (
@@ -57,12 +64,18 @@ vi.mock('../src/online.js', () => ({
 }));
 vi.mock('../src/components/upload-chip.js', () => ({
   UploadNotes: () => null,
+  useUploadItems: () => [],
 }));
 // Add sends files through the durable queue (#768); these tests are about
 // Add, so the queue hands each file straight to the `upload` mock.
 vi.mock('../src/upload-queue.js', () => ({
   startUploads: () => Promise.resolve('owner'),
-  uploadQueue: () => ({}),
+  activeItems: () => [],
+  uploadQueue: () => ({
+    items: () => [],
+    subscribe: () => () => undefined,
+    retry: () => undefined,
+  }),
   uploadThroughQueue: (
     _queue: unknown,
     input: { blob: Blob; name: string; parentId: string },
@@ -70,9 +83,13 @@ vi.mock('../src/upload-queue.js', () => ({
   ) => upload(input.parentId, new File([input.blob], input.name), onProgress),
 }));
 vi.mock('../src/drive.js', () => ({
+  INSTRUCTION_APP_PROPERTIES: { bower: 'instruction' },
   listFolder,
   upload,
-  createTextFile: vi.fn(() => Promise.resolve(fakeFile)),
+  createTextFile: vi.fn(() => Promise.resolve(noteEntry)),
+  updateFileText: vi.fn(() => Promise.resolve(noteEntry)),
+  deleteFile: vi.fn(() => Promise.resolve()),
+  getText: vi.fn(() => Promise.resolve('')),
 }));
 vi.mock('../src/share-target.js', () => ({ takeSharedFiles }));
 // #289 added a `useVault()` call to Add (the refresh after a batch's
@@ -94,7 +111,8 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
   useVault: () => ({ files: [], refresh: vi.fn() }),
 }));
 
-const { Add } = await import('../src/routes/add.js');
+const { Add, resetAddDraft } = await import('../src/routes/add.js');
+const { resetPiles } = await import('../src/pile-store.js');
 
 let root: HTMLElement;
 
@@ -130,6 +148,8 @@ describe('Add: shared files', () => {
     // (#334): each test starts it empty rather than inheriting rows left
     // by the previous one.
     setQueue([]);
+    resetPiles();
+    resetAddDraft();
   });
 
   afterEach(() => {
@@ -140,7 +160,7 @@ describe('Add: shared files', () => {
     window.history.pushState({}, '', '/add');
   });
 
-  it('renders a shared file as a waiting card and never uploads it on its own', async () => {
+  it('renders a shared file in the new pile and starts uploading it at once (R-ADD-1)', async () => {
     takeSharedFiles.mockImplementation(() =>
       Promise.resolve([new File(['x'], 'photo.jpg', { type: 'image/jpeg' })]),
     );
@@ -148,16 +168,9 @@ describe('Add: shared files', () => {
     renderAt('?shared=1');
     await waitFor(() => root.textContent?.includes('photo.jpg') === true);
 
-    const card = root.querySelector('.add-queue-card');
-    expect(card?.className).toContain('add-queue-card-waiting');
-    expect(card?.textContent).toContain('Waiting');
-    expect(upload).not.toHaveBeenCalled();
-
-    const addButton = root.querySelector<HTMLButtonElement>('.add-tidy-button');
-    if (addButton === null) throw new Error('Tidy up button missing');
-    void act(() => addButton.click());
     await waitFor(() => upload.mock.calls.length > 0);
-
+    expect(root.querySelector('.pile-row')).not.toBeNull();
+    expect(root.textContent).not.toContain('Waiting');
     expect(upload).toHaveBeenCalledOnce();
   });
 
@@ -165,7 +178,7 @@ describe('Add: shared files', () => {
     renderAt('?shared=1');
     await flush();
 
-    expect(root.querySelector('.add-queue-card')).toBeNull();
+    expect(root.querySelector('.pile-row')).toBeNull();
     expect(upload).not.toHaveBeenCalled();
   });
 
@@ -176,7 +189,7 @@ describe('Add: shared files', () => {
     expect(root.textContent).toContain(
       'Could not receive the shared files. Try again.',
     );
-    expect(root.querySelector('.add-queue-card')).toBeNull();
+    expect(root.querySelector('.pile-row')).toBeNull();
     expect(takeSharedFiles).not.toHaveBeenCalled();
     expect(upload).not.toHaveBeenCalled();
   });
@@ -194,7 +207,7 @@ describe('Add: shared files', () => {
         true,
     );
 
-    expect(root.querySelector('.add-queue-card')).toBeNull();
+    expect(root.querySelector('.pile-row')).toBeNull();
     expect(errorSpy).toHaveBeenCalledWith(new Error('cache blocked'));
   });
 });

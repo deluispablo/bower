@@ -67,7 +67,8 @@ function baseName(path: string): string {
  * filed — so the working sheet never gives it a row, counts it toward the
  * bar, or names it in the Done message.
  */
-const CONTEXT_NOTE = /^Bower - \d{4}-\d{2}-\d{2} \d{4} Context\.md$/;
+const CONTEXT_NOTE =
+  /^Bower - \d{4}-\d{2}-\d{2} \d{4}(?:-\d{2})? Context(?: [0-9a-f]{2})?\.md$/;
 
 /** Whether `path` is Add's own "What is this?" note for its batch. */
 export function isContextNote(path: string): boolean {

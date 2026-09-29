@@ -21,8 +21,10 @@
  * sign-out) actually call.
  */
 
+import { setQueue } from './add-queue-store.js';
 import { clearAll, clearCachedMe } from './cache.js';
 import { invalidateToken } from './drive.js';
+import { resetPiles } from './pile-store.js';
 import { resetPrefs } from './prefs.js';
 import { clearRecentSearches } from './search.js';
 import { SHARE_CACHE_NAME } from './share-target.js';
@@ -50,6 +52,9 @@ export interface ForgetDeviceDeps {
   clearOpened: () => void;
   /** Stops the upload queue and drops its device copies (`upload-queue.ts`). */
   clearUploadQueue: () => Promise<void>;
+  /** Forgets this session's piles and Add's rows: the next person signing in
+   * on this device must not see them (`pile-store.ts`, `add-queue-store.ts`). */
+  clearPiles: () => void;
   /** Drops the last `me` kept for offline starts (`clearCachedMe` in `cache.ts`). */
   clearMe: () => void;
 }
@@ -79,6 +84,7 @@ export async function forgetDevice(deps: ForgetDeviceDeps): Promise<void> {
     runSafely(() => deps.clearRecentSearches()),
     runSafely(() => deps.clearOpened()),
     runSafely(() => deps.clearUploadQueue()),
+    runSafely(() => deps.clearPiles()),
     runSafely(() => deps.clearMe()),
   ]);
 }
@@ -93,6 +99,10 @@ export default function forgetThisDevice(): Promise<void> {
     clearRecentSearches,
     clearOpened,
     clearUploadQueue: () => clearUploadQueue(),
+    clearPiles: () => {
+      resetPiles();
+      setQueue([]);
+    },
     clearMe: clearCachedMe,
   });
 }

@@ -33,8 +33,15 @@ const token: DriveToken = {
 };
 
 const getToken = vi.fn(() => Promise.resolve(token));
+const noteEntry: DriveFile = {
+  id: 'NOTE_ID',
+  name: 'Bower - note.md',
+  mimeType: 'text/markdown',
+  parents: ['INBOX_ID'],
+  path: '0-Inbox/Bower - note.md',
+};
 const listFolder = vi.fn<(folderId: string) => Promise<DriveFile[]>>(() =>
-  Promise.resolve([]),
+  Promise.resolve([noteEntry]),
 );
 const copyOrExportIntoInbox = vi.fn<
   (
@@ -71,12 +78,18 @@ vi.mock('../src/online.js', () => ({
 }));
 vi.mock('../src/components/upload-chip.js', () => ({
   UploadNotes: () => null,
+  useUploadItems: () => [],
 }));
 // Add sends files through the durable queue (#768); these tests are about
 // Add, so the queue hands each file straight to the `upload` mock.
 vi.mock('../src/upload-queue.js', () => ({
   startUploads: () => Promise.resolve('owner'),
-  uploadQueue: () => ({}),
+  activeItems: () => [],
+  uploadQueue: () => ({
+    items: () => [],
+    subscribe: () => () => undefined,
+    retry: () => undefined,
+  }),
   uploadThroughQueue: (
     _queue: unknown,
     input: { blob: Blob; name: string; parentId: string },
@@ -89,7 +102,11 @@ vi.mock('../src/drive.js', async (importOriginal) => {
     FOLDER_MIME: 'application/vnd.google-apps.folder',
     exportPlanFor: actual.exportPlanFor,
     copyOrExportIntoInbox,
-    createTextFile: vi.fn(),
+    INSTRUCTION_APP_PROPERTIES: { bower: 'instruction' },
+    createTextFile: vi.fn(() => Promise.resolve(noteEntry)),
+    updateFileText: vi.fn(() => Promise.resolve(noteEntry)),
+    deleteFile: vi.fn(() => Promise.resolve()),
+    getText: vi.fn(() => Promise.resolve('')),
     getToken,
     listFolder,
     upload: vi.fn(),
@@ -146,7 +163,7 @@ async function mountAdd(apiKey: string): Promise<void> {
 
 function driveButton(): HTMLButtonElement | undefined {
   return Array.from(root.querySelectorAll('button')).find(
-    (b) => b.textContent === 'From your Drive',
+    (b) => b.getAttribute('aria-label') === 'From your Drive',
   );
 }
 
@@ -234,7 +251,7 @@ describe('Add from your Drive', () => {
     ]);
     await waitFor(
       () =>
-        root.querySelectorAll('.add-queue-card').length === 3 &&
+        root.querySelectorAll('.pile-row').length === 3 &&
         (root.textContent ?? '').includes('From your Drive'),
     );
   });
@@ -248,7 +265,7 @@ describe('Add from your Drive', () => {
     ];
     // The inbox listing on mount stays empty.
     listFolder.mockImplementation((id) =>
-      Promise.resolve(id === 'DIR_ID' ? folder : []),
+      Promise.resolve(id === 'DIR_ID' ? folder : [noteEntry]),
     );
     await mountAdd('test-key');
     await pick({

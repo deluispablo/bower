@@ -12,7 +12,7 @@ import {
   linkNoteName,
   linkTitleFromFileName,
 } from '../src/add.js';
-import { setQueue } from '../src/add-queue-store.js';
+import { getQueue, setQueue } from '../src/add-queue-store.js';
 import type { DriveFile } from '../src/drive.js';
 import { HELP_ROWS } from '../src/help-rows.js';
 
@@ -150,8 +150,7 @@ describe('linkTitleFromFileName (#557)', () => {
 });
 
 // #208: Add only ever fills the inbox. Uploading resolves without starting
-// a run — there is no `autoProcessOnAdd` left to call `process()` for. The
-// only way to start one from Add is the Tidy up button in the hint (#320).
+// a run: the only way to start one from Add is the Tidy up button.
 const tidyUp = vi.fn();
 const startRun = vi.fn(() => Promise.resolve());
 const fakeFile: DriveFile = {
@@ -163,8 +162,13 @@ const fakeFile: DriveFile = {
 };
 
 const location = { path: '/add', route: vi.fn() };
+
+// The inbox folder as Drive holds it: the pile notes the app wrote, and the
+// text of notes an earlier visit left (read back by `getText`).
+let notes: DriveFile[] = [];
+const noteTexts = new Map<string, string>();
 const listFolder = vi.fn<(folderId: string) => Promise<DriveFile[]>>(() =>
-  Promise.resolve([]),
+  Promise.resolve(notes),
 );
 const upload = vi.fn<
   (
@@ -173,6 +177,7 @@ const upload = vi.fn<
     onProgress?: (sent: number, total: number) => void,
   ) => Promise<DriveFile>
 >(() => Promise.resolve(fakeFile));
+let noteCount = 0;
 const createTextFile = vi.fn<
   (
     parentId: string,
@@ -180,7 +185,34 @@ const createTextFile = vi.fn<
     content: string,
     options?: unknown,
   ) => Promise<DriveFile>
->(() => Promise.resolve(fakeFile));
+>((parentId, name, content) => {
+  noteCount += 1;
+  const note: DriveFile = {
+    id: `NOTE_${noteCount}`,
+    name,
+    mimeType: 'text/markdown',
+    parents: [parentId],
+    modifiedTime: `2026-09-30T10:00:0${noteCount}.000Z`,
+    path: `0-Inbox/${name}`,
+  };
+  notes = [...notes, note];
+  noteTexts.set(note.id, content);
+  return Promise.resolve(note);
+});
+const updateFileText = vi.fn<(id: string, text: string) => Promise<DriveFile>>(
+  (id, text) => {
+    noteTexts.set(id, text);
+    const note = notes.find((n) => n.id === id);
+    if (note === undefined) return Promise.reject(new Error('not found'));
+    return Promise.resolve(note);
+  },
+);
+const deleteFile = vi.fn<(id: string) => Promise<void>>(() =>
+  Promise.resolve(),
+);
+const getText = vi.fn<(id: string) => Promise<string>>((id) =>
+  Promise.resolve(noteTexts.get(id) ?? ''),
+);
 
 const vault: Vault = {
   folderId: 'FOLDER_ID',
@@ -203,12 +235,18 @@ vi.mock('../src/online.js', () => ({
 }));
 vi.mock('../src/components/upload-chip.js', () => ({
   UploadNotes: () => null,
+  useUploadItems: () => [],
 }));
 // Add sends files through the durable queue (#768); these tests are about
 // Add, so the queue hands each file straight to the `upload` mock.
 vi.mock('../src/upload-queue.js', () => ({
   startUploads: () => Promise.resolve('owner'),
-  uploadQueue: () => ({}),
+  activeItems: () => [],
+  uploadQueue: () => ({
+    items: () => [],
+    subscribe: () => () => undefined,
+    retry: () => undefined,
+  }),
   uploadThroughQueue: (
     _queue: unknown,
     input: { blob: Blob; name: string; parentId: string },
@@ -221,14 +259,11 @@ vi.mock('../src/drive.js', () => ({
   listFolder,
   upload,
   createTextFile,
+  updateFileText,
+  deleteFile,
+  getText,
 }));
-// #289 added a `useVault()` call to Add (the refresh after a batch's
-// worth of uploads). Mocked the same way sibling suites do
-// (`layout.test.ts`, `settings-demo.test.ts`): no real VaultProvider
-// needed for a plain UI check.
-// The last run this session saw finish (#493): `null` unless a test sets
-// it, so `useRun().lastFinished` behaves like the real store's initial
-// state.
+// The last run this session saw finish (#493): `null` unless a test sets it.
 let lastFinished: Run | null = null;
 vi.mock('../src/run-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/run-store.js')>()),
@@ -240,8 +275,8 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
     lastFinished,
   }),
 }));
-// The raw file list the hint counts (#336): three things waiting in the
-// inbox unless a test empties it before rendering.
+// The raw file list the count reads: three things waiting in the inbox
+// unless a test changes it before rendering.
 function inboxFile(name: string): DriveFile {
   return {
     id: `ID_${name}`,
@@ -262,14 +297,14 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
   useVault: () => ({ files: vaultFiles, refresh: vi.fn() }),
 }));
 
-const { Add } = await import('../src/routes/add.js');
-const { resetContext } = await import('../src/add-context.js');
+const { Add, resetAddDraft } = await import('../src/routes/add.js');
+const { getPiles, resetPiles } = await import('../src/pile-store.js');
 
 let root: HTMLElement;
 
 function dropFiles(files: File[]): void {
-  const zone = root.querySelector('.add-dropzone');
-  if (zone === null) throw new Error('dropzone missing');
+  const zone = root.querySelector('.add-screen');
+  if (zone === null) throw new Error('Add screen missing');
   const event = new Event('drop', { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'dataTransfer', { value: { files } });
   void act(() => {
@@ -277,7 +312,7 @@ function dropFiles(files: File[]): void {
   });
 }
 
-/** The one Tidy up button at the foot of the screen (R-ADD-5). */
+/** The one Tidy up button at the foot of the screen (R-ADD-0). */
 function tidyButton(): HTMLButtonElement {
   const button = root.querySelector<HTMLButtonElement>('.add-tidy-button');
   if (button === null) throw new Error('Tidy up button missing');
@@ -299,90 +334,169 @@ async function waitFor(predicate: () => boolean, tries = 30): Promise<void> {
   if (!predicate()) throw new Error('waitFor: condition never became true');
 }
 
+function mount(): void {
+  void act(() => {
+    render(h(Add, {}), root);
+  });
+}
+
+function unmount(): void {
+  void act(() => {
+    render(null, root);
+  });
+}
+
+function buttonNamed(text: string): HTMLButtonElement {
+  const button = Array.from(root.querySelectorAll('button')).find(
+    (b) => b.textContent?.trim() === text,
+  );
+  if (button === undefined) throw new Error(`Button "${text}" missing`);
+  return button;
+}
+
+function typeNote(value: string): HTMLTextAreaElement {
+  const box = root.querySelector<HTMLTextAreaElement>('#add-context');
+  if (box === null) throw new Error('note box missing');
+  void act(() => {
+    box.value = value;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  return box;
+}
+
+function rowNames(): string[] {
+  return Array.from(root.querySelectorAll('.pile-row-name')).map(
+    (el) => el.textContent ?? '',
+  );
+}
+
+function pileNoteFor(name: string): DriveFile {
+  return {
+    id: 'OLD_NOTE',
+    name,
+    mimeType: 'text/markdown',
+    parents: ['FOLDER_ID'],
+    modifiedTime: '2026-09-29T09:00:00.000Z',
+    path: `0-Inbox/${name}`,
+  };
+}
+
+const OLD_PILE_NOTE = [
+  '---',
+  'tags: [instruction]',
+  'date: 2026-09-29T09:00:00.000Z',
+  'via: app',
+  'kind: context',
+  'pile: PILE_1',
+  '---',
+  '',
+  'Five job offers. Score each against my CV.',
+  '',
+  '## Applies to',
+  '',
+  '- Offer A.pdf',
+  '- Offer B.pdf',
+  '',
+].join('\n');
+
 describe('Add', () => {
   beforeEach(() => {
-    // The queue lives in `add-queue-store.js`, module scope, on purpose
-    // (#334: it survives navigating away and back) -- so each test starts
-    // this suite's own instance of it empty rather than inheriting the
-    // previous test's rows.
+    // The queue and the piles live in modules of their own, on purpose (they
+    // survive navigating away and back): each test starts them empty.
     setQueue([]);
+    resetPiles();
+    resetAddDraft();
     lastFinished = null;
-    resetContext();
+    vaultFiles = THREE_WAITING;
+    notes = [];
+    noteTexts.clear();
+    noteCount = 0;
     root = document.createElement('div');
     document.body.append(root);
-    void act(() => {
-      render(h(Add, {}), root);
-    });
+    mount();
   });
 
   afterEach(() => {
-    void act(() => {
-      render(null, root);
-    });
+    unmount();
     root.remove();
     vi.clearAllMocks();
+    upload.mockImplementation(() => Promise.resolve(fakeFile));
   });
 
   it('never mentions the removed "Tidy up right after adding" switch', () => {
     expect(root.textContent).not.toContain('Tidy up right after adding');
   });
 
-  // R-ADD-5: one button carrying the count, no separate hint.
+  // R-ADD-0 (D33): the count in the one filled button; no hint, no other
+  // filled button.
   it('carries the inbox count in the one Tidy up button, with no hint', () => {
     expect(tidyButton().textContent).toBe('Tidy up 3 things');
     expect(root.querySelector('.add-hint')).toBeNull();
     expect(root.querySelectorAll('.process-button')).toHaveLength(1);
+    expect(root.textContent).not.toContain('Done with this pile');
   });
 
-  it('counts the files chosen but not yet uploaded, and says "thing" for one', () => {
+  it('counts what the inbox listing holds, the same number as Home (R-ADD-2)', () => {
+    vaultFiles = [
+      ...THREE_WAITING,
+      inboxFile('Bower - 2026-09-30 1000-00 Context ab.md'),
+    ];
+    unmount();
+    mount();
+    expect(tidyButton().textContent).toBe('Tidy up 3 things');
+  });
+
+  it('says "thing" for one', () => {
+    vaultFiles = [inboxFile('one.pdf')];
+    unmount();
+    mount();
+    expect(tidyButton().textContent).toBe('Tidy up 1 thing');
+  });
+
+  it('hides the button when the inbox is empty (#336)', () => {
     vaultFiles = [];
-    try {
-      void act(() => {
-        render(null, root);
-      });
-      void act(() => {
-        render(h(Add, {}), root);
-      });
-      dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
-      expect(tidyButton().textContent).toBe('Tidy up 1 thing');
-    } finally {
-      vaultFiles = THREE_WAITING;
-    }
+    unmount();
+    mount();
+    expect(root.querySelector('.add-tidy')).toBeNull();
+    expect(root.querySelector('.process-button')).toBeNull();
   });
 
-  it('reads "Tidy up 5 things" with five items and opens the confirmation once they are in', async () => {
-    vaultFiles = [];
-    try {
-      void act(() => {
-        render(null, root);
-      });
-      void act(() => {
-        render(h(Add, {}), root);
-      });
-      dropFiles(
-        ['a', 'b', 'c', 'd', 'e'].map(
-          (n) => new File([n], `${n}.txt`, { type: 'text/plain' }),
-        ),
-      );
-      expect(tidyButton().textContent).toBe('Tidy up 5 things');
-      void act(() => tidyButton().click());
-      await waitFor(() => tidyUp.mock.calls.length === 1);
-      expect(upload).toHaveBeenCalledTimes(5);
-    } finally {
-      vaultFiles = THREE_WAITING;
-    }
+  it('goes straight to the confirmation, uploading nothing', () => {
+    void act(() => tidyButton().click());
+    expect(upload).not.toHaveBeenCalled();
+    expect(tidyUp).toHaveBeenCalledTimes(1);
+    expect(startRun).not.toHaveBeenCalled();
   });
 
-  // #333: the phone doors, the drop zone (both in the DOM; `add.css`'s
-  // breakpoint picks which one shows), and the line about sharing in from
-  // another app.
-  it('lists the doors as one row: Files, then Drive when it shows (R-ADD-1)', () => {
+  it('says how many are still uploading under the button', async () => {
+    upload.mockImplementation(() => new Promise<DriveFile>(() => undefined));
+    dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
+    await flush();
+    expect(root.querySelector('.add-tidy-note')?.textContent).toBe(
+      '1 still uploading will wait for the next tidy-up',
+    );
+    expect(root.textContent).toContain(
+      '1 thing · 0 in your inbox, 1 uploading',
+    );
+  });
+
+  // R-ADD-1: no "Waiting" state; every attached file starts uploading.
+  it('starts uploading a dropped file at once, with no Waiting state', async () => {
+    dropFiles([
+      new File(['a'], 'a.txt', { type: 'text/plain' }),
+      new File(['b'], 'b.txt', { type: 'text/plain' }),
+    ]);
+    await waitFor(() => upload.mock.calls.length === 2);
+    expect(rowNames()).toEqual(['a.txt', 'b.txt']);
+    expect(root.querySelector('.add-queue-card-waiting')).toBeNull();
+  });
+
+  it('lists the doors as one row: Files, Drive when it shows, and Link', () => {
     const doors = Array.from(
       root.querySelectorAll('.add-doors > button.add-door'),
     );
-    expect(doors.map((d) => d.textContent)).toContain('Files');
-    expect(root.querySelector('.add-doors')?.textContent).not.toContain(
-      'voice memos',
+    expect(doors.map((d) => d.textContent)).toEqual(
+      expect.arrayContaining(['Files', 'Link']),
     );
   });
 
@@ -398,10 +512,10 @@ describe('Add', () => {
     expect(click).toHaveBeenCalledOnce();
   });
 
-  it('keeps the drop zone in the DOM, sized by its own content', () => {
-    const dropzone = root.querySelector('.add-dropzone');
-    expect(dropzone?.textContent).toContain('Drop files here');
-    expect(dropzone?.textContent).toContain('Choose files');
+  it('says on the desktop that files dropped anywhere join the pile (PILE-14)', () => {
+    expect(root.querySelector('.add-drop-line')?.textContent).toBe(
+      'Drop files anywhere on this page: they join the pile you are making.',
+    );
   });
 
   it('moves the share line to the Add help sheet (R-ADD-1)', () => {
@@ -410,183 +524,31 @@ describe('Add', () => {
     expect(rows).toContain('Share from any app to Bower: it lands here too.');
   });
 
-  it('has no Add to Bower button any more: the one Tidy up button does both', () => {
-    dropFiles([new File(['a'], 'a.txt', { type: 'text/plain' })]);
-    expect(
-      Array.from(root.querySelectorAll('button')).some((b) =>
-        (b.textContent ?? '').includes('Add to Bower'),
-      ),
-    ).toBe(false);
-  });
-
-  it('uploads the waiting files, then opens the confirmation without starting a run', async () => {
-    dropFiles([
-      new File(['a'], 'a.txt', { type: 'text/plain' }),
-      new File(['b'], 'b.txt', { type: 'text/plain' }),
-      new File(['c'], 'c.txt', { type: 'text/plain' }),
-    ]);
-    await flush();
-    expect(upload).not.toHaveBeenCalled();
-
-    void act(() => tidyButton().click());
-    await waitFor(() =>
-      Array.from(root.querySelectorAll('.add-queue-status')).every(
-        (el) => el.textContent === 'In your inbox',
-      ),
-    );
-    await waitFor(() => tidyUp.mock.calls.length === 1);
-
-    expect(upload).toHaveBeenCalledTimes(3);
-    expect(startRun).not.toHaveBeenCalled();
-  });
-
-  it('with nothing waiting, the button goes straight to the confirmation', () => {
-    void act(() => tidyButton().click());
-    expect(upload).not.toHaveBeenCalled();
-    expect(tidyUp).toHaveBeenCalledTimes(1);
-  });
-
-  it('hides the button when the inbox is empty and nothing is queued (#336)', () => {
-    vaultFiles = [];
-    try {
-      void act(() => {
-        render(null, root);
-      });
-      void act(() => {
-        render(h(Add, {}), root);
-      });
-      expect(root.querySelector('.add-tidy')).toBeNull();
-      expect(root.querySelector('.process-button')).toBeNull();
-    } finally {
-      vaultFiles = THREE_WAITING;
-    }
-  });
-
-  // R-ADD-2 and R-ADD-4: every row has its badge; a kind Bower only keeps
-  // shows its queue line.
-  it('shows a badge on every row and the kept-not-read line on a video', () => {
+  // R-ADD-4: every row has its badge; a kind Bower only keeps shows its line.
+  it('shows a badge on every row and the kept-not-read line on a video', async () => {
     dropFiles([
       new File(['a'], 'Lease.pdf', { type: 'application/pdf' }),
       new File(['b'], 'IMG_1.jpg', { type: 'image/jpeg' }),
       new File(['c'], 'Walk-through.mp4', { type: 'video/mp4' }),
     ]);
-    const rows = Array.from(root.querySelectorAll('.add-queue-card'));
+    await waitFor(() => upload.mock.calls.length === 3);
+    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 3);
+    const rows = Array.from(root.querySelectorAll('.pile-row'));
     expect(
       rows.map((r) => r.querySelector('.kind-badge')?.textContent),
     ).toEqual(['PDF', 'JPG', 'MP4']);
-    expect(rows[0]?.querySelector('.add-queue-kept')).toBeNull();
-    expect(rows[2]?.querySelector('.add-queue-kept')?.textContent).toBe(
+    expect(rows[0]?.querySelector('.pile-row-ok')?.textContent).not.toContain(
+      'Kept, not read',
+    );
+    expect(rows[2]?.querySelector('.pile-row-ok')?.textContent).toContain(
       "Kept, not read: Bower can't watch videos",
     );
   });
 
-  it('names the sources in the queue heading, for phone and desktop', () => {
-    dropFiles([new File(['a'], 'a.pdf', { type: 'application/pdf' })]);
-    const input = root.querySelector('#add-link') as HTMLInputElement;
-    void act(() => {
-      input.value = 'https://example.com/page';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    const save = Array.from(root.querySelectorAll('button')).find(
-      (b) => b.textContent === 'Save',
-    );
-    void act(() => save?.click());
-    expect(root.querySelector('.add-sources-phone')?.textContent).toBe(
-      'Shared from Files, a link',
-    );
-    expect(root.querySelector('.add-sources-desktop')?.textContent).toBe(
-      'From drop and a link',
-    );
-  });
-
-  // #334 (issue 21.2): the queue's own heading, its type icon, and the
-  // per-row state text.
-  it('heads the queue "In your inbox · n" and shows the picked name', () => {
-    dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
-    const head = root.querySelector('.add-queue-head');
-    expect(head?.textContent).toBe('In your inbox · 1');
-    expect(root.querySelector('.add-queue-name')?.textContent).toBe(
-      'receipt.txt',
-    );
-  });
-
-  it('says "In your inbox" once a plain upload is done', async () => {
-    dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
-    await flush();
-    void act(() => tidyButton().click());
-    await waitFor(
-      () =>
-        (root.querySelector('.add-queue-status')?.textContent ?? '') ===
-        'In your inbox',
-    );
-  });
-
-  it('survives leaving the screen and coming back (#334)', () => {
-    dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
-    expect(root.querySelector('.add-queue-name')?.textContent).toBe(
-      'receipt.txt',
-    );
-
-    // Unmount, as `preact-iso` would on navigating away, then mount a
-    // fresh `Add` the way it would coming back to the tab -- no `setQueue`
-    // reset in between, unlike this suite's own `beforeEach`.
-    void act(() => {
-      render(null, root);
-    });
-    void act(() => {
-      render(h(Add, {}), root);
-    });
-
-    expect(root.querySelector('.add-queue-name')?.textContent).toBe(
-      'receipt.txt',
-    );
-  });
-
-  // #335: the "What is this?" box and the note it becomes.
-  function typeContext(value: string): void {
-    const box = root.querySelector<HTMLTextAreaElement>('#add-context');
-    if (box === null) throw new Error('What is this? box missing');
-    void act(() => {
-      box.value = value;
-      box.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-  }
-
-  async function addOneFile(): Promise<void> {
+  // R-PILE-1: the note is in the inbox from the first file.
+  it('writes the pile note to the inbox with the first file, before anything is typed', async () => {
     dropFiles([new File(['a'], 'Offer A.pdf', { type: 'application/pdf' })]);
-    await flush();
-    void act(() => tidyButton().click());
-    await waitFor(
-      () =>
-        (root.querySelector('.add-queue-status')?.textContent ?? '') ===
-        'In your inbox',
-    );
-  }
-
-  function leaveAdd(): void {
-    void act(() => {
-      render(null, root);
-    });
-  }
-
-  it('shows the optional What is this? box only under a queue (#335)', () => {
-    expect(root.querySelector('#add-context')).toBeNull();
-    dropFiles([new File(['a'], 'receipt.txt', { type: 'text/plain' })]);
-    const box = root.querySelector<HTMLTextAreaElement>('#add-context');
-    expect(box?.placeholder).toBe('Flats for November.');
-    expect(root.querySelector('label[for="add-context"]')?.textContent).toBe(
-      'What is this? optional',
-    );
-  });
-
-  it('leaving Add with text and a batch writes one context note (#335)', async () => {
-    await addOneFile();
-    typeContext('Job offers: pull out salary and deadline.');
-    createTextFile.mockClear();
-    leaveAdd();
-    await flush();
-
-    expect(createTextFile).toHaveBeenCalledTimes(1);
+    await waitFor(() => createTextFile.mock.calls.length === 1);
     const [parent, name, content, options] = createTextFile.mock.calls[0] as [
       string,
       string,
@@ -594,120 +556,222 @@ describe('Add', () => {
       unknown,
     ];
     expect(parent).toBe('FOLDER_ID');
-    expect(name).toMatch(/^Bower - \d{4}-\d{2}-\d{2} \d{4} Context\.md$/);
+    expect(name).toMatch(
+      /^Bower - \d{4}-\d{2}-\d{2} \d{4}-\d{2} Context [0-9a-f]{2}\.md$/,
+    );
     expect(content).toContain('kind: context');
-    expect(content).toContain('Job offers: pull out salary and deadline.');
-    expect(content).toContain('- Offer A.pdf');
+    expect(content).toMatch(/\npile: \S+\n/);
     expect(options).toEqual({ appProperties: { bower: 'instruction' } });
+  });
 
-    // The box is cleared, and the same batch is never written twice.
+  it('saves "What is this pile?" into the note as typed, and says so', async () => {
+    dropFiles([new File(['a'], 'Offer A.pdf', { type: 'application/pdf' })]);
+    await waitFor(() => createTextFile.mock.calls.length === 1);
+    const box = typeNote('Job offers: pull out salary and deadline.');
+    expect(root.textContent).toContain(
+      'Saved in your inbox as you type. Bower reads it with these files only.',
+    );
     void act(() => {
-      render(h(Add, {}), root);
+      box.focus();
+      box.blur();
     });
+    await waitFor(() =>
+      updateFileText.mock.calls.some(([, text]) =>
+        text.includes('Job offers: pull out salary and deadline.'),
+      ),
+    );
+  });
+
+  it('holds text typed before the first file and puts it in the note', async () => {
+    typeNote('Flats for November.');
+    dropFiles([new File(['a'], 'Flat.pdf', { type: 'application/pdf' })]);
+    await waitFor(() => createTextFile.mock.calls.length === 1);
+    expect(createTextFile.mock.calls[0]?.[2]).toContain('Flats for November.');
+  });
+
+  // R-ADD-0: "Start another pile" is a text button, not a filled one.
+  it('"Start another pile" closes the pile and waits it under the tidy-up', async () => {
+    vaultFiles = [...THREE_WAITING, inboxFile('one.txt')];
+    unmount();
+    mount();
+    dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
+    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    typeNote('Receipts for the tax return.');
+
+    const another = buttonNamed('Start another pile');
+    expect(another.classList.contains('process-button')).toBe(false);
+    expect(root.textContent).toContain('This pile is saved as you go.');
+    void act(() => another.click());
+    await waitFor(() => getPiles()[0]?.closed === true);
+
     expect(root.querySelector<HTMLTextAreaElement>('#add-context')?.value).toBe(
       '',
     );
-    leaveAdd();
-    await flush();
-    expect(createTextFile).toHaveBeenCalledTimes(1);
+    expect(root.textContent).toContain('Waiting for the tidy-up');
+    const card = root.querySelector('.pile-card-waiting');
+    expect(card?.textContent).toContain('Receipts for the tax return.');
+    expect(card?.textContent).toContain('1 thing');
+    expect(root.querySelectorAll('.process-button')).toHaveLength(1);
   });
 
-  it('leaving Add with an empty box writes nothing (#335)', async () => {
-    await addOneFile();
-    createTextFile.mockClear();
-    leaveAdd();
-    await flush();
-    expect(createTextFile).not.toHaveBeenCalled();
+  it('shows "No note" on a waiting pile with no words', async () => {
+    vaultFiles = [...THREE_WAITING, inboxFile('one.txt')];
+    unmount();
+    mount();
+    dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
+    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    void act(() => buttonNamed('Start another pile').click());
+    await waitFor(() => root.querySelector('.pile-card-none') !== null);
+    expect(root.querySelector('.pile-card-none')?.textContent).toBe('No note');
+  });
+
+  // R-PILE-2: leaving Add closes the open pile.
+  it('leaving Add closes the open pile', async () => {
+    dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
+    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    expect(getPiles()[0]?.closed).toBe(false);
+    unmount();
+    await waitFor(() => getPiles()[0]?.closed === true);
+  });
+
+  it('a second pile starts once the first is closed (several piles wait)', async () => {
+    dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
+    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    void act(() => buttonNamed('Start another pile').click());
+    await waitFor(() => getPiles()[0]?.closed === true);
+    dropFiles([new File(['b'], 'two.txt', { type: 'text/plain' })]);
+    await waitFor(() => getPiles().length === 2);
+    expect(getPiles().map((pile) => pile.closed)).toEqual([true, false]);
+  });
+
+  // R-PILE-3: the waiting piles come from the inbox listing.
+  it('lists the piles an earlier visit left, with their notes, from the inbox listing', async () => {
+    const note = pileNoteFor('Bower - 2026-09-29 0900-00 Context ab.md');
+    noteTexts.set(note.id, OLD_PILE_NOTE);
+    notes = [note];
+    vaultFiles = [inboxFile('Offer A.pdf'), inboxFile('Offer B.pdf'), note];
+    unmount();
+    mount();
+    await waitFor(() => root.querySelector('.pile-card-waiting') !== null);
+    const card = root.querySelector('.pile-card-waiting');
+    expect(card?.textContent).toContain(
+      'Five job offers. Score each against my CV.',
+    );
+    expect(card?.textContent).toContain('2 things');
+    expect(root.textContent).not.toContain('Added from elsewhere');
+    expect(tidyButton().textContent).toBe('Tidy up 2 things');
+  });
+
+  // R-PILE-4: files named in no pile.
+  it('lists inbox files named in no pile, and "Say what they are" opens a pile with them', async () => {
+    vaultFiles = [inboxFile('x.pdf'), inboxFile('y.pdf')];
+    unmount();
+    mount();
+    await waitFor(() => root.querySelector('.pile-elsewhere') !== null);
+    expect(root.querySelector('.pile-elsewhere')?.textContent).toContain(
+      'Added from elsewhere',
+    );
+    expect(root.querySelector('.pile-elsewhere')?.textContent).toContain(
+      '2 things',
+    );
+
+    void act(() => buttonNamed('Say what they are').click());
+    await waitFor(() => getPiles().length === 1);
+    await waitFor(() =>
+      updateFileText.mock.calls.some(
+        ([, text]) => text.includes('- x.pdf') && text.includes('- y.pdf'),
+      ),
+    );
+    expect(rowNames()).toEqual(['x.pdf', 'y.pdf']);
+    expect(root.querySelector('.pile-elsewhere')).toBeNull();
+  });
+
+  it('does not list a file a pile names as "from elsewhere"', async () => {
+    const note = pileNoteFor('Bower - 2026-09-29 0900-00 Context ab.md');
+    noteTexts.set(note.id, OLD_PILE_NOTE);
+    notes = [note];
+    vaultFiles = [
+      inboxFile('Offer A.pdf'),
+      inboxFile('Offer B.pdf'),
+      inboxFile('Loose.pdf'),
+      note,
+    ];
+    unmount();
+    mount();
+    await waitFor(() => root.querySelector('.pile-elsewhere') !== null);
+    expect(root.querySelector('.pile-elsewhere')?.textContent).toContain(
+      '1 thing',
+    );
+  });
+
+  it('removes a file from the pile and sends it to the Bin in Drive', async () => {
+    vaultFiles = [...THREE_WAITING, inboxFile('one.txt')];
+    unmount();
+    mount();
+    dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
+    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    const remove = root.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove one.txt from this pile"]',
+    );
+    if (remove === null) throw new Error('remove button missing');
+    void act(() => remove.click());
+    await waitFor(() => deleteFile.mock.calls.length >= 1);
+    expect(deleteFile).toHaveBeenCalledWith('ID_one.txt');
+    await waitFor(() => rowNames().length === 0);
+  });
+
+  // Links.
+  function saveLink(url: string): HTMLInputElement {
+    const door = root.querySelector<HTMLButtonElement>(
+      '.add-doors button[aria-label="Paste a link"]',
+    );
+    if (door === null) throw new Error('Link door missing');
+    void act(() => door.click());
+    const input = root.querySelector('#add-link') as HTMLInputElement;
+    void act(() => {
+      input.value = url;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    void act(() => buttonNamed('Save').click());
+    return input;
+  }
+
+  it('the Link door opens an inline field with Save', () => {
+    expect(root.querySelector('#add-link')).toBeNull();
+    const door = root.querySelector<HTMLButtonElement>(
+      '.add-doors button[aria-label="Paste a link"]',
+    );
+    void act(() => door?.click());
+    expect(root.querySelector('#add-link')).not.toBeNull();
   });
 
   it('clears the field and greys out Save again, so a second press cannot resave it (#493)', () => {
-    const input = root.querySelector('#add-link') as HTMLInputElement;
-    const save = Array.from(root.querySelectorAll('button')).find(
-      (b) => b.textContent === 'Save',
-    );
-    if (save === undefined) throw new Error('Save button missing');
-    void act(() => {
-      input.value = 'https://example.com/page';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    expect(save.hasAttribute('disabled')).toBe(false);
-    void act(() => save.click());
+    const input = saveLink('https://example.com/page');
     expect(input.value).toBe('');
-    expect(save.hasAttribute('disabled')).toBe(true);
+    expect(buttonNamed('Save').hasAttribute('disabled')).toBe(true);
   });
 
-  it("a saved link's row shows the URL, not the note's file name (#508)", () => {
-    const input = root.querySelector('#add-link') as HTMLInputElement;
-    const save = Array.from(root.querySelectorAll('button')).find(
-      (b) => b.textContent === 'Save',
-    );
-    if (save === undefined) throw new Error('Save button missing');
-    void act(() => {
-      input.value = 'https://www.example.com/a/page';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    void act(() => save.click());
-    expect(root.querySelector('.add-queue-name')?.textContent).toBe(
-      'example.com/a/page',
-    );
+  it("a saved link's row shows the address, not the note's file name (#508)", async () => {
+    saveLink('https://www.example.com/a/page');
+    await flush();
+    expect(rowNames()).toEqual(['example.com/a/page']);
   });
 
-  // #421: Save used to navigate to Home once the link finished uploading,
-  // and coming back to Add (the queue survives navigation, #334) then
-  // showed a leftover "Add to Bower" button that did nothing but re-run
-  // `finish()` and bounce back to Home again.
-  it('saving a link stays on Add, with no upload left waiting', async () => {
-    const input = root.querySelector('#add-link') as HTMLInputElement;
-    const save = Array.from(root.querySelectorAll('button')).find(
-      (b) => b.textContent === 'Save',
-    );
-    if (save === undefined) throw new Error('Save button missing');
-    void act(() => {
-      input.value = 'https://example.com/page';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    void act(() => save.click());
-    await waitFor(
-      () =>
-        root.querySelector('.add-queue-status')?.textContent ===
-        'In your inbox',
-    );
-
-    expect(root.querySelector('.add-queue-head')?.textContent).toBe(
-      'In your inbox · 1',
-    );
-    expect(root.querySelector('.add-queue-card-waiting')).toBeNull();
+  it('saving a link stays on Add and joins the pile', async () => {
+    saveLink('https://example.com/page');
+    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
     expect(location.route).not.toHaveBeenCalled();
+    expect(getPiles()).toHaveLength(1);
   });
 
-  it('clears the filed rows and "Added to your inbox." once a tidy-up finishes (#493)', async () => {
-    const input = root.querySelector('#add-link') as HTMLInputElement;
-    const save = Array.from(root.querySelectorAll('button')).find(
-      (b) => b.textContent === 'Save',
-    );
-    if (save === undefined) throw new Error('Save button missing');
-    void act(() => {
-      input.value = 'https://example.com/page';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    void act(() => save.click());
-    await waitFor(
-      () =>
-        root.querySelector('.add-queue-status')?.textContent ===
-        'In your inbox',
-    );
-    expect(root.querySelector('.add-message')?.textContent).toBe(
-      'Added to your inbox.',
-    );
-
-    // Home's Inbox card and the run store both say the run is over; the
-    // effect only needs `lastFinished` to have moved to a new `done` run.
+  it('drops the filed rows once a tidy-up finishes (#493)', async () => {
+    dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
+    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    vaultFiles = [];
     lastFinished = { state: 'done', requestedAt: '2026-09-28T09:05:00.000Z' };
-    void act(() => {
-      render(h(Add, {}), root);
-    });
-
-    expect(root.querySelector('.add-queue-section')).toBeNull();
-    expect(root.querySelector('.add-message')).toBeNull();
+    mount();
+    await flush();
+    expect(getQueue()).toHaveLength(0);
+    expect(root.querySelector('.add-tidy')).toBeNull();
   });
 });

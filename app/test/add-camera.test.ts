@@ -45,8 +45,15 @@ const me: Me = {
   hasApiKey: false,
 };
 const location = { path: '/add', route: vi.fn() };
+const noteEntry: DriveFile = {
+  id: 'NOTE_ID',
+  name: 'Bower - note.md',
+  mimeType: 'text/markdown',
+  parents: ['FOLDER_ID'],
+  path: '0-Inbox/Bower - note.md',
+};
 const listFolder = vi.fn<(folderId: string) => Promise<DriveFile[]>>(() =>
-  Promise.resolve([]),
+  Promise.resolve([noteEntry]),
 );
 
 vi.mock('preact-iso', () => ({ useLocation: () => location }));
@@ -57,12 +64,18 @@ vi.mock('../src/online.js', () => ({
 }));
 vi.mock('../src/components/upload-chip.js', () => ({
   UploadNotes: () => null,
+  useUploadItems: () => [],
 }));
 // Add sends files through the durable queue (#768); these tests are about
 // Add, so the queue hands each file straight to the `upload` mock.
 vi.mock('../src/upload-queue.js', () => ({
   startUploads: () => Promise.resolve('owner'),
-  uploadQueue: () => ({}),
+  activeItems: () => [],
+  uploadQueue: () => ({
+    items: () => [],
+    subscribe: () => () => undefined,
+    retry: () => undefined,
+  }),
   uploadThroughQueue: (
     _queue: unknown,
     input: { blob: Blob; name: string; parentId: string },
@@ -70,9 +83,13 @@ vi.mock('../src/upload-queue.js', () => ({
   ) => Promise.resolve({ input, onProgress }),
 }));
 vi.mock('../src/drive.js', () => ({
+  INSTRUCTION_APP_PROPERTIES: { bower: 'instruction' },
   listFolder,
   upload: vi.fn(),
-  createTextFile: vi.fn(),
+  createTextFile: vi.fn(() => Promise.resolve(noteEntry)),
+  updateFileText: vi.fn(() => Promise.resolve(noteEntry)),
+  deleteFile: vi.fn(() => Promise.resolve()),
+  getText: vi.fn(() => Promise.resolve('')),
 }));
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
@@ -89,7 +106,8 @@ vi.mock('../src/run-store.js', async (importOriginal) => ({
   }),
 }));
 
-const { Add } = await import('../src/routes/add.js');
+const { Add, resetAddDraft } = await import('../src/routes/add.js');
+const { resetPiles } = await import('../src/pile-store.js');
 
 let root: HTMLElement;
 
@@ -127,6 +145,8 @@ function cameraDoor(): HTMLButtonElement | undefined {
 describe('Add: the camera door', () => {
   beforeEach(() => {
     setQueue([]);
+    resetPiles();
+    resetAddDraft();
     root = document.createElement('div');
     document.body.append(root);
   });
@@ -196,8 +216,6 @@ describe('Add: the camera door', () => {
     void act(() => {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect(root.querySelector('.add-queue-name')?.textContent).toBe(
-      'photo.jpg',
-    );
+    expect(root.querySelector('.pile-row-name')?.textContent).toBe('photo.jpg');
   });
 });
