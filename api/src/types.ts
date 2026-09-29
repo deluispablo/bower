@@ -18,6 +18,19 @@ export interface User {
     folderId: string;
     inboxFolderId: string;
     name: string;
+    /**
+     * ISO-8601; when this folder became the user's Bower folder (spec
+     * R-VAULT-6, `vaultSetAt`). Kept when the same folder is chosen again;
+     * absent on vaults set before #736.
+     */
+    setAt?: string;
+    /**
+     * ISO-8601; set when a run found the folder deleted or in the Bin
+     * (spec R-VAULT-8). `GET /me` returns it with the vault; the weekly
+     * lint skips the vault while it is set. Choosing a folder again (the
+     * same one after "Put it back", or another) clears it.
+     */
+    missingAt?: string;
   };
   /** AES-GCM envelope from `crypto.ts`; never plaintext. */
   encRefreshToken: string;
