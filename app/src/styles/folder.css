@@ -66,41 +66,44 @@
   font-size: var(--text-sm);
 }
 
-/*
- * 13 px, not the shared `.chip`'s 14 (`--text-sm`), with tighter padding,
- * icon-to-label gap and inter-chip gap than the default: at 375 px the
- * three chips (Pinned/Pin to Home, Ask Bower about it, Drive) measure
- * under 328–340 px across depending on the pin state (less than with the
- * old "Open in Drive" label, #453), fitting the phone's 343 px content
- * width in one row instead of wrapping to two
- * (#310, 2.14). `min-height: 44px` (`.chip`) keeps the touch target full
- * size regardless of the tighter padding. Scoped to the Folder screen's
- * own chips; `.chip` itself is shared with Tell Bower's composer and
- * stays at its own size there.
- */
-.folder-chips .chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  font-size: 13px;
-}
-
-.folder-chips .chip .icon {
-  width: 14px;
-  height: 14px;
-}
-
-/* Pinned (#216): the chip's own toggled state, same accent as an active
-   nav row (`--color-brand`); its `.b` briefly replaces the pin icon with
-   the bird's `done` pose right after a successful toggle. */
-.folder-chips .chip[aria-pressed='true'] {
-  border-color: var(--color-accent-line);
-  color: var(--color-link);
-}
-
-.folder-chips .chip .b {
+/* Pinned's toggled look comes from `header-action.css` (R-FOLD-2); only
+   the bird's confirmation is sized here. */
+.folder-chips .header-action .b {
   flex-shrink: 0;
+}
+
+.folder-row-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.folder-row-chevron .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Wrappers that only carry an id for aria-describedby (R-FOLD-5). */
+.folder-row-describe {
+  display: contents;
+}
+
+.folder-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.folder-show-all {
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-link);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .folder-label {
@@ -254,29 +257,6 @@
   margin-left: auto;
 }
 
-/* The "want more" tip (#453, Phone-Folder-Project board): any folder but
-   a root one, after the list, inviting more from Bower. Same dashed-card
-   treatment as `home-tip`/`bower-tip`. */
-.folder-tip,
-.folder-list-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-3);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.folder-tip > .icon {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  color: var(--color-accent);
-}
-
 /* The board's list mode (#611, Phone-Folder-List): path bar, counts, origin
    filter, tool row, date groups and rows. */
 .folder-path {
@@ -411,11 +391,6 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   font-size: var(--text-sm);
-}
-
-.folder-list-tip .bower-tag {
-  display: inline-flex;
-  vertical-align: middle;
 }
 
 /* Rows and tiles: no text selection or callout while held (quick look, #613). */
@@ -703,26 +678,14 @@
   font-size: var(--text-xs);
 }
 
-/* The phone's folder screen (#702, boards Phone-Folder-List and
-   Phone-Folder-Grid): the top bar and the path bar already name the folder,
-   and the More menu carries Pin to Home, Ask Bower and Drive, so the large
-   title, the icon, the chip row and the demo sentence stay out. The heading
-   is hidden visually only, so the screen keeps its `<h1>`. From 900 px the
-   header is the desktop boards' (Pinned and Ask Bower). */
-@media (max-width: 899.98px) {
-  .folder-head > .icon,
-  .folder-chips,
-  .folder-demo-note {
-    display: none;
-  }
+/* The header on the phone (R-FOLD-1, boards Folder-List-375): the mark, the
+   name at 24 px and the actions all show; from 900 px the name is 30 px. */
+.folder-head-text h1 {
+  font-size: 24px;
+}
 
+@media (min-width: 900px) {
   .folder-head-text h1 {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
+    font-size: 30px;
   }
 }
