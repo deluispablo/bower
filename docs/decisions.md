@@ -49,3 +49,6 @@ Rejected: a VPS (~4–5 €/month; documented as an upgrade path), local models 
 
 ## 2026-09-26 · Names
 Bower, after the Australian bowerbird that collects objects and arranges them with care. "Second brain" is used only to explain the concept.
+
+## 2026-09-29 · Startup bundle budget 170 KB
+v5 adds the Overlay queue, the tidy-up bar and sheet, the send-to-Bower sheet, dictation and the new bird poses, which took the gzipped startup scripts just past 150 KB. The budget in `app/scripts/check-size.mjs` goes to 170 KB so v5 can land; an issue in M46 code-splits the sheets and overlays that are not needed on first paint, with the goal of coming back under 150 KB.

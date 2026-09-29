@@ -34,6 +34,8 @@ function focusables(container: HTMLElement): HTMLElement[] {
 export function useFocusTrap(
   ref: RefObject<HTMLElement>,
   onEscape: () => void,
+  /** The element to give focus back to; defaults to the focused one at mount. */
+  opener?: RefObject<HTMLElement | null>,
 ): void {
   const onEscapeRef = useRef(onEscape);
   onEscapeRef.current = onEscape;
@@ -42,9 +44,10 @@ export function useFocusTrap(
     const container = ref.current;
     if (container === null) return;
     const previous =
-      document.activeElement instanceof HTMLElement
+      opener?.current ??
+      (document.activeElement instanceof HTMLElement
         ? document.activeElement
-        : null;
+        : null);
     (focusables(container)[0] ?? container).focus();
     openTraps.push(container);
 
@@ -81,5 +84,5 @@ export function useFocusTrap(
       if (at !== -1) openTraps.splice(at, 1);
       previous?.focus();
     };
-  }, [ref]);
+  }, [ref, opener]);
 }

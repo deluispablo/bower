@@ -71,7 +71,14 @@ function openDialog(
         >
           <h2 id={`${id}-title`}>Rename {id}</h2>
           <button type="button">Save</button>
-          <button type="button">Cancel</button>
+          <button
+            type="button"
+            onClick={() => {
+              close(id);
+            }}
+          >
+            Cancel
+          </button>
         </Overlay>
       ),
     });
@@ -117,6 +124,50 @@ describe('Overlay', () => {
     expect(shell.hasAttribute('inert')).toBe(false);
     expect(document.body.style.overflow).toBe('auto');
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('an overlay rendered inline is portalled out of the inert page and focused', () => {
+    const inline = document.createElement('div');
+    shell.appendChild(inline);
+    void act(() => {
+      render(
+        <Overlay kind="dialog" label="Inline" onClose={() => undefined}>
+          <button type="button">First</button>
+        </Overlay>,
+        inline,
+      );
+    });
+    const dialog = panel();
+    expect(dialog).not.toBeNull();
+    expect(shell.contains(dialog)).toBe(false);
+    expect(dialog?.closest('[inert]')).toBeNull();
+    expect(shell.hasAttribute('inert')).toBe(true);
+    expect(dialog?.contains(document.activeElement)).toBe(true);
+    void act(() => {
+      render(null, inline);
+    });
+  });
+
+  it('returns focus to the opener on Escape and on the close button, even if the page blurred it', () => {
+    for (const closeWith of ['escape', 'button'] as const) {
+      openDialog('rename');
+      // The inert page drops focus from the opener in a real browser.
+      opener.blur();
+      if (closeWith === 'escape') press('Escape');
+      else {
+        void act(() => {
+          [
+            ...document.querySelectorAll<HTMLButtonElement>(
+              '.overlay-panel button',
+            ),
+          ]
+            .find((b) => b.textContent === 'Cancel')
+            ?.click();
+        });
+      }
+      expect(panel()).toBeNull();
+      expect(document.activeElement).toBe(opener);
+    }
   });
 
   it('closes on a tap on the scrim', () => {

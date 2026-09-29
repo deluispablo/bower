@@ -113,6 +113,25 @@ let virtualModule: VirtualModule | null = null;
 /** A row's height in px before it is measured: the 44 px row plus its gap. */
 const ROW_ESTIMATE = 46;
 
+let treeSeq = 0;
+
+/** What a row's link description says: the folder's count and what is new
+ * in it, or "New" for a fresh note. `undefined` when there is nothing to
+ * add to the name (R-SIDE-3). */
+export function rowDescription(
+  count: number | undefined,
+  fresh: number,
+  isNewNote = false,
+): string | undefined {
+  const parts: string[] = [];
+  if (count !== undefined && count > 0) {
+    parts.push(count === 1 ? '1 item' : `${count} items`);
+  }
+  if (fresh > 0) parts.push(`${fresh} new`);
+  else if (isNewNote) parts.push('New');
+  return parts.length === 0 ? undefined : parts.join(', ');
+}
+
 /** How long the revealed row's highlight lasts (matches `tree.css`). */
 const REVEAL_FLASH_MS = 600;
 
@@ -247,6 +266,8 @@ export function Tree({
   topOnTabTap = false,
 }: TreeProps): JSX.Element {
   const { pinNote, unpinNote, pinFolder, unpinFolder } = useVault();
+  // Makes the description ids unique when two trees are on screen.
+  const [seq] = useState(() => ++treeSeq);
   // The one row (folder or note) whose pin sheet/menu is open, or `null`.
   const [openRow, setOpenRow] = useState<Row | null>(null);
   const tree = useMemo(() => buildTree(index, sort), [index, sort]);
@@ -641,6 +662,8 @@ export function Tree({
         : undefined;
     const fresh = newState.newCountIn(row.path);
     const count = counts.get(row.path) ?? 0;
+    const descId = `tree-desc-${seq}-${i}`;
+    const description = rowDescription(count, fresh);
     const nameEl =
       meaning === undefined ? (
         <span class="tree-name">{name}</span>
@@ -675,6 +698,9 @@ export function Tree({
           href={folderHref(row.path)}
           ref={setRef}
           class="tree-folder-link"
+          aria-label={name}
+          title={name}
+          aria-describedby={description === undefined ? undefined : descId}
           aria-current={isCurrent(row) ? 'page' : undefined}
           tabIndex={i === focusIndex ? 0 : -1}
           onClick={() => onNavigate?.()}
@@ -692,6 +718,11 @@ export function Tree({
           {fresh > 0 && <NewTag count={fresh} />}
           {(count > 0 || (row.depth === 0 && landmark === 'inbox')) && (
             <span class="tree-count">{count}</span>
+          )}
+          {description !== undefined && (
+            <span id={descId} class="tree-sr">
+              {description}
+            </span>
           )}
         </a>
         <button
@@ -716,6 +747,9 @@ export function Tree({
     const name = displayName(row);
     const isFile = row.kind === 'file';
     const setRef = rowRef(i);
+    const descId = `tree-desc-${seq}-${i}`;
+    const isNewNote = row.id !== undefined && newState.isNew(row.id);
+    const description = rowDescription(undefined, 0, isNewNote);
     return (
       <span
         class={`tree-row ${isFile ? 'tree-file' : 'tree-note'}${isFile ? '' : ' tree-row-pinnable'}${revealClass(row)}`}
@@ -737,6 +771,9 @@ export function Tree({
           href={`${isFile ? '/file/' : '/note/'}${row.id ?? ''}`}
           ref={setRef}
           class="tree-note-link"
+          aria-label={name}
+          title={name}
+          aria-describedby={description === undefined ? undefined : descId}
           aria-current={isCurrent(row) ? 'page' : undefined}
           tabIndex={i === focusIndex ? 0 : -1}
           onClick={() => onNavigate?.()}
@@ -752,7 +789,12 @@ export function Tree({
           {row.file !== undefined && (
             <KindBadge kind={fileKind(row.file)} file={row.file} />
           )}
-          {row.id !== undefined && newState.isNew(row.id) && <NewTag />}
+          {isNewNote && <NewTag />}
+          {description !== undefined && (
+            <span id={descId} class="tree-sr">
+              {description}
+            </span>
+          )}
         </a>
         {!isFile && (
           <button

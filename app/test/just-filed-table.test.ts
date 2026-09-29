@@ -16,6 +16,7 @@ import {
   pickRun,
   runKey,
   runLine,
+  showsNewChip,
   tableRows,
   youAdded,
 } from '../src/just-filed.js';
@@ -97,6 +98,18 @@ describe('tableRows', () => {
       'Updated · 1',
       'Filed · 1',
     ]);
+  });
+
+  it('shows the New chip only on an unseen new note, never beside Filed', () => {
+    const filed = rows.find((row) => row.action === 'filed');
+    const note = rows.find((row) => row.action === 'new');
+    if (filed === undefined || note === undefined) throw new Error('rows');
+    const unseen = new Set(
+      [filed.id, note.id].filter((id): id is string => id !== undefined),
+    );
+    expect(showsNewChip(filed, unseen)).toBe(false);
+    expect(showsNewChip(note, unseen)).toBe(note.id !== undefined);
+    expect(showsNewChip(note, new Set())).toBe(false);
   });
 
   it('reads the origin of a row and the You added cell', () => {
