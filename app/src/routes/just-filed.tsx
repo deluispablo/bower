@@ -357,8 +357,7 @@ function Earlier({
               <details
                 class="just-filed-details"
                 onToggle={(event) => {
-                  const isOpen = (event.currentTarget as HTMLDetailsElement)
-                    .open;
+                  const isOpen = event.currentTarget.open;
                   setOpen((prev) => {
                     const next = new Set(prev);
                     if (isOpen) next.add(key);
