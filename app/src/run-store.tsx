@@ -249,6 +249,25 @@ function sheetForActive(
   return { sheetOpen: true, sheetRunId: key };
 }
 
+/**
+ * Whether the open sheet is showing a finished result: only then does the
+ * run count as seen. A sheet that is open on a run in flight, on the day's
+ * limit (`quota`) or on nothing has shown no result, so the chip stays.
+ */
+export function sheetShowsResult(
+  phase: RunPhase,
+  sheetOpen: boolean,
+  lastFinished: Run | null,
+): boolean {
+  if (!sheetOpen || lastFinished === null) return false;
+  return (
+    phase === 'idle' ||
+    phase === 'done' ||
+    phase === 'failed' ||
+    phase === 'stale'
+  );
+}
+
 function isActive(phase: RunPhase): boolean {
   return phase === 'queued' || phase === 'running';
 }
@@ -335,7 +354,9 @@ export function reduce(state: RunState, event: RunEvent): RunState {
             phase: 'idle',
             run,
             message,
-            sheetOpen: false,
+            // A result the person already opened from the chip stays open
+            // when a later poll meets the same finished run.
+            sheetOpen: state.sheetOpen,
             sheetRunId: state.sheetRunId,
           };
         }
@@ -698,10 +719,8 @@ export function RunProvider({ children }: RunProviderProps) {
   // chip's only job is to lead there (R-CHIP, D24).
   const [seenTick, setSeenTick] = useState(0);
   useEffect(() => {
-    if (!state.sheetOpen || lastFinished === null || isActive(state.phase)) {
-      return;
-    }
-    if (state.phase === 'starting') return;
+    if (lastFinished === null) return;
+    if (!sheetShowsResult(state.phase, state.sheetOpen, lastFinished)) return;
     if (typeof localStorage === 'undefined') return;
     writeRunSeen(localStorage, runKey(lastFinished));
     setSeenTick((tick) => tick + 1);
