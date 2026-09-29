@@ -58,6 +58,75 @@ export function pinnedOf(text: string): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;
 }
 
+const PINNED_FILES_KEY = 'pinned_files';
+const FILE_ID_LINE = /^[ \t]+([A-Za-z0-9_-]+):[ \t]*(\S+)[ \t]*$/;
+
+/** The `pinned_files:` block in `lines`: the key line and the end of the
+ * indented lines that follow it. `null` when the key is absent. */
+function filesBlock(lines: string[]): { at: number; end: number } | null {
+  const at = findKeyLine(lines, PINNED_FILES_KEY);
+  if (at < 0) return null;
+  let end = at + 1;
+  while (end < lines.length && /^[ \t]+\S/.test(lines[end] ?? '')) end++;
+  return { at, end };
+}
+
+/**
+ * The files pinned through a folder note (issue #688): `pinned_files:`, a
+ * block map of Drive file id to the ISO time it was pinned, kept in the
+ * frontmatter of the note of the folder the file sits in. Ids survive
+ * Bower's moves, and a pin whose file left the folder is dropped by the
+ * reader (`vault-store.tsx`), not here. Anything unreadable is skipped.
+ */
+export function pinnedFilesOf(text: string): Map<string, string> {
+  const result = new Map<string, string>();
+  const { lines } = splitFrontmatter(text);
+  if (lines === null) return result;
+  const block = filesBlock(lines);
+  if (block === null) return result;
+  for (const line of lines.slice(block.at + 1, block.end)) {
+    const match = FILE_ID_LINE.exec(line);
+    if (match?.[1] !== undefined && match[2] !== undefined) {
+      result.set(match[1], match[2]);
+    }
+  }
+  return result;
+}
+
+function writeFilePins(text: string, pins: Map<string, string>): string {
+  const { lines, body } = splitFrontmatter(text);
+  const rows = [...pins].map(([id, iso]) => `  ${id}: ${iso}`);
+  const block = rows.length === 0 ? [] : [`${PINNED_FILES_KEY}:`, ...rows];
+  if (lines === null) {
+    if (block.length === 0) return text;
+    return `---\n${block.join('\n')}\n---\n${text}`;
+  }
+  const at = filesBlock(lines);
+  const next =
+    at === null
+      ? [...lines, ...block]
+      : [...lines.slice(0, at.at), ...block, ...lines.slice(at.end)];
+  if (next.every((line) => line.trim() === '')) return body;
+  return `---\n${next.join('\n')}\n---\n${body}`;
+}
+
+/** Adds (or refreshes) file `id` in `pinned_files`; every other key and the
+ * body are kept exactly. */
+export function setFilePinned(text: string, id: string, iso: string): string {
+  const pins = pinnedFilesOf(text);
+  pins.set(id, iso);
+  return writeFilePins(text, pins);
+}
+
+/** Removes file `id` from `pinned_files`; the whole key goes with its last
+ * entry, and the frontmatter block with its last key. Unchanged when the id
+ * is not pinned. */
+export function clearFilePinned(text: string, id: string): string {
+  const pins = pinnedFilesOf(text);
+  if (!pins.delete(id)) return text;
+  return writeFilePins(text, pins);
+}
+
 /**
  * `items`, newest pin first. ISO 8601 timestamps compare correctly as plain
  * strings as long as they share the same offset — `vault-store` always

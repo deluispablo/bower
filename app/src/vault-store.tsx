@@ -53,10 +53,14 @@ import { interviewToFiles } from './interview.js';
 import type { InterviewAnswers } from './interview.js';
 import { parseLastRun } from './last-run.js';
 import type { LastRunOutcome } from './last-run.js';
+import { folderOf } from './navigation.js';
 import {
+  clearFilePinned,
   clearPinned,
   folderNoteName,
+  pinnedFilesOf,
   pinnedOf,
+  setFilePinned,
   setPinned,
   sortPinned,
 } from './pins.js';
@@ -147,6 +151,16 @@ export interface Vault extends VaultState {
    */
   unpinFolder: (path: string) => Promise<void>;
   /**
+   * Pins a file (#688): its Drive id and the time go into `pinned_files` in
+   * the frontmatter of its folder's note (created when the folder has none),
+   * the same note a folder pin uses. Conflict-checked like `pinFolder`.
+   * Throws when the file sits at the top level, where no folder note exists.
+   */
+  pinFile: (id: string) => Promise<void>;
+  /** Unpins a file; the folder note is deleted only when nothing else is
+   * left in it. */
+  unpinFile: (id: string) => Promise<void>;
+  /**
    * "Update Bower's rules" (Settings › Advanced, #197): appends the owner's
    * own additions to the old rulebook (`splitLegacyRules`) to `Rules.md`
    * (creating it from the template when missing), then replaces `CLAUDE.md`
@@ -220,10 +234,16 @@ export interface PinnedFolder {
   pinnedAt: string;
 }
 
-export type PinnedItem = PinnedNote | PinnedFolder;
+export interface PinnedFile {
+  kind: 'file';
+  file: DriveFile;
+  pinnedAt: string;
+}
+
+export type PinnedItem = PinnedNote | PinnedFolder | PinnedFile;
 
 /**
- * Notes and folders with a `pinned` timestamp, newest first (spec §14).
+ * Notes, folders and files with a `pinned` timestamp, newest first (spec §14).
  * Pure: reads only what `index`'s `notePinnedAt`/`folderPinnedAt` already
  * carry — filled in by `VaultProvider`'s load pipeline, not here.
  */
@@ -238,6 +258,10 @@ export function pinned(index: VaultIndex): PinnedItem[] {
     if (file !== undefined) {
       items.push({ kind: 'folder', path, file, pinnedAt });
     }
+  }
+  for (const [id, pinnedAt] of index.filePinnedAt) {
+    const file = index.byId.get(id);
+    if (file !== undefined) items.push({ kind: 'file', file, pinnedAt });
   }
   return sortPinned(items);
 }
@@ -322,6 +346,24 @@ const PINNED_SEARCH_QUERY = 'pinned:';
 interface PinnedMaps {
   notePinnedAt: Map<string, string>;
   folderPinnedAt: Map<string, string>;
+  filePinnedAt: Map<string, string>;
+}
+
+/** The ids `pinned_files` lists that still sit in `folderPath`: a pin left
+ * behind by a move (the file kept its id) is dropped here, not deleted. */
+function filePinsIn(
+  index: VaultIndex,
+  folderPath: string,
+  text: string,
+): Map<string, string> {
+  const kept = new Map<string, string>();
+  for (const [id, iso] of pinnedFilesOf(text)) {
+    const file = index.byId.get(id);
+    if (file !== undefined && folderOf(file.path) === folderPath) {
+      kept.set(id, iso);
+    }
+  }
+  return kept;
 }
 
 /**
@@ -341,29 +383,54 @@ interface PinnedMaps {
 export async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
   const notePinnedAt = new Map<string, string>();
   const folderPinnedAt = new Map<string, string>();
+  const filePinnedAt = new Map<string, string>();
   let fetches = 0;
 
-  const resolve = async (
+  const resolveText = async (
     id: string,
     modifiedTime: string | undefined,
   ): Promise<string | null> => {
     const cached = await loadNote(id);
     if (cached !== undefined && cached.modifiedTime === (modifiedTime ?? '')) {
-      return pinnedOf(cached.text);
+      return cached.text;
     }
     if (fetches >= PINNED_HYDRATION_FETCH_CAP) {
-      return cached !== undefined ? pinnedOf(cached.text) : null;
+      return cached !== undefined ? cached.text : null;
     }
     fetches++;
     try {
       const text = await getText(id);
       await saveNote(id, text, modifiedTime ?? '', new Date().toISOString());
-      return pinnedOf(text);
+      return text;
     } catch (err) {
       console.error(err);
-      return cached !== undefined ? pinnedOf(cached.text) : null;
+      return cached !== undefined ? cached.text : null;
     }
   };
+
+  const resolve = async (
+    id: string,
+    modifiedTime: string | undefined,
+  ): Promise<string | null> => {
+    const text = await resolveText(id, modifiedTime);
+    return text === null ? null : pinnedOf(text);
+  };
+
+  // A folder note holds the folder's own pin and its files' pins (#688).
+  const readFolderNote = async (
+    path: string,
+    id: string,
+    modifiedTime: string | undefined,
+  ): Promise<void> => {
+    const text = await resolveText(id, modifiedTime);
+    if (text === null) return;
+    const pinnedAt = pinnedOf(text);
+    if (pinnedAt !== null) folderPinnedAt.set(path, pinnedAt);
+    for (const [fileId, iso] of filePinsIn(index, path, text)) {
+      filePinnedAt.set(fileId, iso);
+    }
+  };
+  const folderNotesRead = new Set<string>();
 
   const folderNoteIdToPath = new Map<string, string>();
   for (const [path, file] of index.folderNotes) {
@@ -381,8 +448,8 @@ export async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
       }
       const path = folderNoteIdToPath.get(hit.id);
       if (path !== undefined) {
-        const pinnedAt = await resolve(hit.id, hit.modifiedTime);
-        if (pinnedAt !== null) folderPinnedAt.set(path, pinnedAt);
+        folderNotesRead.add(path);
+        await readFolderNote(path, hit.id, hit.modifiedTime);
       }
     }
   } catch (err) {
@@ -402,12 +469,11 @@ export async function hydratePinnedAt(index: VaultIndex): Promise<PinnedMaps> {
     if (pinnedAt !== null) notePinnedAt.set(note.id, pinnedAt);
   }
   for (const [path, file] of index.folderNotes) {
-    if (folderPinnedAt.has(path)) continue;
-    const pinnedAt = await resolve(file.id, file.modifiedTime);
-    if (pinnedAt !== null) folderPinnedAt.set(path, pinnedAt);
+    if (folderNotesRead.has(path)) continue;
+    await readFolderNote(path, file.id, file.modifiedTime);
   }
 
-  return { notePinnedAt, folderPinnedAt };
+  return { notePinnedAt, folderPinnedAt, filePinnedAt };
 }
 
 /** The rulebook's path, relative to the Bower folder. */
@@ -481,10 +547,11 @@ export async function readLastRunOutcome(
 /** `index` with everything `buildVaultIndex` leaves empty filled in: pins
  * and the rulebook's version. */
 async function hydrate(index: VaultIndex): Promise<VaultIndex> {
-  const { notePinnedAt, folderPinnedAt } = await hydratePinnedAt(index);
+  const { notePinnedAt, folderPinnedAt, filePinnedAt } =
+    await hydratePinnedAt(index);
   const version = await hydrateRulesVersion(index);
   return withRulesVersion(
-    withPinnedAt(index, notePinnedAt, folderPinnedAt),
+    withPinnedAt(index, notePinnedAt, folderPinnedAt, filePinnedAt),
     version,
   );
 }
@@ -1070,6 +1137,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
           builtIndex,
           notePinnedAt,
           stateRef.current.index?.folderPinnedAt ?? new Map<string, string>(),
+          stateRef.current.index?.filePinnedAt ?? new Map<string, string>(),
         ),
         bowerRulesVersion,
       );
@@ -1172,6 +1240,7 @@ export function VaultProvider({ children }: VaultProviderProps) {
       path: string,
       file: DriveFile | null,
       pinnedAt: string | null,
+      filePins?: Map<string, string>,
     ): Promise<void> => {
       const previous = stateRef.current.index?.folderNotes.get(path);
       const files = stateRef.current.files.filter((f) => f.id !== previous?.id);
@@ -1183,11 +1252,24 @@ export function VaultProvider({ children }: VaultProviderProps) {
       );
       if (pinnedAt === null) folderPinnedAt.delete(path);
       else folderPinnedAt.set(path, pinnedAt);
+      // Files pinned through this folder's note: replaced when given, else
+      // kept as they were (#688).
+      const filePinnedAt = new Map(stateRef.current.index?.filePinnedAt ?? []);
+      if (filePins !== undefined) {
+        for (const [id] of filePinnedAt) {
+          const at = stateRef.current.files.find((f) => f.id === id);
+          if (at !== undefined && folderOf(at.path) === path) {
+            filePinnedAt.delete(id);
+          }
+        }
+        for (const [id, iso] of filePins) filePinnedAt.set(id, iso);
+      }
       const index = withRulesVersion(
         withPinnedAt(
           builtIndex,
           stateRef.current.index?.notePinnedAt ?? new Map<string, string>(),
           folderPinnedAt,
+          filePinnedAt,
         ),
         stateRef.current.index?.bowerRulesVersion ?? null,
       );
@@ -1265,6 +1347,81 @@ export function VaultProvider({ children }: VaultProviderProps) {
       }
     },
     [recordFolderNote],
+  );
+
+  /**
+   * Rewrites the pins of `id`'s folder note with `compute` (#688): creates
+   * the note when the folder has none, deletes it when nothing is left in
+   * it, and keeps the folder's own pin. Conflict-checked like `pinFolder`.
+   */
+  const updateFilePin = useCallback(
+    async (
+      id: string,
+      compute: (text: string) => string,
+      create: boolean,
+    ): Promise<void> => {
+      const file = stateRef.current.index?.byId.get(id);
+      if (file === undefined) throw new Error('File not in the index.');
+      const path = folderOf(file.path);
+      const folder = stateRef.current.index?.byPath.get(path);
+      if (path === '' || folder === undefined) {
+        throw new Error('This file has no folder to keep its pin in.');
+      }
+      const existing = stateRef.current.index?.folderNotes.get(path);
+      const folderPin =
+        stateRef.current.index?.folderPinnedAt.get(path) ?? null;
+      const pinsOf = (text: string): Map<string, string> =>
+        filePinsIn(stateRef.current.index ?? buildVaultIndex([]), path, text);
+
+      if (existing === undefined) {
+        if (!create) return; // Nothing pinned.
+        const text = compute('');
+        const created = await createTextFile(
+          folder.id,
+          folderNoteName(path),
+          text,
+        );
+        await recordFolderNote(path, created, folderPin, pinsOf(text));
+        return;
+      }
+
+      for (let attempt = 1; ; attempt++) {
+        const fresh = await readNoteForEdit(existing.id);
+        if ((await modifiedTimeOf(existing.id)) !== fresh.modifiedTime) {
+          if (attempt < PIN_ATTEMPTS) continue;
+          throw new SaveError(
+            'conflict',
+            'The folder note changed while saving.',
+          );
+        }
+        const next = compute(fresh.text);
+        if (next.trim() === '') {
+          await deleteFile(existing.id);
+          await recordFolderNote(path, null, null, new Map());
+        } else {
+          const updated = await updateFileText(existing.id, next);
+          await recordFolderNote(path, updated, pinnedOf(next), pinsOf(next));
+        }
+        return;
+      }
+    },
+    [recordFolderNote],
+  );
+
+  const pinFile = useCallback(
+    (id: string): Promise<void> =>
+      updateFilePin(
+        id,
+        (text) => setFilePinned(text, id, new Date().toISOString()),
+        true,
+      ),
+    [updateFilePin],
+  );
+
+  const unpinFile = useCallback(
+    (id: string): Promise<void> =>
+      updateFilePin(id, (text) => clearFilePinned(text, id), false),
+    [updateFilePin],
   );
 
   const updateRules = useCallback(async (): Promise<RulesUpdate> => {
@@ -1444,6 +1601,8 @@ export function VaultProvider({ children }: VaultProviderProps) {
     unpinNote,
     pinFolder,
     unpinFolder,
+    pinFile,
+    unpinFile,
     updateRules,
     submitInterview,
     decideProposal,
