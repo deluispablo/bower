@@ -85,6 +85,18 @@
   flex-grow: 1;
   min-width: 0;
   font-size: 0.97rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+@media (min-width: 900px) {
+  .compare-card-title {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
 }
 
 .compare-fit {
