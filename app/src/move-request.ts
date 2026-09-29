@@ -42,8 +42,8 @@ export function requestRowText(text: string): string {
   const [, name = '', path = '', destination = ''] = match;
   return moveRequestText(
     name,
-    displayPath(path, '/'),
-    displayPath(destination, '/'),
+    displayPath(path, ' › '),
+    displayPath(destination, ' › '),
   );
 }
 
