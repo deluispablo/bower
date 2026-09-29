@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { h, render } from 'preact';
+import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,7 +15,10 @@ vi.mock('../src/api.js', async (importOriginal) => {
 
 vi.mock('../src/cache.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../src/cache.js')>();
-  return { ...original, loadThumbnail: vi.fn(async () => undefined) };
+  return {
+    ...original,
+    loadThumbnail: vi.fn(() => Promise.resolve(undefined)),
+  };
 });
 
 const { QuickLook, filedLine, kindLine } =
@@ -89,7 +92,7 @@ describe('QuickLook', () => {
   const onClose = vi.fn();
 
   function mount(): void {
-    act(() => {
+    void act(() => {
       render(
         <QuickLook
           title="Lease agreement 2026"
@@ -115,7 +118,7 @@ describe('QuickLook', () => {
   });
 
   afterEach(() => {
-    act(() => render(null, root));
+    void act(() => render(null, root));
     root.remove();
   });
 
@@ -154,7 +157,7 @@ describe('QuickLook', () => {
 
   it('closes on Escape', () => {
     mount();
-    act(() => {
+    void act(() => {
       document.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
       );
@@ -167,7 +170,7 @@ describe('QuickLook', () => {
     const grip = root.querySelector<HTMLElement>('.quick-look-grip');
     expect(grip).not.toBeNull();
     const pointer = (type: string, clientY: number): void => {
-      act(() => {
+      void act(() => {
         grip?.dispatchEvent(new MouseEvent(type, { clientY, bubbles: true }));
       });
     };
@@ -186,10 +189,10 @@ describe('QuickLook', () => {
     try {
       mount();
       const backdrop = root.querySelector<HTMLElement>('.quick-look-backdrop');
-      act(() => backdrop?.click());
+      void act(() => backdrop?.click());
       expect(onClose).not.toHaveBeenCalled();
       vi.setSystemTime(Date.now() + 400);
-      act(() => backdrop?.click());
+      void act(() => backdrop?.click());
       expect(onClose).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();

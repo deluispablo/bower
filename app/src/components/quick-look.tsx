@@ -180,7 +180,9 @@ export function QuickLook({
         <p class="quick-look-kind">{kindLine(kind, pages, shown.size)}</p>
         <p class="quick-look-path">
           {para !== null && <FolderMark kind={para} size={18} />}
-          <span class="quick-look-path-text">{segments.map(displayName).join(' › ')}</span>
+          <span class="quick-look-path-text">
+            {segments.map(displayName).join(' › ')}
+          </span>
         </p>
         {filed !== null && <p class="quick-look-filed">{filed}</p>}
         <div class="quick-look-actions">
