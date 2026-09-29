@@ -14,7 +14,7 @@
  */
 
 import type { JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 
 import type { DriveFile } from '../drive.js';
 import { displayPath, folderHref, folderOf } from '../navigation.js';
@@ -22,12 +22,13 @@ import { noteTitle } from '../note-title.js';
 import { openSwitcher } from '../switcher-store.js';
 import type { PinnedItem } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
-import { Bird } from './bird.js';
+import { BowerMark } from './bird.js';
 import { IconClose, IconFolder, IconNote } from './icons.js';
 import { KindBadge } from './kind-badge.js';
 import { useNoteTitles } from './use-note-titles.js';
 import '../styles/pinned-section.css';
 
+const UNPINNED_SHOWN_MS = 2000;
 const TILE_LIMIT = 8;
 
 interface Tile {
@@ -126,6 +127,13 @@ export function PinnedSection({
   // The tile that just finished unpinning: kept on screen, showing the
   // bird's `done` pose, even once `items` itself has already dropped it.
   const [pending, setPending] = useState<Tile | null>(null);
+  // The mark is still, so nothing tells when it is over: drop the tile after
+  // the same two seconds the `done` pose used to take.
+  useEffect(() => {
+    if (pending === null) return;
+    const timer = setTimeout(() => setPending(null), UNPINNED_SHOWN_MS);
+    return () => clearTimeout(timer);
+  }, [pending]);
   const shown = items.slice(0, TILE_LIMIT);
   const noteFiles: DriveFile[] = shown
     .filter(
@@ -173,7 +181,7 @@ export function PinnedSection({
         {tiles.map((tile) =>
           pending?.key === tile.key ? (
             <div key={tile.key} class="home-pinned-tile home-pinned-tile-done">
-              <Bird state="done" size={20} onDone={() => setPending(null)} />
+              <BowerMark size={20} />
               <span class="home-pinned-tile-name">Unpinned</span>
             </div>
           ) : editing ? (

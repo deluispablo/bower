@@ -55,7 +55,7 @@ import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
-import { Bird } from './bird.js';
+import { BowerMark } from './bird.js';
 import { FolderMark } from './folder-mark.js';
 import {
   LayoutToggle,
@@ -659,7 +659,7 @@ export function FolderItems({
             <span class="folder-tile-note">
               {row.bower && (
                 <span class="folder-tile-bower">
-                  <Bird state="idle" size={16} />
+                  <BowerMark size={16} />
                   Bower&rsquo;s note
                 </span>
               )}

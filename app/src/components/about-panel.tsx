@@ -19,7 +19,7 @@ import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { isAppFile } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
-import { Bird } from './bird.js';
+import { BowerMark } from './bird.js';
 import { detailsGroups, humaniseKey } from './details.js';
 import { KeyFacts } from './key-facts.js';
 import { hasNoteProperties, NotePropertiesList } from './note-properties.js';
@@ -191,7 +191,7 @@ export function AboutPanel({
                     class="about-outline-bird"
                     title="Bower on this section"
                   >
-                    <Bird state="idle" size={14} reducedMotion />
+                    <BowerMark size={14} />
                   </span>
                 )}
               </a>

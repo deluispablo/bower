@@ -6,14 +6,14 @@
 
 import type { JSX } from 'preact';
 
-import { Bird } from './bird.js';
+import { BowerMark } from './bird.js';
 
 import '../styles/marks.css';
 
 export function BowerTag(): JSX.Element {
   return (
     <span class="bower-tag">
-      <Bird state="idle" size={14} reducedMotion />
+      <BowerMark size={14} />
       Bower
     </span>
   );

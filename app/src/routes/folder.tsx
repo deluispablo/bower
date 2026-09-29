@@ -32,7 +32,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
 
 import { isDemo } from '../api.js';
-import { Bird } from '../components/bird.js';
+import { Bird, BowerMark } from '../components/bird.js';
 import {
   IconChat,
   IconExternalLink,
@@ -302,6 +302,13 @@ function FolderBody({
   const compare = useFolderCompare(contents.notes);
   const [tab, setTab] = useState<'everything' | 'compare'>('everything');
   useEffect(() => setTab('everything'), [contents.path]);
+  // The mark is still, so the chip's confirmation ends on a timer, after
+  // the two seconds the `done` pose used to take.
+  useEffect(() => {
+    if (!justChanged) return;
+    const timer = setTimeout(onDoneShown, 2000);
+    return () => clearTimeout(timer);
+  }, [justChanged, onDoneShown]);
   const comparing = tab === 'compare' && compare !== null;
   // The board's header (#611) for a folder with things in it; a root folder
   // and an empty one keep the counts line they have always had.
@@ -350,11 +357,7 @@ function FolderBody({
           aria-pressed={pinned}
           onClick={onTogglePin}
         >
-          {justChanged ? (
-            <Bird state="done" size={16} onDone={onDoneShown} />
-          ) : (
-            <IconPin />
-          )}
+          {justChanged ? <BowerMark size={16} /> : <IconPin />}
           {pinned ? 'Pinned' : 'Pin to Home'}
         </button>
         <a class="chip" href={tellHref}>

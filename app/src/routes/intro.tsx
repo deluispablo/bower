@@ -25,7 +25,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { isDemo, loginUrl } from '../api.js';
-import { Bird } from '../components/bird.js';
+import { Bird, BowerMark } from '../components/bird.js';
 import { DemoBanner } from '../components/demo-banner.js';
 import {
   IconChevronRight,
@@ -301,7 +301,7 @@ function Page4(): JSX.Element {
         <div class="intro-window-curtain">
           <div class="intro-window-layer intro-window-layer--app">
             <span class="intro-window-title">
-              <Bird state="idle" size={22} />
+              <BowerMark size={22} />
               {INTRO_APP_TITLE}
             </span>
             {INTRO_APP_ROWS.map((row) => (
@@ -632,7 +632,7 @@ export function Intro(): JSX.Element {
     <section class="intro" onKeyDown={onKeyDown}>
       <header class="intro-bar">
         <span class="intro-brand" aria-hidden="true">
-          <Bird state="idle" size={32} />
+          <BowerMark size={32} />
           Bower
         </span>
         <Dots page={page} where="top" />

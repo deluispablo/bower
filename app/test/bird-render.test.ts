@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { stubMatchMediaFor } from './helpers/match-media.js';
 
 import { BowerWorking } from '../src/components/bower-working.js';
-import { Bird } from '../src/components/bird.js';
+import { Bird, BowerMark } from '../src/components/bird.js';
 import type { BirdProps } from '../src/components/bird.js';
 
 function mount(props: BirdProps): SVGSVGElement {
@@ -27,6 +27,7 @@ function animationEnd(target: Element): void {
 
 afterEach(() => {
   document.body.replaceChildren();
+  vi.restoreAllMocks();
 });
 
 describe('Bird', () => {
@@ -34,7 +35,7 @@ describe('Bird', () => {
     const svg = mount({ state: 'looking' });
     expect(svg.getAttribute('aria-hidden')).toBe('true');
     expect(svg.getAttribute('class')).toBe('b p-look');
-    expect(svg.getAttribute('width')).toBe('32');
+    expect(svg.getAttribute('width')).toBe('40');
     // The v9 drawing (spec Appendix A): joints, then the
     // parts that only some states move (neck, lids, blush, feet).
     for (const part of ['rig', 'turn', 'hd', 'ey', 'jw', 'wg', 'tl', 'ft']) {
@@ -202,6 +203,53 @@ describe('Bird', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('Bird size guard', () => {
+  it('logs an error in dev and test for a size under 40', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mount({ state: 'idle', size: 24 });
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0]?.[0])).toContain('BowerMark');
+  });
+
+  it('is quiet for 40 and above, and for the default', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mount({ state: 'idle', size: 40 });
+    mount({ state: 'idle' });
+    expect(error).not.toHaveBeenCalled();
+  });
+});
+
+describe('BowerMark', () => {
+  function mountMark(size?: number): SVGSVGElement {
+    const root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(h(BowerMark, size === undefined ? {} : { size }), root);
+    });
+    const svg = root.querySelector('svg');
+    if (svg === null) throw new Error('no svg rendered');
+    return svg;
+  }
+
+  it('is the still drawing: class "b mark", no pose, hidden from assistive technology', () => {
+    const svg = mountMark(16);
+    expect(svg.getAttribute('class')).toBe('b mark');
+    expect(svg.getAttribute('aria-hidden')).toBe('true');
+    expect(svg.getAttribute('width')).toBe('16');
+    expect(svg.getAttribute('height')).toBe('16');
+    for (const part of ['bd', 'hc', 'ec', 'bk', 'wg', 'tf', 'fo']) {
+      expect(svg.querySelector(`.${part}`)).not.toBeNull();
+    }
+    expect(svg.querySelector('.nest2')).toBeNull();
+  });
+
+  it('does not log the size guard', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mountMark(14);
+    expect(error).not.toHaveBeenCalled();
   });
 });
 
