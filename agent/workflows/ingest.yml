@@ -61,10 +61,10 @@ jobs:
           sudo install -m 755 ~/rclone-bin/rclone /usr/local/bin/rclone
           rclone version
 
-      - name: Install pandoc
+      - name: Install pandoc and poppler-utils
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc
+          sudo apt-get install -y pandoc poppler-utils
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
