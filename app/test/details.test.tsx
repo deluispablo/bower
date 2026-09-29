@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 
 import { h, render } from 'preact';
-import { act } from 'preact/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { Details } from '../src/components/details.js';
+import rulebook from '../../vault-template/CLAUDE.md?raw';
+import { BOOKKEEPING_KEYS, Details } from '../src/components/details.js';
 import { keyFactsFor, kindById } from '../src/kinds.js';
 import type { Kind } from '../src/kinds.js';
 import { noteMetaFrom } from '../src/note-meta.js';
-import { currentToast, dismissToast } from '../src/toast-store.js';
 
 const FOUND = kindById('rental-listing');
 if (FOUND === undefined) throw new Error('rental-listing kind is missing');
@@ -26,16 +25,9 @@ const SAMPLE: Record<string, unknown> = {
 };
 
 let host: HTMLElement;
-const writeText = vi.fn<(text: string) => Promise<void>>();
 
 function mount(fields: Record<string, unknown>): void {
   render(h(Details, { kind: KIND, meta: noteMetaFrom(fields) }), host);
-}
-
-async function click(selector: string): Promise<void> {
-  await act(() => {
-    host.querySelector<HTMLButtonElement>(selector)?.click();
-  });
 }
 
 function titles(): (string | null)[] {
@@ -47,43 +39,22 @@ function titles(): (string | null)[] {
 beforeEach(() => {
   host = document.createElement('div');
   document.body.append(host);
-  writeText.mockReset();
-  writeText.mockResolvedValue();
-  Object.defineProperty(navigator, 'clipboard', {
-    value: { writeText },
-    configurable: true,
-  });
 });
 
 afterEach(() => {
   render(null, host);
   host.remove();
-  dismissToast();
 });
 
-describe('Details (issue #603)', () => {
-  it('is collapsed by default with the count in its row', () => {
+describe('Details (issue #603, #757)', () => {
+  it('is always open: groups, values and origin squares only off the file', () => {
     mount(SAMPLE);
-    const toggle = host.querySelector('.details-toggle');
-    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-    expect(toggle?.textContent).toBe(
-      'Details· rental listing · 4 read by Bower',
-    );
-    expect(host.querySelector('.details-body')).toBeNull();
-  });
-
-  it('shows groups, values, origin squares and chips when open', async () => {
-    mount(SAMPLE);
-    await click('.details-toggle');
-    expect(
-      host.querySelector('.details-toggle')?.getAttribute('aria-expanded'),
-    ).toBe('true');
+    expect(host.querySelector('.details-toggle')).toBeNull();
     expect(titles()).toEqual([
       'The place',
       'Money',
       'Terms and dates',
       'For you',
-      'Not in the listing',
     ]);
     const text = host.textContent ?? '';
     expect(text).toContain('14 Arlington Road, London NW1');
@@ -92,37 +63,17 @@ describe('Details (issue #603)', () => {
     expect(text).toContain(
       '14 minutes, from your offer letter and Cycle to Work agreement',
     );
+    // A field from the file shows no square; one from your notes does.
     expect(
       [...host.querySelectorAll('.origin-square')].map((node) =>
         node.getAttribute('data-origin'),
       ),
-    ).toEqual(['file', 'file', 'file', 'notes']);
-    expect(
-      [...host.querySelectorAll('.details-chip')].map(
-        (node) => node.textContent,
-      ),
-    ).toEqual(['Pets', 'Parking', 'Council tax']);
-    expect(host.querySelector('.details-ask')?.textContent).toBe(
-      'Ask the agent: copy these three as questions',
-    );
+    ).toEqual(['notes']);
   });
 
-  it('copies one question per chip and shows a toast', async () => {
-    mount(SAMPLE);
-    await click('.details-toggle');
-    await click('.details-ask');
-    expect(writeText).toHaveBeenCalledTimes(1);
-    const lines = (writeText.mock.calls[0]?.[0] ?? '').split('\n');
-    expect(lines).toHaveLength(3);
-    expect(lines[0]).toBe('What is the pets for this rental listing?');
-    expect(lines[2]).toContain('council tax');
-    expect(currentToast()?.message).toBe('Copied three questions');
-  });
-
-  it('puts a field a rule added under "More", never in key facts', async () => {
+  it('puts a field a rule added under "More", never in key facts', () => {
     const fields = { ...SAMPLE, pet_policy: 'Cats allowed' };
     mount(fields);
-    await click('.details-toggle');
     expect(titles()).toContain('More');
     expect(host.textContent).toContain('Pet policy');
     expect(host.textContent).toContain('Cats allowed');
@@ -131,15 +82,53 @@ describe('Details (issue #603)', () => {
     expect(facts.map((fact) => fact.value)).not.toContain('Cats allowed');
   });
 
-  it('never lists bookkeeping keys under "More"', async () => {
+  it('never lists bookkeeping keys under "More"', () => {
     mount({ ...SAMPLE, status: 'to view', original: '[[Listing.pdf]]' });
-    await click('.details-toggle');
     expect(titles()).not.toContain('More');
+  });
+
+  it('keeps the box, verdict and pile keys out of "More" (R-INS-8)', () => {
+    mount({
+      ...SAMPLE,
+      bower_updated: '2026-09-29',
+      bower_change: 'Your rule now asks for 70.',
+      bower_before: 'Your rule asked for 80.',
+      by: 'bower',
+      pile_note: 'From the Flat hunt pile',
+      facts: { rent: 2150 },
+      score: 79,
+      verdict: 'Apply first',
+      made_for: '[[CV]]',
+    });
+    expect(titles()).not.toContain('More');
+    const text = host.textContent ?? '';
+    expect(text).not.toContain('Apply first');
+    expect(text).not.toContain('Flat hunt pile');
+  });
+
+  it('keeps BOOKKEEPING_KEYS equal to the rulebook frontmatter keys (spec 7c item 10)', () => {
+    const required = [
+      'bower_updated',
+      'bower_change',
+      'bower_before',
+      'by',
+      'pile_note',
+      'facts',
+      'score',
+      'verdict',
+      'made_for',
+    ];
+    for (const key of required) expect(BOOKKEEPING_KEYS.has(key)).toBe(true);
+    // Every `bower_*` key the rulebook names must be bookkeeping too.
+    const named = new Set(rulebook.match(/\bbower_[a-z_]+\b/g) ?? []);
+    // `bower_rules_version` is the rulebook's own version, not a note field.
+    named.delete('bower_rules_version');
+    for (const key of named) expect(BOOKKEEPING_KEYS.has(key)).toBe(true);
   });
 });
 
 describe('Details notes and bookkeeping (issue #705)', () => {
-  it('writes a value with its companion note and hides bookkeeping keys', async () => {
+  it('writes a value with its companion note and hides bookkeeping keys', () => {
     mount({
       ...SAMPLE,
       bike_to_office: '14 min',
@@ -152,7 +141,6 @@ describe('Details notes and bookkeeping (issue #705)', () => {
       extra_note: 'stray',
       pet_policy: 'No pets',
     });
-    await click('.details-toggle');
     const text = host.textContent ?? '';
     expect(text).toContain('14 min, from your offer letter');
     expect(text).toContain('72 of 100: cheap, close');

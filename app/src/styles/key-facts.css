@@ -95,36 +95,11 @@
   font-size: var(--text-sm);
 }
 
-/* Details (issue #603): the folded block under a kind note's key facts. */
+/* Details (issue #603, #757): the fields inside Bower's note box. */
 .details {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-
-.details-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.details-toggle-meta {
-  color: var(--color-text-muted);
-}
-
-.details-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
 }
 
 .details-group-title {
@@ -165,33 +140,4 @@
 .details-field .origin-square {
   grid-column: 2;
   grid-row: 1 / span 2;
-}
-
-.details-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.details-chip {
-  padding: 2px var(--space-3);
-  border: 1px dashed var(--color-border-strong);
-  border-radius: var(--radius-full);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.details-ask {
-  align-self: flex-start;
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-full);
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  cursor: pointer;
 }

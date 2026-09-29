@@ -341,9 +341,9 @@ test("a note Bower wrote opens with Bower's note and the Used line (#351, #602)"
     .first()
     .click();
 
-  const box = page.locator('.bower-note');
+  const box = page.locator('.bower-note-box');
   await expect(box).toBeVisible();
-  await expect(box.locator('.bower-note-title')).toHaveText("Bower's note");
+  await expect(box.locator('.bower-note-box-name')).toHaveText("Bower's note");
   // v3 markers (#602): ✅ shows no word, ⚠️ "Check", ❌ "Problem".
   await expect(box.locator('.bower-note-row')).toHaveCount(3);
   await expect(box.locator('.bower-note-word')).toHaveText([
@@ -2010,7 +2010,7 @@ test('At 1920 the content stays in one centred container, away from the right ed
     .getByRole('option', { name: /subscriptions renew/ })
     .first()
     .click();
-  await expect(page.locator('.bower-note')).toBeVisible();
+  await expect(page.locator('.bower-note-box')).toBeVisible();
   await expect(
     page.getByRole('complementary', { name: 'About this note' }),
   ).toBeVisible();
@@ -2236,7 +2236,7 @@ test('Home, a note, Add, the Bower tab and Settings at 1024, 1280, 1440 and 1920
           .getByRole('option', { name: /subscriptions renew/ })
           .first()
           .click();
-        await expect(page.locator('.bower-note')).toBeVisible();
+        await expect(page.locator('.bower-note-box')).toBeVisible();
       },
     ],
     ['add', () => navigate(page, /^Add$/)],

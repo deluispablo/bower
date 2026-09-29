@@ -1,19 +1,16 @@
 /**
- * Details (issue #603, spec §6.7 R-NOTE-5, board `Phone-Note-Details-Open`):
- * the folded block under a kind note's key facts. Collapsed it reads
- * "Details · rental listing · 18 read by Bower"; open it lists the kind's
- * groups with each field's label, value and where it came from, then the
- * "Not in the listing" chips with a button that copies them as questions.
- * Fields a person's rule added (not in the kind) sit under "More".
+ * Details (issue #603, spec §6.9 R-INS-7): every other field of the note's
+ * kind, by group, each with its label, value and origin square (the square
+ * only when the field is not from the file). Always shown: it sits inside
+ * Bower's note box, which is the one thing that folds. Fields a person's
+ * rule added (not in the kind) sit under "More".
  */
 
-import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
-import { formatFieldValue, questionsLabelFor } from '../kinds.js';
+import { formatFieldValue } from '../kinds.js';
 import type { Kind, KindField } from '../kinds.js';
 import type { NoteMeta } from '../note-meta.js';
-import { showToast } from '../toast-store.js';
 import { OriginSquare } from './folder-mark.js';
 import type { OriginKind } from './folder-mark.js';
 
@@ -29,7 +26,7 @@ export const MORE_GROUP = 'More';
 
 /** Frontmatter keys Bower or Obsidian keep for themselves: never a "More"
  * field. */
-const BOOKKEEPING_KEYS: ReadonlySet<string> = new Set([
+export const BOOKKEEPING_KEYS: ReadonlySet<string> = new Set([
   'kind',
   'status',
   'original',
@@ -46,9 +43,19 @@ const BOOKKEEPING_KEYS: ReadonlySet<string> = new Set([
   'type',
   'source',
   'pages',
+  // Bower's note box keeps these (R-INS-8, R-VERDICT-1). `score` and `fit`
+  // stay readable by Compare and the front page; they are only kept out of
+  // "More".
+  'bower_updated',
+  'bower_change',
+  'bower_before',
+  'by',
+  'pile_note',
+  'facts',
+  'score',
+  'verdict',
+  'made_for',
 ]);
-
-const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six'];
 
 const ORIGINS: ReadonlySet<string> = new Set(['file', 'notes', 'web', 'you']);
 
@@ -149,7 +156,7 @@ export function detailsGroups(
 
 /** The chip for a field the document did not state: the kind's label for
  * it, or the key made readable. */
-function chipLabel(kind: Kind, key: string): string {
+export function chipLabel(kind: Kind, key: string): string {
   return (
     kind.fields.find((field) => field.key === key)?.label ?? humaniseKey(key)
   );
@@ -166,82 +173,26 @@ export function questionsFor(
   );
 }
 
-export function Details({ kind, meta }: DetailsProps): JSX.Element {
-  const [open, setOpen] = useState(false);
+export function Details({ kind, meta }: DetailsProps): JSX.Element | null {
   const groups = detailsGroups(kind, meta);
-  const count = groups.reduce((total, group) => total + group.rows.length, 0);
-  const notStated = meta.not_stated;
-
-  const copyQuestions = (): void => {
-    const questions = questionsFor(kind, notStated);
-    const count = questions.length;
-    const noun = count === 1 ? 'question' : 'questions';
-    const words = NUMBER_WORDS[count] ?? String(count);
-    const clipboard =
-      typeof navigator === 'undefined' ? undefined : navigator.clipboard;
-    if (clipboard === undefined) {
-      showToast("Bower couldn't copy that. Try again.");
-      return;
-    }
-    clipboard.writeText(questions.join('\n')).then(
-      () => {
-        showToast(`Copied ${words} ${noun}`);
-      },
-      (error: unknown) => {
-        console.error('Copying the questions failed', error);
-        showToast("Bower couldn't copy that. Try again.");
-      },
-    );
-  };
-
+  if (groups.length === 0) return null;
   return (
     <section class="details" aria-label="Details">
-      <button
-        type="button"
-        class="details-toggle"
-        aria-expanded={open}
-        onClick={() => {
-          setOpen((current) => !current);
-        }}
-      >
-        <span>Details</span>
-        <span class="details-toggle-meta">
-          {`· ${kind.name} · ${count} read by Bower`}
-        </span>
-      </button>
-      {open && (
-        <div class="details-body">
-          {groups.map((group) => (
-            <div class="details-group" key={group.title}>
-              <h3 class="details-group-title">{group.title}</h3>
-              <dl class="details-fields">
-                {group.rows.map((row) => (
-                  <div class="details-field" key={row.key}>
-                    <dt class="details-field-label">{row.label}</dt>
-                    <dd class="details-field-value">{row.value}</dd>
-                    <OriginSquare origin={row.origin} />
-                  </div>
-                ))}
-              </dl>
-            </div>
-          ))}
-          {notStated.length > 0 && (
-            <div class="details-group">
-              <h3 class="details-group-title">{kind.notStatedLabel}</h3>
-              <ul class="details-chips">
-                {notStated.map((key) => (
-                  <li class="details-chip" key={key}>
-                    {chipLabel(kind, key)}
-                  </li>
-                ))}
-              </ul>
-              <button type="button" class="details-ask" onClick={copyQuestions}>
-                {questionsLabelFor(kind, notStated.length)}
-              </button>
-            </div>
-          )}
+      <h3 class="bower-box-title">Details</h3>
+      {groups.map((group) => (
+        <div class="details-group" key={group.title}>
+          <h4 class="details-group-title">{group.title}</h4>
+          <dl class="details-fields">
+            {group.rows.map((row) => (
+              <div class="details-field" key={row.key}>
+                <dt class="details-field-label">{row.label}</dt>
+                <dd class="details-field-value">{row.value}</dd>
+                {row.origin !== 'file' && <OriginSquare origin={row.origin} />}
+              </div>
+            ))}
+          </dl>
         </div>
-      )}
+      ))}
     </section>
   );
 }

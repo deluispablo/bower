@@ -1,0 +1,241 @@
+// @vitest-environment jsdom
+
+import { h, render } from 'preact';
+import { act } from 'preact/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  BowerNoteBox,
+  NOTE_FOLDED_KEY,
+  boxParts,
+  checkItems,
+  ruleChange,
+  takeCheckSection,
+  updatedWhen,
+  whoFor,
+} from '../src/components/bower-note-box.js';
+import { kindById } from '../src/kinds.js';
+import { noteMetaFrom } from '../src/note-meta.js';
+import { currentToast, dismissToast } from '../src/toast-store.js';
+
+vi.mock('../src/vault-store.js', () => ({
+  useVault: () => ({ index: null, getNoteText: () => Promise.resolve('') }),
+}));
+
+const TOP =
+  '<div class="bower-note"><div class="bower-note-head">' +
+  '<div class="bower-note-title">Bower\'s note</div>' +
+  '<div class="bower-note-legend">· from <em class="bower-legend-file">the file</em>, <em class="bower-legend-notes">your notes</em></div></div>' +
+  '<ul class="bower-note-rows">' +
+  '<li class="bower-note-row"><span class="bower-origin bower-origin-file"></span><div class="bower-note-text">Pays 72,000 a year.</div></li>' +
+  '<li class="bower-note-row bower-note-check"><span class="bower-origin bower-origin-notes"></span><div class="bower-note-text">Ten minutes by bike.</div><span class="bower-note-word">Check</span></li>' +
+  '</ul></div>\n';
+
+const OFFER: Record<string, unknown> = {
+  kind: 'job-offer',
+  salary: 72000,
+  score: 79,
+  not_stated: ['bonus', 'notice_period'],
+};
+
+let host: HTMLElement;
+const writeText = vi.fn<(text: string) => Promise<void>>();
+
+function mount(
+  frontmatter: Record<string, unknown>,
+  checkSection: string[] = [],
+): void {
+  void act(() => {
+    render(h(BowerNoteBox, { html: TOP, frontmatter, checkSection }), host);
+  });
+}
+
+beforeEach(() => {
+  host = document.createElement('div');
+  document.body.append(host);
+  localStorage.clear();
+  writeText.mockReset();
+  writeText.mockResolvedValue();
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { writeText },
+    configurable: true,
+  });
+});
+
+afterEach(() => {
+  void act(() => {
+    render(null, host);
+  });
+  host.remove();
+  dismissToast();
+});
+
+describe('pure helpers', () => {
+  it('takes the top box apart and drops its own title', () => {
+    const parts = boxParts(TOP);
+    expect(parts.rows).toContain('bower-note-rows');
+    expect(parts.legend).toContain('from');
+    expect(parts.rows + parts.legend).not.toContain('bower-note-title');
+    expect(boxParts('<p>nothing</p>')).toEqual({
+      legend: '',
+      rows: '',
+      joined: '',
+    });
+  });
+
+  it('reads the note\'s own "What to check" section and removes it', () => {
+    const html =
+      '<h2>Terms</h2><p>x</p><h2>What to check</h2><ul><li>Bonus</li><li>Notice</li></ul><p>after</p>';
+    const out = takeCheckSection(html);
+    expect(out.items).toEqual(['Bonus', 'Notice']);
+    expect(out.rest).not.toContain('What to check');
+    expect(out.rest).toContain('after');
+    expect(takeCheckSection('<p>none</p>')).toEqual({
+      items: [],
+      rest: '<p>none</p>',
+    });
+  });
+
+  it('names the check items from not_stated, one question per item', () => {
+    const kind = kindById('job-offer');
+    const meta = noteMetaFrom(OFFER);
+    const out = checkItems(kind, meta, []);
+    expect(out.items).toHaveLength(2);
+    expect(out.questions).toHaveLength(2);
+    expect(checkItems(kind, meta, ['Ask about the start date']).items).toEqual([
+      'Ask about the start date',
+    ]);
+  });
+
+  it('says who the questions go to', () => {
+    expect(whoFor(kindById('job-offer'))).toBe('the employer');
+    expect(whoFor(kindById('rental-listing'))).toBe('the agent');
+    expect(whoFor(undefined)).toBe('the agent');
+  });
+
+  it('writes the rule-change line only when bower_change is there', () => {
+    const now = new Date(2026, 8, 29, 10);
+    expect(ruleChange({}, now)).toBeNull();
+    expect(ruleChange({ bower_updated: '2026-09-29' }, now)).toBeNull();
+    expect(
+      ruleChange(
+        {
+          bower_updated: '2026-09-29',
+          bower_change: 'your rule now asks for 70, not 80.',
+          bower_before: 'Your rule asked for 80.',
+        },
+        now,
+      ),
+    ).toEqual({
+      line: 'Updated today · your rule now asks for 70, not 80.',
+      before: 'Your rule asked for 80.',
+    });
+    expect(updatedWhen('2026-09-28', now)).toBe('28 Sep');
+  });
+});
+
+describe('BowerNoteBox (issue #757)', () => {
+  it('is open by default with every section, in order', () => {
+    mount(OFFER);
+    const head = host.querySelector('.bower-note-box-head');
+    expect(head?.tagName).toBe('BUTTON');
+    expect(head?.getAttribute('aria-expanded')).toBe('true');
+    const controls = head?.getAttribute('aria-controls') ?? '';
+    expect(host.querySelector(`[id="${controls}"]`)).not.toBeNull();
+    const titles = [...host.querySelectorAll('.bower-box-title')].map(
+      (node) => node.textContent,
+    );
+    expect(titles.slice(0, 2)).toEqual(['Summary', 'Key facts']);
+    expect(titles[titles.length - 1]).toBe('What to check');
+    expect(host.querySelectorAll('.bower-note-row')).toHaveLength(2);
+    expect(host.querySelector('.bower-origin-notes')).not.toBeNull();
+    expect(host.querySelector('.bower-note-word')?.textContent).toBe('Check');
+    // The key facts appear once, with the score tile first.
+    expect(host.querySelectorAll('.key-facts')).toHaveLength(1);
+    expect(host.querySelector('.key-fact-pill')?.textContent).toBe('79');
+  });
+
+  it('folds to one line and remembers it for every note', async () => {
+    mount(OFFER);
+    await act(() => {
+      host.querySelector<HTMLButtonElement>('.bower-note-box-head')?.click();
+    });
+    expect(localStorage.getItem(NOTE_FOLDED_KEY)).toBe('true');
+    expect(
+      host.querySelector('.bower-note-box-head')?.getAttribute('aria-expanded'),
+    ).toBe('false');
+    expect(
+      host.querySelector('.bower-note-box-body')?.hasAttribute('hidden'),
+    ).toBe(true);
+    const line = host.querySelector('.bower-note-box-line');
+    expect(line?.querySelector('.key-fact-pill')?.textContent).toBe('79');
+    expect(line?.textContent).toContain('2 to check');
+
+    // A second box mounted later reads the same device preference.
+    await act(() => {
+      render(null, host);
+    });
+    mount(OFFER);
+    expect(
+      host.querySelector('.bower-note-box-head')?.getAttribute('aria-expanded'),
+    ).toBe('false');
+  });
+
+  it('shows the blue line and "Before today" only when asked', async () => {
+    mount({
+      ...OFFER,
+      bower_updated: '2026-09-28',
+      bower_change: 'your job-offer rule now asks for 70, not 80.',
+      bower_before: 'Your rule asked for 80.',
+    });
+    expect(
+      host.querySelector('.bower-note-box-updated-line')?.textContent,
+    ).toContain(
+      'Updated 28 Sep · your job-offer rule now asks for 70, not 80.',
+    );
+    expect(host.textContent).not.toContain('Before today');
+    await act(() => {
+      host.querySelector<HTMLButtonElement>('.bower-note-box-changed')?.click();
+    });
+    expect(host.textContent).toContain('Before today');
+    expect(host.textContent).toContain('Your rule asked for 80.');
+  });
+
+  it('shows no blue line without the frontmatter', () => {
+    mount(OFFER);
+    expect(host.querySelector('.bower-note-box-updated')).toBeNull();
+  });
+
+  it('copies one question per line and says so', async () => {
+    mount(OFFER);
+    await act(() => {
+      host.querySelector<HTMLButtonElement>('.bower-note-box-copy')?.click();
+    });
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect((writeText.mock.calls[0]?.[0] ?? '').split('\n')).toHaveLength(2);
+    expect(currentToast()?.message).toBe('Copied 2 questions');
+    expect(host.querySelector('.bower-note-box-copy')?.textContent).toBe(
+      'Copy as questions for the employer',
+    );
+  });
+
+  it('says so when the clipboard is missing', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      configurable: true,
+    });
+    mount(OFFER);
+    await act(() => {
+      host.querySelector<HTMLButtonElement>('.bower-note-box-copy')?.click();
+    });
+    expect(currentToast()?.message).toBe(
+      "Bower couldn't copy that. Try again.",
+    );
+  });
+
+  it('shows no What to check without anything to check', () => {
+    mount({ kind: 'job-offer', salary: 72000 });
+    expect(host.querySelector('.bower-note-box-check')).toBeNull();
+    expect(host.querySelector('.bower-note-box-line')).toBeNull();
+  });
+});

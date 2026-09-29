@@ -45,21 +45,17 @@ test('the Arlington Road note shows its props line, key facts and folded Details
   ).toHaveAttribute('href', /^\/file\//);
   await expect(props.getByRole('link', { name: /Flat hunt/ })).toBeVisible();
 
-  await expect(view.locator('.bower-note')).toBeVisible();
+  await expect(view.locator('.bower-note-box')).toBeVisible();
   await expect(view.locator('.bower-joined')).toContainText('Joined from:');
-  await expect(view.locator('.note-keyfacts-caption')).toHaveText(
-    'Key facts for a rental listing: set in your rules, the same for every listing',
-  );
+  await expect(view.locator('.note-keyfacts-caption')).toHaveCount(0);
   await expect(view.locator('.key-fact')).not.toHaveCount(0);
 
-  const details = view.getByRole('button', { name: /^Details/ });
-  await expect(details).toHaveAttribute('aria-expanded', 'false');
-  await expect(details).toContainText('rental listing');
-  await details.click();
-  await expect(view.locator('.details-body')).toContainText(
+  // Details are part of the open box: no second fold.
+  await expect(view.locator('.details-toggle')).toHaveCount(0);
+  await expect(view.locator('.details')).toContainText(
     '14 min, from your offer letter and Cycle to Work agreement',
   );
-  await expect(view.locator('.details-body')).toContainText(
+  await expect(view.locator('.details')).toContainText(
     '72 of 100: cheap, close, one bedroom short of a study',
   );
   await shot(page, testInfo, 'v4-note-arlington');
@@ -81,7 +77,7 @@ test('an answer shows the question, the lists, the checklist link and Used', asy
   await expect(view.locator('.note-asked-text')).toHaveText(
     'Which two should we view first?',
   );
-  await expect(view.locator('.bower-note')).toBeVisible();
+  await expect(view.locator('.bower-note-box')).toBeVisible();
   await expect(view.getByText('At the viewing, check')).toBeVisible();
   await expect(view.getByText('Ask the agent')).toBeVisible();
   await expect(

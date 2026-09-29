@@ -1,0 +1,156 @@
+/* Bower's note box (issue #757, boards Note-*, Note-Folded-*). */
+.bower-note-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: 0 14px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.bower-note-box.is-folded {
+  padding-bottom: 8px;
+}
+
+.bower-note-box-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-heading);
+  font: inherit;
+  font-size: 0.8125rem; /* 13px */
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bower-note-box-name {
+  flex: 1;
+}
+
+.bower-note-box-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--motion-fast);
+}
+
+.bower-note-box-head[aria-expanded='false'] .bower-note-box-chevron {
+  transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bower-note-box-chevron {
+    transition: none;
+  }
+}
+
+.bower-note-box-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.bower-note-box-facts {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bower-note-box-tocheck {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.bower-note-box-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bower-note-box-body[hidden] {
+  display: none;
+}
+
+.bower-box-title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* The rows sit inside the box, not in a second one. */
+.bower-note-box-summary .markdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bower-note-box-updated-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  color: var(--color-link, var(--color-text));
+  font-size: var(--text-sm);
+}
+
+.bower-note-box-changed,
+.bower-note-box-copy {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bower-note-box-copy {
+  align-self: flex-start;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.bower-note-box-before p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.bower-check-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.bower-check-row {
+  padding: 2px var(--space-3);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+}

@@ -23,6 +23,11 @@ import { FolderMark } from '../components/folder-mark.js';
 import { IconClock, IconFolder, IconSparkle } from '../components/icons.js';
 import { KindBadge } from '../components/kind-badge.js';
 import { MoreButton } from '../components/more-button.js';
+import {
+  BowerNoteBox,
+  splitOpening,
+  takeCheckSection,
+} from '../components/bower-note-box.js';
 import { NoteBody, loadImage } from '../components/note-body.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { PhotoViewer } from '../components/photo-viewer.js';
@@ -543,19 +548,32 @@ function BowerNote({
 }): JSX.Element {
   const { note, text } = companion;
   const pages = useMemo(() => whereToLook(text), [text]);
-  const html = useMemo(
-    () =>
-      renderNote(withoutWhereToLook(text), index, {
-        path: note.path,
-        title: noteTitle(note, text),
-      }).html,
-    [text, index, note.path],
-  );
+  const rendered = useMemo(() => {
+    const out = renderNote(withoutWhereToLook(text), index, {
+      path: note.path,
+      title: noteTitle(note, text),
+    });
+    const opening = splitOpening(out.html);
+    const checked = takeCheckSection(opening.rest);
+    return {
+      top: opening.top,
+      rest: checked.rest,
+      items: checked.items,
+      frontmatter: out.frontmatter,
+    };
+  }, [text, index, note.path]);
   const driveUrl = driveFileUrl(file);
   return (
     <section class="file-bower-note" aria-label="Bower's note">
+      {rendered.top !== '' && (
+        <BowerNoteBox
+          html={rendered.top}
+          frontmatter={rendered.frontmatter}
+          checkSection={rendered.items}
+        />
+      )}
       <div class="file-bower-note-text">
-        <NoteBody html={html} />
+        <NoteBody html={rendered.rest} />
       </div>
       {pages.length > 0 && (
         <div class="file-where">

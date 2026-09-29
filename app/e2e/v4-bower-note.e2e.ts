@@ -22,9 +22,9 @@ test("the Arlington Road note shows Bower's note as the board draws it", async (
     .first()
     .click();
 
-  const box = page.locator('.bower-note');
+  const box = page.locator('.bower-note-box');
   await expect(box).toBeVisible();
-  await expect(box.locator('.bower-note-title')).toHaveText("Bower's note");
+  await expect(box.locator('.bower-note-box-name')).toHaveText("Bower's note");
   await expect(box.locator('.bower-note-legend')).toHaveText(
     '· from the file, your notes',
   );
