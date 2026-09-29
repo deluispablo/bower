@@ -64,6 +64,10 @@ test('the Notes tab lists Pinned, the five landmarks, a divider, the others, Hea
   ]);
   expect(order.slice(6).every((kind) => kind === 'other')).toBe(true);
   await expect(box.locator('.tree-meaning').first()).toBeVisible();
+  // The Inbox row always carries its count (a count of 0 is unit-tested).
+  await expect(
+    box.locator('a[href="/folder/0-Inbox"] .tree-count'),
+  ).toBeVisible();
 
   // Pinned comes before the folders, the Health row and the hidden-files
   // line come after the tree.
