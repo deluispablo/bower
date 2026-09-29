@@ -15,6 +15,7 @@ import { BackLink } from '../components/back-link.js';
 import { FolderMark } from '../components/folder-mark.js';
 import { useJustFiled } from '../components/just-filed-row.js';
 import { KindBadge } from '../components/kind-badge.js';
+import { isLinkNote } from '../note-title.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { NewTag } from '../components/tags.js';
 import { useFileText } from '../components/rules-panel.js';
@@ -100,7 +101,12 @@ function Where({ row }: { row: JustFiledRow }): JSX.Element {
 }
 
 function Badge({ row }: { row: JustFiledRow }): JSX.Element {
-  return <KindBadge kind={row.kind} file={{ name: row.name, mimeType: '' }} />;
+  return (
+    <KindBadge
+      kind={isLinkNote(row.name) ? 'doc' : row.kind}
+      file={{ name: row.name, mimeType: '' }}
+    />
+  );
 }
 
 function Title({
