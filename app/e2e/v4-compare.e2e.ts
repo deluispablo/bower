@@ -62,10 +62,10 @@ test.describe('Compare on a phone (#701)', () => {
     await page.goto('/folder/1-Projects/Flat%20hunt');
     await page.getByRole('tab', { name: /^Compare \d+ / }).click();
 
-    await expect(page.locator('.compare-chip')).toHaveText([
-      'Best fit first',
-      'Under £2,300',
-    ]);
+    await expect(page.locator('.compare-chip')).toHaveText(['Under £2,300']);
+    await expect(page.locator('.compare-sort-btn')).toHaveText(
+      'Sort: Fit, high first',
+    );
     const cards = page.locator('.compare-card');
     await expect(cards.nth(0)).toContainText('garden');
     await expect(cards.nth(1)).toContainText('2nd floor');
