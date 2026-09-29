@@ -551,7 +551,7 @@ export function Home(): JSX.Element {
         }}
       >
         <IconSearch />
-        <span>Search or jump to a note</span>
+        <span>Search folders, notes and files</span>
       </button>
 
       <div class="home-cards">

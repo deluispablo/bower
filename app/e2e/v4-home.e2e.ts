@@ -32,7 +32,7 @@ test('the bubble says what was filed and links to Just filed', async ({
   await tidyUp(page);
   const bubble = visible(page.locator('.home-bubble'));
   await expect(bubble).toContainText(
-    'All tidy. 2 filed and 1 question answered. See where they went.',
+    'All tidy. 5 filed and 1 question answered, and I added bike times to the flats. See where they went.',
   );
   await shot(page, testInfo, 'home-after-tidy');
   await bubble.getByRole('link', { name: 'See where they went' }).click();
@@ -79,5 +79,10 @@ test('Recent rows show the kind badge, New for what was just filed, and the All 
   await expect(
     rows.filter({ hasText: 'Notes from the viewing' }).locator('.new-tag'),
   ).toHaveCount(0);
+  // The listings the run files show the Bower tag and their key facts.
+  const listing = rows.filter({ hasText: 'Arlington Road, 2 bed' });
+  await expect(listing).toBeVisible();
+  await expect(listing.locator('.bower-tag')).toBeVisible();
+  await expect(listing).toContainText('2 bed');
   await expect(page.locator('.home-recent-head a')).toHaveText('All');
 });

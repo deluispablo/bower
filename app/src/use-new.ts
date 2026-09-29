@@ -23,11 +23,11 @@ import { useVault } from './vault-store.js';
 export interface NewState {
   /** Ids new to this device: the last run's filed items not yet opened. */
   ids: ReadonlySet<string>;
-  isNew(id: string): boolean;
+  isNew: (id: string) => boolean;
   /** New items under a folder (`/`-joined path), at any depth. */
-  newCountIn(folderPath: string): number;
-  markSeen(id: string): Promise<void>;
-  markAllSeen(ids: Iterable<string>): Promise<void>;
+  newCountIn: (folderPath: string) => number;
+  markSeen: (id: string) => Promise<void>;
+  markAllSeen: (ids: Iterable<string>) => Promise<void>;
 }
 
 export function useNew(): NewState {

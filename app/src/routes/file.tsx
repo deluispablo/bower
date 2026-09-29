@@ -725,7 +725,7 @@ export function FileScreen(): JSX.Element {
   const { params } = useRoute();
   const { route } = useLocation();
   const id = params.id ?? '';
-  const { index, getNoteText } = useVault();
+  const { index, getNoteText, fileFacts } = useVault();
   const [menuOpen, setMenuOpen] = useState(false);
   const [thumbnailBroken, setThumbnailBroken] = useState(false);
 
@@ -810,7 +810,13 @@ export function FileScreen(): JSX.Element {
   const preview: PreviewLoad =
     thumbnailBroken && load.status === 'thumbnail' ? { status: 'none' } : load;
   const rows = load.status === 'table' ? dataRowCount(load.rows) : undefined;
-  const facts = metaFacts(file, { pages, rows });
+  const known = fileFacts.get(file.path);
+  const facts = metaFacts(file, {
+    pages: pages ?? known?.pages,
+    rows,
+    sheets: known?.sheets,
+    entries: known?.entries,
+  });
   const topFolder = folder.split('/')[0] ?? '';
   const para = paraKindOf(topFolder);
   const walkSiblings =

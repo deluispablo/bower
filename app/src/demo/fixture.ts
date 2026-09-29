@@ -727,6 +727,19 @@ Six engineers and a product manager, working from the King's Cross office on Tue
 `,
   },
 
+  // The runner's counts for files Drive has no metadata for (#610, #674):
+  // sheets, ZIP entries and the lease's pages (`file-facts.ts`).
+  {
+    path: '.bower/file-facts.json',
+    mimeType: 'application/json',
+    modifiedTime: at(27, '0700'),
+    content: JSON.stringify({
+      '2-Areas/Money/Household costs 2026.xlsx': { sheets: 3 },
+      '1-Projects/Flat hunt/Photos from the viewing.zip': { entries: 14 },
+      '1-Projects/Flat hunt/Lease agreement 2026.pdf': { pages: 42 },
+    }),
+  },
+
   // --- Money, Garden, Home ---------------------------------------------------
   {
     path: '2-Areas/Money/Household costs 2026.xlsx',
@@ -1422,3 +1435,14 @@ Home insurance on 3 November, and the streaming service every month until you ca
 
   ...V4_FILES,
 ];
+
+/**
+ * What the scripted tidy-up also files (#674, boards `Flow-05-Home`,
+ * `Phone-JustFiled`): the flat listings, each with the companion note that
+ * carries `kind: rental-listing`, and the clause Home's bubble adds.
+ */
+export const SCRIPTED_LISTINGS: readonly RunItem[] = (
+  DEMO_RUNS[0]?.items ?? []
+).filter((item) => /^1-Projects\/Flat hunt\/.*\.pdf$/.test(item.to ?? ''));
+
+export const SCRIPTED_ADDED = 'I added bike times to the flats';

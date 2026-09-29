@@ -89,7 +89,7 @@ test('an Excel file shows the Drive preview and Open in Drive to edit (#604)', a
     'Household costs 2026',
   );
   await expect(page.locator('.file-props')).toContainText(
-    'Excel spreadsheet · 18 KB',
+    'Excel spreadsheet · 18 KB · 3 sheets',
   );
   await expect(page.getByText('Preview from Google Drive')).toBeVisible();
   await expect(page.locator('.drive-preview')).toBeVisible();
@@ -113,7 +113,7 @@ test('a ZIP explains itself, offers Open in Drive and Download, and gives the ti
     'Photos from the viewing',
   );
   await expect(page.locator('.file-props')).toContainText(
-    'ZIP archive · 38 MB',
+    'ZIP archive · 14 files · 38 MB',
   );
   await expect(
     page.getByText('A ZIP archive holds other files packed together.'),

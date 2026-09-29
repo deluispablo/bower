@@ -127,7 +127,7 @@ test('after a tidy-up, the folder it filed into shows "<n> new" and its new rows
     .getByRole('button', { name: 'Yes, tidy up' })
     .click();
   const sheet = page.getByRole('dialog', { name: 'Tidying up status' });
-  await expect(sheet.getByText('3 files processed')).toBeVisible({
+  await expect(sheet.getByText('6 files processed')).toBeVisible({
     timeout: 20_000,
   });
   await sheet.getByRole('button', { name: 'Close' }).click();
