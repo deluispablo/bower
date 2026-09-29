@@ -136,6 +136,49 @@
   border-color: var(--color-danger);
 }
 
+/* Partly done, or a done run that left things for the person: the card is
+   outlined in the warning colour (Home-Done, Home-Partial). */
+.home-card-warn {
+  border-color: var(--color-warn);
+}
+
+.home-card-partial {
+  color: var(--color-warn);
+}
+
+/* The partly done card is a button that opens the sheet: look like the rest. */
+.home-card-button {
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Running: a small spinner before "Running · 2 min". */
+.home-card-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: var(--space-2);
+  border: 2px solid var(--color-accent-line);
+  border-top-color: var(--color-accent);
+  border-radius: var(--radius-full);
+  vertical-align: -1px;
+  animation: home-spin 0.9s linear infinite;
+}
+
+@keyframes home-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-card-spinner {
+    animation: none;
+  }
+}
+
 /* Running: the line under the count opens the working sheet. */
 .home-card-running {
   padding: 0;

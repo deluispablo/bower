@@ -7,7 +7,8 @@ import {
   greetingFor,
   homeStateFor,
   inboxLine,
-  lastTidyUpLine,
+  lastTidyUpCounts,
+  lastTidyUpOverride,
   quarantinedMessage,
   refusedMessage,
   restingBird,
@@ -67,6 +68,43 @@ const DONE_RUN = run('done', [
   '0-Inbox/Bower - 2026-09-27 0815 What do I still need.md',
 ]);
 
+/** A run that filed 2, wrote 3 notes, updated 2 and set 1 aside. */
+const WROTE_RUN: Run = {
+  ...run('done'),
+  items: [
+    { path: '0-Inbox/a.pdf', kind: 'file', to: '1-Projects/Flat/a.pdf' },
+    { path: '0-Inbox/b.pdf', kind: 'file', to: '1-Projects/Flat/b.pdf' },
+  ],
+  created: [
+    '2-Areas/Home/One.md',
+    '2-Areas/Home/Two.md',
+    '2-Areas/Home/Three.md',
+  ],
+  updated: [
+    { path: '2-Areas/Home/Four.md', what: 'Added the rent' },
+    { path: '2-Areas/Home/Five.md' },
+  ],
+  setAside: [{ path: '0-Inbox/IMG_1.heic', reason: 'kept-not-read' }],
+};
+
+/** Three notes written, then stopped before filing five things. */
+const PARTIAL_RUN: Run = {
+  ...run('failed'),
+  reason: 'drive_unavailable',
+  created: [
+    '2-Areas/Home/One.md',
+    '2-Areas/Home/Two.md',
+    '2-Areas/Home/Three.md',
+  ],
+  left: [
+    '0-Inbox/a.pdf',
+    '0-Inbox/b.pdf',
+    '0-Inbox/c.pdf',
+    '0-Inbox/d.pdf',
+    '0-Inbox/e.pdf',
+  ],
+};
+
 function text(parts: BubblePart[]): string {
   return parts
     .map((part) => (typeof part === 'string' ? part : part.text))
@@ -121,6 +159,38 @@ describe('homeStateFor', () => {
     );
   });
 
+  it('done while only what the run left for the person waits (D31)', () => {
+    expect(homeStateFor({ ...base, pending: 1, lastFinished: WROTE_RUN })).toBe(
+      'done',
+    );
+    // Something new was added on top: back to Waiting.
+    expect(homeStateFor({ ...base, pending: 2, lastFinished: WROTE_RUN })).toBe(
+      'waiting',
+    );
+  });
+
+  it('partial after a run that wrote notes and then stopped', () => {
+    expect(
+      homeStateFor({
+        ...base,
+        phase: 'failed',
+        pending: 5,
+        lastFinished: PARTIAL_RUN,
+      }),
+    ).toBe('partial');
+    expect(
+      homeStateFor({ ...base, pending: 5, lastFinished: PARTIAL_RUN }),
+    ).toBe('partial');
+    expect(
+      homeStateFor({
+        ...base,
+        phase: 'failed',
+        pending: 5,
+        lastFinished: run('failed'),
+      }),
+    ).toBe('failed');
+  });
+
   it('loading instead of empty until the index resolves (#322)', () => {
     expect(homeStateFor({ ...base, loading: true })).toBe('loading');
     expect(
@@ -144,23 +214,25 @@ describe('homeStateFor', () => {
   });
 });
 
-describe('runCounts and lastTidyUpLine', () => {
+describe('runCounts and the Last tidy-up card line', () => {
   it('counts a message to Bower as answered, the rest as filed', () => {
     expect(runCounts(DONE_RUN)).toEqual({ filed: 3, answered: 1 });
-    expect(lastTidyUpLine(DONE_RUN)).toBe('3 filed · 1 answered');
   });
 
-  it('leaves out a half at zero, says Nothing new at both', () => {
-    expect(lastTidyUpLine(run('done', ['0-Inbox/a.pdf']))).toBe('1 filed');
-    expect(lastTidyUpLine(run('done'))).toBe('Nothing new');
+  it('the card counts are the run summary, short: filed, new, updated, needs you', () => {
+    expect(lastTidyUpCounts(WROTE_RUN)).toBe(
+      '2 filed · 3 new · 2 updated · 1 needs you',
+    );
+    expect(lastTidyUpCounts(run('done'))).toBe('');
+    expect(lastTidyUpOverride(WROTE_RUN)).toBeNull();
   });
 
   it('says Failed for a failed run', () => {
-    expect(lastTidyUpLine(run('failed', ['0-Inbox/a.pdf']))).toBe(
+    expect(lastTidyUpOverride(run('failed', ['0-Inbox/a.pdf']))).toBe(
       'Failed · Did not finish',
     );
     expect(
-      lastTidyUpLine({ ...run('failed', []), reason: 'drive_unavailable' }),
+      lastTidyUpOverride({ ...run('failed', []), reason: 'drive_unavailable' }),
     ).toBe('Failed · Drive did not answer');
   });
 
@@ -171,7 +243,6 @@ describe('runCounts and lastTidyUpLine', () => {
       '0-Inbox/Bower - 2026-09-27 0900 Context.md',
     ]);
     expect(runCounts(withContext)).toEqual({ filed: 1, answered: 1 });
-    expect(lastTidyUpLine(withContext)).toBe('1 filed · 1 answered');
   });
 
   it('a run recovered from .bower/last-run.json shows its own sentence (#564)', () => {
@@ -183,7 +254,7 @@ describe('runCounts and lastTidyUpLine', () => {
       finishedAt: '2026-09-27T08:05:00Z',
       summary: 'Tidied up 3 things.',
     };
-    expect(lastTidyUpLine(recovered)).toBe('Tidied up 3 things.');
+    expect(lastTidyUpOverride(recovered)).toBe('Tidied up 3 things.');
   });
 
   it("agrees with the working sheet's own count for the same run (#506)", () => {
@@ -220,6 +291,7 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
     error: false,
     editingPins: false,
     lastFinished: null,
+    now: Date.parse('2026-09-27T08:09:00Z'),
   };
 
   it('Waiting: the count and a Tidy up link', () => {
@@ -245,94 +317,76 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
     );
   });
 
-  it('Running: how many, how long, keep adding', () => {
+  it('Running: RunSentence in the bird voice', () => {
     expect(text(bubbleFor({ ...base, state: 'running' }))).toBe(
-      "Tidying up 3 things. Takes a few minutes; I'll say when I'm done. You can keep adding.",
+      'Tidying up 3 things. It takes a few minutes; you can keep adding.',
     );
   });
 
-  it('Done: what it filed and answered, and See what I did (no destinations)', () => {
+  it('Done: the run sentence, and See what changed opens Just filed (R-HOME-1)', () => {
+    const parts = bubbleFor({
+      ...base,
+      state: 'done',
+      pending: 1,
+      lastFinished: WROTE_RUN,
+    });
+    expect(text(parts)).toBe(
+      'Done 4 min ago: 2 filed · 3 new notes · 2 updated · 1 needs you. See what changed',
+    );
+    expect(links(parts)).toEqual(['just-filed:See what changed']);
+  });
+
+  it('Done: what Bower added is a second sentence with one full stop (R-HOME-1)', () => {
+    for (const added of [
+      'I added bike times to the flats',
+      'I added bike times to the flats.',
+    ]) {
+      const parts = bubbleFor({
+        ...base,
+        state: 'done',
+        pending: 1,
+        lastFinished: { ...WROTE_RUN, added },
+      });
+      expect(text(parts)).toContain(
+        '1 needs you. I added bike times to the flats. See what changed',
+      );
+      expect(text(parts)).not.toContain('..');
+    }
+  });
+
+  it('Done with nothing to list keeps the Bower tab', () => {
     const parts = bubbleFor({
       ...base,
       state: 'done',
       pending: 0,
-      lastFinished: DONE_RUN,
+      lastFinished: run('done'),
     });
-    expect(text(parts)).toBe(
-      'All tidy. 3 filed and 1 question answered. See what I did.',
-    );
     expect(links(parts)).toEqual(['activity:See what I did']);
-    expect(
-      text(
-        bubbleFor({
-          ...base,
-          state: 'done',
-          lastFinished: run('done', ['0-Inbox/a.pdf']),
-        }),
-      ),
-    ).toBe('All tidy. 1 filed. See what I did.');
-    expect(
-      text(bubbleFor({ ...base, state: 'done', lastFinished: run('done') })),
-    ).toBe('All tidy. Nothing new this time. See what I did.');
-  });
-
-  describe('Done with a report that says where things went (#617)', () => {
-    const files = [
-      '0-Inbox/a.pdf',
-      '0-Inbox/b.pdf',
-      '0-Inbox/c.pdf',
-      '0-Inbox/d.pdf',
-      '0-Inbox/e.pdf',
-    ];
-    const filed: Run = {
-      ...run('done', files),
-      items: files.map((path) => ({
-        path,
-        kind: 'file' as const,
-        to: `1-Projects/Flat hunt/${path.slice(8)}`,
-      })),
-    };
-
-    it('says how many were filed, what Bower added, and links to Just filed', () => {
-      const parts = bubbleFor({
-        ...base,
-        state: 'done',
-        pending: 0,
-        lastFinished: { ...filed, added: 'I added bike times to the flats' },
-      });
-      expect(text(parts)).toBe(
-        'All tidy. 5 filed, and I added bike times to the flats. See where they went.',
-      );
-      expect(links(parts)).toEqual(['just-filed:See where they went']);
-    });
-
-    it('drops the clause when the report has no added', () => {
-      const parts = bubbleFor({
-        ...base,
-        state: 'done',
-        pending: 0,
-        lastFinished: filed,
-      });
-      expect(text(parts)).toBe('All tidy. 5 filed. See where they went.');
-      expect(links(parts)).toEqual(['just-filed:See where they went']);
-    });
-
-    it('the Last tidy-up line counts what is new to you', () => {
-      expect(lastTidyUpLine(filed, 4)).toBe('5 filed · 4 new to you');
-      expect(lastTidyUpLine(filed, 0)).toBe('5 filed');
-    });
+    expect(text(parts)).not.toContain('Nothing new this time');
   });
 
   it('Done: adds what the run set aside or had refused (spec A.3/A.5)', () => {
     const parts = bubbleFor({
       ...base,
       state: 'done',
-      lastFinished: { ...DONE_RUN, quarantined: ['a'], refused: ['b', 'c'] },
+      lastFinished: { ...WROTE_RUN, quarantined: ['a'], refused: ['b', 'c'] },
+    });
+    expect(text(parts)).toContain(
+      `See what changed ${quarantinedMessage(1)} ${refusedMessage(2)}`,
+    );
+  });
+
+  it('Partial: what it did, then the Finish the tidy-up link (R-HOME-2)', () => {
+    const parts = bubbleFor({
+      ...base,
+      state: 'partial',
+      pending: 5,
+      lastFinished: PARTIAL_RUN,
     });
     expect(text(parts)).toBe(
-      'All tidy. 3 filed and 1 question answered. See what I did. ' +
-        `${quarantinedMessage(1)} ${refusedMessage(2)}`,
+      'I wrote 3 notes, then stopped before filing your 5 things. Finish the tidy-up and I file them without writing the notes again.',
     );
+    expect(links(parts)).toEqual(['tidy-up:Finish the tidy-up']);
   });
 
   it('Failed: the reason in words, nothing was lost, and Try again opens the failure (#316)', () => {
@@ -386,7 +440,8 @@ describe('birdStateFor and restingBird', () => {
     expect(birdStateFor({ ...base, state: 'done', justDone: true })).toBe(
       'showoff',
     );
-    expect(birdStateFor({ ...base, state: 'done' })).toBe('looking');
+    expect(birdStateFor({ ...base, state: 'done' })).toBe('done');
+    expect(birdStateFor({ ...base, state: 'partial' })).toBe('confused');
     expect(birdStateFor({ ...base, state: 'failed' })).toBe('confused');
     expect(birdStateFor({ ...base, state: 'loading' })).toBe('looking');
   });
@@ -397,6 +452,7 @@ describe('birdStateFor and restingBird', () => {
       'empty',
       'running',
       'done',
+      'partial',
       'failed',
     ];
     for (const state of states) {
@@ -417,7 +473,9 @@ describe('birdStateFor and restingBird', () => {
 describe('inboxLine', () => {
   it('per state, as the boards write it', () => {
     expect(inboxLine('waiting', 3)).toBe('waiting to be filed');
-    expect(inboxLine('running', 3)).toBe('Tidying up…');
+    expect(inboxLine('running', 3)).toBe('Being tidied up');
+    expect(inboxLine('partial', 5)).toBe('Still waiting');
+    expect(inboxLine('done', 1)).toBe('Needs you');
     expect(inboxLine('failed', 3)).toBe('still waiting');
     expect(inboxLine('done', 0)).toBe('Nothing waiting. Add something.');
     expect(inboxLine('empty', 0)).toBe('Nothing waiting. Add something.');
