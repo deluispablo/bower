@@ -98,9 +98,7 @@ test.describe('open Home', () => {
     }
     await expect(tour).toBeHidden();
     await expect(page).toHaveURL(/\/$/);
-    await expect(
-      page.getByRole('heading', { name: 'Good morning, Alex' }),
-    ).toBeVisible();
+    await expect(visible(page.locator('.home-bubble'))).toBeVisible();
     // "?" opens the same sheet afterwards, without the step counter.
     await visible(
       page.getByRole('button', { name: 'About this screen' }),
@@ -126,9 +124,7 @@ test.describe('open Home', () => {
     // Back on Home from a reload: `tourSeenAt` survives it (#494, kept in
     // `sessionStorage`), so the tour does not replay.
     await page.goto('/');
-    await expect(
-      page.getByRole('heading', { name: 'Good morning, Alex' }),
-    ).toBeVisible();
+    await expect(visible(page.locator('.home-bubble'))).toBeVisible();
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(
       page.getByText('This is a demo, not the real thing'),
