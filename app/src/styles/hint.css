@@ -1,0 +1,86 @@
+/* The hint (`components/hint.tsx`, spec §6.14 R-HINT-1): one look, three
+   variants. Surface fill, 1 px border, 12 px radius, 15 px text, 20 px icon. */
+
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text);
+}
+
+.hint-suggestion {
+  border-color: var(--color-brand);
+}
+
+.hint-state {
+  background: transparent;
+  border-style: dashed;
+  padding-right: var(--space-4);
+}
+
+.hint-icon {
+  display: inline-flex;
+  flex: none;
+  /* Centres the 20 px icon on the first 15 px text line. */
+  margin-top: 2px;
+  color: var(--color-text-muted);
+}
+
+.hint-suggestion .hint-icon {
+  color: var(--color-focus);
+}
+
+.hint-icon .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.hint-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.hint-text {
+  margin: 0;
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.45;
+}
+
+.hint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.hint-dismiss {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  /* Pulls the 44 px target into the padding so the box stays compact. */
+  margin: calc(var(--space-3) * -1) 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.hint-dismiss:hover {
+  background: var(--color-surface-hover);
+}
+
+.hint-dismiss .icon {
+  width: 20px;
+  height: 20px;
+}
