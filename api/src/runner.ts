@@ -127,10 +127,7 @@ function isOperatorKey(credential: string, env: Env): boolean {
  * Anything else (no credential, a ticket for another vault, a retired or
  * expired ticket, the operator key) is a 401 `unauthorized`.
  */
-async function authorizeRun(
-  c: Context<AppEnv>,
-  id: string,
-): Promise<RunKind> {
+async function authorizeRun(c: Context<AppEnv>, id: string): Promise<RunKind> {
   const env = c.get('env');
   const credential = bearer(c);
   const now = new Date();

@@ -13,10 +13,7 @@ import {
   MAX_PROCESSED,
   MAX_TEXT_LENGTH,
 } from '../src/runner.js';
-import type {
-  LintDispatchResult,
-  RunnerVault,
-} from '../src/runner.js';
+import type { LintDispatchResult, RunnerVault } from '../src/runner.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import {
   getRun,
