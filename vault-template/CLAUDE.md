@@ -2,7 +2,7 @@
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-09-29
-bower_rules_version: 20
+bower_rules_version: 21
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -72,6 +72,7 @@ related: ["[[Note A]]", "[[Note B]]"]       # 2-3 strongest links
 ---
 ```
 Omit fields that do not apply. Extra fields are fine when useful.
+- **`by: bower`** goes in the frontmatter of every note you write: companion notes, answers, job results, summaries, text copies, converted documents' `.md`, and the hub and project notes you create.
 
 ### Linking
 - Use Obsidian `[[wikilinks]]` for all cross-references; `[[Page Name|display text]]` when the text should differ.
