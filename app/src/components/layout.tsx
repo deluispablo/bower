@@ -32,8 +32,16 @@
  * The sidebar's waiting-count bubble (#326, C.9): the Desktop-Home and
  * Desktop-Add boards both put it on the Home row, not Add — the board
  * wins over the issue's own title and C.9's text, which say Add. Same
- * count as Home's Inbox card and Add's hint (`pendingCount`); hidden at
+ * count as Home's Inbox card and Add's hint (`inboxCount`, #741); hidden at
  * zero, same convention as the Notes tree's counts.
+ *
+ * v5 slots (#741, spec 7b T14), all empty by default and so invisible: on the
+ * phone a docked row between the page and the tab bar (`tidyBar`, else
+ * `uploadChip`: the tidy-up bar wins, 6.15b); from 900 px the same content is a
+ * chip in the top bar before "?", plus a `breadcrumb` slot in the bar; and
+ * under the sidebar's explorer a 66 px `ledge`, outside the nav landmark.
+ * `OverlayHost` (#740) is mounted once. The sidebar's width comes from
+ * `bower:pref:sidebarWidth`, read in the first render (T15).
  */
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -42,7 +50,7 @@ import { useLocation } from 'preact-iso';
 
 import { isDemo, loginUrl } from '../api.js';
 import { tourOnScreen } from '../onboarding.js';
-import { pendingCount } from '../run-store.js';
+import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { useSession } from '../session.js';
 import {
   BOWER_PATH,
@@ -67,6 +75,7 @@ import {
   IconSliders,
 } from './icons.js';
 import { OfflineBanner } from './offline-banner.js';
+import { OverlayHost } from './overlay.js';
 import { RunSheets } from './run-sheets.js';
 import { Switcher } from './switcher.js';
 import { Toast } from './toast.js';
@@ -129,16 +138,98 @@ export function avatarInitial(email: string | undefined): string {
 
 const HOME_BACK = <BackLink href="/" label="Home" />;
 
+const SIDEBAR_WIDTH_KEY = 'bower:pref:sidebarWidth';
+export const SIDEBAR_WIDTH_MIN = 200;
+export const SIDEBAR_WIDTH_MAX = 480;
+/** The main column never gets narrower than this (R-SIDE-2). */
+export const MAIN_WIDTH_MIN = 560;
+const DESKTOP_QUERY = '(min-width: 900px)';
+
+/** A sidebar width kept to 200 to 480 px and to what leaves the main column
+ * at least 560 px in a window `viewport` px wide (the 200 floor wins). */
+export function clampSidebarWidth(px: number, viewport: number): number {
+  const max = Math.max(
+    SIDEBAR_WIDTH_MIN,
+    Math.min(SIDEBAR_WIDTH_MAX, viewport - MAIN_WIDTH_MIN),
+  );
+  return Math.min(max, Math.max(SIDEBAR_WIDTH_MIN, Math.round(px)));
+}
+
+/** The stored width in px (a bare number, as `prefs.ts` stores values), or
+ * `null` when there is none, it is not a number or storage is blocked. */
+export function readStoredSidebarWidth(): number | null {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    if (raw === null) return null;
+    const value: unknown = JSON.parse(raw);
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  } catch {
+    // Storage blocked or the value is corrupt: the stylesheet's width stands.
+    return null;
+  }
+}
+
+function useDesktop(): boolean {
+  const query = (): boolean =>
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia(DESKTOP_QUERY).matches;
+  const [desktop, setDesktop] = useState(query);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const list = window.matchMedia(DESKTOP_QUERY);
+    const update = (): void => {
+      setDesktop(list.matches);
+    };
+    update();
+    list.addEventListener('change', update);
+    return () => {
+      list.removeEventListener('change', update);
+    };
+  }, []);
+  return desktop;
+}
+
+/** `--sidebar-width` for the shell, read in the first render (T15: no inline
+ * script, no CSP change) and kept clamped as the window resizes; `undefined`
+ * means "no stored width", the stylesheet's 264 px. */
+function useSidebarWidth(): number | undefined {
+  const [stored] = useState(readStoredSidebarWidth);
+  const [viewport, setViewport] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const update = (): void => {
+      setViewport(window.innerWidth);
+    };
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+  return stored === null ? undefined : clampSidebarWidth(stored, viewport);
+}
+
 interface LayoutProps {
   children: ComponentChildren;
 }
 
 export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
-  const { files } = useVault();
+  const { files, status } = useVault();
   const { path, route } = useLocation();
   const tour = useTour();
-  const { back, crumb, actions, aside } = useShellSlots();
+  const {
+    back,
+    crumb,
+    actions,
+    aside,
+    tidyBar,
+    uploadChip,
+    breadcrumb,
+    ledge,
+  } = useShellSlots();
+  // One bar slot for both chips: the tidy-up bar wins (spec 6.15b).
+  const bar = tidyBar ?? uploadChip;
+  const desktop = useDesktop();
+  const sidebarWidth = useSidebarWidth();
   // "?" (About this screen): the help sheet for the screen on show (#330).
   const [helpOpen, setHelpOpen] = useState(false);
   const inner = isInnerScreen(path, isDemo());
@@ -164,7 +255,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   }, []);
 
   const healthIsNew = useHealthIsNew();
-  const pending = pendingCount(files);
+  const pending = inboxTotal(inboxCount(files, status === 'loading'));
 
   // Any route change closes the help sheet.
   useEffect(() => {
@@ -207,17 +298,33 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         path === BOWER_PATH && 'shell-bower',
         // The folder's three panes from 1200 px (#614, D13).
         path.startsWith('/folder/') && 'shell-folder',
+        // A docked bar on the phone shrinks the scroll area (#741).
+        !desktop && bar !== null && 'shell-with-dock',
       ]
         .filter(Boolean)
         .join(' ')}
+      style={
+        sidebarWidth === undefined
+          ? undefined
+          : { '--sidebar-width': `${sidebarWidth}px` }
+      }
     >
-      <nav class="shell-sidebar" aria-label="Your notes" data-tour="notes">
-        <Explorer
-          variant="sidebar"
-          healthIsNew={healthIsNew}
-          nav={sidebarNav}
-        />
-      </nav>
+      {/* `data-tour` sits on the whole column, as it did on the old nav: the
+          help sheet lights the target's box and places itself by it. */}
+      <div class="shell-sidebar" data-tour="notes">
+        <nav class="shell-sidebar-nav" aria-label="Your notes">
+          <Explorer
+            variant="sidebar"
+            healthIsNew={healthIsNew}
+            nav={sidebarNav}
+          />
+        </nav>
+        {/* The ledge (#741): a 66 px strip under the explorer, decoration
+            only, so outside the landmark and hidden from assistive tech. */}
+        <div class="shell-ledge" data-slot="ledge" aria-hidden="true">
+          {ledge}
+        </div>
+      </div>
       <div class="shell-main">
         {/* The one centred container (#355, Desktop-Responsive board): the
             header row, the banners, the content and, on a note, the About
@@ -230,9 +337,17 @@ export function Layout({ children }: LayoutProps): JSX.Element {
               <div class="topbar-crumb">
                 {crumb ?? <span class="topbar-title">Bower</span>}
               </div>
+              <div class="topbar-slot topbar-breadcrumb" data-slot="breadcrumb">
+                {breadcrumb}
+              </div>
               <div class="topbar-slot topbar-actions" data-slot="actions">
                 {actions}
               </div>
+              {desktop && bar !== null && (
+                <div class="topbar-slot topbar-chip" data-slot="chip">
+                  {bar}
+                </div>
+              )}
               <button
                 type="button"
                 class="icon-button topbar-help"
@@ -276,6 +391,13 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           </div>
         </div>
       </div>
+      {!desktop && bar !== null && (
+        // A flex item of the shell, not fixed: it sticks just above the tab
+        // bar and `.shell-with-dock` gives the content room for it.
+        <div class="shell-dock" data-slot="dock">
+          {bar}
+        </div>
+      )}
       <nav class="bottom-nav" aria-label="Primary">
         {TABS.map(({ href, label, Icon, tour }) => (
           <a
@@ -305,6 +427,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       )}
       <Switcher />
       <RunSheets />
+      {/* The one overlay host (#740): sheets, dialogs and menus queue here. */}
+      <OverlayHost />
       {/* The one toast (`toast-store.ts`): a pin, a finished run. */}
       <Toast />
     </div>

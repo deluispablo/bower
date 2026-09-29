@@ -143,6 +143,10 @@ beforeEach(() => {
 
 afterEach(() => {
   closeSwitcher();
+  // Unmount, so no effect or timer of the switcher outlives the test.
+  void act(() => {
+    render(null, root);
+  });
   root.remove();
   vi.clearAllMocks();
   vi.useRealTimers();
