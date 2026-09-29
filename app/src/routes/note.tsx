@@ -7,7 +7,8 @@ import { isBowerWritten } from '../bower-written.js';
 import { originalDisplayName, resolveOriginal } from '../companion.js';
 import { kindById, statusLabel } from '../kinds.js';
 import type { Kind } from '../kinds.js';
-import { setFrontmatterValue, statusOptionLabel } from '../compare.js';
+import { statusOptionLabel } from '../compare.js';
+import { changeStatusWithHistory } from '../history.js';
 import { IconChat, IconFile, IconNote } from '../components/icons.js';
 import { MadeFrom, madeFromSources } from '../components/made-from.js';
 import { showToast } from '../toast-store.js';
@@ -804,7 +805,11 @@ export function Note() {
     const before = statusPick;
     setStatusPick(status);
     try {
-      const next = setFrontmatterValue(load.text, 'status', status);
+      const next = changeStatusWithHistory(load.text, status, new Date());
+      if (next === load.text) {
+        setStatusPick(null);
+        return;
+      }
       const saved = await saveEditedNote(id, next, {
         baseModifiedTime: file.modifiedTime ?? null,
       });

@@ -37,7 +37,6 @@ import {
   phoneExplainer,
   receiptsByMonth,
   receiptsExplainer,
-  setFrontmatterValue,
   SCORE_LABEL,
   sortButtonText,
   sortNotes,
@@ -51,6 +50,7 @@ import {
 import type { CompareColumn, CompareNote, CompareSort } from '../compare.js';
 import { getText } from '../drive.js';
 import type { DriveFile } from '../drive.js';
+import { changeStatusWithHistory } from '../history.js';
 import { keyFactsFor, statusLabel } from '../kinds.js';
 import type { Kind } from '../kinds.js';
 import { loadNoteMeta, recordNoteMeta } from '../note-meta.js';
@@ -394,7 +394,16 @@ export function CompareView({
     }));
     try {
       const text = await getText(note.id);
-      const next = setFrontmatterValue(text, 'status', status);
+      const next = changeStatusWithHistory(text, status, new Date());
+      if (next === text) {
+        setOverrides((now) => {
+          const rest = { ...now };
+          if (before === undefined) delete rest[note.id];
+          else rest[note.id] = before;
+          return rest;
+        });
+        return;
+      }
       // Through the vault store, so the index gets the new `modifiedTime`
       // and the folder shows the new status when you come back to it.
       const saved = await saveEditedNote(note.id, next, {

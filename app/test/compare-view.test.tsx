@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { stubMatchMedia } from './helpers/match-media.js';
 
 import type { CompareNote } from '../src/compare.js';
+import { historyDate } from '../src/history.js';
 
 const drive = vi.hoisted(() => ({
   getText: vi.fn<(id: string) => Promise<string>>(),
@@ -405,7 +406,9 @@ describe('Compare on a desktop', () => {
     ];
     expect(args[0].id).toBe('id-Arlington Road, 2 bed');
     expect(args[1]).toBe(
-      '---\nkind: rental-listing\nstatus: viewed\n---\nBody\n',
+      '---\nkind: rental-listing\nstatus: viewed\n---\nBody\n\n## History\n\n- ' +
+        `${historyDate(new Date())} · Status to view → viewed, by you
+`,
     );
     expect(args[2].baseModifiedTime).toBe('2026-09-28T08:00:00Z');
     // Saved through the vault store (index refresh) and written through to
@@ -415,7 +418,9 @@ describe('Compare on a desktop', () => {
     expect(noteMeta.recordNoteMeta).toHaveBeenCalledWith(
       'id-Arlington Road, 2 bed',
       '2026-09-28T09:00:00Z',
-      '---\nkind: rental-listing\nstatus: viewed\n---\nBody\n',
+      '---\nkind: rental-listing\nstatus: viewed\n---\nBody\n\n## History\n\n- ' +
+        `${historyDate(new Date())} · Status to view → viewed, by you
+`,
     );
   });
 
