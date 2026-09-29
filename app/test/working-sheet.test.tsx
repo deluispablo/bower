@@ -254,7 +254,7 @@ describe('partly done (R-SHEET-4)', () => {
     expect(dialog()?.querySelector('h2')?.textContent).toBe('Partly done');
     expect(text).toContain('then stopped before filing');
     expect(text).toContain(
-      'Finish the tidy-up files them without writing the notes again.',
+      'Finishing the tidy-up files them, without writing the notes again.',
     );
     const stopped = dialog()?.querySelector('.working-sheet-step-stopped');
     expect(stopped?.textContent).toContain('Filing and saving to Drive');

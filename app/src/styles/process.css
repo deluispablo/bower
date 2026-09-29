@@ -51,6 +51,13 @@
   color: var(--color-on-danger);
 }
 
+/* "Finish the tidy-up" on a partly done run's Inbox card: the primary teal,
+   like the partial sheet's action, not the failure red. */
+.process-button.process-button-finish {
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+}
+
 .process-button[data-phase='quota'] {
   background: var(--color-accent);
   color: var(--color-on-accent);

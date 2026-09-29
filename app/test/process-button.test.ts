@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buttonLabel,
   isRunning,
   labelFor,
   startsRun,
@@ -22,6 +23,16 @@ describe('labelFor', () => {
     expect(labelFor('failed')).toBe('Try again');
     expect(labelFor('stale')).toBe('Try again');
     expect(labelFor('quota')).toBe('Limit reached');
+  });
+});
+
+describe('buttonLabel', () => {
+  it('reads "Finish the tidy-up" on a partly done run, in any phase that starts one', () => {
+    for (const phase of ['idle', 'done', 'failed', 'stale'] as const) {
+      expect(buttonLabel(phase, true)).toBe('Finish the tidy-up');
+    }
+    expect(buttonLabel('running', true)).toBe('Tidy-up running…');
+    expect(buttonLabel('failed', false)).toBe('Try again');
   });
 });
 

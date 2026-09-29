@@ -269,7 +269,7 @@ function InboxCard({
     >
       {head}
       <p class="home-card-sub">{inboxLine(state, pending)}</p>
-      <ProcessButton />
+      <ProcessButton finish={state === 'partial'} />
     </div>
   );
 }
