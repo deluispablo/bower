@@ -501,7 +501,7 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
 
 - **"Just this, now":**
   - It writes nothing new. It awaits any pending save of the note, then calls `startRun('instructions')` through one shared helper (the same helper Rename, Move and Ask Bower use).
-  - It is disabled while any run is in flight, offline, or when the day's quota is used up. The item's hint then says why: "A tidy-up is running", "No signal", or "No runs left today".
+  - It is disabled while any run is in flight or offline. The app cannot know the day's quota in advance (no API change, Q4): after the first `/process` refusal with the error code `quota`, the item is disabled for the rest of the day on this device. The hint says why: "A tidy-up is running", "No signal", or "No runs left today".
 - **A request that did not finish** is not re-dispatched. Its instruction note is still in the inbox (a failed run leaves originals where they were), so only its row changes back to waiting at the next listing.
 - **Data.**
   - A request is matched to its run by the run's id **and** the instruction note's path, both taken from `items[kind=request]`.
@@ -509,7 +509,7 @@ Under the Bower box, one line explains this: "What you ask waits in your inbox a
 - **Tidy up while a run is going.** The Tidy up button reads "Tidy-up running…" and is disabled; it queues nothing, so a tap never silently joins an instructions-only run. The tidy-up bar shows the run. (Q6)
 - **Acceptance criteria:**
   - [ ] R-REQ-1: a processed request shows as Done or Did not finish with its run's counts; it never vanishes (fixes 1.11, W3).
-  - [ ] R-REQ-2: waiting and did-not-finish rows carry the More menu with "Just this, now" and its quota line; no row has a button that starts a run on its own.
+  - [ ] R-REQ-2: waiting and did-not-finish rows carry the More menu with "Just this, now" and its line "uses one run of your plan"; no row has a button that starts a run on its own.
   - [ ] R-REQ-3: "Just this, now" awaits the note write before `/process` (unit test: an edit then "Just this, now" produces a run that includes the edited note).
   - [ ] R-REQ-4: "See what came of it" opens Just filed for that run; Activity cards use `RunOutcome` (counts, states, no raw Moved lines).
   - [ ] R-REQ-5: the Tidy up button during a run reads "Tidy-up running…" and is disabled.
@@ -991,7 +991,7 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
 - **R-RUNNER-4.** A `phase` field on running reports: `queued`, `reading`, `writing`, `saving`, plus `total` and `done` counts when known. `run.sh` reports `reading` after conversion, `writing` when the agent starts, and `saving` before copy up. A `done` count while writing needs the agent to report progress. That is out of scope, so the step shows "Writing notes" without "k of n" unless it is cheap. Cost S to M.
 - **R-RUNNER-6.** The runner holds back, for the next tidy-up, every pending inbox file created or modified after `requestedAt` **plus a grace of 15 seconds**, and every context note modified in that window together with the files it lists. The grace covers the gap between Drive's clock and the Worker's: a pile note or request note saved just before "Yes, tidy up" or "Just this, now" is never skipped. Files that land later, including files still uploading when the run was asked for, wait for the next tidy-up (R-UPL). Serves R-PILE-7 and R-REQ-3.
 - **R-RUNNER-7.** `run.sh` appends `## The document` and the converted text to a document's text copy (R-AG-2, T9) by finding pandoc's output for that original's path. When there is no conversion, it writes nothing (no empty section).
-- **R-RUNNER-8.** The default daily run limit goes from 20 to 100 (`DAILY_RUN_LIMIT` in `api/src/env.ts`, the runbook table and the Limits table in `ARCHITECTURE.md`); an operator can still set another value. The app shows no run count (Q4). Serves D22.
+- **R-RUNNER-8.** The default daily run limit goes from 20 to 100 (`DAILY_RUN_LIMIT` in `api/src/env.ts`, the runbook table and the Limits table in `ARCHITECTURE.md`); an operator can still set another value. The app shows no run count (Q4). The runbook's Limits note adds one line: at 100 runs a day, one busy person can use a real share of the instance repo's 2,000 free Actions minutes a month. Serves D22.
 - **R-RUNNER-5.** A run is `partial` when it failed and `created + updated + items.to > 0`. The Worker keeps `state: failed`, and the app derives partial (no API change beyond the new arrays).
 
 **Rulebook** (`vault-template/CLAUDE.md`; bump `bower_rules_version` once for all of these; the prompts in `agent/prompts/ingest.md` point to the new rules):
@@ -1024,7 +1024,7 @@ On desktop the page has two columns: the new pile on the left, the waiting piles
 - **R-AG-7.** A rename request is written in words plus a path, like a move request ("Rename {path} to {new name}"), and handled the same way: the agent renames the file, and the runner keeps its id and books the rename. There are no `op:` fields.
 - **R-AG-9 (runner, proposed).** PDFs get the same treatment. `run.sh` converts a text PDF with `pdftotext -layout` (poppler-utils, installed in the job like pandoc) so the runner can append the text as it does for Word files (T9). A scanned PDF with no text layer gets the copy with its properties and Bower's note, and the line "Scanned: no text to copy" under `## The document`.
   - Escalation: a new tool in the runner job (apt package, no runtime dependency in the app). Without it, PDFs get the metadata and insights only.
-- **R-AG-10.** Finishing a partly done tidy-up: a pending inbox file that already has a note whose `original:` names it is filed only; its note is not written again. The runner reads the previous failed run's `created[]` from `.bower/last-run.json` in the vault (written by R-RUNNER-2; the runner itself keeps nothing) and lists those paths in the prompt as "already written; do not write these again". Serves R-SHEET-4 and D3.
+- **R-AG-10.** Finishing a partly done tidy-up: a pending inbox file that already has a note whose `original:` names it is filed only; its note is not written again. The runner reads the previous run's `created[]` from `.bower/last-run.json` in the vault, only when that file's state is failed (an instructions-only run in between overwrites it; the `original:` rule alone still prevents duplicates) (written by R-RUNNER-2; the runner itself keeps nothing) and lists those paths in the prompt as "already written; do not write these again". Serves R-SHEET-4 and D3.
 - **R-AG-8.** Piles:
   - Each context note applies only to the files in its own `## Applies to` list. A file named in two context notes goes with the newest note.
   - A context note with an empty text only groups its files: file them as usual, with no extra note.
