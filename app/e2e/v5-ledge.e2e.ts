@@ -12,12 +12,14 @@ import { MOTION_ON } from './motion.js';
 
 test.use(MOTION_ON);
 
-/** The demo opens the tidy-up sheet, and its own bird hides the others. */
+/**
+ * The demo opens the tidy-up sheet on a running run, and its stage bird
+ * (#752, on the overlay) hides the other birds: close it with Escape first.
+ */
 async function closeSheet(page: Page): Promise<void> {
-  await page
-    .getByRole('dialog', { name: 'Tidying up status' })
-    .getByRole('button', { name: 'Close' })
-    .click();
+  await expect(page.getByRole('dialog', { name: 'Tidying up' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
 const FLAT = '/folder/1-Projects/Flat%20hunt';
