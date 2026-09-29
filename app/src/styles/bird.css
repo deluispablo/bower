@@ -1,7 +1,7 @@
 /*
  * The bird (spec §4), drawing v8.2. Colours, transform origins, one class per
  * state (`p-*`), the still faces (`e-*`) and the keyframes, copied from the
- * design canvas (`docs/design/gen.py`, `CSS`) with the class names unchanged.
+ * design canvas (its `CSS`) with the class names unchanged.
  * The component (`components/bird.tsx`) only picks the classes; everything
  * that moves animates `transform` or `opacity`.
  *

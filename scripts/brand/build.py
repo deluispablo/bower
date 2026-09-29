@@ -2,8 +2,8 @@
 """Generate the Bower logo, wordmarks, favicons and PWA icons.
 
 Writes app/public/logo.svg, the two wordmarks and app/public/icons/*. (docs/assets/logo.svg
-is written by docs/design/assets.py.) The bird is defined once below on a 100 x 100 grid
-(drawing v8.2 of docs/design/gen.py, BIRD_CORE, still and without its props); every icon
+is a committed drawing.) The bird is defined once below on a 100 x 100 grid
+(drawing v8.2 of the design canvas, BIRD_CORE, still and without its props); every icon
 places it by its measured bounding box, so it is centred in each icon. After rendering,
 the script checks centring, the maskable safe zone, how much of the 16 px favicon the bird
 fills and the size of logo.svg, and exits non-zero if any check fails.
@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PUBLIC = ROOT / "app/public"
 ICONS = PUBLIC / "icons"
 
-# The v8.2 colours (docs/design/gen.py, CSS): head and body, wing and tail, belly and
+# The v8.2 colours (design canvas, CSS): head and body, wing and tail, belly and
 # cheek, eye, beak and feet, jaw, highlights; navy behind the icons and for the word on
 # light backgrounds, and the word on dark backgrounds.
 TEAL, TEAL_DARK, BELLY, EYE, AMBER, AMBER_DARK, WHITE = (
@@ -44,7 +44,7 @@ NAVY, INK_DARK = "#0b1220", "#f1f5f9"
 # The bird on a 100 x 100 grid, facing right, feet on y = 91: three tail feathers, legs
 # and pill feet, round body with a lighter belly, neck and round head, cheek, eye with
 # two highlights, upper and lower lids at rest, pill beak and jaw, the leaf wing. Same
-# shapes and order as BIRD_CORE in docs/design/gen.py (and the app's
+# shapes and order as BIRD_CORE in the design canvas (and the app's
 # components/bird.tsx), without the props it only holds while a state shows them.
 GRID = 100
 LEG = f'fill="none" stroke="{AMBER}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"'
@@ -71,7 +71,7 @@ BIRD = [
     f'<path fill="{TEAL_DARK}" d="M54 56C64 58 65 68 58 74C44 78 28 78 18 72C28 64 42 56 54 56Z"/>',
 ]
 
-# The wordmark as drawn in docs/design/screens/Logo.dc.html (primary lockup): an 84 px
+# The wordmark as drawn on the design canvas's Logo board (primary lockup): an 84 px
 # bird box, a 14 px gap, then "Bower" in Poppins Bold at 52 px with letter-spacing -3 %
 # and line-height 1, centred on the bird box. Kept as ratios of the bird box (grid units).
 LOCKUP_PX = 84

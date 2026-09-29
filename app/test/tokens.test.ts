@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 // (types for `node:fs` come from ./node-fs.d.ts)
 
 // Parses tokens.css with a regex (no CSS engine): §3.1 and §3.3 of the
-// redesign spec (docs/superpowers/specs/2026-09-27-app-redesign-design.md)
+// redesign spec (the 2026-09-27 app redesign spec)
 // require these custom properties to exist, with light values in `:root`
 // and dark overrides in the dark block. A plain regex is enough here; this
 // is not a computed-style test. Read from disk (not `?raw`, which Vite

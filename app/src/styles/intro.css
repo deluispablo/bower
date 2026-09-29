@@ -2,8 +2,8 @@
  * "What is Bower" (#207, #327): a bare full-screen page (shell-routes.ts
  * keeps it out of the shell), one CSS scroll-snap track holding all nine
  * pages side by side, each page scrolling on its own. Every page is its
- * board's resting frame (`docs/design/v3/boards/Intro-1.dc.html` to
- * `Intro-9`): the rules up to the motion block at the end draw only that.
+ * board's resting frame (the v3 Intro-1 to
+ * Intro-9 boards): the rules up to the motion block at the end draw only that.
  * The boards' loops (#328) live in that block, behind
  * `prefers-reduced-motion: no-preference`, so with reduced motion nothing
  * moves and every page stays complete at rest. They move transform and

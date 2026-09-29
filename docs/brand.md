@@ -4,12 +4,12 @@ Bower is named after the bowerbird, which builds and decorates a bower from twig
 
 ## Mark and files
 
-One drawing (v8.2, approved 2026-09-28; spec §4.1) on a 100 × 100 grid, facing right, feet on y = 91: a round teal body (`#5fcfbc`) with a lighter belly (`#b9ece2`); a round head on a same-colour neck; one big navy eye (`#1b2233`) with two white highlights and a faint lighter cheek; an upper and a lower eyelid in head colour; a pill-shaped amber beak (`#f0b64f`) with a darker jaw (`#d9952e`); one long leaf-shaped dark-teal wing (`#2f9c8d`) lying along the flank, hinged at the shoulder; three thin dark-teal tail feathers fanning back and up from the rump; two amber stick legs with flat pill feet. No gradients, no outlines, no raster. It holds a twig, paper or gem only while carrying one, so the mark has none. The lockups, icon sizes, one-colour version and clear space are drawn in `docs/design/screens/Logo.dc.html`.
+One drawing (v8.2, approved 2026-09-28; spec §4.1) on a 100 × 100 grid, facing right, feet on y = 91: a round teal body (`#5fcfbc`) with a lighter belly (`#b9ece2`); a round head on a same-colour neck; one big navy eye (`#1b2233`) with two white highlights and a faint lighter cheek; an upper and a lower eyelid in head colour; a pill-shaped amber beak (`#f0b64f`) with a darker jaw (`#d9952e`); one long leaf-shaped dark-teal wing (`#2f9c8d`) lying along the flank, hinged at the shoulder; three thin dark-teal tail feathers fanning back and up from the rump; two amber stick legs with flat pill feet. No gradients, no outlines, no raster. It holds a twig, paper or gem only while carrying one, so the mark has none. The lockups, icon sizes, one-colour version and clear space were drawn on the approved design canvas.
 
 | File | Use |
 | --- | --- |
 | `app/public/logo.svg` | Mark only, transparent. Avatars, sign-in page. The in-app header draws the animated bird instead (`<Bird state="looking">`). |
-| `docs/assets/logo.svg` | The mark for the README and GitHub, written by `docs/design/assets.py` with the other README drawings (not by `build.py`). |
+| `docs/assets/logo.svg` | The mark for the README and GitHub, a committed drawing, like the other README drawings (not written by `build.py`; the generator that drew them was retired, see git history). |
 | `app/public/logo-wordmark.svg` | Mark + "Bower" with a navy word, for light backgrounds. The word is outlined from Poppins Bold (SIL Open Font License 1.1) with letter-spacing -3 %, sized and spaced as the primary lockup of `Logo.dc.html` (84 px bird box, 14 px gap, 52 px word), so no font is loaded. |
 | `app/public/logo-wordmark-dark.svg` | The same with a `#f1f5f9` word, for dark backgrounds. Pick the file by the page's theme (for example `<picture>` with a `prefers-color-scheme` source, or the app's current theme); neither file switches colour on its own. |
 | `app/public/icons/favicon.svg` | Browser tab. Mark on a navy rounded square so it reads on light and dark tab bars. |
@@ -59,7 +59,7 @@ Five still faces from the same dials (lids, jaw, eye, head): happy (lower lid up
 
 ### Regenerating
 
-The shapes come from the design canvas (`docs/design/gen.py`, `BIRD_CORE` and `SCENE`); the app's component (`app/src/components/bird.tsx`, with `styles/bird.css` from the canvas's `CSS`) and `scripts/brand/build.py` each carry a copy, so change all three together. Then run `python3 scripts/brand/build.py`. It rewrites every file above except `docs/assets/logo.svg` (run `python3 docs/design/assets.py` for that one), centres the bird by its measured bounding box, and fails if an icon is off-centre, the maskable bird leaves the safe zone, the bird fills less than 12 px of the 16 px favicon or `logo.svg` reaches 6 KB. It needs Pillow, fontTools, Playwright with Chromium and Poppins Bold on the developer machine (a system `Poppins-Bold.ttf`, else the app's own `poppins-700.woff2` with brotli installed; see the script header); none of these are app dependencies. After changing colours in `tokens.css`, run `python3 scripts/brand/contrast.py` (standard library only) and update the contrast table below.
+The shapes come from the design canvas (`BIRD_CORE` and `SCENE`); the app's component (`app/src/components/bird.tsx`, with `styles/bird.css` from the canvas's `CSS`) and `scripts/brand/build.py` each carry a copy, so change all three together. Then run `python3 scripts/brand/build.py`. It rewrites every file above except `docs/assets/logo.svg` (a committed drawing), centres the bird by its measured bounding box, and fails if an icon is off-centre, the maskable bird leaves the safe zone, the bird fills less than 12 px of the 16 px favicon or `logo.svg` reaches 6 KB. It needs Pillow, fontTools, Playwright with Chromium and Poppins Bold on the developer machine (a system `Poppins-Bold.ttf`, else the app's own `poppins-700.woff2` with brotli installed; see the script header); none of these are app dependencies. After changing colours in `tokens.css`, run `python3 scripts/brand/contrast.py` (standard library only) and update the contrast table below.
 
 ## Palette
 
@@ -88,7 +88,7 @@ Brand colours: teal `#5fcfbc`, deep navy `#0b1220`, amber `#f0b64f`. Light is wa
 | `--color-success` | Confirmations | `#2d8250` | `#7ed3a1` |
 | `--color-on-success` | Text on a `--color-success` fill (e.g. the "done" button) | `#ffffff` | `#0b1220` |
 
-The soft set (`docs/design/screens/Brand.dc.html`, spec §14) gives one accent value each for teal, amber, success and danger; on light, `--color-link`/`--color-focus` and `--color-danger`/`--color-success` are a darker shade of the same hue instead of the literal accent, because the accent value alone fails AA as text or a fill's own text on the light (warm) page — see the contrast table. Dark uses the literal accent values throughout.
+The soft set (the design canvas's Brand board, spec §14) gives one accent value each for teal, amber, success and danger; on light, `--color-link`/`--color-focus` and `--color-danger`/`--color-success` are a darker shade of the same hue instead of the literal accent, because the accent value alone fails AA as text or a fill's own text on the light (warm) page — see the contrast table. Dark uses the literal accent values throughout.
 
 Contrast (WCAG 2.1; AA needs 4.5:1 for body text, 3:1 for control outlines):
 

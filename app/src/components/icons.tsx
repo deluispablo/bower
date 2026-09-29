@@ -1,5 +1,5 @@
 /**
- * The stroke icon set of spec §3.4 (paths from `docs/design/gen.py`): one
+ * The stroke icon set of spec §3.4 (paths from the design canvas): one
  * function per icon, inline SVG on a 24 px grid, `currentColor`, hidden
  * from assistive technology (the control around it carries the label).
  * Sized by CSS through the `icon` class; only the icons the app uses.

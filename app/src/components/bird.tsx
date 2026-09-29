@@ -1,6 +1,6 @@
 /**
  * The bird (spec §4): one drawing, every state. The markup is the design
- * canvas's (`docs/design/gen.py`, `BIRD_CORE` and `SCENE`) with its class
+ * canvas's (`BIRD_CORE` and `SCENE`) with its class
  * names; `birdClasses` (`bird-classes.ts`) picks the pose and face classes and
  * `styles/bird.css` does all the moving, so no JavaScript timer runs.
  *

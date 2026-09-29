@@ -29,7 +29,7 @@ export type BirdState =
  */
 export type BirdFace = 'happy' | 'curious' | 'worried' | 'sleepy' | 'proud';
 
-/** The pose class of each state; the names match `docs/design/gen.py`. */
+/** The pose class of each state; the names match the approved design canvas. */
 const POSES: Record<BirdState, string> = {
   idle: 'p-idle',
   looking: 'p-look',
