@@ -25,6 +25,15 @@ PAIRS = [
     ("danger", "bg", 4.5), ("success", "bg", 4.5),
     ("on-brand", "brand", 4.5), ("on-accent", "accent", 4.5),
     ("border-strong", "bg", 3.0), ("border-strong", "surface", 3.0),
+    # v5 tokens. "a@b" is token a (a tint) composited over token b.
+    ("warn", "bg", 4.5), ("warn", "surface", 4.5),
+    ("text", "warn-bg@bg", 4.5), ("text", "warn-bg@surface", 4.5),
+    ("danger-text", "danger-bg@bg", 4.5), ("danger-text", "danger-bg@surface", 4.5),
+    ("text", "success-bg@bg", 4.5),
+    ("updated", "bg", 4.5), ("updated", "surface", 4.5),
+    # Strokes (WCAG 1.4.11): the accent line and the focus ring.
+    ("accent-line", "bg", 3.0), ("accent-line", "surface", 3.0),
+    ("accent-line", "sidebar", 3.0), ("focus", "bg", 3.0),
 ]
 
 
@@ -48,10 +57,24 @@ def block(css: str, selector: str) -> dict[str, str]:
 
 
 def resolve(tokens: dict[str, str], name: str) -> str:
+    if "@" in name:
+        tint, base = name.split("@")
+        return composite(resolve(tokens, tint), resolve(tokens, base))
     value = tokens[f"color-{name}"].strip()
     while value.startswith("var("):
         value = tokens[value[6:-1]].strip()
     return value
+
+
+def composite(tint: str, base: str) -> str:
+    """Flatten an `rgb(r g b / a)` tint over an opaque hex base."""
+    m = re.fullmatch(r"rgb\((\d+) (\d+) (\d+) / ([\d.]+)\)", tint)
+    if not m:
+        sys.exit(f"not an rgb(r g b / a) tint: {tint}")
+    a = float(m.group(4))
+    b = base.lstrip("#")
+    out = [round(int(m.group(i + 1)) * a + int(b[2 * i:2 * i + 2], 16) * (1 - a)) for i in range(3)]
+    return "#" + "".join(f"{c:02x}" for c in out)
 
 
 def main() -> None:
