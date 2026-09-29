@@ -6,7 +6,7 @@ import { isDemo } from './api.js';
 import { Layout } from './components/layout.js';
 import { Home } from './routes/home.js';
 import { Login } from './routes/login.js';
-import { RunProvider } from './run-store.js';
+import { RunProvider, useRun } from './run-store.js';
 import { ShellSlotsProvider } from './components/shell-slots.js';
 import { SessionProvider, useSession } from './session.js';
 import { JUST_FILED_PATH } from './just-filed.js';
@@ -45,6 +45,9 @@ const Onboarding = lazy(() =>
 const Privacy = lazy(() =>
   import('./routes/privacy.js').then((m) => m.Privacy),
 );
+const Recover = lazy(() =>
+  import('./routes/recover.js').then((m) => m.Recover),
+);
 const RunYourOwn = lazy(() =>
   import('./routes/run-your-own.js').then((m) => m.RunYourOwn),
 );
@@ -76,8 +79,19 @@ function NotFoundPage() {
 }
 
 function AppRoutes() {
-  const { status } = useSession();
+  const { status, recheckFolder } = useSession();
   const { path } = useLocation();
+  const { phase, run } = useRun();
+
+  // A tidy-up that finds the folder gone fails with `vault_missing`: the
+  // recovery screens answer that, not the run-failure sheet (R-VAULT-3).
+  const missingRunKey =
+    phase === 'failed' && run?.reason === 'vault_missing'
+      ? (run.runId ?? run.requestedAt)
+      : null;
+  useEffect(() => {
+    if (missingRunKey !== null) void recheckFolder();
+  }, [missingRunKey]);
 
   // Ctrl/Cmd+K opens the quick switcher from anywhere (#142).
   useEffect(() => {
@@ -122,6 +136,7 @@ function AppRoutes() {
       <Route path="/lint" component={LintRedirect} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/welcome" component={Intro} />
+      <Route path="/recover" component={Recover} />
       <Route default component={NotFoundPage} />
     </Router>
   );

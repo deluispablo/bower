@@ -254,7 +254,6 @@ export function SessionProvider({ children }: SessionProviderProps) {
     if (state.status === 'signed-in' && folderId !== null) {
       void recheckFolder();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status, folderId]);
 
   // R-VAULT-1: on focus after 10 minutes.
@@ -270,7 +269,6 @@ export function SessionProvider({ children }: SessionProviderProps) {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const signOut = async (): Promise<void> => {
