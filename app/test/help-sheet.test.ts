@@ -21,8 +21,10 @@ vi.mock('../src/api.js', async (importOriginal) => ({
 
 import { OverlayHost } from '../src/components/overlay.js';
 import { close, open, resetOverlayQueue } from '../src/overlay-queue.js';
+import { resetTourStore } from '../src/tour-store.js';
+import { currentToast, dismissToast } from '../src/toast-store.js';
 
-const { HelpSheet, dismissedTips, INTRO_AGAIN_HREF, Tour, placeSheet } =
+const { HelpSheet, dismissedTips, INTRO_AGAIN_HREF, Tour, placeTour } =
   await import('../src/components/help-sheet.js');
 
 let root: HTMLElement;
@@ -83,6 +85,8 @@ afterEach(() => {
     render(null, root);
   });
   resetOverlayQueue();
+  resetTourStore();
+  dismissToast();
   localStorage.clear();
   root.remove();
   tabs.remove();
@@ -145,11 +149,21 @@ describe('HELP_ROWS', () => {
 });
 
 describe('Tour', () => {
-  it('walks the four sheets, highlighting each tab, and finishes', () => {
-    const onEnd = vi.fn();
-    void act(() => {
-      render(h(Tour, { onEnd }), root);
+  async function mountTour(
+    onEnd = vi.fn<(finished: boolean) => void>(),
+  ): Promise<typeof onEnd> {
+    await act(async () => {
+      render(
+        h(Fragment, null, h(Tour, { onEnd }), h(OverlayHost, null)),
+        root,
+      );
+      await Promise.resolve();
     });
+    return onEnd;
+  }
+
+  it('walks the four steps, lighting each tab, and finishes', async () => {
+    const onEnd = await mountTour();
 
     expect(dialog().getAttribute('aria-modal')).toBe('true');
     const titles: string[] = [];
@@ -158,40 +172,97 @@ describe('Tour', () => {
       expect(tab(name).classList.contains('help-tab-on')).toBe(true);
       titles.push(dialog().querySelector('h2')?.textContent ?? '');
       const label = tourNextLabel(index);
+      await act(async () => {
+        await Promise.resolve();
+      });
       expect(document.activeElement).toBe(button(label));
-      void act(() => button(label).click());
+      await act(async () => {
+        button(label).click();
+        await Promise.resolve();
+      });
       if (index < TOUR_TABS.length - 1) {
         expect(tab(name).classList.contains('help-tab-on')).toBe(false);
       }
     }
     expect(titles).toEqual(['Home', 'Notes', 'Add', 'Bower']);
     expect(onEnd).toHaveBeenCalledWith(true);
+    expect(currentToast()).toBeNull();
   });
 
-  it('skips on Skip and on Escape, and leaves no highlight behind', () => {
-    const onEnd = vi.fn();
-    void act(() => {
-      render(h(Tour, { onEnd }), root);
+  it('has no Back on the first step and goes back from the next', async () => {
+    await mountTour();
+    expect(
+      Array.from(document.body.querySelectorAll('button')).some(
+        (b) => b.textContent === 'Back',
+      ),
+    ).toBe(false);
+    await act(async () => {
+      button('Next: Notes').click();
     });
-    void act(() => button('Next: Notes').click());
-    void act(() => button('Skip').click());
-    expect(onEnd).toHaveBeenCalledWith(false);
+    expect(dialog().querySelector('h2')?.textContent).toBe('Notes');
+    await act(async () => {
+      button('Back').click();
+    });
+    expect(dialog().querySelector('h2')?.textContent).toBe('Home');
+    expect(tab('home').classList.contains('help-tab-on')).toBe(true);
+  });
 
+  it('shows the pointing bird (80 px, down) and the ring over the tab', async () => {
+    tab('home').getBoundingClientRect = () =>
+      ({ top: 700, left: 20, width: 90, height: 56 }) as DOMRect;
+    await mountTour();
+    const bird = document.body.querySelector<HTMLElement>('.tour-bird');
+    expect(bird).not.toBeNull();
+    expect(bird?.querySelector('svg')?.getAttribute('width')).toBe('80');
+    expect(bird?.querySelector('svg')?.getAttribute('class')).toContain('pd');
+  });
+
+  it('skips on Skip and on Escape with the toast once, and leaves no highlight', async () => {
+    const onEnd = await mountTour();
+    await act(async () => {
+      button('Next: Notes').click();
+    });
+    await act(async () => {
+      button('Skip').click();
+    });
+    expect(onEnd).toHaveBeenCalledWith(false);
+    expect(currentToast()?.message).toBe(
+      'Replay the tour any time from Settings.',
+    );
+
+    dismissToast();
     onEnd.mockReset();
     escape();
     expect(onEnd).toHaveBeenCalledWith(false);
+    expect(currentToast()).toBeNull();
 
-    void act(() => {
+    await act(async () => {
       render(null, root);
     });
     expect(tabs.querySelector('.help-tab-on')).toBeNull();
   });
 
-  it('carries the demo lines in a demo build', () => {
-    state.demo = true;
-    void act(() => {
-      render(h(Tour, { onEnd: vi.fn() }), root);
+  it('waits while another overlay is open', async () => {
+    open({
+      id: 'other',
+      priority: 1,
+      render: () => h('div', { role: 'dialog', 'aria-label': 'Other' }),
     });
+    await mountTour();
+    expect(dialog().getAttribute('aria-label')).toBe('Other');
+    expect(tabs.querySelector('.help-tab-on')).toBeNull();
+    expect(document.body.querySelector('.tour-bird')).toBeNull();
+    await act(async () => {
+      close('other');
+      await Promise.resolve();
+    });
+    expect(dialog().textContent).toContain('Tour · 1 of 4');
+    expect(tab('home').classList.contains('help-tab-on')).toBe(true);
+  });
+
+  it('carries the demo lines in a demo build', async () => {
+    state.demo = true;
+    await mountTour();
     expect(dialog().textContent).toContain(
       "These are Alex's things, a sample.",
     );
@@ -289,37 +360,42 @@ describe('HelpSheet', () => {
   });
 });
 
-describe('placeSheet', () => {
-  it('puts the sheet right above the phone tab bar, full width', () => {
-    const place = placeSheet(
+describe('placeTour', () => {
+  it('stands the bird on the phone tab bar, centred over the tab', () => {
+    const place = placeTour(
+      { top: 770, left: 100, width: 90, height: 56 },
       { top: 760, left: 0, width: 390, height: 84 },
       390,
       844,
     );
-    expect(place.spot).not.toBeNull();
-    expect(place.sheet).toMatchObject({
-      left: '0px',
-      width: '390px',
-      bottom: '90px',
-    });
+    expect(place.spot).toMatchObject({ top: '766px', left: '96px' });
+    expect(place.bird).toEqual({ left: '105px', bottom: '84px' });
   });
 
-  it('puts the sheet beside the desktop sidebar', () => {
-    const place = placeSheet(
-      { top: 60, left: 0, width: 264, height: 200 },
+  it('keeps the bird inside the screen at the edges', () => {
+    const place = placeTour(
+      { top: 770, left: 0, width: 50, height: 56 },
+      { top: 760, left: 0, width: 390, height: 84 },
+      390,
+      844,
+    );
+    expect(place.bird).toMatchObject({ left: '8px' });
+  });
+
+  it('stands it on the tab itself beside a desktop sidebar', () => {
+    const place = placeTour(
+      { top: 200, left: 16, width: 232, height: 44 },
+      { top: 60, left: 0, width: 264, height: 400 },
       1440,
       900,
     );
-    expect(place.sheet).toMatchObject({
-      left: '280px',
-      width: '400px',
-      top: '60px',
-    });
+    expect(place.bird).toEqual({ left: '92px', bottom: '700px' });
   });
 
-  it('dims the whole screen when the tab is not on screen', () => {
-    const place = placeSheet(null, 1024, 700);
-    expect(place.spot).toBeNull();
-    expect(place.sheet).toMatchObject({ width: '520px', left: '252px' });
+  it('has no ring or bird when the tab is not on screen', () => {
+    expect(placeTour(null, null, 1024, 700)).toEqual({
+      spot: null,
+      bird: null,
+    });
   });
 });
