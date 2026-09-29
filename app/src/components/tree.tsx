@@ -82,6 +82,7 @@ import {
 } from './icons.js';
 import { KindBadge } from './kind-badge.js';
 import { PinSheet } from './pin-sheet.js';
+import { openSendToBower } from './send-to-bower.js';
 import { NewTag } from './tags.js';
 import { useNoteTitles } from './use-note-titles.js';
 import type { VirtualListHandle } from './virtual-list.js';
@@ -605,9 +606,13 @@ export function Tree({
         openHref={folderHref(
           row.kind === 'note' ? folderOf(row.path) : row.path,
         )}
-        tellHref={`/bower?text=${encodeURIComponent(
-          row.kind === 'note' ? `[[${name}]] ` : `${name} `,
-        )}`}
+        onAsk={() =>
+          openSendToBower({
+            mode: 'ask',
+            about: name,
+            buildText: (value) => `About ${name}: ${value}`,
+          })
+        }
         driveHref={driveHref}
         onTogglePin={() => void togglePin(row)}
         onClose={() => setOpenRow(null)}

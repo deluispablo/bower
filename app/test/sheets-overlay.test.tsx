@@ -52,7 +52,7 @@ describe('PinSheet on Overlay', () => {
         name: 'Lease agreement',
         pinned: false,
         openHref: '#/open',
-        tellHref: '#/tell',
+        onAsk: () => undefined,
         driveHref: 'https://drive.example.com/FILE_ID',
         onTogglePin: vi.fn(),
         onClose,
@@ -66,6 +66,34 @@ describe('PinSheet on Overlay', () => {
     expect(document.body.querySelector('.pin-sheet-backdrop')).toBeNull();
     escape();
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('PinSheet ask row', () => {
+  it('opens the send sheet callback instead of a link, and closes the menu', () => {
+    const onAsk = vi.fn();
+    const onClose = vi.fn();
+    mount(
+      h(PinSheet, {
+        kind: 'folder',
+        name: 'Applications',
+        pinned: false,
+        openHref: '#/open',
+        onAsk,
+        driveHref: 'https://drive.example.com/FOLDER_ID',
+        onTogglePin: vi.fn(),
+        onClose,
+      }),
+    );
+    const row = [...document.body.querySelectorAll('.pin-sheet-row')].find(
+      (el) => el.textContent === 'Ask Bower about this folder',
+    );
+    expect(row?.tagName).toBe('BUTTON');
+    void act(() => {
+      (row as HTMLElement).click();
+    });
+    expect(onClose).toHaveBeenCalled();
+    expect(onAsk).toHaveBeenCalledOnce();
   });
 });
 

@@ -32,7 +32,8 @@ export interface PinSheetProps {
   /** The row's own folder screen (a folder row) or its containing folder
    * (a note row). */
   openHref: string;
-  tellHref: string;
+  /** "Ask Bower about this": opens the send-to-Bower sheet. */
+  onAsk: () => void;
   driveHref: string;
   onTogglePin: () => void;
   onClose: () => void;
@@ -43,7 +44,7 @@ export function PinSheet({
   name,
   pinned,
   openHref,
-  tellHref,
+  onAsk,
   driveHref,
   onTogglePin,
   onClose,
@@ -77,15 +78,15 @@ export function PinSheet({
             <IconFolder />
             <span>Open the folder</span>
           </a>
-          <a
+          <button
+            type="button"
             role="menuitem"
             class="pin-sheet-row"
-            href={tellHref}
-            onClick={onClose}
+            onClick={selectAndClose(onAsk)}
           >
             <IconChat />
             <span>Ask Bower about this {kind}</span>
-          </a>
+          </button>
           <a
             role="menuitem"
             class="pin-sheet-row"

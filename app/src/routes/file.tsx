@@ -20,7 +20,9 @@ import { isDemo } from '../api.js';
 import { BackLink } from '../components/back-link.js';
 import { DrivePreview } from '../components/drive-preview.js';
 import { FolderMark } from '../components/folder-mark.js';
+import { Hint } from '../components/hint.js';
 import { IconClock, IconFolder, IconSparkle } from '../components/icons.js';
+import { openSendToBower } from '../components/send-to-bower.js';
 import { KindBadge } from '../components/kind-badge.js';
 import { MoreButton } from '../components/more-button.js';
 import {
@@ -114,6 +116,9 @@ type PreviewLoad =
  * in Drive" is dropped instead of opening a broken Drive page, the same
  * sentence as Add's own greyed Drive door. */
 const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
+
+/** The suggestion chip under a file with no note. */
+const ASK_NOTE = 'Summarise this and list what matters';
 
 /**
  * Fetches `file`'s preview as `previewKind` says. Starts over for another
@@ -281,10 +286,10 @@ function Crumb({ crumbs }: CrumbProps): JSX.Element {
     <>
       {crumbs.length > 0 && (
         <nav class="breadcrumb" aria-label="Folder">
-          {crumbs.map((crumb) => (
+          {crumbs.map((crumb, i) => (
             <span key={crumb.path}>
               <a href={folderHref(crumb.path)}>{crumb.name}</a>
-              <span aria-hidden="true"> / </span>
+              {i < crumbs.length - 1 && <span aria-hidden="true"> / </span>}
             </span>
           ))}
         </nav>
@@ -414,13 +419,10 @@ function NoPreview({
         </p>
       )}
       {kind === 'zip' && (
-        <p class="file-tip">
-          <IconSparkle />
-          <span>
-            Next time, add the photos themselves: Bower can file and describe
-            photos, not what is inside a ZIP.
-          </span>
-        </p>
+        <Hint id="file-zip" variant="tip" icon={<IconSparkle />}>
+          Next time, add the photos themselves: Bower can file and describe
+          photos, not what is inside a ZIP.
+        </Hint>
       )}
     </div>
   );
@@ -866,9 +868,6 @@ export function FileScreen(): JSX.Element {
   const viewerAt = viewerSiblings.findIndex((item) => item.id === file.id);
   const sourceKind = sourceKindOf(file);
   const source = file.appProperties?.bowerSource;
-  const askHref = `/bower?text=${encodeURIComponent(
-    `Summarise [[${file.name}]] and list what matters in it`,
-  )}`;
 
   return (
     <section class="note-view file-view">
@@ -967,17 +966,31 @@ export function FileScreen(): JSX.Element {
       {policy.bowerReads === 'yes' &&
         companion === null &&
         source === undefined && (
-          <p class="file-tip">
-            <IconSparkle />
-            <span>
-              <b>Want a note on it?</b>{' '}
-              {origin === 'filed' ? 'Bower filed this as it is. ' : ''}Ask for
-              one:{' '}
-              <a href={askHref}>
-                &ldquo;Summarise this and list what matters&rdquo;
-              </a>
-            </span>
-          </p>
+          <Hint
+            id="file-note"
+            variant="suggestion"
+            icon={<IconSparkle />}
+            actions={
+              <button
+                type="button"
+                class="chip"
+                onClick={() =>
+                  openSendToBower({
+                    mode: 'ask',
+                    about: file.name,
+                    initialText: ASK_NOTE,
+                    buildText: (value) => `About ${file.name}: ${value}`,
+                  })
+                }
+              >
+                {ASK_NOTE}
+              </button>
+            }
+          >
+            <b>Want a note on it?</b>{' '}
+            {origin === 'filed' ? 'Bower filed this as it is. ' : ''}Ask for
+            one.
+          </Hint>
         )}
 
       {walk !== null && walk.total > 1 && <WalkBar walk={walk} />}

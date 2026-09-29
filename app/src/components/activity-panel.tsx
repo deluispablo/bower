@@ -27,6 +27,7 @@ import {
   IconRedo,
   IconShield,
 } from './icons.js';
+import { Hint } from './hint.js';
 import { useFileText } from './rules-panel.js';
 
 const LOG_PATH = 'log.md';
@@ -174,18 +175,15 @@ export function ActivityPanel({ load }: { load: RunsLoad }): JSX.Element {
   }
   return (
     <>
+      <Hint id="activity-fix" variant="tip" icon={<IconHelp />}>
+        Something in the wrong place? Say so: &ldquo;The lease goes under Home,
+        not Flat hunt&rdquo;. Bower moves it and remembers.
+      </Hint>
       <ol class="activity-cards" aria-label="Tidy-ups, newest first">
         {cards.map((card) => (
           <Card key={card.key} card={card} />
         ))}
       </ol>
-      <p class="activity-tip">
-        <IconHelp />
-        <span>
-          Something in the wrong place? Say so: &ldquo;The lease goes under
-          Home, not Flat hunt&rdquo;. Bower moves it and remembers.
-        </span>
-      </p>
     </>
   );
 }

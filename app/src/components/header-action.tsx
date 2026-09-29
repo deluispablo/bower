@@ -15,6 +15,8 @@ export interface HeaderActionProps {
   class?: string;
   /** Renders a link instead of a button. */
   href?: string;
+  /** With `href`: opens in a new tab (Open in Drive). */
+  external?: boolean;
   onClick?: () => void;
   /** Set for a toggle; it becomes `aria-pressed`. */
   pressed?: boolean;
@@ -38,7 +40,15 @@ export function HeaderAction(props: HeaderActionProps): JSX.Element {
   );
   if (props.href !== undefined) {
     return (
-      <a class={className} href={props.href} title={props.title}>
+      <a
+        class={className}
+        href={props.href}
+        title={props.title}
+        {...(props.external === true && {
+          target: '_blank',
+          rel: 'noopener',
+        })}
+      >
         {content}
       </a>
     );

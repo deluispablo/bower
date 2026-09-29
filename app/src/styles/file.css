@@ -94,35 +94,6 @@
   color: var(--color-text-muted);
 }
 
-.file-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.file-tip .icon {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
-  color: var(--color-accent);
-}
-
-.file-tip b {
-  color: var(--color-text);
-}
-
-.file-tip a {
-  font-weight: var(--weight-medium);
-  text-decoration: none;
-}
-
 /* The meta line: badge, kind word and facts (#604). */
 .file-props .kind-badge {
   flex-shrink: 0;

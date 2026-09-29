@@ -17,6 +17,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { Bird } from './bird.js';
+import { Hint } from './hint.js';
 import { IconChevronRight, IconShield } from './icons.js';
 import { RuleSheet } from './rule-sheet.js';
 import type { RuleAction } from './rule-sheet.js';
@@ -277,14 +278,11 @@ export function RulesPanel({
 
   return (
     <div class="rules-panel" aria-busy={busy}>
-      <p class="rules-tip">
-        <IconShield />
-        <span>
-          <b>Rules are yours and start at once.</b> Bower files its own way
-          (PARA) for anything you have not said anything about. Tap a rule to
-          change it, pause it, remove it, or apply it to what is already filed.
-        </span>
-      </p>
+      <Hint id="rules-yours" variant="tip" icon={<IconShield />}>
+        <b>Rules are yours and start at once.</b> Bower files its own way (PARA)
+        for anything you have not said anything about. Tap a rule to change it,
+        pause it, remove it, or apply it to what is already filed.
+      </Hint>
       {status}
       <SuggestedRules />
       {groups.map((group, i) => {
