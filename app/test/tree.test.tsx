@@ -113,6 +113,15 @@ function topRows(): string[] {
 }
 
 describe('Tree v4', () => {
+  it('shows the Inbox count even at 0, and no other folder at 0', async () => {
+    await mount();
+    const count = (path: string): string | undefined =>
+      host.querySelector(`a[href="${folderHref(path)}"] .tree-count`)
+        ?.textContent ?? undefined;
+    expect(count('0-Inbox')).toBe('0');
+    expect(count('2-Areas')).toBeUndefined();
+  });
+
   it('shows the five landmarks with marks and meanings, a divider, then neutral folders', async () => {
     await mount({ rootMeanings: true });
     expect(topRows()).toEqual([

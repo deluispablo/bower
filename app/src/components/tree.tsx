@@ -690,7 +690,9 @@ export function Tree({
           )}
           {nameEl}
           {fresh > 0 && <NewTag count={fresh} />}
-          {count > 0 && <span class="tree-count">{count}</span>}
+          {(count > 0 || (row.depth === 0 && landmark === 'inbox')) && (
+            <span class="tree-count">{count}</span>
+          )}
         </a>
         <button
           type="button"

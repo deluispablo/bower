@@ -80,6 +80,12 @@ export const KINDS: readonly Kind[] = [
       { key: 'address', label: 'Address', type: 'text', group: 'The place' },
       { key: 'type', label: 'Type', type: 'text', group: 'The place' },
       {
+        key: 'highlight',
+        label: 'Highlight',
+        type: 'text',
+        group: 'The place',
+      },
+      {
         key: 'rooms',
         label: 'Rooms',
         type: 'text',
