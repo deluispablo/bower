@@ -48,6 +48,7 @@ import {
   birdStateFor,
   bubbleFor,
   greetingFor,
+  finishedRunFor,
   homeStateFor,
   inboxLine,
   lastTidyUpOverride,
@@ -572,7 +573,8 @@ export function Home(): JSX.Element {
   // folder again after its upload (`add.tsx`), and Home reads the same index.
   // Refreshing again on open dropped a pin that was still being saved.
   // R-HOME-3: a session that has not seen a run finish still has the history.
-  const lastRun = useLastRun(lastFinished);
+  const settled = finishedRunFor(phase, run, lastFinished);
+  const lastRun = useLastRun(settled);
 
   const showAppFiles = getPref('showAppFiles');
   const recent =
@@ -616,7 +618,7 @@ export function Home(): JSX.Element {
     pending,
     // The history read is not a reason to leave Loading: only a run this
     // session already saw finish is.
-    lastFinished: loading ? lastFinished : lastRun,
+    lastFinished: loading ? settled : lastRun,
     loading,
   });
 

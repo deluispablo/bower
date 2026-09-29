@@ -4,6 +4,7 @@ import type { Run } from '../src/api.js';
 import {
   birdStateFor,
   bubbleFor,
+  finishedRunFor,
   greetingFor,
   homeStateFor,
   inboxLine,
@@ -116,6 +117,27 @@ function links(parts: BubblePart[]): string[] {
     typeof part === 'string' ? [] : [`${part.link}:${part.text}`],
   );
 }
+
+describe('finishedRunFor', () => {
+  it('stands in for a lastFinished the run store has not kept yet', () => {
+    expect(finishedRunFor('failed', PARTIAL_RUN, null)).toBe(PARTIAL_RUN);
+    expect(finishedRunFor('done', DONE_RUN, null)).toBe(DONE_RUN);
+    expect(
+      homeStateFor({
+        phase: 'failed',
+        pending: 2,
+        loading: false,
+        lastFinished: finishedRunFor('failed', PARTIAL_RUN, null),
+      }),
+    ).toBe('partial');
+  });
+
+  it('keeps lastFinished, and ignores a run in flight or none', () => {
+    expect(finishedRunFor('failed', PARTIAL_RUN, DONE_RUN)).toBe(DONE_RUN);
+    expect(finishedRunFor('running', PARTIAL_RUN, null)).toBeNull();
+    expect(finishedRunFor('idle', null, null)).toBeNull();
+  });
+});
 
 describe('homeStateFor', () => {
   const base = {
