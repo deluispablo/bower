@@ -309,12 +309,10 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           : { '--sidebar-width': `${sidebarWidth}px` }
       }
     >
-      <div class="shell-sidebar">
-        <nav
-          class="shell-sidebar-nav"
-          aria-label="Your notes"
-          data-tour="notes"
-        >
+      {/* `data-tour` sits on the whole column, as it did on the old nav: the
+          help sheet lights the target's box and places itself by it. */}
+      <div class="shell-sidebar" data-tour="notes">
+        <nav class="shell-sidebar-nav" aria-label="Your notes">
           <Explorer
             variant="sidebar"
             healthIsNew={healthIsNew}
