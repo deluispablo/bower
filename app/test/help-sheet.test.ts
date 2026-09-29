@@ -308,7 +308,7 @@ describe('HelpSheet', () => {
     mount('home');
     expect(dialog().textContent).toContain('About this screen');
     expect(dialog().querySelector('h2')?.textContent).toBe('Home');
-    expect(dialog().querySelectorAll('li')).toHaveLength(4);
+    expect(dialog().querySelectorAll('li')).toHaveLength(5);
     expect(dialog().textContent).not.toContain('top-left');
     expect(dialog().textContent).not.toContain('Tour ·');
     expect(link('What is Bower, from the start')?.getAttribute('href')).toBe(
