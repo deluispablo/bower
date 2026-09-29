@@ -22,6 +22,7 @@ import answersNote from '../../../vault-template/Answers/_Answers.md?raw';
 import clippingsNote from '../../../vault-template/Clippings/_Clippings.md?raw';
 
 import type { Run, RunItem } from '../api.js';
+import { buildRun } from './run-builders.js';
 import type { ImageMediaMetadata, VideoMediaMetadata } from '../drive.js';
 
 export const DEMO_NAME = 'Alex';
@@ -1460,3 +1461,71 @@ export const SCRIPTED_LISTINGS: readonly RunItem[] = (
 ).filter((item) => /^1-Projects\/Flat hunt\/.*\.pdf$/.test(item.to ?? ''));
 
 export const SCRIPTED_ADDED = 'I added bike times to the flats';
+
+// --- Test states (#735, spec §7c item 4) --------------------------------
+// Extra vault shapes and run states the v5 tests need. Nothing here is part
+// of the demo's normal story: `FIXTURE_FILES` and `DEMO_RUNS` stay as they
+// were, and a test picks one of these to swap in.
+
+/** The folder that exists with nothing in it (see `FIXTURE_FOLDERS`). */
+export const EMPTY_FOLDER = '2-Areas/Car';
+
+/** Whether a path is waiting to be tidied: in an inbox folder, outside
+ * `Processed` and `Quarantine`, and not a folder's own `_note.md` (the rule
+ * `pendingCount` reads). */
+function isPendingPath(path: string): boolean {
+  const segments = path.split('/');
+  const name = segments[segments.length - 1] ?? '';
+  if (segments[0] !== '0-Inbox' && segments[0] !== 'Clippings') return false;
+  if (segments.includes('Processed')) return false;
+  if (segments[0] === '0-Inbox' && segments[1] === 'Quarantine') return false;
+  return !(name.startsWith('_') && name.toLowerCase().endsWith('.md'));
+}
+
+/** The demo's files with nothing waiting to be tidied: an empty inbox. */
+export const EMPTY_INBOX_FILES: readonly FixtureFile[] = FIXTURE_FILES.filter(
+  (file) => !isPendingPath(file.path),
+);
+
+/** The folder the long tree lives in. */
+export const LONG_TREE_FOLDER = '4-Archives/Long tree';
+
+/** How many notes `LONG_TREE_FILES` holds: with the folders already in the
+ * demo this puts the tree well over 150 rows. */
+export const LONG_TREE_COUNT = 160;
+
+/** A folder of 160 small notes, for the tree's long-list behaviour. */
+export const LONG_TREE_FILES: readonly FixtureFile[] = Array.from(
+  { length: LONG_TREE_COUNT },
+  (_, index) => {
+    const number = String(index + 1).padStart(3, '0');
+    return note(
+      `${LONG_TREE_FOLDER}/Old note ${number}.md`,
+      1 + (index % 27),
+      'archive',
+      `# Old note ${number}\n\nNothing here but a line to fill the tree.`,
+    );
+  },
+);
+
+/** The demo's files plus the long tree. */
+export const LONG_TREE_VAULT: readonly FixtureFile[] = [
+  ...FIXTURE_FILES,
+  ...LONG_TREE_FILES,
+];
+
+/**
+ * A run in each state the app tells apart (spec §7c item 4), built with the
+ * shared run builders (#728): held running (writing, 1 of 2), done, partly
+ * done (failed after writing some notes) and failed (nothing changed). A test
+ * serves one as the current run and moves the clock with
+ * `page.clock.fastForward` to reach the next.
+ */
+export const DEMO_RUN_STATES: Readonly<
+  Record<'running' | 'done' | 'partial' | 'failed', Run>
+> = {
+  running: buildRun('running'),
+  done: buildRun('done'),
+  partial: buildRun('partial'),
+  failed: buildRun('failed'),
+};

@@ -1,0 +1,52 @@
+/* The (i) popover (`components/info-pop.tsx`): a 44 px button and a small
+   non-modal panel under it: no scrim, no focus trap. */
+
+.info-pop {
+  position: relative;
+  display: inline-flex;
+}
+
+.info-pop-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.info-pop-button:hover {
+  background: var(--color-surface-hover);
+}
+
+.info-pop-button[aria-expanded='true'] {
+  color: var(--color-text);
+}
+
+.info-pop-button .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.info-pop-panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  inset-inline-start: 0;
+  z-index: var(--z-chip);
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text);
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.45;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
+}

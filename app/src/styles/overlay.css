@@ -1,0 +1,169 @@
+/*
+ * The one overlay (R-OVL-1, spec §5, D4, board System-Overlays). A modal
+ * is a bottom sheet on phones; from 900 px up it is a 440 px right panel,
+ * a centred 440 px dialog or a small menu under its opener. The scrim sits
+ * at `--z-scrim`, the panel at `--z-overlay`. Only transform and opacity
+ * animate; under reduced motion only opacity does.
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-scrim);
+}
+
+.overlay-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-scrim);
+  background: var(--color-scrim);
+  animation: overlay-fade var(--motion-base) var(--ease-out);
+}
+
+.overlay-panel {
+  position: fixed;
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  outline: none;
+}
+
+.overlay-grab {
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  margin: var(--space-2) 0 var(--space-1);
+  border-radius: 2px;
+  background: var(--color-border);
+}
+
+/* Phone: every kind is a bottom sheet. */
+@media (max-width: 899.98px) {
+  .overlay-panel {
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: 90%;
+    padding-bottom: var(--space-4);
+    border-width: 1px 0 0;
+    border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+    animation: overlay-rise var(--motion-base) var(--ease-out);
+  }
+}
+
+@media (min-width: 900px) {
+  .overlay-grab {
+    display: none;
+  }
+
+  .overlay--desktop-right .overlay-panel {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(440px, 100vw);
+    border-width: 0 0 0 1px;
+    animation: overlay-slide var(--motion-base) var(--ease-out);
+  }
+
+  .overlay--desktop-center .overlay-panel {
+    inset: 0;
+    width: min(440px, calc(100vw - 2 * var(--space-4)));
+    height: fit-content;
+    max-height: 90vh;
+    margin: auto;
+    border-radius: var(--radius-lg);
+    animation: overlay-pop var(--motion-base) var(--ease-out);
+  }
+
+  /* A menu sits under the control that opened it, over a clear scrim. */
+  .overlay--desktop-anchor .overlay-scrim {
+    background: transparent;
+  }
+
+  .overlay--desktop-anchor .overlay-panel {
+    top: var(--overlay-anchor-top, 25vh);
+    left: var(--overlay-anchor-left, 50%);
+    width: min(280px, 88vw);
+    max-height: 70vh;
+    padding: var(--space-2);
+    background: var(--color-sidebar);
+    border-radius: var(--radius-lg);
+    animation: overlay-drop var(--motion-base) var(--ease-out);
+  }
+}
+
+@keyframes overlay-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlay-rise {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes overlay-slide {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes overlay-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes overlay-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reduced motion: nothing moves, the overlay only fades in. */
+@media (prefers-reduced-motion: reduce) {
+  .overlay-panel,
+  .overlay--desktop-right .overlay-panel,
+  .overlay--desktop-center .overlay-panel,
+  .overlay--desktop-anchor .overlay-panel {
+    animation: overlay-fade var(--motion-base) linear;
+  }
+}

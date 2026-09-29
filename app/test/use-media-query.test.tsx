@@ -10,6 +10,7 @@ import type { JSX } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { stubMatchMedia } from './helpers/match-media.js';
 import { mediaMatches, useMediaQuery } from '../src/use-media-query.js';
 
 const QUERY = '(min-width: 1200px)';
@@ -47,24 +48,12 @@ describe('useMediaQuery', () => {
   });
 
   it('answers the query and follows its changes', async () => {
-    let listener: (() => void) | null = null;
-    const list = {
-      matches: true,
-      addEventListener: vi.fn((_type: string, fn: () => void) => {
-        listener = fn;
-      }),
-      removeEventListener: vi.fn(),
-    };
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => list),
-    );
+    const stub = stubMatchMedia(true);
     const el = await mount();
     expect(el.textContent).toBe('wide');
 
-    list.matches = false;
     await act(() => {
-      listener?.();
+      stub.set(false);
     });
     expect(el.textContent).toBe('narrow');
   });
