@@ -56,7 +56,9 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
     list.locator('.just-filed-item', { hasText: 'Kentish Town, 2 bed' }),
   ).toContainText('from Kentish Town flat.pdf');
   await expect(first).toContainText('Projects › Flat hunt');
-  await expect(first.locator('.new-tag')).toHaveText('New');
+  // No New chip on a filed row (#819, #829: the chip is only for a new note
+  // Bower wrote).
+  await expect(first.locator('.new-tag')).toHaveCount(0);
   await expect(first.locator('.kind-badge')).toHaveText('PDF');
   await expect(
     list.locator('.just-filed-item', { hasText: 'Kentish Town photos' }),
@@ -82,13 +84,13 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
   await shot(page, testInfo, 'just-filed-phone');
 });
 
-test('Mark all seen clears every New tag and the Notes row', async ({
-  page,
-}, testInfo) => {
+test('Mark all seen clears the Notes row', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', 'the phone list');
   await openJustFiled(page, true);
   const list = screen(page);
-  await expect(list.locator('.new-tag').first()).toBeVisible();
+  // The demo's rows are all Filed, so no New chips show (#819, #829); Mark all
+  // seen still clears what is unseen.
+  await expect(list.locator('.new-tag')).toHaveCount(0);
 
   await list.getByRole('button', { name: 'Mark all seen' }).click();
   await expect(list.locator('.new-tag')).toHaveCount(0);
@@ -127,7 +129,9 @@ test('at 1280 px the list is a table with Earlier tidy-ups', async ({
     .filter({ hasText: 'Arlington Road, 2 bed' });
   await expect(first).toContainText('Arlington Road, 2 bed.pdf');
   await expect(first).toContainText('Projects › Flat hunt');
-  await expect(first.locator('.new-tag')).toHaveText('New');
+  // A Filed row carries its Filed tag, not a New chip (#819, #829).
+  await expect(first).toContainText('Filed');
+  await expect(first.locator('.new-tag')).toHaveCount(0);
   // A saved link's "You added" cell is its address, not the old file name.
   await expect(
     table.getByRole('row').filter({ hasText: 'Kentish Town photos' }),

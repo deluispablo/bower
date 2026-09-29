@@ -18,7 +18,9 @@ test('the bird animates with motion on, and can be sampled at 0, 25, 50 and 75%'
   page,
 }) => {
   await page.goto('/welcome');
-  const bird = page.locator('svg.b:visible').first();
+  // The welcome page now leads with the still mark under 40 px (#822), which
+  // has no animation; sample the first full bird instead.
+  const bird = page.locator('svg.b:not(.mark):visible').first();
   await expect(bird).toBeVisible();
   expect(
     await page.evaluate(

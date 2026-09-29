@@ -121,7 +121,7 @@ The same flows run in CI without a network: `app/test/demo-flows.test.ts` stubs 
 
 ## End-to-end tests
 
-`pnpm -C app e2e` drives the demo build in a real browser with [Playwright](https://playwright.dev) (#196): hermetic like the demo itself, no network, no Google, no Claude. The config (`app/playwright.config.ts`) builds the demo (`pnpm build:demo`) and serves it with `vite preview` on port 4196; locally a preview already running on that port is reused, so rebuild after changing the app. Chromium only, in two projects: `phone` (375 × 812, a phone's user agent and touch) and `desktop` (1280 × 800). The whole run takes well under a minute.
+`pnpm -C app e2e` drives the demo build in a real browser with [Playwright](https://playwright.dev) (#196): hermetic like the demo itself, no network, no Google, no Claude. The config (`app/playwright.config.ts`) builds the demo (`pnpm build:demo`) and serves it with `vite preview` on port 4196 (or `E2E_PORT`, so parallel worktrees do not share a server); locally a preview already running on that port is reused, so rebuild after changing the app. Chromium only, in two projects: `phone` (375 × 812, a phone's user agent and touch) and `desktop` (1280 × 800). The whole run takes well under a minute.
 
 The six flows live in `app/e2e/flows.e2e.ts`, one test each, run in both projects:
 
