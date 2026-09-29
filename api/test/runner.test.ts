@@ -1,17 +1,19 @@
 import { env as testEnv } from 'cloudflare:test';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
 import { GOOGLE_TOKEN_URL } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
-import { RUN_TICKET_TTL_MS } from '../src/process.js';
+import { RUN_TICKET_TTL_MS, RUNNING_STALE_MS } from '../src/process.js';
 import { hashTicket, issueRunTicket } from '../src/run-ticket.js';
 import {
   MAX_ADDED_LENGTH,
   MAX_PROCESSED,
+  MAX_REPORT_ENTRIES,
   MAX_TEXT_LENGTH,
+  MAX_WHAT_LENGTH,
   runScheduledLint,
 } from '../src/runner.js';
 import type { LintDispatchResult, RunnerVault } from '../src/runner.js';
@@ -1146,6 +1148,212 @@ describe('POST /runner/vaults/:id/status', () => {
     expect(await getRun(kv, USER_ID)).toEqual(run);
   });
 
+  it('keeps created, updated and left on a done run (R-RUNNER-1)', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      processed: [{ path: '0-Inbox/a.pdf', kind: 'file' }],
+      created: ['3-Resources/A summary.md'],
+      updated: [
+        { path: '2-Areas/Home/Boiler.md', what: 'Added the new service date' },
+        { path: '2-Areas/Home/Flat.md' },
+      ],
+      left: ['0-Inbox/b.pdf'],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.created).toEqual(['3-Resources/A summary.md']);
+    expect(run.updated).toEqual([
+      { path: '2-Areas/Home/Boiler.md', what: 'Added the new service date' },
+      { path: '2-Areas/Home/Flat.md' },
+    ]);
+    expect(run.left).toEqual(['0-Inbox/b.pdf']);
+    expect(await getRun(kv, USER_ID)).toEqual(run);
+    expect(await listRuns(kv, USER_ID)).toEqual([run]);
+  });
+
+  it('caps created, updated and left like processed, and cuts what', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      created: Array.from({ length: MAX_PROCESSED + 5 }, (_, i) => `c${i}.md`),
+      updated: [
+        { path: 'u'.repeat(MAX_TEXT_LENGTH + 10), what: 'w'.repeat(200) },
+      ],
+      left: ['l'.repeat(MAX_TEXT_LENGTH + 10)],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.created).toHaveLength(MAX_PROCESSED);
+    expect(run.updated?.[0]?.path).toHaveLength(MAX_TEXT_LENGTH);
+    expect(run.updated?.[0]?.what).toHaveLength(MAX_WHAT_LENGTH);
+    expect(run.left?.[0]).toHaveLength(MAX_TEXT_LENGTH);
+  });
+
+  it('answers 400 when processed, created, updated, left and setAside carry more than 400 entries together (T13)', async () => {
+    await seedUser();
+    const paths = (prefix: string, n: number): string[] =>
+      Array.from({ length: n }, (_, i) => `${prefix}${i}.md`);
+
+    const atCap = await postStatus({
+      state: 'done',
+      processed: paths('p', 100),
+      created: paths('c', 100),
+      updated: paths('u', 100).map((path) => ({ path })),
+      left: paths('l', 50),
+      setAside: paths('s', 50).map((path) => ({
+        path,
+        reason: 'too-large',
+      })),
+    });
+    expect(atCap.status).toBe(200);
+
+    await kv.delete(`run:${USER_ID}`);
+    const over = await postStatus({
+      state: 'done',
+      processed: paths('p', 100),
+      created: paths('c', 100),
+      updated: paths('u', 100).map((path) => ({ path })),
+      left: paths('l', 50),
+      setAside: paths('s', MAX_REPORT_ENTRIES - 350 + 1).map((path) => ({
+        path,
+        reason: 'too-large',
+      })),
+    });
+    expect(over.status).toBe(400);
+    expect((await over.json<ErrorBody>()).error.code).toBe('bad_request');
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+  });
+
+  it('keeps the phase and counts on a running run; a report without a phase keeps them (R-RUNNER-4)', async () => {
+    await seedUser();
+
+    const reading = (
+      await (
+        await postStatus({ state: 'running', phase: 'reading', total: 5 })
+      ).json<RunBody>()
+    ).run;
+    expect(reading).toMatchObject({
+      state: 'running',
+      phase: 'reading',
+      total: 5,
+    });
+    expect(reading.phaseAt).toBe(reading.startedAt);
+
+    const writing = (
+      await (
+        await postStatus({
+          state: 'running',
+          phase: 'writing',
+          total: 5,
+          done: 2,
+        })
+      ).json<RunBody>()
+    ).run;
+    expect(writing).toMatchObject({ phase: 'writing', total: 5, done: 2 });
+
+    const plain = (
+      await (await postStatus({ state: 'running' })).json<RunBody>()
+    ).run;
+    expect(plain).toMatchObject({ phase: 'writing', total: 5, done: 2 });
+    expect(plain.phaseAt).toBe(writing.phaseAt);
+
+    // A finished run drops the phase: it is running news only.
+    const done = (
+      await (
+        await postStatus({ state: 'done', phase: 'saving' })
+      ).json<RunBody>()
+    ).run;
+    expect(done.phase).toBeUndefined();
+    expect(done.phaseAt).toBeUndefined();
+    expect(done.total).toBeUndefined();
+  });
+
+  describe('running-stale timer (T13)', () => {
+    const start = new Date('2026-09-29T10:00:00Z');
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(start);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('restarts on each running report with a phase', async () => {
+      await seedUser();
+      await postStatus({ state: 'running', phase: 'reading' });
+
+      vi.setSystemTime(start.getTime() + RUNNING_STALE_MS - 60_000);
+      const writing = await postStatus({ state: 'running', phase: 'writing' });
+      expect(writing.status).toBe(200);
+
+      // Past the window from startedAt, inside it from the last phase.
+      vi.setSystemTime(start.getTime() + RUNNING_STALE_MS + 60_000);
+      const status = await (await getStatus()).json<{
+        run: Run;
+        stale: boolean;
+      }>();
+      expect(status.stale).toBe(false);
+      expect(status.run).toMatchObject({
+        state: 'running',
+        phase: 'writing',
+        startedAt: start.toISOString(),
+      });
+
+      vi.setSystemTime(start.getTime() + 2 * RUNNING_STALE_MS);
+      const later = await (await getStatus()).json<{
+        run: Run;
+        stale: boolean;
+      }>();
+      expect(later.stale).toBe(true);
+      expect(later.run.state).toBe('failed');
+    });
+
+    it('does not restart on a running report without a phase', async () => {
+      await seedUser();
+      await postStatus({ state: 'running' });
+
+      vi.setSystemTime(start.getTime() + RUNNING_STALE_MS - 60_000);
+      await postStatus({ state: 'running' });
+
+      vi.setSystemTime(start.getTime() + RUNNING_STALE_MS + 60_000);
+      const status = await (await getStatus()).json<{
+        run: Run;
+        stale: boolean;
+      }>();
+      expect(status.stale).toBe(true);
+    });
+  });
+
+  it('keeps created, updated and left on a failed run (R-RUNNER-1)', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'failed',
+      reason: 'timeout',
+      created: ['3-Resources/Written before the timeout.md'],
+      updated: [{ path: '2-Areas/Home/Boiler.md' }],
+      left: ['0-Inbox/b.pdf'],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run).toMatchObject({
+      state: 'failed',
+      reason: 'timeout',
+      created: ['3-Resources/Written before the timeout.md'],
+      updated: [{ path: '2-Areas/Home/Boiler.md' }],
+      left: ['0-Inbox/b.pdf'],
+    });
+    expect(await getRun(kv, USER_ID)).toEqual(run);
+  });
+
   it.each([
     ['not JSON', '{'],
     ['not an object', ['running']],
@@ -1171,6 +1379,35 @@ describe('POST /runner/vaults/:id/status', () => {
     ['quarantined not an array', { state: 'done', quarantined: 'a.md' }],
     ['a refused entry that is not a string', { state: 'done', refused: [1] }],
     ['refused not an array', { state: 'done', refused: 'a.md' }],
+    ['created not an array', { state: 'done', created: 'a.md' }],
+    ['a created entry that is not a string', { state: 'done', created: [1] }],
+    ['left not an array', { state: 'done', left: 'a.md' }],
+    ['a left entry that is not a string', { state: 'done', left: [{}] }],
+    ['updated not an array', { state: 'done', updated: 'a.md' }],
+    ['an updated entry that is a string', { state: 'done', updated: ['a.md'] }],
+    ['an updated entry without a path', { state: 'done', updated: [{}] }],
+    [
+      'an updated entry with an unknown key',
+      { state: 'done', updated: [{ path: 'a.md', why: 'x' }] },
+    ],
+    [
+      'an updated what that is not a string',
+      { state: 'done', updated: [{ path: 'a.md', what: 1 }] },
+    ],
+    [
+      'an updated what on two lines',
+      { state: 'done', updated: [{ path: 'a.md', what: 'one\ntwo' }] },
+    ],
+    ['an unknown phase', { state: 'running', phase: 'thinking' }],
+    ['a non-string phase', { state: 'running', phase: 1 }],
+    ['a negative total', { state: 'running', phase: 'writing', total: -1 }],
+    ['a fractional total', { state: 'running', phase: 'writing', total: 1.5 }],
+    ['a string done', { state: 'running', phase: 'writing', done: '1' }],
+    ['total without a phase', { state: 'running', total: 3 }],
+    [
+      'done over total',
+      { state: 'running', phase: 'writing', total: 2, done: 3 },
+    ],
   ])('answers 400 bad_request for %s', async (_, body) => {
     await seedUser();
 

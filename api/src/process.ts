@@ -63,8 +63,9 @@ export interface RunStaleness {
 
 /**
  * Where `run` stands at `now`. `queued` is measured from `requestedAt`
- * against `QUEUED_STALE_MS`; `running` from `startedAt` (falling back to
- * `requestedAt` if somehow absent) against `RUNNING_STALE_MS`. A missing
+ * against `QUEUED_STALE_MS`; `running` from its last `phase` report
+ * (`phaseAt`, spec T13), else `startedAt` (falling back to `requestedAt` if
+ * somehow absent) against `RUNNING_STALE_MS`. A missing
  * run, or one already `done` or `failed`, is neither active nor stale.
  *
  * `/process` and `GET /status` both build on this single function, so they
@@ -77,7 +78,7 @@ export function runStaleness(run: Run | undefined, now: Date): RunStaleness {
   }
   const since = Date.parse(
     run.state === 'running'
-      ? (run.startedAt ?? run.requestedAt)
+      ? (run.phaseAt ?? run.startedAt ?? run.requestedAt)
       : run.requestedAt,
   );
   const limit = run.state === 'running' ? RUNNING_STALE_MS : QUEUED_STALE_MS;
