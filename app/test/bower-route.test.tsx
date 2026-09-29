@@ -208,6 +208,13 @@ describe('the Bower tab', () => {
     expect(text).not.toMatch(/\bvault\b/i);
   });
 
+  it('draws the bird 56 px high above the composer (ruling, R-BIRD)', async () => {
+    await mount();
+    const bird = root.querySelector('.bower-box-intro svg');
+    expect(bird?.getAttribute('width')).toBe('56');
+    expect(bird?.getAttribute('height')).toBe('56');
+  });
+
   it('the first time: the tip is open, and an example fills the box without sending', async () => {
     await mount();
     expect(root.textContent).toContain('Nothing yet');

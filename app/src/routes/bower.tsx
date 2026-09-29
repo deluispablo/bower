@@ -31,7 +31,7 @@
  */
 
 import { createPortal } from 'preact/compat';
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
@@ -261,8 +261,8 @@ interface RequestsListProps {
   now: number;
   /** When the run in flight started (ISO-8601), for "started 13:52". */
   runStarted: string | null;
-  /** The finished runs by their key, for a done row's counts. */
-  runsByKey: ReadonlyMap<string, Run>;
+  /** The finished runs, for a done row's counts. */
+  runs: readonly Run[];
   /** "Just this, now": its disabled states and how to start it. */
   runNow: RunNow;
   /** A write is under way: the row buttons wait. */
@@ -277,13 +277,13 @@ function RequestMeta({
   row,
   now,
   runStarted,
-  runsByKey,
+  runs,
   onRules,
-}: Pick<RequestsListProps, 'now' | 'runStarted' | 'runsByKey' | 'onRules'> & {
+}: Pick<RequestsListProps, 'now' | 'runStarted' | 'runs' | 'onRules'> & {
   row: RequestRow;
 }): JSX.Element {
   const when = lowerFirst(cardWhen(row.since, now));
-  const run = row.runKey === undefined ? undefined : runsByKey.get(row.runKey);
+  const run = runs.find((item) => runKey(item) === row.runKey);
   const counts =
     row.state === 'done' && run !== undefined
       ? outcomeCounts(outcomeFromRun(run), { short: true })
@@ -420,7 +420,7 @@ function RequestsList({
   rows,
   now,
   runStarted,
-  runsByKey,
+  runs,
   runNow,
   busy,
   onRules,
@@ -453,7 +453,7 @@ function RequestsList({
                 row={row}
                 now={now}
                 runStarted={runStarted}
-                runsByKey={runsByKey}
+                runs={runs}
                 onRules={onRules}
               />
               {(row.state === 'waiting' || row.state === 'failed') &&
@@ -582,14 +582,7 @@ export function Bower(): JSX.Element {
     segment !== 'rules' || wide,
     lastFinished?.finishedAt ?? null,
   );
-  const runs = useMemo(
-    () => (runsLoad.status === 'ready' ? runsLoad.runs : []),
-    [runsLoad],
-  );
-  const runsByKey = useMemo(
-    () => new Map(runs.map((item) => [runKey(item), item])),
-    [runs],
-  );
+  const runs = runsLoad.status === 'ready' ? runsLoad.runs : [];
   const rows = requestRows({
     runs,
     files,
@@ -918,7 +911,7 @@ export function Bower(): JSX.Element {
                 ? (run.startedAt ?? run.requestedAt)
                 : null
             }
-            runsByKey={runsByKey}
+            runs={runs}
             runNow={runNow}
             busy={sending}
             onRules={() => {
@@ -946,7 +939,7 @@ export function Bower(): JSX.Element {
 
       <div class="bower-box">
         <div class="bower-box-intro">
-          <Bird state="looking" size={44} />
+          <Bird state="looking" size={56} />
           <p class="bower-bubble">
             Tell me what you want, in your words. I work out whether it is a
             rule, a job or a question.
