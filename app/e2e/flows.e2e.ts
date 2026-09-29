@@ -98,9 +98,7 @@ test.describe('open Home', () => {
     }
     await expect(tour).toBeHidden();
     await expect(page).toHaveURL(/\/$/);
-    await expect(
-      page.getByRole('heading', { name: 'Good morning, Alex' }),
-    ).toBeVisible();
+    await expect(visible(page.locator('.home-bubble'))).toBeVisible();
     // "?" opens the same sheet afterwards, without the step counter.
     await visible(
       page.getByRole('button', { name: 'About this screen' }),
@@ -126,9 +124,7 @@ test.describe('open Home', () => {
     // Back on Home from a reload: `tourSeenAt` survives it (#494, kept in
     // `sessionStorage`), so the tour does not replay.
     await page.goto('/');
-    await expect(
-      page.getByRole('heading', { name: 'Good morning, Alex' }),
-    ).toBeVisible();
+    await expect(visible(page.locator('.home-bubble'))).toBeVisible();
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(
       page.getByText('This is a demo, not the real thing'),
@@ -189,56 +185,6 @@ test.describe('first visit, Skip', () => {
       page.getByRole('heading', { name: 'Run your own Bower', level: 1 }),
     ).toBeVisible();
   });
-});
-
-test('the phone greeting is one line at 24 px, even with a long given name (#500, Phone-Home board)', async ({
-  page,
-}, testInfo) => {
-  test.skip(
-    testInfo.project.name !== 'phone',
-    'The board only draws this size for the phone greeting; desktop is unchanged.',
-  );
-  await openHome(page);
-  const heading = page.getByRole('heading', { name: /^Good morning, Alex$/ });
-  await expect(heading).toBeVisible();
-
-  // Substitute a long given name for the demo's short "Alex" (#341's data
-  // never has one to test with) to check the row holds under real-world
-  // length, not just this fixture's own name. One `evaluate` call: the
-  // text swap changes the heading's accessible name, so a fresh locator
-  // lookup afterward would no longer find it.
-  const box = await heading.evaluate((el) => {
-    el.textContent = 'Good morning, Persephone-Alexandra';
-    const style = getComputedStyle(el);
-    return {
-      fontSize: style.fontSize,
-      lineHeight: parseFloat(style.lineHeight),
-      height: el.getBoundingClientRect().height,
-    };
-  });
-  expect(box.fontSize).toBe('24px');
-  // One line: the row's rendered height doesn't exceed one line-height
-  // (a couple of px of rounding slack).
-  expect(box.height).toBeLessThanOrEqual(box.lineHeight + 2);
-  await shot(page, testInfo, 'home-greeting-long-name');
-});
-
-test('the phone greeting shows a short given name in full, not cut (#551)', async ({
-  page,
-}, testInfo) => {
-  test.skip(
-    testInfo.project.name !== 'phone',
-    'The 243 px box only happens at the phone width.',
-  );
-  await openHome(page);
-  const heading = page.getByRole('heading', { name: /^Good \w+, Alex$/ });
-  await expect(heading).toBeVisible();
-
-  // No ellipsis: the text's own scrollWidth fits inside the rendered box.
-  const overflowing = await heading.evaluate(
-    (el) => el.scrollWidth > el.clientWidth,
-  );
-  expect(overflowing).toBe(false);
 });
 
 test('the demo banner carries Run your own on Home, Add and Settings (#362)', async ({
@@ -1837,7 +1783,7 @@ test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
     await expect(bar.getByRole('button', { name: 'Your folders' })).toHaveCount(
       0,
     );
-    await expect(bar.getByText('Bower', { exact: true })).toBeVisible();
+    await expect(bar.getByText('Home', { exact: true })).toBeVisible();
     await expect(bar.getByRole('link', { name: 'Settings' })).toHaveText('A');
     await shot(page, testInfo, 'bar-home');
   }
@@ -1888,7 +1834,8 @@ test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
     0,
   );
   await expect(bar.getByRole('link', { name: /^Back to / })).toBeVisible();
-  await expect(bar.locator('.topbar-title')).toHaveText('Lisbon Trip');
+  // The title is on the page, not in the bar (#704).
+  await expect(bar.locator('.topbar-title')).toHaveCount(0);
   await shot(page, testInfo, 'bar-note');
 });
 
@@ -1915,10 +1862,7 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
     .click();
   await expect(page).toHaveURL(/\/note\//);
 
-  // The title keeps its 130px floor: Back gives way to it, not the other
-  // way round, and the bar itself never grows past the viewport.
-  const crumbBox = await bar.locator('.topbar-crumb').boundingBox();
-  expect(crumbBox?.width ?? 0).toBeGreaterThanOrEqual(130);
+  // The bar has Back only (#704), and never grows past the viewport.
   await expect
     .poll(async () => page.evaluate(() => document.body.scrollWidth))
     .toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
@@ -2542,7 +2486,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   const props = page.locator('.file-props');
   await expect(props).toContainText('Photo ·');
   await expect(
-    props.getByRole('link', { name: 'Projects / Kitchen Refresh' }),
+    props.getByRole('link', { name: 'Kitchen Refresh' }),
   ).toBeVisible();
   await expect(props).toContainText('Filed by Bower ·');
   // The photo viewer (#605, #606): the photo fitted, tap to see it whole.
