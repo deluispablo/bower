@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { Fragment, h, render } from 'preact';
+import { useState } from 'preact/hooks';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -229,5 +230,47 @@ describe('PhotoViewer (issue #605)', () => {
     expect(dialogs[0]?.querySelector('.photo-viewer-full')).not.toBeNull();
     expect(shell.hasAttribute('inert')).toBe(true);
     page.remove();
+  });
+
+  it('comes back with focus on More when the menu closes', async () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+    host = root;
+    let closeMenu: () => void = () => undefined;
+    function Screen(): ReturnType<typeof h> {
+      const [menu, setMenu] = useState(false);
+      closeMenu = () => setMenu(false);
+      return h(
+        Fragment,
+        null,
+        h(PhotoViewer, {
+          src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E',
+          title: 'Arlington Road, window sign',
+          siblings: SIBLINGS,
+          index: 1,
+          folderName: 'Flat hunt',
+          onNavigate: () => undefined,
+          onMore: () => setMenu(true),
+          moreOpen: menu,
+        }),
+        h(OverlayHost, null),
+      );
+    }
+    void act(() => render(h(Screen, null), root));
+    void act(() =>
+      root.querySelector<HTMLElement>('.photo-viewer-open')?.click(),
+    );
+    void act(() =>
+      document.querySelector<HTMLElement>('[aria-label="More"]')?.click(),
+    );
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    void act(() => closeMenu());
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(document.activeElement).toBe(
+      document.querySelector('[aria-label="More"]'),
+    );
   });
 });
