@@ -243,6 +243,8 @@ Each Worker secret is rotated the same way — pipe the new value into `wrangler
 
 `DAILY_RUN_LIMIT` (default 100) caps `/process` runs per vault per day; `DEFAULT_MAX_TURNS` (default 60, see "Rulebook v22 and the turn budget") caps how many turns the agent takes per run, unless the instance repo's `BOWER_MAX_TURNS` variable overrides it. Change either in `wrangler.local.toml`'s `[vars]` and redeploy (step 3.6 above). A waiting request's **Do it now** on the Bower tab is a run too (`POST /process` with `scope: "instructions"`) and counts the same; the dispatch carries `client_payload.scope`, which `ingest.yml` hands to `run.sh` (#373): Do it now runs only the instruction notes directly in `0-Inbox/` and leaves every other inbox file, `Clippings/` included, and Add's context notes where they are for the next Tidy up. An instance repo set up before #373 still has the old `ingest.yml`, which drops the field, so Do it now there tidies up the whole inbox: rerun `bash scripts/new-instance.sh OWNER/bower-home` to update it. A request sent from the Bower tab while a run is queued or running is left in `0-Inbox/` for the next run (#491): the runner compares the note's Drive modified time with the run's `requestedAt`, which the Worker hands it with the vault info; with a Worker deployed before #491 there is no `requestedAt` and such a request is taken by the run in flight, as before.
 
+**Limits note.** At the default of 100 runs a day, one busy person can use a real share of the instance repo's 2,000 free GitHub Actions minutes a month (a run is capped at 20 minutes). The app shows no run count, so watch Actions usage in the repo's billing settings and lower `DAILY_RUN_LIMIT` if the minutes run short. The KV write budget (see "KV write budget") is shared by everyone on the instance too.
+
 The runner also caps what one run may change: `BOWER_MAX_CHANGES` (default 200) is the most files a run may add or change. Above it, `agent/run.sh` reverts the whole run: nothing is uploaded or deleted, originals stay in the inbox, and the report's summary starts `Refused: too many changes`. The workflows do not pass it yet, so every instance uses the default; to change it, add `BOWER_MAX_CHANGES: <n>` to the `Run` step's `env:` in both workflows. Files the agent may not change (anything outside the vault's known folders, `CLAUDE.md`, `README.md`, `.claude/`) are reverted the same way, one by one; see "Protected paths and the post-run audit" in `agent/README.md`.
 
 ### Weekly health check
@@ -302,6 +304,15 @@ Worker first, then the runner, then the app:
 Each user then gets the new rulebook from **Settings → Advanced → "Update Bower's rules"** (`bower_rules_version` in `vault-template/CLAUDE.md` is the current number).
 
 **Rulebook v21** (#732): `by: bower` on every note Bower writes, Bower's note on every note it generates, a text copy next to each document of no listed kind, notes rewritten to the present when a rule or fact changes (`bower_updated`, `bower_change`, `bower_before`), short note names, `pile_note`, rename requests, `.bower/updated.txt`, and finishing a tidy-up without writing a note twice. Deploy the runner first (it reads `.bower/updated.txt` and appends a text copy's `## The document`), then each owner applies v21 from **Settings → Advanced → "Update Bower's rules"**.
+
+### Deploy order for the v5 update
+
+Same order as v4: Worker, then runner, then app, and each owner applies the rulebook last.
+
+1. **Worker**: `bash scripts/deploy-api.sh`. It accepts the report's new fields (`created`, `updated`, `left`, `phase`, `total`, `done`, `disagree`, `next`) and keeps the folder pointer's `missingAt` and `setAt`. It also raises the default `DAILY_RUN_LIMIT` to 100 (an instance that sets its own value keeps it).
+2. **Runner**: rerun `bash scripts/deploy.sh` so the instance repo gets the new `run.sh`, `prompts/` and workflows (`ingest.yml` installs `poppler-utils` for the text copy of PDFs). It reads `.bower/updated.txt`, `.bower/checks.txt` and `.bower/next.txt`, and sends a running report only when the phase changes.
+3. **App**: Cloudflare Pages builds it from `main`, including the public `/learn` route ("Learn Bower", readable signed out).
+4. **Rulebooks**: each owner taps **Settings → Advanced → "Update Bower's rules"** once. The update replaces `CLAUDE.md` with the template's whole, so a folder on v20 or older goes straight to v22 in one tap: v21 (`by: bower` notes, text copies, `pile_note`) and v22 ("How Bower thinks", `## History`) arrive together. Apply v22 only after the runner is deployed: a v22 folder on an older runner leaves `.bower/checks.txt` and `.bower/next.txt` unread and writes no History lines. `DEFAULT_MAX_TURNS` is 60 (see "Rulebook v22 and the turn budget").
 
 ### What a tidy-up does with each file
 
