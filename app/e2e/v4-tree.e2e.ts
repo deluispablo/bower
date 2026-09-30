@@ -35,7 +35,7 @@ test('Flat hunt lists its PDF and photo as rows, and its count equals its rows',
   page,
 }) => {
   const list = await openTree(page);
-  await expand(list, 'Projects');
+  await expand(list, 'Archives');
   await expand(list, 'Flat hunt');
 
   // The rows directly under Flat hunt: everything after it until the next
@@ -149,10 +149,10 @@ test('after a tidy-up, the folder it filed into shows "<n> new" and its new rows
   const list = tree(page);
   await expect(list).toBeVisible();
 
-  // Areas holds the two items the run filed (Garden and Home).
-  const areas = list.locator('a[href="/folder/2-Areas"]');
+  // Resources holds the two items the run filed (Garden and Home).
+  const areas = list.locator('a[href="/folder/3-Resources"]');
   await expect(areas.locator('.new-tag')).toHaveText('2 new');
-  await expand(list, 'Areas');
+  await expand(list, 'Resources');
   await expand(list, 'Garden');
   const garden = list.locator('a[href="/folder/3-Resources/Garden"]');
   await expect(garden.locator('.new-tag')).toHaveText('1 new');

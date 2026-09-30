@@ -22,7 +22,7 @@ function row(page: Page): Locator {
 async function openJustFiled(page: Page, phone: boolean): Promise<void> {
   await openHome(page);
   if (phone) await navigate(page, /^Folders$/);
-  await expect(row(page)).toContainText('Just filed · 6');
+  await expect(row(page)).toContainText('Just filed · 1');
   await row(page).click();
   await expect(screen(page)).toBeVisible();
 }
@@ -38,11 +38,12 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
     'What each tidy-up did: what is new, what changed, where things went.',
   );
   await expect(
-    list.getByRole('heading', { name: /^Today, 10:42$/ }),
+    list.getByRole('heading', { name: /^Yesterday, 15:03$/ }),
   ).toBeVisible();
-  // Rows are grouped by action, each group a role="table".
+  // Rows are grouped by action, each group a role="table". Yesterday's
+  // last tidy-up filed one thing and needs nothing from you (JF-Main).
   await expect(
-    list.getByRole('heading', { name: /^Needs you · 1$/ }),
+    list.getByRole('heading', { name: /^Filed · 1$/ }),
   ).toBeVisible();
   await expect(list.getByRole('table')).not.toHaveCount(0);
   await expect(
@@ -50,28 +51,16 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
   ).toBeVisible();
 
   const first = list.locator('.just-filed-item', {
-    hasText: 'Arlington Road, 2 bed',
+    hasText: 'Passport copy',
   });
-  await expect(
-    list.locator('.just-filed-item', { hasText: 'Kentish Town, 2 bed' }),
-  ).toContainText('from Kentish Town flat.pdf');
-  await expect(first).toContainText('Archives › Flat hunt');
+  await expect(first).toContainText('Areas › Visa & Immigration');
   // No New chip on a filed row (#819, #829: the chip is only for a new note
   // Bower wrote).
   await expect(first.locator('.new-tag')).toHaveCount(0);
   await expect(first.locator('.kind-badge')).toHaveText('PDF');
-  await expect(
-    list.locator('.just-filed-item', { hasText: 'Kentish Town photos' }),
-  ).toContainText('Resources › Links');
-
-  // The set-aside video, with its reason and the way to say what it is.
-  const aside = list.locator('.just-filed-item', {
-    hasText: "Bower can't watch videos.",
-  });
-  await expect(aside).toContainText('Archives › Flat hunt');
-  await expect(
-    aside.getByRole('link', { name: 'Tell Bower what it is' }),
-  ).toBeVisible();
+  // Old names and the set-aside video belong to an earlier tidy-up now
+  // (the London flat hunt, #903): renamedFrom and setAside are covered by
+  // the demo's unit tests (`test/demo-v4.test.ts`).
 
   // Earlier tidy-ups, each with its own lines.
   await expect(
@@ -111,7 +100,7 @@ test('at 1280 px the list is a table with Earlier tidy-ups', async ({
   const list = screen(page);
 
   await expect(
-    list.getByRole('heading', { name: /^Today, 10:42$/ }),
+    list.getByRole('heading', { name: /^Yesterday, 15:03$/ }),
   ).toBeVisible();
   await expect(
     list.getByRole('button', { name: 'Mark all seen' }),
@@ -124,22 +113,11 @@ test('at 1280 px the list is a table with Earlier tidy-ups', async ({
     'Where it is',
     'What changed',
   ]);
-  const first = table
-    .getByRole('row')
-    .filter({ hasText: 'Arlington Road, 2 bed' });
-  await expect(first).toContainText('Arlington Road, 2 bed.pdf');
-  await expect(first).toContainText('Archives › Flat hunt');
+  const first = table.getByRole('row').filter({ hasText: 'Passport copy' });
+  await expect(first).toContainText('Areas › Visa & Immigration');
   // A Filed row carries its Filed tag, not a New chip (#819, #829).
   await expect(first).toContainText('Filed');
   await expect(first.locator('.new-tag')).toHaveCount(0);
-  // A saved link's "You added" cell is its address, not the old file name.
-  await expect(
-    table.getByRole('row').filter({ hasText: 'Kentish Town photos' }),
-  ).toContainText('rightmove.example.com/…/kentish-town');
-
-  await expect(
-    table.getByRole('row').filter({ hasText: 'Needs you' }),
-  ).not.toHaveCount(0);
   await expect(
     list.getByRole('heading', { name: 'Earlier tidy-ups' }),
   ).toBeVisible();

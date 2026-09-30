@@ -70,7 +70,14 @@ const CASES: readonly Case[] = [
   {
     name: 'the photo viewer',
     prepare: async (page) => {
-      await page.goto('/file/demo-37');
+      // By name, not by a demo id that moves with the fixture.
+      await page.goto('/folder/4-Archives/Flat%20hunt');
+      await page
+        .locator('.folder-item', { hasText: 'Arlington Road, window sign' })
+        .filter({ hasText: /Photo/ })
+        .first()
+        .click();
+      await expect(photo(page)).toBeVisible();
     },
     open: (page) => photo(page).click(),
     dialog: /.+/,

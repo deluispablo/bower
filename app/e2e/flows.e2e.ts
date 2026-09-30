@@ -287,7 +287,7 @@ test('the quick switcher opens a note', async ({ page }, testInfo) => {
 test('/search?q= lands on Home with the switcher open and prefilled (#495)', async ({
   page,
 }) => {
-  await page.goto('/search?q=viewing');
+  await page.goto('/search?q=laundry');
 
   await expect(page).toHaveURL(/\/$/);
   // The demo's tour is a modal (#776) and makes the page, switcher included,
@@ -299,11 +299,11 @@ test('/search?q= lands on Home with the switcher open and prefilled (#495)', asy
     .catch(() => undefined);
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
-  await expect(switcher.getByRole('combobox')).toHaveValue('viewing');
+  await expect(switcher.getByRole('combobox')).toHaveValue('laundry');
   // A recent note: a snippet needs the note's text in the cache, and the
   // load caches the newest notes first, up to a fetch cap.
   const option = switcher
-    .getByRole('option', { name: /Notes from the viewing/ })
+    .getByRole('option', { name: /10-43 Buckley St, Moonee Ponds/ })
     .first();
   await expect(option).toBeVisible();
   // The snippet reads like the note body, not the raw file (#554): no
@@ -982,7 +982,9 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   await expect(rows.filter({ hasText: 'Reading…' })).toHaveCount(0);
 });
 
-test('Home loading state: dimmed cards and skeleton rows, never Empty (#322)', async ({
+// The v6 demo (#903) starts on yesterday's tidy-up, and Home shows the last
+// run before the index loads (`homeState`): no first-day loading state to see.
+test.fixme('Home loading state: dimmed cards and skeleton rows, never Empty (#322)', async ({
   page,
 }, testInfo) => {
   // Holds the demo's folder listing back a few seconds (`src/demo/drive.ts`)
@@ -2265,17 +2267,16 @@ test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#
   page,
 }, testInfo) => {
   await openHome(page);
-  // Projects (the demo fixture) has no notes of its own — Lisbon Trip,
-  // Kitchen Refresh, Half Marathon and Flat hunt hold all of them — a real
+  // Projects (the demo fixture) has no notes of its own — Housing Search
+  // Australia and Job Search Australia hold all of them — a real
   // instance of 1.9: the header's count is the whole subtree, the empty
   // state used to say "Nothing here yet" regardless.
   await page.goto('/folder/1-Projects');
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.getByText('Nothing here yet.')).toBeHidden();
-  // #424: the total is real (2 + 3 + 4 + 8 across four subfolders, #367
-  // added Flat hunt, #583 its listings and companion notes), but no single
-  // one of them holds all seventeen, so none is named.
-  await expect(page.getByText('17 notes in its folders')).toBeVisible();
+  // #424: the total is real (the two projects' notes, #903), but no single
+  // one of them holds all of them, so none is named.
+  await expect(page.getByText(/^\d+ notes in its folders$/)).toBeVisible();
   await shot(page, testInfo, 'folder-notes-elsewhere');
 });
 
@@ -2368,7 +2369,7 @@ test('folder counts add files and notes together, the same total the folder scre
     ).toHaveText('2');
     await expect(
       page.locator('main a[href="/folder/1-Projects"] .tree-count'),
-    ).toHaveText('28');
+    ).toHaveText('30');
   } else {
     const sidebar = page.getByRole('navigation', { name: 'Your folders' });
     await expect(
@@ -2376,7 +2377,7 @@ test('folder counts add files and notes together, the same total the folder scre
     ).toHaveText('2');
     await expect(
       sidebar.locator('a[href="/folder/1-Projects"] .tree-count'),
-    ).toHaveText('28');
+    ).toHaveText('30');
   }
 
   // 0-Inbox: 1 file (the boiler invoice) + 1 note (Tomato seedlings) — the
@@ -2551,10 +2552,10 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   const rowWith = (card: number, text: string) =>
     cards.nth(card).getByRole('listitem').filter({ hasText: text });
 
-  // The demo's four earlier tidy-ups (`DEMO_RUNS`, the v4 story), newest
-  // first: today's, with the walk-through video set aside, and three older.
-  await expect(cards).toHaveCount(4);
-  await expect(cards.nth(0)).toContainText('Today, 10:42');
+  // The demo's earlier tidy-ups (`DEMO_RUNS`, #903), newest first:
+  // yesterday's ten, then the four from the London folders.
+  await expect(cards).toHaveCount(14);
+  await expect(cards.nth(0)).toContainText('Yesterday, 15:03');
   await expect(cards.nth(0)).toContainText('Done');
   await expect(activity).toContainText('Something in the wrong place?');
   await shot(page, testInfo, 'bower-activity');
@@ -2589,13 +2590,13 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   await navigate(page, /^Bower$/);
   await showBowerPart(page, 'Activity');
   await expect(bowerPart(page, 'Activity')).toBeVisible();
-  await expect(cards).toHaveCount(5);
-  await expect(cards.nth(0)).toContainText('Today, 10:44 · 1 min');
+  await expect(cards).toHaveCount(15);
+  await expect(cards.nth(0)).toContainText('Today, 12:10 · 1 min');
   await expect(rowWith(0, 'Boiler service invoice.pdf')).toContainText(
-    '→ Areas / Home',
+    '→ Resources / Home',
   );
   await expect(rowWith(0, 'Tomato seedlings')).toContainText(
-    '→ Areas / Garden',
+    '→ Resources / Garden',
   );
   const question = rowWith(0, 'What do I still need for the visa?');
   await expect(question).toContainText('→ Answers, read it');

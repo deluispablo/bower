@@ -57,12 +57,12 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   await page.goto(FLAT);
   await expect(page.locator('.folder-item').first()).toBeVisible();
 
-  // Path bar: the PARA mark, "Projects" a link, the current folder bold.
+  // Path bar: the PARA mark, "Archives" a link, the current folder bold.
   const path = page.getByRole('navigation', { name: 'You are in' });
   await expect(path.locator('.folder-mark')).toBeVisible();
-  await expect(path.getByRole('link', { name: 'Projects' })).toHaveAttribute(
+  await expect(path.getByRole('link', { name: 'Archives' })).toHaveAttribute(
     'href',
-    '/folder/1-Projects',
+    '/folder/4-Archives',
   );
   await expect(path.locator('b')).toHaveText('Flat hunt');
 

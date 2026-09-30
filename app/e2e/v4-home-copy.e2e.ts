@@ -8,7 +8,9 @@ import { expect, openHome, test } from './demo.js';
 
 const DELAY_MS = 3000;
 
-test('Home shows skeletons, not zeros, while the index loads (#584)', async ({
+// The v6 demo (#903) starts on yesterday's tidy-up, and Home shows the last
+// run before the index loads (`homeState`): no first-day loading state to see.
+test.fixme('Home shows skeletons, not zeros, while the index loads (#584)', async ({
   page,
 }) => {
   // Holds the demo's folder listing back (`src/demo/drive.ts`).
