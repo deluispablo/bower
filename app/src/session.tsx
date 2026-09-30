@@ -72,6 +72,27 @@ const PUBLIC_PATHS = new Set(['/not-invited', '/privacy', '/terms']);
 /** The recovery screens' path (R-VAULT-3). */
 export const RECOVER_PATH = '/recover';
 
+/** The signed-in person as the top bar and the avatar show them. */
+export interface Person {
+  /** The Google profile's first name; `null` when Google gave none. */
+  firstName: string | null;
+  /** One capital letter for the avatar: the first name's, else the
+   * address's, else "?". */
+  initial: string;
+}
+
+/**
+ * The first name and initial of the signed-in person (R-API-13, #905),
+ * read from `me` only: never invented. With no `me`: no name and "?".
+ */
+export function personOf(me: Pick<Me, 'name' | 'email'> | undefined): Person {
+  const name = me?.name?.trim() ?? '';
+  const firstName = name === '' ? null : (name.split(/\s+/)[0] ?? null);
+  const source = firstName ?? me?.email.trim() ?? '';
+  const letter = source.charAt(0).toLocaleUpperCase('en');
+  return { firstName, initial: /\p{L}/u.test(letter) ? letter : '?' };
+}
+
 /** Where a folder state sends the app, or `null` when it sends nowhere. */
 function recoverTarget(folder: FolderState): string | null {
   return folder === 'missing' || folder === 'trashed' || folder === 'no-access'
