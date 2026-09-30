@@ -54,6 +54,18 @@ Props (the blue cap `bcap`, the sound arcs `wv` of Listening, the page `rd` of R
 | Peeking | Behind the drop zone; behind the search box before typing | Only the top of the head shows, eye follows the caret, head pops up | Loop |
 | Offline | Offline banner, note not on this device | Puffed, desaturated, cloud above, slow blink | Still |
 | Done | Small wins: upload done, message sent, settings saved | One hop, wink, chirp | Once, 2 s |
+| Listening | Dictation while the microphone is on | Head up, sound arcs (`wv`) ripple, eye wide (curious face) | Loop while listening |
+| Flying | The run chip and the ledge while a tidy-up runs | Wings beat, tail streams, feet tucked | Loop while running |
+| Reading | A note's "Bower's note" and Reading line | Holds a page (`rd`), eye follows the lines | Loop |
+| Pointing | The tour and Learn Bower, at the thing being described | Points a wing at a spot; the pointer dots (`pdot`) show where; `down` aims it lower | Loop |
+| Perched | The perch on the ledge when a tidy-up is done or nothing is running | Still on the ledge, slow blink | Still |
+
+**Poses used by v5 (R-BIRD).** Asleep (empty inbox, empty states, and the nap), Looking (the greeting and every idle bird), Listening (dictation), Flying (a run in progress), Happy (the still face after a win), Confused (a failed or partly done run, a missing folder) and the two rules of D30: Settle and Nap.
+
+- **Settle.** A looping pose plays for `SETTLE_MS` (10 s) and then swaps to its still class (`s-*`); an event on the screen (a tap, a run change) wakes it for one more cycle. Under reduced motion the still class always replaces the pose.
+- **Nap.** The greeting's and the perch's bird is a button: tapping it plays Asleep for one cycle (`NAP_CYCLE_MS`, 4.8 s) and holds it still until the next tap.
+- **One animated bird per screen.** `bird-presence.ts` counts the birds on screen; the perch shows only while the count is 0, and a bird inside an overlay passes `overlay` so the others go still. Birds under 40 px are the still `BowerMark`, never `Bird`.
+- **Sizes.** Search 72 px, the tour 80, the Bower tab 56, reading 64, empty states 64, the working sheet's Tidying stage 166.
 
 Five still faces from the same dials (lids, jaw, eye, head): happy (lower lid up, jaw open, head up), curious (eye wide, lean in), worried (upper lid down, head down), sleepy (both lids closed, head tucked), proud (lower lid up, head up, wing and tail spread) (`face` prop). Plays-once states call `onDone` when the `rig`'s animation ends (right away with reduced motion); the caller switches back to Looking. Under `prefers-reduced-motion: reduce` (or `reducedMotion`) no state plays: the bird holds the still face of its state (Hello happy, Shiny curious, Confused worried, Asleep sleepy, Show-off proud, otherwise none).
 

@@ -228,16 +228,18 @@ Full walkthrough: [`docs/runbook.md`](docs/runbook.md). Short version, driven mo
 
 ## Status
 
-Shipped: M1 to M33, from the first API to the explorer and the file views. Still open from those: an external dry run of the deploy docs (#48), semantic search (#51) and linked mentions (#150).
+Shipped: M1 to M46, from the first API to the explorer, the file views and v5 (planned in [`PLAN.md`](PLAN.md) from the spec [`docs/superpowers/plans/2026-09-29-runs-notes-folders-spec.md`](docs/superpowers/plans/2026-09-29-runs-notes-folders-spec.md)). Still open from earlier: an external dry run of the deploy docs (#48), semantic search (#51) and linked mentions (#150).
 
-Next, v5 (milestones M34 to M46, planned in [`PLAN.md`](PLAN.md) from the spec [`docs/superpowers/plans/2026-09-29-runs-notes-folders-spec.md`](docs/superpowers/plans/2026-09-29-runs-notes-folders-spec.md)):
+What v5 added:
 
 - **Every tidy-up says what it did**, in four counts (filed, new notes, updated, needs you), and a bar follows you on every screen while it runs.
-- **Bower's note** on every note it writes, folded to one line when you want, with a verdict and next steps where it helps.
+- **Bower's note** on every note it writes, folded to one line when you want, with a verdict, a score and next steps where it helps.
 - **Piles:** add things together and say in one line what they are; uploads survive a closed tab.
-- **Dictation** wherever you write a sentence, and a short intro plus a **Learn Bower** page.
+- **Dictation** wherever you write a sentence, and a short intro plus a public **Learn Bower** page at `/learn`.
 - **Bower on screen:** the bird, redrawn as a satin bowerbird, keeps you company without getting in the way.
 - **A missing Bower folder** is noticed and can be put back.
+
+Operators: the update order (Worker, runner, app, then each owner's rulebook) is in [`docs/runbook.md`](docs/runbook.md). Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 Why things are built this way: [`docs/decisions.md`](docs/decisions.md). What an instance stores about you: [`docs/privacy.md`](docs/privacy.md). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
