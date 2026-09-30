@@ -779,6 +779,34 @@
   transform: scaleX(-1);
 }
 
+/* Settled (D30): the component swaps the pose for its still class (s-* or the
+   state's e-* face) and adds .settled, which stops every animation. Asleep
+   keeps its pose, so the rig's resting height is set here instead. */
+.b.settled,
+.b.settled * {
+  animation: none !important;
+}
+.p-sleep.settled .rig {
+  transform: translateY(5px);
+}
+
+/* The nap button (D30): the greeting's and the perch's bird. The bird stays
+   `pointer-events: none` (rule 4); the button is the one tap target. */
+.bird-nap {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+.bird-nap:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 /* Reduced motion: the component already drops the pose; this covers the system setting in CSS too. */
 @media (prefers-reduced-motion: reduce) {
   .b,

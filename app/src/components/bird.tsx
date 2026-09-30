@@ -24,9 +24,17 @@
  * meaning.
  */
 
-import type { JSX, Ref, RefObject } from 'preact';
+import type { ComponentChildren, JSX, Ref, RefObject } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
+import {
+  NAP_CYCLE_MS,
+  SETTLE_MS,
+  retainWakeListeners,
+  toggleNap,
+  useNapping,
+  useWakeCount,
+} from '../bird-events.js';
 import { registerBird, useOverlayBird } from '../bird-presence.js';
 
 import { ONCE_STATES, birdClasses } from './bird-classes.js';
@@ -325,6 +333,27 @@ export function Bird({
   const once = ONCE_STATES.includes(state);
   const playsOnce = !still && once;
 
+  // D30: a looping pose settles after SETTLE_MS and an event wakes it for one
+  // more cycle; a nap plays Asleep for one cycle, then holds it still.
+  useEffect(() => retainWakeListeners(), []);
+  const wake = useWakeCount();
+  const napping = useNapping();
+  const [settled, setSettled] = useState(false);
+  const loops = !still && (napping || !once);
+  // While napping the wake events change nothing: he sleeps until the next tap.
+  const cycle = napping ? -1 : wake;
+  useLayoutEffect(() => {
+    setSettled(false);
+    if (!loops) return;
+    const timer = setTimeout(
+      () => setSettled(true),
+      napping ? NAP_CYCLE_MS : SETTLE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [state, cycle, loops, napping]);
+  const shownState: BirdState = napping ? 'asleep' : state;
+  const shownFace = napping ? undefined : face;
+
   // The latest `onDone`, so a new callback on every render does not count
   // as a new play.
   const onDoneRef = useRef(onDone);
@@ -371,7 +400,8 @@ export function Bird({
     <svg
       ref={svg}
       class={
-        birdClasses(state, face, flip, still, down) + (paused ? ' paused' : '')
+        birdClasses(shownState, shownFace, flip, still, down, settled) +
+        (paused ? ' paused' : '')
       }
       viewBox="0 0 100 100"
       width={size}
@@ -382,6 +412,36 @@ export function Bird({
       {scene && <Scene />}
       <BirdRig scene={scene} rigRef={rig} />
     </svg>
+  );
+}
+
+export interface BirdNapButtonProps {
+  children: ComponentChildren;
+  /** False where the button sits inside an `aria-hidden` slot (the ledge). */
+  tabbable?: boolean;
+}
+
+/**
+ * The nap button (D30): the greeting's and the perch's bird is a `button`
+ * named "Bower". A tap plays Asleep and pauses every animation until the next
+ * tap or the next page load.
+ */
+export function BirdNapButton({
+  children,
+  tabbable = true,
+}: BirdNapButtonProps): JSX.Element {
+  const napping = useNapping();
+  return (
+    <button
+      type="button"
+      class="bird-nap"
+      aria-label="Bower"
+      aria-pressed={napping}
+      tabIndex={tabbable ? undefined : -1}
+      onClick={toggleNap}
+    >
+      {children}
+    </button>
   );
 }
 
