@@ -110,6 +110,37 @@ export const BIRD_STATES: readonly BirdState[] = Object.keys(
   POSES,
 ) as BirdState[];
 
+/**
+ * The bird's size scale (spec §2.4, R-TOK-63 to 71, R-BIRD-1), mirrored from
+ * the `--bird-*` tokens in `styles/tokens.css` (keep both in sync). `hero`
+ * is 84 on the phone and 96 from 900 px; the number here is the phone's.
+ * Under 40 (`inline` to `box`) the bird is the still `BowerMark`.
+ */
+export const BIRD_SIZE = {
+  inline: 16,
+  icon: 20,
+  tip: 28,
+  box: 32,
+  drop: 44,
+  sheet: 52,
+  confirm: 56,
+  running: 70,
+  tab: 72,
+  tour: 80,
+  hero: 84,
+} as const;
+
+export type BirdSize = keyof typeof BIRD_SIZE;
+
+/** A size in px, or a name from the scale. */
+export type BirdSizeValue = number | BirdSize;
+
+/** The px size and, for a named size, the CSS length that reads its token. */
+export function birdSize(size: BirdSizeValue): { px: number; css?: string } {
+  if (typeof size === 'number') return { px: size };
+  return { px: BIRD_SIZE[size], css: `var(--bird-${size})` };
+}
+
 /** States that play once and then report `onDone` (the caller goes back to `looking`). */
 export const ONCE_STATES: readonly BirdState[] = ['hello', 'showoff', 'done'];
 

@@ -334,8 +334,11 @@
 .p-tidy .rig {
   animation: ferry 6s ease-in-out infinite;
 }
-.p-tidy .turn {
-  animation: ferryturn 6s linear infinite;
+/* Tidying faces right all the way (R-BIRD-2, D-58): no turn on the way
+   back. Only the tour's pointing bird turns to face its target (G-20). */
+.b.p-tidy .turn {
+  animation: none;
+  transform: none;
 }
 .p-tidy .wg {
   animation: flap var(--motion-base) ease-in-out infinite alternate;
@@ -1247,24 +1250,6 @@
   }
   100% {
     transform: translateX(34px);
-  }
-}
-@keyframes ferryturn {
-  0%,
-  24% {
-    transform: scaleX(-1);
-  }
-  26%,
-  50% {
-    transform: scaleX(1);
-  }
-  52%,
-  72% {
-    transform: scaleX(-1);
-  }
-  74%,
-  100% {
-    transform: scaleX(1);
   }
 }
 @keyframes flap {
