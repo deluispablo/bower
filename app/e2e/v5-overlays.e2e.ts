@@ -11,21 +11,79 @@ import { expect, openHome, test, visible } from './demo.js';
 
 interface Case {
   name: string;
-  opener: (page: Page) => Locator;
+  /** Goes to the screen the overlay opens on. */
+  prepare: (page: Page) => Promise<void>;
+  /** Opens the overlay. */
+  open: (page: Page) => Promise<void>;
   dialog: string | RegExp;
+  /** The control focus returns to on Escape, when it stays on screen. */
+  opener?: (page: Page) => Locator;
 }
+
+async function openNote(page: Page): Promise<void> {
+  await openHome(page);
+  await visible(
+    page
+      .locator('.home-notes a[href^="/note/"]')
+      .filter({ hasText: /Notes from the viewing/ }),
+  ).click();
+  await expect(page).toHaveURL(/\/note\//);
+}
+
+const more = (page: Page): Locator =>
+  visible(page.getByRole('button', { name: 'More' }));
+const tidy = (page: Page): Locator =>
+  visible(page.getByRole('button', { name: 'Tidy up' }));
+const help = (page: Page): Locator =>
+  visible(page.getByRole('button', { name: 'About this screen' }));
+const photo = (page: Page): Locator =>
+  page.getByRole('button', { name: /Tap to see it whole/ }).first();
 
 const CASES: readonly Case[] = [
   {
     name: 'the tidy-up confirmation',
-    opener: (page) => visible(page.getByRole('button', { name: 'Tidy up' })),
+    prepare: openHome,
+    open: (page) => tidy(page).click(),
     dialog: 'Is that everything?',
+    opener: tidy,
   },
   {
     name: 'the help sheet',
-    opener: (page) =>
-      visible(page.getByRole('button', { name: 'About this screen' })),
+    prepare: openHome,
+    open: (page) => help(page).click(),
     dialog: /^(About this screen|Home)/,
+    opener: help,
+  },
+  {
+    name: 'the note More menu',
+    prepare: openNote,
+    open: (page) => more(page).click(),
+    dialog: 'Note actions',
+    opener: more,
+  },
+  {
+    name: 'the quick switcher',
+    prepare: openHome,
+    open: (page) => page.keyboard.press('Control+k'),
+    dialog: 'Quick switcher',
+  },
+  {
+    name: 'the send-to-Bower sheet',
+    prepare: openNote,
+    open: async (page) => {
+      await more(page).click();
+      await page.getByRole('menuitem', { name: /Move to…/ }).click();
+    },
+    dialog: 'Move',
+  },
+  {
+    name: 'the photo viewer',
+    prepare: async (page) => {
+      await page.goto('/file/demo-37');
+    },
+    open: (page) => photo(page).click(),
+    dialog: /.+/,
+    opener: photo,
   },
 ];
 
@@ -33,10 +91,15 @@ for (const item of CASES) {
   test(`${item.name}: the page behind takes no tap and does not scroll`, async ({
     page,
   }) => {
-    await openHome(page);
+    await item.prepare(page);
     const url = page.url();
-    await item.opener(page).click();
-    const dialog = page.getByRole('dialog', { name: item.dialog });
+    await item.open(page);
+    const dialog = page.getByRole(
+      item.name.includes('More menu') ? 'menu' : 'dialog',
+      {
+        name: item.dialog,
+      },
+    );
     await expect(dialog).toBeVisible();
 
     // The page is inert and the body cannot scroll.
@@ -67,26 +130,56 @@ for (const item of CASES) {
     }
     expect(probed).toBeGreaterThan(0);
 
-    // A wheel over the page does not scroll it, and no route changed.
-    await page.mouse.move(20, 200);
-    await page.mouse.wheel(0, 600);
-    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    // No route changed.
     expect(page.url()).toBe(url);
   });
 
-  test(`${item.name}: Escape returns focus to the opener`, async ({ page }) => {
-    await openHome(page);
-    const opener = item.opener(page);
-    await opener.focus();
-    await opener.click();
-    const dialog = page.getByRole('dialog', { name: item.dialog });
+  test(`${item.name}: Escape closes it and returns focus`, async ({ page }) => {
+    await item.prepare(page);
+    await item.opener?.(page).focus();
+    await item.open(page);
+    const dialog = page.getByRole(
+      item.name.includes('More menu') ? 'menu' : 'dialog',
+      {
+        name: item.dialog,
+      },
+    );
     await expect(dialog).toBeVisible();
+    // The trap takes focus a frame after it opens; Escape needs it there.
+    await expect(dialog.locator(':focus')).toHaveCount(1);
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
-    await expect(opener).toBeFocused();
+    if (item.opener !== undefined)
+      await expect(item.opener(page)).toBeFocused();
+    else
+      expect(
+        await page.evaluate(() => document.activeElement?.tagName),
+      ).not.toBe('BODY');
     await expect(page.locator('#app > .shell')).not.toHaveAttribute(
       'inert',
       '',
     );
   });
 }
+
+test('a wheel over the scrim does not scroll the page behind', async ({
+  page,
+}) => {
+  await openHome(page);
+  // Make sure the page scrolls, whatever the screen holds.
+  await page.evaluate(() => {
+    document.body.style.minHeight = '4000px';
+  });
+  await page.evaluate(() => window.scrollTo(0, 300));
+  const before = await page.evaluate(() => window.scrollY);
+  expect(before).toBeGreaterThan(0);
+
+  await page.keyboard.press('Control+k');
+  await expect(
+    page.getByRole('dialog', { name: 'Quick switcher' }),
+  ).toBeVisible();
+  await page.mouse.move(8, 400);
+  await page.mouse.wheel(0, 600);
+  await page.mouse.wheel(0, -100);
+  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+});
