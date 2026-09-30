@@ -269,6 +269,10 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
   it('gives each subfolder a card: things and when updated (#908, R-FCARD-1)', async () => {
     mount();
     await subfoldersReady();
+    // The group label above the cards (board AR-Main-375).
+    expect(root.querySelector('.folder-cards-label')?.textContent).toBe(
+      'Folders',
+    );
     const card = root.querySelector(
       'a.folder-card[href="/folder/1-Projects/Flat%20hunt"]',
     );

@@ -191,26 +191,29 @@ export function SubfolderList({
   if (detailed) {
     const byPath = index?.byPath ?? NO_FILES;
     return (
-      <ul class="folder-cards" role="list" aria-label={`In ${contents.name}`}>
-        {contents.subfolders.map((folder) => (
-          <li key={folder.path}>
-            <FolderCard
-              folder={{
-                path: folder.path,
-                name: folder.name,
-                href: folderHref(folder.path),
-                things: folder.things,
-                ...(folder.updated !== undefined && {
-                  updated: folder.updated,
-                }),
-              }}
-              items={firstInside(byPath, folder.path)}
-              newCount={fresh.newCountIn(folder.path)}
-              now={now}
-            />
-          </li>
-        ))}
-      </ul>
+      <>
+        <h3 class="folder-cards-label">Folders</h3>
+        <ul class="folder-cards" role="list" aria-label={`In ${contents.name}`}>
+          {contents.subfolders.map((folder) => (
+            <li key={folder.path}>
+              <FolderCard
+                folder={{
+                  path: folder.path,
+                  name: folder.name,
+                  href: folderHref(folder.path),
+                  things: folder.things,
+                  ...(folder.updated !== undefined && {
+                    updated: folder.updated,
+                  }),
+                }}
+                items={firstInside(byPath, folder.path)}
+                newCount={fresh.newCountIn(folder.path)}
+                now={now}
+              />
+            </li>
+          ))}
+        </ul>
+      </>
     );
   }
   return (

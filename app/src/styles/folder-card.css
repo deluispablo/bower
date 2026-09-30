@@ -56,11 +56,9 @@
   overflow-wrap: anywhere;
 }
 
+/* "2 things · updated today [1 new]": the Badge inline at the end. */
 .folder-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  display: block;
   margin-top: 2px;
   color: var(--color-text-muted);
   font-size: 0.8125rem; /* 13px */
@@ -71,7 +69,7 @@
   flex-direction: column;
   gap: 4px;
   margin-top: 8px;
-  color: var(--color-text);
+  color: var(--color-text-secondary);
   font-size: 0.8125rem; /* 13px, board AR-Main */
 }
 
@@ -104,4 +102,18 @@
 .folder-card-chevron .icon {
   width: 18px;
   height: 18px;
+}
+
+.folder-card-meta .badge {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* The "Folders" group label above the cards (board AR-Main-375). */
+.folder-cards-label {
+  margin: 20px 8px 4px;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem; /* 13px */
+  font-weight: 700;
 }
