@@ -80,6 +80,8 @@ export interface ComposerProps {
   maxLength?: number;
   /** The text fails a check (`aria-invalid`). */
   invalid?: boolean;
+  /** The box takes no text for now (the interview's areas are full). */
+  disabled?: boolean;
   /** Focus the box when it mounts (a sheet's only field). */
   autoFocus?: boolean;
   /** Extra class on the wrapper. */
@@ -195,6 +197,7 @@ export function Composer({
   onListening,
   maxLength,
   invalid = false,
+  disabled = false,
   autoFocus = false,
   class: rootClass,
 }: ComposerProps): JSX.Element {
@@ -254,7 +257,7 @@ export function Composer({
   }, [value]);
 
   function commit(): void {
-    if (mode !== 'send' || sending || !online || !hasText) return;
+    if (mode !== 'send' || sending || disabled || !online || !hasText) return;
     dictation.stop();
     onCommit(value.trim());
   }
@@ -299,6 +302,7 @@ export function Composer({
     placeholder,
     maxLength,
     readOnly: sending,
+    disabled,
     'aria-label': label,
     'aria-invalid': invalid || undefined,
     'aria-describedby': line !== null ? lineId : undefined,
@@ -341,7 +345,7 @@ export function Composer({
           label={button.label}
           onPress={press}
           {...(button.pressed !== undefined && { pressed: button.pressed })}
-          {...(button.disabled === true && { disabled: true })}
+          {...((button.disabled === true || disabled) && { disabled: true })}
         />
       </div>
       <p

@@ -22,7 +22,7 @@ import {
 } from '../interview.js';
 import { useSession } from '../session.js';
 import { Bird } from './bird.js';
-import { DictateButton } from './dictate-button.js';
+import { Composer } from './composer.js';
 import '../styles/interview.css';
 
 const LANGUAGE_CHIPS = ['English', 'Spanish', 'English and Spanish'];
@@ -109,6 +109,14 @@ function useFirstName(): string | undefined {
   }
 }
 
+/**
+ * The interview's answers live in its state as they are typed and are
+ * written on Finish, so a `save` box has nothing more to do (#910).
+ */
+function keepAsTyped(): void {
+  // Nothing to write until Finish.
+}
+
 export function Interview({
   onFinish,
   onSkip,
@@ -164,13 +172,14 @@ export function Interview({
       {question === 0 && (
         <div class="interview-question">
           <ChipRow chips={INTERVIEW_KEEP_CHIPS} value={keep} onPick={setKeep} />
-          <DictateButton
-            inputClass="interview-input"
+          <Composer
+            mode="save"
+            rows={1}
             label="What you will keep here"
-            rows={2}
             placeholder="Or say it your way"
             value={keep}
-            onValue={setKeep}
+            onChange={setKeep}
+            onCommit={keepAsTyped}
           />
         </div>
       )}
@@ -182,13 +191,14 @@ export function Interview({
             value={languages}
             onPick={setLanguages}
           />
-          <DictateButton
-            inputClass="interview-input"
+          <Composer
+            mode="save"
+            rows={1}
             label="Languages your notes come in"
-            rows={2}
             placeholder="Or say it your way"
             value={languages}
-            onValue={setLanguages}
+            onChange={setLanguages}
+            onCommit={keepAsTyped}
           />
         </div>
       )}
@@ -201,31 +211,17 @@ export function Interview({
             onPick={(chip) => setAreas((prev) => toggleArea(prev, chip))}
           />
           <div class="interview-area-add">
-            <input
-              type="text"
-              class="interview-input"
-              aria-label="Add your own area"
+            <Composer
+              mode="send"
+              rows={1}
+              label="Add your own area"
               placeholder="Add your own"
+              commitLabel="Add the area"
               value={customArea}
+              onChange={setCustomArea}
+              onCommit={addCustomArea}
               disabled={areas.length >= MAX_AREAS}
-              onInput={(e) =>
-                setCustomArea((e.target as HTMLInputElement).value)
-              }
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  addCustomArea();
-                }
-              }}
             />
-            <button
-              type="button"
-              class="button-link"
-              disabled={customArea.trim() === '' || areas.length >= MAX_AREAS}
-              onClick={addCustomArea}
-            >
-              Add
-            </button>
           </div>
           {areas.length > 0 && (
             <p class="onb-note">
@@ -242,21 +238,23 @@ export function Interview({
             value={titleStyle}
             onPick={setTitleStyle}
           />
-          <DictateButton
-            inputClass="interview-input"
+          <Composer
+            mode="save"
+            rows={1}
             label="How you like titles and tags"
-            rows={2}
             placeholder="Or say it your way"
             value={titleStyle}
-            onValue={setTitleStyle}
+            onChange={setTitleStyle}
+            onCommit={keepAsTyped}
           />
-          <input
-            type="text"
-            class="interview-input"
-            aria-label="An example title or tag"
+          <Composer
+            mode="save"
+            rows={1}
+            label="An example title or tag"
             placeholder="An example, e.g. 2026-09-27 Dentist"
             value={example}
-            onInput={(e) => setExample((e.target as HTMLInputElement).value)}
+            onChange={setExample}
+            onCommit={keepAsTyped}
           />
         </div>
       )}

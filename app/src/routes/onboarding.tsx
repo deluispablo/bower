@@ -40,6 +40,7 @@ import {
   IconInbox,
   IconPlus,
 } from '../components/icons.js';
+import { Composer } from '../components/composer.js';
 import { Interview } from '../components/interview.js';
 import { copyOrExportIntoInbox, exportPlanFor, getToken } from '../drive.js';
 import type { InterviewAnswers } from '../interview.js';
@@ -512,24 +513,21 @@ export function Onboarding(): JSX.Element {
                 <label for="onboarding-folder">
                   Paste the folder link or id
                 </label>
-                <input
+                <Composer
                   id="onboarding-folder"
-                  type="text"
+                  mode="send"
+                  rows={1}
+                  label="Paste the folder link or id"
                   placeholder="https://drive.google.com/drive/folders/…"
+                  commitLabel="Use this folder"
                   value={folderInput}
-                  onInput={(event) => {
-                    setFolderInput((event.target as HTMLInputElement).value);
+                  onChange={setFolderInput}
+                  onCommit={() => {
+                    if (busy === null) void handleSelect();
                   }}
+                  sending={busy === 'select'}
+                  error={inputError !== null && inputError !== '' ? inputError : null}
                 />
-                {inputError && <p class="auth-error">{inputError}</p>}
-                <button
-                  type="button"
-                  class="button"
-                  disabled={busy !== null}
-                  onClick={() => void handleSelect()}
-                >
-                  Use this folder
-                </button>
               </>
             ) : (
               <button

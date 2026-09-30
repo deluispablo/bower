@@ -73,8 +73,9 @@ function heading(): string {
 }
 
 function input(label: string): HTMLInputElement {
+  // The box is a Composer (#910): a textarea named by its label.
   const found = root.querySelector<HTMLInputElement>(
-    `input[aria-label="${label}"]`,
+    `input[aria-label="${label}"], textarea[aria-label="${label}"]`,
   );
   if (found === null) throw new Error(`input ${label} missing`);
   return found;
