@@ -43,4 +43,20 @@ describe('AddDropRow bird (rule 1)', () => {
     expect(birdCount()).toBe(0);
     unmount();
   });
+
+  it('shows the Listening pose while dictation is on (R-BIRD-10)', () => {
+    stubMatchMedia(true);
+    const pose = (listening: boolean): string | null => {
+      const unmount = mount(h(AddDropRow, { listening }));
+      const cls = document
+        .querySelector('.add-drop-bird svg')
+        ?.getAttribute('class');
+      unmount();
+      return cls ?? null;
+    };
+    const idle = pose(false);
+    const listening = pose(true);
+    expect(listening).not.toBeNull();
+    expect(listening).not.toBe(idle);
+  });
 });
