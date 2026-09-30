@@ -14,6 +14,7 @@ import {
   composerLine,
 } from '../src/components/composer.js';
 import type { ComposerProps } from '../src/components/composer.js';
+import { resetDictationBlocked } from '../src/components/dictate-button.js';
 import {
   FakeSpeechRecognition,
   installSpeechRecognition,
@@ -88,6 +89,7 @@ function key(root: HTMLElement, init: KeyboardEventInit): void {
 
 beforeEach(() => {
   stub = installSpeechRecognition();
+  resetDictationBlocked();
   localStorage.clear();
   localStorage.setItem('bower:dictation:used', '1');
   onCommit.mockClear();

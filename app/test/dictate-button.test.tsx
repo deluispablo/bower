@@ -11,6 +11,7 @@ import {
   insertSpoken,
   languageLabel,
   nextDictateState,
+  resetDictationBlocked,
 } from '../src/components/dictate-button.js';
 import {
   FakeSpeechRecognition,
@@ -59,6 +60,7 @@ function button(root: HTMLElement): HTMLButtonElement {
 
 beforeEach(() => {
   stub = installSpeechRecognition();
+  resetDictationBlocked();
   localStorage.clear();
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });

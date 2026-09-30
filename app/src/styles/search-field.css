@@ -1,0 +1,142 @@
+/* The search field (`components/search-field.tsx`, spec §3.15 as
+   overridden by the owner review O-R4): the Composer's box with the search
+   glyph on the left and the round mic on the right. 52 px / 40 px mic on
+   the phone, 44 px / 32 px mic on desktop. */
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 52px;
+  box-sizing: border-box;
+  padding: 0 5px 0 14px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-composer);
+  color: var(--color-text-muted);
+  font-size: 16px;
+}
+
+.search-field-desktop {
+  height: 44px;
+  font-size: 14px;
+}
+
+.search-field > .icon,
+.search-field-open > .icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-muted);
+}
+
+/* Open, or holding text: teal (O-R4). */
+.search-field-input {
+  flex: 1;
+  border-color: var(--color-brand);
+}
+
+.search-field-trigger:hover {
+  border-color: var(--color-border-control);
+}
+
+.search-field-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: text;
+}
+
+.search-field-placeholder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.search-field-kbd {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+}
+
+.search-field-mic {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.search-field-text {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--color-heading);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.search-field-text::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+.search-field-text::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-field-clear {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.search-field-clear .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.search-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* In the explorer's slot (#909): the sidebar keeps its side margins; the
+   drawer and the Folders tab give it the full width. */
+.explorer-search-slot .search-field {
+  margin: var(--space-2) var(--space-3);
+}
+
+.explorer-drawer .explorer-search-slot .search-field,
+.explorer-page .explorer-search-slot .search-field {
+  margin: 0;
+}

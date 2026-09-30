@@ -179,6 +179,21 @@ export type DictateEvent =
   /** This browser has no recogniser. */
   | { type: 'missing' };
 
+let blockedThisSession = false;
+
+/**
+ * Whether the browser refused the microphone earlier in this session: every
+ * box then starts crossed out (spec §3.12, "chosen once per session").
+ */
+export function dictationBlocked(): boolean {
+  return blockedThisSession;
+}
+
+/** For tests: forget a refusal. */
+export function resetDictationBlocked(): void {
+  blockedThisSession = false;
+}
+
 /** Whether a recogniser error means the browser refused the microphone. */
 export function isBlockedError(error: string): boolean {
   return error === 'not-allowed' || error === 'service-not-allowed';
@@ -251,8 +266,12 @@ export function useDictation({
   field,
   onListening,
 }: DictationOptions): Dictation {
-  const [state, setState] = useState<DictateState>(
-    getRecognitionCtor() === undefined ? 'unavailable' : 'ready',
+  const [state, setState] = useState<DictateState>(() =>
+    getRecognitionCtor() === undefined
+      ? 'unavailable'
+      : blockedThisSession
+        ? 'blocked'
+        : 'ready',
   );
   const [interim, setInterim] = useState('');
   const [announce, setAnnounce] = useState('');
@@ -346,6 +365,7 @@ export function useDictation({
     r.lang = tag !== '' ? tag : navigator.language;
     r.onstart = (): void => {
       markUsed();
+      blockedThisSession = false;
       move({ type: 'started' });
       setAnnounce('Listening');
       armSilence();
@@ -373,6 +393,7 @@ export function useDictation({
     };
     r.onerror = (event): void => {
       console.error('Dictation error', event.error);
+      if (isBlockedError(event.error)) blockedThisSession = true;
       detach();
       setInterim('');
       setAnnounce('Stopped');
