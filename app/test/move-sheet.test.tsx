@@ -109,13 +109,6 @@ function click(el: Element): void {
   });
 }
 
-function type(input: HTMLInputElement, value: string): void {
-  void act(() => {
-    input.value = value;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-}
-
 async function flush(): Promise<void> {
   await act(async () => {
     for (let i = 0; i < 8; i += 1) await Promise.resolve();

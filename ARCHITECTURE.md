@@ -115,6 +115,13 @@ Each module's own header comment says what it holds; this table only says where 
 - `app/src/components/layout.tsx` draws the phone top bar (files button, back link, title slot, ⋯ slot, avatar button), the tab bar, and the desktop sidebar frame and nav. There is no "?" in the bar and no "Done · 1 filed" pill on desktop (E-9: the run chip hides its done state there); Help lives in each screen's ⋯ menu.
 - `app/src/components/page-header.tsx` is the one page header: the desktop breadcrumb (parents only), the h1 with (i) and ⋯, the meta line from `meta-line.ts`, a purpose line and a tabs slot. Screens adopt it in their own issues.
 
+### One explorer, three hosts (#909)
+
+- `components/tree.tsx` is the one tree, in three hosts: `sidebar` (desktop, rows 28 px), `drawer` and `page` (the phone drawer and the Folders tab, rows 40 px). No counts, badges or hidden-files footer; "Bower's own files" (the `showAppFiles` preference) is a group at the bottom of the tree. Answers and Clippings are rows under it.
+- `components/explorer.tsx` builds each host around it (search slot `ExplorerSearchSlot` for #910, Pinned, YOUR FOLDERS with Show the open item / Sort / Collapse all folders). The sidebar explorer also mounts the phone drawer `FoldersDrawer` (portalled to the body) and the left-edge swipe (`use-edge-swipe.ts`); `folders-drawer.ts` holds its open state (`openFoldersDrawer` for the top bar's files button).
+- `reveal.ts#revealInFolders(path, id?)` opens the drawer on the phone or points the sidebar on desktop, then expands, scrolls to, selects and focuses the row. Used by "Show the open item", the Folders tab's `?reveal=` link and #906's root crumb.
+- `components/folder-picker.tsx#openMoveTo` is Move to…: the same tree rows, folders only, "Move here" writes the request note and confirms by a toast with Undo.
+
 ## v4 data flows
 
 - **Search.** Everything runs on the device. When the vault index changes, `syncSearchIndex` adds, removes and updates entries in the MiniSearch index and saves it to IndexedDB; a note's text is added the first time it is read. A query never calls Drive or the Worker.

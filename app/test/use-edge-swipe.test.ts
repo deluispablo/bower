@@ -44,7 +44,7 @@ function Probe(props: { enabled: boolean }): null {
 }
 
 function mount(enabled = true): void {
-  act(() => {
+  void act(() => {
     render(h(Probe, { enabled }), host);
   });
 }
