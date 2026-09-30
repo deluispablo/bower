@@ -10,8 +10,8 @@
  * offers); Areas holds Visa & Immigration. Alex's earlier London life (the
  * flat hunt, the Lisbon trip, the kitchen, the half marathon, the old job)
  * is in Archives, and the household notes are in Resources: those folders
- * keep every file kind the explorer shows. The demo clock the dates are
- * written for is Wednesday 30 September 2026, around noon in London
+ * keep every file kind the explorer shows. The v6 times are local times on
+ * the viewer's own today and yesterday (`LOADED_AT`); the e2e clock is 30 Sep 2026, noon, London
  * (`e2e/demo.ts`): the last tidy-up finished 21 hours earlier.
  *
  * The rulebook, `Rules.md`, `About-Me.md` and the folder notes come straight
@@ -207,17 +207,68 @@ function unfinished(runId: string, finishedAt: string, minutes: number): Run {
   return run;
 }
 
-/** `2026-09-29` at `hhmm` London time (BST, UTC+1): yesterday on the demo clock. */
-function yesterday(hhmm: string): string {
-  const hours = String(Number(hhmm.slice(0, 2)) - 1).padStart(2, '0');
-  return `2026-09-29T${hours}:${hhmm.slice(2)}:00.000Z`;
+/**
+ * The viewer's own clock when the demo loads (lead ruling on #903): the
+ * v6 world's times are local times on the viewer's today and yesterday,
+ * so the last tidy-up always ran "yesterday, 15:03" wherever and whenever
+ * the demo is opened. The end-to-end tests pin this clock (`e2e/demo.ts`:
+ * Wednesday 30 September 2026, 12:10 London). Alex's London folders keep
+ * their own fixed September dates.
+ */
+const LOADED_AT = new Date();
+
+/** Local midnight `offset` days from the viewer's today. */
+function localDay(offset: number): Date {
+  return new Date(
+    LOADED_AT.getFullYear(),
+    LOADED_AT.getMonth(),
+    LOADED_AT.getDate() + offset,
+  );
 }
 
-/** `2026-09-30` at `hhmm` London time (BST, UTC+1): today on the demo clock. */
-function today(hhmm: string): string {
-  const hours = String(Number(hhmm.slice(0, 2)) - 1).padStart(2, '0');
-  return `2026-09-30T${hours}:${hhmm.slice(2)}:00.000Z`;
+/** `hhmm` local time, `offset` days from today, as an ISO instant. */
+function localAt(offset: number, hhmm: string): string {
+  const day = localDay(offset);
+  day.setHours(Number(hhmm.slice(0, 2)), Number(hhmm.slice(2)));
+  return day.toISOString();
 }
+
+/** `YYYY-MM-DD` of the local day `offset` days from today. */
+function dayOf(offset: number): string {
+  const day = localDay(offset);
+  const mm = String(day.getMonth() + 1).padStart(2, '0');
+  const dd = String(day.getDate()).padStart(2, '0');
+  return `${day.getFullYear()}-${mm}-${dd}`;
+}
+
+/** "7 Oct": the local day `offset` days from today, in words. */
+function shortDate(offset: number): string {
+  return localDay(offset).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+/** "Thu 1 Oct": with the weekday. */
+function weekdayDate(offset: number): string {
+  const day = localDay(offset);
+  const weekday = day.toLocaleDateString('en-GB', { weekday: 'short' });
+  return `${weekday} ${shortDate(offset)}`;
+}
+
+/** `hhmm` local time yesterday (the demo's run history). */
+function yesterday(hhmm: string): string {
+  return localAt(-1, hhmm);
+}
+
+/** `hhmm` local time today. */
+function today(hhmm: string): string {
+  return localAt(0, hhmm);
+}
+
+/** The viewer's yesterday and today, `YYYY-MM-DD`. */
+const YESTERDAY = dayOf(-1);
+const TODAY = dayOf(0);
 
 const HOUSING = '1-Projects/Housing Search Australia';
 const MOONEE_PONDS = `${HOUSING}/Moonee Ponds`;
@@ -301,7 +352,7 @@ export const DEMO_RUNS: readonly Run[] = [
   runOf(
     'demo-run-yesterday-4',
     yesterday('1231'),
-    [request('Bower - 2026-09-29 1228 Rate the job offers against my CV.md')],
+    [request(`Bower - ${YESTERDAY} 1228 Rate the job offers against my CV.md`)],
     { summary: 'Answered 1 request.' },
     2,
   ),
@@ -319,8 +370,8 @@ export const DEMO_RUNS: readonly Run[] = [
     'demo-run-yesterday-2',
     yesterday('1214'),
     [
-      request('Bower - 2026-09-29 1209 Keep my visa papers together.md'),
-      filed('0-Inbox/CV Australia.docx', `${JOBS}/CV Australia.docx`),
+      request(`Bower - ${YESTERDAY} 1209 Keep my visa papers together.md`),
+      filed('0-Inbox/Resume Australia.docx', `${JOBS}/Resume Australia.docx`),
       filed('0-Inbox/Visa & Immigration.md', `${VISA}/Visa & Immigration.md`),
     ],
     {},
@@ -1163,7 +1214,7 @@ SQL, Python, dbt.
 //
 // What the v6 boards draw (PF-*, LI-*, AR-*, HM-*, JF-*, NO-*, FI-*), with
 // the stand-ins of spec §0 for anything personal: Alex, "Cover Letter -
-// Alex", "Passport copy", "CV Australia". The flats, offers and companies
+// Alex", "Passport copy", "Resume Australia". The flats, offers and companies
 // are the boards' own fictional ones; the CV and visa facts are invented.
 
 /** A note with its own frontmatter lines, modified at `modified`. */
@@ -1252,16 +1303,16 @@ export const MOONEE_PONDS_FLATS: readonly Flat[] = [
   {
     name: '10-43 Buckley St, Moonee Ponds',
     rent: '460 AUD/week',
-    available: '2026-10-07',
+    available: dayOf(7),
     against: '−15% vs area median',
     fit: 73,
     status: 'to view',
-    viewing: '2026-10-01',
+    viewing: dayOf(1),
     time: '0654',
     callout: [
       'AUD 460/week, 15% under the suburb median, with internal laundry, a balcony and A/C. (from the file)',
-      'Available 7 Oct, a week before your short let ends. (from your notes: [[Housing Search Australia]])',
-      '~10–15 min walk to Essendon or Moonee Ponds station; the Wed 1 Oct inspection is still open. (looked up)',
+      `Available ${shortDate(7)}, a week before your short let ends. (from your notes: [[Housing Search Australia]])`,
+      `~10–15 min walk to Essendon or Moonee Ponds station; the ${weekdayDate(1)} inspection is still open. (looked up)`,
     ],
     body: 'The most complete of the six Moonee Ponds 1-beds: internal laundry, balcony and A/C are rare together at this price.',
   },
@@ -1293,12 +1344,12 @@ export const MOONEE_PONDS_FLATS: readonly Flat[] = [
   {
     name: '21-51 Buckley St, Moonee Ponds',
     rent: '395 AUD/week',
-    available: '2026-09-25',
+    available: dayOf(-5),
     against: '−27% vs area median',
     fit: 66,
     status: 'new',
     time: '0648',
-    callout: ['AUD 395/week, free since 25 Sep. (from the file)'],
+    callout: [`AUD 395/week, free since ${shortDate(-5)}. (from the file)`],
     body: 'On the busy end of Buckley St; the bedroom faces the road.',
   },
   {
@@ -1314,12 +1365,12 @@ export const MOONEE_PONDS_FLATS: readonly Flat[] = [
   {
     name: '10-8 Eddy St, Moonee Ponds',
     rent: '460 AUD/week',
-    available: '2026-09-29',
+    available: dayOf(-1),
     against: '−15% vs area median',
     fit: 58,
     status: 'new',
     time: '0644',
-    callout: ['AUD 460/week, free since 29 Sep. (from the file)'],
+    callout: [`AUD 460/week, free since ${shortDate(-1)}. (from the file)`],
     body: 'A second-floor walk-up with no lift and no A/C.',
   },
 ];
@@ -1342,7 +1393,7 @@ function mooneePondsFiles(): FixtureFile[] {
       companion({
         path: `${MOONEE_PONDS}/${flat.name}.md`,
         original: pdf,
-        created: '2026-09-30',
+        created: TODAY,
         modified: today(flat.time),
         tags: 'housing, summary',
         kind: 'rental-listing',
@@ -1377,6 +1428,7 @@ interface Offer {
   employer: string;
   office: string;
   salary?: string;
+  holiday?: string;
   fit: number;
   status: string;
   modified: string;
@@ -1406,15 +1458,14 @@ export const JOB_OFFERS: readonly Offer[] = [
     name: 'Lead Data Engineer, Clicks IT Recruitment',
     role: 'Lead Data Engineer',
     employer: 'Clicks IT Recruitment',
-    office: 'Melbourne, VIC',
-    salary: '$140,000 – $155,000 AUD + super',
-    fit: 61,
-    status: 'applied',
+    office: 'Multiple states (QLD, WA, ACT, VIC, NSW, NT, SA, TAS)',
+    fit: 46,
+    status: 'new',
     modified: yesterday('1355'),
     callout: [
       'A recruiter listing for an unnamed client in financial services. (from the file)',
     ],
-    body: 'Applied through the recruiter on 29 Sep.',
+    body: 'A recruiter listing across several states; the client is not named, and neither is the salary.',
   },
   {
     name: 'Senior Data Engineer Team Lead, Allume Energy',
@@ -1422,6 +1473,8 @@ export const JOB_OFFERS: readonly Offer[] = [
     employer: 'Allume Energy',
     office: 'Abbotsford, Melbourne VIC',
     salary: '$150,000 – $165,000 AUD base + super',
+    holiday:
+      '25 days (5 weeks) annual leave, plus a half-day Friday every fortnight',
     fit: 73,
     status: 'new',
     modified: yesterday('1353'),
@@ -1452,8 +1505,8 @@ function applicationFiles(): FixtureFile[] {
       offer.modified,
       [
         'tags: [career, summary]',
-        'created: 2026-09-29',
-        `updated: ${offer.modified.slice(0, 10)}`,
+        `created: ${YESTERDAY}`,
+        `updated: ${offer.modified === today('0711') ? TODAY : YESTERDAY}`,
         'kind: job-offer',
         `role: ${yamlValue(offer.role)}`,
         `employer: ${yamlValue(offer.employer)}`,
@@ -1462,6 +1515,9 @@ function applicationFiles(): FixtureFile[] {
         ...(offer.salary === undefined
           ? ['not_stated: [salary]']
           : [`salary: ${yamlValue(offer.salary)}`]),
+        ...(offer.holiday === undefined
+          ? []
+          : [`holiday: ${yamlValue(offer.holiday)}`]),
         `fit: ${offer.fit}`,
         `status: ${offer.status}`,
       ],
@@ -1483,8 +1539,8 @@ function applicationFiles(): FixtureFile[] {
         'by: bower',
         ...(answer ? ['type: answer'] : []),
         'tags: [career]',
-        'created: 2026-09-29',
-        'updated: 2026-09-29',
+        `created: ${YESTERDAY}`,
+        `updated: ${YESTERDAY}`,
         `made_for: "[[${offer}]]"`,
       ],
       `# ${name}\n\n${body}`,
@@ -1496,8 +1552,8 @@ function applicationFiles(): FixtureFile[] {
       [
         'by: bower',
         'tags: [project, hub, career]',
-        'created: 2026-09-29',
-        'updated: 2026-09-29',
+        `created: ${YESTERDAY}`,
+        `updated: ${YESTERDAY}`,
         'status: active',
         statusesLine(APPLICATIONS),
       ],
@@ -1510,8 +1566,8 @@ function applicationFiles(): FixtureFile[] {
       [
         'type: answer',
         'tags: [answer, career]',
-        'created: 2026-09-29',
-        'updated: 2026-09-29',
+        `created: ${YESTERDAY}`,
+        `updated: ${YESTERDAY}`,
         'question: Rate the job offers against my CV',
       ],
       `> [!bower] Bower's note
@@ -1525,7 +1581,7 @@ function applicationFiles(): FixtureFile[] {
 | Senior Consultant - Data Engineer, Altis Consulting | 79 |
 | Senior Data Engineer Team Lead, Allume Energy | 73 |
 | Managing Consultant, Altis Consulting | 65 |
-| Lead Data Engineer, Clicks IT Recruitment | 61 |`,
+| Lead Data Engineer, Clicks IT Recruitment | 46 |`,
     ),
     madeFor(
       'Cover Letter - Senior Data Engineer Team Lead, Allume Energy',
@@ -1566,10 +1622,10 @@ const V6_WORLD: readonly FixtureFile[] = [
     yesterday('1140'),
     [
       'tags: [project, hub, housing]',
-      'created: 2026-09-29',
-      'updated: 2026-09-29',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
       'status: active',
-      'pinned: 2026-09-29T10:45:00.000Z',
+      `pinned: ${yesterday('1145')}`,
     ],
     `# Housing Search Australia
 
@@ -1583,8 +1639,8 @@ A one-bedroom flat in Melbourne's inner north before the short let ends mid-Octo
     [
       'by: bower',
       'tags: [project, hub, housing]',
-      'created: 2026-09-29',
-      'updated: 2026-09-29',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
       'status: active',
       statusesLine(MOONEE_PONDS),
     ],
@@ -1596,15 +1652,15 @@ Six one-bedroom listings, each with a note from Bower. Under 500 AUD a week, clo
 
   // --- Job Search Australia (boards NO-Main, FI-Main, LI-*) -----------------
   // Tree order (FI-Bottom "2 of 6", NO-Bottom "3 of 6"): the hub note,
-  // Cover Letter - Alex, CV insights, LinkedIn profile, CV Australia, SEEK
+  // Cover Letter - Alex, CV insights, LinkedIn profile, Resume Australia, SEEK
   // profile: newest first after the hub.
   noteAt(
     `${JOBS}/Job Search Australia.md`,
     yesterday('1225'),
     [
       'tags: [project, hub, career]',
-      'created: 2026-09-29',
-      'updated: 2026-09-29',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
       'status: active',
     ],
     `# Job Search Australia
@@ -1622,8 +1678,8 @@ A senior data engineering role in Melbourne, hybrid.
   ),
   companion({
     path: `${JOBS}/CV insights.md`,
-    original: 'CV Australia.docx',
-    created: '2026-09-29',
+    original: 'Resume Australia.docx',
+    created: YESTERDAY,
     modified: yesterday('1300'),
     tags: 'summary, career',
     callout: [
@@ -1632,7 +1688,7 @@ A senior data engineering role in Melbourne, hybrid.
       'The LinkedIn link on the CV matches your [[LinkedIn profile]] note. — Check',
     ],
     body: `## Why
-A summary of [[CV Australia]], the CV tailored for [[Job Search Australia]], with the facts an Australian recruiter would look for first and what is worth checking before it goes out.
+A summary of [[Resume Australia]], the CV tailored for [[Job Search Australia]], with the facts an Australian recruiter would look for first and what is worth checking before it goes out.
 
 ## Key facts
 - Target role: Senior Data Engineer (Google Cloud)
@@ -1650,17 +1706,17 @@ Lead with the Google Cloud work; say the visa status in the first lines.
   noteAt(
     `${JOBS}/LinkedIn profile.md`,
     yesterday('1223'),
-    ['tags: [career]', 'created: 2026-09-29', 'updated: 2026-09-29'],
+    ['tags: [career]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
     `# LinkedIn profile
 
 Headline: Senior Data Engineer · Google Cloud · Melbourne. Open to work, hybrid.`,
   ),
   {
-    path: `${JOBS}/CV Australia.docx`,
+    path: `${JOBS}/Resume Australia.docx`,
     mimeType:
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     modifiedTime: yesterday('1214'),
-    content: stub('CV Australia', 'application/octet-stream'),
+    content: stub('Resume Australia', 'application/octet-stream'),
     size: 52 * KIB,
     appProperties: { bowerOrigin: 'filed' },
     preview: true,
@@ -1668,7 +1724,7 @@ Headline: Senior Data Engineer · Google Cloud · Melbourne. Open to work, hybri
   noteAt(
     `${JOBS}/SEEK profile.md`,
     yesterday('1210'),
-    ['tags: [career]', 'created: 2026-09-29', 'updated: 2026-09-29'],
+    ['tags: [career]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
     `# SEEK profile
 
 Visible to employers. Right to work: Working Holiday visa. Salary expectation: from 140,000 AUD + super.`,
@@ -1681,8 +1737,8 @@ Visible to employers. Right to work: Working Holiday visa. Salary expectation: f
     yesterday('1502'),
     [
       'tags: [area, visa]',
-      'created: 2026-09-29',
-      'updated: 2026-09-29',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
       'status: active',
     ],
     `# Visa & Immigration
@@ -1696,15 +1752,15 @@ Visible to employers. Right to work: Working Holiday visa. Salary expectation: f
 
   // --- The two requests yesterday's tidy-ups answered ------------------------
   noteAt(
-    '0-Inbox/Processed/Bower - 2026-09-29 1228 Rate the job offers against my CV.md',
+    `0-Inbox/Processed/Bower - ${YESTERDAY} 1228 Rate the job offers against my CV.md`,
     yesterday('1228'),
-    ['tags: [instruction]', 'date: 2026-09-29T11:28:00.000Z', 'via: app'],
+    ['tags: [instruction]', `date: ${yesterday('1228')}`, 'via: app'],
     'Rate the job offers against my CV.',
   ),
   noteAt(
-    '0-Inbox/Processed/Bower - 2026-09-29 1209 Keep my visa papers together.md',
+    `0-Inbox/Processed/Bower - ${YESTERDAY} 1209 Keep my visa papers together.md`,
     yesterday('1209'),
-    ['tags: [instruction]', 'date: 2026-09-29T11:09:00.000Z', 'via: app'],
+    ['tags: [instruction]', `date: ${yesterday('1209')}`, 'via: app'],
     'Keep my visa papers together.',
   ),
 
@@ -1712,19 +1768,23 @@ Visible to employers. Right to work: Working Holiday visa. Salary expectation: f
   noteAt(
     '3-Resources/Australia/Renting in Victoria.md',
     yesterday('1146'),
-    ['tags: [guide, housing]', 'created: 2026-09-29', 'updated: 2026-09-29'],
+    [
+      'tags: [guide, housing]',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
+    ],
     '# Renting in Victoria\n\nThe bond is at most four weeks of rent and is lodged with the state bond authority, not the agent.',
   ),
   noteAt(
     '3-Resources/Australia/Tax file number.md',
     yesterday('1145'),
-    ['tags: [guide, money]', 'created: 2026-09-29', 'updated: 2026-09-29'],
+    ['tags: [guide, money]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
     '# Tax file number\n\nApply online once in the country; employers ask for it on the first day.',
   ),
   noteAt(
     '3-Resources/Australia/Opening a bank account.md',
     yesterday('1144'),
-    ['tags: [guide, money]', 'created: 2026-09-29', 'updated: 2026-09-29'],
+    ['tags: [guide, money]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
     '# Opening a bank account\n\nBring the passport and a proof of address; the short let agreement counts.',
   ),
 ];

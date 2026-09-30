@@ -5,7 +5,10 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { siblings } from '../folder-view.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
+import { buildTree } from '../navigation.js';
+import { buildVaultIndex } from '../vault-index.js';
 import {
   DEMO_EMAIL,
   DEMO_NAME,
@@ -121,8 +124,17 @@ describe('the v6 demo world (#903)', () => {
     expect(first.against_area).toBe('−15% vs area median');
     expect(first.fit).toBe(73);
     expect(first.status).toBe('to view');
-    expect(String(first.available)).toContain('2026-10-07');
-    expect(String(first.viewing)).toContain('2026-10-01');
+    // A week and a day from the viewer's today (7 Oct and 1 Oct on the
+    // e2e clock).
+    const inDays = (n: number): string => {
+      const day = new Date();
+      day.setDate(day.getDate() + n);
+      const mm = String(day.getMonth() + 1).padStart(2, '0');
+      const dd = String(day.getDate()).padStart(2, '0');
+      return `${day.getFullYear()}-${mm}-${dd}`;
+    };
+    expect(String(first.available)).toContain(inDays(7));
+    expect(String(first.viewing)).toContain(inDays(1));
     expect(MOONEE_PONDS_FLATS.map((flat) => flat.fit)).toEqual([
       73, 72, 72, 66, 60, 58,
     ]);
@@ -182,10 +194,10 @@ describe('the v6 demo world (#903)', () => {
   it('holds Job Search Australia and Visa & Immigration as drawn, with the stand-ins', () => {
     expect(thingsIn(JOBS).sort()).toEqual([
       'Applications',
-      'CV Australia.docx',
       'CV insights.md',
       'Cover Letter - Alex.pdf',
       'LinkedIn profile.md',
+      'Resume Australia.docx',
       'SEEK profile.md',
     ]);
     // AR-Sub-375 counts the note named after the folder as one of the
@@ -201,14 +213,48 @@ describe('the v6 demo world (#903)', () => {
     ]);
   });
 
+  it('lists Job Search Australia in the pager order of FI-Bottom and NO-Bottom', () => {
+    const index = buildVaultIndex(
+      FIXTURE_FILES.map((file, i) => ({
+        id: `f${i}`,
+        name: nameOf(file.path),
+        mimeType: file.mimeType ?? 'text/markdown',
+        parents: ['FOLDER_ID'],
+        path: file.path,
+        modifiedTime: file.modifiedTime,
+      })),
+    );
+    const tree = buildTree(index, 'name');
+    const cover = index.byPath.get(`${JOBS}/Cover Letter - Alex.pdf`);
+    if (cover === undefined) throw new Error('no cover letter');
+    const names = siblings(cover, tree).map((file) => file.name);
+    expect(names).toEqual([
+      'Job Search Australia.md',
+      'Cover Letter - Alex.pdf',
+      'CV insights.md',
+      'LinkedIn profile.md',
+      'Resume Australia.docx',
+      'SEEK profile.md',
+    ]);
+    // "2 of 6" on the cover letter, "3 of 6" on CV insights.
+    expect(names.indexOf('Cover Letter - Alex.pdf')).toBe(1);
+    expect(names.indexOf('CV insights.md')).toBe(2);
+  });
+
   it('keeps the run history of JF-Main and JF-Earlier, each run with its start', () => {
     const yesterday = DEMO_RUNS.filter((run) =>
       (run.runId ?? '').startsWith('demo-run-yesterday-'),
     );
     expect(yesterday).toHaveLength(10);
     const [last] = DEMO_RUNS;
-    expect(last?.startedAt).toBe('2026-09-29T14:01:00.000Z');
-    expect(last?.finishedAt).toBe('2026-09-29T14:03:00.000Z');
+    // Yesterday 15:01 to 15:03 on the viewer's own clock.
+    const started = new Date(last?.startedAt ?? '');
+    const finished = new Date(last?.finishedAt ?? '');
+    const dayBefore = new Date();
+    dayBefore.setDate(dayBefore.getDate() - 1);
+    expect(started.toDateString()).toBe(dayBefore.toDateString());
+    expect([started.getHours(), started.getMinutes()]).toEqual([15, 1]);
+    expect([finished.getHours(), finished.getMinutes()]).toEqual([15, 3]);
     expect(last?.items).toEqual([
       {
         path: '0-Inbox/Passport copy.pdf',
@@ -243,7 +289,7 @@ describe('the v6 demo world (#903)', () => {
   });
 
   it('starts on the last tidy-up, with three things waiting or none', () => {
-    const now = (): number => new Date('2026-09-30T12:10:00+01:00').getTime();
+    const now = (): number => Date.now();
     const waiting = new DemoServer(now);
     expect(waiting.status().run?.runId).toBe('demo-run-yesterday-10');
 
