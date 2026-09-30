@@ -13,6 +13,10 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { stubMatchMedia } from './helpers/match-media.js';
+import {
+  installSpeechRecognition,
+  type SpeechRecognitionStub,
+} from './helpers/speech-recognition.js';
 
 import type { Me, Run } from '../src/api.js';
 import type { CreateTextFileOptions, DriveFile } from '../src/drive.js';
@@ -723,5 +727,59 @@ describe('three columns from 1200 px (#357)', () => {
     await mount();
     expect(root.querySelector('[role="tablist"]')).not.toBeNull();
     expect(root.querySelector('.bower-columns')).toBeNull();
+  });
+});
+
+describe('dictation in the Bower box (#780)', () => {
+  let stub: SpeechRecognitionStub;
+  beforeEach(() => {
+    stub = installSpeechRecognition();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function micButton(): HTMLButtonElement {
+    const button = root.querySelector<HTMLButtonElement>('.dictate-btn');
+    if (button === null) throw new Error('No microphone');
+    return button;
+  }
+
+  it('puts the microphone in the box, and only that box', async () => {
+    await mount();
+    expect(root.querySelectorAll('.dictate-btn')).toHaveLength(1);
+    expect(box().closest('.dictate-box')).not.toBeNull();
+    expect(box().classList.contains('bower-textarea')).toBe(true);
+  });
+
+  it('shows the listening bird and bubble only while the microphone is on', async () => {
+    await mount();
+    const bubble = (): string =>
+      root.querySelector('.bower-bubble')?.textContent ?? '';
+    const bird = (): Element | null => root.querySelector('.bower-box-intro svg');
+    expect(bubble()).toMatch(/^Tell me what you want/);
+    expect(bird()?.classList.contains('p-listen')).toBe(false);
+    await act(() => {
+      micButton().click();
+    });
+    expect(stub.latest().starts).toBe(1);
+    expect(bubble()).toBe("I'm listening. Speak as you would to a person.");
+    expect(bird()?.classList.contains('p-listen')).toBe(true);
+    await act(() => {
+      micButton().click();
+    });
+    expect(bubble()).toMatch(/^Tell me what you want/);
+    expect(bird()?.classList.contains('p-listen')).toBe(false);
+  });
+
+  it('puts what was said in the box', async () => {
+    await mount();
+    await act(() => {
+      micButton().click();
+    });
+    await act(() => {
+      stub.latest().say('file every receipt under Finance');
+    });
+    expect(box().value).toBe('file every receipt under Finance');
   });
 });
