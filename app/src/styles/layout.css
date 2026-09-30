@@ -588,8 +588,9 @@ button.page-bare-back {
   padding: 0 var(--space-2);
 }
 
-/* The desktop nav rows (#906, spec §3.3, PF-Main-1280): radius 8, icon 20,
-   label 14 px; 44 px on touch, 34 px with a fine pointer (below). The active
+/* The desktop nav rows (#906, spec §3.3, PF-Main-1280): radius 8,
+   label 14 px; icon 18 and padding 0 8 px as the board's `.nv`; 44 px on
+   touch, 34 px with a fine pointer (below). The active
    row is teal on the selection tint (R-SIDEBAR-2) in the dark theme; light
    keeps today's grey fill (the lead's ruling: light does not change). */
 .explorer-row {
@@ -597,7 +598,7 @@ button.page-bare-back {
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: var(--radius-row);
   color: var(--color-text);
   font-size: var(--text-sm);
@@ -615,8 +616,8 @@ button.page-bare-back {
 }
 
 .explorer-row .icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   color: var(--color-text-muted);
 }
 
@@ -849,7 +850,7 @@ button.page-bare-back {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    padding-top: var(--space-4);
+    padding: 16px 12px;
     background: var(--color-sidebar);
     border-right: 1px solid var(--color-border);
   }

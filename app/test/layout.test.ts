@@ -276,6 +276,36 @@ describe('Layout', () => {
     expect(root.querySelector('.topbar-avatar')).toBeNull();
   });
 
+  it("opens the help sheet on the ⋯ menu's bower:open-help event, and cancels it", async () => {
+    location.path = '/bower';
+    mount();
+    const event = new Event('bower:open-help', { cancelable: true });
+    void act(() => {
+      window.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+    await lazyChunks();
+    const dialog = document.body.querySelector('[role="dialog"]');
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Bower');
+  });
+
+  it('"Show me around" on the help sheet closes it and goes Home for the tour', async () => {
+    location.path = '/notes';
+    location.route.mockClear();
+    mount();
+    void act(() => {
+      window.dispatchEvent(new Event('bower:open-help', { cancelable: true }));
+    });
+    await lazyChunks();
+    const showMe = Array.from(document.body.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Show me around',
+    );
+    if (showMe === undefined) throw new Error('Show me around missing');
+    click(showMe);
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(location.route).toHaveBeenCalledWith('/');
+  });
+
   it('shows the wordmark as text, and never the bird, in the bar', () => {
     mount();
     const title = query('.topbar .topbar-title');

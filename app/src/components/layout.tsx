@@ -66,11 +66,12 @@ import {
   SETTINGS_PATH,
   activeTab,
   barHasAvatar,
+  helpScreenFor,
   topBarVariant,
 } from '../shell-routes.js';
 import type { TabId } from '../shell-routes.js';
-import { whenIdle } from '../lazy-overlay.js';
-import { useTour } from '../tour-store.js';
+import { lazyOverlay, whenIdle } from '../lazy-overlay.js';
+import { replayTour, useTour } from '../tour-store.js';
 import { useVault } from '../vault-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
@@ -157,6 +158,19 @@ function currentFor(href: string, path: string): 'page' | undefined {
 function openYourFolders(route: (url: string) => void): void {
   route(FOLDERS_PATH);
 }
+
+/**
+ * Help is opened from each screen's ⋯ menu (#907's `requestHelp` in
+ * `more-menu.ts`): it dispatches this cancelable window event and the shell,
+ * which keeps the help sheet mounted, cancels it and opens the sheet for the
+ * screen on show. There is no "?" in the bar (R-TOPBAR-1).
+ */
+export const HELP_REQUEST_EVENT = 'bower:open-help';
+
+const LazyHelp = lazyOverlay(() =>
+  import('./help-sheet.js').then((m) => m.HelpSheet),
+);
+const LazyHelpSheet = LazyHelp.Component;
 
 const HOME_BACK = <BackLink href="/" label="Home" />;
 
@@ -273,9 +287,26 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       whenIdle(() => {
         preloadSwitcher();
         preloadRunSheets();
+        LazyHelp.preload();
       }),
     [],
   );
+  // Help and about this (#330, #907): opened by the ⋯ menu's event.
+  const [helpOpen, setHelpOpen] = useState(false);
+  useEffect(() => {
+    const onHelp = (event: Event): void => {
+      event.preventDefault();
+      setHelpOpen(true);
+    };
+    window.addEventListener(HELP_REQUEST_EVENT, onHelp);
+    return () => {
+      window.removeEventListener(HELP_REQUEST_EVENT, onHelp);
+    };
+  }, []);
+  // Any route change closes the help sheet.
+  useEffect(() => {
+    setHelpOpen(false);
+  }, [path]);
   const variant = topBarVariant(path);
   const tab = activeTab(path);
   const person = personOf(me ?? undefined);
@@ -476,6 +507,19 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           </a>
         ))}
       </nav>
+      {helpOpen && (
+        <LazyHelpSheet
+          screen={helpScreenFor(path)}
+          onClose={() => {
+            setHelpOpen(false);
+          }}
+          onShowMeAround={() => {
+            setHelpOpen(false);
+            replayTour();
+            route('/');
+          }}
+        />
+      )}
       <SwitcherHost />
       <RunSheets />
       {/* The one overlay host (#740): sheets, dialogs and menus queue here. */}

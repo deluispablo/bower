@@ -25,7 +25,8 @@
 }
 
 /* Title then (i) and ⋯, 2 px apart; the buttons sit on the first line,
-   their centre on its centre (−3 px on the phone, −1 px on desktop). */
+   their centre on its centre (−3 px on the phone, 0 on desktop as the
+   1280 boards draw it). */
 .page-header-title-row {
   display: flex;
   align-items: flex-start;
@@ -140,7 +141,7 @@
   }
 
   .page-header-buttons {
-    margin-top: -1px;
+    margin-top: 0;
   }
 
   .page-header-purpose {
