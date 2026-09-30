@@ -160,3 +160,40 @@ describe('parseLastRun report fields (#743, R-RUNNER-2)', () => {
     expect(parsed).not.toHaveProperty('left');
   });
 });
+
+describe('parseLastRun disagree and next (R-MEAN-1)', () => {
+  const base = JSON.parse(DONE_JSON) as Record<string, unknown>;
+
+  it('reads both, drops bad lines, clears a "-" path and keeps the caps', () => {
+    const line = (n: number): Record<string, string> => ({
+      a: `A${n}.md`,
+      b: `B${n}.md`,
+      reason: 'differ',
+    });
+    const parsed = parseLastRun(
+      JSON.stringify({
+        ...base,
+        disagree: [1, 2, 3, 4, 5, 6].map(line).concat([{ a: 'x.md' }]),
+        next: [
+          { path: '-', action: 'One' },
+          { path: 'N.md', action: 'Two' },
+          { action: '' },
+          { action: 'Three' },
+          { action: 'Four' },
+        ],
+      }),
+    );
+    expect(parsed?.disagree).toHaveLength(5);
+    expect(parsed?.next).toEqual([
+      { action: 'One' },
+      { path: 'N.md', action: 'Two' },
+      { action: 'Three' },
+    ]);
+  });
+
+  it('leaves them out when the file has none', () => {
+    const parsed = parseLastRun(JSON.stringify(base));
+    expect(parsed).not.toHaveProperty('disagree');
+    expect(parsed).not.toHaveProperty('next');
+  });
+});

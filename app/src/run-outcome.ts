@@ -299,6 +299,8 @@ export function outcomeFromLastRun(last: LastRunOutcome): RunOutcome {
     reason: last.reason,
   };
   if (last.added !== undefined) raw.added = last.added;
+  if (last.disagree !== undefined) raw.disagree = last.disagree;
+  if (last.next !== undefined) raw.next = last.next;
   return build(raw);
 }
 

@@ -9,7 +9,13 @@
  * Pure: no Drive, no cache; `vault-store.tsx` does the read.
  */
 
-import type { RunItem, SetAsideItem, UpdatedItem } from './api.js';
+import type {
+  DisagreeItem,
+  NextItem,
+  RunItem,
+  SetAsideItem,
+  UpdatedItem,
+} from './api.js';
 import { failureReason } from './run-failure.js';
 import type { RunFailureReason } from './run-failure.js';
 
@@ -42,6 +48,10 @@ export interface LastRunOutcome {
   updated?: UpdatedItem[];
   /** R-RUNNER-2: pending inbox paths still there at the end. */
   left?: string[];
+  /** R-MEAN-1: notes the run found disagreeing, at most 5. */
+  disagree?: DisagreeItem[];
+  /** R-MEAN-1: what is next for the person, at most 3. */
+  next?: NextItem[];
   /** Only on a failed run; unrecognised or missing reads as `unknown`
    * (`failureReason`, `run-failure.ts`), same as a Worker-reported run. */
   reason?: RunFailureReason;
@@ -122,6 +132,33 @@ function parseUpdated(value: unknown): UpdatedItem[] | undefined {
   return items;
 }
 
+function parseDisagree(value: unknown): DisagreeItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items: DisagreeItem[] = [];
+  for (const raw of value as unknown[]) {
+    if (!isRecord(raw)) continue;
+    const { a, b, reason } = raw;
+    if (!isNonEmptyString(a) || !isNonEmptyString(b)) continue;
+    if (!isNonEmptyString(reason)) continue;
+    items.push({ a, b, reason });
+  }
+  return items.slice(0, 5);
+}
+
+function parseNext(value: unknown): NextItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items: NextItem[] = [];
+  for (const raw of value as unknown[]) {
+    if (!isRecord(raw)) continue;
+    const { path, action } = raw;
+    if (!isNonEmptyString(action)) continue;
+    const item: NextItem = { action };
+    if (isNonEmptyString(path) && path !== '-') item.path = path;
+    items.push(item);
+  }
+  return items.slice(0, 3);
+}
+
 /**
  * Parses `.bower/last-run.json`'s text. `null` on anything that is not the
  * shape `write_outcome` writes: malformed JSON, a missing or wrong-typed
@@ -153,6 +190,8 @@ export function parseLastRun(text: string): LastRunOutcome | null {
     created,
     updated,
     left,
+    disagree,
+    next,
   } = data;
   if (state !== 'done' && state !== 'failed') return null;
   if (!isNonEmptyString(kind)) return null;
@@ -184,6 +223,10 @@ export function parseLastRun(text: string): LastRunOutcome | null {
   if (parsedUpdated !== undefined) outcome.updated = parsedUpdated;
   const parsedLeft = parseStrings(left);
   if (parsedLeft !== undefined) outcome.left = parsedLeft;
+  const parsedDisagree = parseDisagree(disagree);
+  if (parsedDisagree !== undefined) outcome.disagree = parsedDisagree;
+  const parsedNext = parseNext(next);
+  if (parsedNext !== undefined) outcome.next = parsedNext;
   if (state === 'failed') outcome.reason = failureReason(reason);
   return outcome;
 }

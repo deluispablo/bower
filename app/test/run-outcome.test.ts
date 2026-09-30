@@ -363,8 +363,9 @@ describe('disagree and next (R-MEAN-2)', () => {
   });
 
   it('leaves them out when empty, and on a run that did not finish', () => {
-    expect(outcomeFromRun(buildRun('done')).disagree).toBeUndefined();
-    expect(outcomeFromRun(buildRun('done', { next: [] })).next).toBeUndefined();
+    const empty = outcomeFromRun(buildRun('done', { disagree: [], next: [] }));
+    expect(empty.disagree).toBeUndefined();
+    expect(empty.next).toBeUndefined();
     const failed = outcomeFromRun(
       buildRun('failed', { next: [{ action: 'Try again' }] }),
     );
@@ -384,5 +385,14 @@ describe('disagree and next (R-MEAN-2)', () => {
         { action: '4' },
       ]).map((item) => item.action),
     ).toEqual(['1', '2', '3']);
+  });
+});
+
+describe('the demo done fixtures carry both parts (R-MEAN-2)', () => {
+  it('shows them from a Worker run and from last-run.json', () => {
+    expect(outcomeFromRun(buildRun('done')).disagree).toHaveLength(2);
+    expect(outcomeFromRun(buildRun('done')).next).toHaveLength(2);
+    expect(outcomeFromLastRun(buildLastRun('done')).disagree).toHaveLength(2);
+    expect(outcomeFromLastRun(buildLastRun('done')).next).toHaveLength(2);
   });
 });
