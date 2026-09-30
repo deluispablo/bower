@@ -229,7 +229,7 @@ test('the demo banner carries Run your own on Home, Add and Settings (#362)', as
   ).toBeVisible();
 });
 
-test('Run your own Bower: the rows, the runbook, and the nine screens with Close (#366)', async ({
+test('Run your own Bower: the rows, the runbook, and the five screens with Close (#366)', async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -264,9 +264,9 @@ test('Run your own Bower: the rows, the runbook, and the nine screens with Close
   ).toBeVisible();
   await shot(page, testInfo, 'run-your-own');
 
-  // "What is Bower, in nine screens": the intro with Close, back here.
+  // "What is Bower, in five screens": the intro with Close, back here.
   await page
-    .getByRole('link', { name: 'What is Bower, in nine screens' })
+    .getByRole('link', { name: 'What is Bower, in five screens' })
     .click();
   await expect(page).toHaveURL(/\/welcome\?from=run-your-own&page=1$/);
   await expect(
@@ -1524,7 +1524,7 @@ test('What is Bower from Settings opens with Close and Done (#329)', async ({
   await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expect(
-    page.getByText('The whole story, in nine screens'),
+    page.getByText('The whole story, in five screens'),
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'What is Bower' }).click();

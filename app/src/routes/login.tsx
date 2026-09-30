@@ -46,7 +46,7 @@ export function Login() {
           Terms
         </a>
         {' · '}
-        <a href="/welcome?from=settings" class="button-link">
+        <a href="/welcome?from=login" class="button-link">
           What is Bower?
         </a>
       </p>
