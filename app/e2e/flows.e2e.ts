@@ -2481,7 +2481,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(
     page.getByRole('textbox', { name: 'Your question' }),
   ).toHaveValue(/^Summarise this/);
-  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Close Ask Bower' }).click();
 
   // The More menu, in its file version: Open in Drive greyed (#555), Pin to
   // Home present (#688).
@@ -2517,12 +2517,21 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
     folderMenu.getByRole('menuitem', { name: /Pin to Home/ }),
   ).toBeVisible();
   await expect(
-    folderMenu.getByRole('menuitem', { name: /Ask Bower about this/ }),
-  ).toHaveAttribute('href', '/bower?text=About%20Kitchen%20Refresh%3A%20');
-  await expect(
     folderMenu.getByRole('menuitem', { name: /Edit the text/ }),
   ).toHaveCount(0);
   await shot(page, testInfo, 'folder-more-menu');
+  // Ask Bower about this opens the Ask sheet over the folder (#910).
+  await folderMenu
+    .getByRole('menuitem', { name: /Ask Bower about this/ })
+    .click();
+  const ask = page.getByRole('dialog', { name: 'Ask Bower' });
+  await expect(ask).toBeVisible();
+  await expect(ask.getByText('About Kitchen Refresh')).toBeVisible();
+  await expect(
+    ask.getByText(
+      'Bower answers at the next tidy-up and puts the answer in Kitchen Refresh.',
+    ),
+  ).toBeVisible();
 });
 
 test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-up lands on it (#345)', async ({

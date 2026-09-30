@@ -51,6 +51,11 @@
   resize: none;
 }
 
+/* The box's teal border is the focus indicator, not the field's own ring. */
+.composer .composer-input:focus-visible {
+  outline: none;
+}
+
 .composer-input::placeholder {
   color: var(--color-text-muted);
   opacity: 1;

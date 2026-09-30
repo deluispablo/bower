@@ -95,6 +95,10 @@
   outline: none;
 }
 
+.search-field .search-field-text:focus-visible {
+  outline: none;
+}
+
 .search-field-text::placeholder {
   color: var(--color-text-muted);
   opacity: 1;
@@ -134,6 +138,12 @@
    drawer and the Folders tab give it the full width. */
 .explorer-search-slot .search-field {
   margin: var(--space-2) var(--space-3);
+}
+
+/* The 44 px field keeps the sidebar row's old 54 px, so the tree's four
+   rows still fit above the ledge in an 800 px window (#847). */
+.shell-sidebar .explorer-search-slot .search-field {
+  margin: 5px var(--space-3);
 }
 
 .explorer-drawer .explorer-search-slot .search-field,

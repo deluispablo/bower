@@ -195,9 +195,11 @@ test.describe('nothing clips Bower in the states he shows himself', () => {
     });
     await openHome(page);
     await page.goto('/bower');
-    await page.getByRole('button', { name: 'Dictate' }).click();
+    // The Bower box's own mic; desktop's sidebar search has one too (#910).
+    const box = page.locator('.bower-box');
+    await box.getByRole('button', { name: 'Dictate' }).click();
     await expect(
-      page.getByRole('button', { name: 'Stop dictating' }),
+      box.getByRole('button', { name: 'Stop dictating' }),
     ).toBeVisible();
     await expectRoom(page, 'dictation');
   });
@@ -213,7 +215,12 @@ test.describe('nothing clips Bower in the states he shows himself', () => {
     const send = page.getByRole('button', { name: 'Send' });
     await expect(send).toBeEnabled();
     await send.click();
-    await expect(send).toBeDisabled();
+    // Sent: the box empties and its round button is the mic again (#910).
+    await expect(
+      page.getByRole('textbox', {
+        name: 'Tell Bower what to do, or ask it something',
+      }),
+    ).toHaveValue('');
     // The tidy-up starts with the request waiting: it is being read.
     await visible(page.locator('a[href="/"]')).click();
     await visible(

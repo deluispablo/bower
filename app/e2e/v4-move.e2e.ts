@@ -1,6 +1,6 @@
 /**
  * More menu and Move to… (#608): Show in folders reveals the open note in the
- * tree, and Move to… opens the send sheet with a folder choice (#866). Runs on the demo's sample folder.
+ * tree, and Move to… opens the folder picker (#909). Runs on the demo's sample folder.
  */
 
 import type { Page } from '@playwright/test';
@@ -46,39 +46,33 @@ test('Show in folders reveals the note in the tree', async ({
   ).toHaveCount(1);
 });
 
-test('Move to… opens the send sheet with a folder choice, not Inbox, and Put in the inbox sends the request', async ({
+test('Move to… opens the folder picker, not Inbox, and Move here sends the request (#909, #910)', async ({
   page,
 }) => {
   await openMenu(page);
   await page.getByRole('menuitem', { name: /Move to…/ }).click();
-  const sheet = page.getByRole('dialog', { name: 'Move' });
+  const sheet = page.getByRole('dialog', { name: 'Move to…' });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole('radio', { name: /^Inbox/ })).toHaveCount(0);
-  await expect(
-    sheet.getByRole('button', { name: 'Put in the inbox' }),
-  ).toBeDisabled();
-  await expect(
-    sheet.getByText('Uses one run of your Claude plan.'),
-  ).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Move here' })).toBeDisabled();
 
   // #909: no "Find a folder" field; Resources is a root, always in view.
   await sheet.getByRole('radio', { name: /Resources/ }).click();
-  await sheet.getByRole('button', { name: 'Put in the inbox' }).click();
+  await sheet.getByRole('button', { name: 'Move here' }).click();
   await expect(sheet).toHaveCount(0);
   await expect(
     page.getByText('In your inbox. Bower moves it at the next tidy-up.'),
   ).toBeVisible();
 });
 
-test('Just this, now sends the move request and starts a run', async ({
+test('Move to… waits for the tidy-up: no Just this, now (#909)', async ({
   page,
 }) => {
   await openMenu(page);
   await page.getByRole('menuitem', { name: /Move to…/ }).click();
-  const sheet = page.getByRole('dialog', { name: 'Move' });
-  // #909: no "Find a folder" field; Resources is a root, always in view.
-  await sheet.getByRole('radio', { name: /Resources/ }).click();
-  await sheet.getByRole('button', { name: 'Just this, now' }).click();
-  await expect(sheet).toHaveCount(0);
-  await expect(page.getByText('Bower is on it now.')).toBeVisible();
+  const sheet = page.getByRole('dialog', { name: 'Move to…' });
+  await expect(sheet).toBeVisible();
+  await expect(
+    sheet.getByRole('button', { name: 'Just this, now' }),
+  ).toHaveCount(0);
 });
