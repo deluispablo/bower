@@ -113,3 +113,8 @@
   color: var(--color-text);
   text-decoration: none;
 }
+
+/* Signed out there is no top bar: the heading always shows. */
+.learn-title {
+  margin: 0;
+}

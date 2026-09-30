@@ -38,6 +38,12 @@ const BACK_TO_SETTINGS = <BackLink href="/settings" label="Settings" />;
 const BACK_TO_LEARN = <BackLink href={LEARN_PATH} label={LEARN_TITLE} />;
 const CRUMB = <span class="topbar-title">{LEARN_TITLE}</span>;
 
+/** In the shell the phone's top bar carries the title (`.screen-title` shows on
+ * desktop only); the bare page has no bar, so its heading always shows. */
+function titleClass(signedIn: boolean): string {
+  return signedIn ? 'screen-title' : 'learn-title';
+}
+
 /** The intro from here: Close goes back to a page that links to Learn. */
 function introHref(signedIn: boolean): string {
   return signedIn ? '/welcome?from=settings' : '/welcome?from=login';
@@ -96,7 +102,7 @@ export function Learn(): JSX.Element {
   return (
     <section class="learn-screen page-column">
       {!signedIn && <BareBack href="/login" label="Sign in" />}
-      <h1 class="screen-title">{LEARN_TITLE}</h1>
+      <h1 class={titleClass(signedIn)}>{LEARN_TITLE}</h1>
       <p class="learn-lead">{LEARN_LEAD}</p>
 
       <RowLink
@@ -157,7 +163,7 @@ export function LearnExample(): JSX.Element {
     return (
       <section class="learn-screen page-column">
         <BareBack href={LEARN_PATH} label={LEARN_TITLE} />
-        <h1 class="screen-title">Example not found</h1>
+        <h1 class={titleClass(signedIn)}>Example not found</h1>
         <p class="learn-lead">That example does not exist.</p>
       </section>
     );
@@ -169,7 +175,7 @@ export function LearnExample(): JSX.Element {
       <div class="learn-example-head">
         <FolderMark kind={example.kind} size={40} />
         <div>
-          <h1 class="screen-title">{example.title}</h1>
+          <h1 class={titleClass(signedIn)}>{example.title}</h1>
           <p class="learn-lead">{example.blurb}</p>
         </div>
       </div>
