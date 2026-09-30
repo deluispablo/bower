@@ -317,8 +317,11 @@ function TreeSkeleton(): JSX.Element {
 
 export interface ExplorerProps {
   variant: TreeHost;
-  /** The latest health report has not been opened yet: show "New". */
-  healthIsNew: boolean;
+  /**
+   * Kept for `layout.tsx`'s call; unused since #909: the Health check row
+   * carries no "New" (NT-Bottom), and on desktop it is #906's nav item.
+   */
+  healthIsNew?: boolean;
   /** Primary links, under the search field (desktop sidebar, #906). */
   nav?: ComponentChildren;
   /** The "Just filed · N" card (Folders tab); left out, today's row. */
@@ -353,7 +356,6 @@ function useRevealRequest(): ReturnType<typeof revealRequest> {
 
 export function Explorer({
   variant,
-  healthIsNew,
   nav,
   justFiled,
   onNavigate,
@@ -505,7 +507,6 @@ export function Explorer({
             >
               <IconHeart />
               <span class="explorer-item-label">Health check</span>
-              {healthIsNew && <span class="nav-badge">New</span>}
             </a>
           )}
         </div>
@@ -523,7 +524,6 @@ export function Explorer({
  */
 export function FoldersDrawer(): JSX.Element | null {
   const { open, drag } = useFoldersDrawer();
-  const healthIsNew = useHealthIsNew();
   const { path } = useLocation();
   const panel = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
@@ -661,11 +661,7 @@ export function FoldersDrawer(): JSX.Element | null {
             <IconClose />
           </button>
         </div>
-        <Explorer
-          variant="drawer"
-          healthIsNew={healthIsNew}
-          onNavigate={closeFoldersDrawer}
-        />
+        <Explorer variant="drawer" onNavigate={closeFoldersDrawer} />
       </div>
     </div>,
     document.body,

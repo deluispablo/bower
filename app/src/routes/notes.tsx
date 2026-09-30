@@ -17,7 +17,6 @@ import {
   DESKTOP_QUERY,
   Explorer,
   setShowAppFiles,
-  useHealthIsNew,
   useShowAppFiles,
 } from '../components/explorer.js';
 import {
@@ -120,7 +119,6 @@ function FoldersMenu({
 }
 
 export function Notes(): JSX.Element | null {
-  const healthIsNew = useHealthIsNew();
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const { route } = useLocation();
   const { index } = useVault();
@@ -194,7 +192,7 @@ export function Notes(): JSX.Element | null {
 
   return (
     <div class="notes-screen">
-      <Explorer variant="page" healthIsNew={healthIsNew} />
+      <Explorer variant="page" />
     </div>
   );
 }
