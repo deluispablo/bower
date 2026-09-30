@@ -78,6 +78,16 @@ describe('decideRedirect', () => {
     expect(decideRedirect('signed-in', false, '/welcome')).toBeNull();
   });
 
+  // R-LEARN-1: Learn Bower is public, a prefix match.
+  it('never redirects /learn or an example page, signed in with no folder or out', () => {
+    for (const path of ['/learn', '/learn/flat-hunting']) {
+      expect(decideRedirect('signed-out', false, path, false)).toBeNull();
+      expect(decideRedirect('signed-in', false, path)).toBeNull();
+      expect(decideRedirect('signed-in', true, path)).toBeNull();
+    }
+    expect(decideRedirect('signed-in', false, '/learning')).toBe('/onboarding');
+  });
+
   // #193: the demo signs in as Alex from the very first load (`getMe()`
   // always answers signed in, `demo/api.ts`), so without this check a
   // first-time visitor would skip the intro and "Run your own Bower"

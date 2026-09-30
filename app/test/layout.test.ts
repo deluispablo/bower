@@ -613,6 +613,16 @@ describe('usesShell', () => {
     }
   });
 
+  it('puts Learn Bower in the shell signed in and bare signed out (R-LEARN-1)', () => {
+    for (const path of ['/learn', '/learn/money']) {
+      expect(usesShell(path)).toBe(true);
+      expect(usesShell(path, false, true)).toBe(true);
+      expect(usesShell(path, false, false)).toBe(false);
+      expect(usesShell(path, true, true)).toBe(true);
+    }
+    expect(usesShell('/learning', false, false)).toBe(true);
+  });
+
   it("puts the demo's Run your own Bower in the shell, and nothing else bare (#366)", () => {
     expect(usesShell('/login', true)).toBe(true);
     expect(usesShell('/not-invited', true)).toBe(true);

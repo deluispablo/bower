@@ -143,7 +143,7 @@ function AppRoutes() {
   return (
     <ShellSlotsProvider>
       <RunChipHost />
-      {usesShell(path, isDemo()) ? (
+      {usesShell(path, isDemo(), status === 'signed-in') ? (
         <Layout>{routes}</Layout>
       ) : (
         <main class="page page-bare">{routes}</main>
