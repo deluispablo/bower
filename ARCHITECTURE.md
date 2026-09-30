@@ -109,6 +109,12 @@ Each module's own header comment says what it holds; this table only says where 
 | `app/src/components/virtual-list.tsx` | The TanStack Virtual adapter: the tree past 150 rows and long folder lists render only what is on screen. | the tree, the folder screen |
 | `app/src/components/explorer.tsx`, `tree.tsx` | The one explorer: the desktop sidebar and the phone's Notes tab, with Pinned, the five landmarks and Expand all. There is no separate phone folder menu. | `layout.tsx`, `routes/notes.tsx` |
 
+### App shell (v6, #906)
+
+- `app/src/shell-routes.ts` names the second tab once (`FOLDERS_TAB_LABEL` "Folders", landmark `FOLDERS_LANDMARK` "Your folders"; the route stays `/notes`) and decides the frame per route: `topBarVariant` (`tab`, `inner`, `explorer`), `activeTab` (Just filed lights Home, Settings none) and `barHasAvatar` (not on Settings).
+- `app/src/components/layout.tsx` draws the phone top bar (files button, back link, title slot, ⋯ slot, avatar button), the tab bar, and the desktop sidebar frame and nav. There is no "?" in the bar and no "Done · 1 filed" pill on desktop (E-9); Help lives in each screen's ⋯ menu.
+- `app/src/components/page-header.tsx` is the one page header: the desktop breadcrumb (parents only), the h1 with (i) and ⋯, the meta line from `meta-line.ts`, a purpose line and a tabs slot. Screens adopt it in their own issues.
+
 ## v4 data flows
 
 - **Search.** Everything runs on the device. When the vault index changes, `syncSearchIndex` adds, removes and updates entries in the MiniSearch index and saves it to IndexedDB; a note's text is added the first time it is read. A query never calls Drive or the Worker.
