@@ -1,0 +1,94 @@
+/* The one text box (`components/composer.tsx`, spec §3.12, owner review
+   O-R1..O-R3, boards BW-*). The round button's own looks live with
+   `.round-button` in primitives.css. */
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.composer-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 6px 6px 6px 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-composer);
+  cursor: text;
+}
+
+.composer-rows-3 .composer-box {
+  min-height: 88px;
+}
+
+/* Neutral only while empty and unfocused (R-COMP-3). */
+.composer-box:focus-within,
+.composer-filled .composer-box,
+.composer-listening .composer-box {
+  border-color: var(--color-brand);
+}
+
+.composer-input {
+  flex: 1;
+  align-self: flex-start;
+  min-width: 0;
+  max-height: 200px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 8px 0;
+  overflow-y: auto;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--color-heading);
+  background: transparent;
+  border: 0;
+  outline: none;
+  resize: none;
+}
+
+.composer-input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+.composer-rows-3 .composer-input {
+  align-self: stretch;
+}
+
+/* The Claude key (ST-Top-1280): JetBrains Mono 15. */
+.composer-mono {
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+
+.composer-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 4px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+/* Kept in the markup so the live region exists before its text. */
+.composer-line:empty {
+  margin: 0;
+}
+
+.composer-line-danger {
+  color: var(--color-danger);
+}
+
+.composer-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-danger);
+}

@@ -55,7 +55,7 @@ import type {
 } from '../bower-tab.js';
 import { ActivityPanel, useRuns } from '../components/activity-panel.js';
 import { Bird } from '../components/bird.js';
-import { DictateButton } from '../components/dictate-button.js';
+import { Composer, COMPOSER_LINES } from '../components/composer.js';
 import {
   IconChat,
   IconCheck,
@@ -64,7 +64,6 @@ import {
   IconHelp,
   IconInbox,
   IconMore,
-  IconSend,
   IconShield,
   IconSparkle,
 } from '../components/icons.js';
@@ -553,7 +552,7 @@ export function Bower(): JSX.Element {
   // a rule", "Already in your rules", "Will go with the next tidy-up".
   // Reset on every new Send.
   const [sendConfirm, setSendConfirm] = useState<string | null>(null);
-  const boxRef = useRef<HTMLTextAreaElement>(null);
+  const boxRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   const [listening, setListening] = useState(false);
 
   useShellSlot('crumb', CRUMB);
@@ -741,7 +740,7 @@ export function Bower(): JSX.Element {
       // "goes with the next tidy-up".
       if (inFlight) setSendConfirm('Will go with the next tidy-up');
     } else {
-      setError('Could not send that. Try again.');
+      setError(COMPOSER_LINES.failed);
     }
     setSending(false);
   }
@@ -950,29 +949,21 @@ export function Bower(): JSX.Element {
               : 'Tell me what you want, in your words. I work out whether it is a rule, a job or a question.'}
           </p>
         </div>
-        <div class="bower-box-row">
-          <DictateButton
-            class="bower-dictate"
-            inputClass="bower-textarea"
-            inputRef={boxRef}
-            label="Tell Bower what to do, or ask it something"
-            placeholder="For example: from now on, file every receipt under Finance"
-            rows={2}
-            value={text}
-            onValue={setText}
-            onListening={setListening}
-          />
-          <button
-            type="button"
-            class="button bower-send"
-            aria-label={sending ? 'Sending' : 'Send'}
-            disabled={!canSend}
-            aria-disabled={!canSend}
-            onClick={() => void handleSend()}
-          >
-            <IconSend />
-          </button>
-        </div>
+        <Composer
+          mode="send"
+          rows={1}
+          class="bower-composer"
+          inputRef={boxRef}
+          label="Tell Bower what to do, or ask it something"
+          placeholder="A rule, a job or a question…"
+          commitLabel="Send"
+          value={text}
+          onChange={setText}
+          onCommit={() => void handleSend()}
+          sending={sending}
+          error={error}
+          onListening={setListening}
+        />
         {(changing !== null || editing !== null) && (
           <p class="bower-changing">
             <span>
@@ -989,8 +980,6 @@ export function Bower(): JSX.Element {
             </button>
           </p>
         )}
-        {error !== null && <p class="auth-error">{error}</p>}
-        {!online && <p class="offline-reason">{offlineReason('tell')}</p>}
         {/* #553: always in the markup, empty until Send sets it, so the
             region exists before the text does (WCAG 4.1.3) — an element
             mounted only once there is something to say is never picked up

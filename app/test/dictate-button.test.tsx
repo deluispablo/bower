@@ -10,6 +10,7 @@ import {
   SILENCE_MS,
   insertSpoken,
   languageLabel,
+  nextDictateState,
 } from '../src/components/dictate-button.js';
 import {
   FakeSpeechRecognition,
@@ -89,6 +90,43 @@ describe('insertSpoken', () => {
 
   it('ignores empty speech', () => {
     expect(insertSpoken('abc', '   ', 3, 3)).toBeNull();
+  });
+});
+
+describe('nextDictateState (R-API-12)', () => {
+  it('asks the first time, then listens once the recogniser starts', () => {
+    expect(nextDictateState('ready', { type: 'start', firstUse: true })).toBe(
+      'asking',
+    );
+    expect(nextDictateState('ready', { type: 'start', firstUse: false })).toBe(
+      'ready',
+    );
+    expect(nextDictateState('asking', { type: 'started' })).toBe('listening');
+    expect(nextDictateState('listening', { type: 'stop' })).toBe('ready');
+  });
+
+  it('is blocked on a refusal and ready after any other failure', () => {
+    expect(
+      nextDictateState('asking', { type: 'error', error: 'not-allowed' }),
+    ).toBe('blocked');
+    expect(
+      nextDictateState('listening', {
+        type: 'error',
+        error: 'service-not-allowed',
+      }),
+    ).toBe('blocked');
+    expect(
+      nextDictateState('listening', { type: 'error', error: 'network' }),
+    ).toBe('ready');
+    expect(nextDictateState('blocked', { type: 'stop' })).toBe('blocked');
+    expect(nextDictateState('blocked', { type: 'started' })).toBe('listening');
+  });
+
+  it('stays unavailable for good', () => {
+    expect(nextDictateState('ready', { type: 'missing' })).toBe('unavailable');
+    expect(nextDictateState('unavailable', { type: 'started' })).toBe(
+      'unavailable',
+    );
   });
 });
 
