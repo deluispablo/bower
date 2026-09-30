@@ -38,6 +38,12 @@
   color: var(--color-text);
   font-size: var(--text-sm);
   line-height: var(--leading-body);
+  /* Both states' words fit in three lines, so the bubble keeps its height
+     when listening starts and stops (#888). */
+  box-sizing: border-box;
+  min-height: calc(
+    3 * var(--text-sm) * var(--leading-body) + 2 * var(--space-2) + 2px
+  );
 }
 
 .bower-box-row {
