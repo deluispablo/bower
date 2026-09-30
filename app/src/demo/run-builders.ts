@@ -10,7 +10,13 @@
  * only what it is about.
  */
 
-import type { Run, RunItem, UpdatedItem } from '../api.js';
+import type {
+  DisagreeItem,
+  NextItem,
+  Run,
+  RunItem,
+  UpdatedItem,
+} from '../api.js';
 import type { LastRunOutcome } from '../last-run.js';
 
 export type RunFixtureState =
@@ -36,6 +42,22 @@ const FILED: [RunItem, RunItem] = [
 const CREATED: string[] = ['3-Resources/Boiler receipt summary.md'];
 const UPDATED: UpdatedItem[] = [
   { path: '2-Areas/Home/Boiler.md', what: 'Added the next service date' },
+];
+const DISAGREE: DisagreeItem[] = [
+  {
+    a: '1-Projects/Flat/Flat notes.md',
+    b: '2-Areas/Home/Boiler.md',
+    reason: 'the notes give different dates for the boiler visit',
+  },
+  {
+    a: '3-Resources/Boiler receipt summary.md',
+    b: '2-Areas/Home/Boiler.md',
+    reason: 'the receipt shows a different service price',
+  },
+];
+const NEXT: NextItem[] = [
+  { path: '2-Areas/Home/Boiler.md', action: 'Check the boiler visit date' },
+  { action: 'Say what the lease is, so Bower can file it' },
 ];
 const LEFT: string[] = ['0-Inbox/Lease.pdf'];
 
@@ -68,6 +90,8 @@ export function buildRun(
       created: [...CREATED],
       updated: UPDATED.map((item) => ({ ...item })),
       left: [],
+      disagree: DISAGREE.map((item) => ({ ...item })),
+      next: NEXT.map((item) => ({ ...item })),
     },
     partial: {
       ...finished,
@@ -132,6 +156,8 @@ export function buildLastRun(
     created: [...CREATED],
     updated: UPDATED.map((item) => ({ ...item })),
     left: [],
+    disagree: DISAGREE.map((item) => ({ ...item })),
+    next: NEXT.map((item) => ({ ...item })),
   };
   const files: Record<Exclude<RunFixtureState, 'running'>, LastRunFile> = {
     done,

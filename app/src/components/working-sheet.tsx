@@ -68,6 +68,7 @@ import {
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
+import { RunMeaning } from './run-meaning.js';
 import { RunSummary, summaryTiles } from './run-summary.js';
 import '../styles/tidy-confirm-sheet.css';
 
@@ -897,6 +898,9 @@ export function WorkingSheet({
                   )}
                   {folder === null && <p>{FINISH_LINE}</p>}
                 </div>
+              )}
+              {state === 'done' && (
+                <RunMeaning outcome={outcome} onNavigate={onDismiss} />
               )}
               <Steps steps={steps} />
               {finished !== null && <Rows rows={finished.rows} />}
