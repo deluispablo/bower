@@ -4,6 +4,7 @@ import { BackLink } from '../components/back-link.js';
 import { Bird } from '../components/bird.js';
 import { IconExternalLink } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { FOLDERS_PATH, FOLDERS_TAB_LABEL } from '../shell-routes.js';
 import { useOpenProposals } from '../components/suggested-rules.js';
 import {
   checkWhen,
@@ -128,10 +129,10 @@ function SuggestedPointer() {
  * A line under the report points to Bower's open suggestions on the Bower
  * tab (`SuggestedPointer`).
  */
-/** The phone top bar (#318, Phone-Health board): Back to the Notes tab,
+/** The phone top bar (#318, Phone-Health board): Back to the Folders tab,
  * where the Health row lives, and the screen's title. Stable elements, so
  * they never refill the shell's slots on a re-render (`shell-slots.ts`). */
-const BACK = <BackLink href="/notes" label="Notes" />;
+const BACK = <BackLink href={FOLDERS_PATH} label={FOLDERS_TAB_LABEL} />;
 const CRUMB = <span class="topbar-title">Health check</span>;
 
 export function Health() {

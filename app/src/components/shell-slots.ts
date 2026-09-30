@@ -26,6 +26,11 @@ import { createContext, h } from 'preact';
 import type { ComponentChildren, JSX } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
 
+/** The tab's label and the sidebar landmark's name (#906, owner review
+ * O-R5), re-exported so the shell's other parts (the explorer, the drawer)
+ * name them from one place. */
+export { FOLDERS_LANDMARK, FOLDERS_TAB_LABEL } from '../shell-routes.js';
+
 /*
  * v5 (#741) reserves four more places, all empty by default, so the issues
  * that fill them never edit the shell: `tidyBar` (the tidy-up bar: docked
