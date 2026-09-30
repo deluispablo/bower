@@ -175,9 +175,7 @@ describe('demo mode', () => {
       to: '2-Areas/Garden/Tomato seedlings.md',
     });
     for (const item of done?.items ?? []) {
-      // A request or context note goes to `Processed`, which no row names.
-      if (item.kind === 'file') expect(item.to).toEqual(expect.any(String));
-      else expect(item.to).toBeUndefined();
+      expect(item.to).toEqual(expect.any(String));
     }
     // The flat listings come with the run (#674), each with its note.
     expect(done?.added).toBe('I added bike times to the flats');
@@ -202,6 +200,8 @@ describe('demo mode', () => {
     const done = (await api.getStatus()).run;
     expect(done?.state).toBe('done');
     expect(done?.processed).toHaveLength(1);
+    expect(done?.summary).toContain('your request');
+    expect(done?.summary).not.toContain('Nothing new');
 
     const after = await paths();
     expect(after.filter(isInboxItem)).toEqual([

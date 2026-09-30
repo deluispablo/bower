@@ -33,6 +33,7 @@ import {
   SCRIPTED_LISTINGS,
   INBOX_PLAN,
 } from './fixture.js';
+import { outcomeFromRun, runSentence } from '../run-outcome.js';
 import { instructionText, replyTo } from './replies.js';
 import type { Reply } from './replies.js';
 import { demoTourSeenAt, setDemoTourSeenAt } from './store.js';
@@ -311,10 +312,7 @@ export class DemoServer {
           run.items?.push({
             path,
             kind,
-            // A request or context note goes to `Processed`, a folder the
-            // person never sees: it names no destination, so no row says
-            // "Processed" (#888).
-            ...(kind === 'file' && { to: destination }),
+            to: destination,
             ...(newName !== name && { renamedFrom: name }),
           });
         },
@@ -351,10 +349,15 @@ export class DemoServer {
         );
         run.state = 'done';
         run.finishedAt = this.iso(startedAt + DONE_MS);
+        const answered = (run.items ?? []).some(
+          (item) => item.kind === 'request',
+        );
         run.summary =
           count === 0
             ? 'Nothing new to file.'
-            : `Filed ${count} ${count === 1 ? 'item' : 'items'}.`;
+            : answered && !withFiles && filed.length === 0
+              ? runSentence(outcomeFromRun(run), { voice: 'third' })
+              : `Filed ${count} ${count === 1 ? 'item' : 'items'}.`;
         this.history = [copyRun(run), ...this.history].slice(
           0,
           RUN_HISTORY_LIMIT,

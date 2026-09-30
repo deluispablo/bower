@@ -154,6 +154,25 @@ const BLANK: Omit<
 describe('runRows', () => {
   const waiting = waitingPaths(BEFORE);
 
+  it('names a request answered in place "Requests", never "Processed"', () => {
+    const path = '0-Inbox/Bower - 2026-09-27 1200 Rename it.md';
+    const rows = runRows({
+      processed: [path],
+      waiting: [],
+      files: [],
+      active: false,
+      items: [
+        {
+          path,
+          kind: 'request',
+          to: '0-Inbox/Processed/Bower - 2026-09-27 1200 Rename it.md',
+        },
+      ],
+    });
+    expect(rows[0]?.destination).toBe('Requests');
+    expect(rows[0]?.folderPath).toBe('Requests');
+  });
+
   it('while running: the filed items, then the one being read', () => {
     const rows = runRows({
       processed: [LEASE, PHOTO],
