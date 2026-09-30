@@ -11,6 +11,7 @@ import type { JSX } from 'preact';
 import { formatFieldValue } from '../kinds.js';
 import type { Kind, KindField } from '../kinds.js';
 import type { NoteMeta } from '../note-meta.js';
+import { applyLinkOf } from './made-from.js';
 import { OriginSquare } from './folder-mark.js';
 import type { OriginKind } from './folder-mark.js';
 
@@ -120,6 +121,13 @@ export function detailsGroups(
   const known = new Set(kind.fields.map((field) => field.key));
 
   for (const field of kind.fields) {
+    // The Apply button under "Made from" already shows a usable apply link.
+    if (
+      field.key === 'apply_link' &&
+      applyLinkOf(meta.fields.apply_link) !== null
+    ) {
+      continue;
+    }
     const value = formatFieldValue(field, meta.fields[field.key]);
     if (value === '') continue;
     groups
