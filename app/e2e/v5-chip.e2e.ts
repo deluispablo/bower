@@ -66,6 +66,17 @@ test('phone: the bar hides while a text field has focus and comes back (R-CHIP-6
   await holdRun(page, 'running');
   await page.goto(FLAT);
   await expect(page.locator('.shell-dock')).toBeVisible();
+  // The chip listens for focus in an effect, which Preact runs after the
+  // next paint: a field focused before then was never seen and the bar
+  // stayed. Wait for a painted frame and the task after it.
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => {
+        requestAnimationFrame(() => {
+          setTimeout(done, 0);
+        });
+      }),
+  );
 
   await page.evaluate(() => {
     const field = document.createElement('input');
@@ -74,6 +85,7 @@ test('phone: the bar hides while a text field has focus and comes back (R-CHIP-6
     document.body.append(field);
     field.focus();
   });
+  await expect(page.locator('#probe-field')).toBeFocused();
   await expect(page.locator('.shell-dock')).toHaveCount(0);
 
   await page.evaluate(() => {
