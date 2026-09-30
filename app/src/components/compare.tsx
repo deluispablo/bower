@@ -560,7 +560,9 @@ export function CompareView({
 
   if (!isDesktop) {
     const faded = fadedLine(hidden, active);
-    const phoneColumns = columns.filter((column) => column.virtual === undefined);
+    const phoneColumns = columns.filter(
+      (column) => column.virtual === undefined,
+    );
     const sortColumn =
       phoneColumns.find((column) => column.id === effectiveSort.column) ??
       phoneColumns[0];

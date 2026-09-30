@@ -237,7 +237,11 @@ export function columnExtras(
   ]);
   for (const note of notes) {
     for (const [key, value] of Object.entries(note.fields)) {
-      if (taken.has(key) || BOOKKEEPING_KEYS.has(key) || key.endsWith('_note')) {
+      if (
+        taken.has(key) ||
+        BOOKKEEPING_KEYS.has(key) ||
+        key.endsWith('_note')
+      ) {
         continue;
       }
       const plain =
@@ -283,7 +287,9 @@ export function defaultColumnIds(
       )
       .map((column) => column.id),
     ...(kind.statuses.length > 0 ? [STATUS_COLUMN] : []),
-    ...extras.filter((column) => column.tail === true).map((column) => column.id),
+    ...extras
+      .filter((column) => column.tail === true)
+      .map((column) => column.id),
   ];
 }
 
@@ -376,7 +382,9 @@ export function toggleColumn(
     .map((column) => column.id)
     .filter((column) => column !== TITLE_COLUMN);
   if (id === TITLE_COLUMN) return now;
-  return now.includes(id) ? now.filter((column) => column !== id) : [...now, id];
+  return now.includes(id)
+    ? now.filter((column) => column !== id)
+    : [...now, id];
 }
 
 /** `order` with the column `id` moved one place left or right; the title
@@ -429,7 +437,8 @@ export function cellText(
   if (column.id === TITLE_COLUMN) return noteTitle(note);
   if (column.id === STATUS_COLUMN) return statusLabel(kind, note.fields);
   if (column.virtual === 'made-for') return madeForBadge(note);
-  if (column.virtual === 'apply') return applyHref(note) === null ? NONE : 'Apply';
+  if (column.virtual === 'apply')
+    return applyHref(note) === null ? NONE : 'Apply';
   if (column.field === undefined) return '';
   if (column.field.group === SCORE_GROUP) {
     const score = numberOf(note.fields[column.id]);
@@ -1125,8 +1134,7 @@ export function tableMarkdown(
   notes: readonly CompareNote[],
   columns: readonly CompareColumn[],
 ): string {
-  const line = (cells: readonly string[]): string =>
-    `| ${cells.join(' | ')} |`;
+  const line = (cells: readonly string[]): string => `| ${cells.join(' | ')} |`;
   const rows = notes.map((note) =>
     line(
       columns.map((column) => {
