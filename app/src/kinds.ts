@@ -168,6 +168,12 @@ export const KINDS: readonly Kind[] = [
       { key: 'office', label: 'Office', type: 'text', group: 'The role' },
       { key: 'hours', label: 'Hours', type: 'text', group: 'The role' },
       {
+        key: 'apply_link',
+        label: 'Apply link',
+        type: 'link',
+        group: 'The role',
+      },
+      {
         key: 'salary',
         label: 'Salary',
         type: 'money',

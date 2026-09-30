@@ -80,7 +80,7 @@ const REQUIRED_VARS = [
 
 const DEFAULTS = {
   DAILY_RUN_LIMIT: '100',
-  DEFAULT_MAX_TURNS: '30',
+  DEFAULT_MAX_TURNS: '60',
   TEMPLATE_FOLDER_NAME: 'Bower',
 } as const satisfies Partial<Record<keyof Env, string>>;
 

@@ -61,7 +61,7 @@ describe('assertEnv', () => {
 
     expect(result.GOOGLE_CLIENT_ID).toBe('test-google-client-id');
     expect(result.DAILY_RUN_LIMIT).toBe('100');
-    expect(result.DEFAULT_MAX_TURNS).toBe('30');
+    expect(result.DEFAULT_MAX_TURNS).toBe('60');
     expect(result.TEMPLATE_FOLDER_NAME).toBe('Bower');
   });
 
