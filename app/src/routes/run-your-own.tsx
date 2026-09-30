@@ -9,7 +9,7 @@
  *
  * The dancing bird, one paragraph, three rows (one folder in your Drive;
  * your own keys; about an hour), "Read the runbook on GitHub" (the repo's
- * `docs/runbook.md`) and "What is Bower, in nine screens", the intro opened
+ * `docs/runbook.md`) and "What is Bower, in five screens", the intro opened
  * with Close, which comes back here (`introReturnPath`, `intro.ts`).
  */
 
@@ -97,7 +97,7 @@ export function RunYourOwn(): JSX.Element {
         Read the runbook on GitHub
       </a>
       <a class="run-your-own-intro" href={INTRO_FROM_RUN_YOUR_OWN_HREF}>
-        What is Bower, in nine screens
+        What is Bower, in five screens
       </a>
     </section>
   );

@@ -3,7 +3,7 @@
 /**
  * "Run your own Bower" (#366, board Demo-RunYourOwn): the dancing bird,
  * the three rows, "Read the runbook on GitHub" (the repo's
- * `docs/runbook.md`, in a new tab) and "What is Bower, in nine screens",
+ * `docs/runbook.md`, in a new tab) and "What is Bower, in five screens",
  * the intro opened with Close back here.
  */
 
@@ -69,7 +69,7 @@ describe('RunYourOwn', () => {
 
   it('opens the nine intro pages with Close, back here', () => {
     mount();
-    expect(link('What is Bower, in nine screens').getAttribute('href')).toBe(
+    expect(link('What is Bower, in five screens').getAttribute('href')).toBe(
       '/welcome?from=run-your-own',
     );
   });

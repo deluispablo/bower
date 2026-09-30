@@ -47,26 +47,21 @@ test.describe('open Home', () => {
     page,
   }, testInfo) => {
     await page.goto('/');
-    await expect(page).toHaveURL(/\/welcome$/);
+    await expect(page).toHaveURL(/\/welcome\?page=1$/);
     await expect(
       page.getByRole('heading', { name: /Bower files it/ }),
     ).toBeInViewport();
     // The demo's intro is the app's, with the banner on top (#361).
     await expect(page.locator('.intro-bar + .demo-banner')).toBeVisible();
-    // Nine pages, one "Next" on each of the first eight; the desktop's side
-    // arrows are extra.
+    // Five pages, one shared "Next" for the first four.
     const headings = [
-      'Where does it go?',
-      'Ask, and it does more',
-      'A window onto your own Drive',
-      'A project: flat hunting',
-      'An area: your health',
-      'A resource: what you read',
-      'The archive: finished, kept',
-      'What will you start with?',
+      /Bower's note/,
+      /the dots/,
+      /own words/,
+      'Only your Drive',
     ];
     const next = page.getByRole('button', { name: 'Next', exact: true });
-    await expect(next).toHaveCount(8);
+    await expect(next).toHaveCount(1);
     // Each page's resting frame, for the PR and the CI artifact (not the
     // README, so not through `shot`).
     const intro = async (n: number): Promise<void> => {
@@ -79,7 +74,7 @@ test.describe('open Home', () => {
     };
     await intro(1);
     for (const [index, name] of headings.entries()) {
-      await next.nth(index).click();
+      await next.click();
       await expect(page.getByRole('heading', { name })).toBeInViewport();
       await intro(index + 2);
     }
@@ -181,35 +176,12 @@ test.describe('open Home', () => {
   });
 });
 
-test.describe('intro page 8, the desktop scroll cue (#509)', () => {
-  test.use({ introSeen: false });
-
-  test('the panel fades at the bottom where the case overflows it', async ({
-    page,
-  }, testInfo) => {
-    await page.goto('/welcome');
-    const next = page.getByRole('button', { name: 'Next', exact: true });
-    for (let i = 0; i < 7; i += 1) await next.nth(i).click();
-    await expect(
-      page.getByRole('heading', { name: 'The archive: finished, kept' }),
-    ).toBeInViewport();
-    // Page 8's copy ends as a sentence, not a fragment.
-    await expect(page.getByText('It asks before it archives.')).toBeVisible();
-    const panel = page.locator('.intro-page--8');
-    if (testInfo.project.name === 'desktop') {
-      // The fade only applies from the desktop breakpoint (intro.css).
-      await expect(panel).toHaveCSS('background-image', /gradient/);
-    }
-    await shot(page, testInfo, 'intro-8-scroll-cue');
-  });
-});
-
 test.describe('first visit, Skip', () => {
   test.use({ introSeen: false });
 
   test('Skip on the intro lands on the sign-in', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveURL(/\/welcome$/);
+    await expect(page).toHaveURL(/\/welcome\?page=1$/);
     await page.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(page).toHaveURL(/\/login$/);
     await expect(
@@ -257,7 +229,7 @@ test('the demo banner carries Run your own on Home, Add and Settings (#362)', as
   ).toBeVisible();
 });
 
-test('Run your own Bower: the rows, the runbook, and the nine screens with Close (#366)', async ({
+test('Run your own Bower: the rows, the runbook, and the five screens with Close (#366)', async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -292,11 +264,11 @@ test('Run your own Bower: the rows, the runbook, and the nine screens with Close
   ).toBeVisible();
   await shot(page, testInfo, 'run-your-own');
 
-  // "What is Bower, in nine screens": the intro with Close, back here.
+  // "What is Bower, in five screens": the intro with Close, back here.
   await page
-    .getByRole('link', { name: 'What is Bower, in nine screens' })
+    .getByRole('link', { name: 'What is Bower, in five screens' })
     .click();
-  await expect(page).toHaveURL(/\/welcome\?from=run-your-own$/);
+  await expect(page).toHaveURL(/\/welcome\?from=run-your-own&page=1$/);
   await expect(
     page.getByRole('heading', { name: /Bower files it/ }),
   ).toBeInViewport();
@@ -1552,11 +1524,11 @@ test('What is Bower from Settings opens with Close and Done (#329)', async ({
   await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expect(
-    page.getByText('The whole story, in nine screens'),
+    page.getByText('The whole story, in five screens'),
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'What is Bower' }).click();
-  await expect(page).toHaveURL(/\/welcome\?from=settings$/);
+  await expect(page).toHaveURL(/\/welcome\?from=settings&page=1$/);
   await expect(
     page.getByRole('heading', { name: /Bower files it/ }),
   ).toBeInViewport();
@@ -1572,15 +1544,14 @@ test('What is Bower from Settings opens with Close and Done (#329)', async ({
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page).toHaveURL(/\/settings$/);
 
-  // Walking all nine pages ends on Done, not Sign in with Google.
+  // Walking all five pages ends on Done, not Sign in with Google.
   await page.getByRole('button', { name: 'What is Bower' }).click();
   const next = page.getByRole('button', { name: 'Next', exact: true });
-  await expect(next).toHaveCount(8);
-  for (let index = 0; index < 8; index += 1) {
-    await next.nth(index).click();
+  for (let index = 0; index < 4; index += 1) {
+    await next.click();
   }
   await expect(
-    page.getByRole('heading', { name: 'What will you start with?' }),
+    page.getByRole('heading', { name: 'Only your Drive' }),
   ).toBeInViewport();
   await expect(
     page.getByRole('link', { name: 'Sign in with Google' }),

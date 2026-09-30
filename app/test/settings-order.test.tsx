@@ -184,10 +184,10 @@ describe('Settings copy fixes', () => {
     ).toBe(true);
   });
 
-  it('describes What is Bower as the whole story, in nine screens (#329)', () => {
+  it('describes What is Bower as the whole story, in five screens (#329)', () => {
     mount(baseMe);
     const hints = textsOf('.toggle-hint');
-    expect(hints).toContain('The whole story, in nine screens');
+    expect(hints).toContain('The whole story, in five screens');
     expect(hints).not.toContain('The four-page intro, again');
   });
 });
