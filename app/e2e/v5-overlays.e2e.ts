@@ -34,8 +34,6 @@ const more = (page: Page): Locator =>
   visible(page.getByRole('button', { name: 'More' }));
 const tidy = (page: Page): Locator =>
   visible(page.getByRole('button', { name: 'Tidy up' }));
-const help = (page: Page): Locator =>
-  visible(page.getByRole('button', { name: 'About this screen' }));
 const photo = (page: Page): Locator =>
   page.getByRole('button', { name: /Tap to see it whole/ }).first();
 
@@ -46,13 +44,6 @@ const CASES: readonly Case[] = [
     open: (page) => tidy(page).click(),
     dialog: 'Is that everything?',
     opener: tidy,
-  },
-  {
-    name: 'the help sheet',
-    prepare: openHome,
-    open: (page) => help(page).click(),
-    dialog: /^(About this screen|Home)/,
-    opener: help,
   },
   {
     name: 'the note More menu',

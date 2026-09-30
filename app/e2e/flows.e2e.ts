@@ -120,17 +120,8 @@ test.describe('open Home', () => {
       await expect(page).toHaveURL(/\/$/);
     }
     await expect(visible(page.locator('.home-bubble'))).toBeVisible();
-    // "?" opens the same sheet afterwards, without the step counter.
-    await visible(
-      page.getByRole('button', { name: 'About this screen' }),
-    ).click();
-    const help = page.getByRole('dialog', { name: 'Home' });
-    await expect(
-      help.getByRole('button', { name: 'Show me around' }),
-    ).toBeVisible();
-    await expect(help.getByText('Tour · 1 of 4')).toHaveCount(0);
-    await page.keyboard.press('Escape');
-    await expect(help).toBeHidden();
+    // #906 removed the top bar's "?" (R-TOPBAR-1): Help moves into each
+    // screen's ⋯ menu (#907, #919), where these steps come back.
 
     // Run your own Bower is the demo's sign-in.
     await page.goto('/login');
@@ -160,19 +151,8 @@ test.describe('open Home', () => {
     ).toContainText('filed');
     await shot(page, testInfo, 'home');
 
-    // "?" still replays the tour on demand.
-    await visible(
-      page.getByRole('button', { name: 'About this screen' }),
-    ).click();
-    await visible(
-      page.getByRole('dialog', { name: 'Home' }).getByRole('button', {
-        name: 'Show me around',
-      }),
-    ).click();
-    const replay = page.getByRole('dialog');
-    await expect(replay.getByText('Tour · 1 of 4')).toBeVisible();
-    await replay.getByRole('button', { name: 'Skip' }).click();
-    await expect(replay).toBeHidden();
+    // #906 removed the top bar's "?" (R-TOPBAR-1): Help moves into each
+    // screen's ⋯ menu (#907, #919), where these steps come back.
   });
 });
 
@@ -1442,10 +1422,6 @@ test('Ideas: grouped examples, Copy fills the Bower box and navigates there (#33
     }),
   ).toHaveValue('How much did I spend on groceries this month?');
 
-  // The help sheet has no Ideas button (#859): Ideas has no help-sheet link.
-  await page.getByRole('button', { name: 'About this screen' }).click();
-  await expect(page.getByRole('link', { name: 'Ideas' })).toHaveCount(0);
-  await page.keyboard.press('Escape');
   await page.goto('/ideas');
 
   // Back in the bar is phone-only (#318): the desktop shell has no Back
@@ -1666,7 +1642,7 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
     // The sidebar (#422, #326, C.9): one Expand/Collapse all tool, no sort
     // menu, and the waiting-count bubble on Add's row, where the pile gets
     // filled, not Home's.
-    const sidebar = page.getByRole('navigation', { name: 'Your notes' });
+    const sidebar = page.getByRole('navigation', { name: 'Your folders' });
     await expect(sidebar.locator('[aria-label^="Sort by"]')).toHaveCount(0);
     await expect(
       sidebar.getByRole('button', { name: 'Expand all' }),
@@ -1678,10 +1654,10 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   }
   await expect(tabs).toBeVisible();
   const links = tabs.getByRole('link');
-  await expect(links).toHaveText(['Home', 'Notes', 'Add', 'Bower']);
+  await expect(links).toHaveText(['Home', 'Folders', 'Add', 'Bower']);
   await expect(links.first()).toHaveAttribute('aria-current', 'page');
 
-  await tabs.getByRole('link', { name: 'Notes' }).click();
+  await tabs.getByRole('link', { name: 'Folders' }).click();
   await expect(page).toHaveURL(/\/notes$/);
   await expect(links.nth(1)).toHaveAttribute('aria-current', 'page');
   await expect(
@@ -1703,7 +1679,7 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
   // viewing", otherwise an ambiguous substring match on Home's own list).
   await page
     .locator('nav.bottom-nav')
-    .getByRole('link', { name: 'Notes' })
+    .getByRole('link', { name: 'Folders' })
     .click();
   await expect(page).toHaveURL(/\/notes$/);
 
@@ -1770,7 +1746,8 @@ test('an old /tell link opens the Bower tab with its text', async ({
   ).toHaveValue('Hello Bower');
 });
 
-test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
+// #906: the "?" left the bar; Help comes back in the ⋯ menu (#907, #919).
+test.fixme('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -1782,7 +1759,7 @@ test('the top bar: title, "?", avatar, no folder menu; Back on a note', async ({
       0,
     );
     await expect(bar.getByText('Home', { exact: true })).toBeVisible();
-    await expect(bar.getByRole('link', { name: 'Settings' })).toHaveText('A');
+    await expect(bar.getByRole('button', { name: 'Settings' })).toHaveText('A');
     await shot(page, testInfo, 'bar-home');
   }
 
@@ -2399,7 +2376,7 @@ test('folder counts add files and notes together, the same total the folder scre
       page.locator('main a[href="/folder/1-Projects"] .tree-count'),
     ).toHaveText('28');
   } else {
-    const sidebar = page.getByRole('navigation', { name: 'Your notes' });
+    const sidebar = page.getByRole('navigation', { name: 'Your folders' });
     await expect(
       sidebar.locator('a[href="/folder/0-Inbox"] .tree-count'),
     ).toHaveText('2');

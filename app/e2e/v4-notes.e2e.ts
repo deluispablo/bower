@@ -157,7 +157,7 @@ test('at 1280 px the sidebar is the explorer', async ({ page }, testInfo) => {
     'the sidebar is the desktop layout',
   );
   await openHome(page);
-  const sidebar = page.getByRole('navigation', { name: 'Your notes' });
+  const sidebar = page.getByRole('navigation', { name: 'Your folders' });
 
   const search = sidebar.getByRole('button', { name: 'Search' });
   await expect(search).toBeVisible();
