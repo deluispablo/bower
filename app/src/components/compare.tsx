@@ -16,6 +16,7 @@ import {
   askQuestion,
   askSubject,
   bookingsTimeline,
+  applyHref,
   cellText,
   compareColumns,
   compareKinds,
@@ -23,12 +24,16 @@ import {
   desktopExplainer,
   directionLabels,
   dropColumn,
-  extraColumns,
+  columnExtras,
   fadedLine,
   firstDirection,
   filterChips,
   footerLine,
   moveColumn,
+  madeForBadge,
+  shownColumns,
+  tableMarkdown,
+  toggleColumn,
   noteTitle,
   notesOfKind,
   numberOf,
@@ -52,6 +57,8 @@ import { getText } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { changeStatusWithHistory } from '../history.js';
 import { keyFactsFor, statusLabel } from '../kinds.js';
+import { madeForItem } from './made-for-it.js';
+import type { MadeForCandidate } from './made-for-it.js';
 import type { Kind } from '../kinds.js';
 import { loadNoteMeta, recordNoteMeta } from '../note-meta.js';
 import { showToast } from '../toast-store.js';
@@ -68,12 +75,9 @@ import '../styles/compare.css';
 /** Where the table replaces the cards: the shell's desktop width. */
 const DESKTOP_QUERY = '(min-width: 900px)';
 
-/** The folder's `viewSettings` plus the Compare column order and sort it
- * remembers (R-CMP-4). */
-type CompareViewSettings = ViewSettings & {
-  compareColumns?: string[];
-  compareSort?: CompareSort;
-};
+/** The folder's `viewSettings` with the Compare column order, column choice
+ * and sort it remembers (R-CMP-4, R-CMP-7). */
+type CompareViewSettings = ViewSettings;
 
 /** A stored sort, or `undefined` when it is not one. */
 function readSort(raw: unknown): CompareSort | undefined {
@@ -95,26 +99,39 @@ export async function loadCompareNotes(
       file.mimeType === 'text/markdown' ||
       file.name.toLowerCase().endsWith('.md'),
   );
-  const notes = await Promise.all(
-    markdown.map(async (file): Promise<CompareNote | null> => {
+  const loaded = await Promise.all(
+    markdown.map(async (file) => {
       try {
-        const meta = await loadNoteMeta(file);
-        if (meta.kind === undefined) return null;
-        return {
-          id: file.id,
-          name: file.name,
-          modifiedTime: file.modifiedTime ?? null,
-          kind: meta.kind,
-          fields: meta.fields,
-          bowerOrigins: meta.bowerOrigins,
-        };
+        return { file, meta: await loadNoteMeta(file) };
       } catch (error: unknown) {
         console.error('Reading a note for Compare failed', error);
         return null;
       }
     }),
   );
-  return notes.filter((note): note is CompareNote => note !== null);
+  const readable = loaded.filter((entry) => entry !== null);
+  // The notes Bower made for an item say so themselves (`made_for`).
+  const candidates: MadeForCandidate[] = readable.filter(
+    ({ meta }) => meta.fields.made_for !== undefined,
+  );
+  const notes: CompareNote[] = [];
+  for (const { file, meta } of readable) {
+    if (meta.kind === undefined) continue;
+    const madeFor = madeForItem(
+      { path: file.path, title: file.name.replace(/\.md$/i, '') },
+      candidates,
+    ).map((made) => made.name);
+    notes.push({
+      id: file.id,
+      name: file.name,
+      modifiedTime: file.modifiedTime ?? null,
+      kind: meta.kind,
+      fields: meta.fields,
+      bowerOrigins: meta.bowerOrigins,
+      ...(madeFor.length === 0 ? {} : { madeFor }),
+    });
+  }
+  return notes;
 }
 
 export interface CompareViewProps {
@@ -259,6 +276,67 @@ function SortSheet({
   );
 }
 
+/** The desktop's "Columns" dialog (R-CMP-7): every column the notes can
+ * show, each switched on or off. The choice is saved as it is made. */
+function ColumnsSheet({
+  columns,
+  visible,
+  onToggle,
+  onClose,
+}: {
+  columns: readonly CompareColumn[];
+  visible: readonly string[] | undefined;
+  onToggle: (id: string) => void;
+  onClose: () => void;
+}): JSX.Element {
+  const shown = new Set(shownColumns(columns, visible).map((c) => c.id));
+  return (
+    <Overlay kind="dialog" labelledBy="compare-columns-title" onClose={onClose}>
+      <div class="compare-sort">
+        <header class="compare-sort-head">
+          <h2 id="compare-columns-title" class="compare-sort-title">
+            Columns
+          </h2>
+          <button
+            type="button"
+            class="compare-sort-close"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <IconClose />
+          </button>
+        </header>
+        <div class="compare-sort-list" role="group" aria-label="Columns">
+          {columns
+            .filter((column) => column.id !== TITLE_COLUMN)
+            .map((column) => (
+              <button
+                key={column.id}
+                type="button"
+                role="checkbox"
+                class="compare-sort-option"
+                aria-checked={shown.has(column.id)}
+                onClick={() => {
+                  onToggle(column.id);
+                }}
+              >
+                <span>{column.label}</span>
+                {column.optional === true && <small>added by your rule</small>}
+              </button>
+            ))}
+        </div>
+        <button
+          type="button"
+          class="button compare-sort-done"
+          onClick={onClose}
+        >
+          Done
+        </button>
+      </div>
+    </Overlay>
+  );
+}
+
 export function CompareView({
   notes,
   folderPath,
@@ -276,6 +354,8 @@ export function CompareView({
   const [sort, setSort] = useState<CompareSort | undefined>();
   const [chosenChips, setChosenChips] = useState<string[] | undefined>();
   const [sortOpen, setSortOpen] = useState(false);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [storedVisible, setStoredVisible] = useState<string[] | undefined>();
 
   useEffect(() => {
     let live = true;
@@ -285,6 +365,8 @@ export function CompareView({
         const stored: CompareViewSettings | undefined = settings;
         const order = stored?.compareColumns;
         if (Array.isArray(order)) setStoredOrder(order);
+        const visible = stored?.compareVisible;
+        if (Array.isArray(visible)) setStoredVisible(visible);
         const storedSort = readSort(stored?.compareSort);
         if (storedSort !== undefined) setSort(storedSort);
       },
@@ -315,9 +397,14 @@ export function CompareView({
           fields: { ...note.fields, status: override.status },
         };
   });
-  const extras = extraColumns(kind, current);
-  const order = orderedColumnIds(kind, storedOrder, extras);
-  const columns = compareColumns(kind, order, extras);
+  const extras = columnExtras(kind, current);
+  const everyColumn = compareColumns(
+    kind,
+    orderedColumnIds(kind, storedOrder, extras),
+    extras,
+  );
+  const columns = shownColumns(everyColumn, storedVisible);
+  const order = columns.map((column) => column.id);
   const chips = filterChips(kind, current);
   // The phone opens with its one filter on, as the board draws it (the
   // faded card and the line under the cards); the desktop starts unfiltered.
@@ -365,6 +452,26 @@ export function CompareView({
   const saveOrder = (next: string[]): void => {
     setStoredOrder(next);
     remember({ compareColumns: next }, 'column order');
+  };
+
+  const chooseColumn = (id: string): void => {
+    const next = toggleColumn(everyColumn, storedVisible, id);
+    setStoredVisible(next);
+    remember({ compareVisible: next }, 'column choice');
+  };
+
+  const copyTable = (): void => {
+    const rows = sorted.filter((note) => !hiddenIds.has(note.id));
+    const text = tableMarkdown(kind, rows, columns);
+    navigator.clipboard.writeText(text).then(
+      () => {
+        showToast('Table copied.');
+      },
+      (error: unknown) => {
+        console.error('Copying the table failed', error);
+        showToast("Bower couldn't copy the table. Try again.");
+      },
+    );
   };
 
   const chooseSort = (next: CompareSort): void => {
@@ -453,9 +560,12 @@ export function CompareView({
 
   if (!isDesktop) {
     const faded = fadedLine(hidden, active);
+    const phoneColumns = columns.filter(
+      (column) => column.virtual === undefined,
+    );
     const sortColumn =
-      columns.find((column) => column.id === effectiveSort.column) ??
-      columns[0];
+      phoneColumns.find((column) => column.id === effectiveSort.column) ??
+      phoneColumns[0];
     // The list shows every note (the filtered ones faded), so the button counts them all.
     const shownCount = sorted.length;
     return (
@@ -478,7 +588,7 @@ export function CompareView({
         {sortOpen && (
           <SortSheet
             kind={kind}
-            columns={columns}
+            columns={phoneColumns}
             extras={extras}
             sort={effectiveSort}
             count={shownCount}
@@ -510,8 +620,39 @@ export function CompareView({
   const shown = sorted.filter((note) => !hiddenIds.has(note.id));
   return (
     <section class="compare compare-desktop" aria-label="Compare">
-      <p class="compare-explainer">{desktopExplainer(kind, current.length)}</p>
+      <p class="compare-explainer">
+        {desktopExplainer(
+          kind,
+          extras.some((column) => column.field?.group === 'score'),
+        )}
+      </p>
       {chipRow}
+      <div class="compare-chips compare-tools" role="group" aria-label="Table">
+        <button
+          type="button"
+          class="compare-chip"
+          aria-haspopup="dialog"
+          aria-expanded={columnsOpen}
+          onClick={() => {
+            setColumnsOpen(true);
+          }}
+        >
+          Columns
+        </button>
+        <button type="button" class="compare-chip" onClick={copyTable}>
+          Copy as table
+        </button>
+      </div>
+      {columnsOpen && (
+        <ColumnsSheet
+          columns={everyColumn}
+          visible={storedVisible}
+          onToggle={chooseColumn}
+          onClose={() => {
+            setColumnsOpen(false);
+          }}
+        />
+      )}
       <div class="compare-table-wrap">
         <table class="compare-table">
           <thead>
@@ -562,10 +703,6 @@ export function CompareView({
         </span>
         <span>
           <OriginSquare origin="you" /> from what you told me
-        </span>
-        <span class="compare-legend-hint">
-          Columns come from what Bower read. Click a header to sort; drag to
-          reorder.
         </span>
       </div>
       <Hint
@@ -798,6 +935,38 @@ function BodyCell({
             </option>
           ))}
         </select>
+      </td>
+    );
+  }
+  if (column.virtual === 'made-for') {
+    const badge = madeForBadge(note);
+    return (
+      <td class="compare-td">
+        {(note.madeFor ?? []).length === 0 ? (
+          badge
+        ) : (
+          <span class="compare-made-for">{badge}</span>
+        )}
+      </td>
+    );
+  }
+  if (column.virtual === 'apply') {
+    const href = applyHref(note);
+    return (
+      <td class="compare-td">
+        {href === null ? (
+          cellText(kind, note, column)
+        ) : (
+          <a
+            href={href}
+            target="_blank"
+            class="compare-apply"
+            rel="noopener noreferrer"
+            aria-label={`Apply to ${noteTitle(note)}`}
+          >
+            Apply
+          </a>
+        )}
       </td>
     );
   }

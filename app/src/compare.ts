@@ -11,7 +11,8 @@ import { formatFieldValue, kindById, KINDS, statusLabel } from './kinds.js';
 import type { Kind, KindField } from './kinds.js';
 import type { NoteOrigin } from './note-meta.js';
 import { findKeyLine, splitFrontmatter } from './markdown/frontmatter.js';
-import { BOOKKEEPING_KEYS, humaniseKey } from './components/details.js';
+import { applyLinkOf } from './components/made-from.js';
+import { BOOKKEEPING_KEYS, humaniseKey } from './note-keys.js';
 
 /** One note of a folder as Compare reads it. */
 export interface CompareNote {
@@ -25,6 +26,9 @@ export interface CompareNote {
   /** Every frontmatter field, raw. */
   fields: Record<string, unknown>;
   bowerOrigins: Readonly<Record<string, NoteOrigin>>;
+  /** Names (no `.md`) of the notes whose `made_for` points at this one
+   * ("CV · Northwind"); set by the loader (#795). */
+  madeFor?: readonly string[];
 }
 
 /** The note's title: its file name without the `.md`. */
@@ -81,6 +85,12 @@ export interface CompareColumn {
   label: string;
   /** Present for a field column. */
   field?: KindField;
+  /** Off until the person picks it in "Columns" (#795). */
+  optional?: boolean;
+  /** Sits after Status by default: the Made for it and Apply columns. */
+  tail?: boolean;
+  /** A column read from more than the note's own field. */
+  virtual?: 'made-for' | 'apply';
 }
 
 const TITLE_LABELS: Readonly<Record<string, string>> = {
@@ -165,6 +175,92 @@ export function extraColumns(
   return columns;
 }
 
+/** The id of the Made for it column (R-CMP-8). */
+export const MADE_FOR_COLUMN = 'made_for';
+/** The id of the Apply column (R-CMP-8). */
+export const APPLY_COLUMN = 'apply_link';
+
+/** The note's `apply_link` when it is a web address, else `null`. */
+export function applyHref(note: Pick<CompareNote, 'fields'>): string | null {
+  return applyLinkOf(note.fields[APPLY_COLUMN]);
+}
+
+/** "CV · Letter": the kinds of the notes made for an item (the part of
+ * "CV · Northwind" before the dot), or the whole name when it has none;
+ * `—` when nothing was made for it. */
+export function madeForBadge(note: Pick<CompareNote, 'madeFor'>): string {
+  const names = note.madeFor ?? [];
+  if (names.length === 0) return NONE;
+  const words: string[] = [];
+  for (const name of names) {
+    const word = (name.split(' · ')[0] ?? name).trim();
+    if (word !== '' && !words.includes(word)) words.push(word);
+  }
+  return words.join(' · ');
+}
+
+/** What an empty Made for it or Apply cell says. */
+const NONE = '—';
+
+/**
+ * Every column beyond the kind's own (R-CMP-2, R-CMP-7, R-CMP-8): the
+ * numeric `extraColumns`, then "Made for it" and "Apply" (after Status, when
+ * any note has one), then a column for every other plain field a rule added,
+ * off until picked in "Columns".
+ */
+export function columnExtras(
+  kind: Kind,
+  notes: readonly CompareNote[],
+): CompareColumn[] {
+  const columns = extraColumns(kind, notes);
+  if (notes.some((note) => (note.madeFor ?? []).length > 0)) {
+    columns.push({
+      id: MADE_FOR_COLUMN,
+      label: 'Made for it',
+      tail: true,
+      virtual: 'made-for',
+    });
+  }
+  if (notes.some((note) => applyHref(note) !== null)) {
+    columns.push({
+      id: APPLY_COLUMN,
+      label: 'Apply',
+      tail: true,
+      virtual: 'apply',
+    });
+  }
+  const taken = new Set<string>([
+    ...columns.map((column) => column.id),
+    ...kind.fields.map((field) => field.key),
+    'score',
+    'fit',
+  ]);
+  for (const note of notes) {
+    for (const [key, value] of Object.entries(note.fields)) {
+      if (
+        taken.has(key) ||
+        BOOKKEEPING_KEYS.has(key) ||
+        key.endsWith('_note')
+      ) {
+        continue;
+      }
+      const plain =
+        (typeof value === 'string' && value.trim() !== '') ||
+        typeof value === 'number' ||
+        typeof value === 'boolean';
+      if (!plain) continue;
+      taken.add(key);
+      columns.push({
+        id: key,
+        label: humaniseKey(key),
+        field: { key, label: humaniseKey(key), type: 'text', group: '' },
+        optional: true,
+      });
+    }
+  }
+  return columns;
+}
+
 /** The score column among `extras`, when there is one. */
 function scoreColumn(
   extras: readonly CompareColumn[],
@@ -184,8 +280,16 @@ export function defaultColumnIds(
     TITLE_COLUMN,
     ...(score === undefined ? [] : [score.id]),
     ...kind.compareFields,
-    ...extras.filter((column) => column !== score).map((column) => column.id),
+    ...extras
+      .filter(
+        (column) =>
+          column !== score && column.optional !== true && column.tail !== true,
+      )
+      .map((column) => column.id),
     ...(kind.statuses.length > 0 ? [STATUS_COLUMN] : []),
+    ...extras
+      .filter((column) => column.tail === true)
+      .map((column) => column.id),
   ];
 }
 
@@ -197,8 +301,14 @@ export function orderedColumnIds(
   extras: readonly CompareColumn[] = [],
 ): string[] {
   const defaults = defaultColumnIds(kind, extras);
-  if (stored === undefined) return defaults;
-  const movable = defaults.filter((id) => id !== TITLE_COLUMN);
+  const optional = extras
+    .filter((column) => column.optional === true)
+    .map((column) => column.id);
+  if (stored === undefined) return [...defaults, ...optional];
+  const movable = [
+    ...defaults.filter((id) => id !== TITLE_COLUMN),
+    ...optional,
+  ];
   const kept = stored.filter((id) => movable.includes(id));
   const rest = movable.filter((id) => !kept.includes(id));
   return [TITLE_COLUMN, ...new Set(kept), ...rest];
@@ -242,6 +352,39 @@ export function compareColumns(
     }
   }
   return columns;
+}
+
+/**
+ * The columns the person sees: the title, then those in `visible` (the
+ * stored choice) or, without one, every column that is not optional. R-CMP-7.
+ */
+export function shownColumns(
+  columns: readonly CompareColumn[],
+  visible?: readonly string[],
+): CompareColumn[] {
+  return columns.filter(
+    (column) =>
+      column.id === TITLE_COLUMN ||
+      (visible === undefined
+        ? column.optional !== true
+        : visible.includes(column.id)),
+  );
+}
+
+/** `visible` (or the default choice) with the column `id` switched on or
+ * off. The title cannot be switched off. */
+export function toggleColumn(
+  columns: readonly CompareColumn[],
+  visible: readonly string[] | undefined,
+  id: string,
+): string[] {
+  const now = shownColumns(columns, visible)
+    .map((column) => column.id)
+    .filter((column) => column !== TITLE_COLUMN);
+  if (id === TITLE_COLUMN) return now;
+  return now.includes(id)
+    ? now.filter((column) => column !== id)
+    : [...now, id];
 }
 
 /** `order` with the column `id` moved one place left or right; the title
@@ -293,6 +436,9 @@ export function cellText(
 ): string {
   if (column.id === TITLE_COLUMN) return noteTitle(note);
   if (column.id === STATUS_COLUMN) return statusLabel(kind, note.fields);
+  if (column.virtual === 'made-for') return madeForBadge(note);
+  if (column.virtual === 'apply')
+    return applyHref(note) === null ? NONE : 'Apply';
   if (column.field === undefined) return '';
   if (column.field.group === SCORE_GROUP) {
     const score = numberOf(note.fields[column.id]);
@@ -371,8 +517,22 @@ function sortValue(
   column: string,
   extras: readonly CompareColumn[],
 ): SortValue {
-  if (extras.some((candidate) => candidate.id === column)) {
-    return numberOf(note.fields[column]);
+  const extra = extras.find((candidate) => candidate.id === column);
+  if (extra !== undefined) {
+    if (extra.virtual === 'made-for') {
+      return (note.madeFor ?? []).length === 0
+        ? null
+        : madeForBadge(note).toLowerCase();
+    }
+    if (extra.virtual === 'apply') return applyHref(note);
+    const raw = note.fields[column];
+    if (extra.field?.type === 'text') {
+      if (typeof raw !== 'string' || raw.trim() === '') {
+        return numberOf(raw);
+      }
+      return numberOf(raw) ?? raw.trim().toLowerCase();
+    }
+    return numberOf(raw);
   }
   if (column === TITLE_COLUMN) return noteTitle(note).toLowerCase();
   if (column === STATUS_COLUMN) {
@@ -629,12 +789,13 @@ export function phoneExplainer(kind: Kind, count: number): string {
   );
 }
 
-/** The desktop's explainer (board `Desktop-Compare`). */
-export function desktopExplainer(kind: Kind, count: number): string {
+/** The desktop's explainer (board `Compare-Table-1280`): what Bower read,
+ * where a score comes from (when the table has one), and how to sort. */
+export function desktopExplainer(kind: Kind, hasScore: boolean): string {
   return (
-    `You saved ${countWord(count)} ${kind.plural} in this folder. Bower read ` +
-    'the same details from each one, so they line up as a table: sort by ' +
-    `any column, filter, and open a row to see the ${kind.name}.`
+    `Bower read the same things from each ${offerWord(kind, 1)}. ` +
+    (hasScore ? `Your score comes from your ${kind.id} rule. ` : '') +
+    'Click a header to sort.'
   );
 }
 
@@ -956,4 +1117,37 @@ export function timelineExplainer(count: number): string {
     'place and the reference from each one, so they line up in the order ' +
     'they happen.'
   );
+}
+
+// --- Copy as table (R-CMP-9) -------------------------------------------------
+
+function markdownCell(text: string): string {
+  return text.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+}
+
+/**
+ * `notes` as a Markdown table: one column per entry of `columns` (the
+ * visible ones, in their order) and one row per note (already sorted and
+ * filtered, as the table shows them). The Apply cell is a link.
+ */
+export function tableMarkdown(
+  kind: Kind,
+  notes: readonly CompareNote[],
+  columns: readonly CompareColumn[],
+): string {
+  const line = (cells: readonly string[]): string => `| ${cells.join(' | ')} |`;
+  const rows = notes.map((note) =>
+    line(
+      columns.map((column) => {
+        const text = markdownCell(cellText(kind, note, column));
+        const href = column.virtual === 'apply' ? applyHref(note) : null;
+        return href === null ? text : `[${text}](${href})`;
+      }),
+    ),
+  );
+  return [
+    line(columns.map((column) => markdownCell(column.label))),
+    line(columns.map(() => '---')),
+    ...rows,
+  ].join('\n');
 }

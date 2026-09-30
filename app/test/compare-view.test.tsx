@@ -510,3 +510,120 @@ describe('Compare for receipts and bookings', () => {
     expect(steps[1]?.textContent).toContain('Ref H123');
   });
 });
+
+describe('Compare columns, Made for it, Apply and Copy as table (#795)', () => {
+  const offers: CompareNote[] = [
+    {
+      id: 'id-Northwind',
+      name: 'Northwind.md',
+      modifiedTime: '2026-09-28T08:00:00Z',
+      kind: 'job-offer',
+      fields: {
+        salary: 72000,
+        score: 79,
+        status: 'new',
+        apply_link: 'https://jobs.example.com/apply',
+        interview_panel: 'Alex',
+      },
+      bowerOrigins: {},
+      madeFor: ['CV · Northwind', 'Letter · Northwind'],
+    },
+    {
+      id: 'id-Fabrikam',
+      name: 'Fabrikam.md',
+      modifiedTime: '2026-09-28T08:00:00Z',
+      kind: 'job-offer',
+      fields: { salary: 65000, score: 91, status: 'applied' },
+      bowerOrigins: {},
+    },
+  ];
+
+  beforeEach(() => {
+    setDesktop(true);
+  });
+
+  async function mountOffers(): Promise<void> {
+    await act(() => {
+      render(
+        h(CompareView, { notes: offers, folderPath: '1-Projects/Jobs' }),
+        root,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  const headers = (): string[] =>
+    [...root.querySelectorAll('th[scope="col"] .compare-th-sort')].map((el) =>
+      (el.textContent ?? '').replace(/[▴▾]/g, '').trim(),
+    );
+
+  it('shows the Made for it badge and an Apply link from the note', async () => {
+    await mountOffers();
+    expect(headers().slice(-2)).toEqual(['Made for it', 'Apply']);
+    const link = root.querySelector<HTMLAnchorElement>(
+      'a[aria-label="Apply to Northwind"]',
+    );
+    expect(link?.href).toBe('https://jobs.example.com/apply');
+    expect(root.textContent).toContain('CV · Letter');
+  });
+
+  it('picks columns in a dialog and remembers the choice for the folder', async () => {
+    await mountOffers();
+    expect(headers()).not.toContain('Interview panel');
+    click(chip('Columns'));
+    const option = [
+      ...document.querySelectorAll<HTMLElement>('[role="checkbox"]'),
+    ].find((el) => el.textContent?.startsWith('Interview panel'));
+    click(option);
+    expect(headers()).toContain('Interview panel');
+    await vi.waitFor(() => {
+      expect(cache.saveViewSettings).toHaveBeenCalled();
+    });
+    const [path, saved] = cache.saveViewSettings.mock.calls[0] as [
+      string,
+      { compareVisible: string[] },
+    ];
+    expect(path).toBe('1-Projects/Jobs');
+    expect(saved.compareVisible).toContain('interview_panel');
+  });
+
+  it('starts from the columns remembered for the folder', async () => {
+    cache.loadViewSettings.mockResolvedValue({
+      sort: 'name',
+      kindFilter: null,
+      originFilter: null,
+      layout: 'list',
+      compareVisible: ['score'],
+    });
+    await mountOffers();
+    expect(headers()).toEqual(['Offer', 'Your score']);
+  });
+
+  it('copies the visible columns, in the sort order, as a Markdown table', async () => {
+    const writeText = vi.fn<(text: string) => Promise<void>>();
+    writeText.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    cache.loadViewSettings.mockResolvedValue({
+      sort: 'name',
+      kindFilter: null,
+      originFilter: null,
+      layout: 'list',
+      compareVisible: ['score', 'apply_link'],
+    });
+    await mountOffers();
+    click(chip('Copy as table'));
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        '| Offer | Your score | Apply |',
+        '| --- | --- | --- |',
+        '| Fabrikam | 91/100 | — |',
+        '| Northwind | 79/100 | [Apply](https://jobs.example.com/apply) |',
+      ].join('\n'),
+    );
+  });
+});

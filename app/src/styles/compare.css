@@ -526,3 +526,44 @@
     min-height: 44px;
   }
 }
+
+/* Columns and Copy as table above the desktop table (#795): 44 px targets. */
+.compare-tools .compare-chip {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+}
+
+.compare-tools .compare-chip:hover {
+  background: var(--color-brand-tint);
+}
+
+/* "Made for it": a pill like the score, in the brand tint. */
+.compare-made-for {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-accent-line);
+  border-radius: var(--radius-full);
+  background: var(--color-brand-tint);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+/* The Apply link is a 44 px target. */
+.compare-td .compare-apply {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-link);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.compare-td .compare-apply:hover {
+  text-decoration: underline;
+}
+
+.compare-td .compare-apply:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 2px;
+}
