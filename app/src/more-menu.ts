@@ -266,13 +266,10 @@ export const MENU_NAMES: Readonly<Record<MenuKind, string>> = {
 
 /**
  * "Help and about this": asks the shell to open Help for the screen on
- * show. The shell listens for `HELP_REQUEST_EVENT` and cancels it (#906
- * wires it); until it does, the top bar's "?" is pressed instead.
+ * show. The shell (`layout.tsx`, #906) listens for `HELP_REQUEST_EVENT`.
  */
 export const HELP_REQUEST_EVENT = 'bower:open-help';
 
 export function requestHelp(): void {
-  const event = new Event(HELP_REQUEST_EVENT, { cancelable: true });
-  if (!window.dispatchEvent(event)) return;
-  document.querySelector<HTMLButtonElement>('.topbar-help')?.click();
+  window.dispatchEvent(new Event(HELP_REQUEST_EVENT, { cancelable: true }));
 }
