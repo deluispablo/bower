@@ -34,15 +34,38 @@ const PARA_KINDS: readonly ParaKind[] = [
 
 const NUMERIC_PREFIX = /^(\d{1,2})-/;
 
+/** A file extension: a dot and one to five letters or digits, at least one a
+ * letter, so "v1.2" keeps its number. */
+const EXTENSION = /\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,5}$/;
+
+export interface DisplayNameOptions {
+  /** Keep the extension: only Just filed's desktop "You added" (K-17). */
+  keepExtension?: boolean;
+}
+
 /**
- * A folder name without its numeric prefix ("2-Areas" → "Areas"): what the
- * breadcrumb, folder paths, activity labels, the More menu header and the
- * back label read. A name that is only a prefix ("2-") is kept whole, so
- * nothing ever shows as an empty label.
+ * The one name every screen shows for a folder or a file (R-API-8,
+ * R-META-5, K-17): the last segment of `name` (a path works too), without
+ * its numeric prefix ("2-Areas" → "Areas", "0-Inbox" → "Inbox"), without
+ * its extension unless `keepExtension`, and with underscores read as
+ * spaces. A name that would come out empty is kept whole, so nothing ever
+ * shows as an empty label. A number in place of `options` (the index, when
+ * `displayName` is passed straight to `Array#map`) is ignored.
  */
-export function displayName(name: string): string {
-  const stripped = name.replace(NUMERIC_PREFIX, '');
-  return stripped === '' ? name : stripped;
+export function displayName(
+  name: string,
+  options: DisplayNameOptions | number = {},
+): string {
+  const keepExtension =
+    typeof options === 'object' && options.keepExtension === true;
+  const last = name.slice(name.lastIndexOf('/') + 1) || name;
+  let shown = last.replace(NUMERIC_PREFIX, '');
+  if (!keepExtension) {
+    const bare = shown.replace(EXTENSION, '');
+    if (bare !== '') shown = bare;
+  }
+  shown = shown.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+  return shown === '' ? last : shown;
 }
 
 /**
@@ -50,7 +73,12 @@ export function displayName(name: string): string {
  * ("2-Areas/Cooking" → "Areas / Cooking").
  */
 export function displayPath(path: string, separator = ' / '): string {
-  return path.split('/').filter(Boolean).map(displayName).join(separator);
+  // A full path names the file exactly, so its extension stays.
+  return path
+    .split('/')
+    .filter(Boolean)
+    .map((part) => displayName(part, { keepExtension: true }))
+    .join(separator);
 }
 
 /**
