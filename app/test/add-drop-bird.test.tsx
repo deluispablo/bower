@@ -31,7 +31,7 @@ afterEach(() => {
 describe('AddDropRow bird (rule 1)', () => {
   it('counts as the one Bower on a computer, so the perch hides', () => {
     stubMatchMedia(true);
-    const unmount = mount(h(AddDropRow, {}));
+    const unmount = mount(h(AddDropRow, null));
     expect(birdCount()).toBe(1);
     unmount();
     expect(birdCount()).toBe(0);
@@ -39,7 +39,7 @@ describe('AddDropRow bird (rule 1)', () => {
 
   it('is not mounted on a phone, so the perch stays', () => {
     stubMatchMedia(false);
-    const unmount = mount(h(AddDropRow, {}));
+    const unmount = mount(h(AddDropRow, null));
     expect(birdCount()).toBe(0);
     unmount();
   });
