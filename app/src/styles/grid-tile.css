@@ -1,15 +1,14 @@
 /* The grid tile (issue #908, spec §3.18, boards GR-Main and GR-PhoneGrid):
-   two columns on the phone (gap 8), three on the desktop (gap 12), every
+   two columns on the phone, three on the desktop, gap 10 on both, every
    tile 132 px high. The look is the Card's (§3.20). */
 .folder-grid.grid-tiles {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 @media (min-width: 900px) {
   .folder-grid.grid-tiles {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
   }
 }
 
