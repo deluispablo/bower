@@ -63,7 +63,10 @@ export const FEATURES = {
   note: { spec: 'R-AG-2', what: "Bower's note on every file" },
   facts: { spec: 'R-KF', what: 'Key facts and what to check, with origins' },
   join: { spec: 'R-AG-11', what: 'New things checked against what you keep' },
-  request: { spec: 'R-REQ', what: 'A request waits and is done at the tidy-up' },
+  request: {
+    spec: 'R-REQ',
+    what: 'A request waits and is done at the tidy-up',
+  },
   rule: { spec: 'R-REQ', what: 'A rule ("from now on") kept in Your rules' },
 } as const;
 

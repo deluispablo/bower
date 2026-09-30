@@ -46,6 +46,8 @@ export const SCREEN_ROUTES: readonly ScreenRoute[] = [
   { pattern: '/lint', urls: ['/lint'] },
   { pattern: '/onboarding', urls: ['/onboarding'] },
   { pattern: '/welcome', urls: ['/welcome', '/welcome?page=5'] },
+  { pattern: '/learn', urls: ['/learn'] },
+  { pattern: '/learn/:example', urls: ['/learn/flat-hunting'] },
   { pattern: '/recover', urls: ['/recover'] },
   { pattern: 'default', urls: ['/no/such/page'] },
 ];

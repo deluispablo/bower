@@ -50,7 +50,13 @@ function introHref(signedIn: boolean): string {
 }
 
 /** Signed out: the bare page's own Back, and at the end the sign-in. */
-function BareBack({ href, label }: { href: string; label: string }): JSX.Element {
+function BareBack({
+  href,
+  label,
+}: {
+  href: string;
+  label: string;
+}): JSX.Element {
   return (
     <a href={href} class="page-bare-back">
       <IconChevronRight />

@@ -9,6 +9,7 @@
  */
 
 import { h, render } from 'preact';
+import type { JSX } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,12 +38,12 @@ const { Login } = await import('../src/routes/login.js');
 
 let root: HTMLDivElement;
 
-function BackSlot(): ReturnType<typeof h> {
+function BackSlot(): JSX.Element {
   const { back } = useShellSlots();
   return h('div', { class: 'topbar' }, back);
 }
 
-async function mount(screen: () => ReturnType<typeof h>): Promise<void> {
+async function mount(screen: () => JSX.Element): Promise<void> {
   await act(() => {
     render(
       h(ShellSlotsProvider, null, [
@@ -103,12 +104,7 @@ describe('Learn Bower', () => {
     expect(root.querySelector('h1')?.textContent).toBe('Flat hunting');
     expect(
       [...root.querySelectorAll('.learn-act h2')].map((el) => el.textContent),
-    ).toEqual([
-      'You add',
-      'Bower files and writes',
-      'You ask',
-      'You get',
-    ]);
+    ).toEqual(['You add', 'Bower files and writes', 'You ask', 'You get']);
     expect(root.querySelector('.learn-hint')?.textContent).toBe(
       LEARN_EXAMPLE_HINT,
     );
