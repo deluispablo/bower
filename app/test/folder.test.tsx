@@ -220,8 +220,8 @@ describe('Folder More menu (#352)', () => {
     });
     const menu = document.querySelector('[role="menu"]');
     expect(menu?.getAttribute('aria-label')).toBe('Folder actions');
-    expect(document.querySelector('.note-menu-title')?.textContent).toBe(
-      'Flat hunt',
+    expect(document.body.textContent).toContain(
+      'Opens your folders at Flat hunt',
     );
     const labels = Array.from(
       document.querySelectorAll('.note-menu-row-label'),

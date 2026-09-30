@@ -1763,21 +1763,19 @@ test.fixme('the top bar: title, "?", avatar, no folder menu; Back on a note', as
     await shot(page, testInfo, 'bar-home');
   }
 
-  // "?" opens the help sheet for this tab: About this screen, no counter.
+  // "?" opens the Help template for this tab (#907), no counter.
   await help.click();
   const sheet = page.getByRole('dialog', { name: 'Home' });
-  await expect(sheet.getByText('About this screen')).toBeVisible();
+  await expect(sheet.getByText('Help and about this')).toBeVisible();
   await expect(sheet.getByText('Tour ·')).toHaveCount(0);
-  await expect(
-    sheet.getByRole('link', { name: 'What is Bower, from the start' }),
-  ).toBeVisible();
-  await sheet.getByRole('button', { name: 'Close' }).first().click();
+  await expect(sheet.getByRole('link', { name: 'Learn Bower' })).toBeVisible();
+  await sheet.getByRole('button', { name: 'Close Help' }).click();
   await expect(sheet).toBeHidden();
 
   await visible(page.getByRole('link', { name: /^Bower$/ })).click();
   await help.click();
   const bower = page.getByRole('dialog', { name: 'Bower' });
-  await expect(bower.getByText('About this screen')).toBeVisible();
+  await expect(bower.getByText('Help and about this')).toBeVisible();
   if (testInfo.project.name === 'phone') {
     await shot(page, testInfo, 'help-bower');
   }
