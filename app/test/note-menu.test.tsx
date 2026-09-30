@@ -464,7 +464,8 @@ describe('NoteMenu', () => {
         parents: ['FOLDER_ID'],
         path: '2-Areas',
       },
-      title: 'Areas',
+      title: '2-Areas',
+      askName: '2-Areas',
       siblingNames: [],
       onTogglePin: vi.fn(),
     });
@@ -472,6 +473,13 @@ describe('NoteMenu', () => {
     expect(text.some((t) => t.includes('Rename…'))).toBe(false);
     expect(text.some((t) => t.includes('Move to…'))).toBe(false);
     expect(text).toHaveLength(6);
+    // Named as shown, never with its numeric prefix (design gate, #907).
+    expect(rowByText('Show in folders').textContent).toContain(
+      'Opens your folders at Areas',
+    );
+    expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
+      `/bower?text=${encodeURIComponent('About Areas: ')}`,
+    );
   });
 
   it('shows Copied. for 2 s after Copy link (R-API-11)', async () => {

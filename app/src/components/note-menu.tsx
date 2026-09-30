@@ -38,7 +38,7 @@ import {
 } from '../more-menu.js';
 import type { MenuKind, MoreItem, MoreItemId } from '../more-menu.js';
 import { moveRequestText } from '../move-request.js';
-import { driveFolderUrl } from '../navigation.js';
+import { displayName, driveFolderUrl } from '../navigation.js';
 import {
   renameRequestText,
   splitFileName,
@@ -204,8 +204,12 @@ export function NoteMenu(props: NoteMenuProps): JSX.Element {
       : kind === 'folder' || kind === 'root'
         ? 'folder'
         : null;
-  const name = props.title ?? props.askName ?? '';
-  const askName = props.askName ?? name;
+  // A root landmark is named as the person sees it ("Areas", not
+  // "2-Areas"), in the subtitle and in what Ask prefills.
+  const shown = (value: string): string =>
+    kind === 'root' ? displayName(value) : value;
+  const name = shown(props.title ?? props.askName ?? '');
+  const askName = shown(props.askName ?? name);
   const ids = props.driveIds ?? {};
   const [copyState, setCopyState] = useState<CopyState>('idle');
 
