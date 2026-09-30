@@ -74,7 +74,7 @@ test('on the phone, Notes after a note shows the tree open at it, and Notes agai
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', 'the tab is the phone layout');
   await openNoteFromRecent(page);
-  await navigate(page, /^Notes$/);
+  await navigate(page, /^Folders$/);
   await expect(page).toHaveURL(/\/notes$/);
   const list = tree(page);
   await expect(
@@ -114,7 +114,7 @@ test('on the phone, Notes after a note shows the tree open at it, and Notes agai
     }
   });
   await expect.poll(offset).toBeGreaterThan(0);
-  await navigate(page, /^Notes$/);
+  await navigate(page, /^Folders$/);
   await expect.poll(offset).toBe(0);
 });
 

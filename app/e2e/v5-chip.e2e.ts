@@ -104,28 +104,16 @@ test('there is no bar and no chip on Home (D31)', async ({ page }) => {
   await expect(page.locator('.run-chip')).toHaveCount(0);
 });
 
-test('desktop: the chip is in the top bar, and opening the sheet takes a done result away', async ({
+// v6 (#906, E-9): the desktop top bar has no "Done · 1 filed" pill; Home's
+// bubble is the way into a done result. The other states keep the chip.
+test('desktop: a done result shows no pill in the top bar (E-9)', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'the chip is desktop');
   await holdRun(page, 'done');
   await page.goto(FLAT);
-  const chip = page.locator('.topbar .run-chip');
-  await expect(chip).toBeVisible();
-  await expect(chip.getByRole('status')).toHaveCount(0);
-  const button = chip.getByRole('button', {
-    name: /^Tidy-up done: .* See what changed$/,
-  });
-  await expect(button).toBeVisible();
-  await expect(chip.locator('.run-chip-title')).toHaveText('Done');
+  await expect(page.locator('.topbar .run-chip')).toBeHidden();
   await expect(page.locator('.shell-dock')).toHaveCount(0);
-
-  await button.click();
-  await expect(page.locator('.run-chip')).toHaveCount(0);
-  const seen = await page.evaluate(() =>
-    Object.keys(localStorage).some((key) => key.startsWith('bower:run-seen:')),
-  );
-  expect(seen).toBe(true);
 });
 
 test('desktop: partly done and did not finish read as the board says', async ({

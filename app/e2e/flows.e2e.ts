@@ -2355,7 +2355,7 @@ test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)'
   // The tree shows a count only above zero (3.6): no folder row reads "0".
   // On the phone the tree lives on the Notes tab; on desktop it is the
   // sidebar.
-  if (testInfo.project.name === 'phone') await navigate(page, /^Notes$/);
+  if (testInfo.project.name === 'phone') await navigate(page, /^Folders$/);
   const counts = await page.locator('.tree-count').allTextContents();
   expect(counts.length).toBeGreaterThan(0);
   expect(counts).not.toContain('0');
@@ -2368,7 +2368,7 @@ test('folder counts add files and notes together, the same total the folder scre
 
   if (testInfo.project.name === 'phone') {
     // The Notes tab is the phone's only explorer (#586).
-    await navigate(page, /^Notes$/);
+    await navigate(page, /^Folders$/);
     await expect(
       page.locator('main a[href="/folder/0-Inbox"] .tree-count'),
     ).toHaveText('2');

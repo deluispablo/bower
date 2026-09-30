@@ -104,10 +104,13 @@ export async function navigate(page: Page, name: RegExp): Promise<void> {
   await visible(page.getByRole('link', { name })).click();
 }
 
-/** Opens Settings: the avatar in the top bar on the phone, a sidebar row
- * on desktop (#318); both are links named "Settings". */
+/** Opens Settings: the avatar in the top bar on the phone, a button named
+ * "Settings" since v6 (#906, R-AVATAR-1); a sidebar link on desktop. */
 export async function openSettings(page: Page): Promise<void> {
-  await navigate(page, /^Settings$/);
+  const name = /^Settings$/;
+  await visible(
+    page.getByRole('link', { name }).or(page.getByRole('button', { name })),
+  ).click();
 }
 
 /**
