@@ -61,7 +61,7 @@ test('Move to… opens the send sheet with a folder choice, not Inbox, and Put i
     sheet.getByText('Uses one run of your Claude plan.'),
   ).toBeVisible();
 
-  await sheet.getByRole('searchbox', { name: 'Find a folder' }).fill('resour');
+  // #909: no "Find a folder" field; Resources is a root, always in view.
   await sheet.getByRole('radio', { name: /Resources/ }).click();
   await sheet.getByRole('button', { name: 'Put in the inbox' }).click();
   await expect(sheet).toHaveCount(0);
@@ -76,7 +76,7 @@ test('Just this, now sends the move request and starts a run', async ({
   await openMenu(page);
   await page.getByRole('menuitem', { name: /Move to…/ }).click();
   const sheet = page.getByRole('dialog', { name: 'Move' });
-  await sheet.getByRole('searchbox', { name: 'Find a folder' }).fill('resour');
+  // #909: no "Find a folder" field; Resources is a root, always in view.
   await sheet.getByRole('radio', { name: /Resources/ }).click();
   await sheet.getByRole('button', { name: 'Just this, now' }).click();
   await expect(sheet).toHaveCount(0);
