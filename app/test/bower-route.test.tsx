@@ -756,7 +756,8 @@ describe('dictation in the Bower box (#780)', () => {
     await mount();
     const bubble = (): string =>
       root.querySelector('.bower-bubble')?.textContent ?? '';
-    const bird = (): Element | null => root.querySelector('.bower-box-intro svg');
+    const bird = (): Element | null =>
+      root.querySelector('.bower-box-intro svg');
     expect(bubble()).toMatch(/^Tell me what you want/);
     expect(bird()?.classList.contains('p-listen')).toBe(false);
     await act(() => {
