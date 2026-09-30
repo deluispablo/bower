@@ -32,7 +32,7 @@ test('a PDF can be pinned to Home from its More menu and unpinned again (#688)',
   await page.goto(FOLDER);
   await page
     .locator('.folder-item', { hasText: 'Shelves and tap quote' })
-    .click();
+    .press('Enter');
   await expect(page).toHaveURL(/\/file\//);
   const fileUrl = page.url();
 

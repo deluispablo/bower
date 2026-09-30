@@ -15,7 +15,7 @@ async function openFile(
   title: string,
 ): Promise<void> {
   await page.goto(`/folder/${folder}`);
-  await page.locator('.folder-item', { hasText: name }).first().click();
+  await page.locator('.folder-item', { hasText: name }).first().press('Enter');
   await expect(page).toHaveURL(/\/file\//);
   await expect(
     page.getByRole('heading', { level: 1, name: title }),
@@ -80,7 +80,7 @@ test('a PDF says its pages from the companion note (#604)', async ({
     .locator('.folder-item', { hasText: 'Lease agreement 2026' })
     .filter({ hasText: /PDF/ })
     .first()
-    .click();
+    .press('Enter');
   await expect(page.locator('.file-props')).toContainText(/PDF · 42 pages · /);
 });
 
@@ -167,7 +167,7 @@ async function openLeasePdf(page: Page): Promise<void> {
     .locator('.folder-item', { hasText: 'Lease agreement 2026' })
     .filter({ hasText: /PDF/ })
     .first()
-    .click();
+    .press('Enter');
   await expect(page).toHaveURL(/\/file\//);
 }
 
@@ -226,7 +226,7 @@ test('previous and next walk the folder in its list, with n of m (#606)', async 
   await page
     .locator('.folder-item', { hasText: 'Flat budget' })
     .first()
-    .click();
+    .press('Enter');
   const walk = page.locator('.file-walk');
   await expect(walk).toContainText(/\d+ of \d+/);
   // The walk sits at the end of the page, after Bower's note (#704).
@@ -264,7 +264,7 @@ test('a photo opens the viewer, full screen with More (#606)', async ({
     .locator('.folder-item', { hasText: 'Arlington Road, window sign' })
     .filter({ hasText: /Photo/ })
     .first()
-    .click();
+    .press('Enter');
   const open = page.locator('.photo-viewer-open');
   await expect(open).toBeVisible();
   await expect(page.getByText('Tap to see it whole')).toBeVisible();
@@ -289,7 +289,7 @@ test('the phone bar of a file has Back to the folder and no item title (#704)', 
   await page
     .locator('.folder-item', { hasText: 'Flat budget' })
     .first()
-    .click();
+    .press('Enter');
   const bar = page.locator('header.topbar');
   await expect(
     bar.getByRole('link', { name: /^Back to Flat hunt/ }),

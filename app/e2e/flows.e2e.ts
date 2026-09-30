@@ -360,7 +360,7 @@ test("previous/next under a note hides Bower's own files and uses titles (#423)"
   await page.goto('/folder/Answers');
   await page
     .getByRole('link', { name: /Which subscriptions renew this autumn/ })
-    .click();
+    .press('Enter');
   await expect(
     page.getByRole('heading', {
       level: 1,
@@ -2456,7 +2456,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await page.goto('/folder/1-Projects/Kitchen%20Refresh');
   await page
     .locator('.folder-item', { hasText: 'Sage green test patch' })
-    .click();
+    .press('Enter');
   await expect(page).toHaveURL(/\/file\//);
   await expect(
     page.getByRole('heading', { level: 1, name: 'Sage green test patch' }),
@@ -2480,7 +2480,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await page.goto('/folder/1-Projects/Kitchen%20Refresh');
   await page
     .locator('.folder-item', { hasText: 'Shelves and tap quote' })
-    .click();
+    .press('Enter');
   await expect(
     page.getByRole('heading', { level: 1, name: 'Shelves and tap quote' }),
   ).toBeVisible();
