@@ -11,6 +11,7 @@ import type { JSX } from 'preact';
 import { formatFieldValue } from '../kinds.js';
 import type { Kind, KindField } from '../kinds.js';
 import type { NoteMeta } from '../note-meta.js';
+import { BOOKKEEPING_KEYS, humaniseKey } from '../note-keys.js';
 import { applyLinkOf } from './made-from.js';
 import { OriginSquare } from './folder-mark.js';
 import type { OriginKind } from './folder-mark.js';
@@ -25,38 +26,7 @@ export interface DetailsProps {
 /** The heading over the fields a rule added. */
 export const MORE_GROUP = 'More';
 
-/** Frontmatter keys Bower or Obsidian keep for themselves: never a "More"
- * field. */
-export const BOOKKEEPING_KEYS: ReadonlySet<string> = new Set([
-  'kind',
-  'status',
-  'original',
-  'bower_origins',
-  'not_stated',
-  'tags',
-  'tag',
-  'aliases',
-  'cssclasses',
-  'title',
-  'created',
-  'updated',
-  'date',
-  'type',
-  'source',
-  'pages',
-  // Bower's note box keeps these (R-INS-8, R-VERDICT-1). `score` and `fit`
-  // stay readable by Compare and the front page; they are only kept out of
-  // "More".
-  'bower_updated',
-  'bower_change',
-  'bower_before',
-  'by',
-  'pile_note',
-  'facts',
-  'score',
-  'verdict',
-  'made_for',
-]);
+export { BOOKKEEPING_KEYS, humaniseKey };
 
 const ORIGINS: ReadonlySet<string> = new Set(['file', 'notes', 'web', 'you']);
 
@@ -65,12 +35,6 @@ interface Row {
   label: string;
   value: string;
   origin: OriginKind;
-}
-
-/** "pet_policy" as "Pet policy". */
-export function humaniseKey(key: string): string {
-  const words = key.replace(/[_-]+/g, ' ').trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** `bower_origins` is `{ <field>: file | notes | web | you }` (spec R-AG-2);

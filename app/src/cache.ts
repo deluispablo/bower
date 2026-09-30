@@ -428,6 +428,11 @@ export interface ViewSettings {
   layoutChosen?: boolean;
   /** Compare's column order for the folder (#612). */
   compareColumns?: string[];
+  /** The columns Compare shows besides the title (#795); without it, the
+   * defaults. */
+  compareVisible?: string[];
+  /** Compare's sort for the folder (#764). */
+  compareSort?: { column: string; direction: 'asc' | 'desc' };
 }
 
 export interface TreeState {
