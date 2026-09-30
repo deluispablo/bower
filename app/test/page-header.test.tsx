@@ -4,6 +4,8 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { revealRequest } from '../src/reveal.js';
+
 const route = vi.fn();
 vi.mock('preact-iso', () => ({
   useLocation: () => ({ path: '/', query: {}, route }),
@@ -106,7 +108,10 @@ describe('PageHeader (R-HEADER-1..4)', () => {
         new MouseEvent('click', { bubbles: true, cancelable: true }),
       );
     });
-    expect(route).toHaveBeenCalledWith('/notes?reveal=folder%2F2-Areas');
+    // #909: the crumb calls revealInFolders instead of #930's route adapter.
+    expect(route).not.toHaveBeenCalled();
+    expect(revealRequest()).toMatchObject({ path: '2-Areas' });
+    expect(revealRequest()?.id).toBeUndefined();
   });
 
   it('shows the meta line with the root dot, the purpose and the tabs', () => {
