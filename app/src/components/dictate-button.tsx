@@ -175,6 +175,15 @@ export interface DictateButtonProps {
   placeholder?: string;
   maxLength?: number;
   disabled?: boolean;
+  /** Extra class on the wrapper (a caller lays the box out). */
+  class?: string;
+  /** Extra class on the textarea. */
+  inputClass?: string;
+  /** Gives the caller the textarea (to focus it). */
+  inputRef?: { current: HTMLTextAreaElement | null };
+  onBlur?: () => void;
+  /** Called whenever the microphone goes on or off. */
+  onListening?: (on: boolean) => void;
 }
 
 function IconMic(): JSX.Element {
@@ -219,6 +228,11 @@ export function DictateButton({
   placeholder,
   maxLength,
   disabled = false,
+  class: rootClass,
+  inputClass,
+  inputRef,
+  onBlur,
+  onListening,
 }: DictateButtonProps): JSX.Element {
   const [state, setState] = useState<DictateState>(
     getRecognitionCtor() === undefined ? 'unavailable' : 'ready',
@@ -236,8 +250,16 @@ export function DictateButton({
   const onValueRef = useRef(onValue);
   const caret = useRef<{ start: number; end: number } | null>(null);
   const pendingCaret = useRef<number | null>(null);
+  const onListeningRef = useRef(onListening);
   valueRef.current = value;
   onValueRef.current = onValue;
+  onListeningRef.current = onListening;
+
+  const listening = state === 'listening';
+  useEffect(() => {
+    onListeningRef.current?.(listening);
+    return () => onListeningRef.current?.(false);
+  }, [listening]);
 
   useLayoutEffect(() => {
     if (pendingCaret.current === null || area.current === null) return;
@@ -407,15 +429,19 @@ export function DictateButton({
 
   return (
     <div
-      class={`dictate${state === 'listening' ? ' dictate-listening' : ''}`}
+      class={`dictate${listening ? ' dictate-listening' : ''}${rootClass !== undefined ? ` ${rootClass}` : ''}`}
       ref={root}
       onFocusOut={onFocusOut}
     >
       <div class="dictate-box">
         <textarea
-          ref={area}
+          ref={(el): void => {
+            area.current = el;
+            if (inputRef !== undefined) inputRef.current = el;
+          }}
           id={id}
-          class={`dictate-input${available ? ' dictate-input-padded' : ''}`}
+          class={`dictate-input${available ? ' dictate-input-padded' : ''}${inputClass !== undefined ? ` ${inputClass}` : ''}`}
+          onBlur={onBlur}
           aria-label={label}
           rows={rows}
           placeholder={placeholder}
