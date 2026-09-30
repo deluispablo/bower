@@ -347,7 +347,10 @@ describe('disagree and next (R-MEAN-2)', () => {
     const outcome = outcomeFromRun(
       buildRun('done', {
         disagree: [{ a: 'A/one.md', b: 'A/two.md', reason: 'Dates differ' }],
-        next: [{ path: '-', action: 'Book a viewing' }, { path: 'A/one.md', action: 'Read it' }],
+        next: [
+          { path: '-', action: 'Book a viewing' },
+          { path: 'A/one.md', action: 'Read it' },
+        ],
       }),
     );
     expect(outcome.disagree).toEqual([

@@ -102,7 +102,9 @@ export function cleanDisagree(
   return (raw ?? [])
     .filter(
       (item) =>
-        item.a.trim() !== '' && item.b.trim() !== '' && item.reason.trim() !== '',
+        item.a.trim() !== '' &&
+        item.b.trim() !== '' &&
+        item.reason.trim() !== '',
     )
     .slice(0, MAX_DISAGREE);
 }

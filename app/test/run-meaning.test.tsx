@@ -21,9 +21,8 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
   useVault: () => ({ index: { byPath } }),
 }));
 
-const { RunMeaning, meaningLink } = await import(
-  '../src/components/run-meaning.js'
-);
+const { RunMeaning, meaningLink } =
+  await import('../src/components/run-meaning.js');
 
 function outcome(extra: Partial<RunOutcome>): RunOutcome {
   return {
@@ -45,7 +44,10 @@ let root: HTMLDivElement | null = null;
 function mount(value: RunOutcome, onNavigate?: () => void): HTMLElement {
   root = document.createElement('div');
   document.body.append(root);
-  const props = onNavigate === undefined ? { outcome: value } : { outcome: value, onNavigate };
+  const props =
+    onNavigate === undefined
+      ? { outcome: value }
+      : { outcome: value, onNavigate };
   void act(() => {
     render(h(RunMeaning, props), root as HTMLElement);
   });
