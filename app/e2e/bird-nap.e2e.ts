@@ -13,7 +13,9 @@ test('a tap on Bower makes him nap and pauses every animation', async ({
   page,
 }) => {
   await openHome(page);
-  const nap = visible(page.locator('.home-greeting').getByRole('button', { name: 'Bower' }));
+  const nap = visible(
+    page.locator('.home-greeting').getByRole('button', { name: 'Bower' }),
+  );
   await expect(nap).toHaveAttribute('aria-pressed', 'false');
   const bird = nap.locator('svg.b');
   await nap.click();
@@ -37,7 +39,9 @@ test('birds take no tap: the point over one hits the nap button or what is behin
   page,
 }) => {
   await openHome(page);
-  const nap = visible(page.locator('.home-greeting').getByRole('button', { name: 'Bower' }));
+  const nap = visible(
+    page.locator('.home-greeting').getByRole('button', { name: 'Bower' }),
+  );
   await expect(nap).toBeVisible();
   const result = await page.evaluate(() => {
     const birds = [...document.querySelectorAll<SVGElement>('svg.b')];

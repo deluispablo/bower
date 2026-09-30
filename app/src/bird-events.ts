@@ -106,16 +106,16 @@ function install(): () => void {
   document.addEventListener('input', onInput);
   window.addEventListener('popstate', onRoute);
   // The router changes the address with `pushState`, which fires no event.
-  const push = history.pushState;
-  const replace = history.replaceState;
+  const push = history.pushState.bind(history);
+  const replace = history.replaceState.bind(history);
   history.pushState = function (...args: Parameters<History['pushState']>) {
-    push.apply(this, args);
+    push(...args);
     onRoute();
   };
   history.replaceState = function (
     ...args: Parameters<History['replaceState']>
   ) {
-    replace.apply(this, args);
+    replace(...args);
     onRoute();
   };
   return () => {
