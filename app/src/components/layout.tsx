@@ -16,9 +16,9 @@
  * Home, Folders, Add, Bower, lit by `activeTab`.
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
- * header row over the content (the breadcrumb slot and the upload chip;
- * there is no "Done · 1 filed" pill, E-9: the tidy-up bar keeps only its
- * phone role). The files button, Back, the phone title, the actions slot
+ * header row over the content (the breadcrumb slot and the tidy-up or upload
+ * chip, which never shows its done state there: no "Done · 1 filed" pill,
+ * E-9, `layout.css`). The files button, Back, the phone title, the actions slot
  * and the avatar are phone-only; Settings is a sidebar row there; the theme
  * control lives only in Settings › Look, #324),
  * and on note screens the About panel, filled through the `aside` shell slot
@@ -276,8 +276,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
     ledge,
   } = useShellSlots();
   // One bar slot for both chips on the phone: the tidy-up bar wins (spec
-  // 6.15b). From 900 px only the upload chip shows in the top bar: the
-  // "Done · 1 filed" pill is gone (E-9).
+  // 6.15b). From 900 px the same chip sits in the top bar, except its done
+  // state, the "Done · 1 filed" pill (E-9), which `layout.css` hides.
   const bar = tidyBar ?? uploadChip;
   const desktop = useDesktop();
   const sidebarWidth = useSidebarWidth();
@@ -445,9 +445,9 @@ export function Layout({ children }: LayoutProps): JSX.Element {
               <div class="topbar-slot topbar-breadcrumb" data-slot="breadcrumb">
                 {breadcrumb}
               </div>
-              {desktop && uploadChip !== null && (
+              {desktop && bar !== null && (
                 <div class="topbar-slot topbar-chip" data-slot="chip">
-                  {uploadChip}
+                  {bar}
                 </div>
               )}
               {barHasAvatar(path) && (

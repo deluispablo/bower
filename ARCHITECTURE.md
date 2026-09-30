@@ -112,7 +112,7 @@ Each module's own header comment says what it holds; this table only says where 
 ### App shell (v6, #906)
 
 - `app/src/shell-routes.ts` names the second tab once (`FOLDERS_TAB_LABEL` "Folders", landmark `FOLDERS_LANDMARK` "Your folders"; the route stays `/notes`) and decides the frame per route: `topBarVariant` (`tab`, `inner`, `explorer`), `activeTab` (Just filed lights Home, Settings none) and `barHasAvatar` (not on Settings).
-- `app/src/components/layout.tsx` draws the phone top bar (files button, back link, title slot, ⋯ slot, avatar button), the tab bar, and the desktop sidebar frame and nav. There is no "?" in the bar and no "Done · 1 filed" pill on desktop (E-9); Help lives in each screen's ⋯ menu.
+- `app/src/components/layout.tsx` draws the phone top bar (files button, back link, title slot, ⋯ slot, avatar button), the tab bar, and the desktop sidebar frame and nav. There is no "?" in the bar and no "Done · 1 filed" pill on desktop (E-9: the run chip hides its done state there); Help lives in each screen's ⋯ menu.
 - `app/src/components/page-header.tsx` is the one page header: the desktop breadcrumb (parents only), the h1 with (i) and ⋯, the meta line from `meta-line.ts`, a purpose line and a tabs slot. Screens adopt it in their own issues.
 
 ## v4 data flows

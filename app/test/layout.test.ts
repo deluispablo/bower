@@ -528,21 +528,14 @@ describe('Layout v5 slots (#741)', () => {
     expect(root.querySelector('.topbar-chip')).toBeNull();
   });
 
-  it('has no "Done · 1 filed" pill from 900 px; the upload chip stays (E-9)', () => {
+  it('puts the same bar in the top bar from 900 px, before the avatar (the done pill is hidden in CSS, E-9)', () => {
     stubMatchMedia(true);
     mountWith({ tidyBar: h('p', null, 'Tidy') });
-    expect(root.querySelector('.topbar-chip')).toBeNull();
+    const chip = query('.topbar-chip');
+    expect(chip.textContent).toBe('Tidy');
+    expect(chip.nextElementSibling).toBe(query('.topbar-avatar'));
     expect(root.querySelector('.shell-dock')).toBeNull();
     expect(query('.shell').classList.contains('shell-with-dock')).toBe(false);
-    void act(() => {
-      render(null, root);
-    });
-    document.body.replaceChildren();
-    mountWith({ uploadChip: h('p', null, 'Upload') });
-    expect(query('.topbar-chip').textContent).toBe('Upload');
-    expect(query('.topbar-chip').nextElementSibling).toBe(
-      query('.topbar-avatar'),
-    );
   });
 
   it('lets the tidy-up bar win over the upload chip, and shows the chip alone', () => {
