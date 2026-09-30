@@ -393,7 +393,9 @@ describe('the demo Drive stub', () => {
     expect(zip.size).toBe(38 * 1024 * 1024);
     expect(zip.thumbnailLink).toBeUndefined();
     expect(previewUrlOf(d.server, zip.id)).toBeNull();
-    expect(get('3-Resources/Garden/Front bed.heic').mimeType).toBe('image/heic');
+    expect(get('3-Resources/Garden/Front bed.heic').mimeType).toBe(
+      'image/heic',
+    );
 
     // The CSV copy remembers the Google Sheet it came from.
     const csv = get(`${FLAT}/Flat budget.csv`);

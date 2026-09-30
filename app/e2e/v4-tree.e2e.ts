@@ -43,7 +43,7 @@ test('Flat hunt lists its PDF and photo as rows, and its count equals its rows',
   const under = await list.locator('[role="treeitem"]').evaluateAll((items) => {
     const at = items.findIndex(
       (item) =>
-        item.querySelector('a[href="/folder/1-Projects/Flat%20hunt"]') !== null,
+        item.querySelector('a[href="/folder/4-Archives/Flat%20hunt"]') !== null,
     );
     if (at === -1) return null;
     const level = Number(items[at]?.getAttribute('aria-level'));
@@ -154,7 +154,7 @@ test('after a tidy-up, the folder it filed into shows "<n> new" and its new rows
   await expect(areas.locator('.new-tag')).toHaveText('2 new');
   await expand(list, 'Areas');
   await expand(list, 'Garden');
-  const garden = list.locator('a[href="/folder/2-Areas/Garden"]');
+  const garden = list.locator('a[href="/folder/3-Resources/Garden"]');
   await expect(garden.locator('.new-tag')).toHaveText('1 new');
   await expect(
     list

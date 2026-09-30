@@ -965,7 +965,7 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   });
   await expect(
     rows.filter({ hasText: 'Boiler service invoice' }),
-  ).toContainText('Areas › Home');
+  ).toContainText('Resources › Home');
   await shot(page, testInfo, 'run-working-rows');
 
   // Done: the listing is read again and the rows name where things went;
@@ -975,9 +975,9 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   });
   await expect(
     rows.filter({ hasText: 'Boiler service invoice' }),
-  ).toContainText('Areas › Home');
+  ).toContainText('Resources › Home');
   await expect(rows.filter({ hasText: 'Tomato seedlings' })).toContainText(
-    'Areas › Garden',
+    'Resources › Garden',
   );
   await expect(rows.filter({ hasText: 'Reading…' })).toHaveCount(0);
 });
@@ -1265,9 +1265,7 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
 
   // The demo's folder: a question waiting in the inbox, an answer, and
   // Alex's own rules.
-  const lisbon = rowWith(
-    'What do I still need to sort out for the Lisbon trip?',
-  );
+  const lisbon = rowWith('What do I still need to sort out for the visa?');
   await expect(
     lisbon.getByText('In your inbox', { exact: true }),
   ).toBeVisible();
@@ -1304,12 +1302,12 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
     name: 'Tell Bower what to do, or ask it something',
   });
   await expect(box).toHaveValue(
-    'What do I still need to sort out for the Lisbon trip?',
+    'What do I still need to sort out for the visa?',
   );
-  await box.fill('What do I still need to book for the Lisbon trip?');
+  await box.fill('What do I still need to book for the visa?');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(box).toHaveValue('');
-  const edited = rowWith('What do I still need to book for the Lisbon trip?');
+  const edited = rowWith('What do I still need to book for the visa?');
   await expect(
     edited.getByText('In your inbox', { exact: true }),
   ).toBeVisible();
@@ -1340,7 +1338,7 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
   ).toBeVisible();
   // One file: the request, not the two other things in the inbox.
   // The row keeps the exact sentence sent (the edit) once answered too --
-  // not "What do I still need for Lisbon", the file name's own short title
+  // not "What do I still need for the visa", the file name's own short title
   // (#465). Same text as `edited` matched while it was still waiting, now
   // in the one row this file becomes (no separate waiting row left).
   await expect(edited).toHaveCount(1);
@@ -2047,16 +2045,12 @@ test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent i
   expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(1);
   const tiles = await boxes(page.locator('.home-pinned-grid > *'));
   expect(tiles.length).toBeGreaterThan(0);
-  // Both of the fixture's pins, on this first (cold-cache) load: Flat
-  // hunt (#489) and Shopping list, which sorts past the hydration
-  // fetch cap and only shows because of the search-first fix (#539).
-  await expect(
-    page.locator('.home-pinned-grid').getByText('Flat hunt', { exact: true }),
-  ).toBeVisible();
+  // The fixture's pin, on this first (cold-cache) load: Housing Search
+  // Australia (#903, HM-Main board).
   await expect(
     page
       .locator('.home-pinned-grid')
-      .getByText('Shopping list', { exact: true }),
+      .getByText('Housing Search Australia', { exact: true }),
   ).toBeVisible();
   tiles.forEach((tile, i) => {
     expect(tile.x).toBeCloseTo(grid[i % 4]?.x ?? NaN, 0);
@@ -2313,13 +2307,15 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
   );
   await expect(
     page
-      .locator('a.folder-card[href="/folder/1-Projects/Lisbon%20Trip"]')
+      .locator(
+        'a.folder-card[href="/folder/1-Projects/Housing%20Search%20Australia"]',
+      )
       .locator('.folder-card-meta'),
   ).toHaveText(/^\d+ things?( · updated [^·]+)?/);
   await shot(page, testInfo, 'folder-root-explained');
 
   // A non-root folder (a project) has no meaning line to show.
-  await page.goto('/folder/1-Projects/Lisbon%20Trip');
+  await page.goto('/folder/4-Archives/Lisbon%20Trip');
   // The h1 only: once the project note loads, its front card adds an h2 with
   // the same name, which made the role query ambiguous whenever the note
   // arrived before the check ran.
@@ -2339,7 +2335,7 @@ test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)'
   // Chips: Pin to Home / Ask Bower about it / Open in Drive, at 13 px,
   // fit the phone's 343 px content width in one row (2.14) instead of
   // wrapping to two.
-  await page.goto('/folder/1-Projects/Lisbon%20Trip');
+  await page.goto('/folder/4-Archives/Lisbon%20Trip');
   // The h1 only: on desktop the preview pane can open with the same title as
   // an h2 (#812), which made the role query ambiguous.
   await expect(page.locator('h1', { hasText: 'Lisbon Trip' })).toBeVisible();
@@ -2392,7 +2388,7 @@ test('folder counts add files and notes together, the same total the folder scre
 test('a project folder lists its files and notes together, newest first, with who put each there', async ({
   page,
 }, testInfo) => {
-  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await page.goto('/folder/4-Archives/Kitchen%20Refresh');
   await expect(
     page.getByRole('heading', { level: 1, name: 'Kitchen Refresh' }),
   ).toBeVisible();
@@ -2453,7 +2449,7 @@ test('a project folder lists its files and notes together, newest first, with wh
 test('a file opens on its own screen: the photo inline, the PDF without a preview says so', async ({
   page,
 }, testInfo) => {
-  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await page.goto('/folder/4-Archives/Kitchen%20Refresh');
   await page
     .locator('.folder-item', { hasText: 'Sage green test patch' })
     .press('Enter');
@@ -2477,7 +2473,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   );
   await shot(page, testInfo, 'file-photo');
 
-  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await page.goto('/folder/4-Archives/Kitchen%20Refresh');
   await page
     .locator('.folder-item', { hasText: 'Shelves and tap quote' })
     .press('Enter');
@@ -2529,7 +2525,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(menu).toBeHidden();
 
   // The same menu on a folder: Pin to Home, no note-only rows.
-  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await page.goto('/folder/4-Archives/Kitchen%20Refresh');
   await visible(page.getByRole('button', { name: 'More' })).click();
   const folderMenu = page.getByRole('menu', { name: 'Folder actions' });
   await expect(
@@ -2601,7 +2597,7 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   await expect(rowWith(0, 'Tomato seedlings')).toContainText(
     '→ Areas / Garden',
   );
-  const question = rowWith(0, 'What do I still need for Lisbon?');
+  const question = rowWith(0, 'What do I still need for the visa?');
   await expect(question).toContainText('→ Answers, read it');
   await expect(question.getByRole('link', { name: 'read it' })).toBeVisible();
   // The phone's notifications prompt follows a first tidy-up; out of the

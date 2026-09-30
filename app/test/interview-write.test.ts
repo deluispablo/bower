@@ -116,10 +116,15 @@ describe('runInterview', () => {
     expect(await fileAt('2-Areas/Career/_Career.md')).toBeDefined();
     // Alex's real Visa & Immigration area is untouched: no `_Visa & Immigration.md` folder note was
     // added next to it, and its own hub note is exactly as it was.
-    expect(await fileAt('2-Areas/Visa & Immigration/_Visa & Immigration.md')).toBeUndefined();
-    expect(await getText((await mustFileAt('2-Areas/Visa & Immigration/Visa & Immigration.md')).id)).toBe(
-      homeBefore,
-    );
+    expect(
+      await fileAt('2-Areas/Visa & Immigration/_Visa & Immigration.md'),
+    ).toBeUndefined();
+    expect(
+      await getText(
+        (await mustFileAt('2-Areas/Visa & Immigration/Visa & Immigration.md'))
+          .id,
+      ),
+    ).toBe(homeBefore);
   });
 
   it('writes nothing at all when every answer is blank', async () => {

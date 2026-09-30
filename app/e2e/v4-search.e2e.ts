@@ -123,7 +123,7 @@ test('search from the Flat hunt screen is scoped and can be widened', async ({
   page,
 }) => {
   await openHome(page);
-  await page.goto('/folder/1-Projects/Flat hunt');
+  await page.goto('/folder/4-Archives/Flat hunt');
   await expect(page.getByRole('heading', { name: 'Flat hunt' })).toBeVisible();
   const dialog = await openSearch(page);
   const field = dialog.getByRole('combobox');

@@ -10,7 +10,7 @@ test.describe('Compare Sort sheet (R-CMP-1)', () => {
 
   test('sorting from the sheet changes the card order', async ({ page }) => {
     await openHome(page);
-    await page.goto('/folder/1-Projects/Flat%20hunt');
+    await page.goto('/folder/4-Archives/Flat%20hunt');
     await page.getByRole('tab', { name: /^Compare \d+ / }).click();
 
     const titles = page.locator('.compare-card-title');

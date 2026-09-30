@@ -55,7 +55,7 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
   await expect(
     list.locator('.just-filed-item', { hasText: 'Kentish Town, 2 bed' }),
   ).toContainText('from Kentish Town flat.pdf');
-  await expect(first).toContainText('Projects › Flat hunt');
+  await expect(first).toContainText('Archives › Flat hunt');
   // No New chip on a filed row (#819, #829: the chip is only for a new note
   // Bower wrote).
   await expect(first.locator('.new-tag')).toHaveCount(0);
@@ -68,7 +68,7 @@ test('the Notes tab row opens the list of old names, new names and folders', asy
   const aside = list.locator('.just-filed-item', {
     hasText: "Bower can't watch videos.",
   });
-  await expect(aside).toContainText('Projects › Flat hunt');
+  await expect(aside).toContainText('Archives › Flat hunt');
   await expect(
     aside.getByRole('link', { name: 'Tell Bower what it is' }),
   ).toBeVisible();
@@ -128,7 +128,7 @@ test('at 1280 px the list is a table with Earlier tidy-ups', async ({
     .getByRole('row')
     .filter({ hasText: 'Arlington Road, 2 bed' });
   await expect(first).toContainText('Arlington Road, 2 bed.pdf');
-  await expect(first).toContainText('Projects › Flat hunt');
+  await expect(first).toContainText('Archives › Flat hunt');
   // A Filed row carries its Filed tag, not a New chip (#819, #829).
   await expect(first).toContainText('Filed');
   await expect(first.locator('.new-tag')).toHaveCount(0);

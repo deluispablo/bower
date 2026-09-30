@@ -321,10 +321,7 @@ export const DEMO_RUNS: readonly Run[] = [
     [
       request('Bower - 2026-09-29 1209 Keep my visa papers together.md'),
       filed('0-Inbox/CV Australia.docx', `${JOBS}/CV Australia.docx`),
-      filed(
-        '0-Inbox/Visa & Immigration.md',
-        `${VISA}/Visa & Immigration.md`,
-      ),
+      filed('0-Inbox/Visa & Immigration.md', `${VISA}/Visa & Immigration.md`),
     ],
     {},
     4,

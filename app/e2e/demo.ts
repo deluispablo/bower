@@ -12,11 +12,11 @@ import type { Locator, Page, Route, TestInfo } from '@playwright/test';
 declare const process: { env: Record<string, string | undefined> };
 
 /**
- * Sunday 27 September 2026, mid-morning: the day the demo fixture is written
+ * Wednesday 30 September 2026, around noon: the day the demo fixture is written
  * for (`src/demo/fixture.ts`). The clock runs on from here as real time
  * passes, and a test can jump it forward with `page.clock.fastForward`.
  */
-export const DEMO_NOW = new Date('2026-09-27T10:44:00+01:00');
+export const DEMO_NOW = new Date('2026-09-30T12:10:00+01:00');
 
 /** `localStorage` key of the intro-seen flag (`src/intro.ts`). */
 const INTRO_SEEN_KEY = 'bower:intro:seen';

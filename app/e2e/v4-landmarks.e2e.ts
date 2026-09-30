@@ -12,7 +12,7 @@ test('the phone back label on a folder inside Areas reads "Areas"', async ({
   await page.setViewportSize({ width: 375, height: 812 });
   await openHome(page);
 
-  await page.goto('/folder/2-Areas/Garden');
+  await page.goto('/folder/3-Resources/Garden');
   await expect(page.getByRole('heading', { name: 'Garden' })).toBeVisible();
   const back = page.locator('.topbar-back');
   await expect(back).toHaveAttribute('aria-label', 'Back to Areas');

@@ -57,7 +57,7 @@ function frontmatterOf(path: string): Record<string, unknown> {
   if (file === undefined || typeof file.content !== 'string') {
     throw new Error(`no note at ${path}`);
   }
-  return parseFrontmatter(file.content).data as Record<string, unknown>;
+  return parseFrontmatter(file.content).data;
 }
 
 /** Top-level folders, in the tree's order (PARA first, then the rest). */
@@ -167,7 +167,9 @@ describe('the v6 demo world (#903)', () => {
       expect(housing.statuses).toContain(flat.status);
     }
     for (const offer of JOB_OFFERS) {
-      if (offer.name === 'Senior Consultant - Data Engineer, Altis Consulting') {
+      if (
+        offer.name === 'Senior Consultant - Data Engineer, Altis Consulting'
+      ) {
         // The old value LI-Compare-375 draws: an extra option (#916).
         expect(offer.status).toBe('declined');
         expect(jobs.statuses).not.toContain('declined');

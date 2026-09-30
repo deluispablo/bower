@@ -121,7 +121,8 @@ export class DemoServer {
   /** The last run `GET /status` reports: the story's newest tidy-up
    * (yesterday 15:01 to 15:03, "Done 21 h ago: 1 filed", #903) until a
    * scripted run ends. */
-  private last: Run | null = DEMO_RUNS[0] === undefined ? null : copyRun(DEMO_RUNS[0]);
+  private last: Run | null =
+    DEMO_RUNS[0] === undefined ? null : copyRun(DEMO_RUNS[0]);
   /** Finished runs, newest first (`GET /runs`, #345): the story's
    * tidy-ups, then every scripted run as it ends. */
   private history: Run[] = DEMO_RUNS.map(copyRun);
