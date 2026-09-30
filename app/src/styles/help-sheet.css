@@ -303,14 +303,15 @@
   color: var(--color-text);
 }
 
-/* Icon 20 stroked in the brand teal (PF-Help-1280); the bird mark 20 on
-   rows about Bower's writing keeps its own colours. */
+/* Icon 20 in `--color-help-icon` (teal in dark, PF-Help-1280; light
+   unchanged); the bird mark 20 on rows about Bower's writing keeps its
+   own colours. */
 .help-template .help-row > svg {
   flex: 0 0 20px;
   width: 20px;
   height: 20px;
   margin-top: 2px;
-  color: var(--color-brand);
+  color: var(--color-help-icon);
 }
 
 .help-template .help-row > svg.b {
