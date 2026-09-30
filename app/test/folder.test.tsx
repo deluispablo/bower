@@ -336,7 +336,7 @@ describe('Ask Bower about it chip (#354, #899)', () => {
       root.querySelectorAll<HTMLElement>('.folder-chips .header-action'),
     ).find((el) => el.textContent?.includes('Ask Bower about it'));
     expect(chip?.tagName).toBe('BUTTON');
-    act(() => chip?.click());
+    void act(() => chip?.click());
     expect(openSheet).toHaveBeenCalledTimes(1);
     const call = openSheet.mock.calls[0]?.[0] as {
       mode: string;
