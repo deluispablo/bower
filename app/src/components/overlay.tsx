@@ -1,12 +1,24 @@
 /**
- * The one overlay (R-OVL-1, spec §5 and D4, board System-Overlays).
+ * The one overlay (R-OVL-1; #907, spec §3.8 to §3.11).
  *
  * `Overlay` draws a modal: the scrim, the panel with its role and name,
  * and, for as long as it is mounted, `inert` on the page behind
  * (`#app > .shell`), a locked body scroll, a focus trap with Escape, and
- * focus back on the opener when it goes. A bottom sheet on phones; from
- * 900 px up a 440 px right panel, a centred 440 px dialog or a menu under
- * the control that opened it (`overlay.css`).
+ * focus back on the opener when it goes.
+ *
+ * The contract (frozen in #907; #910 and every sheet build on it):
+ *
+ * | `kind`   | phone (< 900 px)             | desktop (>= 900 px)                  |
+ * | -------- | ---------------------------- | ------------------------------------ |
+ * | `sheet`  | content sheet, hugs, ✕       | side panel, `--panel-side` (440), ✕  |
+ * | `menu`   | action sheet, hugs, Cancel   | popover 320 under its button         |
+ * | `dialog` | sheet                        | the centred dialog (R-DIALOG-1 only) |
+ *
+ * `desktopPlacement` overrides the desktop column (`right`, `center`,
+ * `anchor`). Inside, new consumers use `.overlay-body` for the padding of
+ * each placement and `OverlayHeader` for the title and ✕, named with one
+ * of `OverlayCloseLabel`. A content sheet has ✕ only, an action sheet
+ * Cancel only, never both (R-SHEET-2, R-PANEL-2).
  *
  * Overlays do not mount themselves: they ask the queue (`overlay-queue.ts`)
  * to open, and `OverlayHost`, mounted once in the shell, renders the entry
@@ -21,6 +33,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 import { currentOverlay, subscribeOverlays } from '../overlay-queue.js';
 import type { OverlayEntry } from '../overlay-queue.js';
+import { IconClose } from './icons.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
 import '../styles/overlay.css';
@@ -60,7 +73,35 @@ const DEFAULT_PLACEMENT: Record<OverlayKind, OverlayPlacement> = {
 
 /** A menu under its opener stays this far from the window's edges. */
 const ANCHOR_GAP = 8;
-const ANCHOR_WIDTH = 280;
+/** The popover's width (R-POP-1, `--popover-width`). */
+export const POPOVER_WIDTH = 320;
+/** The popover sits this far under (or over) its button (spec §3.10). */
+const ANCHOR_OFFSET = 6;
+
+/**
+ * Every ✕ name, exactly as the boards' `aria-label`s (#907). A consumer
+ * passes one of these to `OverlayHeader`; nothing else names a close.
+ */
+export const OVERLAY_CLOSE_LABELS = [
+  'Close Help',
+  'Close Ask Bower',
+  'Close the rule',
+  'Close the pile',
+  'Close the tidy-up',
+  'Close the tidy-up result',
+  'Close Sort by',
+  'Close Columns',
+  'Close About this note',
+  'Close About this file',
+  'Close Rename',
+  'Close Add a paragraph',
+  'Close Move to',
+  'Close Filter and sort',
+  'Close Search',
+  'Close your folders',
+] as const;
+
+export type OverlayCloseLabel = (typeof OVERLAY_CLOSE_LABELS)[number];
 
 let locks = 0;
 let savedOverflow = '';
@@ -85,17 +126,22 @@ function lockPage(): () => void {
   };
 }
 
-/** Places a desktop menu under `opener`, kept inside the window. */
+/**
+ * Places a desktop popover 6 px under `opener`, right edges aligned (spec
+ * §3.10), kept inside the window: flipped above when there is no room
+ * below, and to the right of a button too near the left edge.
+ */
 function anchorTo(panel: HTMLElement, opener: Element | null): void {
   if (opener === null || opener === document.body) return;
   const rect = opener.getBoundingClientRect();
-  const maxLeft = window.innerWidth - ANCHOR_WIDTH - ANCHOR_GAP;
-  const left = Math.max(ANCHOR_GAP, Math.min(rect.left, maxLeft));
+  const width = Math.min(POPOVER_WIDTH, window.innerWidth * 0.88);
+  const maxLeft = window.innerWidth - width - ANCHOR_GAP;
+  const left = Math.max(ANCHOR_GAP, Math.min(rect.right - width, maxLeft));
   // Under the opener; above it when there is no room below; clamped into
   // the window when neither side fits.
   const height = panel.offsetHeight;
-  const below = rect.bottom + 4;
-  const above = rect.top - 4 - height;
+  const below = rect.bottom + ANCHOR_OFFSET;
+  const above = rect.top - ANCHOR_OFFSET - height;
   const lowest = window.innerHeight - height - ANCHOR_GAP;
   let top = below;
   if (below > lowest) top = above >= ANCHOR_GAP ? above : lowest;
@@ -248,6 +294,39 @@ export function Overlay(props: OverlayProps): JSX.Element {
       </div>
     </div>,
     document.body,
+  );
+}
+
+export interface OverlayHeaderProps {
+  /** The heading's id, for the overlay's `labelledBy`. */
+  titleId: string;
+  title: ComponentChildren;
+  /** The ✕'s name, one of the boards' (`OVERLAY_CLOSE_LABELS`). */
+  closeLabel: OverlayCloseLabel;
+  onClose: () => void;
+}
+
+/** A content sheet's or side panel's header: the title and ✕ (§3.8, §3.9). */
+export function OverlayHeader({
+  titleId,
+  title,
+  closeLabel,
+  onClose,
+}: OverlayHeaderProps): JSX.Element {
+  return (
+    <div class="overlay-head">
+      <h2 id={titleId} class="overlay-title" tabIndex={-1}>
+        {title}
+      </h2>
+      <button
+        type="button"
+        class="icon-button overlay-close"
+        aria-label={closeLabel}
+        onClick={onClose}
+      >
+        <IconClose />
+      </button>
+    </div>
   );
 }
 

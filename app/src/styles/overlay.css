@@ -1,9 +1,16 @@
 /*
- * The one overlay (R-OVL-1, spec §5, D4, board System-Overlays). A modal
- * is a bottom sheet on phones; from 900 px up it is a 440 px right panel,
- * a centred 440 px dialog or a small menu under its opener. The scrim sits
- * at `--z-scrim`, the panel at `--z-overlay`. Only transform and opacity
- * animate; under reduced motion only opacity does.
+ * The one overlay (#907, spec §3.8 to §3.11). Four placements:
+ *
+ * - sheet (every kind under 900 px): a bottom sheet that hugs its content
+ *   up to 90 % of the viewport, top radius 20, grab `--color-grab`.
+ * - panel (`kind="sheet"` from 900 px): the right side panel,
+ *   `--panel-side` wide, border-left `--color-border-subtle`.
+ * - popover (`kind="menu"` from 900 px): `--popover-width` (320), radius 16,
+ *   `--shadow-lg`, 6 px under its button with the right edges aligned.
+ * - dialog (`kind="dialog"` from 900 px): the centred card, 420 by default.
+ *
+ * The scrim sits at `--z-scrim`, the panel at `--z-overlay`. Only transform
+ * and opacity animate; under reduced motion a 120 ms fade only.
  */
 
 .overlay {
@@ -30,7 +37,7 @@
   overscroll-behavior: contain;
   background: var(--color-surface);
   color: var(--color-text);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-subtle);
   box-shadow: var(--shadow-md);
   outline: none;
 }
@@ -40,9 +47,45 @@
   align-self: center;
   width: 36px;
   height: 4px;
-  margin: var(--space-2) 0 var(--space-1);
+  margin: var(--space-2) 0 var(--space-3);
   border-radius: 2px;
-  background: var(--color-border);
+  background: var(--color-grab);
+}
+
+/*
+ * Opt-in content frame for new consumers (Help, the ⋯ menu, the confirm):
+ * the sheet's 0 16 24 (+ safe area) under the grab, the panel's 16 20, the
+ * dialog's 18 20 20. Older consumers pad themselves and do not use it.
+ */
+.overlay-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 var(--space-4) calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* A content sheet's or panel's header: title 20 px and ✕ (R-SHEET-2). */
+.overlay-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+}
+
+.overlay-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-heading);
+}
+
+.overlay-close {
+  flex: none;
+  margin-right: calc(-1 * var(--space-2));
 }
 
 /* Phone: every kind is a bottom sheet. */
@@ -51,8 +94,8 @@
     right: 0;
     bottom: 0;
     left: 0;
+    height: auto;
     max-height: 90%;
-    padding-bottom: var(--space-4);
     border-width: 1px 0 0;
     border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
     animation: overlay-rise var(--motion-base) var(--ease-out);
@@ -68,19 +111,34 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(440px, 100vw);
+    width: var(--panel-side);
     border-width: 0 0 0 1px;
+    box-shadow: none;
     animation: overlay-slide var(--motion-base) var(--ease-out);
   }
 
+  .overlay--desktop-right .overlay-body {
+    padding: var(--space-4) 20px;
+  }
+
+  /* The one centred dialog (R-DIALOG-1): tidy-up confirm, Columns and the
+     destructive confirmations. Width from `--dialog-width` (AD-Confirm 420,
+     the confirm 400), 70 px from the top as drawn. */
   .overlay--desktop-center .overlay-panel {
-    inset: 0;
-    width: min(440px, calc(100vw - 2 * var(--space-4)));
+    top: 70px;
+    right: 0;
+    left: 0;
+    width: min(var(--dialog-width, 420px), calc(100vw - 2 * var(--space-4)));
     height: fit-content;
-    max-height: 90vh;
-    margin: auto;
+    max-height: calc(100vh - 140px);
+    margin: 0 auto;
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
     animation: overlay-pop var(--motion-base) var(--ease-out);
+  }
+
+  .overlay--desktop-center .overlay-body {
+    padding: 18px 20px 20px;
   }
 
   /* A menu sits under the control that opened it, over a clear scrim. */
@@ -88,15 +146,21 @@
     background: transparent;
   }
 
+  /* The popover (R-POP-1, R-POP-2): 320 wide, fits an 800 px window. */
   .overlay--desktop-anchor .overlay-panel {
     top: var(--overlay-anchor-top, 25vh);
     left: var(--overlay-anchor-left, 50%);
-    width: min(280px, 88vw);
-    max-height: 70vh;
-    padding: var(--space-2);
-    background: var(--color-sidebar);
+    width: var(--popover-width);
+    max-height: calc(100vh - 16px);
+    padding: 6px 14px;
+    background: var(--color-surface-overlay);
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
     animation: overlay-drop var(--motion-base) var(--ease-out);
+  }
+
+  .overlay--desktop-anchor .overlay-body {
+    padding: 0;
   }
 }
 
@@ -158,12 +222,13 @@
   }
 }
 
-/* Reduced motion: nothing moves, the overlay only fades in. */
+/* Reduced motion: nothing moves, the overlay only fades in, 120 ms. */
 @media (prefers-reduced-motion: reduce) {
+  .overlay-scrim,
   .overlay-panel,
   .overlay--desktop-right .overlay-panel,
   .overlay--desktop-center .overlay-panel,
   .overlay--desktop-anchor .overlay-panel {
-    animation: overlay-fade var(--motion-base) linear;
+    animation: overlay-fade var(--motion-fast) linear;
   }
 }
