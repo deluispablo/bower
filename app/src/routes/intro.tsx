@@ -275,7 +275,6 @@ export function Intro(): JSX.Element {
     window.history.replaceState(window.history.state, '', urlForPage(page));
     scrollToPage(page, false);
     // Once, on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Focus follows Next, Back, a swipe and browser back (never the first load).
@@ -331,7 +330,6 @@ export function Intro(): JSX.Element {
       track.removeEventListener('scroll', onScroll);
     };
     // goTo only reads refs and stable setters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function leave(): void {

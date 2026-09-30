@@ -35,7 +35,9 @@ test.describe('the intro, five pages (#796)', () => {
   }) => {
     await page.goto('/welcome');
     await expect(page).toHaveURL(/\/welcome\?page=1$/);
-    await expect(page.getByRole('heading', { name: HEADINGS[0] })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: HEADINGS[0] }),
+    ).toBeVisible();
 
     await next(page).click();
     await expect(page).toHaveURL(/page=2$/);
@@ -47,7 +49,9 @@ test.describe('the intro, five pages (#796)', () => {
     await page.goBack();
     await expect(page).toHaveURL(/page=2$/);
     await expect(page.locator('.intro-status')).toHaveText('2 of 5');
-    await expect(page.getByRole('heading', { name: HEADINGS[1] })).toBeFocused();
+    await expect(
+      page.getByRole('heading', { name: HEADINGS[1] }),
+    ).toBeFocused();
 
     // A reload resumes.
     await page.reload();
@@ -104,7 +108,9 @@ test.describe('the intro, five pages (#796)', () => {
     await expect(back(page)).toHaveCount(0);
 
     await next(page).click();
-    await expect(page.getByRole('heading', { name: HEADINGS[1] })).toBeFocused();
+    await expect(
+      page.getByRole('heading', { name: HEADINGS[1] }),
+    ).toBeFocused();
     await expect(back(page)).toBeVisible();
     await expect(page.locator('.intro-status')).toHaveText('2 of 5');
 
@@ -121,7 +127,9 @@ test.describe('the intro, five pages (#796)', () => {
     }
 
     await back(page).click();
-    await expect(page.getByRole('heading', { name: HEADINGS[0] })).toBeFocused();
+    await expect(
+      page.getByRole('heading', { name: HEADINGS[0] }),
+    ).toBeFocused();
   });
 
   test('the last page offers sign-in and the way to Learn Bower', async ({

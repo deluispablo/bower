@@ -73,7 +73,7 @@ export const INTRO_PAGES: IntroPages = [
   },
   {
     heading: 'Only your Drive',
-    body: "Your notes live in a folder you own, readable in Drive and Obsidian. A tidy-up works on a temporary copy that is deleted when it ends; Claude, the AI behind Bower, reads your files to write Bower’s notes.",
+    body: 'Your notes live in a folder you own, readable in Drive and Obsidian. A tidy-up works on a temporary copy that is deleted when it ends; Claude, the AI behind Bower, reads your files to write Bower’s notes.',
   },
 ];
 
