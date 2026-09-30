@@ -182,7 +182,7 @@ const projectFile = {
 let host: HTMLElement;
 
 async function mount(notes: DriveFile[] = [projectFile]): Promise<void> {
-  await act(async () => {
+  await act(() => {
     render(
       h(ProjectFront, {
         folderName: 'Job search',
@@ -240,7 +240,7 @@ describe('ProjectFront', () => {
     });
     await mount();
     const box = host.querySelector<HTMLInputElement>('input[type="checkbox"]');
-    await act(async () => {
+    await act(() => {
       box?.click();
     });
     expect(vault.save).toHaveBeenCalledWith('NOTE_ID', ticked, {
@@ -258,7 +258,7 @@ describe('ProjectFront', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     await mount();
     const box = host.querySelector<HTMLInputElement>('input[type="checkbox"]');
-    await act(async () => {
+    await act(() => {
       box?.click();
     });
     await act(async () => {

@@ -259,10 +259,7 @@ const MONTHS: readonly string[] = [
 ];
 
 /** "updated today", else "updated 26 Sep". */
-export function updatedLine(
-  modifiedTime: string | null,
-  now: number,
-): string {
+export function updatedLine(modifiedTime: string | null, now: number): string {
   if (modifiedTime === null) return '';
   const then = new Date(modifiedTime);
   if (Number.isNaN(then.getTime())) return '';
@@ -310,7 +307,8 @@ export function ProjectFront({
 }: ProjectFrontProps): JSX.Element | null {
   const { openNoteForEdit, saveEditedNote } = useVault();
   const file = projectNoteOf(folderName, notes);
-  const fileKey = file === undefined ? '' : `${file.id}:${file.modifiedTime ?? ''}`;
+  const fileKey =
+    file === undefined ? '' : `${file.id}:${file.modifiedTime ?? ''}`;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [scored, setScored] = useState<CompareNote[]>([]);
   // Ticks the person made that are still saving, by line.
