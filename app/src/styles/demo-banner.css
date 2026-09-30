@@ -33,7 +33,9 @@
 
 .demo-banner-link {
   flex-shrink: 0;
-  margin-left: auto;
+  /* A 44 px hit area without a taller banner (#899). */
+  margin: -12px -8px -12px auto;
+  padding: 12px 8px;
   color: var(--demo-banner-link);
   font-weight: 600;
   white-space: nowrap;

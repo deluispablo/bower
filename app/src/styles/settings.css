@@ -64,6 +64,12 @@
   font-size: var(--text-sm);
 }
 
+.settings-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .settings-account-links {
   display: flex;
   flex-direction: column;
@@ -75,6 +81,7 @@
 .settings-account-links a {
   display: inline-flex;
   align-items: center;
+  min-height: 44px;
   gap: var(--space-1);
   color: var(--color-link);
 }

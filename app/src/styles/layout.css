@@ -296,16 +296,27 @@ button.page-bare-back {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin: 0 6px;
-  border-radius: var(--radius-full);
-  background: var(--color-brand-tint);
+  position: relative;
+  /* A 44 px hit area around the 32 px disc (#899). */
+  width: 44px;
+  height: 44px;
   color: var(--color-link);
   font-family: var(--font-display);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   text-decoration: none;
+}
+
+.topbar-avatar::before {
+  position: absolute;
+  inset: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand-tint);
+  content: '';
+}
+
+.topbar-avatar > span {
+  position: relative;
 }
 
 .topbar-help {
