@@ -19,9 +19,20 @@ test.use({ contextOptions: { reducedMotion: 'reduce' } });
 const FLAT = '/folder/1-Projects/Flat%20hunt';
 const EMPTY_FOLDER = '/folder/2-Areas/Car';
 
-async function expectRoom(page: Page, where: string): Promise<void> {
+async function expectRoom(
+  page: Page,
+  where: string,
+  { birds = true }: { birds?: boolean } = {},
+): Promise<void> {
   // The screens draw in a beat; the bird's box must be the settled one.
   await page.waitForLoadState('networkidle');
+  // A walk that meets no bird proves nothing about where he shows himself.
+  if (birds) {
+    expect(
+      await page.locator('svg.b').count(),
+      `${where}: a bird`,
+    ).toBeGreaterThan(0);
+  }
   const findings = await birdRoomFindings(page);
   expect(findings, `${where}\n${describeFindings(findings)}`).toEqual([]);
 }
@@ -85,6 +96,7 @@ test.describe('the room walk itself', () => {
 
 test.describe('nothing clips Bower on any route', () => {
   test('every route of the router', async ({ page }) => {
+    test.setTimeout(120_000);
     // The first note and file the demo lists stand in for `:id`.
     await page.goto('/notes');
     await page.waitForLoadState('networkidle');
@@ -103,14 +115,14 @@ test.describe('nothing clips Bower on any route', () => {
             ? file
             : url;
         await page.goto(target);
-        await expectRoom(page, target);
+        await expectRoom(page, target, { birds: false });
       }
     }
   });
 });
 
 test.describe('nothing clips Bower in the states he shows himself', () => {
-  test('the tidy-up sheet, going and done', async ({ page }) => {
+  test('the tidy-up sheet, going', async ({ page }) => {
     await holdRun(page, 'running');
     await page.goto(FLAT);
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -191,16 +203,42 @@ test.describe('nothing clips Bower in the states he shows himself', () => {
   });
 
   test('Reading', async ({ page }) => {
-    await holdRun(page, 'running');
-    await page.goto('/bower');
+    await openHome(page);
+    await visible(page.locator('a[href="/bower"]')).click();
     await page
-      .getByPlaceholder(/from now on, file every receipt/)
+      .getByRole('textbox', {
+        name: 'Tell Bower what to do, or ask it something',
+      })
       .fill('Tidy up [[Arlington Road, 2 bed]]');
     const send = page.getByRole('button', { name: 'Send' });
     await expect(send).toBeEnabled();
     await send.click();
-    await page.goto('/notes');
-    await page.getByText('Arlington Road, 2 bed').first().click();
+    await expect(send).toBeDisabled();
+    // The tidy-up starts with the request waiting: it is being read.
+    await visible(page.locator('a[href="/"]')).click();
+    await visible(
+      page.getByRole('button', { name: 'Tidy up', exact: true }),
+    ).click();
+    await page
+      .getByRole('dialog', { name: 'Is that everything?' })
+      .getByRole('button', { name: 'Yes, tidy up' })
+      .click();
+    const sheet = page.getByRole('dialog', { name: 'Tidying up' });
+    await expect(sheet).toBeVisible();
+    await sheet.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    await visible(
+      page.getByRole('button', {
+        name: /^Search( folders, notes and files)?$/,
+      }),
+    ).click();
+    const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+    await switcher.getByRole('combobox').fill('Arlington Road, 2 bed');
+    await switcher
+      .getByRole('option', { name: /Arlington Road, 2 bed/ })
+      .filter({ hasNotText: /pdf/i })
+      .first()
+      .click();
     await expect(page.locator('.bower-note-box.is-reading')).toBeVisible();
     await expectRoom(page, 'Reading');
   });

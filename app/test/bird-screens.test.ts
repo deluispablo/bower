@@ -24,7 +24,8 @@ function routerPatterns(): string[] {
     } else {
       const name = match[2] ?? '';
       const value = CONSTANTS[name];
-      if (value === undefined) throw new Error(`Unknown route constant ${name}`);
+      if (value === undefined)
+        throw new Error(`Unknown route constant ${name}`);
       patterns.push(value);
     }
   }
