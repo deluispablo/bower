@@ -14,6 +14,7 @@ import {
   ruleChange,
   takeCheckSection,
   updatedWhen,
+  verdictRow,
   whoFor,
 } from '../src/components/bower-note-box.js';
 import type { RequestRow } from '../src/bower-tab.js';
@@ -330,5 +331,35 @@ describe('Bower reads inside the note box (issue #784, R-BIRD-10)', () => {
     mountReading([row('done')]);
     expect(host.querySelector('[role="status"]')).toBeNull();
     expect(host.querySelector('.key-facts')).not.toBeNull();
+  });
+});
+
+describe('the verdict row (issue #792, R-VERDICT-1, R-VERDICT-4)', () => {
+  it('needs a score (or fit) and a verdict, both from the frontmatter', () => {
+    expect(verdictRow({ score: 79, verdict: 'Apply first' })).toEqual({
+      score: '79',
+      tone: 'good',
+      verdict: 'Apply first',
+    });
+    expect(verdictRow({ fit: '55', verdict: 'Worth a look' })?.tone).toBe(
+      'fair',
+    );
+    expect(verdictRow({ score: 79 })).toBeNull();
+    expect(verdictRow({ verdict: 'Skip' })).toBeNull();
+    expect(verdictRow({ score: 'high', verdict: 'Skip' })).toBeNull();
+  });
+
+  it('shows the row and does not repeat the score as a key fact tile', () => {
+    mount({ ...OFFER, verdict: 'Apply first' });
+    const row = host.querySelector('.bower-note-box-verdict');
+    expect(row?.textContent).toBe('79Apply first');
+    expect(host.querySelector('.key-facts .key-fact-pill')).toBeNull();
+    expect(host.querySelector('.key-facts')?.textContent).toContain('72,000');
+  });
+
+  it('keeps the score tile and shows no row without a verdict', () => {
+    mount(OFFER);
+    expect(host.querySelector('.bower-note-box-verdict')).toBeNull();
+    expect(host.querySelector('.key-facts .key-fact-pill')).not.toBeNull();
   });
 });

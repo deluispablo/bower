@@ -13,7 +13,7 @@ import type { JSX } from 'preact';
 
 import { requestsForNote } from '../bower-tab.js';
 import type { RequestRow } from '../bower-tab.js';
-import { keyFactsFor, kindById } from '../kinds.js';
+import { keyFactsFor, kindById, scoreTone } from '../kinds.js';
 import type { Kind } from '../kinds.js';
 import { noteMetaFrom } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
@@ -162,6 +162,37 @@ export function updatedWhen(value: string, now: Date = new Date()): string {
   if (match[0] === localDay(now)) return 'today';
   const month = MONTHS[Number(match[2]) - 1];
   return month === undefined ? value : `${String(Number(match[3]))} ${month}`;
+}
+
+export interface VerdictRow {
+  /** The score as a whole number, 0 to 100. */
+  score: string;
+  tone: 'good' | 'fair' | 'low';
+  /** "Apply first", "Worth a look", "Skip": as the agent wrote it. */
+  verdict: string;
+}
+
+/**
+ * The decision row (R-VERDICT-1): only when the frontmatter has a numeric
+ * `score` (or `fit`) and a `verdict`. The box text is never parsed; the
+ * agent's "why" line stays in the Summary rows.
+ */
+export function verdictRow(fields: Record<string, unknown>): VerdictRow | null {
+  const verdict =
+    typeof fields.verdict === 'string' ? fields.verdict.trim() : '';
+  if (verdict === '') return null;
+  for (const key of ['score', 'fit']) {
+    const raw = fields[key];
+    const n =
+      typeof raw === 'number'
+        ? raw
+        : typeof raw === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(raw)
+          ? Number(raw)
+          : Number.NaN;
+    if (!Number.isFinite(n) || n < 0 || n > 100) continue;
+    return { score: String(Math.round(n)), tone: scoreTone(n), verdict };
+  }
+  return null;
 }
 
 function oneLine(value: unknown): string {
@@ -354,12 +385,19 @@ export function BowerNoteBox({
 
   const meta = noteMetaFrom(frontmatter);
   const kind = meta.kind === undefined ? undefined : kindById(meta.kind);
+  const verdict = verdictRow(meta.fields);
+  // R-VERDICT-4: the verdict row shows the score, so no tile repeats it.
   const facts =
-    kind === undefined ? [] : keyFactsFor(kind, meta.fields, { score: true });
+    kind === undefined
+      ? []
+      : keyFactsFor(kind, meta.fields, { score: verdict === null });
   const parts = boxParts(html);
   const check = checkItems(kind, meta, checkSection);
   const change = ruleChange(meta.fields);
-  const score = facts.find((fact) => fact.tone !== undefined);
+  const score =
+    verdict === null
+      ? facts.find((fact) => fact.tone !== undefined)
+      : { value: verdict.score, tone: verdict.tone };
   const others = facts.filter((fact) => fact.tone === undefined);
 
   const toggle = (): void => {
@@ -450,6 +488,19 @@ export function BowerNoteBox({
       )}
 
       <div id={bodyId} class="bower-note-box-body" hidden={folded}>
+        {verdict !== null && (
+          <p class="bower-note-box-verdict">
+            <span
+              class={`key-fact-pill key-fact-pill-${verdict.tone}`}
+              role="img"
+              aria-label={scoreName(verdict.score)}
+            >
+              {verdict.score}
+            </span>
+            <strong>{verdict.verdict}</strong>
+          </p>
+        )}
+
         {change !== null && (
           <div class="bower-note-box-updated">
             <p class="bower-note-box-updated-line">

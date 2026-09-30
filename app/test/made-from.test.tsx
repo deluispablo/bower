@@ -5,6 +5,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  applyLinkOf,
   foldedLabel,
   MadeFrom,
   madeFromSources,
@@ -148,5 +149,49 @@ describe('MadeFrom (R-NOTE-7)', () => {
     expect(missing?.textContent).toContain('Nowhere.pdf');
     expect(missing?.textContent).toContain('not found');
     expect(root.querySelector('a.made-from-source')).toBeNull();
+  });
+});
+
+describe('Apply (issue #792, R-VERDICT-2)', () => {
+  it('reads only a web address from apply_link', () => {
+    expect(applyLinkOf(' https://jobs.example.com/apply ')).toBe(
+      'https://jobs.example.com/apply',
+    );
+    expect(applyLinkOf('mailto:you@example.com')).toBeNull();
+    expect(applyLinkOf('')).toBeNull();
+    expect(applyLinkOf(42)).toBeNull();
+  });
+
+  it('shows one Apply button under Made from, even when it is folded', async () => {
+    localStorage.setItem(SOURCES_FOLDED_KEY, 'true');
+    const root = document.createElement('div');
+    document.body.append(root);
+    const sources = madeFromSources({
+      note,
+      original: 'CV 2026.docx',
+      source: 'https://jobs.example.com/a',
+      kind: 'job-offer',
+      lookup,
+    });
+    await act(() => {
+      render(
+        h(MadeFrom, { sources, apply: 'https://jobs.example.com/apply' }),
+        root,
+      );
+    });
+    const buttons =
+      root.querySelectorAll<HTMLAnchorElement>('.made-from-apply');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.textContent).toBe('Apply');
+    expect(buttons[0]?.target).toBe('_blank');
+    expect(buttons[0]?.rel).toBe('noopener');
+    await act(() => {
+      render(h(MadeFrom, { sources }), root);
+    });
+    expect(root.querySelector('.made-from-apply')).toBeNull();
+    await act(() => {
+      render(null, root);
+    });
+    root.remove();
   });
 });

@@ -149,3 +149,32 @@ describe('Details notes and bookkeeping (issue #705)', () => {
     expect(text).not.toContain('2026-09-29');
   });
 });
+
+describe('the apply link (issue #792)', () => {
+  const FOUND_OFFER = kindById('job-offer');
+  if (FOUND_OFFER === undefined) throw new Error('job-offer kind is missing');
+  const OFFER: Kind = FOUND_OFFER;
+
+  function rows(apply: unknown): string {
+    render(
+      h(Details, {
+        kind: OFFER,
+        meta: noteMetaFrom({
+          kind: 'job-offer',
+          role: 'Data Lead',
+          apply_link: apply,
+        }),
+      }),
+      host,
+    );
+    return host.textContent ?? '';
+  }
+
+  it('is left to the Apply button when it is a web address', () => {
+    expect(rows('https://jobs.example.com/apply')).not.toContain('Apply link');
+  });
+
+  it('still shows as a row when it is not a web address', () => {
+    expect(rows('ask the recruiter')).toContain('Apply link');
+  });
+});

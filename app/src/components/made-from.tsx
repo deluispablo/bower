@@ -14,7 +14,12 @@ import type { JSX } from 'preact';
 import { originalDisplayName, resolveOriginal } from '../companion.js';
 import type { OriginalLookup } from '../companion.js';
 import type { DriveFile } from '../drive.js';
-import { IconChevronRight, IconFile, IconNote } from './icons.js';
+import {
+  IconChevronRight,
+  IconExternalLink,
+  IconFile,
+  IconNote,
+} from './icons.js';
 
 import '../styles/made-from.css';
 
@@ -200,11 +205,54 @@ function SourceButton({ source }: { source: MadeFromSource }): JSX.Element {
   );
 }
 
-export interface MadeFromProps {
-  sources: readonly MadeFromSource[];
+/**
+ * The job offer's `apply_link` (R-VERDICT-2) as a web address, or `null` when
+ * it is empty or not http(s).
+ */
+export function applyLinkOf(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (!/^https?:\/\//i.test(text)) return null;
+  try {
+    return new URL(text).href;
+  } catch {
+    return null;
+  }
 }
 
-export function MadeFrom({ sources }: MadeFromProps): JSX.Element | null {
+/** The Apply button under "Made from" (R-VERDICT-2). */
+function ApplyButton({ href }: { href: string }): JSX.Element {
+  return (
+    <a class="made-from-apply" href={href} target="_blank" rel="noopener">
+      <span>Apply</span>
+      <IconExternalLink />
+    </a>
+  );
+}
+
+export interface MadeFromProps {
+  sources: readonly MadeFromSource[];
+  /** The note's `apply_link`, from `applyLinkOf`. */
+  apply?: string | null;
+}
+
+export function MadeFrom({
+  sources,
+  apply = null,
+}: MadeFromProps): JSX.Element | null {
+  return (
+    <>
+      <MadeFromSources sources={sources} />
+      {apply !== null && (
+        <div class="made-from made-from-apply-row">
+          <ApplyButton href={apply} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function MadeFromSources({ sources }: MadeFromProps): JSX.Element | null {
   const listId = useId();
   const [folded, setFolded] = useState(readSourcesFolded);
   if (sources.length === 0) return null;
