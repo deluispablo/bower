@@ -507,7 +507,9 @@ describe('displayName, one name per item (#905, R-API-8, R-META-5)', () => {
   it('drops the prefix of a root, from a name or a path', () => {
     expect(displayName('2-Areas')).toBe('Areas');
     expect(displayName('0-Inbox')).toBe('Inbox');
-    expect(displayName('2-Areas/Visa_&_Immigration')).toBe('Visa & Immigration');
+    expect(displayName('2-Areas/Visa_&_Immigration')).toBe(
+      'Visa & Immigration',
+    );
   });
   it('drops the extension and underscores unless asked to keep it', () => {
     expect(displayName('Passport_copy.pdf')).toBe('Passport copy');

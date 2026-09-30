@@ -61,13 +61,20 @@ describe('shared titles', () => {
 
   it('names folders and files without prefix or extension', () => {
     const folder = { ...note, id: 'f', name: '2-Areas', mimeType: FOLDER_MIME };
-    const pdf = { ...note, id: 'p', name: 'Passport copy.pdf', mimeType: 'application/pdf' };
+    const pdf = {
+      ...note,
+      id: 'p',
+      name: 'Passport copy.pdf',
+      mimeType: 'application/pdf',
+    };
     expect(titleFor(folder)).toBe('Areas');
     expect(titleFor(pdf)).toBe('Passport copy');
   });
 
   it('forgets every title when a run completes, and says so', async () => {
-    rememberTitles(new Map([[`${note.id}:${note.modifiedTime ?? ''}`, 'Old title']]));
+    rememberTitles(
+      new Map([[`${note.id}:${note.modifiedTime ?? ''}`, 'Old title']]),
+    );
     const listener = vi.fn();
     const stop = onTitlesForgotten(listener);
     await invalidateOnRunComplete();

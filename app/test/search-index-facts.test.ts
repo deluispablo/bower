@@ -33,9 +33,24 @@ function entry(
 const vault = buildVaultIndex([
   entry('p', '1-Projects', FOLDER_MIME, '2026-01-01T00:00:00Z'),
   entry('h', '1-Projects/Housing', FOLDER_MIME, '2026-01-01T00:00:00Z'),
-  entry('m', '1-Projects/Housing/Moonee Ponds', FOLDER_MIME, '2026-01-01T00:00:00Z'),
-  entry('n', '1-Projects/Housing/Moonee Ponds/Buckley St.md', 'text/markdown', '2026-09-30T06:54:00Z'),
-  entry('d', '1-Projects/Housing/Moonee Ponds/Lease.pdf', 'application/pdf', '2026-09-29T10:00:00Z'),
+  entry(
+    'm',
+    '1-Projects/Housing/Moonee Ponds',
+    FOLDER_MIME,
+    '2026-01-01T00:00:00Z',
+  ),
+  entry(
+    'n',
+    '1-Projects/Housing/Moonee Ponds/Buckley St.md',
+    'text/markdown',
+    '2026-09-30T06:54:00Z',
+  ),
+  entry(
+    'd',
+    '1-Projects/Housing/Moonee Ponds/Lease.pdf',
+    'application/pdf',
+    '2026-09-29T10:00:00Z',
+  ),
   entry('a', '2-Areas', FOLDER_MIME, '2026-03-01T00:00:00Z'),
 ]);
 

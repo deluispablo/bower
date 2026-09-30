@@ -248,10 +248,10 @@ export function metaLine(item: MetaItem, context: MetaContext): MetaLine {
     if (view === 'row') return line(folderTail(item, now), null);
     const rootName =
       item.rootName === undefined ? undefined : displayName(item.rootName);
-    return line(
-      [rootName, item.lifecycle, ...folderTail(item, now)],
-      { at: 0, root },
-    );
+    return line([rootName, item.lifecycle, ...folderTail(item, now)], {
+      at: 0,
+      root,
+    });
   }
   if (view === 'row') return line([kind], null);
   const size = item.size === undefined ? undefined : sizeWords(item.size);

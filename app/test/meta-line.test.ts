@@ -54,15 +54,50 @@ describe('sizeWords', () => {
 
 describe('kindLabel', () => {
   const cases: [string, Parameters<typeof kindLabel>[0], string][] = [
-    ['Bower note', { name: 'Moonee Ponds.md', mimeType: MD, bowerWritten: true }, 'Bower note'],
-    ['Bower answer', { name: 'Answer.md', mimeType: MD, bowerWritten: true, answer: true }, 'Bower answer'],
+    [
+      'Bower note',
+      { name: 'Moonee Ponds.md', mimeType: MD, bowerWritten: true },
+      'Bower note',
+    ],
+    [
+      'Bower answer',
+      { name: 'Answer.md', mimeType: MD, bowerWritten: true, answer: true },
+      'Bower answer',
+    ],
     ['your note', { name: 'Ideas.md', mimeType: MD }, 'Note'],
     ['PDF', { name: 'Passport copy.pdf', mimeType: PDF }, 'PDF'],
-    ['Word', { name: 'CV Australia.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }, 'Word'],
-    ['Google Doc', { name: 'Cover Letter - Alex', mimeType: 'application/vnd.google-apps.document' }, 'Word'],
-    ['Spreadsheet', { name: 'Budget.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, 'Spreadsheet'],
+    [
+      'Word',
+      {
+        name: 'CV Australia.docx',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      },
+      'Word',
+    ],
+    [
+      'Google Doc',
+      {
+        name: 'Cover Letter - Alex',
+        mimeType: 'application/vnd.google-apps.document',
+      },
+      'Word',
+    ],
+    [
+      'Spreadsheet',
+      {
+        name: 'Budget.xlsx',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+      'Spreadsheet',
+    ],
     ['Photo', { name: 'Balcony.jpg', mimeType: 'image/jpeg' }, 'Photo'],
-    ['Link', { name: 'Link - example.com 2026-09-30 0654.md', mimeType: MD }, 'Link'],
+    [
+      'Link',
+      { name: 'Link - example.com 2026-09-30 0654.md', mimeType: MD },
+      'Link',
+    ],
     ['Folder', { name: 'Listings', mimeType: FOLDER_MIME }, 'Folder'],
     ['fallback', { name: 'archive.zip', mimeType: 'application/zip' }, 'File'],
   ];
@@ -165,7 +200,12 @@ describe('metaLine', () => {
 
   it('shows only the kind in a one-folder row', () => {
     const meta = metaLine(
-      { name: 'Buckley St.md', mimeType: MD, bowerWritten: true, parentName: 'Moonee Ponds' },
+      {
+        name: 'Buckley St.md',
+        mimeType: MD,
+        bowerWritten: true,
+        parentName: 'Moonee Ponds',
+      },
       { view: 'row', now },
     );
     expect(meta.text).toBe('Bower note');
@@ -182,7 +222,12 @@ describe('metaLine', () => {
 
   it('adds where in a mixed list, with the dot before the parent', () => {
     const meta = metaLine(
-      { name: 'Passport copy.pdf', mimeType: PDF, root: 'areas', parentName: 'Visa & Immigration' },
+      {
+        name: 'Passport copy.pdf',
+        mimeType: PDF,
+        root: 'areas',
+        parentName: 'Visa & Immigration',
+      },
       { view: 'mixed-row', now },
     );
     expect(meta.text).toBe('PDF · Visa & Immigration');

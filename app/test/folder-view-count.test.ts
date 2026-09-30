@@ -17,7 +17,11 @@ import { buildVaultIndex } from '../src/vault-index.js';
 const DIR = '1-Projects/Housing Search Australia/Moonee Ponds';
 const MD = 'text/markdown';
 
-function entry(path: string, mimeType: string, modifiedTime?: string): DriveFile {
+function entry(
+  path: string,
+  mimeType: string,
+  modifiedTime?: string,
+): DriveFile {
   return {
     id: `id-${path}`,
     name: path.slice(path.lastIndexOf('/') + 1),
@@ -46,7 +50,11 @@ const files: DriveFile[] = [
   entry(`${DIR}/Listings`, FOLDER_MIME),
   entry(`${DIR}/Listings/8-128 Park St.md`, MD, '2026-09-28T08:00:00Z'),
   ...STREETS.map((street, i) =>
-    entry(`${DIR}/${street}, Moonee Ponds.md`, MD, `2026-09-30T06:${50 - i}:00Z`),
+    entry(
+      `${DIR}/${street}, Moonee Ponds.md`,
+      MD,
+      `2026-09-30T06:${50 - i}:00Z`,
+    ),
   ),
 ];
 
@@ -54,7 +62,10 @@ describe('folderCount', () => {
   const index = buildVaultIndex(files);
   const contents = folderContents(index, DIR);
   if (contents === null) throw new Error('fixture');
-  const notes = files.filter((file) => file.path.startsWith(`${DIR}/`) && !file.path.includes('/Listings'));
+  const notes = files.filter(
+    (file) =>
+      file.path.startsWith(`${DIR}/`) && !file.path.includes('/Listings'),
+  );
   const metas = new Map(
     notes.map((note) => [note.id, noteMetaFrom({ by: 'bower' })] as const),
   );
@@ -84,7 +95,9 @@ describe('siblings', () => {
   const tree = buildTree(buildVaultIndex(files), 'modified');
 
   it('lists the folder’s things in tree order, subfolders left out', () => {
-    const item = files.find((file) => file.name === '8-128 Park St, Moonee Ponds.md');
+    const item = files.find(
+      (file) => file.name === '8-128 Park St, Moonee Ponds.md',
+    );
     if (item === undefined) throw new Error('fixture');
     const names = siblings(item, tree).map((file) => file.name);
     const inTree = tree.folders[0]?.folders[0]?.folders[0]?.items.map(

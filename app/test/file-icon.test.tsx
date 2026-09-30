@@ -12,7 +12,10 @@ import {
   fileIconChoice,
   fileIconLabel,
 } from '../src/components/file-icon.js';
-import type { FileIconItem, FileIconSize } from '../src/components/file-icon.js';
+import type {
+  FileIconItem,
+  FileIconSize,
+} from '../src/components/file-icon.js';
 import { MARK_LETTER_PX } from '../src/components/folder-mark.js';
 import { FOLDER_MIME } from '../src/drive.js';
 
@@ -40,8 +43,16 @@ const subfolder: FileIconItem = {
   mimeType: FOLDER_MIME,
   path: '1-Projects/Housing/Moonee Ponds/Listings',
 };
-const areas: FileIconItem = { name: '2-Areas', mimeType: FOLDER_MIME, path: '2-Areas' };
-const answers: FileIconItem = { name: 'Answers', mimeType: FOLDER_MIME, path: 'Answers' };
+const areas: FileIconItem = {
+  name: '2-Areas',
+  mimeType: FOLDER_MIME,
+  path: '2-Areas',
+};
+const answers: FileIconItem = {
+  name: 'Answers',
+  mimeType: FOLDER_MIME,
+  path: 'Answers',
+};
 const clipping: FileIconItem = {
   name: 'Article.md',
   mimeType: MD,
@@ -50,24 +61,50 @@ const clipping: FileIconItem = {
 
 describe('fileIconChoice', () => {
   it('draws the bird for what Bower wrote', () => {
-    expect(fileIconChoice(bowerNote)).toEqual({ mark: 'bird', kind: 'bower-note', root: 'projects' });
+    expect(fileIconChoice(bowerNote)).toEqual({
+      mark: 'bird',
+      kind: 'bower-note',
+      root: 'projects',
+    });
   });
   it('tints an original’s glyph in its root colour', () => {
-    expect(fileIconChoice(yourNote)).toEqual({ mark: 'glyph', kind: 'note', root: 'projects' });
-    expect(fileIconChoice(inboxPdf)).toEqual({ mark: 'glyph', kind: 'pdf', root: 'inbox' });
+    expect(fileIconChoice(yourNote)).toEqual({
+      mark: 'glyph',
+      kind: 'note',
+      root: 'projects',
+    });
+    expect(fileIconChoice(inboxPdf)).toEqual({
+      mark: 'glyph',
+      kind: 'pdf',
+      root: 'inbox',
+    });
   });
   it('outlines a subfolder in its root colour', () => {
-    expect(fileIconChoice(subfolder)).toEqual({ mark: 'outline', kind: 'folder', root: 'projects' });
+    expect(fileIconChoice(subfolder)).toEqual({
+      mark: 'outline',
+      kind: 'folder',
+      root: 'projects',
+    });
   });
   it('draws a root as its disc', () => {
-    expect(fileIconChoice(areas)).toEqual({ mark: 'disc', kind: 'folder', root: 'areas' });
+    expect(fileIconChoice(areas)).toEqual({
+      mark: 'disc',
+      kind: 'folder',
+      root: 'areas',
+    });
   });
   it('keeps Answers and Clippings muted', () => {
-    expect(fileIconChoice(answers)).toEqual({ mark: 'outline', kind: 'folder', root: null });
+    expect(fileIconChoice(answers)).toEqual({
+      mark: 'outline',
+      kind: 'folder',
+      root: null,
+    });
     expect(fileIconChoice(clipping).root).toBeNull();
   });
   it('names the kind and the root', () => {
-    expect(fileIconLabel({ ...inboxPdf, path: '2-Areas/Visa/Passport copy.pdf' })).toBe('PDF in Areas');
+    expect(
+      fileIconLabel({ ...inboxPdf, path: '2-Areas/Visa/Passport copy.pdf' }),
+    ).toBe('PDF in Areas');
     expect(fileIconLabel(clipping)).toBe('Note');
   });
 });

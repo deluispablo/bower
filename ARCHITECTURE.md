@@ -134,6 +134,10 @@ Runs, piles, uploads, recovery and Bower on screen. Each module's own header com
 | `app/src/bird-presence.ts` | The presence store: a tiny external store that counts the birds on screen. `Bird` registers itself on mount when it is animated, at least 40 px and not the perch; the perch shows only while the count is 0; birds inside an overlay pass `overlay` so the others go still. `usePerchVisible()` reads it. Tests call `resetBirdPresence()`. | `Bird`, the perch, the run chip |
 | `app/src/history.ts` | Parses and writes the `## History` bullets (`- 29 Sep · Status new → done, by you`) of a note; the runner and the rulebook write the same shape ("by Bower", "(your rule)"). | the note screen, made-from |
 
+### One source for names, kinds, dates and icons (#905)
+
+`app/src/meta-line.ts` (`metaLine`, `kindLabel`, `shortDate`) is the only source of kind words, dates and meta lines, with `displayName`, `folderCount`/`siblings`, `filedBy` and `titleFor` beside it; `components/file-icon.tsx` (`FileIcon`) is the only item icon. Screens import these instead of deriving their own.
+
 ## v5 data flows
 
 - **A run's result.** The runner writes `.bower/last-run.json` and reports to the Worker at each phase change (at most four running reports) and once at the end. The report carries `processed` and `items` (with `to`), `created`, `updated` (each with a one-line `what`, cut at 120), `left`, `setAside`, on a done run `disagree` (at most 5) and `next` (at most 3), and while running `phase`, `total`, `done` and `phaseAt`. The Worker caps the sum of `processed`, `created`, `updated`, `left` and `setAside` at 400 entries (each array is cut to 200 first). `run-outcome.ts` turns either source into a `RunOutcome`; every screen asks `runSentence` for its words.

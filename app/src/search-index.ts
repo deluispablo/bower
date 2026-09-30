@@ -190,8 +190,7 @@ function factsFor(
   return {
     root: top === '' ? null : paraKindOf(top),
     parent: parentPath === '' ? '' : displayName(parentPath),
-    updated:
-      file.mimeType === FOLDER_MIME && inside > own ? inside : own,
+    updated: file.mimeType === FOLDER_MIME && inside > own ? inside : own,
   };
 }
 
@@ -624,7 +623,15 @@ export function searchVault(
     };
     push(
       results,
-      hitFor(file, doc, tokens, result.terms, hasTextMatch, result.score, facts),
+      hitFor(
+        file,
+        doc,
+        tokens,
+        result.terms,
+        hasTextMatch,
+        result.score,
+        facts,
+      ),
     );
   }
   return results;

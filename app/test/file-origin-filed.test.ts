@@ -13,7 +13,11 @@ const note = { name: 'CV insights.md', mimeType: 'text/markdown' };
 
 describe('filedBy', () => {
   it('says Bower filed an original yesterday, as it is', () => {
-    const facts = filedBy({ ...pdf, filedAt: YESTERDAY, createdTime: EARLIER }, 'filed', NOW);
+    const facts = filedBy(
+      { ...pdf, filedAt: YESTERDAY, createdTime: EARLIER },
+      'filed',
+      NOW,
+    );
     expect(facts).toEqual({
       by: 'bower',
       at: YESTERDAY,
