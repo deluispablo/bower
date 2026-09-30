@@ -16,7 +16,6 @@
  */
 
 import type { JSX } from 'preact';
-import { useLayoutEffect, useRef } from 'preact/hooks';
 
 import { FOLDER_MIME } from '../drive.js';
 import type { ItemKindWord } from '../kinds.js';
@@ -26,7 +25,7 @@ import { paraKindOf } from '../navigation.js';
 import type { ParaKind } from '../navigation.js';
 import { BowerMark } from './bird.js';
 import { FolderMark, markSizeFor } from './folder-mark.js';
-import { IconFolder } from './icons.js';
+import { IconDocument, IconFolder } from './icons.js';
 
 export type FileIconSize = 16 | 20 | 28 | 40;
 
@@ -90,59 +89,6 @@ export function fileIconLabel(item: FileIconItem): string {
   return root === null ? kind : `${kind} in ${ROOT_NAMES[root]}`;
 }
 
-/**
- * The document glyph every original wears, whatever its kind (lead ruling on
- * #929: the boards SE-Query, AD-Confirm and AR-Ask win over spec §3.16; the
- * kind word in the meta line tells the kinds apart).
- * TODO(#904): move to `components/icons.tsx` as `IconDocument` once #904,
- * which owns icons.tsx in this wave, has merged.
- */
-function IconDocument({ size }: { size: FileIconSize }): JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M7 3h7l5 5v13H7z" />
-      <path d="M14 3v5h5M10 13h6M10 17h6" />
-    </svg>
-  );
-}
-
-/**
- * `IconFolder` from icons.tsx at `size`: its `.icon` class fixes 22 px, so
- * the drawn svg gets an inline size once mounted.
- */
-function SizedFolder({ size }: { size: FileIconSize }): JSX.Element {
-  const ref = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    const svg = ref.current?.querySelector('svg');
-    if (svg === null || svg === undefined) return;
-    svg.style.width = `${size}px`;
-    svg.style.height = `${size}px`;
-  }, [size]);
-  return (
-    <span
-      ref={ref}
-      style={{
-        display: 'inline-flex',
-        width: `${size}px`,
-        height: `${size}px`,
-      }}
-    >
-      <IconFolder />
-    </span>
-  );
-}
-
 function tint(root: ParaKind | null): string {
   return root === null
     ? 'var(--color-text-muted)'
@@ -175,7 +121,7 @@ export function FileIcon({
   } else {
     drawing =
       choice.mark === 'outline' ? (
-        <SizedFolder size={size} />
+        <IconFolder size={size} />
       ) : (
         <IconDocument size={size} />
       );

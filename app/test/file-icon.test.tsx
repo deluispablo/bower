@@ -142,7 +142,7 @@ describe('FileIcon', () => {
     const icon = await mount(<FileIcon item={inboxPdf} size={20} box />);
     expect(icon.style.color).toBe('var(--color-para-inbox)');
     expect(icon.style.background).toBe('var(--color-surface)');
-    expect(icon.querySelector('svg')?.getAttribute('width')).toBe('20');
+    expect(icon.querySelector<SVGElement>('svg')?.style.width).toBe('20px');
   });
 
   it('draws the muted outline for Answers', async () => {
