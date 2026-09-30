@@ -1,0 +1,185 @@
+/*
+ * Project front page (issue #794, boards Project-Front-375 and
+ * Project-Front-1280): the project note as a card on top of the folder.
+ * One column on a phone; from 900 px Next steps and Best so far sit side by
+ * side.
+ */
+
+.project-front {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-brand);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.project-front-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.project-front-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-heading);
+  color: var(--color-heading);
+  overflow-wrap: anywhere;
+}
+
+.project-front-pill {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-brand-tint);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.project-front-goal {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.project-front-cols {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 900px) {
+  .project-front-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.project-front-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.project-front-cap {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-muted);
+}
+
+.project-front-steps,
+.project-front-best {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.project-front-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.project-front-step input {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-link);
+}
+
+.project-front-step.is-done span {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+.project-front-best-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-1) 0;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.project-front-score {
+  flex-shrink: 0;
+  min-width: 2.5rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-brand-tint);
+  text-align: center;
+  font-weight: var(--weight-bold);
+}
+
+.project-front-best-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.project-front-best-title {
+  overflow-wrap: anywhere;
+}
+
+.project-front-best-line {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.project-front-link {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--color-link);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.project-front-ref {
+  border-top: 1px solid var(--color-border);
+}
+
+.project-front-ref summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+}
+
+.project-front-ref summary small {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.project-front-ref .markdown {
+  overflow-x: auto;
+}
+
+.project-front-foot {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.project-front-list-heading {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--color-heading);
+}

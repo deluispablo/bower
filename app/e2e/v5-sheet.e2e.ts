@@ -44,8 +44,9 @@ test('the sheet is modal: a tap on the page behind does nothing (R-SHEET-1)', as
   const overflow = await page.evaluate(() => document.body.style.overflow);
   expect(overflow).toBe('hidden');
 
-  // A tap where a row of the page sits lands on the scrim, not on the row.
-  const row = page.locator('.folder-item').first();
+  // A tap where the page sits lands on the scrim, not on it. The folder's
+  // heading is always in view; a project card can push the rows below the fold.
+  const row = page.locator('.folder-head');
   const box = await row.boundingBox();
   expect(box).not.toBeNull();
   const before = page.url();

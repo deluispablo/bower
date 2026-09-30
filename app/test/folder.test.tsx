@@ -83,12 +83,23 @@ vi.mock('../src/components/send-to-bower.js', () => ({
 const pinFolder = vi.fn(() => Promise.resolve());
 const unpinFolder = vi.fn(() => Promise.resolve());
 const getNoteText = (): Promise<string> => Promise.resolve('');
+const openNoteForEdit = (): Promise<{
+  text: string;
+  modifiedTime: string | null;
+}> => Promise.resolve({ text: '', modifiedTime: null });
 
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => {
     index ??= buildVaultIndex(files);
-    return { index, pinFolder, unpinFolder, getNoteText };
+    return {
+      index,
+      pinFolder,
+      unpinFolder,
+      getNoteText,
+      openNoteForEdit,
+      saveEditedNote: vi.fn(),
+    };
   },
 }));
 
