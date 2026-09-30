@@ -2,6 +2,7 @@ import { render } from 'preact';
 
 import { App } from './app.js';
 import './styles/layout.css';
+import './styles/primitives.css';
 import { initTheme } from './theme.js';
 
 initTheme();
