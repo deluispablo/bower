@@ -78,7 +78,7 @@ const CASES: readonly Case[] = [
         .locator('.folder-item', { hasText: 'Arlington Road, window sign' })
         .filter({ hasText: /Photo/ })
         .first()
-        .click();
+        .press('Enter');
       await expect(photo(page)).toBeVisible();
     },
     open: (page) => photo(page).click(),
