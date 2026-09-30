@@ -526,11 +526,8 @@ function FolderBody({
             now={now}
             desktop={desktop}
             waiting={waiting}
-            onPreview={(item) =>
-              onPreview(
-                hubId !== undefined && item?.file.id === hubId ? null : item,
-              )
-            }
+            onPreview={onPreview}
+            noAutoPreview={hubId}
             onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
             onOpen={onNavigate}
             {...(compare !== null && {

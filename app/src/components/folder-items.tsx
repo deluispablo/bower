@@ -617,6 +617,9 @@ export interface FolderItemsProps {
   waiting?: ReadonlyMap<string, PendingRequest>;
   /** Tells the preview pane what is selected (desktop only). */
   onPreview?: (item: PanePreview | null) => void;
+  /** A file id the pane never preselects on its own (the project note that
+   * the front card already shows); choosing its row still previews it. */
+  noAutoPreview?: string | undefined;
   /** Takes the person up a folder (Backspace); absent at a top level. */
   onUp?: (() => void) | undefined;
   /** Opens a row's address (Enter). */
@@ -643,6 +646,18 @@ function entryKey(entry: Entry): string {
 
 /** The list mode of the folder screen (issue #611): origin filter, tool row,
  * date groups and rows, with pairs as one row. */
+/** The row the preview pane shows: the chosen one, else the first row that is
+ * not `skipId` (the automatic pick never lands on the project note). */
+export function pickSelected<T extends { key: string; file: { id: string } }>(
+  rows: readonly T[],
+  selectedKey: string | null,
+  skipId?: string,
+): T | null {
+  const chosen = rows.find((row) => row.key === selectedKey);
+  if (chosen !== undefined) return chosen;
+  return rows.find((row) => row.file.id !== skipId) ?? null;
+}
+
 export function FolderItems({
   contents,
   titles,
@@ -652,6 +667,7 @@ export function FolderItems({
   desktop = false,
   waiting = NO_WAITING,
   onPreview,
+  noAutoPreview,
   onUp,
   onOpen,
 }: FolderItemsProps): JSX.Element {
@@ -914,7 +930,7 @@ export function FolderItems({
   // arrow keys move it, Space and Enter act on it.
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selected = desktop
-    ? (rows.find((row) => row.key === selectedKey) ?? rows[0] ?? null)
+    ? pickSelected(rows, selectedKey, noAutoPreview)
     : null;
   const orderedRows = useMemo(
     () =>

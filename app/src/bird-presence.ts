@@ -84,8 +84,7 @@ export function usePerchVisible(): boolean {
  */
 export function greetingBirdHidden(
   tourOnScreen: boolean,
-  searchOpen: boolean,
   overlayBird: boolean,
 ): boolean {
-  return tourOnScreen || searchOpen || overlayBird;
+  return tourOnScreen || overlayBird;
 }

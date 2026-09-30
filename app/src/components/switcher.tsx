@@ -1263,7 +1263,12 @@ function SwitcherPanel({
               <IconClose />
             </button>
             <div class="switcher-bird" aria-hidden="true">
-              <Bird state={fieldFocused ? 'shiny' : 'peeking'} flip size={72} />
+              <Bird
+                state={fieldFocused ? 'shiny' : 'peeking'}
+                flip
+                size={72}
+                overlay
+              />
             </div>
           </div>
           <div class="switcher-chips" onKeyDown={handleChipsKeyDown}>

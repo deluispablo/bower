@@ -68,21 +68,18 @@ describe('bird presence', () => {
 
 describe('greetingBirdHidden', () => {
   it('keeps the greeting bird when nothing owns the bird', () => {
-    expect(greetingBirdHidden(false, false, false)).toBe(false);
+    expect(greetingBirdHidden(false, false)).toBe(false);
   });
 
   it('unmounts it for the tour, the search peek or an overlay bird', () => {
-    expect(greetingBirdHidden(true, false, false)).toBe(true);
-    expect(greetingBirdHidden(false, true, false)).toBe(true);
-    expect(greetingBirdHidden(false, false, true)).toBe(true);
+    expect(greetingBirdHidden(true, false)).toBe(true);
+    expect(greetingBirdHidden(false, true)).toBe(true);
   });
 
   it('follows the overlay bird registration', () => {
     const off = registerBird(true);
-    expect(greetingBirdHidden(false, false, overlayBirdCount() > 0)).toBe(true);
+    expect(greetingBirdHidden(false, overlayBirdCount() > 0)).toBe(true);
     off();
-    expect(greetingBirdHidden(false, false, overlayBirdCount() > 0)).toBe(
-      false,
-    );
+    expect(greetingBirdHidden(false, overlayBirdCount() > 0)).toBe(false);
   });
 });
