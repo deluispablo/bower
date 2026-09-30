@@ -42,6 +42,11 @@ export interface Prefs {
    * `''` = match the device. Shared with the dictate button.
    */
   dictationLang: string;
+  /**
+   * The notes whose Bower's note box is folded, by path (issue #908,
+   * R-NOTEBOX-2): the fold is remembered per note, open by default.
+   */
+  foldedNotes: string[];
 }
 
 const DEFAULTS: Prefs = {
@@ -53,6 +58,7 @@ const DEFAULTS: Prefs = {
   explorerSort: 'name',
   showAppFiles: false,
   dictationLang: '',
+  foldedNotes: [],
 };
 
 const STORAGE_PREFIX = 'bower:pref:';
@@ -83,6 +89,7 @@ const PER_USER_PREFS: ReadonlyArray<Exclude<keyof Prefs, 'theme'>> = [
   'explorerSort',
   'showAppFiles',
   'dictationLang',
+  'foldedNotes',
 ];
 
 /** Set once the dictate button has been used; not a `Prefs` key. */

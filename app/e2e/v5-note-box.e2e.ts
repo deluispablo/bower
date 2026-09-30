@@ -27,9 +27,9 @@ test("Bower's note folds to one line and stays folded on the device", async ({
 }) => {
   await openArlington(page);
 
-  const head = page.locator('.bower-note-box-head');
+  const head = page.getByRole('button', { name: "Fold Bower's note" });
   await expect(head).toHaveAttribute('aria-expanded', 'true');
-  const box = await head.boundingBox();
+  const box = await page.locator('.bower-note-box-head').boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
 
   // Open shows everything: summary, key facts once, details, no caption.
@@ -41,10 +41,12 @@ test("Bower's note folds to one line and stays folded on the device", async ({
   await head.click();
   await expect(head).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('.bower-note-box-summary')).toBeHidden();
-  await expect(page.locator('.bower-note-box-line')).toBeVisible();
+  await expect(page.locator('.bower-note-box-line')).toHaveText(
+    /^\d+ points?( · \d+ to check)?$/,
+  );
   expect(
-    await page.evaluate(() => localStorage.getItem('bower:pref:noteFolded')),
-  ).toBe('true');
+    await page.evaluate(() => localStorage.getItem('bower:pref:foldedNotes')),
+  ).toMatch(/^\[".+"\]$/);
 
   // Open it again to leave the device as it was.
   await head.click();

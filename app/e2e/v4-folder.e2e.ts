@@ -92,21 +92,26 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   const pair = page
     .locator('.folder-item', { hasText: 'Arlington Road, 2 bed' })
     .first();
-  await expect(pair).toContainText('note on the listing');
-  await expect(pair.locator('.bower-tag')).toContainText('Bower');
-  await expect(pair.locator('.kind-badge')).toHaveText('PDF');
+  // One row, the kind in words, no kind badge (#908, R-FILEICON-2).
+  await expect(pair.locator('.list-row-meta')).toHaveText('Bower note');
+  await expect(pair.locator('.kind-badge')).toHaveCount(0);
 
   // The phone header shows the mark, the name and the actions (R-FOLD-1);
   // Open in Drive is desktop only.
   await expect(page.locator('.folder-chips')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.locator('.folder-demo-note')).toHaveCount(0);
+  // The kind in words is the row's meta (#908, R-META-1).
   await expect(
-    page.locator('.folder-item', { hasText: 'Flat budget' }),
-  ).toContainText('Spreadsheet (CSV) · copy of your Google Sheet');
+    page
+      .locator('.folder-item', { hasText: 'Flat budget' })
+      .locator('.list-row-meta'),
+  ).toHaveText('Spreadsheet');
   await expect(
-    page.locator('.folder-item', { hasText: 'Notes from the viewing' }),
-  ).toContainText('Note · written by you');
+    page
+      .locator('.folder-item', { hasText: 'Notes from the viewing' })
+      .locator('.list-row-meta'),
+  ).toHaveText('Note');
 
   // The list tip, the board's copy.
   await page.getByRole('button', { name: 'What By Bower means' }).click();
@@ -132,12 +137,13 @@ test('By Bower shows only what Bower wrote, with its key facts (#611)', async ({
   const rows = page.locator('.folder-item');
   await expect(rows.first()).toBeVisible();
   for (const row of await rows.all()) {
-    await expect(row.locator('.bower-tag')).toBeVisible();
+    await expect(row.locator('.file-icon')).toHaveAttribute(
+      'data-mark',
+      'bird',
+    );
   }
-  const listing = page
-    .locator('.folder-item', { hasText: 'note on the listing PDF' })
-    .first();
-  await expect(listing.locator('.key-facts')).toBeVisible();
+  // No scores or facts on a row (G-18).
+  await expect(page.locator('.folder-list .key-facts')).toHaveCount(0);
   await expect(
     page.locator('.folder-item', { hasText: 'Flat budget' }),
   ).toHaveCount(0);
@@ -148,8 +154,7 @@ test('By Bower shows only what Bower wrote, with its key facts (#611)', async ({
   const original = page
     .locator('.folder-item', { hasText: 'Arlington Road, 2 bed' })
     .first();
-  await expect(original).toContainText('PDF');
-  await expect(original).not.toContainText('note on the listing');
+  await expect(original.locator('.list-row-meta')).toHaveText('PDF');
 });
 
 test('sort, kind filter and origin filter survive a reload, per folder (#611)', async ({
@@ -223,29 +228,22 @@ test('tiles show thumbnails online and the kind icon offline (#613)', async ({
   test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
   await page.goto(FLAT);
   await pick(page, 'Layout', 'Grid');
-  // A pair shows Bower's note: its name and its first lines.
+  // A tile is the kind line, the title and the date (#908, R-TILE-1):
+  // no excerpt, no picture, no score.
   const pair = page
-    .locator('.folder-tile', { hasText: 'Arlington Road, 2 bed' })
+    .locator('.grid-tile', { hasText: 'Arlington Road, 2 bed' })
     .first();
-  // #761: the header and the suggestion push the tiles down; the note
-  // lines only load once a tile is in view.
   await pair.scrollIntoViewIfNeeded();
-  await expect(pair).toContainText('Bower’s note');
-  await expect(pair.locator('.note-line').first()).toBeVisible();
-  // Originals: the photo alone, with Drive's picture.
+  await expect(pair.locator('.grid-tile-kind-word')).toHaveText('Bower note');
+  await expect(pair.locator('.note-line, .thumb')).toHaveCount(0);
   await page.getByRole('button', { name: /^Originals/ }).click();
-  const sign = page.locator('.folder-tile', { hasText: 'window sign' });
-  await expect(sign).toContainText('Photo');
-  await expect(sign.locator('img.thumb-img')).toBeVisible();
-
-  // Offline, inside the app (no reload): the tiles are drawn again and show
-  // the kind icon instead of the picture.
+  const sign = page.locator('.grid-tile', { hasText: 'window sign' });
+  await expect(sign.locator('.grid-tile-kind-word')).toHaveText('Photo');
+  // Offline, inside the app (no reload): the tiles are drawn again.
   await context.setOffline(true);
   await pick(page, 'Layout', 'List');
   await pick(page, 'Layout', 'Grid');
   await expect(sign).toBeVisible();
-  await expect(sign.locator('img.thumb-img')).toHaveCount(0);
-  await expect(sign.locator('.folder-row-icon .icon')).toBeVisible();
   await context.setOffline(false);
 });
 
@@ -287,8 +285,8 @@ test('holding a row or a tile opens quick look (#613)', async ({
   await pick(page, 'Layout', 'Grid');
   // By its name, not its text: once Bower's note lines load, another tile
   // mentions the lease too.
-  const tile = page.locator('.folder-tile').filter({
-    has: page.locator('[id^="row-name-"]', {
+  const tile = page.locator('.grid-tile').filter({
+    has: page.locator('.grid-tile-title', {
       hasText: /^Lease agreement 2026$/,
     }),
   });

@@ -11,12 +11,15 @@
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
-import { KEY_HINT, folderKeyAction, rowDate } from '../folder-keys.js';
+import { KEY_HINT, folderKeyAction } from '../folder-keys.js';
 import { isBowerWritten } from '../bower-written.js';
 import { loadViewSettings, saveViewSettings } from '../cache.js';
 import type { ViewSettings } from '../cache.js';
 import { parseCatalogueFiles } from '../companion.js';
+import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
+import { metaLine, shortDate } from '../meta-line.js';
+import type { MetaItem } from '../meta-line.js';
 import { CATALOGUE_PATH, originOf } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import {
@@ -31,17 +34,9 @@ import {
   metaCounts,
   rowsFor,
   sortRows,
-  subjectOf,
-  whenWords,
 } from '../folder-view.js';
-import type {
-  FolderModel,
-  FolderRow,
-  FolderSort,
-  OriginFilter,
-} from '../folder-view.js';
+import type { FolderRow, FolderSort, OriginFilter } from '../folder-view.js';
 import { keyFactsFor, kindById } from '../kinds.js';
-import { parseFrontmatter } from '../markdown/frontmatter.js';
 import {
   displayName,
   folderHref,
@@ -58,72 +53,23 @@ import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
-import { BowerMark } from './bird.js';
+import { Badge } from './badge.js';
+import { FolderCard } from './folder-card.js';
+import type { FolderCardItem } from './folder-card.js';
 import { FolderMark } from './folder-mark.js';
-import {
-  LayoutToggle,
-  NoteLines,
-  Thumb,
-  defaultLayout,
-} from './folder-grid.js';
+import { GridTile, LayoutToggle, defaultLayout } from './folder-grid.js';
 import type { FolderLayout } from './folder-grid.js';
 import { Hint } from './hint.js';
-import {
-  IconChevronRight,
-  IconClock,
-  IconDoc,
-  IconFolder,
-  IconImage,
-  IconNote,
-  IconPdf,
-} from './icons.js';
+import { IconChevronRight, IconFolder } from './icons.js';
 import { InfoPop } from './info-pop.js';
 import { FilterSortSheet } from './filter-sort-sheet.js';
-import { KeyFacts, scoreName } from './key-facts.js';
-import { KindBadge } from './kind-badge.js';
+import { ListRow } from './list-row.js';
+import type { ListRowItem } from './list-row.js';
 import { QuickLook } from './quick-look.js';
 import type { PanePreview } from './quick-look.js';
 import { useLongPress } from './use-long-press.js';
-import { BowerTag, NewTag } from './tags.js';
-
-/** A row's type icon, coloured by kind (`folder.css`). A note copied from
- * Drive keeps the Drive page icon, as on the board. */
-function KindIcon({
-  file,
-  origin,
-  badge = false,
-}: {
-  file: DriveFile;
-  origin: Origin | null;
-  /** The grey kind badge in the tile's corner, for everything but a note. */
-  badge?: boolean;
-}): JSX.Element {
-  const kind = fileKind(file);
-  let icon: JSX.Element;
-  let tone: string;
-  if (kind === 'note') {
-    icon = origin === 'drive' ? <IconDoc /> : <IconNote />;
-    tone = origin === 'drive' ? 'drive' : 'note';
-  } else if (kind === 'pdf') {
-    icon = <IconPdf />;
-    tone = 'pdf';
-  } else if (kind === 'photo' || kind === 'image') {
-    icon = <IconImage />;
-    tone = 'image';
-  } else {
-    icon = <IconDoc />;
-    tone =
-      kind === 'doc' || kind === 'sheet' || kind === 'slides'
-        ? 'drive'
-        : 'note';
-  }
-  return (
-    <span class={`folder-row-icon tone-${tone}`}>
-      {icon}
-      {badge && kind !== 'note' && <KindBadge kind={kind} file={file} />}
-    </span>
-  );
-}
+import { EMPTY_COPY } from './system-state.js';
+import { BowerTag } from './tags.js';
 
 /** The path bar (R-FOLDER-1): the PARA mark, each segment a link, the
  * current one bold. */
@@ -172,67 +118,64 @@ export function subfolderLine(folder: FolderSubfolder, now: number): string {
   return `${count} · ${age === 'today' ? 'updated today' : age}`;
 }
 
-/** An id for `aria-labelledby` / `aria-describedby` from a row's key. */
-function domId(prefix: string, key: string): string {
-  return `${prefix}-${key.replace(/\s+/g, '_')}`;
-}
-
-/** A subfolder as a row of the one list (R-FOLD-1): the folder icon, its
- * name (the accessible name, R-FOLD-5), "{n} things" as its description and
- * a chevron. `detailed` is the root folder's two-line version. */
+/** A subfolder as a row of the one list (R-FOLD-1, board PF-Main): the
+ * folder outline in its root's colour, its name, and "6 things" with a
+ * chevron at the right. */
 export function SubfolderRow({
   folder,
-  now,
-  detailed,
 }: {
   folder: FolderSubfolder;
-  now: number;
-  detailed: boolean;
 }): JSX.Element {
-  const nameId = domId('folder-name', folder.path);
-  const countId = domId('folder-count', folder.path);
-  const detail = detailed ? subfolderLine(folder, now) : '';
   const count = folder.things > 0 ? things(folder.things) : '';
-  const describedBy = detailed ? detail : count;
   return (
-    <a
-      class="folder-row"
-      href={folderHref(folder.path)}
-      aria-labelledby={nameId}
-      aria-describedby={describedBy === '' ? undefined : countId}
-    >
-      <IconFolder />
-      {detailed ? (
-        <span class="folder-row-text">
-          <span class="folder-row-name" id={nameId}>
-            {folder.name}
-          </span>
-          {detail !== '' && (
-            <span class="folder-row-detail" id={countId}>
-              {detail}
-            </span>
-          )}
-        </span>
-      ) : (
+    <ListRow
+      item={{
+        id: folder.path,
+        title: folder.name,
+        name: folder.name,
+        mimeType: FOLDER_MIME,
+        path: folder.path,
+        href: folderHref(folder.path),
+      }}
+      trailing={
         <>
-          <span class="folder-row-name" id={nameId}>
-            {folder.name}
-          </span>
-          {count !== '' && (
-            <span class="folder-row-count" id={countId}>
-              {count}
-            </span>
-          )}
+          {count}
+          <IconChevronRight />
         </>
-      )}
-      <span class="folder-row-chevron" aria-hidden="true">
-        <IconChevronRight />
-      </span>
-    </a>
+      }
+      rowProps={{ class: 'folder-sub-row' }}
+    />
   );
 }
 
-/** The subfolders of a folder as the top rows of its one list. */
+/** The first things inside a folder, newest first, as its card lists them
+ * (title and kind only, G-18). */
+export function firstInside(
+  byPath: ReadonlyMap<string, DriveFile>,
+  path: string,
+  max = 3,
+): FolderCardItem[] {
+  const prefix = `${path}/`;
+  const inside: DriveFile[] = [];
+  for (const [at, file] of byPath) {
+    if (!at.startsWith(prefix) || file.mimeType === FOLDER_MIME) continue;
+    inside.push(file);
+  }
+  inside.sort((a, b) =>
+    (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''),
+  );
+  return inside.slice(0, max).map((file) => ({
+    id: file.id,
+    title: fileKind(file) === 'note' ? noteTitle(file) : fileTitle(file.name),
+    name: file.name,
+    mimeType: file.mimeType,
+    path: file.path,
+  }));
+}
+
+/** The subfolders of a folder as the top rows of its one list; on a root
+ * folder's screen (a folder of folders, `detailed`) as folder cards
+ * (R-FCARD-1, board AR-Main). */
 export function SubfolderList({
   contents,
   now,
@@ -242,12 +185,42 @@ export function SubfolderList({
   now: number;
   detailed: boolean;
 }): JSX.Element | null {
+  const { index } = useVault();
+  const fresh = useNew();
   if (contents.subfolders.length === 0) return null;
+  if (detailed) {
+    const byPath = index?.byPath ?? NO_FILES;
+    return (
+      <>
+        <h3 class="folder-cards-label">Folders</h3>
+        <ul class="folder-cards" role="list" aria-label={`In ${contents.name}`}>
+          {contents.subfolders.map((folder) => (
+            <li key={folder.path}>
+              <FolderCard
+                folder={{
+                  path: folder.path,
+                  name: folder.name,
+                  href: folderHref(folder.path),
+                  things: folder.things,
+                  ...(folder.updated !== undefined && {
+                    updated: folder.updated,
+                  }),
+                }}
+                items={firstInside(byPath, folder.path)}
+                newCount={fresh.newCountIn(folder.path)}
+                now={now}
+              />
+            </li>
+          ))}
+        </ul>
+      </>
+    );
+  }
   return (
     <ul class="folder-list" role="list" aria-label={`In ${contents.name}`}>
       {contents.subfolders.map((folder) => (
         <li key={folder.path}>
-          <SubfolderRow folder={folder} now={now} detailed={detailed} />
+          <SubfolderRow folder={folder} />
         </li>
       ))}
     </ul>
@@ -445,45 +418,6 @@ function useCatalogueFiles(
   return files;
 }
 
-/** The first line of each answer's text, read only when By Bower shows it. */
-function useFirstLines(
-  notes: readonly DriveFile[],
-  getNoteText: (id: string) => Promise<string>,
-): ReadonlyMap<string, string> {
-  const [lines, setLines] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
-  );
-  const key = versionKey(notes);
-  const latest = useRef(notes);
-  latest.current = notes;
-
-  useEffect(() => {
-    let cancelled = false;
-    const read = new Map<string, string>();
-    void (async () => {
-      for (const note of latest.current) {
-        if (cancelled) return;
-        try {
-          const { body } = parseFrontmatter(await getNoteText(note.id));
-          const first = body
-            .split(/\r\n|\r|\n/)
-            .map((line) => line.trim())
-            .find((line) => line !== '' && !line.startsWith('#'));
-          if (first !== undefined) read.set(note.id, first);
-        } catch (err) {
-          console.error(err);
-        }
-      }
-      if (!cancelled) setLines(new Map(read));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [key, getNoteText]);
-
-  return lines;
-}
-
 const FILTER_LABELS: Readonly<Record<OriginFilter, string>> = {
   all: 'All',
   originals: 'Originals',
@@ -508,95 +442,6 @@ export function addedLine(
     return `${FILE_KIND_LABELS.csv} · copy of your Google Sheet`;
   }
   return fileLine(file, origin, pages);
-}
-
-/** What a row says under its title. */
-function RowDetail({
-  row,
-  view,
-  model,
-  catalogue,
-  pages,
-  now,
-  firstLine,
-}: {
-  row: FolderRow;
-  view: FolderViewState;
-  model: FolderModel;
-  catalogue: ReadonlyMap<string, Origin>;
-  pages: ReadonlyMap<string, number>;
-  now: number;
-  firstLine: string | undefined;
-}): JSX.Element {
-  const meta = model.metas.get(row.file.id);
-  if (!row.bower) {
-    return (
-      <span class="folder-row-detail">
-        {addedLine(
-          row.file,
-          originOf(row.file, catalogue),
-          pages.get(row.file.id),
-        )}
-      </span>
-    );
-  }
-  const inBower = view.origin === 'bower';
-  if (row.answer) {
-    const when = row.modified === '' ? 'undated' : whenWords(row.modified, now);
-    return (
-      <>
-        <span class="folder-row-detail">
-          <BowerTag />{' '}
-          {inBower ? `answer · ${when}` : 'answer to your question'}
-        </span>
-        {inBower && firstLine !== undefined && (
-          <span class="folder-row-lead">{firstLine}</span>
-        )}
-      </>
-    );
-  }
-  const kind = meta?.kind === undefined ? undefined : kindById(meta.kind);
-  const facts =
-    kind === undefined || meta === undefined
-      ? []
-      : keyFactsFor(kind, meta.fields);
-  const score =
-    kind === undefined || meta === undefined
-      ? undefined
-      : keyFactsFor(kind, meta.fields, { score: true }).find(
-          (fact) => fact.tone !== undefined,
-        );
-  const about =
-    row.original === undefined ? 'note' : `note on the ${subjectOf(meta)}`;
-  const original = row.original === undefined ? '' : FILE_KIND_LABELS[row.kind];
-  const dot = facts.length > 0 ? ' ·' : '';
-  return (
-    <>
-      <span class="folder-row-detail">
-        <BowerTag /> {about}
-        {original !== '' && ` ${inBower ? original : `${original}${dot}`}`}
-        {!inBower && facts.length > 0 && (
-          <>
-            {' '}
-            <KeyFacts facts={facts} inline />
-          </>
-        )}
-        {score !== undefined && (
-          <>
-            {' · '}
-            <span
-              class="folder-row-score"
-              role="img"
-              aria-label={scoreName(score.value)}
-            >
-              {score.value}/100
-            </span>
-          </>
-        )}
-      </span>
-      {inBower && facts.length > 0 && <KeyFacts facts={facts} />}
-    </>
-  );
 }
 
 const NO_WAITING: ReadonlyMap<string, PendingRequest> = new Map();
@@ -731,15 +576,6 @@ export function FolderItems({
     return map;
   }, [model]);
 
-  const answers = useMemo(
-    () =>
-      view.origin === 'bower'
-        ? rows.filter((row) => row.answer).map((row) => row.file)
-        : [],
-    [rows, view.origin],
-  );
-  const firstLines = useFirstLines(answers, getNoteText);
-
   const wantsVirtual = rows.length > VIRTUAL_FROM_ROWS;
   useEffect(() => {
     if (!wantsVirtual || loaded !== null) return;
@@ -759,7 +595,6 @@ export function FolderItems({
 
   // Below 900 px the sort, kind and layout controls are one button (D34).
   const toolbar = useMediaQuery(TOOLBAR_QUERY);
-  const showTime = view.sort === 'name' || view.sort === 'kind';
 
   // Grid when the person chose it, else when most of the folder is photos.
   const allKinds = useMemo(
@@ -775,16 +610,11 @@ export function FolderItems({
     const held = rows.find((row) => row.key === key);
     if (held !== undefined) setQuick(held);
   });
+  // Hover never selects (G-5): the row selects on click or focus.
   const holdProps = (row: FolderRow): Record<string, unknown> => ({
     ...press,
     'data-row-key': row.key,
-    ...(desktop && {
-      'data-selected': row.key === selected?.key ? 'true' : undefined,
-      onFocus: (): void => setSelectedKey(row.key),
-      onPointerEnter: (event: PointerEvent): void => {
-        if (event.pointerType === 'mouse') setSelectedKey(row.key);
-      },
-    }),
+    class: 'folder-item',
     onClick: (event: Event): void => {
       if (consumeLongPress()) event.preventDefault();
     },
@@ -799,52 +629,44 @@ export function FolderItems({
       ? `/note/${row.file.id}`
       : `/file/${row.file.id}`;
 
+  /** What a row or tile shows of its file (FileIcon, title, link). */
+  function itemOf(row: FolderRow): ListRowItem & MetaItem {
+    return {
+      id: row.key,
+      title: titleOf(row),
+      href: hrefOf(row),
+      name: row.file.name,
+      mimeType: row.file.mimeType,
+      bowerWritten: row.bower,
+      answer: row.answer,
+      path: row.file.path,
+    };
+  }
+  const isNewRow = (row: FolderRow): boolean =>
+    fresh.isNew(row.file.id) ||
+    (row.original !== undefined && fresh.isNew(row.original.id));
+  const selectProps = (
+    row: FolderRow,
+  ): { selected: boolean; onSelect?: () => void; onOpen?: () => void } =>
+    desktop
+      ? {
+          selected: row.key === selected?.key,
+          onSelect: () => setSelectedKey(row.key),
+          ...(onOpen !== undefined && { onOpen: () => onOpen(hrefOf(row)) }),
+        }
+      : { selected: false };
+
   function renderTile(row: FolderRow): JSX.Element {
-    const shown = row.original ?? row.file;
-    const isNote = row.original === undefined && row.kind === 'note';
-    const showsNote = isNote || row.original !== undefined;
-    const isNew =
-      fresh.isNew(row.file.id) ||
-      (row.original !== undefined && fresh.isNew(row.original.id));
-    const icon = (
-      <KindIcon file={shown} origin={originOf(row.file, catalogue)} />
-    );
+    const date = row.modified === '' ? '' : shortDate(row.modified, now);
     return (
-      <a
-        class="folder-tile folder-item"
-        href={hrefOf(row)}
-        aria-labelledby={domId('row-name', row.key)}
-        {...holdProps(row)}
-      >
-        <span class="folder-tile-thumb">
-          {showsNote ? (
-            <span class="folder-tile-note">
-              {row.bower && (
-                <span class="folder-tile-bower">
-                  <BowerMark size={16} />
-                  Bower&rsquo;s note
-                </span>
-              )}
-              <NoteLines id={row.file.id} />
-            </span>
-          ) : (
-            <Thumb file={shown} kind={row.kind} fallback={icon} />
-          )}
-          {row.kind !== 'note' && <KindBadge kind={row.kind} file={shown} />}
-        </span>
-        <span class="folder-tile-title">
-          <span id={domId('row-name', row.key)}>{titleOf(row)}</span>
-          {isNew && (
-            <>
-              {' '}
-              <NewTag />
-            </>
-          )}
-        </span>
-        <span class="folder-tile-line">
-          {tileLine(row, pages.get(shown.id))}
-        </span>
-      </a>
+      <GridTile
+        item={itemOf(row)}
+        date={date}
+        {...(row.modified !== '' && { dateTime: row.modified })}
+        badge={isNewRow(row) ? <Badge tone="new">New</Badge> : undefined}
+        rowProps={holdProps(row)}
+        {...selectProps(row)}
+      />
     );
   }
 
@@ -853,76 +675,27 @@ export function FolderItems({
       return <h3 class="folder-group">{entry.label}</h3>;
     }
     const { row } = entry;
-    const href = hrefOf(row);
     const isWaiting =
       waiting.has(row.file.path) ||
       (row.original !== undefined && waiting.has(row.original.path));
-    const isNew =
-      fresh.isNew(row.file.id) ||
-      (row.original !== undefined && fresh.isNew(row.original.id));
+    const item = itemOf(row);
+    const meta = metaLine(item, { view: 'row', now }).text;
+    const when = row.file.modifiedTime ?? (row.modified || undefined);
     return (
-      <a
-        class="folder-row folder-item"
-        href={href}
-        aria-labelledby={domId('row-name', row.key)}
-        aria-describedby={[
-          domId('row-detail', row.key),
-          isNew ? domId('row-new', row.key) : null,
-          isWaiting ? domId('row-wait', row.key) : null,
-        ]
-          .filter((id) => id !== null)
-          .join(' ')}
-        {...holdProps(row)}
-      >
-        <KindIcon
-          file={row.original ?? row.file}
-          origin={originOf(row.file, catalogue)}
-          badge
-        />
-        <span class="folder-row-text">
-          <span class="folder-row-title">
-            <span class="folder-row-name" id={domId('row-name', row.key)}>
-              {titleOf(row)}
-            </span>
-            {isNew && (
-              <span class="folder-row-describe" id={domId('row-new', row.key)}>
-                <NewTag />
-              </span>
-            )}
-            {isWaiting && (
-              <span
-                class="folder-row-describe folder-row-waiting"
-                id={domId('row-wait', row.key)}
-                role="img"
-                aria-label="Waiting for the next tidy-up"
-              >
-                <IconClock />
-              </span>
-            )}
-          </span>
-          <span class="folder-row-describe" id={domId('row-detail', row.key)}>
-            <RowDetail
-              row={row}
-              view={view}
-              model={model}
-              catalogue={catalogue}
-              pages={pages}
-              now={now}
-              firstLine={firstLines.get(row.file.id)}
-            />
-          </span>
-        </span>
-        {desktop && row.file.modifiedTime !== undefined && (
-          <time class="folder-row-date" dateTime={row.file.modifiedTime}>
-            {rowDate(row.file.modifiedTime, now)}
-          </time>
-        )}
-        {!desktop && showTime && row.file.modifiedTime !== undefined && (
-          <time class="folder-row-meta" dateTime={row.file.modifiedTime}>
-            {shortAge(row.file.modifiedTime, now)}
-          </time>
-        )}
-      </a>
+      <ListRow
+        item={item}
+        meta={isWaiting ? `${meta} · waiting for the next tidy-up` : meta}
+        badge={isNewRow(row) ? <Badge tone="new">New</Badge> : undefined}
+        trailing={
+          when === undefined ? undefined : (
+            <time class="folder-row-date" dateTime={when}>
+              {shortDate(when, now)}
+            </time>
+          )
+        }
+        rowProps={holdProps(row)}
+        {...selectProps(row)}
+      />
     );
   }
 
@@ -1216,15 +989,15 @@ export function FolderItems({
         )}
       </div>
       {rows.length === 0 && subs.length === 0 ? (
-        <p class="folder-elsewhere">
-          {view.origin === 'bower'
-            ? `Bower has not written anything in ${contents.name} yet.`
-            : 'Nothing of that kind here.'}
+        <p class="folder-elsewhere empty-segment">
+          {view.origin === 'all' || kind !== null
+            ? 'Nothing of that kind here.'
+            : EMPTY_COPY[view.origin]}
         </p>
       ) : layout === 'grid' ? (
         <>
           <SubfolderList contents={subContents} now={now} detailed={false} />
-          <ul class="folder-grid">
+          <ul class="folder-grid grid-tiles">
             {rows.map((row) => (
               <li key={row.key}>{renderTile(row)}</li>
             ))}
@@ -1250,7 +1023,7 @@ export function FolderItems({
         <ul class="folder-list" role="list" aria-label={`In ${contents.name}`}>
           {subs.map((folder) => (
             <li key={folder.path}>
-              <SubfolderRow folder={folder} now={now} detailed={false} />
+              <SubfolderRow folder={folder} />
             </li>
           ))}
           {entries.map((entry) => (

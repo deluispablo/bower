@@ -229,7 +229,7 @@ describe('Note screen (#609)', () => {
     // R-INS-7: no Details toggle; the fields are shown while the box is open.
     expect(root.querySelector('.details-toggle')).toBeNull();
     expect(root.querySelector('.bower-note-box .details')).not.toBeNull();
-    const head = root.querySelector('.bower-note-box-head');
+    const head = root.querySelector('.bower-note-box-fold');
     expect(head?.getAttribute('aria-expanded')).toBe('true');
 
     // Box (summary, key facts, details), then the body: in that order.

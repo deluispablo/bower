@@ -39,7 +39,7 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
   const first = rows.first();
   await expect(first).toHaveAttribute('data-selected', 'true');
   const firstTitle = (
-    await first.locator('.folder-row-name').innerText()
+    await first.locator('.list-row-title').innerText()
   ).trim();
   await expect(preview.locator('.quick-look-title')).toHaveText(firstTitle);
   await expect(
@@ -51,7 +51,7 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
   await page.keyboard.press('ArrowDown');
   await expect(rows.nth(1)).toHaveAttribute('data-selected', 'true');
   const secondTitle = (
-    await rows.nth(1).locator('.folder-row-name').innerText()
+    await rows.nth(1).locator('.list-row-title').innerText()
   ).trim();
   await expect(preview.locator('.quick-look-title')).toHaveText(secondTitle);
 
@@ -66,7 +66,7 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
     /^\d+ things?( · \d+ new)? · \d+ originals?, \d+ by Bower$/,
   );
   await expect(page.locator('.folder-row-date').first()).toHaveText(
-    /^(\d\d:\d\d|[A-Z][a-z]{2} \d+)$/,
+    /^(\d\d:\d\d|\d+ [A-Z][a-z]{2}( \d{4})?)$/,
   );
   await expect(page.locator('.folder-keys-hint')).toHaveText(
     '↑ ↓ move · Space quick look · Enter open · ⌫ up a folder',
@@ -82,7 +82,7 @@ test('the pair on the preview: Bower and the original, the note rendered', async
   await page
     .locator('.folder-item', { hasText: 'Arlington Road, 2 bed' })
     .first()
-    .hover();
+    .click();
   await expect(preview.locator('.quick-look-title')).toContainText(
     'Arlington Road',
   );

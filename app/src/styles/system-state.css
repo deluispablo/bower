@@ -1,0 +1,134 @@
+/* System states (issue #908, spec §3.38): skeleton, error line, empty
+   folder and empty segment. */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skeleton-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (min-width: 900px) {
+  .skeleton-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 8px;
+}
+
+.skeleton-box {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-row, 8px);
+  background: var(--color-surface);
+}
+
+.skeleton-lines,
+.skeleton-tile,
+.skeleton-property {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skeleton-tile {
+  box-sizing: border-box;
+  height: 132px;
+  padding: 12px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.skeleton-property {
+  flex-direction: row;
+  padding: 10px 0;
+}
+
+.skeleton-bar {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-bar-long {
+  width: 60%;
+}
+
+.skeleton-bar-short {
+  width: 35%;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar {
+    animation: none;
+  }
+}
+
+.error-line {
+  margin: 0;
+  padding: 12px 8px;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.error-line-retry,
+.empty-folder-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.error-line-retry {
+  color: inherit;
+}
+
+.empty-folder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.empty-folder-title {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: 1rem;
+}
+
+.empty-folder-text,
+.empty-segment {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.empty-segment {
+  padding: 12px 8px;
+}

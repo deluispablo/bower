@@ -9,6 +9,8 @@ import {
   NOTE_FOLDED_KEY,
   boxParts,
   checkItems,
+  countPoints,
+  foldedLine,
   readingRequest,
   readingText,
   ruleChange,
@@ -48,11 +50,18 @@ const writeText = vi.fn<(text: string) => Promise<void>>();
 function mount(
   frontmatter: Record<string, unknown>,
   checkSection: string[] = [],
+  path = 'Areas/Offer.md',
 ): void {
   void act(() => {
-    render(h(BowerNoteBox, { html: TOP, frontmatter, checkSection }), host);
+    render(
+      h(BowerNoteBox, { html: TOP, frontmatter, checkSection, path }),
+      host,
+    );
   });
 }
+
+const foldButton = (): HTMLButtonElement | null =>
+  host.querySelector<HTMLButtonElement>('.bower-note-box-fold');
 
 beforeEach(() => {
   host = document.createElement('div');
@@ -73,6 +82,10 @@ afterEach(() => {
   host.remove();
   dismissToast();
 });
+
+function boxRows(html: string): string {
+  return boxParts(html).rows;
+}
 
 describe('pure helpers', () => {
   it('takes the top box apart and drops its own title', () => {
@@ -141,8 +154,9 @@ describe('pure helpers', () => {
 describe('BowerNoteBox (issue #757)', () => {
   it('is open by default with every section, in order', () => {
     mount(OFFER);
-    const head = host.querySelector('.bower-note-box-head');
+    const head = foldButton();
     expect(head?.tagName).toBe('BUTTON');
+    expect(head?.getAttribute('aria-label')).toBe("Fold Bower's note");
     expect(head?.getAttribute('aria-expanded')).toBe('true');
     const controls = head?.getAttribute('aria-controls') ?? '';
     expect(host.querySelector(`[id="${controls}"]`)).not.toBeNull();
@@ -159,30 +173,66 @@ describe('BowerNoteBox (issue #757)', () => {
     expect(host.querySelector('.key-fact-pill')?.textContent).toBe('79');
   });
 
-  it('folds to one line and remembers it for every note', async () => {
+  it('folds to one 52 px row and remembers it per note (#908, R-NOTEBOX-2)', async () => {
     mount(OFFER);
     await act(() => {
-      host.querySelector<HTMLButtonElement>('.bower-note-box-head')?.click();
+      foldButton()?.click();
     });
-    expect(localStorage.getItem(NOTE_FOLDED_KEY)).toBe('true');
-    expect(
-      host.querySelector('.bower-note-box-head')?.getAttribute('aria-expanded'),
-    ).toBe('false');
+    expect(localStorage.getItem(NOTE_FOLDED_KEY)).toBe(
+      JSON.stringify(['Areas/Offer.md']),
+    );
+    expect(foldButton()?.getAttribute('aria-expanded')).toBe('false');
     expect(
       host.querySelector('.bower-note-box-body')?.hasAttribute('hidden'),
     ).toBe(true);
-    const line = host.querySelector('.bower-note-box-line');
-    expect(line?.querySelector('.key-fact-pill')?.textContent).toBe('79');
-    expect(line?.textContent).toContain('2 to check');
+    // Points and what to check only: no score or facts (G-18).
+    const line = host.querySelector(
+      '.bower-note-box-head .bower-note-box-line',
+    );
+    expect(line?.textContent).toBe('2 points · 1 to check');
+    expect(
+      host.querySelector('.bower-note-box-head .key-fact-pill'),
+    ).toBeNull();
 
-    // A second box mounted later reads the same device preference.
+    // The same note mounted later is still folded; another note is open.
     await act(() => {
       render(null, host);
     });
     mount(OFFER);
+    expect(foldButton()?.getAttribute('aria-expanded')).toBe('false');
+    await act(() => {
+      render(null, host);
+    });
+    mount(OFFER, [], 'Areas/Other.md');
+    expect(foldButton()?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('writes the folded row: "3 points · 1 to check", no " · 0 to check"', () => {
+    expect(foldedLine(3, 1)).toBe('3 points · 1 to check');
+    expect(foldedLine(3, 0)).toBe('3 points');
+    expect(foldedLine(1, 0)).toBe('1 point');
+    const rows = boxRows(TOP);
+    expect(countPoints(rows)).toEqual({ points: 2, toCheck: 1 });
+    expect(countPoints('')).toEqual({ points: 0, toCheck: 0 });
+  });
+
+  it('has no fold control with fold={false} and stays open', () => {
+    localStorage.setItem(NOTE_FOLDED_KEY, JSON.stringify(['Areas/Offer.md']));
+    void act(() => {
+      render(
+        h(BowerNoteBox, {
+          html: TOP,
+          frontmatter: OFFER,
+          path: 'Areas/Offer.md',
+          fold: false,
+        }),
+        host,
+      );
+    });
+    expect(foldButton()).toBeNull();
     expect(
-      host.querySelector('.bower-note-box-head')?.getAttribute('aria-expanded'),
-    ).toBe('false');
+      host.querySelector('.bower-note-box-body')?.hasAttribute('hidden'),
+    ).toBe(false);
   });
 
   it('shows the blue line and "Before today" only when asked', async () => {

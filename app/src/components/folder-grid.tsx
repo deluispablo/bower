@@ -10,14 +10,20 @@
  * Offline, or with no thumbnail at all, the caller's kind icon shows.
  */
 
-import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import type { ComponentChildren, JSX } from 'preact';
+import { useEffect, useId, useRef, useState } from 'preact/hooks';
 
 import { loadThumbnail } from '../cache.js';
 import type { DriveFile } from '../drive.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
+import { kindLabel } from '../meta-line.js';
 import { useVault } from '../vault-store.js';
 import type { FileKind } from '../vault-index.js';
+import { FileIcon } from './file-icon.js';
+import { classes, follow, pointerFocus, selectionKeys } from './list-row.js';
+import type { ListRowItem } from './list-row.js';
+
+import '../styles/grid-tile.css';
 
 export type FolderLayout = 'list' | 'grid';
 
@@ -255,5 +261,113 @@ export function LayoutToggle({
         </svg>
       </button>
     </div>
+  );
+}
+
+export interface GridTileProps {
+  item: ListRowItem;
+  /** The date line (`shortDate`, R-META-3); empty for none. */
+  date: string;
+  /** ISO time for the `<time>` element. */
+  dateTime?: string;
+  /** A Badge at the top right ("New"). */
+  badge?: ComponentChildren;
+  selected?: boolean;
+  /** Present on the desktop, where one click selects (see `ListRow`). */
+  onSelect?: () => void;
+  onOpen?: () => void;
+  /** Extra attributes for the tile (long press, data hooks). */
+  rowProps?: Record<string, unknown>;
+}
+
+function call(handler: unknown, event: Event): void {
+  if (typeof handler === 'function') (handler as (e: Event) => void)(event);
+}
+
+/** Columns of the grid that holds `element` (1 when it is not a grid). */
+function columnsOf(element: HTMLElement): number {
+  const grid = element.closest('.folder-grid');
+  if (grid === null) return 1;
+  return Math.max(
+    1,
+    getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean)
+      .length,
+  );
+}
+
+/**
+ * The grid tile (issue #908, spec §3.18 R-TILE-1, R-TILE-2, boards GR-Main
+ * and GR-PhoneGrid): the kind line (FileIcon 16 and the kind in words), the
+ * title up to three lines and the date; every tile the same height. No
+ * excerpt, score or facts (G-18). Selected: 1 px teal border and the
+ * selection tint (K-19); select and open as `ListRow`.
+ */
+export function GridTile({
+  item,
+  date,
+  dateTime,
+  badge,
+  selected = false,
+  onSelect,
+  onOpen,
+  rowProps = {},
+}: GridTileProps): JSX.Element {
+  const titleId = useId();
+  const open =
+    onOpen ?? (item.href === undefined ? undefined : () => follow(item.href));
+  return (
+    <a
+      {...rowProps}
+      {...pointerFocus}
+      class={classes('grid-tile', rowProps.class, selected)}
+      href={item.href}
+      data-row-key={rowProps['data-row-key'] ?? item.id}
+      data-selected={selected ? 'true' : undefined}
+      aria-current={selected ? 'true' : undefined}
+      aria-labelledby={titleId}
+      onClick={(event: MouseEvent) => {
+        call(rowProps.onClick, event);
+        if (event.defaultPrevented || onSelect === undefined) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onSelect();
+      }}
+      onDblClick={(event: MouseEvent) => {
+        if (onSelect === undefined) return;
+        event.preventDefault();
+        open?.();
+      }}
+      onFocus={(event: FocusEvent) => {
+        call(rowProps.onFocus, event);
+        onSelect?.();
+      }}
+      onKeyDown={(event: KeyboardEvent) => {
+        call(rowProps.onKeyDown, event);
+        const target = event.currentTarget;
+        const columns = target instanceof HTMLElement ? columnsOf(target) : 1;
+        selectionKeys(
+          event,
+          '.grid-tile',
+          columns,
+          onSelect === undefined ? onOpen : open,
+        );
+      }}
+    >
+      <span class="grid-tile-kind">
+        <FileIcon item={item} size={16} />
+        <span class="grid-tile-kind-word">{kindLabel(item)}</span>
+        {badge !== undefined && badge !== null && (
+          <span class="grid-tile-badge">{badge}</span>
+        )}
+      </span>
+      <span class="grid-tile-title" id={titleId}>
+        {item.title}
+      </span>
+      {date !== '' && (
+        <time class="grid-tile-date" dateTime={dateTime}>
+          {date}
+        </time>
+      )}
+    </a>
   );
 }

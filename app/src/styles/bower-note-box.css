@@ -4,45 +4,84 @@
   flex-direction: column;
   gap: var(--space-3);
   margin: 0 0 var(--space-4);
-  padding: 0 14px 12px;
+  padding: 0 14px 14px;
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
 }
 
+/* Folded (R-NOTEBOX-2): only the 52 px head row is left. */
 .bower-note-box.is-folded {
-  padding-bottom: 8px;
+  gap: 0;
+  padding-bottom: 0;
 }
 
 .bower-note-box-head {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  width: 100%;
-  min-height: 48px;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  min-width: 0;
+  min-height: 52px;
   color: var(--color-heading);
-  font: inherit;
-  font-size: 0.8125rem; /* 13px */
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
 }
 
 .bower-note-box-name {
-  flex: 1;
+  flex-shrink: 0;
+  font-size: 0.9375rem; /* 15px, board NO-Main */
+  font-weight: 700;
 }
 
-.bower-note-box-chevron {
-  flex-shrink: 0;
+/* "3 points · 1 to check" beside the name while folded. */
+.bower-note-box-line {
+  min-width: 0;
+  overflow: hidden;
   color: var(--color-text-muted);
+  font-size: 0.8125rem; /* 13px, board NO-Fold */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The fold control ("Fold Bower's note"); its hit area covers the whole
+   head row, so a tap anywhere on it folds or opens the box. */
+.bower-note-box-fold {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.bower-note-box-fold::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+}
+
+.bower-note-box-fold:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Open: the chevron points up (fold); folded: down (open). */
+.bower-note-box-chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-muted);
+  transform: rotate(180deg);
   transition: transform var(--motion-fast);
 }
 
-.bower-note-box-head[aria-expanded='false'] .bower-note-box-chevron {
-  transform: rotate(-90deg);
+.bower-note-box-fold[aria-expanded='false'] .bower-note-box-chevron {
+  transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -51,27 +90,9 @@
   }
 }
 
-.bower-note-box-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text);
-}
-
-.bower-note-box-facts {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.bower-note-box-tocheck {
-  padding: 1px var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
+/* The desktop preview column: same anatomy, 15 px text (§3.27). */
+.bower-note-box.is-preview .markdown {
+  font-size: var(--text-15, 0.9375rem);
 }
 
 .bower-note-box-body {
@@ -179,4 +200,17 @@
   border-radius: 12px;
   background: var(--color-success-bg);
   color: var(--color-text);
+}
+
+/* Origin squares inside the box (board NO-Main): 22 px, radius 6, glyph 14. */
+.bower-note-box .markdown .bower-origin {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 6px;
+}
+
+.bower-note-box .markdown .bower-origin::before {
+  width: 14px;
+  height: 14px;
 }

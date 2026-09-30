@@ -360,7 +360,7 @@ test("previous/next under a note hides Bower's own files and uses titles (#423)"
   await page.goto('/folder/Answers');
   await page
     .getByRole('link', { name: /Which subscriptions renew this autumn/ })
-    .click();
+    .press('Enter');
   await expect(
     page.getByRole('heading', {
       level: 1,
@@ -2313,9 +2313,9 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
   );
   await expect(
     page
-      .locator('a.folder-row[href="/folder/1-Projects/Lisbon%20Trip"]')
-      .locator('.folder-row-detail'),
-  ).toHaveText(/^\d+ things? · (updated today|\d+ (d|w|mo|y))$/);
+      .locator('a.folder-card[href="/folder/1-Projects/Lisbon%20Trip"]')
+      .locator('.folder-card-meta'),
+  ).toHaveText(/^\d+ things?( · updated [^·]+)?/);
   await shot(page, testInfo, 'folder-root-explained');
 
   // A non-root folder (a project) has no meaning line to show.
@@ -2405,12 +2405,10 @@ test('a project folder lists its files and notes together, newest first, with wh
   // The board's row lines (#611): the kind word and size for a file, "Note
   // · written by you" for the person's own notes.
   await expect(rows.nth(0)).toContainText('Sage green test patch');
-  await expect(rows.nth(0)).toContainText('Photo · ');
+  await expect(rows.nth(0).locator('.list-row-meta')).toHaveText('Photo');
   await expect(rows.nth(1)).toContainText('Shelves and tap quote');
-  await expect(rows.nth(1)).toContainText('PDF · ');
-  await expect(rows.nth(2).locator('.folder-row-detail')).toHaveText(
-    'Note · written by you',
-  );
+  await expect(rows.nth(1).locator('.list-row-meta')).toHaveText('PDF');
+  await expect(rows.nth(2).locator('.list-row-meta')).toHaveText('Note');
 
   // A file opens on its own screen; a note opens in the app.
   await expect(rows.nth(1)).toHaveAttribute('href', /^\/file\//);
@@ -2458,7 +2456,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await page.goto('/folder/1-Projects/Kitchen%20Refresh');
   await page
     .locator('.folder-item', { hasText: 'Sage green test patch' })
-    .click();
+    .press('Enter');
   await expect(page).toHaveURL(/\/file\//);
   await expect(
     page.getByRole('heading', { level: 1, name: 'Sage green test patch' }),
@@ -2482,7 +2480,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await page.goto('/folder/1-Projects/Kitchen%20Refresh');
   await page
     .locator('.folder-item', { hasText: 'Shelves and tap quote' })
-    .click();
+    .press('Enter');
   await expect(
     page.getByRole('heading', { level: 1, name: 'Shelves and tap quote' }),
   ).toBeVisible();
