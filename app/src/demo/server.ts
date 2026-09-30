@@ -274,6 +274,13 @@ export class DemoServer {
       });
     }
 
+    // What the run will count as done: the sheet's "Tidying up N things" and
+    // the filed count at the end are the same number (#888). A context note
+    // is never counted.
+    run.total =
+      pending.filter((item) => !isContext(item.text)).length +
+      (withFiles ? SCRIPTED_LISTINGS.length : 0);
+
     for (const [i, { path, name, text }] of pending.entries()) {
       let destination = INBOX_PLAN.get(path) ?? `3-Resources/${name}`;
       // What the runner reports for each item (#345, `agent/run.sh`).
@@ -304,7 +311,10 @@ export class DemoServer {
           run.items?.push({
             path,
             kind,
-            to: destination,
+            // A request or context note goes to `Processed`, a folder the
+            // person never sees: it names no destination, so no row says
+            // "Processed" (#888).
+            ...(kind === 'file' && { to: destination }),
             ...(newName !== name && { renamedFrom: name }),
           });
         },

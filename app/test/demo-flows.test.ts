@@ -165,6 +165,8 @@ describe('demo mode', () => {
     const done = (await api.getStatus()).run;
     expect(done?.state).toBe('done');
     expect(done?.processed).toHaveLength(6);
+    // "Tidying up N things" counts what ends up filed (#888).
+    expect(running?.total).toBe(done?.processed?.length);
     expect(done?.processed).toContain('0-Inbox/Tomato seedlings.md');
     // Each item says where it went (New, #652); none was renamed.
     expect(done?.items).toContainEqual({
@@ -173,7 +175,9 @@ describe('demo mode', () => {
       to: '2-Areas/Garden/Tomato seedlings.md',
     });
     for (const item of done?.items ?? []) {
-      expect(item.to).toEqual(expect.any(String));
+      // A request or context note goes to `Processed`, which no row names.
+      if (item.kind === 'file') expect(item.to).toEqual(expect.any(String));
+      else expect(item.to).toBeUndefined();
     }
     // The flat listings come with the run (#674), each with its note.
     expect(done?.added).toBe('I added bike times to the flats');
