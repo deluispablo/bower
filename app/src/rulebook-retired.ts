@@ -95,4 +95,13 @@ export const RETIRED_RULEBOOK_LINES: readonly string[] = [
   'rent: £2,150',
   '- File each named file as Ingest says, then do for them, as one batch, what the text asks (a table across them, a summary, a translation): the result is **A note from Bower** in the same folder, linked from the hub note, with the files under `## What Bower used`. A text that only says what the files are ("receipts from the trip") needs no note: use it to file and name them.',
   "- Never edit this `CLAUDE.md`, `README.md` or anything under `.claude/`; the owner's rules go to `Rules.md`. Write only inside the folders above and to `Rules.md`, `About-Me.md`, `index.md`, `log.md`, `Lint Report.md` and `.bower/added.txt`: in unattended runs anything else is undone after the run.",
+  'updated: 2026-09-29',
+  '- The role: `role` Role (text); `employer` Employer (text); `office` Office (text); `hours` Hours (text)',
+  "- Join the dots first (see **A note from Bower**): check the document against the owner's notes and add the `for you` fields and box lines that follow, with the notes named in their origin.",
+  "- Body: the `> [!bower] Bower's note` box, exactly as in **A note from Bower** (at most three lines, each with its origin, `— Check` when it needs the person), then a short body: what it is and what it means for the owner, in a few lines with `[[wikilinks]]`. The fields live in the frontmatter: never repeat them as a table.",
+  '**Context note** (frontmatter `kind: context`, file name `Bower - <date> <time> Context.md`): what the owner typed in Add\'s "What is this?" box, then `## Applies to` with the names of the files it covers, as they were in the inbox. Handle it before the other files in the inbox:',
+  "3. Join the dots (see **A note from Bower**): check the answer against the owner's notes and name the notes used.",
+  "4. Write the answer as **A note from Bower** (see Note templates) in `Answers/<YYYY-MM-DD> <question>.md`: `type: answer`, the `> [!bower] Bower's note` box (at most three lines, each ending with its origin in brackets; `— Check` when it needs the person), then `## Why`, then, when useful, what to check, what to ask, the checklist link and `## What Bower used`, as **An answer** says.",
+  "- Never edit this `CLAUDE.md`, `README.md` or anything under `.claude/`; the owner's rules go to `Rules.md`. Write only inside the folders above and to `Rules.md`, `About-Me.md`, `index.md`, `log.md`, `Lint Report.md`, `.bower/added.txt` and `.bower/updated.txt`: in unattended runs anything else is undone after the run.",
+  '- Never rewrite a note the owner edited today unless an instruction asks for it; add to it instead.',
 ];

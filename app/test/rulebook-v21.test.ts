@@ -13,8 +13,8 @@ const RULEBOOK = rulebookRaw.replace(/\r\n/g, '\n');
 const INGEST = ingestRaw.replace(/\r\n/g, '\n');
 
 describe('rulebook v21', () => {
-  it('is version 21', () => {
-    expect(rulesVersionOf(RULEBOOK)).toBe(21);
+  it('is version 21 or later', () => {
+    expect(rulesVersionOf(RULEBOOK)).toBeGreaterThanOrEqual(21);
   });
 
   it.each([
@@ -87,7 +87,7 @@ describe('rulebook v21', () => {
 
   it('lets the agent write updated.txt', () => {
     expect(RULEBOOK).toContain(
-      '`.bower/added.txt` and `.bower/updated.txt`: in unattended runs',
+      'under `.bower/`, `added.txt`, `updated.txt`, `checks.txt` and `next.txt`: in unattended runs',
     );
   });
 
