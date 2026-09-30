@@ -46,6 +46,7 @@ import { HeaderAction } from '../components/header-action.js';
 import { Hint } from '../components/hint.js';
 import { MoreButton } from '../components/more-button.js';
 import { NoteMenu } from '../components/note-menu.js';
+import { ProjectFront } from '../components/project-front.js';
 import { QuickLookPane } from '../components/quick-look.js';
 import type { PanePreview } from '../components/quick-look.js';
 import { useShellSlot } from '../components/shell-slots.js';
@@ -454,6 +455,19 @@ function FolderBody({
         <compare.module.CompareView
           notes={compare.notes}
           folderPath={contents.path}
+        />
+      )}
+
+      {!comparing && parentName !== null && (
+        <ProjectFront
+          folderName={contents.name}
+          notes={contents.notes}
+          para={paraOfFolder}
+          compare={
+            compare === null
+              ? null
+              : { label: compare.label, onOpen: () => setTab('compare') }
+          }
         />
       )}
 
