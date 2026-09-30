@@ -79,6 +79,28 @@ const STILL_CLASSES: Partial<Record<BirdState, string>> = {
 };
 
 /**
+ * What a settled bird holds (D30, spec Appendix B): a still class (`s-*`) or a
+ * still face (`e-*`) per looping pose. The tidying and flying paper is hidden
+ * by a still face rather than the reading page.
+ */
+const SETTLED_CLASSES: Partial<Record<BirdState, string>> = {
+  looking: 's-perch',
+  perched: 's-perch',
+  pointing: 's-point',
+  reading: 's-read',
+  listening: 'e-curious',
+  singing: 'e-happy',
+  shiny: 'e-happy',
+  tidying: 'e-happy',
+  flying: 'e-happy',
+  building: 'e-happy',
+  peeking: 'e-curious',
+  confused: 'e-worried',
+  offline: 'e-worried',
+  asleep: 'e-sleepy',
+};
+
+/**
  * Every state: the spec's table (§4.3), plus `idle` (§14 finding 13) — the
  * same breathe and blink as `looking`, without the loop that turns the
  * whole bird round and hunts with the head. Bars and cards use it; `looking`
@@ -95,7 +117,10 @@ export const ONCE_STATES: readonly BirdState[] = ['hello', 'showoff', 'done'];
  * The class list for the bird's `<svg>`: `b`, then the state's pose (with
  * `reducedMotion` its still class, if it has one, instead), then `pd` for a
  * pointing bird that points down, then a face (`face`, or with
- * `reducedMotion` the state's still face), then `flip`.
+ * `reducedMotion` the state's still face), then `settled`, then `flip`. A
+ * `settled` bird (D30) holds the still class or face of its pose instead of
+ * playing it and gets `settled`, which stops every animation; Asleep keeps
+ * its pose (the nest, the resting height) and only stops.
  */
 export function birdClasses(
   state: BirdState,
@@ -103,16 +128,24 @@ export function birdClasses(
   flip: boolean,
   reducedMotion: boolean,
   down = false,
+  settled = false,
 ): string {
   const classes = ['b'];
-  if (!reducedMotion) classes.push(POSES[state]);
-  else {
-    const held = STILL_CLASSES[state];
-    if (held !== undefined) classes.push(held);
+  const holds = settled && !reducedMotion;
+  const still = holds ? SETTLED_CLASSES[state] : undefined;
+  if (!reducedMotion && (!holds || state === 'asleep')) {
+    classes.push(POSES[state]);
+  } else {
+    const held = holds ? still : STILL_CLASSES[state];
+    if (held !== undefined && !held.startsWith('e-')) classes.push(held);
   }
   if (down && state === 'pointing') classes.push('pd');
-  const shown = face ?? (reducedMotion ? STILL_FACES[state] : undefined);
+  let shown = face ?? (reducedMotion ? STILL_FACES[state] : undefined);
+  if (shown === undefined && still?.startsWith('e-') === true) {
+    shown = still.slice(2) as BirdFace;
+  }
   if (shown !== undefined) classes.push(`e-${shown}`);
+  if (holds) classes.push('settled');
   if (flip) classes.push('flip');
   return classes.join(' ');
 }

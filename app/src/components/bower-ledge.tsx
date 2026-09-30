@@ -17,7 +17,7 @@ import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import { useBirdCount } from '../bird-presence.js';
 import { useRun } from '../run-store.js';
 import { useMediaQuery } from '../use-media-query.js';
-import { Bird } from './bird.js';
+import { Bird, BirdNapButton } from './bird.js';
 import { useShellSlot } from './shell-slots.js';
 
 import '../styles/bower-ledge.css';
@@ -54,7 +54,9 @@ export function BowerLedge({ running }: LedgeProps): JSX.Element | null {
     <div class="bower-ledge">
       <span class="bower-ledge-line" />
       <span class="bower-ledge-bird">
-        <Bird state={running ? 'flying' : 'perched'} size={52} />
+        <BirdNapButton tabbable={false}>
+          <Bird state={running ? 'flying' : 'perched'} size={52} />
+        </BirdNapButton>
       </span>
     </div>
   );

@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { getRuns } from '../api.js';
 import type { Run } from '../api.js';
-import { Bird } from '../components/bird.js';
+import { Bird, BirdNapButton } from '../components/bird.js';
 import { ONCE_STATES } from '../components/bird-classes.js';
 import type { BirdState } from '../components/bird-classes.js';
 import { Hint } from '../components/hint.js';
@@ -173,7 +173,9 @@ function Greeting({
 }: GreetingProps): JSX.Element {
   return (
     <div class={`home-greeting home-greeting--${variant}`}>
-      <Bird state={state} size={size} onDone={onDone} />
+      <BirdNapButton>
+        <Bird state={state} size={size} onDone={onDone} />
+      </BirdNapButton>
       <div class="home-greeting-text">
         {variant === 'desktop' && <h1 class="home-h1">{greeting}</h1>}
         <BubbleText {...bubble} />
