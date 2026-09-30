@@ -1,0 +1,120 @@
+/*
+ * Learn Bower (R-LEARN, boards Learn-375, Learn-1280, Example-FlatHunt-375):
+ * rows and cards on the single-column page width.
+ */
+
+.learn-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+}
+
+.learn-lead {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.learn-heading {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+}
+
+.learn-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: inherit;
+  text-decoration: none;
+}
+
+.learn-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.learn-row-title {
+  font-weight: var(--weight-medium);
+}
+
+.learn-row-hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.learn-how,
+.learn-examples,
+.learn-act-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learn-how-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.learn-example-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.learn-act-item {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.learn-hint {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.learn-signin {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-4);
+}
+
+@media (min-width: 900px) {
+  .learn-how {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Sign-in's secondary button: What is Bower? · 2 min (Login-375). */
+.auth-learn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+/* Signed out there is no top bar: the heading always shows. */
+.learn-title {
+  margin: 0;
+}

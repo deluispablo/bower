@@ -27,6 +27,10 @@ const Folder = lazy(() => import('./routes/folder.js').then((m) => m.Folder));
 const Health = lazy(() => import('./routes/health.js').then((m) => m.Health));
 const Ideas = lazy(() => import('./routes/ideas.js').then((m) => m.Ideas));
 const Intro = lazy(() => import('./routes/intro.js').then((m) => m.Intro));
+const Learn = lazy(() => import('./routes/learn.js').then((m) => m.Learn));
+const LearnExample = lazy(() =>
+  import('./routes/learn.js').then((m) => m.LearnExample),
+);
 const LintRedirect = lazy(() =>
   import('./routes/lint-redirect.js').then((m) => m.LintRedirect),
 );
@@ -135,6 +139,8 @@ function AppRoutes() {
       <Route path="/lint" component={LintRedirect} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/welcome" component={Intro} />
+      <Route path="/learn" component={Learn} />
+      <Route path="/learn/:example" component={LearnExample} />
       <Route path="/recover" component={Recover} />
       <Route default component={NotFoundPage} />
     </Router>
@@ -143,7 +149,7 @@ function AppRoutes() {
   return (
     <ShellSlotsProvider>
       <RunChipHost />
-      {usesShell(path, isDemo()) ? (
+      {usesShell(path, isDemo(), status === 'signed-in') ? (
         <Layout>{routes}</Layout>
       ) : (
         <main class="page page-bare">{routes}</main>

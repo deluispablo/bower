@@ -9,8 +9,10 @@
 import { loginUrl } from '../api.js';
 import { Bird } from '../components/bird.js';
 import { IconGoogle } from '../components/icons.js';
+import { LEARN_PATH } from '../learn.js';
 import { useSession } from '../session.js';
 import '../styles/auth.css';
+import '../styles/learn.css';
 
 export function Login() {
   const { error } = useSession();
@@ -31,6 +33,9 @@ export function Login() {
         <IconGoogle />
         Sign in with Google
       </a>
+      <a href={LEARN_PATH} class="auth-learn">
+        What is Bower? · 2 min
+      </a>
       <p class="auth-note">
         Only people the person running this Bower has invited can sign in. Bower
         reads and writes your Bower folder; when you pick files from the rest of
@@ -44,10 +49,6 @@ export function Login() {
         {' · '}
         <a href="/terms" class="button-link">
           Terms
-        </a>
-        {' · '}
-        <a href="/welcome?from=login" class="button-link">
-          What is Bower?
         </a>
       </p>
     </section>

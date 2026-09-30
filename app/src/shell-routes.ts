@@ -1,4 +1,5 @@
 import type { HelpScreen } from './help-rows.js';
+import { isLearnPath } from './learn.js';
 
 /**
  * Which routes render inside the shell (`components/layout.tsx`) and which
@@ -71,7 +72,14 @@ export function helpScreenFor(path: string): HelpScreen {
   return 'home';
 }
 
-export function usesShell(path: string, demo = false): boolean {
+export function usesShell(
+  path: string,
+  demo = false,
+  signedIn = true,
+): boolean {
+  // Learn Bower (R-LEARN-1) is public: inside the shell for someone signed
+  // in, bare (ending in "Sign in with Google", not the tab bar) otherwise.
+  if (isLearnPath(path)) return signedIn;
   if (demo && DEMO_SHELL_PATHS.has(path)) return true;
   return !BARE_PATHS.has(path);
 }

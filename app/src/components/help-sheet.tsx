@@ -54,6 +54,7 @@ import {
 } from './icons.js';
 import { Queued } from './queued-overlay.js';
 import { Overlay } from './overlay.js';
+import { LEARN_PATH } from '../learn.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { restoreHint, isHintDismissed } from './hint.js';
 import { announceTourSkipped } from '../tour-store.js';
@@ -352,6 +353,9 @@ export function HelpSheet({
           </div>
           <a class="help-intro-link" href={INTRO_AGAIN_HREF}>
             What is Bower, from the start
+          </a>
+          <a class="help-intro-link" href={LEARN_PATH}>
+            Learn Bower: examples and use cases
           </a>
         </div>
       </Overlay>

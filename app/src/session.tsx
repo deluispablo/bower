@@ -28,6 +28,7 @@ import {
 } from './folder-state.js';
 import type { FolderState } from './folder-state.js';
 import { introSeen } from './intro.js';
+import { isLearnPath } from './learn.js';
 
 export type SessionStatus = 'loading' | 'signed-out' | 'signed-in';
 
@@ -155,7 +156,9 @@ function clearHadSessionMarker(): void {
  * `introHasBeenSeen` (#207) defaults to `true` so every existing call site
  * and test keeps its old behaviour unless it opts in; `SessionProvider`
  * below always passes the real `introSeen()` reading. `/welcome` itself is
- * always left alone: it is reachable signed out (the first-run intro) and
+ * always left alone, and so are `/learn` and `/learn/:example` (R-LEARN-1, a
+ * prefix match since `PUBLIC_PATHS` is exact, so a signed-in person with no
+ * folder is not sent to `/onboarding`): `/welcome` is reachable signed out (the first-run intro) and
  * signed in (reopened from Settings), and never auto-redirected to for a
  * signed-in visitor — only the signed-out first visit sends someone there.
  *
@@ -189,7 +192,7 @@ export function decideRedirect(
   query = '',
 ): string | null {
   if (status === 'loading' || PUBLIC_PATHS.has(currentPath)) return null;
-  if (currentPath === '/welcome') return null;
+  if (currentPath === '/welcome' || isLearnPath(currentPath)) return null;
   if (isDemoBuild && !introHasBeenSeen && currentPath === '/') {
     return '/welcome';
   }

@@ -325,6 +325,9 @@ describe('HelpSheet', () => {
     expect(link('What is Bower, from the start')?.getAttribute('href')).toBe(
       INTRO_AGAIN_HREF,
     );
+    expect(
+      link('Learn Bower: examples and use cases')?.getAttribute('href'),
+    ).toBe('/learn');
     expect(dialog().getAttribute('aria-modal')).toBe('true');
     expect(dialog().closest('#app, nav')).toBeNull();
   });
