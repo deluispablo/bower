@@ -20,11 +20,11 @@ import type { InterviewAnswers } from '../src/interview.js';
 import { runInterview } from '../src/vault-store.js';
 import type { InterviewInput } from '../src/vault-store.js';
 
-// Alex's demo folder (`demo/fixture.ts`) already has real `2-Areas/Home` and
-// `2-Areas/Health` folders (a hub note each, no leading underscore): these
+// Alex's demo folder (`demo/fixture.ts`) already has a real
+// `2-Areas/Visa & Immigration` folder (a note of that name, no leading underscore): these
 // area names are chosen to have nothing in the fixture, so a run always
 // creates all three, and a separate test below answers with one of Alex's
-// own areas (`Home`) to check the "already exists" skip against something
+// own areas (`Visa & Immigration`) to check the "already exists" skip against something
 // real rather than something this same test just created.
 const ANSWERS: InterviewAnswers = {
   keep: 'Everything I capture',
@@ -99,25 +99,25 @@ describe('runInterview', () => {
 
   it("skips an area whose folder already exists (one of Alex's own), still creates the others", async () => {
     const homeBefore = await getText(
-      (await mustFileAt('2-Areas/Home/Home.md')).id,
+      (await mustFileAt('2-Areas/Visa & Immigration/Visa & Immigration.md')).id,
     );
 
     const writes = await runInterview(
       await baseInput(
-        { ...ANSWERS, areas: ['Career', 'Home'] },
-        new Set(['Home']),
+        { ...ANSWERS, areas: ['Career', 'Visa & Immigration'] },
+        new Set(['Visa & Immigration']),
       ),
     );
 
     expect(writes.result).toEqual({
       areasCreated: ['Career'],
-      areasSkipped: ['Home'],
+      areasSkipped: ['Visa & Immigration'],
     });
     expect(await fileAt('2-Areas/Career/_Career.md')).toBeDefined();
-    // Alex's real Home area is untouched: no `_Home.md` folder note was
+    // Alex's real Visa & Immigration area is untouched: no `_Visa & Immigration.md` folder note was
     // added next to it, and its own hub note is exactly as it was.
-    expect(await fileAt('2-Areas/Home/_Home.md')).toBeUndefined();
-    expect(await getText((await mustFileAt('2-Areas/Home/Home.md')).id)).toBe(
+    expect(await fileAt('2-Areas/Visa & Immigration/_Visa & Immigration.md')).toBeUndefined();
+    expect(await getText((await mustFileAt('2-Areas/Visa & Immigration/Visa & Immigration.md')).id)).toBe(
       homeBefore,
     );
   });

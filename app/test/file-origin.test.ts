@@ -158,7 +158,7 @@ describe('the demo fixture', () => {
       typeof catalogueText === 'string' ? catalogueText : '',
     );
 
-    const contents = folderContents(index, '1-Projects/Kitchen Refresh');
+    const contents = folderContents(index, '4-Archives/Kitchen Refresh');
     expect(contents?.fileCount).toBe(2);
     expect(
       contents?.items.map((item) => [

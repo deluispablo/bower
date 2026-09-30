@@ -35,7 +35,7 @@ async function listing(
   return new Map(files.map((f) => [f.path, f]));
 }
 
-const FLAT = '1-Projects/Flat hunt';
+const FLAT = '4-Archives/Flat hunt';
 
 describe('the v4 sample folder', () => {
   it('lists every file and folder of the story, system files hidden in the app', async () => {
@@ -58,14 +58,14 @@ describe('the v4 sample folder', () => {
       `${FLAT}/Walk-through, Arlington Road.mp4`,
       `${FLAT}/Photos from the viewing.zip`,
       `${FLAT}/Notes from the viewing.md`,
-      '2-Areas/Work/Offer letter, Northwind Data.pdf',
-      '2-Areas/Work/Offer letter, Northwind Data.md',
-      '2-Areas/Work/Cycle to Work agreement.pdf',
-      '2-Areas/Work/Cycle to Work agreement.md',
-      '2-Areas/Work/Job offer, Northwind Data.md',
-      '2-Areas/Money/Household costs 2026.xlsx',
-      '2-Areas/Garden/Tomato seedlings.jpg',
-      '2-Areas/Garden/Front bed.heic',
+      '4-Archives/Work/Offer letter, Northwind Data.pdf',
+      '4-Archives/Work/Offer letter, Northwind Data.md',
+      '4-Archives/Work/Cycle to Work agreement.pdf',
+      '4-Archives/Work/Cycle to Work agreement.md',
+      '4-Archives/Work/Job offer, Northwind Data.md',
+      '3-Resources/Money/Household costs 2026.xlsx',
+      '3-Resources/Garden/Tomato seedlings.jpg',
+      '3-Resources/Garden/Front bed.heic',
       '3-Resources/Links/Kentish Town photos.md',
       '3-Resources/Viewing checklist.md',
       'Answers/Which flat should we view first.md',
@@ -79,13 +79,13 @@ describe('the v4 sample folder', () => {
     const emptyFolders = empty.filter(
       (f) => ![...files.keys()].some((p) => p.startsWith(`${f.path}/`)),
     );
-    expect(emptyFolders.map((f) => f.path)).toContain('2-Areas/Car');
+    expect(emptyFolders.map((f) => f.path)).toContain('3-Resources/Car');
 
     // System files exist in the Drive listing and the app hides them.
     const system = [
       `${FLAT}/desktop.ini`,
-      '2-Areas/Work/desktop.ini',
-      '2-Areas/Garden/desktop.ini',
+      '4-Archives/Work/desktop.ini',
+      '3-Resources/Garden/desktop.ini',
       `${FLAT}/~$Lease agreement 2026.docx`,
     ];
     for (const path of system) {
@@ -237,18 +237,18 @@ describe('the v4 sample folder', () => {
     // The June papers: a job offer and a contract.
     const offer = noteMetaFrom(
       parseFrontmatter(
-        await text('2-Areas/Work/Offer letter, Northwind Data.md'),
+        await text('4-Archives/Work/Offer letter, Northwind Data.md'),
       ).data,
     );
     expect(offer.kind).toBe('job-offer');
     const contract = noteMetaFrom(
-      parseFrontmatter(await text('2-Areas/Work/Cycle to Work agreement.md'))
+      parseFrontmatter(await text('4-Archives/Work/Cycle to Work agreement.md'))
         .data,
     );
     expect(contract.kind).toBe('contract');
 
     // The long note has a top box and collapsed section callouts.
-    const long = await text('2-Areas/Work/Job offer, Northwind Data.md');
+    const long = await text('4-Archives/Work/Job offer, Northwind Data.md');
     expect(long).toContain("> [!bower] Bower's note");
     expect(long).toContain('> [!bower]- Bower on this section');
 
@@ -278,12 +278,15 @@ describe('the v4 sample folder', () => {
 });
 
 describe('the demo API report v2', () => {
-  it('returns the last run and three earlier ones with to, renamedFrom, setAside and added', async () => {
+  it('returns the last run and the London ones with to, renamedFrom, setAside and added', async () => {
     const d = demo();
-    // Nothing has run in this session, so Home starts on "No tidy-up yet";
-    // today's tidy-up is the newest of the runs.
-    expect((await d.worker.getStatus()).run).toBeNull();
-    const { runs } = await d.worker.getRuns();
+    // Home starts on yesterday's last tidy-up (#903, "Done 21 h ago");
+    // the flat hunt's tidy-up is the newest of the London ones.
+    expect((await d.worker.getStatus()).run?.runId).toBe(
+      'demo-run-yesterday-10',
+    );
+    const { runs: all } = await d.worker.getRuns();
+    const runs = all.filter((r) => r.runId.startsWith('demo-run-earlier-'));
     const run = runs[0];
     expect(run?.state).toBe('done');
     expect(run?.finishedAt).toBe('2026-09-27T09:42:00.000Z');
@@ -371,7 +374,7 @@ describe('the demo Drive stub', () => {
 
     // A PDF and the Office file have thumbnails.
     expect(get(`${FLAT}/Lease agreement 2026.pdf`).thumbnailLink).toBeDefined();
-    const excel = get('2-Areas/Money/Household costs 2026.xlsx');
+    const excel = get('3-Resources/Money/Household costs 2026.xlsx');
     expect(excel.thumbnailLink).toBeDefined();
     expect(excel.size).toBe(18 * 1024);
 
@@ -390,7 +393,7 @@ describe('the demo Drive stub', () => {
     expect(zip.size).toBe(38 * 1024 * 1024);
     expect(zip.thumbnailLink).toBeUndefined();
     expect(previewUrlOf(d.server, zip.id)).toBeNull();
-    expect(get('2-Areas/Garden/Front bed.heic').mimeType).toBe('image/heic');
+    expect(get('3-Resources/Garden/Front bed.heic').mimeType).toBe('image/heic');
 
     // The CSV copy remembers the Google Sheet it came from.
     const csv = get(`${FLAT}/Flat budget.csv`);

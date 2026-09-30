@@ -98,7 +98,7 @@ describe('demo mode', () => {
     expect(all.filter(isInboxItem)).toHaveLength(3);
 
     const hub = await drive.getText(
-      (await fileAt('1-Projects/Lisbon Trip/Lisbon Trip.md')).id,
+      (await fileAt('4-Archives/Lisbon Trip/Lisbon Trip.md')).id,
     );
     expect(parseFrontmatter(hub).data.tags).toContain('travel');
     expect(hub).toContain('[[Flights and stays]]');
@@ -111,7 +111,7 @@ describe('demo mode', () => {
     });
 
     const image = await drive.getBlob(
-      (await fileAt('2-Areas/Garden/Garden plan.svg')).id,
+      (await fileAt('3-Resources/Garden/Garden plan.svg')).id,
     );
     expect(image.type).toBe('image/svg+xml');
 
@@ -122,29 +122,27 @@ describe('demo mode', () => {
     expect(found.map((f) => f.name)).toContain('Things to see in Lisbon.md');
   });
 
-  it('pins Flat hunt and Shopping list from the fixture (#489, #539, Demo-Home board)', async () => {
+  it('pins Housing Search Australia, and nothing else, from the fixture (#903, HM-Main board)', async () => {
     // A note pin on the hub note itself, not a folder pin (#489): the
     // folder note map is hydrated after every regular note
     // (`hydratePinnedAt`, `vault-store.tsx`).
-    const flatHuntPin = await drive.getText(
-      (await fileAt('1-Projects/Flat hunt/Flat hunt.md')).id,
+    const housingPin = await drive.getText(
+      (
+        await fileAt(
+          '1-Projects/Housing Search Australia/Housing Search Australia.md',
+        )
+      ).id,
     );
-    expect(pinnedOf(flatHuntPin)).not.toBeNull();
+    expect(pinnedOf(housingPin)).not.toBeNull();
 
-    // Lisbon Trip carried the fixture's only pin before #489; the board
-    // pins Flat hunt instead.
-    const lisbonHub = await drive.getText(
-      (await fileAt('1-Projects/Lisbon Trip/Lisbon Trip.md')).id,
-    );
-    expect(pinnedOf(lisbonHub)).toBeNull();
-
-    // Shopping list (2-Areas/Home) sorts well past
-    // `PINNED_HYDRATION_FETCH_CAP` by path; pinned now that #539 makes
-    // hydration find it via search first, ahead of the capped walk.
-    const shoppingList = await drive.getText(
-      (await fileAt('2-Areas/Home/Shopping list.md')).id,
-    );
-    expect(pinnedOf(shoppingList)).not.toBeNull();
+    // Flat hunt and Shopping list carried the pins before the v6 world.
+    for (const path of [
+      '4-Archives/Flat hunt/Flat hunt.md',
+      '4-Archives/Lisbon Trip/Lisbon Trip.md',
+      '3-Resources/Home/Shopping list.md',
+    ]) {
+      expect(pinnedOf(await drive.getText((await fileAt(path)).id))).toBeNull();
+    }
   });
 
   it('plays Tidy up: queued, running filing one by one, done', async () => {
@@ -175,7 +173,7 @@ describe('demo mode', () => {
     expect(done?.items).toContainEqual({
       path: '0-Inbox/Tomato seedlings.md',
       kind: 'file',
-      to: '2-Areas/Garden/Tomato seedlings.md',
+      to: '3-Resources/Garden/Tomato seedlings.md',
     });
     for (const item of done?.items ?? []) {
       expect(item.to).toEqual(expect.any(String));
@@ -187,8 +185,8 @@ describe('demo mode', () => {
 
     const after = await paths();
     expect(after.filter(isInboxItem)).toHaveLength(0);
-    expect(after).toContain('2-Areas/Garden/Tomato seedlings.md');
-    expect(after).toContain('2-Areas/Home/Boiler service invoice.pdf');
+    expect(after).toContain('3-Resources/Garden/Tomato seedlings.md');
+    expect(after).toContain('3-Resources/Home/Boiler service invoice.pdf');
     expect(
       after.some((p) => /^Answers\/2026-09-27 What do I still need/.test(p)),
     ).toBe(true);
@@ -249,7 +247,7 @@ describe('demo mode', () => {
     expect(texts.some((t) => t.includes('This is the demo'))).toBe(true);
     expect(
       (await paths()).filter((p) => /^0-Inbox\/Processed\/Bower - /.test(p)),
-    ).toHaveLength(5);
+    ).toHaveLength(7);
   });
 
   it('files the "What is this?" context note without answering it as a question (#444)', async () => {
