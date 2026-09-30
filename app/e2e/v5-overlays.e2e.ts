@@ -25,7 +25,7 @@ async function openNote(page: Page): Promise<void> {
   await visible(
     page
       .locator('.home-notes a[href^="/note/"]')
-      .filter({ hasText: /Notes from the viewing/ }),
+      .filter({ hasText: /10-43 Buckley St, Moonee Ponds/ }),
   ).click();
   await expect(page).toHaveURL(/\/note\//);
 }

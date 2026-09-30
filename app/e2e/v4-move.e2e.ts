@@ -7,8 +7,8 @@ import type { Page } from '@playwright/test';
 
 import { expect, openHome, test, visible } from './demo.js';
 
-/** The note in Flat hunt that Recent lists. */
-const NOTE = /Notes from the viewing/;
+/** The note in Moonee Ponds that Recent lists. */
+const NOTE = /10-43 Buckley St, Moonee Ponds/;
 
 /** Opens the note from Home's Recent list, then its More menu. */
 async function openMenu(page: Page): Promise<void> {

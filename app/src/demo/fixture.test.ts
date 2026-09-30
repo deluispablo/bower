@@ -69,9 +69,9 @@ function roots(): string[] {
 }
 
 describe('the v6 demo world (#903)', () => {
-  it('is Alex, with the stand-in e-mail', () => {
+  it('is Alex, whose avatar reads "A"', () => {
     expect(DEMO_NAME).toBe('Alex');
-    expect(DEMO_EMAIL).toBe('you@example.com');
+    expect(DEMO_EMAIL).toBe('alex@example.com');
   });
 
   it('has the roots of the boards, Projects and Areas as drawn', () => {

@@ -104,7 +104,7 @@ test('the keys: Space quick look, Enter opens, Backspace goes up', async ({
   await expect(dialog).toBeHidden();
 
   await page.keyboard.press('Backspace');
-  await expect(page).toHaveURL(/\/folder\/1-Projects$/);
+  await expect(page).toHaveURL(/\/folder\/4-Archives$/);
 
   await page.goBack();
   await expect(page.locator('.folder-item').first()).toBeVisible();

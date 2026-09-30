@@ -36,7 +36,7 @@ import { buildRun } from './run-builders.js';
 import type { ImageMediaMetadata, VideoMediaMetadata } from '../drive.js';
 
 export const DEMO_NAME = 'Alex';
-export const DEMO_EMAIL = 'you@example.com';
+export const DEMO_EMAIL = 'alex@example.com';
 /** Tidy up runs a day in the demo, the same as a real instance's default. */
 export const DEMO_QUOTA_LIMIT = 10;
 
@@ -2283,8 +2283,9 @@ Home insurance on 3 November, and the streaming service every month until you ca
 - [[Bills and renewals]] (from your notes)`,
   ),
 
-  ...V6_WORLD,
   ...V4_FILES,
+  // Last, so the older files keep their demo ids (`demo-<n>`) the tests use.
+  ...V6_WORLD,
 ];
 
 /**
