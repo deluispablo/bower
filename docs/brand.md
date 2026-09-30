@@ -166,6 +166,8 @@ Added for the v6 foundations (spec §2.1 to §2.5, issue #904). The dark theme i
 | `--color-accent-border` | `rgb(95 207 188 / .45)` | `--color-accent-line` | The accent card's border |
 | `--color-danger-halo` | `rgb(239 138 138 / .18)` | `--color-danger-bg` | The ring round the stop square while dictating |
 | `--color-badge-new-bg` / `-text` | `rgb(95 207 188 / .16)` / `#5fcfbc` | `--color-new` / `--color-new-on` | The New and Filed badges (the tint fails 4.5:1 on cream, so light keeps the solid tag) |
+| `--color-badge-failed-bg` | `rgb(239 138 138 / .16)` | `--color-danger-bg` | The Did not finish badge |
+| `--color-badge-check-bg` | `rgb(240 182 79 / .16)` | `--color-warn-bg` | The Check badge |
 | `--shadow-lg` | `0 12px 32px rgb(0 0 0 / .4)` | `--shadow-md` | Desktop popovers and the centred dialog |
 
 Theme-independent: type `--text-13` 13, `--text-15` 15, `--text-18` 18, `--text-28` 28 px; radii `--radius-xs` 4, `--radius-row` 8, `--radius-card` 12, `--radius-bubble` 14, `--radius-composer` 24 px (the text box and every search field); half steps `--space-1-5` 6, `--space-2-5` 10, `--space-3-5` 14 px; sizes `--hit` 44, `--control-lg` 48, `--control-sm` 40, `--row-tree-phone` 40, `--row-tree-desk` 28, `--topbar-h` 56, `--tabbar-h` 64, `--drawer-width` 324 (max 88vw), `--panel-side` 440 (max 100vw), `--popover-width` 320 (max 88vw), `--aside-width` 360, `--avatar` 30 px.
@@ -197,11 +199,11 @@ In `app/src/styles/primitives.css` (imported once from `main.tsx`) and `app/src/
 | Primitive | Anatomy |
 | --- | --- |
 | `.btn` | Primary: 48 high (`.btn-sm` 40), radius 12, 16 px 600 (sm 15 px), teal fill. `.btn-secondary`: transparent, 1 px `--color-border`. `.btn-text` and `.btn-danger`: links with a 44 px target. `.btn-block` fills the width; `aria-busy` shows `.btn-spinner` |
-| `.chip` | 32 high pill with a 44 px target, 14 px, 1 px `--color-border-control`; on (`aria-pressed` or `aria-checked`): teal tint and teal border |
+| `.chip` | Dark only: 32 high pill with a 44 px target, 14 px, 1 px `--color-border-control`; on (`aria-pressed` or `aria-checked`): teal tint and teal border. Light keeps today's chip (`layout.css`), and `BowerTag` keeps its light look too |
 | `Badge` (`badge.tsx`) | 22 high pill, 12 px 700; tones `new`, `done`, `failed`, `check`, `filed`. `NewTag` is the `new` tone |
 | Text roles | `.section-heading` (a real `h2`, Poppins 700 20 px, margin 20 0 8), `.overline` (12 px 700 uppercase .08em muted), `.group-label` (13 px 700 muted), `.meta` (13 px muted) |
 | `Segmented` (`segmented.tsx`) | `.seg` track radius 10, padding 3; buttons 34 high (44 target), radius 8, 15 px; on: `--color-surface-strong`. `role="radiogroup"`, arrow keys, Home and End |
-| `Card`, `StatTile` (`card.tsx`) | Radius 12, 1 px `--color-border-subtle`, `--color-surface-raised`, padding 12 14. Variants `plain`, `accent`, `bubble` (radius 14, never wider than its column). The stat tile's number is 24 px Poppins 700 |
+| `Card`, `StatTile` (`card.tsx`) | Radius 12, 1 px `--color-border-subtle`, `--color-surface-raised`, padding 12 14. Variants `plain`, `accent`, `bubble` (radius 14, never wider than its column). The stat tile's number is 24 px 700 `--color-heading` in the body font; a zero is not dimmed |
 | `RoundButton` (`round-button.tsx`) | 40 px circle (32 in the desktop search field), 44 px target, same place in every state: `mic`, `asking` (pulsing ring), `mic-off` (crossed-out, dimmed, dashed), `arrow`, `stop` (square and halo), `spinner` |
 
 Shared states: one focus ring (2 px `--color-focus`, 2 px offset); hover only on a fine pointer (rows `.hover-row` `--color-surface` at 60 %, primary teal at 90 %); pressed `scale(.98)` in 120 ms, none under reduced motion; disabled 40 % with `aria-disabled` where the control stays focusable. `.hit` gives any control a 44 × 44 target under 900 px or on a coarse pointer.

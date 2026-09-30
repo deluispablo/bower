@@ -198,6 +198,8 @@
      4.5:1 on cream); dark is the tint of the boards. */
   --color-badge-new-bg: var(--color-new);
   --color-badge-new-text: var(--color-new-on);
+  --color-badge-failed-bg: var(--color-danger-bg);
+  --color-badge-check-bg: var(--color-warn-bg);
 
   /* Type sizes new in v6 (R-TOK-31, 33, 35, 38). */
   --text-13: 0.8125rem; /* 13px */
@@ -325,6 +327,8 @@
     --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.4);
     --color-badge-new-bg: rgb(95 207 188 / 0.16);
     --color-badge-new-text: #5fcfbc;
+    --color-badge-failed-bg: rgb(239 138 138 / 0.16);
+    --color-badge-check-bg: rgb(240 182 79 / 0.16);
   }
 }
 
@@ -399,4 +403,6 @@
   --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.4);
   --color-badge-new-bg: rgb(95 207 188 / 0.16);
   --color-badge-new-text: #5fcfbc;
+  --color-badge-failed-bg: rgb(239 138 138 / 0.16);
+  --color-badge-check-bg: rgb(240 182 79 / 0.16);
 }

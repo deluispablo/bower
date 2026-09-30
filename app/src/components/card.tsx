@@ -60,9 +60,7 @@ export function StatTile({
         {icon}
         {label}
       </div>
-      <div class={value === 0 ? 'stat-tile-value is-zero' : 'stat-tile-value'}>
-        {value}
-      </div>
+      <div class="stat-tile-value">{value}</div>
       {note !== undefined && <div class="stat-tile-note">{note}</div>}
     </Card>
   );

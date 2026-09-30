@@ -15,7 +15,6 @@
 }
 
 .btn,
-.chip,
 .seg-button,
 .round-button {
   transition:
@@ -25,7 +24,6 @@
 
 /* Pressed: a small squeeze, never under reduced motion. */
 .btn:active:not(:disabled, [aria-disabled='true']),
-.chip:active:not(:disabled, [aria-disabled='true']),
 .seg-button:active,
 .round-button:active:not(:disabled, [aria-disabled='true']) {
   transform: scale(0.98);
@@ -34,8 +32,6 @@
 /* Disabled: 40 %. Use `aria-disabled` where the control must stay focusable. */
 .btn:disabled,
 .btn[aria-disabled='true'],
-.chip:disabled,
-.chip[aria-disabled='true'],
 .seg-button:disabled {
   opacity: 0.4;
   cursor: default;
@@ -52,12 +48,6 @@
   }
 
   .btn-secondary:hover:not(:disabled, [aria-disabled='true']),
-  .chip:hover:not(
-      :disabled,
-      [aria-disabled='true'],
-      [aria-pressed='true'],
-      [aria-checked='true']
-    ),
   .seg-button:hover:not([aria-checked='true']) {
     background: color-mix(in srgb, var(--color-surface) 60%, transparent);
   }
@@ -170,7 +160,14 @@
 
 /* ---------- Chip (§3.22, R-CHIP-1, R-CHIP-2) ---------- */
 
-.chip {
+/*
+ * Dark only: the light theme keeps today's chip (`.chip` in layout.css,
+ * owner review O-R7). `:where()` keeps the specificity of a plain `.chip`,
+ * so a caller's own `.chip.x` rule still wins. The same block twice: for
+ * `data-theme="dark"` and for a dark system theme.
+ */
+
+:where(:root[data-theme='dark']) .chip {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -188,10 +185,13 @@
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
 }
 
 /* The 44 px target around the 32 px pill. */
-.chip::after {
+:where(:root[data-theme='dark']) .chip::after {
   content: '';
   position: absolute;
   left: 0;
@@ -201,15 +201,128 @@
   transform: translateY(-50%);
 }
 
-.chip[aria-pressed='true'],
-.chip[aria-checked='true'] {
+:where(:root[data-theme='dark']) .chip[aria-pressed='true'],
+:where(:root[data-theme='dark']) .chip[aria-checked='true'] {
   border-color: var(--color-brand);
   background: var(--color-brand-tint);
 }
 
-.chip .icon {
+:where(:root[data-theme='dark']) .chip .icon {
   width: 16px;
   height: 16px;
+}
+
+:where(:root[data-theme='dark'])
+  .chip:active:not(:disabled, [aria-disabled='true']) {
+  transform: scale(0.98);
+}
+
+:where(:root[data-theme='dark']) .chip:disabled,
+:where(:root[data-theme='dark']) .chip[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(:root[data-theme='dark'])
+    .chip:hover:not(
+      :disabled,
+      [aria-disabled='true'],
+      [aria-pressed='true'],
+      [aria-checked='true']
+    ) {
+    background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(:root[data-theme='dark']) .chip {
+    transition: none;
+  }
+
+  :where(:root[data-theme='dark']) .chip:active {
+    transform: none !important;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :where(:root:not([data-theme='light'])) .chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    box-sizing: border-box;
+    height: 32px;
+    min-height: 0;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border-control);
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--text-sm);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      transform var(--motion-fast) var(--ease-out),
+      opacity var(--motion-fast) var(--ease-out);
+  }
+
+  /* The 44 px target around the 32 px pill. */
+  :where(:root:not([data-theme='light'])) .chip::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: var(--hit);
+    transform: translateY(-50%);
+  }
+
+  :where(:root:not([data-theme='light'])) .chip[aria-pressed='true'],
+  :where(:root:not([data-theme='light'])) .chip[aria-checked='true'] {
+    border-color: var(--color-brand);
+    background: var(--color-brand-tint);
+  }
+
+  :where(:root:not([data-theme='light'])) .chip .icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  :where(:root:not([data-theme='light']))
+    .chip:active:not(:disabled, [aria-disabled='true']) {
+    transform: scale(0.98);
+  }
+
+  :where(:root:not([data-theme='light'])) .chip:disabled,
+  :where(:root:not([data-theme='light'])) .chip[aria-disabled='true'] {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    :where(:root:not([data-theme='light']))
+      .chip:hover:not(
+        :disabled,
+        [aria-disabled='true'],
+        [aria-pressed='true'],
+        [aria-checked='true']
+      ) {
+      background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where(:root:not([data-theme='light'])) .chip {
+      transition: none;
+    }
+
+    :where(:root:not([data-theme='light'])) .chip:active {
+      transform: none !important;
+    }
+  }
 }
 
 /* ---------- Badge (§3.21, R-BADGE-1, R-BADGE-2) ---------- */
@@ -241,12 +354,12 @@
 }
 
 .badge-failed {
-  background: var(--color-danger-bg);
+  background: var(--color-badge-failed-bg);
   color: var(--color-danger-text);
 }
 
 .badge-check {
-  background: var(--color-warn-bg);
+  background: var(--color-badge-check-bg);
   color: var(--color-warn);
 }
 
@@ -378,14 +491,9 @@
 .stat-tile-value {
   margin-top: var(--space-1-5);
   color: var(--color-heading);
-  font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: 700;
   line-height: var(--leading-heading);
-}
-
-.stat-tile-value.is-zero {
-  color: var(--color-text-muted);
 }
 
 .stat-tile-note {
@@ -514,14 +622,12 @@
 
 @media (prefers-reduced-motion: reduce) {
   .btn,
-  .chip,
   .seg-button,
   .round-button {
     transition: none;
   }
 
   .btn:active,
-  .chip:active,
   .seg-button:active,
   .round-button:active {
     transform: none !important;
