@@ -33,10 +33,7 @@ export interface MadeForCandidate {
 
 function baseName(target: string): string {
   const last = target.split('/').pop() ?? target;
-  return last
-    .replace(/\.md$/i, '')
-    .trim()
-    .toLowerCase();
+  return last.replace(/\.md$/i, '').trim().toLowerCase();
 }
 
 /**

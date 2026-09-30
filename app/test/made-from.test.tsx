@@ -174,9 +174,13 @@ describe('Apply (issue #792, R-VERDICT-2)', () => {
       lookup,
     });
     await act(() => {
-      render(h(MadeFrom, { sources, apply: 'https://jobs.example.com/apply' }), root);
+      render(
+        h(MadeFrom, { sources, apply: 'https://jobs.example.com/apply' }),
+        root,
+      );
     });
-    const buttons = root.querySelectorAll<HTMLAnchorElement>('.made-from-apply');
+    const buttons =
+      root.querySelectorAll<HTMLAnchorElement>('.made-from-apply');
     expect(buttons).toHaveLength(1);
     expect(buttons[0]?.textContent).toBe('Apply');
     expect(buttons[0]?.target).toBe('_blank');

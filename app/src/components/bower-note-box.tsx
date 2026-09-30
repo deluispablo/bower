@@ -177,10 +177,9 @@ export interface VerdictRow {
  * `score` (or `fit`) and a `verdict`. The box text is never parsed; the
  * agent's "why" line stays in the Summary rows.
  */
-export function verdictRow(
-  fields: Record<string, unknown>,
-): VerdictRow | null {
-  const verdict = typeof fields.verdict === 'string' ? fields.verdict.trim() : '';
+export function verdictRow(fields: Record<string, unknown>): VerdictRow | null {
+  const verdict =
+    typeof fields.verdict === 'string' ? fields.verdict.trim() : '';
   if (verdict === '') return null;
   for (const key of ['score', 'fit']) {
     const raw = fields[key];

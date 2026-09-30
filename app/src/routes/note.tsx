@@ -10,7 +10,11 @@ import type { Kind } from '../kinds.js';
 import { statusOptionLabel } from '../compare.js';
 import { changeStatusWithHistory } from '../history.js';
 import { IconChat, IconFile, IconNote } from '../components/icons.js';
-import { isMadeForName, madeForItem, MadeForIt } from '../components/made-for-it.js';
+import {
+  isMadeForName,
+  madeForItem,
+  MadeForIt,
+} from '../components/made-for-it.js';
 import {
   applyLinkOf,
   MadeFrom,

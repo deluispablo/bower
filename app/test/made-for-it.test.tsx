@@ -28,7 +28,10 @@ describe('madeForItem (R-VERDICT-3)', () => {
     const notes = madeForItem(ITEM, [
       candidate('Letter · Northwind', '[[Data Lead, Northwind]]'),
       candidate('CV · Fabrikam', '[[Analytics Lead, Fabrikam]]'),
-      candidate('CV · Northwind', '[[Applications/Data Lead, Northwind|offer]]'),
+      candidate(
+        'CV · Northwind',
+        '[[Applications/Data Lead, Northwind|offer]]',
+      ),
     ]);
     expect(notes.map((note) => note.name)).toEqual([
       'CV · Northwind',
