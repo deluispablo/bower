@@ -36,11 +36,42 @@
   margin-top: var(--space-2);
 }
 
-/* A link is a tap target on a phone (44 px). */
+/* "Next for you" is a checklist: an empty box marks each line. */
+.run-meaning-next .run-meaning-list li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.run-meaning-next .run-meaning-list li::before {
+  content: '';
+  flex: none;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  margin-top: 0.25em;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 4px;
+}
+
+.run-meaning-next .run-meaning-list li > span {
+  min-width: 0;
+}
+
+/* A link stays inline and wraps like text; on a phone its 44 px tap target
+   comes from a ::after box, so it never changes the line height. */
+.run-meaning-link {
+  position: relative;
+}
+
 @media (max-width: 899px) {
-  .run-meaning-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
+  .run-meaning-link::after {
+    content: '';
+    position: absolute;
+    left: -4px;
+    right: -4px;
+    top: 50%;
+    height: 44px;
+    transform: translateY(-50%);
   }
 }
