@@ -37,19 +37,32 @@ import {
 } from '../bird-events.js';
 import { registerBird, useOverlayBird } from '../bird-presence.js';
 
-import { ONCE_STATES, birdClasses } from './bird-classes.js';
-import type { BirdFace, BirdState } from './bird-classes.js';
+import { ONCE_STATES, birdClasses, birdSize } from './bird-classes.js';
+import type {
+  BirdFace,
+  BirdSizeValue,
+  BirdState,
+} from './bird-classes.js';
 
 import '../styles/bird.css';
 
-export type { BirdFace, BirdState } from './bird-classes.js';
+export type {
+  BirdFace,
+  BirdSize,
+  BirdSizeValue,
+  BirdState,
+} from './bird-classes.js';
+export { BIRD_SIZE } from './bird-classes.js';
 
 export interface BirdProps {
   state: BirdState;
   /** A still face on top of the state (or instead of it, with reduced motion). */
   face?: BirdFace;
-  /** Width and height in px; 40 or more (smaller, use `BowerMark`). */
-  size?: number;
+  /**
+   * Width and height: a name from the size scale (`BIRD_SIZE`, read from
+   * the `--bird-*` tokens) or px; 40 or more (smaller, use `BowerMark`).
+   */
+  size?: BirdSizeValue;
   /** Faces left instead of right. */
   flip?: boolean;
   /** For `pointing`: the wing points down (`pd`) instead of up and out. */
@@ -312,7 +325,7 @@ function useOffScreen(ref: RefObject<SVGSVGElement>): boolean {
 export function Bird({
   state,
   face,
-  size = 40,
+  size: sizeValue = 40,
   flip = false,
   down = false,
   reducedMotion = false,
@@ -320,6 +333,7 @@ export function Bird({
   overlay = false,
   onDone,
 }: BirdProps): JSX.Element {
+  const { px: size, css: sizeCss } = birdSize(sizeValue);
   if (import.meta.env.DEV && size < MARK_BELOW) {
     console.error(
       `Bird: size ${size} is under ${MARK_BELOW} px; use BowerMark (spec 6.21 rule 2).`,
@@ -406,6 +420,9 @@ export function Bird({
       viewBox="0 0 100 100"
       width={size}
       height={size}
+      style={
+        sizeCss === undefined ? undefined : { width: sizeCss, height: sizeCss }
+      }
       aria-hidden="true"
       focusable="false"
     >
@@ -446,8 +463,8 @@ export function BirdNapButton({
 }
 
 export interface BowerMarkProps {
-  /** Width and height in px (tags, rows and headers use 14 to 32). */
-  size?: number;
+  /** Width and height: `inline`, `icon`, `tip`, `box` from the size scale, or px. */
+  size?: BirdSizeValue;
 }
 
 /**
@@ -456,13 +473,19 @@ export interface BowerMarkProps {
  * iris ring, lids, jaw and props). For anything under 40 px. It never moves
  * and never counts as a bird on screen.
  */
-export function BowerMark({ size = 24 }: BowerMarkProps): JSX.Element {
+export function BowerMark({
+  size: sizeValue = 24,
+}: BowerMarkProps): JSX.Element {
+  const { px: size, css: sizeCss } = birdSize(sizeValue);
   return (
     <svg
       class="b mark"
       viewBox="0 0 100 100"
       width={size}
       height={size}
+      style={
+        sizeCss === undefined ? undefined : { width: sizeCss, height: sizeCss }
+      }
       aria-hidden="true"
       focusable="false"
     >
