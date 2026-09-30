@@ -6,7 +6,7 @@ This page is the terms of service for this Bower instance. It is written for the
 
 ## What Bower is
 
-Bower is [open-source software](https://github.com/deluispablo/bower), released under the MIT licence. There is no company behind it and no contract between you and anyone: what you are using is a private copy of that software, deployed and run by the operator described below.
+Bower is [source-available software](https://github.com/deluispablo/bower), released under the Functional Source License 1.1, MIT Future License (FSL-1.1-MIT): you may run and change your own copy, but not offer it as a competing product or service; each version becomes MIT two years after its release. There is no company behind it and no contract between you and anyone: what you are using is a private copy of that software, deployed and run by the operator described below.
 
 ## Who runs this instance
 

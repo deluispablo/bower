@@ -55,6 +55,10 @@ The test suites are **hermetic**: no network, no real Google, no real Claude. Go
 - If the change alters how an operator deploys or how a user acts, update `docs/runbook.md` or the UI copy in the same pull request.
 - Label the PR `needs-review`. Merges are squash merges by the maintainer once CI is green.
 
+## License of contributions
+
+Bower is licensed under `FSL-1.1-MIT` (see `LICENSE`). By opening a pull request you agree that your contribution is licensed under the same terms, and that the maintainer may relicense it together with the rest of the project.
+
 ## Releases
 
 Bower is deployed, not published. Operators pull `main` into their instance and redeploy; `docs/runbook.md` says how. Breaking changes for operators (new secret, renamed variable) are listed under **Operator action required** in the pull request and in `docs/changelog.md`.
