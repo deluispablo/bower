@@ -148,6 +148,64 @@ The light `--color-danger` (`#e12020`) stays for fills, but it is 3.99:1 on `--c
 
 The new pairs are checked by `python3 scripts/brand/contrast.py` and `app/test/tokens.test.ts`.
 
+### v6 tokens
+
+Added for the v6 foundations (spec §2.1 to §2.5, issue #904). The dark theme is the reference. The light theme keeps every value it had: a colour role that is new in v6 is, in light, an alias of an existing light role, so nothing in light changes. Three dark values changed: `--color-sidebar` `#0b1120` → `#0e1626`, `--color-heading` `#f1f5f9` → `#f3f6fa`, `--color-border` `#2c3a54` → `rgb(223 229 238 / .18)`.
+
+| Token | Dark | Light (alias) | Use |
+| --- | --- | --- | --- |
+| `--color-surface-raised` | `#162034` | `--color-surface` | Cards, stat tiles, grid tiles, Bower's note box |
+| `--color-surface-overlay` | `#1f2b42` | `--color-surface` | Desktop popovers |
+| `--color-surface-strong` | `#2a3850` | `--color-surface-hover` | The segment that is on, the avatar circle |
+| `--color-text-secondary` | `#c6cfdc` | `--color-text-muted` | Icon buttons, Skip, secondary text in cards |
+| `--color-text-disabled` | `#6b7890` | `--color-border-strong` | A disabled glyph (the crossed-out microphone) |
+| `--color-border-subtle` | `rgb(223 229 238 / .1)` | `--color-border` | Card borders, dividers, bar and panel edges |
+| `--color-border-control` | `rgb(223 229 238 / .4)` | `--color-border-strong` | A control's only edge: chips, the outlined segmented track, the microphone |
+| `--color-grab` | `#64748b` | `--color-border-strong` | The sheet's grab handle |
+| `--color-selection` | `rgb(95 207 188 / .14)` | `--color-brand-tint` | Selected row, tree row, tile, sidebar item |
+| `--color-accent-border` | `rgb(95 207 188 / .45)` | `--color-accent-line` | The accent card's border |
+| `--color-danger-halo` | `rgb(239 138 138 / .18)` | `--color-danger-bg` | The ring round the stop square while dictating |
+| `--color-badge-new-bg` / `-text` | `rgb(95 207 188 / .16)` / `#5fcfbc` | `--color-new` / `--color-new-on` | The New and Filed badges (the tint fails 4.5:1 on cream, so light keeps the solid tag) |
+| `--shadow-lg` | `0 12px 32px rgb(0 0 0 / .4)` | `--shadow-md` | Desktop popovers and the centred dialog |
+
+Theme-independent: type `--text-13` 13, `--text-15` 15, `--text-18` 18, `--text-28` 28 px; radii `--radius-xs` 4, `--radius-row` 8, `--radius-card` 12, `--radius-bubble` 14, `--radius-composer` 24 px (the text box and every search field); half steps `--space-1-5` 6, `--space-2-5` 10, `--space-3-5` 14 px; sizes `--hit` 44, `--control-lg` 48, `--control-sm` 40, `--row-tree-phone` 40, `--row-tree-desk` 28, `--topbar-h` 56, `--tabbar-h` 64, `--drawer-width` 324 (max 88vw), `--panel-side` 440 (max 100vw), `--popover-width` 320 (max 88vw), `--aside-width` 360, `--avatar` 30 px.
+
+#### Bird sizes
+
+`--bird-*` in `tokens.css`, mirrored by `BIRD_SIZE` in `app/src/components/bird-classes.ts`. `<Bird size="tab">` and `<BowerMark size="inline">` read the token; a number still works. Under 40 px the bird is the still `BowerMark`.
+
+| Token | px | Where |
+| --- | --- | --- |
+| `--bird-inline` | 16 | Tree rows, About lists, inline meta |
+| `--bird-icon` | 20 | Inside a 32 px row box |
+| `--bird-tip` | 28 | The file tip |
+| `--bird-box` | 32 | Bower's note header, the desktop preview |
+| `--bird-drop` | 44 | Add's desktop drop hint |
+| `--bird-sheet` | 52 | Help and about this |
+| `--bird-confirm` | 56 | Add's confirm sheet |
+| `--bird-running` | 70 | Add while tidying |
+| `--bird-tab` | 72 | The Bower tab |
+| `--bird-tour` | 80 | The tour |
+| `--bird-hero` | 84 phone, 96 from 900 px | Home |
+
+The bird faces right everywhere; the tidying pose (`p-tidy`) no longer turns round on the way back. Only the tour's pointing bird turns to face its target (`flip`).
+
+#### Primitives
+
+In `app/src/styles/primitives.css` (imported once from `main.tsx`) and `app/src/components/`:
+
+| Primitive | Anatomy |
+| --- | --- |
+| `.btn` | Primary: 48 high (`.btn-sm` 40), radius 12, 16 px 600 (sm 15 px), teal fill. `.btn-secondary`: transparent, 1 px `--color-border`. `.btn-text` and `.btn-danger`: links with a 44 px target. `.btn-block` fills the width; `aria-busy` shows `.btn-spinner` |
+| `.chip` | 32 high pill with a 44 px target, 14 px, 1 px `--color-border-control`; on (`aria-pressed` or `aria-checked`): teal tint and teal border |
+| `Badge` (`badge.tsx`) | 22 high pill, 12 px 700; tones `new`, `done`, `failed`, `check`, `filed`. `NewTag` is the `new` tone |
+| Text roles | `.section-heading` (a real `h2`, Poppins 700 20 px, margin 20 0 8), `.overline` (12 px 700 uppercase .08em muted), `.group-label` (13 px 700 muted), `.meta` (13 px muted) |
+| `Segmented` (`segmented.tsx`) | `.seg` track radius 10, padding 3; buttons 34 high (44 target), radius 8, 15 px; on: `--color-surface-strong`. `role="radiogroup"`, arrow keys, Home and End |
+| `Card`, `StatTile` (`card.tsx`) | Radius 12, 1 px `--color-border-subtle`, `--color-surface-raised`, padding 12 14. Variants `plain`, `accent`, `bubble` (radius 14, never wider than its column). The stat tile's number is 24 px Poppins 700 |
+| `RoundButton` (`round-button.tsx`) | 40 px circle (32 in the desktop search field), 44 px target, same place in every state: `mic`, `asking` (pulsing ring), `mic-off` (crossed-out, dimmed, dashed), `arrow`, `stop` (square and halo), `spinner` |
+
+Shared states: one focus ring (2 px `--color-focus`, 2 px offset); hover only on a fine pointer (rows `.hover-row` `--color-surface` at 60 %, primary teal at 90 %); pressed `scale(.98)` in 120 ms, none under reduced motion; disabled 40 % with `aria-disabled` where the control stays focusable. `.hit` gives any control a 44 × 44 target under 900 px or on a coarse pointer.
+
 The theme follows the system. The root element may carry `data-theme="light"` or `data-theme="dark"` to override it.
 
 ## Type
