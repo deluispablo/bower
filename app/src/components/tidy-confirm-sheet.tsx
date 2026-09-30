@@ -226,6 +226,16 @@ export function TidyConfirmSheet({
                       </span>
                     </li>
                   ))}
+                  {piles.elsewhere > 0 && (
+                    <li>
+                      <span class="tidy-confirm-pile-label">
+                        Added from elsewhere
+                      </span>
+                      <span class="tidy-confirm-pile-count">
+                        {`${piles.elsewhere} ${piles.elsewhere === 1 ? 'thing' : 'things'} · no note`}
+                      </span>
+                    </li>
+                  )}
                 </ul>
               )}
               {uploading > 0 && (
