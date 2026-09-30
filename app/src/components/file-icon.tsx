@@ -3,8 +3,8 @@
  * spec §3.16 R-FILEICON-1 and R-FILEICON-3, canon K-13, G-21, G-22):
  *
  * - anything Bower wrote: the still bird mark (`BowerMark`);
- * - an original: its kind's file glyph, stroked in its root's colour
- *   (`--color-para-inbox` only while it is in the Inbox);
+ * - an original: one document glyph for every kind, stroked in its root's
+ *   colour (`--color-para-inbox` only while it is in the Inbox);
  * - a subfolder: the folder outline in its root's colour, no fill;
  * - a root: the PARA disc (`FolderMark`);
  * - Answers, Clippings and anything outside the five roots: the outline or
@@ -15,7 +15,8 @@
  * values come from `styles/tokens.css`.
  */
 
-import type { ComponentChildren, JSX } from 'preact';
+import type { JSX } from 'preact';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 
 import { FOLDER_MIME } from '../drive.js';
 import type { ItemKindWord } from '../kinds.js';
@@ -25,6 +26,7 @@ import { paraKindOf } from '../navigation.js';
 import type { ParaKind } from '../navigation.js';
 import { BowerMark } from './bird.js';
 import { FolderMark, markSizeFor } from './folder-mark.js';
+import { IconFolder } from './icons.js';
 
 export type FileIconSize = 16 | 20 | 28 | 40;
 
@@ -88,13 +90,14 @@ export function fileIconLabel(item: FileIconItem): string {
   return root === null ? kind : `${kind} in ${ROOT_NAMES[root]}`;
 }
 
-function Glyph({
-  size,
-  children,
-}: {
-  size: FileIconSize;
-  children: ComponentChildren;
-}): JSX.Element {
+/**
+ * The document glyph every original wears, whatever its kind (lead ruling on
+ * #929: the boards SE-Query, AD-Confirm and AR-Ask win over spec §3.16; the
+ * kind word in the meta line tells the kinds apart).
+ * TODO(#904): move to `components/icons.tsx` as `IconDocument` once #904,
+ * which owns icons.tsx in this wave, has merged.
+ */
+function IconDocument({ size }: { size: FileIconSize }): JSX.Element {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -108,64 +111,37 @@ function Glyph({
       aria-hidden="true"
       focusable="false"
     >
-      {children}
+      <path d="M7 3h7l5 5v13H7z" />
+      <path d="M14 3v5h5M10 13h6M10 17h6" />
     </svg>
   );
 }
 
-const PAGE = (
-  <>
-    <path d="M6 3h8l4 4v14H6z" />
-    <path d="M14 3v4h4" />
-  </>
-);
-
-/** The glyph for each kind; a subfolder uses `folder`. */
-const GLYPHS: Readonly<Record<ItemKindWord, () => JSX.Element>> = {
-  folder: () => (
-    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-  ),
-  note: () => (
-    <>
-      <path d="M5 4h10l4 4v12H5z" />
-      <path d="M8 12h8M8 16h5" />
-    </>
-  ),
-  'bower-note': () => GLYPHS.note(),
-  'bower-answer': () => GLYPHS.note(),
-  pdf: () => (
-    <>
-      {PAGE}
-      <path d="M9 13h6M9 17h4" />
-    </>
-  ),
-  word: () => (
-    <>
-      {PAGE}
-      <path d="M8.5 12l1.5 5 2-4 2 4 1.5-5" />
-    </>
-  ),
-  spreadsheet: () => (
-    <>
-      {PAGE}
-      <path d="M8.5 11h7v7h-7zM8.5 14.5h7M12 11v7" />
-    </>
-  ),
-  photo: () => (
-    <>
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <circle cx="8.5" cy="10" r="1.5" />
-      <path d="M21 16l-5-5-8 8" />
-    </>
-  ),
-  link: () => (
-    <>
-      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
-      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
-    </>
-  ),
-  file: () => PAGE,
-};
+/**
+ * `IconFolder` from icons.tsx at `size`: its `.icon` class fixes 22 px, so
+ * the drawn svg gets an inline size once mounted.
+ */
+function SizedFolder({ size }: { size: FileIconSize }): JSX.Element {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const svg = ref.current?.querySelector('svg');
+    if (svg === null || svg === undefined) return;
+    svg.style.width = `${size}px`;
+    svg.style.height = `${size}px`;
+  }, [size]);
+  return (
+    <span
+      ref={ref}
+      style={{
+        display: 'inline-flex',
+        width: `${size}px`,
+        height: `${size}px`,
+      }}
+    >
+      <IconFolder />
+    </span>
+  );
+}
 
 function tint(root: ParaKind | null): string {
   return root === null
@@ -197,12 +173,12 @@ export function FileIcon({
   } else if (choice.mark === 'disc' && choice.root !== null) {
     drawing = <FolderMark kind={choice.root} size={markSizeFor(size)} />;
   } else {
-    const Draw = GLYPHS[choice.mark === 'outline' ? 'folder' : choice.kind];
-    drawing = (
-      <Glyph size={size}>
-        <Draw />
-      </Glyph>
-    );
+    drawing =
+      choice.mark === 'outline' ? (
+        <SizedFolder size={size} />
+      ) : (
+        <IconDocument size={size} />
+      );
   }
   const a11y = labelled
     ? { role: 'img' as const, 'aria-label': fileIconLabel(item) }
@@ -211,7 +187,7 @@ export function FileIcon({
     ? {
         width: '32px',
         height: '32px',
-        borderRadius: '8px',
+        borderRadius: 'var(--radius-row, 8px)',
         background: 'var(--color-surface)',
       }
     : {};

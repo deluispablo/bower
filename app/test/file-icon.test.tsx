@@ -172,4 +172,25 @@ describe('FileIcon', () => {
     expect(icon.getAttribute('aria-label')).toBe('PDF in Inbox');
     expect(icon.hasAttribute('aria-hidden')).toBe(false);
   });
+
+  it('draws one document glyph for every original (board over §3.16)', async () => {
+    const paths: string[] = [];
+    for (const item of [
+      inboxPdf,
+      yourNote,
+      { ...inboxPdf, name: 'Balcony.jpg', mimeType: 'image/jpeg' },
+    ]) {
+      const icon = await mount(<FileIcon item={item} size={16} />);
+      paths.push(icon.querySelector('path')?.getAttribute('d') ?? '');
+      render(null, icon.parentElement as HTMLElement);
+    }
+    expect(new Set(paths)).toEqual(new Set(['M7 3h7l5 5v13H7z']));
+  });
+
+  it('sizes the shared folder outline for a subfolder', async () => {
+    const icon = await mount(<FileIcon item={subfolder} size={20} box />);
+    const svg = icon.querySelector<SVGElement>('svg.icon');
+    expect(svg?.style.width).toBe('20px');
+    expect(icon.style.borderRadius).toBe('var(--radius-row, 8px)');
+  });
 });
