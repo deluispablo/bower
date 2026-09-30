@@ -1,126 +1,90 @@
 /**
- * The one sheet for everything sent to Bower (R-ASK-1, spec §6.13, boards
- * Rename-*, Ask-*): Rename, Move, "Ask Bower about it/this" and a tapped
- * suggestion chip all open it. Title and subtitle, the one field, the
- * "It waits in your inbox" box, "Put in the inbox" and the text button
+ * The Ask sheet (spec §3.13, R-ASK-1..5; boards PF-Ask, LI-Ask, GR-Ask,
+ * AR-Ask, NO-Ask, FI-Ask): a content sheet on the phone, the side panel on
+ * desktop. The header "Ask Bower" and ✕, the context line (the item's own
+ * icon and "About <name>"), "Your question" in a Composer (`send`, three
+ * rows, "Put in the inbox"), the explainer of where the answer goes, and
  * "Just this, now" with its cost line. It writes one instruction note
- * (`writeRequestNote`); nothing is sent until a button is pressed.
+ * (`writeRequestNote`) and confirms by a toast with Undo; the page under
+ * it never changes.
  *
- * Open it with `openSendToBower`; it lives on the Overlay queue.
+ * Open it with `openAsk(item, { prefill })` (⋯ "Ask Bower about this", the
+ * file tip); `openSendToBower` stays for the older "Try asking" chips.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
-import { deleteFile, createTextFile } from '../drive.js';
-import {
-  pickerFolders,
-  undoRequestNote,
-  writeRequestNote,
-} from '../move-request.js';
-import type { MoveSubject } from '../move-request.js';
-import { buildTree } from '../navigation.js';
+import { FOLDER_MIME, createTextFile, deleteFile } from '../drive.js';
+import { undoRequestNote, writeRequestNote } from '../move-request.js';
+import type { ParaKind } from '../navigation.js';
+import { useOnline } from '../online.js';
 import { close, open, OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { RUN_NOW_LABEL, RUN_NOW_LINE, useRunNow } from '../run-now.js';
 import { useSession } from '../session.js';
 import { showToast } from '../toast-store.js';
 import { useVault } from '../vault-store.js';
-import { FolderChoice } from './folder-picker.js';
-import { FolderMark } from './folder-mark.js';
-import type { ParaKind } from './folder-mark.js';
-import { IconClose, IconInbox } from './icons.js';
-import { Overlay } from './overlay.js';
+import { Composer, COMPOSER_LINES } from './composer.js';
+import { FileIcon } from './file-icon.js';
+import type { FileIconItem } from './file-icon.js';
+import { IconInbox } from './icons.js';
+import { Overlay, OverlayHeader } from './overlay.js';
 
 import '../styles/send-to-bower.css';
 
-export const SEND_TO_BOWER_ID = 'send-to-bower';
+export const ASK_ID = 'ask-bower';
 
-export interface SendToBowerProps {
-  /** `rename` asks for a new name, `ask` for a question, `move` for a
-   * folder (the field's value is then the chosen folder's vault path). */
-  mode: 'rename' | 'ask' | 'move';
-  /** Move mode: what is being moved, for the folder choice. */
-  moveSubject?: MoveSubject;
-  /** What it is about: "About {mark} Applications". */
-  about: string;
-  aboutKind?: ParaKind;
-  /** The field's starting text (a chip's text, the current name). */
-  initialText?: string;
-  /** A locked extension shown after the rename field. */
-  extension?: string;
-  /** The words of the request note for what is in the field. */
-  buildText: (value: string) => string;
-  /** The message for a value that cannot be sent, else `null` (Rename's
-   * name check). Shown under the field once the person has typed, and on
-   * any send. */
-  validate?: (value: string) => string | null;
+/** The empty box's placeholder (spec §3.13). */
+export const ASK_PLACEHOLDER = 'What would you like to know?';
+export const ASK_SENT_TOAST =
+  'In your inbox. Bower answers at the next tidy-up.';
+
+/** What the question is about. */
+export interface AskItem {
+  /** The name as the person reads it ("Moonee Ponds", "Areas"). */
+  name: string;
+  /** A folder's answer goes in it; a note's or file's next to it (K-29). */
+  kind: 'folder' | 'note' | 'file';
+  /** The item for its own icon in the context line (FileIcon 18). */
+  icon?: FileIconItem;
+  /** The request note's words; `About <name>: <question>` by default. */
+  buildText?: (question: string) => string;
+}
+
+export interface AskOptions {
+  /** The box's starting text (the file tip's question, a chip). */
+  prefill?: string;
+}
+
+/** The explainer's second line (R-ASK-3). */
+export function askExplainer(item: Pick<AskItem, 'name' | 'kind'>): string {
+  return item.kind === 'folder'
+    ? `Bower answers at the next tidy-up and puts the answer in ${item.name}.`
+    : `Bower answers at the next tidy-up and puts the answer next to ${item.name}.`;
+}
+
+export interface AskSheetProps {
+  item: AskItem;
+  prefill?: string;
   onClose: () => void;
 }
 
-const COPY = {
-  rename: {
-    title: 'Rename',
-    sub: 'Bower renames it and updates every link to it.',
-    label: 'New name',
-    when: 'Bower renames it at the next tidy-up; until then it keeps its name.',
-  },
-  ask: {
-    title: 'Ask Bower',
-    sub: null,
-    label: 'Your question',
-    when: 'Bower answers at the next tidy-up and puts the answer in {about}.',
-  },
-  move: {
-    title: 'Move',
-    sub: 'Bower moves it and keeps its links straight.',
-    label: 'Move to',
-    when: 'Bower moves it at the next tidy-up; until then it stays where it is.',
-  },
-} as const;
-
-const LATER_TOAST = {
-  rename: 'In your inbox. Bower renames it at the next tidy-up.',
-  ask: 'In your inbox. Bower answers at the next tidy-up.',
-  move: 'In your inbox. Bower moves it at the next tidy-up.',
-} as const;
-
-export function SendToBower({
-  mode,
-  about,
-  aboutKind,
-  moveSubject,
-  initialText = '',
-  extension,
-  buildText,
-  validate,
+export function AskSheet({
+  item,
+  prefill = '',
   onClose,
-}: SendToBowerProps): JSX.Element {
-  const copy = COPY[mode];
+}: AskSheetProps): JSX.Element {
   const { me } = useSession();
-  const { index, refresh } = useVault();
+  const { refresh } = useVault();
   const runNow = useRunNow();
-  const folders = useMemo(
-    () =>
-      mode !== 'move' || moveSubject === undefined || index === null
-        ? []
-        : pickerFolders(buildTree(index), moveSubject),
-    [mode, index, moveSubject?.path, moveSubject?.isFolder],
-  );
-  const [value, setValue] = useState(initialText);
+  const online = useOnline();
+  const [value, setValue] = useState(prefill);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
   const empty = value.trim() === '';
-  const problem = validate?.(value) ?? null;
-  const showProblem = problem !== null && value !== initialText;
-  // A field with a name check says what is wrong; one without has nothing
-  // to say, so its buttons wait for text.
-  const blocked = validate === undefined && empty;
-
-  useEffect(() => {
-    if (mode !== 'move') field.current?.focus();
-  }, []);
+  const build =
+    item.buildText ?? ((question: string) => `About ${item.name}: ${question}`);
 
   async function undo(id: string): Promise<void> {
     const result = await undoRequestNote(deleteFile, id);
@@ -133,12 +97,10 @@ export function SendToBower({
   }
 
   async function send(when: 'later' | 'now'): Promise<void> {
-    if (problem !== null) {
-      setError(problem);
-      return;
-    }
-    if (inboxFolderId === null || empty) {
-      setError('Could not send that. Try again.');
+    const question = value.trim();
+    if (busy || question === '') return;
+    if (inboxFolderId === null) {
+      setError(COMPOSER_LINES.failed);
       return;
     }
     setBusy(true);
@@ -147,18 +109,18 @@ export function SendToBower({
     try {
       id = await writeRequestNote(
         { createTextFile },
-        { inboxFolderId, text: buildText(value.trim()), now: new Date() },
+        { inboxFolderId, text: build(question), now: new Date() },
       );
     } catch (err) {
       console.error(err);
       setBusy(false);
-      setError('Could not send that. Try again.');
+      setError(COMPOSER_LINES.failed);
       return;
     }
     void refresh();
     if (when === 'later') {
       showToast(
-        LATER_TOAST[mode],
+        ASK_SENT_TOAST,
         undefined,
         id === null ? undefined : { label: 'Undo', run: () => void undo(id) },
       );
@@ -175,133 +137,109 @@ export function SendToBower({
     onClose();
   }
 
-  const fieldProps = {
-    id: 'send-to-bower-field',
-    ref: field,
-    value,
-    'aria-label': copy.label,
-    'aria-invalid': showProblem || undefined,
-    onInput: (
-      event: JSX.TargetedEvent<HTMLInputElement | HTMLTextAreaElement>,
-    ) => {
-      setError(null);
-      setValue(event.currentTarget.value);
-    },
-  };
+  const nowOff = busy || empty || !online || runNow.block !== null;
 
   return (
-    <Overlay kind="sheet" labelledBy="send-to-bower-title" onClose={onClose}>
-      <div class="send-to-bower">
-        <header class="send-to-bower-head">
-          <div>
-            <h2 id="send-to-bower-title" class="send-to-bower-title">
-              {copy.title}
-            </h2>
-            <p class="send-to-bower-sub">
-              {aboutKind !== undefined && (
-                <FolderMark kind={aboutKind} size={18} />
-              )}
-              {copy.sub ?? `About ${about}`}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="send-to-bower-close"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <IconClose />
-          </button>
-        </header>
-        {mode === 'move' ? (
-          <>
-            <p class="send-to-bower-label">{copy.label}</p>
-            {moveSubject !== undefined && (
-              <FolderChoice
-                subject={moveSubject}
-                folders={folders}
-                chosen={value}
-                onChoose={(path) => {
-                  setError(null);
-                  setValue(path);
-                }}
-              />
-            )}
-          </>
-        ) : (
-          <label class="send-to-bower-label" htmlFor="send-to-bower-field">
-            {copy.label}
-          </label>
-        )}
-        {mode !== 'move' && (
-          <div class="send-to-bower-field">
-            {mode === 'rename' ? (
-              <>
-                <input
-                  type="text"
-                  class="send-to-bower-input"
-                  {...fieldProps}
-                />
-                {extension !== undefined && (
-                  <span class="send-to-bower-ext">{extension}</span>
-                )}
-              </>
-            ) : (
-              <textarea class="send-to-bower-input" rows={3} {...fieldProps} />
-            )}
-          </div>
-        )}
-        <div class="send-to-bower-box">
-          <span class="send-to-bower-box-icon" aria-hidden="true">
+    <Overlay kind="sheet" labelledBy="ask-title" onClose={onClose}>
+      <div class="overlay-body ask">
+        <OverlayHeader
+          titleId="ask-title"
+          title="Ask Bower"
+          closeLabel="Close Ask Bower"
+          onClose={onClose}
+        />
+        <p class="ask-about">
+          {item.icon !== undefined && <FileIcon item={item.icon} size={16} />}
+          <span>About {item.name}</span>
+        </p>
+        <label class="ask-label" htmlFor="ask-question">
+          Your question
+        </label>
+        <Composer
+          id="ask-question"
+          mode="send"
+          rows={3}
+          label="Your question"
+          placeholder={ASK_PLACEHOLDER}
+          commitLabel="Put in the inbox"
+          value={value}
+          onChange={(next) => {
+            setError(null);
+            setValue(next);
+          }}
+          onCommit={() => void send('later')}
+          sending={busy}
+          error={error}
+          autoFocus
+        />
+        <div class="ask-explainer">
+          <span class="ask-explainer-icon" aria-hidden="true">
             <IconInbox />
           </span>
-          <div>
-            <p class="send-to-bower-box-title">It waits in your inbox</p>
-            <p class="send-to-bower-box-text">
-              {copy.when.replace('{about}', about)}
-            </p>
-          </div>
-        </div>
-        {(error ?? (showProblem ? problem : null)) !== null && (
-          <p class="send-to-bower-error" role="alert">
-            {error ?? problem}
-          </p>
-        )}
-        <div class="send-to-bower-actions">
-          <button
-            type="button"
-            class="button send-to-bower-primary"
-            disabled={busy || blocked}
-            onClick={() => void send('later')}
-          >
-            <IconInbox /> Put in the inbox
-          </button>
-          <button
-            type="button"
-            class="send-to-bower-now"
-            disabled={busy || blocked || runNow.block !== null}
-            onClick={() => void send('now')}
-          >
-            {RUN_NOW_LABEL}
-          </button>
-          <p class="send-to-bower-line">
-            {runNow.reason ?? `${RUN_NOW_LINE} The rest of the inbox waits.`}
+          <p>
+            <b>The arrow puts it in your inbox</b>
+            <br />
+            {askExplainer(item)}
           </p>
         </div>
+        <button
+          type="button"
+          class="ask-now"
+          aria-disabled={nowOff || undefined}
+          onClick={() => {
+            if (!nowOff) void send('now');
+          }}
+        >
+          {RUN_NOW_LABEL}
+        </button>
+        <p class="ask-now-line">
+          {runNow.reason ?? `${RUN_NOW_LINE} The rest of the inbox waits.`}
+        </p>
       </div>
     </Overlay>
   );
 }
 
-/** Opens the sheet on the overlay queue; it closes with `onClose`. */
-export function openSendToBower(
-  props: Omit<SendToBowerProps, 'onClose'>,
-): void {
+/** Opens Ask Bower about `item` on the overlay queue (R-ASK-1). */
+export function openAsk(item: AskItem, options: AskOptions = {}): void {
   open({
-    id: SEND_TO_BOWER_ID,
+    id: ASK_ID,
     priority: OVERLAY_PRIORITY.own,
     render: () => (
-      <SendToBower {...props} onClose={() => close(SEND_TO_BOWER_ID)} />
+      <AskSheet
+        item={item}
+        {...(options.prefill !== undefined && { prefill: options.prefill })}
+        onClose={() => close(ASK_ID)}
+      />
     ),
   });
+}
+
+/** The older call of the "Try asking" chips (folder, file tip, compare). */
+export interface SendToBowerProps {
+  mode: 'ask';
+  /** What it is about: "About Applications". */
+  about: string;
+  /** The folder's root, for its icon; the answer goes in it. */
+  aboutKind?: ParaKind;
+  initialText?: string;
+  buildText: (value: string) => string;
+}
+
+/**
+ * Opens the Ask sheet for a caller written before `openAsk`: the answer
+ * goes in `about`, as that sheet always said.
+ */
+export function openSendToBower(props: SendToBowerProps): void {
+  openAsk(
+    {
+      name: props.about,
+      kind: 'folder',
+      buildText: props.buildText,
+      ...(props.aboutKind !== undefined && {
+        icon: { name: props.about, mimeType: FOLDER_MIME, root: props.aboutKind },
+      }),
+    },
+    props.initialText !== undefined ? { prefill: props.initialText } : {},
+  );
 }

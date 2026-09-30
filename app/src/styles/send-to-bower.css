@@ -1,153 +1,88 @@
-/* The send-to-Bower sheet (`components/send-to-bower.tsx`). */
+/* The Ask sheet (`components/send-to-bower.tsx`, spec §3.13; boards
+   PF-Ask, NO-Ask, FI-Ask and the other Ask boards). */
 
-.send-to-bower {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
+.ask {
+  gap: 0;
 }
 
-.send-to-bower-head {
+.ask-about {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-3);
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
 }
 
-.send-to-bower-title {
-  margin: 0;
-  font-size: var(--text-lg);
+.ask-label {
+  margin: 16px 0 8px;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--color-heading);
 }
 
-.send-to-bower-sub {
+.ask-explainer {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: var(--space-1) 0 0;
-  font-size: var(--text-sm);
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--color-selection);
+  border-radius: var(--radius-card);
+  color: var(--color-text);
+  font-size: 16px;
+  line-height: 1.4;
 }
 
-.send-to-bower-close {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
-  background: none;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-}
-
-.send-to-bower-label {
-  font-weight: var(--weight-bold);
-  font-size: var(--text-sm);
-}
-
-.send-to-bower-field {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.send-to-bower-input {
-  flex: 1;
-  min-width: 0;
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
-  font: inherit;
-  color: inherit;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  resize: vertical;
-}
-
-.send-to-bower-input:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
-}
-
-.send-to-bower-ext {
-  flex-shrink: 0;
-  font-size: var(--text-sm);
-}
-
-.send-to-bower-box {
-  display: flex;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--color-brand-tint);
-  border-radius: var(--radius-md);
-}
-
-.send-to-bower-box-icon {
-  flex-shrink: 0;
-  display: inline-flex;
-}
-
-.send-to-bower-box-title,
-.send-to-bower-box-text {
+.ask-explainer p {
   margin: 0;
 }
 
-.send-to-bower-box-title {
-  font-weight: var(--weight-bold);
+.ask-explainer b {
+  color: var(--color-heading);
 }
 
-.send-to-bower-box-text {
-  font-size: var(--text-sm);
-}
-
-.send-to-bower-error {
-  margin: 0;
-  color: var(--color-danger-text);
-  font-size: var(--text-sm);
-}
-
-/* The footer stays in view at the bottom of the sheet, like
-   `.working-sheet-actions` (#872): a long folder list never pushes "Put in
-   the inbox" and "Just this, now" below the fold at 375x812. */
-.send-to-bower-actions {
-  position: sticky;
-  bottom: calc(-1 * var(--space-4));
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-bottom: calc(-1 * var(--space-4));
-  padding: var(--space-2) 0 var(--space-4);
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-}
-
-.send-to-bower-primary {
+.ask-explainer-icon {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-height: 44px;
+  flex: 0 0 auto;
+  padding-top: 3px;
+  color: var(--color-text);
 }
 
-.send-to-bower-now {
+.ask-explainer-icon .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.ask-now {
+  align-self: center;
   min-height: 44px;
-  background: none;
-  border: 0;
+  margin-top: 8px;
+  padding: 0 12px;
   font: inherit;
-  font-weight: var(--weight-bold);
+  font-weight: 700;
   color: var(--color-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
   cursor: pointer;
 }
 
-.send-to-bower-now:disabled {
-  opacity: 0.5;
+.ask-now[aria-disabled='true'] {
+  opacity: 0.4;
   cursor: default;
 }
 
-.send-to-bower-line {
+.ask-now-line {
   margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
   text-align: center;
-  font-size: var(--text-sm);
+}
+
+@media (min-width: 900px) {
+  .ask-explainer {
+    font-size: 15px;
+  }
 }

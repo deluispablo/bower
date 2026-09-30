@@ -10,8 +10,23 @@ import { OverlayHost } from '../src/components/overlay.js';
 import type { NoteMenuProps } from '../src/components/note-menu.js';
 import type { DriveFile } from '../src/drive.js';
 
-const openSendToBower = vi.hoisted(() => vi.fn());
-vi.mock('../src/components/send-to-bower.js', () => ({ openSendToBower }));
+const openAsk = vi.hoisted(() => vi.fn());
+const openRename = vi.hoisted(() => vi.fn());
+const openMoveTo = vi.hoisted(() => vi.fn());
+vi.mock('../src/components/send-to-bower.js', () => ({ openAsk }));
+vi.mock('../src/components/rename-sheet.js', () => ({ openRename }));
+vi.mock('../src/components/folder-picker.js', async (original) => ({
+  ...(await original<object>()),
+  openMoveTo,
+}));
+
+/** Ask Bower about this opens the Ask sheet about `name` (#910). */
+function expectAsk(name: string, kind: string): void {
+  openAsk.mockClear();
+  click(rowByText('Ask Bower about this'));
+  expect(openAsk).toHaveBeenCalledOnce();
+  expect(openAsk.mock.calls[0]?.[0]).toMatchObject({ name, kind });
+}
 
 function file(name: string): DriveFile {
   return {
@@ -137,8 +152,8 @@ afterEach(() => {
 });
 
 describe('NoteMenu', () => {
-  it('offers Rename… for a note that has its folder names, and opens the send sheet (#765)', () => {
-    openSendToBower.mockClear();
+  it('offers Rename… for a note that has its folder names, and opens the Rename sheet (#765, #910)', () => {
+    openRename.mockClear();
     mountFor({
       file: NOTE,
       title: 'Shopping list',
@@ -155,21 +170,12 @@ describe('NoteMenu', () => {
       'Bower renames it at the next tidy-up',
     );
     click(rename);
-    const call = openSendToBower.mock.calls[0]?.[0] as {
-      mode: string;
-      initialText: string;
-      buildText: (v: string) => string;
-      validate: (v: string) => string | null;
-    };
-    expect(call.mode).toBe('rename');
-    expect(call.initialText).toBe('Shopping list');
-    expect(call.buildText(' Groceries ')).toBe(
-      'Rename Shopping list.md to Groceries.md',
-    );
-    expect(call.validate('Todo')).toBe(
-      'Something in this folder already has that name.',
-    );
-    expect(call.validate('Groceries')).toBeNull();
+    expect(openRename).toHaveBeenCalledWith({
+      path: 'Shopping list.md',
+      name: 'Shopping list.md',
+      isNote: true,
+      siblingNames: ['Shopping list.md', 'Todo.md'],
+    });
   });
 
   it('leaves Rename… out for a folder, for the app files and without names (#765)', () => {
@@ -257,34 +263,25 @@ describe('NoteMenu', () => {
     expect(onTogglePin).toHaveBeenCalledOnce();
   });
 
-  it('prefills the Bower box with a wikilink to the note, and a space', () => {
+  it('opens the Ask sheet about the note over the page (R-MORE-5, #910)', () => {
     mount(true);
-    const ask = rowByText('Ask Bower about this');
-    expect(ask.getAttribute('href')).toBe(
-      `/bower?text=${encodeURIComponent('[[Shopping list]] ')}`,
-    );
+    expectAsk('Shopping list', 'note');
+    expect(openAsk.mock.calls[0]?.[0]).toMatchObject({
+      icon: { name: 'Shopping list.md', path: 'Shopping list.md' },
+    });
   });
 
-  it('says "waits for the tidy-up" under Move to…, which opens the send sheet in move mode for this note (#866)', () => {
-    openSendToBower.mockClear();
+  it('says "waits for the tidy-up" under Move to…, which opens Move to… for this note (#866, #909)', () => {
+    openMoveTo.mockClear();
     const { onClose } = mount(true);
     const move = rowByText('Move to…');
     expect(move.textContent).toContain('Bower moves it at the next tidy-up');
-    expect(openSendToBower).not.toHaveBeenCalled();
+    expect(openMoveTo).not.toHaveBeenCalled();
     click(move);
-    const call = openSendToBower.mock.calls[0]?.[0] as {
-      mode: string;
-      moveSubject: { path: string; isFolder: boolean };
-      buildText: (destination: string) => string;
-    };
-    expect(call.mode).toBe('move');
-    expect(call.moveSubject).toEqual({
-      path: 'Shopping list.md',
-      isFolder: false,
+    expect(openMoveTo).toHaveBeenCalledWith({
+      subject: { path: 'Shopping list.md', isFolder: false },
+      name: 'Shopping list',
     });
-    expect(call.buildText('3-Resources')).toBe(
-      'Move “Shopping list” (Shopping list.md) to 3-Resources.',
-    );
     // The menu closes; the sheet takes over.
     expect(onClose).toHaveBeenCalled();
   });
@@ -397,17 +394,12 @@ describe('NoteMenu', () => {
     expect(rowByText('Show in folders').getAttribute('href')).toBe(
       '/notes?reveal=file%2Ffile-1',
     );
-    expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
-      `/bower?text=${encodeURIComponent('[[Lease 2026.pdf]] ')}`,
-    );
-    openSendToBower.mockClear();
+    expectAsk('Lease 2026.pdf', 'file');
+    openMoveTo.mockClear();
     click(rowByText('Move to…'));
     expect(
-      (
-        openSendToBower.mock.calls[0]?.[0] as {
-          moveSubject: { path: string };
-        }
-      ).moveSubject.path,
+      (openMoveTo.mock.calls[0]?.[0] as { subject: { path: string } }).subject
+        .path,
     ).toBe('1-Projects/Flat hunt/Lease 2026.pdf');
   });
 
@@ -441,9 +433,7 @@ describe('NoteMenu', () => {
       expect.stringContaining('Copy link'),
       expect.stringContaining('Help and about this'),
     ]);
-    expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
-      `/bower?text=${encodeURIComponent('About Flat hunt: ')}`,
-    );
+    expectAsk('Flat hunt', 'folder');
     expect(rowByText('Open in Drive').getAttribute('href')).toBe(
       'https://drive.google.com/drive/folders/folder-1',
     );
@@ -477,9 +467,7 @@ describe('NoteMenu', () => {
     expect(rowByText('Show in folders').textContent).toContain(
       'Opens your folders at Areas',
     );
-    expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
-      `/bower?text=${encodeURIComponent('About Areas: ')}`,
-    );
+    expectAsk('Areas', 'folder');
   });
 
   it('shows Copied. for 2 s after Copy link (R-API-11)', async () => {
