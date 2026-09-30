@@ -161,6 +161,8 @@ interface GreetingProps {
   greeting: string;
   bubble: BubbleProps;
   onDone: () => void;
+  /** The tour shows its own bird: this one steps aside (rule 1, #888). */
+  birdHidden: boolean;
 }
 
 function Greeting({
@@ -170,12 +172,21 @@ function Greeting({
   greeting,
   bubble,
   onDone,
+  birdHidden,
 }: GreetingProps): JSX.Element {
   return (
     <div class={`home-greeting home-greeting--${variant}`}>
-      <BirdNapButton>
-        <Bird state={state} size={size} onDone={onDone} />
-      </BirdNapButton>
+      {birdHidden ? (
+        <span
+          class="home-greeting-bird-gap"
+          style={{ width: `${size}px`, height: `${size}px` }}
+          aria-hidden="true"
+        />
+      ) : (
+        <BirdNapButton>
+          <Bird state={state} size={size} onDone={onDone} />
+        </BirdNapButton>
+      )}
       <div class="home-greeting-text">
         {variant === 'desktop' && <h1 class="home-h1">{greeting}</h1>}
         <BubbleText {...bubble} />
@@ -677,6 +688,7 @@ export function Home(): JSX.Element {
         greeting={greeting}
         bubble={bubble}
         onDone={onDone}
+        birdHidden={showTour}
       />
 
       <button
