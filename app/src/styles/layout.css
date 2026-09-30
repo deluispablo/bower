@@ -132,6 +132,14 @@ summary:focus-visible {
   text-decoration: none;
 }
 
+.page-bare .page-column {
+  padding-inline: var(--space-4);
+}
+
+.page-bare .page-column > .page-bare-back {
+  margin-left: 0;
+}
+
 .page-bare-back .icon {
   transform: rotate(180deg);
 }

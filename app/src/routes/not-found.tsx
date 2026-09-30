@@ -11,6 +11,7 @@
  */
 
 import { Bird } from '../components/bird.js';
+import { useTitle } from '../use-title.js';
 import '../styles/auth.css';
 
 export type NotFoundKind = 'note' | 'folder' | 'file' | 'page';
@@ -30,6 +31,7 @@ interface NotFoundProps {
 }
 
 export function NotFound({ kind = 'page' }: NotFoundProps) {
+  useTitle('Page not found');
   return (
     <section class="auth-screen page-column">
       <div class="auth-bird">

@@ -59,7 +59,6 @@ import { CATALOGUE_PATH } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
 import { openSendToBower } from '../components/send-to-bower.js';
-import { askBowerHref } from '../more-menu.js';
 import {
   breadcrumb,
   displayName,
@@ -74,6 +73,7 @@ import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { pendingByPath } from '../rename-request.js';
+import { useTitle } from '../use-title.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { useVault } from '../vault-store.js';
 import { NotFound } from './not-found.js';
@@ -300,7 +300,6 @@ function FolderBody({
 }: FolderBodyProps): JSX.Element {
   // "About <folder>: " and nothing else from the folder (#354), through
   // the same `/bower?text=` link the More menu's rows use.
-  const tellHref = askBowerHref('folder', contents.name);
   const now = Date.now();
   const titles = useNoteTitles(contents.notes);
   const emptyState = folderEmptyState(contents);
@@ -378,7 +377,17 @@ function FolderBody({
         >
           {pinned ? 'Pinned' : 'Pin to Home'}
         </HeaderAction>
-        <HeaderAction icon={<IconChat />} href={tellHref}>
+        <HeaderAction
+          icon={<IconChat />}
+          onClick={() =>
+            openSendToBower({
+              mode: 'ask',
+              about: contents.name,
+              ...(paraOfFolder !== null && { aboutKind: paraOfFolder }),
+              buildText: (value) => `About ${contents.name}: ${value}`,
+            })
+          }
+        >
           Ask Bower about it
         </HeaderAction>
         {file !== undefined && topBarPath && !isDemo() && (
@@ -557,6 +566,7 @@ export function Folder(): JSX.Element {
         : folderContents(index, path, getPref('explorerSort')),
     [index, path],
   );
+  useTitle(contents?.name ?? null);
   const ancestors = useMemo(() => breadcrumb(path), [path]);
   const parent = ancestors[ancestors.length - 1];
   const { route } = useLocation();

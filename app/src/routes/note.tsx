@@ -55,6 +55,7 @@ import type { BreadcrumbSegment } from '../navigation.js';
 import { loadNoteMeta, noteMetaFrom, recordNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle as computeNoteTitle } from '../note-title.js';
+import { useTitle } from '../use-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
@@ -584,6 +585,7 @@ export function Note() {
   }, [id]);
 
   const file = index?.byId.get(id);
+  useTitle(file === undefined ? null : displayName(file.name).replace(/\.md$/i, ''));
 
   // Opening a note marks it seen on this device (#587): the "New" tag goes.
   useEffect(() => {
