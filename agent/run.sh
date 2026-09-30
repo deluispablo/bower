@@ -257,6 +257,14 @@ readonly ADDED_NOTE='.bower/added.txt'
 # R-RUNNER-1: the agent's optional one line per note it updated
 # ("<path><TAB><what>"), read and removed like ADDED_NOTE, never uploaded.
 readonly UPDATED_NOTE='.bower/updated.txt'
+# R-MEAN-1: the agent's optional lines about what the run means, read and
+# removed like ADDED_NOTE, never uploaded: one per pair of notes that
+# disagree ("<path A><TAB><path B><TAB><reason>") and one per thing that is
+# next for the person ("<path or -><TAB><action>").
+readonly CHECKS_NOTE='.bower/checks.txt'
+readonly NEXT_NOTE='.bower/next.txt'
+# In the work dir: each note's `status:` before the run (R-RUNNER-9).
+readonly STATUS_BEFORE="$WORK_DIR/status-before.txt"
 # In the work dir: the `what` lines kept from UPDATED_NOTE, every path a
 # copy up actually uploaded (the upload list, not the intent), and every
 # pending original deleted from Drive.
@@ -280,6 +288,12 @@ readonly MAX_READ_BYTES=$((50 * 1024 * 1024))
 readonly MAX_PDF_PAGES=300
 # Longest `added` clause sent; the Worker keeps as much (MAX_ADDED_LENGTH).
 readonly MAX_ADDED_LENGTH=200
+# R-MEAN-1, the Worker's caps too: at most MAX_DISAGREE lines from
+# CHECKS_NOTE and MAX_NEXT from NEXT_NOTE, each reason or action at most
+# MAX_MEANING_LENGTH characters. A line out of the fixed format is dropped.
+readonly MAX_DISAGREE=5
+readonly MAX_NEXT=3
+readonly MAX_MEANING_LENGTH=120
 # The instruction-origin step's files: in the work dir, never in the vault,
 # so the model never sees them.
 readonly CANDIDATES_FILE="$WORK_DIR/instruction-candidates.txt"
@@ -338,6 +352,10 @@ RECONCILED=0         # 1 once the reconcile phase listed the tree (#597)
 CREATED_JSON=''
 UPDATED_JSON=''
 LEFT_JSON=''
+# R-MEAN-1: what the run means, JSON arrays set by read_meaning; sent on a
+# done report only, and only when not empty.
+DISAGREE_JSON=''
+NEXT_JSON=''
 
 # The jq filter a final report and last-run.json go through (R-RUNNER-1):
 # created, updated and left are each cut to MAX_REPORT_LIST entries, then,
@@ -364,6 +382,16 @@ readonly ALREADY_WRITTEN_FILTER='if type == "object" and .state == "failed" and 
 # `what` cut to $cut characters.
 readonly UPDATED_FILTER='[inputs | . as $line | split("\t") as $p | {path: $p[0]}
   + (if ($p | length) > 1 then {what: ($p[1:] | join("\t") | .[0:$cut])} else {} end)]'
+# R-MEAN-1: CHECKS_NOTE's lines as disagree entries and NEXT_NOTE's as next
+# entries. Each field is trimmed; a line with another number of fields, an
+# empty field, or a reason or action over $cut characters is dropped; the
+# first $max lines left are kept. A path of "-" in next.txt means none.
+readonly DISAGREE_FILTER='[inputs | sub("\r$"; "") | split("\t") | map(gsub("^\\s+|\\s+$"; ""))
+  | select(length == 3 and all(.[]; length > 0) and (.[2] | length) <= $cut)
+  | {a: .[0], b: .[1], reason: .[2]}] | .[0:$max]'
+readonly NEXT_FILTER='[inputs | sub("\r$"; "") | split("\t") | map(gsub("^\\s+|\\s+$"; ""))
+  | select(length == 2 and all(.[]; length > 0) and (.[1] | length) <= $cut)
+  | (if .[0] == "-" then {} else {path: .[0]} end) + {action: .[1]}] | .[0:$max]'
 
 on_exit() {
   local rc=$?
@@ -403,6 +431,10 @@ report() {
   if [ "$state" = done ]; then
     [ -n "$SET_ASIDE_JSON" ] && args+=(--argjson setAside "$SET_ASIDE_JSON")
     [ -n "$ADDED" ] && args+=(--arg added "$ADDED")
+    # R-MEAN-1: what the run means, when the agent said anything.
+    [ -n "$DISAGREE_JSON" ] && [ "$DISAGREE_JSON" != '[]' ] &&
+      args+=(--argjson disagree "$DISAGREE_JSON")
+    [ -n "$NEXT_JSON" ] && [ "$NEXT_JSON" != '[]' ] && args+=(--argjson next "$NEXT_JSON")
   fi
   # R-RUNNER-1: a final report, done or failed, says what was created,
   # updated and left in the inbox.
@@ -503,6 +535,9 @@ write_outcome() {
     [ -z "${PROCESSED_JSON:-}" ] || args+=(--argjson items "$PROCESSED_JSON")
     [ -z "$SET_ASIDE_JSON" ] || args+=(--argjson setAside "$SET_ASIDE_JSON")
     [ -z "$ADDED" ] || args+=(--arg added "$ADDED")
+    [ -z "$DISAGREE_JSON" ] || [ "$DISAGREE_JSON" = '[]' ] ||
+      args+=(--argjson disagree "$DISAGREE_JSON")
+    [ -z "$NEXT_JSON" ] || [ "$NEXT_JSON" = '[]' ] || args+=(--argjson next "$NEXT_JSON")
   elif [ "$state" = failed ]; then
     # The items already moved in Drive, as the failed report (R-RUNNER-5).
     [ -z "${PROCESSED_JSON:-}" ] || args+=(--argjson items "$PROCESSED_JSON")
@@ -1459,6 +1494,134 @@ read_updated() {
   rm -f "$file"
 }
 
+# What the run means (R-MEAN-1): DISAGREE_JSON from CHECKS_NOTE and
+# NEXT_JSON from NEXT_NOTE, each a JSON array of the lines in the fixed
+# format (DISAGREE_FILTER and NEXT_FILTER), empty when the agent wrote no
+# file. Both files are removed from the local copy either way, so they are
+# never uploaded. Their lines are never logged.
+read_meaning() {
+  local checks="$VAULT_DIR/$CHECKS_NOTE" next="$VAULT_DIR/$NEXT_NOTE"
+  DISAGREE_JSON=''
+  NEXT_JSON=''
+  if [ -f "$checks" ]; then
+    DISAGREE_JSON=$(jq -Rn --argjson cut "$MAX_MEANING_LENGTH" \
+      --argjson max "$MAX_DISAGREE" "$DISAGREE_FILTER" <"$checks") || DISAGREE_JSON=''
+  fi
+  if [ -f "$next" ]; then
+    NEXT_JSON=$(jq -Rn --argjson cut "$MAX_MEANING_LENGTH" \
+      --argjson max "$MAX_NEXT" "$NEXT_FILTER" <"$next") || NEXT_JSON=''
+  fi
+  rm -f "$checks" "$next"
+}
+
+# The mechanical History lines (R-RUNNER-9, R-HIST): the runner, not the
+# agent, appends one dated bullet to the `## History` section of a note
+# Bower wrote (`by: bower` in its frontmatter), creating the section at the
+# end of the note when it is missing, in the shape the app writes
+# (app/src/history.ts): "- 29 Sep · Filed to <folder>, by Bower". A line
+# already in the note is not added again, so running twice changes nothing.
+# Usage: append_history <note file> <line without "- ">
+append_history() {
+  local file=$1 line=$2 tmp="$1.bower-history"
+  grep -qxF -- "- $line" "$file" && return 1
+  LINE="- $line" awk '
+    { sub(/\r$/, ""); rows[++n] = $0 }
+    END {
+      for (i = 1; i <= n; i++) if (rows[i] ~ /^##[ \t]+History[ \t]*$/) { start = i; break }
+      if (!start) {
+        while (n > 0 && rows[n] ~ /^[ \t]*$/) n--
+        for (i = 1; i <= n; i++) print rows[i]
+        print ""; print "## History"; print ""; print ENVIRON["LINE"]
+        exit
+      }
+      end = n + 1
+      for (i = start + 1; i <= n; i++) if (rows[i] ~ /^##[ \t]+[^ \t]/) { end = i; break }
+      last = end - 1
+      while (last > start && rows[last] ~ /^[ \t]*$/) last--
+      for (i = 1; i <= last; i++) print rows[i]
+      if (last == start) print ""
+      print ENVIRON["LINE"]
+      for (i = last + 1; i <= n; i++) print rows[i]
+    }' "$file" >"$tmp" || { rm -f "$tmp"; return 2; }
+  cat "$tmp" >"$file" && rm -f "$tmp" || return 2
+}
+
+# The `status:` of every note before the run, "<path><TAB><status>" in
+# STATUS_BEFORE, for the status History lines. Only notes that have one.
+snapshot_status() {
+  : >"$STATUS_BEFORE"
+  (cd "$VAULT_DIR" && cut -d ' ' -f 3- "$MANIFEST_BEFORE" | { grep '\.md$' || true; } | tr '\n' '\0' |
+    xargs -0 -r awk "$STATUS_AWK") >"$STATUS_BEFORE" || return 1
+}
+
+# One "<path><TAB><status>" line per note given that has a frontmatter
+# `status:` (quotes removed). A path with a tab is skipped.
+readonly STATUS_AWK='
+  FNR == 1 { fm = ($0 ~ /^---\r?$/); done = 0; next }
+  fm && !done && /^---[ \t]*\r?$/ { done = 1; next }
+  fm && !done && /^status:/ {
+    v = $0; sub(/\r$/, "", v); sub(/^status:[ \t]*/, "", v); sub(/[ \t]+$/, "", v)
+    if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
+    if (FILENAME !~ /\t/) print FILENAME "\t" v
+    done = 1
+  }'
+
+# After the bookkeeping phase: the runner's own History lines (R-RUNNER-9),
+# dated today, on the notes Bower wrote that this run touched:
+# - a note moved out of 0-Inbox/ or Clippings/, or one the run created
+#   anywhere else: "Filed to <folder>, by Bower";
+# - any other moved note: "Moved to <folder>, by Bower", or "Renamed from
+#   <old name>, by Bower" when only its name changed;
+# - a note whose `status:` the agent changed: "Status <old> → <new>, by
+#   Bower" (an empty status reads "none", as in the app).
+# Every note it changed joins UPLOAD_FILE. Logs a count only.
+write_history() {
+  [ "$MODE" = ingest ] && [ "$TOO_MANY_CHANGES" -eq 0 ] || return 0
+  local day lines="$WORK_DIR/history-lines.txt" before="$WORK_DIR/history-before.txt"
+  local path line by kind orig old new count=0 rc
+  day=$(LC_ALL=C date -u '+%-d %b')
+  : >"$lines"
+  : >"$before"
+  [ ! -f "$MANIFEST_BEFORE" ] || cut -d ' ' -f 3- "$MANIFEST_BEFORE" >"$before"
+  # Moves (Drive moves and fallbacks alike).
+  paste "$BOOKED_OLD" "$BOOKED_NEW" | awk -F '\t' '
+    function base(p) { sub(/.*\//, "", p); return p }
+    function dir(p) { if (p !~ /\//) return "the Bower folder"; sub(/\/[^\/]*$/, "", p); return p }
+    $1 != "" && $2 ~ /\.md$/ {
+      if ($1 ~ /^(0-Inbox|Clippings)\// && $2 !~ /^(0-Inbox|Clippings)\//) what = "Filed to " dir($2)
+      else if (dir($1) == dir($2)) what = "Renamed from " base($1)
+      else what = "Moved to " dir($2)
+      print $2 "\t" what
+    }' >>"$lines" || return 1
+  # Notes the run created, outside the inboxes: accepted, new, not a move.
+  awk 'FILENAME == ARGV[1] { skip[$0] = 1; next } FILENAME == ARGV[2] { skip[$0] = 1; next }
+    /\.md$/ && !($0 in skip) && $0 !~ /^(0-Inbox|Clippings|\.bower)\// &&
+      $0 !~ /^(log|index|Rules)\.md$/ && $0 !~ /(^|\/)(CLAUDE|_[^\/]*)\.md$/ { print }' \
+    "$before" "$BOOKED_NEW" "$CHANGED_FILE" |
+    awk '{ p = $0; d = p; if (d !~ /\//) d = "the Bower folder"; else sub(/\/[^\/]*$/, "", d)
+      print p "\tFiled to " d }' >>"$lines" || return 1
+  # Status changes on the notes that were there before.
+  (cd "$VAULT_DIR" && { grep '\.md$' "$CHANGED_FILE" || true; } | tr '\n' '\0' | xargs -0 -r awk "$STATUS_AWK") |
+    awk -F '\t' 'FILENAME == ARGV[1] { was[$1] = $2; seen[$1] = 1; next }
+      ($1 in seen) && was[$1] != $2 {
+        print $1 "\tStatus " (was[$1] == "" ? "none" : was[$1]) " → " ($2 == "" ? "none" : $2) }' \
+      "$STATUS_BEFORE" - >>"$lines" || return 1
+  while IFS=$'\t' read -r path line; do
+    [ -n "$path" ] && [ -f "$VAULT_DIR/$path" ] || continue
+    may_write "$path" || continue
+    IFS=$'\t' read -r by kind orig < <(note_meta "$VAULT_DIR/$path")
+    [ "$by" = bower ] || continue
+    rc=0
+    append_history "$VAULT_DIR/$path" "$day · $line, by Bower" || rc=$?
+    [ "$rc" -ne 2 ] || return 1
+    [ "$rc" -eq 0 ] || continue
+    printf '%s\n' "$path" >>"$UPLOAD_FILE"
+    count=$((count + 1))
+  done <"$lines"
+  [ "$count" -eq 0 ] || log "$count History lines written"
+  awk '!seen[$0]++' "$UPLOAD_FILE" >"$UPLOAD_FILE.tmp" && mv "$UPLOAD_FILE.tmp" "$UPLOAD_FILE"
+}
+
 # The pending inbox paths still there at the end (R-RUNNER-1): the pending
 # list (after the pre-scan) minus the originals moved in Drive and those
 # deleted from it; none before the pending list exists (a run that failed
@@ -1829,12 +1992,16 @@ log "$STEP"
 # Only this run's agent may say what it added (#598): a stale note in the
 # local copy is dropped before the manifest, and so is a stale list of
 # updated notes (R-RUNNER-1).
-rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST" "$VAULT_DIR/$UPDATED_NOTE"
+rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST" "$VAULT_DIR/$UPDATED_NOTE" "$VAULT_DIR/$CHECKS_NOTE" "$VAULT_DIR/$NEXT_NOTE"
 if ! manifest >"$MANIFEST_BEFORE"; then
   fail "$STEP: listing the local copy failed"
 fi
 if ! keep_pre_run_copy; then
   fail "$STEP: keeping a pre-run copy failed"
+fi
+# R-RUNNER-9: each note's status now, for the status History lines.
+if ! snapshot_status 2>>"$LOG_DIR/bookkeeping.err"; then
+  fail "$STEP: reading the statuses failed"
 fi
 
 # Keeps a copy of the text file $2 (a document's converted text) as the text
@@ -2136,6 +2303,7 @@ check_folder "$STEP"
 report_phase saving
 read_added
 read_updated
+read_meaning
 if ! audit || ! record_saved_keys; then
   fail "$STEP: copy failed" drive_unavailable
 fi
@@ -2153,6 +2321,10 @@ fi
 # A failing tool's own message names vault paths: it goes to a private log.
 if ! book_moves "$VAULT_DIR" "$BOOKED_OLD" "$BOOKED_NEW" "$(date -u '+%F %H:%M')" \
   2>>"$LOG_DIR/bookkeeping.err"; then
+  fail "$STEP: bookkeeping failed"
+fi
+# R-RUNNER-9: the mechanical History lines, now that the moves are booked.
+if ! write_history 2>>"$LOG_DIR/bookkeeping.err"; then
   fail "$STEP: bookkeeping failed"
 fi
 # Report v2 (#598): each processed item that moved carries where it went.
@@ -2207,6 +2379,8 @@ if [ "$TOO_MANY_CHANGES" -eq 1 ]; then
   [ -z "$PROCESSED_JSON" ] || PROCESSED_JSON='[]'
   SET_ASIDE_JSON=''
   ADDED=''
+  DISAGREE_JSON=''
+  NEXT_JSON=''
   write_outcome done 'Nothing was saved: the tidy-up changed too many files.'
 else
   [ -z "$AUDIT_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'

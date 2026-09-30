@@ -337,6 +337,14 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         echo '{"vault":"local"}' >"$remote/.claude/settings.local.json"
         ;;
     esac
+    if [ "$SMOKE_SCENARIO" = meaning ]; then
+      # R-RUNNER-9: two notes Bower wrote (one with a status, one with a
+      # History already) and one the person wrote.
+      printf -- '---\nby: bower\nstatus: new\n---\n\nA flat to see.\n' >"$remote/2-Areas/Flat.md"
+      printf -- '---\nby: bower\n---\n\nThe old place.\n\n## History\n\n- 1 Jan · Filed to 3-Resources, by Bower\n\n## Reference\n\nKept.\n' \
+        >"$remote/3-Resources/Old place.md"
+      printf -- '---\nstatus: new\n---\n\nMine.\n' >"$remote/2-Areas/Mine.md"
+    fi
     if [ "$SMOKE_SCENARIO" = convert ]; then
       # Documents run.sh converts before the agent runs: two good ones, one
       # pandoc cannot read, one with an upper-case extension, and one whose
@@ -922,6 +930,26 @@ case "$SMOKE_SCENARIO" in
       '3-Resources/app.md' 'Not changed, so not sent' '2-Areas/Insurance.md' '' \
       >.bower/updated.txt
     ;;
+  # R-MEAN-1 and R-RUNNER-9: the agent writes what the run means, lines
+  # out of format among them and one line past the caps each, a new note
+  # (Bower's) and one of the person's, moves one of Bower's notes and sets
+  # the status of two notes (one Bower's, one the person's).
+  meaning)
+    mkdir -p .bower '1-Projects/Flat hunt' 4-Archives
+    printf -- '---\nby: bower\n---\n\nArlington Road.\n' >'1-Projects/Flat hunt/Arlington Road.md'
+    printf -- '# By hand\n' >'1-Projects/Flat hunt/By hand.md'
+    mv '3-Resources/Old place.md' '4-Archives/Old place.md'
+    sed -i 's/^status: new$/status: done/' 2-Areas/Flat.md 2-Areas/Mine.md
+    {
+      printf '%s\t%s\t%s\n' '1-Projects/Flat hunt/Arlington Road.md' '2-Areas/Flat.md' \
+        ' The rent differs: 900 in one, 950 in the other '
+      printf '%s\n' 'Only one field'
+      printf '%s\t%s\t%s\n' 'a.md' 'b.md' "$(printf 'r%.0s' $(seq 1 121))"
+      for n in 2 3 4 5 6; do printf '%s\t%s\t%s\r\n' "a$n.md" "b$n.md" "Reason $n"; done
+    } >.bower/checks.txt
+    printf '%s\t%s\n' '2-Areas/Flat.md' 'Book a viewing' '-' 'Send the signed lease back' \
+      'x.md' '' 'y.md' 'Three' 'z.md' 'Four' >.bower/next.txt
+    ;;
   # A name that says nothing (issue #369): the photo is renamed from its
   # content, indexed with its type and origin, and the rename logged.
   rename)
@@ -1110,6 +1138,20 @@ if (filter === '$ARGS.named') {
     const [path, ...what] = l.split('\t');
     return what.length > 0 ? { path, what: [...what.join('\t')].slice(0, named.cut).join('') } : { path };
   })) + '\n');
+} else if (filter.startsWith('[inputs | sub(') && flags.has('R')) {
+  // run.sh's DISAGREE_FILTER and NEXT_FILTER (R-MEAN-1).
+  const next = filter.includes('{action: .[1]}');
+  const lines = input().split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  const out = [];
+  for (const l of lines) {
+    const f = l.replace(/\r$/, '').split('\t').map((x) => x.trim());
+    if (f.length !== (next ? 2 : 3) || f.some((x) => x.length === 0)) continue;
+    if ([...f[f.length - 1]].length > named.cut) continue;
+    if (next) out.push(f[0] === '-' ? { action: f[1] } : { path: f[0], action: f[1] });
+    else out.push({ a: f[0], b: f[1], reason: f[2] });
+  }
+  process.stdout.write(JSON.stringify(out.slice(0, named.max)) + '\n');
 } else if (filter === '.[$k] // empty' && flags.has('r')) {
   const v = JSON.parse(input())[named.k];
   if (v !== undefined && v !== null && v !== false) {
@@ -2901,3 +2943,50 @@ for scenario in foldergone folderbin foldermid folderdown; do
   expect_cleaned_up
 done
 echo "ok a missing or binned folder fails with vault_missing and uploads nothing"
+
+# 41. R-MEAN-1: the agent's .bower/checks.txt and .bower/next.txt become
+# `disagree` (at most 5) and `next` (at most 3) on the done report and in
+# last-run.json, lines out of the fixed format dropped; neither file reaches
+# Drive nor the log. R-RUNNER-9: the runner writes the mechanical History
+# lines on Bower's notes only: filed for a new note, moved for a moved one
+# (under its History, above its Reference), and the status change.
+run_case meaning
+expect_eq "$RC" 0 'meaning: exit code'
+expect_eq "$(post 2 p.state)" done 'meaning: final state'
+expect_eq "$(post 2 'JSON.stringify(p.disagree)')" \
+  '[{"a":"1-Projects/Flat hunt/Arlington Road.md","b":"2-Areas/Flat.md","reason":"The rent differs: 900 in one, 950 in the other"},{"a":"a2.md","b":"b2.md","reason":"Reason 2"},{"a":"a3.md","b":"b3.md","reason":"Reason 3"},{"a":"a4.md","b":"b4.md","reason":"Reason 4"},{"a":"a5.md","b":"b5.md","reason":"Reason 5"}]' \
+  'meaning: disagree'
+expect_eq "$(post 2 'JSON.stringify(p.next)')" \
+  '[{"path":"2-Areas/Flat.md","action":"Book a viewing"},{"action":"Send the signed lease back"},{"path":"y.md","action":"Three"}]' \
+  'meaning: next'
+outcome="$STATE/remote/.bower/last-run.json"
+expect_eq "$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(JSON.stringify([o.disagree, o.next]))' "$outcome")" \
+  "$(post 2 'JSON.stringify([p.disagree, p.next])')" 'meaning: last-run.json carries the same disagree and next'
+for f in .bower/checks.txt .bower/next.txt; do
+  [ ! -e "$STATE/remote/$f" ] || die "meaning: $f reached Drive"
+  if grep -Fxq -- "$f" "$STATE/uploaded.txt"; then die "meaning: $f was uploaded"; fi
+done
+if grep -Eq 'rent differs|viewing|lease back|Arlington|Flat\.md|Old place' "$STATE/out.log"; then
+  die 'meaning: the log names a note or a line'
+fi
+day=$(LC_ALL=C date -u '+%-d %b')
+remote="$STATE/remote"
+expect_eq "$(cat "$remote/1-Projects/Flat hunt/Arlington Road.md")" \
+  "$(printf -- '---\nby: bower\n---\n\nArlington Road.\n\n## History\n\n- %s · Filed to 1-Projects/Flat hunt, by Bower' "$day")" \
+  "meaning: a new note of Bower's gets the filed line"
+expect_eq "$(cat "$remote/4-Archives/Old place.md")" \
+  "$(printf -- '---\nby: bower\n---\n\nThe old place.\n\n## History\n\n- 1 Jan · Filed to 3-Resources, by Bower\n- %s · Moved to 4-Archives, by Bower\n\n## Reference\n\nKept.' "$day")" \
+  'meaning: a moved note gets the moved line under its History'
+grep -Fxq -- '3-Resources/Old place.md -> 4-Archives/Old place.md' "$STATE/moved.txt" ||
+  die 'meaning: the note was not moved in Drive'
+expect_eq "$(tail -n 3 "$remote/2-Areas/Flat.md")" \
+  "$(printf -- '## History\n\n- %s · Status new → done, by Bower' "$day")" 'meaning: the status line'
+expect_eq "$(cat "$remote/2-Areas/Mine.md")" "$(printf -- '---\nstatus: done\n---\n\nMine.')" \
+  "meaning: the person's note gets no History"
+expect_eq "$(cat "$remote/1-Projects/Flat hunt/By hand.md")" '# By hand' \
+  "meaning: a new note of the person's gets no History"
+grep -q ' 3 History lines written$' "$STATE/out.log" || die 'meaning: History lines not counted in the log'
+expect_content_free
+expect_cleaned_up
+echo "ok the report says what disagrees and what is next, and Bower's notes keep their History"
