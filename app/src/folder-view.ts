@@ -14,6 +14,8 @@ import { formatSize } from './file-preview.js';
 import { CATALOGUE_PATH, originLine, originOf } from './file-origin.js';
 import type { Origin } from './file-origin.js';
 import { kindById } from './kinds.js';
+import { folderOf } from './navigation.js';
+import type { TreeNode } from './navigation.js';
 import type { NoteMeta } from './note-meta.js';
 import {
   FILE_KIND_LABELS,
@@ -386,4 +388,56 @@ export function fileLine(
   return file.size === undefined
     ? label
     : `${label} · ${formatSize(file.size)}`;
+}
+
+/** What `folderCount` adds up: the folder's subfolders and its model. */
+export interface FolderCountInput {
+  /** How many subfolders the folder shows (they count as originals). */
+  subfolders: number;
+  model: Pick<FolderModel, 'originals' | 'bower'>;
+}
+
+/**
+ * The folder's two segments (R-API-9, K-31): Originals are its subfolders
+ * and everything the person added; By Bower is everything Bower wrote.
+ */
+export function folderSegments(folder: FolderCountInput): {
+  originals: number;
+  bower: number;
+} {
+  return {
+    originals: folder.subfolders + folder.model.originals.length,
+    bower: folder.model.bower.length,
+  };
+}
+
+/**
+ * The one count of a folder (R-API-9, K-31): the sum of its segments, so
+ * the meta line ("7 things"), the Filter's "Show 7 things" and search's
+ * "7 things" can never disagree with Originals 1 + By Bower 6.
+ */
+export function folderCount(folder: FolderCountInput): number {
+  const { originals, bower } = folderSegments(folder);
+  return originals + bower;
+}
+
+/**
+ * The things in the same folder as `item`, in tree order (R-API-9): what
+ * About's "In this folder", the prev / next footer and "next item" walk.
+ * `item` itself is included; subfolders are not. Empty when its folder is
+ * not in `tree`.
+ */
+export function siblings(
+  item: Pick<DriveFile, 'path'>,
+  tree: TreeNode,
+): DriveFile[] {
+  const parent = folderOf(item.path);
+  let node: TreeNode | undefined = tree;
+  if (parent !== '') {
+    for (const name of parent.split('/')) {
+      node = node.folders.find((folder) => folder.name === name);
+      if (node === undefined) return [];
+    }
+  }
+  return [...node.items];
 }
