@@ -187,12 +187,31 @@ function scrollParentOf(el: HTMLElement | null): HTMLElement | null {
 }
 
 /**
+ * The box that actually scrolls around `el`: the nearest ancestor that can
+ * scroll and holds more than it shows (the desktop sidebar's column, since
+ * the tree itself never scrolls); `null` when only the page does.
+ */
+function scrollBoxOf(el: HTMLElement): HTMLElement | null {
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    if (node === document.body || node === document.documentElement) break;
+    const { overflowY } = getComputedStyle(node);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      node.scrollHeight > node.clientHeight
+    ) {
+      return node;
+    }
+  }
+  return null;
+}
+
+/**
  * Brings a row into view by scrolling only its own scroll box (the sidebar
  * column), never the page behind it; the page itself when nothing else
  * scrolls (the Folders tab).
  */
 function scrollRowIntoView(el: HTMLElement): void {
-  const parent = scrollParentOf(el);
+  const parent = scrollBoxOf(el);
   if (parent === null) {
     if (typeof el.scrollIntoView === 'function') {
       el.scrollIntoView({ block: 'nearest' });
@@ -201,8 +220,10 @@ function scrollRowIntoView(el: HTMLElement): void {
   }
   const row = el.getBoundingClientRect();
   const box = parent.getBoundingClientRect();
-  if (row.top < box.top) parent.scrollTop += row.top - box.top;
-  else if (row.bottom > box.bottom) parent.scrollTop += row.bottom - box.bottom;
+  if (row.top >= box.top && row.bottom <= box.bottom) return;
+  // Centred, so rows that still settle above it (titles, pins) do not push
+  // it back out of view.
+  parent.scrollTop += row.top - box.top - (box.height - row.height) / 2;
 }
 
 function currentScroll(el: HTMLElement | null): number {
