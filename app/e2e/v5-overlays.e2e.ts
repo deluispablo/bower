@@ -72,6 +72,8 @@ const CASES: readonly Case[] = [
     prepare: async (page) => {
       // By name, not by a demo id that moves with the fixture.
       await page.goto('/folder/4-Archives/Flat%20hunt');
+      // The photo alone (its note pairs with it under All).
+      await page.getByRole('button', { name: /^Originals/ }).click();
       await page
         .locator('.folder-item', { hasText: 'Arlington Road, window sign' })
         .filter({ hasText: /Photo/ })

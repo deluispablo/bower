@@ -14,7 +14,7 @@ test('the phone back label on a folder inside Areas reads "Areas"', async ({
 
   await page.goto('/folder/2-Areas/Visa%20%26%20Immigration');
   await expect(
-    page.getByRole('heading', { name: 'Visa & Immigration' }),
+    page.getByRole('heading', { name: 'Visa & Immigration', level: 1 }),
   ).toBeVisible();
   const back = page.locator('.topbar-back');
   await expect(back).toHaveAttribute('aria-label', 'Back to Areas');
