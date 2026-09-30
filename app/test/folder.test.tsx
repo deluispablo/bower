@@ -327,16 +327,25 @@ describe('Subfolder rows on a non-root folder screen count files too (#457)', ()
   });
 });
 
-describe('Ask Bower about it chip (#354)', () => {
-  it('prefills "About <folder>: " and nothing else from the folder', () => {
+describe('Ask Bower about it chip (#354, #899)', () => {
+  it('opens the send-to-Bower sheet in Ask mode with the folder as subject', () => {
     route.params.path = '1-Projects/Flat hunt';
     mount();
+    openSheet.mockClear();
     const chip = Array.from(
-      root.querySelectorAll<HTMLAnchorElement>('.folder-chips a.header-action'),
-    ).find((a) => a.textContent?.includes('Ask Bower about it'));
-    expect(chip?.getAttribute('href')).toBe(
-      `/bower?text=${encodeURIComponent('About Flat hunt: ')}`,
-    );
+      root.querySelectorAll<HTMLElement>('.folder-chips .header-action'),
+    ).find((el) => el.textContent?.includes('Ask Bower about it'));
+    expect(chip?.tagName).toBe('BUTTON');
+    act(() => chip?.click());
+    expect(openSheet).toHaveBeenCalledTimes(1);
+    const call = openSheet.mock.calls[0]?.[0] as {
+      mode: string;
+      about: string;
+      buildText: (value: string) => string;
+    };
+    expect(call.mode).toBe('ask');
+    expect(call.about).toBe('Flat hunt');
+    expect(call.buildText('when?')).toBe('About Flat hunt: when?');
   });
 });
 

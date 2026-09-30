@@ -585,7 +585,9 @@ export function Note() {
   }, [id]);
 
   const file = index?.byId.get(id);
-  useTitle(file === undefined ? null : displayName(file.name).replace(/\.md$/i, ''));
+  useTitle(
+    file === undefined ? null : displayName(file.name).replace(/\.md$/i, ''),
+  );
 
   // Opening a note marks it seen on this device (#587): the "New" tag goes.
   useEffect(() => {
