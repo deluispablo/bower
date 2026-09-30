@@ -31,8 +31,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: CI,
   retries: CI ? 1 : 0,
-  // Both cores of a GitHub runner, per shard.
-  workers: CI ? 2 : undefined,
+  // Every core of a GitHub runner, per shard: a standard runner for a
+  // public repository has four vCPUs.
+  workers: CI ? 4 : undefined,
   timeout: 30_000,
   expect: { timeout: 10_000 },
   reporter: CI ? [['list'], ['github']] : 'list',
