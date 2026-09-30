@@ -1,0 +1,156 @@
+/*
+ * The page header (#906, spec §3.5; PF-Main-375/1280, NO-Main-375,
+ * AR-Main-375, JF-Main-1280, ST-Top-1280). Phone first: no breadcrumb (the
+ * bar's back link), the h1 28 px 8 px under the bar; from 900 px the
+ * breadcrumb row and a 32 px h1.
+ */
+.page-header {
+  margin: 0;
+}
+
+.page-header-crumbs {
+  display: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-13);
+}
+
+.page-header-crumbs a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.page-header-crumbs a:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+/* Title then (i) and ⋯, 2 px apart; the buttons sit on the first line,
+   their centre on its centre (−3 px on the phone, −1 px on desktop). */
+.page-header-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  margin-top: var(--space-2);
+}
+
+.page-header-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--color-heading);
+  font-family: var(--font-display);
+  font-size: var(--text-28);
+  font-weight: var(--weight-bold);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.page-header-buttons {
+  display: flex;
+  flex: 0 0 auto;
+  margin-top: -3px;
+}
+
+/* 40 visual, 44 hit (R-GLOBAL-1). */
+.page-header-buttons .icon-button {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--color-text-secondary);
+}
+
+.page-header-buttons .icon-button::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  content: '';
+}
+
+.page-header-meta {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The root dot (R-META-4): 8 px in the root's colour, neutral without one. */
+.page-header-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-muted);
+  vertical-align: middle;
+}
+
+.page-header-dot[data-root='inbox'] {
+  background: var(--color-para-inbox);
+}
+
+.page-header-dot[data-root='projects'] {
+  background: var(--color-para-projects);
+}
+
+.page-header-dot[data-root='areas'] {
+  background: var(--color-para-areas);
+}
+
+.page-header-dot[data-root='resources'] {
+  background: var(--color-para-resources);
+}
+
+.page-header-dot[data-root='archives'] {
+  background: var(--color-para-archives);
+}
+
+.page-header-purpose {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+.page-header-tabs {
+  margin-top: var(--space-3);
+}
+
+/* A tab screen's title is in the phone's top bar (R-TOPBAR-3). */
+.page-header-tab .page-header-title-row {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .page-header-crumbs {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+  }
+
+  .page-header-title-row,
+  .page-header-tab .page-header-title-row {
+    display: flex;
+    margin-top: var(--space-1);
+  }
+
+  .page-header-title {
+    font-size: var(--text-2xl);
+  }
+
+  .page-header-buttons {
+    margin-top: -1px;
+  }
+
+  .page-header-purpose {
+    font-size: var(--text-15);
+  }
+}
+
+/* The About column is on screen from 1200 px: no (i) (R-HEADER-3). */
+@media (min-width: 1200px) {
+  .page-header-about {
+    display: none;
+  }
+}
