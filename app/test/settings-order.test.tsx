@@ -83,9 +83,15 @@ afterEach(() => {
 });
 
 describe('Settings section order', () => {
-  it('runs Tidying up, Look, Bower, Advanced in that order', () => {
+  it('runs Tidying up, Look, Bower, Learn Bower, Advanced in that order', () => {
     mount(baseMe);
-    expect(headings()).toEqual(['Tidying up', 'Look', 'Bower', 'Advanced']);
+    expect(headings()).toEqual([
+      'Tidying up',
+      'Look',
+      'Bower',
+      'Learn Bower',
+      'Advanced',
+    ]);
   });
 
   it('puts Show Bower’s own files in Advanced, next to the API key (#379 review)', () => {
@@ -184,10 +190,21 @@ describe('Settings copy fixes', () => {
     ).toBe(true);
   });
 
-  it('describes What is Bower as the whole story, in five screens (#329)', () => {
+  // R-LEARN-3, board Settings-Learn-375: four rows in the Learn Bower group.
+  it('has a Learn Bower group of four rows with their hints', () => {
     mount(baseMe);
+    const labels = textsOf('.settings-row-label');
+    for (const label of [
+      'What is Bower',
+      'Show me around',
+      'Examples and use cases',
+      'Ideas to try',
+    ]) {
+      expect(labels).toContain(label);
+    }
     const hints = textsOf('.toggle-hint');
-    expect(hints).toContain('The whole story, in five screens');
+    expect(hints).toContain('The intro: five screens');
+    expect(hints).toContain('What people use Bower for');
     expect(hints).not.toContain('The four-page intro, again');
   });
 });

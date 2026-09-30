@@ -18,6 +18,7 @@ import { IconExternalLink } from '../components/icons.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useGuardedSignOut } from '../components/upload-chip.js';
 import { Toggle } from '../components/toggle.js';
+import { LEARN_PATH } from '../learn.js';
 import { getPref, setPref } from '../prefs.js';
 import type { ThemePref } from '../prefs.js';
 import {
@@ -27,6 +28,7 @@ import {
   enablePush,
 } from '../push.js';
 import { isRulebookBehind } from '../rulebook.js';
+import { IDEAS_PATH } from '../shell-routes.js';
 import { useSession } from '../session.js';
 import { replayTour } from '../tour-store.js';
 import '../styles/settings.css';
@@ -440,31 +442,59 @@ function BowerSection() {
           </span>
         </span>
       </button>
+    </div>
+  );
+}
 
-      <button
-        type="button"
-        class="settings-row"
-        onClick={() => {
-          replayTour();
-          route('/');
-        }}
-      >
-        <span class="settings-row-text">
-          <span class="settings-row-label">Show me around again</span>
-          <span class="toggle-hint">Replay the tour</span>
-        </span>
-      </button>
-
-      <button
-        type="button"
-        class="settings-row"
-        onClick={() => route('/welcome?from=settings')}
-      >
-        <span class="settings-row-text">
-          <span class="settings-row-label">What is Bower</span>
-          <span class="toggle-hint">The whole story, in five screens</span>
-        </span>
-      </button>
+/** The Learn Bower group (R-LEARN-3, board Settings-Learn-375): the intro, the
+ * tour, the examples and the ideas. */
+function LearnRows() {
+  const { route } = useLocation();
+  const rows: readonly {
+    label: string;
+    hint: string;
+    go: () => void;
+  }[] = [
+    {
+      label: 'What is Bower',
+      hint: 'The intro: five screens',
+      go: () => route('/welcome?from=settings'),
+    },
+    {
+      label: 'Show me around',
+      hint: 'The tour of the app',
+      go: () => {
+        replayTour();
+        route('/');
+      },
+    },
+    {
+      label: 'Examples and use cases',
+      hint: 'What people use Bower for',
+      go: () => route(LEARN_PATH),
+    },
+    {
+      label: 'Ideas to try',
+      hint: 'Things you can ask Bower',
+      go: () => route(IDEAS_PATH),
+    },
+  ];
+  return (
+    <div class="settings-section">
+      <h2>Learn Bower</h2>
+      {rows.map((row) => (
+        <button
+          key={row.label}
+          type="button"
+          class="settings-row"
+          onClick={row.go}
+        >
+          <span class="settings-row-text">
+            <span class="settings-row-label">{row.label}</span>
+            <span class="toggle-hint">{row.hint}</span>
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -746,6 +776,7 @@ export function Settings() {
       <AppearanceSection />
 
       <BowerSection />
+      <LearnRows />
 
       <AdvancedSection me={me} />
 
