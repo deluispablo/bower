@@ -704,6 +704,16 @@ const V4_FILES: readonly FixtureFile[] = [
 tags: [work, summary]
 created: 2026-09-26
 updated: 2026-09-26
+kind: job-offer
+role: Senior data engineer
+employer: Northwind Data
+office: King's Cross
+salary: 78000
+reply_by: 2026-10-10
+apply_link: https://example.com/careers/senior-data-engineer
+score: 82
+verdict: Apply first
+status: new
 ---
 
 > [!bower] Bower's note
@@ -739,6 +749,37 @@ Six engineers and a product manager, working from the King's Cross office on Tue
 - Can the non-compete be shortened to six months?
 - Is the hybrid pattern written into the contract or a policy?
 - Does the bonus depend on company results or personal ones?
+`,
+  },
+  // What Bower made for that offer (R-VERDICT, Compare's Made for it).
+  {
+    path: '2-Areas/Work/CV · Northwind Data.md',
+    modifiedTime: at(26, '1015'),
+    content: `---
+tags: [work, cv]
+created: 2026-09-26
+updated: 2026-09-26
+made_for: "[[Job offer, Northwind Data]]"
+---
+
+# CV · Northwind Data
+
+Data engineer with six years of pipeline work. Leads with the warehouse migration and the cost cut, then the team you ran.
+`,
+  },
+  {
+    path: '2-Areas/Work/Letter · Northwind Data.md',
+    modifiedTime: at(26, '1020'),
+    content: `---
+tags: [work, letter]
+created: 2026-09-26
+updated: 2026-09-26
+made_for: "[[Job offer, Northwind Data]]"
+---
+
+# Letter · Northwind Data
+
+Dear hiring team, I am applying for the senior data engineer role. The three-day hybrid pattern suits how I work best.
 `,
   },
 

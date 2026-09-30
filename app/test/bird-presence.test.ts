@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   birdCount,
   overlayBirdCount,
+  greetingBirdHidden,
   registerBird,
   resetBirdPresence,
   subscribeBirds,
@@ -62,5 +63,23 @@ describe('bird presence', () => {
     expect(birdCount()).toBe(0);
     registerBird();
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('greetingBirdHidden', () => {
+  it('keeps the greeting bird when nothing owns the bird', () => {
+    expect(greetingBirdHidden(false, false)).toBe(false);
+  });
+
+  it('unmounts it for the tour, the search peek or an overlay bird', () => {
+    expect(greetingBirdHidden(true, false)).toBe(true);
+    expect(greetingBirdHidden(false, true)).toBe(true);
+  });
+
+  it('follows the overlay bird registration', () => {
+    const off = registerBird(true);
+    expect(greetingBirdHidden(false, overlayBirdCount() > 0)).toBe(true);
+    off();
+    expect(greetingBirdHidden(false, overlayBirdCount() > 0)).toBe(false);
   });
 });

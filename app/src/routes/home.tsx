@@ -80,6 +80,7 @@ import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import type { DriveFile } from '../drive.js';
 import { ACTIVITY_PATH } from '../shell-routes.js';
+import { greetingBirdHidden, useOverlayBird } from '../bird-presence.js';
 import { openSwitcher } from '../switcher-store.js';
 import {
   endTour,
@@ -673,6 +674,7 @@ export function Home(): JSX.Element {
   // The first-run tour (#149): once per account, or again from Settings.
   // "Let's go" ends it with one show-off on Home.
   const tour = useTour();
+  const overlayBird = useOverlayBird();
   const showTour = tourOnScreen(me, tour);
   // One greeting, so one bird (spec 6.21 rule 1); 900 px is the CSS breakpoint.
   const wide = useMediaQuery('(min-width: 900px)');
@@ -688,7 +690,7 @@ export function Home(): JSX.Element {
         greeting={greeting}
         bubble={bubble}
         onDone={onDone}
-        birdHidden={showTour}
+        birdHidden={greetingBirdHidden(showTour, overlayBird)}
       />
 
       <button
