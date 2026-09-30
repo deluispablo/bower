@@ -42,9 +42,9 @@ test('the bubble says what was filed and links to Just filed', async ({
   const bubble = visible(page.locator('.home-bubble'));
   await expect(bubble).toContainText(
     // #754: the run sentence, what Bower added, then See what changed.
-    'Done just now: 2 filed',
+    'Done just now: 5 filed',
   );
-  await expect(bubble).not.toContainText('bike times');
+  await expect(bubble).toContainText('I added bike times to the flats.');
   await shot(page, testInfo, 'home-after-tidy');
   await bubble.getByRole('link', { name: 'See what changed' }).click();
   await expect(page).toHaveURL(/\/just-filed$/);
@@ -57,7 +57,7 @@ test('Last tidy-up counts what is new and opens Just filed; Health and Notes sit
   await tidyUp(page);
   const card = visible(page.locator('.home-card', { hasText: 'Last tidy-up' }));
   // #754: the card is the time and the counts line only.
-  await expect(card).toContainText('2 filed');
+  await expect(card).toContainText('5 filed');
   await expect(card).not.toContainText('new to you');
   if (testInfo.project.name === 'desktop') {
     const tidy = await card.boundingBox();
