@@ -305,6 +305,8 @@
 .intro-hero-bird {
   display: flex;
   justify-content: center;
+  /* Room above the 112 px bird for his props: 12% of his size (R-BIRD-6). */
+  padding-top: 14px;
 }
 
 .intro-strip {
