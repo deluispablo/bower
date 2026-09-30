@@ -46,7 +46,7 @@ import { HeaderAction } from '../components/header-action.js';
 import { Hint } from '../components/hint.js';
 import { MoreButton } from '../components/more-button.js';
 import { NoteMenu } from '../components/note-menu.js';
-import { ProjectFront } from '../components/project-front.js';
+import { ProjectFront, projectNoteOf } from '../components/project-front.js';
 import { QuickLookPane } from '../components/quick-look.js';
 import type { PanePreview } from '../components/quick-look.js';
 import { useShellSlot } from '../components/shell-slots.js';
@@ -324,6 +324,11 @@ function FolderBody({
   // and an empty one keep the counts line they have always had.
   const paraOfFolder = paraKindOf(contents.path.split('/')[0] ?? '');
   const boardHeader = parentName !== null && contents.items.length > 0;
+  // The project note is the front card, so Quick Look never opens on it.
+  const hubId =
+    parentName === null
+      ? undefined
+      : projectNoteOf(contents.name, contents.notes)?.id;
 
   return (
     <section class="folder-view">
@@ -459,6 +464,7 @@ function FolderBody({
       )}
 
       {!comparing && parentName !== null && (
+        // The front card is the project note: Quick Look stays off it (#896).
         <ProjectFront
           folderName={contents.name}
           notes={contents.notes}
@@ -520,7 +526,11 @@ function FolderBody({
             now={now}
             desktop={desktop}
             waiting={waiting}
-            onPreview={onPreview}
+            onPreview={(item) =>
+              onPreview(
+                hubId !== undefined && item?.file.id === hubId ? null : item,
+              )
+            }
             onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
             onOpen={onNavigate}
             {...(compare !== null && {
