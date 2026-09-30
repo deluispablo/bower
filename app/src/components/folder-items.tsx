@@ -35,11 +35,7 @@ import {
   rowsFor,
   sortRows,
 } from '../folder-view.js';
-import type {
-  FolderRow,
-  FolderSort,
-  OriginFilter,
-} from '../folder-view.js';
+import type { FolderRow, FolderSort, OriginFilter } from '../folder-view.js';
 import { keyFactsFor, kindById } from '../kinds.js';
 import {
   displayName,
