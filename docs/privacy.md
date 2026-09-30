@@ -4,7 +4,7 @@ This page explains what this Bower instance does with your information. It is wr
 
 ## Who runs this
 
-Bower is open source software. There is no company behind it. This particular instance is run by an operator — a person who deployed their own copy for a small group of people they invited, such as their household. The operator controls the server that runs it and, as explained below, is able to read what it stores.
+Bower is source-available software ([Fair Source](https://github.com/deluispablo/bower/blob/main/LICENSE), FSL-1.1-MIT). There is no company behind it. This particular instance is run by an operator — a person who deployed their own copy for a small group of people they invited, such as their household. The operator controls the server that runs it and, as explained below, is able to read what it stores.
 
 ## What this instance stores
 

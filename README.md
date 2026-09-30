@@ -11,7 +11,7 @@ Self-hosted, zero servers, 0 € a month.</p>
   <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/agent-Claude%20Code-6b46c1" alt="Agent: Claude Code"></a>
   <a href="https://github.com/features/actions"><img src="https://img.shields.io/badge/runs%20on-GitHub%20Actions-2088FF" alt="Runs on GitHub Actions"></a>
   <a href="https://www.cloudflare.com"><img src="https://img.shields.io/badge/hosted%20on-Cloudflare-F38020" alt="Hosted on Cloudflare"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" alt="MIT license"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-FSL--1.1--MIT-blue" alt="License: FSL-1.1-MIT (Fair Source)"></a>
 </p>
 
 <table align="center">
@@ -243,6 +243,16 @@ Operators: the update order (Worker, runner, app, then each owner's rulebook) is
 
 Why things are built this way: [`docs/decisions.md`](docs/decisions.md). What an instance stores about you: [`docs/privacy.md`](docs/privacy.md). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## License
+
+Bower is [Fair Source](https://fair.io/): the code is public, and you may read it, run it, change it and share it, under the [Functional Source License 1.1, MIT Future License](LICENSE) (`FSL-1.1-MIT`).
+
+- **Allowed:** running your own Bower for yourself, your household or your team, even at work; changing it; learning from it; helping someone else run theirs.
+- **Not allowed:** offering Bower, or something substantially like it, as a competing product or service.
+- **Two years later, fully open:** each version becomes MIT-licensed two years after it is published, with no restriction left.
+
+Versions published before 30 September 2026 remain under the MIT licence they were released with.
+
 ## Credits
 
-Built by [Pablo de Luis](https://github.com/deluispablo), with Claude Code doing the typing. MIT licensed. The bird is drawn from the satin bowerbird, violet eye and blue bottle cap included, which really does collect, sort and show off; the brand is described in [`docs/brand.md`](docs/brand.md).
+Built by [Pablo de Luis](https://github.com/deluispablo), with Claude Code doing the typing. The bird is drawn from the satin bowerbird, violet eye and blue bottle cap included, which really does collect, sort and show off; the brand is described in [`docs/brand.md`](docs/brand.md).

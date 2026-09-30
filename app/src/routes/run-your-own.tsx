@@ -72,8 +72,9 @@ export function RunYourOwn(): JSX.Element {
       <h1 class="run-your-own-title">Run your own Bower</h1>
       <p class="run-your-own-lede">
         The demo shows Alex's things. Yours live in your own Google Drive, and
-        only you can see them. Bower is free, open source, and runs on free
-        tiers; you bring a Google account and a Claude subscription.
+        only you can see them. Bower is free to run, its code is public, and it
+        runs on free tiers; you bring a Google account and a Claude
+        subscription.
       </p>
       <ul class="run-your-own-rows">
         {ROWS.map(({ Icon, title, line }) => (
