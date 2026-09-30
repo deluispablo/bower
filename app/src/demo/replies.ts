@@ -79,13 +79,13 @@ Missing: nothing yet on travel insurance.`,
       title,
       body: `# ${text}
 
-From [[Lisbon Trip]] and its notes:
+From [[Visa & Immigration]] and its papers:
 
-- Book the day trip to Sintra; the palace sells out ([[Things to see in Lisbon]]).
-- Check what the card's travel insurance covers, and print it ([[Packing list]]).
-- Pack a light rain jacket.
+- Book the health check the skilled visa is waiting for.
+- Keep [[Passport copy.pdf]] with the application; it is filed next to the note.
+- Add the visa line to your CV's header ([[CV insights]]).
 
-Flights and the flat are sorted ([[Flights and stays]]).`,
+The Working Holiday visa runs until June 2027, so there is time.`,
     };
   }
 

@@ -29,8 +29,8 @@ export const SCREEN_ROUTES: readonly ScreenRoute[] = [
     pattern: '/folder/:path*',
     urls: [
       '/folder/1-Projects',
-      '/folder/1-Projects/Flat%20hunt',
-      '/folder/2-Areas/Car',
+      '/folder/4-Archives/Flat%20hunt',
+      '/folder/3-Resources/Car',
       '/folder/does-not-exist',
     ],
   },

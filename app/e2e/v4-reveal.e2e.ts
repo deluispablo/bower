@@ -8,8 +8,8 @@ import type { Locator, Page } from '@playwright/test';
 
 import { expect, navigate, openHome, test, visible } from './demo.js';
 
-/** The note in Flat hunt that Recent lists. */
-const NOTE = /Notes from the viewing/;
+/** The note in Moonee Ponds that Recent lists. */
+const NOTE = /10-43 Buckley St, Moonee Ponds/;
 
 function tree(page: Page): Locator {
   return visible(page.locator('[role="tree"]'));
@@ -20,7 +20,7 @@ function currentRow(page: Page): Locator {
   return tree(page).locator('a[aria-current="page"]');
 }
 
-/** Opens a Flat hunt note from Home's Recent list. */
+/** Opens a Moonee Ponds note from Home's Recent list. */
 async function openNoteFromRecent(page: Page): Promise<void> {
   await openHome(page);
   const link = visible(
@@ -30,7 +30,7 @@ async function openNoteFromRecent(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/note\//);
 }
 
-test('opening a note from Recent opens Projects and Flat hunt and marks the note current', async ({
+test('opening a note from Recent opens Projects and Moonee Ponds and marks the note current', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'the sidebar is desktop');
@@ -40,7 +40,7 @@ test('opening a note from Recent opens Projects and Flat hunt and marks the note
     list.getByRole('button', { name: 'Collapse Projects' }),
   ).toBeVisible();
   await expect(
-    list.getByRole('button', { name: 'Collapse Flat hunt' }),
+    list.getByRole('button', { name: 'Collapse Moonee Ponds' }),
   ).toBeVisible();
   await expect(currentRow(page)).toHaveCount(1);
   await expect(currentRow(page)).toHaveAttribute('href', /^\/note\//);
@@ -62,7 +62,7 @@ test('reveal never collapses a folder the person had open', async ({
   ).click();
   await expect(currentRow(page)).toHaveCount(1);
   await expect(
-    list.getByRole('button', { name: 'Collapse Flat hunt' }),
+    list.getByRole('button', { name: 'Collapse Moonee Ponds' }),
   ).toBeVisible();
   await expect(
     list.getByRole('button', { name: 'Collapse Areas' }),
@@ -78,7 +78,7 @@ test('on the phone, Notes after a note shows the tree open at it, and Notes agai
   await expect(page).toHaveURL(/\/notes$/);
   const list = tree(page);
   await expect(
-    list.getByRole('button', { name: 'Collapse Flat hunt' }),
+    list.getByRole('button', { name: 'Collapse Moonee Ponds' }),
   ).toBeVisible();
   await expect(currentRow(page)).toHaveCount(1);
   await expect(currentRow(page)).toBeInViewport();

@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test';
 
 import { expect, shot, test } from './demo.js';
 
-const FLAT = '/folder/1-Projects/Flat%20hunt';
+const FLAT = '/folder/4-Archives/Flat%20hunt';
 
 async function open(page: Page, width: number): Promise<void> {
   await page.setViewportSize({ width, height: 800 });
@@ -104,7 +104,7 @@ test('the keys: Space quick look, Enter opens, Backspace goes up', async ({
   await expect(dialog).toBeHidden();
 
   await page.keyboard.press('Backspace');
-  await expect(page).toHaveURL(/\/folder\/1-Projects$/);
+  await expect(page).toHaveURL(/\/folder\/4-Archives$/);
 
   await page.goBack();
   await expect(page.locator('.folder-item').first()).toBeVisible();

@@ -27,6 +27,7 @@ import {
   DEMO_QUOTA_LIMIT,
   DEMO_RUNS,
   DEMO_RUN_STATES,
+  EMPTY_INBOX_FILES,
   FIXTURE_FILES,
   FIXTURE_FOLDERS,
   SCRIPTED_LISTINGS,
@@ -96,15 +97,33 @@ function isContext(text: string): boolean {
 /** The session-storage switch that holds the demo's current run. */
 export const DEMO_RUN_KEY = 'bower:demo:run';
 
+/**
+ * The session-storage switch for the inbox (#903): `empty` starts the demo
+ * as Home looks after a tidy-up (board HM-Main, inbox 0); anything else,
+ * or nothing, starts with three things waiting (HM-Waiting).
+ */
+export const DEMO_INBOX_KEY = 'bower:demo:inbox';
+
+/** Whether `storage` asks for the empty inbox (`DEMO_INBOX_KEY`). */
+function wantsEmptyInbox(storage: Storage | null): boolean {
+  if (storage === null) return false;
+  try {
+    return storage.getItem(DEMO_INBOX_KEY) === 'empty';
+  } catch {
+    return false;
+  }
+}
+
 export class DemoServer {
   readonly vault: DemoVault;
   readonly me: Me;
   private active: ActiveRun | null = null;
-  /** The last run `GET /status` reports: none until a scripted run ends, so
-   * Home starts on "No tidy-up yet". The story's earlier tidy-ups, today's
-   * included, are in `history` (`GET /runs`, #583). */
-  private last: Run | null = null;
-  /** Finished runs, newest first (`GET /runs`, #345): the story's four
+  /** The last run `GET /status` reports: the story's newest tidy-up
+   * (yesterday 15:01 to 15:03, "Done 21 h ago: 1 filed", #903) until a
+   * scripted run ends. */
+  private last: Run | null =
+    DEMO_RUNS[0] === undefined ? null : copyRun(DEMO_RUNS[0]);
+  /** Finished runs, newest first (`GET /runs`, #345): the story's
    * tidy-ups, then every scripted run as it ends. */
   private history: Run[] = DEMO_RUNS.map(copyRun);
 
@@ -113,7 +132,11 @@ export class DemoServer {
     /** `null` in tests: `tourSeenAt` then starts unset and is never persisted. */
     private readonly storage: Storage | null = null,
   ) {
-    this.vault = new DemoVault(FIXTURE_FILES, now, FIXTURE_FOLDERS);
+    this.vault = new DemoVault(
+      wantsEmptyInbox(storage) ? EMPTY_INBOX_FILES : FIXTURE_FILES,
+      now,
+      FIXTURE_FOLDERS,
+    );
     const inbox = this.vault.byPath('0-Inbox');
     this.me = {
       email: DEMO_EMAIL,

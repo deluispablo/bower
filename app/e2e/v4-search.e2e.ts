@@ -67,7 +67,7 @@ test('"flat hnt" finds Flat hunt: chips with counts and the three groups in orde
   expect(headings.slice(0, 3)).toEqual(['Folder', 'Notes', 'Files']);
 
   const folder = dialog.getByRole('option', { name: /Flat hunt/ }).first();
-  await expect(folder).toContainText('Projects');
+  await expect(folder).toContainText('Archives');
   await expect(folder).toContainText('things');
   await expect(folder.locator('.folder-mark')).toBeVisible();
   await expect(dialog.locator('.switcher-match').first()).toBeVisible();
@@ -123,8 +123,10 @@ test('search from the Flat hunt screen is scoped and can be widened', async ({
   page,
 }) => {
   await openHome(page);
-  await page.goto('/folder/1-Projects/Flat hunt');
-  await expect(page.getByRole('heading', { name: 'Flat hunt' })).toBeVisible();
+  await page.goto('/folder/4-Archives/Flat hunt');
+  await expect(
+    page.getByRole('heading', { name: 'Flat hunt', level: 1 }),
+  ).toBeVisible();
   const dialog = await openSearch(page);
   const field = dialog.getByRole('combobox');
   await expect(field).toHaveAttribute('placeholder', 'Search in Flat hunt');

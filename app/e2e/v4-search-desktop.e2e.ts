@@ -26,7 +26,7 @@ test('the overlay has two columns and the preview follows the highlighted result
 }, testInfo) => {
   await openHome(page);
   const dialog = await openSearch(page);
-  await dialog.getByRole('combobox').fill('lease');
+  await dialog.getByRole('combobox').fill('Moonee Ponds');
 
   const rows = dialog.getByRole('option');
   await expect(rows.first()).toBeVisible();
@@ -60,7 +60,7 @@ test('the overlay has two columns and the preview follows the highlighted result
 test('the kind chips count each kind and filter the list', async ({ page }) => {
   await openHome(page);
   const dialog = await openSearch(page);
-  await dialog.getByRole('combobox').fill('lease');
+  await dialog.getByRole('combobox').fill('Moonee Ponds');
 
   // The results come in two steps: names at once, then the debounced
   // full-text search adds more. A count read before the second step is
@@ -111,7 +111,7 @@ test('Tab reaches the chips, Enter opens the highlighted result, / opens search'
   await expect(dialog).toContainText('filters');
 
   // A slash typed into the field stays a slash.
-  await field.fill('lease');
+  await field.fill('Moonee Ponds');
   await expect(dialog.getByRole('option').first()).toBeVisible();
   const firstHref = await dialog
     .locator('.switcher-row[data-highlighted="true"]')

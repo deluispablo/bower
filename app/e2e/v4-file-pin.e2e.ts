@@ -24,7 +24,7 @@ async function goHome(page: Page): Promise<void> {
   if (shown) await skip.click();
 }
 
-const FOLDER = '/folder/1-Projects/Kitchen%20Refresh';
+const FOLDER = '/folder/4-Archives/Kitchen%20Refresh';
 
 test('a PDF can be pinned to Home from its More menu and unpinned again (#688)', async ({
   page,

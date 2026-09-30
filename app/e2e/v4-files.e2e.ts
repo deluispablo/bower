@@ -22,7 +22,7 @@ async function openFile(
   ).toBeVisible();
 }
 
-const FLAT = '1-Projects/Flat%20hunt';
+const FLAT = '4-Archives/Flat%20hunt';
 
 /** The folder screen with Originals showing (#611): in All an original and
  * its companion note are one row that opens the note. */
@@ -110,7 +110,7 @@ test('an Excel file shows the Drive preview and Open in Drive to edit (#604)', a
 }) => {
   await openFile(
     page,
-    '2-Areas/Money',
+    '3-Resources/Money',
     'Household costs 2026',
     'Household costs 2026',
   );

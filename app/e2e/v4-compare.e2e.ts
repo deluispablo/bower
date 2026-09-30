@@ -12,7 +12,7 @@ import { expect, openHome, test } from './demo.js';
 
 async function openCompare(page: Page): Promise<void> {
   await openHome(page);
-  await page.goto('/folder/1-Projects/Flat%20hunt');
+  await page.goto('/folder/4-Archives/Flat%20hunt');
   // The desktop's button beside the kind filter (#613); the phone's tab is
   // covered in `v4-folder.e2e.ts`.
   const button = page.getByRole('button', { name: /^Compare \d+ / });
@@ -59,7 +59,7 @@ test.describe('Compare on a phone (#701)', () => {
     page,
   }) => {
     await openHome(page);
-    await page.goto('/folder/1-Projects/Flat%20hunt');
+    await page.goto('/folder/4-Archives/Flat%20hunt');
     await page.getByRole('tab', { name: /^Compare \d+ / }).click();
 
     await expect(page.locator('.compare-chip')).toHaveText(['Under £2,300']);

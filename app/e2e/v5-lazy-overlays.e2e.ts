@@ -24,7 +24,7 @@ test('the tidy-up sheet opens at once from its chip', async ({ page }) => {
   await page.addInitScript(() => {
     sessionStorage.setItem('bower:demo:run', 'partial');
   });
-  await page.goto('/folder/1-Projects/Flat%20hunt');
+  await page.goto('/folder/4-Archives/Flat%20hunt');
   await page.waitForLoadState('networkidle');
   await page.locator('.run-chip-button').click();
   await expect(

@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test';
 
 import { expect, shot, test } from './demo.js';
 
-const FLAT = '/folder/1-Projects/Flat%20hunt';
+const FLAT = '/folder/4-Archives/Flat%20hunt';
 
 const PHONE_ONLY = 'the boards are the phone';
 
@@ -57,12 +57,12 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   await page.goto(FLAT);
   await expect(page.locator('.folder-item').first()).toBeVisible();
 
-  // Path bar: the PARA mark, "Projects" a link, the current folder bold.
+  // Path bar: the PARA mark, "Archives" a link, the current folder bold.
   const path = page.getByRole('navigation', { name: 'You are in' });
   await expect(path.locator('.folder-mark')).toBeVisible();
-  await expect(path.getByRole('link', { name: 'Projects' })).toHaveAttribute(
+  await expect(path.getByRole('link', { name: 'Archives' })).toHaveAttribute(
     'href',
-    '/folder/1-Projects',
+    '/folder/4-Archives',
   );
   await expect(path.locator('b')).toHaveText('Flat hunt');
 
@@ -181,7 +181,7 @@ test('sort, kind filter and origin filter survive a reload, per folder (#611)', 
   ).toHaveAttribute('aria-pressed', 'true');
 
   // Another folder is not affected.
-  await page.goto('/folder/1-Projects/Kitchen%20Refresh');
+  await page.goto('/folder/4-Archives/Kitchen%20Refresh');
   await expect(page.locator('.folder-item').first()).toBeVisible();
   await expect(filterButton(page)).toHaveAccessibleName(
     'Filter and sort: newest first, all kinds',
@@ -191,8 +191,8 @@ test('sort, kind filter and origin filter survive a reload, per folder (#611)', 
   ).toHaveAttribute('aria-pressed', 'true');
 });
 
-const GARDEN = '/folder/2-Areas/Garden';
-const EMPTY = '/folder/2-Areas/Car';
+const GARDEN = '/folder/3-Resources/Garden';
+const EMPTY = '/folder/3-Resources/Car';
 
 test('a folder of photos opens in Grid and the toggle is remembered (#613)', async ({
   page,
@@ -265,7 +265,7 @@ test('holding a row or a tile opens quick look (#613)', async ({
     /^PDF · .* [KM]B$/,
   );
   await expect(sheet.locator('.quick-look-path')).toContainText(
-    'Projects › Flat hunt',
+    'Archives › Flat hunt',
   );
   await expect(sheet.locator('.quick-look-filed')).toHaveText(
     /^Filed by Bower /,

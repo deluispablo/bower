@@ -518,6 +518,10 @@ Anyone who hasn't opened the app in those 24 hours is signed out at that point a
 
 The public demo is retired (owner decision, 28 September 2026): the Cloudflare Pages project `bower-demo` was deleted and nothing links to it. The demo build itself stays in the code, because the end-to-end tests run on it: `pnpm -C app build:demo` builds the app with `VITE_DEMO=1`, a scripted, in-memory sample folder (an invented person, "Alex"), with no Worker, no Drive and no Claude.
 
+### The demo world (v6)
+
+The demo runs locally only (owner ruling, 30 September 2026): `pnpm -C app build:demo`, or `pnpm -C app dev` with `VITE_DEMO=1`; it is not deployed. It holds the world the v6 boards draw (`app/src/demo/fixture.ts`, #903): Alex (`alex@example.com`, so the avatar reads "A") has moved to Melbourne. Projects holds **Housing Search Australia** (pinned; its **Moonee Ponds** folder has a **Listings** subfolder of six saved listings and six flat notes Bower wrote, comparable in "Compare 6 flats") and **Job Search Australia** ("Cover Letter - Alex", "CV insights", "Resume Australia" and two profiles, plus **Applications** with nine notes by Bower, four of them job offers). Areas holds **Visa & Immigration** (a note and "Passport copy"). Alex's London folders (the flat hunt, the Lisbon trip, the kitchen, the old job) are in Archives, the household notes in Resources. The hub notes of Moonee Ponds and Applications carry the folder's own `statuses:` list. The times follow the viewer's own clock: the last tidy-up ran yesterday 15:01 to 15:03 local time and filed "Passport copy", and the six flat notes were written today at 06:44 to 06:54. The end-to-end tests pin that clock to Wednesday 30 September 2026, 12:10 London time (`app/e2e/demo.ts`). The demo starts with three things in the inbox; setting `bower:demo:inbox` to `empty` in the tab's session storage and reloading starts it with none, as Home looks after a tidy-up.
+
 To publish it again one day, build it and push `app/dist` to a Pages project of its own:
 
 ```bash

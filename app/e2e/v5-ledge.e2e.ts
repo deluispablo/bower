@@ -22,7 +22,7 @@ async function closeSheet(page: Page): Promise<void> {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-const FLAT = '/folder/1-Projects/Flat%20hunt';
+const FLAT = '/folder/4-Archives/Flat%20hunt';
 
 async function holdRun(page: Page, state: string): Promise<void> {
   await page.addInitScript((held) => {

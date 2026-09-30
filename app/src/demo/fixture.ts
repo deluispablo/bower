@@ -4,6 +4,16 @@
  * Tidy up, a health report and a short Tell Bower history. Only ever held in
  * memory (`vault.ts`); nothing here is real, and nothing is saved.
  *
+ * The world is the v6 boards' (#903): Alex has moved to Melbourne. Projects
+ * holds Housing Search Australia (Moonee Ponds, its Listings and six flat
+ * notes Bower wrote) and Job Search Australia (Applications and four job
+ * offers); Areas holds Visa & Immigration. Alex's earlier London life (the
+ * flat hunt, the Lisbon trip, the kitchen, the half marathon, the old job)
+ * is in Archives, and the household notes are in Resources: those folders
+ * keep every file kind the explorer shows. The v6 times are local times on
+ * the viewer's own today and yesterday (`LOADED_AT`); the e2e clock is 30 Sep 2026, noon, London
+ * (`e2e/demo.ts`): the last tidy-up finished 21 hours earlier.
+ *
  * The rulebook, `Rules.md`, `About-Me.md` and the folder notes come straight
  * from `vault-template/`, so the demo starts from the same files a real
  * Bower folder does; `Rules.md` then gets a few rules of Alex's own
@@ -124,16 +134,16 @@ function pngBlob(hex: string): Blob {
 
 /** Where Tidy up files each inbox item (`run.ts`). */
 export const INBOX_PLAN: ReadonlyMap<string, string> = new Map([
-  ['0-Inbox/Tomato seedlings.md', '2-Areas/Garden/Tomato seedlings.md'],
+  ['0-Inbox/Tomato seedlings.md', '3-Resources/Garden/Tomato seedlings.md'],
   [
     '0-Inbox/Boiler service invoice.pdf',
-    '2-Areas/Home/Boiler service invoice.pdf',
+    '3-Resources/Home/Boiler service invoice.pdf',
   ],
 ]);
 
 /** The question already waiting in the inbox; its answer is scripted in `replies.ts`. */
 export const INBOX_QUESTION =
-  '0-Inbox/Bower - 2026-09-27 0815 What do I still need for Lisbon.md';
+  '0-Inbox/Bower - 2026-09-27 0815 What do I still need for the visa.md';
 
 /** One processed item of a run, in the report v2 shape (#583, R-RUN-4). */
 function filed(path: string, to: string, renamedFrom?: string): RunItem {
@@ -145,19 +155,38 @@ function filed(path: string, to: string, renamedFrom?: string): RunItem {
   };
 }
 
+/** A request the run answered (an instruction note, moved to Processed). */
+function request(name: string): RunItem {
+  return {
+    path: `0-Inbox/${name}`,
+    kind: 'request',
+    to: `0-Inbox/Processed/${name}`,
+  };
+}
+
+/**
+ * A finished run: `finishedAt`, and `startedAt` `minutes` before it (R-API-4:
+ * every run carries its start), requested a minute before that.
+ */
 function runOf(
   runId: string,
   finishedAt: string,
   items: readonly RunItem[],
   extra: Partial<Run> = {},
+  minutes = 4,
 ): Run {
   const finished = new Date(finishedAt).getTime();
+  const started = finished - minutes * 60_000;
+  const files = items.filter((item) => item.kind === 'file').length;
   return {
     state: 'done',
-    requestedAt: new Date(finished - 5 * 60_000).toISOString(),
-    startedAt: new Date(finished - 4 * 60_000).toISOString(),
+    requestedAt: new Date(started - 60_000).toISOString(),
+    startedAt: new Date(started).toISOString(),
     finishedAt,
-    summary: `Filed ${items.length} ${items.length === 1 ? 'item' : 'items'}.`,
+    summary:
+      files === 0
+        ? 'Nothing new to file.'
+        : `Filed ${files} ${files === 1 ? 'item' : 'items'}.`,
     processed: items.map((item) => item.path),
     items: items.map((item) => ({ ...item })),
     runId,
@@ -165,36 +194,231 @@ function runOf(
   };
 }
 
+/** A run that did not finish: nothing moved, the inbox kept everything. */
+function unfinished(runId: string, finishedAt: string, minutes: number): Run {
+  const run = runOf(
+    runId,
+    finishedAt,
+    [],
+    { state: 'failed', error: 'agent: out of turns' },
+    minutes,
+  );
+  delete run.summary;
+  return run;
+}
+
 /**
- * The tidy-ups before the demo starts, newest first (boards `Phone-JustFiled`,
- * `Desktop-JustFiled`, `Flow-05-Home`): today's at 10:42, which filed the
- * flat listings and set the walk-through video aside, then the three the
- * Just filed screen lists as earlier (26 Sep 18:10, 21 Sep 09:02, 12 Jun
- * 20:45, London time). The first is also the demo's last run.
+ * The viewer's own clock when the demo loads (lead ruling on #903): the
+ * v6 world's times are local times on the viewer's today and yesterday,
+ * so the last tidy-up always ran "yesterday, 15:03" wherever and whenever
+ * the demo is opened. The end-to-end tests pin this clock (`e2e/demo.ts`:
+ * Wednesday 30 September 2026, 12:10 London). Alex's London folders keep
+ * their own fixed September dates.
+ */
+const LOADED_AT = new Date();
+
+/** Local midnight `offset` days from the viewer's today. */
+function localDay(offset: number): Date {
+  return new Date(
+    LOADED_AT.getFullYear(),
+    LOADED_AT.getMonth(),
+    LOADED_AT.getDate() + offset,
+  );
+}
+
+/** `hhmm` local time, `offset` days from today, as an ISO instant. */
+function localAt(offset: number, hhmm: string): string {
+  const day = localDay(offset);
+  day.setHours(Number(hhmm.slice(0, 2)), Number(hhmm.slice(2)));
+  return day.toISOString();
+}
+
+/** `YYYY-MM-DD` of the local day `offset` days from today. */
+function dayOf(offset: number): string {
+  const day = localDay(offset);
+  const mm = String(day.getMonth() + 1).padStart(2, '0');
+  const dd = String(day.getDate()).padStart(2, '0');
+  return `${day.getFullYear()}-${mm}-${dd}`;
+}
+
+/** "7 Oct": the local day `offset` days from today, in words. */
+function shortDate(offset: number): string {
+  return localDay(offset).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+/** "Thu 1 Oct": with the weekday. */
+function weekdayDate(offset: number): string {
+  const day = localDay(offset);
+  const weekday = day.toLocaleDateString('en-GB', { weekday: 'short' });
+  return `${weekday} ${shortDate(offset)}`;
+}
+
+/** `hhmm` local time yesterday (the demo's run history). */
+function yesterday(hhmm: string): string {
+  return localAt(-1, hhmm);
+}
+
+/** `hhmm` local time today. */
+function today(hhmm: string): string {
+  return localAt(0, hhmm);
+}
+
+/** The viewer's yesterday and today, `YYYY-MM-DD`. */
+const YESTERDAY = dayOf(-1);
+const TODAY = dayOf(0);
+
+const HOUSING = '1-Projects/Housing Search Australia';
+const MOONEE_PONDS = `${HOUSING}/Moonee Ponds`;
+const LISTINGS = `${MOONEE_PONDS}/Listings`;
+const JOBS = '1-Projects/Job Search Australia';
+const APPLICATIONS = `${JOBS}/Applications`;
+const VISA = '2-Areas/Visa & Immigration';
+
+/**
+ * The tidy-ups before the demo starts, newest first (boards JF-Main,
+ * JF-Earlier, AR-Run, BW-Activity; London times): yesterday's ten, the last
+ * of them 15:01 to 15:03, which filed "Passport copy" into Visa &
+ * Immigration (Home: "Done 21 h ago: 1 filed."), then the older ones from
+ * Alex's London folders. The first is also the demo's last run.
  */
 export const DEMO_RUNS: readonly Run[] = [
+  runOf(
+    'demo-run-yesterday-10',
+    yesterday('1503'),
+    [filed('0-Inbox/Passport copy.pdf', `${VISA}/Passport copy.pdf`)],
+    {},
+    2,
+  ),
+  runOf(
+    'demo-run-yesterday-9',
+    yesterday('1355'),
+    [
+      filed(
+        '0-Inbox/Senior Consultant - Data Engineer, Altis Consulting.md',
+        `${APPLICATIONS}/Senior Consultant - Data Engineer, Altis Consulting.md`,
+      ),
+      filed(
+        '0-Inbox/Lead Data Engineer, Clicks IT Recruitment.md',
+        `${APPLICATIONS}/Lead Data Engineer, Clicks IT Recruitment.md`,
+      ),
+      filed('0-Inbox/Job ratings.md', `${APPLICATIONS}/Job ratings.md`),
+      filed(
+        '0-Inbox/Senior Data Engineer Team Lead, Allume Energy.md',
+        `${APPLICATIONS}/Senior Data Engineer Team Lead, Allume Energy.md`,
+      ),
+      filed(
+        '0-Inbox/Managing Consultant, Altis Consulting.md',
+        `${APPLICATIONS}/Managing Consultant, Altis Consulting.md`,
+      ),
+      filed(
+        '0-Inbox/Cover Letter - Senior Data Engineer Team Lead, Allume Energy.md',
+        `${APPLICATIONS}/Cover Letter - Senior Data Engineer Team Lead, Allume Energy.md`,
+      ),
+    ],
+    {},
+    2,
+  ),
+  unfinished('demo-run-yesterday-8', yesterday('1344'), 7),
+  runOf('demo-run-yesterday-7', yesterday('1320'), [], {}, 6),
+  runOf(
+    'demo-run-yesterday-6',
+    yesterday('1301'),
+    [
+      filed(
+        '0-Inbox/CV - Senior Data Engineer Team Lead, Allume Energy.md',
+        `${APPLICATIONS}/CV - Senior Data Engineer Team Lead, Allume Energy.md`,
+      ),
+      filed(
+        '0-Inbox/Cover Letter - Senior Consultant, Altis Consulting.md',
+        `${APPLICATIONS}/Cover Letter - Senior Consultant, Altis Consulting.md`,
+      ),
+      filed(
+        '0-Inbox/CV - Senior Consultant, Altis Consulting.md',
+        `${APPLICATIONS}/CV - Senior Consultant, Altis Consulting.md`,
+      ),
+      filed(
+        '0-Inbox/Cover Letter - Alex.pdf',
+        `${JOBS}/Cover Letter - Alex.pdf`,
+      ),
+      filed('0-Inbox/CV insights.md', `${JOBS}/CV insights.md`),
+    ],
+    {},
+    5,
+  ),
+  unfinished('demo-run-yesterday-5', yesterday('1252'), 7),
+  runOf(
+    'demo-run-yesterday-4',
+    yesterday('1231'),
+    [request(`Bower - ${YESTERDAY} 1228 Rate the job offers against my CV.md`)],
+    { summary: 'Answered 1 request.' },
+    2,
+  ),
+  runOf(
+    'demo-run-yesterday-3',
+    yesterday('1223'),
+    [
+      filed('0-Inbox/LinkedIn profile.md', `${JOBS}/LinkedIn profile.md`),
+      filed('0-Inbox/SEEK profile.md', `${JOBS}/SEEK profile.md`),
+    ],
+    {},
+    1,
+  ),
+  runOf(
+    'demo-run-yesterday-2',
+    yesterday('1214'),
+    [
+      request(`Bower - ${YESTERDAY} 1209 Keep my visa papers together.md`),
+      filed('0-Inbox/Resume Australia.docx', `${JOBS}/Resume Australia.docx`),
+      filed('0-Inbox/Visa & Immigration.md', `${VISA}/Visa & Immigration.md`),
+    ],
+    {},
+    4,
+  ),
+  runOf(
+    'demo-run-yesterday-1',
+    yesterday('1147'),
+    [
+      filed(
+        '0-Inbox/Renting in Victoria.md',
+        '3-Resources/Australia/Renting in Victoria.md',
+      ),
+      filed(
+        '0-Inbox/Tax file number.md',
+        '3-Resources/Australia/Tax file number.md',
+      ),
+      filed(
+        '0-Inbox/Opening a bank account.md',
+        '3-Resources/Australia/Opening a bank account.md',
+      ),
+    ],
+    {},
+    3,
+  ),
   runOf(
     'demo-run-earlier-4',
     '2026-09-27T09:42:00.000Z',
     [
       filed(
         '0-Inbox/Arlington Road, 2 bed.pdf',
-        '1-Projects/Flat hunt/Arlington Road, 2 bed.pdf',
+        '4-Archives/Flat hunt/Arlington Road, 2 bed.pdf',
         'Arlington Road, 2 bed.pdf',
       ),
       filed(
         '0-Inbox/Kentish Town flat.pdf',
-        '1-Projects/Flat hunt/Kentish Town, 2 bed.pdf',
+        '4-Archives/Flat hunt/Kentish Town, 2 bed.pdf',
         'Kentish Town flat.pdf',
       ),
       filed(
         '0-Inbox/Camden Mews studio.pdf',
-        '1-Projects/Flat hunt/Camden Mews, 1 bed.pdf',
+        '4-Archives/Flat hunt/Camden Mews, 1 bed.pdf',
         'Camden Mews studio.pdf',
       ),
       filed(
         '0-Inbox/IMG_4471.jpg',
-        '1-Projects/Flat hunt/Arlington Road, window sign.jpg',
+        '4-Archives/Flat hunt/Arlington Road, window sign.jpg',
         'IMG_4471.jpg',
       ),
       filed(
@@ -204,13 +428,13 @@ export const DEMO_RUNS: readonly Run[] = [
       ),
       filed(
         '0-Inbox/Walk-through, Arlington Road.mp4',
-        '1-Projects/Flat hunt/Walk-through, Arlington Road.mp4',
+        '4-Archives/Flat hunt/Walk-through, Arlington Road.mp4',
       ),
     ],
     {
       setAside: [
         {
-          path: '1-Projects/Flat hunt/Walk-through, Arlington Road.mp4',
+          path: '4-Archives/Flat hunt/Walk-through, Arlington Road.mp4',
           reason: 'kept-not-read',
         },
       ],
@@ -222,44 +446,44 @@ export const DEMO_RUNS: readonly Run[] = [
       'Clippings/Weeknight curry.md',
       '3-Resources/Cooking/Weeknight curry.md',
     ),
-    filed('0-Inbox/Running log.md', '2-Areas/Health/Running log.md'),
+    filed('0-Inbox/Running log.md', '3-Resources/Health/Running log.md'),
     filed(
       '0-Inbox/Sage green test patch.png',
-      '1-Projects/Kitchen Refresh/Sage green test patch.png',
+      '4-Archives/Kitchen Refresh/Sage green test patch.png',
     ),
   ]),
   runOf('demo-run-earlier-2', '2026-09-21T08:02:00.000Z', [
     filed(
       '0-Inbox/Bills and renewals.md',
-      '2-Areas/Home/Bills and renewals.md',
+      '3-Resources/Home/Bills and renewals.md',
     ),
     filed('0-Inbox/Reading list.md', '3-Resources/Books/Reading list.md'),
     filed(
       '0-Inbox/Training plan.md',
-      '1-Projects/Half Marathon/Training plan.md',
+      '4-Archives/Half Marathon/Training plan.md',
     ),
     filed(
       '0-Inbox/Half Marathon.md',
-      '1-Projects/Half Marathon/Half Marathon.md',
+      '4-Archives/Half Marathon/Half Marathon.md',
     ),
     filed(
       '0-Inbox/Paint colours.md',
-      '1-Projects/Kitchen Refresh/Paint colours.md',
+      '4-Archives/Kitchen Refresh/Paint colours.md',
     ),
     filed(
       '0-Inbox/Quotes from fitters.md',
-      '1-Projects/Kitchen Refresh/Quotes from fitters.md',
+      '4-Archives/Kitchen Refresh/Quotes from fitters.md',
     ),
     filed('0-Inbox/Sourdough.md', '3-Resources/Cooking/Sourdough.md'),
   ]),
   runOf('demo-run-earlier-1', '2026-06-12T19:45:00.000Z', [
     filed(
       '0-Inbox/Offer letter, Northwind Data.pdf',
-      '2-Areas/Work/Offer letter, Northwind Data.pdf',
+      '4-Archives/Work/Offer letter, Northwind Data.pdf',
     ),
     filed(
       '0-Inbox/Bike shop receipt.pdf',
-      '2-Areas/Money/Bike shop receipt.pdf',
+      '3-Resources/Money/Bike shop receipt.pdf',
     ),
   ]),
 ];
@@ -316,6 +540,8 @@ interface CompanionSpec {
   /** The original file's name, for `original: [[…]]`. */
   original: string;
   created: string;
+  /** Drive's modified time, when not derived from `created`. */
+  modified?: string;
   tags: string;
   kind?: string;
   /** The kind's fields, in the order written. */
@@ -363,11 +589,14 @@ function companion(spec: CompanionSpec): FixtureFile {
   for (const line of spec.callout) lines.push(`> ${line}`);
   lines.push('', spec.body.trim(), '');
   const day = Number(spec.created.slice(8, 10));
-  // Nothing is newer than the e2e clock (27 Sep, 10:30 London), so the
-  // story's files never crowd out what a test adds.
-  const modified = spec.created.startsWith('2026-09')
-    ? at(Math.min(day, 27), '0700')
-    : `${spec.created}T09:00:00.000Z`;
+  // Nothing is newer than the e2e clock (30 Sep, noon London), so the
+  // story's files never crowd out what a test adds; the archived London
+  // notes stay on their own old days (27 Sep at the latest).
+  const modified =
+    spec.modified ??
+    (spec.created.startsWith('2026-09')
+      ? at(Math.min(day, 27), '0700')
+      : `${spec.created}T09:00:00.000Z`);
   return {
     path: spec.path,
     modifiedTime: modified,
@@ -496,7 +725,7 @@ function listingFiles(): FixtureFile[] {
   for (const [i, listing] of FLAT_LISTINGS.entries()) {
     const pdf = `${listing.name}.pdf`;
     files.push({
-      path: `1-Projects/Flat hunt/${pdf}`,
+      path: `4-Archives/Flat hunt/${pdf}`,
       mimeType: 'application/pdf',
       modifiedTime: at(27, '0700'),
       content: new Blob([LEASE_PDF], { type: 'application/pdf' }),
@@ -506,7 +735,7 @@ function listingFiles(): FixtureFile[] {
     });
     files.push(
       companion({
-        path: `1-Projects/Flat hunt/${listing.name}.md`,
+        path: `4-Archives/Flat hunt/${listing.name}.md`,
         original: pdf,
         created: '2026-09-28',
         tags: 'housing, summary',
@@ -575,7 +804,7 @@ const V4_FILES: readonly FixtureFile[] = [
   // --- Flat hunt: listings, photo, lease, budget, video, ZIP ----------------
   ...listingFiles(),
   companion({
-    path: '1-Projects/Flat hunt/Arlington Road, window sign.md',
+    path: '4-Archives/Flat hunt/Arlington Road, window sign.md',
     original: 'Arlington Road, window sign.jpg',
     created: '2026-09-27',
     tags: 'housing',
@@ -585,7 +814,7 @@ const V4_FILES: readonly FixtureFile[] = [
     body: 'A photo of the "To let" sign outside 14 Arlington Road, taken on the way to the viewing.',
   }),
   companion({
-    path: '1-Projects/Flat hunt/Lease agreement 2026.md',
+    path: '4-Archives/Flat hunt/Lease agreement 2026.md',
     original: 'Lease agreement 2026.pdf',
     created: '2026-09-27',
     tags: 'housing, summary',
@@ -613,7 +842,7 @@ const V4_FILES: readonly FixtureFile[] = [
   }),
   {
     // A copy of a Google Sheet: Bower keeps the first sheet as a table.
-    path: '1-Projects/Flat hunt/Flat budget.csv',
+    path: '4-Archives/Flat hunt/Flat budget.csv',
     mimeType: 'text/csv',
     modifiedTime: at(26, '1815'),
     content: budgetCsv(),
@@ -621,7 +850,7 @@ const V4_FILES: readonly FixtureFile[] = [
     appProperties: { bowerSource: 'Flat budget', bowerSourceKind: 'sheet' },
   },
   {
-    path: '1-Projects/Flat hunt/Walk-through, Arlington Road.mp4',
+    path: '4-Archives/Flat hunt/Walk-through, Arlington Road.mp4',
     mimeType: 'video/mp4',
     modifiedTime: at(26, '1120'),
     content: stub('video', 'video/mp4'),
@@ -631,7 +860,7 @@ const V4_FILES: readonly FixtureFile[] = [
     preview: true,
   },
   {
-    path: '1-Projects/Flat hunt/Photos from the viewing.zip',
+    path: '4-Archives/Flat hunt/Photos from the viewing.zip',
     mimeType: 'application/zip',
     modifiedTime: at(26, '1130'),
     content: stub('zip', 'application/zip'),
@@ -640,7 +869,7 @@ const V4_FILES: readonly FixtureFile[] = [
 
   // --- Work: the papers Bower filed in June and July -----------------------
   {
-    path: '2-Areas/Work/Offer letter, Northwind Data.pdf',
+    path: '4-Archives/Work/Offer letter, Northwind Data.pdf',
     mimeType: 'application/pdf',
     modifiedTime: '2026-06-12T19:45:00.000Z',
     content: new Blob([INVOICE_PDF], { type: 'application/pdf' }),
@@ -649,7 +878,7 @@ const V4_FILES: readonly FixtureFile[] = [
     appProperties: { bowerOrigin: 'filed' },
   },
   companion({
-    path: '2-Areas/Work/Offer letter, Northwind Data.md',
+    path: '4-Archives/Work/Offer letter, Northwind Data.md',
     original: 'Offer letter, Northwind Data.pdf',
     created: '2026-06-12',
     tags: 'work, summary',
@@ -670,7 +899,7 @@ const V4_FILES: readonly FixtureFile[] = [
     body: 'The offer you accepted in June. Original: PDF, 3 pages.',
   }),
   {
-    path: '2-Areas/Work/Cycle to Work agreement.pdf',
+    path: '4-Archives/Work/Cycle to Work agreement.pdf',
     mimeType: 'application/pdf',
     modifiedTime: '2026-07-08T18:20:00.000Z',
     content: new Blob([INVOICE_PDF], { type: 'application/pdf' }),
@@ -679,7 +908,7 @@ const V4_FILES: readonly FixtureFile[] = [
     appProperties: { bowerOrigin: 'filed' },
   },
   companion({
-    path: '2-Areas/Work/Cycle to Work agreement.md',
+    path: '4-Archives/Work/Cycle to Work agreement.md',
     original: 'Cycle to Work agreement.pdf',
     created: '2026-07-08',
     tags: 'work, summary',
@@ -698,7 +927,7 @@ const V4_FILES: readonly FixtureFile[] = [
     body: 'Also filed in July. Keep it: the scheme asks for it if you leave early.',
   }),
   {
-    path: '2-Areas/Work/Job offer, Northwind Data.md',
+    path: '4-Archives/Work/Job offer, Northwind Data.md',
     modifiedTime: at(26, '1005'),
     content: `---
 tags: [work, summary]
@@ -753,7 +982,7 @@ Six engineers and a product manager, working from the King's Cross office on Tue
   },
   // What Bower made for that offer (R-VERDICT, Compare's Made for it).
   {
-    path: '2-Areas/Work/CV · Northwind Data.md',
+    path: '4-Archives/Work/CV · Northwind Data.md',
     modifiedTime: at(26, '1015'),
     content: `---
 tags: [work, cv]
@@ -768,7 +997,7 @@ Data engineer with six years of pipeline work. Leads with the warehouse migratio
 `,
   },
   {
-    path: '2-Areas/Work/Letter · Northwind Data.md',
+    path: '4-Archives/Work/Letter · Northwind Data.md',
     modifiedTime: at(26, '1020'),
     content: `---
 tags: [work, letter]
@@ -790,15 +1019,15 @@ Dear hiring team, I am applying for the senior data engineer role. The three-day
     mimeType: 'application/json',
     modifiedTime: at(27, '0700'),
     content: JSON.stringify({
-      '2-Areas/Money/Household costs 2026.xlsx': { sheets: 3 },
-      '1-Projects/Flat hunt/Photos from the viewing.zip': { entries: 14 },
-      '1-Projects/Flat hunt/Lease agreement 2026.pdf': { pages: 42 },
+      '3-Resources/Money/Household costs 2026.xlsx': { sheets: 3 },
+      '4-Archives/Flat hunt/Photos from the viewing.zip': { entries: 14 },
+      '4-Archives/Flat hunt/Lease agreement 2026.pdf': { pages: 42 },
     }),
   },
 
   // --- Money, Garden, Home ---------------------------------------------------
   {
-    path: '2-Areas/Money/Household costs 2026.xlsx',
+    path: '3-Resources/Money/Household costs 2026.xlsx',
     mimeType:
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     modifiedTime: at(24, '2010'),
@@ -811,7 +1040,7 @@ Dear hiring team, I am applying for the senior data engineer role. The three-day
     preview: true,
   },
   {
-    path: '2-Areas/Money/Bike shop receipt.pdf',
+    path: '3-Resources/Money/Bike shop receipt.pdf',
     mimeType: 'application/pdf',
     modifiedTime: '2026-06-12T19:45:00.000Z',
     content: new Blob([INVOICE_PDF], { type: 'application/pdf' }),
@@ -820,7 +1049,7 @@ Dear hiring team, I am applying for the senior data engineer role. The three-day
     appProperties: { bowerOrigin: 'filed' },
   },
   {
-    path: '2-Areas/Garden/Tomato seedlings.jpg',
+    path: '3-Resources/Garden/Tomato seedlings.jpg',
     mimeType: 'image/jpeg',
     modifiedTime: at(27, '0738'),
     content: pngBlob(TEST_PATCH_PNG),
@@ -834,7 +1063,7 @@ Dear hiring team, I am applying for the senior data engineer role. The three-day
   },
   {
     // An iPhone photo: a format the app shows only by name (System-Formats).
-    path: '2-Areas/Garden/Front bed.heic',
+    path: '3-Resources/Garden/Front bed.heic',
     mimeType: 'image/heic',
     modifiedTime: at(25, '1650'),
     content: stub('heic', 'image/heic'),
@@ -906,7 +1135,7 @@ Used: the four listings, your offer letter and Cycle to Work agreement, routes a
 
   // --- A text copy of a document of no listed kind (R-NOTE-8, D21) ----------
   {
-    path: '2-Areas/Work/CV 2026.docx',
+    path: '4-Archives/Work/CV 2026.docx',
     mimeType:
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     modifiedTime: at(25, '0900'),
@@ -915,7 +1144,7 @@ Used: the four listings, your offer letter and Cycle to Work agreement, routes a
     appProperties: { bowerOrigin: 'filed' },
   },
   {
-    path: '2-Areas/Work/CV 2026.md',
+    path: '4-Archives/Work/CV 2026.md',
     modifiedTime: at(25, '0905'),
     content: `---
 by: bower
@@ -954,25 +1183,25 @@ SQL, Python, dbt.
 
   // --- System files: never shown (D18) --------------------------------------
   {
-    path: '1-Projects/Flat hunt/desktop.ini',
+    path: '4-Archives/Flat hunt/desktop.ini',
     mimeType: 'text/plain',
     modifiedTime: at(26, '1000'),
     content: '[.ShellClassInfo]\n',
   },
   {
-    path: '2-Areas/Work/desktop.ini',
+    path: '4-Archives/Work/desktop.ini',
     mimeType: 'text/plain',
     modifiedTime: at(26, '1000'),
     content: '[.ShellClassInfo]\n',
   },
   {
-    path: '2-Areas/Garden/desktop.ini',
+    path: '3-Resources/Garden/desktop.ini',
     mimeType: 'text/plain',
     modifiedTime: at(26, '1000'),
     content: '[.ShellClassInfo]\n',
   },
   {
-    path: '1-Projects/Flat hunt/~$Lease agreement 2026.docx',
+    path: '4-Archives/Flat hunt/~$Lease agreement 2026.docx',
     mimeType:
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     modifiedTime: at(27, '0930'),
@@ -981,9 +1210,588 @@ SQL, Python, dbt.
   },
 ];
 
+// --- The v6 world (#903): Melbourne ----------------------------------------
+//
+// What the v6 boards draw (PF-*, LI-*, AR-*, HM-*, JF-*, NO-*, FI-*), with
+// the stand-ins of spec §0 for anything personal: Alex, "Cover Letter -
+// Alex", "Passport copy", "Resume Australia". The flats, offers and companies
+// are the boards' own fictional ones; the CV and visa facts are invented.
+
+/** A note with its own frontmatter lines, modified at `modified`. */
+function noteAt(
+  path: string,
+  modified: string,
+  frontmatter: readonly string[],
+  body: string,
+): FixtureFile {
+  return {
+    path,
+    modifiedTime: modified,
+    content: `---\n${frontmatter.join('\n')}\n---\n\n${body.trim()}\n`,
+  };
+}
+
+/** A PDF stub of `size` bytes as Drive reports it, filed by Bower. */
+function pdfAt(
+  path: string,
+  modified: string,
+  size: number,
+  label: string,
+  filedByBower = true,
+): FixtureFile {
+  return {
+    path,
+    mimeType: 'application/pdf',
+    modifiedTime: modified,
+    content: new Blob([LEASE_PDF], { type: 'application/pdf' }),
+    size,
+    thumbnailLink: thumb(label, '#e8eef7'),
+    ...(filedByBower && { appProperties: { bowerOrigin: 'filed' } }),
+  };
+}
+
+/**
+ * The per-folder status lists (E-7 as ruled, #916 reads them, #921 makes
+ * the real agent write them): Bower picks the list for each comparable
+ * folder and writes it into the folder's hub note; the kind's own list is
+ * the fallback.
+ */
+export const FOLDER_STATUSES: Readonly<Record<string, readonly string[]>> = {
+  [MOONEE_PONDS]: [
+    'new',
+    'to view',
+    'viewed',
+    'applied',
+    'approved',
+    'signed',
+    'not for me',
+    'turned down',
+  ],
+  [APPLICATIONS]: [
+    'new',
+    'applied',
+    'interview',
+    'offer',
+    'accepted',
+    'not for me',
+    'turned down',
+  ],
+};
+
+/** `statuses: [...]`, the hub note's frontmatter line for `folder`. */
+function statusesLine(folder: string): string {
+  return `statuses: [${(FOLDER_STATUSES[folder] ?? []).join(', ')}]`;
+}
+
+/** The six Moonee Ponds flats Compare lines up (board PF-Compare-1280). */
+interface Flat {
+  name: string;
+  rent: string;
+  /** `YYYY-MM-DD`, or absent: "No date yet". */
+  available?: string;
+  against: string;
+  fit: number;
+  status: string;
+  viewing?: string;
+  /** London time today, `hhmm`. */
+  time: string;
+  callout: readonly string[];
+  body: string;
+}
+
+export const MOONEE_PONDS_FLATS: readonly Flat[] = [
+  {
+    name: '10-43 Buckley St, Moonee Ponds',
+    rent: '460 AUD/week',
+    available: dayOf(7),
+    against: '−15% vs area median',
+    fit: 73,
+    status: 'to view',
+    viewing: dayOf(1),
+    time: '0654',
+    callout: [
+      'AUD 460/week, 15% under the suburb median, with internal laundry, a balcony and A/C. (from the file)',
+      `Available ${shortDate(7)}, a week before your short let ends. (from your notes: [[Housing Search Australia]])`,
+      `~10–15 min walk to Essendon or Moonee Ponds station; the ${weekdayDate(1)} inspection is still open. (looked up)`,
+    ],
+    body: 'The most complete of the six Moonee Ponds 1-beds: internal laundry, balcony and A/C are rare together at this price.',
+  },
+  {
+    name: '6-20 Mantell St, Moonee Ponds',
+    rent: '350 AUD/week',
+    against: '−35% vs area median',
+    fit: 72,
+    status: 'to view',
+    time: '0652',
+    callout: [
+      'AUD 350/week, the cheapest of the six. (from the file)',
+      'No move-in date in the listing. (from the file) — Check',
+    ],
+    body: 'A small ground-floor unit; ask the agent when it is free.',
+  },
+  {
+    name: '9-2 Alexandra Ave, Moonee Ponds',
+    rent: '495 AUD/week',
+    against: '−8% vs area median',
+    fit: 72,
+    status: 'new',
+    time: '0650',
+    callout: [
+      'AUD 495/week, the dearest of the six, with a car space. (from the file)',
+    ],
+    body: 'Close to the station and the shops on Puckle St.',
+  },
+  {
+    name: '21-51 Buckley St, Moonee Ponds',
+    rent: '395 AUD/week',
+    available: dayOf(-5),
+    against: '−27% vs area median',
+    fit: 66,
+    status: 'new',
+    time: '0648',
+    callout: [`AUD 395/week, free since ${shortDate(-5)}. (from the file)`],
+    body: 'On the busy end of Buckley St; the bedroom faces the road.',
+  },
+  {
+    name: '8-128 Park St, Moonee Ponds',
+    rent: '450 AUD/week',
+    against: '−17% vs area median',
+    fit: 60,
+    status: 'new',
+    time: '0646',
+    callout: ['AUD 450/week, no laundry in the unit. (from the file)'],
+    body: 'A shared laundry downstairs; no date yet.',
+  },
+  {
+    name: '10-8 Eddy St, Moonee Ponds',
+    rent: '460 AUD/week',
+    available: dayOf(-1),
+    against: '−15% vs area median',
+    fit: 58,
+    status: 'new',
+    time: '0644',
+    callout: [`AUD 460/week, free since ${shortDate(-1)}. (from the file)`],
+    body: 'A second-floor walk-up with no lift and no A/C.',
+  },
+];
+
+function mooneePondsFiles(): FixtureFile[] {
+  const files: FixtureFile[] = [];
+  for (const [i, flat] of MOONEE_PONDS_FLATS.entries()) {
+    const pdf = `${flat.name}.pdf`;
+    // The listing as saved from the agent's site: one of Alex's originals.
+    files.push(
+      pdfAt(
+        `${LISTINGS}/${pdf}`,
+        today(`063${i}`),
+        (150 + i * 20) * KIB,
+        flat.name,
+        false,
+      ),
+    );
+    files.push(
+      companion({
+        path: `${MOONEE_PONDS}/${flat.name}.md`,
+        original: pdf,
+        created: TODAY,
+        modified: today(flat.time),
+        tags: 'housing, summary',
+        kind: 'rental-listing',
+        fields: {
+          address: flat.name,
+          type: 'Apartment',
+          rent: flat.rent,
+          rooms: '1 bed',
+          ...(flat.available !== undefined && { available: flat.available }),
+          against_area: flat.against,
+          fit: flat.fit,
+          ...(flat.viewing !== undefined && { viewing: flat.viewing }),
+        },
+        origins: { against_area: 'web', fit: 'you' },
+        notStated:
+          flat.available === undefined
+            ? ['available', 'pets', 'bond']
+            : ['pets', 'bond'],
+        status: flat.status,
+        callout: flat.callout,
+        body: flat.body,
+      }),
+    );
+  }
+  return files;
+}
+
+/** The four job offers Compare lines up (boards LI-Main, LI-Compare). */
+interface Offer {
+  name: string;
+  role: string;
+  employer: string;
+  office: string;
+  salary?: string;
+  holiday?: string;
+  fit: number;
+  status: string;
+  modified: string;
+  callout: readonly string[];
+  body: string;
+}
+
+export const JOB_OFFERS: readonly Offer[] = [
+  {
+    name: 'Senior Consultant - Data Engineer, Altis Consulting',
+    role: 'Senior Consultant - Data Engineer',
+    employer: 'Altis Consulting',
+    office: 'Melbourne, VIC',
+    fit: 79,
+    // The old value, drawn on LI-Compare-375 ("Declined"): not in the
+    // folder's list, so the status menu shows it as an extra option (#916).
+    status: 'declined',
+    modified: today('0711'),
+    callout: [
+      "A more hands-on, less leadership-heavy role than Altis's other listing; lists Google Cloud as a preferred platform. (from the file)",
+      'Closest technical match of the four: SQL, data modelling, ETL/ELT and GCP line up with your day-to-day work. (from your notes: [[CV insights]])',
+      'Scored 79/100, above the 70-point bar in your CV rule; a tailored [[CV - Senior Consultant, Altis Consulting|CV]] and [[Cover Letter - Senior Consultant, Altis Consulting|cover letter]] are ready.',
+    ],
+    body: 'Hybrid, Melbourne CBD. The listing gives no salary.',
+  },
+  {
+    name: 'Lead Data Engineer, Clicks IT Recruitment',
+    role: 'Lead Data Engineer',
+    employer: 'Clicks IT Recruitment',
+    office: 'Multiple states (QLD, WA, ACT, VIC, NSW, NT, SA, TAS)',
+    fit: 46,
+    status: 'new',
+    modified: yesterday('1355'),
+    callout: [
+      'A recruiter listing for an unnamed client in financial services. (from the file)',
+    ],
+    body: 'A recruiter listing across several states; the client is not named, and neither is the salary.',
+  },
+  {
+    name: 'Senior Data Engineer Team Lead, Allume Energy',
+    role: 'Senior Data Engineer Team Lead',
+    employer: 'Allume Energy',
+    office: 'Abbotsford, Melbourne VIC',
+    salary: '$150,000 – $165,000 AUD base + super',
+    holiday:
+      '25 days (5 weeks) annual leave, plus a half-day Friday every fortnight',
+    fit: 73,
+    status: 'new',
+    modified: yesterday('1353'),
+    callout: [
+      'Leads a team of four; the only offer of the four with a salary range. (from the file)',
+    ],
+    body: 'Hybrid, three days in the Abbotsford office.',
+  },
+  {
+    name: 'Managing Consultant, Altis Consulting',
+    role: 'Managing Consultant',
+    employer: 'Altis Consulting',
+    office: 'Melbourne, VIC',
+    fit: 65,
+    status: 'new',
+    modified: yesterday('1352'),
+    callout: [
+      'More client management than engineering. (from the file) — Check',
+    ],
+    body: 'Hybrid, Melbourne CBD. The listing gives no salary.',
+  },
+];
+
+function applicationFiles(): FixtureFile[] {
+  const offers = JOB_OFFERS.map((offer) =>
+    noteAt(
+      `${APPLICATIONS}/${offer.name}.md`,
+      offer.modified,
+      [
+        'tags: [career, summary]',
+        `created: ${YESTERDAY}`,
+        `updated: ${offer.modified === today('0711') ? TODAY : YESTERDAY}`,
+        'kind: job-offer',
+        `role: ${yamlValue(offer.role)}`,
+        `employer: ${yamlValue(offer.employer)}`,
+        `office: ${yamlValue(offer.office)}`,
+        'hours: Hybrid',
+        ...(offer.salary === undefined
+          ? ['not_stated: [salary]']
+          : [`salary: ${yamlValue(offer.salary)}`]),
+        ...(offer.holiday === undefined
+          ? []
+          : [`holiday: ${yamlValue(offer.holiday)}`]),
+        `fit: ${offer.fit}`,
+        `status: ${offer.status}`,
+      ],
+      `> [!bower] Bower's note\n${offer.callout.map((line) => `> ${line}`).join('\n')}\n\n${offer.body}`,
+    ),
+  );
+  /** A CV or cover letter Bower wrote for one offer. */
+  const madeFor = (
+    name: string,
+    offer: string,
+    modified: string,
+    answer: boolean,
+    body: string,
+  ): FixtureFile =>
+    noteAt(
+      `${APPLICATIONS}/${name}.md`,
+      modified,
+      [
+        'by: bower',
+        ...(answer ? ['type: answer'] : []),
+        'tags: [career]',
+        `created: ${YESTERDAY}`,
+        `updated: ${YESTERDAY}`,
+        `made_for: "[[${offer}]]"`,
+      ],
+      `# ${name}\n\n${body}`,
+    );
+  return [
+    noteAt(
+      `${APPLICATIONS}/Applications.md`,
+      yesterday('1350'),
+      [
+        'by: bower',
+        'tags: [project, hub, career]',
+        `created: ${YESTERDAY}`,
+        `updated: ${YESTERDAY}`,
+        'status: active',
+        statusesLine(APPLICATIONS),
+      ],
+      '# Applications\n\nThe roles Alex is applying for, one note each, with the CVs and letters Bower tailored.',
+    ),
+    ...offers,
+    noteAt(
+      `${APPLICATIONS}/Job ratings.md`,
+      yesterday('1354'),
+      [
+        'type: answer',
+        'tags: [answer, career]',
+        `created: ${YESTERDAY}`,
+        `updated: ${YESTERDAY}`,
+        'question: Rate the job offers against my CV',
+      ],
+      `> [!bower] Bower's note
+> Altis, Senior Consultant first: 79/100. (from your notes: [[CV insights]])
+> Allume second: 73/100, the only one with a salary range. (from the file)
+
+# Job ratings
+
+| Offer | Fit |
+| --- | --- |
+| Senior Consultant - Data Engineer, Altis Consulting | 79 |
+| Senior Data Engineer Team Lead, Allume Energy | 73 |
+| Managing Consultant, Altis Consulting | 65 |
+| Lead Data Engineer, Clicks IT Recruitment | 46 |`,
+    ),
+    madeFor(
+      'Cover Letter - Senior Data Engineer Team Lead, Allume Energy',
+      'Senior Data Engineer Team Lead, Allume Energy',
+      yesterday('1351'),
+      true,
+      'Dear Allume team, I am applying for the Senior Data Engineer Team Lead role.',
+    ),
+    madeFor(
+      'CV - Senior Data Engineer Team Lead, Allume Energy',
+      'Senior Data Engineer Team Lead, Allume Energy',
+      yesterday('1301'),
+      false,
+      'Leads with the team Alex ran and the pipeline cost cut.',
+    ),
+    madeFor(
+      'Cover Letter - Senior Consultant, Altis Consulting',
+      'Senior Consultant - Data Engineer, Altis Consulting',
+      yesterday('1300'),
+      false,
+      'Dear Altis team, I am applying for the Senior Consultant - Data Engineer role.',
+    ),
+    madeFor(
+      'CV - Senior Consultant, Altis Consulting',
+      'Senior Consultant - Data Engineer, Altis Consulting',
+      yesterday('1259'),
+      false,
+      'Leads with SQL, data modelling and the move to Google Cloud.',
+    ),
+  ];
+}
+
+const V6_WORLD: readonly FixtureFile[] = [
+  // --- Housing Search Australia (boards PF-*, HM-Main) ----------------------
+  // Pinned to Home: "Housing Search Australia · Projects · 14 things".
+  noteAt(
+    `${HOUSING}/Housing Search Australia.md`,
+    yesterday('1140'),
+    [
+      'tags: [project, hub, housing]',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
+      'status: active',
+      `pinned: ${yesterday('1145')}`,
+    ],
+    `# Housing Search Australia
+
+A one-bedroom flat in Melbourne's inner north before the short let ends mid-October.
+
+- [[Moonee Ponds]]: the six listings Bower read`,
+  ),
+  noteAt(
+    `${MOONEE_PONDS}/Moonee Ponds.md`,
+    yesterday('1145'),
+    [
+      'by: bower',
+      'tags: [project, hub, housing]',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
+      'status: active',
+      statusesLine(MOONEE_PONDS),
+    ],
+    `# Moonee Ponds
+
+Six one-bedroom listings, each with a note from Bower. Under 500 AUD a week, close to a train line.`,
+  ),
+  ...mooneePondsFiles(),
+
+  // --- Job Search Australia (boards NO-Main, FI-Main, LI-*) -----------------
+  // Tree order (FI-Bottom "2 of 6", NO-Bottom "3 of 6"): the hub note,
+  // Cover Letter - Alex, CV insights, LinkedIn profile, Resume Australia, SEEK
+  // profile: newest first after the hub.
+  noteAt(
+    `${JOBS}/Job Search Australia.md`,
+    yesterday('1225'),
+    [
+      'tags: [project, hub, career]',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
+      'status: active',
+    ],
+    `# Job Search Australia
+
+A senior data engineering role in Melbourne, hybrid.
+
+- [[Applications]]
+- [[CV insights]]`,
+  ),
+  pdfAt(
+    `${JOBS}/Cover Letter - Alex.pdf`,
+    yesterday('1301'),
+    117 * KIB,
+    'Cover letter',
+  ),
+  companion({
+    path: `${JOBS}/CV insights.md`,
+    original: 'Resume Australia.docx',
+    created: YESTERDAY,
+    modified: yesterday('1300'),
+    tags: 'summary, career',
+    callout: [
+      'Eight years as a data engineer (SQL, Python, dbt, Google Cloud), most recently at Northwind Data in London. (from the file)',
+      'Work rights need a clear callout: a Working Holiday visa now, a skilled visa applied for. (from your notes: [[Visa & Immigration]])',
+      'The LinkedIn link on the CV matches your [[LinkedIn profile]] note. — Check',
+    ],
+    body: `## Why
+A summary of [[Resume Australia]], the CV tailored for [[Job Search Australia]], with the facts an Australian recruiter would look for first and what is worth checking before it goes out.
+
+## Key facts
+- Target role: Senior Data Engineer (Google Cloud)
+- Experience: 8 years, retail and financial data
+- Current role: Data Engineer, Northwind Data, London (2026)
+- Work rights: Working Holiday visa; skilled visa applied for
+
+## What this means for you
+Lead with the Google Cloud work; say the visa status in the first lines.
+
+## Next steps
+- Add the visa line to the CV's header
+- Ask two referees in Melbourne`,
+  }),
+  noteAt(
+    `${JOBS}/LinkedIn profile.md`,
+    yesterday('1223'),
+    ['tags: [career]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
+    `# LinkedIn profile
+
+Headline: Senior Data Engineer · Google Cloud · Melbourne. Open to work, hybrid.`,
+  ),
+  {
+    path: `${JOBS}/Resume Australia.docx`,
+    mimeType:
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    modifiedTime: yesterday('1214'),
+    content: stub('Resume Australia', 'application/octet-stream'),
+    size: 52 * KIB,
+    appProperties: { bowerOrigin: 'filed' },
+    preview: true,
+  },
+  noteAt(
+    `${JOBS}/SEEK profile.md`,
+    yesterday('1210'),
+    ['tags: [career]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
+    `# SEEK profile
+
+Visible to employers. Right to work: Working Holiday visa. Salary expectation: from 140,000 AUD + super.`,
+  ),
+  ...applicationFiles(),
+
+  // --- Areas › Visa & Immigration (boards AR-Main, AR-Sub) ------------------
+  noteAt(
+    `${VISA}/Visa & Immigration.md`,
+    yesterday('1502'),
+    [
+      'tags: [area, visa]',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
+      'status: active',
+    ],
+    `# Visa & Immigration
+
+- Current visa: Working Holiday, valid until June 2027.
+- Skilled visa: applied for on 12 September; waiting for the health check.
+- Keep a copy of the passport with the application.`,
+  ),
+  // Filed by yesterday's last tidy-up, so it is new since the last look.
+  pdfAt(`${VISA}/Passport copy.pdf`, yesterday('1503'), 356 * KIB, 'Passport'),
+
+  // --- The two requests yesterday's tidy-ups answered ------------------------
+  noteAt(
+    `0-Inbox/Processed/Bower - ${YESTERDAY} 1228 Rate the job offers against my CV.md`,
+    yesterday('1228'),
+    ['tags: [instruction]', `date: ${yesterday('1228')}`, 'via: app'],
+    'Rate the job offers against my CV.',
+  ),
+  noteAt(
+    `0-Inbox/Processed/Bower - ${YESTERDAY} 1209 Keep my visa papers together.md`,
+    yesterday('1209'),
+    ['tags: [instruction]', `date: ${yesterday('1209')}`, 'via: app'],
+    'Keep my visa papers together.',
+  ),
+
+  // --- Resources › Australia (filed by yesterday's first tidy-up) -----------
+  noteAt(
+    '3-Resources/Australia/Renting in Victoria.md',
+    yesterday('1146'),
+    [
+      'tags: [guide, housing]',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
+    ],
+    '# Renting in Victoria\n\nThe bond is at most four weeks of rent and is lodged with the state bond authority, not the agent.',
+  ),
+  noteAt(
+    '3-Resources/Australia/Tax file number.md',
+    yesterday('1145'),
+    ['tags: [guide, money]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
+    '# Tax file number\n\nApply online once in the country; employers ask for it on the first day.',
+  ),
+  noteAt(
+    '3-Resources/Australia/Opening a bank account.md',
+    yesterday('1144'),
+    ['tags: [guide, money]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
+    '# Opening a bank account\n\nBring the passport and a proof of address; the short let agreement counts.',
+  ),
+];
+
 /** Folders that exist with nothing in them: the empty-folder screen's
  * target (board `Phone-Folder-Empty`). */
-export const FIXTURE_FOLDERS: readonly string[] = ['2-Areas/Car'];
+export const FIXTURE_FOLDERS: readonly string[] = ['3-Resources/Car'];
 
 export const FIXTURE_FILES: readonly FixtureFile[] = [
   // --- Top of the folder -------------------------------------------------
@@ -997,20 +1805,24 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
     `# Index
 
 ## Projects
-- [[Lisbon Trip]]: a week in Lisbon in October
-- [[Kitchen Refresh]]: paint, shelves and a new tap
-- [[1-Projects/Kitchen Refresh/Sage green test patch.png]] · Photo · filed by Bower
-- [[Half Marathon]]: race day in November
-- [[Flat hunt]]: a one-bedroom before the lease runs out
+- [[Housing Search Australia]]: a one-bedroom in Moonee Ponds
+- [[Job Search Australia]]: a data engineering role in Melbourne
 
 ## Areas
-- [[Home]], [[Health]], [[Money]], [[Garden]]
-- [[Shopping list]] · under Home
+- [[Visa & Immigration]]
 
 ## Resources
+- [[Home]], [[Health]], [[Money]], [[Garden]]
+- [[Shopping list]] · under Home
 - [[Cooking]], [[Reading list]], [[Packing light]]
+- [[Renting in Victoria]], [[Tax file number]], [[Opening a bank account]]
 
 ## Archives
+- [[Lisbon Trip]]: a week in Lisbon last October
+- [[Kitchen Refresh]]: paint, shelves and a new tap
+- [[4-Archives/Kitchen Refresh/Sage green test patch.png]] · Photo · filed by Bower
+- [[Half Marathon]]: race day in November
+- [[Flat hunt]]: the London flat hunt, before the move
 - [[Bike Repair]]
 
 ## Answers
@@ -1030,11 +1842,11 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
 - 2026-09-12 · Filed · Flights and stays, Things to see in Lisbon
 - 2026-09-18 · Filed · Paint colours, Quotes from fitters
 - 2026-09-21 · Answered · Which subscriptions renew this autumn
-- 2026-09-26 08:10 · Filed: Running log.md → 2-Areas/Health
+- 2026-09-26 08:10 · Filed: Running log.md → 3-Resources/Health
 - 2026-09-26 08:11 · Filed: Weeknight curry.md → 3-Resources/Cooking
-- 2026-09-27 06:49 · Filed: Lease agreement 2026.pdf → 1-Projects/Flat hunt
-- 2026-09-27 06:50 · Filed: Arlington Road, window sign.jpg → 1-Projects/Flat hunt, renamed from IMG_4471.jpg
-- 2026-09-27 06:51 · Filed: Notes from the viewing.md → 1-Projects/Flat hunt`,
+- 2026-09-27 06:49 · Filed: Lease agreement 2026.pdf → 4-Archives/Flat hunt
+- 2026-09-27 06:50 · Filed: Arlington Road, window sign.jpg → 4-Archives/Flat hunt, renamed from IMG_4471.jpg
+- 2026-09-27 06:51 · Filed: Notes from the viewing.md → 4-Archives/Flat hunt`,
   ),
   note(
     'Lint Report.md',
@@ -1065,7 +1877,7 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
   {
     path: INBOX_QUESTION,
     modifiedTime: at(27, '0815'),
-    content: `---\ntags: [instruction]\ndate: 2026-09-27T08:15:00.000Z\nvia: app\n---\n\nWhat do I still need to sort out for the Lisbon trip?\n`,
+    content: `---\ntags: [instruction]\ndate: 2026-09-27T08:15:00.000Z\nvia: app\n---\n\nWhat do I still need to sort out for the visa?\n`,
   },
   note(
     '0-Inbox/Processed/Bower - 2026-09-20 0930 Start a reading list.md',
@@ -1086,7 +1898,7 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
     modifiedTime: at(1),
   },
   note(
-    '1-Projects/Lisbon Trip/Lisbon Trip.md',
+    '4-Archives/Lisbon Trip/Lisbon Trip.md',
     24,
     'project, hub, travel',
     `# Lisbon Trip
@@ -1103,7 +1915,7 @@ A week in Lisbon, 14 to 21 October. Goal: rest, walk a lot, eat well.
     'status: active\n',
   ),
   note(
-    '1-Projects/Lisbon Trip/Flights and stays.md',
+    '4-Archives/Lisbon Trip/Flights and stays.md',
     12,
     'document, travel',
     `# Flights and stays
@@ -1114,7 +1926,7 @@ A week in Lisbon, 14 to 21 October. Goal: rest, walk a lot, eat well.
 Part of [[Lisbon Trip]].`,
   ),
   note(
-    '1-Projects/Lisbon Trip/Things to see in Lisbon.md',
+    '4-Archives/Lisbon Trip/Things to see in Lisbon.md',
     12,
     'reference, travel',
     `# Things to see in Lisbon
@@ -1127,7 +1939,7 @@ Part of [[Lisbon Trip]].`,
 Related: [[Packing light]], [[Lisbon Trip]].`,
   ),
   note(
-    '1-Projects/Lisbon Trip/Packing list.md',
+    '4-Archives/Lisbon Trip/Packing list.md',
     22,
     'inventory, travel',
     `# Packing list
@@ -1140,7 +1952,7 @@ Related: [[Packing light]], [[Lisbon Trip]].`,
 See [[Packing light]].`,
   ),
   note(
-    '1-Projects/Kitchen Refresh/Kitchen Refresh.md',
+    '4-Archives/Kitchen Refresh/Kitchen Refresh.md',
     18,
     'project, hub, home',
     `# Kitchen Refresh
@@ -1154,7 +1966,7 @@ Budget: see [[Monthly budget]].`,
     'status: active\n',
   ),
   note(
-    '1-Projects/Kitchen Refresh/Paint colours.md',
+    '4-Archives/Kitchen Refresh/Paint colours.md',
     18,
     'note, home',
     `# Paint colours
@@ -1164,7 +1976,7 @@ Shortlist: a warm white for the walls, sage green for the cupboard doors. Test p
 Part of [[Kitchen Refresh]].`,
   ),
   note(
-    '1-Projects/Kitchen Refresh/Quotes from fitters.md',
+    '4-Archives/Kitchen Refresh/Quotes from fitters.md',
     18,
     'document, home, finance',
     `# Quotes from fitters
@@ -1179,20 +1991,20 @@ The second one is cheaper but after the trip. Part of [[Kitchen Refresh]].`,
   // Who filed these two is known two ways (`file-origin.ts`): the PDF
   // carries it as a Drive app property, the photo has a row in `index.md`.
   {
-    path: '1-Projects/Kitchen Refresh/Shelves and tap quote.pdf',
+    path: '4-Archives/Kitchen Refresh/Shelves and tap quote.pdf',
     mimeType: 'application/pdf',
     modifiedTime: at(25, '1730'),
     content: new Blob([FITTER_QUOTE_PDF], { type: 'application/pdf' }),
     appProperties: { bowerOrigin: 'filed' },
   },
   {
-    path: '1-Projects/Kitchen Refresh/Sage green test patch.png',
+    path: '4-Archives/Kitchen Refresh/Sage green test patch.png',
     mimeType: 'image/png',
     modifiedTime: at(26, '1015'),
     content: pngBlob(TEST_PATCH_PNG),
   },
   note(
-    '1-Projects/Half Marathon/Half Marathon.md',
+    '4-Archives/Half Marathon/Half Marathon.md',
     20,
     'project, hub, health',
     `# Half Marathon
@@ -1204,7 +2016,7 @@ Race day: 16 November. Target: finish under two hours, enjoy it.
     'status: active\n',
   ),
   note(
-    '1-Projects/Half Marathon/Training plan.md',
+    '4-Archives/Half Marathon/Training plan.md',
     20,
     'guide, health',
     `# Training plan
@@ -1228,7 +2040,7 @@ Taper the last ten days. Log every run in [[Running log]].`,
   // "Left out" for the board's folder-style tile ("1-Projects · 6
   // things"), not reproduced here for the same reason.
   note(
-    '1-Projects/Flat hunt/Flat hunt.md',
+    '4-Archives/Flat hunt/Flat hunt.md',
     27,
     'project, hub, home',
     `# Flat hunt
@@ -1241,10 +2053,10 @@ Looking for a one-bedroom before the current lease runs out in December.
 ## Still open
 - Ask about the deposit protection scheme
 - Compare the bike commute for each one`,
-    'status: active\npinned: 2026-09-27T08:00:00.000Z\n',
+    'status: active\n',
   ),
   {
-    path: '1-Projects/Flat hunt/Lease agreement 2026.pdf',
+    path: '4-Archives/Flat hunt/Lease agreement 2026.pdf',
     mimeType: 'application/pdf',
     modifiedTime: at(27, '0930'),
     content: new Blob([LEASE_PDF], { type: 'application/pdf' }),
@@ -1255,7 +2067,7 @@ Looking for a one-bedroom before the current lease runs out in December.
   // A photo from the viewing: the same tiny stub PNG as the garden test
   // patch, filed with a camera-style name (spec D.1's own example).
   {
-    path: '1-Projects/Flat hunt/Arlington Road, window sign.jpg',
+    path: '4-Archives/Flat hunt/Arlington Road, window sign.jpg',
     mimeType: 'image/jpeg',
     modifiedTime: at(27, '0935'),
     content: pngBlob(TEST_PATCH_PNG),
@@ -1270,7 +2082,7 @@ Looking for a one-bedroom before the current lease runs out in December.
   // A Google Doc, exported as text (#367): a plain Markdown note, the way
   // `drive.ts#exportPlanFor` saves one from a real Drive pick.
   note(
-    '1-Projects/Flat hunt/Notes from the viewing.md',
+    '4-Archives/Flat hunt/Notes from the viewing.md',
     27,
     'document, home',
     `# Notes from the viewing
@@ -1281,7 +2093,7 @@ Arlington Road, one bedroom, top floor. Bright kitchen, small garden share. The 
   // --- Areas ---------------------------------------------------------------
   { path: '2-Areas/_Areas.md', content: areasNote, modifiedTime: at(1) },
   note(
-    '2-Areas/Home/Home.md',
+    '3-Resources/Home/Home.md',
     15,
     'area, hub, home',
     `# Home
@@ -1295,7 +2107,7 @@ Arlington Road, one bedroom, top floor. Bright kitchen, small garden share. The 
   // Home"), sorting near the middle of the fixture's notes by path,
   // exactly the case #539's search-first hydration exists for.
   note(
-    '2-Areas/Home/Shopping list.md',
+    '3-Resources/Home/Shopping list.md',
     25,
     'inventory, home',
     `# Shopping list
@@ -1306,10 +2118,9 @@ Arlington Road, one bedroom, top floor. Bright kitchen, small garden share. The 
 - Bin bags
 
 Part of [[Home]].`,
-    'pinned: 2026-09-25T08:00:00.000Z\n',
   ),
   note(
-    '2-Areas/Home/Boiler.md',
+    '3-Resources/Home/Boiler.md',
     15,
     'document, home',
     `# Boiler
@@ -1319,7 +2130,7 @@ Serviced once a year, in September. Last service: September last year. The engin
 Part of [[Home]].`,
   ),
   note(
-    '2-Areas/Home/Bills and renewals.md',
+    '3-Resources/Home/Bills and renewals.md',
     21,
     'inventory, home, finance',
     `# Bills and renewals
@@ -1331,7 +2142,7 @@ Part of [[Home]].`,
 See [[2026-09-21 Which subscriptions renew this autumn]].`,
   ),
   note(
-    '2-Areas/Health/Health.md',
+    '3-Resources/Health/Health.md',
     10,
     'area, hub, health',
     `# Health
@@ -1341,7 +2152,7 @@ See [[2026-09-21 Which subscriptions renew this autumn]].`,
 - Dentist check-up due in December.`,
   ),
   note(
-    '2-Areas/Health/Running log.md',
+    '3-Resources/Health/Running log.md',
     26,
     'inventory, health',
     `# Running log
@@ -1355,7 +2166,7 @@ See [[2026-09-21 Which subscriptions renew this autumn]].`,
 Plan: [[Training plan]].`,
   ),
   note(
-    '2-Areas/Money/Money.md',
+    '3-Resources/Money/Money.md',
     8,
     'area, hub, finance',
     `# Money
@@ -1364,7 +2175,7 @@ Plan: [[Training plan]].`,
 - [[Bills and renewals]]`,
   ),
   note(
-    '2-Areas/Money/Monthly budget.md',
+    '3-Resources/Money/Monthly budget.md',
     8,
     'guide, finance',
     `# Monthly budget
@@ -1372,7 +2183,7 @@ Plan: [[Training plan]].`,
 Rent, bills and food first; then 10% saved on payday; the rest is free. The kitchen and the trip come out of savings this autumn.`,
   ),
   note(
-    '2-Areas/Garden/Garden.md',
+    '3-Resources/Garden/Garden.md',
     14,
     'area, hub, hobby',
     `# Garden
@@ -1384,13 +2195,13 @@ The small back garden: three beds and a herb corner.
 - [[Watering schedule]]`,
   ),
   {
-    path: '2-Areas/Garden/Garden plan.svg',
+    path: '3-Resources/Garden/Garden plan.svg',
     mimeType: 'image/svg+xml',
     modifiedTime: at(14),
     content: new Blob([GARDEN_PLAN_SVG], { type: 'image/svg+xml' }),
   },
   note(
-    '2-Areas/Garden/Watering schedule.md',
+    '3-Resources/Garden/Watering schedule.md',
     14,
     'guide, hobby',
     `# Watering schedule
@@ -1535,6 +2346,8 @@ Home insurance on 3 November, and the streaming service every month until you ca
   ),
 
   ...V4_FILES,
+  // Last, so the older files keep their demo ids (`demo-<n>`) the tests use.
+  ...V6_WORLD,
 ];
 
 /**
@@ -1543,8 +2356,8 @@ Home insurance on 3 November, and the streaming service every month until you ca
  * carries `kind: rental-listing`, and the clause Home's bubble adds.
  */
 export const SCRIPTED_LISTINGS: readonly RunItem[] = (
-  DEMO_RUNS[0]?.items ?? []
-).filter((item) => /^1-Projects\/Flat hunt\/.*\.pdf$/.test(item.to ?? ''));
+  DEMO_RUNS.find((run) => run.runId === 'demo-run-earlier-4')?.items ?? []
+).filter((item) => /^4-Archives\/Flat hunt\/.*\.pdf$/.test(item.to ?? ''));
 
 // --- Test states (#735, spec §7c item 4) --------------------------------
 // Extra vault shapes and run states the v5 tests need. Nothing here is part
@@ -1552,7 +2365,7 @@ export const SCRIPTED_LISTINGS: readonly RunItem[] = (
 // were, and a test picks one of these to swap in.
 
 /** The folder that exists with nothing in it (see `FIXTURE_FOLDERS`). */
-export const EMPTY_FOLDER = '2-Areas/Car';
+export const EMPTY_FOLDER = '3-Resources/Car';
 
 /** Whether a path is waiting to be tidied: in an inbox folder, outside
  * `Processed` and `Quarantine`, and not a folder's own `_note.md` (the rule

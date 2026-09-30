@@ -16,8 +16,8 @@ import { expect, openHome, test, visible } from './demo.js';
 
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
-const FLAT = '/folder/1-Projects/Flat%20hunt';
-const EMPTY_FOLDER = '/folder/2-Areas/Car';
+const FLAT = '/folder/4-Archives/Flat%20hunt';
+const EMPTY_FOLDER = '/folder/3-Resources/Car';
 
 async function expectRoom(
   page: Page,
