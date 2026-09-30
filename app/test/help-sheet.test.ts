@@ -414,6 +414,26 @@ describe('placeTour', () => {
     expect(place.bird).toEqual({ left: '260px', bottom: '656px' });
   });
 
+  it('uses the sidebar branch for a tall sidebar that reaches the lower half', () => {
+    const place = placeTour(
+      { top: 300, left: 16, width: 232, height: 44 },
+      { top: 0, left: 0, width: 264, height: 800 },
+      1280,
+      800,
+    );
+    expect(place.bird).toEqual({ left: '260px', bottom: '456px' });
+  });
+
+  it('treats a short, wide bar in the lower half as a bottom bar', () => {
+    const place = placeTour(
+      { top: 730, left: 100, width: 90, height: 56 },
+      { top: 720, left: 0, width: 1280, height: 80 },
+      1280,
+      800,
+    );
+    expect(place.bird).toEqual({ left: '105px', bottom: '80px' });
+  });
+
   it('has no ring or bird when the tab is not on screen', () => {
     expect(placeTour(null, null, 1024, 700)).toEqual({
       spot: null,

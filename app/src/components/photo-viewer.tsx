@@ -43,6 +43,8 @@ export interface PhotoViewerProps {
   onNavigate: (index: number) => void;
   /** The screen's More menu (board `Phone-Photo-Full`): a button top right in full screen; the viewer closes first so the menu is in view. */
   onMore?: () => void;
+  /** True while the More menu is open; when it closes the viewer comes back. */
+  moreOpen?: boolean;
 }
 
 /** Two taps closer than this (ms) and this (px) are a double tap. */
@@ -97,12 +99,17 @@ function usePinchScale(): number {
 
 interface FullScreenProps extends PhotoViewerProps {
   onClose: () => void;
+  /** Opens the More menu and hides the viewer without focusing the photo. */
+  onOpenMore: () => void;
+  /** Focus the More button on mount (the viewer is coming back from the menu). */
+  focusMore: boolean;
 }
 
 function FullScreen(props: FullScreenProps): JSX.Element {
   const { src, title, siblings, index, folderName, onNavigate, onClose } =
     props;
-  const { onMore } = props;
+  const { onMore, onOpenMore, focusMore } = props;
+  const moreRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [doubled, setDoubled] = useState(false);
   const pinch = usePinchScale();
@@ -196,6 +203,13 @@ function FullScreen(props: FullScreenProps): JSX.Element {
     }
   }
 
+  useEffect(() => {
+    if (!focusMore) return;
+    // The overlay claims focus after mount, so ask once it has settled.
+    const frame = requestAnimationFrame(() => moreRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [focusMore]);
+
   const scale = (doubled ? 2 : 1) * pinch;
 
   return (
@@ -214,14 +228,12 @@ function FullScreen(props: FullScreenProps): JSX.Element {
         </span>
         {onMore !== undefined && (
           <button
+            ref={moreRef}
             type="button"
             class="photo-viewer-button"
             aria-label="More"
             aria-haspopup="menu"
-            onClick={() => {
-              onClose();
-              onMore();
-            }}
+            onClick={onOpenMore}
           >
             <svg
               class="photo-viewer-icon"
@@ -297,12 +309,32 @@ function FullScreen(props: FullScreenProps): JSX.Element {
 }
 
 export function PhotoViewer(props: PhotoViewerProps): JSX.Element {
-  const { src, title } = props;
+  const { src, title, moreOpen, onMore } = props;
   const [open, setOpen] = useState(false);
+  const [fromMore, setFromMore] = useState(false);
+  const [returned, setReturned] = useState(false);
   const openRef = useRef<HTMLButtonElement>(null);
+
+  // The menu closed without leaving the page: bring the viewer back.
+  useEffect(() => {
+    if (moreOpen === true || !fromMore) return;
+    setFromMore(false);
+    setReturned(true);
+    setOpen(true);
+  }, [moreOpen, fromMore]);
+
+  function openMore(): void {
+    if (onMore === undefined) return;
+    setFromMore(true);
+    setReturned(false);
+    setOpen(false);
+    onMore();
+  }
 
   function close(): void {
     setOpen(false);
+    setFromMore(false);
+    setReturned(false);
     // Leaving real full screen is asynchronous and the browser may take
     // focus with it, so the photo asks for it back once that is done too.
     const focusPhoto = (): void => openRef.current?.focus();
@@ -331,7 +363,12 @@ export function PhotoViewer(props: PhotoViewerProps): JSX.Element {
       {open && (
         <Queued id="photo-viewer" priority={OVERLAY_PRIORITY.own}>
           <Overlay kind="dialog" label={title} onClose={close}>
-            <FullScreen {...props} onClose={close} />
+            <FullScreen
+              {...props}
+              onClose={close}
+              onOpenMore={openMore}
+              focusMore={returned}
+            />
           </Overlay>
         </Queued>
       )}

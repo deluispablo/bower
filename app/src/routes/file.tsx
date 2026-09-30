@@ -943,6 +943,7 @@ export function FileScreen(): JSX.Element {
             if (target !== undefined) route(walkHref(target));
           }}
           onMore={() => setMenuOpen(true)}
+          moreOpen={menuOpen}
         />
       ) : (
         <Preview
