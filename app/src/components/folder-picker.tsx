@@ -134,7 +134,7 @@ export function FolderChoice({
               size={16}
             />
           )}
-          <span class="tree-name">{label}</span>
+          <span class="tree-name folder-picker-name">{label}</span>
           {isCurrent && <span class="tree-sr"> (where it is now)</span>}
         </button>
       </div>

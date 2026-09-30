@@ -347,8 +347,9 @@ describe('Layout', () => {
     mount();
     const sidebar = query('nav[aria-label="Your folders"]');
     expect(sidebar.getAttribute('role')).toBeNull();
-    expect(sidebar.textContent).toContain('Health');
-    expect(sidebar.textContent).toContain('you@example.com');
+    // #909: Health check is a nav item (#906); no account row (board).
+    expect(sidebar.textContent).toContain('Your folders');
+    expect(sidebar.textContent).not.toContain('you@example.com');
     expect(sidebar.querySelector('[role="tree"]')).not.toBeNull();
     expect(root.querySelector('[role="dialog"]')).toBeNull();
   });
@@ -367,28 +368,32 @@ describe('Layout', () => {
     expect(root.querySelector('button[aria-label="Your folders"]')).toBeNull();
   });
 
-  it('has no sort menu, one Expand/Collapse all toggle (#326)', () => {
+  it('has the three tools on YOUR FOLDERS, one name each (#909)', () => {
     mount();
     const sidebar = query('nav[aria-label="Your folders"]');
-    expect(sidebar.querySelector('[aria-label^="Sort by"]')).toBeNull();
-    expect(sidebar.querySelectorAll('.explorer-tool')).toHaveLength(1);
+    expect(
+      Array.from(sidebar.querySelectorAll('.explorer-tool')).map((b) =>
+        b.getAttribute('aria-label'),
+      ),
+    ).toEqual(['Show the open item', 'Sort', 'Collapse all folders']);
   });
 
-  it('the sidebar toggle expands, then collapses, every folder (#326)', () => {
+  it('"Collapse all folders" collapses every folder (#909)', () => {
     mount();
     const sidebar = query('nav[aria-label="Your folders"]');
-    const toggle = query<HTMLButtonElement>(
-      'nav[aria-label="Your folders"] button.explorer-tool',
+    for (const chevron of Array.from(
+      sidebar.querySelectorAll<HTMLButtonElement>('.tree-chevron'),
+    )) {
+      click(chevron);
+    }
+    expect(
+      sidebar.querySelectorAll('[aria-expanded="true"]').length,
+    ).toBeGreaterThan(0);
+    click(
+      query<HTMLButtonElement>(
+        'nav[aria-label="Your folders"] button[aria-label="Collapse all folders"]',
+      ),
     );
-    expect(toggle.getAttribute('aria-label')).toBe('Expand all folders');
-
-    // The fixture's three folders: 0-Inbox, 2-Areas, 2-Areas/Cooking.
-    click(toggle);
-    expect(toggle.getAttribute('aria-label')).toBe('Collapse all folders');
-    expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(3);
-
-    click(toggle);
-    expect(toggle.getAttribute('aria-label')).toBe('Expand all folders');
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
   });
 

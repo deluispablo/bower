@@ -4,7 +4,6 @@ import { INSTRUCTION_APP_PROPERTIES } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import {
   currentFolderOf,
-  findFolders,
   moveRequestText,
   pickerFolders,
   requestRowText,
@@ -100,22 +99,6 @@ describe('pickerFolders', () => {
     expect(currentFolderOf({ path: '2-Areas/Garden', isFolder: true })).toBe(
       '2-Areas',
     );
-  });
-});
-
-describe('findFolders', () => {
-  const list = pickerFolders(tree(), { path: 'x.pdf', isFolder: false });
-
-  it('matches names at any depth, ignoring case and the numeric prefix', () => {
-    expect(findFolders(list, 'GARD').map((n) => n.path)).toEqual([
-      '2-Areas/Garden',
-    ]);
-    expect(findFolders(list, 'areas').map((n) => n.path)).toEqual(['2-Areas']);
-    expect(findFolders(list, '2-').map((n) => n.path)).toEqual([]);
-  });
-
-  it('gives nothing for a blank query', () => {
-    expect(findFolders(list, '  ')).toEqual([]);
   });
 });
 

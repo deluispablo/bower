@@ -1,13 +1,22 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
+import {
+  closeFoldersDrawer,
+  foldersDrawerState,
+} from '../src/folders-drawer.js';
 import {
   ancestorsOf,
   lastTarget,
   mergeExpanded,
   rememberTarget,
   revealHref,
+  revealInFolders,
+  revealRequest,
+  subscribeReveal,
   targetFromReveal,
   targetFromRoute,
 } from '../src/reveal.js';
@@ -121,5 +130,44 @@ describe('the last target', () => {
     rememberTarget(target);
     rememberTarget(null);
     expect(lastTarget()).toEqual(target);
+  });
+});
+
+describe('revealInFolders (#909)', () => {
+  afterEach(() => {
+    closeFoldersDrawer();
+    vi.unstubAllGlobals();
+  });
+
+  function screen(desktop: boolean): void {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: desktop && query.includes('900px'),
+    }));
+  }
+
+  it('opens the drawer on the phone and tells the explorers what to show', () => {
+    screen(false);
+    const heard: unknown[] = [];
+    const stop = subscribeReveal(() => heard.push(revealRequest()));
+    revealInFolders('1-Projects/Flat hunt/Viewing.md', 'n1');
+    stop();
+    expect(foldersDrawerState().open).toBe(true);
+    expect(heard).toHaveLength(1);
+    expect(revealRequest()).toMatchObject({
+      path: '1-Projects/Flat hunt/Viewing.md',
+      id: 'n1',
+      at: window.location.pathname,
+    });
+    expect(lastTarget()).toMatchObject({ id: 'n1' });
+  });
+
+  it('leaves the drawer shut on desktop (the sidebar shows it) and counts requests', () => {
+    screen(true);
+    const before = revealRequest()?.seq ?? 0;
+    revealInFolders('1-Projects');
+    expect(foldersDrawerState().open).toBe(false);
+    expect(revealRequest()).toMatchObject({ path: '1-Projects' });
+    expect(revealRequest()?.id).toBeUndefined();
+    expect(revealRequest()?.seq).toBe(before + 1);
   });
 });
