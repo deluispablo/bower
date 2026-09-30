@@ -854,7 +854,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   // R-HOME-0/1: the greeting carries the run (`runSentence`, then what Bower
   // added as a second sentence), the card only the time and the counts.
   await expect(bubble).toContainText(/^Done just now: 5 filed/);
-  await expect(bubble).toContainText('I added bike times to the flats.');
+  await expect(bubble).not.toContainText('bike times');
   await expect(bubble).not.toContainText('..');
   await expect(inbox).toContainText('Nothing waiting. Add something.');
   await expect(
@@ -2465,15 +2465,13 @@ test('a project folder lists its files and notes together, newest first, with wh
     0,
   );
 
-  // The Ask Bower chip opens the Bower tab's box with the folder named,
-  // and nothing else from the folder (#354).
-  await page.getByRole('link', { name: 'Ask Bower about it' }).click();
-  await expect(page).toHaveURL(/\/bower\?text=/);
-  await expect(
-    page.getByRole('textbox', {
-      name: 'Tell Bower what to do, or ask it something',
-    }),
-  ).toHaveValue('About Kitchen Refresh: ');
+  // The Ask Bower chip opens the send-to-Bower sheet in Ask mode with the
+  // folder as its subject, not the Bower tab (#354, #899).
+  await page.getByRole('button', { name: 'Ask Bower about it' }).click();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toContainText('About Kitchen Refresh');
+  await expect(page).not.toHaveURL(/\/bower/);
 });
 
 test('a file opens on its own screen: the photo inline, the PDF without a preview says so', async ({

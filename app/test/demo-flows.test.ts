@@ -181,9 +181,8 @@ describe('demo mode', () => {
       expect(item.to).toEqual(expect.any(String));
     }
     // The flat listings come with the run (#674), each with its note.
-    expect(done?.added).toBe('I added bike times to the flats');
-    // ...and the claim is backed by the notes it says it changed.
-    expect(done?.updated).toHaveLength(3);
+    // Nothing was updated, so Bower claims no update (#899).
+    expect(done?.added).toBeUndefined();
     expect(done?.processed).toContain('0-Inbox/Arlington Road, 2 bed.pdf');
 
     const after = await paths();

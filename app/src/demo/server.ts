@@ -29,7 +29,6 @@ import {
   DEMO_RUN_STATES,
   FIXTURE_FILES,
   FIXTURE_FOLDERS,
-  SCRIPTED_ADDED,
   SCRIPTED_LISTINGS,
   INBOX_PLAN,
 } from './fixture.js';
@@ -340,13 +339,6 @@ export class DemoServer {
               at: DONE_MS,
             });
           }
-          run.added = SCRIPTED_ADDED;
-          // "I added bike times" is only said with the notes it changed: the
-          // Done sheet counts them as updated (#899, R-CONF-2).
-          run.updated = SCRIPTED_LISTINGS.map((item) => ({
-            path: (item.to ?? '').replace(/\.pdf$/, '.md'),
-            what: 'Added the bike time to your office',
-          }));
         }
         for (const reply of replies) this.applyReply(reply, date);
         const count = run.processed?.length ?? 0;
