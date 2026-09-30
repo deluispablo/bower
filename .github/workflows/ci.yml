@@ -180,10 +180,10 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-chromium-${{ steps.playwright.outputs.version }}
 
-      # The browser comes from the cache when it hits; the system libraries
-      # are installed every time.
+      # The browser comes from the cache when it hits. No apt: the runner
+      # image already has the system libraries Chromium needs (#902).
       - name: Install Chromium
-        run: pnpm -C app exec playwright install --with-deps chromium
+        run: pnpm -C app exec playwright install chromium
 
       - name: End-to-end tests (shard ${{ matrix.shard }} of 4)
         env:
