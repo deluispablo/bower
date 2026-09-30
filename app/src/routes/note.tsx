@@ -1053,7 +1053,11 @@ export function Note() {
             </>
           )}
           {canAppend && appendOpen && (
-            <AppendForm key={id} onAppend={handleAppend} />
+            <AppendForm
+              key={id}
+              onAppend={handleAppend}
+              onClose={() => setAppendOpen(false)}
+            />
           )}
         </>
       )}
