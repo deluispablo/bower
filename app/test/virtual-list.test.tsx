@@ -213,7 +213,9 @@ describe('Tree over VirtualList', () => {
     expect(items.length).toBeGreaterThan(0);
     expect(items.length).toBeLessThan(60);
     expect(
-      host.querySelector('[data-index="0"]')?.getAttribute('aria-level'),
+      host
+        .querySelector('[data-index="0"] [aria-level]')
+        ?.getAttribute('aria-level'),
     ).toBe('1');
     // The roving tab stop is rendered: the first row.
     expect(host.querySelector('a[tabindex="0"]')).not.toBeNull();

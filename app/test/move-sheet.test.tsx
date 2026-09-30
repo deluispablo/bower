@@ -38,7 +38,8 @@ vi.mock('../src/run-store.js', () => ({
   useRun: () => ({ phase: 'idle', process: mocks.process }),
 }));
 
-const { FolderChoice } = await import('../src/components/folder-picker.js');
+const { FolderChoice, openMoveTo } =
+  await import('../src/components/folder-picker.js');
 const { openSendToBower } = await import('../src/components/send-to-bower.js');
 
 function folder(path: string): DriveFile {
@@ -108,13 +109,6 @@ function click(el: Element): void {
   });
 }
 
-function type(input: HTMLInputElement, value: string): void {
-  void act(() => {
-    input.value = value;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-}
-
 async function flush(): Promise<void> {
   await act(async () => {
     for (let i = 0; i < 8; i += 1) await Promise.resolve();
@@ -150,15 +144,16 @@ function choice(onChoose = vi.fn(), chosen = ''): void {
 }
 
 describe('FolderChoice', () => {
-  it('shows the search field and the landmarks with their lines', () => {
+  it('is the tree alone: no "Find a folder" field, roots with their discs (#909)', () => {
     choice();
+    expect(document.body.querySelector('input')).toBeNull();
+    expect(document.body.textContent).not.toContain('Find a folder');
     expect(
-      document.body.querySelector('input')?.getAttribute('placeholder'),
-    ).toBe('Find a folder');
-    const text = document.body.textContent ?? '';
-    expect(text).toContain('Things with an end date');
-    expect(text).toContain('Parts of life that go on');
-    expect(text).toContain('Things to keep');
+      [...document.body.querySelectorAll('.folder-mark')].map((m) =>
+        m.getAttribute('data-kind'),
+      ),
+    ).toEqual(['projects', 'areas', 'resources', 'archives']);
+    expect(document.body.querySelector('.tree-guide')).not.toBeNull();
   });
 
   it('offers no Inbox, offers Archives, and opens the current folder in place', () => {
@@ -190,18 +185,60 @@ describe('FolderChoice', () => {
     );
     expect(radio('Flat hunt')).toBeTruthy();
   });
+});
 
-  it('filters by "Find a folder"', () => {
-    choice();
-    type(document.body.querySelector('input') as HTMLInputElement, 'gard');
-    expect(
-      radios().map((r) => r.querySelector('.folder-picker-name')?.textContent),
-    ).toEqual(['Garden']);
-    type(document.body.querySelector('input') as HTMLInputElement, 'zzz');
-    expect(radios()).toHaveLength(0);
+describe('Move to… (#909, PF-Move)', () => {
+  function moveTo(): void {
+    mount(null);
+    void act(() => {
+      openMoveTo({ subject: SUBJECT, name: NAME });
+    });
+  }
+
+  it('titles the sheet "Move to…" with its line and "Move here" off until a choice', () => {
+    moveTo();
+    expect(document.body.querySelector('h2')?.textContent).toBe('Move to…');
     expect(document.body.textContent).toContain(
-      'No folder has that in its name.',
+      `Pick a folder for ${NAME}. Bower moves it at the next tidy-up.`,
     );
+    expect(
+      document.body.querySelector('[aria-label="Close Move to"]'),
+    ).not.toBeNull();
+    expect(button('Move here').disabled).toBe(true);
+    click(radio('Resources'));
+    expect(document.body.textContent).toContain('Moving to Resources');
+    expect(button('Move here').disabled).toBe(false);
+  });
+
+  it('"Move here" queues the move and confirms by a toast with Undo', async () => {
+    moveTo();
+    click(radio('Garden'));
+    click(button('Move here'));
+    await flush();
+    expect(mocks.createTextFile).toHaveBeenCalledTimes(1);
+    const [parent, , content] = mocks.createTextFile.mock.calls[0] as string[];
+    expect(parent).toBe('INBOX_ID');
+    expect(content).toContain(
+      'Move “Lease agreement 2026” (2-Areas/Home/Lease agreement 2026.pdf) to 2-Areas/Garden.',
+    );
+    expect(currentToast()?.message).toBe(
+      'In your inbox. Bower moves it at the next tidy-up.',
+    );
+    expect(currentToast()?.action?.label).toBe('Undo');
+    expect(document.body.querySelector('.overlay-panel')).toBeNull();
+  });
+
+  it('says so and stays open when the move could not be written', async () => {
+    mocks.createTextFile.mockRejectedValue(new Error('offline'));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    moveTo();
+    click(radio('Resources'));
+    click(button('Move here'));
+    await flush();
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toBe(
+      'Could not send that. Try again.',
+    );
+    expect(document.body.querySelector('.overlay-panel')).not.toBeNull();
   });
 });
 

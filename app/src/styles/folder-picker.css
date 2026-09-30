@@ -1,135 +1,91 @@
 /*
- * The folder choice in the Move sheet (#608, #866): the body of the
- * send-to-Bower sheet in move mode. Colours are tokens only; the marks come
- * from `marks.css`.
+ * Move to… (#909, spec §3.36; PF-Move-375/1280): the explorer's tree rows
+ * (`tree.css`) as a choice of folder, then "Moving to …" and "Move here".
  */
 
 .folder-picker-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   min-height: 0;
-  padding: 0;
-}
-
-.folder-picker-search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-}
-
-.folder-picker-search input {
-  flex-grow: 1;
-  min-width: 0;
-  min-height: 44px;
-  border: none;
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  outline: none;
-}
-
-.folder-picker-search:focus-within {
-  border-color: var(--color-accent);
 }
 
 .folder-picker-list {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  max-height: 40vh;
   overflow-y: auto;
 }
 
-.folder-picker-row {
-  display: flex;
-  align-items: center;
-}
-
-.folder-picker-chevron,
-.folder-picker-chevron-gap {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  min-height: 44px;
-}
-
-.folder-picker-chevron {
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.folder-picker-open {
-  display: inline-flex;
-  transform: rotate(90deg);
-}
-
 .folder-picker-choice {
-  display: flex;
-  flex-grow: 1;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  min-height: 44px;
-  padding: var(--space-1) var(--space-2);
+  padding: 0;
+  background: none;
   border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text);
   font: inherit;
   text-align: left;
-  cursor: pointer;
 }
 
-.folder-picker-landmark .folder-picker-choice {
-  min-height: 56px;
+.folder-picker-choice:focus-visible {
+  outline: 2px solid var(--color-focus, var(--color-brand));
+  outline-offset: -2px;
+  border-radius: 6px;
 }
 
-.folder-picker-choice:hover:not(:disabled) {
-  background: var(--color-surface-hover);
+/* Where it is now: muted, not on offer. */
+.folder-picker-current {
+  color: var(--color-text-muted);
+  font-weight: 400;
 }
 
-.folder-picker-choice:disabled {
-  opacity: 0.55;
+.folder-picker-current .folder-picker-choice {
   cursor: default;
 }
 
-.folder-picker-text {
+.move-to {
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  gap: var(--space-3);
+  min-height: 0;
 }
 
-.folder-picker-landmark .folder-picker-name {
-  font-weight: var(--weight-bold);
+.move-to-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
-.folder-picker-meaning {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-
-.folder-picker-tick {
-  display: inline-flex;
-  margin-left: auto;
-  color: var(--color-accent);
-}
-
-.folder-picker-empty,
-.folder-picker-note {
+.move-to-title {
   margin: 0;
-  padding: var(--space-1) 2px;
-  font-size: var(--text-sm);
-  line-height: 1.45;
+  color: var(--color-heading);
+  font-family: var(--font-display, Poppins, sans-serif);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.move-to-sub {
+  margin: 4px 0 0;
   color: var(--color-text-muted);
+  font-size: 15px;
+}
+
+.move-to-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.move-to-line {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.move-to-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+.move-to-primary {
+  width: 100%;
+  min-height: 48px;
 }

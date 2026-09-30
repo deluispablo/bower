@@ -5,7 +5,12 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SidebarSeparator } from '../src/components/sidebar-separator.js';
-import { Tree, rowDescription } from '../src/components/tree.js';
+import {
+  TREE_ROW_HEIGHT,
+  Tree,
+  typeAheadIndex,
+} from '../src/components/tree.js';
+import type { TreeProps } from '../src/components/tree.js';
 import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import { folderHref } from '../src/navigation.js';
@@ -92,7 +97,7 @@ async function settle(): Promise<void> {
   });
 }
 
-async function mount(props: { rootMeanings?: boolean } = {}): Promise<void> {
+async function mount(props: Partial<TreeProps> = {}): Promise<void> {
   await act(() => {
     render(h(Tree, { index: buildVaultIndex(files), ...props }), host);
   });
@@ -100,7 +105,9 @@ async function mount(props: { rootMeanings?: boolean } = {}): Promise<void> {
 }
 
 beforeEach(() => {
-  state.saved = undefined;
+  // An empty stored state, so a folder opened by an earlier test (kept in
+  // the tree's module memory) starts closed again.
+  state.saved = { expanded: [], scroll: 0 };
   state.newIds = new Set();
   host = document.createElement('div');
   document.body.append(host);
@@ -117,26 +124,39 @@ function topRows(): string[] {
   );
 }
 
-describe('Tree v4', () => {
-  it('shows the Inbox count even at 0, and no other folder at 0', async () => {
+function link(path: string): HTMLAnchorElement {
+  const el = host.querySelector<HTMLAnchorElement>(
+    `a[href="${folderHref(path)}"]`,
+  );
+  if (el === null) throw new Error(`${path} missing`);
+  return el;
+}
+
+function keydown(el: Element, key: string): Promise<void> {
+  return act(() => {
+    el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  });
+}
+
+describe('Tree (#909): one tree, three hosts', () => {
+  it('sizes rows by host: 28 px in the sidebar, 40 px in the drawer and the Folders tab', async () => {
+    expect(TREE_ROW_HEIGHT).toEqual({ sidebar: 28, drawer: 40, page: 40 });
     await mount();
-    const count = (path: string): string | undefined =>
-      host.querySelector(`a[href="${folderHref(path)}"] .tree-count`)
-        ?.textContent ?? undefined;
-    expect(count('0-Inbox')).toBe('0');
-    expect(count('2-Areas')).toBeUndefined();
+    expect(host.querySelector('.tree-wrap.tree-host-sidebar')).not.toBeNull();
+    await mount({ host: 'drawer' });
+    expect(host.querySelector('.tree-wrap.tree-host-drawer')).not.toBeNull();
+    await mount({ host: 'page' });
+    expect(host.querySelector('.tree-wrap.tree-host-page')).not.toBeNull();
   });
 
-  it('shows the five landmarks with marks and meanings, a divider, then neutral folders', async () => {
-    await mount({ rootMeanings: true });
+  it('shows the five roots with their discs; Answers and Clippings sit under the tree', async () => {
+    await mount({ host: 'page' });
     expect(topRows()).toEqual([
       'Inbox',
       'Projects',
       'Areas',
       'Resources',
       'Archives',
-      'Answers',
-      'Clippings',
     ]);
     const marks = [...host.querySelectorAll('.folder-mark')];
     expect(marks.map((m) => m.getAttribute('data-kind'))).toEqual([
@@ -146,31 +166,24 @@ describe('Tree v4', () => {
       'resources',
       'archives',
     ]);
-    expect(marks[0]?.classList.contains('folder-mark-28')).toBe(true);
-    expect(host.querySelector('.tree-meaning')?.textContent).toBe(
-      'Waiting for the next tidy-up',
-    );
-    // Answers and Clippings: neutral folder icon, no tint.
-    const neutral = [...host.querySelectorAll('.folder-icon')].map((n) =>
-      n.getAttribute('data-tint'),
-    );
-    expect(neutral).toEqual([null, null]);
-    // The divider sits between Archives and Answers.
-    const items = [...host.querySelectorAll('.tree > li')];
-    const at = items.findIndex((li) => li.classList.contains('tree-divider'));
-    expect(items[at - 1]?.textContent).toContain('Archives');
-    expect(items[at + 1]?.textContent).toContain('Answers');
   });
 
-  it('uses 18 px marks and the short meaning on the desktop sidebar', async () => {
-    await mount();
-    expect(
-      host.querySelector('.folder-mark')?.classList.contains('folder-mark-18'),
-    ).toBe(true);
-    const meanings = [...host.querySelectorAll('.tree-meaning')].map(
-      (n) => n.textContent,
-    );
-    expect(meanings).toContain('Parts of life that go on');
+  it('draws no counts, meanings, badges or new tags on any host (K-1)', async () => {
+    state.newIds = new Set(['id4']);
+    state.saved = {
+      expanded: ['1-Projects', '1-Projects/Flat hunt'],
+      scroll: 0,
+    };
+    for (const hostName of ['sidebar', 'drawer', 'page'] as const) {
+      await mount({ host: hostName });
+      expect(host.querySelector('.tree-count')).toBeNull();
+      expect(host.querySelector('.tree-meaning')).toBeNull();
+      expect(host.querySelector('.kind-badge')).toBeNull();
+      expect(host.querySelector('.new-tag')).toBeNull();
+      expect(link('1-Projects').querySelector('.tree-name')?.textContent).toBe(
+        'Projects',
+      );
+    }
   });
 
   it('names each chevron "Expand <name>" / "Collapse <name>" and expands in place', async () => {
@@ -183,37 +196,29 @@ describe('Tree v4', () => {
     expect(
       host.querySelector('button[aria-label="Collapse Projects"]'),
     ).not.toBeNull();
-    expect(
-      host.querySelector(`a[href="${folderHref('1-Projects/Flat hunt')}"]`),
-    ).not.toBeNull();
+    expect(link('1-Projects/Flat hunt')).not.toBeNull();
   });
 
-  it('shows files as rows with their badge, sorted by title, and tints subfolders', async () => {
+  it('gives an empty folder no chevron and no aria-expanded', async () => {
+    await mount();
+    expect(link('2-Areas').hasAttribute('aria-expanded')).toBe(false);
+    expect(host.querySelector('button[aria-label="Expand Areas"]')).toBeNull();
+  });
+
+  it('lists files and notes by title with depth guides', async () => {
     state.saved = {
       expanded: ['1-Projects', '1-Projects/Flat hunt'],
       scroll: 0,
     };
     await mount();
-    const flatIcon = host.querySelector(
-      `a[href="${folderHref('1-Projects/Flat hunt')}"] .folder-icon`,
-    );
-    expect(flatIcon?.getAttribute('data-tint')).toBe('projects');
     const leaves = [
       ...host.querySelectorAll('[aria-level="3"] .tree-name'),
     ].map((n) => n.textContent);
     expect(leaves).toEqual(['Budget', 'Lease', 'Window sign']);
-    const badges = [...host.querySelectorAll('.kind-badge')].map(
-      (n) => n.textContent,
-    );
-    expect(badges).toEqual(['PDF', 'JPG']);
-    expect(host.querySelector('a[href^="/file/"]')).not.toBeNull();
-    expect(host.querySelector('a[href^="/note/"]')).not.toBeNull();
-    // The folder's count equals its rows.
+    const lease = host.querySelector('a[href^="/file/"]');
     expect(
-      host.querySelector(
-        `a[href="${folderHref('1-Projects/Flat hunt')}"] .tree-count`,
-      )?.textContent,
-    ).toBe('3');
+      lease?.closest('.tree-row')?.querySelectorAll('.tree-guide'),
+    ).toHaveLength(2);
   });
 
   it('restores expanded folders and saves a change', async () => {
@@ -224,61 +229,112 @@ describe('Tree v4', () => {
     ).not.toBeNull();
     await act(() =>
       host
-        .querySelector<HTMLButtonElement>('button[aria-label="Expand Areas"]')
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Collapse Projects"]',
+        )
         ?.click(),
     );
-    expect([...(state.saved?.expanded ?? [])].sort()).toEqual([
-      '1-Projects',
-      '2-Areas',
-    ]);
+    expect(state.saved?.expanded).toEqual([]);
   });
 
-  it('tags new rows and the folder holding them', async () => {
+  it('selects the open item and colours the folder holding it', async () => {
     const index = buildVaultIndex(files);
-    state.newIds = new Set([
-      index.byPath.get('1-Projects/Flat hunt/Lease.pdf')?.id ?? '',
-    ]);
-    state.saved = {
-      expanded: ['1-Projects', '1-Projects/Flat hunt'],
-      scroll: 0,
-    };
+    const budget = index.byPath.get('1-Projects/Flat hunt/Budget.md');
     await act(() => {
-      render(h(Tree, { index }), host);
+      render(
+        h(Tree, { index, revealPath: budget?.path, currentId: budget?.id }),
+        host,
+      );
     });
     await settle();
-    expect(host.querySelector('[aria-expanded="true"]')).not.toBeNull();
-    const tags = [...host.querySelectorAll('.new-tag')].map(
-      (n) => n.textContent,
+    const row = host.querySelector(`a[href="/note/${budget?.id ?? ''}"]`);
+    expect(row?.getAttribute('aria-selected')).toBe('true');
+    expect(
+      row?.closest('.tree-row')?.classList.contains('tree-row-selected'),
+    ).toBe(true);
+    expect(link('1-Projects/Flat hunt').getAttribute('style')).toContain(
+      '--color-para-projects',
     );
-    expect(tags).toContain('New');
-    expect(tags).toContain('1 new');
+    expect(link('1-Projects').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it("adds the Bower's own files group only when asked", async () => {
+    const withApp = [...files, entry('Bower - Rules.md')];
+    await act(() => {
+      render(h(Tree, { index: buildVaultIndex(withApp) }), host);
+    });
+    expect(host.querySelector('.tree-app-label')).toBeNull();
+    await act(() => {
+      render(
+        h(Tree, { index: buildVaultIndex(withApp), showAppFiles: true }),
+        host,
+      );
+    });
+    expect(host.querySelector('.tree-app-label')?.textContent).toBe(
+      "Bower's own files",
+    );
   });
 });
 
-describe('Tree names and descriptions (R-SIDE-3)', () => {
-  it('names each link by the item alone, with a tooltip and a description', async () => {
-    state.newIds = new Set(['id4']);
+describe('Tree ARIA and keyboard (R-EXP-9)', () => {
+  it('is a tree of treeitems with level, expanded and selected', async () => {
     await mount();
-    const folder = host.querySelector<HTMLElement>(
-      `a[href="${folderHref('1-Projects')}"]`,
-    );
-    expect(folder?.getAttribute('aria-label')).toBe('Projects');
-    expect(folder?.getAttribute('title')).toBe('Projects');
-    const descId = folder?.getAttribute('aria-describedby') ?? '';
-    expect(host.querySelector(`#${descId}`)?.textContent).toBe(
-      '3 items, 1 new',
-    );
-    const inbox = host.querySelector<HTMLElement>(
-      `a[href="${folderHref('0-Inbox')}"]`,
-    );
-    expect(inbox?.getAttribute('aria-describedby')).toBeNull();
+    const tree = host.querySelector('[role="tree"]');
+    expect(tree?.getAttribute('aria-label')).toBe('Your folders');
+    const projects = link('1-Projects');
+    expect(projects.getAttribute('role')).toBe('treeitem');
+    expect(projects.getAttribute('aria-level')).toBe('1');
+    expect(projects.getAttribute('aria-expanded')).toBe('false');
+    expect(projects.getAttribute('aria-selected')).toBe('false');
+    expect(projects.getAttribute('title')).toBe('Projects');
+    expect(
+      host.querySelectorAll('[role="treeitem"][tabindex="0"]'),
+    ).toHaveLength(1);
   });
 
-  it('describes counts and New in words', () => {
-    expect(rowDescription(3, 0)).toBe('3 items');
-    expect(rowDescription(1, 2)).toBe('1 item, 2 new');
-    expect(rowDescription(0, 0)).toBeUndefined();
-    expect(rowDescription(undefined, 0, true)).toBe('New');
+  it('Right expands then enters, Left goes to the parent then collapses', async () => {
+    await mount();
+    link('1-Projects').focus();
+    await keydown(link('1-Projects'), 'ArrowRight');
+    expect(link('1-Projects').getAttribute('aria-expanded')).toBe('true');
+    await keydown(link('1-Projects'), 'ArrowRight');
+    expect(document.activeElement).toBe(link('1-Projects/Flat hunt'));
+    await keydown(link('1-Projects/Flat hunt'), 'ArrowLeft');
+    expect(document.activeElement).toBe(link('1-Projects'));
+    await keydown(link('1-Projects'), 'ArrowLeft');
+    expect(link('1-Projects').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('Up/Down, Home/End and type-ahead move focus', async () => {
+    await mount();
+    link('0-Inbox').focus();
+    await keydown(link('0-Inbox'), 'ArrowDown');
+    expect(document.activeElement).toBe(link('1-Projects'));
+    await keydown(link('1-Projects'), 'End');
+    expect(document.activeElement).toBe(link('4-Archives'));
+    await keydown(link('4-Archives'), 'Home');
+    expect(document.activeElement).toBe(link('0-Inbox'));
+    await keydown(link('0-Inbox'), 'r');
+    expect(document.activeElement).toBe(link('3-Resources'));
+  });
+
+  it('type-ahead finds the next name with that start, wrapping', () => {
+    const names = ['Inbox', 'Projects', 'Areas', 'Resources', 'Archives'];
+    expect(typeAheadIndex(names, 0, 'a')).toBe(2);
+    expect(typeAheadIndex(names, 2, 'a')).toBe(4);
+    expect(typeAheadIndex(names, 4, 'a')).toBe(2);
+    expect(typeAheadIndex(names, 0, 'ar')).toBe(2);
+    expect(typeAheadIndex(names, 1, 'z')).toBe(1);
+  });
+
+  it('a double click on a folder name toggles it', async () => {
+    await mount();
+    await act(() => {
+      link('1-Projects').dispatchEvent(
+        new MouseEvent('dblclick', { bubbles: true }),
+      );
+    });
+    expect(link('1-Projects').getAttribute('aria-expanded')).toBe('true');
   });
 });
 

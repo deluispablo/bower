@@ -6,6 +6,7 @@
  * tab, and the link the More menu's "Show in folders" uses.
  */
 
+import { openFoldersDrawer } from './folders-drawer.js';
 import type { VaultIndex } from './vault-index.js';
 
 export type RevealKind = 'note' | 'file' | 'folder';
@@ -107,4 +108,57 @@ export function targetFromReveal(
 ): RevealTarget | null {
   if (value === undefined || value === '') return null;
   return targetFromRoute(`/${value}`, index);
+}
+
+/** The window width from which the desktop sidebar shows (`layout.tsx`). */
+const DESKTOP_QUERY = '(min-width: 900px)';
+
+/** A "reveal this" request (`revealInFolders`); `seq` tells requests apart. */
+export interface RevealRequest {
+  path: string;
+  /** A note or file's id; not set for a folder. */
+  id?: string;
+  seq: number;
+  /** The route it was made on: it holds until the person leaves it. */
+  at: string;
+}
+
+let request: RevealRequest | null = null;
+let requestSeq = 0;
+const requestListeners = new Set<() => void>();
+
+/** The latest `revealInFolders` request, or `null` before any. */
+export function revealRequest(): RevealRequest | null {
+  return request;
+}
+
+export function subscribeReveal(listener: () => void): () => void {
+  requestListeners.add(listener);
+  return () => {
+    requestListeners.delete(listener);
+  };
+}
+
+/**
+ * Shows `path` in the explorer (#909, E-17): opens the drawer on the phone
+ * or points the desktop sidebar at it, expands its ancestors, scrolls its
+ * row into view, selects it and moves focus to it. `id` names a note or
+ * file; leave it out for a folder. Used by ⋯ "Show in folders", the tool
+ * "Show the open item" and the root crumb (#906).
+ */
+export function revealInFolders(path: string, id?: string): void {
+  requestSeq += 1;
+  const at = window.location.pathname;
+  request =
+    id === undefined
+      ? { path, seq: requestSeq, at }
+      : { path, id, seq: requestSeq, at };
+  rememberTarget(
+    id === undefined ? { kind: 'folder', path } : { kind: 'note', id, path },
+  );
+  const desktop =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia(DESKTOP_QUERY).matches;
+  if (!desktop) openFoldersDrawer();
+  for (const listener of requestListeners) listener();
 }

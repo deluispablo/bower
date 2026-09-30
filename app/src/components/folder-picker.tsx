@@ -1,26 +1,43 @@
 /**
- * The folder choice of the Move sheet (#866, spec §6.9 R-MOVE-1 to R-MOVE-4,
- * §6.13): the "Find a folder" field and the folder tree, the body of the
- * send-to-Bower sheet's move mode. The app never moves anything itself (D1);
- * the sheet writes the request (`move-request.ts`).
+ * Move to… (#909, spec §3.36, R-EDITS-2; boards PF-Move-375/1280): the
+ * explorer's tree, folders only, as a choice of destination. The app never
+ * moves anything itself (D1): "Move here" writes a request note into the
+ * inbox (`move-request.ts`) and confirms by a toast with Undo.
  *
- * The list is a radio group: the landmarks (with their short meaning
- * lines) and their folders, each landmark expandable through its own
- * chevron button. The folder the thing sits in now is disabled, the chosen
- * one ticked. "Find a folder" swaps the tree for a flat list of matches.
+ * `FolderChoice` is the tree alone (same rows, guides, chevrons and icons as
+ * `tree.tsx`; the folder the thing sits in now is muted and not on offer;
+ * the chosen one is selected). `MoveToSheet` / `openMoveTo` is the whole
+ * sheet: "Move to…", the line "Pick a folder for <name>. Bower moves it at
+ * the next tidy-up.", the tree, "Moving to <folder>" and "Move here".
  */
 
 import { useMemo, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
-import { folderMeaning } from '../folder-meanings.js';
-import { currentFolderOf, findFolders } from '../move-request.js';
+import { createTextFile, deleteFile } from '../drive.js';
+import { FOLDER_MIME } from '../drive.js';
+import {
+  currentFolderOf,
+  moveRequestText,
+  pickerFolders,
+  undoRequestNote,
+  writeRequestNote,
+} from '../move-request.js';
 import type { MoveSubject } from '../move-request.js';
-import { displayName, displayPath, paraKindOf } from '../navigation.js';
+import { buildTree, displayName, paraKindOf } from '../navigation.js';
 import type { TreeNode } from '../navigation.js';
+import { close, open, OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { ancestorsOf } from '../reveal.js';
-import { FolderIcon, FolderMark } from './folder-mark.js';
-import { IconCheck, IconChevronRight, IconSearch } from './icons.js';
+import { useSession } from '../session.js';
+import { showToast } from '../toast-store.js';
+import { useVault } from '../vault-store.js';
+import { FileIcon } from './file-icon.js';
+import { FolderMark } from './folder-mark.js';
+import { IconChevronRight, IconClose } from './icons.js';
+import { Overlay } from './overlay.js';
+import { TREE_INDENT } from './tree.js';
+
+import '../styles/tree.css';
 import '../styles/folder-picker.css';
 
 export interface FolderChoiceProps {
@@ -44,16 +61,13 @@ export function FolderChoice({
   onChoose,
 }: FolderChoiceProps): JSX.Element {
   const current = currentFolderOf(subject);
-  const [query, setQuery] = useState('');
   // The current folder's ancestors start open, so it is visible in place.
-  const [open, setOpen] = useState<ReadonlySet<string>>(
+  const [openPaths, setOpenPaths] = useState<ReadonlySet<string>>(
     () => new Set(ancestorsOf(`${current}/x`)),
   );
-  const matches = useMemo(() => findFolders(folders, query), [folders, query]);
-  const searching = query.trim() !== '';
 
   function toggle(path: string): void {
-    setOpen((prev) => {
+    setOpenPaths((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
@@ -61,68 +75,67 @@ export function FolderChoice({
     });
   }
 
-  function choice(node: TreeNode, depth: number, flat: boolean): JSX.Element {
+  function choice(node: TreeNode, depth: number): JSX.Element {
     const isCurrent = node.path === current;
     const isChosen = node.path === chosen;
-    const top = depth === 0;
-    const kind = paraKindOf(topOf(node.path));
-    const meaning = top ? folderMeaning(node.path, 'short') : undefined;
-    const expandable = !flat && node.folders.length > 0;
-    const expanded = open.has(node.path);
+    const root = paraKindOf(topOf(node.path));
+    const expandable = node.folders.length > 0;
+    const expanded = openPaths.has(node.path);
     const label = displayName(node.name);
     return (
       <div
         key={node.path}
-        class={`folder-picker-row${top ? ' folder-picker-landmark' : ''}${flat ? ' folder-picker-flat' : ''}`}
-        style={flat ? undefined : { paddingLeft: `${depth * 18}px` }}
+        class={[
+          'tree-row',
+          'folder-picker-row',
+          depth === 0 && 'tree-root',
+          isChosen && 'tree-row-selected',
+          isCurrent && 'folder-picker-current',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        style={{ paddingLeft: `${depth * TREE_INDENT + 4}px` }}
       >
-        {flat ? null : expandable ? (
+        {Array.from({ length: depth }, (_, k) => (
+          <span
+            key={k}
+            class="tree-guide"
+            aria-hidden="true"
+            style={{ left: `${10 + k * TREE_INDENT}px` }}
+          />
+        ))}
+        {expandable ? (
           <button
             type="button"
-            class="folder-picker-chevron"
+            class={`tree-chevron${expanded ? ' tree-chevron-open' : ''}`}
             aria-label={`${expanded ? 'Collapse' : 'Expand'} ${label}`}
             aria-expanded={expanded}
             onClick={() => toggle(node.path)}
           >
-            <span class={expanded ? 'folder-picker-open' : undefined}>
-              <IconChevronRight />
-            </span>
+            <IconChevronRight />
           </button>
         ) : (
-          <span class="folder-picker-chevron-gap" aria-hidden="true" />
+          <span class="tree-spacer" aria-hidden="true" />
         )}
         <button
           type="button"
           role="radio"
-          class="folder-picker-choice"
+          class="tree-link folder-picker-choice"
           aria-checked={isChosen}
           disabled={isCurrent}
+          title={label}
           onClick={() => onChoose(node.path)}
         >
-          {top && kind !== null ? (
-            <FolderMark kind={kind} size={28} />
+          {depth === 0 && root !== null ? (
+            <FolderMark kind={root} size={18} />
           ) : (
-            <FolderIcon tint={kind ?? undefined} />
+            <FileIcon
+              item={{ name: node.name, mimeType: FOLDER_MIME, path: node.path }}
+              size={16}
+            />
           )}
-          <span class="folder-picker-text">
-            <span class="folder-picker-name">{label}</span>
-            {meaning !== undefined && (
-              <span class="folder-picker-meaning">{meaning}</span>
-            )}
-            {flat && (
-              <span class="folder-picker-meaning">
-                {displayPath(node.path)}
-              </span>
-            )}
-            {isCurrent && (
-              <span class="folder-picker-meaning">Where it is now</span>
-            )}
-          </span>
-          {isChosen && (
-            <span class="folder-picker-tick">
-              <IconCheck />
-            </span>
-          )}
+          <span class="tree-name folder-picker-name">{label}</span>
+          {isCurrent && <span class="tree-sr"> (where it is now)</span>}
         </button>
       </div>
     );
@@ -130,37 +143,156 @@ export function FolderChoice({
 
   function tree(nodes: readonly TreeNode[], depth: number): JSX.Element[] {
     return nodes.flatMap((node) => [
-      choice(node, depth, false),
-      ...(open.has(node.path) ? tree(node.folders, depth + 1) : []),
+      choice(node, depth),
+      ...(openPaths.has(node.path) ? tree(node.folders, depth + 1) : []),
     ]);
   }
 
   return (
-    <div class="folder-picker-body">
-      <label class="folder-picker-search">
-        <IconSearch />
-        <input
-          type="search"
-          placeholder="Find a folder"
-          aria-label="Find a folder"
-          value={query}
-          onInput={(event) => setQuery(event.currentTarget.value)}
-        />
-      </label>
+    <div class="folder-picker-body tree-wrap tree-host-drawer">
       <div
         class="folder-picker-list"
         role="radiogroup"
         aria-label="Destination folder"
       >
-        {searching
-          ? matches.map((node) => choice(node, 0, true))
-          : tree(folders, 0)}
-        {searching && matches.length === 0 && (
-          <p class="folder-picker-empty" role="status">
-            No folder has that in its name.
-          </p>
-        )}
+        {tree(folders, 0)}
       </div>
     </div>
   );
+}
+
+export interface MoveToProps {
+  subject: MoveSubject;
+  /** What is being moved, as the person reads it ("Moonee Ponds"). */
+  name: string;
+  onClose: () => void;
+}
+
+/** The whole Move to… sheet (phone) / panel (desktop). */
+export function MoveToSheet({
+  subject,
+  name,
+  onClose,
+}: MoveToProps): JSX.Element {
+  const { me } = useSession();
+  const { index, refresh } = useVault();
+  const [chosen, setChosen] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const folders = useMemo(
+    () => (index === null ? [] : pickerFolders(buildTree(index), subject)),
+    [index, subject.path, subject.isFolder],
+  );
+  const inboxFolderId = me?.vault?.inboxFolderId ?? null;
+
+  async function undo(id: string): Promise<void> {
+    const result = await undoRequestNote(deleteFile, id);
+    if (result === 'failed') {
+      showToast("Couldn't take that back. It is still in your inbox.");
+      return;
+    }
+    void refresh();
+    showToast('Taken out of your inbox.');
+  }
+
+  async function moveHere(): Promise<void> {
+    if (chosen === '') return;
+    if (inboxFolderId === null) {
+      setError('Could not send that. Try again.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    let id: string | null;
+    try {
+      id = await writeRequestNote(
+        { createTextFile },
+        {
+          inboxFolderId,
+          text: moveRequestText(name, subject.path, chosen),
+          now: new Date(),
+        },
+      );
+    } catch (err) {
+      console.error(err);
+      setBusy(false);
+      setError('Could not send that. Try again.');
+      return;
+    }
+    void refresh();
+    showToast(
+      'In your inbox. Bower moves it at the next tidy-up.',
+      undefined,
+      id === null ? undefined : { label: 'Undo', run: () => void undo(id) },
+    );
+    onClose();
+  }
+
+  const destination =
+    chosen === '' ? '' : displayName(chosen.slice(chosen.lastIndexOf('/') + 1));
+
+  return (
+    <Overlay kind="sheet" labelledBy="move-to-title" onClose={onClose}>
+      <div class="move-to">
+        <header class="move-to-head">
+          <div>
+            <h2 id="move-to-title" class="move-to-title">
+              Move to…
+            </h2>
+            <p class="move-to-sub">
+              Pick a folder for {name}. Bower moves it at the next tidy-up.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="icon-button move-to-close"
+            aria-label="Close Move to"
+            onClick={onClose}
+          >
+            <IconClose />
+          </button>
+        </header>
+        <FolderChoice
+          subject={subject}
+          folders={folders}
+          chosen={chosen}
+          onChoose={(path) => {
+            setError(null);
+            setChosen(path);
+          }}
+        />
+        <div class="move-to-foot">
+          {destination !== '' && (
+            <p class="move-to-line" aria-live="polite">
+              Moving to {destination}
+            </p>
+          )}
+          {error !== null && (
+            <p class="move-to-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button
+            type="button"
+            class="button move-to-primary"
+            disabled={busy || chosen === ''}
+            onClick={() => void moveHere()}
+          >
+            Move here
+          </button>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+const MOVE_TO_ID = 'move-to';
+
+/** Opens Move to… on the overlay queue (⋯ "Move to…", #907). */
+export function openMoveTo(props: Omit<MoveToProps, 'onClose'>): void {
+  open({
+    id: MOVE_TO_ID,
+    priority: OVERLAY_PRIORITY.own,
+    render: () => <MoveToSheet {...props} onClose={() => close(MOVE_TO_ID)} />,
+  });
 }

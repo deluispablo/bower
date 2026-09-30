@@ -76,12 +76,14 @@ import { useVault } from '../vault-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
 import { DemoBanner } from './demo-banner.js';
-import { Explorer, useHealthIsNew } from './explorer.js';
+import { openFoldersDrawer } from '../folders-drawer.js';
+import { Explorer, HEALTH_PATH } from './explorer.js';
 import { SidebarSeparator } from './sidebar-separator.js';
 import { useShellSlots } from './shell-slots.js';
 import {
   IconChat,
   IconFolder,
+  IconHeart,
   IconHome,
   IconPanel,
   IconPlus,
@@ -137,26 +139,24 @@ const SETTINGS: NavLink = {
   label: 'Settings',
   Icon: IconSliders,
 };
+/** Health check (K-30, R-SIDEBAR-3): a sidebar nav item on desktop. */
+const HEALTH: NavLink = {
+  href: HEALTH_PATH,
+  label: 'Health check',
+  Icon: IconHeart,
+};
 
 /** The four tabs at the bottom of the phone (§3.2, R-TABBAR-1 as the owner
  * review renamed it): Home, Folders, Add, Bower. */
 const TABS: readonly NavLink[] = [HOME, FOLDERS, ADD, BOWER];
 
-/** The desktop sidebar's links (§3.3): Home, Add, Bower, Settings; there is
- * no Folders item (the tree below is the Folders tab there). The explorer
- * adds its Health check row right after them. */
-const SIDEBAR_LINKS: readonly NavLink[] = [HOME, ADD, BOWER, SETTINGS];
+/** The desktop sidebar's links (§3.3): Home, Add, Bower, Settings, Health
+ * check; there is no Folders item (the tree below is the Folders tab
+ * there). */
+const SIDEBAR_LINKS: readonly NavLink[] = [HOME, ADD, BOWER, SETTINGS, HEALTH];
 
 function currentFor(href: string, path: string): 'page' | undefined {
   return href === path ? 'page' : undefined;
-}
-
-/**
- * The files button's action (R-TOPBAR-4 belongs to #909, which builds the
- * drawer): until the drawer lands, "Open your folders" opens the Folders tab.
- */
-function openYourFolders(route: (url: string) => void): void {
-  route(FOLDERS_PATH);
 }
 
 /**
@@ -331,7 +331,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
     return () => observer.disconnect();
   }, []);
 
-  const healthIsNew = useHealthIsNew();
   const pending = inboxTotal(inboxCount(files, status === 'loading'));
 
   const sidebarNav = (
@@ -385,11 +384,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           explorer (`data-tour` in explorer.tsx), not this whole column. */}
       <div class="shell-sidebar">
         <nav class="shell-sidebar-nav" aria-label={FOLDERS_LANDMARK}>
-          <Explorer
-            variant="sidebar"
-            healthIsNew={healthIsNew}
-            nav={sidebarNav}
-          />
+          <Explorer variant="sidebar" nav={sidebarNav} />
         </nav>
         {/* The ledge (#741): a 66 px strip under the explorer, decoration
             only, so outside the landmark and hidden from assistive tech. */}
@@ -421,9 +416,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
                   type="button"
                   class="topbar-files"
                   aria-label="Open your folders"
-                  onClick={() => {
-                    openYourFolders(route);
-                  }}
+                  onClick={openFoldersDrawer}
                 >
                   <IconPanel />
                 </button>

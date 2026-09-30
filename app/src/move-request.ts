@@ -11,12 +11,7 @@
 import type { RunScope } from './api.js';
 import { INSTRUCTION_APP_PROPERTIES } from './drive.js';
 import { runNow } from './run-now.js';
-import {
-  displayName,
-  displayPath,
-  folderOf,
-  paraKindOf,
-} from './navigation.js';
+import { displayPath, folderOf, paraKindOf } from './navigation.js';
 import type { TreeNode } from './navigation.js';
 import { instructionFileName, instructionNote } from './tell.js';
 
@@ -68,9 +63,9 @@ export function currentFolderOf(subject: MoveSubject): string {
 }
 
 /**
- * The folders the picker offers, as a tree of folders only. Inbox (and
- * everything in it) is never a destination (board `Phone-Move-Picker`, lead
- * ruling); a folder being moved is not offered inside itself. The current
+ * The folders the picker offers, as a tree of folders only: the four roots
+ * drawn on PF-Move (#909). Inbox (and everything in it), Answers, Clippings
+ * and any other top folder are never a destination; a folder being moved is not offered inside itself. The current
  * folder stays in the tree (the picker shows it disabled).
  */
 export function pickerFolders(
@@ -85,32 +80,11 @@ export function pickerFolders(
     };
   }
   return root.folders
-    .filter((top) => paraKindOf(top.name) !== 'inbox')
+    .filter((top) => {
+      const kind = paraKindOf(top.name);
+      return kind !== null && kind !== 'inbox';
+    })
     .flatMap((top) => keep(top) ?? []);
-}
-
-/**
- * The "Find a folder" filter: every folder at any depth whose name has
- * `query` in it (case-insensitive, numeric prefix ignored), in tree order.
- * A blank query gives none: the picker then shows the tree.
- */
-export function findFolders(
-  nodes: readonly TreeNode[],
-  query: string,
-): TreeNode[] {
-  const needle = query.trim().toLowerCase();
-  if (needle === '') return [];
-  const out: TreeNode[] = [];
-  function walk(list: readonly TreeNode[]): void {
-    for (const node of list) {
-      if (displayName(node.name).toLowerCase().includes(needle)) {
-        out.push(node);
-      }
-      walk(node.folders);
-    }
-  }
-  walk(nodes);
-  return out;
 }
 
 /** How a send ended: `run-failed` means the note is written, the run is not. */

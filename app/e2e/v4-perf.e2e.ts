@@ -88,7 +88,7 @@ for (const mode of ['page', 'box'] as const) {
       await page.goto(mode === 'box' ? `${HARNESS}#box` : HARNESS);
       // Every folder opens: 20 batches, 2,000 notes, 2,021 rows.
       await expect(
-        page.locator('a.tree-folder-link', { hasText: 'Batch 00' }),
+        page.locator('a.tree-link', { hasText: 'Batch 00' }),
       ).toBeVisible();
     });
 
@@ -101,7 +101,7 @@ for (const mode of ['page', 'box'] as const) {
     test('the arrow keys move focus row by row, far past the first screen', async ({
       page,
     }) => {
-      await page.locator('a.tree-folder-link', { hasText: 'Batch 00' }).focus();
+      await page.locator('a.tree-link', { hasText: 'Batch 00' }).focus();
 
       // Batch 00 holds Note 0000 to Note 0099: 80 presses walk well past
       // the rows rendered at the start.

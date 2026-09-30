@@ -151,48 +151,35 @@ describe('Notes (#353)', () => {
     expect(openSwitcher).toHaveBeenCalledOnce();
   });
 
-  it('has no sort button, only the tree', () => {
+  it('has YOUR FOLDERS with its three tools (#909)', () => {
     mount();
-    expect(root.querySelector('[aria-label^="Sort by"]')).toBeNull();
     expect(query('.explorer-label').textContent).toBe('Your folders');
-    expect(root.querySelector('.explorer-tool')).toBeNull();
+    expect(
+      Array.from(root.querySelectorAll('.explorer-tool')).map((b) =>
+        b.getAttribute('aria-label'),
+      ),
+    ).toEqual(['Show the open item', 'Sort', 'Collapse all folders']);
   });
 
-  it("shows a root folder's meaning and count, but not a project's", () => {
+  it('draws the tree with no counts, meanings, badges or new tags (K-1)', () => {
     mount();
-    const inbox = query('.tree-folder-link[href="/folder/0-Inbox"]');
-    expect(inbox.querySelector('.tree-meaning')?.textContent).toBe(
-      'Waiting for the next tidy-up',
-    );
-    // Expand 2-Areas (its own chevron, not 0-Inbox's) to reveal Cooking,
-    // a non-root folder.
-    const areasChevron = query('a[href="/folder/2-Areas"]')
-      .closest('.tree-row')
-      ?.querySelector<HTMLButtonElement>('.tree-chevron');
-    if (areasChevron === undefined || areasChevron === null) {
-      throw new Error('2-Areas chevron missing');
-    }
-    void act(() => {
-      areasChevron.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    const cooking = query('.tree-folder-link[href="/folder/2-Areas/Cooking"]');
-    expect(cooking.querySelector('.tree-meaning')).toBeNull();
+    const inbox = query('a[role="treeitem"][href="/folder/0-Inbox"]');
+    expect(inbox.textContent).toBe('Inbox');
+    expect(root.querySelector('.tree-count')).toBeNull();
+    expect(root.querySelector('.tree-meaning')).toBeNull();
+    expect(root.querySelector('.kind-badge')).toBeNull();
+    expect(root.querySelector('.tag-new')).toBeNull();
   });
 
-  it('puts the Health row and the hidden-files line together at the bottom, with the compact subtitle', async () => {
+  it('puts Health check at the bottom with no subtitle, and no hidden-files footer', async () => {
     mount();
     await flush();
-    const foot = query('.explorer-foot');
-    const health = query<HTMLAnchorElement>('.explorer-health-row');
-    expect(foot.contains(health)).toBe(true);
-    expect(foot.contains(query('.explorer-hidden'))).toBe(true);
-    expect(health.textContent).toContain('Health check');
-    expect(health.querySelector('.explorer-health-subtitle')?.textContent).toBe(
-      'Checked Sunday · 2 small things to fix',
+    const health = query<HTMLAnchorElement>(
+      '.explorer-below a[href="/health"]',
     );
-    expect(query('.explorer-hidden').textContent).toContain(
-      "Bower's own files and dot-folders: hidden",
-    );
+    expect(health.textContent).toBe('Health check');
+    expect(root.querySelector('.explorer-hidden')).toBeNull();
+    expect(root.textContent).not.toContain("Bower's own files");
   });
 
   it('has no account row (#353: not on the Phone-Notes board)', () => {
@@ -214,16 +201,10 @@ describe('Notes (#353)', () => {
     ).toBeTruthy();
   });
 
-  it('shows the five landmarks as skeletons and a status line on the first load (R-NOTES-7)', () => {
+  it('shows six skeleton bars on the first load (R-EXP-10)', () => {
     firstLoad = true;
     mount();
-    expect(root.querySelectorAll('.explorer-skeleton-row')).toHaveLength(5);
-    expect(
-      root.querySelectorAll('.explorer-skeleton .folder-mark'),
-    ).toHaveLength(5);
-    expect(query('[role="status"]').textContent).toContain(
-      'Reading your Bower folder for the first time on this phone.',
-    );
+    expect(root.querySelectorAll('.explorer-skeleton-bar')).toHaveLength(6);
     expect(root.querySelector('[role="tree"]')).toBeNull();
   });
 
@@ -236,7 +217,7 @@ describe('Notes (#353)', () => {
 });
 
 describe('PinnedSidebar (#589)', () => {
-  it('shows a pinned folder with its count on the Notes tab', () => {
+  it('shows a pinned folder with no count on the Folders tab (K-1)', () => {
     root = document.createElement('div');
     document.body.append(root);
     const items = [
@@ -251,9 +232,7 @@ describe('PinnedSidebar (#589)', () => {
       render(h(PinnedSidebar, { items, variant: 'page' }), root);
     });
     expect(query('.explorer-label').textContent).toBe('Pinned');
-    const row = query('.explorer-row');
-    expect(row.textContent).toBe('Cooking1');
-    expect(row.querySelector('.explorer-pinned-count')?.textContent).toBe('1');
+    expect(query('.explorer-item').textContent).toBe('Cooking');
   });
 
   it('renders nothing when nothing is pinned', () => {

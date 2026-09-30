@@ -31,9 +31,9 @@ async function expand(list: Locator, name: string): Promise<void> {
   ).toBeVisible();
 }
 
-test('Flat hunt lists its PDF and photo as rows, and its count equals its rows', async ({
-  page,
-}) => {
+// #909: the tree has no counts or kind badges (K-1); the row link is the
+// treeitem. The intent stays: the PDF and the photo are rows of their own.
+test('Flat hunt lists its PDF and photo as rows', async ({ page }) => {
   const list = await openTree(page);
   await expand(list, 'Archives');
   await expand(list, 'Flat hunt');
@@ -42,33 +42,26 @@ test('Flat hunt lists its PDF and photo as rows, and its count equals its rows',
   // row that is not deeper.
   const under = await list.locator('[role="treeitem"]').evaluateAll((items) => {
     const at = items.findIndex(
-      (item) =>
-        item.querySelector('a[href="/folder/4-Archives/Flat%20hunt"]') !== null,
+      (item) => item.getAttribute('href') === '/folder/4-Archives/Flat%20hunt',
     );
     if (at === -1) return null;
     const level = Number(items[at]?.getAttribute('aria-level'));
-    const out: { folder: boolean; file: boolean; badge: string }[] = [];
+    const out: { folder: boolean; file: boolean }[] = [];
     for (const item of items.slice(at + 1)) {
       if (Number(item.getAttribute('aria-level')) <= level) break;
       out.push({
-        folder: item.querySelector('.tree-folder') !== null,
-        file: item.querySelector('a[href^="/file/"]') !== null,
-        badge: item.querySelector('.kind-badge')?.textContent ?? '',
+        folder: item.closest('.tree-folder') !== null,
+        file: (item.getAttribute('href') ?? '').startsWith('/file/'),
       });
     }
-    const count = items[at]?.querySelector('.tree-count')?.textContent ?? '';
-    return { rows: out, count: Number(count) };
+    return out;
   });
   if (under === null) throw new Error('Flat hunt is not in the tree');
 
-  // A PDF and a photo are rows, each with its grey badge.
-  const badges = under.rows.filter((row) => row.file).map((row) => row.badge);
-  expect(badges).toContain('PDF');
-  expect(badges.some((badge) => ['JPG', 'PNG'].includes(badge))).toBe(true);
-
-  // The count on the folder row is the number of rows it holds.
-  expect(under.rows.some((row) => row.folder)).toBe(false);
-  expect(under.count).toBe(under.rows.length);
+  expect(under.filter((row) => row.file).length).toBeGreaterThanOrEqual(2);
+  expect(under.some((row) => row.folder)).toBe(false);
+  await expect(list.locator('.kind-badge')).toHaveCount(0);
+  await expect(list.locator('.tree-count')).toHaveCount(0);
 });
 
 test('the five landmarks show their marks, a divider follows, the others are neutral', async ({
@@ -76,8 +69,10 @@ test('the five landmarks show their marks, a divider follows, the others are neu
 }) => {
   const list = await openTree(page);
   await expect(list.locator('.folder-mark')).toHaveCount(5);
-  await expect(list.locator('.tree-divider')).toHaveCount(1);
-  await expect(list.locator('.tree-meaning').first()).toBeVisible();
+  // #909: no divider and no meaning lines (K-1); Answers and Clippings are
+  // rows under the tree, not in it.
+  await expect(list.locator('.tree-divider')).toHaveCount(0);
+  await expect(list.locator('.tree-meaning')).toHaveCount(0);
 });
 
 test('chevrons measure at least 44 x 44 on the phone and carry their names', async ({
@@ -87,10 +82,14 @@ test('chevrons measure at least 44 x 44 on the phone and carry their names', asy
   await page.setViewportSize({ width: 375, height: 812 });
   const list = await openTree(page);
   const chevron = list.getByRole('button', { name: 'Expand Projects' });
-  const box = await chevron.boundingBox();
-  if (box === null) throw new Error('the chevron has no box');
-  expect(box.width).toBeGreaterThanOrEqual(44);
-  expect(box.height).toBeGreaterThanOrEqual(44);
+  // #909: the chevron is drawn 14 px (PF-Drawer); on touch its hit area
+  // (::after) spans the whole 40 px row and 30 px across.
+  const hit = await chevron.evaluate((el) => {
+    const after = getComputedStyle(el, '::after');
+    return { w: parseFloat(after.width), h: parseFloat(after.height) };
+  });
+  expect(hit.h).toBeGreaterThanOrEqual(40);
+  expect(hit.w).toBeGreaterThanOrEqual(30);
   await chevron.click();
   await expect(
     list.getByRole('button', { name: 'Collapse Projects' }),
@@ -118,7 +117,9 @@ test('expanded folders survive a reload on the same device', async ({
   ).toBeVisible();
 });
 
-test('after a tidy-up, the folder it filed into shows "<n> new" and its new rows show New', async ({
+// #909: no "n new" or New tags in the tree (K-1); what the tidy-up filed
+// is still in the tree, untagged.
+test('after a tidy-up, what it filed is in the tree, with no new tags', async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -150,15 +151,11 @@ test('after a tidy-up, the folder it filed into shows "<n> new" and its new rows
   await expect(list).toBeVisible();
 
   // Resources holds the two items the run filed (Garden and Home).
-  const areas = list.locator('a[href="/folder/3-Resources"]');
-  await expect(areas.locator('.new-tag')).toHaveText('2 new');
+  await expect(list.locator('.new-tag')).toHaveCount(0);
   await expand(list, 'Resources');
   await expand(list, 'Garden');
-  const garden = list.locator('a[href="/folder/3-Resources/Garden"]');
-  await expect(garden.locator('.new-tag')).toHaveText('1 new');
   await expect(
-    list
-      .locator('a[href^="/note/"]', { hasText: 'Tomato seedlings' })
-      .locator('.new-tag'),
-  ).toHaveText('New');
+    list.locator('a[href^="/note/"]', { hasText: 'Tomato seedlings' }),
+  ).toBeVisible();
+  await expect(list.locator('.new-tag')).toHaveCount(0);
 });

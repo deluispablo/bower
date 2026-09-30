@@ -1,92 +1,250 @@
-/* Explorer additions (#589): the Just filed slot, Pinned counts, the first-load skeleton. */
+/* The explorer's three hosts (#909, spec §3.3, §3.14): sidebar, drawer and
+   the Folders tab. Base rules for .explorer, .explorer-filter,
+   .explorer-section and .explorer-label live in layout.css. */
 
-/* Empty until #616 fills it: no space taken. */
+.explorer-label {
+  font-size: 12px;
+}
+
+.explorer-search-slot .explorer-filter {
+  width: calc(100% - 2 * var(--space-3));
+}
+
+.explorer-drawer .explorer-search-slot .explorer-filter,
+.explorer-page .explorer-search-slot .explorer-filter {
+  width: 100%;
+  margin: 0;
+}
+
 .explorer-just-filed:empty {
   display: none;
 }
 
-.explorer-pinned-new {
-  margin-left: var(--space-2);
-  padding: 0 var(--space-2);
-  border-radius: 999px;
-  background: var(--color-brand-tint);
-  color: var(--color-brand);
-  font-size: var(--text-xs, var(--text-sm));
-  white-space: nowrap;
+.explorer-page .explorer-just-filed {
+  margin-top: var(--space-3);
 }
 
-.explorer-pinned-count {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
+/* YOUR FOLDERS with its three tools on the same row. */
+.explorer-section-tools {
+  margin-right: 4px;
 }
 
-.explorer-pinned .folder-icon {
+.explorer-tools {
+  display: flex;
+  gap: 0;
+}
+
+.explorer-tool {
+  position: relative;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.explorer-tool:hover {
+  background: var(--color-surface-hover);
+}
+
+.explorer-tool[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.explorer-tool .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* 44 px targets on touch, the drawn button stays 28 px. */
+@media (pointer: coarse) {
+  .explorer-tool::after {
+    position: absolute;
+    inset: -8px -4px;
+    content: '';
+  }
+}
+
+/* Pinned rows and the rows under the tree (Answers, Clippings, Health check):
+   28 px / 13 px in the sidebar, 40 px / 15 px on the phone hosts. */
+.explorer-list,
+.explorer-below {
+  display: flex;
+  flex-direction: column;
+}
+
+.explorer-pinned .explorer-list,
+.explorer-below {
+  padding: 0 var(--space-2);
+}
+
+.explorer-drawer .explorer-pinned .explorer-list,
+.explorer-drawer .explorer-below,
+.explorer-page .explorer-pinned .explorer-list,
+.explorer-page .explorer-below {
+  padding: 0;
+}
+
+.explorer-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.explorer-host-rows-drawer .explorer-item,
+.explorer-host-rows-page .explorer-item {
+  height: 40px;
+  font-size: 15px;
+}
+
+.explorer-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.explorer-item[aria-current='page'] {
+  background: var(--color-selection);
+  box-shadow: inset 3px 0 0 var(--color-brand);
+  color: var(--color-heading);
+}
+
+.explorer-item > svg,
+.explorer-item > span:first-child {
   flex-shrink: 0;
 }
 
-.explorer-first-load {
-  margin: 0 var(--space-1) var(--space-2);
+.explorer-item > .icon {
+  width: 16px;
+  height: 16px;
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
 }
 
-/* The five landmarks before the index exists (R-NOTES-7, Phone-Notes-Loading). */
+.explorer-item-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.explorer-below {
+  margin-top: 0;
+}
+
+/* The 1 px divider before Answers (PF-Main-1280, NT-Bottom). */
+.explorer-below::before {
+  display: block;
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--color-border-subtle);
+  content: '';
+}
+
+/* Answers, Clippings, Health check: the icon lines up with the root discs
+   (4 px inset, a 14 px chevron-wide spacer, gap 6). */
+.explorer-below .explorer-item {
+  gap: 6px;
+  padding-left: 4px;
+}
+
+/* Desktop: the column's own inset only, so the icons sit at x 36 with the
+   root discs. */
+.explorer-sidebar .explorer-below {
+  padding: 0;
+}
+
+.explorer-item-spacer {
+  flex: 0 0 14px;
+  width: 14px;
+}
+
+/* The sidebar tree takes the column's own 12 px inset (PF-Main-1280: rows
+   from x 12 to 251) and reserves no height: the column scrolls as one. */
+.shell-sidebar .explorer-sidebar .explorer-tree {
+  min-height: 0;
+  padding: 0;
+}
+
+/* Every host scrolls as one column (spec §3.3): the tree never scrolls on
+   its own, so Answers and Clippings follow it. */
+.explorer-sidebar .explorer-tree,
+.explorer-drawer .explorer-tree,
+.explorer-page .explorer-tree {
+  flex: none;
+  padding: 0;
+  overflow: visible;
+}
+
+/* The Sort menu (Name / Newest first). */
+.explorer-sort-menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+}
+
+.explorer-sort-item {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.explorer-sort-item[aria-checked='true'] {
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+.explorer-sort-item:hover {
+  background: var(--color-surface-hover);
+}
+
+/* Loading: six 12 px bars, no spinner (R-EXP-10). */
 .explorer-skeleton {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   margin: 0;
-  padding: 0;
+  padding: 0 8px;
   list-style: none;
 }
 
 .explorer-skeleton-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  padding-right: var(--space-2);
+  height: 40px;
 }
 
-.explorer-skeleton-chevron {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-}
-
-.explorer-skeleton-text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  gap: 4px;
-  color: var(--color-heading);
-  font-weight: 600;
+.explorer-sidebar .explorer-skeleton-row {
+  height: 28px;
 }
 
 .explorer-skeleton-bar {
   display: block;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-hover);
+  height: 12px;
+  border-radius: 6px;
+  background: var(--color-surface);
   animation: explorer-skeleton-pulse 1.4s ease-in-out infinite;
 }
 
-.explorer-skeleton-line {
-  width: 70%;
-  height: var(--text-xs);
-}
-
-.explorer-skeleton-count {
-  width: 1.5rem;
-  height: var(--text-sm);
-}
-
 @keyframes explorer-skeleton-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
   50% {
     opacity: 0.5;
   }
@@ -95,6 +253,132 @@
 @media (prefers-reduced-motion: reduce) {
   .explorer-skeleton-bar {
     animation: none;
+  }
+}
+
+.explorer-error {
+  margin: 0;
+  padding: 0 8px;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.explorer-retry {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-brand);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* The phone drawer "Your folders": 324 px (at most 88 vw), right corners
+   20, scrim behind, below every sheet and menu. */
+.folders-drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 38;
+}
+
+.folders-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--color-scrim);
+  animation: folders-drawer-fade 200ms ease-out;
+}
+
+.folders-drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(324px, 88vw);
+  padding: 12px 8px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: var(--color-sidebar);
+  border-right: 1px solid var(--color-border-subtle);
+  border-radius: 0 20px 20px 0;
+  outline: none;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  transition: transform 200ms ease-out;
+  animation: folders-drawer-in 200ms ease-out;
+}
+
+/* The left-edge swipe's own strip (phone widths): 16 px, under the top bar
+   and above the tab bar, below the drawer. `touch-action: pan-y` keeps the
+   horizontal move for the swipe and still lets a vertical scroll start
+   here. */
+.folders-edge {
+  position: fixed;
+  top: 56px;
+  bottom: 64px;
+  left: 0;
+  z-index: 37;
+  width: 16px;
+  touch-action: pan-y;
+}
+
+@media (min-width: 900px) {
+  .folders-edge {
+    display: none;
+  }
+}
+
+.folders-drawer:focus-visible {
+  outline: none;
+}
+
+.folders-drawer-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding-left: 8px;
+}
+
+.folders-drawer-title {
+  margin: 0;
+  color: var(--color-heading);
+  font-family: var(--font-display, Poppins, sans-serif);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.folders-drawer .explorer {
+  height: auto;
+  padding: 4px 4px 0;
+}
+
+.folders-drawer .explorer-section {
+  margin: 14px 4px 4px 8px;
+}
+
+@keyframes folders-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes folders-drawer-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folders-drawer {
+    transition: none;
+    animation: folders-drawer-fade 120ms ease-out;
+  }
+
+  .folders-drawer-scrim {
+    animation: folders-drawer-fade 120ms ease-out;
   }
 }
 
@@ -152,4 +436,48 @@
   .sidebar-separator-dragging::after {
     opacity: 1;
   }
+}
+
+/* The Folders tab's title with its ⋯ right after it (NT-Main, NT-More). */
+.folders-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.folders-menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+}
+
+.folders-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.folders-menu-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.folders-menu-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.folders-menu-sub {
+  color: var(--color-text-muted);
+  font-size: 13px;
 }

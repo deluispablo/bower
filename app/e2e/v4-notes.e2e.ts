@@ -42,35 +42,24 @@ test('the Notes tab lists Pinned, the five landmarks, a divider, the others, Hea
     box.getByRole('heading', { name: 'Your folders' }),
   ).toBeVisible();
 
-  // The five landmarks in their fixed order, each with a mark and a meaning
-  // line, before the one divider; the other folders come after it.
-  const order = await box
-    .locator('.tree')
-    .evaluate((list) =>
-      Array.from(list.children).map((child) =>
-        child.classList.contains('tree-divider')
-          ? 'divider'
-          : (child.querySelector('.folder-mark')?.getAttribute('data-kind') ??
-            (child.querySelector('.tree-folder') !== null ? 'other' : 'row')),
-      ),
-    );
-  expect(order.slice(0, 6)).toEqual([
+  // #909: the five roots in their fixed order, each with its disc; no
+  // meaning lines, counts or divider (K-1). Answers and Clippings are rows
+  // under the tree.
+  const kinds = await box
+    .locator('.tree .folder-mark')
+    .evaluateAll((marks) => marks.map((m) => m.getAttribute('data-kind')));
+  expect(kinds).toEqual([
     'inbox',
     'projects',
     'areas',
     'resources',
     'archives',
-    'divider',
   ]);
-  expect(order.slice(6).every((kind) => kind === 'other')).toBe(true);
-  await expect(box.locator('.tree-meaning').first()).toBeVisible();
-  // The Inbox row always carries its count (a count of 0 is unit-tested).
-  await expect(
-    box.locator('a[href="/folder/0-Inbox"] .tree-count'),
-  ).toBeVisible();
+  await expect(box.locator('.tree-meaning')).toHaveCount(0);
+  await expect(box.locator('.tree-count')).toHaveCount(0);
 
-  // Pinned comes before the folders, the Health row and the hidden-files
-  // line come after the tree.
+  // Pinned comes before the folders; Answers, Clippings and Health check
+  // come after the tree. #909 removed the hidden-files line.
   const positions = await box.evaluate((el) => {
     const at = (selector: string): number =>
       Array.from(el.querySelectorAll('*')).indexOf(
@@ -79,42 +68,38 @@ test('the Notes tab lists Pinned, the five landmarks, a divider, the others, Hea
     return [
       at('.explorer-pinned'),
       at('.explorer-tree'),
-      at('.explorer-health-row'),
-      at('.explorer-hidden'),
+      at('.explorer-below'),
+      at('.explorer-health'),
     ];
   });
   expect(positions.every((p) => p >= 0)).toBe(true);
   expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  await expect(box.locator('.explorer-hidden')).toHaveCount(0);
 
-  // No sort anywhere on the tab.
-  await expect(page.getByRole('button', { name: /^Sort by/ })).toHaveCount(0);
+  // #909: one Sort tool on the YOUR FOLDERS row.
+  await expect(box.getByRole('button', { name: 'Sort' })).toHaveCount(1);
 });
 
-test('Expand all folders toggles to Collapse all folders and back', async ({
+// #909 replaced the Expand/Collapse all toggle with one "Collapse all
+// folders" tool on the YOUR FOLDERS row.
+test('Collapse all folders closes every open folder', async ({
   page,
 }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== 'phone',
-    'the button is in the phone bar',
-  );
+  test.skip(testInfo.project.name !== 'phone', 'the Folders tab is the phone');
   const list = await openNotes(page);
-  const button = visible(page.getByRole('button', { name: /all folders$/ }));
-
-  await expect(button).toHaveAccessibleName('Expand all folders');
-  await button.click();
-  await expect(button).toHaveAccessibleName('Collapse all folders');
+  const expand = list.getByRole('button', { name: 'Expand Projects' });
+  if ((await expand.count()) > 0) await expand.click();
   await expect(
     list.getByRole('button', { name: 'Collapse Projects' }),
   ).toBeVisible();
-  await expect(
-    list.getByRole('button', { name: 'Collapse Areas' }),
-  ).toBeVisible();
 
-  await button.click();
-  await expect(button).toHaveAccessibleName('Expand all folders');
+  await visible(
+    page.getByRole('button', { name: 'Collapse all folders' }),
+  ).click();
   await expect(
     list.getByRole('button', { name: 'Expand Projects' }),
   ).toBeVisible();
+  await expect(list.locator('[aria-expanded="true"]')).toHaveCount(0);
 });
 
 test('the first load on a device shows skeletons and a status line, the second one none', async ({
@@ -130,18 +115,14 @@ test('the first load on a device shows skeletons and a status line, the second o
   }, DELAY_MS);
   await page.goto('/notes');
 
+  // #909: the loading state is six 12 px skeleton bars (R-EXP-10); the
+  // status line and the landmark skeletons are gone.
   const box = explorer(page);
-  const status = box.getByRole('status');
-  await expect(status).toContainText(
-    'Reading your Bower folder for the first time on this phone. Next time it opens at once.',
-  );
-  await expect(box.locator('.explorer-skeleton-row')).toHaveCount(5);
-  await expect(box.locator('.folder-mark')).toHaveCount(5);
+  await expect(box.locator('.explorer-skeleton-bar')).toHaveCount(6);
   await shot(page, testInfo, 'notes-first-load');
 
   // The listing lands: the real tree replaces the skeletons.
   await expect(tree(page)).toBeVisible({ timeout: DELAY_MS + 5000 });
-  await expect(status).toHaveCount(0);
   await expect(box.locator('.explorer-skeleton-row')).toHaveCount(0);
 
   // The index is cached now: the same delay does not hold the tree back.
@@ -159,7 +140,9 @@ test('at 1280 px the sidebar is the explorer', async ({ page }, testInfo) => {
   await openHome(page);
   const sidebar = page.getByRole('navigation', { name: 'Your folders' });
 
-  const search = sidebar.getByRole('button', { name: 'Search' });
+  const search = sidebar.getByRole('button', {
+    name: 'Search folders, notes and files',
+  });
   await expect(search).toBeVisible();
   await expect(search).toContainText('Ctrl K');
   for (const name of ['Home', 'Add', 'Bower']) {
@@ -172,13 +155,9 @@ test('at 1280 px the sidebar is the explorer', async ({ page }, testInfo) => {
     sidebar.getByRole('heading', { name: 'Your folders' }),
   ).toBeVisible();
 
-  // Short meaning lines: the sidebar says "Things to keep", the phone the
-  // longer "Things to keep: articles, recipes, manuals".
-  await expect(
-    sidebar.getByText('Things to keep', { exact: true }),
-  ).toBeVisible();
-  await expect(sidebar.getByText(/articles, recipes/)).toHaveCount(0);
-  await expect(sidebar.locator('.folder-mark')).toHaveCount(5);
+  // #909: no meaning lines in the tree (K-1); the five roots wear discs.
+  await expect(sidebar.locator('.tree-meaning')).toHaveCount(0);
+  await expect(sidebar.locator('.tree .folder-mark')).toHaveCount(5);
   await shot(page, testInfo, 'notes-sidebar');
 });
 

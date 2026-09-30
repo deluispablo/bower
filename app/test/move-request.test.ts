@@ -4,7 +4,6 @@ import { INSTRUCTION_APP_PROPERTIES } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import {
   currentFolderOf,
-  findFolders,
   moveRequestText,
   pickerFolders,
   requestRowText,
@@ -69,7 +68,8 @@ describe('moveRequestText', () => {
 });
 
 describe('pickerFolders', () => {
-  it('leaves Inbox and what is in it out, and offers the rest', () => {
+  // #909: only the four roots drawn on PF-Move; Answers is not offered.
+  it('offers the four roots and their folders, never Inbox or Answers', () => {
     const list = pickerFolders(tree(), { path: 'x.pdf', isFolder: false });
     expect(paths(list)).toEqual([
       '1-Projects',
@@ -79,7 +79,6 @@ describe('pickerFolders', () => {
       '2-Areas/Garden/Beds',
       '3-Resources',
       '4-Archives',
-      'Answers',
     ]);
   });
 
@@ -100,22 +99,6 @@ describe('pickerFolders', () => {
     expect(currentFolderOf({ path: '2-Areas/Garden', isFolder: true })).toBe(
       '2-Areas',
     );
-  });
-});
-
-describe('findFolders', () => {
-  const list = pickerFolders(tree(), { path: 'x.pdf', isFolder: false });
-
-  it('matches names at any depth, ignoring case and the numeric prefix', () => {
-    expect(findFolders(list, 'GARD').map((n) => n.path)).toEqual([
-      '2-Areas/Garden',
-    ]);
-    expect(findFolders(list, 'areas').map((n) => n.path)).toEqual(['2-Areas']);
-    expect(findFolders(list, '2-').map((n) => n.path)).toEqual([]);
-  });
-
-  it('gives nothing for a blank query', () => {
-    expect(findFolders(list, '  ')).toEqual([]);
   });
 });
 
