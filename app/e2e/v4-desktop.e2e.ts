@@ -60,7 +60,7 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
     page.getByRole('button', { name: /^Pin to Home|^Pinned/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Ask Bower about it' }),
+    page.getByRole('button', { name: 'Ask Bower about it' }),
   ).toBeVisible();
   await expect(page.locator('.folder-counts')).toHaveText(
     /^\d+ things?( · \d+ new)? · \d+ originals?, \d+ by Bower$/,
