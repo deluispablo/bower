@@ -21,6 +21,7 @@ import {
   IconSparkle,
 } from '../components/icons.js';
 import { KindBadge } from '../components/kind-badge.js';
+import { DictateButton } from '../components/dictate-button.js';
 import {
   PileRows,
   PileSheet,
@@ -931,14 +932,14 @@ export function Add() {
                 {PILE_NOTE_LABEL}{' '}
                 <span class="add-context-optional">optional</span>
               </label>
-              <textarea
+              <DictateButton
                 id="add-context"
-                ref={noteRef}
+                inputRef={noteRef}
+                label={PILE_NOTE_LABEL}
                 rows={3}
                 placeholder={PILE_NOTE_PLACEHOLDER}
                 value={draft}
-                onInput={(e) => {
-                  const next = e.currentTarget.value;
+                onValue={(next) => {
                   draftText = next;
                   setDraft(next);
                   saver.schedule(next);

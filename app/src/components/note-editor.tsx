@@ -7,6 +7,7 @@ import { applyFormat } from '../editor-format.js';
 import type { Format } from '../editor-format.js';
 import { offlineReason, useOnline } from '../online.js';
 import type { EditableNote } from '../vault-store.js';
+import { DictateButton } from './dictate-button.js';
 import '../styles/note-editor.css';
 
 interface NoteEditorProps {
@@ -219,16 +220,14 @@ export function NoteEditor({
         ))}
       </div>
 
-      <textarea
-        ref={textareaRef}
-        class="note-editor-textarea"
-        aria-label="Note text"
-        spellcheck
+      <DictateButton
+        inputRef={textareaRef}
+        inputClass="note-editor-textarea"
+        label="Note text"
+        rows={20}
         value={text}
+        onValue={setText}
         disabled={busy}
-        onInput={(event) => {
-          setText((event.target as HTMLTextAreaElement).value);
-        }}
       />
 
       {error !== null && (

@@ -16,6 +16,7 @@ import { formatPolicy } from '../formats.js';
 import type { FileKind } from '../vault-index.js';
 import { fileKind } from '../vault-index.js';
 import { IconCheck, IconClose } from './icons.js';
+import { DictateButton } from './dictate-button.js';
 import { KindBadge } from './kind-badge.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
@@ -348,14 +349,14 @@ export function PileSheet({
           <label class="pile-note-label" for="pile-sheet-note">
             {PILE_NOTE_LABEL} <span class="add-context-optional">optional</span>
           </label>
-          <textarea
+          <DictateButton
             id="pile-sheet-note"
-            class="pile-note"
+            inputClass="pile-note"
+            label={PILE_NOTE_LABEL}
             rows={3}
             placeholder={PILE_NOTE_PLACEHOLDER}
             value={text}
-            onInput={(event) => {
-              const next = event.currentTarget.value;
+            onValue={(next) => {
               setText(next);
               saver.schedule(next);
             }}

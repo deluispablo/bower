@@ -22,6 +22,7 @@ import {
 } from '../interview.js';
 import { useSession } from '../session.js';
 import { Bird } from './bird.js';
+import { DictateButton } from './dictate-button.js';
 import '../styles/interview.css';
 
 const LANGUAGE_CHIPS = ['English', 'Spanish', 'English and Spanish'];
@@ -163,13 +164,13 @@ export function Interview({
       {question === 0 && (
         <div class="interview-question">
           <ChipRow chips={INTERVIEW_KEEP_CHIPS} value={keep} onPick={setKeep} />
-          <input
-            type="text"
-            class="interview-input"
-            aria-label="What you will keep here"
+          <DictateButton
+            inputClass="interview-input"
+            label="What you will keep here"
+            rows={2}
             placeholder="Or say it your way"
             value={keep}
-            onInput={(e) => setKeep((e.target as HTMLInputElement).value)}
+            onValue={setKeep}
           />
         </div>
       )}
@@ -181,13 +182,13 @@ export function Interview({
             value={languages}
             onPick={setLanguages}
           />
-          <input
-            type="text"
-            class="interview-input"
-            aria-label="Languages your notes come in"
+          <DictateButton
+            inputClass="interview-input"
+            label="Languages your notes come in"
+            rows={2}
             placeholder="Or say it your way"
             value={languages}
-            onInput={(e) => setLanguages((e.target as HTMLInputElement).value)}
+            onValue={setLanguages}
           />
         </div>
       )}
@@ -241,13 +242,13 @@ export function Interview({
             value={titleStyle}
             onPick={setTitleStyle}
           />
-          <input
-            type="text"
-            class="interview-input"
-            aria-label="How you like titles and tags"
+          <DictateButton
+            inputClass="interview-input"
+            label="How you like titles and tags"
+            rows={2}
             placeholder="Or say it your way"
             value={titleStyle}
-            onInput={(e) => setTitleStyle((e.target as HTMLInputElement).value)}
+            onValue={setTitleStyle}
           />
           <input
             type="text"

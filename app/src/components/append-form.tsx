@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks';
 import { ApiError } from '../api.js';
 import { AppendError, DriveError } from '../drive.js';
 import { offlineReason, useOnline } from '../online.js';
+import { DictateButton } from './dictate-button.js';
 import '../styles/append-form.css';
 
 interface AppendFormProps {
@@ -63,15 +64,14 @@ export function AppendForm({ onAppend }: AppendFormProps) {
   return (
     <form class="append-form" onSubmit={(event) => void handleSubmit(event)}>
       <label for="append-text">Add to this note</label>
-      <textarea
+      <DictateButton
         id="append-text"
-        class="append-textarea"
+        inputClass="append-textarea"
+        label="Add to this note"
         placeholder="A new paragraph at the end of this note."
         value={text}
+        onValue={setText}
         disabled={!online || saving}
-        onInput={(event) => {
-          setText((event.target as HTMLTextAreaElement).value);
-        }}
       />
 
       {error !== null && (
