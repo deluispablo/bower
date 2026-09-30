@@ -36,12 +36,9 @@ import {
 } from '../overlay-queue.js';
 import { revealInFolders, targetFromReveal } from '../reveal.js';
 import { useSession } from '../session.js';
+import { FOLDERS_TAB_LABEL } from '../shell-routes.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
-
-// TODO(#906): import FOLDERS_TAB_LABEL from '../shell-routes.js' once #906
-// has merged; the tab, this title and the ⋯ name all read it.
-export const FOLDERS_TAB_LABEL = 'Folders';
 
 const MORE_ID = 'folders-more';
 
@@ -165,10 +162,11 @@ export function Notes(): JSX.Element | null {
     });
   }
 
-  const crumb = useMemo(
+  // The bar's title is the shell's (`topBarVariant` "explorer"); the ⋯
+  // follows it in the actions slot.
+  const more = useMemo(
     () => (
       <div class="folders-title">
-        <h1 class="topbar-title">{FOLDERS_TAB_LABEL}</h1>
         <span class="folders-more">
           <button
             type="button"
@@ -186,7 +184,7 @@ export function Notes(): JSX.Element | null {
     [menuOpen, shown, driveHref],
   );
 
-  useShellSlot('crumb', crumb);
+  useShellSlot('actions', more);
 
   if (desktop) return null;
 

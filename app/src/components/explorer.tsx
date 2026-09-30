@@ -38,7 +38,7 @@ import {
   openFoldersDrawer,
   useFoldersDrawer,
 } from '../folders-drawer.js';
-import { findReport, isReportNew, summarise } from '../health-report.js';
+import { findReport, summarise } from '../health-report.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
 import { displayName, folderHref } from '../navigation.js';
 import {
@@ -100,20 +100,6 @@ export const DRAWER_WIDTH = 324;
 /** The `?reveal=` value "Show in folders" (#608, `revealHref`) put on `/notes`. */
 function revealParam(): string | undefined {
   return new URLSearchParams(window.location.search).get('reveal') ?? undefined;
-}
-
-/**
- * Whether the latest health report has not been opened yet, for the Health
- * row's "New". No "New" while on that screen.
- */
-export function useHealthIsNew(): boolean {
-  const { index } = useVault();
-  const { path } = useLocation();
-  const reportTime =
-    index === null ? undefined : findReport(index)?.modifiedTime;
-  return (
-    path !== HEALTH_PATH && isReportNew(reportTime, getPref('healthSeenAt'))
-  );
 }
 
 /**
@@ -317,11 +303,6 @@ function TreeSkeleton(): JSX.Element {
 
 export interface ExplorerProps {
   variant: TreeHost;
-  /**
-   * Kept for `layout.tsx`'s call; unused since #909: the Health check row
-   * carries no "New" (NT-Bottom), and on desktop it is #906's nav item.
-   */
-  healthIsNew?: boolean;
   /** Primary links, under the search field (desktop sidebar, #906). */
   nav?: ComponentChildren;
   /** The "Just filed · N" card (Folders tab); left out, today's row. */

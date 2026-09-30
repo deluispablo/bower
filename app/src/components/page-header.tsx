@@ -19,11 +19,10 @@
  */
 
 import type { ComponentChildren, JSX } from 'preact';
-import { useLocation } from 'preact-iso';
 
 import type { MetaLine } from '../meta-line.js';
 import { breadcrumb, folderHref } from '../navigation.js';
-import { revealHref } from '../reveal.js';
+import { revealHref, revealInFolders } from '../reveal.js';
 import { FOLDERS_LANDMARK } from '../shell-routes.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { IconInfo } from './icons.js';
@@ -57,15 +56,6 @@ export function crumbsFor(path: string): Crumb[] {
     label: segment.name,
     href: folderHref(segment.path),
   }));
-}
-
-/**
- * E-17: the root crumb opens the tree at `path`. #909 exports
- * `revealInFolders(path)`; until it lands, this one-line adapter follows the
- * existing "Show in folders" link.
- */
-function revealInFolders(path: string, route: (url: string) => void): void {
-  route(revealHref({ kind: 'folder', path }));
 }
 
 export interface PageHeaderProps {
@@ -119,7 +109,6 @@ function Breadcrumb({
   crumbs: readonly Crumb[];
   rootPath: string | undefined;
 }): JSX.Element | null {
-  const { route } = useLocation();
   if (rootPath !== undefined) {
     return (
       <nav class="page-header-crumbs" aria-label="Breadcrumb">
@@ -127,7 +116,7 @@ function Breadcrumb({
           href={revealHref({ kind: 'folder', path: rootPath })}
           onClick={(event) => {
             event.preventDefault();
-            revealInFolders(rootPath, route);
+            revealInFolders(rootPath);
           }}
         >
           {FOLDERS_LANDMARK}
