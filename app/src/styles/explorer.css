@@ -149,6 +149,9 @@
   border-top: none;
 }
 
+/* Every host scrolls as one column (spec §3.3): the tree never scrolls on
+   its own, so Answers and Clippings follow it. */
+.explorer-sidebar .explorer-tree,
 .explorer-drawer .explorer-tree,
 .explorer-page .explorer-tree {
   flex: none;
