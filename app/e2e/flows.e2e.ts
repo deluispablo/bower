@@ -2517,11 +2517,12 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(
     menu.getByRole('menuitem', { name: /Pin to Home/ }),
   ).toBeVisible();
-  // The one More menu (#352): the board's header, then Ask Bower first.
-  await expect(menu.locator('.note-menu-meta')).toContainText('PDF');
-  await expect(menu.locator('.note-menu-meta')).toContainText(
-    'Projects › Kitchen Refresh',
-  );
+  // The one ⋯ menu (#352, #907): no header (boards FI-More), Ask Bower
+  // first, Help and about this last.
+  await expect(menu.locator('.note-menu-meta')).toHaveCount(0);
+  await expect(
+    menu.getByRole('menuitem', { name: 'Help and about this' }),
+  ).toBeVisible();
   await expect(menu.getByRole('menuitem').first()).toContainText(
     'Ask Bower about this',
   );
