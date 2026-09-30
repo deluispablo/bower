@@ -3,18 +3,24 @@
  * sign-in, Not invited, Privacy, Terms and the onboarding render outside it
  * instead, in a bare `<main>` (`app.tsx`).
  *
- * Phone: a top bar (#318, Phone-Home and Phone-Note boards) — on a tab,
- * nothing before the title (the Notes tab is the only explorer, #586); on an
- * inner screen (`isInnerScreen`), Back (the `back` slot, or Back to Home); then
- * the title (the wordmark as text on Home, the screen's own title from the
- * `crumb` slot elsewhere), the `actions` slot (a note's More, #144), "?"
- * (About this screen) and the avatar that opens Settings — and four tabs at the bottom (#317): Home, Notes,
- * Add, Bower. Health is reached from the Notes tab's Health row.
+ * Phone (#906, spec §3.1): a 56 px top bar in one of three variants
+ * (`topBarVariant`): `tab` on Home, Add and Bower (the files button "Open
+ * your folders", the screen's title from the `crumb` slot at 24 px, the ⋯
+ * from the `actions` slot right after it, the avatar pinned right);
+ * `inner` everywhere else (files button, Back from the `back` slot or Back
+ * to Home, the avatar; no avatar on Settings); `explorer` on the Folders tab
+ * (the title "Folders", ⋯, avatar; no files button). There is no "?" in
+ * the bar (R-TOPBAR-1): Help lives in each screen's ⋯ menu. Until a screen
+ * adopts `PageHeader` it may still fill `crumb` and `actions` on an inner
+ * screen; the bar shows them after Back. At the bottom, four tabs (§3.2):
+ * Home, Folders, Add, Bower, lit by `activeTab`.
  *
  * Desktop (900 px and wider): the explorer as a permanent left column, a
- * header row over the content (breadcrumb slot, "?" — Back, the phone title, the actions slot and the avatar are phone-only;
- * Settings is a sidebar row there; the theme control lives only in
- * Settings › Look, #324),
+ * header row over the content (the breadcrumb slot and the upload chip;
+ * there is no "Done · 1 filed" pill, E-9: the tidy-up bar keeps only its
+ * phone role). The files button, Back, the phone title, the actions slot
+ * and the avatar are phone-only; Settings is a sidebar row there; the theme
+ * control lives only in Settings › Look, #324),
  * and on note screens the About panel, filled through the `aside` shell slot
  * (#144, `shell-slots.ts` — the note screen sits inside `children`, so it
  * cannot reach these any other way).
@@ -48,13 +54,23 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
-import { isDemo, loginUrl } from '../api.js';
+import { loginUrl } from '../api.js';
 import { tourOnScreen } from '../onboarding.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
-import { useSession } from '../session.js';
-import { BOWER_PATH, helpScreenFor, isInnerScreen } from '../shell-routes.js';
-import { lazyOverlay, whenIdle } from '../lazy-overlay.js';
-import { replayTour, useTour } from '../tour-store.js';
+import { personOf, useSession } from '../session.js';
+import {
+  BOWER_PATH,
+  FOLDERS_LANDMARK,
+  FOLDERS_PATH,
+  FOLDERS_TAB_LABEL,
+  SETTINGS_PATH,
+  activeTab,
+  barHasAvatar,
+  topBarVariant,
+} from '../shell-routes.js';
+import type { TabId } from '../shell-routes.js';
+import { whenIdle } from '../lazy-overlay.js';
+import { useTour } from '../tour-store.js';
 import { useVault } from '../vault-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
@@ -65,8 +81,8 @@ import { useShellSlots } from './shell-slots.js';
 import {
   IconChat,
   IconFolder,
-  IconHelp,
   IconHome,
+  IconPanel,
   IconPlus,
   IconSliders,
 } from './icons.js';
@@ -82,6 +98,8 @@ interface NavLink {
   Icon: () => JSX.Element;
   /** The tab a help sheet sits over (`components/help-sheet.tsx`). */
   tour?: HelpTab;
+  /** The phone tab this link is (`activeTab`). */
+  tab?: TabId;
 }
 
 const HOME: NavLink = {
@@ -89,18 +107,21 @@ const HOME: NavLink = {
   label: 'Home',
   Icon: IconHome,
   tour: 'home',
+  tab: 'home',
 };
-const NOTES: NavLink = {
-  href: '/notes',
-  label: 'Notes',
+const FOLDERS: NavLink = {
+  href: FOLDERS_PATH,
+  label: FOLDERS_TAB_LABEL,
   Icon: IconFolder,
   tour: 'notes',
+  tab: 'folders',
 };
 const ADD: NavLink = {
   href: '/add',
   label: 'Add',
   Icon: IconPlus,
   tour: 'add',
+  tab: 'add',
 };
 /** The Bower tab (#317): the old Tell Bower screen lives here until #340. */
 const BOWER: NavLink = {
@@ -108,33 +129,33 @@ const BOWER: NavLink = {
   label: 'Bower',
   Icon: IconChat,
   tour: 'bower',
+  tab: 'bower',
 };
 const SETTINGS: NavLink = {
-  href: '/settings',
+  href: SETTINGS_PATH,
   label: 'Settings',
   Icon: IconSliders,
 };
 
-/** The four tabs at the bottom of the phone (#317, Phone-Home board). */
-const TABS: readonly NavLink[] = [HOME, NOTES, ADD, BOWER];
+/** The four tabs at the bottom of the phone (§3.2, R-TABBAR-1 as the owner
+ * review renamed it): Home, Folders, Add, Bower. */
+const TABS: readonly NavLink[] = [HOME, FOLDERS, ADD, BOWER];
 
-/** The desktop sidebar's links (Desktop-Home board): the tree below them
- * is the Notes tab there. Settings is a row here; the phone has the avatar. */
+/** The desktop sidebar's links (§3.3): Home, Add, Bower, Settings; there is
+ * no Folders item (the tree below is the Folders tab there). The explorer
+ * adds its Health check row right after them. */
 const SIDEBAR_LINKS: readonly NavLink[] = [HOME, ADD, BOWER, SETTINGS];
 
 function currentFor(href: string, path: string): 'page' | undefined {
   return href === path ? 'page' : undefined;
 }
 
-/** The avatar's letter: the first letter of the account's email. */
-const LazyHelp = lazyOverlay(() =>
-  import('./help-sheet.js').then((m) => m.HelpSheet),
-);
-const LazyHelpSheet = LazyHelp.Component;
-
-export function avatarInitial(email: string | undefined): string {
-  const first = email?.trim().charAt(0) ?? '';
-  return first === '' ? '?' : first.toUpperCase();
+/**
+ * The files button's action (R-TOPBAR-4 belongs to #909, which builds the
+ * drawer): until the drawer lands, "Open your folders" opens the Folders tab.
+ */
+function openYourFolders(route: (url: string) => void): void {
+  route(FOLDERS_PATH);
 }
 
 const HOME_BACK = <BackLink href="/" label="Home" />;
@@ -240,23 +261,24 @@ export function Layout({ children }: LayoutProps): JSX.Element {
     breadcrumb,
     ledge,
   } = useShellSlots();
-  // One bar slot for both chips: the tidy-up bar wins (spec 6.15b).
+  // One bar slot for both chips on the phone: the tidy-up bar wins (spec
+  // 6.15b). From 900 px only the upload chip shows in the top bar: the
+  // "Done · 1 filed" pill is gone (E-9).
   const bar = tidyBar ?? uploadChip;
   const desktop = useDesktop();
   const sidebarWidth = useSidebarWidth();
-  // "?" (About this screen): the help sheet for the screen on show (#330).
-  const [helpOpen, setHelpOpen] = useState(false);
   // The overlays' code is fetched once the page is idle, so each opens at once.
   useEffect(
     () =>
       whenIdle(() => {
         preloadSwitcher();
         preloadRunSheets();
-        LazyHelp.preload();
       }),
     [],
   );
-  const inner = isInnerScreen(path, isDemo());
+  const variant = topBarVariant(path);
+  const tab = activeTab(path);
+  const person = personOf(me ?? undefined);
   const headRef = useRef<HTMLDivElement>(null);
   // The quick switcher's own top offset (spec §14, `switcher.css`'s
   // `--switcher-top`): the live bottom edge of the header *and* whichever
@@ -281,13 +303,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const healthIsNew = useHealthIsNew();
   const pending = inboxTotal(inboxCount(files, status === 'loading'));
 
-  // Any route change closes the help sheet.
-  useEffect(() => {
-    setHelpOpen(false);
-  }, [path]);
-
   const sidebarNav = (
-    <nav class="explorer-nav" aria-label="Primary">
+    <nav class="explorer-nav" aria-label="Main">
       {SIDEBAR_LINKS.map(({ href, label, Icon, tour }) => (
         <a
           key={href}
@@ -336,7 +353,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       {/* The tour's Notes step lights the "Your folders" header row inside the
           explorer (`data-tour` in explorer.tsx), not this whole column. */}
       <div class="shell-sidebar">
-        <nav class="shell-sidebar-nav" aria-label="Your notes">
+        <nav class="shell-sidebar-nav" aria-label={FOLDERS_LANDMARK}>
           <Explorer
             variant="sidebar"
             healthIsNew={healthIsNew}
@@ -357,40 +374,63 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             edge however wide the window is. */}
         <div class="shell-container">
           <div ref={headRef}>
-            <header class="topbar">
-              {inner && (back ?? HOME_BACK)}
+            <header
+              class={[
+                'topbar',
+                `topbar-${variant}`,
+                variant === 'inner' && crumb != null && 'topbar-has-title',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              {variant === 'explorer' ? (
+                <span class="topbar-lead" aria-hidden="true" />
+              ) : (
+                <button
+                  type="button"
+                  class="topbar-files"
+                  aria-label="Open your folders"
+                  onClick={() => {
+                    openYourFolders(route);
+                  }}
+                >
+                  <IconPanel />
+                </button>
+              )}
+              {variant === 'inner' && (back ?? HOME_BACK)}
               <div class="topbar-crumb">
-                {crumb ?? <span class="topbar-title">Bower</span>}
-              </div>
-              <div class="topbar-slot topbar-breadcrumb" data-slot="breadcrumb">
-                {breadcrumb}
+                {variant === 'explorer' ? (
+                  <h1 class="topbar-title">{FOLDERS_TAB_LABEL}</h1>
+                ) : variant === 'tab' ? (
+                  (crumb ?? <span class="topbar-title">Bower</span>)
+                ) : (
+                  crumb
+                )}
               </div>
               <div class="topbar-slot topbar-actions" data-slot="actions">
                 {actions}
               </div>
-              {desktop && bar !== null && (
+              <span class="topbar-spacer" aria-hidden="true" />
+              <div class="topbar-slot topbar-breadcrumb" data-slot="breadcrumb">
+                {breadcrumb}
+              </div>
+              {desktop && uploadChip !== null && (
                 <div class="topbar-slot topbar-chip" data-slot="chip">
-                  {bar}
+                  {uploadChip}
                 </div>
               )}
-              <button
-                type="button"
-                class="icon-button topbar-help"
-                aria-label="About this screen"
-                aria-haspopup="dialog"
-                onClick={() => {
-                  setHelpOpen(true);
-                }}
-              >
-                <IconHelp />
-              </button>
-              <a
-                href={SETTINGS.href}
-                class="topbar-avatar"
-                aria-label="Settings"
-              >
-                <span aria-hidden="true">{avatarInitial(me?.email)}</span>
-              </a>
+              {barHasAvatar(path) && (
+                <button
+                  type="button"
+                  class="topbar-avatar"
+                  aria-label="Settings"
+                  onClick={() => {
+                    route(SETTINGS.href);
+                  }}
+                >
+                  <span aria-hidden="true">{person.initial}</span>
+                </button>
+              )}
             </header>
             <DemoBanner tourOpen={path === '/' && tourOnScreen(me, tour)} />
             <OfflineBanner />
@@ -423,12 +463,12 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           {bar}
         </div>
       )}
-      <nav class="bottom-nav" aria-label="Primary">
-        {TABS.map(({ href, label, Icon, tour }) => (
+      <nav class="bottom-nav" aria-label="Main">
+        {TABS.map(({ href, label, Icon, tour, tab: id }) => (
           <a
             key={href}
             href={href}
-            aria-current={currentFor(href, path)}
+            aria-current={id !== undefined && id === tab ? 'page' : undefined}
             data-tour={tour}
           >
             <Icon />
@@ -436,19 +476,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           </a>
         ))}
       </nav>
-      {helpOpen && (
-        <LazyHelpSheet
-          screen={helpScreenFor(path)}
-          onClose={() => {
-            setHelpOpen(false);
-          }}
-          onShowMeAround={() => {
-            setHelpOpen(false);
-            replayTour();
-            route('/');
-          }}
-        />
-      )}
       <SwitcherHost />
       <RunSheets />
       {/* The one overlay host (#740): sheets, dialogs and menus queue here. */}

@@ -57,7 +57,8 @@ vi.mock('preact-iso', () => ({
   useLocation: () => location,
 }));
 
-vi.mock('../src/session.js', () => ({
+vi.mock('../src/session.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/session.js')>()),
   useSession: () => ({ status: 'signed-in', me, signOut }),
 }));
 
@@ -102,8 +103,9 @@ vi.mock('../src/cache.js', () => ({
   saveTreeState: () => Promise.resolve(),
 }));
 
-const { Layout, avatarInitial, clampSidebarWidth, readStoredSidebarWidth } =
-  await import('../src/components/layout.js');
+const { Layout, clampSidebarWidth, readStoredSidebarWidth } = await import(
+  '../src/components/layout.js'
+);
 
 let root: HTMLDivElement;
 
@@ -155,11 +157,11 @@ describe('Layout', () => {
     location.path = '/add';
     mount();
     const nav = query('nav.bottom-nav');
-    expect(nav.getAttribute('aria-label')).toBe('Primary');
+    expect(nav.getAttribute('aria-label')).toBe('Main');
     const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>('a'));
     expect(links.map((a) => a.textContent)).toEqual([
       'Home',
-      'Notes',
+      'Folders',
       'Add',
       'Bower',
     ]);
@@ -207,23 +209,72 @@ describe('Layout', () => {
     expect(query('.topbar').contains(sheets[0] ?? null)).toBe(false);
   });
 
-  it('orders the bar: title, "?", avatar, nothing before the title on a tab (#318, #586)', () => {
+  it('lights Home on Just filed and no tab on Settings (R-TABBAR-2)', () => {
+    location.path = '/just-filed';
+    mount();
+    const current = (): (string | null)[] =>
+      Array.from(root.querySelectorAll('nav.bottom-nav a')).map((a) =>
+        a.getAttribute('aria-current'),
+      );
+    expect(current()).toEqual(['page', null, null, null]);
+    void act(() => {
+      render(null, root);
+    });
+    location.path = '/settings';
+    mount();
+    expect(current()).toEqual([null, null, null, null]);
+    void act(() => {
+      render(null, root);
+    });
+    location.path = '/note/id-1';
+    mount();
+    expect(current()).toEqual([null, 'page', null, null]);
+  });
+
+  it('orders the tab bar: files, title, ⋯, spacer, avatar; no "?" (R-TOPBAR-1)', () => {
     mount();
     const bar = query('.topbar');
+    expect(bar.classList.contains('topbar-tab')).toBe(true);
     const order = Array.from(bar.children).map((el) => el.className);
-    const titleIndex = order.findIndex((c) => c.includes('topbar-crumb'));
-    const helpIndex = order.findIndex((c) => c.includes('topbar-help'));
-    expect(titleIndex).toBe(0);
-    expect(helpIndex).toBeGreaterThan(titleIndex);
+    expect(order[0]).toBe('topbar-files');
+    expect(order[1]).toBe('topbar-crumb');
+    expect(order[2]).toContain('topbar-actions');
     expect(order[order.length - 1]).toBe('topbar-avatar');
+    expect(root.querySelector('.topbar-help')).toBeNull();
+    expect(bar.textContent).not.toContain('?');
 
-    expect(query('.topbar-help').getAttribute('aria-label')).toBe(
-      'About this screen',
+    expect(query('.topbar-files').getAttribute('aria-label')).toBe(
+      'Open your folders',
     );
-    const avatar = query<HTMLAnchorElement>('.topbar-avatar');
-    expect(avatar.getAttribute('href')).toBe('/settings');
+    const avatar = query<HTMLButtonElement>('.topbar-avatar');
+    expect(avatar.tagName).toBe('BUTTON');
     expect(avatar.getAttribute('aria-label')).toBe('Settings');
     expect(avatar.textContent).toBe('Y');
+    location.route.mockClear();
+    click(avatar);
+    expect(location.route).toHaveBeenCalledWith('/settings');
+  });
+
+  it('shows the Folders tab bar: "Folders", no files button (NT-Main-375)', () => {
+    location.path = '/notes';
+    mount();
+    const bar = query('.topbar');
+    expect(bar.classList.contains('topbar-explorer')).toBe(true);
+    expect(root.querySelector('.topbar-files')).toBeNull();
+    expect(query('.topbar h1.topbar-title').textContent).toBe('Folders');
+    expect(root.querySelector('.topbar-avatar')).not.toBeNull();
+  });
+
+  it('shows files, Back and no avatar on Settings (ST-Top-375)', () => {
+    location.path = '/settings';
+    mount();
+    const bar = query('.topbar');
+    expect(bar.classList.contains('topbar-inner')).toBe(true);
+    expect(root.querySelector('.topbar-files')).not.toBeNull();
+    expect(query('.topbar-back').getAttribute('aria-label')).toBe(
+      'Back to Home',
+    );
+    expect(root.querySelector('.topbar-avatar')).toBeNull();
   });
 
   it('shows the wordmark as text, and never the bird, in the bar', () => {
@@ -263,34 +314,9 @@ describe('Layout', () => {
     expect(back.getAttribute('href')).toBe('/folder/2-Areas');
   });
 
-  it('opens the help sheet for the tab on "?"', async () => {
-    location.path = '/bower';
-    mount();
-    click(query('.topbar-help'));
-    await lazyChunks();
-    const dialog = document.body.querySelector('[role="dialog"]');
-    expect(dialog?.textContent).toContain('About this screen');
-    expect(dialog?.querySelector('h2')?.textContent).toBe('Bower');
-  });
-
-  it('"Show me around" on the help sheet closes it and goes Home for the tour', async () => {
-    location.path = '/notes';
-    location.route.mockClear();
-    mount();
-    click(query('.topbar-help'));
-    await lazyChunks();
-    const showMe = Array.from(document.body.querySelectorAll('button')).find(
-      (b) => b.textContent === 'Show me around',
-    );
-    if (showMe === undefined) throw new Error('Show me around missing');
-    click(showMe);
-    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
-    expect(location.route).toHaveBeenCalledWith('/');
-  });
-
   it('shows the explorer as a desktop landmark, not a dialog', () => {
     mount();
-    const sidebar = query('nav[aria-label="Your notes"]');
+    const sidebar = query('nav[aria-label="Your folders"]');
     expect(sidebar.getAttribute('role')).toBeNull();
     expect(sidebar.textContent).toContain('Health');
     expect(sidebar.textContent).toContain('you@example.com');
@@ -301,7 +327,7 @@ describe('Layout', () => {
   it('keeps Settings as a desktop sidebar row', () => {
     mount();
     expect(
-      query('nav[aria-label="Your notes"] a[href="/settings"]').textContent,
+      query('nav[aria-label="Your folders"] a[href="/settings"]').textContent,
     ).toBe('Settings');
   });
 
@@ -314,16 +340,16 @@ describe('Layout', () => {
 
   it('has no sort menu, one Expand/Collapse all toggle (#326)', () => {
     mount();
-    const sidebar = query('nav[aria-label="Your notes"]');
+    const sidebar = query('nav[aria-label="Your folders"]');
     expect(sidebar.querySelector('[aria-label^="Sort by"]')).toBeNull();
     expect(sidebar.querySelectorAll('.explorer-tool')).toHaveLength(1);
   });
 
   it('the sidebar toggle expands, then collapses, every folder (#326)', () => {
     mount();
-    const sidebar = query('nav[aria-label="Your notes"]');
+    const sidebar = query('nav[aria-label="Your folders"]');
     const toggle = query<HTMLButtonElement>(
-      'nav[aria-label="Your notes"] button.explorer-tool',
+      'nav[aria-label="Your folders"] button.explorer-tool',
     );
     expect(toggle.getAttribute('aria-label')).toBe('Expand all folders');
 
@@ -339,13 +365,13 @@ describe('Layout', () => {
 
   it("shows the waiting count on Add's row, not on Home (#422, #326, C.9)", () => {
     mount();
-    const sidebar = query('nav[aria-label="Your notes"]');
+    const sidebar = query('nav[aria-label="Your folders"]');
     const add = query<HTMLAnchorElement>(
-      'nav[aria-label="Primary"] a[href="/add"]',
+      'nav[aria-label="Main"] a[href="/add"]',
     );
     expect(add.querySelector('.nav-badge')?.textContent).toBe('1');
     const home = query<HTMLAnchorElement>(
-      'nav[aria-label="Primary"] a[href="/"]',
+      'nav[aria-label="Main"] a[href="/"]',
     );
     expect(home.querySelector('.nav-badge')).toBeNull();
     // Sanity: the fixture's one pending file is `0-Inbox/Receipt.pdf` (the tree names its folder Inbox).
@@ -461,7 +487,7 @@ describe('Layout v5 slots (#741)', () => {
     const ledge = query('.shell-ledge');
     expect(ledge.getAttribute('aria-hidden')).toBe('true');
     expect(ledge.closest('nav')).toBeNull();
-    const nav = query('nav[aria-label="Your notes"]');
+    const nav = query('nav[aria-label="Your folders"]');
     expect(nav.nextElementSibling).toBe(ledge);
     expect(ledge.parentElement).toBe(nav.parentElement);
   });
@@ -475,14 +501,21 @@ describe('Layout v5 slots (#741)', () => {
     expect(root.querySelector('.topbar-chip')).toBeNull();
   });
 
-  it('puts the same bar in the top bar from 900 px, before help', () => {
+  it('has no "Done · 1 filed" pill from 900 px; the upload chip stays (E-9)', () => {
     stubMatchMedia(true);
     mountWith({ tidyBar: h('p', null, 'Tidy') });
-    const chip = query('.topbar-chip');
-    expect(chip.textContent).toBe('Tidy');
-    expect(chip.nextElementSibling).toBe(query('.topbar-help'));
+    expect(root.querySelector('.topbar-chip')).toBeNull();
     expect(root.querySelector('.shell-dock')).toBeNull();
     expect(query('.shell').classList.contains('shell-with-dock')).toBe(false);
+    void act(() => {
+      render(null, root);
+    });
+    document.body.replaceChildren();
+    mountWith({ uploadChip: h('p', null, 'Upload') });
+    expect(query('.topbar-chip').textContent).toBe('Upload');
+    expect(query('.topbar-chip').nextElementSibling).toBe(
+      query('.topbar-avatar'),
+    );
   });
 
   it('lets the tidy-up bar win over the upload chip, and shows the chip alone', () => {
@@ -675,13 +708,5 @@ describe('helpScreenFor', () => {
     expect(helpScreenFor('/note/id-1')).toBe('notes');
     expect(helpScreenFor('/file/id-2')).toBe('notes');
     expect(helpScreenFor('/settings')).toBe('home');
-  });
-});
-
-describe('avatarInitial', () => {
-  it("is the email's first letter, upper case, or ? without one", () => {
-    expect(avatarInitial('you@example.com')).toBe('Y');
-    expect(avatarInitial(undefined)).toBe('?');
-    expect(avatarInitial('')).toBe('?');
   });
 });
