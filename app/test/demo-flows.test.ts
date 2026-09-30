@@ -166,7 +166,10 @@ describe('demo mode', () => {
     expect(done?.state).toBe('done');
     expect(done?.processed).toHaveLength(6);
     // "Tidying up N things" counts what ends up filed (#888).
-    expect(running?.total).toBe(done?.processed?.length);
+    // The requests Bower answers are not things it files (#899, R-CONF-2).
+    expect(running?.total).toBe(
+      done?.items?.filter((item) => item.kind === 'file').length,
+    );
     expect(done?.processed).toContain('0-Inbox/Tomato seedlings.md');
     // Each item says where it went (New, #652); none was renamed.
     expect(done?.items).toContainEqual({
@@ -178,7 +181,8 @@ describe('demo mode', () => {
       expect(item.to).toEqual(expect.any(String));
     }
     // The flat listings come with the run (#674), each with its note.
-    expect(done?.added).toBe('I added bike times to the flats');
+    // Nothing was updated, so Bower claims no update (#899).
+    expect(done?.added).toBeUndefined();
     expect(done?.processed).toContain('0-Inbox/Arlington Road, 2 bed.pdf');
 
     const after = await paths();

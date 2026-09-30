@@ -120,6 +120,7 @@
   font-weight: 700;
   letter-spacing: 0.03em;
   line-height: 15px;
+  white-space: nowrap;
 }
 
 .bower-tag {

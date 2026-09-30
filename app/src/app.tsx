@@ -13,6 +13,7 @@ import { ShellSlotsProvider } from './components/shell-slots.js';
 import { SessionProvider, useSession } from './session.js';
 import { JUST_FILED_PATH } from './just-filed.js';
 import { BOWER_PATH, IDEAS_PATH, usesShell } from './shell-routes.js';
+import { titleForPath } from './use-title.js';
 import { openSwitcher } from './switcher-store.js';
 import { VaultProvider } from './vault-store.js';
 
@@ -95,6 +96,12 @@ function AppRoutes() {
   useEffect(() => {
     if (missingRunKey !== null) void recheckFolder();
   }, [missingRunKey]);
+
+  // Every route names its page (#899, WCAG 2.4.2); named routes set their own.
+  useEffect(() => {
+    const title = titleForPath(path, isDemo());
+    if (title !== null) document.title = title;
+  }, [path]);
 
   // Ctrl/Cmd+K opens the quick switcher from anywhere (#142).
   useEffect(() => {

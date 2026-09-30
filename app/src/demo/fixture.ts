@@ -1546,8 +1546,6 @@ export const SCRIPTED_LISTINGS: readonly RunItem[] = (
   DEMO_RUNS[0]?.items ?? []
 ).filter((item) => /^1-Projects\/Flat hunt\/.*\.pdf$/.test(item.to ?? ''));
 
-export const SCRIPTED_ADDED = 'I added bike times to the flats';
-
 // --- Test states (#735, spec §7c item 4) --------------------------------
 // Extra vault shapes and run states the v5 tests need. Nothing here is part
 // of the demo's normal story: `FIXTURE_FILES` and `DEMO_RUNS` stay as they

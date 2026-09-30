@@ -44,7 +44,7 @@ test('the bubble says what was filed and links to Just filed', async ({
     // #754: the run sentence, what Bower added, then See what changed.
     'Done just now: 5 filed',
   );
-  await expect(bubble).toContainText('I added bike times to the flats.');
+  await expect(bubble).not.toContainText('bike times');
   await shot(page, testInfo, 'home-after-tidy');
   await bubble.getByRole('link', { name: 'See what changed' }).click();
   await expect(page).toHaveURL(/\/just-filed$/);

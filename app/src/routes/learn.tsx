@@ -9,6 +9,7 @@
 
 import type { JSX } from 'preact';
 import { useRoute } from 'preact-iso';
+import { useMemo } from 'preact/hooks';
 
 import { loginUrl } from '../api.js';
 import { BackLink } from '../components/back-link.js';
@@ -32,10 +33,12 @@ import {
   findExample,
 } from '../learn.js';
 import { useSession } from '../session.js';
+import { useTitle } from '../use-title.js';
 import '../styles/learn.css';
 
 const BACK_TO_SETTINGS = <BackLink href="/settings" label="Settings" />;
-const BACK_TO_LEARN = <BackLink href={LEARN_PATH} label={LEARN_TITLE} />;
+const LEARN_BACK_LABEL = 'Learn';
+const BACK_TO_LEARN = <BackLink href={LEARN_PATH} label={LEARN_BACK_LABEL} />;
 const CRUMB = <span class="topbar-title">{LEARN_TITLE}</span>;
 
 /** In the shell the phone's top bar carries the title (`.screen-title` shows on
@@ -104,6 +107,7 @@ export function Learn(): JSX.Element {
   const signedIn = status === 'signed-in';
   useShellSlot('back', BACK_TO_SETTINGS);
   useShellSlot('crumb', CRUMB);
+  useTitle(LEARN_TITLE);
 
   return (
     <section class="learn-screen page-column">
@@ -161,14 +165,20 @@ export function LearnExample(): JSX.Element {
   const { status } = useSession();
   const { params } = useRoute();
   const signedIn = status === 'signed-in';
-  useShellSlot('back', BACK_TO_LEARN);
-  useShellSlot('crumb', CRUMB);
   const example = findExample(params.example);
+  useShellSlot('back', BACK_TO_LEARN);
+  const exampleTitle = example?.title ?? 'Example not found';
+  const crumb = useMemo(
+    () => <span class="topbar-title">{exampleTitle}</span>,
+    [exampleTitle],
+  );
+  useShellSlot('crumb', crumb);
+  useTitle(exampleTitle);
 
   if (example === undefined) {
     return (
       <section class="learn-screen page-column">
-        <BareBack href={LEARN_PATH} label={LEARN_TITLE} />
+        <BareBack href={LEARN_PATH} label={LEARN_BACK_LABEL} />
         <h1 class={titleClass(signedIn)}>Example not found</h1>
         <p class="learn-lead">That example does not exist.</p>
       </section>
@@ -177,7 +187,7 @@ export function LearnExample(): JSX.Element {
 
   return (
     <section class="learn-screen page-column">
-      {!signedIn && <BareBack href={LEARN_PATH} label={LEARN_TITLE} />}
+      {!signedIn && <BareBack href={LEARN_PATH} label={LEARN_BACK_LABEL} />}
       <div class="learn-example-head">
         <FolderMark kind={example.kind} size={40} />
         <div>

@@ -29,7 +29,6 @@ import {
   DEMO_RUN_STATES,
   FIXTURE_FILES,
   FIXTURE_FOLDERS,
-  SCRIPTED_ADDED,
   SCRIPTED_LISTINGS,
   INBOX_PLAN,
 } from './fixture.js';
@@ -279,8 +278,11 @@ export class DemoServer {
     // the filed count at the end are the same number (#888). A context note
     // is never counted.
     run.total =
-      pending.filter((item) => !isContext(item.text)).length +
-      (withFiles ? SCRIPTED_LISTINGS.length : 0);
+      pending.filter(
+        (item) =>
+          !isContext(item.text) &&
+          !isInstruction(item.path, item.name, item.text),
+      ).length + (withFiles ? SCRIPTED_LISTINGS.length : 0);
 
     for (const [i, { path, name, text }] of pending.entries()) {
       let destination = INBOX_PLAN.get(path) ?? `3-Resources/${name}`;
@@ -337,7 +339,6 @@ export class DemoServer {
               at: DONE_MS,
             });
           }
-          run.added = SCRIPTED_ADDED;
         }
         for (const reply of replies) this.applyReply(reply, date);
         const count = run.processed?.length ?? 0;

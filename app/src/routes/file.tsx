@@ -90,6 +90,7 @@ import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
 import { siblingNames } from '../rename-request.js';
+import { useTitle } from '../use-title.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
@@ -758,6 +759,7 @@ export function FileScreen(): JSX.Element {
   const [thumbnailBroken, setThumbnailBroken] = useState(false);
 
   const file = index?.byId.get(id);
+  useTitle(file?.name ?? null);
   const isNote = file !== undefined && fileKind(file) === 'note';
   const load = usePreview(file);
   const pages = usePages(file, index?.byPath);
