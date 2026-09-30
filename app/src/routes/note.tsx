@@ -10,7 +10,11 @@ import type { Kind } from '../kinds.js';
 import { statusOptionLabel } from '../compare.js';
 import { changeStatusWithHistory } from '../history.js';
 import { IconChat, IconFile, IconNote } from '../components/icons.js';
-import { MadeFrom, madeFromSources } from '../components/made-from.js';
+import {
+  applyLinkOf,
+  MadeFrom,
+  madeFromSources,
+} from '../components/made-from.js';
 import { showToast } from '../toast-store.js';
 import { AppFileBanner } from '../components/app-file-banner.js';
 import { AppendForm } from '../components/append-form.js';
@@ -935,6 +939,7 @@ export function Note() {
             folder={folderLink}
           />
           <MadeFrom
+            apply={applyLinkOf(meta.fields.apply_link)}
             sources={madeFromSources({
               note: file,
               original: meta.original,
