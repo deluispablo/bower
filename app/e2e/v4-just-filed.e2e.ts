@@ -21,7 +21,14 @@ function row(page: Page): Locator {
 
 async function openJustFiled(page: Page, phone: boolean): Promise<void> {
   await openHome(page);
-  if (phone) await navigate(page, /^Folders$/);
+  if (!phone) {
+    // #909 (E-9): the desktop sidebar has no Just filed row any more; the
+    // screen opens from its own address.
+    await page.goto('/just-filed');
+    await expect(screen(page)).toBeVisible();
+    return;
+  }
+  await navigate(page, /^Folders$/);
   await expect(row(page)).toContainText('Just filed · 1');
   await row(page).click();
   await expect(screen(page)).toBeVisible();
