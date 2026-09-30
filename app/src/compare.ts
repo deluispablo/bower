@@ -789,12 +789,13 @@ export function phoneExplainer(kind: Kind, count: number): string {
   );
 }
 
-/** The desktop's explainer (board `Desktop-Compare`). */
-export function desktopExplainer(kind: Kind, count: number): string {
+/** The desktop's explainer (board `Compare-Table-1280`): what Bower read,
+ * where a score comes from (when the table has one), and how to sort. */
+export function desktopExplainer(kind: Kind, hasScore: boolean): string {
   return (
-    `You saved ${countWord(count)} ${kind.plural} in this folder. Bower read ` +
-    'the same details from each one, so they line up as a table: sort by ' +
-    `any column, filter, and open a row to see the ${kind.name}.`
+    `Bower read the same things from each ${offerWord(kind, 1)}. ` +
+    (hasScore ? `Your score comes from your ${kind.id} rule. ` : '') +
+    'Click a header to sort.'
   );
 }
 

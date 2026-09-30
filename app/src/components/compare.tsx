@@ -620,9 +620,14 @@ export function CompareView({
   const shown = sorted.filter((note) => !hiddenIds.has(note.id));
   return (
     <section class="compare compare-desktop" aria-label="Compare">
-      <p class="compare-explainer">{desktopExplainer(kind, current.length)}</p>
+      <p class="compare-explainer">
+        {desktopExplainer(
+          kind,
+          extras.some((column) => column.field?.group === 'score'),
+        )}
+      </p>
       {chipRow}
-      <div class="compare-chips" role="group" aria-label="Table">
+      <div class="compare-chips compare-tools" role="group" aria-label="Table">
         <button
           type="button"
           class="compare-chip"
@@ -698,10 +703,6 @@ export function CompareView({
         </span>
         <span>
           <OriginSquare origin="you" /> from what you told me
-        </span>
-        <span class="compare-legend-hint">
-          Columns come from what Bower read. Click a header to sort; drag to
-          reorder.
         </span>
       </div>
       <Hint
@@ -938,7 +939,16 @@ function BodyCell({
     );
   }
   if (column.virtual === 'made-for') {
-    return <td class="compare-td">{madeForBadge(note)}</td>;
+    const badge = madeForBadge(note);
+    return (
+      <td class="compare-td">
+        {(note.madeFor ?? []).length === 0 ? (
+          badge
+        ) : (
+          <span class="compare-made-for">{badge}</span>
+        )}
+      </td>
+    );
   }
   if (column.virtual === 'apply') {
     const href = applyHref(note);
@@ -950,6 +960,7 @@ function BodyCell({
           <a
             href={href}
             target="_blank"
+            class="compare-apply"
             rel="noopener noreferrer"
             aria-label={`Apply to ${noteTitle(note)}`}
           >

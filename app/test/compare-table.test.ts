@@ -5,6 +5,7 @@ import {
   cellText,
   columnExtras,
   compareColumns,
+  desktopExplainer,
   MADE_FOR_COLUMN,
   madeForBadge,
   orderedColumnIds,
@@ -182,5 +183,19 @@ describe('Copy as table (R-CMP-9)', () => {
   it('escapes a pipe in a cell', () => {
     const columns = shownColumns(all, ['interview_panel']);
     expect(tableMarkdown(kind, [northwind], columns)).toContain('Alex \\| Sam');
+  });
+});
+
+describe('The desktop explainer (Compare-Table-1280)', () => {
+  it('says what Bower read, where the score comes from, and how to sort', () => {
+    expect(desktopExplainer(kind, true)).toBe(
+      'Bower read the same things from each offer. Your score comes from your job-offer rule. Click a header to sort.',
+    );
+  });
+
+  it('leaves the score sentence out when there is no score column', () => {
+    expect(desktopExplainer(kind, false)).toBe(
+      'Bower read the same things from each offer. Click a header to sort.',
+    );
   });
 });
