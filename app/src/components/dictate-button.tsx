@@ -1,6 +1,7 @@
 /**
- * The dictate button (spec §5 `dictate-button.tsx`, §6.16 R-DICT-1, D18).
- * It wraps a textarea: a microphone inside the box, bottom right, that
+ * Dictation (spec §5 `dictate-button.tsx`, §6.16 R-DICT-1, R-API-12, D18).
+ * `useDictation` is the Web Speech state machine every microphone runs on
+ * (the Composer's round button, #910). `DictateButton` wraps a textarea: a microphone inside the box, bottom right, that
  * fills the box with what the person says. States: ready, asking (first
  * use), listening, blocked, not available (no button, a one-time tip on
  * touch devices). The browser turns speech into text; nothing is kept.
@@ -11,7 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 import '../styles/dictate-button.css';
 import { Hint } from './hint.js';
-import { IconHelp } from './icons.js';
+import { IconHelp, IconMic, IconStopSquare } from './icons.js';
 
 export type DictateState =
   'ready' | 'asking' | 'listening' | 'blocked' | 'unavailable';
@@ -165,75 +166,91 @@ function isTouch(): boolean {
   }
 }
 
-export interface DictateButtonProps {
+/** What moves the dictation state machine (R-API-12). */
+export type DictateEvent =
+  /** The person pressed the mic; `firstUse` until the browser said yes once. */
+  | { type: 'start'; firstUse: boolean }
+  /** The recogniser started: the microphone is on. */
+  | { type: 'started' }
+  /** A stop, the end of speech, or the silence timer. */
+  | { type: 'stop' }
+  /** The recogniser failed with this code. */
+  | { type: 'error'; error: string }
+  /** This browser has no recogniser. */
+  | { type: 'missing' };
+
+/** Whether a recogniser error means the browser refused the microphone. */
+export function isBlockedError(error: string): boolean {
+  return error === 'not-allowed' || error === 'service-not-allowed';
+}
+
+/**
+ * The dictation state machine: `ready | asking | listening | blocked |
+ * unavailable`. Unavailable is final. Blocked holds until the browser
+ * actually starts listening (the person allowed the microphone in the
+ * browser's settings); the Composer draws it crossed out and inert.
+ */
+export function nextDictateState(
+  state: DictateState,
+  event: DictateEvent,
+): DictateState {
+  if (event.type === 'missing' || state === 'unavailable') return 'unavailable';
+  switch (event.type) {
+    case 'start':
+      if (state === 'blocked') return 'blocked';
+      return event.firstUse ? 'asking' : 'ready';
+    case 'started':
+      return 'listening';
+    case 'stop':
+      return state === 'blocked' ? 'blocked' : 'ready';
+    case 'error':
+      return isBlockedError(event.error) || state === 'blocked'
+        ? 'blocked'
+        : 'ready';
+  }
+}
+
+/** A text field dictation writes into (keeps the caret). */
+type DictationField = HTMLTextAreaElement | HTMLInputElement;
+
+export interface DictationOptions {
   value: string;
   onValue: (next: string) => void;
-  /** The box's accessible name (also its visible label elsewhere). */
-  label: string;
-  id?: string;
-  rows?: number;
-  placeholder?: string;
-  maxLength?: number;
-  disabled?: boolean;
-  /** Extra class on the wrapper (a caller lays the box out). */
-  class?: string;
-  /** Extra class on the textarea. */
-  inputClass?: string;
-  /** Gives the caller the textarea (to focus it). */
-  inputRef?: { current: HTMLTextAreaElement | null };
-  onBlur?: () => void;
+  /** The field the words go into, for the caret. */
+  field: { current: DictationField | null };
   /** Called whenever the microphone goes on or off. */
   onListening?: (on: boolean) => void;
 }
 
-function IconMic(): JSX.Element {
-  return (
-    <svg
-      class="icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <rect x="9" y="3" width="6" height="11" rx="3" />
-      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-    </svg>
-  );
+export interface Dictation {
+  state: DictateState;
+  /** Words heard but not final yet. */
+  interim: string;
+  /** "Listening" / "Stopped", for a screen reader. */
+  announce: string;
+  /** A short sentence after a failure that is not a refusal, else ''. */
+  failure: string;
+  /** The chosen language tag; '' = the device's. */
+  lang: string;
+  /** Starts listening, or stops when already on. */
+  toggle: () => void;
+  start: () => void;
+  stop: () => void;
+  chooseLang: (tag: string) => void;
 }
 
-function IconStopSquare(): JSX.Element {
-  return (
-    <svg
-      class="icon"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <rect x="7" y="7" width="10" height="10" rx="2" />
-    </svg>
-  );
-}
-
-export function DictateButton({
+/**
+ * The Web Speech dictation behind every microphone (R-API-12): the state
+ * machine above, the language from Settings, a 3 s silence stop, and the
+ * words put in at the caret. The browser turns speech into text; nothing
+ * is kept. Leaving the screen (unmount) ends a dictation.
+ */
+export function useDictation({
   value,
   onValue,
-  label,
-  id,
-  rows = 4,
-  placeholder,
-  maxLength,
-  disabled = false,
-  class: rootClass,
-  inputClass,
-  inputRef,
-  onBlur,
+  field,
   onListening,
-}: DictateButtonProps): JSX.Element {
+}: DictationOptions): Dictation {
   const [state, setState] = useState<DictateState>(
     getRecognitionCtor() === undefined ? 'unavailable' : 'ready',
   );
@@ -241,9 +258,6 @@ export function DictateButton({
   const [announce, setAnnounce] = useState('');
   const [failure, setFailure] = useState('');
   const [lang, setLang] = useState<string>(readLang);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const area = useRef<HTMLTextAreaElement>(null);
-  const root = useRef<HTMLDivElement>(null);
   const rec = useRef<Recognition | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const valueRef = useRef(value);
@@ -255,6 +269,10 @@ export function DictateButton({
   onValueRef.current = onValue;
   onListeningRef.current = onListening;
 
+  const move = (event: DictateEvent): void => {
+    setState((s) => nextDictateState(s, event));
+  };
+
   const listening = state === 'listening';
   useEffect(() => {
     onListeningRef.current?.(listening);
@@ -262,8 +280,9 @@ export function DictateButton({
   }, [listening]);
 
   useLayoutEffect(() => {
-    if (pendingCaret.current === null || area.current === null) return;
-    area.current.setSelectionRange(pendingCaret.current, pendingCaret.current);
+    const f = field.current;
+    if (pendingCaret.current === null || f === null) return;
+    f.setSelectionRange(pendingCaret.current, pendingCaret.current);
     pendingCaret.current = null;
   }, [value]);
 
@@ -287,7 +306,7 @@ export function DictateButton({
     detach();
     setInterim('');
     setAnnounce('Stopped');
-    setState((s) => (s === 'listening' || s === 'asking' ? 'ready' : s));
+    move({ type: 'stop' });
   }
 
   function stop(): void {
@@ -303,29 +322,31 @@ export function DictateButton({
   }
 
   function place(): { start: number; end: number } {
-    const a = area.current;
-    if (a !== null && document.activeElement === a) {
-      caret.current = { start: a.selectionStart, end: a.selectionEnd };
+    const f = field.current;
+    if (f !== null && document.activeElement === f) {
+      caret.current = {
+        start: f.selectionStart ?? f.value.length,
+        end: f.selectionEnd ?? f.value.length,
+      };
     }
     const end = valueRef.current.length;
     return caret.current ?? { start: end, end };
   }
 
-  function start(tag: string): void {
+  function begin(tag: string): void {
     const Ctor = getRecognitionCtor();
     if (Ctor === undefined) {
-      setState('unavailable');
+      move({ type: 'missing' });
       return;
     }
     setFailure('');
-    setMenuOpen(false);
     const r = new Ctor();
     r.continuous = true;
     r.interimResults = true;
     r.lang = tag !== '' ? tag : navigator.language;
     r.onstart = (): void => {
       markUsed();
-      setState('listening');
+      move({ type: 'started' });
       setAnnounce('Listening');
       armSilence();
     };
@@ -352,17 +373,15 @@ export function DictateButton({
     };
     r.onerror = (event): void => {
       console.error('Dictation error', event.error);
-      const blocked =
-        event.error === 'not-allowed' || event.error === 'service-not-allowed';
       detach();
       setInterim('');
       setAnnounce('Stopped');
-      if (blocked) {
-        setState('blocked');
-        return;
-      }
-      setState('ready');
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+      move({ type: 'error', error: event.error });
+      if (
+        !isBlockedError(event.error) &&
+        event.error !== 'no-speech' &&
+        event.error !== 'aborted'
+      ) {
         setFailure('Dictation stopped. Tap the mic to try again.');
       }
     };
@@ -370,40 +389,44 @@ export function DictateButton({
       if (rec.current === r) finish();
     };
     rec.current = r;
-    const a = area.current;
+    const f = field.current;
     const end = valueRef.current.length;
     caret.current =
-      a !== null
-        ? { start: a.selectionStart, end: a.selectionEnd }
+      f !== null
+        ? { start: f.selectionStart ?? end, end: f.selectionEnd ?? end }
         : { start: end, end };
-    setState(hasUsedBefore() ? 'ready' : 'asking');
+    move({ type: 'start', firstUse: !hasUsedBefore() });
     try {
       r.start();
     } catch (err) {
       console.error('Dictation could not start', err);
       detach();
-      setState('ready');
+      move({ type: 'stop' });
       setFailure('Dictation could not start. Tap the mic to try again.');
     }
   }
 
+  function start(): void {
+    if (state === 'unavailable') return;
+    begin(lang);
+  }
+
   function toggle(): void {
-    if (state === 'listening' || state === 'asking') stop();
-    else start(lang);
+    if (rec.current !== null) stop();
+    else start();
   }
 
   function chooseLang(tag: string): void {
     writeLang(tag);
     setLang(tag);
-    setMenuOpen(false);
     const r = rec.current;
     if (r === null) return;
     detach();
     r.abort();
-    start(tag);
+    begin(tag);
   }
 
-  // Leaving the route (unmount) ends the dictation.
+  // Leaving the screen (unmount) ends the dictation.
   useEffect(
     () => () => {
       const r = rec.current;
@@ -413,10 +436,76 @@ export function DictateButton({
     [],
   );
 
+  return {
+    state,
+    interim,
+    announce,
+    failure,
+    lang,
+    toggle,
+    start,
+    stop,
+    chooseLang,
+  };
+}
+
+export interface DictateButtonProps {
+  value: string;
+  onValue: (next: string) => void;
+  /** The box's accessible name (also its visible label elsewhere). */
+  label: string;
+  id?: string;
+  rows?: number;
+  placeholder?: string;
+  maxLength?: number;
+  disabled?: boolean;
+  /** Extra class on the wrapper (a caller lays the box out). */
+  class?: string;
+  /** Extra class on the textarea. */
+  inputClass?: string;
+  /** Gives the caller the textarea (to focus it). */
+  inputRef?: { current: HTMLTextAreaElement | null };
+  onBlur?: () => void;
+  /** Called whenever the microphone goes on or off. */
+  onListening?: (on: boolean) => void;
+}
+
+/**
+ * The older textarea with a microphone, kept for the boxes that adopt the
+ * Composer in wave 2 (note editor, pile note, Add). New boxes use
+ * `Composer` (`composer.tsx`), which shares `useDictation`.
+ */
+export function DictateButton({
+  value,
+  onValue,
+  label,
+  id,
+  rows = 4,
+  placeholder,
+  maxLength,
+  disabled = false,
+  class: rootClass,
+  inputClass,
+  inputRef,
+  onBlur,
+  onListening,
+}: DictateButtonProps): JSX.Element {
+  const area = useRef<HTMLTextAreaElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const dictation = useDictation({
+    value,
+    onValue,
+    field: area,
+    ...(onListening !== undefined && { onListening }),
+  });
+  const { state, interim, announce, failure, lang } = dictation;
+  const listening = state === 'listening';
+
   function onFocusOut(e: FocusEvent): void {
     const next = e.relatedTarget;
     if (next instanceof Node && root.current?.contains(next)) return;
-    if (rec.current !== null) stop();
+    dictation.stop();
     setMenuOpen(false);
   }
 
@@ -454,20 +543,23 @@ export function DictateButton({
           <button
             type="button"
             class={`dictate-btn${state === 'asking' ? ' dictate-btn-asking' : ''}`}
-            aria-pressed={state === 'listening'}
-            aria-label={state === 'listening' ? 'Stop dictating' : 'Dictate'}
+            aria-pressed={listening}
+            aria-label={listening ? 'Stop dictating' : 'Dictate'}
             disabled={disabled}
             onPointerDown={(e): void => e.preventDefault()}
-            onClick={toggle}
+            onClick={(): void => {
+              setMenuOpen(false);
+              dictation.toggle();
+            }}
           >
-            {state === 'listening' ? <IconStopSquare /> : <IconMic />}
+            {listening ? <IconStopSquare /> : <IconMic />}
           </button>
         )}
       </div>
       <span class="dictate-live" role="status">
         {announce}
       </span>
-      {state === 'listening' && (
+      {listening && (
         <div class="dictate-line">
           {interim !== '' && <span class="dictate-interim">{interim}</span>}
           <span class="dictate-status">
@@ -492,7 +584,10 @@ export function DictateButton({
                 type="button"
                 role="menuitemradio"
                 aria-checked={item.tag === lang}
-                onClick={(): void => chooseLang(item.tag)}
+                onClick={(): void => {
+                  setMenuOpen(false);
+                  dictation.chooseLang(item.tag);
+                }}
               >
                 {item.text}
               </button>
@@ -526,3 +621,4 @@ export function DictateButton({
     </div>
   );
 }
+
