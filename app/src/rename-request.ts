@@ -53,7 +53,8 @@ export const RENAME_MESSAGES = {
 } as const;
 
 /** The line under Rename's box (board NO-Rename). */
-export const RENAME_HINT = 'The arrow renames it. The link to it keeps working.';
+export const RENAME_HINT =
+  'The arrow renames it. The link to it keeps working.';
 
 /** The toast once the rename request is in the inbox (with Undo). */
 export const RENAME_SENT_TOAST =

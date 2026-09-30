@@ -85,9 +85,9 @@ describe('SearchField trigger', () => {
     mount({ variant: 'trigger', size: 'desktop', shortcut: true });
     expect(root.querySelector('.search-field-desktop')).not.toBeNull();
     expect(root.querySelector('kbd')?.textContent).toMatch(/K$/);
-    expect(
-      named('Dictate').classList.contains('round-button-small'),
-    ).toBe(true);
+    expect(named('Dictate').classList.contains('round-button-small')).toBe(
+      true,
+    );
   });
 
   it('opens Search and asks its field to dictate from the mic', () => {

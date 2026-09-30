@@ -82,7 +82,11 @@ function key(root: HTMLElement, init: KeyboardEventInit): void {
   const field = root.querySelector('textarea, input');
   void act(() => {
     field?.dispatchEvent(
-      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }),
+      new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      }),
     );
   });
 }
@@ -334,7 +338,10 @@ describe('Composer', () => {
   });
 
   it('draws the key box as a password field in mono with the mic', () => {
-    const root = mount('', { inputType: 'password', commitLabel: 'Save the key' });
+    const root = mount('', {
+      inputType: 'password',
+      commitLabel: 'Save the key',
+    });
     const input = root.querySelector('input');
     expect(input?.getAttribute('type')).toBe('password');
     expect(input?.getAttribute('autocomplete')).toBe('off');

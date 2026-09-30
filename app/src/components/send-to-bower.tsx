@@ -237,7 +237,11 @@ export function openSendToBower(props: SendToBowerProps): void {
       kind: 'folder',
       buildText: props.buildText,
       ...(props.aboutKind !== undefined && {
-        icon: { name: props.about, mimeType: FOLDER_MIME, root: props.aboutKind },
+        icon: {
+          name: props.about,
+          mimeType: FOLDER_MIME,
+          root: props.aboutKind,
+        },
       }),
     },
     props.initialText !== undefined ? { prefill: props.initialText } : {},

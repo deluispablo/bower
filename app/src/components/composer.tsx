@@ -353,9 +353,7 @@ export function Composer({
         class={`composer-line${line?.tone === 'danger' ? ' composer-line-danger' : ''}`}
         aria-live="polite"
       >
-        {line?.dot === true && (
-          <span class="composer-dot" aria-hidden="true" />
-        )}
+        {line?.dot === true && <span class="composer-dot" aria-hidden="true" />}
         {line?.text}
       </p>
     </div>

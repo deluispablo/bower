@@ -70,7 +70,8 @@ describe('Add a paragraph…', () => {
     await act(() => {
       stub.latest().say('A new thought');
     });
-    const box = document.body.querySelector<HTMLTextAreaElement>('#append-text');
+    const box =
+      document.body.querySelector<HTMLTextAreaElement>('#append-text');
     expect(box?.value).toBe('A new thought');
     expect(roundButton()?.getAttribute('aria-label')).toBe('Stop dictating');
   });
@@ -81,7 +82,8 @@ describe('Add a paragraph…', () => {
     await act(() => {
       render(h(AppendForm, { onAppend, onClose }), root);
     });
-    const box = document.body.querySelector<HTMLTextAreaElement>('#append-text');
+    const box =
+      document.body.querySelector<HTMLTextAreaElement>('#append-text');
     await act(() => {
       if (box === null) return;
       box.value = 'One more thing';

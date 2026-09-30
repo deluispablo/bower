@@ -130,7 +130,9 @@ describe('Ask sheet', () => {
       'Your question',
     );
     expect(body().textContent).toContain('The arrow puts it in your inbox');
-    expect(body().textContent).toContain('puts the answer next to CV insights.');
+    expect(body().textContent).toContain(
+      'puts the answer next to CV insights.',
+    );
     expect(named('Just this, now').getAttribute('aria-disabled')).toBe('true');
     expect(body().textContent).toContain(
       'Uses one run of your Claude plan. The rest of the inbox waits.',
@@ -188,9 +190,7 @@ describe('Ask sheet', () => {
         buildText: (value) => `About Moonee Ponds: ${value}`,
       });
     });
-    expect(body().textContent).toContain(
-      'puts the answer in Moonee Ponds.',
-    );
+    expect(body().textContent).toContain('puts the answer in Moonee Ponds.');
     expect(box().value).toBe('What is still missing here?');
   });
 });

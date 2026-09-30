@@ -741,7 +741,9 @@ describe('dictation in the Bower box (#780)', () => {
   });
 
   function micButton(): HTMLButtonElement {
-    const button = root.querySelector<HTMLButtonElement>('.composer .round-button');
+    const button = root.querySelector<HTMLButtonElement>(
+      '.composer .round-button',
+    );
     if (button === null) throw new Error('No microphone');
     return button;
   }

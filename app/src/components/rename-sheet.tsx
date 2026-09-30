@@ -47,7 +47,10 @@ export interface RenameSheetProps {
   onClose: () => void;
 }
 
-export function RenameSheet({ target, onClose }: RenameSheetProps): JSX.Element {
+export function RenameSheet({
+  target,
+  onClose,
+}: RenameSheetProps): JSX.Element {
   const { me } = useSession();
   const { refresh } = useVault();
   const { base, extension } = splitFileName(target.name, target.isNote);

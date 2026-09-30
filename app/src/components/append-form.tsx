@@ -44,7 +44,10 @@ function errorSentence(err: unknown): string {
   return 'Could not add it. Try again.';
 }
 
-export function AppendForm({ onAppend, onClose }: AppendFormProps): JSX.Element {
+export function AppendForm({
+  onAppend,
+  onClose,
+}: AppendFormProps): JSX.Element {
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

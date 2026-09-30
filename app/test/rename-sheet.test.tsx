@@ -103,10 +103,10 @@ describe('Rename…', () => {
   it('draws the title, the line, the prefilled box with the arrow and the hint', () => {
     rename();
     expect(body().querySelector('h2')?.textContent).toBe('Rename…');
-    expect(
-      body().querySelector('[aria-label="Close Rename"]'),
-    ).not.toBeNull();
-    expect(body().textContent).toContain('Bower renames it at the next tidy-up.');
+    expect(body().querySelector('[aria-label="Close Rename"]')).not.toBeNull();
+    expect(body().textContent).toContain(
+      'Bower renames it at the next tidy-up.',
+    );
     expect(box().value).toBe('CV insights');
     expect(box().getAttribute('rows')).toBe('1');
     expect(roundButton().getAttribute('aria-label')).toBe('Rename');

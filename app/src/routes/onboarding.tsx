@@ -526,7 +526,9 @@ export function Onboarding(): JSX.Element {
                     if (busy === null) void handleSelect();
                   }}
                   sending={busy === 'select'}
-                  error={inputError !== null && inputError !== '' ? inputError : null}
+                  error={
+                    inputError !== null && inputError !== '' ? inputError : null
+                  }
                 />
               </>
             ) : (
