@@ -29,7 +29,7 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
   const preview = page.getByRole('complementary', { name: 'Preview' });
   await expect(preview).toBeVisible();
   await expect(
-    page.getByRole('navigation', { name: 'Your notes' }),
+    page.getByRole('navigation', { name: 'Your folders' }),
   ).toBeVisible();
   const box = await page.locator('.folder-view').boundingBox();
   expect(box?.width).toBeLessThanOrEqual(561);

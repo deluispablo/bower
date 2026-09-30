@@ -92,7 +92,10 @@ test('running: the Tidying bird stage is 166 px, with the steps and the demo not
 
 test('done: tiles, rows with a tag, and See everything opens Just filed for this run (R-SHEET-2, 3, 6)', async ({
   page,
-}) => {
+}, testInfo) => {
+  // v6 (#906, E-9): the done sheet opens from the phone chip; the desktop
+  // top bar has no "Done · 1 filed" pill to open it from.
+  test.skip(testInfo.project.name !== 'phone', 'the done chip is phone-only');
   await holdRun(page, 'done');
   await openSheet(page, 'Tidy-up done', true);
   const sheet = page.getByRole('dialog', { name: 'Tidy-up done' });

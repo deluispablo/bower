@@ -1,7 +1,8 @@
-/* A Back link that keeps its name (`named` in `back-link.tsx`, R-NOTE-10):
-   the name is the last thing to give way, after the bar's own room runs out
-   at 60% of its width. */
-.topbar-back.topbar-back-named {
+/* A Back link that keeps its name (`named` in `back-link.tsx`, R-NOTE-10)
+   on an inner screen that still shows a title in the bar: the name is the
+   last thing to give way, after the bar's own room runs out at 60% of its
+   width. Without a title in the bar, Back takes the free space anyway. */
+.topbar-has-title .topbar-back.topbar-back-named {
   flex: 0 1 auto;
   max-width: 60%;
   padding-right: var(--space-2);

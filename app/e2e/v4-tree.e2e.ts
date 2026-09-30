@@ -145,7 +145,7 @@ test('after a tidy-up, the folder it filed into shows "<n> new" and its new rows
   if (prompted) await gotIt.click();
   // In-app navigation: a reload would forget the run.
   // On desktop the sidebar is the tree already.
-  if (testInfo.project.name === 'phone') await navigate(page, /^Notes$/);
+  if (testInfo.project.name === 'phone') await navigate(page, /^Folders$/);
   const list = tree(page);
   await expect(list).toBeVisible();
 

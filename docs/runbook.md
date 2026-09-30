@@ -541,7 +541,7 @@ A folder opens at `/folder/<path>` (issue #214) — the path relative to the Bow
 - **Quick look.** Tapping a file, or pressing Space on a desktop, opens it over the folder without leaving it; Enter opens the full screen.
 - **Empty state.** A folder with nothing in it says "Nothing in <name> yet", with **Add something** and **Ask Bower to move things here** (the Bower box prefilled). If the files are in subfolders, it says how many and where instead.
 - **Compare.** When the folder's notes name a kind (flats, jobs, and so on) a **Compare N <kind>** tab appears beside the list, and a button on a desktop. Its code loads only then.
-- **Desktop, three panes.** From 1200 px the folder screen shows the tree, the folder and a preview side by side. Keys, listed on the screen's bottom line: arrows move the selection, Space quick look, Enter open, Backspace up a folder, `/` or Ctrl K (Cmd K on a Mac) search. Below 1200 px it is one column; below 900 px the tree is the Notes tab.
+- **Desktop, three panes.** From 1200 px the folder screen shows the tree, the folder and a preview side by side. Keys, listed on the screen's bottom line: arrows move the selection, Space quick look, Enter open, Backspace up a folder, `/` or Ctrl K (Cmd K on a Mac) search. Below 1200 px it is one column; below 900 px the tree is the Folders tab.
 
 ## Pins
 

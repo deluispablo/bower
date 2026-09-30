@@ -21,7 +21,7 @@ function row(page: Page): Locator {
 
 async function openJustFiled(page: Page, phone: boolean): Promise<void> {
   await openHome(page);
-  if (phone) await navigate(page, /^Notes$/);
+  if (phone) await navigate(page, /^Folders$/);
   await expect(row(page)).toContainText('Just filed · 6');
   await row(page).click();
   await expect(screen(page)).toBeVisible();
@@ -98,7 +98,7 @@ test('Mark all seen clears the Notes row', async ({ page }, testInfo) => {
     0,
   );
 
-  await navigate(page, /^Notes$/);
+  await navigate(page, /^Folders$/);
   await expect(visible(page.locator('[role="tree"]'))).toBeVisible();
   await expect(page.locator('a.just-filed-row')).toHaveCount(0);
 });

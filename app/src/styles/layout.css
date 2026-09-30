@@ -199,44 +199,134 @@ button.page-bare-back {
   font-weight: var(--weight-bold);
 }
 
+/*
+ * The shell's v6 colours (#906). The boards are dark; the light theme keeps
+ * today's look (the lead's ruling), so each role here reads today's light
+ * value and switches to the board's value in the dark theme only.
+ */
+.shell {
+  --shell-active-bg: var(--color-surface-hover);
+  --shell-active-fg: var(--color-heading);
+  --shell-back-fg: var(--color-heading);
+  --shell-avatar-bg: var(--color-brand-tint);
+  --shell-avatar-fg: var(--color-link);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .shell {
+    --shell-active-bg: var(--color-selection);
+    --shell-active-fg: var(--color-link);
+    --shell-back-fg: var(--color-text-muted);
+    --shell-avatar-bg: var(--color-surface-strong);
+    --shell-avatar-fg: var(--color-text);
+  }
+}
+
+:root[data-theme='dark'] .shell {
+  --shell-active-bg: var(--color-selection);
+  --shell-active-fg: var(--color-link);
+  --shell-back-fg: var(--color-text-muted);
+  --shell-avatar-bg: var(--color-surface-strong);
+  --shell-avatar-fg: var(--color-text);
+}
+
+/*
+ * The phone top bar (#906, spec §3.1, PF-Main-375, HM-Main-375,
+ * NT-Main-375, ST-Top-375): 56 px, the page background, sticky at the top,
+ * padding 0 12 px 0 4 px under the safe-area inset. Three variants
+ * (`topBarVariant`): `tab` (files, title, ⋯, avatar), `inner` (files, back,
+ * avatar) and `explorer` (title, ⋯, avatar). Nothing changes on scroll: no
+ * border, no shadow.
+ */
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 60px;
-  padding: var(--space-2) var(--space-3) 0;
+  gap: 2px;
+  min-height: 56px;
+  padding: env(safe-area-inset-top, 0px) 12px 0 4px;
+  background: var(--color-bg);
 }
 
-/* `auto`, not `0`, as the basis: the title keeps its own width while Back's
-   label shrinks first (see `.topbar-back`), then grows to push "?" and the
-   avatar to the right edge. A 96px floor (#426, #847): on a note whose own
-   title is close in length to wherever Back points (its own folder, say),
-   proportional flex-shrink alone let both give up a slice of the deficit
-   at once, each landing at only a few letters. Below this floor the
-   flexbox algorithm freezes the title and pushes the rest of the deficit
-   onto Back instead, which still has its own 44px floor to fall back on.
-   96px keeps a title readable to around a dozen characters before it
-   has to give any further. */
+/* The files button (R-ICON-1): 40 visual, 44 hit; "Open your folders". */
+.topbar-files {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.topbar-files::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  content: '';
+}
+
+.topbar-files .icon {
+  width: 22px;
+  height: 22px;
+}
+
+/* The Folders tab has no files button: its title starts 12 px in. */
+.topbar-lead {
+  flex: 0 0 12px;
+}
+
+/* The title slot: on a tab it is as wide as the title, so the ⋯ follows the
+   text 4 px after it (K-11) and the spacer pushes the avatar right. */
 .topbar-crumb {
-  flex: 1 1 auto;
-  min-width: 96px;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
-/* The screen title, phone only (#318): the crumb slot's content, or the
-   wordmark as text on Home. Desktop shows nothing here (unchanged);
-   the route's own `.screen-title` heading in the content column covers it
-   there instead. */
+.topbar-crumb:empty {
+  display: none;
+}
+
+.topbar-spacer {
+  flex: 1 1 0;
+}
+
+/* Tab and Folders titles (R-TOPBAR-3): 24 px Poppins 700, one line. */
 .topbar-title {
   display: block;
   margin: 0;
-  padding-left: var(--space-1);
   overflow: hidden;
   color: var(--color-heading);
   font-family: var(--font-display);
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   font-weight: var(--weight-bold);
+  line-height: 1.25;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.topbar-tab .topbar-actions,
+.topbar-explorer .topbar-actions {
+  margin-left: 2px;
+}
+
+/* An inner screen that still fills the bar's title (until it adopts
+   `PageHeader`): the title keeps a 96 px floor (#426, #847) and Back's
+   name gives way first. */
+.topbar-has-title .topbar-crumb {
+  flex: 1 1 auto;
+  min-width: 96px;
 }
 
 /* Add, Tell Bower, Settings: the same title as `.topbar-title`, but in the
@@ -246,40 +336,44 @@ button.page-bare-back {
   display: none;
 }
 
-/* Phone note screen (#144): the back link (crumb slot content) replaces the
-   wordmark; the full breadcrumb (also crumb slot content, `routes/note.tsx`)
-   only shows once there is room for it, in the desktop header below. */
+/* Phone note screen (#144): the full breadcrumb (crumb slot content,
+   `routes/note.tsx`) only shows once there is room for it, on desktop. */
 .topbar-crumb .breadcrumb {
   display: none;
 }
 
-/* Back on an inner screen (#318, `back-link.tsx`): it shrinks a thousand
-   times faster than the title, so its label gives way (down to the bare
-   arrow) before the title starts to truncate. On a phone the label takes
-   the free space and ellipsizes (#847), so it is never a 5 px sliver. */
+/* Back on an inner screen (R-TOPBAR-2, `back-link.tsx`, PF-Main-375): the
+   chevron, then the parent's name in 15 px muted text taking the free space
+   and ellipsized at the end. At least 44 px high; at its narrowest the
+   chevron alone is a 44 px target. */
 .topbar-back {
+  position: relative;
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   align-items: center;
-  /* 11 + 22 (the arrow) + 11 = 44: at its narrowest the link is exactly
-     the arrow's tap target, with no sliver of the label left showing. */
-  gap: 11px;
+  gap: 4px;
   min-width: 44px;
   min-height: 44px;
-  padding-left: 11px;
+  padding-left: 4px;
   overflow: hidden;
-  color: var(--color-heading);
-  font-family: var(--font-display);
-  font-weight: var(--weight-bold);
+  color: var(--shell-back-fg);
+  font-size: var(--text-15);
   text-decoration: none;
+}
+
+.topbar-has-title .topbar-back {
+  flex: 0 1000 auto;
 }
 
 .topbar-back .icon {
   flex-shrink: 0;
-  transform: rotate(180deg);
+  width: 20px;
+  height: 20px;
+  color: currentcolor;
 }
 
 .topbar-back-label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -287,40 +381,38 @@ button.page-bare-back {
 
 .topbar-actions {
   display: flex;
+  flex: 0 0 auto;
 }
 
-/* The avatar (#318): the account's initial in a teal-tinted circle; it
-   opens Settings. Phone only: the desktop sidebar has a Settings row. */
+/* The avatar (R-AVATAR-1, §3.4, HM-Main-375): a 44 px button holding a
+   30 px circle with the signed-in person's initial, 13 px 700 (the board
+   over the spec's 14). It opens Settings. Phone only: the desktop sidebar
+   has a Settings row. */
 .topbar-avatar {
   display: inline-flex;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  position: relative;
-  /* A 44 px hit area around the 32 px disc (#899). */
   width: 44px;
   height: 44px;
-  color: var(--color-link);
-  font-family: var(--font-display);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
-  text-decoration: none;
-}
-
-.topbar-avatar::before {
-  position: absolute;
-  inset: 6px;
-  border-radius: var(--radius-full);
-  background: var(--color-brand-tint);
-  content: '';
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .topbar-avatar > span {
-  position: relative;
-}
-
-.topbar-help {
-  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  background: var(--shell-avatar-bg);
+  color: var(--shell-avatar-fg);
+  font-size: var(--text-13);
+  font-weight: var(--weight-bold);
 }
 
 /* The desktop breadcrumb slot (#741); phone-only screens never see it. */
@@ -338,6 +430,9 @@ button.page-bare-back {
   line-height: 1.5;
 }
 
+/* The tab bar (#906, spec §3.2): 64 px plus the safe area, the sidebar
+   colour, four equal cells Home · Folders · Add · Bower; icon 22, label
+   12 px 600, gap 4; idle muted, active teal icon and label. */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -345,10 +440,12 @@ button.page-bare-back {
   right: 0;
   z-index: 10;
   display: flex;
-  padding: var(--space-1) var(--space-2)
-    calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
+  /* 8 px sides keep the tour bird that points at a tab clear of the edge. */
+  padding: 0 var(--space-2) env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
   background: var(--color-sidebar);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .bottom-nav a {
@@ -357,13 +454,18 @@ button.page-bare-back {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
-  min-height: 52px;
+  min-height: 44px;
   color: var(--color-text-muted);
   font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
+  font-weight: 600;
   text-decoration: none;
+}
+
+.bottom-nav a .icon {
+  width: 22px;
+  height: 22px;
 }
 
 .bottom-nav a[aria-current='page'] {
@@ -378,7 +480,7 @@ button.page-bare-back {
  * above it. Nothing renders while the slot is empty.
  */
 .shell {
-  --bottom-nav-height: calc(60px + env(safe-area-inset-bottom, 0px));
+  --bottom-nav-height: calc(64px + env(safe-area-inset-bottom, 0px));
   --dock-height: 60px;
 }
 
@@ -487,27 +589,41 @@ button.page-bare-back {
   padding: 0 var(--space-2);
 }
 
+/* The desktop nav rows (#906, spec §3.3, PF-Main-1280): radius 8,
+   label 14 px; icon 18 and padding 0 8 px as the board's `.nv`; 44 px on
+   touch, 34 px with a fine pointer (below). The active
+   row is teal on the selection tint (R-SIDEBAR-2) in the dark theme; light
+   keeps today's grey fill (the lead's ruling: light does not change). */
 .explorer-row {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
   min-height: 44px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  border-radius: var(--radius-row);
   color: var(--color-text);
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 
-.explorer-row:hover,
-.explorer-row[aria-current='page'] {
+.explorer-row:hover {
   background: var(--color-surface-hover);
   color: var(--color-heading);
+}
+
+.explorer-row[aria-current='page'] {
+  background: var(--shell-active-bg);
+  color: var(--shell-active-fg);
 }
 
 .explorer-row .icon {
   width: 18px;
   height: 18px;
   color: var(--color-text-muted);
+}
+
+.explorer-row[aria-current='page'] .icon {
+  color: var(--shell-active-fg);
 }
 
 .explorer-row-label {
@@ -527,8 +643,8 @@ button.page-bare-back {
   color: var(--color-text-muted);
   font-family: var(--font-sans);
   font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -735,7 +851,7 @@ button.page-bare-back {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    padding-top: var(--space-4);
+    padding: 16px 12px;
     background: var(--color-sidebar);
     border-right: 1px solid var(--color-border);
   }
@@ -800,6 +916,12 @@ button.page-bare-back {
     align-items: center;
   }
 
+  /* E-9: no "Done · 1 filed" pill on desktop (Home's bubble is the way in);
+     the chip keeps its running, partly done and failed states there. */
+  .topbar-chip:has(.run-chip--done) {
+    display: none;
+  }
+
   .shell-dock {
     display: none;
   }
@@ -835,13 +957,29 @@ button.page-bare-back {
     padding: 0 10px;
   }
 
+  /* The desktop top area (#906, PF-Main-1280, JF-Main-1280): one 48 px row
+     for the breadcrumb and the upload chip, no border; the files button,
+     Back, the phone title, the actions slot, the avatar and the tab bar
+     are phone-only. There is no "Done · 1 filed" pill (E-9). */
   .topbar {
-    min-height: 56px;
+    position: static;
+    min-height: 48px;
     padding: 0 var(--space-6);
     gap: var(--space-3);
-    border-bottom: 1px solid var(--color-border);
+    background: transparent;
   }
 
+  /* The wordmark row (§3.3): "Bower" 18 px Poppins 700, 40 high. */
+  .explorer-brand {
+    min-height: 40px;
+  }
+
+  .explorer-brand .brand-word {
+    font-size: var(--text-18);
+  }
+
+  .topbar-files,
+  .topbar-lead,
   .topbar-avatar,
   .topbar-back,
   .topbar-title,
@@ -904,7 +1042,7 @@ button.page-bare-back {
 /* Mouse or trackpad on a wide screen: the denser rows of the design. */
 @media (min-width: 900px) and (pointer: fine) {
   .explorer-row {
-    min-height: 36px;
+    min-height: 34px;
   }
 
   .explorer-tool {

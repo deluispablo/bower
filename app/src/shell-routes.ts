@@ -39,8 +39,69 @@ export const ACTIVITY_PATH = '/bower?show=activity';
  * help sheet's Ideas button; Back goes to the Bower tab. */
 export const IDEAS_PATH = '/ideas';
 
+/** The second tab's label (owner review O-R5): "Folders" everywhere the
+ * tab is named. A label only: the route stays `/notes` and the kind
+ * "Notes" (Search groups, Filter chips) is not renamed. */
+export const FOLDERS_TAB_LABEL = 'Folders';
+
+/** The desktop sidebar's landmark and the drawer's title (O-R5). */
+export const FOLDERS_LANDMARK = 'Your folders';
+
+/** The Folders tab's route (unchanged by the rename). */
+export const FOLDERS_PATH = '/notes';
+
+/** Just filed (#345): a child of Home (K-5). */
+export const JUST_FILED_PATH = '/just-filed';
+
+/** Settings: reached from the avatar (phone) or the sidebar (desktop). */
+export const SETTINGS_PATH = '/settings';
+
+export type TabId = 'home' | 'folders' | 'add' | 'bower';
+
+/**
+ * The phone tab lit on `path` (spec §3.2, R-TABBAR-2): Home on Home and
+ * Just filed; Folders on the Folders tab, every folder, note and file, and
+ * Health (reached from the Folders tab); Add and Bower on their own tab.
+ * Settings and every other screen light none.
+ */
+export function activeTab(path: string): TabId | null {
+  if (path === '/' || path === JUST_FILED_PATH) return 'home';
+  if (
+    path === FOLDERS_PATH ||
+    path === '/health' ||
+    path === '/folder' ||
+    path.startsWith('/folder/') ||
+    path.startsWith('/note/') ||
+    path.startsWith('/file/')
+  ) {
+    return 'folders';
+  }
+  if (path === '/add') return 'add';
+  if (path === BOWER_PATH) return 'bower';
+  return null;
+}
+
+/**
+ * The phone top bar's variant (spec §3.1, R-TOPBAR-1): `explorer` on the
+ * Folders tab (title, ⋯, avatar; no files button), `tab` on Home, Add and
+ * Bower (files, title, ⋯, avatar), `inner` everywhere else (files, back,
+ * avatar).
+ */
+export type TopBarVariant = 'tab' | 'inner' | 'explorer';
+
+export function topBarVariant(path: string): TopBarVariant {
+  if (path === FOLDERS_PATH) return 'explorer';
+  if (path === '/' || path === '/add' || path === BOWER_PATH) return 'tab';
+  return 'inner';
+}
+
+/** Whether the phone bar shows the avatar: everywhere but Settings (ST-1). */
+export function barHasAvatar(path: string): boolean {
+  return path !== SETTINGS_PATH;
+}
+
 /** The four tabs (#317); every other screen in the shell is an inner one. */
-const TAB_PATHS = new Set(['/', '/notes', '/add', BOWER_PATH]);
+const TAB_PATHS = new Set(['/', FOLDERS_PATH, '/add', BOWER_PATH]);
 
 /**
  * Whether `path` is an inner screen (#318): a note, a folder, Health,
