@@ -391,3 +391,177 @@ export function IconCheck(): JSX.Element {
     </Svg>
   );
 }
+
+/*
+ * v6 icons (spec §2.6, R-ICON-1 to 35): one meaning per icon. Paths from the
+ * v6 boards where a board draws the glyph; the others follow the spec.
+ */
+
+/** Open your folders (the drawer): the files panel glyph (R-ICON-1). */
+export function IconPanel(): JSX.Element {
+  return (
+    <Svg>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </Svg>
+  );
+}
+
+/** Back to the parent (R-ICON-2). */
+export function IconChevronLeft(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M15 6l-6 6 6 6" />
+    </Svg>
+  );
+}
+
+/** About this note or file, (i) only (R-ICON-4). */
+export function IconInfo(): JSX.Element {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8h.01" />
+    </Svg>
+  );
+}
+
+/** Show in folders / show the open item in the tree (R-ICON-9). */
+export function IconLocate(): JSX.Element {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="7" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    </Svg>
+  );
+}
+
+/** Move to… (R-ICON-11). */
+export function IconMove(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M3 6a1 1 0 0 1 1-1h4.5l1.5 2H20a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6Z" />
+      <path d="M10 13h6M13 10l3 3-3 3" />
+    </Svg>
+  );
+}
+
+/** Download (R-ICON-13). */
+export function IconDownload(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />
+    </Svg>
+  );
+}
+
+/** Add a paragraph… (R-ICON-14): text lines and a plus. */
+export function IconAddParagraph(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M4 6h16M4 10h16M4 14h8M17 14v6M14 17h6" />
+    </Svg>
+  );
+}
+
+/** Edit the text (R-ICON-15). */
+export function IconText(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M5 6h14M5 10h14M5 14h10M5 18h7" />
+    </Svg>
+  );
+}
+
+/** Things you can ask (R-ICON-17). */
+export function IconBulb(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" />
+    </Svg>
+  );
+}
+
+/** Dictate (R-ICON-22). */
+export function IconMic(): JSX.Element {
+  return (
+    <Svg>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </Svg>
+  );
+}
+
+/** Dictation blocked or not available: the mic crossed out (owner review O-R2). */
+export function IconMicOff(): JSX.Element {
+  return (
+    <Svg>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16" />
+    </Svg>
+  );
+}
+
+/** Stop dictating: a filled square (R-ICON-23). */
+export function IconStopSquare(): JSX.Element {
+  return (
+    <svg
+      class="icon"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+    </svg>
+  );
+}
+
+/** The text box's commit: send, save, rename, add (R-ICON-24). */
+export function IconArrowUp(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M12 19V5M6 11l6-6 6 6" />
+    </Svg>
+  );
+}
+
+/** The Link door (R-ICON-25). */
+export function IconLink(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+    </Svg>
+  );
+}
+
+/** Settings (R-ICON-28): a gear, so the sliders keep Filter & sort only. */
+export function IconGear(): JSX.Element {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" />
+    </Svg>
+  );
+}
+
+/** Remove a thing from a pile, unpin in edit mode, remove a rule (R-ICON-32). */
+export function IconRemove(): JSX.Element {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12h8" />
+    </Svg>
+  );
+}
+
+/** Pause a rule (R-ICON-33). */
+export function IconPause(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M9 6v12M15 6v12" />
+    </Svg>
+  );
+}
