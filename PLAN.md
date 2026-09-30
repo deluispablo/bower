@@ -39,72 +39,72 @@ Wave = depth in the dependency graph. Budgets are the agent's own ceilings.
 
 | Key | Issue | Milestone | Title | Model | Wave | Depends on | Budget | Status |
 |---|---|---|---|---|---|---|---|---|
-| C1 | #728 | M34 | Worker: the run report carries created, updated, left and phase, capped and validated, with shared fixture builders | opus/high | 1 | - | 70 tool calls / 60 minutes | pending |
-| C2 | #729 | M34 | Runner: report created, updated, left and phase, on failed runs too, and write them to last-run.json | opus/high | 2 | #728 | 80 tool calls / 70 minutes | pending |
-| C3 | #730 | M34 | Runner: hold back late files and pile notes, and finish a partly done tidy-up without writing notes twice | opus/high | 3 | #729 | 70 tool calls / 60 minutes | pending |
-| C4 | #731 | M34 | Runner: append the full text to a document's text copy, convert text PDFs with pdftotext, audit note names | sonnet/high | 4 | #730 | 60 tool calls / 50 minutes | pending |
-| C5 | #732 | M34 | Rulebook v21: by: bower, Bower's note on every generated note, text copies, rule changes, names, piles, rename, Finish | opus/high | 3 | #729 | 60 tool calls / 50 minutes | pending |
-| C6 | #733 | M34 | Worker: push body in the four counts, and a default daily limit of 100 runs | sonnet/medium | 2 | #728 | 35 tool calls / 30 minutes | pending |
-| C7 | #734 | M34 | Tokens for v5: scrim, warn, danger and success tints, updated, stacking order, sheet radius, sidebar width, accent line | sonnet/medium | 1 | - | 40 tool calls / 35 minutes | pending |
-| C8 | #735 | M34 | Test kit for v5: motion helper, demo fixture states, shared matchMedia and SpeechRecognition stubs | sonnet/high | 2 | #728 | 50 tool calls / 40 minutes | pending |
-| V1 | #736 | M35 | Worker: create over a dead folder pointer, refuse a trashed folder, mark a missing vault, vault_missing everywhere | opus/high | 2 | #728 | 70 tool calls / 60 minutes | pending |
-| V2 | #737 | M35 | Runner: check the Bower folder before sync down and sync up, fail with vault_missing and upload nothing | sonnet/high | 5 | #731 #736 | 50 tool calls / 45 minutes | pending |
-| V3 | #738 | M35 | App: check the Bower folder, route a missing, trashed or unreachable one to the recovery screens | sonnet/high | 3 | #736 | 65 tool calls / 55 minutes | pending |
-| V4 | #739 | M35 | App: offline is never missing; caches keyed by folder, other tabs follow a re-point, the folder name from Drive | sonnet/high | 4 | #738 | 55 tool calls / 45 minutes | pending |
-| P1 | #740 | M36 | Overlay and its queue: one modal at a time, scrim, inert page, scroll lock, focus trap | opus/high | 2 | #734 | 70 tool calls / 60 minutes | pending |
-| P2 | #741 | M36 | Layout slots for v5: the tidy-up bar, upload chip, breadcrumb, OverlayHost, sidebar width and the ledge | sonnet/high | 3 | #740 | 55 tool calls / 45 minutes | pending |
-| P3 | #742 | M36 | Hint, info-pop and header-action components | sonnet/medium | 2 | #734 | 40 tool calls / 35 minutes | pending |
-| P4 | #743 | M36 | RunOutcome: one run result, runSentence, cleanQuote and run-summary | sonnet/high | 2 | #728 | 50 tool calls / 40 minutes | pending |
-| P5 | #744 | M36 | One rule for "By Bower": isBowerWritten everywhere | sonnet/medium | 1 | - | 35 tool calls / 30 minutes | pending |
-| P6 | #745 | M36 | inbox-count.ts: the single source of the inbox number, things and requests apart | sonnet/medium | 1 | - | 35 tool calls / 30 minutes | pending |
-| P7 | #746 | M36 | Send to Bower: one sheet for Rename, Move, Ask and suggestion chips, and one "Just this, now" helper | sonnet/high | 3 | #740 | 60 tool calls / 50 minutes | pending |
-| P8 | #747 | M36 | Money keeps its period and a score tile leads the key facts | sonnet/medium | 1 | - | 35 tool calls / 30 minutes | pending |
-| P9 | #748 | M36 | Bower v9 and four new poses: listening, pointing, reading, perched, and the hop-turn | sonnet/high | 3 | #735 | 60 tool calls / 50 minutes | pending |
-| P10 | #749 | M36 | The still mark under 40 px, with size guards | sonnet/medium | 4 | #748 | 40 tool calls / 35 minutes | pending |
-| P11 | #750 | M36 | One animated Bower per screen: the presence store, one Home greeting, pause off screen | sonnet/high | 5 | #749 | 55 tool calls / 45 minutes | pending |
-| R1 | #751 | M37 | The tidy-up bar on phones and the chip on desktop, in four states, on every screen but Home | sonnet/high | 4 | #741 #743 | 60 tool calls / 50 minutes | pending |
-| R2 | #752 | M37 | The tidy-up sheet on Overlay: steps, Partly done with Finish, rows with Needs you first | sonnet/high | 5 | #751 #740 | 65 tool calls / 55 minutes | pending |
-| R3 | #753 | M37 | Is that everything? on Overlay, labelled, with one count that never flashes 0 | sonnet/medium | 3 | #740 #745 | 35 tool calls / 30 minutes | pending |
-| R4 | #754 | M37 | Home after a tidy-up: the greeting carries the run, one counts line, no done toast | sonnet/high | 6 | #751 #743 #745 #750 #739 | 55 tool calls / 45 minutes | pending |
-| R5 | #755 | M37 | Just filed as a table: what Bower did, now called, where it is, what changed, with earlier tidy-ups | sonnet/high | 3 | #743 | 60 tool calls / 50 minutes | pending |
-| R6 | #756 | M37 | Requests never vanish: waiting, running, done and did-not-finish rows, Activity on RunOutcome | sonnet/high | 4 | #743 #746 | 60 tool calls / 50 minutes | pending |
-| N1 | #757 | M38 | Bower's note box: summary, key facts once, details, what to check, folding and the rule-change line | sonnet/high | 5 | #744 #747 #749 | 70 tool calls / 60 minutes | pending |
-| N2 | #758 | M38 | A note Bower wrote: kind row, status, Made from that folds, the folder's name on the back button | sonnet/high | 6 | #742 #757 | 60 tool calls / 50 minutes | pending |
-| N3 | #759 | M38 | Note pager after the body, the About panel without key facts, 44 px small controls | sonnet/medium | 7 | #758 | 40 tool calls / 35 minutes | pending |
-| N4 | #760 | M38 | The text copy of a document: its original's name, Made from, Bower's note, then the document | sonnet/medium | 8 | #759 #735 | 40 tool calls / 35 minutes | pending |
-| F1 | #761 | M39 | Folder view in one list: header, header actions, filters with an (i), subfolders first, the path once on desktop | sonnet/high | 4 | #741 #742 #746 #744 | 65 tool calls / 55 minutes | pending |
-| F2 | #762 | M39 | Phone folders: one Filter & sort button, scores read out, "Where" and "No date" | sonnet/medium | 5 | #761 #740 | 40 tool calls / 35 minutes | pending |
-| F3 | #763 | M39 | A resizable sidebar and tree rows named by their item | sonnet/high | 4 | #741 | 55 tool calls / 45 minutes | pending |
-| F4 | #764 | M39 | Compare: a Sort sheet on phones, Your score, extra number columns, values that wrap | sonnet/high | 6 | #762 #740 #747 | 60 tool calls / 50 minutes | pending |
-| F5 | #765 | M39 | Rename… in More: validated, waits for the tidy-up, and shows on the thing until then | sonnet/high | 9 | #746 #756 #761 #760 #732 | 55 tool calls / 45 minutes | pending |
-| F6 | #766 | M39 | Phone lists wrap titles to two lines | sonnet/low | 7 | #763 #764 #754 | 25 tool calls / 20 minutes | pending |
-| U1 | #767 | M40 | Durable upload queue: IndexedDB copies, Drive resumable sessions, one tab, per user | opus/high | 3 | #735 | 75 tool calls / 65 minutes | pending |
-| U2 | #768 | M40 | Upload chip, resume after a reload, sign out with uploads unfinished | sonnet/high | 6 | #767 #741 #752 | 60 tool calls / 50 minutes | pending |
-| U3 | #769 | M40 | Piles: each pile is a context note in the inbox from its first file, flushed before a tidy-up | opus/high | 4 | #767 #730 | 70 tool calls / 60 minutes | pending |
-| U4 | #770 | M40 | Add as piles: the new pile card, waiting piles, Added from elsewhere, one sticky Tidy up | sonnet/high | 7 | #769 #768 #740 #745 | 70 tool calls / 60 minutes | pending |
-| U5 | #771 | M40 | Piles everywhere after a tidy-up: grouped by pile, Remove this pile, the two-pile e2e | sonnet/high | 8 | #770 #752 #753 #755 | 55 tool calls / 45 minutes | pending |
-| O1 | #772 | M41 | Sheets on Overlay: pin, rule, folder picker and Move | sonnet/medium | 3 | #740 | 50 tool calls / 40 minutes | pending |
-| O2 | #773 | M41 | Help on Overlay: a right panel on desktop with Tips on this screen, and the push prompt queued | sonnet/high | 5 | #740 #742 #751 | 50 tool calls / 40 minutes | pending |
-| O3 | #774 | M41 | Menu and viewers on Overlay: note menu, quick look, photo viewer | sonnet/medium | 10 | #740 #765 | 50 tool calls / 40 minutes | pending |
-| O4 | #775 | M41 | The switcher on Overlay | sonnet/medium | 3 | #740 | 40 tool calls / 35 minutes | pending |
-| O5 | #776 | M41 | The tour as a modal where Bower points at the tab, with Back and Skip | sonnet/high | 6 | #773 #748 #750 | 60 tool calls / 50 minutes | pending |
-| O6 | #777 | M41 | Every tip becomes a Hint, one per screen, and suggestion chips open the send-to-Bower sheet | sonnet/medium | 7 | #742 #746 #754 #764 #756 | 50 tool calls / 40 minutes | pending |
-| O7 | #778 | M41 | e2e: with any overlay open, the page behind takes no tap and does not scroll | sonnet/medium | 11 | #772 #773 #774 #775 #776 #752 #753 #764 #770 | 40 tool calls / 35 minutes | pending |
-| D1 | #779 | M42 | The dictate button: ready, asking, listening, blocked, not available | sonnet/high | 3 | #735 #742 | 55 tool calls / 45 minutes | pending |
-| D2 | #780 | M42 | Dictation in the five writing boxes, with Bower listening while the microphone is on | sonnet/medium | 9 | #779 #771 #756 #748 | 50 tool calls / 40 minutes | pending |
-| D3 | #781 | M42 | Dictation language in Settings, and the Privacy page says where the audio goes | sonnet/medium | 7 | #779 #768 | 35 tool calls / 30 minutes | pending |
-| B1 | #782 | M43 | Bower's ledge at the foot of the desktop sidebar: perched at rest, flying during a run | sonnet/medium | 6 | #741 #750 #751 #763 | 40 tool calls / 35 minutes | pending |
-| B2 | #783 | M43 | Bower inside the phone tidy-up bar: flying, done once, confused | sonnet/medium | 6 | #751 #750 | 35 tool calls / 30 minutes | pending |
-| B3 | #784 | M43 | Bower reads inside Bower's note while "Just this, now" writes it | sonnet/medium | 6 | #757 #756 #748 | 40 tool calls / 35 minutes | pending |
-| B4 | #785 | M43 | Bower in place: asleep in empty folders and the inbox, peeking by search and the drop zone, with room | sonnet/medium | 10 | #762 #777 #780 #775 | 40 tool calls / 35 minutes | pending |
-| B5 | #786 | M43 | Bower settles after 10 seconds, reacts to what happens, and naps when tapped | sonnet/high | 11 | #782 #783 #785 #754 | 55 tool calls / 45 minutes | pending |
+| C1 | #728 | M34 | Worker: the run report carries created, updated, left and phase, capped and validated, with shared fixture builders | opus/high | 1 | - | 70 tool calls / 60 minutes | merged |
+| C2 | #729 | M34 | Runner: report created, updated, left and phase, on failed runs too, and write them to last-run.json | opus/high | 2 | #728 | 80 tool calls / 70 minutes | merged |
+| C3 | #730 | M34 | Runner: hold back late files and pile notes, and finish a partly done tidy-up without writing notes twice | opus/high | 3 | #729 | 70 tool calls / 60 minutes | merged |
+| C4 | #731 | M34 | Runner: append the full text to a document's text copy, convert text PDFs with pdftotext, audit note names | sonnet/high | 4 | #730 | 60 tool calls / 50 minutes | merged |
+| C5 | #732 | M34 | Rulebook v21: by: bower, Bower's note on every generated note, text copies, rule changes, names, piles, rename, Finish | opus/high | 3 | #729 | 60 tool calls / 50 minutes | merged |
+| C6 | #733 | M34 | Worker: push body in the four counts, and a default daily limit of 100 runs | sonnet/medium | 2 | #728 | 35 tool calls / 30 minutes | merged |
+| C7 | #734 | M34 | Tokens for v5: scrim, warn, danger and success tints, updated, stacking order, sheet radius, sidebar width, accent line | sonnet/medium | 1 | - | 40 tool calls / 35 minutes | merged |
+| C8 | #735 | M34 | Test kit for v5: motion helper, demo fixture states, shared matchMedia and SpeechRecognition stubs | sonnet/high | 2 | #728 | 50 tool calls / 40 minutes | merged |
+| V1 | #736 | M35 | Worker: create over a dead folder pointer, refuse a trashed folder, mark a missing vault, vault_missing everywhere | opus/high | 2 | #728 | 70 tool calls / 60 minutes | merged |
+| V2 | #737 | M35 | Runner: check the Bower folder before sync down and sync up, fail with vault_missing and upload nothing | sonnet/high | 5 | #731 #736 | 50 tool calls / 45 minutes | merged |
+| V3 | #738 | M35 | App: check the Bower folder, route a missing, trashed or unreachable one to the recovery screens | sonnet/high | 3 | #736 | 65 tool calls / 55 minutes | merged |
+| V4 | #739 | M35 | App: offline is never missing; caches keyed by folder, other tabs follow a re-point, the folder name from Drive | sonnet/high | 4 | #738 | 55 tool calls / 45 minutes | merged |
+| P1 | #740 | M36 | Overlay and its queue: one modal at a time, scrim, inert page, scroll lock, focus trap | opus/high | 2 | #734 | 70 tool calls / 60 minutes | merged |
+| P2 | #741 | M36 | Layout slots for v5: the tidy-up bar, upload chip, breadcrumb, OverlayHost, sidebar width and the ledge | sonnet/high | 3 | #740 | 55 tool calls / 45 minutes | merged |
+| P3 | #742 | M36 | Hint, info-pop and header-action components | sonnet/medium | 2 | #734 | 40 tool calls / 35 minutes | merged |
+| P4 | #743 | M36 | RunOutcome: one run result, runSentence, cleanQuote and run-summary | sonnet/high | 2 | #728 | 50 tool calls / 40 minutes | merged |
+| P5 | #744 | M36 | One rule for "By Bower": isBowerWritten everywhere | sonnet/medium | 1 | - | 35 tool calls / 30 minutes | merged |
+| P6 | #745 | M36 | inbox-count.ts: the single source of the inbox number, things and requests apart | sonnet/medium | 1 | - | 35 tool calls / 30 minutes | merged |
+| P7 | #746 | M36 | Send to Bower: one sheet for Rename, Move, Ask and suggestion chips, and one "Just this, now" helper | sonnet/high | 3 | #740 | 60 tool calls / 50 minutes | merged |
+| P8 | #747 | M36 | Money keeps its period and a score tile leads the key facts | sonnet/medium | 1 | - | 35 tool calls / 30 minutes | merged |
+| P9 | #748 | M36 | Bower v9 and four new poses: listening, pointing, reading, perched, and the hop-turn | sonnet/high | 3 | #735 | 60 tool calls / 50 minutes | merged |
+| P10 | #749 | M36 | The still mark under 40 px, with size guards | sonnet/medium | 4 | #748 | 40 tool calls / 35 minutes | merged |
+| P11 | #750 | M36 | One animated Bower per screen: the presence store, one Home greeting, pause off screen | sonnet/high | 5 | #749 | 55 tool calls / 45 minutes | merged |
+| R1 | #751 | M37 | The tidy-up bar on phones and the chip on desktop, in four states, on every screen but Home | sonnet/high | 4 | #741 #743 | 60 tool calls / 50 minutes | merged |
+| R2 | #752 | M37 | The tidy-up sheet on Overlay: steps, Partly done with Finish, rows with Needs you first | sonnet/high | 5 | #751 #740 | 65 tool calls / 55 minutes | merged |
+| R3 | #753 | M37 | Is that everything? on Overlay, labelled, with one count that never flashes 0 | sonnet/medium | 3 | #740 #745 | 35 tool calls / 30 minutes | merged |
+| R4 | #754 | M37 | Home after a tidy-up: the greeting carries the run, one counts line, no done toast | sonnet/high | 6 | #751 #743 #745 #750 #739 | 55 tool calls / 45 minutes | merged |
+| R5 | #755 | M37 | Just filed as a table: what Bower did, now called, where it is, what changed, with earlier tidy-ups | sonnet/high | 3 | #743 | 60 tool calls / 50 minutes | merged |
+| R6 | #756 | M37 | Requests never vanish: waiting, running, done and did-not-finish rows, Activity on RunOutcome | sonnet/high | 4 | #743 #746 | 60 tool calls / 50 minutes | merged |
+| N1 | #757 | M38 | Bower's note box: summary, key facts once, details, what to check, folding and the rule-change line | sonnet/high | 5 | #744 #747 #749 | 70 tool calls / 60 minutes | merged |
+| N2 | #758 | M38 | A note Bower wrote: kind row, status, Made from that folds, the folder's name on the back button | sonnet/high | 6 | #742 #757 | 60 tool calls / 50 minutes | merged |
+| N3 | #759 | M38 | Note pager after the body, the About panel without key facts, 44 px small controls | sonnet/medium | 7 | #758 | 40 tool calls / 35 minutes | merged |
+| N4 | #760 | M38 | The text copy of a document: its original's name, Made from, Bower's note, then the document | sonnet/medium | 8 | #759 #735 | 40 tool calls / 35 minutes | merged |
+| F1 | #761 | M39 | Folder view in one list: header, header actions, filters with an (i), subfolders first, the path once on desktop | sonnet/high | 4 | #741 #742 #746 #744 | 65 tool calls / 55 minutes | merged |
+| F2 | #762 | M39 | Phone folders: one Filter & sort button, scores read out, "Where" and "No date" | sonnet/medium | 5 | #761 #740 | 40 tool calls / 35 minutes | merged |
+| F3 | #763 | M39 | A resizable sidebar and tree rows named by their item | sonnet/high | 4 | #741 | 55 tool calls / 45 minutes | merged |
+| F4 | #764 | M39 | Compare: a Sort sheet on phones, Your score, extra number columns, values that wrap | sonnet/high | 6 | #762 #740 #747 | 60 tool calls / 50 minutes | merged |
+| F5 | #765 | M39 | Rename… in More: validated, waits for the tidy-up, and shows on the thing until then | sonnet/high | 9 | #746 #756 #761 #760 #732 | 55 tool calls / 45 minutes | merged |
+| F6 | #766 | M39 | Phone lists wrap titles to two lines | sonnet/low | 7 | #763 #764 #754 | 25 tool calls / 20 minutes | merged |
+| U1 | #767 | M40 | Durable upload queue: IndexedDB copies, Drive resumable sessions, one tab, per user | opus/high | 3 | #735 | 75 tool calls / 65 minutes | merged |
+| U2 | #768 | M40 | Upload chip, resume after a reload, sign out with uploads unfinished | sonnet/high | 6 | #767 #741 #752 | 60 tool calls / 50 minutes | merged |
+| U3 | #769 | M40 | Piles: each pile is a context note in the inbox from its first file, flushed before a tidy-up | opus/high | 4 | #767 #730 | 70 tool calls / 60 minutes | merged |
+| U4 | #770 | M40 | Add as piles: the new pile card, waiting piles, Added from elsewhere, one sticky Tidy up | sonnet/high | 7 | #769 #768 #740 #745 | 70 tool calls / 60 minutes | merged |
+| U5 | #771 | M40 | Piles everywhere after a tidy-up: grouped by pile, Remove this pile, the two-pile e2e | sonnet/high | 8 | #770 #752 #753 #755 | 55 tool calls / 45 minutes | merged |
+| O1 | #772 | M41 | Sheets on Overlay: pin, rule, folder picker and Move | sonnet/medium | 3 | #740 | 50 tool calls / 40 minutes | merged |
+| O2 | #773 | M41 | Help on Overlay: a right panel on desktop with Tips on this screen, and the push prompt queued | sonnet/high | 5 | #740 #742 #751 | 50 tool calls / 40 minutes | merged |
+| O3 | #774 | M41 | Menu and viewers on Overlay: note menu, quick look, photo viewer | sonnet/medium | 10 | #740 #765 | 50 tool calls / 40 minutes | merged |
+| O4 | #775 | M41 | The switcher on Overlay | sonnet/medium | 3 | #740 | 40 tool calls / 35 minutes | merged |
+| O5 | #776 | M41 | The tour as a modal where Bower points at the tab, with Back and Skip | sonnet/high | 6 | #773 #748 #750 | 60 tool calls / 50 minutes | merged |
+| O6 | #777 | M41 | Every tip becomes a Hint, one per screen, and suggestion chips open the send-to-Bower sheet | sonnet/medium | 7 | #742 #746 #754 #764 #756 | 50 tool calls / 40 minutes | merged |
+| O7 | #778 | M41 | e2e: with any overlay open, the page behind takes no tap and does not scroll | sonnet/medium | 11 | #772 #773 #774 #775 #776 #752 #753 #764 #770 | 40 tool calls / 35 minutes | merged |
+| D1 | #779 | M42 | The dictate button: ready, asking, listening, blocked, not available | sonnet/high | 3 | #735 #742 | 55 tool calls / 45 minutes | merged |
+| D2 | #780 | M42 | Dictation in the five writing boxes, with Bower listening while the microphone is on | sonnet/medium | 9 | #779 #771 #756 #748 | 50 tool calls / 40 minutes | merged |
+| D3 | #781 | M42 | Dictation language in Settings, and the Privacy page says where the audio goes | sonnet/medium | 7 | #779 #768 | 35 tool calls / 30 minutes | merged |
+| B1 | #782 | M43 | Bower's ledge at the foot of the desktop sidebar: perched at rest, flying during a run | sonnet/medium | 6 | #741 #750 #751 #763 | 40 tool calls / 35 minutes | merged |
+| B2 | #783 | M43 | Bower inside the phone tidy-up bar: flying, done once, confused | sonnet/medium | 6 | #751 #750 | 35 tool calls / 30 minutes | merged |
+| B3 | #784 | M43 | Bower reads inside Bower's note while "Just this, now" writes it | sonnet/medium | 6 | #757 #756 #748 | 40 tool calls / 35 minutes | merged |
+| B4 | #785 | M43 | Bower in place: asleep in empty folders and the inbox, peeking by search and the drop zone, with room | sonnet/medium | 10 | #762 #777 #780 #775 | 40 tool calls / 35 minutes | merged |
+| B5 | #786 | M43 | Bower settles after 10 seconds, reacts to what happens, and naps when tapped | sonnet/high | 11 | #782 #783 #785 #754 | 55 tool calls / 45 minutes | merged |
 | B6 | #787 | M43 | e2e gate: nothing clips Bower on any route or state, at 375 and 1280 | sonnet/high | 12 | #784 #786 #778 #771 #738 | 60 tool calls / 50 minutes | pending |
-| T1 | #788 | M44 | Runner: write the mechanical History lines, and report disagreements and next steps | opus/high | 6 | #737 #728 | 75 tool calls / 65 minutes | pending |
+| T1 | #788 | M44 | Runner: write the mechanical History lines, and report disagreements and next steps | opus/high | 6 | #737 #728 | 75 tool calls / 65 minutes | merged |
 | T2 | #789 | M44 | Spike: measure a 10-item pile's turns and set DEFAULT_MAX_TURNS for rulebook v22 | sonnet/medium | 7 | #788 #732 | 30 tool calls / 60 minutes | pending |
 | T3 | #790 | M44 | Rulebook v22: how Bower thinks, verdicts, Reference, Next steps, History, apply_link and made_for | opus/high | 8 | #789 | 60 tool calls / 50 minutes | pending |
-| T4 | #791 | M44 | Things that disagree and Next for you on the sheet, Just filed and Activity | sonnet/medium | 9 | #788 #771 #777 | 40 tool calls / 35 minutes | pending |
+| T4 | #791 | M44 | Things that disagree and Next for you on the sheet, Just filed and Activity | sonnet/medium | 9 | #788 #771 #777 | 40 tool calls / 35 minutes | merged |
 | T5 | #792 | M44 | Verdict and Apply first, and "Made for it" on a note | sonnet/high | 9 | #790 #784 #760 | 50 tool calls / 40 minutes | pending |
-| T6 | #793 | M44 | History in each note: a status change appends one dated line | sonnet/medium | 9 | #760 #777 | 35 tool calls / 30 minutes | pending |
+| T6 | #793 | M44 | History in each note: a status change appends one dated line | sonnet/medium | 9 | #760 #777 | 35 tool calls / 30 minutes | merged |
 | T7 | #794 | M44 | Project front page: Next steps to tick, Best so far, Reference | sonnet/high | 11 | #790 #785 #764 | 55 tool calls / 45 minutes | pending |
 | T8 | #795 | M44 | Compare: choose columns, Made for it and Apply columns, Copy as table | sonnet/high | 10 | #792 #793 | 50 tool calls / 40 minutes | pending |
 | I1 | #796 | M45 | The intro in five true pages: resumable by URL, focus on the heading, Back on phones | sonnet/high | 10 | #731 #732 #751 #756 #790 #791 #749 #735 | 65 tool calls / 55 minutes | pending |
