@@ -190,6 +190,8 @@
   --color-border-subtle: var(--color-border);
   --color-border-control: var(--color-border-strong);
   --color-grab: var(--color-border-strong);
+  /* Help row icons (#907, PF-Help): teal in dark, today's muted in light. */
+  --color-help-icon: var(--color-text-muted);
   --color-selection: var(--color-brand-tint);
   --color-accent-border: var(--color-accent-line);
   --color-danger-halo: var(--color-danger-bg);
@@ -321,6 +323,7 @@
     --color-border-subtle: rgb(223 229 238 / 0.1);
     --color-border-control: rgb(223 229 238 / 0.4);
     --color-grab: #64748b;
+    --color-help-icon: #5fcfbc;
     --color-selection: rgb(95 207 188 / 0.14);
     --color-accent-border: rgb(95 207 188 / 0.45);
     --color-danger-halo: rgb(239 138 138 / 0.18);
@@ -397,6 +400,7 @@
   --color-border-subtle: rgb(223 229 238 / 0.1);
   --color-border-control: rgb(223 229 238 / 0.4);
   --color-grab: #64748b;
+  --color-help-icon: #5fcfbc;
   --color-selection: rgb(95 207 188 / 0.14);
   --color-accent-border: rgb(95 207 188 / 0.45);
   --color-danger-halo: rgb(239 138 138 / 0.18);

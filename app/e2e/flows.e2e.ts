@@ -1763,21 +1763,19 @@ test.fixme('the top bar: title, "?", avatar, no folder menu; Back on a note', as
     await shot(page, testInfo, 'bar-home');
   }
 
-  // "?" opens the help sheet for this tab: About this screen, no counter.
+  // "?" opens the Help template for this tab (#907), no counter.
   await help.click();
   const sheet = page.getByRole('dialog', { name: 'Home' });
-  await expect(sheet.getByText('About this screen')).toBeVisible();
+  await expect(sheet.getByText('Help and about this')).toBeVisible();
   await expect(sheet.getByText('Tour ·')).toHaveCount(0);
-  await expect(
-    sheet.getByRole('link', { name: 'What is Bower, from the start' }),
-  ).toBeVisible();
-  await sheet.getByRole('button', { name: 'Close' }).first().click();
+  await expect(sheet.getByRole('link', { name: 'Learn Bower' })).toBeVisible();
+  await sheet.getByRole('button', { name: 'Close Help' }).click();
   await expect(sheet).toBeHidden();
 
   await visible(page.getByRole('link', { name: /^Bower$/ })).click();
   await help.click();
   const bower = page.getByRole('dialog', { name: 'Bower' });
-  await expect(bower.getByText('About this screen')).toBeVisible();
+  await expect(bower.getByText('Help and about this')).toBeVisible();
   if (testInfo.project.name === 'phone') {
     await shot(page, testInfo, 'help-bower');
   }
@@ -2519,11 +2517,12 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(
     menu.getByRole('menuitem', { name: /Pin to Home/ }),
   ).toBeVisible();
-  // The one More menu (#352): the board's header, then Ask Bower first.
-  await expect(menu.locator('.note-menu-meta')).toContainText('PDF');
-  await expect(menu.locator('.note-menu-meta')).toContainText(
-    'Projects › Kitchen Refresh',
-  );
+  // The one ⋯ menu (#352, #907): no header (boards FI-More), Ask Bower
+  // first, Help and about this last.
+  await expect(menu.locator('.note-menu-meta')).toHaveCount(0);
+  await expect(
+    menu.getByRole('menuitem', { name: 'Help and about this' }),
+  ).toBeVisible();
   await expect(menu.getByRole('menuitem').first()).toContainText(
     'Ask Bower about this',
   );

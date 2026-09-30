@@ -1,4 +1,7 @@
-/* The one toast (`components/toast.tsx`, `toast-store.ts`). */
+/* The one toast (`components/toast.tsx`, `toast-store.ts`; #907, spec
+   §3.32): max 360 wide, radius 12, padding 12 14, 15 px, `--shadow-lg`,
+   an optional teal "Undo". Light keeps its inverted colours; the dark theme
+   uses `--color-surface-overlay` and `--color-heading`. */
 
 .toast {
   position: fixed;
@@ -10,14 +13,29 @@
   align-items: center;
   gap: var(--space-3);
   min-width: min(300px, 100vw - 32px);
-  max-width: calc(100vw - var(--space-8));
-  padding: var(--space-3) var(--space-4);
+  max-width: min(360px, calc(100vw - var(--space-8)));
+  box-sizing: border-box;
+  padding: var(--space-3) 14px;
   background: var(--color-text);
   color: var(--color-bg);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  font-size: var(--text-sm);
-  text-align: center;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-15);
+  text-align: left;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .toast {
+    background: var(--color-surface-overlay);
+    color: var(--color-heading);
+    border: 1px solid var(--color-border-subtle);
+  }
+}
+
+:root[data-theme='dark'] .toast {
+  background: var(--color-surface-overlay);
+  color: var(--color-heading);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .toast-message {
@@ -67,17 +85,13 @@
   outline-offset: 2px;
 }
 
-/* From 900 px the toast is anchored to the shell's centred container
-   (#355, `layout.css`), not to the whole window: centred right of the
-   sidebar, never wider than the container. */
+/* From 900 px the toast sits at the bottom left of the main area, right
+   of the sidebar (spec §3.32). */
 @media (min-width: 900px) {
   .toast {
-    left: calc(50% + var(--sidebar-width, 264px) / 2);
+    left: calc(var(--sidebar-width, 264px) + var(--space-6, 24px));
     bottom: var(--space-4);
-    max-width: min(
-      calc(100vw - var(--sidebar-width, 264px) - var(--space-8)),
-      calc(980px - var(--space-8))
-    );
+    transform: none;
   }
 }
 

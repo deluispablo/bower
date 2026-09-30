@@ -5,7 +5,7 @@ import { useState } from 'preact/hooks';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { NoteMenu } from '../src/components/note-menu.js';
+import { COPIED_MS, NoteMenu } from '../src/components/note-menu.js';
 import { OverlayHost } from '../src/components/overlay.js';
 import type { NoteMenuProps } from '../src/components/note-menu.js';
 import type { DriveFile } from '../src/drive.js';
@@ -151,7 +151,9 @@ describe('NoteMenu', () => {
     );
     expect(labels.indexOf('Rename…')).toBe(labels.indexOf('Move to…') - 1);
     const rename = rowByText('Rename…');
-    expect(rename.textContent).toContain('waits for the tidy-up');
+    expect(rename.textContent).toContain(
+      'Bower renames it at the next tidy-up',
+    );
     click(rename);
     const call = openSendToBower.mock.calls[0]?.[0] as {
       mode: string;
@@ -187,29 +189,27 @@ describe('NoteMenu', () => {
     expect(rows().some((r) => r.textContent?.includes('Rename…'))).toBe(false);
   });
 
-  it('lists eight rows for a normal note, in the board order', () => {
+  it("lists a note's rows in the NO-More order (#907)", () => {
     mount(true);
     expect(
       rows().map((r) => r.querySelector('.note-menu-row-label')?.textContent),
     ).toEqual([
       'Ask Bower about this',
-      'Show in folders',
       'Pin to Home',
-      'Move to…',
       'Open in Drive',
+      'Show in folders',
+      'Move to…',
       'Copy link',
       'Add a paragraph…',
       'Edit the text',
+      'Help and about this',
     ]);
   });
 
-  it('heads the menu with the title, then the type word and the folder', () => {
+  it('has no header, and separates its groups with a rule (#907)', () => {
     mount(true);
-    expect(document.querySelector('.note-menu-title')?.textContent).toBe(
-      'Shopping list',
-    );
-    // The note sits at the top of the Bower folder: just the type word.
-    expect(document.querySelector('.note-menu-meta')?.textContent).toBe('Note');
+    expect(document.querySelector('.note-menu-head')).toBeNull();
+    expect(document.querySelectorAll('[role="separator"]')).toHaveLength(3);
   });
 
   it('closes on Cancel, and returns focus to the opener', () => {
@@ -223,7 +223,7 @@ describe('NoteMenu', () => {
 
   it('lists six rows, Edit left out, for a protected note', () => {
     mount(false);
-    expect(rows()).toHaveLength(7);
+    expect(rows()).toHaveLength(8);
     expect(rows().some((r) => r.textContent?.includes('Edit the text'))).toBe(
       false,
     );
@@ -231,7 +231,7 @@ describe('NoteMenu', () => {
 
   it('leaves out Add a paragraph when the note cannot be appended to', () => {
     mount(true, vi.fn(), false, vi.fn(), false);
-    expect(rows()).toHaveLength(7);
+    expect(rows()).toHaveLength(8);
     expect(rows().some((r) => r.textContent?.includes('Add a paragraph'))).toBe(
       false,
     );
@@ -269,7 +269,7 @@ describe('NoteMenu', () => {
     openSendToBower.mockClear();
     const { onClose } = mount(true);
     const move = rowByText('Move to…');
-    expect(move.textContent).toContain('waits for the tidy-up');
+    expect(move.textContent).toContain('Bower moves it at the next tidy-up');
     expect(openSendToBower).not.toHaveBeenCalled();
     click(move);
     const call = openSendToBower.mock.calls[0]?.[0] as {
@@ -289,10 +289,11 @@ describe('NoteMenu', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('draws the NEW pill next to Show in folders, which reveals the note (#608)', () => {
+  it('names the note under Show in folders, which reveals it (#608, #907)', () => {
     mount(true);
     const show = rowByText('Show in folders');
-    expect(show.textContent).toContain('NEW');
+    expect(show.textContent).toContain('Opens your folders at Shopping list');
+    expect(show.textContent).not.toContain('NEW');
     expect(show.getAttribute('href')).toBe('/notes?reveal=note%2Fnote-1');
   });
 
@@ -384,17 +385,14 @@ describe('NoteMenu', () => {
     expect(
       document.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     ).toBe('File actions');
-    const spans = document.querySelectorAll('.note-menu-meta > span');
-    expect(spans[0]?.textContent).toBe('PDF');
-    expect(spans[1]?.textContent).toContain('Projects › Flat hunt');
-    expect(spans[1]?.querySelector('.folder-mark-projects')).not.toBeNull();
     expect(rows().map((r) => r.textContent)).toEqual([
       expect.stringContaining('Ask Bower about this'),
+      expect.stringContaining('Open in Drive'),
       expect.stringContaining('Show in folders'),
       expect.stringContaining('Move to…'),
-      expect.stringContaining('Open in Drive'),
-      expect.stringContaining('Download'),
       expect.stringContaining('Copy link'),
+      expect.stringContaining('Download'),
+      expect.stringContaining('Help and about this'),
     ]);
     expect(rowByText('Show in folders').getAttribute('href')).toBe(
       '/notes?reveal=file%2Ffile-1',
@@ -434,16 +432,14 @@ describe('NoteMenu', () => {
     expect(
       document.querySelector('[role="menu"]')?.getAttribute('aria-label'),
     ).toBe('Folder actions');
-    const spans = document.querySelectorAll('.note-menu-meta > span');
-    expect(spans[0]?.textContent).toBe('Folder');
-    expect(spans[1]?.textContent).toContain('Projects');
     expect(rows().map((r) => r.textContent)).toEqual([
       expect.stringContaining('Ask Bower about this'),
-      expect.stringContaining('Show in folders'),
       expect.stringContaining('Unpin from Home'),
-      expect.stringContaining('Move to…'),
       expect.stringContaining('Open in Drive'),
+      expect.stringContaining('Show in folders'),
+      expect.stringContaining('Move to…'),
       expect.stringContaining('Copy link'),
+      expect.stringContaining('Help and about this'),
     ]);
     expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
       `/bower?text=${encodeURIComponent('About Flat hunt: ')}`,
@@ -456,5 +452,112 @@ describe('NoteMenu', () => {
     );
     click(rowByText('Unpin from Home'));
     expect(onTogglePin).toHaveBeenCalledOnce();
+  });
+
+  it('gives a root landmark no Rename… and no Move to… (AR-More)', () => {
+    mountFor({
+      kind: 'folder',
+      file: {
+        id: 'areas',
+        name: '2-Areas',
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: ['FOLDER_ID'],
+        path: '2-Areas',
+      },
+      title: '2-Areas',
+      askName: '2-Areas',
+      siblingNames: [],
+      onTogglePin: vi.fn(),
+    });
+    const text = rows().map((r) => r.textContent ?? '');
+    expect(text.some((t) => t.includes('Rename…'))).toBe(false);
+    expect(text.some((t) => t.includes('Move to…'))).toBe(false);
+    expect(text).toHaveLength(6);
+    // Named as shown, never with its numeric prefix (design gate, #907).
+    expect(rowByText('Show in folders').textContent).toContain(
+      'Opens your folders at Areas',
+    );
+    expect(rowByText('Ask Bower about this').getAttribute('href')).toBe(
+      `/bower?text=${encodeURIComponent('About Areas: ')}`,
+    );
+  });
+
+  it('shows Copied. for 2 s after Copy link (R-API-11)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    mount(true);
+    click(rowByText('Copy link'));
+    await flush();
+    expect(rowByText('Copy link').textContent).toContain('Copied.');
+    void act(() => {
+      vi.advanceTimersByTime(COPIED_MS);
+    });
+    expect(rowByText('Copy link').textContent).not.toContain('Copied.');
+    vi.useRealTimers();
+    Reflect.deleteProperty(navigator, 'clipboard');
+  });
+
+  it('builds each tab menu, and hides Drive items whose id is not loaded (R-API-5)', () => {
+    mountFor({ kind: 'settings' });
+    expect(
+      document.querySelector('[role="menu"]')?.getAttribute('aria-label'),
+    ).toBe('Settings actions');
+    expect(rows().map((r) => r.textContent)).toEqual(['Help and about this']);
+    void act(() => render(null, root));
+    mountFor({ kind: 'settings', driveIds: { root: 'ROOT_ID' } });
+    expect(
+      rowByText('Open your Bower folder in Drive').getAttribute('href'),
+    ).toBe('https://drive.google.com/drive/folders/ROOT_ID');
+    void act(() => render(null, root));
+    const onToggleOwnFiles = vi.fn();
+    mountFor({
+      kind: 'notes',
+      driveIds: { root: 'ROOT_ID' },
+      ownFilesShown: true,
+      onToggleOwnFiles,
+    });
+    click(rowByText("Hide Bower's own files"));
+    expect(onToggleOwnFiles).toHaveBeenCalledOnce();
+    void act(() => render(null, root));
+    mountFor({
+      kind: 'bower',
+      driveIds: { rules: 'RULES_ID' },
+      onIdeas: vi.fn(),
+    });
+    expect(rowByText('Open your rules in Drive').getAttribute('href')).toBe(
+      'https://drive.google.com/file/d/RULES_ID/view',
+    );
+    expect(rowByText('Things you can ask').textContent).toContain(
+      'Ideas for rules, jobs and questions',
+    );
+  });
+
+  it('asks for Help with onHelp, closing the menu first', () => {
+    const onHelp = vi.fn();
+    const onClose = vi.fn();
+    root = document.createElement('div');
+    document.body.append(root);
+    void act(() => {
+      render(
+        h(
+          Fragment,
+          null,
+          h(NoteMenu, { kind: 'home', onHelp, onClose, onEditPinned: vi.fn() }),
+          h(OverlayHost, null),
+        ),
+        root,
+      );
+    });
+    expect(rows().map((r) => r.textContent)).toEqual([
+      'Edit pinned',
+      'Help and about this',
+    ]);
+    click(rowByText('Help and about this'));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onHelp).toHaveBeenCalledOnce();
   });
 });

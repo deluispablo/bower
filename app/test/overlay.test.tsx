@@ -6,7 +6,12 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { Overlay, OverlayHost } from '../src/components/overlay.js';
+import {
+  OVERLAY_CLOSE_LABELS,
+  Overlay,
+  OverlayHeader,
+  OverlayHost,
+} from '../src/components/overlay.js';
 import type {
   OverlayKind,
   OverlayPlacement,
@@ -288,5 +293,47 @@ describe('overlay.css', () => {
     const fade =
       keyframes.find((block) => block.includes('overlay-fade')) ?? '';
     expect(fade).not.toContain('transform');
+  });
+
+  it('sizes the four placements from the v6 tokens (#907)', () => {
+    expect(css).toContain('width: var(--panel-side)');
+    expect(css).toContain('width: var(--popover-width)');
+    expect(css).toContain('var(--dialog-width, 420px)');
+    expect(css).toContain('background: var(--color-grab)');
+    expect(css).toContain('var(--shadow-lg)');
+    // The phone sheet hugs its content, up to 90 % of the window.
+    expect(css).toMatch(/height: auto;\s*max-height: 90%/);
+    // Reduced motion: a 120 ms fade only.
+    const reduced = css.slice(
+      css.indexOf('@media (prefers-reduced-motion: reduce)'),
+    );
+    expect(reduced).toContain('overlay-fade var(--motion-fast)');
+  });
+});
+
+describe('OverlayHeader (#907)', () => {
+  it('names the ✕ with a board close label and closes', () => {
+    let closed = 0;
+    const box = document.createElement('div');
+    document.body.appendChild(box);
+    void act(() => {
+      render(
+        <OverlayHeader
+          titleId="t"
+          title="A folder"
+          closeLabel="Close Help"
+          onClose={() => {
+            closed += 1;
+          }}
+        />,
+        box,
+      );
+    });
+    expect(box.querySelector('h2#t')?.textContent).toBe('A folder');
+    const x = box.querySelector<HTMLButtonElement>('[aria-label="Close Help"]');
+    x?.click();
+    expect(closed).toBe(1);
+    expect(OVERLAY_CLOSE_LABELS).toContain('Close the pile');
+    expect(OVERLAY_CLOSE_LABELS).toHaveLength(16);
   });
 });

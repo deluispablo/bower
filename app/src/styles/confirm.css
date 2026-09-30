@@ -1,0 +1,54 @@
+/*
+ * The destructive confirmation (`components/confirm.tsx`, #907, spec
+ * §3.39). Phone: title 20, one sentence 16, the red button then Cancel,
+ * both lg and full width. From 900 px: the centred dialog 400 wide, the
+ * buttons small and right-aligned, Cancel first.
+ */
+
+.overlay-panel:has(> .confirm) {
+  --dialog-width: 400px;
+}
+
+.confirm-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-heading);
+}
+
+.confirm-sentence {
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.confirm-actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2);
+}
+
+.confirm-actions .btn {
+  width: 100%;
+}
+
+.confirm-danger {
+  background: var(--color-danger);
+  color: var(--color-on-danger);
+}
+
+@media (min-width: 900px) {
+  .confirm-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .confirm-actions .btn {
+    width: auto;
+    height: var(--control-sm);
+    font-size: var(--text-15);
+  }
+}

@@ -25,8 +25,14 @@ import { close, open, resetOverlayQueue } from '../src/overlay-queue.js';
 import { resetTourStore } from '../src/tour-store.js';
 import { currentToast, dismissToast } from '../src/toast-store.js';
 
-const { HelpSheet, dismissedTips, INTRO_AGAIN_HREF, Tour, placeTour } =
-  await import('../src/components/help-sheet.js');
+const {
+  HelpSheet,
+  dismissedTips,
+  INTRO_AGAIN_HREF,
+  Tour,
+  isBowerRow,
+  placeTour,
+} = await import('../src/components/help-sheet.js');
 
 let root: HTMLElement;
 let tabs: HTMLElement;
@@ -315,19 +321,27 @@ describe('HelpSheet', () => {
     return props;
   }
 
-  it('shows the screen\'s rows, "About this screen" and the intro link', () => {
+  it('draws the one Help template: bird 52, overline, title, lede, rows, the Bower group (#907)', () => {
     mount('home');
-    expect(dialog().textContent).toContain('About this screen');
+    expect(dialog().querySelector('.help-kicker')?.textContent).toBe(
+      'Help and about this',
+    );
+    expect(
+      dialog().querySelector('.help-bird svg')?.getAttribute('width'),
+    ).toBe('52');
     expect(dialog().querySelector('h2')?.textContent).toBe('Home');
+    expect(dialog().querySelector('.help-head + .help-lede')).not.toBeNull();
     expect(dialog().querySelectorAll('li')).toHaveLength(3);
     expect(dialog().textContent).not.toContain('top-left');
     expect(dialog().textContent).not.toContain('Tour ·');
-    expect(link('What is Bower, from the start')?.getAttribute('href')).toBe(
-      INTRO_AGAIN_HREF,
-    );
-    expect(
-      link('Learn Bower: examples and use cases')?.getAttribute('href'),
-    ).toBe('/learn');
+    expect(dialog().querySelector('.help-group')?.textContent).toBe('Bower');
+    const actions = dialog().querySelectorAll('.help-actions .btn-secondary');
+    expect(Array.from(actions, (a) => a.textContent?.trim())).toEqual([
+      'Show me around',
+      'Learn Bower',
+    ]);
+    expect(link('Learn Bower')?.getAttribute('href')).toBe('/learn');
+    expect(INTRO_AGAIN_HREF).toBe('/welcome?from=settings');
     expect(dialog().getAttribute('aria-modal')).toBe('true');
     expect(dialog().closest('#app, nav')).toBeNull();
   });
@@ -368,14 +382,20 @@ describe('HelpSheet', () => {
     expect(dialog().querySelector('h2')?.textContent).toBe('Home');
   });
 
-  it('closes on Close and Escape; Show me around starts the tour', () => {
+  it('closes on Close Help and Escape; Show me around starts the tour', () => {
     const props = mount('home');
-    void act(() => button('Close').click());
+    void act(() => button('Close Help').click());
     expect(props.onClose).toHaveBeenCalledTimes(1);
     escape();
     expect(props.onClose).toHaveBeenCalledTimes(2);
     void act(() => button('Show me around').click());
     expect(props.onShowMeAround).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks rows about what Bower wrote with the bird (R-HELP-4)', () => {
+    expect(isBowerRow('By Bower')).toBe(true);
+    expect(isBowerRow('The bird')).toBe(true);
+    expect(isBowerRow('Ask Bower')).toBe(false);
   });
 
   it('has no Ideas button (#859)', () => {

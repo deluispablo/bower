@@ -3,9 +3,8 @@
  * plus one for a folder screen, with the copy from `help-rows.ts`. Two ways
  * in, one drawing:
  *
- * - `HelpSheet`: what the top bar's "?" opens (`layout.tsx`). "About this
- *   screen", the rows, Close, "Show me around" (the tour), Ideas when the
- *   caller has somewhere to send it, and "What is Bower, from the start".
+ * - `HelpSheet`: what the top bar's "?" and the ⋯ menu's "Help and about
+ *   this" open: the one Help template (#907, spec §3.7).
  * - `Tour`: the first-run tour after onboarding and Settings › Show me around
  *   again (`routes/home.tsx`, `tour-store.ts`). A queued dialog (R-OVL-3) that
  *   steps through the four tabs: "Tour · n of 4", Skip, Back, "Next: <tab>" …
@@ -35,7 +34,7 @@ import {
   tourSheet,
 } from '../help-rows.js';
 import type { HelpIcon, HelpRow, HelpScreen, HelpTab } from '../help-rows.js';
-import { Bird } from './bird.js';
+import { Bird, BowerMark } from './bird.js';
 import {
   IconChat,
   IconClock,
@@ -224,6 +223,14 @@ function useTourPlacement(tab: HelpTab): TourPlacement {
   return placeTour(boxes.tab, boxes.bar, viewport.width, viewport.height);
 }
 
+/**
+ * Rows about what Bower wrote carry the bird mark, 20 px (R-HELP-4, D-18):
+ * the "By Bower" and "The bird" rows. #919 may name them by icon instead.
+ */
+export function isBowerRow(lead: string): boolean {
+  return /^(by bower|the bird)\b/i.test(lead.trim());
+}
+
 function HelpRows({ rows }: { rows: readonly HelpRow[] }): JSX.Element {
   return (
     <ul class="help-rows">
@@ -231,7 +238,7 @@ function HelpRows({ rows }: { rows: readonly HelpRow[] }): JSX.Element {
         const Icon = ICONS[icon];
         return (
           <li key={lead} class="help-row">
-            <Icon />
+            {isBowerRow(lead) ? <BowerMark size={20} /> : <Icon />}
             <span>
               <b>{lead}</b> {text}
             </span>
@@ -282,9 +289,12 @@ export function dismissedTips(screen: HelpScreen): ScreenTip[] {
 }
 
 /**
- * What "?" opens: the sheet about the screen on show, queued as an own
- * overlay (R-OVL-2): a bottom sheet on phones, a 440 px right panel from
- * 900 px up (R-OVL-4).
+ * What "?" and "Help and about this" open: the one Help template (#907,
+ * spec §3.7, R-HELP-1, boards PF-Help): a header with the bird 52, the
+ * overline, the title and ✕ "Close Help"; the lede; the rows; then the
+ * "Bower" group with "Show me around" and "Learn Bower". Queued as an own
+ * overlay: a content sheet on phones, the 440 px side panel from 900 px.
+ * The copy is `help-rows.ts`'s (#919).
  */
 export function HelpSheet({
   screen,
@@ -297,33 +307,33 @@ export function HelpSheet({
   return (
     <Queued id="help-sheet" priority={OVERLAY_PRIORITY.own}>
       <Overlay kind="sheet" labelledBy="help-sheet-title" onClose={onClose}>
-        <div class="help-panel">
+        <div class="overlay-body help-template">
           <div class="help-head">
             <span class="help-bird" aria-hidden="true">
-              <Bird state="idle" face="happy" size={44} overlay />
+              <Bird state="idle" face="happy" size={52} overlay />
             </span>
             <div class="help-heading">
-              <p class="help-kicker">About this screen</p>
-              <h2 id="help-sheet-title" class="help-title">
+              <p class="help-kicker">Help and about this</p>
+              <h2 id="help-sheet-title" class="help-title" tabIndex={-1}>
                 {copy.title}
               </h2>
-              <p id="help-sheet-lede" class="help-lede">
-                {copy.lede}
-              </p>
             </div>
             <button
               type="button"
               class="icon-button help-close"
-              aria-label="Close"
+              aria-label="Close Help"
               onClick={onClose}
             >
               <IconClose />
             </button>
           </div>
+          <p id="help-sheet-lede" class="help-lede">
+            {copy.lede}
+          </p>
           <HelpRows rows={copy.rows} />
           {tips.length > 0 && (
             <section class="help-tips" aria-labelledby="help-tips-title">
-              <p id="help-tips-title" class="help-kicker">
+              <p id="help-tips-title" class="help-group">
                 Tips on this screen
               </p>
               <ul class="help-tip-list">
@@ -345,18 +355,20 @@ export function HelpSheet({
               </ul>
             </section>
           )}
+          <p class="help-group">Bower</p>
           <div class="help-actions">
-            <button type="button" class="button" onClick={onShowMeAround}>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              onClick={onShowMeAround}
+            >
               <IconPlay />
               Show me around
             </button>
+            <a class="btn btn-secondary" href={LEARN_PATH} onClick={onClose}>
+              Learn Bower
+            </a>
           </div>
-          <a class="help-intro-link" href={INTRO_AGAIN_HREF}>
-            What is Bower, from the start
-          </a>
-          <a class="help-intro-link" href={LEARN_PATH}>
-            Learn Bower: examples and use cases
-          </a>
         </div>
       </Overlay>
     </Queued>

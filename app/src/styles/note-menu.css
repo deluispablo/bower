@@ -1,6 +1,6 @@
 /*
- * The one More menu for a note, a file and a folder (#210, #352, spec §14,
- * board Phone-Note-Menu). The popover and the sheet come from `Overlay`.
+ * The one ⋯ menu (#210, #352, #907, spec §3.6). The popover and the sheet
+ * come from `Overlay`.
  */
 
 /* The phone's own More trigger lives in the shell's `actions` slot instead
@@ -26,88 +26,58 @@
   }
 }
 
-/* The menu is an `Overlay` (R-OVL-2, `overlay.css`): the scrim, the sheet on
-   phones and the popover under the More button from 900 px are its own. This
-   only sets what sits inside the panel. */
-.overlay .overlay-panel:has(.note-menu-head) {
-  gap: 2px;
-  padding: var(--space-2) var(--space-2) var(--space-4);
+/* The ⋯ menu (#907, spec §3.6, boards *-More): an `Overlay` of kind menu
+   (`overlay.css`) gives the sheet and the 320 popover; this sets what sits
+   inside. Phone: 0 16 24 under the grab; desktop: the popover's 6 14. */
+.note-menu {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--space-4) calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 900px) {
-  .overlay .overlay-panel:has(.note-menu-head) {
-    width: min(320px, 88vw);
-    padding-bottom: var(--space-2);
+  .note-menu {
+    padding: 0;
   }
 }
 
-/* The board's header: the title, then the type word and the folder. */
-.note-menu-head {
+.note-menu-group {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  margin-bottom: var(--space-1);
-  padding: var(--space-1) var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--color-border);
 }
 
-.note-menu-title {
-  overflow: hidden;
-  font-family: var(--font-display);
-  font-weight: var(--weight-bold);
-  color: var(--color-text);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.note-menu-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-
-.note-menu-place {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-/* The board's small "NEW" pill next to Show in folders. */
-.note-menu-new {
-  margin-left: auto;
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-md);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  font-size: 11px;
-  font-weight: var(--weight-bold);
-  letter-spacing: 0.04em;
+/* Groups: a 1 px rule, 4 px above and below (board). */
+.note-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--color-border-subtle);
 }
 
 .note-menu-row {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 14px;
   min-height: 52px;
+  margin: 0 calc(-1 * var(--space-2));
   padding: 0 var(--space-2);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-row);
   background: transparent;
-  color: var(--color-text);
+  color: var(--color-heading);
   font: inherit;
+  font-size: var(--text-base);
   text-align: left;
   text-decoration: none;
   cursor: pointer;
 }
 
-.note-menu-row:hover {
-  background: var(--color-surface-hover);
+@media (hover: hover) and (pointer: fine) {
+  .note-menu-row:hover {
+    background: var(--color-surface-hover);
+  }
 }
 
-/* #555: Open in Drive, greyed in the demo (Add's own doors, #364). */
+/* #555: Drive items, greyed in the demo (Add's own doors, #364). */
 .note-menu-row:disabled {
   opacity: 0.6;
   cursor: default;
@@ -118,7 +88,10 @@
 }
 
 .note-menu-row .icon {
-  color: var(--color-text-muted);
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--color-text-secondary);
 }
 
 .note-menu-row-text {
@@ -129,26 +102,14 @@
 }
 
 .note-menu-row-hint {
-  font-size: var(--text-sm);
+  font-size: 13px;
   color: var(--color-text-muted);
 }
 
-/* Cancel closes the phone sheet; the desktop popover closes on Escape or
-   a click outside, as the board only draws the sheet. */
+/* Cancel ends the phone action sheet, 8 px under the last group (board);
+   the popover has none (R-MORE-3). */
 .note-menu-cancel {
-  min-height: 48px;
   margin-top: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  font-weight: var(--weight-bold);
-  cursor: pointer;
-}
-
-.note-menu-cancel:hover {
-  background: var(--color-surface-hover);
 }
 
 @media (min-width: 900px) {
@@ -159,7 +120,7 @@
 
 .note-menu-copy-fallback {
   min-height: 44px;
-  margin: 0 var(--space-2);
+  margin: 0 0 var(--space-2);
   padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
