@@ -68,7 +68,8 @@ describe('moveRequestText', () => {
 });
 
 describe('pickerFolders', () => {
-  it('leaves Inbox and what is in it out, and offers the rest', () => {
+  // #909: only the four roots drawn on PF-Move; Answers is not offered.
+  it('offers the four roots and their folders, never Inbox or Answers', () => {
     const list = pickerFolders(tree(), { path: 'x.pdf', isFolder: false });
     expect(paths(list)).toEqual([
       '1-Projects',
@@ -78,7 +79,6 @@ describe('pickerFolders', () => {
       '2-Areas/Garden/Beds',
       '3-Resources',
       '4-Archives',
-      'Answers',
     ]);
   });
 

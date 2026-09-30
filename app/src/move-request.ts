@@ -63,9 +63,9 @@ export function currentFolderOf(subject: MoveSubject): string {
 }
 
 /**
- * The folders the picker offers, as a tree of folders only. Inbox (and
- * everything in it) is never a destination (board `Phone-Move-Picker`, lead
- * ruling); a folder being moved is not offered inside itself. The current
+ * The folders the picker offers, as a tree of folders only: the four roots
+ * drawn on PF-Move (#909). Inbox (and everything in it), Answers, Clippings
+ * and any other top folder are never a destination; a folder being moved is not offered inside itself. The current
  * folder stays in the tree (the picker shows it disabled).
  */
 export function pickerFolders(
@@ -80,7 +80,10 @@ export function pickerFolders(
     };
   }
   return root.folders
-    .filter((top) => paraKindOf(top.name) !== 'inbox')
+    .filter((top) => {
+      const kind = paraKindOf(top.name);
+      return kind !== null && kind !== 'inbox';
+    })
     .flatMap((top) => keep(top) ?? []);
 }
 
