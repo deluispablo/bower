@@ -145,7 +145,7 @@ Settings' footer shows which commit is live (`Bower 0.1.0 · a1b2c3d`, #512): `v
 | `GITHUB_REPO` | Var | The operator's private instance repo, `owner/name` | `OWNER/bower-home` |
 | `VAPID_SUBJECT` | Var | A contact URI for push, `mailto:` an address the operator reads | `mailto:you@example.com` |
 | `DAILY_RUN_LIMIT` | Var (default `100`) | How many `/process` runs a vault may start per day | `100` |
-| `DEFAULT_MAX_TURNS` | Var (default `30`) | Default `--max-turns` passed to the agent when a run doesn't set its own | `30` |
+| `DEFAULT_MAX_TURNS` | Var (default `60`) | Default `--max-turns` passed to the agent when a run doesn't set its own | `60` |
 | `TEMPLATE_FOLDER_NAME` | Var (default `Bower`) | Name of the folder created in the user's Drive from `vault-template/` | `Bower` |
 | `APP_VERSION` | Var | Set by `[vars]` in `wrangler.toml`; predates this contract (#6) | `0.1.0` |
 | `BOWER_KV` | Binding | `wrangler kv namespace create BOWER_KV`, bound in `[[kv_namespaces]]` | `KV_NAMESPACE_ID` |
@@ -241,7 +241,7 @@ Each Worker secret is rotated the same way — pipe the new value into `wrangler
 
 ### Quotas
 
-`DAILY_RUN_LIMIT` (default 100) caps `/process` runs per vault per day; `DEFAULT_MAX_TURNS` (default 30) caps how many turns the agent takes per run, unless the instance repo's `BOWER_MAX_TURNS` variable overrides it. Change either in `wrangler.local.toml`'s `[vars]` and redeploy (step 3.6 above). A waiting request's **Do it now** on the Bower tab is a run too (`POST /process` with `scope: "instructions"`) and counts the same; the dispatch carries `client_payload.scope`, which `ingest.yml` hands to `run.sh` (#373): Do it now runs only the instruction notes directly in `0-Inbox/` and leaves every other inbox file, `Clippings/` included, and Add's context notes where they are for the next Tidy up. An instance repo set up before #373 still has the old `ingest.yml`, which drops the field, so Do it now there tidies up the whole inbox: rerun `bash scripts/new-instance.sh OWNER/bower-home` to update it. A request sent from the Bower tab while a run is queued or running is left in `0-Inbox/` for the next run (#491): the runner compares the note's Drive modified time with the run's `requestedAt`, which the Worker hands it with the vault info; with a Worker deployed before #491 there is no `requestedAt` and such a request is taken by the run in flight, as before.
+`DAILY_RUN_LIMIT` (default 100) caps `/process` runs per vault per day; `DEFAULT_MAX_TURNS` (default 60, see "Rulebook v22 and the turn budget") caps how many turns the agent takes per run, unless the instance repo's `BOWER_MAX_TURNS` variable overrides it. Change either in `wrangler.local.toml`'s `[vars]` and redeploy (step 3.6 above). A waiting request's **Do it now** on the Bower tab is a run too (`POST /process` with `scope: "instructions"`) and counts the same; the dispatch carries `client_payload.scope`, which `ingest.yml` hands to `run.sh` (#373): Do it now runs only the instruction notes directly in `0-Inbox/` and leaves every other inbox file, `Clippings/` included, and Add's context notes where they are for the next Tidy up. An instance repo set up before #373 still has the old `ingest.yml`, which drops the field, so Do it now there tidies up the whole inbox: rerun `bash scripts/new-instance.sh OWNER/bower-home` to update it. A request sent from the Bower tab while a run is queued or running is left in `0-Inbox/` for the next run (#491): the runner compares the note's Drive modified time with the run's `requestedAt`, which the Worker hands it with the vault info; with a Worker deployed before #491 there is no `requestedAt` and such a request is taken by the run in flight, as before.
 
 The runner also caps what one run may change: `BOWER_MAX_CHANGES` (default 200) is the most files a run may add or change. Above it, `agent/run.sh` reverts the whole run: nothing is uploaded or deleted, originals stay in the inbox, and the report's summary starts `Refused: too many changes`. The workflows do not pass it yet, so every instance uses the default; to change it, add `BOWER_MAX_CHANGES: <n>` to the `Run` step's `env:` in both workflows. Files the agent may not change (anything outside the vault's known folders, `CLAUDE.md`, `README.md`, `.claude/`) are reverted the same way, one by one; see "Protected paths and the post-run audit" in `agent/README.md`.
 
@@ -263,6 +263,19 @@ Each Bower folder holds three rule files with three owners: `CLAUDE.md` is Bower
 `About-Me.md` and every note are left alone. Both writes are checked against the file's last-modified time, so a run or another device writing at the same moment makes the update fail with a short message; trying again later is safe and never copies a line twice. Anything a user added before the first `##` heading (frontmatter, title, intro) is not carried over. Drive keeps the previous `CLAUDE.md` in the file's version history (in drive.google.com, right-click the file → **File information → Manage versions**) if anything needs to be copied back by hand.
 
 When you change `vault-template/CLAUDE.md` in a way existing folders should receive, bump `bower_rules_version` by one in the same PR, and add every line you removed or reworded to `app/src/rulebook-retired.ts`; see `vault-template/README.md`.
+
+### Rulebook v22 and the turn budget
+
+Rulebook v22 (#790) adds "How Bower thinks": a score and a verdict first, the project note's `## Reference` reused, disagreements and next steps written to `.bower/checks.txt` and `.bower/next.txt`, and an append-only `## History` in each note Bower writes. The runner reads those two files and writes the History lines for filing, moves and status changes (#788). Deploy the runner (the instance repo's `run.sh`) and the Worker first, then let users apply v22 from Settings: a v22 folder on an older runner leaves the two files in `.bower/` unread.
+
+Thinking costs turns, so `DEFAULT_MAX_TURNS` went from 30 to 60 after a measurement (#789). A fictional pile of 10 items (four flat listings, a job offer, a receipt, two short notes, a web clip and a photo caption, all as text) plus one context note was tidied up once per rulebook with the ingest prompt, `run.sh`'s tool flags, no web tools and `--max-turns 150`:
+
+| Rulebook | Turns | Turns per item | Tool calls |
+|---|---|---|---|
+| v21 | 42 | 4.2 | 41 |
+| v22 draft | 32 | 3.2 | 31 |
+
+Turns vary from run to run as much as between the two rulebooks (a second setup gave 30 and 30), so the default is about 1.5 times the highest run, not the v22 one. The runs were local, not on the instance: the turn count depends only on the agent, the prompt and the rules, not on Drive. An instance with its own `DEFAULT_MAX_TURNS` in `wrangler.local.toml`, or a `BOWER_MAX_TURNS` variable, keeps that value: raise it to 60 by hand if it is lower.
 
 ### One tidy-up, phase by phase
 

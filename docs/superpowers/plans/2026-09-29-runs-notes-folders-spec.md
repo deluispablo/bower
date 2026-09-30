@@ -1375,7 +1375,7 @@ The new props are three sound arcs (`wv`), the page with three lines (`rd`), two
   - A context note with an empty text only groups its files: file them as usual, with no extra note.
   - The pile id (`pile:`) is copied into each resulting note as `pile_note: "[[<context note name>]]"`, so Just filed and the note header can say which pile a thing came from.
   - Serves R-PILE-5.
-- **R-RUNNER-9 (run budget for R-AG-11).** The runner writes the mechanical History lines itself ("filed", "moved", "status"), as it books moves today; the agent writes only "scored" and "written for it". Before R-AG-11 ships, a fixture pile of 10 mixed items is run and its turns are measured. The spec then records the result as turns per item, and `DEFAULT_MAX_TURNS` is raised to cover a pile of 10 with margin. The rulebook's growth is capped at about 3 KB over today's 36 KB, and the bump PR states it.
+- **R-RUNNER-9 (run budget for R-AG-11).** The runner writes the mechanical History lines itself ("filed", "moved", "status"), as it books moves today; the agent writes only "scored" and "written for it". Before R-AG-11 ships, a fixture pile of 10 mixed items is run and its turns are measured. The spec then records the result as turns per item, and `DEFAULT_MAX_TURNS` is raised to cover a pile of 10 with margin. The rulebook's growth is capped at about 3 KB over today's 36 KB, and the bump PR states it. **Measured 30 Sep (#789):** a fixture pile of 10 items and one context note took 42 turns with v21 and 32 with the v22 draft (4.2 and 3.2 turns per item); `DEFAULT_MAX_TURNS` goes from 30 to 60. The runbook's "Rulebook v22 and the turn budget" has the table.
 
 **App modules touched** (in addition to the new `pile-store.ts` and `upload-queue.ts`):
 
