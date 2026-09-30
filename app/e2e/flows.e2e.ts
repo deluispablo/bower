@@ -1524,10 +1524,16 @@ test('What is Bower from Settings opens with Close and Done (#329)', async ({
   await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expect(
-    page.getByText('The whole story, in five screens'),
+    page.getByRole('heading', { name: 'Learn Bower', level: 2 }),
   ).toBeVisible();
 
-  await page.getByRole('button', { name: 'What is Bower' }).click();
+  // Settings > Learn Bower group > Examples and use cases > the intro card.
+  const openIntro = async (): Promise<void> => {
+    await page.getByRole('button', { name: /Examples and use cases/ }).click();
+    await expect(page).toHaveURL(/\/learn$/);
+    await page.getByRole('link', { name: /The intro/ }).click();
+  };
+  await openIntro();
   await expect(page).toHaveURL(/\/welcome\?from=settings&page=1$/);
   await expect(
     page.getByRole('heading', { name: /Bower files it/ }),
@@ -1545,7 +1551,7 @@ test('What is Bower from Settings opens with Close and Done (#329)', async ({
   await expect(page).toHaveURL(/\/settings$/);
 
   // Walking all five pages ends on Done, not Sign in with Google.
-  await page.getByRole('button', { name: 'What is Bower' }).click();
+  await openIntro();
   const next = page.getByRole('button', { name: 'Next', exact: true });
   for (let index = 0; index < 4; index += 1) {
     await next.click();
@@ -1567,13 +1573,19 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
   await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
-  // Account · Tidying up · Look · Bower · Advanced, in that order (scoped
+  // Account · Tidying up · Look · Bower · Learn Bower · Advanced, in that order (scoped
   // to the settings section: the desktop sidebar has its own h2s).
   const headings = await page
     .locator('.settings')
     .getByRole('heading', { level: 2 })
     .allTextContents();
-  expect(headings).toEqual(['Tidying up', 'Look', 'Bower', 'Advanced']);
+  expect(headings).toEqual([
+    'Tidying up',
+    'Look',
+    'Bower',
+    'Learn Bower',
+    'Advanced',
+  ]);
 
   // The web-lookup switch (#374): off by default, and it turns on.
   const webLookup = page
