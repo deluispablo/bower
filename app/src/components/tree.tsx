@@ -1,92 +1,86 @@
 /**
- * The PARA tree: collapsible folders, notes linking to `/note/:id` and files
- * linking to `/file/:id`, all as rows (#588). Used by
- * both explorer variants (`explorer.tsx`) — the desktop sidebar and the
- * Notes tab (#317), the one explorer on every screen size.
+ * The one tree (issue #909, spec §3.14, K-1): folders, notes and files as
+ * rows, in three hosts that differ only in size.
  *
- * Desktop keyboard support is a roving `tabindex` (only the focused row is
- * in the tab order) driven by `nextFocusIndex` (pure, in `navigation.ts`):
- * arrow up/down move between visible rows, right/left expand/collapse a
- * folder (or, once a folder can't expand/collapse further, move to its
- * first child / its parent). A note row's Enter opens it; a folder row's
- * name is a link to `/folder/<path>` (issue #214), so Enter opens that the
- * same way — the chevron alone still toggles expand/collapse, by its own
- * click or the arrow keys.
+ * - `sidebar`: the desktop sidebar, rows 28 px, 13 px text.
+ * - `drawer`: the phone drawer, rows 40 px, 15 px text.
+ * - `page`: the Folders tab, the drawer's tree at full width.
  *
- * Row anatomy (v4): a 44 x 44 chevron button of its own ("Expand
- * Projects" / "Collapse Projects", out of the tab order like the row's pin
- * button; the arrow keys do the same), then the name, a link to
- * `/folder/<path>`. The five landmarks wear a `FolderMark` (28 px in the
- * Notes tab, 18 px in the sidebar; `rootMeanings` tells them apart) with
- * their meaning line, then a divider, then the other top folders with a
- * neutral `FolderIcon`; subfolders take their top folder's tint. A file
- * row carries its kind icon and `KindBadge`. `useNew` adds a `NewTag` to
- * new rows and "<n> new" to folders holding some. Expanded folders and the
- * scroll offset live in the `treeState` store, shared by both variants.
+ * Row anatomy: 14 px per level of indent with a 1 px depth guide at each
+ * ancestor's chevron centre; the chevron (folders that hold something), then
+ * the icon (a root's PARA disc, a subfolder's outline or an item's FileIcon,
+ * tinted by its root; the bird on what Bower wrote), then the name with an
+ * ellipsis and the full name as `title`. No counts, descriptions, "new" tags
+ * or kind badges on any host. The open item's row is selected (tint and a
+ * 3 px bar); the folder holding it has its name in its root's colour.
  *
- * Each folder row shows its count (`folderCounts`: notes and files,
- * subfolders included). The explorer (`explorer.tsx`) passes the order (`sort`) and a
- * `collapseKey`/`expandKey` pair (its one Expand/Collapse all toggle,
- * #326, #353) that collapses, or expands, every folder whenever either
- * changes.
+ * Tree pattern (WAI-ARIA): each row's link is the `treeitem` (with
+ * `aria-level`, `aria-expanded` on folders, `aria-selected`), in a roving
+ * `tabindex`. Up/Down move, Right expands or enters, Left collapses or goes
+ * to the parent, Home/End, a printable key jumps to the next row starting
+ * with it, Enter opens (the row is a link). A folder's chevron toggles it
+ * by pointer; a double click on a folder name toggles it too (desktop).
  *
- * A non-blank `filter` (spec §14; no caller passes one since the Notes
- * tab's search row opens the switcher instead, #433) swaps in
- * `filterTree`'s result and force-expands every folder it kept, so a match
- * is always visible; the tree's own expand/collapse state underneath is
- * untouched and takes back over once the filter is cleared.
+ * Expanded folders and the scroll offset live in the `treeState` store,
+ * shared by every host. Reveal (#591): `revealPath`/`currentId` open the
+ * ancestors of the open item, select its row and scroll it into view; a
+ * new `revealSeq` (from `revealInFolders`) also moves focus to it.
  *
- * Pinning (spec §14, issue #216): a hover pin button on every row plus a
- * `contextmenu` (right-click, or the keyboard's Menu key / Shift+F10) menu
- * with the same items as the held-row sheet (`pin-sheet.tsx`).
+ * Pinning (spec §14, #216): a row's `contextmenu` (right-click, a long
+ * press, the Menu key or Shift+F10) opens the pin sheet.
  */
 
 import { Fragment } from 'preact';
 import type { JSX, RefCallback } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import { isBowerWritten } from '../bower-written.js';
+import { loadNoteMetaEntry, loadTreeState, saveTreeState } from '../cache.js';
 import type { DriveFile } from '../drive.js';
-import { loadTreeState, saveTreeState } from '../cache.js';
-import { folderMeaning } from '../folder-meanings.js';
+import { FOLDER_MIME } from '../drive.js';
 import { driveViewUrl } from '../markdown/embeds.js';
 import {
   appFileGroup,
   buildTree,
   displayName as folderDisplayName,
   driveFolderUrl,
-  filterTree,
-  folderCounts,
   folderHref,
   folderOf,
   nextFocusIndex,
   paraKindOf,
 } from '../navigation.js';
 import type { ParaKind, TreeNode, TreeRow, TreeSort } from '../navigation.js';
+import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { ancestorsOf, mergeExpanded } from '../reveal.js';
-import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
-import type { FileKind, VaultIndex } from '../vault-index.js';
-import { FolderIcon, FolderMark } from './folder-mark.js';
-import {
-  IconChevronRight,
-  IconDoc,
-  IconExternalLink,
-  IconFolder,
-  IconImage,
-  IconNote,
-  IconPdf,
-  IconPin,
-} from './icons.js';
-import { KindBadge } from './kind-badge.js';
+import type { VaultIndex } from '../vault-index.js';
+import { FileIcon } from './file-icon.js';
+import { FolderMark } from './folder-mark.js';
+import { IconChevronRight } from './icons.js';
 import { PinSheet } from './pin-sheet.js';
-import { NewTag } from './tags.js';
 import { useNoteTitles } from './use-note-titles.js';
 import type { VirtualListHandle } from './virtual-list.js';
 
 import '../styles/tree.css';
+
+/** Where the tree is shown: its row height and text size follow. */
+export type TreeHost = 'sidebar' | 'drawer' | 'page';
+
+/** Top folders drawn as their own rows under the tree, not inside it. */
+export const BELOW_TREE_NAMES: readonly string[] = ['Answers', 'Clippings'];
+
+/** Indent per level, px (board PF-Drawer: the chevron's own width). */
+export const TREE_INDENT = 14;
+
+/** The row heights of each host, px (spec §3.14). */
+export const TREE_ROW_HEIGHT: Readonly<Record<TreeHost, number>> = {
+  sidebar: 28,
+  drawer: 40,
+  page: 40,
+};
 
 interface Row extends TreeRow {
   /** A folder's name as Drive has it (numeric prefix included). */
@@ -95,53 +89,40 @@ interface Row extends TreeRow {
   id?: string;
   /** Set for a file row. */
   file?: DriveFile;
+  /** A folder with nothing in it has no chevron. */
+  empty?: boolean;
 }
 
 /**
  * Past this many visible rows the tree renders only the ones in view
- * (`VirtualList`, #590); below it every row is in the DOM, as before.
+ * (`VirtualList`, #590); below it every row is in the DOM.
  */
 const VIRTUAL_FROM_ROWS = 150;
 
 type VirtualModule = typeof import('./virtual-list.js');
 
-// Loaded the first time a tree passes the threshold, so the virtualiser and
-// TanStack Virtual stay out of the startup chunk. Until it arrives the plain
-// list renders.
+// Loaded the first time a tree passes the threshold, so the virtualiser
+// stays out of the startup chunk. Until it arrives the plain list renders.
 let virtualModule: VirtualModule | null = null;
-
-/** A row's height in px before it is measured: the 44 px row plus its gap. */
-const ROW_ESTIMATE = 46;
-
-let treeSeq = 0;
-
-/** What a row's link description says: the folder's count and what is new
- * in it, or "New" for a fresh note. `undefined` when there is nothing to
- * add to the name (R-SIDE-3). */
-export function rowDescription(
-  count: number | undefined,
-  fresh: number,
-  isNewNote = false,
-): string | undefined {
-  const parts: string[] = [];
-  if (count !== undefined && count > 0) {
-    parts.push(count === 1 ? '1 item' : `${count} items`);
-  }
-  if (fresh > 0) parts.push(`${fresh} new`);
-  else if (isNewNote) parts.push('New');
-  return parts.length === 0 ? undefined : parts.join(', ');
-}
 
 /** How long the revealed row's highlight lasts (matches `tree.css`). */
 const REVEAL_FLASH_MS = 600;
 
-// The folders open when this tree last changed, kept for the next tree that
-// mounts (the phone's Notes tab mounts a fresh one on every visit) so it
-// paints open at once instead of collapsed until the stored state is read.
+// The folders open when a tree last changed, kept for the next tree that
+// mounts (the drawer and the Folders tab mount a fresh one) so it paints
+// open at once instead of collapsed until the stored state is read.
 let rememberedExpanded: ReadonlySet<string> | null = null;
 
 /** How long a scroll must rest before its offset is saved. */
 const SCROLL_SAVE_MS = 250;
+
+/** How long type-ahead keeps adding keys to one search. */
+const TYPE_AHEAD_MS = 700;
+
+/** Whether a top folder is drawn under the tree instead of in it. */
+export function isBelowTree(name: string): boolean {
+  return BELOW_TREE_NAMES.includes(folderDisplayName(name));
+}
 
 function flatten(
   node: TreeNode,
@@ -150,13 +131,16 @@ function flatten(
   out: Row[],
 ): void {
   for (const folder of node.folders) {
+    if (depth === 0 && isBelowTree(folder.name)) continue;
     const isExpanded = expanded.has(folder.path);
+    const empty = folder.folders.length === 0 && folder.items.length === 0;
     out.push({
       kind: 'folder',
       path: folder.path,
       depth,
       expanded: isExpanded,
       name: folder.name,
+      empty,
     });
     if (isExpanded) flatten(folder, depth + 1, expanded, out);
   }
@@ -173,6 +157,26 @@ function flatten(
   }
 }
 
+/**
+ * Where type-ahead lands: the first row after `from` (wrapping) whose name
+ * starts with `prefix`, case-insensitive; `from` itself when none does.
+ */
+export function typeAheadIndex(
+  names: readonly string[],
+  from: number,
+  prefix: string,
+): number {
+  const needle = prefix.toLowerCase();
+  if (needle === '' || names.length === 0) return from;
+  // A repeated single letter cycles; a longer prefix may match `from` itself.
+  const start = needle.length > 1 ? 0 : 1;
+  for (let step = start; step <= names.length; step++) {
+    const i = (from + step) % names.length;
+    if ((names[i] ?? '').toLowerCase().startsWith(needle)) return i;
+  }
+  return from;
+}
+
 /** The nearest ancestor that scrolls, or `null` when the page itself does. */
 function scrollParentOf(el: HTMLElement | null): HTMLElement | null {
   for (let node = el?.parentElement; node; node = node.parentElement) {
@@ -186,20 +190,7 @@ function currentScroll(el: HTMLElement | null): number {
   return scrollParentOf(el)?.scrollTop ?? window.scrollY;
 }
 
-function FileRowIcon({ kind }: { kind: FileKind }): JSX.Element {
-  let icon: JSX.Element;
-  if (kind === 'pdf') icon = <IconPdf />;
-  else if (kind === 'photo' || kind === 'image' || kind === 'heic') {
-    icon = <IconImage />;
-  } else icon = <IconDoc />;
-  return (
-    <span class="tree-kind-icon" aria-hidden="true">
-      {icon}
-    </span>
-  );
-}
-
-/** Every folder path in `node`, so a filtered tree can be shown fully open. */
+/** Every folder path in `node`. */
 function allFolderPaths(node: TreeNode, out: Set<string>): void {
   for (const folder of node.folders) {
     out.add(folder.path);
@@ -207,47 +198,65 @@ function allFolderPaths(node: TreeNode, out: Set<string>): void {
   }
 }
 
-interface TreeProps {
+/** The root a path sits under, or `null` outside the five. */
+function rootOf(path: string): ParaKind | null {
+  return paraKindOf(path.split('/')[0] ?? '');
+}
+
+/**
+ * Which of `files` Bower wrote, from the cached frontmatter only (no network
+ * call, like `useNoteTitles`): a note not read yet shows the document glyph
+ * until a folder screen has cached it.
+ */
+function useBowerWritten(files: readonly DriveFile[]): ReadonlySet<string> {
+  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  const key = files.map((file) => file.id).join(',');
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      files.map(async (file) => {
+        const entry = await loadNoteMetaEntry<{ meta?: NoteMeta }>(file.id);
+        return isBowerWritten(entry?.meta) ? file.id : null;
+      }),
+    ).then((found) => {
+      if (cancelled) return;
+      const next = new Set(found.filter((id): id is string => id !== null));
+      setIds((prev) =>
+        prev.size === next.size && [...next].every((id) => prev.has(id))
+          ? prev
+          : next,
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+  return ids;
+}
+
+export interface TreeProps {
   index: VaultIndex;
-  /** Called when a note link is activated, e.g. to close the mobile drawer. */
+  /** The host: row height and text size (spec §3.14). */
+  host?: TreeHost;
+  /** Called when a row's link is activated, e.g. to close the drawer. */
   onNavigate?: () => void;
   /** The explorer's order; by name when left out. */
   sort?: TreeSort;
-  /** Every change collapses all folders (the explorer's Expand/Collapse all). */
+  /** Every change collapses all folders ("Collapse all folders"). */
   collapseKey?: number;
-  /** Every change expands all folders (the explorer's Expand/Collapse all). */
+  /** Every change expands all folders. */
   expandKey?: number;
-  /**
-   * Show the "Bower's files" group after the tree (the `showAppFiles`
-   * preference). Off by default: the tree is the user's notes only.
-   */
+  /** Adds the "Bower's own files" group at the bottom (`showAppFiles`). */
   showAppFiles?: boolean;
-  /**
-   * A live filter (spec §14; unused since #433): narrows the tree to name matches,
-   * force-expanding their parent folders. Blank or left out: the tree
-   * behaves as before, with its own expand/collapse state.
-   */
-  filter?: string;
-  /**
-   * The Notes tab (phone) variant: marks 28 px and the full meaning line
-   * under a top folder's name. Off (the desktop sidebar): marks 18 px and
-   * the short meaning line. Both come from `folder-meanings.ts`.
-   */
-  rootMeanings?: boolean;
-  /**
-   * Reveal (#591): the vault path of the open note, file or folder. Its
-   * ancestors are added to the open folders (none is ever closed), its row is
-   * marked current, highlighted for a moment and scrolled into view.
-   */
+  /** Reveal (#591): the vault path of the open note, file or folder. */
   revealPath?: string;
   /** Reveal (#591): the open note or file's id; left out for a folder. */
   currentId?: string;
+  /** A new value (from `revealInFolders`) also moves focus to the row. */
+  revealSeq?: number;
   /** Called with whether any folder is open, whenever that changes. */
   onOpenChange?: (anyOpen: boolean) => void;
-  /**
-   * The Notes tab (phone): tapping the Notes tab again while on `/notes`
-   * scrolls the tree to the top (R-REVEAL-2).
-   */
+  /** The Folders tab: tapping its tab again scrolls to the top (R-REVEAL-2). */
   topOnTabTap?: boolean;
   /** "Ask Bower about this" in the pin menu; the host opens the sheet. */
   onAsk?: (name: string) => void;
@@ -255,29 +264,23 @@ interface TreeProps {
 
 export function Tree({
   index,
+  host = 'sidebar',
   onNavigate,
   sort = 'name',
   collapseKey = 0,
   expandKey = 0,
   showAppFiles = false,
-  filter = '',
-  rootMeanings = false,
   revealPath,
   currentId,
+  revealSeq = 0,
   onOpenChange,
   topOnTabTap = false,
   onAsk,
 }: TreeProps): JSX.Element {
   const { pinNote, unpinNote, pinFolder, unpinFolder } = useVault();
-  // Makes the description ids unique when two trees are on screen.
-  const [seq] = useState(() => ++treeSeq);
-  // The one row (folder or note) whose pin sheet/menu is open, or `null`.
+  // The one row whose pin sheet is open, or `null`.
   const [openRow, setOpenRow] = useState<Row | null>(null);
   const tree = useMemo(() => buildTree(index, sort), [index, sort]);
-  // #425: files and notes together, the same total the folder screen
-  // itself lists ("n files · n notes") — the Notes tab and the desktop
-  // sidebar (`components/explorer.tsx`) share this one `Tree`.
-  const counts = useMemo(() => folderCounts(index, true), [index]);
   const group = useMemo(() => appFileGroup(index), [index]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
     mergeExpanded(
@@ -287,16 +290,17 @@ export function Tree({
   );
   // The path whose row is still to be scrolled to and highlighted.
   const pendingReveal = useRef<string | null>(revealPath ?? null);
+  const pendingRevealFocus = useRef(false);
   const revealRef = useRef(revealPath);
   revealRef.current = revealPath;
   const [flashPath, setFlashPath] = useState<string | null>(null);
-  const newState = useNew();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   // Nothing is saved until the stored state has been read, so a fresh mount
   // never overwrites it with an empty set.
   const restored = useRef(false);
   const expandedRef = useRef(expanded);
   expandedRef.current = expanded;
+  const typed = useRef<{ text: string; at: number }>({ text: '', at: 0 });
 
   useEffect(() => {
     let cancelled = false;
@@ -305,8 +309,6 @@ export function Tree({
         if (cancelled) return;
         restored.current = true;
         if (state === undefined) return;
-        // The stored folders, plus the ancestors of what is being revealed:
-        // a reveal that ran before the state arrived keeps its folders.
         const target = revealRef.current;
         setExpanded(
           mergeExpanded(
@@ -357,9 +359,13 @@ export function Tree({
     if (revealPath === undefined) return;
     pendingReveal.current = revealPath;
     setExpanded((prev) => mergeExpanded(prev, ancestorsOf(revealPath)));
-  }, [revealPath, currentId]);
+  }, [revealPath, currentId, revealSeq]);
 
-  // R-REVEAL-2: the Notes tab tapped again while on it scrolls to the top.
+  useEffect(() => {
+    if (revealSeq > 0) pendingRevealFocus.current = true;
+  }, [revealSeq]);
+
+  // R-REVEAL-2: the Folders tab tapped again while on it scrolls to the top.
   useEffect(() => {
     if (!topOnTabTap) return;
     const onClick = (event: MouseEvent): void => {
@@ -390,17 +396,6 @@ export function Tree({
     };
   }, []);
 
-  const filtering = filter.trim() !== '';
-  const displayTree = useMemo(
-    () => (filtering ? filterTree(tree, filter) : tree),
-    [tree, filtering, filter],
-  );
-  const displayExpanded = useMemo(() => {
-    if (!filtering) return expanded;
-    const paths = new Set<string>();
-    allFolderPaths(displayTree, paths);
-    return paths;
-  }, [filtering, displayTree, expanded]);
   const [focusIndex, setFocusIndex] = useState(0);
   const rowRefs = useRef<Array<HTMLElement | null>>([]);
   // A row that was off screen when focus was sent to it: focused as soon as
@@ -429,9 +424,9 @@ export function Tree({
 
   const rows = useMemo(() => {
     const out: Row[] = [];
-    flatten(displayTree, 0, displayExpanded, out);
+    flatten(tree, 0, expanded, out);
     return out;
-  }, [displayTree, displayExpanded]);
+  }, [tree, expanded]);
   const noteFiles = useMemo(
     () =>
       rows
@@ -441,6 +436,7 @@ export function Tree({
     [rows, index],
   );
   const titles = useNoteTitles(noteFiles);
+  const bowerIds = useBowerWritten(noteFiles);
 
   const wantsVirtual = rows.length > VIRTUAL_FROM_ROWS;
   useEffect(() => {
@@ -462,7 +458,7 @@ export function Tree({
   // Scrolls to the revealed row once it is in the list, and lights it up.
   useEffect(() => {
     const target = pendingReveal.current;
-    if (target === null || filtering) return;
+    if (target === null) return;
     if (wantsVirtual && loaded === null) return;
     const at = rows.findIndex((row) =>
       currentId !== undefined
@@ -471,16 +467,20 @@ export function Tree({
     );
     if (at === -1) return;
     pendingReveal.current = null;
+    setFocusIndex(at);
     const el = rowRefs.current[at];
     if (el) {
       if (typeof el.scrollIntoView === 'function') {
         el.scrollIntoView({ block: 'nearest' });
       }
+      if (pendingRevealFocus.current) el.focus();
     } else if (listHandle.current !== null) {
+      if (pendingRevealFocus.current) pendingFocus.current = at;
       listHandle.current.scrollToIndex(at, { align: 'auto' });
     }
+    pendingRevealFocus.current = false;
     setFlashPath(target);
-  }, [rows, currentId, filtering, wantsVirtual, loaded]);
+  }, [rows, currentId, revealSeq, wantsVirtual, loaded]);
 
   useEffect(() => {
     if (flashPath === null) return;
@@ -519,38 +519,68 @@ export function Tree({
     };
   }
 
+  /** A note row's resolved title, a file's title or a folder's own name. */
+  function displayName(row: Row): string {
+    if (row.kind === 'folder') return folderDisplayName(row.name);
+    if (row.kind === 'file') return fileTitle(row.name);
+    return (
+      (row.id !== undefined ? titles.get(row.id) : undefined) ?? noteTitle(row)
+    );
+  }
+
   function onRowKeyDown(
     event: JSX.TargetedKeyboardEvent<HTMLElement>,
     i: number,
   ): void {
     const row = rows[i];
     if (row === undefined) return;
+    const { key } = event;
+    if (key === 'Home' || key === 'End') {
+      event.preventDefault();
+      focusAt(key === 'Home' ? 0 : rows.length - 1);
+      return;
+    }
     if (
-      event.key !== 'ArrowDown' &&
-      event.key !== 'ArrowUp' &&
-      event.key !== 'ArrowLeft' &&
-      event.key !== 'ArrowRight'
+      key.length === 1 &&
+      key !== ' ' &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      const now = Date.now();
+      const text =
+        now - typed.current.at < TYPE_AHEAD_MS ? typed.current.text + key : key;
+      typed.current = { text, at: now };
+      const at = typeAheadIndex(rows.map(displayName), i, text);
+      if (at !== i) {
+        event.preventDefault();
+        focusAt(at);
+      }
+      return;
+    }
+    if (
+      key !== 'ArrowDown' &&
+      key !== 'ArrowUp' &&
+      key !== 'ArrowLeft' &&
+      key !== 'ArrowRight'
     ) {
       return;
     }
     event.preventDefault();
     if (
-      event.key === 'ArrowRight' &&
+      key === 'ArrowRight' &&
       row.kind === 'folder' &&
-      row.expanded !== true
+      row.expanded !== true &&
+      row.empty !== true
     ) {
       toggle(row.path);
       return;
     }
-    if (
-      event.key === 'ArrowLeft' &&
-      row.kind === 'folder' &&
-      row.expanded === true
-    ) {
+    if (key === 'ArrowLeft' && row.kind === 'folder' && row.expanded === true) {
       toggle(row.path);
       return;
     }
-    focusAt(nextFocusIndex(rows, i, event.key));
+    focusAt(nextFocusIndex(rows, i, key));
   }
 
   function isPinned(row: Row): boolean {
@@ -574,18 +604,6 @@ export function Tree({
         message,
       );
     }
-  }
-
-  /** A note row's resolved title (`useNoteTitles`, falling back to
-   * `noteTitle`'s file-name reading while the cache hasn't answered yet),
-   * or a folder's own name. Used for the sheet's dialog name and its "Ask
-   * Bower" wording, and for the row's own label. */
-  function displayName(row: Row): string {
-    if (row.kind === 'folder') return folderDisplayName(row.name);
-    if (row.kind === 'file') return fileTitle(row.name);
-    return (
-      (row.id !== undefined ? titles.get(row.id) : undefined) ?? noteTitle(row)
-    );
   }
 
   function pinSheetFor(row: Row): JSX.Element {
@@ -622,22 +640,9 @@ export function Tree({
       group.instructionNotesCount > 0 ||
       group.agentSettings !== null);
 
-  const emptyText = filtering ? 'No matches.' : 'Nothing here yet.';
-
   if (rows.length === 0 && !showGroup) {
-    return <p class="tree-empty">{emptyText}</p>;
+    return <p class="tree-empty">Nothing here yet.</p>;
   }
-
-  const markSize = rootMeanings ? 28 : 18;
-  // The divider sits before the first top folder that is not a landmark,
-  // once a landmark has been shown.
-  let landmarkSeen = false;
-  let dividerBefore = -1;
-  rows.forEach((row, i) => {
-    if (row.kind !== 'folder' || row.depth !== 0) return;
-    if (paraKindOf(row.name) !== null) landmarkSeen = true;
-    else if (landmarkSeen && dividerBefore === -1) dividerBefore = i;
-  });
 
   /** Whether `row` is the open note, file or folder. */
   function isCurrent(row: Row): boolean {
@@ -647,117 +652,139 @@ export function Tree({
       : row.kind === 'folder' && row.path === revealPath;
   }
 
-  /** The highlight class while the revealed row's flash lasts. */
-  function revealClass(row: Row): string {
-    return flashPath !== null && isCurrent(row) ? ' tree-row-reveal' : '';
+  // The folder open in the main area: the one holding the open item, or the
+  // open folder itself. Its name wears its root's colour (G-22).
+  const openFolder =
+    revealPath === undefined
+      ? undefined
+      : currentId !== undefined
+        ? folderOf(revealPath)
+        : revealPath;
+
+  function guides(depth: number): JSX.Element[] {
+    return Array.from({ length: depth }, (_, k) => (
+      <span
+        key={k}
+        class="tree-guide"
+        aria-hidden="true"
+        style={{ left: `${10 + k * TREE_INDENT}px` }}
+      />
+    ));
+  }
+
+  function rowClass(row: Row, extra: string): string {
+    const parts = ['tree-row', extra];
+    if (row.depth === 0 && row.kind === 'folder') parts.push('tree-root');
+    if (isCurrent(row)) parts.push('tree-row-selected');
+    if (flashPath !== null && isCurrent(row)) parts.push('tree-row-reveal');
+    if (row.kind === 'folder' && row.path === openFolder) {
+      parts.push('tree-row-open');
+    }
+    return parts.join(' ');
+  }
+
+  function rowLink(
+    row: Row,
+    i: number,
+    href: string,
+    icon: JSX.Element,
+  ): JSX.Element {
+    const name = displayName(row);
+    const root = rootOf(row.path);
+    return (
+      <a
+        href={href}
+        ref={rowRef(i)}
+        role="treeitem"
+        class="tree-link"
+        aria-level={row.depth + 1}
+        aria-expanded={
+          row.kind === 'folder' && row.empty !== true ? row.expanded : undefined
+        }
+        aria-selected={isCurrent(row)}
+        aria-current={isCurrent(row) ? 'page' : undefined}
+        title={name}
+        tabIndex={i === focusIndex ? 0 : -1}
+        style={
+          row.kind === 'folder' && row.path === openFolder && root !== null
+            ? { color: `var(--color-para-${root})` }
+            : undefined
+        }
+        onClick={() => onNavigate?.()}
+        onDblClick={
+          row.kind === 'folder' && row.empty !== true
+            ? () => toggle(row.path)
+            : undefined
+        }
+        onKeyDown={(event) => onRowKeyDown(event, i)}
+        onFocus={() => setFocusIndex(i)}
+      >
+        {icon}
+        <span class="tree-name">{name}</span>
+      </a>
+    );
   }
 
   function folderRow(row: Row, i: number): JSX.Element {
     const name = displayName(row);
-    const setRef = rowRef(i);
-    const top = row.path.split('/')[0] ?? '';
-    const landmark: ParaKind | null = paraKindOf(top);
-    const meaning =
-      row.depth === 0
-        ? folderMeaning(row.path, rootMeanings ? 'full' : 'short')
-        : undefined;
-    const fresh = newState.newCountIn(row.path);
-    const count = counts.get(row.path) ?? 0;
-    const descId = `tree-desc-${seq}-${i}`;
-    const description = rowDescription(count, fresh);
-    const nameEl =
-      meaning === undefined ? (
-        <span class="tree-name">{name}</span>
+    const landmark = rootOf(row.path);
+    const icon =
+      row.depth === 0 && landmark !== null ? (
+        <FolderMark kind={landmark} size={18} />
       ) : (
-        <span class="tree-name-group">
-          <span class="tree-name">{name}</span>
-          <span class="tree-meaning">{meaning}</span>
-        </span>
+        <FileIcon
+          item={{ name: row.name, mimeType: FOLDER_MIME, path: row.path }}
+          size={16}
+        />
       );
     return (
       <span
-        class={`tree-row tree-folder tree-row-pinnable${revealClass(row)}`}
-        style={{
-          paddingLeft: `${row.depth * 16 + 4}px`,
-          position: 'relative',
-        }}
+        class={rowClass(row, 'tree-folder')}
+        style={{ paddingLeft: `${row.depth * TREE_INDENT + 4}px` }}
         onContextMenu={(event) => {
           event.preventDefault();
           setOpenRow(row);
         }}
       >
-        <button
-          type="button"
-          class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
-          tabIndex={-1}
-          aria-label={`${row.expanded === true ? 'Collapse' : 'Expand'} ${name}`}
-          onClick={() => toggle(row.path)}
-        >
-          <IconChevronRight />
-        </button>
-        <a
-          href={folderHref(row.path)}
-          ref={setRef}
-          class="tree-folder-link"
-          aria-label={name}
-          title={name}
-          aria-describedby={description === undefined ? undefined : descId}
-          aria-current={isCurrent(row) ? 'page' : undefined}
-          tabIndex={i === focusIndex ? 0 : -1}
-          onClick={() => onNavigate?.()}
-          onKeyDown={(event) => onRowKeyDown(event, i)}
-          onFocus={() => setFocusIndex(i)}
-        >
-          {row.depth === 0 && landmark !== null ? (
-            <FolderMark kind={landmark} size={markSize} />
-          ) : (
-            <FolderIcon
-              tint={row.depth === 0 ? undefined : (landmark ?? undefined)}
-            />
-          )}
-          {nameEl}
-          {fresh > 0 && <NewTag count={fresh} />}
-          {(count > 0 || (row.depth === 0 && landmark === 'inbox')) && (
-            <span class="tree-count">{count}</span>
-          )}
-          {description !== undefined && (
-            <span id={descId} class="tree-sr">
-              {description}
-            </span>
-          )}
-        </a>
-        <button
-          type="button"
-          class="tree-pin"
-          aria-label={`${isPinned(row) ? 'Unpin' : 'Pin'} ${name}`}
-          aria-pressed={isPinned(row)}
-          // Out of the roving tab order, like the chevron above: a keyboard
-          // user reaches the same toggle through the row's own menu
-          // (Shift+F10 / the Menu key).
-          tabIndex={-1}
-          onClick={() => void togglePin(row)}
-        >
-          <IconPin />
-        </button>
+        {guides(row.depth)}
+        {row.empty === true ? (
+          <span class="tree-spacer" aria-hidden="true" />
+        ) : (
+          <button
+            type="button"
+            class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
+            tabIndex={-1}
+            aria-label={`${row.expanded === true ? 'Collapse' : 'Expand'} ${name}`}
+            onClick={() => toggle(row.path)}
+          >
+            <IconChevronRight />
+          </button>
+        )}
+        {rowLink(row, i, folderHref(row.path), icon)}
         {openRow?.path === row.path && pinSheetFor(row)}
       </span>
     );
   }
 
   function leafRow(row: Row, i: number): JSX.Element {
-    const name = displayName(row);
     const isFile = row.kind === 'file';
-    const setRef = rowRef(i);
-    const descId = `tree-desc-${seq}-${i}`;
-    const isNewNote = row.id !== undefined && newState.isNew(row.id);
-    const description = rowDescription(undefined, 0, isNewNote);
+    const file =
+      row.file ?? (row.id === undefined ? undefined : index.byId.get(row.id));
+    const icon = (
+      <FileIcon
+        item={{
+          name: row.name,
+          mimeType: file?.mimeType ?? 'text/markdown',
+          path: row.path,
+          bowerWritten: row.id !== undefined && bowerIds.has(row.id),
+        }}
+        size={16}
+      />
+    );
     return (
       <span
-        class={`tree-row ${isFile ? 'tree-file' : 'tree-note'}${isFile ? '' : ' tree-row-pinnable'}${revealClass(row)}`}
-        style={{
-          paddingLeft: `${row.depth * 16 + 4}px`,
-          position: 'relative',
-        }}
+        class={rowClass(row, isFile ? 'tree-file' : 'tree-note')}
+        style={{ paddingLeft: `${row.depth * TREE_INDENT + 4}px` }}
         onContextMenu={
           isFile
             ? undefined
@@ -767,47 +794,13 @@ export function Tree({
               }
         }
       >
+        {guides(row.depth)}
         <span class="tree-spacer" aria-hidden="true" />
-        <a
-          href={`${isFile ? '/file/' : '/note/'}${row.id ?? ''}`}
-          ref={setRef}
-          class="tree-note-link"
-          aria-label={name}
-          title={name}
-          aria-describedby={description === undefined ? undefined : descId}
-          aria-current={isCurrent(row) ? 'page' : undefined}
-          tabIndex={i === focusIndex ? 0 : -1}
-          onClick={() => onNavigate?.()}
-          onKeyDown={(event) => onRowKeyDown(event, i)}
-          onFocus={() => setFocusIndex(i)}
-        >
-          {row.file !== undefined ? (
-            <FileRowIcon kind={fileKind(row.file)} />
-          ) : (
-            <IconNote />
-          )}
-          <span class="tree-name">{name}</span>
-          {row.file !== undefined && (
-            <KindBadge kind={fileKind(row.file)} file={row.file} />
-          )}
-          {isNewNote && <NewTag />}
-          {description !== undefined && (
-            <span id={descId} class="tree-sr">
-              {description}
-            </span>
-          )}
-        </a>
-        {!isFile && (
-          <button
-            type="button"
-            class="tree-pin"
-            aria-label={`${isPinned(row) ? 'Unpin' : 'Pin'} ${name}`}
-            aria-pressed={isPinned(row)}
-            tabIndex={-1}
-            onClick={() => void togglePin(row)}
-          >
-            <IconPin />
-          </button>
+        {rowLink(
+          row,
+          i,
+          `${isFile ? '/file/' : '/note/'}${row.id ?? ''}`,
+          icon,
         )}
         {openRow?.path === row.path && !isFile && pinSheetFor(row)}
       </span>
@@ -815,53 +808,36 @@ export function Tree({
   }
 
   const VirtualList = loaded?.VirtualList;
+  const rowHeight = TREE_ROW_HEIGHT[host];
 
   return (
-    <div class="tree-wrap" ref={wrapRef}>
+    <div class={`tree-wrap tree-host-${host}`} ref={wrapRef}>
       {rows.length === 0 ? (
-        <p class="tree-empty">{emptyText}</p>
+        <p class="tree-empty">Nothing here yet.</p>
       ) : wantsVirtual && VirtualList !== undefined ? (
         <VirtualList
           as="ul"
           rowAs="li"
           class="tree"
           role="tree"
+          aria-label="Your folders"
           items={rows}
-          estimateSize={() => ROW_ESTIMATE}
-          gap={2}
+          estimateSize={() => rowHeight}
+          gap={0}
           overscan={10}
           keepIndex={focusIndex}
           handleRef={listHandle}
           getKey={(row) => row.path}
-          rowProps={(row, i) => ({
-            role: 'treeitem',
-            'aria-level': row.depth + 1,
-            'aria-expanded': row.kind === 'folder' ? row.expanded : undefined,
-            style:
-              i === dividerBefore
-                ? { borderTop: '1px solid var(--color-border)' }
-                : undefined,
-          })}
+          rowProps={() => ({ role: 'none' })}
           renderRow={(row, i) =>
             row.kind === 'folder' ? folderRow(row, i) : leafRow(row, i)
           }
         />
       ) : (
-        <ul class="tree" role="tree">
+        <ul class="tree" role="tree" aria-label="Your folders">
           {rows.map((row, i) => (
             <Fragment key={row.path}>
-              {i === dividerBefore && (
-                <li
-                  role="presentation"
-                  class="tree-divider"
-                  aria-hidden="true"
-                />
-              )}
-              <li
-                role="treeitem"
-                aria-level={row.depth + 1}
-                aria-expanded={row.kind === 'folder' ? row.expanded : undefined}
-              >
+              <li role="none">
                 {row.kind === 'folder' ? folderRow(row, i) : leafRow(row, i)}
               </li>
             </Fragment>
@@ -869,30 +845,37 @@ export function Tree({
         </ul>
       )}
       {showGroup && (
-        <>
-          <div class="tree-app-divider" aria-hidden="true" />
-          <ul class="tree tree-app-group" aria-label="Bower's files">
+        <div class="tree-app-group">
+          <h3 class="tree-app-label">Bower's own files</h3>
+          <ul class="tree" aria-label="Bower's own files">
             {group.files.map(({ file, label }) => (
               <li key={file.id}>
                 <a
                   href={`/note/${file.id}`}
-                  class="tree-row tree-note tree-app"
+                  class="tree-row tree-app"
                   onClick={() => onNavigate?.()}
                 >
-                  <IconNote />
+                  <span class="tree-spacer" aria-hidden="true" />
+                  <FileIcon item={{ ...file, bowerWritten: true }} size={16} />
                   <span class="tree-name">{label}</span>
-                  <span class="tag-app">app</span>
                 </a>
               </li>
             ))}
             {group.instructionNotesCount > 0 && (
               <li>
-                <span class="tree-row tree-app-summary">
-                  <IconNote />
+                <span class="tree-row tree-app">
+                  <span class="tree-spacer" aria-hidden="true" />
+                  <FileIcon
+                    item={{
+                      name: 'Instruction notes',
+                      mimeType: 'text/markdown',
+                      bowerWritten: true,
+                    }}
+                    size={16}
+                  />
                   <span class="tree-name">
                     Instruction notes ({group.instructionNotesCount})
                   </span>
-                  <span class="tag-app">app</span>
                 </span>
               </li>
             )}
@@ -902,17 +885,16 @@ export function Tree({
                   href={driveFolderUrl(group.agentSettings.file)}
                   target="_blank"
                   rel="noopener"
-                  class="tree-row tree-note tree-app"
+                  class="tree-row tree-app"
                 >
-                  <IconFolder />
+                  <span class="tree-spacer" aria-hidden="true" />
+                  <FileIcon item={group.agentSettings.file} size={16} />
                   <span class="tree-name">{group.agentSettings.label}</span>
-                  <IconExternalLink />
-                  <span class="tag-app">app</span>
                 </a>
               </li>
             )}
           </ul>
-        </>
+        </div>
       )}
     </div>
   );

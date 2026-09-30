@@ -1,11 +1,23 @@
-/* Tree (explorer, #588): folders, notes and files as rows, 44 px chevrons. */
+/* The one tree (#909, spec §3.14): three hosts, one look. Rows 28 px / 13 px
+   in the desktop sidebar, 40 px / 15 px in the drawer and the Folders tab;
+   14 px per level with 1 px depth guides; selection tint + 3 px bar. */
 .tree {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.tree-wrap {
+  --tree-row: 28px;
+  --tree-text: 13px;
+}
+
+.tree-host-drawer,
+.tree-host-page {
+  --tree-row: 40px;
+  --tree-text: 15px;
 }
 
 .tree-empty {
@@ -16,280 +28,141 @@
 }
 
 .tree-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 6px;
   width: 100%;
-  min-height: 44px;
-  padding-right: var(--space-2);
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
+  min-width: 0;
+  height: var(--tree-row);
+  padding-right: 6px;
+  box-sizing: border-box;
+  border-radius: 6px;
   color: var(--color-text);
-  font: inherit;
-  text-align: left;
+  font-size: var(--tree-text);
   text-decoration: none;
-  cursor: pointer;
 }
 
 .tree-row:hover {
   background: var(--color-surface-hover);
+}
+
+.tree-root {
+  font-weight: 600;
+}
+
+.tree-row-selected,
+.tree-row-selected:hover {
+  background: var(--color-selection);
+  box-shadow: inset 3px 0 0 var(--color-brand);
+}
+
+.tree-row-selected .tree-link {
   color: var(--color-heading);
 }
 
-.tree-row:focus-visible {
-  outline: 2px solid var(--color-accent-line);
+.tree-row-open {
+  font-weight: 600;
+}
+
+/* A depth guide: at each ancestor's chevron centre. */
+.tree-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-border-subtle);
+  pointer-events: none;
+}
+
+.tree-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.tree-row:has(.tree-link:focus-visible) {
+  outline: 2px solid var(--color-focus, var(--color-brand));
   outline-offset: -2px;
 }
 
-.tree-row .icon {
-  width: 20px;
-  height: 20px;
-}
-
-/* The mark's own icon sizes and the folder icon's tint come from
-   `marks.css`; only the plain note and kind icons are muted here. */
-.tree-row .folder-mark .icon {
-  width: 15px;
-  height: 15px;
-}
-
-.tree-row .folder-mark-18 .icon {
-  width: 11px;
-  height: 11px;
-}
-
-.tree-note-link > .icon,
-.tree-kind-icon {
-  display: inline-flex;
+.tree-link > .folder-mark,
+.tree-link > span:first-child,
+.tree-link > svg {
   flex-shrink: 0;
-  color: var(--color-text-muted);
 }
 
-/* `Tree` wraps its list so it can find the scrolling ancestor; the wrapper
-   takes no part in layout. */
-.tree-wrap {
-  display: contents;
+.tree-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* Where a leaf row's chevron would be, so names line up with the folders'. */
+.tree-chevron,
 .tree-spacer {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-}
-
-.tree-divider {
-  height: 0;
-  margin: var(--space-2) 10px;
-  border-top: 1px solid var(--color-border);
-  list-style: none;
-}
-
-.tree-chevron {
+  position: relative;
   display: inline-flex;
+  flex: 0 0 14px;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
+  width: 14px;
+  height: 14px;
   padding: 0;
   background: none;
   border: none;
-  color: inherit;
+  color: var(--color-text-muted);
   cursor: pointer;
-  transition: transform var(--motion-fast) var(--ease-out);
 }
 
 .tree-chevron .icon {
   width: 14px;
   height: 14px;
+  transition: transform 150ms ease;
 }
 
-.tree-chevron-open {
+.tree-chevron-open .icon {
   transform: rotate(90deg);
 }
 
-.tree-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-/* Phone row titles are 15.5px; the two-line clamp stays. */
-@media (max-width: 899.98px) {
-  .tree-name {
-    font-size: 15.5px;
+/* A 44 px tall target on touch without widening the drawn chevron. */
+@media (pointer: coarse) {
+  .tree-chevron::after {
+    position: absolute;
+    inset: calc((14px - var(--tree-row)) / 2) -8px;
+    content: '';
   }
-}
-
-@media (min-width: 900px) {
-  .tree-name {
-    display: block;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    -webkit-line-clamp: unset;
-  }
-}
-
-/* The Notes tab's root folders only (#353, C.5): the meaning line under
-   the name, from `folder-meanings.ts` via `Tree`'s `rootMeanings` prop. */
-.tree-name-group {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  gap: 1px;
-}
-
-.tree-meaning {
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tree-count {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-/* The desktop sidebar's folder row (issue #214): the chevron (`.tree-chevron`,
-   above) is its own button, out of the tab order (arrow keys toggle it for a
-   keyboard user, same as before); `.tree-folder-link` is the rest of the row,
-   a real link to `/folder/<path>` and the row's one roving-tabindex stop. */
-.tree-folder-link {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 1;
-  min-width: 0;
-  color: inherit;
-  text-decoration: none;
-}
-
-.tree-folder-link:focus-visible {
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: -2px;
-}
-
-/* The desktop sidebar's note row (issue #216), split the same way the
-   folder row already is: the link carries the icon and name, `.tree-pin` is
-   its own hover-only button alongside it. */
-.tree-note-link {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 1;
-  min-width: 0;
-  color: inherit;
-  text-decoration: none;
-}
-
-.tree-note-link:focus-visible {
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: -2px;
-}
-
-/* The hover pin button (issue #216): hidden until the row is hovered,
-   focused within (a keyboard user tabbing to the link or the button
-   itself) or already pinned, so a still row stays uncluttered. */
-.tree-pin {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity var(--motion-fast) var(--ease-out);
-}
-
-.tree-row-pinnable:hover .tree-pin,
-.tree-row-pinnable:focus-within .tree-pin,
-.tree-pin[aria-pressed='true'] {
-  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tree-pin {
+  .tree-chevron .icon {
     transition: none;
   }
 }
 
-.tree-pin:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-heading);
-}
-
-.tree-pin[aria-pressed='true'] {
-  color: var(--color-brand);
-}
-
-.tree-pin .icon {
-  width: 16px;
-  height: 16px;
-}
-
-/* The "Bower's files" group (spec §5.3): shown only when `showAppFiles` is
-   on, after a dashed divider, each row tagged "app". */
-.tree-app-divider {
-  margin: var(--space-2) 10px;
-  border-top: 1px dashed var(--color-border);
-}
-
+/* "Bower's own files" (the showAppFiles preference): at the bottom. */
 .tree-app-group {
-  margin-top: var(--space-1);
+  margin-top: var(--space-2);
 }
 
-.tree-app-summary {
-  cursor: default;
-}
-
-.tag-app {
-  flex-shrink: 0;
-  padding: 1px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+.tree-app-label {
+  margin: 0;
+  padding: 6px 8px;
   color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tree-chevron {
-    transition: none;
-  }
-}
-
-@media (min-width: 900px) and (pointer: fine) {
-  .tree-row {
-    min-height: 32px;
-    font-size: var(--text-sm);
-  }
-
-  .tree-row .icon {
-    width: 18px;
-    height: 18px;
-  }
-
-  .tree-chevron,
-  .tree-spacer {
-    width: 32px;
-    height: 32px;
-  }
+.tree-app {
+  padding-left: 4px;
 }
 
 /* Reveal (#591): the row the tree just opened to fades from a highlight. */
@@ -301,9 +174,6 @@
   from {
     background: var(--color-surface-hover);
   }
-  to {
-    background: transparent;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -312,7 +182,6 @@
   }
 }
 
-/* The link's description for assistive tech (R-SIDE-3): counts and "New". */
 .tree-sr {
   position: absolute;
   width: 1px;
