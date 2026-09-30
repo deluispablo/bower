@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
+import { Bird } from '../components/bird.js';
 import { useHasCamera } from '../add-camera.js';
 import {
   clearFiledAfterRun,
@@ -889,7 +890,12 @@ export function Add() {
       onDrop={onDrop}
     >
       <h1 class="screen-title">Add</h1>
-      <p class="add-drop-line">{DROP_LINE}</p>
+      <div class="add-drop-row">
+        <div class="add-drop-bird" aria-hidden="true">
+          <Bird state="looking" size={64} />
+        </div>
+        <p class="add-drop-line">{DROP_LINE}</p>
+      </div>
 
       <UploadNotes />
 

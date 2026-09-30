@@ -8,8 +8,18 @@
  * only, on the motion tokens, and turned off under `prefers-reduced-motion`.
  */
 
-.add-drop-line {
+.add-drop-row {
   display: none;
+}
+
+.add-drop-bird {
+  /* 64 px bird with the room of rule 3: 8 px above and each side, 1 px below. */
+  flex: none;
+  padding: 8px 8px 1px;
+  pointer-events: none;
+}
+
+.add-drop-line {
   margin: 0 0 var(--space-3);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
@@ -35,8 +45,15 @@
 }
 
 @media (min-width: 900px) {
+  .add-drop-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-3);
+  }
+
   .add-drop-line {
-    display: block;
+    margin: 0;
   }
 
   .add-columns {
