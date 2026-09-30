@@ -1348,9 +1348,7 @@ describe('POST /runner/vaults/:id/status', () => {
     ]) {
       const response = await postStatus(body);
       expect(response.status).toBe(400);
-      expect((await response.json<ErrorBody>()).error.code).toBe(
-        'bad_request',
-      );
+      expect((await response.json<ErrorBody>()).error.code).toBe('bad_request');
     }
     expect(await getRun(kv, USER_ID)).toBeUndefined();
   });
