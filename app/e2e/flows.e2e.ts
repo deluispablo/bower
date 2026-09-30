@@ -1639,14 +1639,13 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   if (testInfo.project.name === 'desktop') {
     await expect(tabs).toBeHidden();
 
-    // The sidebar (#422, #326, C.9): one Expand/Collapse all tool, no sort
-    // menu, and the waiting-count bubble on Add's row, where the pile gets
-    // filled, not Home's.
+    // The sidebar (#422, #909, C.9): the three tools on YOUR FOLDERS (#909
+    // replaced the Expand/Collapse all toggle), and the waiting-count bubble
+    // on Add's row, where the pile gets filled, not Home's.
     const sidebar = page.getByRole('navigation', { name: 'Your folders' });
-    await expect(sidebar.locator('[aria-label^="Sort by"]')).toHaveCount(0);
-    await expect(
-      sidebar.getByRole('button', { name: 'Expand all' }),
-    ).toBeVisible();
+    for (const name of ['Show the open item', 'Sort', 'Collapse all folders']) {
+      await expect(sidebar.getByRole('button', { name })).toBeVisible();
+    }
     await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveText('3');
     await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveCount(0);
     await shot(page, testInfo, 'desktop-sidebar');
@@ -1667,7 +1666,11 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   await shot(page, testInfo, 'tabs-notes');
 });
 
-test('the Notes tab: root meanings, Health and hidden-files at the bottom, one Expand/Collapse button (#353)', async ({
+// #909: the Folders tab is the drawer's tree at full width. It has no meaning
+// lines, no bar button, no hidden-files line and no Health subtitle; the
+// tools sit on YOUR FOLDERS and Answers, Clippings, Health check come after
+// the tree.
+test('the Notes tab: the tree, its tools, then Answers, Clippings and Health check (#353, #909)', async ({
   page,
 }, testInfo) => {
   test.skip(
@@ -1684,35 +1687,30 @@ test('the Notes tab: root meanings, Health and hidden-files at the bottom, one E
   await expect(page).toHaveURL(/\/notes$/);
 
   const bar = page.locator('header.topbar');
-  await expect(bar.getByRole('button', { name: 'Expand all' })).toBeVisible();
-  await expect(bar.getByRole('button', { name: /^Sort by/ })).toHaveCount(0);
-  // Scoped to the Notes screen itself: the desktop sidebar (always mounted,
-  // just CSS-hidden below 900px) keeps its own sort button until #326.
-  await expect(
-    page.locator('.explorer-page [aria-label^="Sort by"]'),
-  ).toHaveCount(0);
+  await expect(bar.getByRole('button', { name: /all folders$/ })).toHaveCount(
+    0,
+  );
+  const screen = page.locator('.explorer-page');
+  for (const name of ['Show the open item', 'Sort', 'Collapse all folders']) {
+    await expect(screen.getByRole('button', { name })).toBeVisible();
+  }
 
   const tree = page.getByRole('tree').first();
   const inbox = tree.locator('a[href="/folder/0-Inbox"]');
-  await expect(inbox).toContainText('Waiting for the next tidy-up');
-  const answers = tree.locator('a[href="/folder/Answers"]');
-  await expect(answers).toContainText('What Bower wrote back to you');
+  await expect(inbox).toBeVisible();
+  await expect(inbox).not.toContainText('Waiting for the next tidy-up');
+  await expect(tree.locator('a[href="/folder/Answers"]')).toHaveCount(0);
+  const answers = screen.locator('.explorer-below a[href="/folder/Answers"]');
+  await expect(answers).toHaveText('Answers');
 
-  const health = page.locator('.explorer-health-row');
+  const health = screen.locator('.explorer-below a[href="/health"]');
   await expect(health).toContainText('Health check');
-  // The day half is relative (#496: "Today"/"Yesterday"/"Last <day>"), so
-  // only the count half is pinned here; `health-report.test.ts` covers the
-  // wording itself.
-  await expect(health).toContainText('small things to fix');
-  // Scoped to `.explorer-foot`: the sidebar has its own hidden-files
-  // button too (always mounted, CSS-hidden below 900px).
-  const hidden = page.locator('.explorer-foot .explorer-hidden');
-  await expect(health).toBeVisible();
-  await expect(hidden).toBeVisible();
-  // Health and the hidden-files line sit together, after the tree.
-  const footBox = await page.locator('.explorer-foot').boundingBox();
+  await expect(health).not.toContainText('small things to fix');
+  await expect(screen.locator('.explorer-hidden')).toHaveCount(0);
+  // Answers, Clippings and Health check sit after the tree.
+  const belowBox = await screen.locator('.explorer-below').boundingBox();
   const treeBox = await tree.boundingBox();
-  expect((footBox?.y ?? 0) >= (treeBox?.y ?? 0)).toBe(true);
+  expect((belowBox?.y ?? 0) >= (treeBox?.y ?? 0)).toBe(true);
 
   await shot(page, testInfo, 'notes-tab');
 
@@ -2347,13 +2345,9 @@ test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)'
   expect(new Set(ys).size).toBe(1);
   await shot(page, testInfo, 'folder-chips');
 
-  // The tree shows a count only above zero (3.6): no folder row reads "0".
-  // On the phone the tree lives on the Notes tab; on desktop it is the
-  // sidebar.
+  // #909: the tree shows no counts at all (K-1), so none reads "0".
   if (testInfo.project.name === 'phone') await navigate(page, /^Folders$/);
-  const counts = await page.locator('.tree-count').allTextContents();
-  expect(counts.length).toBeGreaterThan(0);
-  expect(counts).not.toContain('0');
+  await expect(page.locator('.tree-count')).toHaveCount(0);
 });
 
 test('folder counts add files and notes together, the same total the folder screen itself lists (#425)', async ({
@@ -2361,24 +2355,10 @@ test('folder counts add files and notes together, the same total the folder scre
 }, testInfo) => {
   await openHome(page);
 
-  if (testInfo.project.name === 'phone') {
-    // The Notes tab is the phone's only explorer (#586).
-    await navigate(page, /^Folders$/);
-    await expect(
-      page.locator('main a[href="/folder/0-Inbox"] .tree-count'),
-    ).toHaveText('2');
-    await expect(
-      page.locator('main a[href="/folder/1-Projects"] .tree-count'),
-    ).toHaveText('30');
-  } else {
-    const sidebar = page.getByRole('navigation', { name: 'Your folders' });
-    await expect(
-      sidebar.locator('a[href="/folder/0-Inbox"] .tree-count'),
-    ).toHaveText('2');
-    await expect(
-      sidebar.locator('a[href="/folder/1-Projects"] .tree-count'),
-    ).toHaveText('30');
-  }
+  // #909: the tree no longer shows counts (K-1); the folder screen's own
+  // header keeps the total of files and notes together.
+  if (testInfo.project.name === 'phone') await navigate(page, /^Folders$/);
+  await expect(page.locator('.tree-count')).toHaveCount(0);
 
   // 0-Inbox: 1 file (the boiler invoice) + 1 note (Tomato seedlings) — the
   // folder screen's own header already says "1 file · 1 note".
