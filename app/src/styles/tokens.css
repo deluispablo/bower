@@ -194,6 +194,10 @@
   --color-accent-border: var(--color-accent-line);
   --color-danger-halo: var(--color-danger-bg);
   --shadow-lg: var(--shadow-md);
+  /* Badge new and filed: light keeps the solid "New" tag (the tint fails
+     4.5:1 on cream); dark is the tint of the boards. */
+  --color-badge-new-bg: var(--color-new);
+  --color-badge-new-text: var(--color-new-on);
 
   /* Type sizes new in v6 (R-TOK-31, 33, 35, 38). */
   --text-13: 0.8125rem; /* 13px */
@@ -319,6 +323,8 @@
     --color-accent-border: rgb(95 207 188 / 0.45);
     --color-danger-halo: rgb(239 138 138 / 0.18);
     --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.4);
+    --color-badge-new-bg: rgb(95 207 188 / 0.16);
+    --color-badge-new-text: #5fcfbc;
   }
 }
 
@@ -391,4 +397,6 @@
   --color-accent-border: rgb(95 207 188 / 0.45);
   --color-danger-halo: rgb(239 138 138 / 0.18);
   --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.4);
+  --color-badge-new-bg: rgb(95 207 188 / 0.16);
+  --color-badge-new-text: #5fcfbc;
 }

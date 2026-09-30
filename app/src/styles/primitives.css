@@ -226,8 +226,8 @@
 
 .badge-new,
 .badge-filed {
-  background: var(--color-brand-tint);
-  color: var(--color-link);
+  background: var(--color-badge-new-bg);
+  color: var(--color-badge-new-text);
 }
 
 .badge-done {

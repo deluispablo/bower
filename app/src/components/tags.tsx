@@ -6,6 +6,7 @@
 
 import type { JSX } from 'preact';
 
+import { Badge } from './badge.js';
 import { BowerMark } from './bird.js';
 
 import '../styles/marks.css';
@@ -19,8 +20,11 @@ export function BowerTag(): JSX.Element {
   );
 }
 
+/** The Badge in its `new` tone (spec §3.21); `new-tag` stays as a hook. */
 export function NewTag({ count }: { count?: number }): JSX.Element {
   return (
-    <span class="new-tag">{count === undefined ? 'New' : `${count} new`}</span>
+    <Badge tone="new" class="new-tag">
+      {count === undefined ? 'New' : `${String(count)} new`}
+    </Badge>
   );
 }
