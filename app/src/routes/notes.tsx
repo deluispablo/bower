@@ -106,8 +106,9 @@ function FoldersMenu({
           class="folders-menu-item"
           onClick={() => {
             onClose();
-            // The help sheet belongs to the shell (#906): its own button.
-            document.querySelector<HTMLButtonElement>('.topbar-help')?.click();
+            // The help sheet belongs to the shell: layout.tsx (#906)
+            // listens for this event, as for #907's `requestHelp`.
+            window.dispatchEvent(new CustomEvent('bower:open-help'));
           }}
         >
           <IconHelp />
