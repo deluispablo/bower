@@ -200,7 +200,7 @@ describe('Folder (#348)', () => {
     await subfoldersReady();
     const explainer = root.querySelector('.folder-explainer');
     const subfolder = root.querySelector(
-      'a.folder-row[href="/folder/1-Projects/Flat%20hunt"]',
+      'a.folder-card[href="/folder/1-Projects/Flat%20hunt"]',
     );
     expect(subfolder).not.toBeNull();
     expect(explainer?.compareDocumentPosition(subfolder as Node)).toBe(
@@ -266,34 +266,39 @@ describe('Root folder screen details (#431, Phone-Folder board)', () => {
     expect(meta()).toBe('1 note · 1 folder');
   });
 
-  it('gives each subfolder row a second line: things and when updated', async () => {
+  it('gives each subfolder a card: things and when updated (#908, R-FCARD-1)', async () => {
     mount();
     await subfoldersReady();
-    const row = root.querySelector(
-      'a.folder-row[href="/folder/1-Projects/Flat%20hunt"]',
+    const card = root.querySelector(
+      'a.folder-card[href="/folder/1-Projects/Flat%20hunt"]',
     );
-    expect(row?.querySelector('.folder-row-detail')?.textContent).toBe(
+    expect(card?.querySelector('.folder-card-meta')?.textContent).toBe(
       '4 things · updated today',
     );
-    expect(row?.querySelector('.folder-row-count')).toBeNull();
+    // Up to three things inside, as "title · kind" (G-18).
+    const items = card?.querySelectorAll('.folder-card-item') ?? [];
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.length).toBeLessThanOrEqual(3);
     route.params.path = '2-Areas';
     mount();
     await subfoldersReady();
     const cooking = root.querySelector(
-      'a.folder-row[href="/folder/2-Areas/Cooking"]',
+      'a.folder-card[href="/folder/2-Areas/Cooking"]',
     );
-    expect(cooking?.querySelector('.folder-row-detail')?.textContent).toBe(
-      '1 thing · 5 d',
+    expect(cooking?.querySelector('.folder-card-meta')?.textContent).toMatch(
+      /^1 thing · updated /,
     );
   });
 
-  it('shows no count line for an empty subfolder, not "0 things" (#502)', async () => {
+  it('says "Nothing here yet" for an empty subfolder, not "0 things" (#502)', async () => {
     mount();
     await subfoldersReady();
     const empty = root.querySelector(
-      'a.folder-row[href="/folder/1-Projects/Empty%20project"]',
+      'a.folder-card[href="/folder/1-Projects/Empty%20project"]',
     );
-    expect(empty?.querySelector('.folder-row-detail')).toBeNull();
+    expect(empty?.querySelector('.folder-card-meta')?.textContent).toBe(
+      'Nothing here yet',
+    );
   });
 });
 
@@ -307,13 +312,13 @@ describe('Subfolder rows on a non-root folder screen count files too (#457)', ()
     mount();
     await subfoldersReady();
     const row = root.querySelector(
-      'a.folder-row[href="/folder/1-Projects/Flat%20hunt/Viewings"]',
+      'a.list-row[href="/folder/1-Projects/Flat%20hunt/Viewings"]',
     );
     // Viewings holds one note and one file: 2, not 1 (notes only).
-    expect(row?.querySelector('.folder-row-count')?.textContent).toBe(
+    expect(row?.querySelector('.list-row-trailing')?.textContent).toBe(
       '2 things',
     );
-    expect(row?.querySelector('.folder-row-detail')).toBeNull();
+    expect(row?.querySelector('.list-row-meta')).toBeNull();
   });
 
   it('shows no count badge for an empty subfolder, not "0" (#502)', async () => {
@@ -321,9 +326,9 @@ describe('Subfolder rows on a non-root folder screen count files too (#457)', ()
     mount();
     await subfoldersReady();
     const empty = root.querySelector(
-      'a.folder-row[href="/folder/1-Projects/Flat%20hunt/Empty"]',
+      'a.list-row[href="/folder/1-Projects/Flat%20hunt/Empty"]',
     );
-    expect(empty?.querySelector('.folder-row-count')).toBeNull();
+    expect(empty?.querySelector('.list-row-trailing')?.textContent).toBe('');
   });
 });
 
@@ -414,7 +419,9 @@ describe('Header actions, Drive and the Ask suggestion (R-FOLD-2, R-HINT-2)', ()
 
 /** The list module has loaded and drawn its subfolder rows. */
 async function subfoldersReady(): Promise<void> {
-  await waitUntil(() => root.querySelector('a.folder-row') !== null);
+  await waitUntil(
+    () => root.querySelector('a.list-row, a.folder-card') !== null,
+  );
 }
 
 /** Polls until `done()` holds (5 s at most): the list mode is loaded on
@@ -500,21 +507,21 @@ describe('Folder list mode (#611)', () => {
     useFlatHuntWithPair();
     mount();
     await listReady();
-    await waitUntil(has('note on the listing'));
-    const names = (): (string | undefined)[] => texts('.folder-row-name');
+    const names = (): (string | undefined)[] => texts('.list-row-title');
+    await waitUntil(() => names().some((n) => n?.startsWith('Arlington')));
     expect(names().filter((n) => n?.startsWith('Arlington'))).toHaveLength(1);
-    expect(root.textContent).toContain('note on the listing');
+    const count = names().length;
 
     const buttons = root.querySelectorAll<HTMLButtonElement>('.folder-seg-btn');
     void act(() => buttons[1]?.click());
-    await waitUntil(() => !has('note on the listing')());
+    await waitUntil(() => texts('.list-row-meta').includes('PDF'));
     expect(names()).toContain('Arlington Road, 2 bed');
-    expect(root.querySelector('.kind-badge')?.textContent).toBe('PDF');
-    expect(root.textContent).not.toContain('note on the listing');
+    // Kinds are words in the meta line; no kind badge (R-FILEICON-2).
+    expect(root.querySelector('.kind-badge')).toBeNull();
 
     void act(() => buttons[2]?.click());
-    await waitUntil(has('note on the listing PDF'));
-    expect(root.textContent).toContain('note on the listing PDF');
+    await waitUntil(() => texts('.list-row-meta').includes('Bower note'));
+    expect(names().length).toBeLessThan(count + 1);
     expect(root.querySelector('.hint-state')?.textContent).toContain(
       'Showing only By Bower.',
     );
@@ -589,7 +596,7 @@ describe('One list, path once, names (R-FOLD-1, 3, 5)', () => {
     useFlatHuntWithPair();
     mount();
     await listReady();
-    await waitUntil(has('note on the listing'));
+    await waitUntil(() => root.querySelector('.folder-item') !== null);
     const lists = root.querySelectorAll('ul[role="list"]');
     expect(lists).toHaveLength(1);
     expect(lists[0]?.getAttribute('aria-label')).toBe('In Flat hunt');
@@ -604,15 +611,15 @@ describe('One list, path once, names (R-FOLD-1, 3, 5)', () => {
     useFlatHuntWithPair();
     mount();
     await listReady();
-    await waitUntil(has('note on the listing'));
     const row = root.querySelector<HTMLAnchorElement>('a.folder-item');
     const nameId = row?.getAttribute('aria-labelledby') ?? '';
     expect(document.getElementById(nameId)?.textContent).toBe(
-      row?.querySelector('.folder-row-name')?.textContent,
+      row?.querySelector('.list-row-title')?.textContent,
     );
-    expect(row?.getAttribute('aria-describedby')).toContain('row-detail');
+    const metaId = row?.getAttribute('aria-describedby') ?? '';
+    expect(document.getElementById(metaId)?.className).toBe('list-row-meta');
     const folder = root.querySelector<HTMLAnchorElement>(
-      'a.folder-row:not(.folder-item)',
+      'a.list-row:not(.folder-item)',
     );
     expect(
       document.getElementById(folder?.getAttribute('aria-labelledby') ?? '')
@@ -672,7 +679,7 @@ describe('Phone Filter & sort (R-FOLD-6, D34)', () => {
     expect(root.querySelector('select[aria-label="Sort"]')).not.toBeNull();
   });
 
-  it('reads a row score as 79/100 with a spoken name', async () => {
+  it('shows no score or facts on a row (#908, G-18)', async () => {
     stubMatchMedia(false);
     useFlatHuntWithPair();
     metaStore.set(listingNote.id, {
@@ -681,10 +688,8 @@ describe('Phone Filter & sort (R-FOLD-6, D34)', () => {
     });
     mount();
     await listReady();
-    await waitUntil(() => root.querySelector('.folder-row-score') !== null);
-    const score = root.querySelector('.folder-row-score');
-    expect(score?.textContent).toBe('79/100');
-    expect(score?.getAttribute('aria-label')).toBe('Your score 79 of 100');
+    expect(root.querySelector('.folder-row-score')).toBeNull();
+    expect(root.querySelector('.folder-list')?.textContent).not.toContain('79');
   });
 
   it('puts a clock badge on the row of a file with a Rename waiting (#765, D32)', async () => {
@@ -702,12 +707,13 @@ describe('Phone Filter & sort (R-FOLD-6, D34)', () => {
     ];
     mount();
     await listReady();
-    await waitUntil(() => root.querySelector('.folder-row-waiting') !== null);
-    const badges = root.querySelectorAll('.folder-row-waiting');
-    expect(badges).toHaveLength(1);
-    expect(badges[0]?.getAttribute('aria-label')).toBe(
-      'Waiting for the next tidy-up',
-    );
+    const waitingRows = (): string[] =>
+      texts('.list-row-meta').filter(
+        (text): text is string =>
+          text?.endsWith('· waiting for the next tidy-up') === true,
+      );
+    await waitUntil(() => waitingRows().length > 0);
+    expect(waitingRows()).toHaveLength(1);
   });
 
   it('puts the same clock badge on the row of a file with a Move waiting (#866)', async () => {
@@ -725,7 +731,11 @@ describe('Phone Filter & sort (R-FOLD-6, D34)', () => {
     ];
     mount();
     await listReady();
-    await waitUntil(() => root.querySelector('.folder-row-waiting') !== null);
-    expect(root.querySelectorAll('.folder-row-waiting')).toHaveLength(1);
+    const waitingRows = (): (string | undefined)[] =>
+      texts('.list-row-meta').filter((text) =>
+        text?.endsWith('· waiting for the next tidy-up'),
+      );
+    await waitUntil(() => waitingRows().length > 0);
+    expect(waitingRows()).toHaveLength(1);
   });
 });
