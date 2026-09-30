@@ -110,7 +110,7 @@ Wave = depth in the dependency graph. Budgets are the agent's own ceilings.
 | I1 | #796 | M45 | The intro in five true pages: resumable by URL, focus on the heading, Back on phones | sonnet/high | 10 | #731 #732 #751 #756 #790 #791 #749 #735 | 65 tool calls / 55 minutes | merged |
 | I2 | #797 | M45 | Learn Bower: a public page with how it works and six examples, reachable from sign-in, Settings and help | sonnet/high | 11 | #796 #739 #781 #776 | 60 tool calls / 50 minutes | merged |
 | Z1 | #798 | M46 | Docs for v5: ARCHITECTURE, runbook, README and brand describe runs, piles, uploads, recovery and Bower on screen | sonnet/medium | 13 | #787 #795 #797 #794 | 35 tool calls / 30 minutes | merged |
-| Z2 | #799 | M46 | Deploy v5 and walk every v5 board on the phone and the desktop in production | sonnet/medium | 14 | #798 | 120 tool calls / 90 minutes | pending |
+| Z2 | #799 | M46 | Deploy v5 and walk every v5 board on the phone and the desktop in production | sonnet/medium | 14 | #798 | 120 tool calls / 90 minutes | merged |
 ## Dispatch queue
 
 Superseded on dispatch: up to eight developers run at once, filling any issue whose dependencies are merged; the rounds keep the dependency order and the hotspot rule.
