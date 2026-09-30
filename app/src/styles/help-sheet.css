@@ -244,3 +244,100 @@
     display: none;
   }
 }
+
+/* The tour keeps its place from before #907: centred, 440 wide. */
+@media (min-width: 900px) {
+  .overlay--desktop-center .overlay-panel:has(.tour-card) {
+    --dialog-width: 440px;
+
+    bottom: 0;
+    margin: auto;
+  }
+}
+
+/* ---------- The one Help template (#907, spec §3.7, boards PF-Help) ----------
+   Scoped to `.help-template` so the tour card (`.help-panel.tour-card`)
+   keeps its own look. The padding comes from `.overlay-body`. */
+
+.help-template {
+  color: var(--color-text);
+}
+
+.help-template .help-head {
+  gap: var(--space-3);
+  min-height: 56px;
+}
+
+/* The overline "HELP AND ABOUT THIS" (12 px, §3.26). */
+.help-template .help-kicker {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.help-template .help-title {
+  margin-top: 2px;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.help-template .help-close {
+  flex: none;
+  align-self: center;
+}
+
+.help-template .help-lede {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.help-template .help-rows {
+  gap: var(--space-2);
+}
+
+.help-template .help-row {
+  gap: var(--space-3);
+  min-height: 44px;
+  font-size: var(--text-base);
+  color: var(--color-text);
+}
+
+/* Icon 20 muted; the bird mark 20 on rows about Bower's writing. */
+.help-template .help-row > svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+}
+
+/* The group label above the two buttons ("Bower", 13 px, §3.26). */
+.help-group {
+  margin: 14px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.help-template .help-tips {
+  margin-top: var(--space-2);
+}
+
+/* "Show me around" and "Learn Bower": two lg secondary buttons, flex 1. */
+.help-template .help-actions {
+  margin-top: var(--space-2);
+}
+
+.help-template .help-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+@media (min-width: 900px) {
+  .help-template .help-lede,
+  .help-template .help-row {
+    font-size: var(--text-15);
+  }
+}
