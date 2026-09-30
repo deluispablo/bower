@@ -98,18 +98,18 @@ Wave = depth in the dependency graph. Budgets are the agent's own ceilings.
 | B3 | #784 | M43 | Bower reads inside Bower's note while "Just this, now" writes it | sonnet/medium | 6 | #757 #756 #748 | 40 tool calls / 35 minutes | merged |
 | B4 | #785 | M43 | Bower in place: asleep in empty folders and the inbox, peeking by search and the drop zone, with room | sonnet/medium | 10 | #762 #777 #780 #775 | 40 tool calls / 35 minutes | merged |
 | B5 | #786 | M43 | Bower settles after 10 seconds, reacts to what happens, and naps when tapped | sonnet/high | 11 | #782 #783 #785 #754 | 55 tool calls / 45 minutes | merged |
-| B6 | #787 | M43 | e2e gate: nothing clips Bower on any route or state, at 375 and 1280 | sonnet/high | 12 | #784 #786 #778 #771 #738 | 60 tool calls / 50 minutes | pending |
+| B6 | #787 | M43 | e2e gate: nothing clips Bower on any route or state, at 375 and 1280 | sonnet/high | 12 | #784 #786 #778 #771 #738 | 60 tool calls / 50 minutes | merged |
 | T1 | #788 | M44 | Runner: write the mechanical History lines, and report disagreements and next steps | opus/high | 6 | #737 #728 | 75 tool calls / 65 minutes | merged |
-| T2 | #789 | M44 | Spike: measure a 10-item pile's turns and set DEFAULT_MAX_TURNS for rulebook v22 | sonnet/medium | 7 | #788 #732 | 30 tool calls / 60 minutes | pending |
-| T3 | #790 | M44 | Rulebook v22: how Bower thinks, verdicts, Reference, Next steps, History, apply_link and made_for | opus/high | 8 | #789 | 60 tool calls / 50 minutes | pending |
+| T2 | #789 | M44 | Spike: measure a 10-item pile's turns and set DEFAULT_MAX_TURNS for rulebook v22 | sonnet/medium | 7 | #788 #732 | 30 tool calls / 60 minutes | merged |
+| T3 | #790 | M44 | Rulebook v22: how Bower thinks, verdicts, Reference, Next steps, History, apply_link and made_for | opus/high | 8 | #789 | 60 tool calls / 50 minutes | merged |
 | T4 | #791 | M44 | Things that disagree and Next for you on the sheet, Just filed and Activity | sonnet/medium | 9 | #788 #771 #777 | 40 tool calls / 35 minutes | merged |
-| T5 | #792 | M44 | Verdict and Apply first, and "Made for it" on a note | sonnet/high | 9 | #790 #784 #760 | 50 tool calls / 40 minutes | pending |
+| T5 | #792 | M44 | Verdict and Apply first, and "Made for it" on a note | sonnet/high | 9 | #790 #784 #760 | 50 tool calls / 40 minutes | merged |
 | T6 | #793 | M44 | History in each note: a status change appends one dated line | sonnet/medium | 9 | #760 #777 | 35 tool calls / 30 minutes | merged |
-| T7 | #794 | M44 | Project front page: Next steps to tick, Best so far, Reference | sonnet/high | 11 | #790 #785 #764 | 55 tool calls / 45 minutes | pending |
-| T8 | #795 | M44 | Compare: choose columns, Made for it and Apply columns, Copy as table | sonnet/high | 10 | #792 #793 | 50 tool calls / 40 minutes | pending |
-| I1 | #796 | M45 | The intro in five true pages: resumable by URL, focus on the heading, Back on phones | sonnet/high | 10 | #731 #732 #751 #756 #790 #791 #749 #735 | 65 tool calls / 55 minutes | pending |
-| I2 | #797 | M45 | Learn Bower: a public page with how it works and six examples, reachable from sign-in, Settings and help | sonnet/high | 11 | #796 #739 #781 #776 | 60 tool calls / 50 minutes | pending |
-| Z1 | #798 | M46 | Docs for v5: ARCHITECTURE, runbook, README and brand describe runs, piles, uploads, recovery and Bower on screen | sonnet/medium | 13 | #787 #795 #797 #794 | 35 tool calls / 30 minutes | pending |
+| T7 | #794 | M44 | Project front page: Next steps to tick, Best so far, Reference | sonnet/high | 11 | #790 #785 #764 | 55 tool calls / 45 minutes | merged |
+| T8 | #795 | M44 | Compare: choose columns, Made for it and Apply columns, Copy as table | sonnet/high | 10 | #792 #793 | 50 tool calls / 40 minutes | merged |
+| I1 | #796 | M45 | The intro in five true pages: resumable by URL, focus on the heading, Back on phones | sonnet/high | 10 | #731 #732 #751 #756 #790 #791 #749 #735 | 65 tool calls / 55 minutes | merged |
+| I2 | #797 | M45 | Learn Bower: a public page with how it works and six examples, reachable from sign-in, Settings and help | sonnet/high | 11 | #796 #739 #781 #776 | 60 tool calls / 50 minutes | merged |
+| Z1 | #798 | M46 | Docs for v5: ARCHITECTURE, runbook, README and brand describe runs, piles, uploads, recovery and Bower on screen | sonnet/medium | 13 | #787 #795 #797 #794 | 35 tool calls / 30 minutes | merged |
 | Z2 | #799 | M46 | Deploy v5 and walk every v5 board on the phone and the desktop in production | sonnet/medium | 14 | #798 | 120 tool calls / 90 minutes | pending |
 ## Dispatch queue
 
