@@ -303,6 +303,8 @@ function FolderBody({
   const now = Date.now();
   const titles = useNoteTitles(contents.notes);
   const emptyState = folderEmptyState(contents);
+  const isInboxFolder =
+    parentName === null && paraKindOf(contents.name) === 'inbox';
   const items = useFolderItems();
   const requestRows = useRequestRows();
   const waiting = useMemo(() => pendingByPath(requestRows), [requestRows]);
@@ -477,10 +479,14 @@ function FolderBody({
               <div class="folder-empty-bird">
                 <Bird state="asleep" size={64} />
               </div>
-              <p class="folder-empty-title">Nothing in {contents.name} yet</p>
+              <p class="folder-empty-title">
+                Nothing in{' '}
+                {isInboxFolder ? displayName(contents.name) : contents.name} yet
+              </p>
               <p class="folder-empty-text">
-                Add tickets, bookings or ideas and Bower files them here at the
-                next tidy-up.
+                {isInboxFolder
+                  ? 'Nothing waiting. Add something and it waits here for the next tidy-up.'
+                  : 'Add tickets, bookings or ideas and Bower files them here at the next tidy-up.'}
               </p>
               <a class="button" href="/add">
                 Add something

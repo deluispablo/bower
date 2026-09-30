@@ -31,7 +31,7 @@ afterEach(() => {
 describe('AddDropRow bird (rule 1)', () => {
   it('counts as the one Bower on a computer, so the perch hides', () => {
     stubMatchMedia(true);
-    const unmount = mount(h(AddDropRow, {}));
+    const unmount = mount(h(AddDropRow, null));
     expect(birdCount()).toBe(1);
     unmount();
     expect(birdCount()).toBe(0);
@@ -39,8 +39,24 @@ describe('AddDropRow bird (rule 1)', () => {
 
   it('is not mounted on a phone, so the perch stays', () => {
     stubMatchMedia(false);
-    const unmount = mount(h(AddDropRow, {}));
+    const unmount = mount(h(AddDropRow, null));
     expect(birdCount()).toBe(0);
     unmount();
+  });
+
+  it('shows the Listening pose while dictation is on (R-BIRD-10)', () => {
+    stubMatchMedia(true);
+    const pose = (listening: boolean): string | null => {
+      const unmount = mount(h(AddDropRow, { listening }));
+      const cls = document
+        .querySelector('.add-drop-bird svg')
+        ?.getAttribute('class');
+      unmount();
+      return cls ?? null;
+    };
+    const idle = pose(false);
+    const listening = pose(true);
+    expect(listening).not.toBeNull();
+    expect(listening).not.toBe(idle);
   });
 });

@@ -92,6 +92,22 @@ describe('pileConfirm', () => {
     );
   });
 
+  it('names every part of the total, requests included', () => {
+    const line = pileConfirmLine(6, {
+      piles: [{ id: 'a', label: 'x', count: 1 }],
+      elsewhere: 2,
+      requests: 1,
+    });
+    expect(line).toBe('6 things: 1 pile, 2 added from elsewhere and 1 request');
+    expect(
+      pileConfirmLine(3, {
+        piles: [{ id: 'a', label: 'x', count: 2 }],
+        elsewhere: 0,
+        requests: 1,
+      }),
+    ).toBe('3 things: 1 pile and 1 request');
+  });
+
   it('is undefined when no pile has a thing waiting', () => {
     expect(pileConfirm([inbox('x.pdf')], piles)).toBeUndefined();
     expect(pileConfirm([], [])).toBeUndefined();

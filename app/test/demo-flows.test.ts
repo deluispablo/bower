@@ -165,6 +165,8 @@ describe('demo mode', () => {
     const done = (await api.getStatus()).run;
     expect(done?.state).toBe('done');
     expect(done?.processed).toHaveLength(6);
+    // "Tidying up N things" counts what ends up filed (#888).
+    expect(running?.total).toBe(done?.processed?.length);
     expect(done?.processed).toContain('0-Inbox/Tomato seedlings.md');
     // Each item says where it went (New, #652); none was renamed.
     expect(done?.items).toContainEqual({
@@ -198,6 +200,8 @@ describe('demo mode', () => {
     const done = (await api.getStatus()).run;
     expect(done?.state).toBe('done');
     expect(done?.processed).toHaveLength(1);
+    expect(done?.summary).toContain('your request');
+    expect(done?.summary).not.toContain('Nothing new');
 
     const after = await paths();
     expect(after.filter(isInboxItem)).toEqual([

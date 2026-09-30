@@ -251,8 +251,17 @@ export function destinationOf(
   return null;
 }
 
+/** A request note answered in place moves to `0-Inbox/Processed/`, a folder
+ * the person never sees: its row says "Requests" instead. */
+const REQUESTS_LABEL = 'Requests';
+
+function isProcessedTo(to: string): boolean {
+  return to.split('/').slice(0, -1).includes('Processed');
+}
+
 /** The folder of `to` as the row shows it: "Projects › Flat hunt". */
 function folderPathOf(to: string): string | null {
+  if (isProcessedTo(to)) return REQUESTS_LABEL;
   const folders = to.split('/').slice(0, -1);
   return folders.length === 0 ? null : folders.map(displayName).join(' › ');
 }
@@ -288,7 +297,9 @@ export function runRows(input: {
       status !== 'filed'
         ? null
         : to !== undefined
-          ? (to.split('/').slice(-2, -1)[0] ?? null)
+          ? isProcessedTo(to)
+            ? REQUESTS_LABEL
+            : (to.split('/').slice(-2, -1)[0] ?? null)
           : destinationOf(path, files);
     const file =
       byPath.get(to ?? path) ??

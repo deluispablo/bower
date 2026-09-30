@@ -109,16 +109,18 @@ export function RunMeaning({
           <ul class="run-meaning-list">
             {next.map((item) => (
               <li key={`${item.path ?? '-'}|${item.action}`}>
-                {item.action}
-                {item.path !== undefined && (
-                  <>
-                    {' '}
-                    <NoteLink
-                      link={meaningLink(index, item.path)}
-                      onNavigate={onNavigate}
-                    />
-                  </>
-                )}
+                <span>
+                  {item.action}
+                  {item.path !== undefined && (
+                    <>
+                      {' '}
+                      <NoteLink
+                        link={meaningLink(index, item.path)}
+                        onNavigate={onNavigate}
+                      />
+                    </>
+                  )}
+                </span>
               </li>
             ))}
           </ul>

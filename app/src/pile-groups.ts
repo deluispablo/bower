@@ -112,6 +112,8 @@ export interface PileConfirm {
   piles: ConfirmPile[];
   /** Things in the inbox that belong to no pile (Drive, Obsidian…). */
   elsewhere: number;
+  /** Waiting requests: they belong to no pile and no folder (R-CONF-4). */
+  requests?: number;
 }
 
 /**
@@ -124,9 +126,13 @@ export function pileConfirm(
   piles: readonly Pile[],
 ): PileConfirm | undefined {
   const waiting = new Set<string>();
+  let requests = 0;
   for (const file of files) {
     if (visiblePendingCount([file]) !== 1) continue;
-    if (processedKind(file.path, undefined) === 'request') continue;
+    if (processedKind(file.path, undefined) === 'request') {
+      requests += 1;
+      continue;
+    }
     waiting.add(file.name);
   }
   const rows: ConfirmPile[] = [];
@@ -144,16 +150,26 @@ export function pileConfirm(
     });
   }
   if (rows.length === 0) return undefined;
-  return { piles: rows, elsewhere: waiting.size - claimed.size };
+  return { piles: rows, elsewhere: waiting.size - claimed.size, requests };
 }
 
-/** "10 things: 2 piles and 2 added from elsewhere" / "10 things in 2 piles". */
+/**
+ * "10 things: 2 piles and 2 added from elsewhere", "6 things: 1 pile, 2 added
+ * from elsewhere and 1 request", "10 things in 2 piles". Every part of the
+ * total is named, so the count matches what is listed.
+ */
 export function pileConfirmLine(total: number, confirm: PileConfirm): string {
   const things = `${total} ${total === 1 ? 'thing' : 'things'}`;
   const n = confirm.piles.length;
-  const piles = `${n} ${n === 1 ? 'pile' : 'piles'}`;
-  if (confirm.elsewhere === 0) return `${things} in ${piles}`;
-  return `${things}: ${piles} and ${confirm.elsewhere} added from elsewhere`;
+  const requests = confirm.requests ?? 0;
+  const parts = [`${n} ${n === 1 ? 'pile' : 'piles'}`];
+  if (confirm.elsewhere > 0)
+    parts.push(`${confirm.elsewhere} added from elsewhere`);
+  if (requests > 0)
+    parts.push(`${requests} ${requests === 1 ? 'request' : 'requests'}`);
+  if (parts.length === 1) return `${things} in ${parts[0]}`;
+  const last = parts[parts.length - 1];
+  return `${things}: ${parts.slice(0, -1).join(', ')} and ${last}`;
 }
 
 /** Items in first-seen group order, keyed by an origin (or none). */

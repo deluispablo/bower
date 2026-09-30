@@ -321,6 +321,8 @@ describe('TidyConfirmSheet, piles (#771, R-PILE-5)', () => {
     expect(text).toContain('2 things');
     expect(text).toContain('From your pile: “Flat”');
     expect(text).toContain('1 thing');
+    expect(text).toContain('Added from elsewhere');
+    expect(text).toContain('2 things · no note');
   });
 
   it('says how many files are still uploading', () => {

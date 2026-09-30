@@ -151,3 +151,26 @@
   font-size: var(--text-sm);
   color: var(--color-danger);
 }
+
+/* The note editor's textarea is taller than the screen (#888): its mic
+   sticks to the bottom right of the visible box instead of sitting at the
+   end of the text, and stays above the phone tab bar. */
+.dictate-box:has(.note-editor-textarea) {
+  display: flex;
+  flex-direction: column;
+}
+
+.dictate-box:has(.note-editor-textarea) .dictate-btn {
+  position: sticky;
+  bottom: 8px;
+  right: auto;
+  align-self: flex-end;
+  margin: -52px 6px 6px 0;
+  z-index: 2;
+}
+
+@media (max-width: 899px) {
+  .dictate-box:has(.note-editor-textarea) .dictate-btn {
+    bottom: calc(var(--bottom-nav-height, 60px) + 8px);
+  }
+}

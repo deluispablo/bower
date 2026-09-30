@@ -25,6 +25,11 @@
   display: none;
 }
 
+/* The greeting's bird steps aside while the tour runs; its room stays. */
+.home-greeting-bird-gap {
+  flex: none;
+}
+
 .home-greeting-text {
   display: flex;
   flex-direction: column;

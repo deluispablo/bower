@@ -165,6 +165,32 @@
 .just-filed-table {
   width: 100%;
   border-collapse: collapse;
+  /* Every group's table shares one grid, so the columns line up (#888). */
+  table-layout: fixed;
+}
+
+.just-filed-table td {
+  overflow-wrap: anywhere;
+}
+
+.just-filed-col-tag {
+  width: 12%;
+}
+
+.just-filed-col-title {
+  width: 26%;
+}
+
+.just-filed-col-was {
+  width: 22%;
+}
+
+.just-filed-col-where {
+  width: 20%;
+}
+
+.just-filed-col-note {
+  width: 20%;
 }
 
 .just-filed-table th,

@@ -118,13 +118,18 @@ const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
  * 900 px, where the line shows: mounted, it counts in the presence store and
  * hides the perch (rule 1), so it must not mount while hidden by CSS.
  */
-export function AddDropRow(): JSX.Element {
+export function AddDropRow({
+  listening = false,
+}: {
+  /** Dictation is on: the bird shows the Listening pose (R-BIRD-10). */
+  listening?: boolean;
+}): JSX.Element {
   const wide = useMediaQuery('(min-width: 900px)');
   return (
     <div class="add-drop-row">
       {wide && (
         <div class="add-drop-bird" aria-hidden="true">
-          <Bird state="looking" size={64} />
+          <Bird state={listening ? 'listening' : 'looking'} size={64} />
         </div>
       )}
       <p class="add-drop-line">{DROP_LINE}</p>
@@ -299,6 +304,7 @@ export function Add() {
   // once must each get their own name before any of them renders.
   const takenNames = useRef(new Set<string>());
   const [dragOver, setDragOver] = useState(false);
+  const [dictating, setDictating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -910,7 +916,7 @@ export function Add() {
       onDrop={onDrop}
     >
       <h1 class="screen-title">Add</h1>
-      <AddDropRow />
+      <AddDropRow listening={dictating} />
 
       <UploadNotes />
 
@@ -966,6 +972,7 @@ export function Add() {
                   saver.schedule(next);
                 }}
                 onBlur={saver.flush}
+                onListening={setDictating}
               />
               {draft.trim() !== '' && openItems.length > 0 && (
                 <p class="pile-saved">{PILE_SAVED_LINE}</p>

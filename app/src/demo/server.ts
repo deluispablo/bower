@@ -33,6 +33,7 @@ import {
   SCRIPTED_LISTINGS,
   INBOX_PLAN,
 } from './fixture.js';
+import { outcomeFromRun, runSentence } from '../run-outcome.js';
 import { instructionText, replyTo } from './replies.js';
 import type { Reply } from './replies.js';
 import { demoTourSeenAt, setDemoTourSeenAt } from './store.js';
@@ -274,6 +275,13 @@ export class DemoServer {
       });
     }
 
+    // What the run will count as done: the sheet's "Tidying up N things" and
+    // the filed count at the end are the same number (#888). A context note
+    // is never counted.
+    run.total =
+      pending.filter((item) => !isContext(item.text)).length +
+      (withFiles ? SCRIPTED_LISTINGS.length : 0);
+
     for (const [i, { path, name, text }] of pending.entries()) {
       let destination = INBOX_PLAN.get(path) ?? `3-Resources/${name}`;
       // What the runner reports for each item (#345, `agent/run.sh`).
@@ -341,10 +349,15 @@ export class DemoServer {
         );
         run.state = 'done';
         run.finishedAt = this.iso(startedAt + DONE_MS);
+        const answered = (run.items ?? []).some(
+          (item) => item.kind === 'request',
+        );
         run.summary =
           count === 0
             ? 'Nothing new to file.'
-            : `Filed ${count} ${count === 1 ? 'item' : 'items'}.`;
+            : answered && !withFiles && filed.length === 0
+              ? runSentence(outcomeFromRun(run), { voice: 'third' })
+              : `Filed ${count} ${count === 1 ? 'item' : 'items'}.`;
         this.history = [copyRun(run), ...this.history].slice(
           0,
           RUN_HISTORY_LIMIT,

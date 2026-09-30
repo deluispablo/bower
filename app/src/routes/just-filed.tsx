@@ -221,6 +221,13 @@ function PhoneTable({ rows, unseen, addresses }: ViewProps): JSX.Element {
 function DesktopTable({ rows, unseen, addresses }: ViewProps): JSX.Element {
   return (
     <table class="just-filed-table">
+      <colgroup>
+        <col class="just-filed-col-tag" />
+        <col class="just-filed-col-title" />
+        <col class="just-filed-col-was" />
+        <col class="just-filed-col-where" />
+        <col class="just-filed-col-note" />
+      </colgroup>
       <thead>
         <tr>
           <th scope="col">What Bower did</th>
