@@ -28,8 +28,8 @@
 
 .bower-note-box-name {
   flex-shrink: 0;
-  font-size: 1rem; /* 16px */
-  font-weight: 600;
+  font-size: 0.9375rem; /* 15px, board NO-Main */
+  font-weight: 700;
 }
 
 /* "3 points · 1 to check" beside the name while folded. */
@@ -37,7 +37,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
+  font-size: 0.8125rem; /* 13px, board NO-Fold */
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -73,6 +73,9 @@
 
 /* Open: the chevron points up (fold); folded: down (open). */
 .bower-note-box-chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-muted);
   transform: rotate(180deg);
   transition: transform var(--motion-fast);
 }
@@ -197,4 +200,17 @@
   border-radius: 12px;
   background: var(--color-success-bg);
   color: var(--color-text);
+}
+
+/* Origin squares inside the box (board NO-Main): 22 px, radius 6, glyph 14. */
+.bower-note-box .markdown .bower-origin {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 6px;
+}
+
+.bower-note-box .markdown .bower-origin::before {
+  width: 14px;
+  height: 14px;
 }
