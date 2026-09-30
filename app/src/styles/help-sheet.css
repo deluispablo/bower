@@ -303,13 +303,18 @@
   color: var(--color-text);
 }
 
-/* Icon 20 muted; the bird mark 20 on rows about Bower's writing. */
+/* Icon 20 stroked in the brand teal (PF-Help-1280); the bird mark 20 on
+   rows about Bower's writing keeps its own colours. */
 .help-template .help-row > svg {
   flex: 0 0 20px;
   width: 20px;
   height: 20px;
   margin-top: 2px;
-  color: var(--color-text-muted);
+  color: var(--color-brand);
+}
+
+.help-template .help-row > svg.b {
+  color: inherit;
 }
 
 /* The group label above the two buttons ("Bower", 13 px, §3.26). */
