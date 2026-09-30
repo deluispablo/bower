@@ -279,8 +279,11 @@ export class DemoServer {
     // the filed count at the end are the same number (#888). A context note
     // is never counted.
     run.total =
-      pending.filter((item) => !isContext(item.text)).length +
-      (withFiles ? SCRIPTED_LISTINGS.length : 0);
+      pending.filter(
+        (item) =>
+          !isContext(item.text) &&
+          !isInstruction(item.path, item.name, item.text),
+      ).length + (withFiles ? SCRIPTED_LISTINGS.length : 0);
 
     for (const [i, { path, name, text }] of pending.entries()) {
       let destination = INBOX_PLAN.get(path) ?? `3-Resources/${name}`;
@@ -338,6 +341,12 @@ export class DemoServer {
             });
           }
           run.added = SCRIPTED_ADDED;
+          // "I added bike times" is only said with the notes it changed: the
+          // Done sheet counts them as updated (#899, R-CONF-2).
+          run.updated = SCRIPTED_LISTINGS.map((item) => ({
+            path: (item.to ?? '').replace(/\.pdf$/, '.md'),
+            what: 'Added the bike time to your office',
+          }));
         }
         for (const reply of replies) this.applyReply(reply, date);
         const count = run.processed?.length ?? 0;
