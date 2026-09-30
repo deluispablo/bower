@@ -8,7 +8,7 @@
   },
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "lint": "eslint . && prettier --check .",
+    "lint": "eslint --cache --cache-strategy content --cache-location node_modules/.cache/eslint/ . && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
