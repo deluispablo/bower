@@ -1,0 +1,46 @@
+/* What a run means (R-MEAN-2): the warn box and the checklist. */
+.run-meaning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.run-meaning-warn {
+  padding: var(--space-3);
+  border: 1px solid var(--color-warn);
+  border-radius: 12px;
+  background: var(--color-warn-bg);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.run-meaning-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.run-meaning-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.run-meaning-list li + li {
+  margin-top: var(--space-2);
+}
+
+/* A link is a tap target on a phone (44 px). */
+@media (max-width: 899px) {
+  .run-meaning-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

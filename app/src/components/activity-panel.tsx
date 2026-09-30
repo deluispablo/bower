@@ -28,6 +28,7 @@ import {
   IconShield,
 } from './icons.js';
 import { Hint } from './hint.js';
+import { RunMeaning } from './run-meaning.js';
 import { useFileText } from './rules-panel.js';
 
 const LOG_PATH = 'log.md';
@@ -93,6 +94,7 @@ function Card({ card }: { card: ActivityCard }): JSX.Element {
         <span class={`bower-state activity-state--${tone}`}>{card.status}</span>
       </p>
       <p class="activity-counts">{card.sentence}</p>
+      <RunMeaning outcome={card.outcome} />
       {card.rows.length > 0 && (
         <ul class="activity-rows">
           {card.rows.map((row) => {

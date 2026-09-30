@@ -18,6 +18,7 @@ import { BackLink } from '../components/back-link.js';
 import { FolderMark } from '../components/folder-mark.js';
 import { useJustFiled } from '../components/just-filed-row.js';
 import { KindBadge } from '../components/kind-badge.js';
+import { RunMeaning } from '../components/run-meaning.js';
 import { RunSummary } from '../components/run-summary.js';
 import { isLinkNote } from '../note-title.js';
 import { useShellSlot } from '../components/shell-slots.js';
@@ -489,6 +490,7 @@ export function JustFiled(): JSX.Element {
             </span>
           </p>
           <RunSummary outcome={outcome} size="stats" />
+          <RunMeaning outcome={outcome} />
         </section>
         <RunBody
           run={latest}
