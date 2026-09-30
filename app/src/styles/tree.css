@@ -43,8 +43,10 @@
   text-decoration: none;
 }
 
-.tree-row:hover {
-  background: var(--color-surface-hover);
+@media (hover: hover) {
+  .tree-row:hover {
+    background: var(--color-surface-hover);
+  }
 }
 
 .tree-root {

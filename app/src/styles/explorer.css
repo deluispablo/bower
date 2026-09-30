@@ -159,6 +159,12 @@
   padding-left: 4px;
 }
 
+/* Desktop: the column's own inset only, so the icons sit at x 36 with the
+   root discs. */
+.explorer-sidebar .explorer-below {
+  padding: 0;
+}
+
 .explorer-item-spacer {
   flex: 0 0 14px;
   width: 14px;
@@ -304,8 +310,9 @@
 }
 
 /* The left-edge swipe's own strip (phone widths): 16 px, under the top bar
-   and above the tab bar, below the drawer. `touch-action: none` keeps the
-   browser from claiming the horizontal move. */
+   and above the tab bar, below the drawer. `touch-action: pan-y` keeps the
+   horizontal move for the swipe and still lets a vertical scroll start
+   here. */
 .folders-edge {
   position: fixed;
   top: 56px;
@@ -313,7 +320,7 @@
   left: 0;
   z-index: 37;
   width: 16px;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 @media (min-width: 900px) {

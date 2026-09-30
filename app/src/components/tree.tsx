@@ -50,6 +50,7 @@ import {
   paraKindOf,
 } from '../navigation.js';
 import type { ParaKind, TreeNode, TreeRow, TreeSort } from '../navigation.js';
+import { loadNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
@@ -250,17 +251,30 @@ function rootOf(path: string): ParaKind | null {
  */
 export function useBowerWritten(
   files: readonly DriveFile[],
+  current?: DriveFile,
 ): ReadonlySet<string> {
   const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
   const key = files.map((file) => file.id).join(',');
   useEffect(() => {
     let cancelled = false;
-    void Promise.all(
-      files.map(async (file) => {
+    void Promise.all([
+      ...files.map(async (file) => {
         const entry = await loadNoteMetaEntry<{ meta?: NoteMeta }>(file.id);
         return isBowerWritten(entry?.meta) ? file.id : null;
       }),
-    ).then((found) => {
+      // The open note is read in full (the note screen reads it anyway), so
+      // its row shows the bird even before its frontmatter was cached.
+      ...(current === undefined
+        ? []
+        : [
+            loadNoteMeta(current)
+              .then((meta) => (isBowerWritten(meta) ? current.id : null))
+              .catch((err: unknown) => {
+                console.error('Could not read the open note', err);
+                return null;
+              }),
+          ]),
+    ]).then((found) => {
       if (cancelled) return;
       const next = new Set(found.filter((id): id is string => id !== null));
       setIds((prev) =>
@@ -272,7 +286,7 @@ export function useBowerWritten(
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [key, current?.id, current?.modifiedTime]);
   return ids;
 }
 
@@ -350,6 +364,16 @@ export function Tree({
       .then((state) => {
         if (cancelled) return;
         restored.current = true;
+        // On load the selected row comes into view once the stored folders
+        // have opened above it (the same helper as a reveal).
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const selected = wrapRef.current?.querySelector<HTMLElement>(
+              '.tree-link[aria-selected="true"]',
+            );
+            if (selected != null) scrollRowIntoView(selected);
+          }),
+        );
         if (state === undefined) return;
         const target = revealRef.current;
         setExpanded(
@@ -478,7 +502,14 @@ export function Tree({
     [rows, index],
   );
   const titles = useNoteTitles(noteFiles);
-  const bowerIds = useBowerWritten(noteFiles);
+  const openNote =
+    currentId === undefined ? undefined : index.byId.get(currentId);
+  const bowerIds = useBowerWritten(
+    noteFiles,
+    openNote !== undefined && fileKind(openNote) === 'note'
+      ? openNote
+      : undefined,
+  );
 
   const wantsVirtual = rows.length > VIRTUAL_FROM_ROWS;
   useEffect(() => {

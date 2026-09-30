@@ -67,3 +67,29 @@ test('the sidebar tree sits 12 px in and Health check is a nav item', async ({
   expect(row.x + row.width).toBeGreaterThan(245);
   expect(row.x + row.width).toBeLessThan(256);
 });
+
+test('on desktop, Answers lines up with the root discs, and the open Bower note wears the bird', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the sidebar is desktop');
+  await openHome(page);
+  const sidebar = page.getByRole('navigation', { name: 'Your folders' });
+  const disc = await sidebar
+    .locator('.tree .folder-mark')
+    .first()
+    .boundingBox();
+  const answers = await sidebar
+    .locator('.explorer-below a[href="/folder/Answers"] svg')
+    .first()
+    .boundingBox();
+  if (disc === null || answers === null) throw new Error('no icons');
+  expect(Math.abs(disc.x - answers.x)).toBeLessThanOrEqual(1);
+
+  // A note Bower wrote: its selected row draws the bird, not a document,
+  // and is in view on load.
+  await page.goto('/note/demo-75');
+  const selected = sidebar.locator('.tree-link[aria-selected="true"]');
+  await expect(selected).toHaveCount(1);
+  await expect(selected.locator('svg.mark')).toHaveCount(1);
+  await expect(selected).toBeInViewport();
+});
