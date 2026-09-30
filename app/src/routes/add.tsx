@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
+import { Bird } from '../components/bird.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { useHasCamera } from '../add-camera.js';
 import {
   clearFiledAfterRun,
@@ -110,6 +112,25 @@ const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY ?? '';
  * (`routes/settings.tsx`) keeps its own identical constant, same as its
  * existing `NOT_IN_DEMO`, rather than a cross-route import. */
 const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
+
+/**
+ * The desktop drop line with its bird (R-BIRD-11). The bird mounts only from
+ * 900 px, where the line shows: mounted, it counts in the presence store and
+ * hides the perch (rule 1), so it must not mount while hidden by CSS.
+ */
+export function AddDropRow(): JSX.Element {
+  const wide = useMediaQuery('(min-width: 900px)');
+  return (
+    <div class="add-drop-row">
+      {wide && (
+        <div class="add-drop-bird" aria-hidden="true">
+          <Bird state="looking" size={64} />
+        </div>
+      )}
+      <p class="add-drop-line">{DROP_LINE}</p>
+    </div>
+  );
+}
 
 /** PILE-14, the drop line under the desktop title. */
 const DROP_LINE =
@@ -889,7 +910,7 @@ export function Add() {
       onDrop={onDrop}
     >
       <h1 class="screen-title">Add</h1>
-      <p class="add-drop-line">{DROP_LINE}</p>
+      <AddDropRow />
 
       <UploadNotes />
 

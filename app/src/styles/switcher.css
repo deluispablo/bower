@@ -54,6 +54,8 @@
 }
 
 .switcher-bird {
+  /* Room of rule 3 around the 72 px bird: 9 px above and each side, 1 px below. */
+  padding: 9px 9px 1px;
   position: absolute;
   right: var(--space-8);
   top: -46px;

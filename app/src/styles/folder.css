@@ -662,6 +662,12 @@
   max-width: 26rem;
 }
 
+/* Asleep in the empty folder and inbox: 64 px with the room of rule 3
+   (12% above and each side, 2% below) so nothing clips him. */
+.folder-empty-bird {
+  padding: 8px 8px 1px;
+}
+
 .folder-empty-ask {
   color: var(--color-link);
 }

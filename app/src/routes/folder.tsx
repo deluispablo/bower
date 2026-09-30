@@ -474,7 +474,9 @@ function FolderBody({
             </p>
           ) : (
             <div class="folder-empty">
-              <Bird state="idle" size={40} />
+              <div class="folder-empty-bird">
+                <Bird state="asleep" size={64} />
+              </div>
               <p class="folder-empty-title">Nothing in {contents.name} yet</p>
               <p class="folder-empty-text">
                 Add tickets, bookings or ideas and Bower files them here at the
