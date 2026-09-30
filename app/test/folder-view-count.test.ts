@@ -53,6 +53,7 @@ const files: DriveFile[] = [
 describe('folderCount', () => {
   const index = buildVaultIndex(files);
   const contents = folderContents(index, DIR);
+  if (contents === null) throw new Error('fixture');
   const notes = files.filter((file) => file.path.startsWith(`${DIR}/`) && !file.path.includes('/Listings'));
   const metas = new Map(
     notes.map((note) => [note.id, noteMetaFrom({ by: 'bower' })] as const),
