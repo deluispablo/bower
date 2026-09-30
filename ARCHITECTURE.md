@@ -144,6 +144,11 @@ Runs, piles, uploads, recovery and Bower on screen. Each module's own header com
 
 `app/src/meta-line.ts` (`metaLine`, `kindLabel`, `shortDate`) is the only source of kind words, dates and meta lines, with `displayName`, `folderCount`/`siblings`, `filedBy` and `titleFor` beside it; `components/file-icon.tsx` (`FileIcon`) is the only item icon. Screens import these instead of deriving their own.
 
+### Overlays and the ⋯ menu (#907)
+
+`components/overlay.tsx` has four placements: a phone sheet that hugs its content up to 90 % (every kind), the 440 px side panel (`kind="sheet"`), the 320 px popover (`kind="menu"`) and one centred dialog (`kind="dialog"`, only the tidy-up confirm, Columns and `components/confirm.tsx`); `OverlayHeader` and `OVERLAY_CLOSE_LABELS` name every ✕.
+`more-menu.ts` (`moreMenuGroups`) lists each ⋯ menu kind (folder, root, note, file, home, add, bower, notes, justFiled, settings) in the spec order; `components/note-menu.tsx` draws it and hides Drive items whose id has not reached it.
+
 ## v5 data flows
 
 - **A run's result.** The runner writes `.bower/last-run.json` and reports to the Worker at each phase change (at most four running reports) and once at the end. The report carries `processed` and `items` (with `to`), `created`, `updated` (each with a one-line `what`, cut at 120), `left`, `setAside`, on a done run `disagree` (at most 5) and `next` (at most 3), and while running `phase`, `total`, `done` and `phaseAt`. The Worker caps the sum of `processed`, `created`, `updated`, `left` and `setAside` at 400 entries (each array is cut to 200 first). `run-outcome.ts` turns either source into a `RunOutcome`; every screen asks `runSentence` for its words.
