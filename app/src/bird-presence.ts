@@ -76,3 +76,16 @@ export function useOverlayBird(): boolean {
 export function usePerchVisible(): boolean {
   return useBirdCount() === 0;
 }
+
+/**
+ * Whether Home's greeting bird is unmounted (rule 1): while the tour, the
+ * search peek or any overlay bird owns the one animated Bower, the greeting
+ * bird is removed, not just covered by the panel.
+ */
+export function greetingBirdHidden(
+  tourOnScreen: boolean,
+  searchOpen: boolean,
+  overlayBird: boolean,
+): boolean {
+  return tourOnScreen || searchOpen || overlayBird;
+}

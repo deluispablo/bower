@@ -361,7 +361,7 @@ export function Intro(): JSX.Element {
             </button>
           ) : (
             <button type="button" class="intro-skip" onClick={leave}>
-              Skip
+              {page === LAST ? 'Close' : 'Skip'}
             </button>
           )}
         </header>

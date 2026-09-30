@@ -334,9 +334,14 @@ describe('Intro', () => {
     expect(introSeen(localStorage)).toBe(false);
   });
 
-  it('shows Skip and Sign in with Google on a first visit', () => {
-    mount('?page=5');
+  it('shows Skip on the first pages of a first visit', () => {
+    mount();
     expect(root.querySelector('.intro-skip')?.textContent).toBe('Skip');
+  });
+
+  it('shows Close top right on page 5 of a first visit, with Sign in with Google', () => {
+    mount('?page=5');
+    expect(root.querySelector('.intro-skip')?.textContent).toBe('Close');
     expect(root.querySelector('.intro-icon-button')).toBeNull();
     expect(root.querySelector('.intro-cta')?.textContent).toBe(
       'Sign in with Google',

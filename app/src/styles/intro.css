@@ -190,6 +190,19 @@
   min-height: 50px;
 }
 
+/* An outline button. The sign-in screen does not load `add.css`, where
+ * `.button-secondary` lives, so the twin is spelled out here. */
+.button.intro-back {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+}
+
+.button.intro-back:hover {
+  background: var(--color-surface);
+  filter: none;
+}
+
 .intro-next {
   margin-left: auto;
   min-width: 120px;
@@ -437,6 +450,19 @@
 .intro-place .intro-row svg {
   width: 14px;
   height: 14px;
+}
+
+/* Short phones (375x812 and below): the pile art must fit above the dots, so
+ * the bird and the colour chips step aside and the cards tighten. */
+@media (max-width: 899px) and (max-height: 860px) {
+  .intro-page--1 .intro-hero-bird,
+  .intro-page--1 .intro-chips {
+    display: none;
+  }
+
+  .intro-page--1 .intro-card {
+    padding: var(--space-2) var(--space-3);
+  }
 }
 
 @media (min-width: 900px) and (pointer: fine) {
