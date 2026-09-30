@@ -220,6 +220,21 @@ export interface UpdatedItem {
   what?: string;
 }
 
+/** Two notes a run found disagreeing, with a short reason (spec R-MEAN-1);
+ * mirrors `DisagreeItem` in `api/src/types.ts`. */
+export interface DisagreeItem {
+  a: string;
+  b: string;
+  reason: string;
+}
+
+/** One thing that is next for the person, with the note it is about when
+ * there is one (spec R-MEAN-1); mirrors `NextItem` in `api/src/types.ts`. */
+export interface NextItem {
+  path?: string;
+  action: string;
+}
+
 /** Mirrors `Run` in `api/src/types.ts`. */
 export interface Run {
   state: RunState;
@@ -240,6 +255,10 @@ export interface Run {
   updated?: UpdatedItem[];
   /** Pending inbox paths still there at the end (#728). */
   left?: string[];
+  /** Notes the run found disagreeing, at most 5 (#788, spec R-MEAN-1). */
+  disagree?: DisagreeItem[];
+  /** What is next for the person, at most 3 (#788, spec R-MEAN-1). */
+  next?: NextItem[];
   /** The step a running run last reported (#728, spec R-RUNNER-4), with
    * `total` and `done` counts when known. Only on a running run. */
   phase?: RunPhase;

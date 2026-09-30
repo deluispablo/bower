@@ -149,6 +149,27 @@ export interface UpdatedItem {
   what?: string;
 }
 
+/**
+ * Two notes the run found disagreeing (spec R-MEAN-1): both paths and one
+ * short reason (at most 120 characters), from the agent's
+ * `.bower/checks.txt`.
+ */
+export interface DisagreeItem {
+  a: string;
+  b: string;
+  reason: string;
+}
+
+/**
+ * One thing the person should do next (spec R-MEAN-1): the note it is
+ * about, when there is one, and the action (at most 120 characters), from
+ * the agent's `.bower/next.txt`.
+ */
+export interface NextItem {
+  path?: string;
+  action: string;
+}
+
 export interface Run {
   state: RunState;
   /** Absent on runs stored before kinds existed; read as `ingest`. */
@@ -182,6 +203,10 @@ export interface Run {
   updated?: UpdatedItem[];
   /** Spec R-RUNNER-1: pending inbox paths still there at the end. */
   left?: string[];
+  /** Spec R-MEAN-1: notes that disagree, at most 5. Only on a done run. */
+  disagree?: DisagreeItem[];
+  /** Spec R-MEAN-1: what is next for the person, at most 3. Done runs only. */
+  next?: NextItem[];
   /**
    * Spec R-RUNNER-4: the step a `running` run last reported, with the
    * `total` and `done` counts when known. Only on a running run.

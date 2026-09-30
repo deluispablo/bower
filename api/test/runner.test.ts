@@ -14,6 +14,9 @@ import {
 import { hashTicket, issueRunTicket } from '../src/run-ticket.js';
 import {
   MAX_ADDED_LENGTH,
+  MAX_DISAGREE,
+  MAX_MEANING_LENGTH,
+  MAX_NEXT,
   MAX_PROCESSED,
   MAX_REPORT_ENTRIES,
   MAX_TEXT_LENGTH,
@@ -1247,6 +1250,122 @@ describe('POST /runner/vaults/:id/status', () => {
     expect(run.updated?.[0]?.path).toHaveLength(MAX_TEXT_LENGTH);
     expect(run.updated?.[0]?.what).toHaveLength(MAX_WHAT_LENGTH);
     expect(run.left?.[0]).toHaveLength(MAX_TEXT_LENGTH);
+  });
+
+  it('keeps disagree and next on a done run (R-MEAN-1)', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'done',
+      disagree: [
+        {
+          a: '1-Projects/Flat hunt/Arlington Road.md',
+          b: '2-Areas/Home/Lease.md',
+          reason: 'The deposit differs: 1,200 in one, 1,000 in the other',
+        },
+      ],
+      next: [
+        { path: '1-Projects/Flat hunt/Flat hunt.md', action: 'Book a viewing' },
+        { action: 'Send the signed lease back' },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.disagree).toEqual([
+      {
+        a: '1-Projects/Flat hunt/Arlington Road.md',
+        b: '2-Areas/Home/Lease.md',
+        reason: 'The deposit differs: 1,200 in one, 1,000 in the other',
+      },
+    ]);
+    expect(run.next).toEqual([
+      { path: '1-Projects/Flat hunt/Flat hunt.md', action: 'Book a viewing' },
+      { action: 'Send the signed lease back' },
+    ]);
+    expect(await getRun(kv, USER_ID)).toEqual(run);
+  });
+
+  it('drops disagree and next entries out of format and keeps at most 5 and 3 (R-MEAN-1)', async () => {
+    await seedUser();
+    const pair = (n: number): { a: string; b: string; reason: string } => ({
+      a: `a${n}.md`,
+      b: `b${n}.md`,
+      reason: `Reason ${n}`,
+    });
+
+    const response = await postStatus({
+      state: 'done',
+      disagree: [
+        pair(1),
+        { ...pair(2), reason: 'r'.repeat(MAX_MEANING_LENGTH + 1) },
+        { ...pair(3), b: '' },
+        { ...pair(4), reason: 'two\nlines' },
+        { ...pair(5), extra: true },
+        'a.md\tb.md\tA line, not an entry',
+        pair(6),
+        { ...pair(7), reason: 'r'.repeat(MAX_MEANING_LENGTH) },
+        pair(8),
+        pair(9),
+        pair(10),
+      ],
+      next: [
+        { action: 'a'.repeat(MAX_MEANING_LENGTH + 1) },
+        { path: '-', action: 'A dash is no path' },
+        { path: 'x.md' },
+        { path: 'x.md', action: 'with\ttab' },
+        { path: 'one.md', action: 'One' },
+        { action: 'Two' },
+        { path: 'three.md', action: 'Three' },
+        { action: 'Four' },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.disagree?.map((item) => item.a)).toEqual([
+      'a1.md',
+      'a6.md',
+      'a7.md',
+      'a8.md',
+      'a9.md',
+    ]);
+    expect(run.disagree).toHaveLength(MAX_DISAGREE);
+    expect(run.next).toEqual([
+      { path: 'one.md', action: 'One' },
+      { action: 'Two' },
+      { path: 'three.md', action: 'Three' },
+    ]);
+    expect(run.next).toHaveLength(MAX_NEXT);
+  });
+
+  it('answers 400 when disagree or next is not an array (R-MEAN-1)', async () => {
+    await seedUser();
+
+    for (const body of [
+      { state: 'done', disagree: 'a.md\tb.md\tDiffers' },
+      { state: 'done', next: { action: 'Book' } },
+    ]) {
+      const response = await postStatus(body);
+      expect(response.status).toBe(400);
+      expect((await response.json<ErrorBody>()).error.code).toBe('bad_request');
+    }
+    expect(await getRun(kv, USER_ID)).toBeUndefined();
+  });
+
+  it('keeps no disagree or next on a failed run (R-MEAN-1)', async () => {
+    await seedUser();
+
+    const response = await postStatus({
+      state: 'failed',
+      disagree: [{ a: 'a.md', b: 'b.md', reason: 'Differs' }],
+      next: [{ action: 'Book' }],
+    });
+
+    expect(response.status).toBe(200);
+    const { run } = await response.json<RunBody>();
+    expect(run.disagree).toBeUndefined();
+    expect(run.next).toBeUndefined();
   });
 
   it('answers 400 when processed, created, updated, left and setAside carry more than 400 entries together (T13)', async () => {

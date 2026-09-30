@@ -64,7 +64,9 @@ import {
   SET_ASIDE_REASONS,
 } from './types.js';
 import type {
+  DisagreeItem,
   DriveToken,
+  NextItem,
   Run,
   RunFailureReason,
   RunItem,
@@ -101,6 +103,18 @@ export const MAX_ADDED_LENGTH = 200;
  * longer text is cut.
  */
 export const MAX_WHAT_LENGTH = 120;
+
+/** Most `disagree` entries kept on a `Run` (spec R-MEAN-1). */
+export const MAX_DISAGREE = 5;
+
+/** Most `next` entries kept on a `Run` (spec R-MEAN-1). */
+export const MAX_NEXT = 3;
+
+/**
+ * Longest `disagree[].reason` and `next[].action` (spec R-MEAN-1): a longer
+ * one breaks the fixed format, so its entry is dropped, not cut.
+ */
+export const MAX_MEANING_LENGTH = 120;
 
 /**
  * Most entries one report may carry across `processed`, `created`,
@@ -201,6 +215,8 @@ interface StatusReport {
   created?: string[];
   updated?: UpdatedItem[];
   left?: string[];
+  disagree?: DisagreeItem[];
+  next?: NextItem[];
   phase?: RunPhase;
   total?: number;
   done?: number;
@@ -223,6 +239,8 @@ const REPORT_FIELDS: ReadonlySet<string> = new Set([
   'created',
   'updated',
   'left',
+  'disagree',
+  'next',
   'phase',
   'total',
   'done',
@@ -382,6 +400,86 @@ function optionalUpdated(
       item.what = what.slice(0, MAX_WHAT_LENGTH);
     }
     items.push(item);
+  }
+  return items;
+}
+
+/**
+ * One field of a `disagree` or `next` entry (spec R-MEAN-1): a non-empty
+ * string on one line with no tab (the fixed format of `checks.txt` and
+ * `next.txt`), at most `max` characters. Anything else is `undefined`.
+ */
+function formatField(value: unknown, max: number): string | undefined {
+  if (typeof value !== 'string' || value.trim() === '') return undefined;
+  if (/[\t\r\n]/.test(value) || [...value].length > max) return undefined;
+  return value;
+}
+
+/** An object entry with only the `allowed` keys, or `undefined`. */
+function formatEntry(
+  entry: unknown,
+  allowed: readonly string[],
+): Record<string, unknown> | undefined {
+  if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+    return undefined;
+  }
+  const record = entry as Record<string, unknown>;
+  return Object.keys(record).every((key) => allowed.includes(key))
+    ? record
+    : undefined;
+}
+
+/**
+ * The `disagree` field (spec R-MEAN-1): absent, or an array whose entries
+ * in the fixed format `{ a, b, reason }` (both note paths, a reason of at
+ * most `MAX_MEANING_LENGTH` characters) are kept, the first `MAX_DISAGREE`
+ * of them. Any other entry is dropped; a value that is not an array is a
+ * 400.
+ */
+function optionalDisagree(
+  body: Record<string, unknown>,
+): DisagreeItem[] | undefined {
+  const value = body.disagree;
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw badRequest('disagree must be an array');
+  const items: DisagreeItem[] = [];
+  for (const entry of value as unknown[]) {
+    if (items.length === MAX_DISAGREE) break;
+    const record = formatEntry(entry, ['a', 'b', 'reason']);
+    if (record === undefined) continue;
+    const a = formatField(record.a, MAX_TEXT_LENGTH);
+    const b = formatField(record.b, MAX_TEXT_LENGTH);
+    const reason = formatField(record.reason, MAX_MEANING_LENGTH);
+    if (a === undefined || b === undefined || reason === undefined) continue;
+    items.push({ a, b, reason });
+  }
+  return items;
+}
+
+/**
+ * The `next` field (spec R-MEAN-1): absent, or an array whose entries in
+ * the fixed format `{ path?, action }` (an action of at most
+ * `MAX_MEANING_LENGTH` characters) are kept, the first `MAX_NEXT` of them.
+ * Any other entry is dropped; a value that is not an array is a 400.
+ */
+function optionalNext(body: Record<string, unknown>): NextItem[] | undefined {
+  const value = body.next;
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw badRequest('next must be an array');
+  const items: NextItem[] = [];
+  for (const entry of value as unknown[]) {
+    if (items.length === MAX_NEXT) break;
+    const record = formatEntry(entry, ['path', 'action']);
+    if (record === undefined) continue;
+    const action = formatField(record.action, MAX_MEANING_LENGTH);
+    if (action === undefined) continue;
+    if (record.path === undefined) {
+      items.push({ action });
+      continue;
+    }
+    const path = formatField(record.path, MAX_TEXT_LENGTH);
+    if (path === undefined || path === '-') continue;
+    items.push({ path, action });
   }
   return items;
 }
@@ -552,6 +650,11 @@ function parseStatusReport(body: unknown): StatusReport {
     );
   }
 
+  const disagree = optionalDisagree(record);
+  if (disagree !== undefined) report.disagree = disagree;
+  const next = optionalNext(record);
+  if (next !== undefined) report.next = next;
+
   const phase = optionalPhase(record);
   const total = optionalTotal(record);
   const done = optionalDone(record);
@@ -630,6 +733,11 @@ function applyReport(
   if (report.updated !== undefined) run.updated = report.updated;
   if (report.left !== undefined) run.left = report.left;
   if (report.added !== undefined) run.added = report.added;
+  // R-MEAN-1: what the run means belongs to a finished, successful run.
+  if (report.state === 'done') {
+    if (report.disagree !== undefined) run.disagree = report.disagree;
+    if (report.next !== undefined) run.next = report.next;
+  }
   if (report.quarantined !== undefined) run.quarantined = report.quarantined;
   if (report.refused !== undefined) run.refused = report.refused;
   if (report.error !== undefined) run.error = report.error;
