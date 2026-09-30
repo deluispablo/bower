@@ -14,6 +14,33 @@ permissions:
   contents: read
 
 jobs:
+  # Whether anything besides Markdown, docs/ and the licence changed. When
+  # nothing did, `ci`, `demo-build` and `e2e` are skipped (#902); `sanitize`
+  # and `supply-chain` always run. A push to main always runs everything.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the PR base must be reachable for git diff
+
+      - name: Look for changes outside the docs
+        id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE...HEAD")
+          code=$(printf '%s\n' "$changed" | grep -vE '(\.md$|^docs/|^LICENSE)' | grep -c . || true)
+          echo "Files outside the docs: $code"
+          echo "code=$([ "$code" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   sanitize:
     runs-on: ubuntu-latest
     steps:
@@ -24,6 +51,8 @@ jobs:
         run: bash scripts/check-sanitized.sh
 
   ci:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,6 +69,17 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # ESLint's cache (`pnpm lint` passes --cache, keyed on file content).
+      # A new entry is saved on every run; the lockfile and the config pick
+      # which older one may be restored.
+      - name: Cache ESLint results
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.cache/eslint
+          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.js') }}-${{ github.sha }}
+          restore-keys: |
+            eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.js') }}-
 
       - name: Lint
         run: pnpm lint
@@ -62,13 +102,11 @@ jobs:
         working-directory: api
         run: pnpm dlx wrangler deploy --dry-run
 
-  # End-to-end flows against the demo build (#196, docs/testing.md). Not a
-  # required check on main yet.
-  e2e:
+  # The demo is built once and shared by the e2e shards (#902).
+  demo-build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,6 +123,53 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build the demo
+        run: pnpm -C app build:demo
+
+      - name: Upload the demo build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: demo-dist
+          path: app/dist/
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
+
+  # End-to-end flows against the demo build (#196, docs/testing.md), split
+  # in four shards that each serve the shared build (`E2E_PREBUILT=1`).
+  e2e:
+    needs: [changes, demo-build]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the demo build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: demo-dist
+          path: app/dist/
+
       - name: Read the Playwright version
         id: playwright
         run: echo "version=$(pnpm -C app exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
@@ -95,24 +180,49 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-chromium-${{ steps.playwright.outputs.version }}
 
-      # The browser comes from the cache when it hits; the system libraries
-      # are installed every time.
+      # The browser comes from the cache when it hits. No apt: the runner
+      # image already has the system libraries Chromium needs (#902).
       - name: Install Chromium
-        run: pnpm -C app exec playwright install --with-deps chromium
+        run: pnpm -C app exec playwright install chromium
 
-      - name: End-to-end tests
-        run: pnpm -C app e2e
+      - name: End-to-end tests (shard ${{ matrix.shard }} of 4)
+        env:
+          E2E_PREBUILT: '1'
+        run: pnpm -C app exec playwright test --shard=${{ matrix.shard }}/4
 
       - name: Upload screenshots and traces
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e
+          name: e2e-${{ matrix.shard }}
           path: |
             app/e2e/screenshots/
             app/e2e/results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # One stable check for the e2e: it fails when the build or any shard
+  # failed, and passes when they ran green or were skipped for a docs-only
+  # change.
+  e2e-result:
+    needs: [changes, demo-build, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the shards
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.demo-build.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          echo "changes=$CHANGES demo-build=$BUILD e2e=$E2E"
+          [ "$CHANGES" = "success" ] || exit 1
+          for result in "$BUILD" "$E2E"; do
+            case "$result" in
+              success | skipped) ;;
+              *) exit 1 ;;
+            esac
+          done
 
   supply-chain:
     runs-on: ubuntu-latest

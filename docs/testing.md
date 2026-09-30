@@ -138,7 +138,9 @@ Every flow but the first sets the intro-seen flag before the page loads and skip
 
 The desktop widths (#359): besides the project's own 1280, the desktop project draws Home, a note, Add, the Bower tab and Settings at **1024, 1280, 1440 and 1920** px (`widths-<width>-<screen>.png`), checks that above 1200 a wider window only adds margin, and checks at 1920 that nothing ends within 40 px of the right edge (#355).
 
-Each flow saves a screenshot to `app/e2e/screenshots/<project>/` (git-ignored); traces of failed tests go to `app/e2e/results/`. In CI the `e2e` job uploads both as the `e2e` artifact, on success and failure.
+Each flow saves a screenshot to `app/e2e/screenshots/<project>/` (git-ignored); traces of failed tests go to `app/e2e/results/`. In CI each e2e shard uploads both as the `e2e-<n>` artifact, on success and failure.
+
+**How CI runs them (#902).** `.github/workflows/ci.yml` builds the demo once in the `demo-build` job and uploads `app/dist` as the `demo-dist` artifact (kept one day). The `e2e` job is a matrix of four shards: each downloads that build and runs `playwright test --shard=<n>/4` with `E2E_PREBUILT=1`, which makes the config serve the existing `dist/` with `vite preview` instead of building it again, on two workers per shard. Every test of both projects runs exactly once per CI run, spread over the shards; a failed test still gets one retry. The `e2e-result` job is the single check to require: it fails when the build or any shard failed and passes otherwise. A first `changes` job diffs the PR against its base: when only Markdown files, `docs/` or `LICENSE*` changed, `ci`, `demo-build` and `e2e` are skipped (so `e2e-result` passes) while `sanitize` and `supply-chain` still run. A push to `main` always runs everything. `pnpm lint` keeps ESLint's cache in `node_modules/.cache/eslint/` and the `ci` job restores it.
 
 Running it locally:
 
@@ -147,6 +149,7 @@ pnpm -C app exec playwright install chromium   # once per Playwright version
 pnpm -C app e2e                                 # both projects
 pnpm -C app e2e --project=desktop --headed      # watch one project
 pnpm -C app exec playwright show-trace e2e/results/<test>/trace.zip
+pnpm -C app build:demo && E2E_PREBUILT=1 pnpm -C app exec playwright test --shard=2/4   # one CI shard
 ```
 
 **README screenshots.** `pnpm -C app e2e:shots` runs the desktop project and also writes its six screenshots to `docs/assets/screenshots/`, which the README shows under the demo link. Run it and commit the PNGs when a screen changes visibly; they only ever show the demo's sample notes. The Tidy up one differs by a few pixels between runs, the others are identical.

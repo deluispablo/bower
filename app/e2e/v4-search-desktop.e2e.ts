@@ -62,26 +62,40 @@ test('the kind chips count each kind and filter the list', async ({ page }) => {
   const dialog = await openSearch(page);
   await dialog.getByRole('combobox').fill('lease');
 
+  // The results come in two steps: names at once, then the debounced
+  // full-text search adds more. A count read before the second step is
+  // stale, so every count is read again until the chips and the list agree.
   const chips = dialog.locator('.switcher-chips');
   const all = chips.getByRole('button', { name: /^All \d+$/ });
-  await expect(all).toBeVisible();
-  const total = Number(((await all.textContent()) ?? '').replace(/\D/g, ''));
   const pdfs = chips.getByRole('button', { name: /^PDFs \d+$/ });
+  const options = dialog.getByRole('option');
+  const countOf = async (chip: Locator): Promise<number> =>
+    Number(((await chip.textContent()) ?? '').replace(/\D/g, ''));
+  await expect(all).toBeVisible();
   await expect(pdfs).toBeVisible();
-  const pdfCount = Number(
-    ((await pdfs.textContent()) ?? '').replace(/\D/g, ''),
-  );
-  expect(pdfCount).toBeGreaterThan(0);
-  expect(pdfCount).toBeLessThan(total);
   await expect(chips.getByRole('button', { name: 'Any time' })).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const total = await countOf(all);
+      const pdfCount = await countOf(pdfs);
+      return (
+        total === (await options.count()) && pdfCount > 0 && pdfCount < total
+      );
+    })
+    .toBe(true);
 
   await pdfs.click();
   await expect(pdfs).toHaveAttribute('aria-pressed', 'true');
-  await expect(dialog.getByRole('option')).toHaveCount(pdfCount);
+  await expect
+    .poll(async () => (await options.count()) === (await countOf(pdfs)))
+    .toBe(true);
   await expect(dialog.locator('.switcher-heading')).toHaveText(['Files']);
 
   await all.click();
-  await expect(dialog.getByRole('option')).toHaveCount(total);
+  await expect
+    .poll(async () => (await options.count()) === (await countOf(all)))
+    .toBe(true);
 });
 
 test('Tab reaches the chips, Enter opens the highlighted result, / opens search', async ({

@@ -2345,8 +2345,11 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
 
   // A non-root folder (a project) has no meaning line to show.
   await page.goto('/folder/1-Projects/Lisbon%20Trip');
+  // The h1 only: once the project note loads, its front card adds an h2 with
+  // the same name, which made the role query ambiguous whenever the note
+  // arrived before the check ran.
   await expect(
-    page.getByRole('heading', { name: 'Lisbon Trip' }),
+    page.getByRole('heading', { level: 1, name: 'Lisbon Trip', exact: true }),
   ).toBeVisible();
   await expect(page.locator('.folder-explainer')).toHaveCount(0);
 });

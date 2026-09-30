@@ -19,6 +19,11 @@ const CI = process.env.CI !== undefined && process.env.CI !== '';
 const PORT = Number(process.env.E2E_PORT ?? '4196');
 const BASE_URL = `http://localhost:${PORT}`;
 
+// `E2E_PREBUILT=1` serves an existing `dist/` (built once by CI's
+// `demo-build` job and shared by the shards) instead of building it again.
+const PREBUILT = process.env.E2E_PREBUILT === '1';
+const PREVIEW = `pnpm exec vite preview --port ${PORT} --strictPort`;
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: '*.e2e.ts',
@@ -26,6 +31,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: CI,
   retries: CI ? 1 : 0,
+  // Two workers per shard: four made the shards no faster (the runs are
+  // CPU-bound) and brought new flaky tests.
+  workers: CI ? 2 : undefined,
   timeout: 30_000,
   expect: { timeout: 10_000 },
   reporter: CI ? [['list'], ['github']] : 'list',
@@ -63,7 +71,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `pnpm build:demo && pnpm exec vite preview --port ${PORT} --strictPort`,
+    command: PREBUILT ? PREVIEW : `pnpm build:demo && ${PREVIEW}`,
     url: BASE_URL,
     reuseExistingServer: !CI,
     timeout: 180_000,
