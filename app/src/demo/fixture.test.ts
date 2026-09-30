@@ -203,7 +203,7 @@ describe('the v6 demo world (#903)', () => {
 
   it('keeps the run history of JF-Main and JF-Earlier, each run with its start', () => {
     const yesterday = DEMO_RUNS.filter((run) =>
-      run.runId.startsWith('demo-run-yesterday-'),
+      (run.runId ?? '').startsWith('demo-run-yesterday-'),
     );
     expect(yesterday).toHaveLength(10);
     const [last] = DEMO_RUNS;

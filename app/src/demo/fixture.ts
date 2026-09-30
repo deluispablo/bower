@@ -1494,6 +1494,7 @@ function applicationFiles(): FixtureFile[] {
       `${APPLICATIONS}/Applications.md`,
       yesterday('1350'),
       [
+        'by: bower',
         'tags: [project, hub, career]',
         'created: 2026-09-29',
         'updated: 2026-09-29',
@@ -1580,6 +1581,7 @@ A one-bedroom flat in Melbourne's inner north before the short let ends mid-Octo
     `${MOONEE_PONDS}/Moonee Ponds.md`,
     yesterday('1145'),
     [
+      'by: bower',
       'tags: [project, hub, housing]',
       'created: 2026-09-29',
       'updated: 2026-09-29',

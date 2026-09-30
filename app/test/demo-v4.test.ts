@@ -286,7 +286,9 @@ describe('the demo API report v2', () => {
       'demo-run-yesterday-10',
     );
     const { runs: all } = await d.worker.getRuns();
-    const runs = all.filter((r) => r.runId.startsWith('demo-run-earlier-'));
+    const runs = all.filter((r) =>
+      (r.runId ?? '').startsWith('demo-run-earlier-'),
+    );
     const run = runs[0];
     expect(run?.state).toBe('done');
     expect(run?.finishedAt).toBe('2026-09-27T09:42:00.000Z');

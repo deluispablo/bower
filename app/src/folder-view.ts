@@ -95,7 +95,10 @@ function writtenByBower(
  * show as separate rows).
  */
 export function buildFolderModel(sources: FolderSources): FolderModel {
-  const { items, byPath, metas, origins } = sources;
+  const { byPath, metas, origins } = sources;
+  const items = sources.items.filter(
+    (item) => !isFolderPage(item, metas.get(item.id)),
+  );
   const notes = items.filter((item) => fileKind(item) === 'note');
   const originalsOf = new Map<string, string>();
   for (const note of notes) {
@@ -390,6 +393,25 @@ export function fileLine(
     : `${label} · ${formatSize(file.size)}`;
 }
 
+/**
+ * Whether `file` is its folder's own page (K-31, lead ruling on #903): a
+ * note named after its folder that Bower wrote (`by: bower`, like
+ * `Moonee Ponds/Moonee Ponds.md`). It is not listed and not counted. A
+ * note of the same name that the person wrote is an ordinary note, listed
+ * and counted (`Visa & Immigration/Visa & Immigration.md`).
+ */
+export function isFolderPage(
+  file: Pick<DriveFile, 'path' | 'name' | 'mimeType'>,
+  meta: NoteMeta | undefined,
+): boolean {
+  if (meta === undefined || fileKind(file) !== 'note') return false;
+  const folder = folderOf(file.path);
+  const name = folder.slice(folder.lastIndexOf('/') + 1);
+  if (name === '' || file.name !== `${name}.md`) return false;
+  const by = meta.fields.by;
+  return typeof by === 'string' && by.trim().toLowerCase() === 'bower';
+}
+
 /** What `folderCount` adds up: the folder's subfolders and its model. */
 export interface FolderCountInput {
   /** How many subfolders the folder shows (they count as originals). */
@@ -424,12 +446,14 @@ export function folderCount(folder: FolderCountInput): number {
 /**
  * The things in the same folder as `item`, in tree order (R-API-9): what
  * About's "In this folder", the prev / next footer and "next item" walk.
- * `item` itself is included; subfolders are not. Empty when its folder is
- * not in `tree`.
+ * `item` itself is included; subfolders and the folder's own page are
+ * not (`metas` tells the page apart). Empty when its folder is not in
+ * `tree`.
  */
 export function siblings(
   item: Pick<DriveFile, 'path'>,
   tree: TreeNode,
+  metas: ReadonlyMap<string, NoteMeta> = new Map(),
 ): DriveFile[] {
   const parent = folderOf(item.path);
   let node: TreeNode | undefined = tree;
@@ -439,5 +463,6 @@ export function siblings(
       if (node === undefined) return [];
     }
   }
-  return [...node.items];
+  // The folder's own page (`isFolderPage`) is not one of its things.
+  return node.items.filter((file) => !isFolderPage(file, metas.get(file.id)));
 }
