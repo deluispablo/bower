@@ -472,6 +472,11 @@ export function Tree({
     if (el) {
       if (typeof el.scrollIntoView === 'function') {
         el.scrollIntoView({ block: 'nearest' });
+        // Again once the rows above have settled (titles, pins, the stored
+        // expansion arriving), so the row is still in view.
+        requestAnimationFrame(() => {
+          if (el.isConnected) el.scrollIntoView({ block: 'nearest' });
+        });
       }
       if (pendingRevealFocus.current) el.focus();
     } else if (listHandle.current !== null) {
