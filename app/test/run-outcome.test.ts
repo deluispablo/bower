@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  cleanDisagree,
+  cleanNext,
   cleanQuote,
   outcomeCounts,
   outcomeFromLastRun,
@@ -337,5 +339,47 @@ describe('cleanQuote (R-RUN-3)', () => {
   it('gives nothing for missing or empty text', () => {
     expect(cleanQuote(undefined)).toBeUndefined();
     expect(cleanQuote(' . ')).toBeUndefined();
+  });
+});
+
+describe('disagree and next (R-MEAN-2)', () => {
+  it('carries both arrays of a done run, the no-path marker cleared', () => {
+    const outcome = outcomeFromRun(
+      buildRun('done', {
+        disagree: [{ a: 'A/one.md', b: 'A/two.md', reason: 'Dates differ' }],
+        next: [{ path: '-', action: 'Book a viewing' }, { path: 'A/one.md', action: 'Read it' }],
+      }),
+    );
+    expect(outcome.disagree).toEqual([
+      { a: 'A/one.md', b: 'A/two.md', reason: 'Dates differ' },
+    ]);
+    expect(outcome.next).toEqual([
+      { action: 'Book a viewing' },
+      { path: 'A/one.md', action: 'Read it' },
+    ]);
+  });
+
+  it('leaves them out when empty, and on a run that did not finish', () => {
+    expect(outcomeFromRun(buildRun('done')).disagree).toBeUndefined();
+    expect(outcomeFromRun(buildRun('done', { next: [] })).next).toBeUndefined();
+    const failed = outcomeFromRun(
+      buildRun('failed', { next: [{ action: 'Try again' }] }),
+    );
+    expect(failed.next).toBeUndefined();
+  });
+
+  it('keeps at most 5 disagreements and 3 next steps, dropping blank lines', () => {
+    const line = (n: number) => ({ a: `a${n}.md`, b: `b${n}.md`, reason: 'x' });
+    expect(cleanDisagree([1, 2, 3, 4, 5, 6].map(line))).toHaveLength(5);
+    expect(cleanDisagree([{ a: '', b: 'b.md', reason: 'x' }])).toEqual([]);
+    expect(
+      cleanNext([
+        { action: '1' },
+        { action: ' ' },
+        { action: '2' },
+        { action: '3' },
+        { action: '4' },
+      ]).map((item) => item.action),
+    ).toEqual(['1', '2', '3']);
   });
 });

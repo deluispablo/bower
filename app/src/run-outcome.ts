@@ -6,7 +6,14 @@
  * clock (callers pass `now`).
  */
 
-import type { Run, RunItem, RunPhase, SetAsideItem } from './api.js';
+import type {
+  DisagreeItem,
+  NextItem,
+  Run,
+  RunItem,
+  RunPhase,
+  SetAsideItem,
+} from './api.js';
 import { sinceLabel } from './bower-tab.js';
 import type { LastRunOutcome } from './last-run.js';
 import { failureCopy, failureReason } from './run-failure.js';
@@ -56,6 +63,10 @@ export interface RunOutcome {
   /** A running run: how many things it is tidying, when known. */
   total?: number;
   phase?: RunPhase;
+  /** Notes the run found disagreeing, at most 5 (R-MEAN-2); absent when none. */
+  disagree?: DisagreeItem[];
+  /** What is next for the person, at most 3 (R-MEAN-2); absent when none. */
+  next?: NextItem[];
 }
 
 /** The fields both sources share, once read. */
@@ -74,6 +85,44 @@ interface RawOutcome {
   reason?: unknown;
   total?: number;
   phase?: RunPhase;
+  disagree?: readonly DisagreeItem[];
+  next?: readonly NextItem[];
+}
+
+const MAX_DISAGREE = 5;
+const MAX_NEXT = 3;
+
+/**
+ * The report's disagreements, kept to the caps and to lines that name both
+ * notes and say why (R-MEAN-2): anything else is dropped, never shown.
+ */
+export function cleanDisagree(
+  raw: readonly DisagreeItem[] | undefined,
+): DisagreeItem[] {
+  return (raw ?? [])
+    .filter(
+      (item) =>
+        item.a.trim() !== '' && item.b.trim() !== '' && item.reason.trim() !== '',
+    )
+    .slice(0, MAX_DISAGREE);
+}
+
+/**
+ * The report's next steps: at most three, each with an action; a path of `-`
+ * or an empty one means the action is about no note.
+ */
+export function cleanNext(raw: readonly NextItem[] | undefined): NextItem[] {
+  const out: NextItem[] = [];
+  for (const item of raw ?? []) {
+    if (item.action.trim() === '') continue;
+    const path = item.path === undefined ? '' : item.path.trim();
+    out.push(
+      path === '' || path === '-'
+        ? { action: item.action }
+        : { path, action: item.action },
+    );
+  }
+  return out.slice(0, MAX_NEXT);
 }
 
 const MAX_QUOTE = 200;
@@ -190,6 +239,13 @@ function build(raw: RawOutcome): RunOutcome {
   }
   if (raw.total !== undefined) outcome.total = raw.total;
   if (raw.phase !== undefined) outcome.phase = raw.phase;
+  // Only a finished, done run says what it means (R-MEAN-2).
+  if (state === 'done') {
+    const disagree = cleanDisagree(raw.disagree);
+    if (disagree.length > 0) outcome.disagree = disagree;
+    const next = cleanNext(raw.next);
+    if (next.length > 0) outcome.next = next;
+  }
   return outcome;
 }
 
@@ -218,6 +274,8 @@ export function outcomeFromRun(run: Run): RunOutcome {
   }
   if (run.total !== undefined) raw.total = run.total;
   if (run.phase !== undefined) raw.phase = run.phase;
+  if (run.disagree !== undefined) raw.disagree = run.disagree;
+  if (run.next !== undefined) raw.next = run.next;
   return build(raw);
 }
 
