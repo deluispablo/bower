@@ -192,6 +192,8 @@ export function ListRow({
       if (onSelect !== undefined) {
         // Desktop: one click selects; the link opens on a double click.
         event.preventDefault();
+        // The router follows links on its own; keep this click from it.
+        event.stopPropagation();
         onSelect();
       }
     },

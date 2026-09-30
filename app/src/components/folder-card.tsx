@@ -91,6 +91,7 @@ export function FolderCard({
       onClick={(event: MouseEvent) => {
         if (onSelect === undefined) return;
         event.preventDefault();
+        event.stopPropagation();
         onSelect();
       }}
       onDblClick={(event: MouseEvent) => {

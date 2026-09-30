@@ -328,6 +328,7 @@ export function GridTile({
         call(rowProps.onClick, event);
         if (event.defaultPrevented || onSelect === undefined) return;
         event.preventDefault();
+        event.stopPropagation();
         onSelect();
       }}
       onDblClick={(event: MouseEvent) => {
