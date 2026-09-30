@@ -18,7 +18,7 @@ import type { SearchResult } from 'minisearch';
 import { loadSearchIndex, saveSearchIndex } from './cache.js';
 import type { DriveFile } from './drive.js';
 import { FOLDER_MIME } from './drive.js';
-import { displayName, paraKindOf } from './navigation.js';
+import { displayName, folderOf, paraKindOf } from './navigation.js';
 import type { ParaKind } from './navigation.js';
 import { isLinkNote, noteTitle } from './note-title.js';
 import { snippet, toPlainWords } from './search.js';
@@ -65,6 +65,13 @@ export interface SearchHit {
   /** Text around the match, for a hit found in a note's text. */
   snippet: string | null;
   score: number;
+  /** The landmark the hit lives under (a root is its own), for the dot. */
+  root: ParaKind | null;
+  /** The display name of the folder it is in; `''` at the top. */
+  parent: string;
+  /** ISO: a folder's newest change inside it at any depth, else the item's
+   * own last change; `''` when unknown (R-API-15, "updated today"). */
+  updated: string;
 }
 
 export interface SearchResults {
@@ -123,6 +130,68 @@ interface IndexDoc {
   kind: HitKind;
   /** Stored only: changes whenever the document needs re-indexing. */
   sig: string;
+  /** Stored only (R-API-15): the root's `ParaKind`, `''` for none. */
+  root: string;
+  /** Stored only: the parent folder's display name. */
+  parent: string;
+  /** Stored only: see `SearchHit.updated`. */
+  updated: string;
+}
+
+/** Where an item sits and when it last changed (R-API-15). */
+interface EntryFacts {
+  root: ParaKind | null;
+  parent: string;
+  updated: string;
+}
+
+/**
+ * The newest `modifiedTime` inside each folder, at any depth, keyed by
+ * folder path: a folder's "updated" time (Drive's own folder time does not
+ * move when something inside it changes).
+ */
+function newestByFolder(vault: VaultIndex): Map<string, string> {
+  const newest = new Map<string, string>();
+  for (const file of [...vault.notes, ...vault.files]) {
+    const time = file.modifiedTime ?? '';
+    if (time === '') continue;
+    let folder = folderOf(file.path);
+    while (folder !== '') {
+      if (time > (newest.get(folder) ?? '')) newest.set(folder, time);
+      folder = folderOf(folder);
+    }
+  }
+  return newest;
+}
+
+const PARA_KINDS: ReadonlySet<string> = new Set([
+  'inbox',
+  'projects',
+  'areas',
+  'resources',
+  'archives',
+]);
+
+/** A stored `root` back to a `ParaKind` (anything else: none). */
+function storedRoot(value: unknown): ParaKind | null {
+  return typeof value === 'string' && PARA_KINDS.has(value)
+    ? (value as ParaKind)
+    : null;
+}
+
+function factsFor(
+  file: DriveFile,
+  newest: ReadonlyMap<string, string>,
+): EntryFacts {
+  const top = file.path.split('/')[0] ?? '';
+  const parentPath = folderOf(file.path);
+  const own = file.modifiedTime ?? '';
+  const inside = newest.get(file.path) ?? '';
+  return {
+    root: top === '' ? null : paraKindOf(top),
+    parent: parentPath === '' ? '' : displayName(parentPath),
+    updated: file.mimeType === FOLDER_MIME && inside > own ? inside : own,
+  };
 }
 
 /** A note's text kept for snippets is cut here; a snippet needs little. */
@@ -148,7 +217,12 @@ function titleOf(
   return fileTitle(file.name);
 }
 
-function docFor(file: DriveFile, rawText: string | undefined): IndexDoc {
+function docFor(
+  file: DriveFile,
+  rawText: string | undefined,
+  newest: ReadonlyMap<string, string>,
+): IndexDoc {
+  const facts = factsFor(file, newest);
   const kind = hitKindOf(file);
   const text =
     kind === 'note' && rawText !== undefined
@@ -163,8 +237,20 @@ function docFor(file: DriveFile, rawText: string | undefined): IndexDoc {
     kindWord,
     file.modifiedTime ?? '',
     text.length,
+    facts.updated,
   ].join('\u0001');
-  return { id: file.id, title, path, kindWord, text, kind, sig };
+  return {
+    id: file.id,
+    title,
+    path,
+    kindWord,
+    text,
+    kind,
+    sig,
+    root: facts.root ?? '',
+    parent: facts.parent,
+    updated: facts.updated,
+  };
 }
 
 // --- The index ----------------------------------------------------------
@@ -181,7 +267,7 @@ function fuzzyFor(term: string): number | false {
 
 const OPTIONS = {
   fields: ['title', 'path', 'kindWord', 'text'],
-  storeFields: ['title', 'kind', 'sig', 'text'],
+  storeFields: ['title', 'kind', 'sig', 'text', 'root', 'parent', 'updated'],
   processTerm: (term: string): string => fold(term),
   searchOptions: {
     prefix: true,
@@ -232,9 +318,10 @@ export function syncSearchIndex(
   let updated = 0;
   const seen = new Set<string>();
   const files = [...vault.folders, ...vault.notes, ...vault.files];
+  const newest = newestByFolder(vault);
   for (const file of files) {
     seen.add(file.id);
-    const doc = docFor(file, texts.get(file.id));
+    const doc = docFor(file, texts.get(file.id), newest);
     if (handle.ids.has(file.id)) {
       if (ms.getStoredFields(file.id)?.sig === doc.sig) continue;
       ms.replace(doc);
@@ -265,7 +352,8 @@ export function buildSearchIndex(
 
 // --- Persistence --------------------------------------------------------
 
-const FORMAT = 1;
+/** 2: entries carry root, parent and updated (#905); older ones rebuild. */
+const FORMAT = 2;
 
 /** `handle` as the string kept in the `searchIndex` store. */
 export function serialiseSearchIndex(handle: SearchIndexHandle): string {
@@ -442,6 +530,7 @@ function hitFor(
   terms: readonly string[],
   hasTextMatch: boolean,
   score: number,
+  facts: EntryFacts,
 ): SearchHit {
   const kind = hitKindOf(file);
   const path = pathSegments(file.path, true);
@@ -468,6 +557,9 @@ function hitFor(
           : kindBadge(fileKind(file), file),
     snippet: found,
     score,
+    root: facts.root,
+    parent: facts.parent,
+    updated: facts.updated,
   };
 }
 
@@ -519,11 +611,27 @@ export function searchVault(
         text: '',
         kind,
         sig: '',
+        root: '',
+        parent: '',
+        updated: '',
       });
     }
+    const facts: EntryFacts = {
+      root: storedRoot(result.root),
+      parent: typeof result.parent === 'string' ? result.parent : '',
+      updated: typeof result.updated === 'string' ? result.updated : '',
+    };
     push(
       results,
-      hitFor(file, doc, tokens, result.terms, hasTextMatch, result.score),
+      hitFor(
+        file,
+        doc,
+        tokens,
+        result.terms,
+        hasTextMatch,
+        result.score,
+        facts,
+      ),
     );
   }
   return results;
@@ -555,6 +663,7 @@ export function mergeFullText(
     ),
   );
   const tokens = tokensOf(query);
+  const newest = newestByFolder(vault);
   for (const found of driveFiles) {
     if (seen.has(found.id)) continue;
     const file = vault.byId.get(found.id);
@@ -569,6 +678,7 @@ export function mergeFullText(
       [],
       false,
       0,
+      factsFor(file, newest),
     );
     hit.snippet = snippets.get(file.id) ?? null;
     push(merged, hit);

@@ -731,3 +731,35 @@ export function statusLabel(
   }
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
+
+/**
+ * The kind of any item in words (spec §3.5 R-META-2, K-14, issue #905):
+ * the one word every meta line, row and accessible name uses. Distinct from
+ * the eight document kinds above, which say what a companion note is about.
+ * `meta-line.ts#kindLabel` decides which of these an item is; `file` is the
+ * fallback for anything else (new copy, E-15).
+ */
+export type ItemKindWord =
+  | 'bower-note'
+  | 'bower-answer'
+  | 'note'
+  | 'pdf'
+  | 'word'
+  | 'spreadsheet'
+  | 'photo'
+  | 'link'
+  | 'file'
+  | 'folder';
+
+export const ITEM_KIND_WORDS: Readonly<Record<ItemKindWord, string>> = {
+  'bower-note': 'Bower note',
+  'bower-answer': 'Bower answer',
+  note: 'Note',
+  pdf: 'PDF',
+  word: 'Word',
+  spreadsheet: 'Spreadsheet',
+  photo: 'Photo',
+  link: 'Link',
+  file: 'File',
+  folder: 'Folder',
+};

@@ -8,7 +8,62 @@
  */
 
 import type { DriveFile } from './drive.js';
+import { FOLDER_MIME } from './drive.js';
+import { displayName } from './navigation.js';
 import { noteTitle } from './note-title.js';
+import { fileKind } from './vault-index.js';
+
+// --- One title per file (#905, R-API-7) ----------------------------------
+
+/**
+ * The titles resolved so far, keyed by `titleCacheKey`, shared by every
+ * view in the tab: the list, the grid, the tree and search read the same
+ * entry, so one file never shows two names at the same moment. Cleared when
+ * a run completes (`cache.ts#invalidateOnRunComplete`), since a run may
+ * rename or rewrite notes.
+ */
+const sharedTitles = new Map<string, string>();
+const forgetListeners = new Set<() => void>();
+
+/** Adds resolved titles (`resolveNoteTitles`' result) to the shared entry. */
+export function rememberTitles(resolved: ReadonlyMap<string, string>): void {
+  for (const [key, title] of resolved) sharedTitles.set(key, title);
+}
+
+/** Whether the shared entry already holds `file`'s title. */
+export function hasSharedTitle(
+  file: Pick<DriveFile, 'id' | 'modifiedTime'>,
+): boolean {
+  return sharedTitles.has(titleCacheKey(file));
+}
+
+/**
+ * The one title of any item: a folder's display name, a note's resolved
+ * title from the shared entry (its file-name fallback until resolved), a
+ * file's name without its extension.
+ */
+export function titleFor(file: DriveFile): string {
+  if (file.mimeType === FOLDER_MIME) return displayName(file.name);
+  if (fileKind(file) === 'note') {
+    return sharedTitles.get(titleCacheKey(file)) ?? noteTitle(file);
+  }
+  return displayName(file.name);
+}
+
+/** Drops every shared title and tells the listeners (views re-resolve). */
+export function forgetTitles(): void {
+  sharedTitles.clear();
+  for (const listener of forgetListeners) listener();
+}
+
+/** Calls `listener` whenever the shared titles are forgotten; returns the
+ * unsubscribe. */
+export function onTitlesForgotten(listener: () => void): () => void {
+  forgetListeners.add(listener);
+  return () => {
+    forgetListeners.delete(listener);
+  };
+}
 
 /** A cached note's text and the `modifiedTime` it was fetched at
  * (`cache.ts#NoteCacheEntry`, narrowed to what this module reads). */

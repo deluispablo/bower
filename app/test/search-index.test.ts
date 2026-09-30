@@ -216,8 +216,9 @@ describe('index upkeep and storage', () => {
   it('updates when a note is added or removed', () => {
     const handle = buildSearchIndex(vault, TEXTS);
     expect(searchVault(handle, withSourdough, 'sourdough').notes).toEqual([]);
+    // The new note, and its folder, whose "updated" time moved (#905).
     expect(syncSearchIndex(handle, withSourdough, TEXTS)).toEqual({
-      updated: 1,
+      updated: 2,
       removed: 0,
     });
     expect(

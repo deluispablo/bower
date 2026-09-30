@@ -20,6 +20,19 @@ export type OriginKind = 'file' | 'notes' | 'web' | 'you';
 
 export type MarkSize = 18 | 28 | 40;
 
+/** The letter's size inside each disc (R-FILEICON-3): FolderMark alone
+ * sets it, so no caller sizes a letter of its own. */
+export const MARK_LETTER_PX: Readonly<Record<MarkSize, number>> = {
+  18: 10,
+  28: 13,
+  40: 18,
+};
+
+/** The disc for a FileIcon size: 16 and 20 take the 18 px disc. */
+export function markSizeFor(iconSize: 16 | 20 | 28 | 40): MarkSize {
+  return iconSize === 16 || iconSize === 20 ? 18 : iconSize;
+}
+
 const LETTERS: Record<Exclude<ParaKind, 'inbox'>, string> = {
   projects: 'P',
   areas: 'A',
@@ -38,6 +51,7 @@ export function FolderMark({
     <span
       class={`folder-mark folder-mark-${kind} folder-mark-${size}`}
       data-kind={kind}
+      style={{ fontSize: `${MARK_LETTER_PX[size]}px` }}
       aria-hidden="true"
     >
       {kind === 'inbox' ? <IconInbox /> : LETTERS[kind]}

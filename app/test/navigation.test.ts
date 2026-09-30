@@ -503,6 +503,34 @@ describe('paraKindOf (R-SYS-2)', () => {
   });
 });
 
+describe('displayName, one name per item (#905, R-API-8, R-META-5)', () => {
+  it('drops the prefix of a root, from a name or a path', () => {
+    expect(displayName('2-Areas')).toBe('Areas');
+    expect(displayName('0-Inbox')).toBe('Inbox');
+    expect(displayName('2-Areas/Visa_&_Immigration')).toBe(
+      'Visa & Immigration',
+    );
+  });
+  it('drops the extension and underscores unless asked to keep it', () => {
+    expect(displayName('Passport_copy.pdf')).toBe('Passport copy');
+    expect(displayName('CV Australia.docx')).toBe('CV Australia');
+    expect(displayName('Cover Letter - Alex.md')).toBe('Cover Letter - Alex');
+    expect(displayName('CV Australia.docx', { keepExtension: true })).toBe(
+      'CV Australia.docx',
+    );
+  });
+  it('keeps a version number and a name that is only an extension', () => {
+    expect(displayName('Plan v1.2')).toBe('Plan v1.2');
+    expect(displayName('.env')).toBe('.env');
+  });
+  it('ignores the index when passed straight to map', () => {
+    expect(['2-Areas', 'Notes.md'].map(displayName)).toEqual([
+      'Areas',
+      'Notes',
+    ]);
+  });
+});
+
 describe('displayName and displayPath', () => {
   it('drops a numeric prefix and nothing else', () => {
     expect(displayName('2-Areas')).toBe('Areas');

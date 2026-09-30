@@ -7,10 +7,24 @@
 
 import type { ComponentChildren, JSX } from 'preact';
 
-function Svg({ children }: { children: ComponentChildren }): JSX.Element {
+/** An icon's size in px when it must differ from the `icon` class's. */
+export interface IconSizeProps {
+  size?: number;
+}
+
+function Svg({
+  children,
+  size,
+}: {
+  children: ComponentChildren;
+  size?: number | undefined;
+}): JSX.Element {
   return (
     <svg
       class="icon"
+      {...(size === undefined
+        ? {}
+        : { style: { width: `${size}px`, height: `${size}px` } })}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -68,10 +82,21 @@ export function IconSearch(): JSX.Element {
   );
 }
 
-export function IconFolder(): JSX.Element {
+export function IconFolder({ size }: IconSizeProps = {}): JSX.Element {
   return (
-    <Svg>
+    <Svg size={size}>
       <path d="M3 6a1 1 0 0 1 1-1h4.5l1.5 2H20a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6Z" />
+    </Svg>
+  );
+}
+
+/** One document for every original, whatever its kind (FileIcon; boards
+ * SE-Query, AD-Confirm, AR-Ask; lead ruling on #929). */
+export function IconDocument({ size }: IconSizeProps = {}): JSX.Element {
+  return (
+    <Svg size={size}>
+      <path d="M7 3h7l5 5v13H7z" />
+      <path d="M14 3v5h5M10 13h6M10 17h6" />
     </Svg>
   );
 }

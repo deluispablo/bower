@@ -32,6 +32,7 @@ import type { UseStore } from 'idb-keyval';
 import { thumbnailLinkOf } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { thumbnailUrl } from './file-preview.js';
+import { forgetTitles } from './note-titles.js';
 import type { Me } from './api.js';
 import type { ExplorerSortPref } from './prefs.js';
 
@@ -262,6 +263,17 @@ export async function saveIndex(
 /** Drops the cached index so the next load re-fetches from Drive. */
 export async function invalidateIndex(): Promise<void> {
   await kvDel('keyval', INDEX_KEY);
+}
+
+/**
+ * A run finished (#905, R-API-7): it may have renamed, moved or rewritten
+ * files, so the shared titles are forgotten at once (every view falls back
+ * to the same file name, then re-resolves together) and the cached index is
+ * dropped so the next load reads Drive again.
+ */
+export async function invalidateOnRunComplete(): Promise<void> {
+  forgetTitles();
+  await invalidateIndex();
 }
 
 // --- Last me ---------------------------------------------------------------

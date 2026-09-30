@@ -28,6 +28,8 @@
  */
 
 import type { DriveFile } from './drive.js';
+import { dayWords } from './meta-line.js';
+import type { DateInput } from './meta-line.js';
 import { FILE_KIND_LABELS, fileKind } from './vault-index.js';
 
 export type Origin = 'filed' | 'yours' | 'asked' | 'drive';
@@ -141,4 +143,75 @@ export function originLine(
   if (origin === null) return FILE_KIND_LABELS[kind];
   if (kind === 'note') return capitalise(ORIGIN_LABELS[origin]);
   return `${FILE_KIND_LABELS[kind]} · ${ORIGIN_LABELS[origin]}`;
+}
+
+/** What `filedBy` reads of a file: its name, kind and times. */
+export interface FiledSource extends Pick<DriveFile, 'name' | 'mimeType'> {
+  modifiedTime?: string | undefined;
+  /** Drive's created time, when the listing asked for it. */
+  createdTime?: string | undefined;
+  /** When the run that filed it finished (run history), when known. */
+  filedAt?: string | undefined;
+}
+
+/** Who filed a file and when (R-API-3), in the words the screens use. */
+export interface FiledFacts {
+  /** Bower filed or wrote it, the person added it, or nobody says. */
+  by: 'bower' | 'you' | null;
+  /** When, ISO; `null` when the file carries no time at all. */
+  at: string | null;
+  /** The meta line's part: "filed by Bower yesterday", "added by you
+   * 29 Sep", or, with no known origin, "added 29 Sep". */
+  line: string;
+  /** About's "Filed" row value: "yesterday, by Bower, as it is",
+   * "29 Sep, by you", or just "29 Sep". */
+  about: string;
+}
+
+/**
+ * Who filed `file` and when (R-API-3, FI-About-375). `origin` is `originOf`
+ * the file. Bower's time is the run's (`filedAt`) when known, else Drive's
+ * created time, else the last change. A file filed before report v2 has no
+ * origin: it reads "added <when>" from Drive's created time. An original
+ * Bower filed unchanged adds "as it is" in About.
+ */
+export function filedBy(
+  file: FiledSource,
+  origin: Origin | null,
+  now: DateInput,
+): FiledFacts {
+  const by =
+    origin === 'filed' || origin === 'asked'
+      ? 'bower'
+      : origin === null
+        ? null
+        : 'you';
+  const at =
+    (by === 'bower' ? file.filedAt : undefined) ??
+    file.createdTime ??
+    file.modifiedTime ??
+    null;
+  const when = at === null ? '' : dayWords(at, now);
+  const join = (...parts: string[]): string =>
+    parts.filter((part) => part !== '').join(' ');
+  if (by === 'bower') {
+    const asItIs = origin === 'filed' && fileKind(file) !== 'note';
+    return {
+      by,
+      at,
+      line: join('filed by Bower', when),
+      about: [when, 'by Bower', asItIs ? 'as it is' : '']
+        .filter((part) => part !== '')
+        .join(', '),
+    };
+  }
+  if (by === 'you') {
+    return {
+      by,
+      at,
+      line: join('added by you', when),
+      about: [when, 'by you'].filter((part) => part !== '').join(', '),
+    };
+  }
+  return { by, at, line: join('added', when), about: when };
 }
