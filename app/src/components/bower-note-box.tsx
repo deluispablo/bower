@@ -1,11 +1,12 @@
 /**
- * Bower's note box (issue #757, spec §5 and §6.9 R-INS, boards Note-*,
- * Note-Folded-*): the one place a note's insights live. Open it shows the
- * summary lines (each with its origin square), the key facts once, every
- * other field as Details, and what to check. Folded it shows one line: the
- * score, the first key facts and how many things to check. The fold is one
- * device preference for every note (`bower:pref:noteFolded`), open by
- * default. The note page and the file page use this same component.
+ * Bower's note box (issues #757 and #908, spec §3.27 R-NOTEBOX-1 to 3,
+ * boards NO-Main, NO-Fold and PF-Main-1280): the one place a note's
+ * insights live. Open it keeps today's look: SUMMARY, the points with
+ * their origin squares, the key facts once, Details and what to check.
+ * Folded it is one 52 px row: the bird, "Bower's note" and "3 points · 1 to
+ * check". The fold is remembered per note (`foldedNotes` in `prefs.ts`),
+ * open by default. The note page, the file page and the desktop preview
+ * column (O-R6, `fold`) use this same component.
  */
 
 import { useEffect, useId, useState } from 'preact/hooks';
@@ -17,31 +18,55 @@ import { keyFactsFor, kindById, scoreTone } from '../kinds.js';
 import type { Kind } from '../kinds.js';
 import { noteMetaFrom } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
+import { getPref, setPref } from '../prefs.js';
 import { showToast } from '../toast-store.js';
 import { Bird, BowerMark } from './bird.js';
 import { chipLabel, Details, questionsFor } from './details.js';
-import { inlineFactsText, KeyFacts, scoreName } from './key-facts.js';
+import { KeyFacts, scoreName } from './key-facts.js';
 import { NoteBody } from './note-body.js';
 
 import '../styles/bower-note-box.css';
 
-/** The device preference: the box is folded on every note (R-INS-5). */
-export const NOTE_FOLDED_KEY = 'bower:pref:noteFolded';
+/** Where the folds live: the `foldedNotes` preference (`prefs.ts`). */
+export const NOTE_FOLDED_KEY = 'bower:pref:foldedNotes';
 
-export function readNoteFolded(): boolean {
-  try {
-    return localStorage.getItem(NOTE_FOLDED_KEY) === 'true';
-  } catch {
-    return false;
-  }
+/** Whether the box of the note at `path` is folded (open by default). */
+export function readNoteFolded(path: string | undefined): boolean {
+  if (path === undefined) return false;
+  return getPref('foldedNotes').includes(path);
 }
 
-export function writeNoteFolded(folded: boolean): void {
-  try {
-    localStorage.setItem(NOTE_FOLDED_KEY, String(folded));
-  } catch {
-    // Storage blocked or full: the choice just does not stick.
-  }
+/** Remembers the fold of the note at `path` (R-NOTEBOX-2, per note). */
+export function writeNoteFolded(
+  path: string | undefined,
+  folded: boolean,
+): void {
+  if (path === undefined) return;
+  const others = getPref('foldedNotes').filter((one) => one !== path);
+  setPref('foldedNotes', folded ? [...others, path] : others);
+}
+
+/** The folded row's words: "3 points · 1 to check", " · 0 to check"
+ * left out (R-NOTEBOX-2). */
+export function foldedLine(points: number, toCheck: number): string {
+  const head = `${String(points)} ${points === 1 ? 'point' : 'points'}`;
+  return toCheck > 0 ? `${head} · ${String(toCheck)} to check` : head;
+}
+
+/** How many summary points the rendered rows hold, and how many of them
+ * carry "Check". */
+export function countPoints(rows: string): {
+  points: number;
+  toCheck: number;
+} {
+  if (rows === '') return { points: 0, toCheck: 0 };
+  const template = document.createElement('template');
+  template.innerHTML = rows;
+  const all = template.content.querySelectorAll('.bower-note-row');
+  const checks = template.content.querySelectorAll(
+    '.bower-note-row.bower-note-check',
+  );
+  return { points: all.length, toCheck: checks.length };
 }
 
 /**
@@ -334,6 +359,10 @@ export interface BowerNoteBoxProps {
   /** Other names the note is asked about by, such as its title: an Ask or
    * Rename request names a note as `[[title]]`. */
   names?: readonly string[];
+  /** The fold chevron ("Fold Bower's note"): on the note page and in the
+   * desktop preview column (O-R6); `false` keeps the box open with no
+   * control (a picture of the box). */
+  fold?: boolean;
 }
 
 export function BowerNoteBox({
@@ -346,8 +375,12 @@ export function BowerNoteBox({
   sources = [],
   updatedAt,
   names,
+  fold = true,
 }: BowerNoteBoxProps): JSX.Element {
-  const [folded, setFolded] = useState<boolean>(readNoteFolded);
+  const [foldedState, setFolded] = useState<boolean>(() =>
+    readNoteFolded(path),
+  );
+  const folded = fold && foldedState;
   const [changed, setChanged] = useState(false);
   const bodyId = useId();
   const changeId = useId();
@@ -375,13 +408,18 @@ export function BowerNoteBox({
   // Another box on the page (or another tab) folded: follow it.
   useEffect(() => {
     const onStorage = (event: StorageEvent): void => {
-      if (event.key === NOTE_FOLDED_KEY) setFolded(readNoteFolded());
+      if (event.key === NOTE_FOLDED_KEY) setFolded(readNoteFolded(path));
     };
     window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener('storage', onStorage);
     };
-  }, []);
+  }, [path]);
+
+  // The preview column shows another note: take that note's fold.
+  useEffect(() => {
+    setFolded(readNoteFolded(path));
+  }, [path]);
 
   const meta = noteMetaFrom(frontmatter);
   const kind = meta.kind === undefined ? undefined : kindById(meta.kind);
@@ -394,16 +432,12 @@ export function BowerNoteBox({
   const parts = boxParts(html);
   const check = checkItems(kind, meta, checkSection);
   const change = ruleChange(meta.fields);
-  const score =
-    verdict === null
-      ? facts.find((fact) => fact.tone !== undefined)
-      : { value: verdict.score, tone: verdict.tone };
-  const others = facts.filter((fact) => fact.tone === undefined);
+  const counted = countPoints(parts.rows);
 
   const toggle = (): void => {
     const next = !folded;
     setFolded(next);
-    writeNoteFolded(next);
+    writeNoteFolded(path, next);
   };
 
   if (reading !== null) {
@@ -413,7 +447,7 @@ export function BowerNoteBox({
         aria-label="Bower's note"
       >
         <div class="bower-note-box-head">
-          <BowerMark size={20} />
+          <BowerMark size={32} />
           <span class="bower-note-box-name">{"Bower's note"}</span>
           <span class="bower-note-box-writing">Writing now</span>
         </div>
@@ -435,57 +469,43 @@ export function BowerNoteBox({
       class={`bower-note-box${folded ? ' is-folded' : ''}${extra === undefined ? '' : ` ${extra}`}`}
       aria-label="Bower's note"
     >
-      <button
-        type="button"
-        class="bower-note-box-head"
-        aria-expanded={!folded}
-        aria-controls={bodyId}
-        onClick={toggle}
-      >
-        <BowerMark size={20} />
+      <div class="bower-note-box-head">
+        <BowerMark size={32} />
         <span class="bower-note-box-name">{"Bower's note"}</span>
-        <svg
-          class="bower-note-box-chevron"
-          viewBox="0 0 20 20"
-          width="20"
-          height="20"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <path
-            d="M5 8l5 5 5-5"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </button>
-
-      {folded && (
-        <p class="bower-note-box-line">
-          {score !== undefined && (
-            <span
-              class={`key-fact-pill key-fact-pill-${score.tone ?? 'fair'}`}
-              role="img"
-              aria-label={scoreName(score.value)}
+        {folded && counted.points > 0 && (
+          <span class="bower-note-box-line">
+            {foldedLine(counted.points, counted.toCheck)}
+          </span>
+        )}
+        {fold && (
+          <button
+            type="button"
+            class="bower-note-box-fold"
+            aria-label="Fold Bower's note"
+            aria-expanded={!folded}
+            aria-controls={bodyId}
+            onClick={toggle}
+          >
+            <svg
+              class="bower-note-box-chevron"
+              viewBox="0 0 20 20"
+              width="16"
+              height="16"
+              aria-hidden="true"
+              focusable="false"
             >
-              {score.value}
-            </span>
-          )}
-          {others.length > 0 && (
-            <span class="bower-note-box-facts">
-              {inlineFactsText(others.slice(0, 3))}
-            </span>
-          )}
-          {check.items.length > 0 && (
-            <span class="bower-note-box-tocheck">
-              {`${String(check.items.length)} to check`}
-            </span>
-          )}
-        </p>
-      )}
+              <path
+                d="M5 8l5 5 5-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
 
       <div id={bodyId} class="bower-note-box-body" hidden={folded}>
         {verdict !== null && (
