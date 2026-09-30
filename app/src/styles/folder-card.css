@@ -1,0 +1,107 @@
+/* The folder card (issue #908, spec §3.19, boards AR-Main): Card look,
+   folder outline 40, name, meta with the "new" Badge, three items. */
+.folder-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folder-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-raised);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .folder-card:hover {
+    border-color: var(--color-border);
+  }
+}
+
+.folder-card.is-selected,
+.folder-card.is-selected:hover {
+  border-color: var(--color-brand);
+  background: var(--color-selection);
+}
+
+.folder-card:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.folder-card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.folder-card-name {
+  color: var(--color-heading);
+  font-size: 1rem; /* 16px */
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.folder-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem; /* 13px */
+}
+
+.folder-card-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--color-text);
+  font-size: 0.8125rem; /* 13px, board AR-Main */
+}
+
+.folder-card-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.folder-card-item-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-card-item-kind {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  white-space: pre;
+}
+
+.folder-card-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.folder-card-chevron .icon {
+  width: 18px;
+  height: 18px;
+}
