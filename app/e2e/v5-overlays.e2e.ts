@@ -115,6 +115,12 @@ for (const item of CASES) {
     for (let i = 0; i < count; i += 1) {
       const box = await links.nth(i).boundingBox();
       if (box === null || box.width === 0 || box.height === 0) continue;
+      // #909: the sidebar scrolls as one column, so a link can sit above or
+      // below the window; only a point on screen can be tapped.
+      const size = page.viewportSize();
+      if (box.y < 0 || (size !== null && box.y + box.height > size.height)) {
+        continue;
+      }
       const x = box.x + box.width / 2;
       const y = box.y + box.height / 2;
       const hit = await page.evaluate(

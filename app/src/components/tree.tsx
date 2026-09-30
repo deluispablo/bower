@@ -186,6 +186,25 @@ function scrollParentOf(el: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
+/**
+ * Brings a row into view by scrolling only its own scroll box (the sidebar
+ * column), never the page behind it; the page itself when nothing else
+ * scrolls (the Folders tab).
+ */
+function scrollRowIntoView(el: HTMLElement): void {
+  const parent = scrollParentOf(el);
+  if (parent === null) {
+    if (typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'nearest' });
+    }
+    return;
+  }
+  const row = el.getBoundingClientRect();
+  const box = parent.getBoundingClientRect();
+  if (row.top < box.top) parent.scrollTop += row.top - box.top;
+  else if (row.bottom > box.bottom) parent.scrollTop += row.bottom - box.bottom;
+}
+
 function currentScroll(el: HTMLElement | null): number {
   return scrollParentOf(el)?.scrollTop ?? window.scrollY;
 }
@@ -470,14 +489,12 @@ export function Tree({
     setFocusIndex(at);
     const el = rowRefs.current[at];
     if (el) {
-      if (typeof el.scrollIntoView === 'function') {
-        el.scrollIntoView({ block: 'nearest' });
-        // Again once the rows above have settled (titles, pins, the stored
-        // expansion arriving), so the row is still in view.
-        requestAnimationFrame(() => {
-          if (el.isConnected) el.scrollIntoView({ block: 'nearest' });
-        });
-      }
+      scrollRowIntoView(el);
+      // Again once the rows above have settled (titles, pins, the stored
+      // expansion arriving), so the row is still in view.
+      requestAnimationFrame(() => {
+        if (el.isConnected) scrollRowIntoView(el);
+      });
       if (pendingRevealFocus.current) el.focus();
     } else if (listHandle.current !== null) {
       if (pendingRevealFocus.current) pendingFocus.current = at;
