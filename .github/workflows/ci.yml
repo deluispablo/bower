@@ -81,22 +81,14 @@ jobs:
           restore-keys: |
             eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.js') }}-
 
-      # Lint and typecheck run beside the unit tests, which leave cores idle
-      # between packages; each log is printed in its own group, and the step
-      # fails when any of the three failed.
-      - name: Lint, typecheck and test
-        run: |
-          pnpm lint > lint.log 2>&1 &
-          lint=$!
-          pnpm typecheck > typecheck.log 2>&1 &
-          typecheck=$!
-          status=0
-          pnpm test || status=1
-          wait "$lint" || { status=1; echo "::error::pnpm lint failed"; }
-          wait "$typecheck" || { status=1; echo "::error::pnpm typecheck failed"; }
-          echo "::group::pnpm lint"; cat lint.log; echo "::endgroup::"
-          echo "::group::pnpm typecheck"; cat typecheck.log; echo "::endgroup::"
-          exit "$status"
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
 
       - name: Build
         run: pnpm build
