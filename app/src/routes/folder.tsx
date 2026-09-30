@@ -273,6 +273,8 @@ interface FolderBodyProps {
   /** 900 px and wider: no PathBar, and Drive shows in the header. */
   topBarPath: boolean;
   onPreview: (item: PanePreview | null) => void;
+  /** The Compare tab is showing: the preview pane makes way for the table. */
+  onComparing: (comparing: boolean) => void;
   /** The parent folder's address; `undefined` at a top-level folder. */
   upHref: string | undefined;
   onNavigate: (href: string) => void;
@@ -294,6 +296,7 @@ function FolderBody({
   onCloseMenu,
   desktop,
   topBarPath,
+  onComparing,
   onPreview,
   upHref,
   onNavigate,
@@ -319,6 +322,10 @@ function FolderBody({
     return () => clearTimeout(timer);
   }, [justChanged, onDoneShown]);
   const comparing = tab === 'compare' && compare !== null;
+  useEffect(() => {
+    onComparing(comparing);
+    return () => onComparing(false);
+  }, [comparing, onComparing]);
   // The board's header (#611) for a folder with things in it; a root folder
   // and an empty one keep the counts line they have always had.
   const paraOfFolder = paraKindOf(contents.path.split('/')[0] ?? '');
@@ -557,6 +564,7 @@ export function Folder(): JSX.Element {
   const path = params.path ?? '';
   const { index, pinFolder, unpinFolder, getNoteText } = useVault();
   const [justChanged, setJustChanged] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const contents = useMemo(
@@ -611,8 +619,8 @@ export function Folder(): JSX.Element {
 
   // The preview pane (#614): the shell's right-hand column, as on a note.
   const asideContent = useMemo(
-    () => (wide ? <QuickLookPane item={preview} /> : null),
-    [wide, preview],
+    () => (wide && !comparing ? <QuickLookPane item={preview} /> : null),
+    [wide, preview, comparing],
   );
   useShellSlot('aside', asideContent);
 
@@ -664,6 +672,7 @@ export function Folder(): JSX.Element {
       desktop={wide}
       topBarPath={topBarPath}
       onPreview={setPreview}
+      onComparing={setComparing}
       onNavigate={route}
       upHref={parent === undefined ? undefined : folderHref(parent.path)}
     />
