@@ -55,6 +55,7 @@ import type {
 } from '../bower-tab.js';
 import { ActivityPanel, useRuns } from '../components/activity-panel.js';
 import { Bird } from '../components/bird.js';
+import { DictateButton } from '../components/dictate-button.js';
 import {
   IconChat,
   IconCheck,
@@ -553,6 +554,7 @@ export function Bower(): JSX.Element {
   // Reset on every new Send.
   const [sendConfirm, setSendConfirm] = useState<string | null>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  const [listening, setListening] = useState(false);
 
   useShellSlot('crumb', CRUMB);
 
@@ -941,22 +943,24 @@ export function Bower(): JSX.Element {
 
       <div class="bower-box">
         <div class="bower-box-intro">
-          <Bird state="looking" size={56} />
+          <Bird state={listening ? 'listening' : 'looking'} size={56} />
           <p class="bower-bubble">
-            Tell me what you want, in your words. I work out whether it is a
-            rule, a job or a question.
+            {listening
+              ? "I'm listening. Speak as you would to a person."
+              : 'Tell me what you want, in your words. I work out whether it is a rule, a job or a question.'}
           </p>
         </div>
         <div class="bower-box-row">
-          <textarea
-            ref={boxRef}
-            class="bower-textarea"
-            aria-label="Tell Bower what to do, or ask it something"
+          <DictateButton
+            class="bower-dictate"
+            inputClass="bower-textarea"
+            inputRef={boxRef}
+            label="Tell Bower what to do, or ask it something"
             placeholder="For example: from now on, file every receipt under Finance"
+            rows={2}
             value={text}
-            onInput={(event) => {
-              setText((event.target as HTMLTextAreaElement).value);
-            }}
+            onValue={setText}
+            onListening={setListening}
           />
           <button
             type="button"

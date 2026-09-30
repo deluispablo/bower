@@ -730,3 +730,9 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* The Bower box's dictate wrapper takes the textarea's place in the row. */
+.bower-dictate {
+  flex: 1 1 auto;
+  min-width: 0;
+}
