@@ -160,6 +160,10 @@ Runs, piles, uploads, recovery and Bower on screen. Each module's own header com
 
 `components/list-row.tsx` (`ListRow`) is the one list row, `folder-grid.tsx#GridTile` the one tile and `folder-card.tsx` (`FolderCard`) the folder-of-folders card; with `onSelect` (desktop) one click selects and double click or Enter opens. `components/system-state.tsx` holds the skeleton (after 300 ms), the error line (`ERROR_COPY`) and the empty folder; `BowerNoteBox` folds per note (`foldedNotes` in `prefs.ts`) and takes `fold` for the preview column.
 
+### The one text box and the search field (#910)
+
+`components/composer.tsx` (`Composer`, modes `send` and `save`, rows 1 or 3) is every text box: one round button (`RoundButton`) that is the mic when empty, the arrow named by effect with text, and the asking, listening, sending, failed, blocked, unavailable and offline states with one live line under the box. Dictation runs on `useDictation` (`components/dictate-button.tsx`), the Web Speech state machine (`ready | asking | listening | blocked | unavailable`, `nextDictateState`), with the language from Settings. `components/search-field.tsx` (`SearchField`) is the same box as a `trigger` (the explorer's search slot) or Search's own `input`. `openAsk` (`send-to-bower.tsx`), `openRename` (`rename-sheet.tsx`) and `AppendForm` are the Ask, Rename… and Add a paragraph… sheets.
+
 ## v5 data flows
 
 - **A run's result.** The runner writes `.bower/last-run.json` and reports to the Worker at each phase change (at most four running reports) and once at the end. The report carries `processed` and `items` (with `to`), `created`, `updated` (each with a one-line `what`, cut at 120), `left`, `setAside`, on a done run `disagree` (at most 5) and `next` (at most 3), and while running `phase`, `total`, `done` and `phaseAt`. The Worker caps the sum of `processed`, `created`, `updated`, `left` and `setAside` at 400 entries (each array is cut to 200 first). `run-outcome.ts` turns either source into a `RunOutcome`; every screen asks `runSentence` for its words.
