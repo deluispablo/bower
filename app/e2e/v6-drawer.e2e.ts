@@ -12,7 +12,7 @@ test('the files button opens the drawer and ✕ closes it', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', 'the drawer is the phone');
   await openHome(page);
-  await page.goto('/folder/1-Projects/Flat%20hunt');
+  await page.goto('/folder/4-Archives/Flat%20hunt');
   await visible(
     page.getByRole('button', { name: 'Open your folders' }),
   ).click();
@@ -28,7 +28,7 @@ test('a touch swipe from the left edge opens the drawer', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', 'the drawer is the phone');
   await openHome(page);
-  await page.goto('/folder/1-Projects/Flat%20hunt');
+  await page.goto('/folder/4-Archives/Flat%20hunt');
   await expect(page.locator('h1', { hasText: 'Flat hunt' })).toBeVisible();
 
   const cdp = await page.context().newCDPSession(page);
