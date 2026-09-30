@@ -1,120 +1,191 @@
 /**
- * The loops of the "What is Bower" intro (#328): the sort strip on page 1,
- * the flying cards on page 2, the Drive curtain on page 4 and the case
- * animation on pages 5 to 8. With reduced motion (the config's default)
- * nothing moves and each animated page is screenshotted at rest, animations
- * left as they are; with motion the loops run and move transform and
- * opacity only.
+ * The five-page intro (#796): the page is in the URL and back and reload
+ * resume it (R-INTRO-2), focus goes to the heading, the other pages are
+ * inert, the status and Back are there (R-INTRO-3), the illustrations never
+ * loop (R-INTRO-5), and the birds stay inside the window at every sampled
+ * point of their motion (R-BIRD-7).
  */
 
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './demo.js';
+import { MOTION_ON, SAMPLE_POINTS, seekAnimations } from './motion.js';
 
-/** The pages (1-based) the boards animate. */
-const ANIMATED_PAGES = [1, 2, 4, 5, 6, 7, 8];
-
-/** Every loop `intro.css` plays. */
-const LOOPS = [
-  'intro-all-tidy',
-  'intro-carry',
-  'intro-check-pop',
-  'intro-curtain',
-  'intro-curtain-back',
-  'intro-fly',
-  'intro-lit',
-  'intro-scan',
-  'intro-sort-card',
-  'intro-tick',
-  'intro-why',
+const HEADINGS = [
+  /Bower files it/,
+  /Bower's note/,
+  /the dots/,
+  /own words/,
+  /Only your Drive/,
 ];
 
-interface Loop {
-  name: string;
-  properties: string[];
+function next(page: Page): ReturnType<Page['getByRole']> {
+  return page.getByRole('button', { name: 'Next', exact: true });
 }
 
-/**
- * The CSS animations running inside the intro, except the bird's own
- * (`styles/bird.css`, the bird's business): each with the properties its
- * keyframes change.
- */
-async function introLoops(page: Page): Promise<Loop[]> {
-  return page.evaluate(() => {
-    const meta = new Set(['offset', 'computedOffset', 'easing', 'composite']);
-    return document
-      .getAnimations()
-      .filter((animation): animation is CSSAnimation => {
-        const effect = animation.effect;
-        if (!(animation instanceof CSSAnimation)) return false;
-        if (!(effect instanceof KeyframeEffect)) return false;
-        const target = effect.target;
-        return (
-          target !== null &&
-          target.closest('.intro') !== null &&
-          target.closest('svg.b') === null
-        );
-      })
-      .map((animation) => {
-        const effect = animation.effect as KeyframeEffect;
-        const properties = new Set<string>();
-        for (const frame of effect.getKeyframes()) {
-          for (const key of Object.keys(frame)) {
-            if (!meta.has(key)) properties.add(key);
-          }
-        }
-        return { name: animation.animationName, properties: [...properties] };
-      });
-  });
+function back(page: Page): ReturnType<Page['getByRole']> {
+  return page.getByRole('button', { name: 'Back', exact: true });
 }
 
-test.describe('the intro loops (#328)', () => {
+test.describe('the intro, five pages (#796)', () => {
   test.use({ introSeen: false });
 
-  test('with reduced motion nothing moves; every animated page rests complete', async ({
+  test('the page is in the URL: Next and Back push, back and reload resume, bad values clamp', async ({
     page,
-  }, testInfo) => {
+  }) => {
     await page.goto('/welcome');
-    await expect(
-      page.getByRole('heading', { name: /Bower files it/ }),
-    ).toBeInViewport();
-    expect(await introLoops(page)).toEqual([]);
+    await expect(page).toHaveURL(/\/welcome\?page=1$/);
+    await expect(page.getByRole('heading', { name: HEADINGS[0] })).toBeVisible();
 
-    const next = page.getByRole('button', { name: 'Next', exact: true });
-    const { testDir, name: project } = testInfo.project;
-    for (let n = 1; n <= Math.max(...ANIMATED_PAGES); n += 1) {
-      if (n > 1) await next.nth(n - 2).click();
-      const panel = page.getByRole('region', {
-        name: `What is Bower, ${n} of 9`,
-      });
-      await expect(panel).toBeInViewport({ ratio: 0.9 });
-      if (!ANIMATED_PAGES.includes(n)) continue;
-      // No `animations: 'disabled'`: the frame is what reduced motion shows.
-      await page.screenshot({
-        caret: 'hide',
-        path: `${testDir}/screenshots/${project}/intro-rest-${n}.png`,
-      });
-    }
+    await next(page).click();
+    await expect(page).toHaveURL(/page=2$/);
+    await next(page).click();
+    await expect(page).toHaveURL(/page=3$/);
+    await expect(page.locator('.intro-status')).toHaveText('3 of 5');
+
+    // Browser back is the previous page, not the way out of the intro.
+    await page.goBack();
+    await expect(page).toHaveURL(/page=2$/);
+    await expect(page.locator('.intro-status')).toHaveText('2 of 5');
+    await expect(page.getByRole('heading', { name: HEADINGS[1] })).toBeFocused();
+
+    // A reload resumes.
+    await page.reload();
+    await expect(page).toHaveURL(/page=2$/);
+    await expect(page.locator('.intro-status')).toHaveText('2 of 5');
+
+    // Invalid values clamp to 1 to 5.
+    await page.goto('/welcome?page=99');
+    await expect(page).toHaveURL(/page=5$/);
+    await page.goto('/welcome?page=0');
+    await expect(page).toHaveURL(/page=1$/);
   });
 
-  test('with motion the loops run, on transform and opacity only', async ({
+  test('typing ?page=5 does not mark the intro seen; reaching it with Next does', async ({
+    page,
+  }) => {
+    const seen = (): Promise<string | null> =>
+      page.evaluate(() => localStorage.getItem('bower:intro:seen'));
+    await page.goto('/welcome?page=5');
+    await expect(page.locator('.intro-status')).toHaveText('5 of 5');
+    expect(await seen()).toBeNull();
+
+    await page.goto('/welcome?page=4');
+    await next(page).click();
+    await expect(page).toHaveURL(/page=5$/);
+    expect(await seen()).toBe('1');
+  });
+
+  test('Skip replaces the entry and lands on the sign-in', async ({ page }) => {
+    await page.goto('/welcome');
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await page.goBack();
+    await expect(page).not.toHaveURL(/\/welcome/);
+  });
+
+  test('from=login and from=settings return where they came from', async ({
+    page,
+  }) => {
+    await page.goto('/welcome?from=login');
+    await page.getByRole('button', { name: 'Close' }).click();
+    await expect(page).toHaveURL(/\/login$/);
+
+    await page.goto('/welcome?from=settings&page=5');
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+  });
+
+  test('focus goes to the heading, other pages are inert, Back and the status are there, Skip is top right', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/welcome');
+    await expect(back(page)).toHaveCount(0);
+
+    await next(page).click();
+    await expect(page.getByRole('heading', { name: HEADINGS[1] })).toBeFocused();
+    await expect(back(page)).toBeVisible();
+    await expect(page.locator('.intro-status')).toHaveText('2 of 5');
+
+    // One h1 in the accessibility tree; the other four pages are inert.
+    await expect(page.locator('.intro-page:not([inert])')).toHaveCount(1);
+    await expect(page.locator('.intro-page[inert]')).toHaveCount(4);
+
+    const skip = page.getByRole('button', { name: 'Skip', exact: true });
+    const box = await skip.boundingBox();
+    expect(box).not.toBeNull();
+    if (box !== null) {
+      expect(box.y).toBeLessThan(80);
+      expect(box.x + box.width).toBeGreaterThan(375 - 40);
+    }
+
+    await back(page).click();
+    await expect(page.getByRole('heading', { name: HEADINGS[0] })).toBeFocused();
+  });
+
+  test('the last page offers sign-in and the way to Learn Bower', async ({
+    page,
+  }) => {
+    await page.goto('/welcome?page=5');
+    await expect(
+      page.getByRole('heading', { name: HEADINGS[4] }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'See examples and use cases' }),
+    ).toBeVisible();
+  });
+
+  test('the illustrations never loop, and with motion on the birds stay inside the window', async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.goto('/welcome');
-    await expect(
-      page.getByRole('heading', { name: /Bower files it/ }),
-    ).toBeInViewport();
-
-    const loops = await introLoops(page);
-    expect([...new Set(loops.map((loop) => loop.name))].sort()).toEqual(LOOPS);
-    for (const loop of loops) {
-      expect(
-        loop.properties.every(
-          (key) => key === 'transform' || key === 'opacity',
-        ),
-        `${loop.name} moves ${loop.properties.join(', ')}`,
-      ).toBe(true);
+    for (const n of [1, 3]) {
+      await page.goto(`/welcome?page=${n}`);
+      await expect(page.locator('.intro-status')).toHaveText(`${n} of 5`);
+      // No CSS animation outside the bird's own.
+      const loops = await page.evaluate(
+        () =>
+          document
+            .getAnimations()
+            .filter((a): a is CSSAnimation => a instanceof CSSAnimation)
+            .filter((a) => {
+              const target = (a.effect as KeyframeEffect | null)?.target;
+              return (
+                target instanceof Element &&
+                target.closest('.intro-art') !== null &&
+                target.closest('svg.b') === null
+              );
+            }).length,
+      );
+      expect(loops).toBe(0);
     }
   });
+});
+
+test.describe('the intro birds, motion on (R-BIRD-7)', () => {
+  test.use({ introSeen: false, ...MOTION_ON });
+
+  for (const n of [1, 3]) {
+    test(`page ${n}: the bird stays inside the window at 0, 25, 50 and 75%`, async ({
+      page,
+    }) => {
+      await page.goto(`/welcome?page=${n}`);
+      const current = page.locator('.intro-page:not([inert])');
+      const bird = current.locator('svg.b').first();
+      await expect(bird).toBeVisible();
+      const size = page.viewportSize();
+      expect(size).not.toBeNull();
+      for (const percent of SAMPLE_POINTS) {
+        await seekAnimations(current, percent);
+        const box = await bird.boundingBox();
+        expect(box, `bird box at ${percent}%`).not.toBeNull();
+        if (box !== null && size !== null) {
+          expect(box.x).toBeGreaterThanOrEqual(0);
+          expect(box.y).toBeGreaterThanOrEqual(0);
+          expect(box.x + box.width).toBeLessThanOrEqual(size.width);
+        }
+      }
+    });
+  }
 });
