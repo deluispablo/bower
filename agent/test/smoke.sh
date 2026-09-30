@@ -84,6 +84,24 @@ elif [ "$bearer" = "$SMOKE_RUN_TICKET" ] && [ "$own_vault" = yes ] &&
   auth=ok
 fi
 echo "curl $method $url auth=$auth" >>"$SMOKE_STATE/calls.log"
+# R-VAULT-7: files.get on the Bower folder, before sync down and before sync
+# up. foldergone: 404 both times; folderbin: 200 with trashed true;
+# foldermid: fine for the sync down, gone for the sync up; folderdown: 403.
+if [ "$url" = 'https://www.googleapis.com/drive/v3/files/FOLDER_ID' ]; then
+  printf '%s\n' "${params[@]}" >>"$SMOKE_STATE/folder-get.log"
+  n=$(($(cat "$SMOKE_STATE/folder-gets" 2>/dev/null || echo 0) + 1))
+  echo "$n" >"$SMOKE_STATE/folder-gets"
+  code=200 body='{"id":"FOLDER_ID","trashed":false}'
+  case "$SMOKE_SCENARIO" in
+    foldergone) code=404 body='{"error":{"code":404,"message":"File not found: FOLDER_ID."}}' ;;
+    folderbin) body='{"id":"FOLDER_ID","trashed":true}' ;;
+    foldermid) [ "$n" -lt 2 ] || { code=404 body='{"error":{"code":404}}'; } ;;
+    folderdown) code=403 body='{"error":{"code":403}}' ;;
+  esac
+  [ -z "$out" ] || printf '%s' "$body" >"$out"
+  [ "$fmt" != '%{http_code}' ] || printf '%s' "$code"
+  exit 0
+fi
 if [ "$url" = 'https://www.googleapis.com/drive/v3/files' ]; then
   printf '%s\n' "${params[@]}" >>"$SMOKE_STATE/drive-list.log"
   if [ "$SMOKE_SCENARIO" = listfail ]; then
@@ -1195,7 +1213,8 @@ post() {
 }
 
 posts_count() { grep -c . "$STATE/posts.log" || true; }
-calls() { grep "^$1 " "$STATE/calls.log" || true; }
+# The folder checks (R-VAULT-7) are counted apart: cases count the other calls.
+calls() { grep "^$1 " "$STATE/calls.log" | grep -v "/files/FOLDER_ID auth=" || true; }
 
 expect_eq() { [ "$1" = "$2" ] || die "$3: expected [$2], got [$1]"; }
 
@@ -1484,6 +1503,8 @@ expect_eq "$(calls curl | sed -n 2p)" "curl POST $API_URL/runner/vaults/vault-1/
 expect_curl_env_clean
 # A Bower*.md in Clippings/ is not instruction-shaped: no Drive listing.
 expect_eq "$(calls curl | grep -c googleapis || true)" 0 'Drive listing calls with no instruction note pending'
+expect_eq "$(grep -c '^curl GET https://www.googleapis.com/drive/v3/files/FOLDER_ID auth=drive$' "$STATE/calls.log")" 2 \
+  'one files.get on the folder before sync down and one before sync up (R-VAULT-7)'
 rclone_calls=$(calls rclone)
 expect_eq "$(printf '%s\n' "$rclone_calls" | wc -l | tr -d ' ')" 4 'rclone calls'
 printf '%s\n' "$rclone_calls" | sed -n 1p | grep -q "^rclone sync vault: .* --exclude \.obsidian/\*\*$" ||
@@ -2852,3 +2873,31 @@ if grep -Eq 'forty|lease|Floor plan|offer-letter' "$STATE/out.log"; then die 'th
 expect_content_free
 expect_cleaned_up
 echo "ok the document text is appended to its text copy, scans say so, names are audited"
+
+# 40. R-VAULT-7: the Bower folder is checked with one files.get before sync
+# down and before sync up. Gone (404) or in the Bin: fail with vault_missing,
+# rclone is never called, nothing is uploaded. Gone only by the sync up: the
+# agent's files, the outcome file and the log line stay local. Any other
+# answer is drive_unavailable.
+for scenario in foldergone folderbin foldermid folderdown; do
+  run_case "$scenario"
+  expect_eq "$RC" 2 "$scenario: exit code"
+  expect_eq "$(post "$(posts_count)" p.state)" failed "$scenario: last state"
+  want=vault_missing
+  [ "$scenario" != folderdown ] || want=drive_unavailable
+  expect_eq "$(post "$(posts_count)" p.reason)" "$want" "$scenario: reason"
+  [ "$want" != vault_missing ] || [ ! -s "$STATE/uploaded.txt" ] || die "$scenario: something was uploaded"
+  [ "$want" != vault_missing ] || [ ! -s "$STATE/outcome-uploaded.txt" ] || die "$scenario: the outcome was uploaded"
+  [ "$want" != vault_missing ] || [ ! -e "$STATE/remote/.bower/last-run.json" ] || die "$scenario: last-run.json written to Drive"
+  case "$scenario" in
+    foldermid) expect_eq "$(calls rclone | grep -c '^rclone sync vault:')" 1 "$scenario: sync down ran" ;;
+    *) expect_eq "$(calls rclone)" '' "$scenario: rclone calls" ;;
+  esac
+  want_gets=1
+  [ "$scenario" != foldermid ] || want_gets=2
+  expect_eq "$(cat "$STATE/folder-gets")" "$want_gets" "$scenario: files.get calls"
+  grep -Fxq 'fields=id,trashed' "$STATE/folder-get.log" || die "$scenario: files.get fields"
+  expect_content_free
+  expect_cleaned_up
+done
+echo "ok a missing or binned folder fails with vault_missing and uploads nothing"

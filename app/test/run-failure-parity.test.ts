@@ -43,7 +43,13 @@ describe('failure reasons parity (R-VAULT-14)', () => {
     for (const reason of runner) expect(known).toContain(reason);
   });
 
-  // `unknown` is the `*` fallback in run.sh; every other reason gets its own
-  // case once #737 adds `vault_missing` to `failed_sentence`.
-  it.todo('run.sh has a sentence for every reason but unknown (#737)');
+  // `unknown` is the `*` fallback in run.sh; every other reason has its own
+  // case.
+  it('run.sh has a sentence for every reason but unknown', () => {
+    const runner = runnerReasons(runShRaw);
+    const expected = workerReasons(typesRaw).filter(
+      (reason) => reason !== 'unknown',
+    );
+    expect([...runner].sort()).toEqual([...expected].sort());
+  });
 });
