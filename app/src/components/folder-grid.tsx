@@ -20,7 +20,7 @@ import { kindLabel } from '../meta-line.js';
 import { useVault } from '../vault-store.js';
 import type { FileKind } from '../vault-index.js';
 import { FileIcon } from './file-icon.js';
-import { classes, follow, selectionKeys } from './list-row.js';
+import { classes, follow, pointerFocus, selectionKeys } from './list-row.js';
 import type { ListRowItem } from './list-row.js';
 
 import '../styles/grid-tile.css';
@@ -318,6 +318,7 @@ export function GridTile({
   return (
     <a
       {...rowProps}
+      {...pointerFocus}
       class={classes('grid-tile', rowProps.class, selected)}
       href={item.href}
       data-row-key={rowProps['data-row-key'] ?? item.id}

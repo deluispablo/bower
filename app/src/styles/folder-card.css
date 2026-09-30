@@ -114,6 +114,11 @@
   margin: 20px 8px 4px;
   padding: 0;
   color: var(--color-text-muted);
+  font-family: var(--font-sans); /* body font, as the board's .grp */
   font-size: 0.8125rem; /* 13px */
   font-weight: 700;
+}
+
+.folder-card[data-pointer]:focus-visible {
+  outline: none;
 }

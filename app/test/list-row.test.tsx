@@ -181,6 +181,19 @@ describe('ListRow (#908, R-ROW-1 to R-ROW-4)', () => {
     expect(selected).toEqual(['a', 'b', 'a']);
   });
 
+  it('keeps the focus ring for the keyboard only (G-4)', () => {
+    void act(() => {
+      render(h(ListRow, { item: NOTE, onSelect: () => undefined }), host);
+    });
+    const row = host.querySelector<HTMLElement>('.list-row');
+    void act(() => {
+      row?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    expect(row?.dataset.pointer).toBe('true');
+    key(row, 'ArrowDown');
+    expect(row?.dataset.pointer).toBeUndefined();
+  });
+
   it('marks the selected row (K-19)', () => {
     void act(() => {
       render(h(ListRow, { item: NOTE, selected: true }), host);

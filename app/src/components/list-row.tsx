@@ -110,6 +110,28 @@ export function follow(href: string | undefined): void {
   window.location.assign(href);
 }
 
+function markPointer(event: Event): void {
+  const element = event.currentTarget;
+  if (element instanceof HTMLElement) element.dataset.pointer = 'true';
+}
+
+function clearPointer(event: Event): void {
+  const element = event.currentTarget;
+  if (element instanceof HTMLElement) delete element.dataset.pointer;
+}
+
+/**
+ * Marks a row, tile or card that was focused by the mouse or a finger, so
+ * the CSS draws the focus ring only for keyboard focus (G-4: no focus box
+ * over a selection made with the mouse). A key press or leaving the element
+ * clears the mark, so the keyboard ring stays.
+ */
+export const pointerFocus = {
+  onPointerDownCapture: markPointer,
+  onKeyDownCapture: clearPointer,
+  onBlurCapture: clearPointer,
+};
+
 /** The element's classes: its own, the caller's extra one, the selection. */
 export function classes(
   own: string,
@@ -220,6 +242,7 @@ export function ListRow({
   const common = {
     ...rowProps,
     ...handlers,
+    ...pointerFocus,
     class: classes('list-row', rowProps.class, selected),
     'data-row-key': rowProps['data-row-key'] ?? item.id,
     'data-selected': selected ? 'true' : undefined,

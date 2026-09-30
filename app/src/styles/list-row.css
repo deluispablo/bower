@@ -117,3 +117,8 @@
   width: 16px;
   height: 16px;
 }
+
+/* Focused by the mouse or a finger (G-4): no ring over the selection. */
+.list-row[data-pointer]:focus-visible {
+  outline: none;
+}

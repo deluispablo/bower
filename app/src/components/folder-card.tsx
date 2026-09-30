@@ -17,7 +17,7 @@ import { Badge } from './badge.js';
 import { FileIcon } from './file-icon.js';
 import type { FileIconItem } from './file-icon.js';
 import { IconChevronRight } from './icons.js';
-import { follow, selectionKeys } from './list-row.js';
+import { follow, pointerFocus, selectionKeys } from './list-row.js';
 
 import '../styles/folder-card.css';
 
@@ -81,6 +81,7 @@ export function FolderCard({
   };
   return (
     <a
+      {...pointerFocus}
       class={`folder-card${selected ? ' is-selected' : ''}`}
       href={folder.href}
       data-row-key={folder.path}

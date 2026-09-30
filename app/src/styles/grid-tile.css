@@ -85,3 +85,7 @@
   color: var(--color-text-muted);
   font-size: 0.75rem; /* 12px */
 }
+
+.grid-tile[data-pointer]:focus-visible {
+  outline: none;
+}
