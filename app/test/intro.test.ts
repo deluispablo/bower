@@ -340,6 +340,7 @@ describe('Intro', () => {
   });
 
   it('shows Close top right on page 5 of a first visit, with Sign in with Google', () => {
+    location.query = { page: '5' };
     mount('?page=5');
     expect(root.querySelector('.intro-skip')?.textContent).toBe('Close');
     expect(root.querySelector('.intro-icon-button')).toBeNull();
