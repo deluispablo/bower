@@ -47,8 +47,10 @@ function radios(): HTMLButtonElement[] {
 }
 
 function checked(): string | undefined {
-  return radios().find((r) => r.getAttribute('aria-checked') === 'true')
-    ?.textContent ?? undefined;
+  return (
+    radios().find((r) => r.getAttribute('aria-checked') === 'true')
+      ?.textContent ?? undefined
+  );
 }
 
 async function press(key: string): Promise<void> {

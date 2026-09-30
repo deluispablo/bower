@@ -42,13 +42,14 @@ export function Segmented<T extends string>({
     const option = options[index];
     if (option === undefined) return;
     onChange(option.value);
-    const buttons = group.current?.querySelectorAll<HTMLButtonElement>(
-      '.seg-button',
-    );
+    const buttons =
+      group.current?.querySelectorAll<HTMLButtonElement>('.seg-button');
     buttons?.[index]?.focus();
   };
 
-  const onKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>): void => {
+  const onKeyDown = (
+    event: JSX.TargetedKeyboardEvent<HTMLDivElement>,
+  ): void => {
     const current = options.findIndex((option) => option.value === value);
     const last = options.length - 1;
     let next: number | undefined;

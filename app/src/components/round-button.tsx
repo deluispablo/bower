@@ -15,12 +15,7 @@ import type { JSX } from 'preact';
 import { IconArrowUp, IconMic, IconMicOff } from './icons.js';
 
 export type RoundButtonState =
-  | 'mic'
-  | 'asking'
-  | 'mic-off'
-  | 'arrow'
-  | 'stop'
-  | 'spinner';
+  'mic' | 'asking' | 'mic-off' | 'arrow' | 'stop' | 'spinner';
 
 export interface RoundButtonProps {
   state: RoundButtonState;

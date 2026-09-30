@@ -47,18 +47,25 @@ describe('RoundButton', () => {
     ['spinner', 'Sending…', '.round-button-spin'],
   ];
 
-  it.each(cases)('%s shows its glyph and its name', async (state, label, glyph) => {
-    const button = await show(state, label);
-    expect(button.getAttribute('aria-label')).toBe(label);
-    expect(button.querySelector(glyph)).not.toBeNull();
-    expect(button.classList.contains(`round-button-${state}`)).toBe(true);
-  });
+  it.each(cases)(
+    '%s shows its glyph and its name',
+    async (state, label, glyph) => {
+      const button = await show(state, label);
+      expect(button.getAttribute('aria-label')).toBe(label);
+      expect(button.querySelector(glyph)).not.toBeNull();
+      expect(button.classList.contains(`round-button-${state}`)).toBe(true);
+    },
+  );
 
   it('crosses the mic out only when dictation is off', async () => {
     const off = await show('mic-off', 'Dictation is off');
-    expect(off.querySelector('path')?.getAttribute('d')).toContain('M4 4l16 16');
+    expect(off.querySelector('path')?.getAttribute('d')).toContain(
+      'M4 4l16 16',
+    );
     const on = await show('mic', 'Dictate');
-    expect(on.querySelector('path')?.getAttribute('d')).not.toContain('M4 4l16 16');
+    expect(on.querySelector('path')?.getAttribute('d')).not.toContain(
+      'M4 4l16 16',
+    );
   });
 
   it('keeps one size and one base class in every state', async () => {

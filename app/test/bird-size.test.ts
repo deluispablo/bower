@@ -4,14 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import { BIRD_SIZE, birdSize } from '../src/components/bird-classes.js';
 
-const TOKENS = readFileSync(
-  new URL('../src/styles/tokens.css', import.meta.url),
-  'utf8',
-);
-const BIRD_CSS = readFileSync(
-  new URL('../src/styles/bird.css', import.meta.url),
-  'utf8',
-);
+const TOKENS = readFileSync('src/styles/tokens.css', 'utf8');
+const BIRD_CSS = readFileSync('src/styles/bird.css', 'utf8');
 
 describe('bird size scale (R-BIRD-1)', () => {
   it.each(Object.entries(BIRD_SIZE))(

@@ -38,11 +38,7 @@ import {
 import { registerBird, useOverlayBird } from '../bird-presence.js';
 
 import { ONCE_STATES, birdClasses, birdSize } from './bird-classes.js';
-import type {
-  BirdFace,
-  BirdSizeValue,
-  BirdState,
-} from './bird-classes.js';
+import type { BirdFace, BirdSizeValue, BirdState } from './bird-classes.js';
 
 import '../styles/bird.css';
 

@@ -52,7 +52,12 @@
   }
 
   .btn-secondary:hover:not(:disabled, [aria-disabled='true']),
-  .chip:hover:not(:disabled, [aria-disabled='true'], [aria-pressed='true'], [aria-checked='true']),
+  .chip:hover:not(
+      :disabled,
+      [aria-disabled='true'],
+      [aria-pressed='true'],
+      [aria-checked='true']
+    ),
   .seg-button:hover:not([aria-checked='true']) {
     background: color-mix(in srgb, var(--color-surface) 60%, transparent);
   }
@@ -494,7 +499,8 @@
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand) 45%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-brand) 0%, transparent);
+    box-shadow: 0 0 0 10px
+      color-mix(in srgb, var(--color-brand) 0%, transparent);
   }
 }
 
@@ -524,7 +530,8 @@
   /* The permission ring holds still. */
   .round-button-asking {
     animation: none;
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand) 45%, transparent);
+    box-shadow: 0 0 0 4px
+      color-mix(in srgb, var(--color-brand) 45%, transparent);
   }
 
   /* A still arc; the accessible name already says "Sending". */
