@@ -25,6 +25,7 @@ const {
   DEMO_RECORDING_NOTICE,
 } = await import('../src/components/tidy-confirm-sheet.js');
 type TidyConfirmKind = 'tidy' | 'request';
+type PileConfirm = import('../src/pile-groups.js').PileConfirm;
 
 let root: HTMLDivElement | undefined;
 
@@ -40,6 +41,7 @@ function mount(
   kind?: TidyConfirmKind,
   loading = false,
   breakdown?: { files: number; links: number; requests: number },
+  extra: { piles?: PileConfirm; uploading?: number } = {},
 ): { onConfirm: () => void; onDismiss: () => void } {
   function Harness() {
     const [open, setOpen] = useState(true);
@@ -49,6 +51,7 @@ function mount(
       kind,
       loading,
       breakdown,
+      ...extra,
       onConfirm: () => {
         onConfirm();
         setOpen(false);
@@ -297,5 +300,39 @@ describe('TidyConfirmSheet, kind="tidy" (default, unchanged)', () => {
     mount(3);
     expect(document.body.textContent).toContain('Is that everything?');
     expect(document.body.textContent).toContain('the rest of the pile');
+  });
+});
+
+describe('TidyConfirmSheet, piles (#771, R-PILE-5)', () => {
+  const piles: PileConfirm = {
+    piles: [
+      { id: 'a', label: 'From your pile: “Job offers”', count: 2 },
+      { id: 'b', label: 'From your pile: “Flat”', count: 1 },
+    ],
+    elsewhere: 2,
+  };
+
+  it('names the piles, one row each, and what came from elsewhere', () => {
+    mount(5, vi.fn(), vi.fn(), undefined, false, undefined, { piles });
+    const text = document.body.textContent;
+    expect(text).toContain('5 things: 2 piles and 2 added from elsewhere');
+    expect(text).toContain('Bower reads each pile with its own note.');
+    expect(text).toContain('From your pile: “Job offers”');
+    expect(text).toContain('2 things');
+    expect(text).toContain('From your pile: “Flat”');
+    expect(text).toContain('1 thing');
+  });
+
+  it('says how many files are still uploading', () => {
+    mount(3, vi.fn(), vi.fn(), undefined, false, undefined, { uploading: 2 });
+    expect(document.body.textContent).toContain(
+      '2 files are still uploading; they join the next tidy-up.',
+    );
+  });
+
+  it('shows no piles list and no uploading line by default', () => {
+    mount(3);
+    expect(document.querySelector('.tidy-confirm-piles')).toBeNull();
+    expect(document.body.textContent).not.toContain('still uploading');
   });
 });

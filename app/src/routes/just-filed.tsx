@@ -46,6 +46,7 @@ import {
 import type { TableRow } from '../just-filed.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { outcomeFromRun, runSentence } from '../run-outcome.js';
+import { groupByOrigin } from '../pile-groups.js';
 import { markAllSeen } from '../seen.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
@@ -311,10 +312,23 @@ function RunBody({
 }): JSX.Element {
   const rows = tableRows(run, index);
   if (rows.length > 0) {
-    return desktop ? (
-      <DesktopTable rows={rows} unseen={unseen} addresses={addresses} />
-    ) : (
-      <PhoneTable rows={rows} unseen={unseen} addresses={addresses} />
+    const View = desktop ? DesktopTable : PhoneTable;
+    const groups = groupByOrigin(rows, (row) => row.origin);
+    if (groups.length === 1 && groups[0]?.origin === undefined) {
+      return <View rows={rows} unseen={unseen} addresses={addresses} />;
+    }
+    // R-PILE-5: what came out of a pile sits under its pile's line.
+    return (
+      <>
+        {groups.map((group) => (
+          <section key={group.origin ?? 'elsewhere'} class="just-filed-pile">
+            <h2 class="just-filed-pile-heading">
+              {group.origin ?? 'Added from elsewhere'}
+            </h2>
+            <View rows={group.rows} unseen={unseen} addresses={addresses} />
+          </section>
+        ))}
+      </>
     );
   }
   const outcome = outcomeFromRun(run);

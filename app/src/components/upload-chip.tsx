@@ -20,6 +20,7 @@ import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
+import { NO_PILE } from '../add-queue-store.js';
 import { isDemo } from '../api.js';
 import { usesShell } from '../shell-routes.js';
 import { useSession } from '../session.js';
@@ -41,6 +42,24 @@ import { useTextFieldFocus } from './run-chip.js';
 import { useFocusTrap } from './use-focus-trap.js';
 
 import '../styles/upload-chip.css';
+
+/**
+ * The pile whose files are on their way, for "Show": the first one still
+ * uploading that joined a pile (`undefined` when none did), so Add can
+ * bring that pile's card into view (R-PILE-6, #771).
+ */
+export function uploadingPileId(
+  items: readonly QueueItem[],
+): string | undefined {
+  return activeItems(items).find((item) => item.pileId !== NO_PILE)?.pileId;
+}
+
+/** The path "Show" opens: Add, with the pile to bring into view. */
+export function showPath(pileId: string | undefined): string {
+  return pileId === undefined
+    ? '/add'
+    : `/add?pile=${encodeURIComponent(pileId)}`;
+}
 
 export type UploadChipState = 'uploading' | 'resuming' | 'offline';
 
@@ -217,8 +236,8 @@ export function UploadChip({ model, onOpen }: UploadChipProps): JSX.Element {
 }
 
 export interface UploadChipSlotProps {
-  /** Opens Add ("Show"). */
-  onShow?: () => void;
+  /** Opens Add ("Show"), with the pile whose files are uploading. */
+  onShow?: (pileId: string | undefined) => void;
   /** The screens that carry the uploads themselves (Home's bubble) hide it. */
   hidden?: boolean;
 }
@@ -236,7 +255,10 @@ export function UploadChipSlot({
   const content = useMemo(
     () =>
       model === null || hidden ? null : (
-        <UploadChip model={model} onOpen={() => onShow?.()} />
+        <UploadChip
+          model={model}
+          onOpen={() => onShow?.(uploadingPileId(items))}
+        />
       ),
     // `model` is rebuilt on every change; `signature` says when it really did.
     [signature],
@@ -266,7 +288,12 @@ export function UploadChipFiller(): JSX.Element {
   }, [userKey]);
   const hidden =
     path === '/' || !usesShell(path, isDemo()) || (!desktop && typing);
-  return <UploadChipSlot hidden={hidden} onShow={() => route('/add')} />;
+  return (
+    <UploadChipSlot
+      hidden={hidden}
+      onShow={(pileId) => route(showPath(pileId))}
+    />
+  );
 }
 
 /**

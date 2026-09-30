@@ -33,6 +33,7 @@ import { doneNotes, things } from '../home.js';
 import { JUST_FILED_PATH } from '../just-filed.js';
 import { displayPath, folderHref, paraKindOf } from '../navigation.js';
 import { failureCopy, failureReason } from '../run-failure.js';
+import { groupByOrigin, pileOriginOf } from '../pile-groups.js';
 import { outcomeFromRun, runSentence } from '../run-outcome.js';
 import type { OutcomeAction, OutcomeItem, RunOutcome } from '../run-outcome.js';
 import {
@@ -387,6 +388,8 @@ export interface SheetRow {
   where: string;
   /** After the path: "was IMG_4471.jpg", what changed, why it needs you. */
   note: string | null;
+  /** "From your pile: “…”" when the item came out of a pile (R-PILE-5). */
+  origin?: string;
 }
 
 const ACTION_ORDER: Record<OutcomeAction, number> = {
@@ -450,6 +453,13 @@ export function rowFor(
   if (item.note !== undefined) notes.push(item.note);
   // A filed link reads by its host, never by its generated file name (#557).
   const title = linkTitleFromFileName(item.title) ?? item.title;
+  // The pile is looked up by the name the file had in the inbox.
+  const origin =
+    item.action === 'filed' || item.action === 'needs'
+      ? pileOriginOf(
+          item.from ?? item.path.slice(item.path.lastIndexOf('/') + 1),
+        )
+      : undefined;
   return {
     key: `${item.action}:${item.path}`,
     title,
@@ -458,6 +468,7 @@ export function rowFor(
     para,
     where,
     note: notes.length === 0 ? null : notes.join(' · '),
+    ...(origin === undefined ? {} : { origin }),
   };
 }
 
@@ -582,8 +593,29 @@ function RowIcon({ tone }: { tone: RowTone }): JSX.Element {
   return <span class={`working-sheet-row-icon tone-${tone}`}>{icon}</span>;
 }
 
+/** Rows under "From your pile: …" headings when any came from a pile
+ * (R-PILE-5); the rest sit under "Added from elsewhere". */
 function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
   if (rows.length === 0) return null;
+  const groups = groupByOrigin(rows, (row) => row.origin);
+  if (groups.length === 1 && groups[0]?.origin === undefined) {
+    return <RowList rows={rows} />;
+  }
+  return (
+    <>
+      {groups.map((group) => (
+        <section key={group.origin ?? 'elsewhere'} class="working-sheet-pile">
+          <h3 class="working-sheet-pile-heading">
+            {group.origin ?? 'Added from elsewhere'}
+          </h3>
+          <RowList rows={group.rows} />
+        </section>
+      ))}
+    </>
+  );
+}
+
+function RowList({ rows }: { rows: readonly SheetRow[] }): JSX.Element {
   return (
     <ul class="working-sheet-rows" aria-label="What Bower did">
       {rows.map((row) => (

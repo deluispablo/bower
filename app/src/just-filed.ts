@@ -22,6 +22,7 @@ import { shortDay } from './rules.js';
 import { displayPath, paraKindOf } from './navigation.js';
 import type { ParaKind } from './components/folder-mark.js';
 import { linkTitleFromFileName } from './add.js';
+import { pileOriginOf } from './pile-groups.js';
 import { fileKind, fileTitle } from './vault-index.js';
 import type { FileKind, VaultIndex } from './vault-index.js';
 
@@ -448,6 +449,8 @@ export interface TableRow {
   changed: string;
   /** Needs you: the Bower box prefilled. */
   sayHref?: string;
+  /** "From your pile: “…”" when the file came out of a pile (R-PILE-5). */
+  origin?: string;
 }
 
 function tableRow(
@@ -503,6 +506,10 @@ export function tableRows(run: Run, index: VaultIndex | null): TableRow[] {
     ) {
       row.oldName = item.from;
       row.changed = 'renamed';
+    }
+    if (item.action === 'filed' || item.action === 'needs') {
+      const origin = pileOriginOf(item.from ?? baseName(item.path));
+      if (origin !== undefined) row.origin = origin;
     }
     if (item.action === 'updated' && item.note !== undefined) {
       row.changed = item.note;

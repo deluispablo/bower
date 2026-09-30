@@ -409,13 +409,29 @@ export function Add() {
     followPileUploads();
   }, []);
 
-  // "Show" on the upload chip opens Add: the pile with uploads is brought
-  // into view.
+  // "Show" on the upload chip opens Add with `?pile=<id>`: that pile's card
+  // (the open one, or a waiting one once the store has it) is brought into
+  // view, once. Without an id, the pile with uploads is.
+  const shownPile = useRef<string | null>(null);
   useEffect(() => {
-    if (getPiles().some((pile) => uploadingCount(pile) > 0)) {
-      cardRef.current?.scrollIntoView?.({ block: 'start' });
+    const pileParam =
+      typeof window === 'undefined'
+        ? null
+        : new URLSearchParams(window.location.search).get('pile');
+    if (pileParam === null) {
+      if (getPiles().some((pile) => uploadingCount(pile) > 0)) {
+        cardRef.current?.scrollIntoView?.({ block: 'start' });
+      }
+      return;
     }
-  }, []);
+    if (shownPile.current === pileParam) return;
+    const card = [...document.querySelectorAll('[data-pile-id]')].find(
+      (el) => el.getAttribute('data-pile-id') === pileParam,
+    );
+    if (card === undefined) return;
+    shownPile.current = pileParam;
+    card.scrollIntoView?.({ block: 'start' });
+  }, [piles]);
 
   // The note box starts empty again once its pile closed (tidy-up, another
   // pile started).
@@ -896,7 +912,11 @@ export function Add() {
 
       <div class="add-columns">
         <div class="add-col add-col-new">
-          <div ref={cardRef} class="pile-card pile-card-new">
+          <div
+            ref={cardRef}
+            class="pile-card pile-card-new"
+            data-pile-id={openPile()?.id}
+          >
             <div class="pile-card-head">
               <h2 class="pile-card-title">New pile</h2>
               <span class="pile-card-count">
@@ -1071,7 +1091,7 @@ export function Add() {
                     ...new Set(pile.items.map((i) => kindOfName(i.name))),
                   ].slice(0, 4);
                   return (
-                    <li key={pile.id}>
+                    <li key={pile.id} data-pile-id={pile.id}>
                       <button
                         type="button"
                         class="pile-card pile-card-waiting"

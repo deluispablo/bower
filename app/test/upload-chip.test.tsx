@@ -8,8 +8,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   SignOutUploadsDialog,
   UploadChip,
+  showPath,
   signOutAnyway,
   uploadChipModel,
+  uploadingPileId,
 } from '../src/components/upload-chip.js';
 import type { QueueItem } from '../src/upload-queue.js';
 
@@ -221,5 +223,27 @@ describe('the sign-out dialog (R-UPL-4)', () => {
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+});
+
+describe('Show carries the pile (#771)', () => {
+  it('names the pile of the first file still on its way', () => {
+    const items = [
+      item('a', { pileId: 'inbox' }),
+      item('b', { pileId: 'PILE_B' }),
+      item('c', { pileId: 'PILE_C' }),
+    ];
+    expect(uploadingPileId(items)).toBe('PILE_B');
+    expect(showPath('PILE_B')).toBe('/add?pile=PILE_B');
+  });
+
+  it('ignores finished files and files that joined no pile', () => {
+    expect(
+      uploadingPileId([
+        item('a', { pileId: 'inbox' }),
+        item('b', { state: 'done' }),
+      ]),
+    ).toBeUndefined();
+    expect(showPath(undefined)).toBe('/add');
   });
 });
