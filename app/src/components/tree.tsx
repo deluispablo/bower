@@ -248,7 +248,9 @@ function rootOf(path: string): ParaKind | null {
  * call, like `useNoteTitles`): a note not read yet shows the document glyph
  * until a folder screen has cached it.
  */
-function useBowerWritten(files: readonly DriveFile[]): ReadonlySet<string> {
+export function useBowerWritten(
+  files: readonly DriveFile[],
+): ReadonlySet<string> {
   const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
   const key = files.map((file) => file.id).join(',');
   useEffect(() => {

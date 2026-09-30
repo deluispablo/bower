@@ -468,6 +468,7 @@ export function Explorer({
               }
               onClick={() => onNavigate?.()}
             >
+              <span class="explorer-item-spacer" aria-hidden="true" />
               <FileIcon
                 item={{
                   name,
@@ -486,6 +487,7 @@ export function Explorer({
               aria-current={path === HEALTH_PATH ? 'page' : undefined}
               onClick={() => onNavigate?.()}
             >
+              <span class="explorer-item-spacer" aria-hidden="true" />
               <IconHeart />
               <span class="explorer-item-label">Health check</span>
             </a>
@@ -566,7 +568,17 @@ export function FoldersDrawer(): JSX.Element | null {
     };
   }, [open]);
 
-  if (!open && drag === null) return null;
+  const swipeOn = !open && path !== FOLDERS_PATH;
+  // A 16 px strip on the left edge with `touch-action: none`: without it a
+  // real browser claims the horizontal move for itself and cancels the
+  // pointer, so the swipe never reaches `useEdgeSwipe`.
+  const edge = swipeOn ? (
+    <div class="folders-edge" aria-hidden="true" data-edge-swipe="" />
+  ) : null;
+
+  if (!open && drag === null) {
+    return edge === null ? null : createPortal(edge, document.body);
+  }
 
   // Pulled out by a finger (opening), or pushed back (closing).
   const shown = open

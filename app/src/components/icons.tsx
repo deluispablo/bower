@@ -209,7 +209,7 @@ export function IconClose(): JSX.Element {
 export function IconSort(): JSX.Element {
   return (
     <Svg>
-      <path d="M4 7h12M4 12h8M4 17h4M18 10v10M15 17l3 3 3-3" />
+      <path d="M7 4v16M4 17l3 3 3-3M17 20V4M14 7l3-3 3 3" />
     </Svg>
   );
 }
@@ -217,7 +217,7 @@ export function IconSort(): JSX.Element {
 export function IconCollapse(): JSX.Element {
   return (
     <Svg>
-      <path d="M6 9l6-6 6 6M6 15l6 6 6-6" />
+      <path d="M7 20l5-5 5 5M7 4l5 5 5-5" />
     </Svg>
   );
 }

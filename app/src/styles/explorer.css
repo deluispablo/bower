@@ -140,13 +140,35 @@
 }
 
 .explorer-below {
-  margin-top: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--color-border-subtle);
+  margin-top: 0;
 }
 
-.explorer-sidebar .explorer-below {
-  border-top: none;
+/* The 1 px divider before Answers (PF-Main-1280, NT-Bottom). */
+.explorer-below::before {
+  display: block;
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--color-border-subtle);
+  content: '';
+}
+
+/* Answers, Clippings, Health check: the icon lines up with the root discs
+   (4 px inset, a 14 px chevron-wide spacer, gap 6). */
+.explorer-below .explorer-item {
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.explorer-item-spacer {
+  flex: 0 0 14px;
+  width: 14px;
+}
+
+/* The sidebar tree takes the column's own 12 px inset (PF-Main-1280: rows
+   from x 12 to 251) and reserves no height: the column scrolls as one. */
+.shell-sidebar .explorer-sidebar .explorer-tree {
+  min-height: 0;
+  padding: 0;
 }
 
 /* Every host scrolls as one column (spec §3.3): the tree never scrolls on
@@ -279,6 +301,29 @@
   overscroll-behavior: contain;
   transition: transform 200ms ease-out;
   animation: folders-drawer-in 200ms ease-out;
+}
+
+/* The left-edge swipe's own strip (phone widths): 16 px, under the top bar
+   and above the tab bar, below the drawer. `touch-action: none` keeps the
+   browser from claiming the horizontal move. */
+.folders-edge {
+  position: fixed;
+  top: 56px;
+  bottom: 64px;
+  left: 0;
+  z-index: 37;
+  width: 16px;
+  touch-action: none;
+}
+
+@media (min-width: 900px) {
+  .folders-edge {
+    display: none;
+  }
+}
+
+.folders-drawer:focus-visible {
+  outline: none;
 }
 
 .folders-drawer-head {

@@ -17,6 +17,7 @@ import type { PinnedItem } from '../vault-store.js';
 import { fileTitle } from '../vault-index.js';
 import { FileIcon } from './file-icon.js';
 import { FolderMark } from './folder-mark.js';
+import { useBowerWritten } from './tree.js';
 import type { TreeHost } from './tree.js';
 import { useNoteTitles } from './use-note-titles.js';
 
@@ -43,6 +44,8 @@ export function PinnedSidebar({
     )
     .map((item) => item.file);
   const titles = useNoteTitles(noteFiles);
+  // The bird on what Bower wrote, from the cached frontmatter (as the tree).
+  const bowerIds = useBowerWritten(noteFiles);
 
   if (items.length === 0) return null;
 
@@ -91,7 +94,13 @@ export function PinnedSidebar({
               title={name}
               onClick={() => onNavigate?.()}
             >
-              <FileIcon item={item.file} size={16} />
+              <FileIcon
+                item={{
+                  ...item.file,
+                  bowerWritten: bowerIds.has(item.file.id),
+                }}
+                size={16}
+              />
               <span class="explorer-item-label">{name}</span>
             </a>
           );
