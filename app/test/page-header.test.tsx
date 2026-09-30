@@ -9,9 +9,8 @@ vi.mock('preact-iso', () => ({
   useLocation: () => ({ path: '/', query: {}, route }),
 }));
 
-const { PageHeader, HOME_CRUMBS, crumbsFor } = await import(
-  '../src/components/page-header.js'
-);
+const { PageHeader, HOME_CRUMBS, crumbsFor } =
+  await import('../src/components/page-header.js');
 const { metaLine } = await import('../src/meta-line.js');
 
 let root: HTMLDivElement;

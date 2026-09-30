@@ -103,9 +103,8 @@ vi.mock('../src/cache.js', () => ({
   saveTreeState: () => Promise.resolve(),
 }));
 
-const { Layout, clampSidebarWidth, readStoredSidebarWidth } = await import(
-  '../src/components/layout.js'
-);
+const { Layout, clampSidebarWidth, readStoredSidebarWidth } =
+  await import('../src/components/layout.js');
 
 let root: HTMLDivElement;
 
@@ -370,9 +369,7 @@ describe('Layout', () => {
       'nav[aria-label="Main"] a[href="/add"]',
     );
     expect(add.querySelector('.nav-badge')?.textContent).toBe('1');
-    const home = query<HTMLAnchorElement>(
-      'nav[aria-label="Main"] a[href="/"]',
-    );
+    const home = query<HTMLAnchorElement>('nav[aria-label="Main"] a[href="/"]');
     expect(home.querySelector('.nav-badge')).toBeNull();
     // Sanity: the fixture's one pending file is `0-Inbox/Receipt.pdf` (the tree names its folder Inbox).
     expect(sidebar.textContent).toContain('Inbox');
