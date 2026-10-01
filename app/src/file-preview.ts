@@ -13,7 +13,7 @@
 
 import type { DriveFile } from './drive.js';
 import { embedKind } from './markdown/embeds.js';
-import { shortDate } from './meta-line.js';
+import { shortDate, sizeWords } from './meta-line.js';
 import { FILE_KIND_LABELS, fileKind } from './vault-index.js';
 
 /**
@@ -88,20 +88,12 @@ export function thumbnailUrl(
   return /=s\d+$/.test(link) ? link.replace(/=s\d+$/, `=s${size}`) : link;
 }
 
-/** A size in words: "820 bytes", "14 KB", "1.2 MB". */
-export function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} bytes`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  const mb = bytes / (1024 * 1024);
-  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
-}
-
 /** The type line: "PDF · 1.2 MB", or just "Google Doc" (no size in Drive). */
 export function typeLine(
   file: Pick<DriveFile, 'name' | 'mimeType' | 'size'>,
 ): string {
   const kind = FILE_KIND_LABELS[fileKind(file)];
-  return file.size === undefined ? kind : `${kind} · ${formatSize(file.size)}`;
+  return file.size === undefined ? kind : `${kind} · ${sizeWords(file.size)}`;
 }
 
 /** The kind word on a file's screen: "Spreadsheet (CSV)" for a CSV (board `Phone-File-Sheet`), else `FILE_KIND_LABELS`. */
@@ -173,7 +165,7 @@ export function metaFacts(
 ): string[] {
   const kind = fileKind(file);
   const now = extras.now ?? Date.now();
-  const size = file.size === undefined ? null : formatSize(file.size);
+  const size = file.size === undefined ? null : sizeWords(file.size);
   const facts: (string | null)[] = [];
   if (kind === 'photo' || kind === 'heic' || kind === 'image') {
     const taken = dateWords(file.imageMediaMetadata?.time, now);

@@ -17,13 +17,12 @@ import { isDemo } from '../api.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
-import { formatSize } from '../file-preview.js';
 import { filedBy } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import { whenWords } from '../folder-view.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
-import { metaLine, shortDate } from '../meta-line.js';
+import { metaLine, shortDate, sizeWords } from '../meta-line.js';
 import type { MetaItem } from '../meta-line.js';
 import { showToast } from '../toast-store.js';
 import { ITEM_KIND_WORDS } from '../kinds.js';
@@ -72,7 +71,7 @@ export function kindLine(
   if (pages !== undefined && pages > 0) {
     parts.push(`${pages} ${pages === 1 ? 'page' : 'pages'}`);
   }
-  if (size !== undefined) parts.push(formatSize(size));
+  if (size !== undefined) parts.push(sizeWords(size));
   return parts.join(' · ');
 }
 

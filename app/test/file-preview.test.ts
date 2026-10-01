@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   drivePreviewUrl,
   formatDuration,
-  formatSize,
   kindWord,
   metaFacts,
   previewKind,
@@ -106,16 +105,7 @@ describe('thumbnailUrl', () => {
   });
 });
 
-describe('formatSize and typeLine', () => {
-  it('says a size in bytes, KB or MB', () => {
-    expect(formatSize(820)).toBe('820 bytes');
-    expect(formatSize(1023)).toBe('1023 bytes');
-    expect(formatSize(340 * 1024)).toBe('340 KB');
-    expect(formatSize(Math.round(2.4 * 1024 * 1024))).toBe('2.4 MB');
-    expect(formatSize(38 * 1024 * 1024)).toBe('38 MB');
-    expect(formatSize(86 * 1024 * 1024)).toBe('86 MB');
-  });
-
+describe('typeLine', () => {
   it('is the type word, then the size when Drive knows it', () => {
     expect(
       typeLine({

@@ -9,8 +9,8 @@
 
 import { isBowerWritten } from './bower-written.js';
 import { findCompanion } from './companion.js';
+import { sizeWords } from './meta-line.js';
 import type { DriveFile } from './drive.js';
-import { formatSize } from './file-preview.js';
 import { CATALOGUE_PATH, originLine, originOf } from './file-origin.js';
 import type { Origin } from './file-origin.js';
 import { kindById } from './kinds.js';
@@ -388,9 +388,7 @@ export function fileLine(
   if (pages !== undefined && pages > 0) {
     return `${label} · ${pages} ${pages === 1 ? 'page' : 'pages'}`;
   }
-  return file.size === undefined
-    ? label
-    : `${label} · ${formatSize(file.size)}`;
+  return file.size === undefined ? label : `${label} · ${sizeWords(file.size)}`;
 }
 
 /**

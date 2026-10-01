@@ -50,9 +50,8 @@ import type { Run } from '../api.js';
 import { loadNote, loadThumbnail } from '../cache.js';
 import { FOLDER_MIME, getText, searchFullText } from '../drive.js';
 import type { DriveFile } from '../drive.js';
-import { formatSize } from '../file-preview.js';
 import { normalizeTags, parseFrontmatter } from '../markdown/frontmatter.js';
-import { metaLine, shortDate } from '../meta-line.js';
+import { metaLine, shortDate, sizeWords } from '../meta-line.js';
 import type { MetaLine } from '../meta-line.js';
 import { plainText } from '../proposals.js';
 import {
@@ -868,7 +867,7 @@ function SearchPreview({
     );
     if (pages !== undefined) facts.push(pagesWord(pages));
     if (row.kind === 'file' && row.file.size !== undefined) {
-      facts.push(formatSize(row.file.size));
+      facts.push(sizeWords(row.file.size));
     }
   }
   const drive =
