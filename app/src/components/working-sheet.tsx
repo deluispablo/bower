@@ -61,6 +61,7 @@ import { IconCheck, IconClose } from './icons.js';
 import { ListRow } from './list-row.js';
 import { kindLabel } from '../meta-line.js';
 import { startedLine } from '../run-progress.js';
+import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
@@ -165,6 +166,21 @@ export function runningNote(desktop: boolean): string {
   return `You can close this. Bower carries on; the tidy-up bar ${
     desktop ? 'at the top' : 'above the tabs'
   } shows how it goes.`;
+}
+
+/**
+ * The running title's count (R-AD-8): the inbox count as the run began,
+ * read with `inboxCount` like the sticky button and the confirm, so the
+ * three agree; the run's own total only when the listing gave nothing.
+ */
+export function runningTotal(
+  startCount: number,
+  outcomeTotal: number | undefined,
+  waitingPaths = 0,
+): number | undefined {
+  if (startCount > 0) return startCount;
+  if (outcomeTotal !== undefined) return outcomeTotal;
+  return waitingPaths > 0 ? waitingPaths : undefined;
 }
 
 /** The link to Just filed, on the running and the Done sheet (K-30). */
@@ -719,11 +735,19 @@ export function WorkingSheet({
 
   // The inbox as the run began: the listing the first time the sheet sees
   // this run (and has a listing at all), kept until the next run.
-  const waitingRef = useRef<{ key: string; paths: string[] } | null>(null);
+  const waitingRef = useRef<{
+    key: string;
+    paths: string[];
+    count: number;
+  } | null>(null);
   if (run !== null && files.length > 0) {
     const key = runKey(run);
     if (waitingRef.current?.key !== key) {
-      waitingRef.current = { key, paths: waitingPaths(files) };
+      waitingRef.current = {
+        key,
+        paths: waitingPaths(files),
+        count: inboxTotal(inboxCount(files, false)),
+      };
     }
   }
   const waiting = waitingRef.current?.paths ?? [];
@@ -761,8 +785,11 @@ export function WorkingSheet({
 
   if (!visible || state === null || vaultMissing) return null;
 
-  const total =
-    outcome?.total ?? (waiting.length > 0 ? waiting.length : undefined);
+  const total = runningTotal(
+    waitingRef.current?.count ?? 0,
+    outcome?.total,
+    waiting.length,
+  );
   const heading = sheetTitle(state, state === 'running' ? total : undefined);
   const timeLine =
     state === 'running'
