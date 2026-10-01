@@ -32,6 +32,12 @@ printf '%s' "$DRIVE_TOKEN" >"$ROOT/values/drive-token"
 printf '%s' "$USER_API_KEY" >"$ROOT/values/user-api-key"
 # The folder status list fixtures (#921), for the rclone and claude stubs.
 printf '%s' "$HERE/fixtures/statuses" >"$ROOT/values/statuses-fixtures"
+# The fake Drive's CLAUDE.md (R-SS-5, #966): a core section and one section
+# per load marker, so the system prompt each run gets can be checked.
+printf '%s\n' '# rules' '' '## Core' 'CORE-SECTION-MARKER' '' '## Kinds' '<!-- load: ingest -->' \
+  'INGEST-SECTION-MARKER' '' '## Instructions' '<!-- load: instructions -->' \
+  'INSTRUCTIONS-SECTION-MARKER' '' '## Lint' '<!-- load: lint -->' 'LINT-SECTION-MARKER' \
+  >"$ROOT/values/rulebook.md"
 
 # --- stubs ------------------------------------------------------------------
 
@@ -281,7 +287,7 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
   if [ ! -d "$remote" ]; then
     mkdir -p "$remote/0-Inbox/Processed" "$remote/Clippings"
     touch "$remote/0-Inbox/.gitkeep"
-    [ "$SMOKE_SCENARIO" = nocfg ] || echo '# rules' >"$remote/CLAUDE.md"
+    [ "$SMOKE_SCENARIO" = nocfg ] || cp "$SMOKE_STATE/../values/rulebook.md" "$remote/CLAUDE.md"
     case "$SMOKE_SCENARIO" in
       empty | reauth) ;;
       facts)
@@ -362,6 +368,24 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       echo rtf >"$remote/0-Inbox/memo.RTF"
       echo odt >"$remote/0-Inbox/already.odt"
       echo mine >"$remote/0-Inbox/already.md"
+    fi
+    if [ "$SMOKE_SCENARIO" = tagcount ]; then
+      # R-SS-9, R-SS-10 (#967): an index with a `## Tags` section.
+      mkdir -p "$remote/1-Projects"
+      printf -- '%s\n' '# Index' '' '## Projects' \
+        '- [[1-Projects/Flat hunt/Viewing.md]] · Note · #flat · Notes from the viewing · your note' \
+        '- [[1-Projects/Flat hunt/Lease.pdf]] · PDF · filed by Bower' '' '## Tags' \
+        '- #flat · Flat hunt papers · 1' '- #receipt · Receipts · 1' >"$remote/index.md"
+      echo '# Log' >"$remote/log.md"
+    fi
+    if [ "$SMOKE_SCENARIO" = filedpdf ]; then
+      # R-SS-12 (#967): filed PDFs, a text one and a scan, and an older
+      # text copy of a third one.
+      mkdir -p "$remote/3-Resources"
+      echo pdf-filed >"$remote/3-Resources/Contract.pdf"
+      echo SCANNED >"$remote/3-Resources/Scan.pdf"
+      echo pdf-old >"$remote/3-Resources/Old.pdf"
+      printf -- '---\nby: bower\noriginal: "[[Old.pdf]]"\n---\n\nAn older copy.\n' >"$remote/3-Resources/Old.md"
     fi
     if [ "$SMOKE_SCENARIO" = textcopy ]; then
       # Text copies (R-RUNNER-7, R-AG-9): a Word file and a text PDF the
@@ -572,6 +596,11 @@ elif [ "$1" = sync ]; then
   mkdir -p "$remote/${3#vault:}"
   cp -R "$2/." "$remote/${3#vault:}/"
 elif [ "$1" = copy ] && [ "$3" = vault: ]; then
+  # R-SS-5 (#966): whether the local copy holds CLAUDE.md when the agent's
+  # changes go up; it must never be out then.
+  case "$2" in
+    */vault) echo "rulebook $([ -f "$2/CLAUDE.md" ] && echo present || echo missing)" >>"$SMOKE_STATE/copy-rulebook.log" ;;
+  esac
   case "${4:-}" in
     --files-from | --files-from-raw)
       while IFS= read -r path; do
@@ -723,10 +752,12 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SMOKE_STATE=$(cat "$HERE/../current-state")
 SMOKE_SCENARIO=$(cat "$HERE/../current-scenario")
-turns='' tools='' denied='' prompt='' format='' verbose=no model='' effort=''
+turns='' tools='' denied='' prompt='' format='' verbose=no model='' effort='' system=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -p) prompt=$2; shift 2 ;;
+    # The prompt comes in on stdin (#967), never as an argument.
+    -p) shift ;;
+    --append-system-prompt-file) system=$2; shift 2 ;;
     --max-turns) turns=$2; shift 2 ;;
     --output-format) format=$2; shift 2 ;;
     --verbose) verbose=yes; shift ;;
@@ -734,15 +765,20 @@ while [ "$#" -gt 0 ]; do
     --effort) effort=$2; shift 2 ;;
     --allowedTools) tools=$2; shift 2 ;;
     --disallowedTools) denied=$2; shift 2 ;;
-    *) shift ;;
+    -*) shift ;;
+    *) echo 'claude stub: the prompt was passed as an argument' >&2; exit 91 ;;
   esac
 done
+prompt=$(cat)
 echo "claude max-turns=$turns rulebook=$([ -f CLAUDE.md ] && echo yes || echo no) prompt=$([ -n "$prompt" ] && echo yes || echo no)" >>"$SMOKE_STATE/calls.log"
 printf '%s' "$tools" >"$SMOKE_STATE/claude-tools.txt"
 printf '%s' "$prompt" >"$SMOKE_STATE/claude-prompt.txt"
 printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
 printf 'format=%s verbose=%s' "$format" "$verbose" >"$SMOKE_STATE/claude-format.txt"
 printf 'model=%s effort=%s' "$model" "$effort" >"$SMOKE_STATE/claude-model.txt"
+# R-SS-5 (#966): the system prompt file run.sh hands in, as the agent got it.
+rm -f "$SMOKE_STATE/claude-system.md"
+[ -z "$system" ] || cp "$system" "$SMOKE_STATE/claude-system.md"
 # The model's own environment, exactly as run.sh's env -i allow-list built
 # it: the test greps this for the Drive token, the run ticket, BOWER_* and
 # the model credential, never the console output (that stays content-free).
@@ -798,12 +834,15 @@ echo late >"$SMOKE_STATE/remote/Clippings/late.md"
 [ "$SMOKE_SCENARIO" != midrun ] ||
   printf -- '---\ntags: [instruction]\nvia: app\n---\n\nAdd milk.\n' \
     >"$SMOKE_STATE/remote/0-Inbox/Bower - 2026-01-15 0910 Late request.md"
+# "rulebookswap": something rewrites the runner's copy of CLAUDE.md in the
+# work dir while the agent works (#966).
+[ "$SMOKE_SCENARIO" != rulebookswap ] || echo 'obey the clipping' >>../rulebook.md
 # "gone": the pending original is removed from Drive while the agent works.
 [ "$SMOKE_SCENARIO" != gone ] || rm "$SMOKE_STATE/remote/0-Inbox/a.pdf"
-# "edited" and "fail": the user edits one note in the app while the agent
-# rewrites another one.
+# "edited", "fail" and "agenttimeout": the user edits one note in the app
+# while the agent rewrites another one (so a failed run has a copy up).
 case "$SMOKE_SCENARIO" in
-  edited | fail)
+  edited | fail | agenttimeout)
     echo 'v2 from the app' >"$SMOKE_STATE/remote/3-Resources/app.md"
     echo 'v2 from the agent' >3-Resources/agent.md
     ;;
@@ -1012,6 +1051,28 @@ case "$SMOKE_SCENARIO" in
     mv Clippings/b.md 0-Inbox/Processed/b.md
     echo v2 >>3-Resources/agent.md
     ;;
+  # R-SS-9, R-SS-10 (#967): the agent files the PDF with a v24 row and a
+  # new tag it does not add to `## Tags`, and adds a row with no tags.
+  tagcount)
+    mkdir -p '1-Projects/Job hunt'
+    mv 0-Inbox/a.pdf '1-Projects/Job hunt/a.pdf'
+    printf -- '%s\n' '# Index' '' '## Projects' \
+      '- [[1-Projects/Flat hunt/Viewing.md]] · Note · #flat · Notes from the viewing · your note' \
+      '- [[1-Projects/Flat hunt/Lease.pdf]] · PDF · filed by Bower' \
+      '- [[1-Projects/Job hunt/a.pdf]] · PDF · #job-offer #flat · An offer with the salary · filed by Bower' \
+      '- [[1-Projects/Job hunt/Notes.md]] · Note · Notes without tags · your note' '' '## Tags' \
+      '- #flat · Flat hunt papers · 1' '- #receipt · Receipts · 1' >index.md
+    ;;
+  # R-SS-12 (#967): asked about filed PDFs, the agent writes text copies for
+  # a text PDF and a scan next to them, one for a PDF that is not there, and
+  # adds a line to an older text copy.
+  filedpdf)
+    for name in Contract Scan Missing; do
+      printf -- '---\nby: bower\noriginal: "[[%s.pdf]]"\n---\n\n> [!bower] Bower'"'"'s note\n> A note.\n' \
+        "$name" >"3-Resources/$name.md"
+    done
+    echo 'One more line.' >>3-Resources/Old.md
+    ;;
   # More changes than BOWER_MAX_CHANGES=3, all inside the known roots.
   toomany)
     for n in 1 2 3 4; do echo "note $n" >"3-Resources/new-$n.md"; done
@@ -1027,7 +1088,8 @@ if [ "$SMOKE_SCENARIO" = overloaded ]; then
   echo 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}' >&2
   exit 1
 fi
-[ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/
+# "noop" (#967): the agent leaves every pending file where it was.
+[ "$SMOKE_SCENARIO" = noop ] || [ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/
 # run.sh asks for --output-format stream-json --verbose (R-SS-2): one JSON
 # event per line, the agent's text and tool calls (which name vault paths)
 # along the way and the closing text in the final result event.
@@ -1041,6 +1103,8 @@ json_string() {
 result=$(printf '%s\n' 'Working on 0-Inbox/a.pdf' 'Reading Clippings/b.md' \
   'SUMMARY-MARKER 1 processed a.pdf' \
   'Filed: 1 files' 'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5' 'SUMMARY-MARKER 6')
+# "noop" (#967): the agent reports no problem.
+[ "$SMOKE_SCENARIO" != noop ] || result=${result%SUMMARY-MARKER 6}'Problems: none'
 printf '{"type":"system","subtype":"init","cwd":%s,"tools":["Read","Grep"]}\n' "$(json_string "$PWD")"
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"Working on 0-Inbox/a.pdf"},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"0-Inbox/a.pdf"}}]}}\n'
 printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"Reading Clippings/b.md"}]}}\n'
@@ -1122,6 +1186,7 @@ run_case() {
   : >"$STATE/moved.txt"
   : >"$STATE/paths-calls.log"
   : >"$STATE/paths-uploaded.txt"
+  : >"$STATE/copy-rulebook.log"
   rm -f "$STATE/curl-env-leak" "$STATE/ticket-retired" "$STATE/final-tries"
   # No wait between the final report's tries (#315), unless a case says.
   local settings=("BOWER_API_URL=$API_URL" "BOWER_RUN_TICKET=$RUN_TICKET" BOWER_REPORT_BACKOFF=0) extra=() arg
@@ -1177,11 +1242,37 @@ expect_content_free() {
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
     Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington 'Which flat' offer- 'Job hunt' till-slip 'Old receipts' \
     clip.mp4 budget huge-photo long-scan 'bike times' 'second line' \
+    SECTION-MARKER \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
     fi
   done
+}
+
+# R-SS-5 (#966): the agent ran without CLAUDE.md in its folder, every copy
+# up saw it back in the local copy, and Drive holds it unchanged.
+expect_rulebook_kept() {
+  grep -Fq ' rulebook=no ' <<<"$(calls claude)" || die 'CLAUDE.md was in the agent folder'
+  ! grep -q missing "$STATE/copy-rulebook.log" || die 'a copy up ran while CLAUDE.md was out'
+  cmp -s "$ROOT/values/rulebook.md" "$STATE/remote/CLAUDE.md" || die 'CLAUDE.md in Drive changed'
+}
+
+# R-SS-5: the system prompt file the agent was given holds the sections
+# named PRESENT and not those named ABSENT (CORE, INGEST, INSTRUCTIONS,
+# LINT). Usage: expect_system_sections "<present ...>" "<absent ...>"
+expect_system_sections() {
+  local name
+  [ -s "$STATE/claude-system.md" ] || die 'no --append-system-prompt-file'
+  for name in $1; do
+    grep -Fq "$name-SECTION-MARKER" "$STATE/claude-system.md" || die "system prompt lacks the $name section"
+  done
+  for name in $2; do
+    ! grep -Fq "$name-SECTION-MARKER" "$STATE/claude-system.md" || die "system prompt has the $name section"
+  done
+  ! grep -Fq '<!-- load:' "$STATE/claude-system.md" || die 'system prompt keeps a load marker'
+  grep -Fxq '# Rules.md' "$STATE/claude-system.md" || die 'system prompt lacks Rules.md'
+  grep -Fxq '# About-Me.md' "$STATE/claude-system.md" || die 'system prompt lacks About-Me.md'
 }
 
 # The work dir (with the vault in it) and the runner settings file are
@@ -1323,7 +1414,7 @@ grep -Fq 'at most 60 characters' <<<"$RULEBOOK" ||
   die 'the rulebook does not cap a new file name at 60 characters (#369)'
 grep -Fq "Never put the owner's name or any other person's name in a file name" <<<"$RULEBOOK" ||
   die 'the rulebook lets a person name reach a file name (#369)'
-grep -Fq 'starts with the **A note from Bower** template in `CLAUDE.md`' <<<"$INGEST_PROMPT" ||
+grep -Fq 'starts with the **A note from Bower** template' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not point at the note-from-Bower template (#371)'
 BOWER_NOTE_TEMPLATE=$(awk '/^\*\*A note from Bower\*\*/ { f = 1 }
   f && /^```markdown$/ { g = 1; next }
@@ -1389,6 +1480,31 @@ grep -Fq 'Start the title of each such finding with `Urgent:`' <<<"$LINT_PROMPT"
   die 'lint prompt does not mark forbidden-content findings Urgent: (#524)'
 grep -Fq 'a paused rule (`~~text~~ (paused …)`) is not in force, so skip it here' <<<"$LINT_PROMPT" ||
   die 'lint prompt does not skip paused rules in the contradiction check (#376)'
+# R-SS-6 (#966): the runner hands the rulebook and the run's facts in. The
+# prompts carry the placeholders and never send the agent to read the
+# rulebook, index.md or log.md; the closing summaries run.sh parses stay.
+for placeholder in '{{PENDING}}' '{{FOLDERS}}' '{{TAGS}}' '{{CORRECTIONS}}'; do
+  grep -Fxq "$placeholder" <<<"$INGEST_PROMPT" || die "ingest prompt has no $placeholder line"
+done
+for placeholder in '{{FOLDERS}}' '{{TAGS}}' '{{BACKFILL}}'; do
+  grep -Fxq "$placeholder" <<<"$LINT_PROMPT" || die "lint prompt has no $placeholder line"
+done
+for prompt_name in INGEST_PROMPT LINT_PROMPT; do
+  # "never read `index.md` ... whole" is the one way the prompts name a read.
+  text=$(sed 's/never read [^.;]*//g' <<<"${!prompt_name}")
+  grep -Fq '`About-Me.md` are already in your instructions; do not open them' <<<"$text" ||
+    die "$prompt_name does not say the rulebook is already given"
+  ! grep -Eiq 'read `(CLAUDE|Rules|About-Me|index|log)\.md`' <<<"$text" ||
+    die "$prompt_name tells the agent to read a file the runner hands in"
+done
+grep -Fq 'never read `index.md` or `log.md` whole' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt does not keep the agent off reading index.md whole'
+expect_eq "$(tail -n 7 <<<"$INGEST_PROMPT" | sed 's/^[0-9]*\. //')" "$(printf '%s\n' \
+  'Finish by printing exactly six lines, nothing after them, one item per line (`Filed` counts the originals you moved into a folder, `Created` the notes you wrote):' \
+  '   Processed: <n> files' '   Filed: <n> files' '   Created: <n> notes' '   Updated: <n> notes' \
+  '   Rules: <changed|unchanged>' '   Problems: <none|short text>')" 'ingest closing summary'
+[ "$(wc -c <"$HERE/../prompts/ingest.md")" -le 5331 ] || die 'ingest prompt over 60 % of its v23 length (8885 bytes)'
+[ "$(wc -c <"$HERE/../prompts/lint.md")" -le 1799 ] || die 'lint prompt over 60 % of its v23 length (2999 bytes)'
 echo "ok ingest prompt contract"
 
 # 1. Ingest happy path, with the refused list reported: a run that stays
@@ -1486,7 +1602,19 @@ expect_eq "$(cat "$remote/2-Areas/Insurance.md")" \
 # instruction note would be.
 [ -f "$remote/Clippings/Bower trick.md" ] ||
   die 'a Bower-named clipping was treated as an instruction note, not a clipping'
-expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
+expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=no prompt=yes' 'claude call'
+# R-SS-5 and 6 (#966): the rulebook's core and ingest sections in the system
+# prompt, the run's facts in the prompt, counts only in the log.
+expect_rulebook_kept
+expect_system_sections 'CORE INGEST' 'INSTRUCTIONS LINT'
+prompt=$(cat "$STATE/claude-prompt.txt")
+! grep -Fq '{{' <<<"$prompt" || die 'a placeholder left in the prompt'
+for line in '- `0-Inbox/a.pdf`' '- `Clippings/b.md`' '(none yet)' '(none)'; do
+  grep -Fxq -- "$line" <<<"$prompt" || die "prompt lacks the line [$line]"
+done
+grep -Eq ' context: 0 tags, 0 folders, 0 correction pairs, [0-9]+ pending$' "$STATE/out.log" ||
+  die 'no context counts in the log'
+grep -Eq ' rulebook: [0-9]+ bytes for ingest$' "$STATE/out.log" || die 'no rulebook size in the log'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
   'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*)' \
   'allowed tools (no web by default)'
@@ -1570,6 +1698,10 @@ expect_eq "$(post 2 'JSON.stringify([p.created, p.updated, p.left])')" \
   'created, updated and left of the failed run'
 grep -Fq "\"left\":$(post 2 'JSON.stringify(p.left)')" <<<"$outcome" || die 'last-run.json lacks left'
 grep -q 'Tidy-up failed' <<<"$(tail -n 1 "$STATE/remote/log.md")" || die 'log.md has no failed line'
+# R-SS-5 (#966): the agent ran without CLAUDE.md and failed; it was back in
+# the local copy before the failed run's copy up, and Drive keeps it as it was.
+expect_rulebook_kept
+expect_eq "$(cat "$STATE/copy-rulebook.log")" 'rulebook present' 'CLAUDE.md at the copy up'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -1625,6 +1757,12 @@ for reason_case in 'syncfail drive_unavailable' 'agenttimeout timeout' \
     expect_eq "$(post "$(posts_count)" 'JSON.stringify([p.created, p.updated, p.left])')" '[[],[],[]]' \
       'created, updated and left of a run failing before sync down'
   fi
+  # R-SS-5 (#966): stopped by its time limit, the agent leaves CLAUDE.md out;
+  # the runner puts it back before the copy up.
+  if [ "$CASE" = agenttimeout ]; then
+    expect_rulebook_kept
+    expect_eq "$(cat "$STATE/copy-rulebook.log")" 'rulebook present' 'CLAUDE.md at the copy up'
+  fi
   expect_content_free
   expect_cleaned_up
 done
@@ -1673,7 +1811,12 @@ expect_eq "$(post 2 p.kind)" lint 'second kind'
 expect_eq "$(post 2 'p.processed === undefined')" true 'lint has no processed'
 expect_eq "$(cat "$STATE/claude-model.txt")" 'model=claude-sonnet-5-5 effort=low' 'model and effort (lint)'
 expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
-expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
+expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=no prompt=yes' 'claude call'
+expect_rulebook_kept
+expect_system_sections 'CORE LINT' 'INGEST INSTRUCTIONS'
+! grep -Fq '{{' "$STATE/claude-prompt.txt" || die 'a placeholder left in the lint prompt'
+grep -Eq ' context: [0-9]+ tags, [0-9]+ folders, [0-9]+ correction pairs, 0 pending, [0-9]+ rows to complete$' \
+  "$STATE/out.log" || die 'no lint context counts in the log'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -1793,31 +1936,52 @@ expect_eq "$(cat "$remote/Clippings/saved-page.md")" 'converted by pandoc' 'conv
 expect_eq "$(cat "$remote/0-Inbox/already.md")" 'mine' 'existing sibling left alone'
 expect_eq "$(post 2 'p.processed.some((i) => i.path.endsWith("quarterly-report.md") || i.path.endsWith("saved-page.md"))')" \
   false 'converted siblings are not reported as processed originals'
+# R-SS-6 (#966): the pending list in the prompt says where a converted
+# document's text is.
+grep -Fxq -- '- `0-Inbox/quarterly-report.docx` (text: `0-Inbox/quarterly-report.md`)' "$STATE/claude-prompt.txt" ||
+  die 'the prompt does not point at the converted text'
 expect_no_copy_or_convert_tool
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok documents converted before the run"
 
-# 12. A prompt-injected run rewrites CLAUDE.md and writes evil/x.md (and a
-# skill under .claude/): the audit reverts both, uploads neither, lists both
-# in `refused`, and still saves the legitimate change. .claude/ is never
-# uploaded, so it needs no refused entry.
+# 12. A prompt-injected run writes a CLAUDE.md and evil/x.md (and a skill
+# under .claude/): CLAUDE.md is out of the folder during the run (R-SS-5,
+# #966), so the file the agent wrote is replaced by the rulebook before the
+# audit and needs no refused entry; the audit reverts evil/x.md, uploads
+# neither, lists it in `refused`, and still saves the legitimate change.
+# .claude/ is never uploaded, so it needs no refused entry.
 run_case protected BOWER_REPORT_REFUSED=1
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
-expect_eq "$(post 2 p.refused)" '["CLAUDE.md","evil/x.md"]' 'refused'
+expect_eq "$(post 2 p.refused)" '["evil/x.md"]' 'refused'
 remote="$STATE/remote"
-expect_eq "$(cat "$remote/CLAUDE.md")" '# rules' 'rulebook in Drive'
+expect_rulebook_kept
+grep -q ' rulebook: a CLAUDE.md written during the run was replaced$' "$STATE/out.log" ||
+  die 'the CLAUDE.md the agent wrote was not replaced'
 [ ! -e "$remote/evil" ] || die 'a file outside the known roots reached Drive'
 [ ! -e "$remote/.claude/skills" ] || die 'a file under .claude/ reached Drive'
 expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md log.md ' 'uploaded files (the filed original is moved, #595, and logged, #596)'
 expect_eq "$(cat "$remote/3-Resources/agent.md")" 'v2 from the agent' 'accepted change'
-grep -q ' 2 changes refused$' "$STATE/out.log" || die 'refused count not logged'
+grep -q ' 1 changes refused$' "$STATE/out.log" || die 'refused count not logged'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok protected paths and unknown roots reverted"
+
+# 12a. The runner's copy of CLAUDE.md changes while it is out (#966): its
+# sha256 no longer matches, so CLAUDE.md comes back from the pre-run copy
+# and Drive keeps it unchanged.
+run_case rulebookswap
+expect_eq "$RC" 0 'exit code'
+expect_rulebook_kept
+grep -q ' rulebook copy changed during the run: restored from the pre-run copy$' "$STATE/out.log" ||
+  die 'the changed rulebook copy was not noticed'
+! grep -Fxq 'CLAUDE.md' "$STATE/uploaded.txt" || die 'CLAUDE.md was uploaded'
+expect_content_free
+expect_cleaned_up
+echo "ok a changed rulebook copy is not restored"
 
 # 13. The pending original is moved out of the known roots: the move is
 # refused and the original stays in the inbox in Drive.
@@ -2098,6 +2262,9 @@ expect_eq "$(post 2 p.quarantined)" \
   '["0-Inbox/Quarantine/Bower - 2026-01-15 0901 Weekly planning tips.md"]' 'quarantined'
 expect_eq "$(tr '\n' '|' <"$STATE/remote/Rules.md")" '# my rules|Tidy the notes every week|' 'Rules.md in Drive'
 grep -Fxq 'Rules.md' "$STATE/uploaded.txt" || die 'Rules.md not uploaded'
+# R-SS-5 (#966): an instruction note adds the instructions sections.
+expect_system_sections 'CORE INGEST INSTRUCTIONS' 'LINT'
+expect_rulebook_kept
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -2579,7 +2746,7 @@ printf -- '%s\n' '2-Areas/New name.md' '1-Projects/Flat hunt/sign.jpg' >"$STATE/
   UPLOAD_FILE="$STATE/upload.txt"
   RULES_WRITABLE=0
   log() { printf '%s\n' "$*" >>"$STATE/out.log"; }
-  eval "$(sed -n '/^in_known_root() {$/,/^}$/p; /^may_write() {$/,/^}$/p; /^book_moves() {$/,/^}$/p' "$RUN_SH")"
+  eval "$(sed -n '/^in_known_root() {$/,/^}$/p; /^may_write() {$/,/^}$/p; /^book_moves() {$/,/^}$/p; /^append_log_lines() {$/,/^}$/p' "$RUN_SH")"
   : >"$UPLOAD_FILE"
   book_moves "$book" "$STATE/old.txt" "$STATE/new.txt" '2026-01-15 09:30'
   LC_ALL=C sort "$UPLOAD_FILE" >"$STATE/upload-1.txt"
@@ -2955,3 +3122,69 @@ fi
 expect_content_free
 expect_cleaned_up
 echo "ok the runner keeps a usable folder status list and removes an unusable one"
+
+# 43. R-SS-9, R-SS-10, R-SS-13 (#967): after the session the runner
+# recounts `## Tags` from the rows (a tag missing from the section added
+# with a placeholder meaning, an unused one kept at 0), logs `Tag added:`
+# for the new tag in log.md, and counts the added rows not in the v24 form
+# as a warning in the summary. Both files reach Drive; only counts reach
+# the log.
+MODE=ingest
+run_case tagcount
+expect_eq "$RC" 0 'tagcount: exit code'
+expect_eq "$(post "$(posts_count)" p.state)" done 'tagcount: final state'
+remote="$STATE/remote"
+expect_eq "$(sed -n '/^## Tags$/,$p' "$remote/index.md")" "$(printf -- '%s\n' '## Tags' \
+  '- #flat · Flat hunt papers · 2' '- #job-offer · — · 1' '- #receipt · Receipts · 0')" \
+  'tagcount: the tag counts in Drive'
+grep -Eq '^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} · Tag added: #job-offer$' "$remote/log.md" ||
+  die 'tagcount: no Tag added: line in log.md'
+expect_eq "$(grep -c 'Tag added:' "$remote/log.md")" 1 'tagcount: one new tag only'
+grep -q ' · Filed: a.pdf → 1-Projects/Job hunt$' "$remote/log.md" || die 'tagcount: the Filed: line is gone'
+expect_eq "$(post "$(posts_count)" 'p.summary.split("\n").pop()')" \
+  'Warning: 1 index row is not in the expected form.' 'tagcount: the row warning in the summary'
+grep -q ' row check: 1 of 2 rows not in the expected form$' "$STATE/out.log" || die 'tagcount: rows not counted'
+grep -q ' tags: 3 counted, 1 added$' "$STATE/out.log" || die 'tagcount: tags not counted'
+grep -Eq '^[^ ]* sync down: [0-9]+ files, [0-9]+\.[0-9] MB, [0-9]+ s$' "$STATE/out.log" ||
+  die 'tagcount: no sync-down numbers'
+if grep -Eq 'job-offer|#flat|#receipt|Notes without' "$STATE/out.log"; then die 'tagcount: the log names a tag or a row'; fi
+expect_content_free
+expect_cleaned_up
+echo "ok the runner recounts the tags, logs a new one and counts the rows not in form"
+
+# 44. #967: a silent no-op. The agent was given three files, left all where
+# they were and said `Problems: none`: the summary carries a warning with
+# the count, the log the count only.
+MODE=ingest
+run_case noop
+expect_eq "$RC" 0 'noop: exit code'
+expect_eq "$(post "$(posts_count)" p.state)" done 'noop: final state'
+expect_eq "$(post "$(posts_count)" 'p.summary.split("\n").pop()')" \
+  'Warning: 3 files were left where they were, and no problem was reported.' 'noop: the warning in the summary'
+grep -q ' silent run: 3 files left where they were, no problem reported$' "$STATE/out.log" ||
+  die 'noop: not counted in the log'
+expect_content_free
+expect_cleaned_up
+echo "ok a run that leaves every file where it was and reports no problem is a warning"
+
+# 45. R-SS-12 (#967): a new text copy of a filed PDF (not pending) gets the
+# PDF's text, or the scan line, the way a pending PDF's does; an older text
+# copy and one whose PDF is not there get nothing. Only counts reach the log.
+MODE=ingest
+run_case filedpdf
+expect_eq "$RC" 0 'filedpdf: exit code'
+expect_eq "$(post "$(posts_count)" p.state)" done 'filedpdf: final state'
+remote="$STATE/remote"
+# The runner's History section (R-RUNNER-9) follows the document's text.
+expect_eq "$(grep -A 3 '^## The document$' "$remote/3-Resources/Contract.md")" \
+  "$(printf '## The document\n\nPDF TEXT LINE 1\n  PDF TEXT LINE 2')" 'filedpdf: the text of a filed PDF'
+expect_eq "$(grep -A 2 '^## The document$' "$remote/3-Resources/Scan.md")" \
+  "$(printf '## The document\n\nScanned: no text to copy')" 'filedpdf: a filed scan says so'
+if grep -q '^## The document$' "$remote/3-Resources/Old.md"; then die 'filedpdf: an older text copy got the text'; fi
+if grep -q '^## The document$' "$remote/3-Resources/Missing.md"; then die 'filedpdf: a copy with no PDF got a section'; fi
+grep -q ' 2 text copies completed$' "$STATE/out.log" || die 'filedpdf: text copies not counted'
+grep -q ' 2 of them for filed PDFs$' "$STATE/out.log" || die 'filedpdf: filed PDFs not counted'
+if grep -Eq 'Contract|Scan\.|Missing' "$STATE/out.log"; then die 'filedpdf: the log names a file'; fi
+expect_content_free
+expect_cleaned_up
+echo "ok a new text copy of a filed PDF gets the text, a filed scan the scan line"
