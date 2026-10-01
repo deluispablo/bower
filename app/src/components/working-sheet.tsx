@@ -416,6 +416,9 @@ export interface SheetRow {
   note: string | null;
   /** "From your pile: “…”" when the item came out of a pile (R-PILE-5). */
   origin?: string;
+  /** The root whose colour the glyph takes when it is not the folder's
+   * (the thing being read is still in the inbox). */
+  iconRoot?: ParaKind | null;
   /** The file name with its extension, for the kind in words and the icon
    * (the title drops it, K-17). */
   name?: string;
@@ -657,7 +660,7 @@ function SheetListRow({ row }: { row: SheetRow }): JSX.Element {
           title,
           name,
           mimeType: '',
-          root: row.para,
+          root: row.iconRoot ?? row.para,
         }}
         meta={meta}
         {...(row.where === ''
@@ -823,6 +826,9 @@ export function WorkingSheet({
           tone: reading.tone,
           action: null,
           para: null,
+          // Still in the inbox: its glyph in the Inbox colour, as the pile
+          // rows draw it (AD-Running).
+          iconRoot: 'inbox',
           where: '',
           note: readingLine(reading.path).toLowerCase(),
         };
