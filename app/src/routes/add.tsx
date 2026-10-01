@@ -101,6 +101,7 @@ import { useVault } from '../vault-store.js';
 
 import '../styles/add.css';
 import '../styles/process.css';
+import { menuDriveIds } from '../menu-drive-ids.js';
 
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
@@ -951,7 +952,7 @@ export function Add() {
           <NoteMenu
             kind="add"
             inboxPath="0-Inbox"
-            driveIds={inboxFolderId === null ? {} : { inbox: inboxFolderId }}
+            driveIds={menuDriveIds({ vault: me?.vault, byPath: index?.byPath })}
             onClose={() => setMenuOpen(false)}
           />
         )}

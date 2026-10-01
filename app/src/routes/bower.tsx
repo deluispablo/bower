@@ -126,6 +126,7 @@ import { useMediaQuery } from '../use-media-query.js';
 import { requestRowText } from '../move-request.js';
 import '../styles/bower.css';
 import '../styles/pin-sheet.css';
+import { menuDriveIds } from '../menu-drive-ids.js';
 
 /** The phone top bar's title (spec §14): a stable element, so it never
  * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
@@ -603,7 +604,6 @@ export function Bower(): JSX.Element {
     [menuOpen, toggleMenu],
   );
   useShellSlot('actions', actionsContent);
-  const rulesId = index?.byPath.get(RULES_PATH)?.id;
   // "Things you can ask" from the ⋯: open the card under the box.
   function openIdeas(): void {
     setTipOpen(true);
@@ -979,7 +979,7 @@ export function Bower(): JSX.Element {
         <NoteMenu
           kind="bower"
           title="Bower"
-          driveIds={rulesId === undefined ? {} : { rules: rulesId }}
+          driveIds={menuDriveIds({ vault: me?.vault, byPath: index?.byPath })}
           onIdeas={openIdeas}
           onClose={closeMenu}
         />

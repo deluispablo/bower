@@ -28,6 +28,7 @@ import { useSession } from '../session.js';
 import { FOLDERS_TAB_LABEL } from '../shell-routes.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
+import { menuDriveIds } from '../menu-drive-ids.js';
 
 export function Notes(): JSX.Element | null {
   const desktop = useMediaQuery(DESKTOP_QUERY);
@@ -36,7 +37,6 @@ export function Notes(): JSX.Element | null {
   const { me } = useSession();
   const shown = useShowAppFiles();
   const [menuOpen, setMenuOpen] = useState(false);
-  const folderId = me?.vault?.folderId ?? null;
 
   // R-NT-5: the desktop has the sidebar; "Show in folders" goes back to the
   // item and points the sidebar at it.
@@ -86,7 +86,7 @@ export function Notes(): JSX.Element | null {
         <NoteMenu
           kind="notes"
           title={FOLDERS_TAB_LABEL}
-          {...(folderId !== null && { driveIds: { root: folderId } })}
+          driveIds={menuDriveIds({ vault: me?.vault, byPath: index?.byPath })}
           ownFilesShown={shown}
           onToggleOwnFiles={() => setShowAppFiles(!shown)}
           onClose={() => setMenuOpen(false)}

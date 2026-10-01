@@ -51,6 +51,7 @@ import { replayTour } from '../tour-store.js';
 import '../styles/settings.css';
 import { setTheme } from '../theme.js';
 import { useVault } from '../vault-store.js';
+import { menuDriveIds } from '../menu-drive-ids.js';
 
 /**
  * `apiFetch` already turns a non-2xx response into an `ApiError` carrying a
@@ -723,6 +724,7 @@ function DeleteAccount(): JSX.Element {
 
 export function Settings(): JSX.Element | null {
   const { me } = useSession();
+  const { index } = useVault();
   const [menuOpen, setMenuOpen] = useState(false);
 
   useShellSlot('back', BACK);
@@ -751,11 +753,7 @@ export function Settings(): JSX.Element | null {
           <NoteMenu
             kind="settings"
             title="Settings"
-            driveIds={
-              me.vault === undefined || me.vault === null
-                ? {}
-                : { root: me.vault.folderId }
-            }
+            driveIds={menuDriveIds({ vault: me.vault, byPath: index?.byPath })}
             onClose={() => {
               setMenuOpen(false);
             }}
