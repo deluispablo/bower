@@ -37,7 +37,10 @@ test('a PDF can be pinned to Home from its More menu and unpinned again (#688)',
   const fileUrl = page.url();
 
   await page
-    .getByRole('button', { name: 'More' })
+    .getByRole('button', {
+      name: 'More for Shelves and tap quote',
+      exact: true,
+    })
     .filter({ visible: true })
     .click();
   const menu = page.getByRole('menu', { name: 'File actions' });
@@ -53,7 +56,10 @@ test('a PDF can be pinned to Home from its More menu and unpinned again (#688)',
   await expect(page).toHaveURL(fileUrl);
 
   await page
-    .getByRole('button', { name: 'More' })
+    .getByRole('button', {
+      name: 'More for Shelves and tap quote',
+      exact: true,
+    })
     .filter({ visible: true })
     .click();
   await page

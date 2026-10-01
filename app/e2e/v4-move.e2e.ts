@@ -17,7 +17,13 @@ async function openMenu(page: Page): Promise<void> {
     page.locator('.home-notes a[href^="/note/"]').filter({ hasText: NOTE }),
   ).click();
   await expect(page).toHaveURL(/\/note\//);
-  await visible(page.getByRole('button', { name: 'More' })).click();
+  // The page's own ⋯, exact: a stale "More for Home" never matches.
+  await visible(
+    page.getByRole('button', {
+      name: 'More for 10-43 Buckley St, Moonee Ponds',
+      exact: true,
+    }),
+  ).click();
   await expect(page.getByRole('menu')).toBeVisible();
 }
 
