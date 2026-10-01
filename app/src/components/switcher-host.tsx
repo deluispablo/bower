@@ -13,6 +13,7 @@ import { lazyOverlay } from '../lazy-overlay.js';
 import {
   openSwitcher,
   recordOpened,
+  recordPage,
   useSwitcherOpen,
 } from '../switcher-store.js';
 
@@ -70,6 +71,8 @@ export function SwitcherHost(): JSX.Element | null {
   useEffect(() => {
     const id = openedIdOf(path);
     if (id !== null) recordOpened(id);
+    // The page a tag's `/search` link goes back to (#917).
+    recordPage(path);
   }, [path]);
 
   return open ? <LazySwitcher.Component /> : null;

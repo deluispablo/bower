@@ -176,3 +176,23 @@ export function recordOpened(id: string): void {
     // Storage full or blocked: the list just does not stick.
   }
 }
+
+// --- The page behind Search (#917, R-SE-5) ----------------------------------
+//
+// A tag on a note links to `/search?q=%23tag`. The route goes back to the
+// page the person was on (the note) and opens Search over it, so closing
+// Search returns to the note. `switcher-host.tsx` sees every location and
+// records each page that is not `/search` itself.
+
+let pageBehindSearch: string | null = null;
+
+/** Remembers `path` as the last page shown; `/search` is never one. */
+export function recordPage(path: string): void {
+  if (path === '/search' || path.startsWith('/search?')) return;
+  pageBehindSearch = path;
+}
+
+/** The last page shown before `/search`, or `null` on a fresh load there. */
+export function lastPage(): string | null {
+  return pageBehindSearch;
+}
