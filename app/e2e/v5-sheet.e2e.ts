@@ -67,7 +67,7 @@ test('the sheet is modal: a tap on the page behind does nothing (R-SHEET-1)', as
   }
 });
 
-test('running: the Tidying bird stage is 166 px, with the steps and the demo note (R-BIRD-8, R-SHEET-5)', async ({
+test('running: the Tidying bird stage is 118 px (AD-Running), with the three steps and the demo note (R-BIRD-8, R-SHEET-5)', async ({
   page,
 }) => {
   await holdRun(page, 'running');
@@ -78,19 +78,24 @@ test('running: the Tidying bird stage is 166 px, with the steps and the demo not
   ).toBeVisible();
   const stage = sheet.locator('.working-sheet-stage');
   const box = await stage.boundingBox();
-  expect(Math.round(box?.height ?? 0)).toBe(166);
-  const steps = sheet
-    .getByRole('list', { name: 'Steps' })
-    .getByRole('listitem');
-  await expect(steps).toHaveCount(4);
-  await expect(steps.nth(2)).toContainText('Writing notes');
+  expect(Math.round(box?.height ?? 0)).toBe(118);
+  // #914 (AD-Running): the stage's two ends; no four-step list.
+  await expect(sheet.locator('.working-sheet-stage-from')).toHaveText('Inbox');
+  await expect(sheet.locator('.working-sheet-stage-to')).toHaveText(
+    'Your folders',
+  );
+  await expect(sheet.getByRole('list', { name: 'Steps' })).toHaveCount(0);
   await expect(sheet).toContainText('A recording.');
+  // The ✕ only, no full-width Close (K-25).
   await expect(
-    sheet.getByRole('button', { name: 'Close' }).last(),
+    sheet.getByRole('button', { name: 'Close the tidy-up', exact: true }),
   ).toBeVisible();
+  await expect(
+    sheet.getByRole('button', { name: 'Close', exact: true }),
+  ).toHaveCount(0);
 });
 
-test('done: tiles, rows with a tag, and See everything opens Just filed for this run (R-SHEET-2, 3, 6)', async ({
+test('done: tiles, rows with a tag, and See what changed opens Just filed for this run (R-SHEET-2, 3, 6)', async ({
   page,
 }, testInfo) => {
   // v6 (#906, E-9): the done sheet opens from the phone chip; the desktop
@@ -104,12 +109,12 @@ test('done: tiles, rows with a tag, and See everything opens Just filed for this
     sheet.getByRole('list', { name: 'What this tidy-up did' }),
   ).toBeVisible();
   const row = sheet.locator('.working-sheet-row').first();
-  await expect(row.locator('.working-sheet-tag')).toBeVisible();
+  await expect(row.locator('.badge')).toBeVisible();
   const align = await row
-    .locator('.working-sheet-row-title')
+    .locator('.list-row-title')
     .evaluate((element) => getComputedStyle(element).textAlign);
   expect(['left', 'start']).toContain(align);
-  const see = sheet.getByRole('link', { name: 'See everything' });
+  const see = sheet.getByRole('link', { name: 'See what changed' });
   await expect(see).toHaveAttribute('href', /^\/just-filed\?run=/);
   await see.click();
   await expect(page).toHaveURL(/\/just-filed\?run=/);
