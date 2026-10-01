@@ -446,42 +446,6 @@
   min-width: 0;
 }
 
-.folders-menu {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-1);
-}
-
-.folders-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 48px;
-  padding: 0 var(--space-3);
-  background: none;
-  border: none;
-  border-radius: 8px;
-  color: var(--color-text);
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.folders-menu-item:hover {
-  background: var(--color-surface-hover);
-}
-
-.folders-menu-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.folders-menu-sub {
-  color: var(--color-text-muted);
-  font-size: 13px;
-}
-
 /* The phone hosts' Health check row: "Not checked yet" in 13 px meta
    (spec §3.14, #920 DA-27). */
 .explorer-item-meta {

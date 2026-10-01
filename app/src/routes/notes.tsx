@@ -19,14 +19,8 @@ import {
   setShowAppFiles,
   useShowAppFiles,
 } from '../components/explorer.js';
-import {
-  IconExternalLink,
-  IconEye,
-  IconEyeOff,
-  IconHelp,
-  IconMore,
-} from '../components/icons.js';
-import { Overlay } from '../components/overlay.js';
+import { IconMore } from '../components/icons.js';
+import { NoteMenu } from '../components/note-menu.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { folderHref } from '../navigation.js';
 import {
@@ -34,7 +28,6 @@ import {
   open as openOverlay,
   OVERLAY_PRIORITY,
 } from '../overlay-queue.js';
-import { requestHelp } from '../more-menu.js';
 import { revealInFolders, targetFromReveal } from '../reveal.js';
 import { useSession } from '../session.js';
 import { FOLDERS_TAB_LABEL } from '../shell-routes.js';
@@ -42,78 +35,6 @@ import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
 
 const MORE_ID = 'folders-more';
-
-function driveFolderHref(folderId: string): string {
-  return `https://drive.google.com/drive/folders/${folderId}`;
-}
-
-function FoldersMenu({
-  driveHref,
-  shown,
-  onClose,
-}: {
-  driveHref: string | null;
-  shown: boolean;
-  onClose: () => void;
-}): JSX.Element {
-  return (
-    <Overlay
-      kind="menu"
-      label={`More for ${FOLDERS_TAB_LABEL}`}
-      onClose={onClose}
-    >
-      <div
-        class="folders-menu"
-        role="menu"
-        aria-label={`More for ${FOLDERS_TAB_LABEL}`}
-      >
-        {driveHref !== null && (
-          <a
-            role="menuitem"
-            class="folders-menu-item"
-            href={driveHref}
-            target="_blank"
-            rel="noopener"
-            onClick={onClose}
-          >
-            <IconExternalLink />
-            <span>Open your Bower folder in Drive</span>
-          </a>
-        )}
-        <button
-          type="button"
-          role="menuitem"
-          class="folders-menu-item"
-          onClick={() => {
-            setShowAppFiles(!shown);
-            onClose();
-          }}
-        >
-          {shown ? <IconEyeOff /> : <IconEye />}
-          <span class="folders-menu-text">
-            <span>
-              {shown ? "Hide Bower's own files" : "Show Bower's own files"}
-            </span>
-            <span class="folders-menu-sub">Files Bower keeps for itself</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          role="menuitem"
-          class="folders-menu-item"
-          onClick={() => {
-            onClose();
-            // The help sheet belongs to the shell (layout.tsx, #906).
-            requestHelp();
-          }}
-        >
-          <IconHelp />
-          <span>Help and about this</span>
-        </button>
-      </div>
-    </Overlay>
-  );
-}
 
 export function Notes(): JSX.Element | null {
   const desktop = useMediaQuery(DESKTOP_QUERY);
@@ -123,7 +44,6 @@ export function Notes(): JSX.Element | null {
   const shown = useShowAppFiles();
   const [menuOpen, setMenuOpen] = useState(false);
   const folderId = me?.vault?.folderId ?? null;
-  const driveHref = folderId === null ? null : driveFolderHref(folderId);
 
   // R-NT-5: the desktop has the sidebar; "Show in folders" goes back to the
   // item and points the sidebar at it.
@@ -150,9 +70,13 @@ export function Notes(): JSX.Element | null {
       id: MORE_ID,
       priority: OVERLAY_PRIORITY.own,
       render: () => (
-        <FoldersMenu
-          driveHref={driveHref}
-          shown={shown}
+        // The shared ⋯ action sheet (#920 DA-5): 52 px items, group
+        // separators and Cancel on the phone, as every other ⋯.
+        <NoteMenu
+          kind="notes"
+          {...(folderId !== null && { driveIds: { root: folderId } })}
+          ownFilesShown={shown}
+          onToggleOwnFiles={() => setShowAppFiles(!shown)}
           onClose={() => {
             setMenuOpen(false);
             closeOverlay(MORE_ID);
@@ -181,7 +105,7 @@ export function Notes(): JSX.Element | null {
         </span>
       </div>
     ),
-    [menuOpen, shown, driveHref],
+    [menuOpen, shown, folderId],
   );
 
   useShellSlot('actions', more);
