@@ -1,9 +1,70 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  FILE_PICKER_VIEWS,
   filesFromPickerResponse,
   folderIdFromPickerResponse,
+  openFilePicker,
 } from '../src/picker.js';
+
+describe('openFilePicker', () => {
+  it('shows two views only, My Drive and Shared with me (R-API-6)', () => {
+    const views: { label?: string; parent?: string; ownedByMe?: boolean }[] =
+      [];
+    class DocsView {
+      state: { label?: string; parent?: string; ownedByMe?: boolean } = {};
+      constructor() {
+        views.push(this.state);
+      }
+      setIncludeFolders(): this {
+        return this;
+      }
+      setSelectFolderEnabled(): this {
+        return this;
+      }
+      setParent(parent: string): this {
+        this.state.parent = parent;
+        return this;
+      }
+      setOwnedByMe(me: boolean): this {
+        this.state.ownedByMe = me;
+        return this;
+      }
+      setLabel(label: string): this {
+        this.state.label = label;
+        return this;
+      }
+    }
+    const added: unknown[] = [];
+    const builder = {
+      addView(view: DocsView): typeof builder {
+        added.push(view);
+        return builder;
+      },
+      enableFeature: (): typeof builder => builder,
+      setTitle: (): typeof builder => builder,
+      setOAuthToken: (): typeof builder => builder,
+      setDeveloperKey: (): typeof builder => builder,
+      setCallback: (): typeof builder => builder,
+      build: () => ({ setVisible: (): void => undefined }),
+    };
+    const api = {
+      DocsView,
+      PickerBuilder: function PickerBuilder() {
+        return builder;
+      },
+      Feature: { MULTISELECT_ENABLED: 'multi' },
+    } as unknown as typeof google.picker;
+
+    openFilePicker(api, 'TOKEN', 'KEY', () => undefined);
+
+    expect(added).toHaveLength(2);
+    expect(views.map((view) => view.label)).toEqual([...FILE_PICKER_VIEWS]);
+    expect(FILE_PICKER_VIEWS).toEqual(['My Drive', 'Shared with me']);
+    expect(views[0]?.parent).toBe('root');
+    expect(views[1]?.ownedByMe).toBe(false);
+  });
+});
 
 describe('folderIdFromPickerResponse', () => {
   it('returns the folder id for a picked response', () => {

@@ -37,6 +37,8 @@ declare namespace google.picker {
     setMimeTypes(mimeTypes: string): this;
     setOwnedByMe(me: boolean): this;
     setStarred(starred: boolean): this;
+    /** The view's tab name in the Picker. */
+    setLabel(label: string): this;
     /** `'root'` for My Drive: real folder navigation from that parent,
      * instead of a flat, unfiltered grid of every folder in the account. */
     setParent(parentId: string): this;
