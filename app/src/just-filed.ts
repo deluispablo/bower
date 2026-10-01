@@ -11,7 +11,7 @@
 
 import { activityCard, cardDuration, cardWhen, parseLog } from './activity.js';
 import type { ActivityRow } from './activity.js';
-import type { Run, RunItem, SetAsideItem, SetAsideReason } from './api.js';
+import type { Run, SetAsideReason } from './api.js';
 import type { DriveFile } from './drive.js';
 import { formatPolicy } from './formats.js';
 import { runCounts, things } from './home.js';
@@ -147,52 +147,11 @@ function kindOfName(name: string): FileKind {
   return fileKind({ name, mimeType: '' });
 }
 
-function rowOf(item: RunItem & { to: string }, index: VaultIndex | null) {
-  const name = baseName(item.to);
-  const file = fileAt(index, item.to);
-  const kind = file === undefined ? kindOfName(name) : fileKind(file);
-  const row: JustFiledRow = {
-    key: item.path,
-    to: item.to,
-    title: linkTitleFromFileName(name) ?? fileTitle(name),
-    kind,
-    name,
-    folder: folderLabel(folderOf(item.to)),
-    para: paraOf(item.to),
-    notePath: kind === 'note' ? item.to : item.to.replace(/\.[^./]+$/, '.md'),
-  };
-  if (item.renamedFrom !== undefined && item.renamedFrom !== '') {
-    row.oldName = item.renamedFrom;
-  }
-  if (file !== undefined) {
-    row.id = file.id;
-    row.href = hrefFor(file, kind);
-  }
-  return row;
-}
-
 /** Whether `run` says where its items went (report v2). */
 export function hasDestinations(run: Run): boolean {
   return (run.items ?? []).some(
     (item) => item.kind === 'file' && item.to !== undefined,
   );
-}
-
-/** The rows of a report with `to`: files only, a request or a rule is not a
- * thing that was filed. Set-aside items stay in the rows list of a table
- * only through their own group (`setAsideRows`). */
-export function justFiledRows(
-  run: Run,
-  index: VaultIndex | null,
-): JustFiledRow[] {
-  const aside = new Set((run.setAside ?? []).map((item) => item.path));
-  const rows: JustFiledRow[] = [];
-  for (const item of run.items ?? []) {
-    if (item.kind !== 'file' || item.to === undefined) continue;
-    if (aside.has(item.to) || aside.has(item.path)) continue;
-    rows.push(rowOf({ ...item, to: item.to }, index));
-  }
-  return rows;
 }
 
 /** The ids the rows stand for, for "Mark all seen" and the New tags. */
@@ -233,32 +192,6 @@ export function setAsideSentence(
   }
 }
 
-function asideRowOf(item: SetAsideItem, index: VaultIndex | null): SetAsideRow {
-  const name = baseName(item.path);
-  const file = fileAt(index, item.path);
-  const kind = file === undefined ? kindOfName(name) : fileKind(file);
-  const row: SetAsideRow = {
-    key: item.path,
-    title: linkTitleFromFileName(name) ?? fileTitle(name),
-    folder: folderLabel(folderOf(item.path)),
-    reason: item.reason,
-    sentence: setAsideSentence(item.reason, kind),
-    sayHref: `/bower?text=${encodeURIComponent(`About ${name}: `)}`,
-  };
-  if (file !== undefined) {
-    row.id = file.id;
-    row.href = hrefFor(file, kind);
-  }
-  return row;
-}
-
-export function setAsideRows(
-  run: Run,
-  index: VaultIndex | null,
-): SetAsideRow[] {
-  return (run.setAside ?? []).map((item) => asideRowOf(item, index));
-}
-
 /** How many things a run filed, set-aside ones included (`Just filed · 6`). */
 export function filedCount(run: Run): number {
   return runCounts(run).filed;
@@ -295,26 +228,6 @@ export function earlierWhen(iso: string): string {
   const pad = (n: number): string => String(n).padStart(2, '0');
   const day = `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   return `${shortDay(day)}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/** An earlier tidy-up's line: "26 Sep, 18:10 · 3 things", and for one or two
- * things their names ("12 Jun, 20:45 · 2 things · Offer letter, Bike shop
- * receipt"). */
-export function earlierHeading(
-  run: Run,
-  now: number,
-  index: VaultIndex | null,
-): string {
-  const count = filedCount(run);
-  const parts = [earlierWhen(run.finishedAt ?? run.requestedAt), things(count)];
-  if (count > 0 && count <= 2 && hasDestinations(run)) {
-    const names = justFiledRows(run, index).map((row) => {
-      const comma = row.title.indexOf(',');
-      return comma === -1 ? row.title : row.title.slice(0, comma);
-    });
-    if (names.length > 0) parts.push(names.join(', '));
-  }
-  return parts.join(' · ');
 }
 
 /** The finished runs, newest first, from `GET /runs`. */
