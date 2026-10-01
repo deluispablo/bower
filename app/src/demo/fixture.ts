@@ -1755,7 +1755,7 @@ A senior data engineering role in Melbourne, hybrid.
 A summary of [[Resume Australia]], the CV tailored for [[Job Search Australia]], with the facts an Australian recruiter would look for first and what is worth checking before it goes out.
 
 ## Key facts
-| Fact | Detail |
+| | |
 |---|---|
 | Target role | Senior Data Engineer (Google Cloud) |
 | Experience | 8 years, retail and financial data |
