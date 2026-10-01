@@ -246,10 +246,11 @@ function SortGlyph({
 }
 
 /** The phone's "Sort by" sheet (PF-Sort-375): High first / Low first, the
- * criteria as radio rows, and "Show <n> flats". Choices apply as made. */
+ * criteria as radio rows, and "Show <n> flats". The choices are a draft:
+ * "Show" applies it, Esc or ✕ cancels it (T-23). */
 function SortSheet({
   options,
-  sort,
+  sort: applied,
   count,
   noun,
   onSort,
@@ -262,6 +263,7 @@ function SortSheet({
   onSort: (sort: CompareSort) => void;
   onClose: () => void;
 }): JSX.Element {
+  const [sort, onSortDraft] = useState<CompareSort>(applied);
   return (
     <Overlay kind="sheet" labelledBy="compare-sort-title" onClose={onClose}>
       <div class="overlay-body compare-sheet">
@@ -281,7 +283,7 @@ function SortSheet({
             ]}
             value={sort.direction}
             onChange={(direction) => {
-              onSort({ column: sort.column, direction });
+              onSortDraft({ column: sort.column, direction });
             }}
           />
         </div>
@@ -297,7 +299,10 @@ function SortSheet({
                 aria-checked={on}
                 onClick={() => {
                   if (!on)
-                    onSort({ column: column.id, direction: sort.direction });
+                    onSortDraft({
+                      column: column.id,
+                      direction: sort.direction,
+                    });
                 }}
               >
                 <span>{optionLabel(column)}</span>
@@ -309,7 +314,15 @@ function SortSheet({
         <button
           type="button"
           class="btn btn-block compare-sheet-done"
-          onClick={onClose}
+          onClick={() => {
+            if (
+              sort.column !== applied.column ||
+              sort.direction !== applied.direction
+            ) {
+              onSort(sort);
+            }
+            onClose();
+          }}
         >
           {`Show ${count} ${noun}`}
         </button>
