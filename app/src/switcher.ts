@@ -180,3 +180,38 @@ export function folderPath(file: DriveFile): string {
   const cut = file.path.length - file.name.length - 1;
   return cut > 0 ? displayPath(file.path.slice(0, cut), '/') : '';
 }
+
+/**
+ * Where the highlight goes when the result list changes (SE-Query): to the
+ * first row when the search itself changed (`reset`: a new query, chip or
+ * scope); otherwise it stays on the row it was on (`current`, a row key),
+ * so Drive's full-text answer arriving later never moves it. A row that is
+ * gone sends it back to the first row. Pure.
+ */
+export function keptHighlight(
+  current: string | null,
+  keys: readonly string[],
+  reset: boolean,
+): number {
+  if (reset || current === null) return 0;
+  const at = keys.indexOf(current);
+  return at === -1 ? 0 : at;
+}
+
+/**
+ * The best match by name (the "Close enough counts" line): the highest
+ * score among the name matches the index found on this device, folders
+ * before notes before files on a tie. It never reads Drive's full-text
+ * hits, so it is the same whenever Drive answers. Pure.
+ */
+export function bestNameMatch<T extends { score: number }>(groups: {
+  folders: readonly T[];
+  notes: readonly T[];
+  files: readonly T[];
+}): T | null {
+  let best: T | null = null;
+  for (const hit of [...groups.folders, ...groups.notes, ...groups.files]) {
+    if (best === null || hit.score > best.score) best = hit;
+  }
+  return best;
+}
