@@ -237,7 +237,7 @@ describe('the Tidy up command (#320)', () => {
 
     const row = Array.from(
       document.body.querySelectorAll<HTMLElement>(
-        '[role="option"] a, [role="option"] button',
+        '[role="option"] .switcher-row',
       ),
     ).find((el) => (el.textContent ?? '').includes('Tidy up the inbox'));
     if (row === undefined) throw new Error('Tidy up command missing');
