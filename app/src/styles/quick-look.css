@@ -185,7 +185,8 @@
   margin: 0;
   color: var(--color-heading);
   font-family: var(--font-display);
-  font-size: var(--text-lg);
+  /* 18 px Poppins 700, as PF-Main-1280 and AR-Sub-1280 draw it. */
+  font-size: var(--text-18);
   font-weight: 700;
   line-height: 1.35;
 }

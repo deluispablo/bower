@@ -204,7 +204,9 @@ export function QuickLook({
             )}
           </div>
           <h2 class="quick-look-title">{title}</h2>
-          <p class="quick-look-kind">{kindLine(kind, pages, shown.size, answer === true && isNote)}</p>
+          <p class="quick-look-kind">
+            {kindLine(kind, pages, shown.size, answer === true && isNote)}
+          </p>
           <p class="quick-look-path">
             {para !== null && <FolderMark kind={para} size={18} />}
             <span class="quick-look-path-text">
@@ -279,6 +281,18 @@ export type PaneItem = PanePreview | PaneFolder;
 
 /** The words the empty column says (K-33). */
 export const PANE_EMPTY = 'Select something to see it here.';
+
+/**
+ * The note's body without its own leading `<h1>`: the column already shows
+ * the name once, in its title (G-7, L-56), and the page keeps one h1.
+ */
+export function withoutTitle(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const first = template.content.firstElementChild;
+  if (first?.tagName === 'H1') first.remove();
+  return template.innerHTML;
+}
 
 /** A note's text, rendered, once it is read; `null` until then. */
 function useRenderedNote(id: string | null, path: string): RenderedNote | null {
@@ -455,7 +469,9 @@ function FilePane({ item }: { item: PanePreview }): JSX.Element {
       )}
       {rendered !== null && (
         <div class="quick-look-pane-note">
-          <NoteBody html={opening === null ? rendered.html : opening.rest} />
+          <NoteBody
+            html={withoutTitle(opening === null ? rendered.html : opening.rest)}
+          />
         </div>
       )}
       {!readsNote && kind === 'csv' && rows !== null && (

@@ -44,7 +44,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => {
   return { ...real, useVault: () => ({ index, getNoteText }) };
 });
 
-const { QuickLook, QuickLookPane, filedLine, kindLine } =
+const { QuickLook, QuickLookPane, filedLine, kindLine, withoutTitle } =
   await import('../src/components/quick-look.js');
 const { defaultLayout, noteLines } =
   await import('../src/components/folder-grid.js');
@@ -353,5 +353,18 @@ describe('QuickLookPane, the desktop preview column (§3.37, R-PREVIEW-1)', () =
       'Floor plan',
     );
     expect(root.textContent).toContain('New');
+  });
+});
+
+describe('the preview shows the name once (#950 F-16)', () => {
+  it('drops the leading h1 of the note, and only that', () => {
+    expect(withoutTitle('<h1>Offer</h1><p>Body</p>')).toBe('<p>Body</p>');
+    expect(withoutTitle('<p>Body</p><h1>Later</h1>')).toBe(
+      '<p>Body</p><h1>Later</h1>',
+    );
+  });
+
+  it('reads a Bower answer as one in the kind line (#950 F-4)', () => {
+    expect(kindLine('note', undefined, 2048, true)).toBe('Bower answer · 2 KB');
   });
 });
