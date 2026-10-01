@@ -92,12 +92,20 @@ test.describe('the intro, five pages (#796)', () => {
     page,
   }) => {
     await page.goto('/welcome?from=login');
-    await page.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
     await expect(page).toHaveURL(/\/login$/);
 
     await page.goto('/welcome?from=settings&page=5');
-    await page.getByRole('button', { name: 'Done' }).click();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(page).toHaveURL(/\/settings$/);
+  });
+
+  test('replayed while signed in, the last button reads Back to Bower and goes Home (R-IN-6)', async ({
+    page,
+  }) => {
+    await page.goto('/welcome?from=settings&page=5');
+    await page.getByRole('button', { name: 'Back to Bower' }).click();
+    await expect(page).toHaveURL(/\/$/);
   });
 
   test('focus goes to the heading, other pages are inert, Back and the status are there, Skip is top right', async ({

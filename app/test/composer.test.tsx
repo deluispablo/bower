@@ -227,6 +227,24 @@ describe('commitsOnKey', () => {
 });
 
 describe('Composer', () => {
+  it('as a picture, is inert and hidden and shows the resting mic even with no speech API', () => {
+    const w = window as unknown as Record<string, unknown>;
+    const saved = [w.SpeechRecognition, w.webkitSpeechRecognition];
+    Reflect.deleteProperty(window, 'SpeechRecognition');
+    Reflect.deleteProperty(window, 'webkitSpeechRecognition');
+    try {
+      const root = mount('My move', { mode: 'save', picture: true });
+      expect(button(root).getAttribute('aria-label')).toBe('Dictate');
+      expect(button(root).dataset.state).toBe('mic');
+      const box = root.querySelector('.composer');
+      expect(box?.hasAttribute('inert')).toBe(true);
+      expect(box?.getAttribute('aria-hidden')).toBe('true');
+    } finally {
+      if (saved[0] !== undefined) w.SpeechRecognition = saved[0];
+      if (saved[1] !== undefined) w.webkitSpeechRecognition = saved[1];
+    }
+  });
+
   it('shows the mic when empty and the arrow once there is text', () => {
     const root = mount();
     expect(button(root).getAttribute('aria-label')).toBe('Dictate');

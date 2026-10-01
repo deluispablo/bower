@@ -21,6 +21,7 @@ import type { NoteMeta } from '../note-meta.js';
 import { getPref, setPref } from '../prefs.js';
 import { showToast } from '../toast-store.js';
 import { Bird, BowerMark } from './bird.js';
+import type { BirdState } from './bird.js';
 import { chipLabel, Details, questionsFor } from './details.js';
 import { KeyFacts, scoreName } from './key-facts.js';
 import { NoteBody } from './note-body.js';
@@ -363,6 +364,10 @@ export interface BowerNoteBoxProps {
    * desktop preview column (O-R6); `false` keeps the box open with no
    * control (a picture of the box). */
   fold?: boolean;
+  /** The bird by the box's name: the still mark when left out; a pose
+   * (the intro's reading bird, board IN-P2) draws the moving bird at its
+   * 40 px floor in the mark's 32 px slot. */
+  headBird?: BirdState;
 }
 
 export function BowerNoteBox({
@@ -376,6 +381,7 @@ export function BowerNoteBox({
   updatedAt,
   names,
   fold = true,
+  headBird,
 }: BowerNoteBoxProps): JSX.Element {
   const [foldedState, setFolded] = useState<boolean>(() =>
     readNoteFolded(path),
@@ -470,7 +476,13 @@ export function BowerNoteBox({
       aria-label="Bower's note"
     >
       <div class="bower-note-box-head">
-        <BowerMark size={32} />
+        {headBird === undefined ? (
+          <BowerMark size={32} />
+        ) : (
+          <span class="bower-note-box-head-bird">
+            <Bird state={headBird} size={40} />
+          </span>
+        )}
         <span class="bower-note-box-name">{"Bower's note"}</span>
         {folded && counted.points > 0 && (
           <span class="bower-note-box-line">

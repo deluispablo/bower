@@ -86,6 +86,12 @@ export interface ComposerProps {
   autoFocus?: boolean;
   /** Extra class on the wrapper. */
   class?: string;
+  /**
+   * A picture of the box (the intro): inert and hidden from assistive
+   * technology, and the empty or `save` box always shows the resting
+   * "Dictate" microphone, whatever speech API the browser has.
+   */
+  picture?: boolean;
 }
 
 export interface ComposerButton {
@@ -201,6 +207,7 @@ export function Composer({
   disabled = false,
   autoFocus = false,
   class: rootClass,
+  picture = false,
 }: ComposerProps): JSX.Element {
   const online = useOnline();
   const desktop = useDesktop();
@@ -213,16 +220,18 @@ export function Composer({
     ...(onListening !== undefined && { onListening }),
   });
   const hasText = value.trim() !== '';
+  // A picture never asks for the microphone: it draws the resting box.
+  const shownDictation: DictateState = picture ? 'ready' : dictation.state;
   const button = composerButton({
     mode,
-    dictation: dictation.state,
+    dictation: shownDictation,
     hasText,
     sending,
     online,
     commitLabel,
   });
   const line = composerLine({
-    dictation: dictation.state,
+    dictation: shownDictation,
     desktop,
     online,
     error,
@@ -339,6 +348,7 @@ export function Composer({
       ref={root}
       data-state={button.state}
       onFocusOut={onFocusOut}
+      {...(picture && { inert: true, 'aria-hidden': 'true' as const })}
     >
       <div class="composer-box">
         {inputType !== undefined ? (

@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   INTRO_PAGES,
+  INTRO_PILE,
+  introLastAction,
   introPageFromQuery,
   introPageLabel,
   introReturnPath,
@@ -76,6 +78,16 @@ describe('the five pages (R-INTRO-1)', () => {
     ]) {
       expect(all).not.toContain(untrue);
     }
+  });
+});
+
+describe('introLastAction (R-IN-6)', () => {
+  it('is Back to Bower when replayed signed in, Done from the sign-in, else the sign-in or the demo', () => {
+    expect(introLastAction('settings', false)).toBe('back-to-bower');
+    expect(introLastAction('login', false)).toBe('done');
+    expect(introLastAction('run-your-own', true)).toBe('done');
+    expect(introLastAction(undefined, false)).toBe('sign-in');
+    expect(introLastAction(undefined, true)).toBe('try-demo');
   });
 });
 
@@ -172,6 +184,11 @@ const location = {
 
 vi.mock('preact-iso', () => ({
   useLocation: () => location,
+}));
+
+// Page 2 draws the real note box, whose body reads the vault for embeds.
+vi.mock('../src/vault-store.js', () => ({
+  useVault: () => ({ index: null, getNoteText: () => Promise.resolve('') }),
 }));
 
 const { Intro } = await import('../src/routes/intro.js');
@@ -271,7 +288,7 @@ describe('Intro', () => {
     click('.intro-next');
     click('.intro-next');
     expect(root.querySelector('.intro-status')?.textContent).toBe('5 of 5');
-    expect(root.querySelector('.intro-next')).toBeNull();
+    expect(button('Next')).toBeUndefined();
     expect(button('Back')).toBeDefined();
   });
 
@@ -339,12 +356,12 @@ describe('Intro', () => {
     expect(root.querySelector('.intro-skip')?.textContent).toBe('Skip');
   });
 
-  it('shows Close top right on page 5 of a first visit, with Sign in with Google', () => {
+  it('shows Close top right on page 5 of a first visit, with Sign in with Google where Next was', () => {
     location.query = { page: '5' };
     mount('?page=5');
     expect(root.querySelector('.intro-skip')?.textContent).toBe('Close');
-    expect(root.querySelector('.intro-icon-button')).toBeNull();
-    expect(root.querySelector('.intro-cta')?.textContent).toBe(
+    expect(button('Next')).toBeUndefined();
+    expect(root.querySelector('.intro-footer .intro-cta')?.textContent).toBe(
       'Sign in with Google',
     );
     expect(root.querySelector('.intro-learn')?.textContent).toBe(
@@ -352,28 +369,73 @@ describe('Intro', () => {
     );
   });
 
-  it('shows Close and Done when opened from Settings, and returns there', () => {
+  it('replayed while signed in, the last button reads Back to Bower and goes Home (R-IN-6)', () => {
+    location.query = { from: 'settings', page: '5' };
+    mount('?from=settings&page=5');
+    const last = root.querySelector<HTMLButtonElement>(
+      '.intro-footer .intro-cta',
+    );
+    expect(last?.textContent).toBe('Back to Bower');
+    click('.intro-footer .intro-cta');
+    expect(location.route).toHaveBeenCalledWith('/');
+    expect(introSeen(localStorage)).toBe(true);
+  });
+
+  it('Skip and Close go back to Settings when opened from there', () => {
     location.query = { from: 'settings' };
     mount('?from=settings');
-    expect(
-      root.querySelector('.intro-icon-button')?.getAttribute('aria-label'),
-    ).toBe('Close');
-    expect(root.querySelector('.intro-cta')?.textContent).toBe('Done');
-    click('.intro-icon-button');
+    expect(root.querySelector('.intro-skip')?.textContent).toBe('Skip');
+    click('.intro-skip');
     expect(location.route).toHaveBeenCalledWith('/settings', true);
   });
 
-  it('returns to the sign-in from ?from=login', () => {
-    location.query = { from: 'login' };
-    mount('?from=login');
-    click('.intro-icon-button');
+  it('returns to the sign-in from ?from=login, with Done on page 5', () => {
+    location.query = { from: 'login', page: '5' };
+    mount('?from=login&page=5');
+    expect(root.querySelector('.intro-footer .intro-cta')?.textContent).toBe(
+      'Done',
+    );
+    click('.intro-skip');
     expect(location.route).toHaveBeenCalledWith('/login', true);
+  });
+
+  it('lists the pile on page 1 by name, without extensions (R-IN-7)', () => {
+    mount();
+    const names = Array.from(
+      root.querySelectorAll('.intro-page--1 .intro-row span:last-child'),
+    ).map((el) => el.textContent);
+    expect(names).toEqual(['Lease 2026', 'flat-camden.example', 'IMG_2231']);
+    for (const name of INTRO_PILE.files) {
+      expect(name).not.toMatch(/\.(pdf|jpe?g|png|docx?)$/i);
+    }
+  });
+
+  it('draws pages 1 and 4 with the real text box and page 2 with the note box (R-IN-2, R-IN-3)', () => {
+    // A picture: the resting mic whatever the browser (jsdom has no speech API).
+    mount();
+    const one = root.querySelector('.intro-page--1 .composer');
+    expect(one).not.toBeNull();
+    expect(
+      root
+        .querySelector('.intro-page--1 .composer button')
+        ?.getAttribute('aria-label'),
+    ).toBe('Dictate');
+    expect(
+      root
+        .querySelector('.intro-page--4 .composer button')
+        ?.getAttribute('aria-label'),
+    ).toBe('Send');
+    expect(root.querySelector('.intro-page--2 .bower-note-box')).not.toBeNull();
+    expect(root.querySelectorAll('.intro-page--5 .folder-mark')).toHaveLength(
+      5,
+    );
   });
 
   it('draws its illustrations without animation', () => {
     mount();
     for (const art of root.querySelectorAll('.intro-art')) {
       expect(art.getAttribute('aria-hidden')).toBe('true');
+      expect(art.hasAttribute('inert')).toBe(true);
     }
   });
 });

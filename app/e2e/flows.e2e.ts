@@ -209,7 +209,7 @@ test('the demo banner carries Run your own on Home, Add and Settings (#362)', as
   ).toBeVisible();
 });
 
-test('Run your own Bower: the rows, the runbook, and the five screens with Close (#366)', async ({
+test('Run your own Bower: the rows, the runbook, and the five screens with Skip on pages 1 to 4 and Close on page 5 (#366)', async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -252,10 +252,8 @@ test('Run your own Bower: the rows, the runbook, and the five screens with Close
   await expect(
     page.getByRole('heading', { name: /Bower files it/ }),
   ).toBeInViewport();
-  await expect(
-    page.getByRole('button', { name: 'Skip', exact: true }),
-  ).toHaveCount(0);
-  await page.getByRole('button', { name: 'Close' }).click();
+  // Skip on pages 1 to 4 (boards IN-P1..P4) goes back to Run your own.
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(heading).toBeVisible();
 });
@@ -1512,7 +1510,7 @@ test('Settings footer carries the build commit next to the version (#512)', asyn
   );
 });
 
-test('What is Bower from Settings opens with Close and Done (#329)', async ({
+test('What is Bower from Settings: Skip goes back to Settings, and the last page ends on Back to Bower (#329, #918)', async ({
   page,
 }, testInfo) => {
   await openHome(page);
@@ -1534,18 +1532,16 @@ test('What is Bower from Settings opens with Close and Done (#329)', async ({
     page.getByRole('heading', { name: /Bower files it/ }),
   ).toBeInViewport();
 
-  // Close (X), not Skip, when opened from Settings.
-  await expect(
-    page.getByRole('button', { name: 'Skip', exact: true }),
-  ).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+  // Skip on pages 1 to 4, as everywhere (boards IN-P1..P4).
+  const skip = page.getByRole('button', { name: 'Skip', exact: true });
+  await expect(skip).toBeVisible();
   await shot(page, testInfo, 'intro-from-settings');
 
-  // Closing on page 1 goes straight back to Settings, not the sign-in.
-  await page.getByRole('button', { name: 'Close' }).click();
+  // Skipping on page 1 goes straight back to Settings, not the sign-in.
+  await skip.click();
   await expect(page).toHaveURL(/\/settings$/);
 
-  // Walking all five pages ends on Done, not Sign in with Google.
+  // Walking all five pages ends on Back to Bower, not Sign in with Google.
   await openIntro();
   const next = page.getByRole('button', { name: 'Next', exact: true });
   for (let index = 0; index < 4; index += 1) {
@@ -1557,8 +1553,8 @@ test('What is Bower from Settings opens with Close and Done (#329)', async ({
   await expect(
     page.getByRole('link', { name: 'Sign in with Google' }),
   ).toHaveCount(0);
-  await page.getByRole('button', { name: 'Done' }).click();
-  await expect(page).toHaveURL(/\/settings$/);
+  await page.getByRole('button', { name: 'Back to Bower' }).click();
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', async ({

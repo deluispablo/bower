@@ -4,7 +4,9 @@
  * sign-in, to a signed-out visitor (`session.tsx`'s `decideRedirect`, gated
  * by `introSeen()` in `intro.ts`). Reachable again any time from Settings
  * and from the sign-in's "What is Bower?" link (`/welcome?from=settings` or
- * `from=login`: Close and Done instead of Skip and Sign in with Google).
+ * `from=login`): Skip and Close go back there, and page 5's last button is
+ * "Back to Bower" (home) when replayed signed in, or Done
+ * (`introLastAction`). Skip reads Close on page 5 (boards IN-P1..P5).
  *
  * The page is in the URL (`?page=3`, clamped to 1 to 5), so browser back goes
  * to the previous page and a reload resumes. Next, Back and a swipe push a
@@ -17,8 +19,10 @@
  * In a demo build (#361) the same pages carry the demo banner on top and
  * "Try the demo" where the app says Sign in with Google.
  *
- * The illustrations are CSS only and static: nothing loops, so reduced
- * motion has nothing to change. The copy is `intro.ts`'s.
+ * The pictures are the app's own components (the text box, Bower's note
+ * box, the folder discs, the bird in a pose per page), drawn inert: nothing
+ * but the bird moves, and he holds still under reduced motion. Page 5's
+ * bird by the wordmark is the happy one. The copy is `intro.ts`'s.
  */
 
 import type { ComponentChildren, JSX } from 'preact';
@@ -28,22 +32,32 @@ import { useLocation } from 'preact-iso';
 import { isDemo, loginUrl } from '../api.js';
 import { Bird, BowerMark } from '../components/bird.js';
 import { DemoBanner } from '../components/demo-banner.js';
-import { IconClose, IconFolder, IconNote } from '../components/icons.js';
+import { useDesktop } from '../components/dictate-button.js';
+import { BowerNoteBox } from '../components/bower-note-box.js';
+import { Composer } from '../components/composer.js';
+import { FolderMark } from '../components/folder-mark.js';
+import { IconDocument, IconFolder, IconSparkle } from '../components/icons.js';
 import {
   INTRO_FOLDER,
   INTRO_JOIN,
+  INTRO_LAST_LABEL,
   INTRO_LEARN_LABEL,
   INTRO_NOTE,
   INTRO_PAGES,
   INTRO_PAGE_COUNT,
   INTRO_PILE,
   INTRO_REQUEST,
+  introBody,
+  introLastAction,
+  introNoteHtml,
   introPageFromQuery,
   introPageLabel,
   introReturnPath,
   markIntroSeen,
+  type IntroLastAction,
   type IntroPage,
 } from '../intro.js';
+import '../styles/markdown.css';
 import '../styles/intro.css';
 
 const LAST = INTRO_PAGE_COUNT - 1;
@@ -71,11 +85,30 @@ function pageFromLocation(): number {
   );
 }
 
+/**
+ * A picture of the app: the real components, drawn but not usable. The
+ * wrapper is `inert` and hidden from assistive technology, so the text box
+ * and the note box inside take no focus, no click and no dictation.
+ */
 function Art({ children }: { children: ComponentChildren }): JSX.Element {
   return (
-    <div class="intro-art" aria-hidden="true">
+    <div class="intro-art" aria-hidden="true" inert>
       {children}
     </div>
+  );
+}
+
+/** Nothing happens: the boxes in the pictures never change. */
+function noop(): void {
+  // A picture: there is nothing to keep.
+}
+
+/** A file's document glyph, stroked in its folder's colour (lead ruling). */
+function DocumentGlyph({ tint }: { tint: 'inbox' | 'areas' }): JSX.Element {
+  return (
+    <span class={`intro-doc intro-doc--${tint}`}>
+      <IconDocument size={16} />
+    </span>
   );
 }
 
@@ -83,27 +116,31 @@ function Page1Art(): JSX.Element {
   return (
     <Art>
       <div class="intro-hero-bird">
-        <Bird state="looking" size={96} />
+        <Bird state="looking" size={84} />
       </div>
-      <div class="intro-card">
+      <div class="intro-card intro-pile">
         <span class="intro-kicker">{INTRO_PILE.title}</span>
-        <p class="intro-pile-line">{INTRO_PILE.line}</p>
+        <Composer
+          mode="save"
+          rows={1}
+          picture
+          label="Say in a line what this pile is"
+          value={INTRO_PILE.line}
+          onChange={noop}
+          onCommit={noop}
+        />
         <ul class="intro-rows">
           {INTRO_PILE.files.map((name) => (
             <li class="intro-row">
-              <IconNote />
+              <DocumentGlyph tint="inbox" />
               <span>{name}</span>
             </li>
           ))}
         </ul>
-        <span class="intro-fake-button">{INTRO_PILE.button}</span>
-      </div>
-      <div class="intro-chips">
-        {INTRO_PILE.chips.map((chip) => (
-          <span class="intro-chip" style={{ background: chip.color }}>
-            {chip.name}
-          </span>
-        ))}
+        <span class="button intro-tidy">
+          <IconSparkle />
+          {INTRO_PILE.button}
+        </span>
       </div>
     </Art>
   );
@@ -113,27 +150,21 @@ function Page2Art(): JSX.Element {
   return (
     <Art>
       <div class="intro-card intro-original">
-        <IconNote />
+        <span class="intro-doc intro-doc--areas">
+          <IconDocument size={20} />
+        </span>
         <span>
           <b>{INTRO_NOTE.original}</b>
           <br />
           <span class="intro-muted">{INTRO_NOTE.originalCaption}</span>
         </span>
       </div>
-      <div class="intro-card intro-note">
-        <b class="intro-note-title">{INTRO_NOTE.title}</b>
-        <p>{INTRO_NOTE.summary}</p>
-        <ul class="intro-facts">
-          {INTRO_NOTE.facts.map((fact, index) => (
-            <li>
-              <span class={`intro-origin intro-origin--${index}`} />
-              <span class="intro-muted">{fact.label}</span>
-              <b>{fact.value}</b>
-            </li>
-          ))}
-        </ul>
-        <p class="intro-check">{INTRO_NOTE.check}</p>
-      </div>
+      <BowerNoteBox
+        html={introNoteHtml()}
+        frontmatter={{}}
+        headBird="reading"
+        class="intro-note-box"
+      />
     </Art>
   );
 }
@@ -144,13 +175,13 @@ function Page3Art(): JSX.Element {
       <div class="intro-join">
         {INTRO_JOIN.notes.map((name) => (
           <div class="intro-card intro-join-note">
-            <IconNote />
+            <BowerMark size={20} />
             <b>{name}</b>
           </div>
         ))}
       </div>
-      <div class="intro-join-line">
-        <Bird state="flying" size={48} />
+      <div class="intro-join-bird">
+        <Bird state="tidying" size={72} />
       </div>
       <div class="intro-card intro-join-result">{INTRO_JOIN.result}</div>
       <p class="intro-muted intro-join-disagree">{INTRO_JOIN.disagree}</p>
@@ -161,15 +192,25 @@ function Page3Art(): JSX.Element {
 function Page4Art(): JSX.Element {
   return (
     <Art>
-      <p class="intro-bubble">{INTRO_REQUEST.bubble}</p>
-      <p class="intro-waits">{INTRO_REQUEST.waits}</p>
-      <div class="intro-card intro-bar-done">
-        <b>{INTRO_REQUEST.barTitle}</b>
-        <ul class="intro-counts">
-          {INTRO_REQUEST.counts.map((count) => (
-            <li>{count}</li>
-          ))}
-        </ul>
+      <Composer
+        mode="send"
+        rows={1}
+        picture
+        label="Ask Bower"
+        commitLabel="Send"
+        value={INTRO_REQUEST.question}
+        hint={INTRO_REQUEST.waits}
+        onChange={noop}
+        onCommit={noop}
+      />
+      <div class="intro-home-bird">
+        <Bird state="looking" size={52} />
+        <p class="card card-bubble intro-done">
+          {INTRO_REQUEST.done}{' '}
+          <a href="/" tabIndex={-1}>
+            {INTRO_REQUEST.link}
+          </a>
+        </p>
       </div>
     </Art>
   );
@@ -183,12 +224,19 @@ function Page5Art(): JSX.Element {
           <div class="intro-card intro-place">
             <b>{place}</b>
             <ul class="intro-rows">
-              {INTRO_FOLDER.rows.map((name) => (
-                <li class="intro-row">
-                  <IconFolder />
-                  <span>{name}</span>
-                </li>
-              ))}
+              {place === 'Bower'
+                ? INTRO_FOLDER.roots.map((root) => (
+                    <li class="intro-row">
+                      <FolderMark kind={root.kind} size={18} />
+                      <span>{root.name}</span>
+                    </li>
+                  ))
+                : INTRO_FOLDER.rows.map((name) => (
+                    <li class="intro-row">
+                      <IconFolder size={14} />
+                      <span>{name}</span>
+                    </li>
+                  ))}
             </ul>
           </div>
         ))}
@@ -206,53 +254,51 @@ const ART: readonly (() => JSX.Element)[] = [
   Page5Art,
 ];
 
-interface LastActionsProps {
-  fromApp: boolean;
-  onDone: () => void;
+interface LastButtonProps {
+  action: IntroLastAction;
+  onLeave: () => void;
 }
 
-/** Page 5's buttons: sign in (or Done from inside the app) and Learn Bower. */
-function LastActions({ fromApp, onDone }: LastActionsProps): JSX.Element {
+/** Page 5's button where Next was (boards IN-P5): see `introLastAction`. */
+function LastButton({ action, onLeave }: LastButtonProps): JSX.Element {
   const { route } = useLocation();
-  return (
-    <div class="intro-actions">
-      {fromApp ? (
-        <button type="button" class="button intro-cta" onClick={onDone}>
-          Done
-        </button>
-      ) : isDemo() ? (
-        <button
-          type="button"
-          class="button intro-cta"
-          onClick={() => {
-            markIntroSeen(localStorage);
-            route('/');
-          }}
-        >
-          Try the demo
-        </button>
-      ) : (
-        <a
-          href={loginUrl()}
-          class="button intro-cta"
-          onClick={() => markIntroSeen(localStorage)}
-        >
-          Sign in with Google
-        </a>
-      )}
-      <a href="/learn" class="intro-learn">
-        {INTRO_LEARN_LABEL}
+  const label = INTRO_LAST_LABEL[action];
+  if (action === 'sign-in') {
+    return (
+      <a
+        href={loginUrl()}
+        class="button intro-next intro-cta"
+        onClick={() => markIntroSeen(localStorage)}
+      >
+        {label}
       </a>
-    </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      class="button intro-next intro-cta"
+      onClick={() => {
+        if (action === 'done') {
+          onLeave();
+          return;
+        }
+        markIntroSeen(localStorage);
+        route('/');
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
 export function Intro(): JSX.Element {
   const { query, route } = useLocation();
   // Opened from inside the app (Settings, the sign-in, the demo's Run your
-  // own): Close and Done, back to where it came from.
+  // own): Skip and Close go back to where it came from.
   const returnTo = introReturnPath(query.from);
-  const fromApp = returnTo !== null;
+  const lastAction = introLastAction(query.from, isDemo());
+  const desktop = useDesktop();
   const trackRef = useRef<HTMLDivElement>(null);
   const headings = useRef<(HTMLHeadingElement | null)[]>([]);
   const focusPending = useRef(false);
@@ -347,23 +393,20 @@ export function Intro(): JSX.Element {
       <div class="intro-frame">
         <header class="intro-bar">
           <span class="intro-brand">
-            <BowerMark size={32} />
+            {page === LAST ? (
+              // The happy bird (K-32) at the 40 px floor for a moving bird
+              // (spec 6.21 rule 2), set in the mark's 32 px slot.
+              <span class="intro-happy">
+                <Bird state="idle" face="happy" size={40} />
+              </span>
+            ) : (
+              <BowerMark size={32} />
+            )}
             Bower
           </span>
-          {fromApp ? (
-            <button
-              type="button"
-              class="intro-icon-button"
-              aria-label="Close"
-              onClick={leave}
-            >
-              <IconClose />
-            </button>
-          ) : (
-            <button type="button" class="intro-skip" onClick={leave}>
-              {page === LAST ? 'Close' : 'Skip'}
-            </button>
-          )}
+          <button type="button" class="intro-skip" onClick={leave}>
+            {page === LAST ? 'Close' : 'Skip'}
+          </button>
         </header>
         <DemoBanner />
 
@@ -388,9 +431,11 @@ export function Intro(): JSX.Element {
                     >
                       {item.heading}
                     </h1>
-                    <p class="intro-body">{item.body}</p>
+                    <p class="intro-body">{introBody(item, desktop)}</p>
                     {index === LAST && (
-                      <LastActions fromApp={fromApp} onDone={leave} />
+                      <a href="/learn" class="intro-learn">
+                        {INTRO_LEARN_LABEL}
+                      </a>
                     )}
                   </div>
                   {Illustration !== undefined && <Illustration />}
@@ -427,7 +472,7 @@ export function Intro(): JSX.Element {
             ) : (
               <span />
             )}
-            {page < LAST && (
+            {page < LAST ? (
               <button
                 type="button"
                 class="button intro-next"
@@ -435,6 +480,8 @@ export function Intro(): JSX.Element {
               >
                 Next
               </button>
+            ) : (
+              <LastButton action={lastAction} onLeave={leave} />
             )}
           </div>
         </footer>

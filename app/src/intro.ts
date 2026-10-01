@@ -69,13 +69,21 @@ export const INTRO_PAGES: IntroPages = [
   },
   {
     heading: 'Ask in your\nown words',
-    body: 'A question, a job or a rule (“from now on…”). It waits in your inbox and Bower does it at the next tidy-up; the tidy-up bar shows how it goes.',
+    body: 'A question, a job or a rule (“from now on…”). It waits in your inbox and Bower does it at the next tidy-up; the bird on Home tells you how it goes.',
   },
   {
     heading: 'Only your Drive',
     body: 'Your notes live in a folder you own, readable in Drive and Obsidian. A tidy-up works on a temporary copy that is deleted when it ends; Claude, the AI behind Bower, reads your files to write Bower’s notes.',
   },
 ];
+
+/**
+ * A page's body for the layout it shows in: the desktop says "click" where
+ * the phone says "tap" (K-27).
+ */
+export function introBody(page: IntroPage, desktop: boolean): string {
+  return desktop ? page.body.replace(/\btap\b/g, 'click') : page.body;
+}
 
 /** How many pages there are. */
 export const INTRO_PAGE_COUNT = INTRO_PAGES.length;
@@ -98,42 +106,46 @@ export function introPageLabel(index: number): string {
 }
 
 /**
- * The four PARA colours, as the boards use them. They read the theme tokens
- * (`tokens.css`), so the intro keeps its look in dark and takes the darker
- * marks in light.
+ * Page 1: the pile. The names have no extension (K-17): the kind word says
+ * what a thing is, never `.pdf`.
  */
-export const PARA_COLORS = {
-  projects: 'var(--color-para-projects)',
-  areas: 'var(--color-para-areas)',
-  resources: 'var(--color-para-resources)',
-  archive: 'var(--color-para-archives)',
-} as const;
-
-/** Page 1: the pile, its one line, the button and two PARA chips. */
 export const INTRO_PILE = {
   title: 'Your pile',
   line: 'My move: the new job and a flat near it',
-  files: ['Lease 2026.pdf', 'flat-camden.example', 'IMG_2231.jpg'],
+  files: ['Lease 2026', 'flat-camden.example', 'IMG_2231'],
   button: 'Tidy up',
-  chips: [
-    { name: 'Projects', color: PARA_COLORS.projects },
-    { name: 'Areas', color: PARA_COLORS.areas },
-  ],
 } as const;
 
+/** One summary point of the page-2 note: where it comes from, and Check. */
+export interface IntroNotePoint {
+  origin: 'file' | 'notes';
+  /** The point's words; `link` names the note in them that is a link. */
+  text: string;
+  check?: boolean;
+  link?: string;
+}
+
 /** Page 2: the original above Bower's note. */
-export const INTRO_NOTE = {
-  original: 'Lease 2026.pdf',
+export const INTRO_NOTE: {
+  original: string;
+  originalCaption: string;
+  points: readonly IntroNotePoint[];
+} = {
+  original: 'Lease 2026',
   originalCaption: 'the original, untouched',
-  title: 'Lease 2026',
-  summary: 'A 12-month lease for the flat in Camden.',
-  facts: [
-    { label: 'Rent', value: '£1,450 a month' },
-    { label: 'Notice', value: 'Two months' },
+  points: [
+    {
+      origin: 'file',
+      text: 'A 12-month lease for the flat in Camden: £1,450 a month, two months’ notice.',
+    },
+    { origin: 'file', text: 'Check who pays the agency fee.', check: true },
+    {
+      origin: 'notes',
+      text: 'The flat is 25 minutes from the new job in your offer letter note.',
+      link: 'offer letter',
+    },
   ],
-  origins: ['From your file', 'From the web', 'From your notes'],
-  check: 'Check: who pays the agency fee.',
-} as const;
+};
 
 /** Page 3: two notes joining into one line. */
 export const INTRO_JOIN = {
@@ -142,20 +154,55 @@ export const INTRO_JOIN = {
   disagree: 'Two notes give a different start date: Bower tells you.',
 } as const;
 
-/** Page 4: a request, where it waits, and the bar when it is done. */
+/** Page 4: a request, where it waits, and the bird on Home when it is done. */
 export const INTRO_REQUEST = {
-  bubble: 'Which flat is closest to the new job?',
+  question: 'Which flat is closest to the new job?',
   waits: 'Waits in your inbox for the tidy-up',
-  barTitle: 'Tidy up',
-  counts: ['2 filed', '3 new', '2 updated', '1 needs you'],
+  done: 'Done: 2 filed, 3 new, 2 updated, 1 needs you.',
+  link: 'See what changed',
 } as const;
 
 /** Page 5: the same folder in three places. */
 export const INTRO_FOLDER = {
   places: ['Drive', 'Bower', 'Obsidian'],
   rows: ['0-Inbox', '1-Projects', '2-Areas', '3-Resources', '4-Archives'],
+  /** The Bower column: each top folder by its plain name, with its disc. */
+  roots: [
+    { kind: 'inbox', name: 'Inbox' },
+    { kind: 'projects', name: 'Projects' },
+    { kind: 'areas', name: 'Areas' },
+    { kind: 'resources', name: 'Resources' },
+    { kind: 'archives', name: 'Archives' },
+  ],
   caption: 'The same folder, in Drive, in Bower and in Obsidian.',
 } as const;
+
+/**
+ * The page-2 note box's HTML in the renderer's own shape (a `.bower-note`
+ * box with its legend and rows), so `BowerNoteBox` draws it like any note.
+ * The strings are this file's own and hold nothing to escape.
+ */
+export function introNoteHtml(): string {
+  const rows = INTRO_NOTE.points
+    .map((point) => {
+      const text =
+        point.link === undefined
+          ? point.text
+          : point.text.replace(
+              point.link,
+              `<a class="wikilink" href="#" tabindex="-1">${point.link}</a>`,
+            );
+      const check = point.check === true ? ' bower-note-check' : '';
+      return `<li class="bower-note-row${check}"><span class="bower-origin bower-origin-${point.origin}"></span><div class="bower-note-text">${text}</div></li>`;
+    })
+    .join('');
+  return (
+    '<div class="bower-note"><div class="bower-note-head">' +
+    '<div class="bower-note-title">Bower’s note</div>' +
+    '<div class="bower-note-legend">· from <em class="bower-legend-file">the file</em>, <em class="bower-legend-notes">your notes</em></div></div>' +
+    `<ul class="bower-note-rows">${rows}</ul></div>`
+  );
+}
 
 /** The last page's link to Learn Bower. */
 export const INTRO_LEARN_LABEL = 'See examples and use cases';
@@ -190,3 +237,29 @@ export function introReturnPath(from: string | undefined): string | null {
   if (from === 'run-your-own') return '/login';
   return null;
 }
+
+/**
+ * Page 5's last button. Replayed from inside the app while signed in
+ * (`from=settings`, which Settings and Learn use when signed in): "Back to
+ * Bower", which goes Home. Opened from the sign-in or the demo's Run your
+ * own: Done, back there. A first visit: the sign-in, or Try the demo in a
+ * demo build.
+ */
+export type IntroLastAction = 'back-to-bower' | 'done' | 'try-demo' | 'sign-in';
+
+export function introLastAction(
+  from: string | undefined,
+  demo: boolean,
+): IntroLastAction {
+  if (from === 'settings') return 'back-to-bower';
+  if (introReturnPath(from) !== null) return 'done';
+  return demo ? 'try-demo' : 'sign-in';
+}
+
+/** The words on each last button. */
+export const INTRO_LAST_LABEL: Readonly<Record<IntroLastAction, string>> = {
+  'back-to-bower': 'Back to Bower',
+  done: 'Done',
+  'try-demo': 'Try the demo',
+  'sign-in': 'Sign in with Google',
+};

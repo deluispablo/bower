@@ -30,6 +30,11 @@ vi.mock('preact-iso', () => ({
   useLocation: () => location,
 }));
 
+// Page 2 draws the real note box, whose body reads the vault for embeds.
+vi.mock('../src/vault-store.js', () => ({
+  useVault: () => ({ index: null, getNoteText: () => Promise.resolve('') }),
+}));
+
 const { Intro } = await import('../src/routes/intro.js');
 
 let root: HTMLDivElement;
@@ -56,6 +61,7 @@ afterEach(() => {
 describe('Intro in a demo build', () => {
   it('shows Try the demo instead of Sign in with Google, and goes Home', () => {
     state.demo = true;
+    location.query = { page: '5' };
     mount();
     const cta = root.querySelector<HTMLButtonElement>('.intro-cta');
     expect(cta?.textContent).toBe('Try the demo');
@@ -72,6 +78,7 @@ describe('Intro in a demo build', () => {
   });
 
   it('has no banner and signs in with Google in a real build', () => {
+    location.query = { page: '5' };
     mount();
     expect(root.querySelector('.demo-banner')).toBeNull();
     expect(root.querySelector('.intro-cta')?.textContent).toBe(
@@ -79,10 +86,10 @@ describe('Intro in a demo build', () => {
     );
   });
 
-  it('still shows Done when opened from Settings', () => {
+  it('shows Back to Bower when replayed from Settings', () => {
     state.demo = true;
-    location.query = { from: 'settings' };
+    location.query = { from: 'settings', page: '5' };
     mount();
-    expect(root.querySelector('.intro-cta')?.textContent).toBe('Done');
+    expect(root.querySelector('.intro-cta')?.textContent).toBe('Back to Bower');
   });
 });
