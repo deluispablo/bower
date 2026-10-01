@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { Bird } from '../components/bird.js';
@@ -20,10 +20,16 @@ import {
   IconCamera,
   IconDrive,
   IconFile,
+  IconLink,
   IconSparkle,
 } from '../components/icons.js';
-import { KindBadge } from '../components/kind-badge.js';
-import { DictateButton } from '../components/dictate-button.js';
+import { Card } from '../components/card.js';
+import { Composer } from '../components/composer.js';
+import { DoorButton } from '../components/door-button.js';
+import { MoreButton } from '../components/more-button.js';
+import { NoteMenu } from '../components/note-menu.js';
+import { PageHeader } from '../components/page-header.js';
+import { kindLabel } from '../meta-line.js';
 import {
   PileRows,
   PileSheet,
@@ -33,7 +39,6 @@ import {
   addedFromElsewhere,
   inboxNameSet,
   kindOfName,
-  pileDay,
   pileNames,
   pileTime,
   rowState,
@@ -129,7 +134,7 @@ export function AddDropRow({
     <div class="add-drop-row">
       {wide && (
         <div class="add-drop-bird" aria-hidden="true">
-          <Bird state={listening ? 'listening' : 'looking'} size={64} />
+          <Bird state={listening ? 'listening' : 'looking'} size={44} />
         </div>
       )}
       <p class="add-drop-line">{DROP_LINE}</p>
@@ -233,24 +238,36 @@ function driveStateText(mimeType: string | undefined): string {
   return `From your Drive · ${savedAs}`;
 }
 
-/** The Link door's icon (`icons.tsx` has none for a pasted address). */
-function LinkIcon(): JSX.Element {
-  return (
-    <svg
-      class="icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
-      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
-    </svg>
-  );
+/** S-AD-11: what each kind of Drive file becomes (K-30, C-4). */
+export const DOORS_NOTE =
+  'Docs become notes, Sheets a table, Slides a PDF. Everything else is copied as it is.';
+
+/** S-AD-12: the Paste a link box. */
+export const LINK_PLACEHOLDER = 'Paste a link';
+export const LINK_SAVE = 'Save the link';
+export const LINK_ERROR =
+  'That does not look like a link. Check it and try again.';
+
+/** S-AD-4: "4 things, all in your inbox" / "4 things · 1 uploading". */
+export function pileCountLine(things: number, uploading: number): string {
+  return uploading > 0
+    ? `${thingsText(things)} · ${uploading} uploading`
+    : `${thingsText(things)}, all in your inbox`;
+}
+
+/** S-AD-15: a waiting pile's meta, kinds in words (K-14): "4 things · PDF,
+ * Spreadsheet, Photo · 11:54". */
+export function waitingMeta(pile: Pile, uploading: number): string {
+  const kinds = [
+    ...new Set(
+      pile.items.map((item) => kindLabel({ name: item.name, mimeType: '' })),
+    ),
+  ].slice(0, 4);
+  const when =
+    uploading > 0 ? `${uploading} uploading` : pileTime(pile.createdAt);
+  return [thingsText(pile.items.length), kinds.join(', '), when]
+    .filter((part) => part !== '')
+    .join(' · ');
 }
 
 /** Follows the durable upload queue for the life of the app, so a file of a
@@ -289,7 +306,7 @@ export function Add() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const noteRef = useRef<HTMLTextAreaElement>(null);
+  const noteRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const sharedHandledRef = useRef(false);
 
@@ -319,6 +336,16 @@ export function Add() {
   const [noted, setNoted] = useState<Set<string> | null>(null);
 
   useShellSlot('crumb', CRUMB);
+
+  // The ⋯ (E-11, kind `add`): in the phone bar's `actions` slot, and next to
+  // the desktop h1 through PageHeader.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const toggleMenu = (): void => setMenuOpen((was) => !was);
+  const actionsContent = useMemo(
+    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} />,
+    [menuOpen],
+  );
+  useShellSlot('actions', actionsContent);
 
   // #493: once a tidy-up this session finishes `done`, the rows it just
   // filed are stale — Home already says "All tidy" by then.
@@ -691,11 +718,11 @@ export function Add() {
     setDragOver(true);
   }
 
-  function onSaveLink(): void {
-    const trimmed = linkUrl.trim();
+  function onSaveLink(value: string = linkUrl): void {
+    const trimmed = value.trim();
     const name = linkNoteName(trimmed, new Date());
     if (name === null) {
-      setLinkError('Enter a link starting with http:// or https://.');
+      setLinkError(LINK_ERROR);
       return;
     }
     const joined = pileIdForNew();
@@ -899,7 +926,6 @@ export function Add() {
   const running = !startsRun(phase);
 
   const openItems = open?.items ?? [];
-  const inInbox = openItems.filter((item) => item.state === 'done').length;
   const openUploading = open === undefined ? 0 : uploadingCount(open);
   const sheetPile =
     sheetPileId === null
@@ -915,66 +941,76 @@ export function Add() {
       }}
       onDrop={onDrop}
     >
-      <h1 class="screen-title">Add</h1>
-      <AddDropRow listening={dictating} />
+      <div class="add-column">
+        <PageHeader
+          title="Add"
+          kind="tab"
+          more={{ expanded: menuOpen, onClick: toggleMenu }}
+        />
+        {menuOpen && (
+          <NoteMenu
+            kind="add"
+            inboxPath="0-Inbox"
+            driveIds={inboxFolderId === null ? {} : { inbox: inboxFolderId }}
+            onClose={() => setMenuOpen(false)}
+          />
+        )}
+        <AddDropRow listening={dictating} />
 
-      <UploadNotes />
+        <UploadNotes />
 
-      {shareError !== null && <p class="add-field-error">{shareError}</p>}
+        {shareError !== null && <p class="add-field-error">{shareError}</p>}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        hidden
-        onChange={onFileInputChange}
-      />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        onChange={onFileInputChange}
-      />
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          hidden
+          onChange={onFileInputChange}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={onFileInputChange}
+        />
 
-      <div class="add-columns">
-        <div class="add-col add-col-new">
-          <div
-            ref={cardRef}
-            class="pile-card pile-card-new"
-            data-pile-id={openPile()?.id}
-          >
-            <div class="pile-card-head">
-              <h2 class="pile-card-title">New pile</h2>
-              <span class="pile-card-count">
-                {openItems.length === 0
-                  ? 'Add files or links, and say what they are'
-                  : `${thingsText(openItems.length)} · ${inInbox} in your inbox${openUploading > 0 ? `, ${openUploading} uploading` : ''}`}
-              </span>
-            </div>
+        <div ref={cardRef} data-pile-id={openPile()?.id}>
+          <Card variant="accent" class="pile-card-new">
+            <h2 class="pile-card-title">New pile</h2>
+            <p class="pile-card-count">
+              {openItems.length === 0
+                ? 'Add files or links, and say what they are'
+                : pileCountLine(openItems.length, openUploading)}
+            </p>
 
-            <div class="add-context">
-              <label for="add-context">
+            <div class="add-context" onFocusOut={() => saver.flush()}>
+              <label class="add-context-label" for="add-context">
                 {PILE_NOTE_LABEL}{' '}
                 <span class="add-context-optional">optional</span>
               </label>
-              <DictateButton
+              <Composer
                 id="add-context"
+                mode="save"
+                rows={3}
                 inputRef={noteRef}
                 label={PILE_NOTE_LABEL}
-                rows={3}
                 placeholder={PILE_NOTE_PLACEHOLDER}
                 value={draft}
-                onValue={(next) => {
+                onChange={(next) => {
                   draftText = next;
                   setDraft(next);
                   saver.schedule(next);
                 }}
-                onBlur={saver.flush}
+                onCommit={(value) => {
+                  saver.schedule(value);
+                  saver.flush();
+                }}
                 onListening={setDictating}
               />
-              {draft.trim() !== '' && openItems.length > 0 && (
+              {(draft.trim() !== '' || openItems.length > 0) && (
                 <p class="pile-saved">{PILE_SAVED_LINE}</p>
               )}
             </div>
@@ -986,218 +1022,172 @@ export function Add() {
                 onRetry={(name) => retry(name, open.id)}
               />
             )}
-
             <div class="add-doors">
               {hasCamera && (
-                <button
-                  type="button"
-                  class="add-door"
-                  aria-label="Take a photo"
+                <DoorButton
+                  label="Photo"
+                  name="Take a photo"
+                  icon={<IconCamera />}
                   disabled={inboxFolderId === null}
                   onClick={() => cameraInputRef.current?.click()}
-                >
-                  <IconCamera />
-                  <span>Photo</span>
-                </button>
+                />
               )}
-              <button
-                type="button"
-                class="add-door"
-                aria-label="Choose files"
+              <DoorButton
+                label="Files"
+                name="Choose files"
+                icon={<IconFile />}
                 disabled={inboxFolderId === null}
                 onClick={() => fileInputRef.current?.click()}
-              >
-                <IconFile />
-                <span>Files</span>
-              </button>
+              />
               {driveShown && (
-                <button
-                  type="button"
-                  class="add-door"
-                  aria-label="From your Drive"
+                <DoorButton
+                  label="Drive"
+                  name="From your Drive"
+                  icon={<IconDrive />}
                   disabled={driveDisabled}
-                  aria-disabled={driveDisabled}
                   onClick={() => void onFromDrive()}
-                >
-                  <IconDrive />
-                  <span>Drive</span>
-                </button>
+                />
               )}
-              <button
-                type="button"
-                class="add-door"
-                aria-label="Paste a link"
-                aria-expanded={linkOpen}
+              <DoorButton
+                label="Link"
+                name="Paste a link"
+                icon={<IconLink />}
+                expanded={linkOpen}
                 disabled={linkDisabled}
                 onClick={() => setLinkOpen(!linkOpen)}
-              >
-                <LinkIcon />
-                <span>Link</span>
-              </button>
+              />
             </div>
-            {driveShown && (
-              <p class="add-drive-note add-doors-note">
-                {isDemo()
-                  ? NOT_IN_DEMO_DRIVE
-                  : 'Docs become Markdown, Sheets a table, Slides a PDF. Everything else is copied as it is.'}
-              </p>
-            )}
+            <p class="add-note">{DOORS_NOTE}</p>
+            {isDemo() && <p class="add-note">{NOT_IN_DEMO_DRIVE}</p>}
 
             {linkOpen && (
-              <div class="add-field">
-                <div class="add-field-row">
-                  <input
-                    id="add-link"
-                    type="url"
-                    placeholder="Paste a link"
-                    aria-label="Link address"
-                    value={linkUrl}
-                    disabled={linkDisabled}
-                    onInput={(e) => setLinkUrl(e.currentTarget.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') onSaveLink();
-                    }}
-                  />
-                  <button
-                    type="button"
-                    class="button button-secondary"
-                    disabled={linkDisabled || linkUrl.trim() === ''}
-                    onClick={onSaveLink}
-                  >
-                    Save
-                  </button>
-                </div>
-                {linkError !== null && (
-                  <p class="add-field-error">{linkError}</p>
-                )}
-              </div>
+              <Composer
+                id="add-link"
+                class="add-link"
+                mode="send"
+                rows={1}
+                inputType="url"
+                label="Link address"
+                placeholder={LINK_PLACEHOLDER}
+                commitLabel={LINK_SAVE}
+                value={linkUrl}
+                disabled={linkDisabled}
+                autoFocus
+                invalid={linkError !== null}
+                error={linkError}
+                onChange={(next) => {
+                  setLinkUrl(next);
+                  if (linkError !== null) setLinkError(null);
+                }}
+                onCommit={(value) => onSaveLink(value)}
+              />
             )}
 
             {driveNotes.map((note) => (
-              <p key={note} class="add-drive-note">
+              <p key={note} class="add-note">
                 {note}
               </p>
             ))}
             {message !== null && <p class="add-field-error">{message}</p>}
             {!online && <p class="offline-reason">{offlineReason('add')}</p>}
 
-            <div class="pile-card-foot">
-              {open !== undefined && openItems.length > 0 && (
-                <>
-                  <button
-                    type="button"
-                    class="button-link pile-another"
-                    onClick={() => void startAnother()}
-                  >
-                    Start another pile
-                  </button>
-                  <span class="pile-saved">This pile is saved as you go.</span>
-                </>
-              )}
-              {!uploadsActive && <p class="pile-saved">{CLOSE_NOTE}</p>}
-            </div>
-          </div>
+            {open !== undefined && openItems.length > 0 && (
+              <button
+                type="button"
+                class="button-link pile-another"
+                onClick={() => void startAnother()}
+              >
+                Start another pile
+              </button>
+            )}
+            {!uploadsActive && <p class="add-note">{CLOSE_NOTE}</p>}
+          </Card>
         </div>
 
-        <div class="add-col add-col-waiting">
-          {waiting.length > 0 && (
-            <section class="pile-waiting" aria-labelledby="pile-waiting-title">
-              <div class="pile-waiting-head">
-                <h2 id="pile-waiting-title" class="pile-waiting-title">
-                  Waiting for the tidy-up
-                </h2>
-                {!loading && (
-                  <span class="pile-card-count">
-                    {thingsText(total)} in your inbox
-                  </span>
-                )}
-              </div>
-              <ul class="pile-list">
-                {waiting.map((pile) => {
-                  const note = noteLine(pile);
-                  const uploading = uploadingCount(pile);
-                  const kinds = [
-                    ...new Set(pile.items.map((i) => kindOfName(i.name))),
-                  ].slice(0, 4);
-                  return (
-                    <li key={pile.id} data-pile-id={pile.id}>
-                      <button
-                        type="button"
-                        class="pile-card pile-card-waiting"
-                        onClick={() => setSheetPileId(pile.id)}
+        {waiting.length > 0 && (
+          <section class="pile-waiting" aria-labelledby="pile-waiting-title">
+            <h2 id="pile-waiting-title" class="pile-waiting-title">
+              Waiting for the tidy-up
+            </h2>
+            {!loading && (
+              <p class="pile-waiting-count">
+                {thingsText(total)} in your inbox
+              </p>
+            )}
+            <ul class="pile-list">
+              {waiting.map((pile) => {
+                const note = noteLine(pile);
+                return (
+                  <li key={pile.id} data-pile-id={pile.id}>
+                    <button
+                      type="button"
+                      class="card pile-card-waiting"
+                      onClick={() => setSheetPileId(pile.id)}
+                    >
+                      <span
+                        class={`pile-card-note${note === '' ? ' pile-card-none' : ''}`}
                       >
-                        {note === '' ? (
-                          <span class="pile-card-note pile-card-none">
-                            No note
-                          </span>
-                        ) : (
-                          <span class="pile-card-note">{note}</span>
-                        )}
-                        <span class="pile-card-kinds" aria-hidden="true">
-                          {kinds.map((kind) => (
-                            <KindBadge key={kind} kind={kind} />
-                          ))}
-                        </span>
-                        <span class="pile-card-meta">
-                          {thingsText(pile.items.length)} ·{' '}
-                          {uploading > 0
-                            ? `${uploading} uploading`
-                            : `${pileDay(pile.createdAt)} ${pileTime(pile.createdAt)}`}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
+                        {note === '' ? 'No note' : note}
+                      </span>
+                      <span class="pile-card-meta">
+                        {waitingMeta(pile, uploadingCount(pile))}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
-          {elsewhere.length > 0 && (
-            <section class="pile-elsewhere">
-              <h2 class="pile-waiting-title">Added from elsewhere</h2>
-              <div class="pile-card pile-card-elsewhere">
-                <span class="pile-card-meta">
-                  {thingsText(elsewhere.length)}
-                </span>
-                <button
-                  type="button"
-                  class="button-link"
-                  onClick={() => void sayWhatTheyAre(elsewhere)}
-                >
-                  Say what they are
-                </button>
-              </div>
-            </section>
-          )}
-        </div>
-      </div>
-
-      {/* The one filled button on Add (R-ADD-0, D33): the count in its label,
-       * pinned above the tabs. Hidden when nothing is waiting: there is
-       * nothing to tidy. */}
-      {total > 0 && (
-        <div class="add-tidy">
-          <button
-            type="button"
-            class="process-button add-tidy-button"
-            data-phase={phase}
-            data-tour="tidy"
-            aria-haspopup={startsRun(phase) ? undefined : 'dialog'}
-            aria-busy={loading}
-            disabled={tidyDisabled}
-            aria-disabled={tidyDisabled}
-            onClick={onTidyUp}
+        {elsewhere.length > 0 && (
+          <section
+            class="pile-elsewhere"
+            aria-labelledby="pile-elsewhere-title"
           >
-            <IconSparkle />
-            <span aria-live="polite">{tidyLabel}</span>
-          </button>
-          {stillUploading > 0 && (
-            <p class="add-tidy-note">
-              {`${stillUploading} still uploading will wait for the next tidy-up`}
-            </p>
-          )}
-        </div>
-      )}
+            <h2 id="pile-elsewhere-title" class="pile-waiting-title">
+              Added from elsewhere
+            </h2>
+            <Card class="pile-card-elsewhere">
+              <span class="pile-card-meta">{thingsText(elsewhere.length)}</span>
+              <button
+                type="button"
+                class="button-link pile-say"
+                onClick={() => void sayWhatTheyAre(elsewhere)}
+              >
+                Say what they are
+              </button>
+            </Card>
+          </section>
+        )}
+
+        {/* The one filled button on Add (R-ADD-0, D33): the count in its
+         * label, pinned under the column. Hidden when nothing is waiting:
+         * there is nothing to tidy. */}
+        {total > 0 && (
+          <div class="add-tidy">
+            <button
+              type="button"
+              class="process-button add-tidy-button"
+              data-phase={phase}
+              data-tour="tidy"
+              aria-haspopup={startsRun(phase) ? undefined : 'dialog'}
+              aria-busy={loading}
+              disabled={tidyDisabled}
+              aria-disabled={tidyDisabled}
+              onClick={onTidyUp}
+            >
+              <IconSparkle />
+              <span aria-live="polite">{tidyLabel}</span>
+            </button>
+            {stillUploading > 0 && (
+              <p class="add-tidy-note">
+                {`${stillUploading} still uploading will wait for the next tidy-up`}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {sheetPile !== undefined && (
         <PileSheet

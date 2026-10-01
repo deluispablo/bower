@@ -187,7 +187,8 @@ describe('PileSheet', () => {
     expect(
       document.body.querySelector<HTMLTextAreaElement>('textarea')?.value,
     ).toBe('Five job offers.');
-    expect(text).toContain('Offer A.pdf');
+    expect(text).toContain('Offer A');
+    expect(text).not.toContain('Offer A.pdf');
     expect(text).toContain('Add more to this pile');
   });
 
@@ -195,9 +196,9 @@ describe('PileSheet', () => {
     show();
     void act(() => button('Remove this pile from the inbox').click());
     expect(document.body.textContent).toContain(
-      'Remove this pile? Its 1 file goes to the Bin in Drive.',
+      'Its 1 thing leaves your inbox. Nothing else changes.',
     );
-    void act(() => button('Keep').click());
+    void act(() => button('Cancel').click());
     expect(handlers.onRemovePile).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain(
       'Remove this pile from the inbox',
@@ -208,7 +209,7 @@ describe('PileSheet', () => {
     show();
     void act(() => button('Remove this pile from the inbox').click());
     await act(async () => {
-      button('Remove').click();
+      button('Remove the pile').click();
       await Promise.resolve();
     });
     expect(handlers.onRemovePile).toHaveBeenCalledOnce();
@@ -220,7 +221,7 @@ describe('PileSheet', () => {
     show();
     void act(() => button('Remove this pile from the inbox').click());
     await act(async () => {
-      button('Remove').click();
+      button('Remove the pile').click();
       await Promise.resolve();
     });
     expect(handlers.onClose).not.toHaveBeenCalled();

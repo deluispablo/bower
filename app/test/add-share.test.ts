@@ -83,6 +83,7 @@ vi.mock('../src/upload-queue.js', () => ({
   ) => upload(input.parentId, new File([input.blob], input.name), onProgress),
 }));
 vi.mock('../src/drive.js', () => ({
+  FOLDER_MIME: 'application/vnd.google-apps.folder',
   INSTRUCTION_APP_PROPERTIES: { bower: 'instruction' },
   listFolder,
   upload,
@@ -166,7 +167,7 @@ describe('Add: shared files', () => {
     );
 
     renderAt('?shared=1');
-    await waitFor(() => root.textContent?.includes('photo.jpg') === true);
+    await waitFor(() => root.textContent?.includes('photo') === true);
 
     await waitFor(() => upload.mock.calls.length > 0);
     expect(root.querySelector('.pile-row')).not.toBeNull();

@@ -348,7 +348,8 @@ function unmount(): void {
 
 function buttonNamed(text: string): HTMLButtonElement {
   const button = Array.from(root.querySelectorAll('button')).find(
-    (b) => b.textContent?.trim() === text,
+    (b) =>
+      b.textContent?.trim() === text || b.getAttribute('aria-label') === text,
   );
   if (button === undefined) throw new Error(`Button "${text}" missing`);
   return button;
@@ -365,7 +366,7 @@ function typeNote(value: string): HTMLTextAreaElement {
 }
 
 function rowNames(): string[] {
-  return Array.from(root.querySelectorAll('.pile-row-name')).map(
+  return Array.from(root.querySelectorAll('.list-row-title')).map(
     (el) => el.textContent ?? '',
   );
 }
@@ -475,9 +476,7 @@ describe('Add', () => {
     expect(root.querySelector('.add-tidy-note')?.textContent).toBe(
       '1 still uploading will wait for the next tidy-up',
     );
-    expect(root.textContent).toContain(
-      '1 thing · 0 in your inbox, 1 uploading',
-    );
+    expect(root.textContent).toContain('1 thing · 1 uploading');
   });
 
   // R-ADD-1: no "Waiting" state; every attached file starts uploading.
@@ -487,13 +486,13 @@ describe('Add', () => {
       new File(['b'], 'b.txt', { type: 'text/plain' }),
     ]);
     await waitFor(() => upload.mock.calls.length === 2);
-    expect(rowNames()).toEqual(['a.txt', 'b.txt']);
+    expect(rowNames()).toEqual(['a', 'b']);
     expect(root.querySelector('.add-queue-card-waiting')).toBeNull();
   });
 
   it('lists the doors as one row: Files, Drive when it shows, and Link', () => {
     const doors = Array.from(
-      root.querySelectorAll('.add-doors > button.add-door'),
+      root.querySelectorAll('.add-doors > button.door-button'),
     );
     expect(doors.map((d) => d.textContent)).toEqual(
       expect.arrayContaining(['Files', 'Link']),
@@ -532,17 +531,20 @@ describe('Add', () => {
       new File(['c'], 'Walk-through.mp4', { type: 'video/mp4' }),
     ]);
     await waitFor(() => upload.mock.calls.length === 3);
-    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 3);
+    await waitFor(() => root.querySelectorAll('.pile-row-done').length === 3);
     const rows = Array.from(root.querySelectorAll('.pile-row'));
-    expect(
-      rows.map((r) => r.querySelector('.kind-badge')?.textContent),
-    ).toEqual(['PDF', 'JPG', 'MP4']);
-    expect(rows[0]?.querySelector('.pile-row-ok')?.textContent).not.toContain(
-      'Kept, not read',
+    // #914 (R-AD-5): kinds in words in the meta line, no badges.
+    expect(root.querySelector('.kind-badge')).toBeNull();
+    const metas = rows.map(
+      (r) => r.querySelector('.list-row-meta')?.textContent ?? '',
     );
-    expect(rows[2]?.querySelector('.pile-row-ok')?.textContent).toContain(
-      "Kept, not read: Bower can't watch videos",
-    );
+    expect(metas.map((m) => m.split(' · ')[0])).toEqual([
+      'PDF',
+      'Photo',
+      'File',
+    ]);
+    expect(metas[0]).toBe('PDF · in your inbox');
+    expect(metas[2]).toContain("kept, not read: Bower can't watch videos");
   });
 
   // R-PILE-1: the note is in the inbox from the first file.
@@ -569,7 +571,7 @@ describe('Add', () => {
     await waitFor(() => createTextFile.mock.calls.length === 1);
     const box = typeNote('Job offers: pull out salary and deadline.');
     expect(root.textContent).toContain(
-      'Saved in your inbox as you type. Bower reads it with these files only.',
+      'Saved as you type. Bower reads this note with these files only.',
     );
     void act(() => {
       box.focus();
@@ -595,12 +597,12 @@ describe('Add', () => {
     unmount();
     mount();
     dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
-    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    await waitFor(() => root.querySelectorAll('.pile-row-done').length === 1);
     typeNote('Receipts for the tax return.');
 
     const another = buttonNamed('Start another pile');
     expect(another.classList.contains('process-button')).toBe(false);
-    expect(root.textContent).toContain('This pile is saved as you go.');
+    expect(root.textContent).toContain('Start another pile');
     void act(() => another.click());
     await waitFor(() => getPiles()[0]?.closed === true);
 
@@ -619,7 +621,7 @@ describe('Add', () => {
     unmount();
     mount();
     dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
-    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    await waitFor(() => root.querySelectorAll('.pile-row-done').length === 1);
     void act(() => buttonNamed('Start another pile').click());
     await waitFor(() => root.querySelector('.pile-card-none') !== null);
     expect(root.querySelector('.pile-card-none')?.textContent).toBe('No note');
@@ -628,7 +630,7 @@ describe('Add', () => {
   // R-PILE-2: leaving Add closes the open pile.
   it('leaving Add closes the open pile', async () => {
     dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
-    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    await waitFor(() => root.querySelectorAll('.pile-row-done').length === 1);
     expect(getPiles()[0]?.closed).toBe(false);
     unmount();
     await waitFor(() => getPiles()[0]?.closed === true);
@@ -636,7 +638,7 @@ describe('Add', () => {
 
   it('a second pile starts once the first is closed (several piles wait)', async () => {
     dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
-    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    await waitFor(() => root.querySelectorAll('.pile-row-done').length === 1);
     void act(() => buttonNamed('Start another pile').click());
     await waitFor(() => getPiles()[0]?.closed === true);
     dropFiles([new File(['b'], 'two.txt', { type: 'text/plain' })]);
@@ -682,7 +684,7 @@ describe('Add', () => {
         ([, text]) => text.includes('- x.pdf') && text.includes('- y.pdf'),
       ),
     );
-    expect(rowNames()).toEqual(['x.pdf', 'y.pdf']);
+    expect(rowNames()).toEqual(['x', 'y']);
     expect(root.querySelector('.pile-elsewhere')).toBeNull();
   });
 
@@ -709,9 +711,9 @@ describe('Add', () => {
     unmount();
     mount();
     dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
-    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    await waitFor(() => root.querySelectorAll('.pile-row-done').length === 1);
     const remove = root.querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove one.txt from this pile"]',
+      'button[aria-label="Remove one"]',
     );
     if (remove === null) throw new Error('remove button missing');
     void act(() => remove.click());
@@ -732,7 +734,7 @@ describe('Add', () => {
       input.value = url;
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    void act(() => buttonNamed('Save').click());
+    void act(() => buttonNamed('Save the link').click());
     return input;
   }
 
@@ -748,7 +750,8 @@ describe('Add', () => {
   it('clears the field and greys out Save again, so a second press cannot resave it (#493)', () => {
     const input = saveLink('https://example.com/page');
     expect(input.value).toBe('');
-    expect(buttonNamed('Save').hasAttribute('disabled')).toBe(true);
+    // The box is empty again: its round button is the mic, not the arrow.
+    expect(() => buttonNamed('Save the link')).toThrow();
   });
 
   it("a saved link's row shows the address, not the note's file name (#508)", async () => {
@@ -759,14 +762,14 @@ describe('Add', () => {
 
   it('saving a link stays on Add and joins the pile', async () => {
     saveLink('https://example.com/page');
-    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    await waitFor(() => root.querySelectorAll('.pile-row-done').length === 1);
     expect(location.route).not.toHaveBeenCalled();
     expect(getPiles()).toHaveLength(1);
   });
 
   it('drops the filed rows once a tidy-up finishes (#493)', async () => {
     dropFiles([new File(['a'], 'one.txt', { type: 'text/plain' })]);
-    await waitFor(() => root.querySelectorAll('.pile-row-ok').length === 1);
+    await waitFor(() => root.querySelectorAll('.pile-row-done').length === 1);
     vaultFiles = [];
     lastFinished = { state: 'done', requestedAt: '2026-09-28T09:05:00.000Z' };
     mount();

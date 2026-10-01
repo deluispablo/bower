@@ -15,10 +15,13 @@ import type { Pile, PileItemState } from '../pile-store.js';
 import { formatPolicy } from '../formats.js';
 import type { FileKind } from '../vault-index.js';
 import { fileKind } from '../vault-index.js';
-import { IconCheck, IconClose } from './icons.js';
-import { DictateButton } from './dictate-button.js';
-import { KindBadge } from './kind-badge.js';
-import { Overlay } from './overlay.js';
+import { kindLabel } from '../meta-line.js';
+import { displayName } from '../navigation.js';
+import { Composer } from './composer.js';
+import { Confirm } from './confirm.js';
+import { IconClose, IconPlus } from './icons.js';
+import { ListRow } from './list-row.js';
+import { Overlay, OverlayHeader } from './overlay.js';
 import { Queued } from './queued-overlay.js';
 
 /** PILE-2, PILE-3, PILE-4: the note box's words. */
@@ -26,7 +29,13 @@ export const PILE_NOTE_LABEL = 'What is this pile?';
 export const PILE_NOTE_PLACEHOLDER =
   'For example: five job offers. Score them against my CV and write a CV for the best ones.';
 export const PILE_SAVED_LINE =
-  'Saved in your inbox as you type. Bower reads it with these files only.';
+  'Saved as you type. Bower reads this note with these files only.';
+
+/** S-AD-8: a row's meta line in each state. */
+export const IN_INBOX_LINE = 'In your inbox';
+export const UPLOADING_LINE = 'Uploading…';
+export const FAILED_LINE = 'Could not upload. Try again.';
+export const OFFLINE_LINE = 'Waiting for a connection';
 
 const MONTHS = [
   'Jan',
@@ -180,7 +189,44 @@ export interface PileRowsProps {
   onRetry: (name: string) => void;
 }
 
-/** The pile's items, one row each (aria-label "In this pile"). */
+/** The kind in words for a row (K-14): "PDF", "Spreadsheet", "Link". */
+export function rowKindWord(row: Pick<PileRow, 'name' | 'kind'>): string {
+  return kindLabel({ name: row.name, mimeType: '' });
+}
+
+/** "Kept, not read: …" as it reads after a dot, lower case first. */
+function afterDot(line: string): string {
+  return line.charAt(0).toLowerCase() + line.slice(1);
+}
+
+/**
+ * A row's meta line (S-AD-8, AD-Pile): "PDF · in your inbox", "Spreadsheet ·
+ * kept, not read: a Google Sheet works instead", "Uploading…", "Could not
+ * upload. Try again."
+ */
+export function rowMeta(row: PileRow): string {
+  switch (row.state) {
+    case 'uploading':
+    case 'queued':
+      return UPLOADING_LINE;
+    case 'offline':
+      return OFFLINE_LINE;
+    case 'failed':
+      return row.error ?? FAILED_LINE;
+    case 'done': {
+      const kept = row.note ?? formatPolicy(row.kind).queueLine;
+      return `${rowKindWord(row)} · ${afterDot(kept ?? IN_INBOX_LINE)}`;
+    }
+  }
+}
+
+/** What a row reads as its title: a link its address, a file its name
+ * without the extension (K-17). */
+function rowTitle(row: PileRow): string {
+  return row.label === row.name ? displayName(row.name) : row.label;
+}
+
+/** The pile's items, one ListRow each (aria-label "In this pile"). */
 export function PileRows({
   rows,
   onRemove,
@@ -189,67 +235,55 @@ export function PileRows({
   return (
     <ul class="pile-rows" aria-label="In this pile">
       {rows.map((row) => {
-        const kept = row.note ?? formatPolicy(row.kind).queueLine;
+        const title = rowTitle(row);
         return (
           <li key={row.name} class={`pile-row pile-row-${row.state}`}>
-            <KindBadge
-              kind={row.kind}
-              file={{ name: row.name, mimeType: '' }}
-            />
-            <span class="pile-row-body">
-              <span class="pile-row-name">{row.label}</span>
-              {row.state === 'uploading' && (
-                <span class="pile-row-progress">
-                  <span
-                    class="add-queue-bar"
-                    role="progressbar"
-                    aria-label={`Uploading ${row.label}`}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={row.percent}
-                  >
-                    <span
-                      class="add-queue-bar-fill"
-                      style={{ width: `${row.percent}%` }}
-                    />
-                  </span>
-                  <span class="pile-row-state">{row.percent}%</span>
-                </span>
-              )}
-              {row.state === 'queued' && (
-                <span class="pile-row-state">queued</span>
-              )}
-              {row.state === 'offline' && (
-                <span class="pile-row-state">no signal</span>
-              )}
-              {row.state === 'done' && (
-                <span class="pile-row-state pile-row-ok">
-                  <IconCheck />
-                  <span class="pile-row-sr">In your inbox</span>
-                  {kept !== null && <span>{kept}</span>}
-                </span>
-              )}
-              {row.state === 'failed' && (
-                <span class="pile-row-state pile-row-error" role="alert">
-                  {row.error ?? 'Could not upload. Check your connection.'}{' '}
+            <ListRow
+              item={{
+                id: row.name,
+                title,
+                name: row.name,
+                mimeType: '',
+                root: 'inbox',
+              }}
+              meta={rowMeta(row)}
+              trailing={
+                <>
+                  {row.state === 'failed' && (
+                    <button
+                      type="button"
+                      class="button-link pile-row-retry"
+                      onClick={() => onRetry(row.name)}
+                    >
+                      Try again
+                    </button>
+                  )}
                   <button
                     type="button"
-                    class="button-link"
-                    onClick={() => onRetry(row.name)}
+                    class="icon-button pile-row-remove"
+                    aria-label={`Remove ${title}`}
+                    onClick={() => onRemove(row.name)}
                   >
-                    Retry
+                    <IconClose />
                   </button>
-                </span>
-              )}
-            </span>
-            <button
-              type="button"
-              class="pile-row-remove"
-              aria-label={`Remove ${row.label} from this pile`}
-              onClick={() => onRemove(row.name)}
-            >
-              <IconClose />
-            </button>
+                </>
+              }
+            />
+            {row.state === 'uploading' && (
+              <span
+                class="pile-row-bar"
+                role="progressbar"
+                aria-label={`Uploading ${title}`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={row.percent}
+              >
+                <span
+                  class="pile-row-bar-fill"
+                  style={{ width: `${row.percent}%` }}
+                />
+              </span>
+            )}
           </li>
         );
       })}
@@ -304,6 +338,10 @@ export interface PileSheetProps {
 
 const TITLE_ID = 'pile-sheet-title';
 
+/** A waiting pile opened (AD-Sheet): a phone sheet, a 440 side panel on
+ * desktop, ✕ "Close the pile", the note, the rows, "Add more to this pile"
+ * and the destructive "Remove this pile from the inbox" through the one
+ * confirm (§3.39). */
 export function PileSheet({
   pile,
   rows,
@@ -318,109 +356,85 @@ export function PileSheet({
 }: PileSheetProps): JSX.Element {
   const [text, setText] = useState(pile.text);
   const [confirming, setConfirming] = useState(false);
-  const [removing, setRemoving] = useState(false);
   const [failed, setFailed] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const saver = useDebouncedSave(onText);
   const count = rows.length;
 
   async function remove(): Promise<void> {
-    setRemoving(true);
+    setConfirming(false);
     setFailed(false);
-    try {
-      if (await onRemovePile()) onClose();
-      else setFailed(true);
-    } finally {
-      setRemoving(false);
-    }
+    if (await onRemovePile()) onClose();
+    else setFailed(true);
   }
 
   return (
-    <Queued id={`pile-${pile.id}`} priority={OVERLAY_PRIORITY.own}>
-      <Overlay kind="sheet" labelledBy={TITLE_ID} onClose={onClose}>
-        <div class="pile-sheet">
-          <h2 id={TITLE_ID} class="pile-sheet-title">
-            {pileTitle(pile.createdAt, now)}
-          </h2>
-          <p class="pile-sheet-sub">
-            {thingsText(count)} · waiting for the next tidy-up
-          </p>
-
-          <label class="pile-note-label" for="pile-sheet-note">
-            {PILE_NOTE_LABEL} <span class="add-context-optional">optional</span>
-          </label>
-          <DictateButton
-            id="pile-sheet-note"
-            inputClass="pile-note"
-            label={PILE_NOTE_LABEL}
-            rows={3}
-            placeholder={PILE_NOTE_PLACEHOLDER}
-            value={text}
-            onValue={(next) => {
-              setText(next);
-              saver.schedule(next);
-            }}
-            onBlur={saver.flush}
-          />
-          <p class="pile-saved">{PILE_SAVED_LINE}</p>
-
-          <PileRows rows={rows} onRemove={onRemoveItem} onRetry={onRetry} />
-
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            hidden
-            onChange={(event) => {
-              const input = event.currentTarget;
-              if (input.files !== null && input.files.length > 0) {
-                onAddFiles(Array.from(input.files));
-              }
-              input.value = '';
-            }}
-          />
-          <button
-            type="button"
-            class="button button-secondary pile-more"
-            onClick={() => fileInput.current?.click()}
-          >
-            Add more to this pile
-          </button>
-
-          {confirming ? (
-            <div
-              class="pile-confirm"
-              role="group"
-              aria-label="Remove this pile"
-            >
-              <p class="pile-confirm-text">
-                {`Remove this pile? Its ${count} ${count === 1 ? 'file goes' : 'files go'} to the Bin in Drive.`}
+    <>
+      {!confirming && (
+        <Queued id={`pile-${pile.id}`} priority={OVERLAY_PRIORITY.own}>
+          <Overlay kind="sheet" labelledBy={TITLE_ID} onClose={onClose}>
+            <div class="overlay-body pile-sheet">
+              <OverlayHeader
+                titleId={TITLE_ID}
+                title={pileTitle(pile.createdAt, now)}
+                closeLabel="Close the pile"
+                onClose={onClose}
+              />
+              <p class="pile-sheet-sub">
+                {thingsText(count)} · waiting for the next tidy-up
               </p>
+
+              <label class="pile-note-label" for="pile-sheet-note">
+                {PILE_NOTE_LABEL}{' '}
+                <span class="add-context-optional">optional</span>
+              </label>
+              <Composer
+                id="pile-sheet-note"
+                mode="save"
+                rows={3}
+                label={PILE_NOTE_LABEL}
+                placeholder={PILE_NOTE_PLACEHOLDER}
+                value={text}
+                onChange={(next) => {
+                  setText(next);
+                  saver.schedule(next);
+                }}
+                onCommit={(value) => {
+                  saver.schedule(value);
+                  saver.flush();
+                }}
+              />
+              <p class="pile-saved">{PILE_SAVED_LINE}</p>
+
+              <PileRows rows={rows} onRemove={onRemoveItem} onRetry={onRetry} />
+
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                hidden
+                onChange={(event) => {
+                  const input = event.currentTarget;
+                  if (input.files !== null && input.files.length > 0) {
+                    onAddFiles(Array.from(input.files));
+                  }
+                  input.value = '';
+                }}
+              />
+              <button
+                type="button"
+                class="button button-secondary pile-more"
+                onClick={() => fileInput.current?.click()}
+              >
+                <IconPlus />
+                Add more to this pile
+              </button>
+
               {failed && (
                 <p class="add-field-error" role="alert">
                   Could not remove everything. Try again.
                 </p>
               )}
-              <div class="pile-confirm-actions">
-                <button
-                  type="button"
-                  class="button pile-remove-yes"
-                  disabled={removing || running}
-                  onClick={() => void remove()}
-                >
-                  Remove
-                </button>
-                <button
-                  type="button"
-                  class="button button-secondary"
-                  onClick={() => setConfirming(false)}
-                >
-                  Keep
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
               <button
                 type="button"
                 class="button-link pile-remove"
@@ -436,10 +450,18 @@ export function PileSheet({
                   done.
                 </p>
               )}
-            </>
-          )}
-        </div>
-      </Overlay>
-    </Queued>
+            </div>
+          </Overlay>
+        </Queued>
+      )}
+      {confirming && (
+        <Confirm
+          action="removePile"
+          count={count}
+          onConfirm={() => void remove()}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
+    </>
   );
 }

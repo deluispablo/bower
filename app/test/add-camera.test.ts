@@ -83,6 +83,7 @@ vi.mock('../src/upload-queue.js', () => ({
   ) => Promise.resolve({ input, onProgress }),
 }));
 vi.mock('../src/drive.js', () => ({
+  FOLDER_MIME: 'application/vnd.google-apps.folder',
   INSTRUCTION_APP_PROPERTIES: { bower: 'instruction' },
   listFolder,
   upload: vi.fn(),
@@ -216,6 +217,6 @@ describe('Add: the camera door', () => {
     void act(() => {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect(root.querySelector('.pile-row-name')?.textContent).toBe('photo.jpg');
+    expect(root.querySelector('.list-row-title')?.textContent).toBe('photo');
   });
 });

@@ -181,19 +181,9 @@ button.pile-card:focus-visible {
 
 /* The pile's items: one row each, in the card and in the sheet. */
 .pile-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.pile-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-1) 0;
 }
 
 .pile-row-body {
@@ -314,9 +304,19 @@ button.pile-card:focus-visible {
   outline-offset: 2px;
 }
 
+/* AD-Sheet: a secondary button with its + icon. */
 .pile-more {
-  align-self: flex-start;
-  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 48px;
+}
+
+.pile-more .icon {
+  width: 18px;
+  height: 18px;
 }
 
 .pile-remove {
@@ -449,25 +449,6 @@ button.pile-card:focus-visible {
   font-weight: 400;
 }
 
-.add-context textarea {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 72px;
-  padding: 10px 12px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  font: inherit;
-  line-height: 1.4;
-  resize: none;
-}
-
-.add-context textarea:focus-visible {
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: 2px;
-}
-
 .add-queue-bar {
   display: block;
   height: 4px;
@@ -487,7 +468,10 @@ button.pile-card:focus-visible {
  * at the foot of the page, under the right column, on desktop. */
 .add-tidy {
   position: sticky;
-  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  /* Docks just above the tab bar and, while it shows, the phone run chip. */
+  bottom: calc(
+    64px + env(safe-area-inset-bottom, 0px) + var(--run-chip-space, 0px)
+  );
   z-index: 1;
   margin: var(--space-3) 0;
   padding: var(--space-2) 0;
@@ -509,10 +493,10 @@ button.pile-card:focus-visible {
 }
 
 @media (min-width: 900px) {
+  /* The full 720 column (AD-Pile-1280). */
   .add-tidy {
     bottom: 0;
-    width: calc(50% - var(--space-3));
-    margin-left: auto;
+    width: 100%;
   }
 }
 
@@ -526,4 +510,223 @@ button.pile-card:focus-visible {
   .add-queue-bar-fill {
     transition: none;
   }
+}
+
+/* #914: Add as the boards draw it (AD-Main, AD-Pile, AD-Waiting): one
+   column, centred and 720 wide on desktop; the new pile accent Card; the
+   doors; kinds in words on ListRows; waiting piles as Cards. */
+
+.add-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.pile-card-new .pile-card-title {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: var(--text-lg);
+}
+
+.pile-card-new .pile-card-count {
+  margin: 2px 0 var(--space-3);
+  color: var(--color-text-secondary, var(--color-text-muted));
+  font-size: var(--text-base);
+}
+
+.add-context-label {
+  display: block;
+  margin-bottom: var(--space-1-5, 6px);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.add-doors {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.door-button {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  height: 64px;
+  padding: 0;
+  border: 1px solid var(--color-border-control, var(--color-border));
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.door-button .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.door-button:hover:not(:disabled) {
+  background: var(--color-surface);
+}
+
+.door-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.add-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 13px);
+  line-height: 1.45;
+}
+
+.pile-saved {
+  margin: var(--space-1-5, 6px) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 13px);
+}
+
+.pile-rows {
+  display: block;
+  width: 100%;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pile-row {
+  position: relative;
+}
+
+/* AD-Pile: about 65 px a row, the ✕ at the row end. */
+.pile-row .list-row {
+  align-items: center;
+  width: 100%;
+  min-height: 65px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+/* One line each, as the board draws them, so rows stay about 65 px. */
+.pile-row .list-row-title,
+.pile-row .list-row-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.pile-row .list-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pile-row .list-row-trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.pile-row-failed .list-row-meta {
+  color: var(--color-danger);
+}
+
+.pile-row-bar {
+  display: block;
+  height: 2px;
+  background: var(--color-border);
+}
+
+.pile-row-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-brand);
+}
+
+.pile-another {
+  align-self: flex-start;
+}
+
+.pile-waiting-title {
+  margin: var(--space-3) 0 0;
+  color: var(--color-heading);
+  font-size: var(--text-lg);
+}
+
+.pile-waiting-count {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.pile-card-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pile-card-waiting .pile-card-note {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--text-base);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.pile-card-waiting .pile-card-meta,
+.pile-card-elsewhere .pile-card-meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 13px);
+}
+
+.pile-card-elsewhere {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+@media (min-width: 900px) {
+  .door-button {
+    height: 76px;
+  }
+}
+
+/* The last card ("Added from elsewhere") clears the sticky Tidy up. */
+.add-column {
+  padding-bottom: var(--space-6);
+}
+
+/* With the run chip in the dock, the sticky Tidy up is the page end: no
+   reserved room is left under it (the chip comes right after it). */
+@media (max-width: 899px) {
+  .shell-with-dock .content:has(.add-tidy) {
+    margin-bottom: 0;
+    padding-bottom: var(--space-2);
+  }
+}
+
+/* AD-Waiting: "Say what they are" is a teal text link at the row end
+   (board over spec's secondary button). */
+.pile-say {
+  flex: none;
+  min-height: 44px;
+  margin-left: auto;
+  color: var(--color-brand);
 }

@@ -372,7 +372,7 @@ describe('the Done sheet', () => {
       );
     });
     const link = document.body.querySelector('a[href^="/just-filed"]');
-    expect(link?.textContent).toBe('See everything');
+    expect(link?.textContent).toBe('See what changed');
     expect(link?.getAttribute('href')).toBe(
       `/just-filed?run=${encodeURIComponent(run.requestedAt)}`,
     );

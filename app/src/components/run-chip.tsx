@@ -22,7 +22,7 @@ import { useLocation } from 'preact-iso';
 import { isDemo } from '../api.js';
 import type { Run } from '../api.js';
 import { outcomeCounts, outcomeFromRun } from '../run-outcome.js';
-import { RUN_CHIP_LIFETIME_MS, useRun } from '../run-store.js';
+import { RUN_CHIP_LIFETIME_MS, runningCount, useRun } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import { usesShell } from '../shell-routes.js';
 import { mediaMatches, useMediaQuery } from '../use-media-query.js';
@@ -56,6 +56,8 @@ export interface ChipInput {
   resultSeen: boolean;
   now: number;
   desktop: boolean;
+  /** The run store's kept, confirmed count (R-AD-8). */
+  count?: number | null;
 }
 
 function plural(n: number, one: string): string {
@@ -77,7 +79,7 @@ function finish(model: Omit<ChipModel, 'signature'>): ChipModel {
 
 function runningModel(input: ChipInput): ChipModel {
   const active = input.run;
-  const total = active?.total;
+  const total = runningCount(input.count ?? null, active?.total);
   const things = total === undefined ? '' : plural(total, 'thing');
   const started = active?.startedAt ?? active?.requestedAt;
   const minutes =
@@ -113,6 +115,9 @@ function finishedModel(run: Run, input: ChipInput): ChipModel | null {
   const counts = outcomeCounts(outcome, { short: true });
   const spoken = outcomeCounts(outcome).split(' · ').join(', ');
   if (outcome.state === 'done') {
+    // E-9 (lead ruling): no "Done · N filed" pill on desktop; the Home
+    // bubble and "See what changed" are the way in. The phone keeps it.
+    if (input.desktop) return null;
     const name = `Tidy-up done: ${spoken === '' ? 'nothing new' : spoken}. See what changed`;
     return finish({
       state: 'done',
@@ -213,6 +218,9 @@ export function useTextFieldFocus(): boolean {
     };
     document.addEventListener('focusin', onIn);
     document.addEventListener('focusout', onOut);
+    // #927: a field focused between the first render and this post-paint
+    // effect sent its focusin before anyone listened; read it once now.
+    setTyping(isTextField(document.activeElement));
     return () => {
       document.removeEventListener('focusin', onIn);
       document.removeEventListener('focusout', onOut);
@@ -360,8 +368,12 @@ export function RunChip({ model, desktop, onOpen }: RunChipProps): JSX.Element {
  * which loads this module after start so the chip stays out of the startup
  * budget (#41).
  */
+/** The room the phone chip takes: its 52 px bar and the 8 px around it. */
+export const RUN_CHIP_SPACE = '68px';
+
 export function RunChipFiller(): JSX.Element {
-  const { phase, run, lastFinished, resultSeen, now, openSheet } = useRun();
+  const { phase, run, lastFinished, resultSeen, now, openSheet, keptCount } =
+    useRun();
   const { path } = useLocation();
   const desktop = useMediaQuery('(min-width: 900px)');
   const typing = useTextFieldFocus();
@@ -373,6 +385,7 @@ export function RunChipFiller(): JSX.Element {
     resultSeen,
     now,
     desktop,
+    count: keptCount,
   });
   // Home's greeting carries the run there (D31); the routes with no shell
   // (onboarding, the intro) have no slot to fill (R-CHIP-5).
@@ -391,5 +404,15 @@ export function RunChipFiller(): JSX.Element {
     [signature, desktop, openSheet],
   );
   useShellSlot('tidyBar', content);
+  // The phone chip sits over the page above the tab bar: while it shows, the
+  // page keeps room for it at its end (`--run-chip-space`, `layout.css`),
+  // so it never covers the last of the content (#936 gate).
+  const reserve = !desktop && content !== null;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (reserve) root.style.setProperty('--run-chip-space', RUN_CHIP_SPACE);
+    else root.style.removeProperty('--run-chip-space');
+    return () => root.style.removeProperty('--run-chip-space');
+  }, [reserve]);
   return <BowerLedgeFiller />;
 }
