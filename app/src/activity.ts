@@ -368,7 +368,13 @@ export function cardWhen(iso: string, now: number): string {
 export function cardDuration(run: Run): string {
   const start = Date.parse(run.startedAt ?? run.requestedAt);
   const end = Date.parse(run.finishedAt ?? run.startedAt ?? run.requestedAt);
-  const minutes = Math.max(1, Math.round((end - start) / 60_000) || 1);
+  return durationWords(end - start);
+}
+
+/** A run's length in `ms` as every run view says it (AR-Run, JF-Main):
+ * "3 min", never under a minute; "1 h 5 min" past the hour. */
+export function durationWords(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000) || 1);
   if (minutes < 60) return `${String(minutes)} min`;
   const rest = minutes % 60;
   const hours = `${String(Math.floor(minutes / 60))} h`;

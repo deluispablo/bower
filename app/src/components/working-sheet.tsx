@@ -27,6 +27,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Run, RunPhase as StepPhase } from '../api.js';
 import { isDemo } from '../api.js';
+import { durationWords } from '../activity.js';
 import { linkTitleFromFileName } from '../add.js';
 import { sinceLabel } from '../bower-tab.js';
 import { doneNotes, things } from '../home.js';
@@ -310,7 +311,8 @@ export function sheetTimeLine(
   const from = clockTime(outcome.startedAt);
   const to = clockTime(outcome.finishedAt);
   if (from === '' || to === '') return from === '' ? '' : `Started ${from}`;
-  const length = minutesLabel(
+  // The words Just filed and Activity use for the same run (#950 T950-6).
+  const length = durationWords(
     Date.parse(outcome.finishedAt ?? '') - Date.parse(outcome.startedAt),
   );
   return `${from} to ${to} · ${state === 'done' ? length : `stopped after ${length}`}`;

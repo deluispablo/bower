@@ -99,6 +99,14 @@ describe('the time line', () => {
     );
   });
 
+  it('done in under a minute: "1 min", as Just filed says it (#950)', () => {
+    const quick = {
+      ...outcome,
+      finishedAt: new Date(start + 20_000).toISOString(),
+    };
+    expect(sheetTimeLine('done', quick, start)).toMatch(/ · 1 min$/);
+  });
+
   it('partial and failed: stopped after', () => {
     expect(sheetTimeLine('partial', outcome, start)).toBe(
       '13:52 to 13:57 · stopped after 5 min',
