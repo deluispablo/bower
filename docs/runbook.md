@@ -366,6 +366,10 @@ Bower never changes the user's rules on its own (#199). When it would like the u
 
 The runner's audit keeps this honest: `Answers/` is an ordinary place for the agent to write, while any change it makes to `Rules.md` in a run without an instruction note the app wrote is put back and reported as `refused` (#263), so an accepted suggestion is the only way a rule reaches `Rules.md` besides Tell Bower. Existing folders get the new rulebook text from **Settings → Advanced → "Update Bower's rules"** (version 5); the updated `prompts/ingest.md` already spells out the section format, so their proposals reach the Bower tab either way, and the new rulebook adds the rest (when to file a workflow or a tag proposal, and never to repeat a dismissed one).
 
+### A folder's statuses (Compare)
+
+The status select in a folder's Compare tab offers the folder's own list, read from `statuses: [..]` in its hub note (`<Folder>/<Folder>.md`); without one, or with a list that is not a non-empty list of short lower-case words, it falls back to the kind's list in `app/src/kinds.ts` (the console says why). A note whose status is not in the list keeps it as an extra option.
+
 ### Reading logs
 
 - **Worker**: `pnpm -C api exec wrangler tail -c wrangler.local.toml` streams live requests (method, path, status, exceptions) — nothing here includes note content or credentials (see `CLAUDE.md`'s logging rule and `api/test/log-hygiene.test.ts`).
