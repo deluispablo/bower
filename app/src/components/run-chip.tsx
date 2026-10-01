@@ -29,7 +29,7 @@ import { usesShell } from '../shell-routes.js';
 import { mediaMatches, useMediaQuery } from '../use-media-query.js';
 import { Bird } from './bird.js';
 import type { BirdState } from './bird.js';
-import { BowerLedgeFiller, useBirdRoom } from './bower-ledge.js';
+import { useBirdRoom } from './bower-ledge.js';
 import { useShellSlot } from './shell-slots.js';
 
 import '../styles/run-chip.css';
@@ -372,7 +372,7 @@ export function RunChip({ model, desktop, onOpen }: RunChipProps): JSX.Element {
 /** The room the phone chip takes: its 52 px bar and the 8 px around it. */
 export const RUN_CHIP_SPACE = '68px';
 
-export function RunChipFiller(): JSX.Element {
+export function RunChipFiller(): null {
   const { phase, run, lastFinished, resultSeen, now, openSheet, keptCount } =
     useRun();
   const { path } = useLocation();
@@ -418,5 +418,5 @@ export function RunChipFiller(): JSX.Element {
     else root.style.removeProperty('--run-chip-space');
     return () => root.style.removeProperty('--run-chip-space');
   }, [reserve]);
-  return <BowerLedgeFiller />;
+  return null;
 }

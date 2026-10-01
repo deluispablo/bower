@@ -34,18 +34,17 @@
  * card and in Add's hint, and the bar shows nothing while a run goes. The
  * working sheet and the notifications prompt are mounted once, here
  * (`RunSheets`), whichever screen the run was started from.
+
  *
- * The sidebar's waiting-count bubble (#326, C.9): the Desktop-Home and
- * Desktop-Add boards both put it on the Home row, not Add — the board
- * wins over the issue's own title and C.9's text, which say Add. Same
- * count as Home's Inbox card and Add's hint (`inboxCount`, #741); hidden at
- * zero, same convention as the Notes tree's counts.
+ * No board draws a waiting-count bubble on a sidebar item, so there is none
+ * (#950 D-1).
  *
  * v5 slots (#741, spec 7b T14), all empty by default and so invisible: on the
  * phone a docked row between the page and the tab bar (`tidyBar`, else
  * `uploadChip`: the tidy-up bar wins, 6.15b); from 900 px the same content is a
- * chip in the top bar before "?", plus a `breadcrumb` slot in the bar; and
- * under the sidebar's explorer a 66 px `ledge`, outside the nav landmark.
+ * chip in the top bar before "?", plus a `breadcrumb` slot in the bar. No
+ * board draws a bird at the foot of the sidebar, so the tree runs to the
+ * bottom (#950 D-1).
  * `OverlayHost` (#740) is mounted once. The sidebar's width comes from
  * `bower:pref:sidebarWidth`, read in the first render (T15).
  */
@@ -57,7 +56,6 @@ import { useLocation } from 'preact-iso';
 import { loginUrl } from '../api.js';
 import { HELP_REQUEST_EVENT } from '../more-menu.js';
 import { tourOnScreen } from '../onboarding.js';
-import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { personOf, useSession } from '../session.js';
 import {
   BOWER_PATH,
@@ -73,7 +71,6 @@ import {
 import type { TabId } from '../shell-routes.js';
 import { lazyOverlay, whenIdle } from '../lazy-overlay.js';
 import { replayTour, useTour } from '../tour-store.js';
-import { useVault } from '../vault-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
 import { BowerMark } from './bird.js';
@@ -343,20 +340,11 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps): JSX.Element {
   const { me } = useSession();
-  const { files, status } = useVault();
   const { path, route } = useLocation();
   const tour = useTour();
   const drawer = useFoldersDrawer();
-  const {
-    back,
-    crumb,
-    actions,
-    aside,
-    tidyBar,
-    uploadChip,
-    breadcrumb,
-    ledge,
-  } = useShellSlots();
+  const { back, crumb, actions, aside, tidyBar, uploadChip, breadcrumb } =
+    useShellSlots();
   // One bar slot for both chips on the phone: the tidy-up bar wins (spec
   // 6.15b). From 900 px the same chip sits in the top bar, except its done
   // state, the "Done · 1 filed" pill (E-9), which `layout.css` hides.
@@ -413,8 +401,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
     return () => observer.disconnect();
   }, []);
 
-  const pending = inboxTotal(inboxCount(files, status === 'loading'));
-
   const sidebarNav = (
     <nav class="explorer-nav" aria-label="Main">
       {SIDEBAR_LINKS.map(({ href, label, Icon, tour }) => (
@@ -428,16 +414,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           {/* R-ICON-27: the Bower item wears the bird, as on the tab bar. */}
           {href === BOWER.href ? <BowerMark size={20} /> : <Icon />}
           <span class="explorer-row-label">{label}</span>
-          {href === ADD.href && pending > 0 && (
-            // aria-hidden: the link's accessible name stays plain "Add"
-            // (screen-reader users meet the same count on Home's own
-            // Inbox card); it also keeps `Add` matchable by name in the
-            // e2e flows' navigation helper. #422/#326: the waiting count
-            // belongs on Add, where the pile gets filled, not on Home.
-            <span class="nav-badge" aria-hidden="true">
-              {pending}
-            </span>
-          )}
         </a>
       ))}
     </nav>
@@ -473,11 +449,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         <nav class="shell-sidebar-nav" aria-label={FOLDERS_LANDMARK}>
           <Explorer variant="sidebar" nav={sidebarNav} />
         </nav>
-        {/* The ledge (#741): a 66 px strip under the explorer, decoration
-            only, so outside the landmark and hidden from assistive tech. */}
-        <div class="shell-ledge" data-slot="ledge" aria-hidden="true">
-          {ledge}
-        </div>
         <SidebarSeparator />
       </div>
       <div class="shell-main">

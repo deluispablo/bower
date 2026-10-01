@@ -401,15 +401,11 @@ describe('Layout', () => {
     expect(sidebar.querySelectorAll('[aria-expanded="true"]')).toHaveLength(0);
   });
 
-  it("shows the waiting count on Add's row, not on Home (#422, #326, C.9)", () => {
+  it('draws no waiting count on a nav item and no ledge (#950 D-1)', () => {
     mount();
     const sidebar = query('nav[aria-label="Your folders"]');
-    const add = query<HTMLAnchorElement>(
-      'nav[aria-label="Main"] a[href="/add"]',
-    );
-    expect(add.querySelector('.nav-badge')?.textContent).toBe('1');
-    const home = query<HTMLAnchorElement>('nav[aria-label="Main"] a[href="/"]');
-    expect(home.querySelector('.nav-badge')).toBeNull();
+    expect(document.querySelector('.nav-badge')).toBeNull();
+    expect(document.querySelector('.shell-ledge')).toBeNull();
     // Sanity: the fixture's one pending file is `0-Inbox/Receipt.pdf` (the tree names its folder Inbox).
     expect(sidebar.textContent).toContain('Inbox');
   });
@@ -490,16 +486,13 @@ describe('Layout v5 slots (#741)', () => {
     document.documentElement.removeAttribute('style');
   });
 
-  type Fills = Partial<
-    Record<'tidyBar' | 'uploadChip' | 'breadcrumb' | 'ledge', VNode>
-  >;
+  type Fills = Partial<Record<'tidyBar' | 'uploadChip' | 'breadcrumb', VNode>>;
 
   function mountWith(fills: Fills): void {
     function Fill(): null {
       useShellSlot('tidyBar', fills.tidyBar ?? null);
       useShellSlot('uploadChip', fills.uploadChip ?? null);
       useShellSlot('breadcrumb', fills.breadcrumb ?? null);
-      useShellSlot('ledge', fills.ledge ?? null);
       return null;
     }
     root = document.createElement('div');
@@ -515,17 +508,6 @@ describe('Layout v5 slots (#741)', () => {
     expect(root.querySelector('.topbar-chip')).toBeNull();
     expect(query('.shell').classList.contains('shell-with-dock')).toBe(false);
     expect(query('.topbar-breadcrumb').childNodes).toHaveLength(0);
-    expect(query('.shell-ledge').childNodes).toHaveLength(0);
-  });
-
-  it('puts the ledge outside the nav landmark, aria-hidden, after the explorer', () => {
-    mount();
-    const ledge = query('.shell-ledge');
-    expect(ledge.getAttribute('aria-hidden')).toBe('true');
-    expect(ledge.closest('nav')).toBeNull();
-    const nav = query('nav[aria-label="Your folders"]');
-    expect(nav.nextElementSibling).toBe(ledge);
-    expect(ledge.parentElement).toBe(nav.parentElement);
   });
 
   it('docks the bar between the page and the tab bar on a phone', () => {
@@ -561,13 +543,11 @@ describe('Layout v5 slots (#741)', () => {
     expect(query('.shell-dock').textContent).toBe('Upload');
   });
 
-  it('fills the breadcrumb and ledge slots', () => {
+  it('fills the breadcrumb slot', () => {
     mountWith({
       breadcrumb: h('span', null, 'Crumbs'),
-      ledge: h('span', null, 'Perch'),
     });
     expect(query('.topbar-breadcrumb').textContent).toBe('Crumbs');
-    expect(query('.shell-ledge').textContent).toBe('Perch');
   });
 
   it('mounts the overlay host once: an opened overlay renders in the body', async () => {

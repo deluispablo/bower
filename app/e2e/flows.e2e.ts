@@ -1643,8 +1643,8 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
     await expect(tabs).toBeHidden();
 
     // The sidebar (#422, #909, C.9): the three tools on YOUR FOLDERS (#909
-    // replaced the Expand/Collapse all toggle), and the waiting-count bubble
-    // on Add's row, where the pile gets filled, not Home's.
+    // replaced the Expand/Collapse all toggle). No board draws a count
+    // bubble on a nav item (#950 D-1).
     const sidebar = page.getByRole('navigation', { name: 'Your folders' });
     for (const name of [
       'Show the open item',
@@ -1653,8 +1653,8 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
     ]) {
       await expect(sidebar.getByRole('button', { name })).toBeVisible();
     }
-    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveText('3');
-    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveCount(0);
+    await expect(sidebar.locator('.nav-badge')).toHaveCount(0);
+    await expect(page.locator('.shell-ledge')).toHaveCount(0);
     await shot(page, testInfo, 'desktop-sidebar');
     return;
   }
