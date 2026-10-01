@@ -11,18 +11,16 @@
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
-import { createTextFile, deleteFile } from '../drive.js';
-import { undoRequestNote, writeRequestNote } from '../move-request.js';
+import { createTextFile } from '../drive.js';
+import { writeRequestNote } from '../move-request.js';
 import { close, open, OVERLAY_PRIORITY } from '../overlay-queue.js';
 import {
   RENAME_HINT,
-  RENAME_SENT_TOAST,
   renameRequestText,
   splitFileName,
   validateRename,
 } from '../rename-request.js';
 import { useSession } from '../session.js';
-import { showToast } from '../toast-store.js';
 import { useVault } from '../vault-store.js';
 import { Composer, COMPOSER_LINES } from './composer.js';
 import { Overlay, OverlayHeader } from './overlay.js';
@@ -67,16 +65,6 @@ export function RenameSheet({
   // A name check speaks once the person has typed something else.
   const shown = error ?? (value !== base ? problem : null);
 
-  async function undo(id: string): Promise<void> {
-    const result = await undoRequestNote(deleteFile, id);
-    if (result === 'failed') {
-      showToast("Couldn't take that back. It is still in your inbox.");
-      return;
-    }
-    void refresh();
-    showToast('Taken out of your inbox.');
-  }
-
   async function rename(): Promise<void> {
     if (busy) return;
     if (problem !== null) {
@@ -89,9 +77,8 @@ export function RenameSheet({
     }
     setBusy(true);
     setError(null);
-    let id: string | null;
     try {
-      id = await writeRequestNote(
+      await writeRequestNote(
         { createTextFile },
         {
           inboxFolderId,
@@ -105,12 +92,9 @@ export function RenameSheet({
       setError(COMPOSER_LINES.failed);
       return;
     }
+    // One Undo (L-20): the page's line "Renaming to <name> at the next
+    // tidy-up" carries it once the listing has the request; no toast.
     void refresh();
-    showToast(
-      RENAME_SENT_TOAST,
-      undefined,
-      id === null ? undefined : { label: 'Undo', run: () => void undo(id) },
-    );
     onClose();
   }
 

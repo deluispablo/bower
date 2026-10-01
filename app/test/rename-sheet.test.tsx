@@ -138,7 +138,7 @@ describe('Rename…', () => {
     expect(mocks.createTextFile).not.toHaveBeenCalled();
   });
 
-  it('queues the rename and confirms by a toast with Undo', async () => {
+  it('queues the rename with no toast: the page line has the Undo', async () => {
     rename();
     type('CV insights for recruiters');
     void act(() => roundButton().click());
@@ -148,10 +148,7 @@ describe('Rename…', () => {
     expect(content).toContain(
       'Rename 1-Projects/Jobs/CV insights.md to CV insights for recruiters.md',
     );
-    expect(currentToast()?.message).toBe(
-      'In your inbox. Bower renames it at the next tidy-up.',
-    );
-    expect(currentToast()?.action?.label).toBe('Undo');
+    expect(currentToast()).toBeNull();
     expect(body().querySelector('.overlay-panel')).toBeNull();
   });
 });
