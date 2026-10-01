@@ -68,44 +68,10 @@
   margin: 0;
 }
 
+/* Accept and Dismiss are the one Button, small: primary and secondary
+   (K-20, `.btn` in primitives.css). */
 .suggested-actions {
   display: flex;
   gap: var(--space-2);
   margin-top: var(--space-2);
-}
-
-.suggested-accept,
-.suggested-dismiss {
-  min-height: 44px;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-full);
-  font: inherit;
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-}
-
-.suggested-accept {
-  background: var(--color-brand);
-  color: var(--color-on-brand);
-  border: none;
-}
-
-.suggested-accept:hover {
-  filter: brightness(0.95);
-}
-
-.suggested-dismiss {
-  background: transparent;
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-}
-
-.suggested-dismiss:hover {
-  background: var(--color-surface-hover);
-}
-
-.suggested-accept:disabled,
-.suggested-dismiss:disabled {
-  opacity: 0.6;
-  cursor: default;
 }

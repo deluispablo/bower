@@ -165,7 +165,7 @@ export function SuggestedRules(): JSX.Element | null {
                 <div class="suggested-actions">
                   <button
                     type="button"
-                    class="suggested-accept"
+                    class="btn btn-sm suggested-accept"
                     disabled={busy !== null}
                     onClick={() => void decide(proposal, 'accepted')}
                   >
@@ -173,7 +173,7 @@ export function SuggestedRules(): JSX.Element | null {
                   </button>
                   <button
                     type="button"
-                    class="suggested-dismiss"
+                    class="btn btn-sm btn-secondary suggested-dismiss"
                     disabled={busy !== null}
                     onClick={() => void decide(proposal, 'dismissed')}
                   >
