@@ -11,6 +11,7 @@ import {
   insertSpoken,
   languageLabel,
   nextDictateState,
+  pressWord,
   resetDictationBlocked,
 } from '../src/components/dictate-button.js';
 import {
@@ -257,6 +258,33 @@ describe('DictateButton', () => {
     expect(root.querySelector('[role="alert"]')?.textContent).toContain(
       'Dictation stopped.',
     );
+  });
+
+  it('says Tap on the phone and Click on desktop after a failure (K-27)', () => {
+    const phone = mount();
+    flush(() => button(phone).click());
+    flush(() => stub.latest().fail('network'));
+    expect(phone.querySelector('[role="alert"]')?.textContent).toBe(
+      'Dictation stopped. Tap the mic to try again.',
+    );
+    render(null, phone);
+    phone.remove();
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(min-width: 900px)',
+      addEventListener: (): void => undefined,
+      removeEventListener: (): void => undefined,
+    }));
+    const desktop = mount();
+    flush(() => button(desktop).click());
+    flush(() => stub.latest().fail('network'));
+    expect(desktop.querySelector('[role="alert"]')?.textContent).toBe(
+      'Dictation stopped. Click the mic to try again.',
+    );
+  });
+
+  it('says Click on desktop and Tap on the phone (pressWord)', () => {
+    expect(pressWord(true)).toBe('Click');
+    expect(pressWord(false)).toBe('Tap');
   });
 
   it('keeps a language chosen in the menu and restarts with it', () => {

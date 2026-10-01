@@ -19,8 +19,7 @@ import type { JSX } from 'preact';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 
 import { useOnline } from '../online.js';
-import { useMediaQuery } from '../use-media-query.js';
-import { useDictation } from './dictate-button.js';
+import { pressWord, useDesktop, useDictation } from './dictate-button.js';
 import type { DictateState } from './dictate-button.js';
 import { RoundButton } from './round-button.js';
 import type { RoundButtonState } from './round-button.js';
@@ -34,14 +33,12 @@ export const SAVE_DEBOUNCE_MS = 600;
 /** Where the box stops growing and scrolls inside (spec §3.12). */
 export const COMPOSER_MAX_HEIGHT = 200;
 
-const DESKTOP_QUERY = '(min-width: 900px)';
-
 /** Every line under the box, exactly as the boards (and O-R2) write them. */
 export const COMPOSER_LINES = {
   asking: 'Allow the microphone to dictate.',
-  listeningPhone: 'Listening. Tap the square to stop.',
+  listeningPhone: `Listening. ${pressWord(false)} the square to stop.`,
   // Canon K-27: desktop says "click" (BW-Dictating-1280 still reads "Tap").
-  listeningDesktop: 'Listening. Click the square to stop.',
+  listeningDesktop: `Listening. ${pressWord(true)} the square to stop.`,
   blocked:
     'The microphone is blocked. You can allow it in your browser settings.',
   unavailable: 'Dictation is off in this browser. Type instead.',
@@ -206,7 +203,7 @@ export function Composer({
   class: rootClass,
 }: ComposerProps): JSX.Element {
   const online = useOnline();
-  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const desktop = useDesktop();
   const field = useRef<Field | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const dictation = useDictation({

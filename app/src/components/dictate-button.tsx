@@ -10,6 +10,7 @@
 import type { JSX } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
+import { useMediaQuery } from '../use-media-query.js';
 import '../styles/dictate-button.css';
 import { Hint } from './hint.js';
 import { IconHelp, IconMic, IconStopSquare } from './icons.js';
@@ -166,6 +167,19 @@ function isTouch(): boolean {
   }
 }
 
+/** From this width the app is the desktop layout ("click", not "tap"). */
+export const DESKTOP_QUERY = '(min-width: 900px)';
+
+/** Canon K-27: desktop says "Click", the phone says "Tap". */
+export function pressWord(desktop: boolean): 'Click' | 'Tap' {
+  return desktop ? 'Click' : 'Tap';
+}
+
+/** Whether the app is in its desktop layout (for `pressWord`). */
+export function useDesktop(): boolean {
+  return useMediaQuery(DESKTOP_QUERY);
+}
+
 /** What moves the dictation state machine (R-API-12). */
 export type DictateEvent =
   /** The person pressed the mic; `firstUse` until the browser said yes once. */
@@ -277,6 +291,9 @@ export function useDictation({
   const [announce, setAnnounce] = useState('');
   const [failure, setFailure] = useState('');
   const [lang, setLang] = useState<string>(readLang);
+  const desktop = useDesktop();
+  const desktopRef = useRef(desktop);
+  desktopRef.current = desktop;
   const rec = useRef<Recognition | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const valueRef = useRef(value);
@@ -403,7 +420,9 @@ export function useDictation({
         event.error !== 'no-speech' &&
         event.error !== 'aborted'
       ) {
-        setFailure('Dictation stopped. Tap the mic to try again.');
+        setFailure(
+          `Dictation stopped. ${pressWord(desktopRef.current)} the mic to try again.`,
+        );
       }
     };
     r.onend = (): void => {
@@ -423,7 +442,9 @@ export function useDictation({
       console.error('Dictation could not start', err);
       detach();
       move({ type: 'stop' });
-      setFailure('Dictation could not start. Tap the mic to try again.');
+      setFailure(
+        `Dictation could not start. ${pressWord(desktopRef.current)} the mic to try again.`,
+      );
     }
   }
 
