@@ -423,7 +423,7 @@ export function PileSheet({
               />
               <button
                 type="button"
-                class="button-link pile-more"
+                class="button button-secondary pile-more"
                 onClick={() => fileInput.current?.click()}
               >
                 <IconPlus />

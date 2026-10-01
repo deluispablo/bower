@@ -314,9 +314,19 @@ button.pile-card:focus-visible {
   outline-offset: 2px;
 }
 
+/* AD-Sheet: a secondary button with its + icon. */
 .pile-more {
-  align-self: flex-start;
-  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 48px;
+}
+
+.pile-more .icon {
+  width: 18px;
+  height: 18px;
 }
 
 .pile-remove {
