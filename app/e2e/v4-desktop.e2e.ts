@@ -179,3 +179,19 @@ test('1280 px: the previewed row wears the selection in the sidebar tree too (R-
   await page.goto('/');
   await expect(selected).toHaveCount(0);
 });
+
+test('1280 px: the tree draws Bower-written notes with the bird, as the list does (#920)', async ({
+  page,
+}) => {
+  await page.goto(
+    '/folder/1-Projects/Housing%20Search%20Australia/Moonee%20Ponds',
+  );
+  const tree = page.getByRole('navigation', { name: 'Your folders' });
+  const flat = tree.locator('.tree-link[aria-label^="10-43 Buckley St"]');
+  await expect(flat.locator('.file-icon')).toHaveAttribute('data-mark', 'bird');
+  await expect(
+    page
+      .locator('.folder-item', { hasText: '10-43 Buckley St' })
+      .locator('.file-icon'),
+  ).toHaveAttribute('data-mark', 'bird');
+});

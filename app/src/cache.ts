@@ -32,6 +32,7 @@ import type { UseStore } from 'idb-keyval';
 import { thumbnailLinkOf } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { thumbnailUrl } from './file-preview.js';
+import { noteMetaCached } from './note-meta-events.js';
 import { forgetTitles } from './note-titles.js';
 import type { Me } from './api.js';
 import type { ExplorerSortPref } from './prefs.js';
@@ -513,6 +514,7 @@ export async function saveNoteMetaEntry(
   entry: unknown,
 ): Promise<void> {
   await kvSet('noteMeta', id, entry);
+  noteMetaCached();
 }
 
 // --- Upload queue (version 3) ------------------------------------------------
