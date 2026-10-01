@@ -1964,7 +1964,8 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await expect(
     page.getByRole('treeitem', { name: /Inbox/ }).first(),
   ).toBeVisible();
-  expect(await width()).toBeCloseTo(1000, 0);
+  // Home settles once its listing is in (it stays in Loading until then).
+  await expect.poll(width).toBeCloseTo(1000, 0);
   const [box, main, bar] = await Promise.all([
     container.boundingBox(),
     page.locator('.shell-main').boundingBox(),
@@ -1996,14 +1997,14 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await expect(
     page.getByRole('complementary', { name: 'About this note' }),
   ).toBeVisible();
-  expect(await width()).toBeCloseTo(1200, 0);
+  await expect.poll(width).toBeCloseTo(1200, 0);
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-note');
 
   await navigate(page, /^Add$/);
   await expect(page).toHaveURL(/\/add$/);
   await expect(content).toBeVisible();
-  expect(await width()).toBeCloseTo(1000, 0);
+  await expect.poll(width).toBeCloseTo(1000, 0);
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-add');
 

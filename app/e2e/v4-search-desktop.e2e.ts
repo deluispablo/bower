@@ -30,7 +30,8 @@ test('the overlay has two columns and the preview follows the highlighted result
 
   const rows = dialog.getByRole('option');
   await expect(rows.first()).toBeVisible();
-  expect(await rows.count()).toBeGreaterThan(1);
+  // Results arrive as the index fills in: wait for more than one.
+  await expect.poll(() => rows.count()).toBeGreaterThan(1);
 
   const list = await dialog.locator('.switcher-body').boundingBox();
   const preview = dialog.getByRole('complementary', { name: 'Preview' });
@@ -60,9 +61,14 @@ test('the overlay has two columns and the preview follows the highlighted result
 
   const title = preview.locator('.switcher-preview-title');
   const highlighted = dialog.locator('.switcher-row[data-highlighted="true"]');
-  await expect(title).toHaveText(
-    (await highlighted.locator('.list-row-title').textContent()) ?? '',
-  );
+  // The preview follows the highlighted row, even while late results
+  // still move the highlight.
+  await expect
+    .poll(async () => {
+      const row = await highlighted.locator('.list-row-title').textContent();
+      return (await title.textContent()) === row;
+    })
+    .toBe(true);
   await shot(page, testInfo, 'search-desktop');
 
   const first = await highlighted.getAttribute('href');
