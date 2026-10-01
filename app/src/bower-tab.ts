@@ -639,3 +639,13 @@ export function requestWhen(iso: string): string {
   const day = dayLabel(iso);
   return day === '' ? '' : `${day}, ${clockLabel(iso)}`;
 }
+
+/** The bubble beside the bird (S-BW-2); it reads the same while dictating. */
+export const BUBBLE =
+  'Tell me what you want, in your words. I work out whether it is a rule, a job or a question.';
+
+/** The bird's pose on the Bower tab (G-24, K-32, R-BW-1): looking, and
+ * listening only while the box is taking dictation. */
+export function birdPose(listening: boolean): 'listening' | 'looking' {
+  return listening ? 'listening' : 'looking';
+}

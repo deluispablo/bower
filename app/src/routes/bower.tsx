@@ -30,7 +30,13 @@
  * its own.
  */
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
@@ -40,6 +46,8 @@ import {
   clockLabel,
   examplesFor,
   lowerFirst,
+  birdPose,
+  BUBBLE,
   requestWhen,
   requestMeta,
   requestRows,
@@ -57,17 +65,20 @@ import { ActivityPanel, useRuns } from '../components/activity-panel.js';
 import { Badge } from '../components/badge.js';
 import type { BadgeTone } from '../components/badge.js';
 import { Bird } from '../components/bird.js';
+import { MoreButton } from '../components/more-button.js';
+import { NoteMenu } from '../components/note-menu.js';
+import { PageHeader } from '../components/page-header.js';
 import { Composer, COMPOSER_LINES } from '../components/composer.js';
 import {
+  IconBulb,
   IconChat,
+  IconChevronRight,
   IconCheck,
   IconClock,
   IconClose,
-  IconHelp,
   IconInbox,
   IconMore,
   IconShield,
-  IconSparkle,
 } from '../components/icons.js';
 import { Overlay } from '../components/overlay.js';
 import { Queued } from '../components/queued-overlay.js';
@@ -158,8 +169,9 @@ function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
         aria-controls={open ? 'bower-tip-body' : undefined}
         onClick={onToggle}
       >
-        <IconHelp />
-        <span>Things you can ask</span>
+        <IconBulb />
+        <span class="bower-tip-title">Things you can ask</span>
+        <IconChevronRight />
       </button>
       {open && (
         <div id="bower-tip-body" class="bower-tip-body">
@@ -178,7 +190,7 @@ function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
                     onPick(example);
                   }}
                 >
-                  <IconSparkle />
+                  <IconChat />
                   <span>{example}</span>
                 </button>
               </li>
@@ -566,6 +578,31 @@ export function Bower(): JSX.Element {
 
   useShellSlot('crumb', CRUMB);
 
+  // The ⋯ (kind `bower`, #907): in the phone bar after the title, and
+  // after the desktop h1 (PageHeader).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const toggleMenu = useCallback(() => {
+    setMenuOpen((open) => !open);
+  }, []);
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+  }, []);
+  const actionsContent = useMemo(
+    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} />,
+    [menuOpen, toggleMenu],
+  );
+  useShellSlot('actions', actionsContent);
+  const rulesId = index?.byPath.get(RULES_PATH)?.id;
+  // "Things you can ask" from the ⋯: open the card under the box.
+  function openIdeas(): void {
+    setTipOpen(true);
+    queueMicrotask(() => {
+      document
+        .querySelector('.bower-tip-toggle')
+        ?.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
   // Waiting instructions and answered notes both, so an answered row can
   // read the question it actually holds, not just the short title in its
   // file name (#465).
@@ -947,16 +984,25 @@ export function Bower(): JSX.Element {
 
   return (
     <section class="bower-screen">
-      <h1 class="screen-title">Bower</h1>
+      <PageHeader
+        title="Bower"
+        kind="tab"
+        more={{ expanded: menuOpen, onClick: toggleMenu }}
+      />
+      {menuOpen && (
+        <NoteMenu
+          kind="bower"
+          title="Bower"
+          driveIds={rulesId === undefined ? {} : { rules: rulesId }}
+          onIdeas={openIdeas}
+          onClose={closeMenu}
+        />
+      )}
 
       <div class="bower-box">
         <div class="bower-box-intro">
-          <Bird state={listening ? 'listening' : 'looking'} size={56} />
-          <p class="bower-bubble">
-            {listening
-              ? "I'm listening. Speak as you would to a person."
-              : 'Tell me what you want, in your words. I work out whether it is a rule, a job or a question.'}
-          </p>
+          <Bird state={birdPose(listening)} size={72} />
+          <p class="bower-bubble">{BUBBLE}</p>
         </div>
         <Composer
           mode="send"
