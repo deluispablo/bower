@@ -43,9 +43,11 @@ import {
   rowsFor,
   sortRows,
   folderPagesUnder,
+  isFolderPage,
   subfolderThings,
 } from '../folder-view.js';
 import type { FolderRow, FolderSort, OriginFilter } from '../folder-view.js';
+import { loadNoteMeta } from '../note-meta.js';
 import {
   displayName,
   folderHref,
@@ -90,6 +92,40 @@ function things(n: number): string {
 /** A subfolder as a row of the one list (R-PF-5, board PF-Main): the folder
  * outline in its root's colour, its name, and "6 things" with a chevron at
  * the right. */
+/**
+ * Which of `pages` are a folder's own page Bower wrote (`isFolderPage`),
+ * read from each note's frontmatter (the cache first, Drive once), so a
+ * count does not depend on which notes happen to be cached: every such page
+ * at every depth is left out (K-31, #950).
+ */
+function useBowerFolderPages(pages: readonly DriveFile[]): ReadonlySet<string> {
+  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  const key = pages
+    .map((page) => `${page.id}:${page.modifiedTime ?? ''}`)
+    .join(',');
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      pages.map((page) =>
+        loadNoteMeta(page).then(
+          (meta) => (isFolderPage(page, meta) ? page.id : null),
+          (err: unknown) => {
+            console.error("A folder's own page could not be read", err);
+            return null;
+          },
+        ),
+      ),
+    ).then((found) => {
+      if (cancelled) return;
+      setIds(new Set(found.filter((id): id is string => id !== null)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+  return ids;
+}
+
 export function SubfolderRow({
   folder,
 }: {
@@ -363,7 +399,7 @@ export function FolderItems({
       ),
     [contents.subfolders, index, byPath],
   );
-  const bowerPages = useBowerWritten(folderPages);
+  const bowerPages = useBowerFolderPages(folderPages);
   const subfolders = useMemo(
     () =>
       contents.subfolders.map((sub) => ({
