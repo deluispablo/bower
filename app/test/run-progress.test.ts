@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { FOLDER_MIME } from '../src/drive.js';
 import { kindById } from '../src/kinds.js';
@@ -440,6 +440,20 @@ describe('startedLine (R-API-4)', () => {
     expect(startedLine({ startedAt: at, requestedAt: at })).toBe(
       'Started 11:57 · it takes a few minutes',
     );
+  });
+
+  it("uses the run's startedAt, never the time the sheet opens (gate 15)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 30, 14, 2));
+    const run = {
+      requestedAt: new Date(2026, 8, 30, 11, 55).toISOString(),
+      startedAt: new Date(2026, 8, 30, 11, 57).toISOString(),
+    };
+    expect(startedLine(run)).toBe('Started 11:57 · it takes a few minutes');
+    expect(startedLine({ requestedAt: run.requestedAt })).toBe(
+      'Started 11:55 · it takes a few minutes',
+    );
+    vi.useRealTimers();
   });
 
   it('falls back to the request time, then to "just now"', () => {
