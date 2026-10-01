@@ -483,8 +483,6 @@ async function listReady(): Promise<void> {
   await waitUntil(() => root.querySelector('.folder-in-row') !== null);
 }
 
-const has = (text: string) => (): boolean => root.textContent.includes(text);
-
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
