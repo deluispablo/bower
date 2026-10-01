@@ -305,18 +305,35 @@ button.pile-card:focus-visible {
 }
 
 /* AD-Sheet: a secondary button with its + icon. */
+/* AD-Sheet: a secondary sm button that hugs its label (40 drawn, 44 hit). */
 .pile-more {
+  position: relative;
   display: inline-flex;
+  align-self: flex-start;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  box-sizing: border-box;
+  width: auto;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-card);
+  font-size: var(--text-15);
+}
+
+.pile-more::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 100%;
-  min-height: 48px;
+  height: 44px;
+  transform: translate(-50%, -50%);
 }
 
 .pile-more .icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .pile-remove {
