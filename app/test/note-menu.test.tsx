@@ -263,6 +263,19 @@ describe('NoteMenu', () => {
     expect(onTogglePin).toHaveBeenCalledOnce();
   });
 
+  it('shows the bird in Ask for a note Bower wrote (K-29, #910)', () => {
+    mountFor({
+      file: NOTE,
+      title: 'Shopping list',
+      askName: 'Shopping list',
+      bowerWritten: true,
+    });
+    expectAsk('Shopping list', 'note');
+    expect(openAsk.mock.calls[0]?.[0]).toMatchObject({
+      icon: { bowerWritten: true },
+    });
+  });
+
   it('opens the Ask sheet about the note over the page (R-MORE-5, #910)', () => {
     mount(true);
     expectAsk('Shopping list', 'note');

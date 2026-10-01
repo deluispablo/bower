@@ -121,6 +121,8 @@ export interface NoteMenuProps {
   typeLabel?: string;
   /** The name "Ask Bower about this" prefills and Move to… uses. */
   askName?: string;
+  /** Bower wrote this note: Ask's context line shows the bird (K-29). */
+  bowerWritten?: boolean;
   /** False for Bower's own files and for anything but a note. */
   canEdit?: boolean;
   /** False for a protected note and for anything but a note. */
@@ -278,7 +280,12 @@ export function NoteMenu(props: NoteMenuProps): JSX.Element {
     openAsk({
       name: askName,
       kind: about,
-      icon: { name: target.name, mimeType: target.mimeType, path: target.path },
+      icon: {
+        name: target.name,
+        mimeType: target.mimeType,
+        path: target.path,
+        ...(props.bowerWritten === true && { bowerWritten: true }),
+      },
     });
   }
 
