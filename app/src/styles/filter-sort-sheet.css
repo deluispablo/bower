@@ -52,11 +52,14 @@
 .filter-sort-options {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  /* 32 px chips with 44 px hit areas that never overlap (K-21). */
+  gap: 12px var(--space-2);
 }
 
 .filter-sort-option {
-  min-height: 36px;
+  position: relative;
+  box-sizing: border-box;
+  height: 32px;
   padding: 0 14px;
   border: 1px solid var(--color-border-control, var(--color-border));
   border-radius: var(--radius-full);
@@ -65,6 +68,16 @@
   font: inherit;
   font-size: var(--text-sm);
   cursor: pointer;
+}
+
+.filter-sort-option::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 44px;
+  transform: translateY(-50%);
 }
 
 .filter-sort-option[aria-checked='true'] {
