@@ -122,7 +122,7 @@ import {
 } from './icons.js';
 import { Overlay } from './overlay.js';
 import { SearchField } from './search-field.js';
-import { useBowerWritten } from './tree.js';
+import { isBowerWritten } from '../bower-written.js';
 import { Queued } from './queued-overlay.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import '../styles/switcher.css';
@@ -208,6 +208,54 @@ function useRowExtras(
  * `tags`, read through the note-meta cache (a note not cached yet is read
  * once from Drive, like a folder screen does). `null` while reading.
  */
+/**
+ * Which of the listed notes Bower wrote (K-14: the bird and "Bower note"),
+ * read the way tag search reads tags: `loadNoteMeta`, the cached
+ * frontmatter first and Drive once for a note not cached yet. Every row
+ * in every list (Opened lately, results, tag search) asks the same source,
+ * so a Bower note never shows as a plain note. Grows as answers come in.
+ */
+function useBowerNotes(files: readonly DriveFile[]): ReadonlySet<string> {
+  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  const asked = useRef(new Set<string>());
+  const gone = useRef(false);
+  const key = files
+    .slice(0, EXTRAS_MAX)
+    .map((file) => `${file.id}:${file.modifiedTime ?? ''}`)
+    .join(',');
+
+  useEffect(
+    () => () => {
+      gone.current = true;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    for (const file of files.slice(0, EXTRAS_MAX)) {
+      const ask = `${file.id}:${file.modifiedTime ?? ''}`;
+      if (asked.current.has(ask)) continue;
+      asked.current.add(ask);
+      loadNoteMeta(file).then(
+        (meta) => {
+          const text = knownNoteText(file.id);
+          const body =
+            text === undefined ? undefined : parseFrontmatter(text).body;
+          if (gone.current || !isBowerWritten(meta, { body })) return;
+          setIds((prev) =>
+            prev.has(file.id) ? prev : new Set(prev).add(file.id),
+          );
+        },
+        (err: unknown) => {
+          console.error('A note could not be read for its author', err);
+        },
+      );
+    }
+  }, [key]);
+
+  return ids;
+}
+
 function useTagged(
   tag: string | null,
   index: VaultIndex | null,
@@ -1150,7 +1198,7 @@ function SwitcherPanel({
     () => flatRows.filter((row) => row.kind === 'note').map((row) => row.file),
     [flatRows],
   );
-  const bower = useBowerWritten(noteFiles);
+  const bower = useBowerNotes(noteFiles);
   const entryCount = flatRows.length + matchingCommands.length;
   const extras = useRowExtras(flatRows, index?.byPath);
   const highlightedRow = flatRows[highlightedIndex] ?? null;

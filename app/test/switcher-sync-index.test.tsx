@@ -74,9 +74,13 @@ const {
   loadThumbnail: vi.fn<(file: unknown) => Promise<Blob | undefined>>(() =>
     Promise.resolve(undefined),
   ),
-  loadNoteMeta: vi.fn<(file: unknown) => Promise<{ pages?: number }>>(() =>
-    Promise.resolve({}),
-  ),
+  loadNoteMeta: vi.fn<
+    (file: unknown) => Promise<{
+      pages?: number;
+      fields: Record<string, unknown>;
+      bowerOrigins: Record<string, unknown>;
+    }>
+  >(() => Promise.resolve({ fields: {}, bowerOrigins: {} })),
   runStub: { lastFinished: null as Run | null },
   // Resolves never: stands in for a Drive full-text search that never
   // comes back (offline, or just slow), so any result shown before it
@@ -396,7 +400,7 @@ describe('rows learn a photo thumbnail and a PDF page count (#594)', () => {
   // #917 (R-SE-3): every row is the FileIcon and "<kind> · ● <parent>",
   // never a thumbnail; the page count stays for the desktop preview.
   it('draws the FileIcon and the mixed meta line, no thumbnail', async () => {
-    loadNoteMeta.mockResolvedValue({ pages: 6 });
+    loadNoteMeta.mockResolvedValue({ pages: 6, fields: {}, bowerOrigins: {} });
     loadThumbnail.mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
     await flush();
     const field = document.body.querySelector('input') as HTMLInputElement;
@@ -417,7 +421,7 @@ describe('rows learn a photo thumbnail and a PDF page count (#594)', () => {
   });
 
   it('leaves the PDF row without a count when the note does not say', async () => {
-    loadNoteMeta.mockResolvedValue({});
+    loadNoteMeta.mockResolvedValue({ fields: {}, bowerOrigins: {} });
     await flush();
     const field = document.body.querySelector('input') as HTMLInputElement;
     void act(() => {
@@ -444,5 +448,27 @@ describe('the multi-word query (#594)', () => {
     expect(document.body.textContent).toContain(
       'Nothing matches “curry warranty”',
     );
+  });
+});
+
+describe('a note Bower wrote (#917, R-SE-3)', () => {
+  it('reads "Bower note" from the note’s frontmatter, not plain "Note"', async () => {
+    loadNoteMeta.mockResolvedValue({
+      fields: { by: 'bower' },
+      bowerOrigins: {},
+    });
+    await flush();
+    const field = document.body.querySelector('input') as HTMLInputElement;
+    void act(() => {
+      type(field, 'lisbon');
+    });
+    await flush();
+    await flush();
+    expect(
+      optionTexts().some(
+        (t) => t.includes('Lisbon Trip') && t.includes('Bower note ·'),
+      ),
+    ).toBe(true);
+    loadNoteMeta.mockResolvedValue({ fields: {}, bowerOrigins: {} });
   });
 });
