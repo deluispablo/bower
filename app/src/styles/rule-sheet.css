@@ -99,9 +99,3 @@
   outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
-
-/* Remove it reads in the danger colour, its icon too (§4.6). */
-.rule-sheet-row--remove,
-.rule-sheet-row--remove .icon {
-  color: var(--color-danger);
-}

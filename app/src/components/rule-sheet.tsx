@@ -17,7 +17,13 @@
 
 import type { JSX } from 'preact';
 
-import { IconClose, IconEdit, IconPause, IconPlay, IconRedo } from './icons.js';
+import {
+  IconClock,
+  IconClose,
+  IconDocument,
+  IconExpand,
+  IconPlay,
+} from './icons.js';
 import { Overlay, OverlayHeader } from './overlay.js';
 import { Queued } from './queued-overlay.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
@@ -48,13 +54,13 @@ function rowsFor(rule: Rule): Row[] {
       action: 'change',
       label: 'Change it',
       hint: 'Rewrite it in your words',
-      Icon: IconEdit,
+      Icon: IconDocument,
     },
     {
       action: 'apply',
       label: 'Apply it to what is already filed',
       hint: 'Bower goes through what is filed on the next tidy-up',
-      Icon: IconRedo,
+      Icon: IconExpand,
     },
     rule.paused
       ? {
@@ -67,7 +73,7 @@ function rowsFor(rule: Rule): Row[] {
           action: 'pause',
           label: 'Pause it',
           hint: 'Kept, but not followed until you turn it back on',
-          Icon: IconPause,
+          Icon: IconClock,
         },
     {
       action: 'remove',
