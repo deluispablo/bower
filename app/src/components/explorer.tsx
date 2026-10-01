@@ -40,7 +40,8 @@ import {
 } from '../folders-drawer.js';
 import { findReport, summarise } from '../health-report.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
-import { displayName, folderHref } from '../navigation.js';
+import { displayName, folderHref, folderOf } from '../navigation.js';
+import { hubNotePath } from '../folder-statuses.js';
 import {
   close as closeOverlay,
   open as openOverlay,
@@ -61,6 +62,7 @@ import type { RevealTarget } from '../reveal.js';
 import { useEdgeSwipe } from '../use-edge-swipe.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { pinned, useVault } from '../vault-store.js';
+import type { PinnedItem } from '../vault-store.js';
 import type { VaultIndex } from '../vault-index.js';
 import { FileIcon } from './file-icon.js';
 import {
@@ -95,6 +97,38 @@ export const COLLAPSE_LABEL = 'Collapse all folders';
 
 /** The drawer's width, px (max 88 vw in CSS). */
 export const DRAWER_WIDTH = 324;
+
+/**
+ * The pinned rows as the explorer lists them: a pinned hub note (X/X.md)
+ * stands for its folder, so it shows the folder outline in its root's
+ * colour (#920 DA-9, DB-5). A folder already pinned is listed once.
+ */
+export function pinnedRows(items: readonly PinnedItem[]): PinnedItem[] {
+  const folders = new Set(
+    items.flatMap((item) => (item.kind === 'folder' ? [item.path] : [])),
+  );
+  const out: PinnedItem[] = [];
+  for (const item of items) {
+    if (item.kind !== 'note') {
+      out.push(item);
+      continue;
+    }
+    const folder = folderOf(item.file.path);
+    if (folder === '' || item.file.path !== hubNotePath(folder)) {
+      out.push(item);
+      continue;
+    }
+    if (folders.has(folder)) continue;
+    folders.add(folder);
+    out.push({
+      kind: 'folder',
+      path: folder,
+      file: item.file,
+      pinnedAt: item.pinnedAt,
+    });
+  }
+  return out;
+}
 
 /** The `?reveal=` value "Show in folders" (#608, `revealHref`) put on `/notes`. */
 function revealParam(): string | undefined {
@@ -391,7 +425,7 @@ export function Explorer({
       )}
       {index !== null && (
         <PinnedSidebar
-          items={pinned(index)}
+          items={pinnedRows(pinned(index))}
           variant={variant}
           onNavigate={onNavigate}
         />
