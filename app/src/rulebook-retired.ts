@@ -104,7 +104,7 @@ export const RETIRED_RULEBOOK_LINES: readonly string[] = [
   "4. Write the answer as **A note from Bower** (see Note templates) in `Answers/<YYYY-MM-DD> <question>.md`: `type: answer`, the `> [!bower] Bower's note` box (at most three lines, each ending with its origin in brackets; `— Check` when it needs the person), then `## Why`, then, when useful, what to check, what to ask, the checklist link and `## What Bower used`, as **An answer** says.",
   "- Never edit this `CLAUDE.md`, `README.md` or anything under `.claude/`; the owner's rules go to `Rules.md`. Write only inside the folders above and to `Rules.md`, `About-Me.md`, `index.md`, `log.md`, `Lint Report.md`, `.bower/added.txt` and `.bower/updated.txt`: in unattended runs anything else is undone after the run.",
   '- Never rewrite a note the owner edited today unless an instruction asks for it; add to it instead.',
-  "updated: 2026-09-30",
+  'updated: 2026-09-30',
   "status: active | waiting | done | archived   # projects and tasks; a companion note uses its kind's values",
   "- Frontmatter: `kind`; `tags` (`document` plus a domain); `created`; `original: \"[[<file name>]]\"`; `pages` (the page count) for a PDF; `status`, the kind's first status value, when the kind has statuses; every field of the kind the document states, and the `for you` fields the owner's notes give, in the list's order and written as their type says; then `bower_origins` and `not_stated`.",
   "- A rule can add a status value to a kind; the kind's first status value is still the one a new note gets.",
