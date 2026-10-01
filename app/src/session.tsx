@@ -1,7 +1,9 @@
 /**
  * Session state: who is signed in, once per app load. Loaded with `getMe()`;
- * a 401 means signed out, any other failure keeps the user signed out with
- * a one-sentence error for the login screen (details go to `console.error`).
+ * a 401 means signed out. Any other failure opens the saved `me` offline when
+ * there is one; with nothing saved the session stays `loading` and the
+ * start-up screen shows the offline or error state (details go to
+ * `console.error`).
  *
  * Plain Preact context + hooks, no routing or state library.
  */
@@ -13,6 +15,7 @@ import { useLocation } from 'preact-iso';
 
 import { ApiError, getMe, isDemo, isNotInvited, logout } from './api.js';
 import type { Me, NotInvitedMe } from './api.js';
+import { bootState } from './boot-screen.js';
 import {
   invalidateIndex,
   loadCachedMe,
@@ -316,11 +319,11 @@ export function SessionProvider({ children }: SessionProviderProps) {
           });
           return;
         }
+        // Nothing saved to open: stay on the start-up screen, which says
+        // why and offers "Try again" (R-BOOT-14). Offline reloads by itself
+        // once the device is back online.
         console.error(err);
-        setState({
-          status: 'signed-out',
-          error: 'Could not reach the server.',
-        });
+        bootState(navigator.onLine ? 'error' : 'offline');
       });
     return () => {
       cancelled = true;

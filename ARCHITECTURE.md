@@ -56,7 +56,7 @@ Vault content never enters either repository.
 | --- | --- | --- | --- |
 | **App** | Cloudflare Pages, in the user's browser | Sign in; list and render the vault by reading Drive directly; search it from a local index; show what is new and what a tidy-up just filed; compare notes of one kind; upload to `0-Inbox/`; create `Bower - …md` instruction notes; append to and edit notes; call `/process`; show status and the working animation; push notifications | Store notes; write the notes the agent maintains; hold refresh tokens |
 | **Worker** (`api/`) | Cloudflare Workers + KV | OAuth callback and allowlist; encrypted refresh tokens; vault provisioning from the template; `/process` with quota and single-active-run; `/status`; runner endpoints; push sending | Store content; watch Drive; run on a schedule |
-| **Agent** (`agent/`) | GitHub Actions runner of the instance repo | `rclone` sync down with a 1 h token; `pandoc --sandbox` conversion of pending Office, HTML and EPUB files to Markdown; `claude -p` inside the vault following its `CLAUDE.md`; reconcile the moves the person made in Drive; `rclone moveto` in Drive for each file the agent moved (the file keeps its Drive id); index, link and log bookkeeping for those moves without AI; `rclone copy` up of only the files the agent added or changed (never deletes), then `rclone deletefile` only for the pending originals the move step did not move; file facts counted without AI; status report | Keep state; print vault content to logs; change rules without an instruction note |
+| **Agent** (`agent/`) | GitHub Actions runner of the instance repo | `rclone` sync down with a 1 h token; `pandoc --sandbox` conversion of pending Office, HTML and EPUB files to Markdown; `claude -p` inside the vault, with its rulebook, `Rules.md` and `About-Me.md` as a system prompt and the run's context in the prompt; carry out the agent's filing sheet in the local copy; reconcile the moves the person made in Drive; `rclone moveto` in Drive for each file the agent moved (the file keeps its Drive id); index, link and log bookkeeping for those moves without AI; `rclone copy` up of only the files the agent added or changed (never deletes), then `rclone deletefile` only for the pending originals the move step did not move; file facts counted without AI; status report | Keep state; print vault content to logs; change rules without an instruction note |
 | **Vault** | The user's Google Drive | The only state: notes, originals, rulebook, catalogue, journal | Leave the user's account |
 
 ## Data flows
@@ -204,6 +204,64 @@ Statuses are chosen per folder (rulebook v23). `folder-statuses.ts#folderStatuse
 - **Who filed.** `file-origin.ts#originOf` reads a file's origin (the `bowerOrigin` Drive app property, else its `index.md` row); `filedBy` turns it into "filed by Bower <when>" (the run's time when known, else Drive's created time) or "added <when>" for something you added or a file without an origin. The file page's About, the quick look, a note's properties and the meta line read it.
 - **Statuses.** In a tidy-up the agent writes `statuses:` in the hub note and the runner checks every hub note the run changed, removing an unusable list. In the app, Compare reads the hub note with the folder's notes, `folderStatuses` gives the list (or the kind's), `statusOptions` adds the note's legacy value at the end, and a change writes the note's `status` in Drive. No Worker call.
 - **Folder counts.** Telling a folder's own page apart needs its frontmatter (`note-meta.ts`), so the folder page reads its notes before it lists and counts them; the header counts what is directly in the folder, and each subfolder's card or row, and a pinned folder, count everything inside it.
+
+## The tidy-up session (M52, M53)
+
+Since M52 and M53 (spec `docs/superpowers/2026-10-01-session-speed-spec.md`), the agent decides and the runner does the bookkeeping. The agent gets everything it needs handed in, so it spends its turns on the items, not on reading Bower's own files.
+
+### The session's inputs
+
+`agent/run.sh` builds them after the pre-scan, with no AI, and logs only counts (`context:` and `rulebook:` lines):
+
+- **The rulebook, out of the folder.** The runner moves the vault's `CLAUDE.md` out of the local copy for the session, so Claude Code does not load it whole as memory, and puts it back right after, before anything reads or copies the local copy (a `CLAUDE.md` written during the session is replaced). From rules v24 on, each `##` section of the rulebook may carry a load marker on the line after its heading (`<!-- load: ingest, instructions -->`). The run keeps the core (every section with no marker) and the sections marked for its modes: `ingest`, plus `instructions` when a request or a context note is pending, or `lint`. A rulebook with no marker (rules v23 or older) is kept whole.
+- **The system prompt.** That cut rulebook, then `Rules.md`, then `About-Me.md`, each under a plain heading, written to a file in the work dir and passed with `--append-system-prompt-file`. It holds only text that does not change during the run, so the prompt cache keeps it across the session's turns.
+- **The prompt.** `prompts/<mode>.md` with its placeholders filled in one pass (text a block inserts is never filled again): `{{TAGS}}`, the lines of `index.md`'s `## Tags`; `{{FOLDERS}}`, the folders with a hub note; `{{CORRECTIONS}}`, the `Correction:` lines of `log.md` counted per `<from folder> -> <to folder>` pair; `{{PENDING}}`, the pending list after the pre-scan; and `{{BACKFILL}}`, up to 50 `index.md` rows in the old form, oldest first. An ingest gets the first four, a lint the tags, the folders and the backfill. A part that cannot be built becomes `(not available)` and the run goes on.
+- **stdin.** The filled prompt is written to the work dir and fed to `claude -p` on stdin, never as an argument, so a large folder's context never meets Linux's limit on one argument.
+
+The model and the effort come from the runner too (`--model`, `--effort`; see the runbook's "Model and effort").
+
+### The filing sheet (rules v25)
+
+The agent no longer moves a pending original or edits hub lists, `index.md` rows or `## Tags`. It writes its decisions to `.bower/filing.tsv`, one TAB-separated line each, in the format the rulebook's **index.md and log.md** section gives:
+
+- `file`: a pending path, a destination folder, a file name, tags and a description. The destination is an existing folder under a PARA folder, a new direct subfolder of one, or `0-Inbox/Processed`.
+- `note`: a note the agent wrote at its final path, its original (or `-`), tags and a description.
+- `tag`: a new tag and its meaning.
+
+The runner removes any old sheet before the session and moves the new one out of the local copy right after it, so no copy up, the one after a failure included, ever takes it to Drive. After the session and before the audit, it reads the sheet and checks every line on its own, treating every field as hostile: paths stay inside the folder and out of hidden and protected places, a `file` line names a file on this run's pending list and overwrites nothing, a `note` line names a note this run wrote, tags and descriptions are in the v24 form. A line that fails is skipped and only counted. For each valid line, in the local copy only, it:
+
+- moves the file (`mv -n`), creating a new subfolder and its hub note `<Folder>/<Folder>.md` when needed;
+- adds the hub line `- [[<file name>]] <description>` to the hub note's list;
+- adds the `index.md` row under the folder's section, the type derived from the extension;
+- adds a new tag to `## Tags`.
+
+Items sent to `0-Inbox/Processed` get no hub line and no row. The sheet adds no Drive write path: the existing pipeline does the rest. The audit checks every file the sheet wrote, the move phase finds each filed original by its content and moves it in Drive with `rclone moveto` (the file keeps its Drive id), and the bookkeeping writes the `Filed:` lines, the row check, the tag recount and the `## History` lines. The log gets `filing sheet: <n> filed, <n> notes booked, <n> tags, <n> lines skipped`, and skipped lines become a warning in the run's summary, with the count and no path.
+
+### `index.md` rows and `## Tags` (rules v24)
+
+Every row is `- [[<path>]] · <Type> · <#tag #tag> · <description> · <origin>`:
+
+- the path from the top of the folder, with the extension;
+- the type as the app names it (Note, PDF, Photo, Image, Spreadsheet, Document, Audio, Video, File);
+- one to five tags;
+- a description of at most 100 characters, with no `·` and no wikilink;
+- the origin, `filed by Bower`.
+
+A note row whose note has an original ends ` · [[<path of the original>]]`. `## Tags`, at the end of `index.md`, holds one line per tag in use, `- #<tag> · <meaning> · <count>`. Rows written before v24 have fewer fields; the app reads both, and the weekly lint completes up to 50 old rows per run. After every session the runner recounts the tags (`book_tags`) and counts the rows added or changed that are not in the v24 form (`check_rows`); a bad row is kept and becomes a warning in the summary.
+
+### Who writes `log.md`
+
+`log.md` is append-only, and each line has one writer:
+
+| Lines | Written by |
+| --- | --- |
+| `Rule added/changed:`, `Correction:`, `Proposal:`, `Context:`, `Applied rule:` | The agent, as the rulebook's workflows give them |
+| `Filed: <name> → <folder>` and `Moved: <old> → <new>` | The runner, for each move Drive did (`book_moves`) |
+| `Moved by you: <old> → <new>` | The runner's reconcile, for a move the person made in Drive or Obsidian |
+| `Tag added: #<tag>` | The runner, for each tag new in `## Tags` (`book_tags`) |
+| The run's own line (counts only) | The runner, with `.bower/last-run.json` at the end of an ingest |
+
+The agent never reads `log.md`: the past corrections come in the prompt. The app writes no `log.md` line.
 
 ## Credentials
 

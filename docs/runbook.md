@@ -300,13 +300,83 @@ gh variable set BOWER_EFFORT_LOW --body medium -R OWNER/bower-home
 
 **Rolling back.** Before #965 the agent ran on the CLI's own default model for the instance's credential. To go back to it, set `BOWER_MODEL` to that model's id (with the same credential, `claude` and then `/model` shows it). The effort is still passed; to give every run high effort as well, set `BOWER_EFFORT_LOW` to `high`. To undo the rollback, delete the variables (`gh variable delete BOWER_MODEL -R OWNER/bower-home`). The next run picks the change up; nothing needs redeploying.
 
+Low effort is safe only together with the filing sheet (rules v25, below). Before it, Sonnet at low effort ended plain tidy-ups in 9 to 12 seconds having filed nothing. Do not combine a low effort with a runner older than #978 or a folder on rules v24 or older.
+
+### Rules v25 and the filing sheet
+
+M52 (#961 to #967, #974) and M53 (#977, #978) made one tidy-up session two to three times faster without an app change. What changed for the operator:
+
+- **The agent gets its context handed in.** The runner takes `CLAUDE.md` out of the local copy while the agent runs and passes the rulebook sections the run needs, `Rules.md` and `About-Me.md` as a system prompt. The tags, the folders, the past corrections and the pending list go into the prompt. The agent no longer opens those files or reads `index.md` and `log.md`. See `ARCHITECTURE.md`, "The tidy-up session".
+- **Rules v24** (#962) gives every `index.md` row a type, tags and a description, and adds a `## Tags` section at the end of `index.md`. After the session, the runner recounts the tags, checks the rows the agent added and completes the text copies of filed PDFs (#967).
+- **Rules v25** (#977, #978) adds the filing sheet. The agent no longer moves pending files or edits hub lists, `index.md` rows or `## Tags`. It writes one line per decision to `.bower/filing.tsv`, and the runner checks each line and carries it out. A line that fails a check is skipped, and what it named stays where it was. The sheet never reaches Drive.
+
+A v23 or v24 folder still runs on the new runner: an old rulebook with no section markers is handed in whole, and old rows are accepted.
+
+**Deploy order**, from a clone of `main` with the instance's own `api/wrangler.local.toml` and secrets outside the repo:
+
+1. **Worker**: `bash scripts/deploy-api.sh`. Its bundled folder template carries rules v25, so new Bower folders start on it, and a queued run that never starts now fails after 17 minutes (#963).
+2. **Runner**: `bash scripts/new-instance.sh OWNER/bower-home`. The instance repo gets the new `run.sh`, prompts and workflows (pandoc now comes from a cached release binary, #964).
+3. **App**: build it with your `VITE_API_URL` and deploy it to Pages (step 10 of section 3), or rerun `bash scripts/deploy.sh`, which does steps 2 and 3. Secrets that are already set are skipped.
+4. **Rules**: each owner taps **Settings → Advanced → "Update Bower's rules"** once, after the runner is deployed. A v25 folder on an older runner writes a filing sheet that nobody reads, so the order matters.
+
+**The lint backfill.** Rows written before rules v24 have no tags and no description. The weekly lint hands the agent up to 50 of them per run, oldest first (`{{BACKFILL}}` in `prompts/lint.md`), and the agent completes them in the v24 form. The lint's `context:` line ends with how many rows it was given (`..., 50 rows to complete`); a large folder takes a few Sundays. To start it at once after the update, dispatch the lint by hand (see "Weekly health check"). The app reads old and new rows alike, so nothing waits for the backfill.
+
+### Reading a tidy-up's log
+
+The Actions log of an `ingest` or `lint` run has step names, numbers and tool names, never a file name or a note's text. The lines added by M52 and M53, in the order they appear:
+
+| Line | What it says |
+| --- | --- |
+| `sync down: 412 files, 18.3 MB, 6 s` | The size of the local copy and how long the download took. When it passes 20 s in normal use, the partial download (spec D-5) moves up. |
+| `context: 23 tags, 31 folders, 4 correction pairs, 2 pending` | What the prompt was given: the tags in `## Tags`, the folders with a hub note, the past corrections counted per pair, the pending items. A lint adds `, <n> rows to complete` (the backfill). `context: <name> not built` means one part failed and the agent got `(not available)` there instead; the run goes on. |
+| `rulebook: 18342 bytes for ingest` | The size of the system prompt (rulebook sections, `Rules.md`, `About-Me.md`) and the modes it was cut for. |
+| `agent stats: model=claude-sonnet-5-5 effort=low turns=7 ...` | The session's model and effort (see "Model and effort"), then turns, time waiting for the model, tokens and tool calls per tool. `unreadable` means the session left no final event, for example after a timeout. |
+| `filing sheet: 1 filed, 1 notes booked, 2 tags, 0 lines skipped` | What the runner did from `.bower/filing.tsv`: originals filed, notes booked, new tags, lines refused by a check. No line at all means the agent wrote no sheet. |
+| `<n> text copies completed` | The PDFs filed in this run whose new text copy got the PDF's text appended by the runner. |
+| `row check: 1 of 3 rows not in the expected form` | The `index.md` rows added or changed in this run that do not match the v24 form. Only logged when a row was checked. A bad row is kept as it is. |
+| `tags: 23 counted, 1 added` | The tag counts in `## Tags` were recounted, and the new tags got a `Tag added:` line in `log.md`. |
+| `<n> originals filed` | The `Filed:` count from the agent's closing report. |
+| `silent run: 2 files left where they were, no problem reported` | See the last warning below. |
+
+Three warnings can end the run's summary, which the app shows with the run. None of them fails the run, and none names a file:
+
+- `Warning: <n> index rows are not in the expected form.` The row check above found rows out of form. They stay, and the next lint completes them.
+- `Warning: <n> filing decisions were not usable and skipped; what they named stays where it was.` Lines of the filing sheet failed a check (a path outside the folder or into a protected place, a file that was not pending, an overwrite, a bad tag or description). The files they named stay in the inbox for the next tidy-up.
+- `Warning: <n> files were left where they were, and no problem was reported.` The agent was given files, filed none of them, and said `Problems: none`. One such run is noise; several in a row mean the session is not filing. Check the model and effort first.
+
+### The tidy-up benchmark
+
+`agent/bench/` measures one tidy-up session case by case on your own machine, so a change to the session can be compared with the one before it. It runs the real `run.sh` and the real `claude` against a made-up folder on disk: no Drive, no GitHub, no real data. It spends your own Claude Code usage. `agent/bench/README.md` has the full detail.
+
+```bash
+bash agent/bench/run-bench.sh <label>            # all five cases
+bash agent/bench/run-bench.sh <label> 2 3        # cases 2 and 3
+python agent/bench/make-large-vault.py           # once: the large folder (400 notes)
+bash agent/bench/run-bench.sh <label> --large 2  # case 2 on the large folder
+```
+
+The five cases are a job offer clipping with a context note, a text PDF, a receipt, a scan, and a question about a PDF already filed. Each case starts from a fresh copy of the folder with the current `vault-template/CLAUDE.md`. Results go to `agent/bench/results/` (git-ignored): one TSV line per case in `<date>-<label>.tsv`, the folder as the case left it (for a quality review) and the runner's log.
+
+| Column | Meaning |
+| --- | --- |
+| `case` | The case, prefixed `large:` with `--large` |
+| `agent_seconds` | Wall time of the agent step, from the `agent run` log line to the next one |
+| `turns` | The session's turns |
+| `api_ms` | Time spent waiting for the model |
+| `in`, `out` | Input tokens not read from the cache, and output tokens |
+| `cache_read`, `cache_write` | Input tokens read from and written to the prompt cache |
+| `tools` | Tool calls per tool name |
+| `files_changed` | Files the whole run added, removed or changed, `.bower/` and `.claude/` left out |
+
+`turns` to `tools` come from the `agent stats:` line; `-` means the value was missing. The numbers before and after M52 and M53 are in `docs/superpowers/2026-10-01-session-speed-spec.md`, section 8.
+
 ### One tidy-up, phase by phase
 
 `agent/run.sh` runs these in this order; each has its own bullet under "What a tidy-up does with each file" below. The log names each step and counts, never a file name.
 
 1. **Reconcile** (#597). List the Bower folder with Drive ids and compare with `.bower/paths.json` from the last run: a file the person moved in Drive or Obsidian gets its `index.md` row rewritten and a `Moved by you:` line in `log.md`. Best effort.
-2. **Agent.** Convert documents with pandoc, pre-scan and quarantine, set aside what Bower only keeps (`kept-not-read`, `too-large`, `unconvertible`, `quarantined`), then `claude -p` inside the folder, following its `CLAUDE.md`. The agent files, writes notes and companion notes; it never deletes.
-3. **Audit and moves** (#595). Revert what the agent may not change; then move in Drive itself each file it moved or renamed (same content at a new path), so the file keeps its Drive id.
+2. **Agent.** Convert documents with pandoc, pre-scan and quarantine, set aside what Bower only keeps (`kept-not-read`, `too-large`, `unconvertible`, `quarantined`), then `claude -p` inside the folder, with its rulebook handed in as a system prompt (see "Rules v25 and the filing sheet"). The agent writes notes and companion notes and decides where each item goes on the filing sheet; it never deletes.
+3. **Filing sheet, audit and moves** (#978, #595). Carry out the filing sheet in the local copy; revert what the agent may not change; then move in Drive itself each file it moved or renamed (same content at a new path), so the file keeps its Drive id.
 4. **Bookkeeping** (#596). Without AI, book each move in `index.md`, in the links that name the file and in `log.md`.
 5. **Upload.** Copy up the accepted files the agent added or changed and did not move; delete only the pending originals the move phase did not move.
 6. **File facts** (#610). Count PDF pages, Excel sheets and ZIP entries without AI into `.bower/file-facts.json`; write `.bower/paths.json` for the next reconcile.

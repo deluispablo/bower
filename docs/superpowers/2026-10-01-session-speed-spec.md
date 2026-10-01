@@ -194,3 +194,35 @@ Reading `index.md` whole is not allowed. R-SS-2 counts Read calls, so the benchm
 ## 7. Open questions
 
 None. Every choice above was the owner's or is recorded as a decision with its reason.
+
+## 8. Result
+
+Measured with `agent/bench/` on the lead's machine, one run per case, the agent step only (`agent_seconds`) and the session's turns.
+
+The baseline: rules v23, the runner before M52, and the CLI's default model.
+
+| Case | Agent seconds | Turns |
+| --- | --- | --- |
+| 1 Job offer clipping | 90 | 23 |
+| 2 Text PDF | 44 | 14 |
+| 3 Receipt | 60 | 14 |
+| 4 Scan | 60 | 18 |
+| 5 Question about a filed PDF | 64 | 19 |
+
+The final run: rules v25 with the filing sheet, Sonnet 5.5, effort low for plain tidy-ups and high for requests (cases 1 and 5), with cases 2 and 3 also run on the large folder (400 notes).
+
+| Case | Agent seconds | Turns | Large folder: seconds | Large folder: turns |
+| --- | --- | --- | --- | --- |
+| 1 Job offer clipping | 55 | 19 | | |
+| 2 Text PDF | 23 | 7 | 23 | 7 |
+| 3 Receipt | 21 | 7 | 24 | 8 |
+| 4 Scan | 20 | 6 | | |
+| 5 Question about a filed PDF | 53 | 20 | | |
+
+Every case filed correctly, on the small and the large folder. The agent step's time went down by 39 % to 67 % on cases 1 to 4, and by 17 % on case 5.
+
+What was learnt:
+
+- Sonnet at low effort filed nothing before the context pack and the filing sheet: plain tidy-ups ended in 9 to 12 seconds with 0 files filed. Low effort is safe only with the sheet.
+- The model change alone gave little.
+- The gain came from fewer turns: the agent no longer reads the rulebook, `index.md` and `log.md` with tool calls, and no longer moves files or edits hub lists, rows and `## Tags` itself.

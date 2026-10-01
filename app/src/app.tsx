@@ -3,6 +3,7 @@ import { LocationProvider, lazy, Route, Router, useLocation } from 'preact-iso';
 import { registerSW } from 'virtual:pwa-register';
 
 import { isDemo } from './api.js';
+import { dismissBoot } from './boot-screen.js';
 import { Layout, focusNewPage } from './components/layout.js';
 import { Home } from './routes/home.js';
 import { Login } from './routes/login.js';
@@ -127,9 +128,16 @@ function AppRoutes() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  if (status === 'loading') {
-    return <p class="app-loading">Loading…</p>;
-  }
+  // The start-up screen (`#boot`, #984) covers the load; it goes once the
+  // first real screen has rendered under it (R-BOOT-13).
+  const bootDismissed = useRef(false);
+  useEffect(() => {
+    if (status === 'loading' || bootDismissed.current) return;
+    bootDismissed.current = true;
+    dismissBoot();
+  }, [status]);
+
+  if (status === 'loading') return null;
 
   const routes = (
     <Router
