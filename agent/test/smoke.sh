@@ -39,9 +39,6 @@ printf '%s\n' '# rules' '' '## Core' 'CORE-SECTION-MARKER' '' '## Kinds' '<!-- l
   'INSTRUCTIONS-SECTION-MARKER' '' '## Lint' '<!-- load: lint -->' 'LINT-SECTION-MARKER' \
   >"$ROOT/values/rulebook.md"
 
-# The context pack's own unit test (#966) runs first: it is quick.
-bash "$HERE/context.test.sh"
-
 # --- stubs ------------------------------------------------------------------
 
 cat >"$STUBS/curl" <<'STUB'
@@ -371,6 +368,24 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       echo rtf >"$remote/0-Inbox/memo.RTF"
       echo odt >"$remote/0-Inbox/already.odt"
       echo mine >"$remote/0-Inbox/already.md"
+    fi
+    if [ "$SMOKE_SCENARIO" = tagcount ]; then
+      # R-SS-9, R-SS-10 (#967): an index with a `## Tags` section.
+      mkdir -p "$remote/1-Projects"
+      printf -- '%s\n' '# Index' '' '## Projects' \
+        '- [[1-Projects/Flat hunt/Viewing.md]] · Note · #flat · Notes from the viewing · your note' \
+        '- [[1-Projects/Flat hunt/Lease.pdf]] · PDF · filed by Bower' '' '## Tags' \
+        '- #flat · Flat hunt papers · 1' '- #receipt · Receipts · 1' >"$remote/index.md"
+      echo '# Log' >"$remote/log.md"
+    fi
+    if [ "$SMOKE_SCENARIO" = filedpdf ]; then
+      # R-SS-12 (#967): filed PDFs, a text one and a scan, and an older
+      # text copy of a third one.
+      mkdir -p "$remote/3-Resources"
+      echo pdf-filed >"$remote/3-Resources/Contract.pdf"
+      echo SCANNED >"$remote/3-Resources/Scan.pdf"
+      echo pdf-old >"$remote/3-Resources/Old.pdf"
+      printf -- '---\nby: bower\noriginal: "[[Old.pdf]]"\n---\n\nAn older copy.\n' >"$remote/3-Resources/Old.md"
     fi
     if [ "$SMOKE_SCENARIO" = textcopy ]; then
       # Text copies (R-RUNNER-7, R-AG-9): a Word file and a text PDF the
@@ -740,7 +755,8 @@ SMOKE_SCENARIO=$(cat "$HERE/../current-scenario")
 turns='' tools='' denied='' prompt='' format='' verbose=no model='' effort='' system=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -p) prompt=$2; shift 2 ;;
+    # The prompt comes in on stdin (#967), never as an argument.
+    -p) shift ;;
     --append-system-prompt-file) system=$2; shift 2 ;;
     --max-turns) turns=$2; shift 2 ;;
     --output-format) format=$2; shift 2 ;;
@@ -749,9 +765,11 @@ while [ "$#" -gt 0 ]; do
     --effort) effort=$2; shift 2 ;;
     --allowedTools) tools=$2; shift 2 ;;
     --disallowedTools) denied=$2; shift 2 ;;
-    *) shift ;;
+    -*) shift ;;
+    *) echo 'claude stub: the prompt was passed as an argument' >&2; exit 91 ;;
   esac
 done
+prompt=$(cat)
 echo "claude max-turns=$turns rulebook=$([ -f CLAUDE.md ] && echo yes || echo no) prompt=$([ -n "$prompt" ] && echo yes || echo no)" >>"$SMOKE_STATE/calls.log"
 printf '%s' "$tools" >"$SMOKE_STATE/claude-tools.txt"
 printf '%s' "$prompt" >"$SMOKE_STATE/claude-prompt.txt"
@@ -1033,6 +1051,28 @@ case "$SMOKE_SCENARIO" in
     mv Clippings/b.md 0-Inbox/Processed/b.md
     echo v2 >>3-Resources/agent.md
     ;;
+  # R-SS-9, R-SS-10 (#967): the agent files the PDF with a v24 row and a
+  # new tag it does not add to `## Tags`, and adds a row with no tags.
+  tagcount)
+    mkdir -p '1-Projects/Job hunt'
+    mv 0-Inbox/a.pdf '1-Projects/Job hunt/a.pdf'
+    printf -- '%s\n' '# Index' '' '## Projects' \
+      '- [[1-Projects/Flat hunt/Viewing.md]] · Note · #flat · Notes from the viewing · your note' \
+      '- [[1-Projects/Flat hunt/Lease.pdf]] · PDF · filed by Bower' \
+      '- [[1-Projects/Job hunt/a.pdf]] · PDF · #job-offer #flat · An offer with the salary · filed by Bower' \
+      '- [[1-Projects/Job hunt/Notes.md]] · Note · Notes without tags · your note' '' '## Tags' \
+      '- #flat · Flat hunt papers · 1' '- #receipt · Receipts · 1' >index.md
+    ;;
+  # R-SS-12 (#967): asked about filed PDFs, the agent writes text copies for
+  # a text PDF and a scan next to them, one for a PDF that is not there, and
+  # adds a line to an older text copy.
+  filedpdf)
+    for name in Contract Scan Missing; do
+      printf -- '---\nby: bower\noriginal: "[[%s.pdf]]"\n---\n\n> [!bower] Bower'"'"'s note\n> A note.\n' \
+        "$name" >"3-Resources/$name.md"
+    done
+    echo 'One more line.' >>3-Resources/Old.md
+    ;;
   # More changes than BOWER_MAX_CHANGES=3, all inside the known roots.
   toomany)
     for n in 1 2 3 4; do echo "note $n" >"3-Resources/new-$n.md"; done
@@ -1048,7 +1088,8 @@ if [ "$SMOKE_SCENARIO" = overloaded ]; then
   echo 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}' >&2
   exit 1
 fi
-[ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/
+# "noop" (#967): the agent leaves every pending file where it was.
+[ "$SMOKE_SCENARIO" = noop ] || [ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/
 # run.sh asks for --output-format stream-json --verbose (R-SS-2): one JSON
 # event per line, the agent's text and tool calls (which name vault paths)
 # along the way and the closing text in the final result event.
@@ -1062,6 +1103,8 @@ json_string() {
 result=$(printf '%s\n' 'Working on 0-Inbox/a.pdf' 'Reading Clippings/b.md' \
   'SUMMARY-MARKER 1 processed a.pdf' \
   'Filed: 1 files' 'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5' 'SUMMARY-MARKER 6')
+# "noop" (#967): the agent reports no problem.
+[ "$SMOKE_SCENARIO" != noop ] || result=${result%SUMMARY-MARKER 6}'Problems: none'
 printf '{"type":"system","subtype":"init","cwd":%s,"tools":["Read","Grep"]}\n' "$(json_string "$PWD")"
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"Working on 0-Inbox/a.pdf"},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"0-Inbox/a.pdf"}}]}}\n'
 printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"Reading Clippings/b.md"}]}}\n'
@@ -2703,7 +2746,7 @@ printf -- '%s\n' '2-Areas/New name.md' '1-Projects/Flat hunt/sign.jpg' >"$STATE/
   UPLOAD_FILE="$STATE/upload.txt"
   RULES_WRITABLE=0
   log() { printf '%s\n' "$*" >>"$STATE/out.log"; }
-  eval "$(sed -n '/^in_known_root() {$/,/^}$/p; /^may_write() {$/,/^}$/p; /^book_moves() {$/,/^}$/p' "$RUN_SH")"
+  eval "$(sed -n '/^in_known_root() {$/,/^}$/p; /^may_write() {$/,/^}$/p; /^book_moves() {$/,/^}$/p; /^append_log_lines() {$/,/^}$/p' "$RUN_SH")"
   : >"$UPLOAD_FILE"
   book_moves "$book" "$STATE/old.txt" "$STATE/new.txt" '2026-01-15 09:30'
   LC_ALL=C sort "$UPLOAD_FILE" >"$STATE/upload-1.txt"
@@ -3079,3 +3122,69 @@ fi
 expect_content_free
 expect_cleaned_up
 echo "ok the runner keeps a usable folder status list and removes an unusable one"
+
+# 43. R-SS-9, R-SS-10, R-SS-13 (#967): after the session the runner
+# recounts `## Tags` from the rows (a tag missing from the section added
+# with a placeholder meaning, an unused one kept at 0), logs `Tag added:`
+# for the new tag in log.md, and counts the added rows not in the v24 form
+# as a warning in the summary. Both files reach Drive; only counts reach
+# the log.
+MODE=ingest
+run_case tagcount
+expect_eq "$RC" 0 'tagcount: exit code'
+expect_eq "$(post "$(posts_count)" p.state)" done 'tagcount: final state'
+remote="$STATE/remote"
+expect_eq "$(sed -n '/^## Tags$/,$p' "$remote/index.md")" "$(printf -- '%s\n' '## Tags' \
+  '- #flat · Flat hunt papers · 2' '- #job-offer · — · 1' '- #receipt · Receipts · 0')" \
+  'tagcount: the tag counts in Drive'
+grep -Eq '^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} · Tag added: #job-offer$' "$remote/log.md" ||
+  die 'tagcount: no Tag added: line in log.md'
+expect_eq "$(grep -c 'Tag added:' "$remote/log.md")" 1 'tagcount: one new tag only'
+grep -q ' · Filed: a.pdf → 1-Projects/Job hunt$' "$remote/log.md" || die 'tagcount: the Filed: line is gone'
+expect_eq "$(post "$(posts_count)" 'p.summary.split("\n").pop()')" \
+  'Warning: 1 index row is not in the expected form.' 'tagcount: the row warning in the summary'
+grep -q ' row check: 1 of 2 rows not in the expected form$' "$STATE/out.log" || die 'tagcount: rows not counted'
+grep -q ' tags: 3 counted, 1 added$' "$STATE/out.log" || die 'tagcount: tags not counted'
+grep -Eq '^[^ ]* sync down: [0-9]+ files, [0-9]+\.[0-9] MB, [0-9]+ s$' "$STATE/out.log" ||
+  die 'tagcount: no sync-down numbers'
+if grep -Eq 'job-offer|#flat|#receipt|Notes without' "$STATE/out.log"; then die 'tagcount: the log names a tag or a row'; fi
+expect_content_free
+expect_cleaned_up
+echo "ok the runner recounts the tags, logs a new one and counts the rows not in form"
+
+# 44. #967: a silent no-op. The agent was given three files, left all where
+# they were and said `Problems: none`: the summary carries a warning with
+# the count, the log the count only.
+MODE=ingest
+run_case noop
+expect_eq "$RC" 0 'noop: exit code'
+expect_eq "$(post "$(posts_count)" p.state)" done 'noop: final state'
+expect_eq "$(post "$(posts_count)" 'p.summary.split("\n").pop()')" \
+  'Warning: 3 files were left where they were, and no problem was reported.' 'noop: the warning in the summary'
+grep -q ' silent run: 3 files left where they were, no problem reported$' "$STATE/out.log" ||
+  die 'noop: not counted in the log'
+expect_content_free
+expect_cleaned_up
+echo "ok a run that leaves every file where it was and reports no problem is a warning"
+
+# 45. R-SS-12 (#967): a new text copy of a filed PDF (not pending) gets the
+# PDF's text, or the scan line, the way a pending PDF's does; an older text
+# copy and one whose PDF is not there get nothing. Only counts reach the log.
+MODE=ingest
+run_case filedpdf
+expect_eq "$RC" 0 'filedpdf: exit code'
+expect_eq "$(post "$(posts_count)" p.state)" done 'filedpdf: final state'
+remote="$STATE/remote"
+# The runner's History section (R-RUNNER-9) follows the document's text.
+expect_eq "$(grep -A 3 '^## The document$' "$remote/3-Resources/Contract.md")" \
+  "$(printf '## The document\n\nPDF TEXT LINE 1\n  PDF TEXT LINE 2')" 'filedpdf: the text of a filed PDF'
+expect_eq "$(grep -A 2 '^## The document$' "$remote/3-Resources/Scan.md")" \
+  "$(printf '## The document\n\nScanned: no text to copy')" 'filedpdf: a filed scan says so'
+if grep -q '^## The document$' "$remote/3-Resources/Old.md"; then die 'filedpdf: an older text copy got the text'; fi
+if grep -q '^## The document$' "$remote/3-Resources/Missing.md"; then die 'filedpdf: a copy with no PDF got a section'; fi
+grep -q ' 2 text copies completed$' "$STATE/out.log" || die 'filedpdf: text copies not counted'
+grep -q ' 2 of them for filed PDFs$' "$STATE/out.log" || die 'filedpdf: filed PDFs not counted'
+if grep -Eq 'Contract|Scan\.|Missing' "$STATE/out.log"; then die 'filedpdf: the log names a file'; fi
+expect_content_free
+expect_cleaned_up
+echo "ok a new text copy of a filed PDF gets the text, a filed scan the scan line"

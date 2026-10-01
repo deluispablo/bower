@@ -291,6 +291,10 @@ readonly SET_ASIDE_FILE="$WORK_DIR/set-aside.txt"
 readonly DOC_TEXT_DIR="$WORK_DIR/doc-text"
 readonly DOC_TEXT_MAP="$WORK_DIR/doc-text-map.txt"
 AUDIT_WARNING=''
+# index.md as the session starts (R-SS-9, R-SS-10), and the row check's
+# one-line warning.
+readonly INDEX_BEFORE="$WORK_DIR/index-before.md"
+ROWS_WARNING=''
 # In the vault: the pending files over the size limit, for the agent to file
 # by name and date without reading them (written before the agent starts),
 # and the one clause the agent may write about what it added besides filing
@@ -870,9 +874,17 @@ note_meta() {
 # section. A scan (no text layer) gets "Scanned: no text to copy". The
 # document's name must be unique among the pending ones, else nothing is
 # guessed. Logs a count only.
+# R-SS-12: a new text copy (the agent created it in this session) whose
+# original is a PDF with no kept text, next to it in the same folder and not
+# pending (a filed PDF the agent was asked about), gets the PDF's text the
+# same way: pdf_text runs on it now (too_large still applies, a PDF
+# pdftotext cannot read gets nothing) and its text, or the scan line, is
+# appended as above.
 append_document_text() {
-  [ "$TOO_MANY_CHANGES" -eq 0 ] && [ -s "$DOC_TEXT_MAP" ] || return 0
-  local map="$WORK_DIR/doc-text-names.txt" path base by kind orig file n appended=0
+  [ "$TOO_MANY_CHANGES" -eq 0 ] || return 0
+  local map="$WORK_DIR/doc-text-names.txt" before="$WORK_DIR/before-paths-text.txt"
+  local path base by kind orig file n pdf appended=0 filed=0
+  cut -d ' ' -f 3- "$MANIFEST_BEFORE" | LC_ALL=C sort -u >"$before" || return 1
   {
     cat "$DOC_TEXT_MAP"
     awk -F '\t' 'FILENAME == ARGV[1] { p = $1; sub(/^.*\//, "", p); f[p] = $2; next }
@@ -888,8 +900,25 @@ append_document_text() {
     [ "${base%.md}" = "${orig%.*}" ] || continue
     if grep -qxF '## The document' "$VAULT_DIR/$path"; then continue; fi
     n=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"]' "$map" | grep -c . || true)
-    [ "$n" -eq 1 ] || continue
-    file=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"] { print $2 }' "$map")
+    if [ "$n" -eq 0 ]; then
+      case "$orig" in
+        *.[pP][dD][fF]) ;;
+        *) continue ;;
+      esac
+      ! grep -qxF -- "$path" "$before" || continue
+      pdf=$orig
+      [ "${path%/*}" = "$path" ] || pdf="${path%/*}/$orig"
+      [ -f "$VAULT_DIR/$pdf" ] || continue
+      ! grep -qxF -- "$pdf" "$PENDING_FILE" || continue
+      pdf_text "$pdf"
+      file=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"] { f = $2 } END { print f }' "$DOC_TEXT_MAP")
+      [ -n "$file" ] || continue
+      filed=$((filed + 1))
+    elif [ "$n" -eq 1 ]; then
+      file=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"] { print $2 }' "$map")
+    else
+      continue
+    fi
     {
       [ -z "$(tail -c1 "$VAULT_DIR/$path")" ] || printf '\n'
       printf '\n## The document\n\n'
@@ -902,8 +931,9 @@ append_document_text() {
     appended=$((appended + 1))
   done <"$CHANGED_FILE"
   [ "$appended" -eq 0 ] || log "$appended text copies completed"
+  [ "$filed" -eq 0 ] || log "$filed of them for filed PDFs"
   # The appended text changed those files: the manifest must say so.
-  manifest >"$MANIFEST_AFTER"
+  [ "$appended" -eq 0 ] || manifest >"$MANIFEST_AFTER"
 }
 
 # R-AG-4 and R-AG-5, after the audit: a note the agent created that is named
@@ -946,6 +976,245 @@ audit_note_names() {
   AUDIT_WARNING="Warning: ${parts[0]}${parts[1]:+; ${parts[1]}}."
   log "note name audit: $long over 40 characters, $same named like their original"
 }
+
+# >>> bookkeeping (R-SS-9, R-SS-10, R-SS-13): agent/test/bookkeeping.test.sh
+# runs this block as is. Pure functions over index.md and log.md text, plus
+# the two wrappers that write them in the local copy (book_tags,
+# append_log_lines), so the changes go up with the run's other changes.
+
+# The index file $1 with its `## Tags` section recounted (R-SS-9), printed.
+# A row is a list item that starts with a wikilink, outside `## Tags`; its
+# tag field is the third ` · ` field when that field is made of `#tag`
+# tokens only (an older row's third field is its origin or a description,
+# never counted). Each valid tag (`^#[a-z0-9]+(-[a-z0-9]+)*$`) counts once
+# per row; notes' frontmatter never counts. In the section each
+# `- #<tag> · <meaning> · <count>` line gets the new count (0 for a tag no
+# row uses any more: the line stays), a tag used in a row but missing gets
+# `- #<tag> · — · <n>`, and the tag lines are sorted by tag (byte order).
+# The lines of the section before its first tag line stay where they are
+# (an `_(none yet)_` line goes once there is a tag), the other lines that
+# are not blank follow the tag lines. With no section and a counted tag, a
+# section is added at the end. When the tag lines come out exactly as they
+# were, the file is printed unchanged. Line ends are printed as LF.
+recount_tags() {
+  LC_ALL=C awk '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    function valid(t) { return t ~ /^#[a-z0-9]+(-[a-z0-9]+)*$/ && length(t) <= 64 }
+    { sub(/\r$/, ""); line[NR] = $0 }
+    /^## / {
+      if (s && !e) e = NR - 1
+      if (!s && $0 ~ /^## Tags[ \t]*$/) s = NR
+    }
+    END {
+      if (s && !e) e = NR
+      for (i = 1; i <= NR; i++) {
+        if (s && i >= s && i <= e) continue
+        if (line[i] !~ /^[ \t]*[-*+][ \t]+\[\[/) continue
+        n = split(line[i], f, " · ")
+        if (n < 3) continue
+        field = trim(f[3])
+        if (field !~ /^#[^ \t]+([ \t]+#[^ \t]+)*$/) continue
+        k = split(field, toks, /[ \t]+/)
+        delete seen
+        for (j = 1; j <= k; j++) {
+          t = toks[j]
+          if (!valid(t) || (t in seen)) continue
+          seen[t] = 1
+          count[t]++
+        }
+      }
+      # The section as it is: its tag lines, the lines before the first one
+      # and the other lines after it.
+      ntag = 0; npre = 0; npost = 0; none = 0
+      if (s) for (i = s + 1; i <= e; i++) {
+        l = line[i]
+        t = ""
+        if (l ~ /^- #[^ \t]/) { t = substr(l, 3); sub(/[ \t].*$/, "", t) }
+        # The line of an invalid tag stays as it is: not counted, not sorted.
+        if (t != "" && valid(t)) {
+          if (t in meaning) continue
+          old[++ntag] = l
+          m = split(l, p, " · ")
+          if (m >= 3 && trim(p[m]) ~ /^[0-9]+$/) { mean = p[2]; for (j = 3; j < m; j++) mean = mean " · " p[j] }
+          else if (m == 2 && trim(p[2]) !~ /^[0-9]+$/) mean = p[2]
+          else if (m >= 3) { mean = p[2]; for (j = 3; j <= m; j++) mean = mean " · " p[j] }
+          else mean = "—"
+          mean = trim(mean)
+          if (mean == "") mean = "—"
+          meaning[t] = mean
+          tags[++nt] = t
+        } else if (ntag == 0) pre[++npre] = l
+        else if (l ~ /[^ \t]/) post[++npost] = l
+      }
+      for (t in count) if (!(t in meaning)) { meaning[t] = "—"; tags[++nt] = t }
+      for (i = 2; i <= nt; i++) {
+        v = tags[i]
+        for (j = i - 1; j >= 1 && tags[j] > v; j--) tags[j + 1] = tags[j]
+        tags[j + 1] = v
+      }
+      for (i = 1; i <= nt; i++) out[i] = "- " tags[i] " · " meaning[tags[i]] " · " (count[tags[i]] + 0)
+      same = (nt == ntag)
+      for (i = 1; same && i <= nt; i++) if (out[i] != old[i]) same = 0
+      if (same) {
+        for (i = 1; i <= NR; i++) print line[i]
+        exit
+      }
+      for (i = 1; i <= NR; i++) {
+        if (!s || i < s || i > e) { print line[i]; continue }
+        if (i > s) continue
+        print line[i]
+        for (j = 1; j <= npre; j++) if (!(nt > 0 && trim(pre[j]) == "_(none yet)_")) print pre[j]
+        for (j = 1; j <= nt; j++) print out[j]
+        for (j = 1; j <= npost; j++) print post[j]
+        if (e < NR) print ""
+      }
+      if (!s && nt > 0) {
+        if (NR > 0 && line[NR] != "") print ""
+        print "## Tags"
+        for (j = 1; j <= nt; j++) print out[j]
+      }
+    }' "$1"
+}
+
+# The valid tags (`^#[a-z0-9]+(-[a-z0-9]+)*$`, at most 64 characters) of
+# the first `## Tags` section of the index file $1, as recount_tags reads
+# it, one per line, sorted; nothing when there is no file or no section.
+# Only these ever reach a `Tag added:` line.
+section_tags() {
+  [ -f "$1" ] || return 0
+  awk '{ sub(/\r$/, "") }
+    /^## / { if (on) exit; on = ($0 ~ /^## Tags[ \t]*$/); next }
+    on && /^- #[^ \t]/ {
+      t = substr($0, 3); sub(/[ \t].*$/, "", t)
+      if (t ~ /^#[a-z0-9]+(-[a-z0-9]+)*$/ && length(t) <= 64) print t
+    }' "$1" |
+    LC_ALL=C sort -u
+}
+
+# Appends each line of file $2 that log.md (in the folder $1) does not hold
+# yet, after a line break if its last line has none. Adds log.md to
+# UPLOAD_FILE when it changed. LOG_LINES_ADDED is the number of lines
+# added. The `Filed:` lines (book_moves) and the `Tag added:` lines
+# (book_tags) both go through here.
+append_log_lines() {
+  local vault=$1 lines=$2 line
+  LOG_LINES_ADDED=0
+  [ -s "$lines" ] || return 0
+  touch "$vault/log.md" || return 1
+  if [ -s "$vault/log.md" ] && [ -n "$(tail -c 1 "$vault/log.md")" ]; then
+    echo >>"$vault/log.md" || return 1
+  fi
+  while IFS= read -r line; do
+    grep -qxF -- "$line" "$vault/log.md" && continue
+    printf '%s\n' "$line" >>"$vault/log.md" || return 1
+    LOG_LINES_ADDED=$((LOG_LINES_ADDED + 1))
+  done <"$lines"
+  [ "$LOG_LINES_ADDED" -eq 0 ] || printf '%s\n' log.md >>"$UPLOAD_FILE"
+}
+
+# R-SS-9, R-SS-13, in the bookkeeping phase: recounts `## Tags` in the
+# folder $1's index.md (recount_tags) and, for each tag of the section that
+# was not in the section of $2 (index.md before the session), appends
+# `- <stamp $3> · Tag added: #<tag>` to log.md, the stamp and helper the
+# `Filed:` lines use. Each file it changed joins UPLOAD_FILE. Logs counts.
+book_tags() {
+  local vault=$1 before=$2 stamp=$3 out="$WORK_DIR/index-recount.md" lines="$WORK_DIR/tag-log.txt"
+  local now="$WORK_DIR/tags-after.txt" was="$WORK_DIR/tags-before.txt"
+  [ -f "$vault/index.md" ] || return 0
+  recount_tags "$vault/index.md" >"$out" || return 1
+  if ! tr -d '\r' <"$vault/index.md" | cmp -s - "$out"; then
+    # Windows line ends stay Windows line ends.
+    if [ -n "$(tr -cd '\r' <"$vault/index.md" | head -c 1)" ]; then
+      sed 's/$/\r/' "$out" >"$vault/index.md" || return 1
+    else
+      cat "$out" >"$vault/index.md" || return 1
+    fi
+    printf '%s\n' index.md >>"$UPLOAD_FILE"
+  fi
+  rm -f "$out"
+  section_tags "$before" >"$was" || return 1
+  section_tags "$vault/index.md" >"$now" || return 1
+  LC_ALL=C comm -13 "$was" "$now" | sed "s/^/- $stamp · Tag added: /" >"$lines" || return 1
+  append_log_lines "$vault" "$lines" || return 1
+  awk '!seen[$0]++' "$UPLOAD_FILE" >"$UPLOAD_FILE.tmp" && mv "$UPLOAD_FILE.tmp" "$UPLOAD_FILE" || return 1
+  log "tags: $(grep -c . "$now" || true) counted, $LOG_LINES_ADDED added"
+}
+
+# The rows of the index file $2 that are not in the index file $1 word for
+# word (added or changed), outside `## Tags`, one per line. $1 may be
+# missing (no index before): every row is new.
+changed_rows() {
+  local before=$1
+  [ -f "$before" ] || before=/dev/null
+  awk 'FILENAME == ARGV[1] { sub(/\r$/, ""); had[$0] = 1; next }
+    { sub(/\r$/, "") }
+    /^## / { tags = ($0 ~ /^## Tags[ \t]*$/); next }
+    !tags && /^[ \t]*[-*+][ \t]+\[\[/ && !($0 in had)' "$before" "$2"
+}
+
+# Whether the index row $1 is in the rules v24 form (R-SS-8, R-SS-10):
+#   - [[<path>]] · <Type> · <#tag #tag> · <description> · <origin>
+# with an optional trailing ` · [[<original>]]`. The type is not empty (the
+# app's words, app/src/vault-index.ts FILE_KIND_LABELS: Note, PDF, Photo,
+# iPhone photo, Image, Google Doc, Google Sheet, Google Slides, Excel
+# spreadsheet, Spreadsheet (CSV), Word document, PowerPoint, OpenDocument,
+# Text, Markdown, ZIP archive, Email, Web page, Audio, Video, File; the
+# rulebook asks for one word, the check does not hold it to the list); one
+# to five tags matching `^#[a-z0-9]+(-[a-z0-9]+)*$`; a description of 1 to
+# 100 characters with no `[[`; an origin the app knows, any letter case
+# (app/src/file-origin.ts ORIGIN_LABELS, keys and labels: filed, yours,
+# asked, drive, "filed by Bower", "your note", "Bower wrote it when you
+# asked", "from your Drive, as Markdown").
+row_ok() {
+  local rest=${1%$'\r'} fields=() n tag tags=() desc origin chars
+  while [[ $rest == *' · '* ]]; do
+    fields+=("${rest%% · *}")
+    rest=${rest#* · }
+  done
+  fields+=("$rest")
+  n=${#fields[@]}
+  if [ "$n" -eq 6 ]; then
+    [[ ${fields[5]} =~ ^[[:space:]]*\[\[[^]]+\]\][[:space:]]*$ ]] || return 1
+  elif [ "$n" -ne 5 ]; then
+    return 1
+  fi
+  [[ ${fields[0]} =~ ^[[:space:]]*[-*+][[:space:]]+\[\[[^]]+\]\][[:space:]]*$ ]] || return 1
+  [[ ${fields[1]} =~ [^[:space:]] ]] || return 1
+  read -r -a tags <<<"${fields[2]}"
+  [ "${#tags[@]}" -ge 1 ] && [ "${#tags[@]}" -le 5 ] || return 1
+  for tag in "${tags[@]}"; do
+    [[ $tag =~ ^#[a-z0-9]+(-[a-z0-9]+)*$ ]] || return 1
+  done
+  desc=${fields[3]}
+  desc=${desc#"${desc%%[![:space:]]*}"}
+  desc=${desc%"${desc##*[![:space:]]}"}
+  [ -n "$desc" ] && [[ $desc != *'[['* ]] || return 1
+  # Characters, not bytes: UTF-8 continuation bytes are not counted.
+  chars=$(printf '%s' "$desc" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' ')
+  [ "$chars" -le 100 ] || return 1
+  origin=${fields[4]}
+  origin=${origin#"${origin%%[![:space:]]*}"}
+  origin=${origin%"${origin##*[![:space:]]}"}
+  case "${origin,,}" in
+    filed | yours | asked | drive | 'filed by bower' | 'your note' | \
+      'bower wrote it when you asked' | 'from your drive, as markdown') return 0 ;;
+  esac
+  return 1
+}
+
+# R-SS-10: "<bad> <checked>", the number of rows the session added or
+# changed (index file $1 before it, $2 after it) that are not in the v24
+# form (row_ok), and the number checked. A row is never refused or
+# rewritten.
+check_rows() {
+  local row bad=0 checked=0
+  while IFS= read -r row; do
+    checked=$((checked + 1))
+    row_ok "$row" || bad=$((bad + 1))
+  done < <(changed_rows "$1" "$2")
+  printf '%s %s\n' "$bad" "$checked"
+}
+# <<< bookkeeping
 
 # A hub note's `statuses:` (decision E-7, #921): "none" when its frontmatter
 # has no such key, "bad" when the value is not a list, else "list" and one
@@ -1194,17 +1463,7 @@ book_moves() {
       } else line = line "Moved: " $1 " → " $2
       print line
     }' "$pairs" >"$lines" || return 1
-  touch "$vault/log.md" || return 1
-  if [ -s "$vault/log.md" ] && [ -n "$(tail -c 1 "$vault/log.md")" ]; then
-    echo >>"$vault/log.md" || return 1
-  fi
-  count=0
-  while IFS= read -r path; do
-    grep -qxF -- "$path" "$vault/log.md" && continue
-    printf '%s\n' "$path" >>"$vault/log.md" || return 1
-    count=$((count + 1))
-  done <"$lines"
-  [ "$count" -eq 0 ] || printf '%s\n' log.md >>"$UPLOAD_FILE"
+  append_log_lines "$vault" "$lines" || return 1
   # Each path once, in the order it was listed.
   awk '!seen[$0]++' "$UPLOAD_FILE" >"$UPLOAD_FILE.tmp" && mv "$UPLOAD_FILE.tmp" "$UPLOAD_FILE"
 }
@@ -2361,9 +2620,20 @@ export RCLONE_CONFIG_VAULT_EXPORT_FORMATS=txt
 STEP='sync down'
 log "$STEP"
 check_folder "$STEP"
+sync_started=$(date +%s)
 if ! rclone sync vault: "$VAULT_DIR" --exclude '.obsidian/**' "${RCLONE_FILTER[@]}" >>"$RCLONE_LOG" 2>&1; then
   fail "$STEP: rclone failed" drive_unavailable
 fi
+# R-SS-15: how heavy the sync down is, numbers only: the files and bytes of
+# the local copy and the seconds it took. When the time passes 20 s in
+# normal use, the partial download (spec D-5) moves up.
+# Best effort: a failure here never fails the run.
+sync_seconds=$(($(date +%s) - sync_started)) || sync_seconds=0
+sync_files=$(find "$VAULT_DIR" -type f 2>/dev/null | wc -l | tr -d ' ') || sync_files=0
+sync_bytes=$(du -sb "$VAULT_DIR" 2>/dev/null | cut -f 1) || sync_bytes=0
+[[ $sync_files =~ ^[0-9]+$ ]] || sync_files=0
+[[ $sync_bytes =~ ^[0-9]+$ ]] || sync_bytes=0
+log "$STEP: $sync_files files, $(awk -v b="$sync_bytes" 'BEGIN { printf "%.1f", b / 1048576 }') MB, $sync_seconds s"
 
 STEP='check rulebook'
 if [ ! -f "$VAULT_DIR/CLAUDE.md" ]; then
@@ -2851,18 +3121,28 @@ if ! build_system_prompt "${CONTEXT_MODES[@]}" >"$SYSTEM_FILE" 2>/dev/null; then
   fail "$STEP: system prompt not built"
 fi
 log "$STEP: $(wc -c <"$SYSTEM_FILE" | tr -d ' ') bytes for ${CONTEXT_MODES[*]}"
+# R-SS-9, R-SS-10: index.md as the session starts, for the tag recount and
+# the row check after it. Kept in the work dir, never logged.
+rm -f "$INDEX_BEFORE"
+[ ! -f "$VAULT_DIR/index.md" ] || cp "$VAULT_DIR/index.md" "$INDEX_BEFORE" ||
+  fail "$STEP: index.md not kept"
 # Logged right before the agent starts: the next line is its stats, so the
 # two timestamps bound the agent's own time (agent/bench/run-bench.sh).
 STEP='agent run'
 log "$STEP"
 RUN_STARTED=1
+# The prompt goes in on stdin (#967): `claude -p` with no prompt argument
+# reads it there, so a large folder's context never meets Linux's 128 KB
+# limit on one argument. Nothing else reads stdin. The file is in the work
+# dir, outside the agent's folder.
+printf '%s\n' "$PROMPT" >"$WORK_DIR/prompt.md"
 set +e
 (
   cd "$VAULT_DIR"
   timeout -k 30 "$AGENT_TIME_LIMIT" env -i "${claude_env[@]}" \
-    claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format stream-json --verbose \
+    claude -p --max-turns "$MAX_TURNS" --output-format stream-json --verbose \
       --model "$MODEL" --effort "$EFFORT" --append-system-prompt-file "$SYSTEM_FILE" \
-      --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
+      --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" <"$WORK_DIR/prompt.md"
 ) >"$AGENT_STREAM" 2>"$AGENT_ERR"
 agent_rc=$?
 set -e
@@ -2925,6 +3205,17 @@ fi
 if ! append_document_text || ! audit_note_names; then
   fail "$STEP: text copy failed"
 fi
+# R-SS-10: the index rows the session added or changed, checked against the
+# v24 form (check_rows); a bad row is counted, never refused or rewritten,
+# and the count is a warning in the summary. Before the bookkeeping phase,
+# so a link the runner rewrites for a move is not counted as the agent's.
+if [ "$TOO_MANY_CHANGES" -eq 0 ] && [ -f "$VAULT_DIR/index.md" ]; then
+  rows_checked=$(check_rows "$INDEX_BEFORE" "$VAULT_DIR/index.md") || fail "$STEP: row check failed"
+  bad_rows=${rows_checked% *}
+  [ "${rows_checked#* }" -eq 0 ] || log "row check: $bad_rows of ${rows_checked#* } rows not in the expected form"
+  [ "$bad_rows" -eq 0 ] ||
+    ROWS_WARNING="Warning: $bad_rows index $([ "$bad_rows" -eq 1 ] && echo 'row is' || echo 'rows are') not in the expected form."
+fi
 # E-7 (#921): an unusable folder status list in a changed hub note is removed.
 if ! check_hub_statuses; then
   fail "$STEP: status list check failed"
@@ -2939,6 +3230,13 @@ if ! book_moves "$VAULT_DIR" "$BOOKED_OLD" "$BOOKED_NEW" "$(date -u '+%F %H:%M')
 fi
 # R-RUNNER-9: the mechanical History lines, now that the moves are booked.
 if ! write_history 2>>"$LOG_DIR/bookkeeping.err"; then
+  fail "$STEP: bookkeeping failed"
+fi
+# R-SS-9, R-SS-13: the tag counts in index.md and a `Tag added:` line per
+# new tag, after the moves are booked, so both files go up with the rest.
+# None after a refused run: nothing of it is saved.
+if [ "$TOO_MANY_CHANGES" -eq 0 ] &&
+  ! book_tags "$VAULT_DIR" "$INDEX_BEFORE" "$(date -u '+%F %H:%M')" 2>>"$LOG_DIR/bookkeeping.err"; then
   fail "$STEP: bookkeeping failed"
 fi
 # Report v2 (#598): each processed item that moved carries where it went.
@@ -3001,6 +3299,30 @@ else
 '}$AUDIT_WARNING"
   [ -z "$STATUSES_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
 '}$STATUSES_WARNING"
+  [ -z "$ROWS_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
+'}$ROWS_WARNING"
+  # A silent no-op (#967): the agent was given at least one file (not an
+  # instruction or context note) after the pre-scan, left every one of them
+  # where it was (not filed, not moved to Processed/; the quarantined ones
+  # are not in the list), and said `Problems: none`. A warning with the
+  # count, never a name.
+  if [ "$MODE" = ingest ] && grep -qiE '^[[:space:]]*Problems:[[:space:]]*none\.?[[:space:]]*$' <<<"$SUMMARY"; then
+    pending_now="$WORK_DIR/pending-after-scan.txt"
+    [ -f "$pending_now" ] || pending_now=$PENDING_FILE
+    given=0
+    left=0
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      [ "$(P="$path" awk -F '\t' '$1 == ENVIRON["P"] { print $2; exit }' "$KINDS_FILE")" = file ] || continue
+      given=$((given + 1))
+      [ ! -e "$VAULT_DIR/$path" ] || left=$((left + 1))
+    done <"$pending_now"
+    if [ "$given" -gt 0 ] && [ "$left" -eq "$given" ]; then
+      log "silent run: $left files left where they were, no problem reported"
+      SUMMARY="${SUMMARY:+$SUMMARY$'
+'}Warning: $left $([ "$left" -eq 1 ] && echo 'file was' || echo 'files were') left where $([ "$left" -eq 1 ] && echo 'it was' || echo 'they were'), and no problem was reported."
+    fi
+  fi
   filed=$(count_lines "$WORK_DIR/pending-after-scan.txt")
   [ -f "$WORK_DIR/pending-after-scan.txt" ] || filed=$(count_lines "$PENDING_FILE")
   write_outcome done "Tidied up $filed $([ "$filed" -eq 1 ] && echo thing || echo things)."
