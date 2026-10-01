@@ -228,6 +228,11 @@
   position: relative;
 }
 
+/* Above the first Recent row, which would paint over its hit area. */
+.home-recent-head a {
+  z-index: 1;
+}
+
 .home-bubble a::after,
 .home-bubble-link::after,
 .home-recent-head a::after {
