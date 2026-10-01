@@ -40,6 +40,14 @@
   line-height: var(--leading-body);
 }
 
+/* Desktop: the bubble spans the content column (BW-Rules-1280). */
+@media (min-width: 900px) {
+  .bower-bubble {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 /* The bubble's words never change (BW-Dictating): only the bird does. */
 .bower-box-intro {
   align-items: center;
