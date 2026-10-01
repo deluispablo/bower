@@ -1015,7 +1015,12 @@ export function FolderItems({
     }
     if (rows.length === 0 && subs.length === 0) {
       if (view.origin !== 'all' && kind === null) {
-        return <EmptySegment segment={view.origin} />;
+        return (
+          <EmptySegment
+            segment={view.origin}
+            folderOfFolders={folderOfFolders}
+          />
+        );
       }
       return <p class="empty-segment">Nothing of that kind here.</p>;
     }
