@@ -723,13 +723,15 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SMOKE_STATE=$(cat "$HERE/../current-state")
 SMOKE_SCENARIO=$(cat "$HERE/../current-scenario")
-turns='' tools='' denied='' prompt='' format='' verbose=no
+turns='' tools='' denied='' prompt='' format='' verbose=no model='' effort=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -p) prompt=$2; shift 2 ;;
     --max-turns) turns=$2; shift 2 ;;
     --output-format) format=$2; shift 2 ;;
     --verbose) verbose=yes; shift ;;
+    --model) model=$2; shift 2 ;;
+    --effort) effort=$2; shift 2 ;;
     --allowedTools) tools=$2; shift 2 ;;
     --disallowedTools) denied=$2; shift 2 ;;
     *) shift ;;
@@ -740,6 +742,7 @@ printf '%s' "$tools" >"$SMOKE_STATE/claude-tools.txt"
 printf '%s' "$prompt" >"$SMOKE_STATE/claude-prompt.txt"
 printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
 printf 'format=%s verbose=%s' "$format" "$verbose" >"$SMOKE_STATE/claude-format.txt"
+printf 'model=%s effort=%s' "$model" "$effort" >"$SMOKE_STATE/claude-model.txt"
 # The model's own environment, exactly as run.sh's env -i allow-list built
 # it: the test greps this for the Drive token, the run ticket, BOWER_* and
 # the model credential, never the console output (that stays content-free).
@@ -1138,6 +1141,7 @@ run_case() {
   env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN -u GITHUB_RUN_ID \
     -u BOWER_API_URL -u BOWER_RUN_TICKET -u BOWER_API_KEY -u BOWER_MAX_TURNS -u BOWER_ALLOW_WEB \
     -u BOWER_MAX_CHANGES -u BOWER_REPORT_REFUSED -u BOWER_SCOPE -u BOWER_RUN_ALLOW_WEB \
+    -u BOWER_MODEL -u BOWER_EFFORT_LOW -u BOWER_EFFORT_HIGH \
     PATH="$STUBS:$PATH" \
     RUNNER_TEMP="$STATE/runner-temp" \
     CLAUDE_CODE_OAUTH_TOKEN='test-oauth-token' \
@@ -1503,12 +1507,16 @@ grep -q STDERR-MARKER "$STATE/runner-temp/bower-logs/agent.err" || die 'agent st
 # R-SS-2: the agent runs with stream-json, and its transcript (vault
 # content) never reaches the logs dir the workflow uploads on a failure.
 expect_eq "$(cat "$STATE/claude-format.txt")" 'format=stream-json verbose=yes' 'claude output format'
+# R-SS-3 (#965): a plain tidy-up (no instruction note, no context note)
+# runs on the default model at low effort.
+expect_eq "$(cat "$STATE/claude-model.txt")" 'model=claude-sonnet-5-5 effort=low' 'model and effort (plain ingest)'
 if grep -rqF -e 'SUMMARY-MARKER' -e '"type":"result"' "$STATE/runner-temp/bower-logs"; then
   die 'the agent stream reached the logs dir'
 fi
 [ -z "$(find "$STATE/runner-temp/bower-logs" -name '*.jsonl')" ] || die 'a stream file is in the logs dir'
 expect_eq "$(sed -n 's/^[^ ]* agent stats: //p' "$STATE/out.log")" \
-  'turns=3 api_ms=3500 in=12 out=34 cache_read=560 cache_write=78 tools=Grep:1,Read:1' 'agent stats line'
+  'model=claude-sonnet-5-5 effort=low turns=3 api_ms=3500 in=12 out=34 cache_read=560 cache_write=78 tools=Grep:1,Read:1' \
+  'agent stats line'
 if grep -q 'no runner settings file' "$STATE/out.log"; then
   die 'warned about a missing runner settings file that was there'
 fi
@@ -1663,6 +1671,7 @@ expect_eq "$(post 1 p.runId)" 4343 'runId'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(post 2 p.kind)" lint 'second kind'
 expect_eq "$(post 2 'p.processed === undefined')" true 'lint has no processed'
+expect_eq "$(cat "$STATE/claude-model.txt")" 'model=claude-sonnet-5-5 effort=low' 'model and effort (lint)'
 expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
 expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
 expect_claude_env unset test-oauth-token
@@ -1673,8 +1682,12 @@ echo "ok lint"
 # 9. The instance opts in to web access and the user's switch is on (the
 # dispatch's allow_web, #374): WebSearch and WebFetch are allowed, network
 # commands in Bash stay denied.
-run_case web BOWER_ALLOW_WEB=1 BOWER_RUN_ALLOW_WEB=1
+# It also sets a valid model and low effort (#965): both are used as given.
+run_case web BOWER_ALLOW_WEB=1 BOWER_RUN_ALLOW_WEB=1 BOWER_MODEL=claude-test-5.1 BOWER_EFFORT_LOW=medium
 expect_eq "$RC" 0 'exit code'
+expect_eq "$(cat "$STATE/claude-model.txt")" 'model=claude-test-5.1 effort=medium' 'model and effort (valid override)'
+grep -q ' agent stats: model=claude-test-5.1 effort=medium ' "$STATE/out.log" || die 'override not in the stats line'
+grep -q 'warning: BOWER_' "$STATE/out.log" && die 'warned about a valid override'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
   'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*),WebSearch,WebFetch' \
   'allowed tools (web opted in)'
@@ -1705,8 +1718,15 @@ echo "ok web tools need both the instance and the user"
 
 # 10. A note is edited in the app while the agent rewrites another one: only
 # what the agent added or changed is uploaded, so the app's edit survives.
-run_case edited
+# Its model and effort settings are not valid (#965): the run uses the
+# defaults and warns, naming the setting and never its value.
+run_case edited 'BOWER_MODEL=MODEL-MARKER x' BOWER_EFFORT_LOW=EFFORT-MARKER BOWER_EFFORT_HIGH=EFFORT-MARKER
 expect_eq "$RC" 0 'exit code'
+expect_eq "$(cat "$STATE/claude-model.txt")" 'model=claude-sonnet-5-5 effort=low' 'model and effort (invalid override)'
+grep -q 'warning: BOWER_MODEL is not a model name' "$STATE/out.log" || die 'no warning for BOWER_MODEL'
+grep -q 'warning: BOWER_EFFORT_LOW is not' "$STATE/out.log" || die 'no warning for BOWER_EFFORT_LOW'
+grep -q 'warning: BOWER_EFFORT_HIGH is not' "$STATE/out.log" || die 'no warning for BOWER_EFFORT_HIGH'
+grep -qF -e MODEL-MARKER -e EFFORT-MARKER "$STATE/out.log" && die 'a warning printed the value'
 expect_eq "$(post 2 p.state)" done 'second state'
 expect_eq "$(calls rclone | grep -c '^rclone copy .* --files-from-raw ')" 1 'changed-only copy calls'
 grep -q ' 2 files changed$' "$STATE/out.log" || die 'changed count not logged'
@@ -1892,6 +1912,8 @@ grep -Fxq '0-Inbox/Bower - 2026-01-15 0901 Weekly planning tips.md' "$saw" &&
 expect_eq "$(cat "$STATE/claude-grep.txt")" '' 'files in the vault naming the listed note'
 grep -q ' instruction origin: 1 of 2 not written by the app$' "$STATE/out.log" ||
   die 'origin count not logged'
+# An instruction note the app wrote reaches the agent: high effort (#965).
+expect_eq "$(cat "$STATE/claude-model.txt")" 'model=claude-sonnet-5-5 effort=high' 'model and effort (instruction note)'
 grep -q ' 1 files quarantined$' "$STATE/out.log" || die 'quarantined count not logged'
 remote="$STATE/remote"
 [ -f "$remote/0-Inbox/Quarantine/Bower - 2026-01-15 0901 Weekly planning tips.md" ] ||
