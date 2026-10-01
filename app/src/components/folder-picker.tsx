@@ -259,7 +259,9 @@ export function MoveToSheet({
     }
     void refresh();
     showToast(
-      kept ? REPLACE_KEPT : 'In your inbox. Bower moves it at the next tidy-up.',
+      kept
+        ? REPLACE_KEPT
+        : 'In your inbox. Bower moves it at the next tidy-up.',
       undefined,
       // Undo only takes back a fresh request: a replaced one is already
       // in the Bin, so undoing would leave no request at all.

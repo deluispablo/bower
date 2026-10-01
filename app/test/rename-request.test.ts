@@ -113,8 +113,8 @@ describe('renamePrefill (§3.6)', () => {
     expect(renamePrefill('CV insights.md', true, 'Resume Australia.md')).toBe(
       'Resume Australia',
     );
-    expect(
-      renamePrefill('Passport copy.pdf', false, 'Passport scan.pdf'),
-    ).toBe('Passport scan');
+    expect(renamePrefill('Passport copy.pdf', false, 'Passport scan.pdf')).toBe(
+      'Passport scan',
+    );
   });
 });
