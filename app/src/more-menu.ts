@@ -61,7 +61,7 @@ export function showInFoldersHref(
 /**
  * Every kind of ⋯ menu (#907, spec §3.6): a thing (folder, a root landmark,
  * note, file) or a tab screen (home, add, bower, notes, justFiled,
- * settings).
+ * settings) or Health.
  */
 export type MenuKind =
   | 'folder'
@@ -73,7 +73,8 @@ export type MenuKind =
   | 'bower'
   | 'notes'
   | 'justFiled'
-  | 'settings';
+  | 'settings'
+  | 'health';
 
 /** One item of a ⋯ menu; the component maps each id to its icon and action. */
 export type MoreItemId =
@@ -226,6 +227,7 @@ export function moreMenuGroups(
       [help],
     ],
     settings: [[bowerDrive], [help]],
+    health: [[help]],
   };
 
   const omit = context.omit;
@@ -251,6 +253,7 @@ export const MENU_NAMES: Readonly<Record<MenuKind, string>> = {
   notes: 'Folders actions',
   justFiled: 'Just filed actions',
   settings: 'Settings actions',
+  health: 'Health check actions',
 };
 
 /**
