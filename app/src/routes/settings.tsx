@@ -515,22 +515,30 @@ function DictationLanguageRow(): JSX.Element {
           What the microphone listens for when you dictate.
         </span>
       </span>
-      <select
-        class="settings-select"
-        value={lang}
-        onChange={(e) => {
-          const next = e.currentTarget.value;
-          setLang(next);
-          setPref('dictationLang', next);
-        }}
-      >
-        <option value="">Match my device</option>
-        {DICTATION_LANGUAGES.map((tag) => (
-          <option key={tag} value={tag}>
-            {languageLabel(tag)}
-          </option>
-        ))}
-      </select>
+      {/* ST-Bot: a compact select button; the native select sits over it,
+          see-through, so the keyboard, screen readers and the phone's own
+          picker all work as before. */}
+      <span class="settings-select-wrap">
+        <span class="settings-select-face" aria-hidden="true">
+          {lang === '' ? 'Match my device' : languageLabel(lang)}
+        </span>
+        <select
+          class="settings-select"
+          value={lang}
+          onChange={(e) => {
+            const next = e.currentTarget.value;
+            setLang(next);
+            setPref('dictationLang', next);
+          }}
+        >
+          <option value="">Match my device</option>
+          {DICTATION_LANGUAGES.map((tag) => (
+            <option key={tag} value={tag}>
+              {languageLabel(tag)}
+            </option>
+          ))}
+        </select>
+      </span>
     </label>
   );
 }
