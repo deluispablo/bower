@@ -64,6 +64,7 @@ import type { NoteMeta } from '../note-meta.js';
 import { noteTitle as computeNoteTitle } from '../note-title.js';
 import { noteHelpTopic, useHelpTopic } from '../help-rows.js';
 import { useTitle } from '../use-title.js';
+import { useTitlesAt } from '../components/use-note-titles.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
@@ -380,6 +381,7 @@ export function Note() {
   const id = params.id ?? '';
   const {
     index,
+    files,
     status,
     refresh,
     getNoteText,
@@ -411,8 +413,14 @@ export function Note() {
   }, [id]);
 
   const file = index?.byId.get(id);
+  // The tab reads the note's title as the page and the tree show it (a
+  // filed link's host and path, never its `Link - …` file name, #950).
+  const tabTitles = useTitlesAt(file === undefined ? [] : [file.path], files);
   useTitle(
-    file === undefined ? null : displayName(file.name).replace(/\.md$/i, ''),
+    file === undefined
+      ? null
+      : (tabTitles.get(file.path) ??
+          displayName(file.name).replace(/\.md$/i, '')),
   );
 
   // Opening a note marks it seen on this device (#587): the "New" tag goes.
