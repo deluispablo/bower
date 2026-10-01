@@ -148,46 +148,35 @@
 
 .bower-tip-toggle:focus-visible,
 .bower-example:focus-visible,
-.bower-segment:focus-visible {
+.bower-segments .seg-button:focus-visible {
   outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
 }
 
-/* Rules · Requests · Activity: a segmented control acting as tabs. */
-
+/* Rules · Requests · Activity: the one segmented control (`.seg`,
+   primitives.css, the same look as Settings' Look) acting as tabs, the
+   full width of the column with an icon before each label (BW-Rules). */
 .bower-segments {
   display: flex;
-  padding: 3px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.bower-segment {
+.bower-segments .seg-button {
   display: inline-flex;
   flex: 1;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1);
-  min-height: 44px;
-  padding: 0 var(--space-2);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--color-text-muted);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
-  cursor: pointer;
+  gap: 6px;
 }
 
-.bower-segment .icon {
+.bower-segments .seg-button .icon {
   width: 16px;
   height: 16px;
 }
 
-.bower-segment[aria-selected='true'] {
-  background: var(--color-surface-hover);
+.bower-segments .seg-button[aria-selected='true'] {
+  background: var(--color-surface-strong);
   color: var(--color-heading);
 }
 

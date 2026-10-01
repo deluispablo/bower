@@ -89,6 +89,8 @@ import {
   writeError,
 } from '../components/rules-panel.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { Segmented } from '../components/segmented.js';
+import type { SegmentedOption } from '../components/segmented.js';
 import {
   INSTRUCTION_APP_PROPERTIES,
   SaveError,
@@ -145,6 +147,12 @@ const SEGMENTS: readonly SegmentTab[] = [
   { id: 'requests', label: 'Requests', Icon: IconChat },
   { id: 'activity', label: 'Activity', Icon: IconClock },
 ];
+
+/** The tabs as the one segmented control's options (DB-13): the same look
+ * as Settings' Look, with the board's icons. */
+const SEGMENT_OPTIONS: readonly SegmentedOption<Segment>[] = SEGMENTS.map(
+  ({ id, label, Icon }) => ({ value: id, label, Icon }),
+);
 
 /** How many times the tab has opened since the app loaded: each visit
  * shows the next set of examples (`examplesFor`). */
@@ -907,31 +915,6 @@ export function Bower(): JSX.Element {
     if (focus) document.getElementById(`bower-tab-${id}`)?.focus();
   }
 
-  // Arrow keys, Home and End move between the three tabs (WAI-ARIA tabs).
-  function onTabKey(event: JSX.TargetedKeyboardEvent<HTMLDivElement>): void {
-    const at = SEGMENTS.findIndex((tab) => tab.id === segment);
-    let next: number;
-    switch (event.key) {
-      case 'ArrowRight':
-        next = (at + 1) % SEGMENTS.length;
-        break;
-      case 'ArrowLeft':
-        next = (at - 1 + SEGMENTS.length) % SEGMENTS.length;
-        break;
-      case 'Home':
-        next = 0;
-        break;
-      case 'End':
-        next = SEGMENTS.length - 1;
-        break;
-      default:
-        return;
-    }
-    event.preventDefault();
-    const tab = SEGMENTS[next];
-    if (tab !== undefined) selectSegment(tab.id, true);
-  }
-
   // The three panels' contents: tabs under 1200 px, three columns from
   // there (#357, Desktop-Bower board).
   const panels: Record<Segment, JSX.Element> = {
@@ -1073,31 +1056,17 @@ export function Bower(): JSX.Element {
         </div>
       ) : (
         <>
-          <div
+          <Segmented
+            label="Rules, requests and activity"
+            outlined
+            tabs={{ idPrefix: 'bower' }}
             class="bower-segments"
-            role="tablist"
-            aria-label="Rules, requests and activity"
-            onKeyDown={onTabKey}
-          >
-            {SEGMENTS.map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                id={`bower-tab-${id}`}
-                class="bower-segment"
-                aria-selected={segment === id}
-                aria-controls={`bower-panel-${id}`}
-                tabIndex={segment === id ? 0 : -1}
-                onClick={() => {
-                  selectSegment(id, false);
-                }}
-              >
-                <Icon />
-                {label}
-              </button>
-            ))}
-          </div>
+            options={SEGMENT_OPTIONS}
+            value={segment}
+            onChange={(id) => {
+              selectSegment(id, false);
+            }}
+          />
 
           {SEGMENTS.map(({ id }) => (
             <div
