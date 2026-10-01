@@ -24,7 +24,7 @@ Requirement IDs: `R-BOOT-<n>`.
 | D-4 | Nothing but background + bird for the first 600 ms. "Opening Bower…" fades in at 600 ms (CSS `animation-delay`, no JS needed). | A warm open of the installed app takes 100–500 ms; text that appears and vanishes inside that window is a flash. Bird on background reads as the continuation of the OS splash. |
 | D-5 | Minimum show: if the session answers before 600 ms, hand over at once. If the status line has appeared, keep it until at least 1100 ms after navigation start (500 ms on screen), then fade. | No text flash; the worst added wait is 500 ms, only when the open was already slow. |
 | D-6 | Maximum: at 8 s the line becomes "Still loading…" with a "Try again" link. The request keeps going; if it answers, hand over as usual. | The `/me` fetch has no timeout (`app/src/api.ts`, `apiFetch`); today "Loading…" can stay up for as long as the browser waits. |
-| D-7 | A CSS-only safety net: if JavaScript never runs (a failed chunk, a stale cache), the "Try again" link appears at 15 s by itself. | Without JS nothing else can ever change the boot screen. |
+| D-7 | A CSS-only safety net: if JavaScript never runs (a failed chunk, a stale cache), the "Try again" link appears at 8 s by itself, with the slow hint. | Without JS nothing else can ever change the boot screen. |
 | D-8 | Hand-over: the real screen renders in `#app` under the boot screen, then `#boot` fades out (opacity 1 → 0, 200 ms `--motion-base`, `--ease-out`) and is removed from the DOM. Reduced motion: removed at once. | One transition, no layout shift; the existing skeletons are already in place underneath when the fade starts. |
 | D-9 | Phase (c) keeps the existing skeletons (`Skeleton`, Home's `SkeletonTile`, the sidebar tree skeleton) and their 300 ms delay unchanged. The boot screen covers only "who is this person" (`/me`), not the folder listing. | Home already shows a shaped skeleton while Drive answers, and the cached index paints first when IndexedDB has one (#922). A full-screen loader over Home would hide work that is already visible. |
 | D-10 | A start-up network failure with no saved copy shows the error state on the boot screen, instead of sending a signed-in owner to the sign-in page with "Could not reach the server." | The owner is not signed out; offering "Sign in" for a network problem sends them the wrong way. |
@@ -121,11 +121,11 @@ Contrast: these are the pairs already in the brand contrast table (muted and lin
 ### 6.1 Layout and markup (all states)
 
 ```html
-<div id="boot" aria-busy="true">            <!-- data-state: absent | slow | offline | error | leaving -->
+<div id="boot" aria-busy="true">            <!-- data-state: absent | slow | offline | error; data-leaving during the fade -->
   <svg class="boot-bird" viewBox="0 0 100 100" width="72" height="72" aria-hidden="true" focusable="false">…v9 mark…</svg>
   <p class="boot-line" role="status" aria-live="polite">Opening Bower…</p>
-  <p class="boot-hint"></p>                 <!-- second line; empty and hidden in the normal state -->
-  <a class="boot-retry" href="">Try again</a> <!-- hidden until slow, offline, error, or the 15 s fallback -->
+  <p class="boot-hint">This is taking longer than usual.</p> <!-- second line; BOOT-3 in the markup, hidden in the normal state -->
+  <a class="boot-retry" href="">Try again</a> <!-- hidden until slow, offline, error, or the 8 s fallback -->
 </div>
 <div id="app"></div>
 ```
@@ -145,7 +145,7 @@ Contrast: these are the pairs already in the brand contrast table (muted and lin
 | **Slow** | 8 s from navigation start, no answer yet | Still mark, breath stops | BOOT-2 (text colour) + BOOT-3 (muted) | Shown | Lines swap without animation |
 | **Offline** | `/me` failed with a network error, no saved copy, `navigator.onLine === false` | Still mark, no breath | BOOT-4 + BOOT-5 | Shown | None; the page reloads by itself on the `online` event |
 | **Error** | `/me` failed with a network or server error (not 401), no saved copy, online | Still mark, no breath | BOOT-6 + BOOT-7 | Shown | None |
-| **No-JS fallback** | 15 s and `#boot` still has no `data-state` (JS never ran) | Still mark | BOOT-1 stays | Shown by CSS (`animation-delay: 15s`) | None |
+| **No-JS fallback** | 8 s and `#boot` still has no `data-state` (JS has not run yet, or never will) | Still mark | BOOT-1 stays; BOOT-3 (already in the markup) shown by CSS | Shown by CSS (`animation-delay: 8s`); hint and link space reserved from the start | None |
 | **Sign-in needed** | `/me` → 401, or not invited | — | — | — | Hand-over to `/login`, `/welcome` or `/not-invited` (the real screen is the message) |
 | **Offline with a saved copy** | network failure, cached `me` | — | — | — | Hand-over to the shell, which shows its existing offline banner |
 | **Signed in** | `/me` answers | — | — | — | Hand-over; Home's skeletons take over (D-9) |
@@ -161,7 +161,7 @@ Reduced motion (`@media (prefers-reduced-motion: reduce)`): no breath; the line 
 3. `dismissBoot()` in a `useEffect` after that render:
    - `t = performance.now()` (ms since navigation start);
    - `t < 600` → remove at once (nothing but the bird was shown, which the OS splash shows too);
-   - `t >= 600` → wait until `t >= 1100`, then set `data-state="leaving"` (opacity 0 over 200 ms `--ease-out`, `pointer-events: none`), and remove the node on `transitionend` or after 250 ms, whichever comes first;
+   - `t >= 600` → wait until `t >= 1100`, then set the `data-leaving` attribute (`data-state` keeps its value) (opacity 0 over 200 ms `--ease-out`, `pointer-events: none`), and remove the node on `transitionend` or after 250 ms, whichever comes first;
    - reduced motion → remove at once after the minimum.
 4. Focus: unchanged from today. The first page load keeps the browser's own start (`onRouteChange` is not called for it). If focus was on "Try again" when the hand-over happens (the user tabbed to it), move focus to `#app`'s first heading via the existing `focusNewPage(null)` before removal, so focus is not lost on a removed node.
 
@@ -230,11 +230,11 @@ Total: M (two S issues touching different files).
 ### Issue A: splash in `index.html`
 
 - [ ] R-BOOT-1 `app/index.html` has `<meta name="color-scheme" content="light dark">` and an inline `<style>` that sets `html` and `#boot` background to `#faf9f6` (light) and `#111a2b` (dark, via `prefers-color-scheme` and `[data-theme='dark']`, light override via `[data-theme='light']`), using the same selectors as `app/src/styles/tokens.css`.
-- [ ] R-BOOT-2 `app/index.html` contains `<div id="boot" aria-busy="true">` before `<div id="app">`, with the inline v9 mark (`aria-hidden="true" focusable="false"`, 72 × 72), `<p class="boot-line" role="status" aria-live="polite">Opening Bower…</p>`, an empty `<p class="boot-hint">` and `<a class="boot-retry" href="">Try again</a>`.
+- [ ] R-BOOT-2 `app/index.html` contains `<div id="boot" aria-busy="true">` before `<div id="app">`, with the inline v9 mark (`aria-hidden="true" focusable="false"`, 72 × 72), `<p class="boot-line" role="status" aria-live="polite">Opening Bower…</p>`, `<p class="boot-hint">This is taking longer than usual.</p>` and `<a class="boot-retry" href="">Try again</a>`.
 - [ ] R-BOOT-3 Layout per §6.1: fixed full screen, column centred, 16 px gap, 320 px max width, safe-area padding; identical at 375 and 1280.
 - [ ] R-BOOT-4 `.boot-line` is `opacity: 0` until 600 ms, then fades in over 200 ms with `cubic-bezier(0.16, 1, 0.3, 1)`; the bird breathes per §6.2 from 600 ms; both stop under `prefers-reduced-motion: reduce` (line visible, no breath).
-- [ ] R-BOOT-5 CSS for `#boot[data-state='slow' | 'offline' | 'error']` (breath off, `.boot-hint` and `.boot-retry` shown, line in text colour) and `#boot[data-state='leaving']` (opacity 0 over 200 ms, `pointer-events: none`; no transition under reduced motion).
-- [ ] R-BOOT-6 With no `data-state`, `.boot-retry` appears by CSS alone at 15 s (no-JS fallback).
+- [ ] R-BOOT-5 CSS for `#boot[data-state='slow' | 'offline' | 'error']` (breath off, `.boot-hint` and `.boot-retry` shown, line in text colour) and `#boot[data-leaving]`, a separate attribute so `data-state` keeps its value during the fade and nothing reflows (opacity 0 over 200 ms, `pointer-events: none`, breath off, the line keeps its opacity; no transition under reduced motion).
+- [ ] R-BOOT-6 `.boot-hint` holds BOOT-3 in the markup. With no `data-state`, `.boot-hint` and `.boot-retry` appear together by CSS alone at 8 s (fallback while JS has not run), with their space reserved from the start; JS replaces the hint text in the other states.
 - [ ] R-BOOT-7 "Try again" is ≥ 44 px high, link colour, 1 px border, 6 px radius, visible 2 px focus outline.
 - [ ] R-BOOT-8 `app/vite.config.ts` manifest `background_color` is `'#111a2b'` (decided: (a)).
 - [ ] R-BOOT-9 A unit test (`app/src/boot-html.test.ts`) reads `app/index.html` and `app/src/styles/tokens.css` and fails if the boot background and text literals differ from `--color-bg`, `--color-text`, `--color-text-muted`, `--color-link` in either theme, and checks the copy BOOT-1 and BOOT-8 is present.
@@ -244,7 +244,7 @@ Total: M (two S issues touching different files).
 
 - [ ] R-BOOT-10 New `app/src/boot-screen.ts` exports `bootState(state: 'slow' | 'offline' | 'error'): void`, `dismissBoot(): void`, `startBootTimers(): void`; it sets `#boot`'s `data-state` and replaces `.boot-line`/`.boot-hint` text with BOOT-2…BOOT-7 exactly; it is a no-op when `#boot` is absent (tests, the demo's later navigations).
 - [ ] R-BOOT-11 `startBootTimers()` is called from `app/src/main.tsx` before `render`; it sets `slow` at 8 s after navigation start unless dismissed or already in offline/error.
-- [ ] R-BOOT-12 `dismissBoot()` follows §6.3: immediate under 600 ms; otherwise not before 1100 ms; then `leaving` and removal on `transitionend` or 250 ms; immediate removal under reduced motion; all timers and the `online` listener cleared.
+- [ ] R-BOOT-12 `dismissBoot()` follows §6.3: immediate under 600 ms; otherwise not before 1100 ms; then `data-leaving` and removal on `transitionend` or 250 ms; immediate removal under reduced motion; all timers and the `online` listener cleared.
 - [ ] R-BOOT-13 `app/src/app.tsx`: the `<p class="app-loading">Loading…</p>` branch renders `null`, and `dismissBoot()` runs once in an effect after `status` first leaves `'loading'`. `.app-loading` is deleted from `app/src/styles/layout.css`.
 - [ ] R-BOOT-14 `app/src/session.tsx`: in the `getMe` failure branch with no cached `me`, the state stays `'loading'` and `bootState('offline')` is called when `navigator.onLine` is false, else `bootState('error')`; the error is still logged with `console.error`. In `offline`, a `window` `online` event reloads the page.
 - [ ] R-BOOT-15 If focus is on `.boot-retry` at dismissal, focus moves to the new page via `focusNewPage` before the node is removed.

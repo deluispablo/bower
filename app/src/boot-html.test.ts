@@ -100,8 +100,30 @@ describe('start-up screen markup (R-BOOT-2)', () => {
     expect(HTML).toContain(
       '<p class="boot-line" role="status" aria-live="polite">Opening Bower…</p>',
     );
-    expect(HTML).toContain('<p class="boot-hint"></p>');
+    expect(HTML).toContain(
+      '<p class="boot-hint">This is taking longer than usual.</p>',
+    );
     expect(HTML).toContain('<a class="boot-retry" href="">Try again</a>');
+  });
+
+  it('fades out on data-leaving, a separate attribute, so data-state keeps its value (R-BOOT-5)', () => {
+    expect(STYLE).not.toContain("data-state='leaving'");
+    const leaving = block(STYLE, '#boot[data-leaving] {');
+    expect(leaving).toContain('opacity: 0;');
+    expect(leaving).toContain('pointer-events: none;');
+    expect(block(STYLE, '#boot[data-leaving] .boot-bird {')).toContain(
+      'animation: none;',
+    );
+    // The line keeps its fade-in animation: no leaving rule touches it.
+    expect(STYLE).not.toMatch(/\[data-leaving\][^{]*\.boot-line/);
+  });
+
+  it('shows the hint and the retry link by CSS alone at 8 s with no state (R-BOOT-6)', () => {
+    for (const el of ['.boot-hint', '.boot-retry']) {
+      const rule = block(STYLE, `#boot:not([data-state]) ${el} {`);
+      expect(rule).toContain('visibility: hidden;');
+      expect(rule).toContain('animation: boot-show 0s linear 8s forwards;');
+    }
   });
 
   it('has no inline script: the CSP is script-src self', () => {

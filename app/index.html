@@ -102,11 +102,21 @@
         outline: 2px solid var(--boot-focus);
         outline-offset: 2px;
       }
-      /* No-JS fallback: if nothing has set a state by 15 s, offer a reload. */
+      /*
+        Fallback while JS has not run (the bundle still downloading, or a
+        failed chunk): with no state by 8 s, CSS alone shows the slow hint
+        and the reload link. Their space is reserved from the start, so
+        nothing moves when they appear.
+      */
+      #boot:not([data-state]) .boot-hint {
+        display: block;
+        visibility: hidden;
+        animation: boot-show 0s linear 8s forwards;
+      }
       #boot:not([data-state]) .boot-retry {
         display: inline-flex;
         visibility: hidden;
-        animation: boot-show 0s linear 15s forwards;
+        animation: boot-show 0s linear 8s forwards;
       }
       #boot:is(
           [data-state='slow'],
@@ -142,11 +152,11 @@
         .boot-retry {
         display: inline-flex;
       }
-      #boot[data-state='leaving'] {
+      #boot[data-leaving] {
         opacity: 0;
         pointer-events: none;
       }
-      #boot[data-state='leaving'] .boot-bird {
+      #boot[data-leaving] .boot-bird {
         animation: none;
       }
       @keyframes boot-in {
@@ -187,7 +197,7 @@
       <!-- prettier-ignore -->
       <svg class="boot-bird" viewBox="0 0 100 100" width="72" height="72" aria-hidden="true" focusable="false"><g transform="translate(1.031 -4.688)"><rect fill="#2f9c8d" x="6" y="71" width="24" height="5.5" rx="2.75" transform="rotate(-54 30 74)"/><rect fill="#2f9c8d" x="4" y="73" width="26" height="5.5" rx="2.75" transform="rotate(-36 30 76)"/><rect fill="#2f9c8d" x="6" y="75" width="24" height="5.5" rx="2.75" transform="rotate(-18 30 78)"/><path fill="none" stroke="#f0b64f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M40 84V91"/><rect fill="#f0b64f" x="34" y="89" width="13" height="4.5" rx="2.25"/><path fill="none" stroke="#f0b64f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M53 85V91"/><rect fill="#f0b64f" x="47" y="89" width="13" height="4.5" rx="2.25"/><circle fill="#5fcfbc" cx="46" cy="62" r="24"/><ellipse fill="#b9ece2" fill-opacity=".9" cx="52" cy="72" rx="13" ry="10"/><rect fill="#5fcfbc" x="52" y="34" width="16" height="38" rx="8"/><circle fill="#5fcfbc" cx="62" cy="39" r="21"/><circle fill="#1b2233" cx="69" cy="37" r="6.3"/><circle fill="none" stroke="#8e7cf3" stroke-width="1.4" cx="69" cy="37" r="5.6"/><circle fill="#ffffff" cx="71.4" cy="34.6" r="2.3"/><circle fill="#ffffff" cx="66.8" cy="39.6" r="1.1"/><circle fill="#5fcfbc" cx="69" cy="23.2" r="7.6"/><circle fill="#5fcfbc" cx="69" cy="51" r="7.6"/><ellipse fill="#ff9fb4" fill-opacity=".6" cx="78" cy="49" rx="3.4" ry="2.3"/><rect fill="#f0b64f" x="80" y="35" width="11" height="6" rx="3"/><rect fill="#d9952e" x="80" y="40" width="8.5" height="4.5" rx="2.25"/><path fill="#2f9c8d" d="M54 56C64 58 65 68 58 74C44 78 28 78 18 72C28 64 42 56 54 56Z"/></g></svg>
       <p class="boot-line" role="status" aria-live="polite">Opening Bower…</p>
-      <p class="boot-hint"></p>
+      <p class="boot-hint">This is taking longer than usual.</p>
       <a class="boot-retry" href="">Try again</a>
     </div>
     <div id="app"></div>
