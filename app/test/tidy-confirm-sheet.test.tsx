@@ -303,6 +303,35 @@ describe('TidyConfirmSheet, kind="tidy" (default, unchanged)', () => {
   });
 });
 
+describe('TidyConfirmSheet, counts agree (#914, R-AD-8, AD-Confirm)', () => {
+  it('shows the same count as the sticky button and the running sheet', async () => {
+    const { thingsText } = await import('../src/components/pile-sheet.js');
+    const { sheetTitle } = await import('../src/components/working-sheet.js');
+    const total = 6;
+    const piles: PileConfirm = {
+      piles: [
+        { id: 'a', label: 'From your pile: “Rental applications”', count: 2 },
+        { id: 'b', label: 'From your pile: “Two job offers”', count: 4 },
+      ],
+      elsewhere: 0,
+    };
+    mount(total, vi.fn(), vi.fn(), undefined, false, undefined, { piles });
+    const text = document.body.textContent;
+    // The sticky "Tidy up 6 things", the confirm and "Tidying up 6 things".
+    expect(`Tidy up ${thingsText(total)}`).toBe('Tidy up 6 things');
+    expect(text).toContain(`${thingsText(total)} in 2 piles`);
+    expect(sheetTitle('running', total)).toBe('Tidying up 6 things');
+    const rows = piles.piles.reduce((sum, pile) => sum + pile.count, 0);
+    expect(rows).toBe(total);
+    // Bird 56 looking (AD-Confirm), and the two buttons.
+    expect(
+      document.body.querySelector('.tidy-confirm svg')?.getAttribute('width'),
+    ).toBe('56');
+    expect(text).toContain('Yes, tidy up');
+    expect(text).toContain('Add more first');
+  });
+});
+
 describe('TidyConfirmSheet, piles (#771, R-PILE-5)', () => {
   const piles: PileConfirm = {
     piles: [
