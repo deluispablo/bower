@@ -8,12 +8,11 @@
   overflow-wrap: break-word;
 }
 
-/* Reading measure (issue #307, 3.5): 17 px body text at 1.6 line height,
-   wider than the app's own 16 px/1.5 default, matching the Phone-Note and
-   Desktop-Note boards' `.prose`. */
+/* Reading measure (issue #307, 3.5): 16 px body text at 1.6 line height;
+   no 17 px anywhere (spec 2.2, NO-Main boards, #950 F-12). */
 .markdown p,
 .markdown li {
-  font-size: 1.0625rem; /* 17px */
+  font-size: var(--text-base);
   line-height: 1.6;
 }
 

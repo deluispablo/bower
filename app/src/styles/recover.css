@@ -1,11 +1,11 @@
 /*
  * The recovery screens (routes/recover.tsx): the auth column (auth.css) with
- * a 26/32 title, a state notice, the foot line and quiet Help · Sign out.
+ * a 28/32 title (spec 2.2: no 26 px, #950 F-12), a state notice, the foot line and quiet Help · Sign out.
  */
 
 .recover-title {
   margin: 0;
-  font-size: 26px;
+  font-size: var(--text-28);
   line-height: 32px;
   text-align: center;
   outline: none;
