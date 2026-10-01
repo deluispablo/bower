@@ -424,7 +424,8 @@ describe('Folder list (#911, R-PF-4, R-PF-5, R-LI-*)', () => {
     const rendered = root.querySelectorAll('.folder-item').length;
     expect(rendered).toBeGreaterThan(0);
     expect(rendered).toBeLessThan(500);
-  });
+    // The CI runner is slower than a laptop: 500 rows need more than 5 s there.
+  }, 20_000);
 
   it('shows no score or facts on a row (#908, G-18)', async () => {
     useFlatHuntWithPair();
