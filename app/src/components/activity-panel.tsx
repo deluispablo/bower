@@ -96,19 +96,20 @@ function rootOfPath(path: string): ParaKind | null {
 /** What the row's icon and kind word read of it: the listing's entry when
  * the folder is loaded, else its name alone. A note a tidy-up filed is
  * Bower's (it wrote it from what was in the inbox): it shows the bird. */
-function rowItem(
-  row: ActivityRow & { path: string },
-  files: readonly DriveFile[],
-): ListRowItem {
-  const name = row.path.slice(row.path.lastIndexOf('/') + 1);
-  const listed = files.find((file) => file.path === row.path);
+function rowItem(row: ActivityRow, files: readonly DriveFile[]): ListRowItem {
+  const path = row.path;
+  const name =
+    path === undefined ? row.title : path.slice(path.lastIndexOf('/') + 1);
+  const listed =
+    path === undefined
+      ? undefined
+      : files.find((file) => file.path === path);
   return {
     id: row.key,
-    title: row.renamed ?? displayName(name),
-    name,
+    title: row.renamed ?? (path === undefined ? row.title : displayName(name)),
+    name: row.tone === 'note' && !/\.md$/i.test(name) ? `${name}.md` : name,
     mimeType: listed?.mimeType ?? '',
-    path: row.path,
-    root: rootOfPath(row.path),
+    ...(path !== undefined && { path, root: rootOfPath(path) }),
     bowerWritten: row.tone === 'note',
     ...(listed !== undefined && {
       href: `/${/\.md$/i.test(name) ? 'note' : 'file'}/${listed.id}`,
@@ -121,25 +122,41 @@ function FiledRow({
   row,
   files,
 }: {
-  row: ActivityRow & { path: string };
+  row: ActivityRow;
   files: readonly DriveFile[];
 }): JSX.Element {
   const item = rowItem(row, files);
-  const parts = row.path.split('/');
+  const parts = row.path?.split('/') ?? [];
   const parent = parts.length > 1 ? (parts[parts.length - 2] ?? '') : '';
   return (
     <li class="activity-filed">
       <ListRow
         item={item}
         meta={kindLabel(item)}
-        where={{ name: displayName(parent), root: item.root ?? null }}
+        {...(parent !== '' && {
+          where: { name: displayName(parent), root: item.root ?? null },
+        })}
       />
     </li>
   );
 }
 
-function hasPath(row: ActivityRow): row is ActivityRow & { path: string } {
-  return row.path !== undefined && row.setAside === undefined;
+/** A file the run took from the inbox (not a request, a rule or a thing
+ * set aside): drawn as a ListRow. */
+const FILE_TONES: ReadonlySet<ActivityTone> = new Set([
+  'note',
+  'pdf',
+  'image',
+  'file',
+]);
+
+function isFileRow(row: ActivityRow): boolean {
+  return (
+    FILE_TONES.has(row.tone) &&
+    row.setAside === undefined &&
+    row.answerId === undefined &&
+    row.outcome === undefined
+  );
 }
 
 function Card({
@@ -172,7 +189,7 @@ function Card({
       {shown.length > 0 && (
         <ul class="activity-rows">
           {shown.map((row) => {
-            if (hasPath(row)) {
+            if (isFileRow(row)) {
               return <FiledRow key={row.key} row={row} files={files} />;
             }
             const Icon = TONE_ICONS[row.tone];
