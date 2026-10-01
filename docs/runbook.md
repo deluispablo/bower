@@ -548,6 +548,17 @@ A folder opens at `/folder/<path>` (issue #214) — the path relative to the Bow
 - **Compare.** When the folder's notes name a kind (flats, jobs, and so on) a **Compare N <kind>** tab appears beside the list, and a button on a desktop. Its code loads only then.
 - **Desktop, three panes.** From 1200 px the folder screen shows the tree, the folder and a preview side by side. Keys, listed on the screen's bottom line: arrows move the selection, Space quick look, Enter open, Backspace up a folder, `/` or Ctrl K (Cmd K on a Mac) search. Below 1200 px it is one column; below 900 px the tree is the Folders tab.
 
+### Folder views (v6, issue #911)
+
+This replaces the v4 list above where they differ.
+
+- **Header.** The folder's name once, with ⋯ beside it (pin, ask, rename, move live there; no Pin, Ask or Drive buttons on the page, no (i)). Under it the meta line, "Projects · 7 things · updated today", whose count is always Originals plus By Bower; a folder of folders reads "Areas · 1 folder" and adds its purpose line. A root's back link and breadcrumb read "Your folders" and open the tree at it.
+- **Tabs.** "List" and "Compare <n> <things>", only when the folder has comparable notes. Compare's panel is an empty slot until #916.
+- **In this folder.** All / Originals <n> / By Bower <n> (a zero stays), and a Filter & sort icon on the same row. Filter & sort holds Sort by, Show (kinds with counts) and Layout (List or Grid); nothing changes until **Show <n> things**. A dot on the icon, and its name "Filter and sort (grid layout on)", say when the choice is not the folder's default. There are no List/Grid buttons, kind chips or "Showing only" box any more, and no "Try asking" card.
+- **Rows.** Subfolders first, then day groups "Today", "Yesterday", "29 Sep"; each row shows only its icon, title, kind and date. On desktop one click selects, a double click or Enter opens.
+- **Folder of folders.** A root with subfolders shows "Folders" as cards (count, last change, "1 new", the first three things), then "Recently changed in <folder>". On desktop it opens with nothing selected.
+- **Preview column.** From 1200 px: "Select something to see it here." until something is selected; then its title, Open, Open in Drive, the meta line and Bower's note box, which folds as on the note page (a PDF shows its first page, a spreadsheet a table, a folder "Inside" and its rows).
+
 ## Pins
 
 A note is pinned when its frontmatter has `pinned: <ISO 8601 time>` — the time it was pinned, not a boolean. A folder is pinned the same way, through its own folder note (`_<Folder>.md`, created with frontmatter only if the folder had none yet, and already hidden from the tree above); unpinning removes the key and deletes that note again if pinning was the only reason it existed. Order everywhere is pin time, newest first; there is no manual reorder.
