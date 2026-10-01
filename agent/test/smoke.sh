@@ -1419,7 +1419,7 @@ grep -Fq '   Filed: <n> files' <<<"$INGEST_PROMPT" ||
 RULEBOOK=$(cat "$HERE/../../vault-template/CLAUDE.md")
 grep -Fq 'Bower files, by default' <<<"$RULEBOOK" ||
   die 'the rulebook Ingest does not file by default (#368)'
-grep -Fq '· <type> · filed by Bower' <<<"$RULEBOOK" ||
+grep -Fq '· <Type> · <#tag #tag> · <description> · <origin>' <<<"$RULEBOOK" ||
   die 'the rulebook does not index filed originals with their type (#368)'
 grep -Fq '`<where or who>, <what it is>.<ext>`' <<<"$RULEBOOK" ||
   die 'the rulebook has no naming rule for originals whose name says nothing (#369)'

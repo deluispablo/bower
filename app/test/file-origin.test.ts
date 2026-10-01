@@ -67,6 +67,39 @@ describe('parseCatalogueOrigins', () => {
     );
     expect(origins.get('a.pdf')).toBe('filed');
   });
+
+  it('reads rules v24 rows, with tags and a description, as it reads v23 rows', () => {
+    const v23 = parseCatalogueOrigins(
+      [
+        '- [[1-Projects/Flat hunt/Arlington Road, listing.pdf]] · PDF · filed by Bower',
+        '- [[1-Projects/Flat hunt/Arlington Road, 2 bed]] · Note · filed by Bower',
+      ].join('\n'),
+    );
+    const v24 = parseCatalogueOrigins(
+      [
+        '## Projects',
+        '- [[1-Projects/Flat hunt/Arlington Road, listing.pdf]] · PDF · #rental-listing #flat-hunt · Listing for a two-bed flat on Arlington Road · filed by Bower',
+        '- [[1-Projects/Flat hunt/Arlington Road, 2 bed]] · Note · #rental-listing · Two-bed flat, available in November · filed by Bower · [[1-Projects/Flat hunt/Arlington Road, listing.pdf]]',
+      ].join('\n'),
+    );
+    expect([...v24]).toEqual([...v23]);
+    expect([...v24]).toEqual([
+      ['1-projects/flat hunt/arlington road, listing.pdf', 'filed'],
+      ['1-projects/flat hunt/arlington road, 2 bed', 'filed'],
+    ]);
+  });
+
+  it('finds nothing in the Tags section', () => {
+    const origins = parseCatalogueOrigins(
+      [
+        '## Tags',
+        '- #rental-listing · A listing of a flat or house to rent · 3',
+        '- #filed · filed by Bower · 1',
+        '',
+      ].join('\n'),
+    );
+    expect(origins.size).toBe(0);
+  });
 });
 
 describe('originOf', () => {

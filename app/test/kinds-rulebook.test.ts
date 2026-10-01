@@ -27,12 +27,25 @@ interface RulebookKind {
 
 const RULEBOOK = rulebookRaw.replace(/\r\n/g, '\n');
 
-/** The `### Kinds` section of the rulebook, up to the next `###` heading. */
+/**
+ * The `## Kinds` section of the rulebook, up to the next `##` heading
+ * outside a code fence (the section's examples hold `## Where to look`).
+ */
 function kindsSection(text: string): string {
-  const start = text.indexOf('\n### Kinds');
-  if (start === -1) throw new Error('the rulebook has no ### Kinds section');
-  const end = text.indexOf('\n### ', start + 1);
-  return end === -1 ? text.slice(start) : text.slice(start, end);
+  const lines = text.split('\n');
+  const start = lines.findIndex((line) => line.startsWith('## Kinds'));
+  if (start === -1) throw new Error('the rulebook has no ## Kinds section');
+  let fenced = false;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+    if (line.startsWith('```')) fenced = !fenced;
+    else if (!fenced && line.startsWith('## ')) {
+      end = i;
+      break;
+    }
+  }
+  return lines.slice(start, end).join('\n');
 }
 
 /** The backticked items of a comma-separated list; `none` is empty. */
