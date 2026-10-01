@@ -1684,17 +1684,19 @@ A senior data engineering role in Melbourne, hybrid.
     tags: 'summary, career',
     callout: [
       'Eight years as a data engineer (SQL, Python, dbt, Google Cloud), most recently at Northwind Data in London. (from the file)',
-      'Work rights need a clear callout: a Working Holiday visa now, a skilled visa applied for. (from your notes: [[Visa & Immigration]])',
-      'The LinkedIn link on the CV matches your [[LinkedIn profile]] note. — Check',
+      'Work rights need a clear callout: a Working Holiday visa now, a skilled visa applied for. (from the file) — Check',
+      'The LinkedIn link on the CV matches your [[LinkedIn profile]] note. (from your notes: [[LinkedIn profile]])',
     ],
     body: `## Why
 A summary of [[Resume Australia]], the CV tailored for [[Job Search Australia]], with the facts an Australian recruiter would look for first and what is worth checking before it goes out.
 
 ## Key facts
-- Target role: Senior Data Engineer (Google Cloud)
-- Experience: 8 years, retail and financial data
-- Current role: Data Engineer, Northwind Data, London (2026)
-- Work rights: Working Holiday visa; skilled visa applied for
+| Fact | Detail |
+|---|---|
+| Target role | Senior Data Engineer (Google Cloud) |
+| Experience | 8 years, retail and financial data |
+| Current role | Data Engineer, Northwind Data, London (2026) |
+| Work rights | Working Holiday visa; skilled visa applied for |
 
 ## What this means for you
 Lead with the Google Cloud work; say the visa status in the first lines.
