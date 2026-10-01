@@ -13,8 +13,8 @@ All state the Worker keeps lives in Cloudflare KV (binding `BOWER_KV`), accessed
 | `lintrun:<id>` | `Run` (the latest scheduled lint) | none | `putRun(…, 'lint')` | `getRun(…, 'lint')` |
 | `runs:<id>` | run history index: up to 20 run ids (`requestedAt` in ms), newest first | none | `recordRun` (from `putRun`, for a `done`/`failed` ingest) | `listRuns` (`GET /runs`) |
 | `runrec:<id>:<runId>` | `Run` (one finished ingest) | none; deleted when it drops off the index | `recordRun` | `listRuns` |
-| `runticket:<id>` | `RunTicket` (`{ hash, expiresAt }`: the SHA-256 of the current ingest's ticket, never the ticket) | 55 min (`RUN_TICKET_TTL_MS`) | `issueRunTicket` (`POST /process`) | `checkRunTicket` (runner routes); deleted by a `done`/`failed` report |
-| `lintticket:<id>` | `RunTicket`, for the current lint | 55 min | `issueRunTicket` (the weekly cron, or `POST /runner/lint/dispatch`) | `checkRunTicket`; deleted by a `done`/`failed` report |
+| `runticket:<id>` | `RunTicket` (`{ hash, expiresAt }`: the SHA-256 of the current ingest's ticket, never the ticket) | 47 min (`RUN_TICKET_TTL_MS`) | `issueRunTicket` (`POST /process`) | `checkRunTicket` (runner routes); deleted by a `done`/`failed` report |
+| `lintticket:<id>` | `RunTicket`, for the current lint | 47 min | `issueRunTicket` (the weekly cron, or `POST /runner/lint/dispatch`) | `checkRunTicket`; deleted by a `done`/`failed` report |
 | `quota:<id>:<yyyy-mm-dd>` | request count (string) | 48 h | `incrQuota` | `incrQuota`, `getQuota` |
 | `push:<id>:<subId>` | `PushSubscription` | none | `putPushSub` | `listPushSubs` (deleted by `deletePushSub`, `DELETE /push/subscribe`, and `sendPush` on a 404/410) |
 | `drivetoken:<id>` | `DriveToken` (cached Drive access token) | token lifetime − 60 s, at least 60 s (set by `drive.ts`) | `putDriveToken` | `getDriveToken` |
@@ -203,7 +203,7 @@ A `queued` or `running` run with no news for long enough is stale: the runner ne
 
 | State | Measured from | Stale after |
 | --- | --- | --- |
-| `queued` | `requestedAt` | 25 minutes |
+| `queued` | `requestedAt` | 17 minutes (GitHub's 15-minute limit for a job no machine picks up, plus 2) |
 | `running` | `startedAt` (`requestedAt` if somehow absent) | 30 minutes |
 | `done`, `failed` | — | never |
 
@@ -241,7 +241,7 @@ Response: `{ "runs": Run[] }`, status 200 (`[]` when there is none).
 
 Called by the GitHub Actions runner of the instance repo, never by the app (`api/src/runner.ts`, `api/src/run-ticket.ts`). Two credentials, each sent as `Authorization: Bearer <credential>`; anything else is a 401 `unauthorized`. `:id` is the user id, the `vault_id` of the dispatch. Nothing here logs a key, a ticket, a token, the user's API key, file names or summaries.
 
-- **A run ticket** for `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status`. Each run gets its own: `POST /process` mints one for an ingest, the weekly cron (or `POST /runner/lint/dispatch`) one per vault for a lint, and sends it in the `repository_dispatch`. The Worker keeps only its SHA-256 (`runticket:<id>`, `lintticket:<id>`) and compares hashes in constant time. A ticket works only for its own `:id` and its own kind of run (an ingest's ticket cannot report a lint, nor the other way round), and stops working when the run reports `done` or `failed`, when a newer run of the same kind on the same vault gets a ticket, or 55 min after it was minted (`RUN_TICKET_TTL_MS`: the 25 min queued window plus the 30 min running window).
+- **A run ticket** for `GET /runner/vaults/:id` and `POST /runner/vaults/:id/status`. Each run gets its own: `POST /process` mints one for an ingest, the weekly cron (or `POST /runner/lint/dispatch`) one per vault for a lint, and sends it in the `repository_dispatch`. The Worker keeps only its SHA-256 (`runticket:<id>`, `lintticket:<id>`) and compares hashes in constant time. A ticket works only for its own `:id` and its own kind of run (an ingest's ticket cannot report a lint, nor the other way round), and stops working when the run reports `done` or `failed`, when a newer run of the same kind on the same vault gets a ticket, or 47 min after it was minted (`RUN_TICKET_TTL_MS`: the 17 min queued window plus the 30 min running window).
 - **The admin key `ADMIN_KEY`** (the same one as `/admin/*`), compared in constant time, for `POST /runner/lint/dispatch` only. It is a 401 on the ticketed routes. The old `BOWER_API_KEY` no longer exists (#292): the weekly lint starts from the Worker's cron, not from a job in the instance repo.
 
 ### `POST /runner/lint/dispatch`
