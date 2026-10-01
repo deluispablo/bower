@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import '../styles/push-prompt.css';
+import { isDemo } from '../api.js';
 import { Bird } from './bird.js';
 import {
   currentPermission,
@@ -32,6 +33,9 @@ export function PushPrompt() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // The demo has no notifications: neither the ask nor the iPhone's
+    // "Add Bower to your Home Screen" hint (#920 F-3).
+    if (isDemo()) return;
     if (phase !== 'done' || hasBeenPrompted()) return;
     const support = currentPushSupport();
     if (
