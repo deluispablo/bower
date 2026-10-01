@@ -237,3 +237,29 @@ export function introReturnPath(from: string | undefined): string | null {
   if (from === 'run-your-own') return '/login';
   return null;
 }
+
+/**
+ * Page 5's last button. Replayed from inside the app while signed in
+ * (`from=settings`, which Settings and Learn use when signed in): "Back to
+ * Bower", which goes Home. Opened from the sign-in or the demo's Run your
+ * own: Done, back there. A first visit: the sign-in, or Try the demo in a
+ * demo build.
+ */
+export type IntroLastAction = 'back-to-bower' | 'done' | 'try-demo' | 'sign-in';
+
+export function introLastAction(
+  from: string | undefined,
+  demo: boolean,
+): IntroLastAction {
+  if (from === 'settings') return 'back-to-bower';
+  if (introReturnPath(from) !== null) return 'done';
+  return demo ? 'try-demo' : 'sign-in';
+}
+
+/** The words on each last button. */
+export const INTRO_LAST_LABEL: Readonly<Record<IntroLastAction, string>> = {
+  'back-to-bower': 'Back to Bower',
+  done: 'Done',
+  'try-demo': 'Try the demo',
+  'sign-in': 'Sign in with Google',
+};

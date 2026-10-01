@@ -4,7 +4,9 @@
  * sign-in, to a signed-out visitor (`session.tsx`'s `decideRedirect`, gated
  * by `introSeen()` in `intro.ts`). Reachable again any time from Settings
  * and from the sign-in's "What is Bower?" link (`/welcome?from=settings` or
- * `from=login`: Close and Done instead of Skip and Sign in with Google).
+ * `from=login`): Skip and Close go back there, and page 5's last button is
+ * "Back to Bower" (home) when replayed signed in, or Done
+ * (`introLastAction`). Skip reads Close on page 5 (boards IN-P1..P5).
  *
  * The page is in the URL (`?page=3`, clamped to 1 to 5), so browser back goes
  * to the previous page and a reload resumes. Next, Back and a swipe push a
@@ -34,15 +36,11 @@ import { useDesktop } from '../components/dictate-button.js';
 import { BowerNoteBox } from '../components/bower-note-box.js';
 import { Composer } from '../components/composer.js';
 import { FolderMark } from '../components/folder-mark.js';
-import {
-  IconClose,
-  IconDocument,
-  IconFolder,
-  IconSparkle,
-} from '../components/icons.js';
+import { IconDocument, IconFolder, IconSparkle } from '../components/icons.js';
 import {
   INTRO_FOLDER,
   INTRO_JOIN,
+  INTRO_LAST_LABEL,
   INTRO_LEARN_LABEL,
   INTRO_NOTE,
   INTRO_PAGES,
@@ -50,11 +48,13 @@ import {
   INTRO_PILE,
   INTRO_REQUEST,
   introBody,
+  introLastAction,
   introNoteHtml,
   introPageFromQuery,
   introPageLabel,
   introReturnPath,
   markIntroSeen,
+  type IntroLastAction,
   type IntroPage,
 } from '../intro.js';
 import '../styles/markdown.css';
@@ -251,53 +251,50 @@ const ART: readonly (() => JSX.Element)[] = [
   Page5Art,
 ];
 
-interface LastActionsProps {
-  fromApp: boolean;
-  onDone: () => void;
+interface LastButtonProps {
+  action: IntroLastAction;
+  onLeave: () => void;
 }
 
-/** Page 5's buttons: sign in (or Done from inside the app) and Learn Bower. */
-function LastActions({ fromApp, onDone }: LastActionsProps): JSX.Element {
+/** Page 5's button where Next was (boards IN-P5): see `introLastAction`. */
+function LastButton({ action, onLeave }: LastButtonProps): JSX.Element {
   const { route } = useLocation();
-  return (
-    <div class="intro-actions">
-      {fromApp ? (
-        <button type="button" class="button intro-cta" onClick={onDone}>
-          Done
-        </button>
-      ) : isDemo() ? (
-        <button
-          type="button"
-          class="button intro-cta"
-          onClick={() => {
-            markIntroSeen(localStorage);
-            route('/');
-          }}
-        >
-          Try the demo
-        </button>
-      ) : (
-        <a
-          href={loginUrl()}
-          class="button intro-cta"
-          onClick={() => markIntroSeen(localStorage)}
-        >
-          Sign in with Google
-        </a>
-      )}
-      <a href="/learn" class="intro-learn">
-        {INTRO_LEARN_LABEL}
+  const label = INTRO_LAST_LABEL[action];
+  if (action === 'sign-in') {
+    return (
+      <a
+        href={loginUrl()}
+        class="button intro-next intro-cta"
+        onClick={() => markIntroSeen(localStorage)}
+      >
+        {label}
       </a>
-    </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      class="button intro-next intro-cta"
+      onClick={() => {
+        if (action === 'done') {
+          onLeave();
+          return;
+        }
+        markIntroSeen(localStorage);
+        route('/');
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
 export function Intro(): JSX.Element {
   const { query, route } = useLocation();
   // Opened from inside the app (Settings, the sign-in, the demo's Run your
-  // own): Close and Done, back to where it came from.
+  // own): Skip and Close go back to where it came from.
   const returnTo = introReturnPath(query.from);
-  const fromApp = returnTo !== null;
+  const lastAction = introLastAction(query.from, isDemo());
   const desktop = useDesktop();
   const trackRef = useRef<HTMLDivElement>(null);
   const headings = useRef<(HTMLHeadingElement | null)[]>([]);
@@ -400,20 +397,9 @@ export function Intro(): JSX.Element {
             )}
             Bower
           </span>
-          {fromApp ? (
-            <button
-              type="button"
-              class="intro-icon-button"
-              aria-label="Close"
-              onClick={leave}
-            >
-              <IconClose />
-            </button>
-          ) : (
-            <button type="button" class="intro-skip" onClick={leave}>
-              {page === LAST ? 'Close' : 'Skip'}
-            </button>
-          )}
+          <button type="button" class="intro-skip" onClick={leave}>
+            {page === LAST ? 'Close' : 'Skip'}
+          </button>
         </header>
         <DemoBanner />
 
@@ -440,7 +426,9 @@ export function Intro(): JSX.Element {
                     </h1>
                     <p class="intro-body">{introBody(item, desktop)}</p>
                     {index === LAST && (
-                      <LastActions fromApp={fromApp} onDone={leave} />
+                      <a href="/learn" class="intro-learn">
+                        {INTRO_LEARN_LABEL}
+                      </a>
                     )}
                   </div>
                   {Illustration !== undefined && <Illustration />}
@@ -477,7 +465,7 @@ export function Intro(): JSX.Element {
             ) : (
               <span />
             )}
-            {page < LAST && (
+            {page < LAST ? (
               <button
                 type="button"
                 class="button intro-next"
@@ -485,6 +473,8 @@ export function Intro(): JSX.Element {
               >
                 Next
               </button>
+            ) : (
+              <LastButton action={lastAction} onLeave={leave} />
             )}
           </div>
         </footer>

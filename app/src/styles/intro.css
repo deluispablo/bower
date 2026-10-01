@@ -42,8 +42,7 @@
   color: var(--color-heading);
 }
 
-.intro-skip,
-.intro-icon-button {
+.intro-skip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -55,11 +54,8 @@
   border-radius: var(--radius-md);
   color: var(--color-link);
   font: inherit;
+  text-decoration: underline;
   cursor: pointer;
-}
-
-.intro-icon-button {
-  color: var(--color-text);
 }
 
 .intro-viewport {
@@ -118,22 +114,17 @@
   line-height: var(--leading-body);
 }
 
-.intro-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-}
-
+/* The page-5 button where Next was: wide enough for "Sign in with Google". */
 .intro-cta {
-  min-height: 50px;
-  border: none;
-  font-size: 1.0625rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-4);
+  text-decoration: none;
 }
 
 .intro-learn {
-  align-self: center;
+  margin-top: var(--space-2);
   min-height: 44px;
   display: inline-flex;
   align-items: center;
