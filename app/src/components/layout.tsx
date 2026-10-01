@@ -471,7 +471,11 @@ export function Layout({ children }: LayoutProps): JSX.Element {
               <aside
                 class="shell-aside"
                 aria-label={
-                  path.startsWith('/folder/') ? 'Preview' : 'About this note'
+                  path.startsWith('/folder/')
+                    ? 'Preview'
+                    : path.startsWith('/file/')
+                      ? 'About this file'
+                      : 'About this note'
                 }
               >
                 {aside}
