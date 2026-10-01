@@ -495,14 +495,11 @@ button.page-bare-back {
   margin: 0 12px 8px;
 }
 
-/* With a dock, the page reserves the larger of the dock's room and the run
-   chip's (`--run-chip-space`), never their sum (#920). */
+/* The dock sits in the page's flow (the run chip renders inside it), so
+   it takes its own room: the content keeps only its normal end padding,
+   with no dock or run chip room on top (#920). */
 .shell-with-dock .content {
   margin-bottom: 0;
-  padding-bottom: max(
-    calc(var(--space-16) + var(--space-6) + var(--dock-height)),
-    var(--run-chip-space, 0px)
-  );
 }
 
 /* The phone run chip keeps its room at the end of the page while it shows
