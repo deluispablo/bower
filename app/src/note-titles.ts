@@ -37,6 +37,13 @@ export function hasSharedTitle(
   return sharedTitles.has(titleCacheKey(file));
 }
 
+/** `file`'s title from the shared entry, `undefined` until resolved. */
+export function sharedTitleOf(
+  file: Pick<DriveFile, 'id' | 'modifiedTime'>,
+): string | undefined {
+  return sharedTitles.get(titleCacheKey(file));
+}
+
 /**
  * The one title of any item: a folder's display name, a note's resolved
  * title from the shared entry (its file-name fallback until resolved), a

@@ -69,6 +69,7 @@ import { isFolderPage } from '../folder-view.js';
 import { ITEM_KIND_WORDS } from '../kinds.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
+import { sharedTitleOf } from '../note-titles.js';
 import { useOnline } from '../online.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
@@ -665,7 +666,7 @@ function rowFromFile(
       kind === 'folder'
         ? displayName(file.name)
         : kind === 'note'
-          ? searchTitle(noteTitle(file))
+          ? searchTitle(sharedTitleOf(file) ?? noteTitle(file))
           : withoutExtension(file.name),
     highlights: [],
     para,
@@ -1411,7 +1412,9 @@ function SwitcherPanel({
       return null;
     }
     const file = index.byId.get(id);
-    return file === undefined ? null : searchTitle(noteTitle(file));
+    return file === undefined
+      ? null
+      : searchTitle(sharedTitleOf(file) ?? noteTitle(file));
   }, [location, index]);
 
   // The highlighted option, on the field (the listbox pattern).

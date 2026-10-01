@@ -23,7 +23,7 @@ import {
 
 import { ApiError } from './api.js';
 import {
-  invalidateIndex as invalidateIndexCache,
+  invalidateOnRunComplete,
   loadIndex,
   loadNote,
   saveIndex,
@@ -1632,5 +1632,7 @@ export function useVault(): Vault {
  * `refresh()` from `useVault()` to update the mounted provider right away.
  */
 export async function invalidateAfterRun(): Promise<void> {
-  await invalidateIndexCache();
+  // The shared titles go too (R-API-7, #922): a run may rename or rewrite
+  // notes, so every view re-resolves them together.
+  await invalidateOnRunComplete();
 }

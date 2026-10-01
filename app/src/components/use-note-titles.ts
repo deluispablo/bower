@@ -7,8 +7,8 @@
  * cache read answers, entirely from IndexedDB (`cache.ts#loadNote`): no
  * network call this hook could ever cause.
  *
- * Resolved titles are kept in a module-level memo keyed by
- * `titleCacheKey` (id + `modifiedTime`), so Home's Recent and Pinned
+ * Resolved titles are kept in the tab's one shared entry
+ * (`note-titles.ts`, keyed by `titleCacheKey`: id + `modifiedTime`), so Home's Recent and Pinned
  * sections, the sidebar, the tree and a folder screen showing the same
  * note each read its cached text at most once, and an edited note (its
  * `modifiedTime` changed) is resolved again rather than shown stale.
@@ -19,13 +19,14 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { loadNote } from '../cache.js';
 import type { DriveFile } from '../drive.js';
 import { noteTitle } from '../note-title.js';
-import { resolveNoteTitles, titleCacheKey } from '../note-titles.js';
+import {
+  hasSharedTitle,
+  onTitlesForgotten,
+  rememberTitles,
+  resolveNoteTitles,
+  sharedTitleOf,
+} from '../note-titles.js';
 
-/** Shared across every component instance and the lifetime of the tab —
- * same trade-off as `cache.ts`'s own IndexedDB store: unbounded, but
- * bounded in practice by how many distinct (id, modifiedTime) pairs a
- * session ever shows. */
-const memo = new Map<string, string>();
 
 /**
  * `titles.get(file.id)` for each of `files`: `noteTitle(file)` (the file
@@ -36,25 +37,29 @@ const memo = new Map<string, string>();
 export function useNoteTitles(
   files: readonly DriveFile[],
 ): ReadonlyMap<string, string> {
-  const [, forceUpdate] = useState(0);
+  const [forgotten, forceUpdate] = useState(0);
+
+  // A run completed and the shared titles were forgotten (#922): every
+  // view falls back to the file name together, then resolves again.
+  useEffect(() => onTitlesForgotten(() => forceUpdate((n) => n + 1)), []);
 
   useEffect(() => {
-    const pending = files.filter((file) => !memo.has(titleCacheKey(file)));
+    const pending = files.filter((file) => !hasSharedTitle(file));
     if (pending.length === 0) return;
     let cancelled = false;
     void resolveNoteTitles(pending, loadNote).then((resolved) => {
       if (cancelled) return;
-      for (const [key, title] of resolved) memo.set(key, title);
+      rememberTitles(resolved);
       forceUpdate((n) => n + 1);
     });
     return () => {
       cancelled = true;
     };
-  }, [files]);
+  }, [files, forgotten]);
 
   const titles = new Map<string, string>();
   for (const file of files) {
-    titles.set(file.id, memo.get(titleCacheKey(file)) ?? noteTitle(file));
+    titles.set(file.id, sharedTitleOf(file) ?? noteTitle(file));
   }
   return titles;
 }

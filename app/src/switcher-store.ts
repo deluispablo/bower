@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 import { loadNote } from './cache.js';
+import { onTitlesForgotten } from './note-titles.js';
 import {
   createSearchIndex,
   persistSearchIndex,
@@ -69,6 +70,10 @@ const noteTexts = new Map<string, string>();
 let restoreStarted = false;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
+// A run completed (R-API-7, #922): the text read so far may be of notes the
+// run rewrote, so it is dropped with the shared titles and read again.
+onTitlesForgotten(() => noteTexts.clear());
+
 const PERSIST_DELAY_MS = 1500;
 
 function schedulePersist(): void {
@@ -119,7 +124,12 @@ export async function feedCachedNoteText(vault: VaultIndex): Promise<boolean> {
   const read = await Promise.all(
     missing.map(async (note) => {
       const cached = await loadNote(note.id).catch(() => undefined);
-      return cached === undefined ? null : ([note.id, cached.text] as const);
+      // Only text of the note's current version (#922): an older copy would
+      // title the hit differently from every other list (R-API-7).
+      return cached === undefined ||
+        cached.modifiedTime !== (note.modifiedTime ?? '')
+        ? null
+        : ([note.id, cached.text] as const);
     }),
   );
   let learned = false;
