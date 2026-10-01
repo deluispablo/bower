@@ -1685,6 +1685,9 @@ const V6_WORLD: readonly FixtureFile[] = [
     `${HOUSING}/Housing Search Australia.md`,
     yesterday('1140'),
     [
+      // Bower wrote the hub: the tree hides it under its folder, as
+      // PF-Filter-1280 and PF-Move draw it (#950).
+      'by: bower',
       'tags: [project, hub, housing]',
       `created: ${YESTERDAY}`,
       `updated: ${YESTERDAY}`,
@@ -1772,7 +1775,13 @@ Lead with the Google Cloud work; say the visa status in the first lines.
   noteAt(
     `${JOBS}/LinkedIn profile.md`,
     yesterday('1223'),
-    ['tags: [career]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
+    // Bower's note: the tree draws the bird, as NO-Main does (#950).
+    [
+      'by: bower',
+      'tags: [career]',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
+    ],
     `# LinkedIn profile
 
 Headline: Senior Data Engineer · Google Cloud · Melbourne. Open to work, hybrid.`,
@@ -1790,7 +1799,12 @@ Headline: Senior Data Engineer · Google Cloud · Melbourne. Open to work, hybri
   noteAt(
     `${JOBS}/SEEK profile.md`,
     yesterday('1210'),
-    ['tags: [career]', `created: ${YESTERDAY}`, `updated: ${YESTERDAY}`],
+    [
+      'by: bower',
+      'tags: [career]',
+      `created: ${YESTERDAY}`,
+      `updated: ${YESTERDAY}`,
+    ],
     `# SEEK profile
 
 Visible to employers. Right to work: Working Holiday visa. Salary expectation: from 140,000 AUD + super.`,
