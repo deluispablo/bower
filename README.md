@@ -16,18 +16,18 @@ Self-hosted, zero servers, 0 € a month.</p>
 
 <table align="center">
   <tr>
-    <td align="center"><img src="docs/assets/screenshots/home.png" alt="Home: the bird greets Alex, three things waiting in the inbox, the Inbox, Last tidy-up, Health and Notes cards, pinned and recent notes." width="260"><br><sub>Home</sub></td>
-    <td align="center"><img src="docs/assets/screenshots/note.png" alt="A note, Lisbon Trip: its tags, its links to the rest of the trip, what is still open, and an outline beside it." width="260"><br><sub>A note</sub></td>
-    <td align="center"><img src="docs/assets/screenshots/add.png" alt="Add: the drop zone the bird peeks over, a box to paste a link, a file waiting in the inbox and a box for saying what it is." width="260"><br><sub>Add</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/home.png" alt="Home: the bird greets Alex, three things waiting in the inbox, the Inbox, Last tidy-up and Health check tiles, a pinned folder and recent notes, with the folders on the left." width="260"><br><sub>Home</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/note.png" alt="A note, CV insights: Bower's note with where each line came from, the key facts, and About this note, the outline and the rest of the folder beside it." width="260"><br><sub>A note</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/add.png" alt="Add: a new pile with a text box and a mic for saying what it is, Files, Drive and Link, and two things added from elsewhere." width="260"><br><sub>Add</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/screenshots/tidy-up.png" alt="Tidying up, done: six files processed, the list of what was filed, and the inbox empty." width="260"><br><sub>Tidy up</sub></td>
-    <td align="center"><img src="docs/assets/screenshots/bower.png" alt="The Bower tab: a box for saying what you want, then Rules, Requests and Activity side by side." width="260"><br><sub>The Bower tab</sub></td>
-    <td align="center"><img src="docs/assets/screenshots/settings.png" alt="Settings in the dark theme." width="260"><br><sub>Settings, dark</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/tidy-up.png" alt="A tidy-up, done: two things filed and one question answered, each with the folder it went to, and the inbox empty." width="260"><br><sub>Tidy up</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/bower.png" alt="The Bower tab: a text box with a mic for saying what you want, Things you can ask, then Rules, Requests and Activity side by side." width="260"><br><sub>The Bower tab</sub></td>
+    <td align="center"><img src="docs/assets/screenshots/settings.png" alt="Settings." width="260"><br><sub>Settings</sub></td>
   </tr>
 </table>
 
-<p align="center"><sub>Screenshots of the demo, taken by the end-to-end tests (<code>pnpm -C app e2e:shots</code>).</sub></p>
+<p align="center"><sub>Screenshots of the local demo (Alex, an invented person), dark theme, 1280 px wide.</sub></p>
 
 ---
 
@@ -102,20 +102,20 @@ Bower is a window onto one folder of your own Google Drive. Everything else foll
 
 ## The app
 
-One explorer, on every screen size: on a computer it is the left column, on a phone it is the **Notes** tab. It shows your notes and files as rows, starts with what you pinned and the five places Bower keeps things, opens to whatever you are reading, and hides the app's own files. Search finds a name, a folder or words inside a note, even with a typo, and works on the phone as well as the desktop. The screenshots at the top are the real app, running the demo.
+One explorer, on every screen size: on a computer it is the left column, on a phone it is the **Folders** tab (and a drawer you swipe in from the left edge). It shows your notes and files as rows, starts with what you pinned and the five places Bower keeps things, opens to whatever you are reading, and hides the app's own files. Search finds a name, a folder or words inside a note, even with a typo, and works on the phone as well as the desktop. The screenshots at the top are the real app, running the demo.
 
 | Screen | What you see |
 | --- | --- |
-| Home | The bird greets you and tells you what is waiting. After a tidy-up it says what it filed and links to **Just filed**. An Inbox card with **Tidy up** and a Last tidy-up card (on a desktop, Health and Notes too), what you pinned, recent notes with their key facts. |
-| Notes | Your notes and files as one explorer: pinned things first, your folders below, **New** on what the last tidy-up filed and you have not opened yet. |
+| Home | The bird greets you and tells you what is waiting. After a tidy-up it says what it filed and links to **Just filed**. Inbox, Last tidy-up and Health check tiles, with **Tidy up** on the inbox, then what you pinned and what changed lately. |
+| Folders | Your notes and files as one explorer: pinned things first, your folders below. **Move to…** uses the same tree. |
 | Just filed | What the last tidy-up did: each thing with the name it had, the name it has now and the folder it went to, what Bower set aside and why, and what it added. |
-| A folder | A list, or a grid of thumbnails, with a small mark for what each is, sorted and filtered by kind, grouped by date. A file and the note Bower wrote about it sit side by side. Hold one for a quick look without leaving the folder. Notes of one kind, such as receipts or bookings, can be **compared** in a table, or as cards on a phone. |
+| A folder | All, **Originals** (what you put there) and **By Bower**, grouped by day, as a list or a grid, with one **Filter & sort**. A folder of folders shows each one as a card. Notes of one kind, such as flats or job offers, can be **compared** in a table, or as cards on a phone, with the status list Bower chose for that folder. |
 | A note | Reading first: the title, the key facts, Bower's note as a callout that says where each line came from, and **Check** when it needs you. Previous and next in the folder; on a desktop, an outline and an About panel. |
 | A file | A PDF, a photo, a spreadsheet, a video: shown as Drive allows, with its facts (pages, sheets, what is in a ZIP) and the note Bower wrote about it. **Move to…** asks Bower to file it somewhere else, now or at the next tidy-up. |
 | Search | Groups, kind chips and a scope. On a desktop, two columns with a preview of the highlighted result. |
-| Add | A drop zone the bird peeks over, camera, paste-a-link, upload progress, and a box for saying what a file is. |
+| Add | A new pile: files, Drive, a link or a photo, and a text box (with a mic) for saying what they are. Uploads carry on if you switch tabs. |
 | Bower | Tell Bower what you want in your own words: a rule is kept at once, a job or a question waits for the next tidy-up (or **Do it now**). **Rules** lists every rule, grouped by topic, and what Bower suggests; **Requests** what is waiting, being done or answered; **Activity** what each tidy-up did. On a wide screen the three sit side by side. |
-| Tidying up | A sheet with the inbox-to-nest scene, what has been filed and where. |
+| Tidying up | A sheet while it runs, with the time it started; then **Done**: what was filed, written, updated or needs you, and where each thing went. |
 | First run | The bird builds your Bower folder in front of you, asks four short questions you can skip, then shows you around in four steps. Once per account. |
 
 On a desktop 1200 px wide or more, the explorer, the folder and a preview of the selected item sit side by side, with keyboard shortcuts.
