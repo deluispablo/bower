@@ -1,0 +1,52 @@
+/*
+ * The status select (#916, spec §3.33): 40 high, radius 8, the control
+ * border, the page background, 14 px; the date line in the accent colour.
+ */
+
+.status-select {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.status-select--row {
+  flex-flow: row wrap;
+  align-items: center;
+}
+
+.status-select--stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.status-select-input {
+  box-sizing: border-box;
+  height: 40px;
+  max-width: 100%;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-control);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.status-select-input[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.status-select-input:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 2px;
+}
+
+.status-select-date {
+  font-size: 13px;
+  color: var(--color-accent);
+}
+
+.status-select--stack .status-select-date {
+  font-size: 12px;
+}

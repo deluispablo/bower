@@ -1,19 +1,19 @@
 /**
- * Compare's Sort sheet on a phone (#764, R-CMP-1): the button names the
- * sort, the sheet opens on Overlay, and choosing a field reorders the cards.
+ * Compare's Sort by sheet on a phone (#764, rebuilt by #916, PF-Sort-375):
+ * the chip names the sort, the sheet opens on Overlay, and choosing a
+ * criterion and a direction reorders the cards.
  */
 
 import { expect, openHome, test } from './demo.js';
 
-test.describe('Compare Sort sheet (R-CMP-1)', () => {
+test.describe('Compare Sort by sheet (PF-Sort-375)', () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  // re-enabled by #916
-  test.fixme('sorting from the sheet changes the card order', async ({
-    page,
-  }) => {
+  test('sorting from the sheet changes the card order', async ({ page }) => {
     await openHome(page);
-    await page.goto('/folder/4-Archives/Flat%20hunt');
+    await page.goto(
+      '/folder/1-Projects/Housing%20Search%20Australia/Moonee%20Ponds',
+    );
     await page.getByRole('tab', { name: /^Compare \d+ / }).click();
 
     const titles = page.locator('.compare-card-title');
@@ -21,19 +21,27 @@ test.describe('Compare Sort sheet (R-CMP-1)', () => {
     const before = await titles.allTextContents();
 
     const button = page.locator('.compare-sort-btn');
-    await expect(button).toHaveText(/^Sort: Fit, high first$/);
+    await expect(button).toHaveText('Fit, high first');
     await button.click();
 
-    const dialog = page.getByRole('dialog', { name: /^Sort .* by$/ });
+    const dialog = page.getByRole('dialog', { name: 'Sort by' });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('radio', { name: /^Rent a month/ }).click();
+    await expect(dialog.locator('.compare-sheet-row')).toHaveText([
+      'Fit',
+      'Rent a week',
+      'Available',
+      'Against the area',
+      'Status',
+      'Name',
+    ]);
+    await dialog.getByRole('radio', { name: 'Rent a week' }).click();
     await dialog.getByRole('radio', { name: 'Low first' }).click();
-    await dialog.getByRole('button', { name: /^Show \d+ / }).click();
+    await dialog.getByRole('button', { name: 'Show 6 flats' }).click();
     await expect(dialog).toBeHidden();
 
-    await expect(button).toHaveText(/^Sort: Rent a month, low first$/);
+    await expect(button).toHaveText('Rent a week, low first');
     const after = await titles.allTextContents();
     expect(after).not.toEqual(before);
-    expect(after[0]).toContain('Camden Mews');
+    expect(after[0]).toBe('6-20 Mantell St, Moonee Ponds');
   });
 });

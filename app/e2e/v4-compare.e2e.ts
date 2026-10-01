@@ -1,8 +1,8 @@
 /**
- * Compare on the Flat hunt folder (#612): the status writes the note's
- * frontmatter and survives a reload, and the column order is remembered per
- * folder. Opened from the folder screen (#613) with the desktop's Compare
- * button; the same behaviour is covered against a stubbed Drive in
+ * Compare in the folder's Compare tab (#612, rebuilt by #916): the status
+ * select offers the folder's own statuses and saves a change, the Columns
+ * choice is remembered for the folder, and the phone draws the board
+ * (PF-Compare-375). The same behaviour is covered against a stubbed Drive in
  * `test/compare-view.test.tsx`.
  */
 
@@ -10,76 +10,130 @@ import type { Page } from '@playwright/test';
 
 import { expect, openHome, test } from './demo.js';
 
-async function openCompare(page: Page): Promise<void> {
+const MOONEE_PONDS =
+  '/folder/1-Projects/Housing%20Search%20Australia/Moonee%20Ponds';
+const APPLICATIONS = '/folder/1-Projects/Job%20Search%20Australia/Applications';
+
+async function openCompare(page: Page, path = MOONEE_PONDS): Promise<void> {
   await openHome(page);
-  await page.goto('/folder/4-Archives/Flat%20hunt');
-  // The desktop's button beside the kind filter (#613); the phone's tab is
-  // covered in `v4-folder.e2e.ts`.
-  const button = page.getByRole('button', { name: /^Compare \d+ / });
-  await expect(page.locator('.folder-item').first()).toBeVisible();
-  await button.click();
+  await page.goto(path);
+  await page.getByRole('tab', { name: /^Compare \d+ / }).click();
+  await expect(page.locator('.compare')).toBeVisible();
 }
 
-async function reopenCompare(page: Page): Promise<void> {
-  await expect(page.locator('.folder-item').first()).toBeVisible();
-  await page.getByRole('button', { name: /^Compare \d+ / }).click();
-}
-
-test.describe('Compare (#612)', () => {
+test.describe('Compare (#612, #916)', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
   // The demo's Drive starts over on a reload, so a status surviving one is
   // covered against a stubbed Drive (`test/compare-view.test.tsx`); here the
   // change is saved without an error and the table shows it.
-  // re-enabled by #916
-  test.fixme('a changed status is saved and shown', async ({ page }) => {
+  test('a changed status is saved and shown', async ({ page }) => {
     await openCompare(page);
-    const select = page.getByLabel(/^Status of Arlington Road/);
+    const select = page.getByLabel('Status of 6-20 Mantell St, Moonee Ponds');
+    await expect(select.locator('option')).toHaveText([
+      'New',
+      'To view',
+      'Viewed',
+      'Applied',
+      'Approved',
+      'Signed',
+      'Not for me',
+      'Turned down',
+    ]);
     await select.selectOption('viewed');
     await expect(select).toHaveValue('viewed');
     await expect(page.getByText(/couldn.t save that status/)).toHaveCount(0);
   });
 
-  // re-enabled by #916
-  test.fixme('a moved column keeps its place for the folder', async ({
+  test('a column picked in Columns stays for the folder', async ({ page }) => {
+    await openCompare(page);
+    const headers = page.locator('th[scope="col"]');
+    await expect(headers).toHaveText([
+      'Flat',
+      'Rent',
+      'Available',
+      'Against the area',
+      'Fit',
+      'Status',
+    ]);
+    await page.getByRole('button', { name: 'Columns' }).click();
+    const popover = page.getByRole('dialog', { name: 'Columns' });
+    await popover.getByLabel('Rooms').check();
+    await popover.getByRole('button', { name: 'Done' }).click();
+    await expect(headers.nth(2)).toHaveText('Rooms');
+
+    await page.reload();
+    await page.getByRole('tab', { name: /^Compare \d+ / }).click();
+    await expect(page.locator('th[scope="col"]').nth(2)).toHaveText('Rooms');
+  });
+
+  test('a header click sorts, the active header says which way', async ({
     page,
   }) => {
     await openCompare(page);
-    const headers = page.locator('th[scope="col"] .compare-th-sort');
-    await page.getByRole('button', { name: 'Move Fit' }).click();
-    await page.getByRole('button', { name: 'Move left' }).click();
-    await expect(headers.nth(5)).toHaveText(/^Fit/);
+    const fit = page.locator('th[scope="col"]', { hasText: 'Fit' });
+    await expect(fit).toHaveAttribute('aria-sort', 'descending');
+    const rent = page.locator('th[scope="col"]', { hasText: 'Rent' });
+    await rent.getByRole('button').click();
+    await expect(rent).toHaveAttribute('aria-sort', 'ascending');
+    await expect(page.locator('tbody th').first()).toHaveText(
+      '6-20 Mantell St, Moonee Ponds',
+    );
+  });
 
-    await page.reload();
-    await reopenCompare(page);
-    await expect(headers.nth(5)).toHaveText(/^Fit/);
+  test('job offers: six columns, the folder statuses, the older value kept', async ({
+    page,
+  }) => {
+    await openCompare(page, APPLICATIONS);
+    await expect(page.locator('th[scope="col"]')).toHaveText([
+      'Offer',
+      'Salary',
+      'Where',
+      'Holiday',
+      'Fit',
+      'Status',
+    ]);
+    const select = page.getByLabel(
+      'Status of Senior Consultant - Data Engineer, Altis Consulting',
+    );
+    await expect(select.locator('option')).toHaveText([
+      'New',
+      'Applied',
+      'Interview',
+      'Offer',
+      'Accepted',
+      'Not for me',
+      'Turned down',
+      'Declined',
+    ]);
   });
 });
 
-test.describe('Compare on a phone (#701)', () => {
+test.describe('Compare on a phone (#701, #916)', () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  // re-enabled by #916
-  test.fixme('draws the board: one filter chip, highlights, the faded line, no tip', async ({
+  test('draws the board: the Sort chip, the quick filter, the cards', async ({
     page,
   }) => {
-    await openHome(page);
-    await page.goto('/folder/4-Archives/Flat%20hunt');
-    await page.getByRole('tab', { name: /^Compare \d+ / }).click();
-
-    await expect(page.locator('.compare-chip')).toHaveText(['Under £2,300']);
+    await openCompare(page);
     await expect(page.locator('.compare-sort-btn')).toHaveText(
-      'Sort: Fit, high first',
+      'Fit, high first',
     );
+    const filter = page.locator('.compare-chip[aria-pressed]');
+    await expect(filter).toHaveText(/^Free before \d+ \w+$/);
     const cards = page.locator('.compare-card');
-    await expect(cards.nth(0)).toContainText('garden');
-    await expect(cards.nth(1)).toContainText('2nd floor');
-    await expect(cards.nth(2)).toContainText('ground');
-    await expect(cards.nth(3)).toContainText('main road');
-    await expect(page.locator('.compare-card-faded')).toHaveCount(1);
-    await expect(page.locator('.compare-foot')).toContainText(
-      'Kentish Town is over £2,300, shown faded.',
+    await expect(cards).toHaveCount(6);
+    await expect(cards.first()).toContainText('10-43 Buckley St, Moonee Ponds');
+    await expect(cards.first()).toContainText('73/100');
+    await expect(cards.first()).toContainText('460 AUD/week · 1 bed · from');
+    await expect(cards.first().locator('.status-select-date')).toHaveText(
+      /^Viewing \w{3} \d+ \w{3}$/,
     );
-    await expect(page.locator('.hint-suggestion')).toBeHidden();
+    await expect(cards.nth(1)).toContainText('No date yet');
+    await expect(page.getByText('Copy as table')).toHaveCount(0);
+
+    await filter.click();
+    await expect(filter).toHaveText(/· 3 hidden without a date$/);
+    await expect(cards).toHaveCount(3);
   });
 });

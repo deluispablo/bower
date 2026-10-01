@@ -9,7 +9,7 @@
  * updated today" (K-31: the sum of the segments) and, for a folder of
  * folders, its purpose line. Under it the tabs "List" | "Compare <n>
  * <things>" when the folder has comparable items (R-TABS-1); the Compare
- * panel is `CompareSlot`, which #916 fills. The body (`folder-items.tsx`)
+ * panel is `CompareSlot`, filled by #916. The body (`folder-items.tsx`)
  * is loaded on demand.
  *
  * Back on the phone goes to the parent folder, or for a root to "‹ Your
@@ -144,8 +144,31 @@ export interface CompareSlotProps {
   tabId: string;
 }
 
-/** The Compare tab's panel: an empty slot until #916 fills it. */
-export function CompareSlot({ label, tabId }: CompareSlotProps): JSX.Element {
+type CompareModule = typeof import('../components/compare.js');
+
+/** The Compare tab's panel: the cards or the table (#916), loaded with the
+ * notes' properties by `useFolderCompare`. */
+export function CompareSlot({
+  notes,
+  folderPath,
+  label,
+  tabId,
+}: CompareSlotProps): JSX.Element {
+  const [module, setModule] = useState<CompareModule | null>(null);
+  useEffect(() => {
+    let live = true;
+    import('../components/compare.js').then(
+      (loaded) => {
+        if (live) setModule(loaded);
+      },
+      (err: unknown) => {
+        console.error('Could not load Compare', err);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
   return (
     <div
       class="compare-slot"
@@ -153,7 +176,11 @@ export function CompareSlot({ label, tabId }: CompareSlotProps): JSX.Element {
       id="folder-panel-compare"
       aria-labelledby={tabId}
       data-label={label}
-    />
+    >
+      {module !== null && (
+        <module.CompareView notes={notes} folderPath={folderPath} />
+      )}
+    </div>
   );
 }
 

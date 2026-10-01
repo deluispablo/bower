@@ -14,7 +14,11 @@ const drive = vi.hoisted(() => ({
   saveNoteText: vi.fn(),
 }));
 const noteMeta = vi.hoisted(() => ({ recordNoteMeta: vi.fn() }));
-const vault = vi.hoisted(() => ({ saveEditedNote: vi.fn() }));
+const vault = vi.hoisted(() => ({
+  saveEditedNote: vi.fn(),
+  getNoteText: vi.fn<(id: string) => Promise<string>>(),
+  index: { byPath: new Map<string, { id: string }>() },
+}));
 const cache = vi.hoisted(() => ({
   loadViewSettings: vi.fn(),
   saveViewSettings: vi.fn(),
@@ -29,7 +33,11 @@ vi.mock('../src/note-meta.js', () => ({
 // The vault store's own save path (which refreshes the index) is faked over
 // the mocked Drive write, so the test sees what Compare hands to it.
 vi.mock('../src/vault-store.js', () => ({
-  useVault: () => ({ saveEditedNote: vault.saveEditedNote }),
+  useVault: () => ({
+    saveEditedNote: vault.saveEditedNote,
+    getNoteText: vault.getNoteText,
+    index: vault.index,
+  }),
 }));
 
 vault.saveEditedNote.mockImplementation(
@@ -88,10 +96,14 @@ const notes = [
       highlight: 'ground',
       available: 'Now',
       fit: 64,
+      status: 'declined',
     },
     { fit: 'you' },
   ),
 ];
+
+const FOLDER = '1-Projects/Flat hunt';
+const HUB = `---\ntags: [project, hub]\nstatuses: [new, to view, viewed, not for me]\n---\n# Flat hunt\n`;
 
 let root: HTMLElement;
 
@@ -101,7 +113,7 @@ function setDesktop(desktop: boolean): void {
 
 async function mount(): Promise<void> {
   await act(() => {
-    render(h(CompareView, { notes, folderPath: '1-Projects/Flat hunt' }), root);
+    render(h(CompareView, { notes, folderPath: FOLDER }), root);
   });
   await act(async () => {
     await Promise.resolve();
@@ -126,6 +138,10 @@ beforeEach(() => {
   document.body.append(root);
   cache.loadViewSettings.mockResolvedValue(undefined);
   cache.saveViewSettings.mockResolvedValue(undefined);
+  vault.index = {
+    byPath: new Map([[`${FOLDER}/Flat hunt.md`, { id: 'id-hub' }]]),
+  };
+  vault.getNoteText.mockResolvedValue(HUB);
 });
 
 afterEach(() => {
@@ -134,107 +150,125 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('Compare on a phone', () => {
+describe('Compare on a phone (PF-Compare-375, PF-Sort-375)', () => {
   beforeEach(() => {
     setDesktop(false);
   });
 
-  it('shows cards, best fit first, with three facts and the status', async () => {
-    await mount();
-    const cards = [...root.querySelectorAll('.compare-card')];
-    expect(
-      cards.map((c) => c.querySelector('.compare-card-title')?.textContent),
-    ).toEqual([
-      'Kentish Town, 2 bed',
-      'Arlington Road, 2 bed',
-      'Camden Mews, 1 bed',
-    ]);
-    const pill = cards[0]?.querySelector('.compare-fit');
-    expect(pill?.textContent).toBe('81/100');
-    expect(pill?.getAttribute('aria-label')).toBe('Your score 81 of 100');
-    expect(cards[0]?.textContent).toContain('£2,400');
-    expect(cards[0]?.textContent).toContain('Viewing Sat');
-    expect(root.querySelector('.compare-explainer')?.textContent).toContain(
-      'You saved three rental listings here.',
+  const titles = (): string[] =>
+    [...root.querySelectorAll('.compare-card-title')].map(
+      (el) => el.textContent ?? '',
     );
-  });
 
-  it('opens with the first filter on: the faded card and the line under the cards', async () => {
+  it('shows one card per flat, best fit first, with its facts and status', async () => {
     await mount();
-    expect(chip('Under £2,300')?.getAttribute('aria-pressed')).toBe('true');
-    const faded = root.querySelectorAll('.compare-card-faded');
-    expect(faded).toHaveLength(1);
-    expect(faded[0]?.textContent).toContain('Kentish Town');
-    expect(root.querySelector('.compare-foot')?.textContent).toBe(
-      'Kentish Town is over £2,300, shown faded. Bower read these details from each rental listing.',
-    );
-  });
-
-  it('turns the filter off when its chip is pressed', async () => {
-    await mount();
-    click(chip('Under £2,300'));
-    expect(root.querySelectorAll('.compare-card-faded')).toHaveLength(0);
-    expect(root.querySelector('.compare-foot')?.textContent).toBe(
-      'Bower read these details from each rental listing.',
-    );
-  });
-
-  it('offers one filter chip and no "Default order" chip', async () => {
-    await mount();
-    expect(
-      [...root.querySelectorAll('.compare-chip')].map((el) => el.textContent),
-    ).toEqual(['Under £2,300']);
-  });
-
-  const sortButton = (): HTMLElement | null =>
-    root.querySelector('.compare-sort-btn');
-  const titles = (): (string | null | undefined)[] =>
-    [...root.querySelectorAll('.compare-card')].map(
-      (c) => c.querySelector('.compare-card-title')?.textContent,
-    );
-  const radio = (label: string): HTMLElement | undefined =>
-    [
-      ...document.body.querySelectorAll<HTMLElement>(
-        '.compare-sort [role=radio]',
-      ),
-    ].find((el) => el.textContent?.startsWith(label));
-
-  it('names the sort on the button and opens the Sort sheet on Overlay', async () => {
-    await mount();
-    expect(sortButton()?.textContent).toBe('Sort: Fit, high first');
-    click(sortButton());
-    const dialog = document.body.querySelector('.overlay [role=dialog]');
-    expect(dialog?.getAttribute('aria-modal')).toBe('true');
-    expect(dialog?.querySelector('h2')?.textContent).toBe('Sort listings by');
-    expect(dialog?.querySelector('[aria-label="Order"]')?.textContent).toBe(
-      'High firstLow first',
-    );
-    expect(dialog?.querySelector('.compare-sort-done')?.textContent).toBe(
-      'Show 3 listings',
-    );
-  });
-
-  it('sorts the cards from the sheet and remembers it for the folder', async () => {
-    await mount();
-    click(sortButton());
-    click(radio('Rent a month'));
     expect(titles()).toEqual([
-      'Camden Mews, 1 bed',
-      'Arlington Road, 2 bed',
       'Kentish Town, 2 bed',
+      'Arlington Road, 2 bed',
+      'Camden Mews, 1 bed',
     ]);
-    click(radio('High first'));
-    expect(titles()[0]).toBe('Kentish Town, 2 bed');
-    expect(sortButton()?.textContent).toBe('Sort: Rent a month, high first');
+    const first = root.querySelector('.compare-card');
+    expect(first?.querySelector('.compare-score')?.textContent).toBe('81/100');
+    expect(first?.querySelector('.compare-card-facts')?.textContent).toBe(
+      '£2,400 · 2 bed · from 15 Nov',
+    );
+    expect(first?.querySelector('.status-select-date')?.textContent).toBe(
+      'Viewing Sat 14 Nov',
+    );
+    expect(root.textContent).not.toContain('Copy as table');
+    expect(root.textContent).not.toContain('Best so far');
+  });
+
+  it('offers the statuses from the hub note, capitalised, plus an older value', async () => {
+    await mount();
+    const select = root.querySelector<HTMLSelectElement>(
+      'select[aria-label="Status of Kentish Town, 2 bed"]',
+    );
+    expect(Array.from(select?.options ?? [], (o) => o.text)).toEqual([
+      'New',
+      'To view',
+      'Viewed',
+      'Not for me',
+    ]);
+    const camden = root.querySelector<HTMLSelectElement>(
+      'select[aria-label="Status of Camden Mews, 1 bed"]',
+    );
+    expect(Array.from(camden?.options ?? [], (o) => o.text)).toContain(
+      'Declined',
+    );
+  });
+
+  it("uses the kind's statuses when the folder has no hub note", async () => {
+    vault.index = { byPath: new Map() };
+    await mount();
+    const select = root.querySelector<HTMLSelectElement>(
+      'select[aria-label="Status of Kentish Town, 2 bed"]',
+    );
+    expect(Array.from(select?.options ?? [], (o) => o.value)).toEqual([
+      'new',
+      'to view',
+      'viewed',
+      'applied',
+      'rejected',
+    ]);
+  });
+
+  it('starts with the quick filter off and hides the undated flats when on', async () => {
+    await mount();
+    const filter = chip('Free before 15 Nov');
+    expect(filter?.getAttribute('aria-pressed')).toBe('false');
+    click(filter);
+    expect(titles()).toEqual(['Kentish Town, 2 bed', 'Arlington Road, 2 bed']);
+    expect(
+      root.querySelector('.compare-chip[aria-pressed="true"]')?.textContent,
+    ).toBe('Free before 15 Nov · 1 hidden without a date');
+  });
+
+  it('names the sort on its chip and sorts from the Sort by sheet', async () => {
+    await mount();
+    const button = root.querySelector('.compare-sort-btn');
+    expect(button?.textContent).toBe('Fit, high first');
+    click(button);
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Sort by');
+    expect(
+      [
+        ...(dialog?.querySelectorAll('.compare-sheet-list [role="radio"]') ??
+          []),
+      ].map((el) => el.textContent),
+    ).toEqual([
+      'Fit',
+      'Rent a month',
+      'Available',
+      'Against the area',
+      'Status',
+      'Name',
+    ]);
+    const rent = [
+      ...(dialog?.querySelectorAll('.compare-sheet-list [role="radio"]') ?? []),
+    ].find((el) => el.textContent === 'Rent a month');
+    click(rent);
+    const low = [...(dialog?.querySelectorAll('button') ?? [])].find(
+      (el) => el.textContent === 'Low first',
+    );
+    click(low);
+    expect(titles()[0]).toBe('Camden Mews, 1 bed');
+    expect(root.querySelector('.compare-sort-btn')?.textContent).toBe(
+      'Rent a month, low first',
+    );
+    const show = [...(dialog?.querySelectorAll('button') ?? [])].find((el) =>
+      el.textContent?.startsWith('Show '),
+    );
+    expect(show?.textContent).toBe('Show 3 flats');
     await vi.waitFor(() => {
       expect(cache.saveViewSettings).toHaveBeenCalled();
     });
-    const last = cache.saveViewSettings.mock.calls.at(-1) as [
+    const saved = cache.saveViewSettings.mock.calls.at(-1) as [
       string,
-      { compareSort: { column: string; direction: string } },
+      { compareSort: unknown },
     ];
-    expect(last[0]).toBe('1-Projects/Flat hunt');
-    expect(last[1].compareSort).toEqual({ column: 'rent', direction: 'desc' });
+    expect(saved[0]).toBe(FOLDER);
+    expect(saved[1].compareSort).toEqual({ column: 'rent', direction: 'asc' });
   });
 
   it('starts from the sort remembered for the folder', async () => {
@@ -243,59 +277,70 @@ describe('Compare on a phone', () => {
       kindFilter: null,
       originFilter: null,
       layout: 'list',
-      compareSort: { column: 'rent', direction: 'asc' },
+      compareSort: { column: 'rent', direction: 'desc' },
     });
     await mount();
-    expect(sortButton()?.textContent).toBe('Sort: Rent a month, low first');
-    expect(titles()[0]).toBe('Camden Mews, 1 bed');
-  });
-
-  it('shows a rule score on the card and offers it first in the sheet', async () => {
-    render(
-      h(CompareView, {
-        notes: notes.map((n, i) => ({
-          ...n,
-          fields: { ...n.fields, score: [50, 90, 70][i], fit: undefined },
-        })),
-        folderPath: '1-Projects/Flat hunt',
-      }),
-      root,
+    expect(titles()[0]).toBe('Kentish Town, 2 bed');
+    expect(root.querySelector('.compare-sort-btn')?.textContent).toBe(
+      'Rent a month, high first',
     );
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(sortButton()?.textContent).toBe('Sort: Your score, high first');
-    expect(titles()[0]).toBe('Arlington Road, 2 bed');
-    click(sortButton());
-    const first = document.body.querySelector('.compare-sort [role=radio]');
-    expect(first?.textContent).toBe('Your scoreadded by your rule');
-  });
-
-  it('shows the highlight under the rooms', async () => {
-    await mount();
-    const facts = root.querySelector('.compare-card-facts');
-    expect(facts?.textContent).toContain('2 bedgarden');
   });
 });
 
-describe('Compare on a desktop', () => {
+describe('Compare on a desktop (PF-Compare-1280, PF-Sort-1280)', () => {
   beforeEach(() => {
     setDesktop(true);
   });
 
   const headers = (): string[] =>
-    [...root.querySelectorAll('th[scope="col"]')].map((th) =>
-      (th.querySelector('.compare-th-sort')?.textContent ?? '')
-        .replace(/[▴▾]/g, '')
-        .trim(),
+    [...root.querySelectorAll('th[scope="col"]')].map(
+      (th) => th.textContent ?? '',
     );
   const firstColumn = (): string[] =>
     [...root.querySelectorAll('tbody th')].map((th) => th.textContent ?? '');
 
-  it('shows a table with the kind columns, fit sorted, and aria-sort', async () => {
+  it('shows the six default columns, sorted by fit with a teal header', async () => {
     await mount();
     expect(headers()).toEqual([
-      'Listing',
+      'Flat',
+      'Rent',
+      'Available',
+      'Against the area',
+      'Fit',
+      'Status',
+    ]);
+    const fit = [...root.querySelectorAll('th[scope="col"]')].find(
+      (th) => th.textContent === 'Fit',
+    );
+    expect(fit?.getAttribute('aria-sort')).toBe('descending');
+    expect(fit?.classList.contains('compare-th-on')).toBe(true);
+    expect(firstColumn()[0]).toBe('Kentish Town, 2 bed');
+    expect(root.textContent).not.toContain('Copy as table');
+  });
+
+  it('sorts by rent when its header is clicked, then flips', async () => {
+    await mount();
+    const rent = (): HTMLElement | null =>
+      [...root.querySelectorAll<HTMLElement>('th[scope="col"]')].find(
+        (th) => th.textContent === 'Rent',
+      ) ?? null;
+    click(rent()?.querySelector('button'));
+    expect(rent()?.getAttribute('aria-sort')).toBe('ascending');
+    expect(firstColumn()[0]).toBe('Camden Mews, 1 bed');
+    click(rent()?.querySelector('button'));
+    expect(rent()?.getAttribute('aria-sort')).toBe('descending');
+    expect(firstColumn()[0]).toBe('Kentish Town, 2 bed');
+  });
+
+  it('picks columns in the Columns popover and remembers them', async () => {
+    await mount();
+    click(chip('Columns'));
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(
+      dialog?.querySelector('[aria-label="Close Columns"]'),
+    ).not.toBeNull();
+    const labels = [...(dialog?.querySelectorAll('label') ?? [])];
+    expect(labels.map((el) => el.textContent)).toEqual([
       'Rent a month',
       'Rooms',
       'Available',
@@ -304,77 +349,28 @@ describe('Compare on a desktop', () => {
       'Fit',
       'Status',
     ]);
-    expect(firstColumn()[0]).toBe('Kentish Town, 2 bed');
-    expect(
-      root.querySelector('th[aria-sort="descending"]')?.textContent,
-    ).toContain('Fit');
-  });
-
-  it('reads the Fit cell as a score out of 100 (#859)', async () => {
-    await mount();
-    const cells = [...root.querySelectorAll('tbody tr:first-child td')].map(
-      (td) => td.textContent ?? '',
-    );
-    expect(cells.some((text) => /^\d+\/100$/.test(text))).toBe(true);
-  });
-
-  it('sorts by rent when the header is clicked', async () => {
-    await mount();
-    click(
-      [...root.querySelectorAll<HTMLElement>('.compare-th-sort')].find((el) =>
-        el.textContent?.startsWith('Rent'),
-      ),
-    );
-    expect(firstColumn()).toEqual([
-      'Camden Mews, 1 bed',
-      'Arlington Road, 2 bed',
-      'Kentish Town, 2 bed',
-    ]);
-  });
-
-  it('hides filtered rows and counts them', async () => {
-    await mount();
-    click(chip('Under £2,300'));
-    expect(firstColumn()).toHaveLength(2);
-    expect(root.querySelector('.compare-hidden')?.textContent).toBe(
-      '1 hidden by the filter',
-    );
-  });
-
-  it('moves a column from its header menu and remembers the order', async () => {
-    await mount();
-    click(root.querySelector('button[aria-label="Move Fit"]'));
-    click(
-      [...root.querySelectorAll<HTMLElement>('.compare-menu button')].find(
-        (el) => el.textContent === 'Move left',
-      ),
-    );
-    expect(headers().slice(5, 8)).toEqual([
-      'Fit',
-      'Bike to the office',
-      'Status',
-    ]);
+    click(labels[1]?.querySelector('input'));
+    expect(headers()).toContain('Rooms');
     await vi.waitFor(() => {
-      expect(cache.saveViewSettings).toHaveBeenCalledTimes(1);
+      expect(cache.saveViewSettings).toHaveBeenCalled();
     });
-    const [path, saved] = cache.saveViewSettings.mock.calls[0] as [
+    const saved = cache.saveViewSettings.mock.calls.at(-1) as [
       string,
-      { compareColumns: string[] },
+      { compareVisible: string[] },
     ];
-    expect(path).toBe('1-Projects/Flat hunt');
-    expect(saved.compareColumns.slice(0, 2)).toEqual(['title', 'rent']);
+    expect(saved[1].compareVisible).toContain('rooms');
   });
 
-  it('starts from the order remembered for the folder', async () => {
+  it('starts from the columns remembered for the folder', async () => {
     cache.loadViewSettings.mockResolvedValue({
       sort: 'name',
       kindFilter: null,
       originFilter: null,
       layout: 'list',
-      compareColumns: ['fit', 'rent'],
+      compareVisible: ['fit'],
     });
     await mount();
-    expect(headers().slice(0, 3)).toEqual(['Listing', 'Fit', 'Rent a month']);
+    expect(headers()).toEqual(['Flat', 'Fit']);
   });
 
   it('writes a changed status into the note', async () => {
@@ -511,7 +507,7 @@ describe('Compare for receipts and bookings', () => {
   });
 });
 
-describe('Compare columns, Made for it, Apply and Copy as table (#795)', () => {
+describe('Compare job offers: Made for it and Apply in Columns (#795)', () => {
   const offers: CompareNote[] = [
     {
       id: 'id-Northwind',
@@ -520,10 +516,9 @@ describe('Compare columns, Made for it, Apply and Copy as table (#795)', () => {
       kind: 'job-offer',
       fields: {
         salary: 72000,
-        score: 79,
+        fit: 79,
         status: 'new',
         apply_link: 'https://jobs.example.com/apply',
-        interview_panel: 'Alex',
       },
       bowerOrigins: {},
       madeFor: ['CV · Northwind', 'Letter · Northwind'],
@@ -533,7 +528,7 @@ describe('Compare columns, Made for it, Apply and Copy as table (#795)', () => {
       name: 'Fabrikam.md',
       modifiedTime: '2026-09-28T08:00:00Z',
       kind: 'job-offer',
-      fields: { salary: 65000, score: 91, status: 'applied' },
+      fields: { salary: 65000, fit: 91, status: 'applied' },
       bowerOrigins: {},
     },
   ];
@@ -555,75 +550,39 @@ describe('Compare columns, Made for it, Apply and Copy as table (#795)', () => {
   }
 
   const headers = (): string[] =>
-    [...root.querySelectorAll('th[scope="col"] .compare-th-sort')].map((el) =>
-      (el.textContent ?? '').replace(/[▴▾]/g, '').trim(),
+    [...root.querySelectorAll('th[scope="col"]')].map(
+      (th) => th.textContent ?? '',
     );
 
-  it('shows the Made for it badge and an Apply link from the note', async () => {
+  it('shows exactly the six default columns, no quick filter', async () => {
     await mountOffers();
-    expect(headers().slice(-2)).toEqual(['Made for it', 'Apply']);
+    expect(headers()).toEqual([
+      'Offer',
+      'Salary',
+      'Where',
+      'Holiday',
+      'Fit',
+      'Status',
+    ]);
+    expect(root.querySelectorAll('.compare-chip[aria-pressed]')).toHaveLength(
+      0,
+    );
+  });
+
+  it('offers Made for it and Apply in Columns, off by default', async () => {
+    cache.loadViewSettings.mockResolvedValue({
+      sort: 'name',
+      kindFilter: null,
+      originFilter: null,
+      layout: 'list',
+      compareVisible: ['fit', 'made_for', 'apply_link'],
+    });
+    await mountOffers();
+    expect(headers()).toEqual(['Offer', 'Fit', 'Made for it', 'Apply']);
     const link = root.querySelector<HTMLAnchorElement>(
       'a[aria-label="Apply to Northwind"]',
     );
     expect(link?.href).toBe('https://jobs.example.com/apply');
     expect(root.textContent).toContain('CV · Letter');
-  });
-
-  it('picks columns in a dialog and remembers the choice for the folder', async () => {
-    await mountOffers();
-    expect(headers()).not.toContain('Interview panel');
-    click(chip('Columns'));
-    const option = [
-      ...document.querySelectorAll<HTMLElement>('[role="checkbox"]'),
-    ].find((el) => el.textContent?.startsWith('Interview panel'));
-    click(option);
-    expect(headers()).toContain('Interview panel');
-    await vi.waitFor(() => {
-      expect(cache.saveViewSettings).toHaveBeenCalled();
-    });
-    const [path, saved] = cache.saveViewSettings.mock.calls[0] as [
-      string,
-      { compareVisible: string[] },
-    ];
-    expect(path).toBe('1-Projects/Jobs');
-    expect(saved.compareVisible).toContain('interview_panel');
-  });
-
-  it('starts from the columns remembered for the folder', async () => {
-    cache.loadViewSettings.mockResolvedValue({
-      sort: 'name',
-      kindFilter: null,
-      originFilter: null,
-      layout: 'list',
-      compareVisible: ['score'],
-    });
-    await mountOffers();
-    expect(headers()).toEqual(['Offer', 'Your score']);
-  });
-
-  it('copies the visible columns, in the sort order, as a Markdown table', async () => {
-    const writeText = vi.fn<(text: string) => Promise<void>>();
-    writeText.mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText },
-      configurable: true,
-    });
-    cache.loadViewSettings.mockResolvedValue({
-      sort: 'name',
-      kindFilter: null,
-      originFilter: null,
-      layout: 'list',
-      compareVisible: ['score', 'apply_link'],
-    });
-    await mountOffers();
-    click(chip('Copy as table'));
-    expect(writeText).toHaveBeenCalledWith(
-      [
-        '| Offer | Your score | Apply |',
-        '| --- | --- | --- |',
-        '| Fabrikam | 91/100 | — |',
-        '| Northwind | 79/100 | [Apply](https://jobs.example.com/apply) |',
-      ].join('\n'),
-    );
   });
 });

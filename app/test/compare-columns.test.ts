@@ -6,8 +6,8 @@ import {
   defaultSort,
   extraColumns,
   firstDirection,
-  offerWord,
-  sortButtonText,
+  itemNoun,
+  sortChipText,
   sortNotes,
 } from '../src/compare.js';
 import type { CompareColumn, CompareNote } from '../src/compare.js';
@@ -111,7 +111,7 @@ describe('Compare score and extra columns (R-CMP-2, 3, 6)', () => {
   });
 });
 
-describe('Compare Sort sheet wording (R-CMP-1)', () => {
+describe('Compare Sort chip wording (PF-Sort-375)', () => {
   const columns = compareColumns(kind, undefined, extraColumns(kind, offers));
   const byId = (id: string): CompareColumn => {
     const column = columns.find((c) => c.id === id);
@@ -120,17 +120,12 @@ describe('Compare Sort sheet wording (R-CMP-1)', () => {
   };
 
   it('names the current sort by field and direction', () => {
-    expect(sortButtonText(byId('score'), 'desc')).toBe(
-      'Sort: Your score, high first',
-    );
-    expect(sortButtonText(byId('office'), 'asc')).toBe('Sort: Where, A to Z');
-    expect(sortButtonText(byId('reply_by'), 'asc')).toBe(
-      'Sort: Reply by, soonest first',
-    );
+    expect(sortChipText(byId('score'), 'desc')).toBe('Your score, high first');
+    expect(sortChipText(byId('office'), 'asc')).toBe('Where, low first');
   });
 
-  it('says how many offers the button shows', () => {
-    expect(offerWord(kind, 4)).toBe('offers');
-    expect(offerWord(kind, 1)).toBe('offer');
+  it('says what the items are called', () => {
+    expect(itemNoun(kind, 4)).toBe('job offers');
+    expect(itemNoun(kind, 1)).toBe('job offer');
   });
 });
