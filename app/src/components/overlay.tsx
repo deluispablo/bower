@@ -27,7 +27,7 @@
  */
 
 import { Fragment } from 'preact';
-import type { ComponentChildren, JSX } from 'preact';
+import type { ComponentChildren, JSX, RefObject } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
@@ -53,6 +53,12 @@ interface OverlayBaseProps {
    * now covers the same spot. Off by default; Escape is never guarded.
    */
   scrimGuardMs?: number;
+  /**
+   * What takes focus when the overlay opens, instead of its first control:
+   * a selector inside the panel or a ref (the tour's main button). Left
+   * out, or not found, the first control does.
+   */
+  initialFocus?: string | RefObject<HTMLElement>;
 }
 
 /** Named by a visible heading (`labelledBy`) or by a `label`, never neither. */
@@ -305,6 +311,18 @@ export function Overlay(props: OverlayProps): JSX.Element {
 
   useFocusTrap(panel, onClose, opener);
   useBackCloses(onClose);
+
+  // Declared after the trap, so it runs after the trap focused the first
+  // control, and wins.
+  const initialFocus = props.initialFocus;
+  useEffect(() => {
+    if (initialFocus === undefined) return;
+    const target =
+      typeof initialFocus === 'string'
+        ? panel.current?.querySelector<HTMLElement>(initialFocus)
+        : initialFocus.current;
+    target?.focus();
+  }, []);
 
   // Declared after the trap, so it runs after focus went back to the opener:
   // an opener that unmounted meanwhile (the run chip) leaves BODY focused.
