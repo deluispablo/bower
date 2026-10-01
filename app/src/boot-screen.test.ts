@@ -41,9 +41,16 @@ async function load(): Promise<BootModule> {
 beforeEach(() => {
   vi.useFakeTimers({
     now: 0,
-    toFake: ['setTimeout', 'clearTimeout', 'performance', 'Date'],
+    toFake: [
+      'setTimeout',
+      'clearTimeout',
+      'performance',
+      'Date',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+    ],
   });
-  focusNewPage.mockClear();
+  focusNewPage.mockReset();
 });
 
 afterEach(() => {
@@ -73,6 +80,33 @@ describe('boot states', () => {
     const { startBootTimers } = await load();
     startBootTimers();
     vi.advanceTimersByTime(5_000);
+    expect(boot.dataset.state).toBe('slow');
+  });
+
+  it('never flashes slow when the script arrives late and the session answers at once', async () => {
+    const boot = mountBoot();
+    vi.advanceTimersByTime(9_000);
+    const { dismissBoot, startBootTimers } = await load();
+    startBootTimers();
+    vi.advanceTimersByTime(50);
+    expect(boot.dataset.state).toBeUndefined();
+    dismissBoot();
+    vi.advanceTimersByTime(5_000);
+    expect(boot.dataset.state).toBeUndefined();
+    expect(boot.querySelector('.boot-line')?.textContent).toBe(
+      'Opening Bower…',
+    );
+    expect(boot.isConnected).toBe(false);
+  });
+
+  it('shows slow 1500 ms after a late start with no answer', async () => {
+    const boot = mountBoot();
+    vi.advanceTimersByTime(9_000);
+    const { startBootTimers } = await load();
+    startBootTimers();
+    vi.advanceTimersByTime(1_499);
+    expect(boot.dataset.state).toBeUndefined();
+    vi.advanceTimersByTime(1);
     expect(boot.dataset.state).toBe('slow');
   });
 
@@ -131,9 +165,10 @@ describe('hand-over', () => {
     dismissBoot();
     vi.advanceTimersByTime(399);
     expect(boot.isConnected).toBe(true);
-    expect(boot.dataset.state).toBeUndefined();
+    expect(boot.dataset.leaving).toBeUndefined();
     vi.advanceTimersByTime(1);
-    expect(boot.dataset.state).toBe('leaving');
+    expect(boot.dataset.leaving).toBe('');
+    expect(boot.dataset.state).toBeUndefined();
     expect(boot.isConnected).toBe(true);
     vi.advanceTimersByTime(250);
     expect(boot.isConnected).toBe(false);
@@ -145,7 +180,7 @@ describe('hand-over', () => {
     const { dismissBoot } = await load();
     dismissBoot();
     vi.advanceTimersByTime(0);
-    expect(boot.dataset.state).toBe('leaving');
+    expect(boot.dataset.leaving).toBe('');
     boot.dispatchEvent(new Event('transitionend'));
     expect(boot.isConnected).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
@@ -159,7 +194,7 @@ describe('hand-over', () => {
     dismissBoot();
     vi.advanceTimersByTime(300);
     expect(boot.isConnected).toBe(false);
-    expect(boot.dataset.state).toBeUndefined();
+    expect(boot.dataset.leaving).toBeUndefined();
   });
 
   it('clears the slow timer and the online listener', async () => {
@@ -174,6 +209,62 @@ describe('hand-over', () => {
     vi.advanceTimersByTime(10_000);
     expect(boot.isConnected).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps the state, line and hint while it fades', async () => {
+    const boot = mountBoot();
+    const { bootState, dismissBoot } = await load();
+    bootState('error');
+    vi.advanceTimersByTime(700);
+    dismissBoot();
+    vi.advanceTimersByTime(400);
+    expect(boot.dataset.leaving).toBe('');
+    expect(boot.dataset.state).toBe('error');
+    expect(text('.boot-line')).toBe('Bower could not reach the server.');
+    expect(text('.boot-hint')).toBe('Check your connection and try again.');
+  });
+
+  it('hands focus over at the start of the fade, before data-leaving', async () => {
+    const boot = mountBoot();
+    const retry = boot.querySelector<HTMLElement>('.boot-retry');
+    retry?.focus();
+    focusNewPage.mockImplementation(() => {
+      expect(boot.dataset.leaving).toBeUndefined();
+    });
+    vi.advanceTimersByTime(700);
+    const { dismissBoot } = await load();
+    dismissBoot();
+    vi.advanceTimersByTime(400);
+    expect(focusNewPage).toHaveBeenCalledTimes(1);
+    expect(focusNewPage).toHaveBeenCalledWith(null);
+    expect(boot.dataset.leaving).toBe('');
+    vi.advanceTimersByTime(250);
+    expect(boot.isConnected).toBe(false);
+    expect(focusNewPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('ends focus on the page heading, not on body (real focusNewPage)', async () => {
+    const real = await vi.importActual<typeof import('./components/layout.js')>(
+      './components/layout.js',
+    );
+    focusNewPage.mockImplementation(real.focusNewPage);
+    const boot = mountBoot();
+    const app = document.getElementById('app');
+    if (app === null) throw new Error('no #app');
+    app.innerHTML = '<main><h1>Home</h1></main>';
+    const heading = app.querySelector('h1');
+    if (heading === null) throw new Error('no heading');
+    // jsdom lays nothing out: make the heading count as shown.
+    heading.getClientRects = (): DOMRectList => [{}] as unknown as DOMRectList;
+    boot.querySelector<HTMLElement>('.boot-retry')?.focus();
+    vi.advanceTimersByTime(700);
+    const { dismissBoot } = await load();
+    dismissBoot();
+    vi.advanceTimersByTime(400);
+    vi.advanceTimersByTime(250);
+    vi.advanceTimersToNextFrame();
+    expect(boot.isConnected).toBe(false);
+    expect(document.activeElement).toBe(heading);
   });
 
   it('runs once', async () => {

@@ -16,6 +16,8 @@ export type BootState = 'slow' | 'offline' | 'error';
 
 /** From navigation start: when the slow state shows (R-BOOT-11). */
 export const BOOT_SLOW_MS = 8_000;
+/** Started at or after `BOOT_SLOW_MS`: wait this long before the slow state. */
+export const BOOT_LATE_SLOW_MS = 1_500;
 /** Dismissed before this, the screen goes at once: only the bird was shown. */
 export const BOOT_INSTANT_MS = 600;
 /** Dismissed after `BOOT_INSTANT_MS`, the screen stays at least until this. */
@@ -46,6 +48,7 @@ let leaveTimer: ReturnType<typeof setTimeout> | undefined;
 let removeTimer: ReturnType<typeof setTimeout> | undefined;
 let onOnline: (() => void) | undefined;
 let dismissed = false;
+let focusHandedOver = false;
 
 function bootElement(): HTMLElement | null {
   return document.getElementById('boot');
@@ -107,33 +110,55 @@ export function bootState(state: BootState): void {
 export function startBootTimers(): void {
   if (bootElement() === null || dismissed) return;
   clearTimeout(slowTimer);
-  slowTimer = setTimeout(
-    () => {
-      slowTimer = undefined;
-      bootState('slow');
-    },
-    Math.max(0, BOOT_SLOW_MS - sinceStart()),
-  );
+  slowTimer = setTimeout(() => {
+    slowTimer = undefined;
+    bootState('slow');
+  }, slowDelay(sinceStart()));
+}
+
+/**
+ * How long until "Still loading…". From navigation start to 8 s; when the
+ * script itself arrives at 8 s or later, a grace of `BOOT_LATE_SLOW_MS` first,
+ * so a session that answers at once never flashes it during the fade (the
+ * CSS already shows the hint and "Try again" by then, #987).
+ */
+function slowDelay(now: number): number {
+  return now >= BOOT_SLOW_MS ? BOOT_LATE_SLOW_MS : BOOT_SLOW_MS - now;
+}
+
+/**
+ * R-BOOT-15: focus never stays on a node that is about to go. Runs before any
+ * attribute change, since hiding "Try again" would blur it to `<body>` first.
+ */
+function handOverFocus(boot: HTMLElement): void {
+  if (focusHandedOver) return;
+  const retry = boot.querySelector('.boot-retry');
+  if (retry !== null && document.activeElement === retry) {
+    focusHandedOver = true;
+    focusNewPage(null);
+  }
 }
 
 function removeBoot(boot: HTMLElement): void {
   clearTimers();
   if (!boot.isConnected) return;
-  // R-BOOT-15: focus never stays on a node that is about to go.
-  const retry = boot.querySelector('.boot-retry');
-  if (retry !== null && document.activeElement === retry) {
-    focusNewPage(null);
-  }
+  handOverFocus(boot);
   boot.remove();
 }
 
+/**
+ * The fade (R-BOOT-12). `data-leaving` is its own attribute so `data-state`,
+ * and with it the line, hint and "Try again", stay as they were while the
+ * screen fades.
+ */
 function leave(boot: HTMLElement): void {
   leaveTimer = undefined;
+  handOverFocus(boot);
   if (prefersReducedMotion()) {
     removeBoot(boot);
     return;
   }
-  boot.dataset.state = 'leaving';
+  boot.dataset.leaving = '';
   boot.addEventListener('transitionend', () => removeBoot(boot), {
     once: true,
   });
@@ -143,7 +168,7 @@ function leave(boot: HTMLElement): void {
 /**
  * Hands over to the real screen (R-BOOT-12, spec §6.3). Under 600 ms the
  * screen goes at once; otherwise it stays until 1100 ms, then fades and is
- * removed on `transitionend` or after 250 ms. Under reduced motion it goes
+ * removed on `transitionend` or after 250 ms (`data-leaving`). Under reduced motion it goes
  * with no fade. Runs once; later calls do nothing.
  */
 export function dismissBoot(): void {
