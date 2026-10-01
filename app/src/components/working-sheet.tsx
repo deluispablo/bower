@@ -972,7 +972,15 @@ export function WorkingSheet({
               <Steps steps={steps} />
               {finished !== null && <Rows rows={finished.rows} />}
               {state === 'done' ? (
-                <p class="working-sheet-more">{seeWhatChanged}</p>
+                <div class="working-sheet-actions">
+                  <a
+                    class="tidy-confirm-button working-sheet-see"
+                    href={changedHref}
+                    onClick={onDismiss}
+                  >
+                    {SEE_WHAT_CHANGED}
+                  </a>
+                </div>
               ) : (
                 <div class="working-sheet-actions">
                   {again('Finish the tidy-up')}

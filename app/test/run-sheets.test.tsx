@@ -121,5 +121,10 @@ describe('the Done sheet (AR-Run)', () => {
       (a) => a.textContent === 'See what changed',
     );
     expect(see?.getAttribute('href')).toBe('/just-filed?run=run-1');
+    // The full-width primary button, as on the board.
+    expect(see?.classList.contains('tidy-confirm-button')).toBe(true);
+    expect(see?.classList.contains('tidy-confirm-button-secondary')).toBe(
+      false,
+    );
   });
 });

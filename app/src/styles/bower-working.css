@@ -358,16 +358,9 @@
   color: var(--color-brand);
 }
 
-/* AR-Run: "See what changed" as the sheet's last line, no full-width Close. */
-.working-sheet-more {
-  margin: 0;
-  font-size: var(--text-base);
-}
-
-.working-sheet-more .working-sheet-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
+/* AR-Run: "See what changed" is the full-width primary button. */
+.working-sheet-see {
+  width: 100%;
 }
 
 /* Done: the bird says what it added. */
