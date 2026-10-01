@@ -811,6 +811,7 @@ export function FileScreen(): JSX.Element {
         more={{
           expanded: menuOpen,
           onClick: () => setMenuOpen((open) => !open),
+          name: title,
         }}
         meta={{ ...meta, dot: { at: 0, root: para } }}
         {...(aboutProps !== null && {

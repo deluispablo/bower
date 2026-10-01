@@ -680,6 +680,7 @@ export function Note() {
         more={{
           expanded: menuOpen,
           onClick: () => setMenuOpen((open) => !open),
+          name: title,
         }}
         {...(aboutProps !== null && {
           onAbout: () => openAbout(aboutProps),
