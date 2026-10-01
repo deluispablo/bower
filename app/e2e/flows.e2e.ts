@@ -1108,7 +1108,7 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
     .getByRole('listitem')
     .filter({ hasText: 'How much did I spend on the kitchen this year?' });
   await expect(row).toBeVisible();
-  await expect(row.getByText('In your inbox', { exact: true })).toBeVisible();
+  await expect(row.getByText('Waiting', { exact: true })).toBeVisible();
   await row.scrollIntoViewIfNeeded();
   await shot(page, testInfo, 'tell');
 
@@ -1275,9 +1275,7 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
   // The demo's folder: a question waiting in the inbox, an answer, and
   // Alex's own rules.
   const lisbon = rowWith('What do I still need to sort out for the visa?');
-  await expect(
-    lisbon.getByText('In your inbox', { exact: true }),
-  ).toBeVisible();
+  await expect(lisbon.getByText('Waiting', { exact: true })).toBeVisible();
   await expect(lisbon).toContainText('Bower does it at the next tidy-up');
   // The full sentence sent, not the file name's own short title (#465).
   const answered = rowWith('Which subscriptions renew this autumn?');
@@ -1317,16 +1315,14 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(box).toHaveValue('');
   const edited = rowWith('What do I still need to book for the visa?');
-  await expect(
-    edited.getByText('In your inbox', { exact: true }),
-  ).toBeVisible();
+  await expect(edited.getByText('Waiting', { exact: true })).toBeVisible();
   await expect(lisbon).toHaveCount(0);
 
   // Remove: a job sent now goes to the Trash and leaves the list.
   await box.fill('Make a packing list for my next trip');
   await page.getByRole('button', { name: 'Send' }).click();
   const job = rowWith('Make a packing list for my next trip');
-  await expect(job.getByText('In your inbox', { exact: true })).toBeVisible();
+  await expect(job.getByText('Waiting', { exact: true })).toBeVisible();
   await chooseFrom(job, 'Remove from the inbox');
   await expect(job).toHaveCount(0);
 

@@ -492,14 +492,14 @@ export function ruleSentences(text: string): string[] {
 }
 
 /**
- * The state chip on a request (spec §6.7, boards Requests-*): "In your
- * inbox", "Being done now", "Done", "Did not finish", "Rule kept". An
+ * The state chip on a request (spec §6.7, S-BW-8): "Waiting" while it is in
+ * the inbox, "Being done now", "Done", "Did not finish", "Rule kept". An
  * answered question reads "Answered".
  */
 export function stateLabel(row: Pick<RequestRow, 'state'>): string {
   switch (row.state) {
     case 'waiting':
-      return 'In your inbox';
+      return 'Waiting';
     case 'tidying':
       return 'Being done now';
     case 'done':
