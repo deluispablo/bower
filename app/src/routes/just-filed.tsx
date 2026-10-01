@@ -1,54 +1,63 @@
 /**
- * `/just-filed` (#755, spec §6.6 R-JUST, boards `JustFiled-375` and
- * `JustFiled-1280`): what a tidy-up did as a table. Desktop is a real
- * `<table>` (What Bower did, Now called, You added, Where it is, What
- * changed); the phone is the same table as stacked rows grouped by action.
- * `?run=` opens an earlier run; an unknown key opens the latest. Earlier
- * tidy-ups, failed and partly done ones too, fold open with the same table.
- * A report without `to` (a runner before report v2) falls back to its
- * Activity lines, without the raw "Moved:" ones.
+ * `/just-filed` (#913, spec §4.5, boards JF-Main and JF-Earlier): what each
+ * tidy-up did. The page header ("Just filed" once, with its ⋯, the purpose
+ * line), the latest run as a Card (when, how long, its Badge, four stat
+ * tiles), then what it did: ListRows grouped "Filed · 1" on the phone, a
+ * real `<table>` on desktop (What Bower did, Now called, You added with the
+ * extension, Where it is with the full path, What changed). "Mark all
+ * seen", then "Earlier tidy-ups": one row each with its Badge and the
+ * outcome said once; a row opens in place to show up to three things and
+ * "and N more". A run whose report has no destinations (a runner before
+ * report v2) opens to "Bower did not keep a list for this one." (R-API-2).
+ * `?run=` opens an earlier run; an unknown key opens the latest.
  */
 
 import type { JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { cardDuration, cardWhen } from '../activity.js';
 import { BackLink } from '../components/back-link.js';
+import { Badge } from '../components/badge.js';
+import { Bird } from '../components/bird.js';
+import { Card, StatTile } from '../components/card.js';
+import { FileIcon } from '../components/file-icon.js';
 import { FolderMark } from '../components/folder-mark.js';
+import { IconChevronRight } from '../components/icons.js';
 import { useJustFiled } from '../components/just-filed-row.js';
-import { KindBadge } from '../components/kind-badge.js';
-import { RunMeaning } from '../components/run-meaning.js';
-import { RunSummary } from '../components/run-summary.js';
-import { isLinkNote } from '../note-title.js';
+import { ListRow } from '../components/list-row.js';
+import { NoteMenu } from '../components/note-menu.js';
+import { HOME_CRUMBS, PageHeader } from '../components/page-header.js';
 import { useShellSlot } from '../components/shell-slots.js';
-import { NewTag } from '../components/tags.js';
-import { useFileText } from '../components/rules-panel.js';
 import type { Run } from '../api.js';
 import {
   ACTION_TAG,
-  fallbackLines,
+  earlierSub,
   groupRows,
   hasDestinations,
   JUST_EARLIER,
-  JUST_EARLIER_SUB,
   JUST_INTRO,
   JUST_MARK_ALL,
   linkAddress,
-  originLine,
+  moreLabel,
+  noListLine,
+  NOTHING_FILED,
+  previewRows,
+  runBadge,
   runKey,
   runLine,
   SAY_LABEL,
   showsNewChip,
-  stateLabel,
   tableRows,
   youAdded,
 } from '../just-filed.js';
 import type { TableRow } from '../just-filed.js';
+import { kindLabel } from '../meta-line.js';
 import { loadNoteMeta } from '../note-meta.js';
+import { isLinkNote } from '../note-title.js';
 import { outcomeFromRun, runSentence } from '../run-outcome.js';
-import { groupByOrigin } from '../pile-groups.js';
 import { markAllSeen } from '../seen.js';
+import { ACTIVITY_PATH } from '../shell-routes.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
 import type { VaultIndex } from '../vault-index.js';
@@ -56,10 +65,9 @@ import type { VaultIndex } from '../vault-index.js';
 import '../styles/just-filed.css';
 
 const DESKTOP_QUERY = '(min-width: 900px)';
-const LOG_PATH = 'log.md';
 
-const BACK = <BackLink href="/notes" label="Notes" />;
-const CRUMB = <span class="topbar-title">Just filed</span>;
+/** R-JF-1: back to Home (K-5), not to Folders. */
+const BACK = <BackLink href="/" label="Home" />;
 
 /** `notePath` → the address of a saved link ("host/…/page"), for the rows
  * whose note names one. */
@@ -103,73 +111,41 @@ function useAddresses(
   return addresses;
 }
 
-function Where({ row }: { row: TableRow }): JSX.Element {
-  return (
-    <span class="just-filed-where">
-      {row.para !== null && <FolderMark kind={row.para} size={18} />}
-      <span>{row.folder}</span>
-    </span>
-  );
+/** The parent folder's own name: the last part of "Areas › Visa & Immigration". */
+function parentName(row: TableRow): string {
+  const parts = row.folder.split(' › ');
+  return parts[parts.length - 1] ?? row.folder;
 }
 
-function Badge({ row }: { row: TableRow }): JSX.Element {
-  return (
-    <KindBadge
-      kind={isLinkNote(row.name) ? 'doc' : row.kind}
-      file={{ name: row.name, mimeType: '' }}
-    />
-  );
+/** What FileIcon and the kind word read of a row. */
+function rowItem(row: TableRow): {
+  id: string;
+  title: string;
+  name: string;
+  mimeType: string;
+  root: TableRow['para'];
+  bowerWritten: boolean;
+  href?: string;
+} {
+  return {
+    id: row.key,
+    title: row.title,
+    name: row.name,
+    mimeType: '',
+    root: row.para,
+    bowerWritten: row.action === 'new',
+    ...(row.href !== undefined && { href: row.href }),
+  };
 }
 
-function Title({ row, isNew }: { row: TableRow; isNew: boolean }): JSX.Element {
-  return (
-    <span class="just-filed-title">
-      {row.href === undefined ? (
-        <span>{row.title}</span>
-      ) : (
-        <a href={row.href}>{row.title}</a>
-      )}
-      {isNew && <NewTag />}
-    </span>
-  );
-}
-
-function Tag({ row }: { row: TableRow }): JSX.Element {
-  return (
-    <span class={`just-filed-tag just-filed-tag-${row.action}`}>
-      {ACTION_TAG[row.action]}
-    </span>
-  );
-}
-
-interface ViewProps {
+/** The phone (R-JF-3): "Filed · 1" then ListRows "<kind> · ● <parent>". */
+function PhoneRows({
+  rows,
+  unseen,
+}: {
   rows: readonly TableRow[];
   unseen: ReadonlySet<string>;
-  addresses: ReadonlyMap<string, string>;
-}
-
-function isUnseen(row: TableRow, unseen: ReadonlySet<string>): boolean {
-  return showsNewChip(row, unseen);
-}
-
-function Changed({ row }: { row: TableRow }): JSX.Element {
-  return (
-    <>
-      <span>{row.changed}</span>
-      {row.sayHref !== undefined && (
-        <>
-          {' '}
-          <a class="just-filed-say" href={row.sayHref}>
-            {SAY_LABEL}
-          </a>
-        </>
-      )}
-    </>
-  );
-}
-
-/** The phone: `role="table"` per group, each row stacked cells. */
-function PhoneTable({ rows, unseen, addresses }: ViewProps): JSX.Element {
+}): JSX.Element {
   return (
     <>
       {groupRows(rows).map((group) => (
@@ -178,56 +154,62 @@ function PhoneTable({ rows, unseen, addresses }: ViewProps): JSX.Element {
           class="just-filed-group"
           aria-label={group.heading}
         >
-          <h2 class="just-filed-heading">{group.heading}</h2>
-          <div class="just-filed-list" role="table" aria-label={group.heading}>
-            <div role="rowgroup">
-              {group.rows.map((row) => {
-                const origin = originLine(row, addresses.get(row.notePath));
-                return (
-                  <div key={row.key} class="just-filed-item" role="row">
-                    <div class="just-filed-badge" role="cell">
-                      <Badge row={row} />
-                    </div>
-                    <div class="just-filed-body">
-                      <div role="cell">
-                        <Title row={row} isNew={isUnseen(row, unseen)} />
-                      </div>
-                      <div role="cell" class="just-filed-to">
-                        <Where row={row} />
-                      </div>
-                      {row.action === 'needs' ? (
-                        <div role="cell" class="just-filed-note">
-                          <Changed row={row} />
-                        </div>
-                      ) : (
-                        origin !== undefined && (
-                          <div role="cell" class="just-filed-was">
-                            {origin}
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <h2 class="just-filed-overline">{group.heading}</h2>
+          <ul class="just-filed-rows" role="list">
+            {group.rows.map((row) => (
+              <li key={row.key}>
+                <ListRow
+                  item={rowItem(row)}
+                  meta={kindLabel(rowItem(row))}
+                  where={{ name: parentName(row), root: row.para }}
+                  {...(showsNewChip(row, unseen) && {
+                    badge: <Badge tone="new">New</Badge>,
+                  })}
+                  {...(row.href !== undefined && {
+                    trailing: <IconChevronRight />,
+                  })}
+                />
+                {row.action === 'needs' && (
+                  <p class="just-filed-note">
+                    {row.changed}
+                    {row.sayHref !== undefined && (
+                      <>
+                        {' '}
+                        <a href={row.sayHref}>{SAY_LABEL}</a>
+                      </>
+                    )}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       ))}
     </>
   );
 }
 
-function DesktopTable({ rows, unseen, addresses }: ViewProps): JSX.Element {
+const TAG_TONE: Readonly<
+  Record<TableRow['action'], 'filed' | 'new' | 'check'>
+> = {
+  filed: 'filed',
+  new: 'new',
+  updated: 'filed',
+  needs: 'check',
+};
+
+/** Desktop (R-JF-3): the table, with "You added" and "Where it is". */
+function DesktopTable({
+  rows,
+  unseen,
+  addresses,
+}: {
+  rows: readonly TableRow[];
+  unseen: ReadonlySet<string>;
+  addresses: ReadonlyMap<string, string>;
+}): JSX.Element {
   return (
     <table class="just-filed-table">
-      <colgroup>
-        <col class="just-filed-col-tag" />
-        <col class="just-filed-col-title" />
-        <col class="just-filed-col-was" />
-        <col class="just-filed-col-where" />
-        <col class="just-filed-col-note" />
-      </colgroup>
       <thead>
         <tr>
           <th scope="col">What Bower did</th>
@@ -241,22 +223,38 @@ function DesktopTable({ rows, unseen, addresses }: ViewProps): JSX.Element {
         {rows.map((row) => (
           <tr key={row.key}>
             <td>
-              <Tag row={row} />
+              <Badge tone={TAG_TONE[row.action]}>
+                {ACTION_TAG[row.action]}
+              </Badge>
             </td>
             <td>
               <span class="just-filed-cell-title">
-                <Badge row={row} />
-                <Title row={row} isNew={isUnseen(row, unseen)} />
+                <FileIcon item={rowItem(row)} size={16} />
+                {row.href === undefined ? (
+                  <span>{row.title}</span>
+                ) : (
+                  <a href={row.href}>{row.title}</a>
+                )}
+                {showsNewChip(row, unseen) && <Badge tone="new">New</Badge>}
               </span>
             </td>
-            <td class="just-filed-was-cell">
+            <td class="just-filed-muted">
               {youAdded(row, addresses.get(row.notePath))}
             </td>
             <td>
-              <Where row={row} />
+              <span class="just-filed-where">
+                {row.para !== null && <FolderMark kind={row.para} size={18} />}
+                <span>{row.folder}</span>
+              </span>
             </td>
-            <td class="just-filed-note-cell">
-              <Changed row={row} />
+            <td class="just-filed-muted">
+              {row.changed}
+              {row.sayHref !== undefined && (
+                <>
+                  {' '}
+                  <a href={row.sayHref}>{SAY_LABEL}</a>
+                </>
+              )}
             </td>
           </tr>
         ))}
@@ -265,151 +263,148 @@ function DesktopTable({ rows, unseen, addresses }: ViewProps): JSX.Element {
   );
 }
 
-/** A report with no `to`: what Activity says for that run. */
-function FallbackList({
-  run,
-  log,
-  now,
-}: {
-  run: Run;
-  log: string;
-  now: number;
-}): JSX.Element {
-  const lines = fallbackLines(run, log, now);
-  if (lines.length === 0) {
-    return <p class="just-filed-empty">Nothing to show for this one.</p>;
-  }
+/** The latest run: its Card with the four tiles (S-JF-3). */
+function Summary({ run, now }: { run: Run; now: number }): JSX.Element {
+  const outcome = outcomeFromRun(run);
+  const badge = runBadge(outcome);
   return (
-    <ul class="just-filed-list">
-      {lines.map((line) => (
-        <li key={line.key} class="just-filed-item">
-          <div class="just-filed-body">
-            <span class="just-filed-title">{line.title}</span>
-            {(line.destination ?? line.outcome ?? line.setAside) !==
-              undefined && (
-              <span class="just-filed-to">
-                {line.destination !== undefined
-                  ? `→ ${line.destination}`
-                  : (line.outcome ?? line.setAside)}
-              </span>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
+    <Card class="just-filed-summary">
+      <h2 class="just-filed-when">
+        {cardWhen(run.finishedAt ?? run.requestedAt, now)}
+      </h2>
+      <p class="just-filed-summary-line">
+        {cardDuration(run)} <Badge tone={badge.tone}>{badge.label}</Badge>
+      </p>
+      <div class="just-filed-tiles">
+        <StatTile label="Filed" value={outcome.filed} />
+        <StatTile label="New notes" value={outcome.created} />
+        <StatTile label="Updated" value={outcome.updated} />
+        <StatTile label="Needs you" value={outcome.needsYou} />
+      </div>
+    </Card>
   );
 }
 
-/** One run's body: the table, else why it stopped, else the Activity lines. */
-function RunBody({
+/** An earlier run opened in place (JF-2): up to three things with where
+ * they went, then "and N more". */
+function EarlierBody({
   run,
   index,
-  log,
   now,
-  desktop,
-  unseen,
-  addresses,
 }: {
   run: Run;
   index: VaultIndex | null;
-  log: string;
   now: number;
-  desktop: boolean;
-  unseen: ReadonlySet<string>;
-  addresses: ReadonlyMap<string, string>;
 }): JSX.Element {
-  const rows = tableRows(run, index);
-  if (rows.length > 0) {
-    const View = desktop ? DesktopTable : PhoneTable;
-    const groups = groupByOrigin(rows, (row) => row.origin);
-    if (groups.length === 1 && groups[0]?.origin === undefined) {
-      return <View rows={rows} unseen={unseen} addresses={addresses} />;
-    }
-    // R-PILE-5: what came out of a pile sits under its pile's line.
-    return (
-      <>
-        {groups.map((group) => (
-          <section key={group.origin ?? 'elsewhere'} class="just-filed-pile">
-            <h2 class="just-filed-pile-heading">
-              {group.origin ?? 'Added from elsewhere'}
-            </h2>
-            <View rows={group.rows} unseen={unseen} addresses={addresses} />
-          </section>
-        ))}
-      </>
-    );
+  const [all, setAll] = useState(false);
+  if (!hasDestinations(run)) {
+    return <p class="just-filed-earlier-empty">{noListLine(run)}</p>;
   }
-  const outcome = outcomeFromRun(run);
-  if (outcome.state === 'failed' || outcome.state === 'partial') {
+  const rows = tableRows(run, index);
+  if (rows.length === 0) {
+    const outcome = outcomeFromRun(run);
     return (
-      <p class="just-filed-danger">
-        {runSentence(outcome, { voice: 'third', now })}
+      <p class="just-filed-earlier-empty">
+        {outcome.state === 'failed'
+          ? NOTHING_FILED
+          : outcome.state === 'partial'
+            ? runSentence(outcome, { voice: 'third', now })
+            : 'Nothing to show for this one.'}
       </p>
     );
   }
-  if (!hasDestinations(run))
-    return <FallbackList run={run} log={log} now={now} />;
-  return <p class="just-filed-empty">Nothing to show for this one.</p>;
+  const { shown, more } = all ? { shown: rows, more: 0 } : previewRows(rows);
+  return (
+    <>
+      {groupRows(shown).map((group) => {
+        const full = groupRows(rows).find((g) => g.action === group.action);
+        return (
+          <div key={group.action}>
+            <p class="just-filed-overline">{full?.heading ?? group.heading}</p>
+            <ul class="just-filed-earlier-items" role="list">
+              {group.rows.map((row) => (
+                <li key={row.key}>
+                  {row.href === undefined ? (
+                    <span class="just-filed-earlier-name">{row.title}</span>
+                  ) : (
+                    <a class="just-filed-earlier-name" href={row.href}>
+                      {row.title}
+                    </a>
+                  )}{' '}
+                  <span class="just-filed-earlier-to">→ {parentName(row)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+      {more > 0 && (
+        <button
+          type="button"
+          class="just-filed-more"
+          onClick={() => setAll(true)}
+        >
+          {moreLabel(more)}
+        </button>
+      )}
+    </>
+  );
 }
 
 function Earlier({
   runs,
   index,
-  log,
   now,
   desktop,
 }: {
   runs: readonly Run[];
   index: VaultIndex | null;
-  log: string;
   now: number;
   desktop: boolean;
 }): JSX.Element | null {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   if (runs.length === 0) return null;
   return (
-    <section class="just-filed-group" aria-label={JUST_EARLIER}>
-      <h2 class="just-filed-heading">{JUST_EARLIER}</h2>
-      <p class="just-filed-sub">{JUST_EARLIER_SUB}</p>
-      <ul class="just-filed-earlier">
+    <section class="just-filed-earlier" aria-label={JUST_EARLIER}>
+      <h2 class="just-filed-overline">{JUST_EARLIER}</h2>
+      <p class="just-filed-sub">{earlierSub(desktop)}</p>
+      <ul class="just-filed-earlier-list" role="list">
         {runs.map((run) => {
           const line = runLine(run, now);
+          const badge = runBadge(outcomeFromRun(run));
           const key = runKey(run);
+          const isOpen = open.has(key);
+          const panelId = `earlier-${key.replace(/[^a-zA-Z0-9_-]/g, '')}`;
           return (
             <li key={key}>
-              <details
-                class="just-filed-details"
-                onToggle={(event) => {
-                  const isOpen = event.currentTarget.open;
+              <button
+                type="button"
+                class="just-filed-earlier-row"
+                aria-expanded={isOpen}
+                aria-controls={panelId}
+                onClick={() =>
                   setOpen((prev) => {
                     const next = new Set(prev);
-                    if (isOpen) next.add(key);
-                    else next.delete(key);
+                    if (next.has(key)) next.delete(key);
+                    else next.add(key);
                     return next;
-                  });
-                }}
+                  })
+                }
               >
-                <summary>
-                  <span class="just-filed-when">{line.when}</span>
-                  <span
-                    class={`just-filed-state just-filed-state-${line.tone}`}
-                  >
-                    {line.label}
+                <span class="just-filed-earlier-text">
+                  <span class="just-filed-earlier-head">
+                    <span class="just-filed-earlier-when">{line.when}</span>
+                    <Badge tone={badge.tone}>{badge.label}</Badge>
                   </span>
-                  {line.counts !== '' && (
-                    <span class="just-filed-counts">{line.counts}</span>
-                  )}
-                </summary>
-                {open.has(key) && (
-                  <RunBodyWithAddresses
-                    run={run}
-                    index={index}
-                    log={log}
-                    now={now}
-                    desktop={desktop}
-                  />
-                )}
-              </details>
+                  <span class="just-filed-earlier-counts">{line.counts}</span>
+                </span>
+                <IconChevronRight />
+              </button>
+              {isOpen && (
+                <div id={panelId} class="card just-filed-earlier-panel">
+                  <EarlierBody run={run} index={index} now={now} />
+                </div>
+              )}
             </li>
           );
         })}
@@ -418,116 +413,90 @@ function Earlier({
   );
 }
 
-function RunBodyWithAddresses({
-  run,
-  index,
-  log,
-  now,
-  desktop,
-}: {
-  run: Run;
-  index: VaultIndex | null;
-  log: string;
-  now: number;
-  desktop: boolean;
-}): JSX.Element {
-  const addresses = useAddresses(tableRows(run, index), index);
-  return (
-    <RunBody
-      run={run}
-      index={index}
-      log={log}
-      now={now}
-      desktop={desktop}
-      unseen={new Set()}
-      addresses={addresses}
-    />
-  );
-}
-
 export function JustFiled(): JSX.Element {
   useShellSlot('back', BACK);
-  useShellSlot('crumb', CRUMB);
 
-  const { query } = useLocation();
+  const { query, route } = useLocation();
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const { index } = useVault();
   const { latest, earlier, loaded, unseen, now } = useJustFiled(
     true,
     query.run,
   );
-  const logLoad = useFileText(index?.byPath.get(LOG_PATH));
-  const log = logLoad.status === 'ready' ? logLoad.text : '';
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const rows = latest === null ? [] : tableRows(latest, index);
+  const rows = useMemo(
+    () => (latest === null ? [] : tableRows(latest, index)),
+    [latest, index],
+  );
   const addresses = useAddresses(rows, index);
 
   function markAll(): void {
     markAllSeen(unseen).catch((err: unknown) => console.error(err));
   }
-  const markAllButton =
-    unseen.size > 0 ? (
-      <button type="button" class="just-filed-markall" onClick={markAll}>
-        {JUST_MARK_ALL}
-      </button>
-    ) : null;
 
   let body: JSX.Element;
   if (latest === null) {
-    body = (
-      <p class="just-filed-empty">
-        {loaded
-          ? 'Nothing has been tidied yet. When Bower files what you add, you will see where it went here.'
-          : 'Reading what Bower did…'}
-      </p>
+    body = loaded ? (
+      <div class="just-filed-none">
+        <Bird state="looking" size={52} />
+        <p>
+          No tidy-ups yet. Add a few things and {desktop ? 'click' : 'tap'} Tidy
+          up; what Bower did shows here. <a href="/add">Add</a>
+        </p>
+      </div>
+    ) : (
+      <p class="just-filed-empty">Reading what Bower did…</p>
     );
   } else {
-    const outcome = outcomeFromRun(latest);
-    const state = stateLabel(outcome);
     body = (
       <>
-        <section class="just-filed-summary" aria-label="Tidy-up summary">
-          <h2 class="just-filed-when">
-            {cardWhen(latest.finishedAt ?? latest.requestedAt, now)}
-          </h2>
-          <p class="just-filed-summary-line">
-            {cardDuration(latest)} {'·'}{' '}
-            <span class={`just-filed-state just-filed-state-${state.tone}`}>
-              {state.label}
-            </span>
-          </p>
-          <RunSummary outcome={outcome} size="stats" />
-          <RunMeaning outcome={outcome} />
-        </section>
-        <RunBody
-          run={latest}
-          index={index}
-          log={log}
-          now={now}
-          desktop={desktop}
-          unseen={unseen}
-          addresses={addresses}
-        />
-        {!desktop && markAllButton}
+        <Summary run={latest} now={now} />
+        {rows.length > 0 ? (
+          desktop ? (
+            <DesktopTable rows={rows} unseen={unseen} addresses={addresses} />
+          ) : (
+            <PhoneRows rows={rows} unseen={unseen} />
+          )
+        ) : (
+          <div class="just-filed-empty">
+            <EarlierBody run={latest} index={index} now={now} />
+          </div>
+        )}
+        {unseen.size > 0 && (
+          <button type="button" class="just-filed-markall" onClick={markAll}>
+            {JUST_MARK_ALL}
+          </button>
+        )}
       </>
     );
   }
 
   return (
     <div class="just-filed-screen">
-      <div class="just-filed-head">
-        <h1 class="screen-title">Just filed</h1>
-        {desktop && markAllButton}
+      <div class="just-filed-header">
+        <PageHeader
+          title="Just filed"
+          crumbs={HOME_CRUMBS}
+          purpose={JUST_INTRO}
+          more={{
+            expanded: menuOpen,
+            onClick: () => setMenuOpen((value) => !value),
+            name: 'Just filed',
+          }}
+        />
+        {menuOpen && (
+          <NoteMenu
+            kind="justFiled"
+            title="Just filed"
+            onMarkAllSeen={markAll}
+            onEveryTidy={() => route(ACTIVITY_PATH)}
+            onClose={() => setMenuOpen(false)}
+          />
+        )}
       </div>
-      <p class="just-filed-intro">{JUST_INTRO}</p>
       {body}
-      <Earlier
-        runs={earlier}
-        index={index}
-        log={log}
-        now={now}
-        desktop={desktop}
-      />
+      <Earlier runs={earlier} index={index} now={now} desktop={desktop} />
     </div>
   );
 }

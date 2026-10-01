@@ -85,9 +85,9 @@ async function mount(
 }
 
 describe('LastTidyUpCard', () => {
-  it('says "No tidy-up yet" only once nothing has ever finished', async () => {
+  it('says "Not yet" only once nothing has ever finished (S-HM-10)', async () => {
     await mount({ state: 'empty', run: null });
-    expect(root.textContent).toContain('No tidy-up yet');
+    expect(root.textContent).toBe('Last tidy-upNot yet');
   });
 
   it('done: the time and the counts line, nothing else (R-HOME-0, R-HOME-1)', async () => {
@@ -125,7 +125,7 @@ describe('LastTidyUpCard', () => {
       'Last tidy-upPartly done3 new · 5 still in your inbox',
     );
     const card = root.querySelector('button');
-    expect(card?.classList.contains('home-card-warn')).toBe(true);
+    expect(card?.querySelector('.home-tile-partial')).not.toBeNull();
     await act(() => {
       card?.click();
     });
@@ -137,8 +137,11 @@ describe('LastTidyUpCard', () => {
       state: 'failed',
       run: { ...PARTIAL_RUN, created: [], left: [] },
     });
-    expect(root.textContent).not.toContain('No tidy-up yet');
-    expect(root.textContent).toContain('Failed · Drive did not answer');
+    expect(root.textContent).not.toContain('Not yet');
+    // S-HM-10 failed: the failed Badge "Did not finish".
+    expect(root.querySelector('.badge-failed')?.textContent).toBe(
+      'Did not finish',
+    );
   });
 
   it('shows a skeleton while loading, never "No tidy-up yet" (#322)', async () => {

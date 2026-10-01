@@ -8,7 +8,9 @@ import {
   greetingFor,
   homeStateFor,
   inboxLine,
+  homeTiles,
   lastTidyUpCounts,
+  lastTidyUpNote,
   lastTidyUpOverride,
   quarantinedMessage,
   refusedMessage,
@@ -19,36 +21,16 @@ import {
 import type { BubbleInput, BubblePart, HomeState } from '../src/home.js';
 import { runCounts as sheetRunCounts } from '../src/run-progress.js';
 
-function at(hour: number): Date {
-  const date = new Date('2026-09-27T00:00:00');
-  date.setHours(hour, 0, 0, 0);
-  return date;
-}
-
-describe('greetingFor', () => {
-  it('says good morning before noon', () => {
-    expect(greetingFor(at(6))).toBe('Good morning');
-    expect(greetingFor(at(11))).toBe('Good morning');
-  });
-
-  it('says good afternoon from noon to 6 pm', () => {
-    expect(greetingFor(at(12))).toBe('Good afternoon');
-    expect(greetingFor(at(17))).toBe('Good afternoon');
-  });
-
-  it('says good evening from 6 pm', () => {
-    expect(greetingFor(at(18))).toBe('Good evening');
-    expect(greetingFor(at(23))).toBe('Good evening');
-  });
-
-  it('adds the name when there is one', () => {
-    expect(greetingFor(at(9), 'Alex')).toBe('Good morning, Alex');
+describe('greetingFor (S-HM-1)', () => {
+  it("says G'day with the first name", () => {
+    expect(greetingFor('Alex')).toBe("G'day, Alex");
+    expect(greetingFor('Alex Example')).toBe("G'day, Alex");
   });
 
   it('never invents a name: undefined or blank stays alone', () => {
-    expect(greetingFor(at(9))).toBe('Good morning');
-    expect(greetingFor(at(9), '')).toBe('Good morning');
-    expect(greetingFor(at(9), '   ')).toBe('Good morning');
+    expect(greetingFor()).toBe("G'day");
+    expect(greetingFor('')).toBe("G'day");
+    expect(greetingFor('   ')).toBe("G'day");
   });
 });
 
@@ -333,10 +315,13 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
     );
   });
 
-  it('Empty: the welcome', () => {
+  it('First run: the hello, tap on the phone and click on desktop (S-HM-8)', () => {
     expect(text(bubbleFor({ ...base, state: 'empty', pending: 0 }))).toBe(
-      'Welcome. Add a few things from your phone or your Drive, then tap Tidy up once. I file them where they belong; you can always ask me for more.',
+      "Hi, I'm Bower. Add a few things and tap Tidy up; I'll file them into your folders.",
     );
+    expect(
+      text(bubbleFor({ ...base, state: 'empty', pending: 0, desktop: true })),
+    ).toContain('and click Tidy up');
   });
 
   it('Running: RunSentence in the bird voice', () => {
@@ -353,7 +338,7 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
       lastFinished: WROTE_RUN,
     });
     expect(text(parts)).toBe(
-      'Done 4 min ago: 2 filed · 3 new notes · 2 updated · 1 needs you. See what changed',
+      'Done 4 min ago: 2 filed · 3 new · 2 updated · 1 needs you. See what changed',
     );
     expect(links(parts)).toEqual(['just-filed:See what changed']);
   });
@@ -423,13 +408,24 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
       },
     });
     expect(text(parts)).toBe(
-      'Google Drive stopped answering half way through copying things back. Nothing was lost; your 3 things are still in the inbox. Try again.',
+      'The last tidy-up did not finish. Nothing was lost; your things are still in the inbox. See what changed',
     );
     expect(text(parts)).not.toContain('sync up');
-    expect(links(parts)).toEqual(['failure:Try again']);
-    expect(text(bubbleFor({ ...base, state: 'failed', pending: 1 }))).toBe(
-      'Something went wrong before Bower could finish. Nothing was lost; your 1 thing is still in the inbox. Try again.',
-    );
+    expect(links(parts)).toEqual(['just-filed:See what changed']);
+  });
+
+  it('Done: the bubble and the Last tidy-up tile say the same run (K-16)', () => {
+    const now = Date.parse(WROTE_RUN.finishedAt ?? '') + 21 * 3_600_000;
+    const parts = bubbleFor({
+      ...base,
+      state: 'done',
+      pending: 0,
+      lastFinished: WROTE_RUN,
+      now,
+    });
+    const ago = tidyUpAgo(WROTE_RUN.finishedAt ?? '', now);
+    expect(ago).toBe('21 h ago');
+    expect(text(parts)).toContain(`Done ${ago}: ${lastTidyUpNote(WROTE_RUN)}.`);
   });
 
   it('Loading: never the Empty welcome (#322)', () => {
@@ -445,6 +441,13 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
     expect(text(bubbleFor({ ...base, error: true }))).toBe(
       'Could not load your notes.',
     );
+  });
+});
+
+describe('homeTiles (E-8)', () => {
+  it('shows Health check on desktop only', () => {
+    expect(homeTiles(false)).toEqual(['Inbox', 'Last tidy-up']);
+    expect(homeTiles(true)).toEqual(['Inbox', 'Last tidy-up', 'Health check']);
   });
 });
 

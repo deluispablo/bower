@@ -105,19 +105,21 @@ afterEach(() => {
 });
 
 describe('PinnedSection', () => {
-  it('renders nothing when there is nothing pinned', () => {
+  it('says how to pin when there is nothing pinned (S-HM-16)', () => {
     mount([]);
-    expect(root.textContent).toBe('');
-    expect(root.querySelector('.home-pinned')).toBeNull();
+    expect(root.textContent).toBe(
+      'PinnedPin a folder from its ⋯ to keep it here.',
+    );
+    expect(root.querySelector('.home-pinned-edit')).toBeNull();
   });
 
-  it('renders a tile per pinned item, newest first as given, with a folder or note count', () => {
+  it('renders a tile per pinned item, newest first as given, with the folder root and count (R-HM-3)', () => {
     mount([PINNED_FOLDER, PINNED_NOTE]);
     const names = Array.from(
       root.querySelectorAll('.home-pinned-tile-name'),
     ).map((el) => el.textContent);
     expect(names).toEqual(['Flat hunt', 'Shopping list']);
-    expect(root.textContent).toContain('12 notes');
+    expect(root.textContent).toContain('Projects · 12 things');
   });
 
   it('shows a pinned file as a tile with its title that opens /file/:id', () => {
@@ -136,7 +138,7 @@ describe('PinnedSection', () => {
     const tile = root.querySelector('a.home-pinned-tile');
     expect(tile?.getAttribute('href')).toBe('/file/pdf-1');
     expect(tile?.textContent).toContain('Lease agreement 2026');
-    expect(tile?.querySelector('.kind-badge')).not.toBeNull();
+    expect(tile?.querySelector('.kind-badge')).toBeNull();
   });
 
   it("has no Edit toggle's unpin buttons until Edit is pressed", () => {

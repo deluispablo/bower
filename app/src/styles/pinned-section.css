@@ -1,8 +1,8 @@
 /*
- * Home's Pinned section (spec §14, issue #216): a two-column grid of tiles
- * above Recent, hidden while empty (`pinned-section.tsx` returns `null`
- * rather than an empty shell). Edit swaps the grid to a single column of
- * rows, each with its own unpin button, sized the same as `.home-card`.
+ * Home's Pinned section (#913, boards HM-Main and HM-Edit): full-width
+ * cards on the phone, two columns from 900 px and three from 1200 (the
+ * tiles' grid). Edit makes every card full width with its unpin button.
+ * The cards share the one Card look (`.card` in primitives.css).
  */
 
 .home-pinned {
@@ -29,74 +29,71 @@
   background: none;
   border: none;
   color: var(--color-link);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
+  font-size: var(--text-15);
+  text-decoration: underline;
   cursor: pointer;
 }
 
 .home-pinned-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
-}
-
-.home-pinned-grid-edit {
-  grid-template-columns: 1fr;
 }
 
 .home-pinned-tile {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 56px;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
+  gap: var(--space-3);
+  min-height: 64px;
+  padding: var(--space-3) var(--space-3-5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-raised);
+  color: var(--color-heading);
   text-decoration: none;
 }
 
 a.home-pinned-tile:hover {
-  background: var(--color-surface-hover);
+  border-color: var(--color-border);
 }
 
-.home-pinned-tile > .icon {
+.home-pinned-tile > * {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  color: var(--color-text-muted);
 }
 
 .home-pinned-tile-text {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
-  flex: 1;
 }
 
+/* R-HM-3: the full name, wrapping, never "Housing Searc…". */
 .home-pinned-tile-name {
-  overflow: hidden;
   font-weight: var(--weight-medium);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .home-pinned-tile-meta {
-  overflow: hidden;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.home-pinned-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-15);
 }
 
 .home-pinned-unpin {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2))
+    calc(-1 * var(--space-2)) 0;
   background: none;
   border: none;
   border-radius: var(--radius-sm);
@@ -115,7 +112,6 @@ a.home-pinned-tile:hover {
 
 .home-pinned-tile-done {
   justify-content: center;
-  gap: var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
@@ -131,17 +127,20 @@ a.home-pinned-tile:hover {
   cursor: pointer;
 }
 
-/* Desktop (#356, Desktop-Home board): the tiles sit on the same grid as
-   Home's four cards (`home.css`) — same gap, two columns under 1200 and
-   four from there. Edit keeps its single column of rows. */
+/* Desktop (HM-Main-1280, HM-Edit-1280): Edit keeps full-width cards. */
 @media (min-width: 900px) {
   .home-pinned-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-4);
+  }
+
+  .home-pinned-grid-edit {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (min-width: 1200px) {
   .home-pinned-grid:not(.home-pinned-grid-edit) {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

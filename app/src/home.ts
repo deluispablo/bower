@@ -9,7 +9,6 @@ import type { Run } from './api.js';
 import { sinceLabel } from './bower-tab.js';
 import type { BirdState } from './components/bird-classes.js';
 import { outcomeCounts, outcomeFromRun, runSentence } from './run-outcome.js';
-import type { RunOutcome } from './run-outcome.js';
 import { processedKind } from './run-progress.js';
 import type { RunPhase } from './run-store.js';
 import { failureCopy } from './run-failure.js';
@@ -90,26 +89,14 @@ export function finishedRunFor(
   return ended && run !== null && run.state !== 'running' ? run : null;
 }
 
-type DayPart = 'morning' | 'afternoon' | 'evening';
-
-/** Morning before noon, afternoon before 6 pm, evening after. */
-function dayPart(date: Date): DayPart {
-  const hour = date.getHours();
-  if (hour < 12) return 'morning';
-  if (hour < 18) return 'afternoon';
-  return 'evening';
-}
-
 /**
- * "Good morning, Alex" / "Good evening" alone when there is no name — the
- * Worker's `/me` may not return one (`Me.name` is optional); never invented
- * here or anywhere else.
+ * "G'day, Alex" (S-HM-1): the first word of the account's name, or "G'day"
+ * alone when there is none — the Worker's `/me` may not return a name
+ * (`Me.name` is optional); never invented here or anywhere else.
  */
-export function greetingFor(date: Date, name?: string): string {
-  const greeting = `Good ${dayPart(date)}`;
-  return name === undefined || name.trim() === ''
-    ? greeting
-    : `${greeting}, ${name}`;
+export function greetingFor(name?: string): string {
+  const first = name?.trim().split(/\s+/)[0] ?? '';
+  return first === '' ? "G'day" : `G'day, ${first}`;
 }
 
 function plural(n: number, singular: string, plural_ = `${singular}s`): string {
@@ -222,22 +209,35 @@ export interface BubbleInput {
   lastFinished: Run | null;
   /** The clock, for "Done 4 min ago" (the run store's `now`). */
   now: number;
+  /** Desktop says "click", the phone "tap" (K-27). */
+  desktop?: boolean;
 }
 
 /**
- * The bubble's line for a run (R-HOME-1): `runSentence` in the bird's own
- * voice, then what Bower added as a second sentence (R-RUN-3; `cleanQuote`
- * already dropped its full stop, so there is exactly one here). A run
- * recovered from `.bower/last-run.json` has no items to count and keeps its
- * own sentence.
+ * What a finished run filed, in the Last tidy-up tile's words: "1 filed",
+ * "2 new · 1 updated", "Nothing new". A run recovered from
+ * `.bower/last-run.json` keeps its own sentence (`lastTidyUpOverride`).
  */
-function runLine(run: Run, outcome: RunOutcome, now: number): string {
+export function lastTidyUpNote(run: Run): string {
   const own = lastTidyUpOverride(run);
   if (own !== null) return own;
-  const sentence = runSentence(outcome, { now, voice: 'first' });
-  return outcome.state === 'done' && outcome.quote !== undefined
-    ? `${sentence} ${outcome.quote}.`
-    : sentence;
+  const counts = outcomeCounts(outcomeFromRun(run), { short: true });
+  return counts === '' ? 'Nothing new' : counts;
+}
+
+/**
+ * The bubble's line for a done run (S-HM-3): "Done 21 h ago: 1 filed." The
+ * time and the counts are the Last tidy-up tile's own values (K-16), so
+ * the two never disagree.
+ */
+function runLine(run: Run, now: number): string {
+  const ago = tidyUpAgo(run.finishedAt ?? run.requestedAt, now);
+  const note = lastTidyUpNote(run);
+  const line = `Done ${ago}: ${note === 'Nothing new' ? 'nothing new' : note}.`;
+  // What Bower added stays a second sentence (R-RUN-3; `cleanQuote` already
+  // dropped its full stop).
+  const { quote } = outcomeFromRun(run);
+  return quote === undefined ? line : `${line} ${quote}.`;
 }
 
 /**
@@ -277,25 +277,13 @@ export function bubbleFor(input: BubbleInput): BubblePart[] {
       ];
     case 'empty':
       return [
-        'Welcome. Add a few things from your phone or your Drive, then tap Tidy up once. I file them where they belong; you can always ask me for more.',
+        `Hi, I'm Bower. Add a few things and ${input.desktop === true ? 'click' : 'tap'} Tidy up; I'll file them into your folders.`,
       ];
     case 'running':
       return [
-        runSentence(
-          {
-            state: 'running',
-            startedAt: '',
-            filed: 0,
-            created: 0,
-            updated: 0,
-            needsYou: 0,
-            requests: 0,
-            left: 0,
-            items: [],
-            ...(pending > 0 && { total: pending }),
-          },
-          { voice: 'first' },
-        ),
+        pending > 0
+          ? `Tidying up ${things(pending)}. It takes a few minutes; you can keep adding.`
+          : 'Tidying up. It takes a few minutes; you can keep adding.',
       ];
     case 'done': {
       if (lastFinished === null) return ['Done.'];
@@ -307,7 +295,7 @@ export function bubbleFor(input: BubbleInput): BubblePart[] {
           ? ({ link: 'just-filed', text: 'See what changed' } as const)
           : ({ link: 'activity', text: 'See what I did' } as const);
       return [
-        `${runLine(lastFinished, outcome, now)} `,
+        `${runLine(lastFinished, now)} `,
         where,
         ...doneNotes(lastFinished).map((note) => ` ${note}`),
       ];
@@ -325,16 +313,21 @@ export function bubbleFor(input: BubbleInput): BubblePart[] {
         tail,
       ];
     }
-    case 'failed': {
-      const are = pending === 1 ? 'is' : 'are';
+    case 'failed':
+      // S-HM-7 and S-HM-4 (spec 4.2): never a step name or a reason code.
       return [
-        // The reason's sentence (#316, Phone-Home-Failed), never a step name.
-        `${failureCopy(lastFinished?.reason).sentence} Nothing was lost; your ${things(pending)} ${are} still in the inbox. `,
-        { link: 'failure', text: 'Try again' },
-        '.',
+        'The last tidy-up did not finish. Nothing was lost; your things are still in the inbox. ',
+        { link: 'just-filed', text: 'See what changed' },
       ];
-    }
   }
+}
+
+/** The stat tiles Home shows (spec §4.2 item 3): Inbox and Last tidy-up;
+ * desktop adds Health check (E-8, as on HM-Main-1280). */
+export function homeTiles(desktop: boolean): string[] {
+  return desktop
+    ? ['Inbox', 'Last tidy-up', 'Health check']
+    : ['Inbox', 'Last tidy-up'];
 }
 
 /** What `birdStateFor` needs: the state, the network, a run just done. */

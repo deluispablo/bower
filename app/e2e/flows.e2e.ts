@@ -142,12 +142,12 @@ test.describe('open Home', () => {
       page.getByText('This is a demo, not the real thing'),
     ).toBeVisible();
     await expect(
-      visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
+      visible(page.locator('.stat-tile', { hasText: 'Last tidy-up' })),
     ).not.toContainText('No tidy-up yet');
     // #754 (R-HOME-3): the demo's history has runs, so the card shows the
     // newest one instead of "No tidy-up yet".
     await expect(
-      visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
+      visible(page.locator('.stat-tile', { hasText: 'Last tidy-up' })),
     ).toContainText('filed');
     await shot(page, testInfo, 'home');
 
@@ -531,8 +531,8 @@ test('Add puts a file in the inbox and stays on Add (#421)', async ({
   // refresh.
   await navigate(page, /^Home$/);
   await expect(
-    visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
-      '.home-card-count',
+    visible(page.locator('.stat-tile', { hasText: 'Inbox' })).locator(
+      '.stat-tile-value',
     ),
   ).toHaveText('4');
 });
@@ -692,8 +692,8 @@ test('Add: What is this? becomes one context note in the inbox (#335)', async ({
   // count already followed.
   await navigate(page, /^Home$/);
   await expect(
-    visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
-      '.home-card-count',
+    visible(page.locator('.stat-tile', { hasText: 'Inbox' })).locator(
+      '.stat-tile-value',
     ),
   ).toHaveText('4');
   // The rule sentence is already in Rules, under its own topic. The pile note
@@ -777,7 +777,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
 }, testInfo) => {
   await openHome(page);
   const bubble = visible(page.locator('.home-bubble'));
-  const inbox = visible(page.locator('.home-card', { hasText: 'Inbox' }));
+  const inbox = visible(page.locator('.stat-tile', { hasText: 'Inbox' }));
 
   // Waiting: the count, and Tidy up in the bubble and on the card.
   await expect(bubble).toHaveText(
@@ -841,7 +841,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(bubble).not.toContainText('..');
   await expect(inbox).toContainText('Nothing waiting. Add something.');
   await expect(
-    visible(page.locator('.home-card', { hasText: 'Last tidy-up' })),
+    visible(page.locator('.stat-tile', { hasText: 'Last tidy-up' })),
   ).toContainText('5 filed');
   await shot(page, testInfo, 'tidy-up');
 
@@ -887,10 +887,10 @@ test('a filed link reads by its host and path, on the Done sheet and in Recent, 
 
   // Home's Recent (#306: titles, never file names) reads it the same way.
   await expect(
-    page.locator('.home-note-title', { hasText: 'example.org/offers/job-one' }),
+    page.locator('.list-row-title', { hasText: 'example.org/offers/job-one' }),
   ).toBeVisible();
   await expect(
-    page.locator('.home-note-title', { hasText: /^Link - / }),
+    page.locator('.list-row-title', { hasText: /^Link - / }),
   ).toHaveCount(0);
 });
 
@@ -911,7 +911,7 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   await dismissPushPrompt(page);
 
   const lastCard = visible(
-    page.locator('.home-card', { hasText: 'Last tidy-up' }),
+    page.locator('.stat-tile', { hasText: 'Last tidy-up' }),
   );
   await expect(lastCard).toContainText('5 filed');
 
@@ -927,7 +927,7 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   await confirm.getByRole('button', { name: 'Yes, tidy up' }).click();
   await expect(sheet).toBeVisible();
   const runningCard = visible(
-    page.locator('.home-card', { hasText: 'Running ·' }),
+    page.locator('.stat-tile', { hasText: 'Running ·' }),
   );
   await expect(runningCard).toContainText('Tidy-up');
   await expect(runningCard).not.toContainText('No tidy-up yet');
@@ -1000,13 +1000,15 @@ test.fixme('Home loading state: dimmed cards and skeleton rows, never Empty (#32
 
   const home = page.locator('.home');
   const bubble = visible(page.locator('.home-bubble'));
-  const inbox = visible(page.locator('.home-card', { hasText: 'Inbox' }));
+  const inbox = visible(page.locator('.stat-tile', { hasText: 'Inbox' }));
 
   await expect(home).toHaveAttribute('data-state', 'loading');
   await expect(bubble).toHaveText('Looking for what is waiting for you.');
-  await expect(page.getByText('Welcome. Add a few things')).toHaveCount(0);
-  await expect(inbox).toHaveClass(/home-card-loading/);
-  await expect(inbox.locator('.home-card-count')).toHaveCount(0);
+  await expect(page.getByText("Hi, I'm Bower. Add a few things")).toHaveCount(
+    0,
+  );
+  await expect(inbox).toHaveClass(/home-tile-loading/);
+  await expect(inbox.locator('.stat-tile-value')).toHaveCount(0);
   await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(5);
   await shot(page, testInfo, 'home-loading');
 
@@ -1015,7 +1017,7 @@ test.fixme('Home loading state: dimmed cards and skeleton rows, never Empty (#32
   await expect(home).not.toHaveAttribute('data-state', 'loading', {
     timeout: DELAY_MS + 5_000,
   });
-  await expect(inbox.locator('.home-card-count')).toBeVisible();
+  await expect(inbox.locator('.stat-tile-value')).toBeVisible();
   await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(0);
 });
 
@@ -1116,8 +1118,8 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
   await expect(page.getByRole('dialog', { name: SHEET_NAME })).toHaveCount(0);
   await navigate(page, /^Home$/);
   await expect(
-    visible(page.locator('.home-card', { hasText: 'Inbox' })).locator(
-      '.home-card-count',
+    visible(page.locator('.stat-tile', { hasText: 'Inbox' })).locator(
+      '.stat-tile-value',
     ),
   ).toHaveText('4');
 });
@@ -1140,7 +1142,7 @@ test('the working sheet dismissed with Escape stays closed after sending a reque
 
   // The run is still going, on the Inbox card's own line, not the sheet.
   await expect(
-    visible(page.locator('.home-card', { hasText: 'Inbox' })).getByRole(
+    visible(page.locator('.stat-tile', { hasText: 'Inbox' })).getByRole(
       'button',
       { name: 'Being tidied up' },
     ),
@@ -2012,14 +2014,14 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await shot(page, testInfo, 'container-1920-settings');
 });
 
-test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent in two columns (#356)', async ({
+test('Home on desktop: three equal stat tiles (E-8), Pinned tiles on the same grid, Recent in two columns (#356)', async ({
   page,
 }, testInfo) => {
   test.skip(
     testInfo.project.name !== 'desktop',
     'The desktop grid; the phone keeps its own Home.',
   );
-  const cards = page.locator('.home-cards > .home-card');
+  const cards = page.locator('.home-tiles > *');
   const boxes = async (
     locator: typeof cards,
   ): Promise<{ x: number; y: number; width: number }[]> =>
@@ -2045,8 +2047,8 @@ test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent i
   // 1024: the content column is narrow, so the cards are 2 x 2.
   await page.setViewportSize({ width: 1024, height: 900 });
   await openHome(page);
-  await expect(cards).toHaveCount(4);
-  await expect(cards.nth(3)).toBeVisible();
+  await expect(cards).toHaveCount(3);
+  await expect(cards.nth(2)).toBeVisible();
   let grid = await boxes(cards);
   expect(new Set(grid.map((b) => Math.round(b.width))).size).toBe(1);
   expect(new Set(grid.map((b) => Math.round(b.y))).size).toBe(2);
@@ -2057,7 +2059,7 @@ test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent i
   );
   await shot(page, testInfo, 'home-desktop-1024');
 
-  // 1280: four equal cards in one row; the Pinned tiles on the same
+  // 1280: three equal tiles in one row; the Pinned tiles on the same
   // columns; Recent in two columns.
   await page.setViewportSize({ width: 1280, height: 900 });
   grid = await boxes(cards);
@@ -2073,8 +2075,8 @@ test('Home on desktop: four equal cards, Pinned tiles on the same grid, Recent i
       .getByText('Housing Search Australia', { exact: true }),
   ).toBeVisible();
   tiles.forEach((tile, i) => {
-    expect(tile.x).toBeCloseTo(grid[i % 4]?.x ?? NaN, 0);
-    expect(tile.width).toBeCloseTo(grid[i % 4]?.width ?? NaN, 0);
+    expect(tile.x).toBeCloseTo(grid[i % 3]?.x ?? NaN, 0);
+    expect(tile.width).toBeCloseTo(grid[i % 3]?.width ?? NaN, 0);
   });
   const recent = await boxes(page.locator('.home-notes > li'));
   expect(recent.length).toBeGreaterThan(1);
@@ -2552,7 +2554,7 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   // Home's Last tidy-up card opens Just filed (#617); Activity in the Bower
   // tab stays the full history, with that run's card first.
   await visible(
-    page.locator('.home-card', { hasText: 'Last tidy-up' }),
+    page.locator('.stat-tile', { hasText: 'Last tidy-up' }),
   ).click();
   await expect(page).toHaveURL(/\/just-filed$/);
   // The push prompt a finished run raises covers the phone's tab bar.

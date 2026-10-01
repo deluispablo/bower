@@ -15,7 +15,6 @@ import type { Run, RunItem, SetAsideItem, SetAsideReason } from './api.js';
 import type { DriveFile } from './drive.js';
 import { formatPolicy } from './formats.js';
 import { runCounts, things } from './home.js';
-import { failureCopy } from './run-failure.js';
 import { outcomeCounts, outcomeFromRun } from './run-outcome.js';
 import type { OutcomeAction, RunOutcome } from './run-outcome.js';
 import { shortDay } from './rules.js';
@@ -37,7 +36,7 @@ export const EARLIER_LIMIT = 20;
 export const JUST_INTRO =
   'What each tidy-up did: what is new, what changed, where things went.';
 export const JUST_EARLIER = 'Earlier tidy-ups';
-export const JUST_EARLIER_SUB = 'The last 20, each with what it did';
+
 export const JUST_MARK_ALL = 'Mark all seen';
 /** The Done sheet's link (R-JUST-5). */
 export const JUST_SEE_WHERE = 'See where everything went';
@@ -598,25 +597,88 @@ export interface RunLine {
   when: string;
   label: string;
   tone: StateTone;
-  /** "4 new · 4 updated"; a failed run says why; a run with requests
-   * leads with "1 request". */
+  /** The outcome said once (S-JF-6, JF-3): "6 filed", "nothing filed",
+   * "1 request · 2 filed", or for a failed run `NOTHING_LOST`. */
   counts: string;
 }
 
-/** The line an earlier tidy-up shows (R-JUST-3). */
+/** S-JF-6: a failed run's line, said once. */
+export const NOTHING_LOST = 'nothing was lost; the things stayed in the inbox';
+
+/** S-JF-12: an old run whose report has no destinations (R-API-2). */
+export const NO_LIST = 'Bower did not keep a list for this one.';
+
+/** An opened run that did not file anything (a failed one, for example). */
+export const NOTHING_FILED = 'Nothing was filed.';
+
+/**
+ * What an opened earlier run says when it has no destinations to list: a
+ * run that failed, or had no files at all, filed nothing; only an old run
+ * whose files carry no `to` (a report before v2) has no list (R-API-2).
+ */
+export function noListLine(run: Run): string {
+  const files = (run.items ?? []).some((item) => item.kind === 'file');
+  if (outcomeFromRun(run).state === 'failed' || !files) return NOTHING_FILED;
+  return NO_LIST;
+}
+
+/** S-JF-5: "Tap" on the phone, "Click" on desktop (K-27). */
+export function earlierSub(desktop: boolean): string {
+  return `Newest first. ${desktop ? 'Click' : 'Tap'} one to see what it did.`;
+}
+
+/** S-JF-7: the link that shows the rest of an opened run. */
+export function moreLabel(count: number): string {
+  return `and ${String(count)} more`;
+}
+
+/** An opened earlier run shows this many things before "and N more". */
+export const PREVIEW_LIMIT = 3;
+
+/** The first `limit` of `rows` and how many are left (JF-2). */
+export function previewRows<T>(
+  rows: readonly T[],
+  limit = PREVIEW_LIMIT,
+): { shown: T[]; more: number } {
+  return {
+    shown: rows.slice(0, limit),
+    more: Math.max(0, rows.length - limit),
+  };
+}
+
+/** The Badge a run shows (R-JF-4): Done, Did not finish, Partly done. */
+export function runBadge(outcome: RunOutcome): {
+  tone: 'done' | 'failed' | 'check';
+  label: string;
+} {
+  const { label, tone } = stateLabel(outcome);
+  return {
+    label,
+    tone: tone === 'danger' ? 'failed' : tone === 'warn' ? 'check' : 'done',
+  };
+}
+
+/** The line an earlier tidy-up shows (R-JF-4): its time and length, the
+ * Badge, and the outcome once. */
 export function runLine(run: Run, now: number): RunLine {
   const outcome = outcomeFromRun(run);
   const { label, tone } = stateLabel(outcome);
   const requests = (run.items ?? []).filter((i) => i.kind === 'request').length;
   const parts: string[] = [];
-  if (requests > 0) {
-    parts.push(
-      `${String(requests)} ${requests === 1 ? 'request' : 'requests'}`,
-    );
+  if (outcome.state === 'failed') {
+    parts.push(NOTHING_LOST);
+  } else if (outcome.state === 'partial') {
+    parts.push(outcomeCounts(outcome, { short: true }));
+  } else {
+    if (requests > 0) {
+      parts.push(
+        `${String(requests)} ${requests === 1 ? 'request' : 'requests'}`,
+      );
+    }
+    const filed = filedCount(run);
+    if (filed > 0) parts.push(`${String(filed)} filed`);
+    if (parts.length === 0) parts.push('nothing filed');
   }
-  const counts = outcomeCounts(outcome, { short: true });
-  if (outcome.state === 'failed') parts.push(failureCopy(outcome.reason).short);
-  else if (counts !== '') parts.push(counts);
   return {
     when: `${cardWhen(run.finishedAt ?? run.requestedAt, now)} · ${cardDuration(run)}`,
     label,

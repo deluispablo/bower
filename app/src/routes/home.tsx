@@ -1,42 +1,44 @@
 /**
- * Home (#321, handover C.4, the Phone-Home boards): the greeting with the
- * bird and its speech bubble, the Inbox card, the Last tidy-up card,
- * Pinned and Recent. Home knows about the run: `homeStateFor` (`home.ts`)
- * picks one of Waiting, Empty (the first day), Running, Done and Failed,
- * and the bird, the bubble and the two cards follow it; editing the pins
- * shortens the bubble and hides Recent (Phone-Home-Pins).
+ * Home (#913, spec §4.2, boards HM-Main, HM-Waiting, HM-Running, HM-Recent,
+ * HM-Edit): "G'day, Alex" with its ⋯ (the phone's top bar, the desktop h1),
+ * the bird with its bubble about the last tidy-up, the search field (phone
+ * only: on desktop the sidebar's field is the only one), the stat tiles
+ * (Inbox, Last tidy-up and, on desktop only, Health check: E-8), Pinned
+ * with its Edit mode, and Recent as list rows with the "where" dot.
  *
- * There is no Tell Bower here: asking lives on the Bower tab (C.2). The
- * phone keeps the search row that opens the quick switcher (#142); desktop
- * adds the Health and Notes cards. The first-run tour (#330,
- * `components/help-sheet.tsx`) opens over Home once per account, or when
+ * Home knows about the run: `homeStateFor` (`home.ts`) picks one of
+ * Waiting, Empty (the first day), Running, Done and Failed, and the bird,
+ * the bubble and the tiles follow it. The bubble and the Last tidy-up tile
+ * read the same run, so "21 h ago" is the same value in both (K-16).
+ * Editing the pins hides Recent (HM-Edit). The first-run tour
+ * (`components/help-sheet.tsx`) opens over Home once per account, or when
  * Settings asks for a replay.
  */
 
-import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import type { ComponentChildren, JSX } from 'preact';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { getRuns } from '../api.js';
 import type { Run } from '../api.js';
+import { Badge } from '../components/badge.js';
 import { Bird, BirdNapButton } from '../components/bird.js';
 import { ONCE_STATES } from '../components/bird-classes.js';
 import type { BirdState } from '../components/bird-classes.js';
+import { Card, StatTile } from '../components/card.js';
 import { Hint } from '../components/hint.js';
 import { HEALTH_PATH, useHealthFindings } from '../components/explorer.js';
 import {
   IconClock,
   IconHeart,
   IconInbox,
-  IconNote,
-  IconSearch,
   IconSparkle,
 } from '../components/icons.js';
-import { inlineFactsText } from '../components/key-facts.js';
-import { KindBadge } from '../components/kind-badge.js';
+import { ListRow } from '../components/list-row.js';
+import { MoreButton } from '../components/more-button.js';
+import { NoteMenu } from '../components/note-menu.js';
 import { PinnedSection } from '../components/pinned-section.js';
 import { ProcessButton } from '../components/process-button.js';
-import { RunSummary } from '../components/run-summary.js';
-import { BowerTag, NewTag } from '../components/tags.js';
+import { SearchField } from '../components/search-field.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
 import {
@@ -51,48 +53,44 @@ import {
   greetingFor,
   finishedRunFor,
   homeStateFor,
+  homeTiles,
   inboxLine,
-  lastTidyUpOverride,
+  lastTidyUpNote,
   things,
   restingBird,
   tidyUpAgo,
 } from '../home.js';
 import type { BubblePart, HomeState } from '../home.js';
 import { JUST_FILED_PATH } from '../just-filed.js';
-import { keyFactsFor, kindById } from '../kinds.js';
+import { kindLabel, shortDate } from '../meta-line.js';
 import {
+  displayName,
   folderCounts,
-  folderHref,
-  displayPath,
   folderOf,
+  paraKindOf,
   recentNotes,
   relativeTime,
 } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
-import { isLinkNote, noteTitle } from '../note-title.js';
+import { noteTitle } from '../note-title.js';
 import { tourOnScreen } from '../onboarding.js';
 import { useOnline } from '../online.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
-import { outcomeCounts, outcomeFromRun } from '../run-outcome.js';
+import { outcomeFromRun } from '../run-outcome.js';
 import { useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import type { DriveFile } from '../drive.js';
-import { ACTIVITY_PATH } from '../shell-routes.js';
+import { ACTIVITY_PATH, FOLDERS_PATH } from '../shell-routes.js';
 import { greetingBirdHidden, useOverlayBird } from '../bird-presence.js';
-import { openSwitcher } from '../switcher-store.js';
 import {
   endTour,
   markTourSeen,
   showoffPlayed,
   useTour,
 } from '../tour-store.js';
-import { useNew } from '../use-new.js';
 import { useMediaQuery } from '../use-media-query.js';
-import { fileKind, isAppFile } from '../vault-index.js';
-import type { FileKind, VaultIndex } from '../vault-index.js';
-import { originalFileOf } from '../components/about-panel.js';
 import { isBowerWritten } from '../bower-written.js';
 import { lazyOverlay } from '../lazy-overlay.js';
 import { pinned, useVault } from '../vault-store.js';
@@ -104,11 +102,15 @@ const LazyTour = lazyOverlay(() =>
 );
 const Tour = LazyTour.Component;
 
-/** The phone top bar's title (Flow-05-Home): "Home", not the wordmark. */
-const CRUMB = <span class="topbar-title">Home</span>;
-
-/** Recent shows this many rows (C.4); "All" opens Notes for the rest. */
+/** Recent shows this many rows; "All in Folders" opens the rest. */
 const RECENT_ROWS = 5;
+
+/** The bird: 84 px on the phone, 96 on desktop (spec §4.2, K-32). */
+const BIRD_PHONE = 84;
+const BIRD_DESKTOP = 96;
+
+/** S-HM-16, S-HM-18. */
+export const RECENT_EMPTY = 'Nothing yet. What you add and open shows here.';
 
 interface BubbleProps {
   parts: readonly BubblePart[];
@@ -116,17 +118,17 @@ interface BubbleProps {
   onFailure: () => void;
 }
 
-/** The bubble's text, its links wired: Tidy up and Try again act here,
- * See where they went opens Just filed, See what I did the Bower tab. Exported for `home-bubble.test.tsx`
- * (#420: the button's click event must never reach `onTidyUp`/`onFailure`,
- * which both take no arguments). */
+/** The bubble's text, its links wired: Tidy up and Finish the tidy-up act
+ * here, See what changed opens Just filed, See what I did the Bower tab.
+ * Exported for `home-bubble.test.tsx` (#420: the button's click event must
+ * never reach `onTidyUp`/`onFailure`, which both take no arguments). */
 export function BubbleText({
   parts,
   onTidyUp,
   onFailure,
 }: BubbleProps): JSX.Element {
   return (
-    <p class="home-bubble">
+    <p class="home-bubble card card-bubble">
       {parts.map((part, i) => {
         if (typeof part === 'string') return part;
         if (part.link === 'activity' || part.link === 'just-filed') {
@@ -155,140 +157,146 @@ export function BubbleText({
   );
 }
 
-interface GreetingProps {
-  variant: 'phone' | 'desktop';
-  size: number;
-  state: BirdState;
-  greeting: string;
-  bubble: BubbleProps;
-  onDone: () => void;
-  /** The tour shows its own bird: this one steps aside (rule 1, #888). */
-  birdHidden: boolean;
+/** A stat tile that also holds a control or a Badge (the Inbox tile's Tidy
+ * up, a failed run's "Did not finish"): `StatTile`'s own markup and
+ * classes, with room under the note. */
+function ActionTile({
+  label,
+  icon,
+  value,
+  note,
+  active = false,
+  children,
+}: {
+  label: string;
+  icon: ComponentChildren;
+  value: ComponentChildren;
+  note?: string;
+  active?: boolean;
+  children?: ComponentChildren;
+}): JSX.Element {
+  return (
+    <Card
+      variant={active ? 'accent' : 'plain'}
+      class={
+        active ? 'stat-tile home-tile home-tile-active' : 'stat-tile home-tile'
+      }
+    >
+      <div class="stat-tile-label">
+        {icon}
+        {label}
+      </div>
+      <div class="stat-tile-value">{value}</div>
+      {note !== undefined && <div class="stat-tile-note">{note}</div>}
+      {children}
+    </Card>
+  );
 }
 
-function Greeting({
-  variant,
-  size,
-  state,
-  greeting,
-  bubble,
-  onDone,
-  birdHidden,
-}: GreetingProps): JSX.Element {
+/** A tile that opens somewhere: the whole tile is the link. */
+function TileLink({
+  href,
+  label,
+  children,
+}: {
+  href: string;
+  label: string;
+  children: ComponentChildren;
+}): JSX.Element {
   return (
-    <div class={`home-greeting home-greeting--${variant}`}>
-      {birdHidden ? (
-        <span
-          class="home-greeting-bird-gap"
-          style={{ width: `${size}px`, height: `${size}px` }}
-          aria-hidden="true"
-        />
-      ) : (
-        <BirdNapButton>
-          <Bird state={state} size={size} onDone={onDone} />
-        </BirdNapButton>
-      )}
-      <div class="home-greeting-text">
-        {variant === 'desktop' && <h1 class="home-h1">{greeting}</h1>}
-        <BubbleText {...bubble} />
-      </div>
+    <a class="home-tile-link" href={href} aria-label={label}>
+      {children}
+    </a>
+  );
+}
+
+function SkeletonTile({
+  label,
+  icon,
+  class: extra,
+}: {
+  label: string;
+  icon: ComponentChildren;
+  class?: string;
+}): JSX.Element {
+  return (
+    <div aria-hidden="true" class={extra}>
+      <Card class="stat-tile home-tile home-tile-loading">
+        <div class="stat-tile-label">
+          {icon}
+          {label}
+        </div>
+        <span class="home-skeleton home-skeleton-count" />
+        <span class="home-skeleton home-skeleton-line" />
+      </Card>
     </div>
   );
 }
 
-interface InboxCardProps {
-  state: HomeState;
-  pending: number;
-  onOpenSheet: () => void;
-}
-
-/** The Inbox card (C.4): the count, a line, and Tidy up or Try again. */
-function InboxCard({
+/** The Inbox tile (S-HM-9): the count, its line, and Tidy up while things
+ * wait. */
+function InboxTile({
   state,
   pending,
   onOpenSheet,
-}: InboxCardProps): JSX.Element {
-  const head = (
-    <>
-      <h2>
-        <IconInbox />
-        Inbox
-      </h2>
-      <p class="home-card-count">{pending}</p>
-    </>
-  );
-
-  // #322: until the folder index resolves, no count is a fact yet.
-  if (state === 'loading') {
-    return (
-      <div class="home-card home-card-loading" aria-hidden="true">
-        <h2>
-          <IconInbox />
-          Inbox
-        </h2>
-        <span class="home-skeleton home-skeleton-count" />
-        <span class="home-skeleton home-skeleton-line" />
-      </div>
-    );
-  }
-
+}: {
+  state: HomeState;
+  pending: number;
+  /** Opens the working sheet: where "Being tidied up" leads. */
+  onOpenSheet: () => void;
+}): JSX.Element {
+  if (state === 'loading')
+    return <SkeletonTile label="Inbox" icon={<IconInbox />} />;
+  const line = inboxLine(state, pending);
   if (state === 'running') {
     return (
-      <div class="home-card home-card-active">
-        {head}
+      <ActionTile label="Inbox" icon={<IconInbox />} value={pending} active>
         <button
           type="button"
-          class="home-card-running"
+          class="stat-tile-note home-tile-running"
           aria-haspopup="dialog"
           onClick={onOpenSheet}
         >
-          {inboxLine(state, pending)}
+          {line}
         </button>
-      </div>
+      </ActionTile>
     );
   }
-
-  // A done run that left things for the person: "1 · Needs you" (R-HOME-0);
-  // the things are theirs to sort, so no Tidy up button.
-  if (state === 'done' && pending > 0) {
+  const waits =
+    pending > 0 &&
+    (state === 'waiting' || state === 'failed' || state === 'partial');
+  if (waits) {
     return (
-      <a
-        class="home-card home-card-link home-card-warn"
-        href={folderHref('0-Inbox')}
+      <ActionTile
+        label="Inbox"
+        icon={<IconInbox />}
+        value={pending}
+        note={line}
+        active
       >
-        {head}
-        <p class="home-card-sub">{inboxLine(state, pending)}</p>
-      </a>
+        <div class="home-tile-action">
+          <ProcessButton finish={state === 'partial'} />
+        </div>
+      </ActionTile>
     );
   }
-
-  if (state !== 'failed' && state !== 'partial' && pending === 0) {
-    return (
-      <a class="home-card home-card-link" href="/add">
-        {head}
-        <p class="home-card-sub">{inboxLine(state, pending)}</p>
-      </a>
-    );
-  }
-
   return (
-    <div
-      class={
-        state === 'failed'
-          ? 'home-card home-card-failed'
-          : state === 'partial'
-            ? 'home-card home-card-warn'
-            : 'home-card home-card-active'
-      }
+    <TileLink
+      href={pending === 0 ? '/add' : '/notes'}
+      label={`Inbox: ${String(pending)}. ${line}`}
     >
-      {head}
-      <p class="home-card-sub">{inboxLine(state, pending)}</p>
-      <ProcessButton finish={state === 'partial'} />
-    </div>
+      <StatTile
+        label="Inbox"
+        icon={<IconInbox />}
+        value={pending}
+        note={line}
+        class="home-tile"
+      />
+    </TileLink>
   );
 }
 
-/** The run in flight, for the Last tidy-up card's "Running · 2 min". */
+/** The run in flight, for the tile's "Running · 1 min". */
 export interface ActiveRun {
   startedAt: string;
   total: number;
@@ -300,17 +308,16 @@ function runningFor(startedAt: string, now: number): string {
     1,
     Math.floor((now - new Date(startedAt).getTime()) / 60_000) || 1,
   );
-  return `Running · ${minutes} min`;
+  return `Running · ${String(minutes)} min`;
 }
 
 /**
- * The Last tidy-up card (C.4, R-HOME-0): the time and the counts line, and
- * nothing else; the greeting carries the sentence. While a run goes it reads
- * "Tidy-up / Running · 2 min / 5 things"; after a partly done one "Partly
- * done" in the warning colour, linking to the sheet; otherwise "No tidy-up
- * yet" only when nothing has ever finished (R-HOME-3: `run` is the run
- * store's `lastFinished`, or the newest of `GET /runs` when this session has
- * not seen one). Exported for its own render test.
+ * The Last tidy-up tile (S-HM-10, S-HM-11): "21 h ago" / "1 filed", the
+ * same values the bubble says; "Tidy-up" / "Running · 1 min" / "3 things"
+ * while a run goes; "Not yet" before the first one; a failed run's Badge
+ * "Did not finish". `run` is the run store's `lastFinished`, or the newest
+ * of `GET /runs` when this session has not seen one. Exported for its own
+ * render test.
  */
 export function LastTidyUpCard({
   state,
@@ -322,224 +329,215 @@ export function LastTidyUpCard({
   state: HomeState;
   run: Run | null;
   now: number;
-  /** The run in flight; the card shows it while `state` is `running`. */
+  /** The run in flight; the tile shows it while `state` is `running`. */
   active?: ActiveRun;
-  /** Opens the working sheet: where a partly done card leads. */
+  /** Opens the working sheet: where a running or partly done tile leads. */
   onOpenSheet?: () => void;
 }): JSX.Element {
-  const head = (title: string): JSX.Element => (
-    <h2>
-      <IconClock />
-      {title}
-    </h2>
-  );
-  // #322: until the folder index resolves, "No tidy-up yet" is not a fact.
   if (state === 'loading') {
-    return (
-      <div class="home-card home-card-loading" aria-hidden="true">
-        {head('Last tidy-up')}
-        <span class="home-skeleton home-skeleton-line" />
-        <span class="home-skeleton home-skeleton-line" />
-      </div>
-    );
+    return <SkeletonTile label="Last tidy-up" icon={<IconClock />} />;
   }
   if (state === 'running' && active !== undefined) {
     return (
-      <div class="home-card home-card-active">
-        {head('Tidy-up')}
-        <p class="home-card-when">
-          <span class="home-card-spinner" aria-hidden="true" />
-          {runningFor(active.startedAt, now)}
-        </p>
-        <p class="home-card-sub">{things(active.total)}</p>
-      </div>
+      <button
+        type="button"
+        class="home-tile-link home-tile-button"
+        aria-haspopup="dialog"
+        onClick={onOpenSheet}
+      >
+        <ActionTile
+          label="Tidy-up"
+          icon={<IconClock />}
+          value={runningFor(active.startedAt, now)}
+          note={things(active.total)}
+          active
+        />
+      </button>
     );
   }
   if (run === null) {
     return (
-      <div class="home-card">
-        {head('Last tidy-up')}
-        <p class="home-card-sub">No tidy-up yet</p>
-      </div>
+      <StatTile
+        label="Last tidy-up"
+        icon={<IconClock />}
+        value="Not yet"
+        class="home-tile"
+      />
     );
   }
   const outcome = outcomeFromRun(run);
-  const own = lastTidyUpOverride(run);
-  const counts =
-    own !== null ? (
-      own
-    ) : outcomeCounts(outcome, { short: true }) === '' ? (
-      'Nothing new'
-    ) : (
-      <RunSummary outcome={outcome} size="inline" short />
-    );
   const when = tidyUpAgo(run.finishedAt ?? run.requestedAt, now);
+  if (outcome.state === 'failed') {
+    return (
+      <TileLink
+        href={JUST_FILED_PATH}
+        label={`Last tidy-up: ${when}. Did not finish`}
+      >
+        <ActionTile label="Last tidy-up" icon={<IconClock />} value={when}>
+          <div class="home-tile-badge">
+            <Badge tone="failed">Did not finish</Badge>
+          </div>
+        </ActionTile>
+      </TileLink>
+    );
+  }
   if (outcome.state === 'partial') {
     return (
       <button
         type="button"
-        class="home-card home-card-link home-card-warn home-card-button"
+        class="home-tile-link home-tile-button"
         aria-haspopup="dialog"
         onClick={onOpenSheet}
       >
-        {head('Last tidy-up')}
-        <p class="home-card-when home-card-partial">Partly done</p>
-        <p class="home-card-sub">{counts}</p>
+        <StatTile
+          label="Last tidy-up"
+          icon={<IconClock />}
+          value="Partly done"
+          note={lastTidyUpNote(run)}
+          class="home-tile home-tile-partial"
+        />
       </button>
+    );
+  }
+  const note = lastTidyUpNote(run);
+  return (
+    <TileLink
+      href={outcome.items.length > 0 ? JUST_FILED_PATH : ACTIVITY_PATH}
+      label={`Last tidy-up: ${when}. ${note}`}
+    >
+      <StatTile
+        label="Last tidy-up"
+        icon={<IconClock />}
+        value={when}
+        note={note}
+        class="home-tile"
+      />
+    </TileLink>
+  );
+}
+
+/** The Health check tile (S-HM-12, E-8): desktop only, as on HM-Main-1280. */
+function HealthTile({
+  loading,
+  line,
+}: {
+  loading: boolean;
+  line: string;
+}): JSX.Element {
+  if (loading) {
+    return (
+      <SkeletonTile
+        label="Health check"
+        icon={<IconHeart />}
+        class="home-desktop-only"
+      />
     );
   }
   return (
     <a
-      class="home-card home-card-link"
-      href={outcome.items.length > 0 ? JUST_FILED_PATH : ACTIVITY_PATH}
+      class="home-tile-link home-desktop-only"
+      href={HEALTH_PATH}
+      aria-label={`Health check: ${line}. Runs every Sunday.`}
     >
-      {head('Last tidy-up')}
-      <p class="home-card-when">{when}</p>
-      <p class="home-card-sub">{counts}</p>
+      <StatTile
+        label="Health check"
+        icon={<IconHeart />}
+        value={line}
+        note="Runs every Sunday."
+        class="home-tile"
+      />
     </a>
   );
 }
 
-interface RecentInfo {
-  /** Bower wrote this note (it has a kind, an original or origins). */
-  bower: boolean;
-  /** The badge's kind: the original's, when the note came from a file. */
-  kind: FileKind;
-  badgeFile?: { name: string; mimeType: string };
-  /** "£2,150 · 2 bed · 14 min by bike", `''` when the note has none. */
-  facts: string;
-  /** The original file's id (its New state is what the tidy-up tracks). */
-  originalId?: string;
-}
-
-/** What each Recent row shows beyond its title, read from the note's
- * frontmatter (the cache first, `loadNoteMeta`). A note that cannot be read
- * keeps the plain row. */
-function useRecentInfo(
-  notes: readonly DriveFile[],
-  index: VaultIndex | null,
-): ReadonlyMap<string, RecentInfo> {
-  const [info, setInfo] = useState<ReadonlyMap<string, RecentInfo>>(new Map());
+/** Which of the Recent notes Bower wrote (the bird icon, "Bower note"),
+ * read from each note's frontmatter (the cache first). A note that cannot
+ * be read keeps the plain row. */
+function useBowerWritten(notes: readonly DriveFile[]): ReadonlySet<string> {
+  const [ids, setIds] = useState<ReadonlySet<string>>(new Set());
   const key = notes
     .map((note) => `${note.id}:${note.modifiedTime ?? ''}`)
     .join();
   useEffect(() => {
     let cancelled = false;
     void Promise.all(
-      notes.map(async (note): Promise<[string, RecentInfo] | null> => {
+      notes.map(async (note): Promise<string | null> => {
         try {
           const meta = await loadNoteMeta(note);
-          const kind =
-            meta.kind === undefined ? undefined : kindById(meta.kind);
-          const original = meta.original
-            ?.replace(/^\[\[|\]\]$/g, '')
-            .split('|')[0]
-            ?.trim();
-          const badgeFile =
-            original === undefined || original === ''
-              ? undefined
-              : { name: original, mimeType: '' };
-          const originalId =
-            index === null
-              ? undefined
-              : originalFileOf(index, note, meta.original)?.id;
-          return [
-            note.id,
-            {
-              ...(originalId !== undefined && { originalId }),
-              bower: isBowerWritten(meta),
-              kind:
-                badgeFile !== undefined
-                  ? fileKind(badgeFile)
-                  : isLinkNote(note.name, meta.fields)
-                    ? 'doc'
-                    : 'note',
-              ...(badgeFile !== undefined && { badgeFile }),
-              facts:
-                kind === undefined
-                  ? ''
-                  : inlineFactsText(keyFactsFor(kind, meta.fields)),
-            },
-          ];
+          return isBowerWritten(meta) ? note.id : null;
         } catch (err: unknown) {
           console.error('Reading a note for Recent failed', err);
           return null;
         }
       }),
-    ).then((pairs) => {
+    ).then((found) => {
       if (cancelled) return;
-      setInfo(
-        new Map(pairs.filter((p): p is [string, RecentInfo] => p !== null)),
-      );
+      setIds(new Set(found.filter((id): id is string => id !== null)));
     });
     return () => {
       cancelled = true;
     };
     // `key` stands for `notes`, which is a new array on every render.
-  }, [key, index]);
-  return info;
+  }, [key]);
+  return ids;
+}
+
+/** The parent folder's name and its root, for the row's "where". */
+function whereOf(
+  path: string,
+): { name: string; root: ReturnType<typeof paraKindOf> } | undefined {
+  const parent = folderOf(path);
+  if (parent === '') return undefined;
+  const name = parent.slice(parent.lastIndexOf('/') + 1);
+  return {
+    name: displayName(name),
+    root: paraKindOf(parent.split('/')[0] ?? ''),
+  };
 }
 
 /**
- * Recent's rows (#617, `Flow-05-Home`): the kind badge, the title, New and
- * the Bower tag, the note's key facts on one line ("£2,150 · 2 bed · 14 min
- * by bike"), its folder and when it changed. Exported for its own render
- * test.
+ * Recent's rows (R-HM-4, HM-Recent): FileIcon (the bird for Bower's
+ * writing), the title, "<kind> · ● <parent>", and the time today or "29
+ * Sep" otherwise. No facts, no MD/FILE kinds, no full paths. Exported for
+ * its own render test.
  */
 export function RecentRows({
   notes,
   titles,
-  isNew,
   now,
-  index = null,
 }: {
   notes: readonly DriveFile[];
   titles: ReadonlyMap<string, string>;
-  isNew: (id: string) => boolean;
   now: number;
-  /** Lets a note's New follow its original file (a filed PDF). */
-  index?: VaultIndex | null;
 }): JSX.Element {
-  const info = useRecentInfo(notes, index);
+  const bower = useBowerWritten(notes);
   return (
-    <ul class="home-notes">
+    <ul class="home-notes" role="list">
       {notes.map((note) => {
-        const folder = folderOf(note.path);
-        const extra = info.get(note.id);
+        const item = {
+          id: note.id,
+          title: titles.get(note.id) ?? noteTitle(note),
+          href: `/note/${note.id}`,
+          name: note.name,
+          mimeType: note.mimeType,
+          path: note.path,
+          bowerWritten: bower.has(note.id),
+        };
+        const where = whereOf(note.path);
         return (
           <li key={note.id}>
-            <a class="home-note-row" href={`/note/${note.id}`}>
-              <span class="home-note-badge">
-                <KindBadge
-                  kind={extra?.kind ?? 'note'}
-                  {...(extra?.badgeFile !== undefined && {
-                    file: extra.badgeFile,
-                  })}
-                />
-              </span>
-              <span class="home-note-text">
-                <span class="home-note-line">
-                  <b class="home-note-title">
-                    {titles.get(note.id) ?? noteTitle(note)}
-                  </b>
-                  {(isNew(note.id) ||
-                    (extra?.originalId !== undefined &&
-                      isNew(extra.originalId))) && <NewTag />}
-                  {extra?.bower === true && <BowerTag />}
-                </span>
-                {extra !== undefined && extra.facts !== '' && (
-                  <span class="home-note-facts">{extra.facts}</span>
-                )}
-                {folder !== '' && (
-                  <span class="home-note-meta">{displayPath(folder)}</span>
-                )}
-              </span>
-              {note.modifiedTime !== undefined && (
-                <span class="home-note-time">
-                  {relativeTime(note.modifiedTime, now)}
-                </span>
-              )}
-            </a>
+            <ListRow
+              item={item}
+              meta={kindLabel(item)}
+              {...(where !== undefined && { where })}
+              trailing={
+                note.modifiedTime === undefined ? undefined : (
+                  <time dateTime={note.modifiedTime}>
+                    {shortDate(note.modifiedTime, now)}
+                  </time>
+                )
+              }
+            />
           </li>
         );
       })}
@@ -548,10 +546,10 @@ export function RecentRows({
 }
 
 /**
- * The run the Last tidy-up card and the greeting speak about: the run store's
- * `lastFinished`, or, when this session has not seen one finish, the newest of
- * the Worker's history (`GET /runs`), so the card never says "No tidy-up yet"
- * while there are runs (R-HOME-3).
+ * The run the Last tidy-up tile and the bubble speak about: the run store's
+ * `lastFinished`, or, when this session has not seen one finish, the newest
+ * of the Worker's history (`GET /runs`), so the tile never says "Not yet"
+ * while there are runs.
  */
 function useLastRun(lastFinished: Run | null): Run | null {
   const [history, setHistory] = useState<Run | null>(null);
@@ -577,17 +575,15 @@ export function Home(): JSX.Element {
   const { me } = useSession();
   const { index, files, status, unpinNote, unpinFolder, unpinFile } =
     useVault();
-  // #513: `now` is the run store's own shared clock, so this card, the
-  // Last tidy-up card and the working sheet always agree on how long ago
-  // something happened, down to the same minute boundary.
+  // `now` is the run store's own shared clock, so the bubble, the tiles and
+  // the working sheet always agree on how long ago something happened.
   const { phase, run, lastFinished, now, tidyUp, openSheet } = useRun();
   const online = useOnline();
   const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // One greeting, so one bird (spec 6.21 rule 1); 900 px is the CSS breakpoint.
+  const wide = useMediaQuery('(min-width: 900px)');
 
-  // Recent lists what Add just uploaded (report F6): Add already reads the
-  // folder again after its upload (`add.tsx`), and Home reads the same index.
-  // Refreshing again on open dropped a pin that was still being saved.
-  // R-HOME-3: a session that has not seen a run finish still has the history.
   const settled = finishedRunFor(phase, run, lastFinished);
   const lastRun = useLastRun(settled);
 
@@ -595,26 +591,17 @@ export function Home(): JSX.Element {
   const recent =
     index === null ? [] : recentNotes(index, RECENT_ROWS, showAppFiles);
   const recentTitles = useNoteTitles(recent);
-  const news = useNew();
-  // #506: the same total the working sheet counts against, so "N things"
-  // here never runs one ahead of it — the context note Add may have left
-  // in the inbox is not one of the "things" either place counts.
+  // The same total the working sheet counts against.
   const pending = inboxTotal(inboxCount(files, status === 'loading'));
   const noteCounts =
     index === null ? new Map<string, number>() : folderCounts(index);
   const pinnedItems = index === null ? [] : pinned(index);
   const editingPins = editing && pinnedItems.length > 0;
-  const noteCount =
-    index === null
-      ? 0
-      : index.notes.filter(
-          (note) => showAppFiles || !isAppFile(note.path, note.name),
-        ).length;
 
   const findings = useHealthFindings(true);
   const reportTime =
     index === null ? undefined : findReport(index)?.modifiedTime;
-  const healthHint =
+  const healthLine =
     reportTime === undefined
       ? 'Not checked yet'
       : isReportNew(reportTime, getPref('healthSeenAt'))
@@ -625,8 +612,6 @@ export function Home(): JSX.Element {
           );
 
   const offline = !online;
-  // #322: the very first fetch, before the folder index has ever resolved —
-  // not `refreshing`, which already has a cached index to show.
   const loading = status === 'loading';
   const state = homeStateFor({
     phase,
@@ -664,55 +649,92 @@ export function Home(): JSX.Element {
       editingPins,
       lastFinished: lastRun,
       now,
+      desktop: wide,
     }),
     onTidyUp: tidyUp,
     onFailure: openSheet,
   };
-  const greeting = greetingFor(new Date(now), me?.name);
-  useShellSlot('crumb', CRUMB);
+  const greeting = greetingFor(me?.name);
+  const toggleMenu = (): void => setMenuOpen((open) => !open);
 
-  // The first-run tour (#149): once per account, or again from Settings.
-  // "Let's go" ends it with one show-off on Home.
+  // The phone's top bar (R-HM-1): "G'day, Alex" and its ⋯.
+  const crumb = useMemo(
+    () => <span class="topbar-title">{greeting}</span>,
+    [greeting],
+  );
+  useShellSlot('crumb', crumb);
+  const actions = useMemo(
+    () =>
+      wide ? null : (
+        <MoreButton expanded={menuOpen} onClick={toggleMenu} name="Home" />
+      ),
+    [wide, menuOpen],
+  );
+  useShellSlot('actions', actions);
+
   const tour = useTour();
   const overlayBird = useOverlayBird();
   const showTour = tourOnScreen(me, tour);
-  // One greeting, so one bird (spec 6.21 rule 1); 900 px is the CSS breakpoint.
-  const wide = useMediaQuery('(min-width: 900px)');
   const greetingBird: BirdState = tour.showoff ? 'showoff' : birdState;
   const onDone = tour.showoff ? showoffPlayed : () => setRestedPlay(playId);
+  const birdHidden = greetingBirdHidden(showTour, overlayBird);
+  const size = wide ? BIRD_DESKTOP : BIRD_PHONE;
 
   return (
     <section class="home" data-state={state} aria-busy={loading || undefined}>
-      <Greeting
-        variant={wide ? 'desktop' : 'phone'}
-        size={wide ? 112 : 88}
-        state={greetingBird}
-        greeting={greeting}
-        bubble={bubble}
-        onDone={onDone}
-        birdHidden={greetingBirdHidden(showTour, overlayBird)}
-      />
+      <div class={`home-greeting home-greeting--${wide ? 'desktop' : 'phone'}`}>
+        {birdHidden ? (
+          <span
+            class="home-greeting-bird-gap"
+            style={{ width: `${String(size)}px`, height: `${String(size)}px` }}
+            aria-hidden="true"
+          />
+        ) : (
+          <span class="home-greeting-bird">
+            <BirdNapButton>
+              <Bird state={greetingBird} size={size} onDone={onDone} />
+            </BirdNapButton>
+          </span>
+        )}
+        <div class="home-greeting-text">
+          {wide && (
+            <div class="home-h1-row">
+              <h1 class="home-h1">{greeting}</h1>
+              <MoreButton
+                expanded={menuOpen}
+                onClick={toggleMenu}
+                name="Home"
+                class="home-more"
+              />
+            </div>
+          )}
+          <BubbleText {...bubble} />
+        </div>
+      </div>
+      {menuOpen && (
+        <NoteMenu
+          kind="home"
+          title="Home"
+          onEditPinned={() => setEditing(true)}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
 
-      <button
-        type="button"
-        class="home-search"
-        onClick={() => {
-          openSwitcher();
-        }}
-      >
-        <IconSearch />
-        <span>Search folders, notes and files</span>
-      </button>
+      {!wide && (
+        <div class="home-search">
+          <SearchField variant="trigger" size="phone" />
+        </div>
+      )}
 
       {offline && (
-        <p class="home-card-sub home-offline-hint" role="status">
+        <p class="home-offline-hint" role="status">
           You are offline. Showing what is on this device; Bower checks your
           folder when you are back.
         </p>
       )}
 
-      <div class="home-cards">
-        <InboxCard state={state} pending={pending} onOpenSheet={openSheet} />
+      <div class="home-tiles">
+        <InboxTile state={state} pending={pending} onOpenSheet={openSheet} />
         <LastTidyUpCard
           state={state}
           run={lastRun}
@@ -723,49 +745,9 @@ export function Home(): JSX.Element {
           }}
           onOpenSheet={openSheet}
         />
-        {state === 'loading' ? (
-          <div
-            class="home-card home-card-loading home-desktop-only"
-            aria-hidden="true"
-          >
-            <h2>
-              <IconHeart />
-              Health
-            </h2>
-            <span class="home-skeleton home-skeleton-line" />
-          </div>
-        ) : (
-          <a
-            class="home-card home-card-link home-desktop-only"
-            href={HEALTH_PATH}
-          >
-            <h2>
-              <IconHeart />
-              Health
-            </h2>
-            <p class="home-card-sub">{healthHint}</p>
-            <p class="home-card-sub">Runs every Sunday.</p>
-          </a>
+        {homeTiles(wide).includes('Health check') && (
+          <HealthTile loading={loading} line={healthLine} />
         )}
-        <div
-          class={
-            state === 'loading'
-              ? 'home-card home-card-loading home-desktop-only'
-              : 'home-card home-desktop-only'
-          }
-          aria-hidden={state === 'loading' || undefined}
-        >
-          <h2>
-            <IconNote />
-            Notes
-          </h2>
-          {state === 'loading' ? (
-            <span class="home-skeleton home-skeleton-count" />
-          ) : (
-            <p class="home-card-count">{noteCount}</p>
-          )}
-          <p class="home-card-sub">in your notes</p>
-        </div>
       </div>
 
       {state === 'empty' && (
@@ -803,19 +785,17 @@ export function Home(): JSX.Element {
         </div>
       )}
 
-      {!editingPins && state !== 'loading' && recent.length > 0 && (
+      {!editingPins && state !== 'loading' && (
         <div class="home-recent">
           <div class="home-recent-head">
             <h2>Recent</h2>
-            <a href="/notes">All</a>
+            {!wide && <a href={FOLDERS_PATH}>All in Folders</a>}
           </div>
-          <RecentRows
-            notes={recent}
-            titles={recentTitles}
-            isNew={(id) => news.isNew(id)}
-            now={now}
-            index={index}
-          />
+          {recent.length > 0 ? (
+            <RecentRows notes={recent} titles={recentTitles} now={now} />
+          ) : (
+            <p class="home-empty">{RECENT_EMPTY}</p>
+          )}
         </div>
       )}
       {showTour && me !== undefined && (

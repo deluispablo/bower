@@ -1,12 +1,12 @@
 /*
- * Home (#321, the Phone-Home boards): the greeting with the bird and its
- * speech bubble, the search row (phone only — desktop already has one in
- * the sidebar, `explorer.tsx`), the Inbox and Last tidy-up cards, the
- * first day's tip, Pinned and Recent. Desktop adds the Health and Notes
- * cards.
+ * Home (#913, spec §4.2, boards HM-Main, HM-Waiting, HM-Running,
+ * HM-Recent, HM-Edit): the greeting with the bird (84 / 96) and its bubble
+ * Card, the phone's search field, the stat tiles (Health check on desktop
+ * only), Pinned and Recent. Tiles are `StatTile`s (`primitives.css`); rows
+ * are `ListRow`s (`list-row.css`).
  *
- * Phone-first; `.home-desktop-only` pieces and the desktop-sized greeting
- * only show from 900 px, the same breakpoint as the shell (layout.css).
+ * Phone-first; the desktop greeting, the h1 and `.home-desktop-only`
+ * pieces show from 900 px, the same breakpoint as the shell.
  */
 
 .home {
@@ -15,177 +15,128 @@
   gap: var(--space-6);
 }
 
+/* The bird and its bubble (HM-2): the bubble takes what is left of the
+   row and wraps, so it never runs past 375. */
 .home-greeting {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: var(--space-3);
+  min-width: 0;
 }
 
-.home-greeting--desktop {
-  display: none;
-}
-
-/* The greeting's bird steps aside while the tour runs; its room stays. */
+/* The bird's box and the gap that stands in for it while an overlay shows
+   its own bird are the same size, so the page never jumps (and a scrolled
+   page keeps its place) when the quick switcher or a sheet opens. */
+.home-greeting-bird,
 .home-greeting-bird-gap {
+  display: flex;
   flex: none;
+  line-height: 0;
+}
+
+/* R-HM-8: the bird faces right in every pose; Looking's hop-turn would
+   show its back to the bubble for a few seconds of each loop. */
+.home-greeting .p-look .turn {
+  animation: none;
 }
 
 .home-greeting-text {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
 }
 
+.home-greeting--phone .home-greeting-text {
+  padding-top: var(--space-1);
+}
+
+.home-h1-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .home-h1 {
   margin: 0;
+  font-size: var(--text-2xl);
 }
 
-/* Phone (Flow-05-Home): no greeting heading, the top bar says Home; the
-   bird and its bubble are the whole row. The row bleeds into the page's
-   right padding and the gap tightens so the bubble gets the width. */
-.home-greeting--phone {
-  gap: var(--space-2);
-  margin-right: calc(-1 * var(--space-4));
-}
-
+/* The board's `.bubble`: body weight and colour; only the links are 600
+   and teal. */
 .home-bubble {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-lg);
-  border-bottom-left-radius: var(--space-1);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  font-size: var(--text-base);
-  line-height: var(--leading-body);
+  color: var(--color-text);
+  font-weight: 400;
 }
 
-/* The bubble's Tidy up and Try again: links in the sentence, buttons
-   underneath since they act rather than go somewhere. */
+.home-greeting--desktop .home-bubble {
+  align-self: flex-start;
+}
+
+.home-bubble a,
+.home-bubble-link {
+  color: var(--color-link);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* The bubble's Tidy up and Finish the tidy-up: links in the sentence,
+   buttons underneath since they act rather than go somewhere. */
 .home-bubble-link {
   padding: 0;
   background: none;
   border: none;
-  color: var(--color-link);
   font: inherit;
-  text-decoration: underline;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .home-search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: 44px;
-  padding: 0 var(--space-3);
-  background: var(--color-surface);
-  border: none;
-  border-radius: var(--radius-full);
+  margin-top: calc(-1 * var(--space-2));
+}
+
+.home-offline-hint {
+  margin: 0;
   color: var(--color-text-muted);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  font-size: var(--text-sm);
 }
 
-.home-search:hover {
-  background: var(--color-surface-hover);
-}
-
-.home-search > .icon {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-}
-
-.home-cards {
+/* Stat tiles: two columns on the phone; three on desktop (Inbox, Last
+   tidy-up, Health check), two between 900 and 1199. */
+.home-tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
+  margin-top: calc(-1 * var(--space-2));
 }
 
-.home-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  text-decoration: none;
+.home-tile {
+  height: 100%;
 }
 
-.home-card h2 {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--color-text-muted);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-}
-
-.home-card h2 .icon {
-  width: 18px;
-  height: 18px;
-}
-
-/* Waiting and Running: the card that wants a look is outlined in teal;
-   after a failure, in the danger colour (Phone-Home, -Running, -Failed). */
-.home-card-active {
-  border-color: var(--color-accent-line);
-}
-
-.home-card-failed {
-  border-color: var(--color-danger);
-}
-
-/* Partly done, or a done run that left things for the person: the card is
-   outlined in the warning colour (Home-Done, Home-Partial). */
-.home-card-warn {
-  border-color: var(--color-warn);
-}
-
-.home-card-partial {
-  color: var(--color-warn);
-}
-
-/* The partly done card is a button that opens the sheet: look like the rest. */
-.home-card-button {
+.home-tile-link {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-card);
   background: none;
+  color: inherit;
   font: inherit;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
-/* Running: a small spinner before "Running · 2 min". */
-.home-card-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  margin-right: var(--space-2);
-  border: 2px solid var(--color-accent-line);
-  border-top-color: var(--color-accent);
-  border-radius: var(--radius-full);
-  vertical-align: -1px;
-  animation: home-spin 0.9s linear infinite;
+.home-tile-link:hover .stat-tile {
+  border-color: var(--color-border);
 }
 
-@keyframes home-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .home-card-spinner {
-    animation: none;
-  }
-}
-
-/* Running: the line under the count opens the working sheet. */
-.home-card-running {
+/* "Being tidied up" opens the working sheet: a button drawn as the note. */
+.home-tile-running {
+  display: block;
   padding: 0;
   background: none;
   border: none;
@@ -196,43 +147,19 @@
   cursor: pointer;
 }
 
-/* The Last tidy-up card's "2 h ago", smaller than a count. */
-.home-card-when {
-  margin: 0;
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
-  line-height: 1.2;
+.home-tile-partial .stat-tile-value {
+  color: var(--color-warn);
 }
 
-.home-card-count {
-  margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-bold);
+.home-tile-action {
+  margin-top: var(--space-3);
 }
 
-.home-card p:last-child {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
+.home-tile-badge {
+  margin-top: var(--space-1-5);
 }
 
-/* The Health card's two lines (status, then cadence): same look as the
-   other cards' single trailing line, but neither is the last child of the
-   other, so each needs the class rather than `:last-child`. */
-.home-card-sub {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.home-card-link:hover {
-  background: var(--color-surface);
-}
-
-/* Loading (#322, C.2): until the folder index resolves, a card is dimmed
-   and shows a skeleton bar instead of a count or a line of text — never a
-   zero or "Nothing here yet" as fact. */
-.home-card-loading {
+.home-tile-loading {
   opacity: 0.6;
 }
 
@@ -245,12 +172,14 @@
 
 .home-skeleton-count {
   width: 2.5rem;
-  height: var(--text-2xl);
+  height: var(--text-xl);
+  margin-top: var(--space-1-5);
 }
 
 .home-skeleton-line {
   width: 70%;
   height: var(--text-sm);
+  margin-top: var(--space-1);
 }
 
 @keyframes home-skeleton-pulse {
@@ -270,7 +199,6 @@
   }
 }
 
-/* The first day's tip (Phone-Home-Empty): three things to start with. */
 .home-desktop-only {
   display: none;
 }
@@ -289,7 +217,7 @@
 }
 
 .home-recent-head a {
-  font-size: var(--text-sm);
+  font-size: var(--text-15);
 }
 
 .home-notes {
@@ -300,117 +228,24 @@
   list-style: none;
 }
 
-.home-notes li {
-  border-bottom: 1px solid var(--color-border);
-}
-
-.home-notes li:last-child {
-  border-bottom: none;
-}
-
-/* A Recent row (issue #306, spec: the designed row — type icon, title,
-   folder · time, a divider between rows from the `li` above). */
-.home-note-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 54px;
-  padding: var(--space-2) 0;
-  color: inherit;
-  text-decoration: none;
-}
-
-.home-note-badge {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  min-width: 38px;
-}
-
-/* The title, then New and the Bower tag on the same line (#617). */
-.home-note-line {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.home-note-facts {
-  overflow: hidden;
+.home-empty {
+  margin: 0;
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--text-15);
 }
 
-.home-note-text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.home-note-title {
-  min-width: 0;
-  overflow: hidden;
-  font-weight: var(--weight-medium);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-/* Phone row titles are 15.5px; the two-line clamp stays. */
-@media (max-width: 899.98px) {
-  .home-note-title {
-    font-size: 15.5px;
-  }
-}
-
-@media (min-width: 900px) {
-  .home-note-title {
-    display: block;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    -webkit-line-clamp: unset;
-  }
-}
-
-.home-note-meta {
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.home-note-time {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-/* Recent's skeleton rows while loading (#322): the same row shape as
-   `.home-note-row`, without the divider's asymmetric last child (there is
-   no "All" link yet either). */
 .home-recent-skeleton-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-height: 54px;
   padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.home-recent-skeleton-row:last-child {
-  border-bottom: none;
 }
 
 .home-recent-skeleton-icon {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-sm);
 }
 
@@ -420,44 +255,30 @@
 }
 
 @media (min-width: 900px) {
-  .home-greeting--phone {
-    display: none;
+  .home-greeting {
+    align-items: center;
+    gap: var(--space-5, 20px);
   }
 
-  .home-greeting--desktop {
-    display: flex;
-  }
-
-  .home-search {
-    display: none;
-  }
-
-  /* Desktop-Home and Desktop-Responsive boards (#356): the four cards
-     and the Pinned tiles share one grid — two columns while the content
-     column is narrow (1024: 2 x 2), four from 1200. */
-  .home-cards {
+  .home-tiles {
     gap: var(--space-4);
+    margin-top: 0;
   }
 
   .home-desktop-only {
-    display: flex;
+    display: block;
   }
 }
 
 @media (min-width: 1200px) {
-  .home-cards {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .home-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  /* Recent in two columns (#356); the last row keeps no divider in
-     either column. */
+  /* Recent in two columns (#356). */
   .home-notes {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: var(--space-6);
-  }
-
-  .home-notes li:nth-last-child(2):nth-child(odd) {
-    border-bottom: none;
   }
 }

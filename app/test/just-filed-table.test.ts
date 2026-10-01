@@ -15,6 +15,7 @@ import {
   originLine,
   pickRun,
   runKey,
+  NOTHING_LOST,
   runLine,
   showsNewChip,
   tableRows,
@@ -133,10 +134,10 @@ describe('earlier tidy-ups (R-JUST-3)', () => {
     expect(line.counts).toContain('still in your inbox');
   });
 
-  it('reads a failed run in danger, with why', () => {
+  it('reads a failed run in danger, saying once that nothing was lost (S-JF-6)', () => {
     const line = runLine(buildRun('failed'), NOW);
     expect(line).toMatchObject({ label: 'Did not finish', tone: 'danger' });
-    expect(line.counts).not.toBe('');
+    expect(line.counts).toBe(NOTHING_LOST);
   });
 
   it('leads a Do-it-now run with its request, never "0 things"', () => {
@@ -151,7 +152,7 @@ describe('earlier tidy-ups (R-JUST-3)', () => {
       NOW,
     );
     expect(line.label).toBe('Done');
-    expect(line.counts).toBe('1 request · 1 new');
+    expect(line.counts).toBe('1 request');
   });
 });
 
