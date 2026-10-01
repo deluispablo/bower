@@ -41,6 +41,7 @@ import {
   fileLine,
   filterKind,
   folderSegments,
+  isFolderPage,
   kindOptions,
   rowsFor,
   sortRows,
@@ -392,8 +393,11 @@ export function lifecycleOf(
   const own = contents.notes.find(
     (note) => note.name === `${contents.name}.md`,
   );
-  const status =
-    own === undefined ? undefined : metas.get(own.id)?.fields.status;
+  const meta = own === undefined ? undefined : metas.get(own.id);
+  // The person's own note about the folder says its lifecycle; a page Bower
+  // keeps for a project (`isFolderPage`) does not (PF-Main: no "Active").
+  if (own === undefined || isFolderPage(own, meta)) return undefined;
+  const status = meta?.fields.status;
   if (typeof status !== 'string' || status.trim() === '') return undefined;
   const word = status.trim();
   return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
