@@ -268,7 +268,9 @@ export function GridTile({
       href={item.href}
       data-row-key={rowProps['data-row-key'] ?? item.id}
       data-selected={selected ? 'true' : undefined}
-      aria-current={selected ? 'true' : undefined}
+      {...(onSelect === undefined
+        ? { 'aria-current': selected ? ('true' as const) : undefined }
+        : { role: 'option' as const, 'aria-selected': selected })}
       aria-labelledby={titleId}
       onClick={(event: MouseEvent) => {
         call(rowProps.onClick, event);
@@ -328,6 +330,11 @@ export interface FolderGridProps<T> {
   groups: readonly TileGroup<T>[];
   keyOf: (item: T) => string;
   renderTile: (item: T) => JSX.Element;
+  /** The tiles can be selected (desktop): each group is a listbox of
+   * options named `label` and its group (spec 3.17). */
+  selectable?: boolean;
+  /** The listbox's name, "In Applications". */
+  label?: string;
 }
 
 /**
@@ -339,15 +346,27 @@ export function FolderGrid<T>({
   groups,
   keyOf,
   renderTile,
+  selectable = false,
+  label,
 }: FolderGridProps<T>): JSX.Element {
   return (
     <div class="folder-grid-groups">
       {groups.map((group, at) => (
         <div key={group.label ?? `group-${at}`} class="folder-grid-group">
           {group.label !== null && <h3 class="folder-group">{group.label}</h3>}
-          <ul class="folder-grid" role="list">
+          <ul
+            class="folder-grid"
+            role={selectable ? 'listbox' : 'list'}
+            aria-label={
+              selectable
+                ? [label, group.label].filter(Boolean).join(', ')
+                : undefined
+            }
+          >
             {group.items.map((item) => (
-              <li key={keyOf(item)}>{renderTile(item)}</li>
+              <li key={keyOf(item)} role={selectable ? 'none' : undefined}>
+                {renderTile(item)}
+              </li>
             ))}
           </ul>
         </div>

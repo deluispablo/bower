@@ -549,7 +549,12 @@ export function FolderItems({
 
   function renderEntry(entry: Entry): JSX.Element {
     if (entry.type === 'group') {
-      return <h3 class="folder-group">{entry.label}</h3>;
+      // Inside the desktop's listbox a heading is not allowed: plain text.
+      return (
+        <h3 class="folder-group" role={desktop ? 'presentation' : undefined}>
+          {entry.label}
+        </h3>
+      );
     }
     const { row } = entry;
     const isWaiting =
@@ -809,7 +814,7 @@ export function FolderItems({
               </h3>
               <ul
                 class="folder-list"
-                role="list"
+                role={desktop ? 'listbox' : 'list'}
                 aria-label={`Recently changed in ${displayName(contents.name)}`}
               >
                 {recent.map((file) => {
@@ -826,7 +831,7 @@ export function FolderItems({
                     parentName: parent.slice(parent.lastIndexOf('/') + 1),
                   };
                   return (
-                    <li key={file.id}>
+                    <li key={file.id} role={desktop ? 'none' : undefined}>
                       <ListRow
                         item={item}
                         meta={metaLine(item, { view: 'mixed-row', now })}
@@ -887,6 +892,8 @@ export function FolderItems({
             groups={groups}
             keyOf={(row) => row.key}
             renderTile={renderTile}
+            selectable={desktop}
+            label={`In ${contents.name}`}
           />
         </>
       );
@@ -918,7 +925,44 @@ export function FolderItems({
             overscan={10}
             getKey={entryKey}
             renderRow={renderEntry}
+            {...(desktop && {
+              role: 'listbox' as const,
+              'aria-label': `In ${contents.name}`,
+              rowProps: () => ({ role: 'none' as const }),
+            })}
           />
+        </>
+      );
+    }
+    if (desktop) {
+      // The desktop's rows can be selected: a listbox of options (spec
+      // 3.17), the folders above it in a list of their own.
+      return (
+        <>
+          {subs.length > 0 && (
+            <ul
+              class="folder-list"
+              role="list"
+              aria-label={`Folders in ${contents.name}`}
+            >
+              {subs.map((folder) => (
+                <li key={folder.path}>
+                  <SubfolderRow folder={folder} />
+                </li>
+              ))}
+            </ul>
+          )}
+          <ul
+            class="folder-list"
+            role="listbox"
+            aria-label={`In ${contents.name}`}
+          >
+            {entries.map((entry) => (
+              <li key={entryKey(entry)} role="none">
+                {renderEntry(entry)}
+              </li>
+            ))}
+          </ul>
         </>
       );
     }
