@@ -419,12 +419,14 @@ export function Overlay(props: OverlayProps): JSX.Element {
       return;
     }
     const panelEl = event.currentTarget;
-    let items = Array.from(panelEl.querySelectorAll<HTMLElement>(MENU_ITEMS));
-    if (items.length === 0) {
-      items = Array.from(
-        panelEl.querySelectorAll<HTMLElement>('button:not([disabled]),a[href]'),
+    // Only the items on screen: the desktop popover hides the phone's
+    // Cancel row, which End must skip (R-MORE-6, #950 F-21).
+    const shown = (selector: string): HTMLElement[] =>
+      Array.from(panelEl.querySelectorAll<HTMLElement>(selector)).filter(
+        isDisplayed,
       );
-    }
+    let items = shown(MENU_ITEMS);
+    if (items.length === 0) items = shown('button:not([disabled]),a[href]');
     if (items.length === 0) return;
     const at = items.indexOf(document.activeElement as HTMLElement);
     let next: number;
