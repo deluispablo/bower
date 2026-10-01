@@ -41,6 +41,7 @@
   font-size: var(--text-xs);
 }
 
-.about-prop-off {
-  color: var(--color-text-muted);
+/* The demo's greyed Open in Drive button sits on the row's line. */
+.about-prop:has(.about-prop-drive) {
+  align-items: center;
 }

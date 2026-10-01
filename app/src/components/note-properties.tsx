@@ -11,7 +11,12 @@ import { shortDate } from '../file-preview.js';
 import { kindById } from '../kinds.js';
 import type { NoteProperties } from '../markdown/frontmatter.js';
 import type { NoteMeta } from '../note-meta.js';
+import { HeaderAction } from './header-action.js';
+import { IconExternalLink } from './icons.js';
 import '../styles/note-properties.css';
+
+/** Why Open in Drive is greyed in the demo (the folder page's words). */
+const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
 
 export interface NoteFolderLink {
   name: string;
@@ -155,7 +160,16 @@ export function FilePropertiesList({
       {filed !== '' && <Row label="Filed">{filed}</Row>}
       <Row label="In Drive">
         {driveHref === null ? (
-          <span class="about-prop-off">Open in Drive</span>
+          // The demo has no Drive: the same greyed button as the folder
+          // page's Open in Drive, with the same reason.
+          <HeaderAction
+            icon={<IconExternalLink />}
+            class="about-prop-drive"
+            disabled
+            title={NOT_IN_DEMO_DRIVE}
+          >
+            Open in Drive
+          </HeaderAction>
         ) : (
           <a href={driveHref} target="_blank" rel="noopener">
             Open in Drive

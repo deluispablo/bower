@@ -139,6 +139,10 @@ describe('About this note and About this file', () => {
       'Filedyesterday, by Bower, as it is',
       'In DriveOpen in Drive',
     ]);
+    // The demo: a greyed Open in Drive button, as on the folder page.
+    const drive = file.querySelector<HTMLButtonElement>('.about-prop-drive');
+    expect(drive?.disabled).toBe(true);
+    expect(drive?.title).toBe('Not in the demo. Run your own Bower to use it.');
   });
 
   it('shows Source as a link by name, without brackets or extension, with its kind', async () => {
