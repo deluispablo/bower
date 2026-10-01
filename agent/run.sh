@@ -11,7 +11,9 @@
 # text files for injection patterns and quarantines what is flagged, together
 # with every instruction-shaped note the app did not write (agent/scan.sh,
 # see "pre-scan" below) before Claude ever reads them, runs Claude Code inside it following the vault's
-# own CLAUDE.md under the permission policy in claude-settings.json (next to
+# own CLAUDE.md (moved out of the folder for the run and handed in as a
+# system prompt with the run's facts, see take_rulebook_out and "context
+# pack" below) under the permission policy in claude-settings.json (next to
 # this script), audits what the agent changed (see "post-run audit" below),
 # moves in Drive itself each file the agent moved or renamed to an accepted
 # place (a server-side move: the file keeps its Drive id and no copy stays at
@@ -2735,8 +2737,7 @@ done
 # runs outside `env -i`, so it starts with this shell's environment and the
 # agent under it with the allow-list only.
 readonly AGENT_TIME_LIMIT=900
-STEP='agent run'
-log "$STEP"
+STEP='agent prompt'
 PROMPT=$(cat "$PROMPT_FILE")
 # R-AG-10: the notes a failed run already wrote, in the ingest prompt's
 # placeholder line; without them the line goes, blank line and all.
@@ -2771,16 +2772,17 @@ CONTEXT_MODES=("$MODE")
 if [ "$MODE" = ingest ]; then
   if [ "$RULES_WRITABLE" -eq 1 ]; then
     EFFORT=$EFFORT_HIGH
+    CONTEXT_MODES+=(instructions)
   else
     while IFS= read -r path; do
       [ -n "$path" ] && [ -f "$VAULT_DIR/$path" ] || continue
       if is_context_note "$path"; then
         EFFORT=$EFFORT_HIGH
+        CONTEXT_MODES+=(instructions)
         break
       fi
     done <"$pending_now"
   fi
-  [ "$EFFORT" != "$EFFORT_HIGH" ] || CONTEXT_MODES+=(instructions)
 fi
 readonly EFFORT
 # R-SS-6 (#966): the run's facts, filled into the prompt the way
@@ -2820,7 +2822,10 @@ if ! build_system_prompt "${CONTEXT_MODES[@]}" >"$SYSTEM_FILE" 2>/dev/null; then
   fail "$STEP: system prompt not built"
 fi
 log "$STEP: $(wc -c <"$SYSTEM_FILE" | tr -d ' ') bytes for ${CONTEXT_MODES[*]}"
+# Logged right before the agent starts: the next line is its stats, so the
+# two timestamps bound the agent's own time (agent/bench/run-bench.sh).
 STEP='agent run'
+log "$STEP"
 RUN_STARTED=1
 set +e
 (
