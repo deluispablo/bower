@@ -490,10 +490,10 @@ button.pile-card:focus-visible {
 }
 
 @media (min-width: 900px) {
+  /* The full 720 column (AD-Pile-1280). */
   .add-tidy {
     bottom: 0;
-    width: calc(50% - var(--space-3));
-    margin-left: auto;
+    width: 100%;
   }
 }
 
@@ -669,4 +669,9 @@ button.pile-card:focus-visible {
   .door-button {
     height: 76px;
   }
+}
+
+/* The last card ("Added from elsewhere") clears the sticky Tidy up. */
+.add-column {
+  padding-bottom: var(--space-6);
 }
