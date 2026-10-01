@@ -49,6 +49,13 @@ interface OverlayBaseProps {
   /** Where it sits from 900 px up; the default follows `kind`. */
   desktopPlacement?: OverlayPlacement;
   /**
+   * How an `anchor` popover lines up with its button: `start` (the default,
+   * the *-More boards) opens to the right from the button's left edge;
+   * `end` puts its right edge on the button's and lifts it level with the
+   * section heading above (PF/LI/GR-Filter-1280, #950 F-8).
+   */
+  desktopAlign?: 'start' | 'end';
+  /**
    * A scrim tap this many ms after the overlay opened is ignored (#510): a
    * fast double-tap on the opener can land its second tap on the scrim that
    * now covers the same spot. Off by default; Escape is never guarded.
@@ -84,6 +91,9 @@ const ANCHOR_GAP = 8;
 export const POPOVER_WIDTH = 320;
 /** The popover sits this far under (or over) its button (spec §3.10). */
 const ANCHOR_OFFSET = 6;
+/** An `end` popover's top sits this far above its button's top, level with
+ * the section heading over the button (PF-Filter-1280: top 212, button 232). */
+const END_LIFT = 20;
 
 /**
  * Every ✕ name, exactly as the boards' `aria-label`s (#907). A consumer
@@ -138,17 +148,25 @@ function lockPage(): () => void {
  * the button's left edge (the *-More boards win over spec §3.10's right
  * alignment, #920 DA-4), kept inside the window: flipped above when there
  * is no room below, and pulled left when the button is near the right edge.
+ * `end` (#950 F-8) puts the right edge on the button's instead, its top
+ * level with the heading over the button.
  */
-function anchorTo(panel: HTMLElement, opener: Element | null): void {
+function anchorTo(
+  panel: HTMLElement,
+  opener: Element | null,
+  align: 'start' | 'end',
+): void {
   if (opener === null || opener === document.body) return;
   const rect = opener.getBoundingClientRect();
   const width = Math.min(POPOVER_WIDTH, window.innerWidth * 0.88);
   const maxLeft = window.innerWidth - width - ANCHOR_GAP;
-  const left = Math.max(ANCHOR_GAP, Math.min(rect.left, maxLeft));
+  const wanted = align === 'end' ? rect.right - width : rect.left;
+  const left = Math.max(ANCHOR_GAP, Math.min(wanted, maxLeft));
   // Under the opener; above it when there is no room below; clamped into
   // the window when neither side fits.
   const height = panel.offsetHeight;
-  const below = rect.bottom + ANCHOR_OFFSET;
+  const below =
+    align === 'end' ? rect.top - END_LIFT : rect.bottom + ANCHOR_OFFSET;
   const above = rect.top - ANCHOR_OFFSET - height;
   const lowest = window.innerHeight - height - ANCHOR_GAP;
   let top = below;
@@ -318,6 +336,7 @@ function focusFallback(): void {
 export function Overlay(props: OverlayProps): JSX.Element {
   const { kind, onClose, children } = props;
   const placement = props.desktopPlacement ?? DEFAULT_PLACEMENT[kind];
+  const align = props.desktopAlign ?? 'start';
   const panel = useRef<HTMLDivElement>(null);
   // `undefined` outside the router (unit tests): links then go the
   // router's own way.
@@ -359,10 +378,10 @@ export function Overlay(props: OverlayProps): JSX.Element {
     opener.current = active instanceof HTMLElement ? active : null;
     const element = panel.current;
     if (element !== null && placement === 'anchor') {
-      anchorTo(element, active);
+      anchorTo(element, active, align);
     }
     return lockPage();
-  }, [placement]);
+  }, [placement, align]);
 
   useFocusTrap(panel, onClose, opener);
   useBackCloses(onClose);

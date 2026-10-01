@@ -115,6 +115,7 @@ export function FilterSortSheet({
         <Overlay
           kind="sheet"
           desktopPlacement="anchor"
+          desktopAlign="end"
           labelledBy="filter-sort-title"
           onClose={close}
         >

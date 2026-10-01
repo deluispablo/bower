@@ -105,3 +105,15 @@
     gap: var(--space-3);
   }
 }
+
+/* The desktop popover (PF/LI/GR-Filter-1280, #950 F-8): 16 px inside, set
+   once on the panel, so the Sort chips wrap 3 + 1 as drawn (T-24). */
+@media (min-width: 900px) {
+  .overlay--desktop-anchor .overlay-panel:has(.filter-sort) {
+    padding: 8px var(--space-4) var(--space-4);
+  }
+
+  .overlay--desktop-anchor .filter-sort {
+    padding: 0;
+  }
+}
