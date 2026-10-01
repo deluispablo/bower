@@ -481,3 +481,13 @@
   color: var(--color-text-muted);
   font-size: 13px;
 }
+
+/* The phone hosts' Health check row: "Not checked yet" in 13 px meta
+   (spec §3.14, #920 DA-27). */
+.explorer-item-meta {
+  flex: none;
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}

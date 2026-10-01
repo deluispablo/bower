@@ -92,7 +92,7 @@ export const DESKTOP_QUERY = '(min-width: 900px)';
 
 /** The tools' names (one name per tool, A-4). */
 export const SHOW_OPEN_LABEL = 'Show the open item';
-export const SORT_LABEL = 'Sort';
+export const SORT_LABEL = 'Sort your folders';
 export const COLLAPSE_LABEL = 'Collapse all folders';
 
 /** The drawer's width, px (max 88 vw in CSS). */
@@ -373,6 +373,8 @@ export function Explorer({
   );
   const [collapseKey, setCollapseKey] = useState(0);
   const showAppFiles = useShowAppFiles();
+  // The phone hosts' Health check row says when there is no report yet.
+  const healthFindings = useHealthFindings(variant !== 'sidebar');
 
   // R-NOTES-7: no index yet and the first listing still on its way.
   const firstLoad = index === null && status === 'loading';
@@ -508,6 +510,9 @@ export function Explorer({
               <span class="explorer-item-spacer" aria-hidden="true" />
               <IconHeart />
               <span class="explorer-item-label">Health check</span>
+              {healthFindings === undefined && (
+                <span class="explorer-item-meta">Not checked yet</span>
+              )}
             </a>
           )}
         </div>

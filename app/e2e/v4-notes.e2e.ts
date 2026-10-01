@@ -77,7 +77,9 @@ test('the Notes tab lists Pinned, the five landmarks, a divider, the others, Hea
   await expect(box.locator('.explorer-hidden')).toHaveCount(0);
 
   // #909: one Sort tool on the YOUR FOLDERS row.
-  await expect(box.getByRole('button', { name: 'Sort' })).toHaveCount(1);
+  await expect(
+    box.getByRole('button', { name: 'Sort your folders' }),
+  ).toHaveCount(1);
 });
 
 // #909 replaced the Expand/Collapse all toggle with one "Collapse all

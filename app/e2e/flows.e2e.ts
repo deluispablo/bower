@@ -1646,7 +1646,11 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
     // replaced the Expand/Collapse all toggle), and the waiting-count bubble
     // on Add's row, where the pile gets filled, not Home's.
     const sidebar = page.getByRole('navigation', { name: 'Your folders' });
-    for (const name of ['Show the open item', 'Sort', 'Collapse all folders']) {
+    for (const name of [
+      'Show the open item',
+      'Sort your folders',
+      'Collapse all folders',
+    ]) {
       await expect(sidebar.getByRole('button', { name })).toBeVisible();
     }
     await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveText('3');
@@ -1701,7 +1705,11 @@ test('the Notes tab: the tree, its tools, then Answers, Clippings and Health che
     0,
   );
   const screen = page.locator('.explorer-page');
-  for (const name of ['Show the open item', 'Sort', 'Collapse all folders']) {
+  for (const name of [
+    'Show the open item',
+    'Sort your folders',
+    'Collapse all folders',
+  ]) {
     await expect(screen.getByRole('button', { name })).toBeVisible();
   }
 
