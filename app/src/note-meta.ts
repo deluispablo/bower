@@ -95,6 +95,25 @@ export function noteMetaFrom(data: Record<string, unknown>): NoteMeta {
 }
 
 /**
+ * Every frontmatter read so far in this tab, by note id, at the version it
+ * was read (#922, T950-1): a folder screen opened again starts from what
+ * is known instead of guessing ("Note", "By Bower 0") until IndexedDB
+ * answers. A different `modifiedTime` is never served.
+ */
+const knownMetas = new Map<string, { modifiedTime: string; meta: NoteMeta }>();
+
+/** `file`'s frontmatter if this tab already read it at its version. */
+export function peekNoteMeta(
+  file: Pick<DriveFile, 'id' | 'modifiedTime'>,
+): NoteMeta | undefined {
+  const modifiedTime = file.modifiedTime ?? '';
+  const known = knownMetas.get(file.id);
+  return modifiedTime !== '' && known?.modifiedTime === modifiedTime
+    ? known.meta
+    : undefined;
+}
+
+/**
  * The note's frontmatter facts. Served from IndexedDB when the cached copy
  * was read at the file's current `modifiedTime`; otherwise the note is read
  * once from Drive and the result cached. A file with no `modifiedTime` is
@@ -110,10 +129,12 @@ export async function loadNoteMeta(
     modifiedTime !== '' &&
     cached.modifiedTime === modifiedTime
   ) {
+    knownMetas.set(file.id, { modifiedTime, meta: cached.meta });
     return cached.meta;
   }
 
   const meta = noteMetaFrom(parseFrontmatter(await getText(file.id)).data);
+  knownMetas.set(file.id, { modifiedTime, meta });
   await saveNoteMetaEntry(file.id, {
     modifiedTime,
     meta,
@@ -133,8 +154,10 @@ export async function recordNoteMeta(
   modifiedTime: string | undefined,
   text: string,
 ): Promise<void> {
+  const meta = noteMetaFrom(parseFrontmatter(text).data);
+  knownMetas.set(id, { modifiedTime: modifiedTime ?? '', meta });
   await saveNoteMetaEntry(id, {
     modifiedTime: modifiedTime ?? '',
-    meta: noteMetaFrom(parseFrontmatter(text).data),
+    meta,
   } satisfies NoteMetaEntry);
 }

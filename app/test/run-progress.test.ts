@@ -472,7 +472,9 @@ describe('startedLine (R-API-4)', () => {
         stale: false,
       }),
     ) as { run: { startedAt?: string; requestedAt: string } };
-    expect(startedLine(wire.run)).toBe('Started 11:57 · it takes a few minutes');
+    expect(startedLine(wire.run)).toBe(
+      'Started 11:57 · it takes a few minutes',
+    );
   });
 
   it('falls back to the request time, then to "just now"', () => {

@@ -27,7 +27,6 @@ import {
   sharedTitleOf,
 } from '../note-titles.js';
 
-
 /**
  * `titles.get(file.id)` for each of `files`: `noteTitle(file)` (the file
  * name) until a cache hit resolves, the real title from then on. Pass the

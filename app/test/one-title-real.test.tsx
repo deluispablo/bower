@@ -23,9 +23,8 @@ vi.mock('../src/cache.js', () => ({
 
 const { useNoteTitles } = await import('../src/components/use-note-titles.js');
 const { forgetTitles, sharedTitleOf } = await import('../src/note-titles.js');
-const { buildSearchIndex, searchVault } = await import(
-  '../src/search-index.js'
-);
+const { buildSearchIndex, searchVault } =
+  await import('../src/search-index.js');
 
 const note: DriveFile = {
   id: 'note-1',

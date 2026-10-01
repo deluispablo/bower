@@ -15,12 +15,16 @@ export const RULES_FILE_PATH = 'Rules.md';
 
 /** What `menuDriveIds` reads: the vault pointer and the listing, as loaded. */
 export interface MenuDriveSources {
-  vault: Pick<Vault, 'folderId' | 'inboxFolderId' | 'missingAt'> | null | undefined;
+  vault:
+    Pick<Vault, 'folderId' | 'inboxFolderId' | 'missingAt'> | null | undefined;
   byPath: ReadonlyMap<string, Pick<DriveFile, 'id'>> | null | undefined;
 }
 
 /** The ids each tab menu may open; an item without its id stays hidden. */
-export function menuDriveIds({ vault, byPath }: MenuDriveSources): MenuDriveIds {
+export function menuDriveIds({
+  vault,
+  byPath,
+}: MenuDriveSources): MenuDriveIds {
   const ids: MenuDriveIds = {};
   if (vault !== null && vault !== undefined && vault.missingAt === undefined) {
     if (vault.folderId !== '') ids.root = vault.folderId;

@@ -35,7 +35,9 @@ import type { MetaItem } from '../meta-line.js';
 import { originOf } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import {
+  CARD_RECENT_MAX,
   FOLDER_SORTS,
+  RECENT_MAX,
   fileLine,
   filterKind,
   folderSegments,
@@ -47,7 +49,7 @@ import {
   subfolderThings,
 } from '../folder-view.js';
 import type { FolderRow, FolderSort, OriginFilter } from '../folder-view.js';
-import { loadNoteMeta } from '../note-meta.js';
+import { loadNoteMeta, peekNoteMeta } from '../note-meta.js';
 import {
   displayName,
   folderHref,
@@ -99,7 +101,18 @@ function things(n: number): string {
  * at every depth is left out (K-31, #950).
  */
 function useBowerFolderPages(pages: readonly DriveFile[]): ReadonlySet<string> {
-  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  // What this tab already read (#922): a card's count is never guessed.
+  const [ids, setIds] = useState<ReadonlySet<string>>(
+    () =>
+      new Set(
+        pages
+          .filter((page) => {
+            const meta = peekNoteMeta(page);
+            return meta !== undefined && isFolderPage(page, meta);
+          })
+          .map((page) => page.id),
+      ),
+  );
   const key = pages
     .map((page) => `${page.id}:${page.modifiedTime ?? ''}`)
     .join(',');
@@ -180,8 +193,7 @@ export function firstInside(
   }));
 }
 
-/** How many rows "Recently changed in <folder>" lists. */
-export const RECENT_MAX = 5;
+export { RECENT_MAX } from '../folder-view.js';
 
 /** A day group's label: "Today", "Yesterday", "29 Sep" (S-PF-6). */
 export function dayLabel(iso: string, now: number): string {
@@ -423,7 +435,9 @@ export function FolderItems({
   const cardFiles = useMemo(
     () =>
       folderOfFolders
-        ? subfolders.flatMap((folder) => changedUnder(byPath, folder.path, 10))
+        ? subfolders.flatMap((folder) =>
+            changedUnder(byPath, folder.path, CARD_RECENT_MAX),
+          )
         : [],
     [folderOfFolders, byPath, subfolders],
   );

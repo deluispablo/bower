@@ -731,8 +731,7 @@ export function FileScreen(): JSX.Element {
   const origin = file === undefined ? null : originOf(file, catalogue);
   // Who filed it and when, from the run history (R-API-3, #922).
   const known = file === undefined ? null : withHistory(file, origin, history);
-  const filed =
-    known === null ? null : filedBy(known.file, known.origin, now);
+  const filed = known === null ? null : filedBy(known.file, known.origin, now);
   const folderPath = file === undefined ? '' : folderOf(file.path);
   const aboutProps: AboutPanelProps | null =
     index === null || file === undefined || filed === null

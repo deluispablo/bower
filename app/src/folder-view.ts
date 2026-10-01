@@ -20,6 +20,7 @@ import type { NoteMeta } from './note-meta.js';
 import {
   FILE_KIND_LABELS,
   FILE_KIND_PLURALS,
+  changedUnder,
   fileKind,
 } from './vault-index.js';
 import type { FileKind } from './vault-index.js';
@@ -502,4 +503,46 @@ export function subfolderThings(
     bowerPages.has(page.id),
   ).length;
   return Math.max(0, sub.things + inside - pages);
+}
+
+/** How many rows "Recently changed in <folder>" lists. */
+export const RECENT_MAX = 5;
+
+/** How many of a subfolder's newest things its card reads. */
+export const CARD_RECENT_MAX = 10;
+
+/**
+ * Every note whose frontmatter a folder screen states something about
+ * (#922, T950-1): the folder's own notes (rows, the split, the count and
+ * Compare), the same-name pages under its subfolders (each card's count)
+ * and, on a folder of folders, the notes its cards and Recently changed
+ * list name ("Bower note"). The screen waits for these before it says
+ * who wrote what, instead of guessing.
+ */
+export function folderReads(
+  folder: {
+    path: string;
+    notes: readonly DriveFile[];
+    subfolders: readonly { path: string }[];
+  },
+  folders: readonly Pick<DriveFile, 'path'>[],
+  byPath: ReadonlyMap<string, DriveFile>,
+  folderOfFolders: boolean,
+): DriveFile[] {
+  const reads = new Map<string, DriveFile>();
+  const add = (file: DriveFile): void => {
+    const kind = fileKind(file);
+    if (kind === 'note' || kind === 'markdown') reads.set(file.id, file);
+  };
+  folder.notes.forEach(add);
+  for (const sub of folder.subfolders) {
+    folderPagesUnder(folders, byPath, sub.path).forEach(add);
+  }
+  if (folderOfFolders) {
+    changedUnder(byPath, folder.path, RECENT_MAX).forEach(add);
+    for (const sub of folder.subfolders) {
+      changedUnder(byPath, sub.path, CARD_RECENT_MAX).forEach(add);
+    }
+  }
+  return [...reads.values()];
 }
