@@ -122,6 +122,30 @@ test('done: tiles, rows with a tag, and See what changed opens Just filed for th
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
+test('Back after See what changed leaves Just filed in one step (#920 F-2)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'the done chip is phone-only');
+  await holdRun(page, 'done');
+  await openSheet(page, 'Tidy-up done', true);
+  const sheet = page.getByRole('dialog', { name: 'Tidy-up done' });
+  // The sheet's own Back entry is in place before the link is used.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (history.state as { bowerOverlay?: boolean } | null)?.bowerOverlay ===
+          true,
+      ),
+    )
+    .toBe(true);
+  await sheet.getByRole('link', { name: 'See what changed' }).click();
+  await expect(page).toHaveURL(/\/just-filed\?run=/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/folder\/4-Archives\/Flat%20hunt$/);
+});
+
 test('partly done: Finish the tidy-up opens the confirmation directly (R-SHEET-4)', async ({
   page,
 }) => {

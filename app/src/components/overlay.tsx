@@ -163,8 +163,9 @@ function anchorTo(panel: HTMLElement, opener: Element | null): void {
  * address, `bowerOverlay` in its state) sits on top: Back pops it and the
  * newest overlay closes. Closing every overlay any other way takes that
  * entry back off; an overlay that hands over to the next (a menu opening
- * Help) keeps it. A pick that navigates pushes its own entry first, so
- * nothing is taken off then.
+ * Help) keeps it. A pick that navigates ("See what changed", "Show in
+ * folders") replaces the overlay's entry instead of pushing on top of it
+ * (#920 F-2), so the next Back leaves the new page in one step.
  */
 const backClosers: Array<{ close: () => void }> = [];
 let ignorePops = 0;
@@ -200,6 +201,27 @@ function queueReconcile(): void {
   setTimeout(reconcileHistory, 0);
 }
 
+/**
+ * While an overlay's own entry is on top, a navigation takes its place
+ * (`replaceState`) instead of pushing above it: otherwise that stale entry
+ * would sit under the new page and swallow the next Back. Installed once,
+ * with the popstate listener.
+ */
+function replaceOverlayEntryOnNavigate(): void {
+  const push = history.pushState.bind(history);
+  history.pushState = (
+    data: unknown,
+    unused: string,
+    url?: string | URL | null,
+  ): void => {
+    if (hasOverlayEntry()) {
+      history.replaceState(data, unused, url);
+      return;
+    }
+    push(data, unused, url);
+  };
+}
+
 function onBackPop(): void {
   if (ignorePops > 0) {
     ignorePops -= 1;
@@ -222,6 +244,7 @@ export function useBackCloses(onClose: () => void, open = true): void {
     if (!popListening) {
       popListening = true;
       window.addEventListener('popstate', onBackPop);
+      replaceOverlayEntryOnNavigate();
     }
     const entry = {
       close: () => {
