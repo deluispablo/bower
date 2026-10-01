@@ -13,9 +13,19 @@ import type { RunOutcome } from '../run-outcome.js';
 import { StatTile } from './card.js';
 import '../styles/run-summary.css';
 
-/** A tile's label as the board writes it: "new notes" → "New notes". */
-export function tileLabel(label: string): string {
-  return label.charAt(0).toUpperCase() + label.slice(1);
+/** The tiles' fixed labels as the board writes them (AR-Run): the same
+ * words whatever the number, so a tile never says "New note". */
+const TILE_LABELS: Readonly<Record<string, string>> = {
+  filed: 'Filed',
+  new: 'New notes',
+  updated: 'Updated',
+  needs: 'Needs you',
+  left: 'Still in your inbox',
+};
+
+/** A tile's label by its key (`summaryTiles`). */
+export function tileLabel(key: string): string {
+  return TILE_LABELS[key] ?? key;
 }
 
 export interface RunSummaryProps {
@@ -103,7 +113,7 @@ export function RunSummary({
             key={tile.key}
             aria-label={`${tile.value} ${tile.label}`}
           >
-            <StatTile label={tileLabel(tile.label)} value={tile.value} />
+            <StatTile label={tileLabel(tile.key)} value={tile.value} />
           </li>
         ))}
       </ul>

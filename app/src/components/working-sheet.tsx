@@ -564,7 +564,7 @@ function PartialTiles({ outcome }: { outcome: RunOutcome }): JSX.Element {
           class={`run-summary-tile${tile.value === 0 ? ' run-summary-zero' : ''}${tile.warn ? ' run-summary-warn' : ''}`}
           aria-label={`${tile.value} ${tile.label}`}
         >
-          <StatTile label={tileLabel(tile.label)} value={tile.value} />
+          <StatTile label={tileLabel(tile.key)} value={tile.value} />
         </li>
       ))}
     </ul>

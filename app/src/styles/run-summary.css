@@ -31,8 +31,26 @@
   box-sizing: border-box;
 }
 
+/* AR-Run: the number first, the label under it in 12 px, never broken
+   inside a word. */
+.run-summary-tile .stat-tile {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+}
+
+.run-summary-tile .stat-tile-value {
+  order: -1;
+  margin-top: 0;
+}
+
 .run-summary-tile .stat-tile-label {
-  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .run-summary-warn .stat-tile {
