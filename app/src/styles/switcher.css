@@ -4,7 +4,7 @@
 /* The overlay's own panel (`overlay.css`) takes the switcher's size: a full
    screen on the phone, a wide dialog from 900 px. The scrim, the animation
    and the focus trap are the overlay's. */
-.overlay .overlay-panel:has(> .switcher-panel:not(.is-sheet)) {
+.overlay .overlay-panel:has(> .switcher-panel:where(:not(.is-sheet))) {
   top: 0;
   right: 0;
   bottom: 0;
@@ -19,7 +19,9 @@
   box-shadow: none;
 }
 
-.overlay .overlay-panel:has(> .switcher-panel:not(.is-sheet)) > .overlay-grab {
+.overlay
+  .overlay-panel:has(> .switcher-panel:where(:not(.is-sheet)))
+  > .overlay-grab {
   display: none;
 }
 
@@ -43,7 +45,8 @@
 /* #917 (SE-Empty, SE-Query, NO-Tag): #910's SearchField at the top, 16 px
    from the edges; no rule under it. */
 .switcher-field {
-  padding: var(--space-4) var(--space-4) var(--space-2);
+  /* SE-Empty-375: the field's top edge 8 px from the screen's. */
+  padding: var(--space-2) var(--space-4) var(--space-2);
 }
 
 /* The tag search's line (NO-Tag), the offline and no-results lines. */
@@ -252,11 +255,16 @@
   .overlay .overlay-panel:has(> .switcher-panel) {
     /* Only the results list scrolls, never the panel or the overlay panel. */
     overflow: hidden;
-    top: var(--switcher-top, 60px);
+    /* SE-Query-1280: centred over the content area right of the sidebar
+       (x 322–1222 at 1280), 60 px from the top. */
+    top: max(60px, var(--switcher-top, 0px));
     right: 0;
     bottom: auto;
-    left: 0;
-    width: min(920px, calc(100vw - var(--space-8)));
+    left: var(--sidebar-width, 264px);
+    width: min(
+      900px,
+      calc(100vw - var(--sidebar-width, 264px) - var(--space-8))
+    );
     height: min(600px, calc(100vh - 160px));
     margin: 0 auto;
     padding: 0;
@@ -350,7 +358,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* NO-Tag-1280 draws it over the note's middle (x 360–920 at 1280). */
   .overlay .overlay-panel:has(> .switcher-panel.is-tag) {
+    left: 0;
     width: min(560px, calc(100vw - var(--space-8)));
     height: auto;
     max-height: min(600px, calc(100vh - 120px));

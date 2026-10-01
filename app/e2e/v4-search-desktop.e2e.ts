@@ -39,6 +39,22 @@ test('the overlay has two columns and the preview follows the highlighted result
   expect(list).not.toBeNull();
   expect(previewBox).not.toBeNull();
   if (list === null || previewBox === null) return;
+  // SE-Query-1280: centred over the content area, x 322–1222, top 60.
+  const panel = await page
+    .locator('.overlay-panel:has(> .switcher-panel)')
+    .boundingBox();
+  expect(Math.round(panel?.x ?? 0)).toBe(322);
+  expect(Math.round(panel?.width ?? 0)).toBe(900);
+  // 60 px down, or below the banners when one shows (the demo's own).
+  const banners = await page.evaluate(() =>
+    Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        '--switcher-top',
+      ) || '0',
+    ),
+  );
+  expect(Math.round(panel?.y ?? 0)).toBe(Math.round(Math.max(60, banners)));
+
   // Side by side: the preview starts where the list ends.
   expect(previewBox.x).toBeGreaterThanOrEqual(list.x + list.width - 1);
 
