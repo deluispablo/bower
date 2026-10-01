@@ -729,10 +729,7 @@ export function Note() {
           onAddParagraph={() => setAppendOpen(true)}
           onEdit={() => void handleEdit()}
           siblingNames={siblingNames(index, file.path)}
-          pendingRename={
-            pendingByPath(requests).get(file.path)?.kind === 'rename'
-          }
-          pendingMove={pendingByPath(requests).get(file.path)?.kind === 'move'}
+          pending={pendingByPath(requests).get(file.path)}
           onClose={() => setMenuOpen(false)}
         />
       )}

@@ -263,6 +263,28 @@ describe('Move to… (#909, PF-Move)', () => {
     expect(document.body.querySelector('.overlay-panel')).toBeNull();
   });
 
+  it('reopens a waiting move with its folder chosen, and Move here replaces it (§3.6)', async () => {
+    mount(null);
+    void act(() => {
+      openMoveTo({
+        subject: SUBJECT,
+        name: NAME,
+        pending: { destination: '2-Areas/Garden', fileId: 'OLD_ID' },
+      });
+    });
+    expect(radio('Garden').getAttribute('aria-checked')).toBe('true');
+    expect(document.body.textContent).toContain('Moving to Garden');
+    expect(button('Move here').disabled).toBe(false);
+    click(button('Move here'));
+    await flush();
+    expect(mocks.createTextFile).toHaveBeenCalledTimes(1);
+    expect(mocks.deleteFile).toHaveBeenCalledWith('OLD_ID');
+    expect(currentToast()?.message).toBe(
+      'In your inbox. Bower moves it at the next tidy-up.',
+    );
+    expect(currentToast()?.action).toBeUndefined();
+  });
+
   it('says so and stays open when the move could not be written', async () => {
     mocks.createTextFile.mockRejectedValue(new Error('offline'));
     vi.spyOn(console, 'error').mockImplementation(() => undefined);

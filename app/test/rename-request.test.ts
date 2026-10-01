@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { RequestRow } from '../src/bower-tab.js';
 import {
   pendingByPath,
+  renamePrefill,
   renameRequestText,
   splitFileName,
   validateRename,
@@ -85,11 +86,13 @@ describe('pendingByPath', () => {
     expect(map.get('1-Projects/Flat hunt/Offer.md')).toEqual({
       kind: 'rename',
       line: 'Renaming to Back to work at the next tidy-up',
+      value: 'Back to work.md',
       fileId: 'NOTE_ID',
     });
     expect(map.get('Letter.md')?.line).toBe(
       'Moving to Areas › Garden at the next tidy-up',
     );
+    expect(map.get('Letter.md')?.value).toBe('2-Areas/Garden');
   });
   it('leaves out finished, answered and unrelated rows', () => {
     const map = pendingByPath([
@@ -98,5 +101,20 @@ describe('pendingByPath', () => {
       row('What is in A.md?'),
     ]);
     expect(map.size).toBe(0);
+  });
+});
+
+describe('renamePrefill (§3.6)', () => {
+  it('starts with the current name when nothing waits', () => {
+    expect(renamePrefill('CV insights.md', true)).toBe('CV insights');
+    expect(renamePrefill('Passport copy.pdf', false)).toBe('Passport copy');
+  });
+  it('starts with the waiting name when a rename is queued', () => {
+    expect(renamePrefill('CV insights.md', true, 'Resume Australia.md')).toBe(
+      'Resume Australia',
+    );
+    expect(renamePrefill('Passport copy.pdf', false, 'Passport scan.pdf')).toBe(
+      'Passport scan',
+    );
   });
 });

@@ -22,8 +22,9 @@ import {
   currentFolderOf,
   moveRequestText,
   pickerFolders,
+  REPLACE_KEPT,
+  replaceRequestNote,
   undoRequestNote,
-  writeRequestNote,
 } from '../move-request.js';
 import type { MoveSubject } from '../move-request.js';
 import { buildTree, displayName, paraKindOf } from '../navigation.js';
@@ -196,6 +197,9 @@ export interface MoveToProps {
   subject: MoveSubject;
   /** What is being moved, as the person reads it ("Moonee Ponds"). */
   name: string;
+  /** A move already waits (§3.6): its folder starts chosen and Move here
+   * replaces it (its Drive id, `null` while the listing lacks it). */
+  pending?: { destination: string; fileId: string | null };
   onClose: () => void;
 }
 
@@ -203,11 +207,12 @@ export interface MoveToProps {
 export function MoveToSheet({
   subject,
   name,
+  pending,
   onClose,
 }: MoveToProps): JSX.Element {
   const { me } = useSession();
   const { index, refresh } = useVault();
-  const [chosen, setChosen] = useState('');
+  const [chosen, setChosen] = useState(pending?.destination ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const folders = useMemo(
@@ -235,15 +240,17 @@ export function MoveToSheet({
     setBusy(true);
     setError(null);
     let id: string | null;
+    let kept: boolean;
     try {
-      id = await writeRequestNote(
-        { createTextFile },
+      ({ id, kept } = await replaceRequestNote(
+        { createTextFile, deleteFile },
         {
           inboxFolderId,
           text: moveRequestText(name, subject.path, chosen),
           now: new Date(),
+          replaces: pending?.fileId ?? null,
         },
-      );
+      ));
     } catch (err) {
       console.error(err);
       setBusy(false);
@@ -252,9 +259,15 @@ export function MoveToSheet({
     }
     void refresh();
     showToast(
-      'In your inbox. Bower moves it at the next tidy-up.',
+      kept
+        ? REPLACE_KEPT
+        : 'In your inbox. Bower moves it at the next tidy-up.',
       undefined,
-      id === null ? undefined : { label: 'Undo', run: () => void undo(id) },
+      // Undo only takes back a fresh request: a replaced one is already
+      // in the Bin, so undoing would leave no request at all.
+      id === null || pending !== undefined
+        ? undefined
+        : { label: 'Undo', run: () => void undo(id) },
     );
     onClose();
   }

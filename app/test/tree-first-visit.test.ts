@@ -35,4 +35,15 @@ describe('firstVisitOpen (#950)', () => {
   it('opens nothing for a real folder', () => {
     expect(firstVisitOpen(TREE, false)).toEqual([]);
   });
+
+  it('keeps the default when there is nothing to reveal, as on Home', () => {
+    expect(firstVisitOpen(TREE, true, undefined)).toEqual([
+      '1-Projects',
+      '2-Areas',
+    ]);
+  });
+
+  it('opens no default roots when a page reveals a current item', () => {
+    expect(firstVisitOpen(TREE, true, '3-Resources/Recipes')).toEqual([]);
+  });
 });

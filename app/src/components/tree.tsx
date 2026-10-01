@@ -125,14 +125,18 @@ const DEMO_OPEN_ROOTS: readonly ParaKind[] = ['projects', 'areas'];
 
 /**
  * The folders a tree opens with when nothing was saved yet: in the demo
- * build only, Projects and Areas; a real folder starts closed. Saved state
- * always wins.
+ * build only, Projects and Areas; a real folder starts closed. A page that
+ * reveals a current item (note, file, folder, Just filed) opens only the
+ * path to it, so the other roots stay closed (NO-Main-1280, FI-Drawer,
+ * #950); the default is for a tree with nothing to reveal, as on Home.
+ * Saved state always wins.
  */
 export function firstVisitOpen(
   tree: Pick<TreeNode, 'folders'>,
   demo: boolean,
+  revealPath?: string,
 ): string[] {
-  if (!demo) return [];
+  if (!demo || revealPath !== undefined) return [];
   return tree.folders
     .filter((folder) => {
       const kind = paraKindOf(folder.name);
@@ -568,7 +572,7 @@ export function Tree({
         );
         if (state === undefined) {
           const open = firstThisSession.current
-            ? firstVisitOpen(treeRef.current, isDemo())
+            ? firstVisitOpen(treeRef.current, isDemo(), revealRef.current)
             : [];
           if (open.length > 0) {
             setExpanded((prev) => mergeExpanded(prev, open));

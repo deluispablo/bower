@@ -841,10 +841,7 @@ export function FileScreen(): JSX.Element {
           pinned={filePinned}
           onTogglePin={folder === '' ? undefined : () => void handleTogglePin()}
           siblingNames={siblingNames(index, file.path)}
-          pendingRename={
-            pendingByPath(requests).get(file.path)?.kind === 'rename'
-          }
-          pendingMove={pendingByPath(requests).get(file.path)?.kind === 'move'}
+          pending={pendingByPath(requests).get(file.path)}
           onClose={() => setMenuOpen(false)}
         />
       )}

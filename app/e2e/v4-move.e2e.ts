@@ -113,3 +113,41 @@ test('Move to… waits for the tidy-up: no Just this, now (#909)', async ({
     sheet.getByRole('button', { name: 'Just this, now' }),
   ).toHaveCount(0);
 });
+
+test('375: Rename… reopens the waiting rename prefilled and replaces it (§3.6)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'the 375 phone');
+  await openMenu(page);
+  await page.getByRole('menuitem', { name: /Rename…/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Rename…' });
+  const box = sheet.locator('#rename-name');
+  await box.fill('Buckley St offer');
+  await sheet.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByText(/Renaming to Buckley St offer at the next tidy-up/),
+  ).toBeVisible();
+
+  // The item now says it waits; choosing it reopens the request.
+  await visible(
+    page.getByRole('button', {
+      name: 'More for 10-43 Buckley St, Moonee Ponds',
+      exact: true,
+    }),
+  ).click();
+  const item = page.getByRole('menuitem', { name: /Rename…/ });
+  await expect(item).toContainText('Waiting for the next tidy-up');
+  await item.click();
+  await expect(box).toHaveValue('Buckley St offer');
+  await box.clear();
+  await expect(box).toHaveValue('');
+  await box.fill('Buckley St final offer');
+  await expect(box).toHaveValue('Buckley St final offer');
+  await sheet.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByText(/Renaming to Buckley St final offer at the next tidy-up/),
+  ).toBeVisible();
+  await expect(page.getByText(/Renaming to /)).toHaveCount(1);
+});
