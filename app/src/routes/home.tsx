@@ -23,7 +23,7 @@ import type { Run } from '../api.js';
 import { Badge } from '../components/badge.js';
 import { Bird, BirdNapButton } from '../components/bird.js';
 import { ONCE_STATES } from '../components/bird-classes.js';
-import { ErrorLine } from '../components/system-state.js';
+import { ErrorLine, Skeleton } from '../components/system-state.js';
 import type { BirdState } from '../components/bird-classes.js';
 import { Card, StatTile } from '../components/card.js';
 import { Hint } from '../components/hint.js';
@@ -813,14 +813,7 @@ export function Home(): JSX.Element {
           <div class="home-recent-head">
             <h2>Recent</h2>
           </div>
-          <ul class="home-notes">
-            {Array.from({ length: RECENT_ROWS }).map((_, i) => (
-              <li key={i} class="home-recent-skeleton-row">
-                <span class="home-skeleton home-recent-skeleton-icon" />
-                <span class="home-skeleton home-recent-skeleton-text" />
-              </li>
-            ))}
-          </ul>
+          <Skeleton shape="rows" count={RECENT_ROWS} />
         </div>
       )}
 

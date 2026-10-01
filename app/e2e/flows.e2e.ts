@@ -1012,7 +1012,7 @@ test.fixme('Home loading state: dimmed cards and skeleton rows, never Empty (#32
   );
   await expect(inbox).toHaveClass(/home-tile-loading/);
   await expect(inbox.locator('.stat-tile-value')).toHaveCount(0);
-  await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(5);
+  await expect(page.locator('.home-recent .skeleton-row')).toHaveCount(5);
   await shot(page, testInfo, 'home-loading');
 
   // Once the delayed listing resolves, the real numbers replace the
@@ -1021,7 +1021,7 @@ test.fixme('Home loading state: dimmed cards and skeleton rows, never Empty (#32
     timeout: DELAY_MS + 5_000,
   });
   await expect(inbox.locator('.stat-tile-value')).toBeVisible();
-  await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(0);
+  await expect(page.locator('.home-recent .skeleton-row')).toHaveCount(0);
 });
 
 test('the working sheet opens once per run, and the run ends back at Tidy up', async ({

@@ -276,26 +276,6 @@
   font-size: var(--text-15);
 }
 
-.home-recent-skeleton-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 54px;
-  padding: var(--space-2) 0;
-}
-
-.home-recent-skeleton-icon {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-}
-
-.home-recent-skeleton-text {
-  flex: 1;
-  height: 1em;
-}
-
 @media (min-width: 900px) {
   .home-greeting {
     align-items: center;

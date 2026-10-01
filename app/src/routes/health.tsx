@@ -20,6 +20,7 @@ import { parseFrontmatter } from '../markdown/frontmatter.js';
 import { renderInline } from '../markdown/render.js';
 import { setPref } from '../prefs.js';
 import { OfflineError, useVault } from '../vault-store.js';
+import { Skeleton } from '../components/system-state.js';
 import '../styles/health.css';
 
 /** One rendered finding: Markdown already turned into sanitized HTML
@@ -198,11 +199,11 @@ export function Health() {
     return (
       <section class="health page-column">
         <h1>Health check</h1>
-        <p>
-          {status === 'error'
-            ? (error ?? 'Could not load your notes.')
-            : 'Loading…'}
-        </p>
+        {status === 'error' ? (
+          <p>{error ?? 'Could not load your notes.'}</p>
+        ) : (
+          <Skeleton shape="properties" count={4} />
+        )}
       </section>
     );
   }
@@ -243,7 +244,7 @@ export function Health() {
       </div>
       <p class="health-explainer">{EXPLAINER}</p>
 
-      {load.status === 'loading' && <p>Loading…</p>}
+      {load.status === 'loading' && <Skeleton shape="properties" count={4} />}
       {load.status === 'offline' && (
         <p>Offline: the health check is not saved on this device yet.</p>
       )}
