@@ -973,7 +973,7 @@ export function Bower(): JSX.Element {
       <PageHeader
         title="Bower"
         kind="tab"
-        more={{ expanded: menuOpen, onClick: toggleMenu }}
+        more={{ expanded: menuOpen, onClick: toggleMenu, name: 'Bower' }}
       />
       {menuOpen && (
         <NoteMenu

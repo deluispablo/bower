@@ -945,7 +945,7 @@ export function Add() {
         <PageHeader
           title="Add"
           kind="tab"
-          more={{ expanded: menuOpen, onClick: toggleMenu }}
+          more={{ expanded: menuOpen, onClick: toggleMenu, name: 'Add' }}
         />
         {menuOpen && (
           <NoteMenu
