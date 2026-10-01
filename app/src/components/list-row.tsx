@@ -263,7 +263,11 @@ export function ListRow({
     class: classes('list-row', rowProps.class, selected),
     'data-row-key': rowProps['data-row-key'] ?? item.id,
     'data-selected': selected ? 'true' : undefined,
-    'aria-current': selected ? ('true' as const) : undefined,
+    // A row that can be selected is an option of its listbox, announced as
+    // selected (spec 3.17); a plain row keeps `aria-current`.
+    ...(onSelect === undefined
+      ? { 'aria-current': selected ? ('true' as const) : undefined }
+      : { role: 'option' as const, 'aria-selected': selected }),
     'aria-labelledby': titleId,
     'aria-describedby': hasMeta ? metaId : undefined,
     ...(!roving && { tabIndex: -1 }),
@@ -292,7 +296,7 @@ export function ListRow({
     </>
   );
   return item.href === undefined ? (
-    <div tabIndex={0} {...common} role="group">
+    <div tabIndex={0} role="group" {...common}>
       {body}
     </div>
   ) : (

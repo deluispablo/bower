@@ -87,11 +87,12 @@ import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
-import { siblingNames } from '../rename-request.js';
+import { pendingByPath, siblingNames } from '../rename-request.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { fileHelpTopic, useHelpTopic } from '../help-rows.js';
 import { useTitle } from '../use-title.js';
 import { useRequestRows } from '../use-request-rows.js';
+import { ErrorLine, Skeleton } from '../components/system-state.js';
 import { useVault } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind, VaultIndex } from '../vault-index.js';
@@ -214,7 +215,7 @@ function Preview({
   );
   switch (load.status) {
     case 'loading':
-      return <p class="file-preview-note">Loading the preview…</p>;
+      return <Skeleton shape="tiles" count={1} />;
     case 'image':
       return (
         <div class="file-preview file-preview-picture">
@@ -654,7 +655,8 @@ export function FileScreen(): JSX.Element {
   const { params } = useRoute();
   const { route } = useLocation();
   const id = params.id ?? '';
-  const { index, getNoteText, pinFile, unpinFile } = useVault();
+  const { index, status, refresh, getNoteText, pinFile, unpinFile } =
+    useVault();
   const [menuOpen, setMenuOpen] = useState(false);
   const requests = useRequestRows();
   const [thumbnailBroken, setThumbnailBroken] = useState(false);
@@ -768,7 +770,11 @@ export function FileScreen(): JSX.Element {
   if (index === null || isNote) {
     return (
       <section>
-        <p>Loading…</p>
+        {index === null && status === 'error' ? (
+          <ErrorLine what="file" onRetry={() => void refresh()} />
+        ) : (
+          <Skeleton shape="properties" count={6} />
+        )}
       </section>
     );
   }
@@ -835,6 +841,10 @@ export function FileScreen(): JSX.Element {
           pinned={filePinned}
           onTogglePin={folder === '' ? undefined : () => void handleTogglePin()}
           siblingNames={siblingNames(index, file.path)}
+          pendingRename={
+            pendingByPath(requests).get(file.path)?.kind === 'rename'
+          }
+          pendingMove={pendingByPath(requests).get(file.path)?.kind === 'move'}
           onClose={() => setMenuOpen(false)}
         />
       )}

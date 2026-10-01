@@ -36,7 +36,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { isDemo } from '../api.js';
 import { isBowerWritten } from '../bower-written.js';
-import { loadNoteMetaEntry, loadTreeState, saveTreeState } from '../cache.js';
+import { loadTreeState, saveTreeState } from '../cache.js';
 import { subscribeNoteMetaCached } from '../note-meta-events.js';
 import type { DriveFile } from '../drive.js';
 import { FOLDER_MIME } from '../drive.js';
@@ -54,7 +54,6 @@ import {
 } from '../navigation.js';
 import type { ParaKind, TreeNode, TreeRow, TreeSort } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
-import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { ancestorsOf, mergeExpanded } from '../reveal.js';
@@ -381,10 +380,38 @@ function rootOf(path: string): ParaKind | null {
   return paraKindOf(path.split('/')[0] ?? '');
 }
 
+/** One read per note and version, shared by every tree, drawer and list on
+ * the page: the promise of `isBowerWritten` for `id:modifiedTime`. */
+const bowerReads = new Map<string, Promise<boolean>>();
+
 /**
- * Which of `files` Bower wrote, from the cached frontmatter only (no network
- * call, like `useNoteTitles`): a note not read yet shows the document glyph
- * until a folder screen has cached it.
+ * Whether Bower wrote `file`: its frontmatter from the cache first, Drive
+ * once otherwise (`loadNoteMeta`, which caches what it read). Read once per
+ * note and version; a failed read counts as "not Bower's" and is tried
+ * again next time.
+ */
+export function readBowerWritten(file: DriveFile): Promise<boolean> {
+  const key = `${file.id}:${file.modifiedTime ?? ''}`;
+  const known = bowerReads.get(key);
+  if (known !== undefined) return known;
+  const read = loadNoteMeta(file).then(
+    (meta) => isBowerWritten(meta),
+    (err: unknown) => {
+      console.error('Could not read who wrote a note', err);
+      bowerReads.delete(key);
+      return false;
+    },
+  );
+  bowerReads.set(key, read);
+  return read;
+}
+
+/**
+ * Which of `files` Bower wrote (the bird, K-14): each note's frontmatter
+ * from the cache first, Drive once otherwise, shared with the cache, so a
+ * Bower note never keeps the document glyph once that read has finished
+ * (#950, #922). The caller passes only the notes it shows: a collapsed
+ * folder's notes are not read.
  */
 export function useBowerWritten(
   files: readonly DriveFile[],
@@ -413,10 +440,9 @@ export function useBowerWritten(
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
-      ...files.map(async (file) => {
-        const entry = await loadNoteMetaEntry<{ meta?: NoteMeta }>(file.id);
-        return isBowerWritten(entry?.meta) ? file.id : null;
-      }),
+      ...files.map(async (file) =>
+        (await readBowerWritten(file)) ? file.id : null,
+      ),
       // The open note is read in full (the note screen reads it anyway), so
       // its row shows the bird even before its frontmatter was cached.
       ...(current === undefined

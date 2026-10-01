@@ -288,3 +288,19 @@ describe('mergeFullText', () => {
     expect(merged.notes[0]?.pathText).toBe('Projects › Kitchen Refresh');
   });
 });
+
+describe('a Bower answer in Search (#950 F-4)', () => {
+  it('reads "Bower answer", as the list and the note do', () => {
+    const files = [
+      folder('a0', '1-Projects'),
+      file('a1', '1-Projects/Job ratings.md', 'text/markdown'),
+    ];
+    const vault = buildVaultIndex(files);
+    const handle = buildSearchIndex(
+      vault,
+      new Map([['a1', '---\ntype: answer\n---\n# Job ratings\nThree offers.']]),
+    );
+    const hit = searchVault(handle, vault, 'ratings').notes[0];
+    expect(hit?.kindWord).toBe('Bower answer');
+  });
+});

@@ -12,10 +12,8 @@
  */
 
 import type { DriveFile } from './drive.js';
-import { ORIGIN_FALLBACK, ORIGIN_LABELS } from './file-origin.js';
-import type { Origin } from './file-origin.js';
 import { embedKind } from './markdown/embeds.js';
-import { relativeTime } from './navigation.js';
+import { shortDate, sizeWords } from './meta-line.js';
 import { FILE_KIND_LABELS, fileKind } from './vault-index.js';
 
 /**
@@ -90,36 +88,12 @@ export function thumbnailUrl(
   return /=s\d+$/.test(link) ? link.replace(/=s\d+$/, `=s${size}`) : link;
 }
 
-/** A size in words: "820 bytes", "14 KB", "1.2 MB". */
-export function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} bytes`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  const mb = bytes / (1024 * 1024);
-  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
-}
-
 /** The type line: "PDF · 1.2 MB", or just "Google Doc" (no size in Drive). */
 export function typeLine(
   file: Pick<DriveFile, 'name' | 'mimeType' | 'size'>,
 ): string {
   const kind = FILE_KIND_LABELS[fileKind(file)];
-  return file.size === undefined ? kind : `${kind} · ${formatSize(file.size)}`;
-}
-
-/**
- * When and by whom: "Filed by Bower · today", "In this folder · 3 days ago".
- * No `modifiedTime`: the origin alone.
- */
-export function whenLine(
-  origin: Origin | null,
-  modifiedTime: string | undefined,
-  now: number,
-): string {
-  const who = origin === null ? ORIGIN_FALLBACK : ORIGIN_LABELS[origin];
-  const said = who.charAt(0).toUpperCase() + who.slice(1);
-  return modifiedTime === undefined
-    ? said
-    : `${said} · ${relativeTime(modifiedTime, now)}`;
+  return file.size === undefined ? kind : `${kind} · ${sizeWords(file.size)}`;
 }
 
 /** The kind word on a file's screen: "Spreadsheet (CSV)" for a CSV (board `Phone-File-Sheet`), else `FILE_KIND_LABELS`. */
@@ -128,30 +102,22 @@ export function kindWord(file: Pick<DriveFile, 'name' | 'mimeType'>): string {
   return kind === 'csv' ? 'Spreadsheet (CSV)' : FILE_KIND_LABELS[kind];
 }
 
-const SHORT_MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-/** "26 Sep": a day and a short month, from an ISO time or Drive's EXIF form (`2024:05:01 10:00:00`). */
-export function shortDate(value: string | undefined): string | null {
+/** A date from an ISO time or Drive's EXIF form (`2024:05:01 10:00:00`);
+ * `null` when there is none or it cannot be read. The words come from
+ * `meta-line.ts#shortDate`, the one date rule (R-META-3, K-16). */
+export function fileDate(value: string | undefined): Date | null {
   if (value === undefined) return null;
   const exif = /^(\d{4}):(\d{2}):(\d{2})[ T](.*)$/.exec(value);
   const date = new Date(
     exif === null ? value : `${exif[1]}-${exif[2]}-${exif[3]}T${exif[4]}`,
   );
-  if (Number.isNaN(date.getTime())) return null;
-  return `${date.getDate()} ${SHORT_MONTHS[date.getMonth()] ?? ''}`;
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** `shortDate` for a file date, or `null` without one. */
+function dateWords(value: string | undefined, now: number): string | null {
+  const date = fileDate(value);
+  return date === null ? null : shortDate(date, now);
 }
 
 /** A length in words: "45 s", "2 min 14 s", "1 h 5 min". */
@@ -174,6 +140,8 @@ export interface MetaExtras {
   sheets?: number;
   /** What a ZIP holds, in files, from the runner's file facts (#610). */
   entries?: number;
+  /** The clock for the dates (`shortDate`); `Date.now()` when left out. */
+  now?: number;
 }
 
 /**
@@ -196,17 +164,18 @@ export function metaFacts(
   extras: MetaExtras = {},
 ): string[] {
   const kind = fileKind(file);
-  const size = file.size === undefined ? null : formatSize(file.size);
+  const now = extras.now ?? Date.now();
+  const size = file.size === undefined ? null : sizeWords(file.size);
   const facts: (string | null)[] = [];
   if (kind === 'photo' || kind === 'heic' || kind === 'image') {
-    const taken = shortDate(file.imageMediaMetadata?.time);
+    const taken = dateWords(file.imageMediaMetadata?.time, now);
     facts.push(taken === null ? null : `Taken ${taken}`, size);
   } else if (kind === 'video') {
     const ms = file.videoMediaMetadata?.durationMillis;
     facts.push(
       ms === undefined ? null : formatDuration(ms),
       size,
-      shortDate(file.modifiedTime),
+      dateWords(file.modifiedTime, now),
     );
   } else if (kind === 'pdf') {
     const pages = extras.pages;

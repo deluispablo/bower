@@ -346,8 +346,12 @@ test("previous/next under a note hides Bower's own files and uses titles (#423)"
   // alongside Bower's own "Bower - Proposals.md" (#420's demo fixture
   // already has it, matching the issue's own repro).
   await page.goto('/folder/Answers');
+  // A link on the phone; on desktop an option of the folder's listbox
+  // (#950 F-15).
+  const name = /Which subscriptions renew this autumn/;
   await page
-    .getByRole('link', { name: /Which subscriptions renew this autumn/ })
+    .getByRole('link', { name })
+    .or(page.getByRole('option', { name }))
     .press('Enter');
   await expect(
     page.getByRole('heading', {
@@ -1008,7 +1012,7 @@ test.fixme('Home loading state: dimmed cards and skeleton rows, never Empty (#32
   );
   await expect(inbox).toHaveClass(/home-tile-loading/);
   await expect(inbox.locator('.stat-tile-value')).toHaveCount(0);
-  await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(5);
+  await expect(page.locator('.home-recent .skeleton-row')).toHaveCount(5);
   await shot(page, testInfo, 'home-loading');
 
   // Once the delayed listing resolves, the real numbers replace the
@@ -1017,7 +1021,7 @@ test.fixme('Home loading state: dimmed cards and skeleton rows, never Empty (#32
     timeout: DELAY_MS + 5_000,
   });
   await expect(inbox.locator('.stat-tile-value')).toBeVisible();
-  await expect(page.locator('.home-recent-skeleton-row')).toHaveCount(0);
+  await expect(page.locator('.home-recent .skeleton-row')).toHaveCount(0);
 });
 
 test('the working sheet opens once per run, and the run ends back at Tidy up', async ({
@@ -1108,7 +1112,7 @@ test('the Bower tab sends a request that waits for the next tidy-up', async ({
     .getByRole('listitem')
     .filter({ hasText: 'How much did I spend on the kitchen this year?' });
   await expect(row).toBeVisible();
-  await expect(row.getByText('In your inbox', { exact: true })).toBeVisible();
+  await expect(row.getByText('Waiting', { exact: true })).toBeVisible();
   await row.scrollIntoViewIfNeeded();
   await shot(page, testInfo, 'tell');
 
@@ -1275,9 +1279,7 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
   // The demo's folder: a question waiting in the inbox, an answer, and
   // Alex's own rules.
   const lisbon = rowWith('What do I still need to sort out for the visa?');
-  await expect(
-    lisbon.getByText('In your inbox', { exact: true }),
-  ).toBeVisible();
+  await expect(lisbon.getByText('Waiting', { exact: true })).toBeVisible();
   await expect(lisbon).toContainText('Bower does it at the next tidy-up');
   // The full sentence sent, not the file name's own short title (#465).
   const answered = rowWith('Which subscriptions renew this autumn?');
@@ -1317,16 +1319,14 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(box).toHaveValue('');
   const edited = rowWith('What do I still need to book for the visa?');
-  await expect(
-    edited.getByText('In your inbox', { exact: true }),
-  ).toBeVisible();
+  await expect(edited.getByText('Waiting', { exact: true })).toBeVisible();
   await expect(lisbon).toHaveCount(0);
 
   // Remove: a job sent now goes to the Trash and leaves the list.
   await box.fill('Make a packing list for my next trip');
   await page.getByRole('button', { name: 'Send' }).click();
   const job = rowWith('Make a packing list for my next trip');
-  await expect(job.getByText('In your inbox', { exact: true })).toBeVisible();
+  await expect(job.getByText('Waiting', { exact: true })).toBeVisible();
   await chooseFrom(job, 'Remove from the inbox');
   await expect(job).toHaveCount(0);
 
@@ -1964,7 +1964,8 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await expect(
     page.getByRole('treeitem', { name: /Inbox/ }).first(),
   ).toBeVisible();
-  expect(await width()).toBeCloseTo(1000, 0);
+  // Home settles once its listing is in (it stays in Loading until then).
+  await expect.poll(width).toBeCloseTo(1000, 0);
   const [box, main, bar] = await Promise.all([
     container.boundingBox(),
     page.locator('.shell-main').boundingBox(),
@@ -1996,14 +1997,14 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await expect(
     page.getByRole('complementary', { name: 'About this note' }),
   ).toBeVisible();
-  expect(await width()).toBeCloseTo(1200, 0);
+  await expect.poll(width).toBeCloseTo(1200, 0);
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-note');
 
   await navigate(page, /^Add$/);
   await expect(page).toHaveURL(/\/add$/);
   await expect(content).toBeVisible();
-  expect(await width()).toBeCloseTo(1000, 0);
+  await expect.poll(width).toBeCloseTo(1000, 0);
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-add');
 

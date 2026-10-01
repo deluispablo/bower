@@ -134,17 +134,6 @@ export function chipLabel(kind: Kind, key: string): string {
   );
 }
 
-/** One question per field not stated. */
-export function questionsFor(
-  kind: Kind,
-  notStated: readonly string[],
-): string[] {
-  return notStated.map(
-    (key) =>
-      `What is the ${chipLabel(kind, key).toLowerCase()} for this ${kind.name}?`,
-  );
-}
-
 export function Details({ kind, meta }: DetailsProps): JSX.Element | null {
   const groups = detailsGroups(kind, meta);
   if (groups.length === 0) return null;

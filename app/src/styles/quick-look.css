@@ -185,7 +185,8 @@
   margin: 0;
   color: var(--color-heading);
   font-family: var(--font-display);
-  font-size: var(--text-lg);
+  /* 18 px Poppins 700, as PF-Main-1280 and AR-Sub-1280 draw it. */
+  font-size: var(--text-18);
   font-weight: 700;
   line-height: 1.35;
 }
@@ -223,9 +224,25 @@
   list-style: none;
 }
 
+/* The note's text under the box, as PF-Main-1280 draws it: 14 px, line
+   height 1.5, 12 px under the box (the column's gap and nothing else). */
+.quick-look-pane .bower-note-box {
+  margin: 0;
+}
+
 .quick-look-pane-note {
   min-width: 0;
-  font-size: var(--text-15);
+}
+
+.quick-look-pane-note .markdown,
+.quick-look-pane-note .markdown p,
+.quick-look-pane-note .markdown li {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.quick-look-pane-note .markdown > :first-child {
+  margin-top: 0;
 }
 
 .quick-look-pane .table-preview {

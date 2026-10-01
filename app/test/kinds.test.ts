@@ -5,7 +5,6 @@ import {
   formatFieldValue,
   keyFactsFor,
   kindById,
-  questionsLabelFor,
   statusLabel,
   type Kind,
   type KindField,
@@ -56,9 +55,6 @@ describe('rental listing', () => {
       ['For you', ['Bike to the office', 'Fit']],
     ]);
     expect(listing.notStatedLabel).toBe('Not in the listing');
-    expect(listing.questionsLabel.replace('{n}', 'three')).toBe(
-      'Ask the agent: copy these three as questions',
-    );
   });
 
   it('marks the For you fields as coming from the person’s notes', () => {
@@ -257,7 +253,6 @@ describe('every kind', () => {
     expect(k.groups.length).toBeLessThanOrEqual(4);
     expect(Array.isArray(k.statuses)).toBe(true);
     expect(['table', 'by-month', 'timeline', 'rarely']).toContain(k.compare);
-    expect(k.questionsLabel).toContain('{n}');
     expect(k.notStatedLabel).toMatch(/^Not (in|on) the /);
 
     const keys = k.fields.map((f) => f.key);
@@ -312,20 +307,6 @@ describe('every kind', () => {
       booking: 'timeline',
       recipe: 'table',
     });
-  });
-});
-
-describe('questionsLabelFor', () => {
-  it('writes the count as a number word', () => {
-    expect(questionsLabelFor(kind('rental-listing'), 3)).toBe(
-      'Ask the agent: copy these three as questions',
-    );
-    expect(questionsLabelFor(kind('rental-listing'), 1)).toBe(
-      'Ask the agent: copy this one as a question',
-    );
-    expect(questionsLabelFor(kind('job-offer'), 12)).toBe(
-      'Ask the employer: copy these 12 as questions',
-    );
   });
 });
 

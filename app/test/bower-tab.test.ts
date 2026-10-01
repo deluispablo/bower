@@ -315,7 +315,7 @@ describe('requestRows', () => {
 
 describe('stateLabel', () => {
   it('says the state in the board words (spec §6.7)', () => {
-    expect(stateLabel({ state: 'waiting' })).toBe('In your inbox');
+    expect(stateLabel({ state: 'waiting' })).toBe('Waiting');
     expect(stateLabel({ state: 'tidying' })).toBe('Being done now');
     expect(stateLabel({ state: 'done' })).toBe('Done');
     expect(stateLabel({ state: 'failed' })).toBe('Did not finish');

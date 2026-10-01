@@ -135,7 +135,9 @@
 }
 
 /* "Being tidied up" opens the working sheet: a button drawn as the note. */
-.home-tile-running {
+/* Teal as HM-Running draws it; beats `.stat-tile-note`'s muted colour
+   whatever order the two style sheets load in. */
+.stat-tile-note.home-tile-running {
   display: block;
   padding: 0;
   background: none;
@@ -153,6 +155,21 @@
 
 .home-tile-action {
   margin-top: var(--space-3);
+}
+
+/* Tidy up: 40 drawn, a 44 px target (R-GLOBAL-1, K-20, K-34). */
+.home-tile-action .process-button {
+  position: relative;
+}
+
+.home-tile-action .process-button::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
 }
 
 .home-tile-badge {
@@ -257,26 +274,6 @@
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--text-15);
-}
-
-.home-recent-skeleton-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 54px;
-  padding: var(--space-2) 0;
-}
-
-.home-recent-skeleton-icon {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-}
-
-.home-recent-skeleton-text {
-  flex: 1;
-  height: 1em;
 }
 
 @media (min-width: 900px) {

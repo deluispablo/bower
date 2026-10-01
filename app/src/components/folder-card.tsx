@@ -86,7 +86,9 @@ export function FolderCard({
       href={folder.href}
       data-row-key={folder.path}
       data-selected={selected ? 'true' : undefined}
-      aria-current={selected ? 'true' : undefined}
+      {...(onSelect === undefined
+        ? { 'aria-current': selected ? ('true' as const) : undefined }
+        : { role: 'option' as const, 'aria-selected': selected })}
       aria-labelledby={nameId}
       aria-describedby={metaId}
       onClick={(event: MouseEvent) => {

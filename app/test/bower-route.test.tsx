@@ -289,7 +289,7 @@ describe('the Bower tab', () => {
     const requests = root.querySelector('#bower-panel-requests');
     expect(requests?.hasAttribute('hidden')).toBe(false);
     expect(requests?.textContent).toContain('Which flat should I visit first?');
-    expect(requests?.textContent).toContain('In your inbox');
+    expect(requests?.textContent).toContain('Waiting');
   });
 
   it('keeps the text and says so when Drive refuses the note', async () => {
@@ -362,7 +362,7 @@ describe('a rule kept at once (#343)', () => {
     const text = root.querySelector('#bower-panel-requests')?.textContent;
     expect(text).toContain('Which flat should I visit first?');
     expect(text).toContain('Make a packing list for my next trip');
-    expect(text?.match(/In your inbox/g)).toHaveLength(2);
+    expect(text?.match(/Waiting/g)).toHaveLength(2);
   });
 
   it('keeps the sentence in the box and says so when the rule cannot be saved', async () => {
@@ -519,7 +519,7 @@ describe('Requests (#344)', () => {
   it('shows each waiting note in its words, with a More menu: Edit, Just this, now, Remove', async () => {
     await mountRead();
     const waiting = row('Which flat should I visit first?');
-    expect(waiting?.textContent).toContain('In your inbox');
+    expect(waiting?.textContent).toContain('Waiting');
     expect(waiting?.textContent).toContain('Bower does it at the next tidy-up');
     // No row has a button that starts a run on its own (R-REQ-2).
     expect(waiting?.querySelectorAll('button')).toHaveLength(1);
@@ -544,7 +544,7 @@ describe('Requests (#344)', () => {
   it("Add's context note: named for what it is, no Edit in its menu", async () => {
     await mountRead();
     const about = row('About the files you added');
-    expect(about?.textContent).toContain('In your inbox');
+    expect(about?.textContent).toContain('Waiting');
     await openMenu('About the files you added');
     expect(menuItem('Edit')).toBeUndefined();
     expect(menuItem('Remove from the inbox')).toBeDefined();

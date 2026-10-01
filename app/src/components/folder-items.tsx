@@ -42,8 +42,12 @@ import {
   kindOptions,
   rowsFor,
   sortRows,
+  folderPagesUnder,
+  isFolderPage,
+  subfolderThings,
 } from '../folder-view.js';
 import type { FolderRow, FolderSort, OriginFilter } from '../folder-view.js';
+import { loadNoteMeta } from '../note-meta.js';
 import {
   displayName,
   folderHref,
@@ -88,6 +92,40 @@ function things(n: number): string {
 /** A subfolder as a row of the one list (R-PF-5, board PF-Main): the folder
  * outline in its root's colour, its name, and "6 things" with a chevron at
  * the right. */
+/**
+ * Which of `pages` are a folder's own page Bower wrote (`isFolderPage`),
+ * read from each note's frontmatter (the cache first, Drive once), so a
+ * count does not depend on which notes happen to be cached: every such page
+ * at every depth is left out (K-31, #950).
+ */
+function useBowerFolderPages(pages: readonly DriveFile[]): ReadonlySet<string> {
+  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  const key = pages
+    .map((page) => `${page.id}:${page.modifiedTime ?? ''}`)
+    .join(',');
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      pages.map((page) =>
+        loadNoteMeta(page).then(
+          (meta) => (isFolderPage(page, meta) ? page.id : null),
+          (err: unknown) => {
+            console.error("A folder's own page could not be read", err);
+            return null;
+          },
+        ),
+      ),
+    ).then((found) => {
+      if (cancelled) return;
+      setIds(new Set(found.filter((id): id is string => id !== null)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+  return ids;
+}
+
 export function SubfolderRow({
   folder,
 }: {
@@ -352,6 +390,24 @@ export function FolderItems({
   const [quick, setQuick] = useState<FolderRow | null>(null);
   const { index } = useVault();
   const byPath = index?.byPath ?? NO_FILES;
+  // K-31 on a subfolder's row and card: the same count as its own page, so
+  // a page Bower wrote for a folder is not one of its things (#950).
+  const folderPages = useMemo(
+    () =>
+      contents.subfolders.flatMap((sub) =>
+        folderPagesUnder(index?.folders ?? [], byPath, sub.path),
+      ),
+    [contents.subfolders, index, byPath],
+  );
+  const bowerPages = useBowerFolderPages(folderPages);
+  const subfolders = useMemo(
+    () =>
+      contents.subfolders.map((sub) => ({
+        ...sub,
+        things: subfolderThings(sub, index?.folders ?? [], byPath, bowerPages),
+      })),
+    [contents.subfolders, index, byPath, bowerPages],
+  );
   const [view, onView] = useFolderView(contents.path);
   const { model } = useFolderModel(contents, catalogue);
   const [loaded, setLoaded] = useState<VirtualModule | null>(virtualModule);
@@ -365,11 +421,9 @@ export function FolderItems({
   const cardFiles = useMemo(
     () =>
       folderOfFolders
-        ? contents.subfolders.flatMap((folder) =>
-            changedUnder(byPath, folder.path, 10),
-          )
+        ? subfolders.flatMap((folder) => changedUnder(byPath, folder.path, 10))
         : [],
-    [folderOfFolders, byPath, contents.subfolders],
+    [folderOfFolders, byPath, subfolders],
   );
   const bowerSet = useBowerWritten(
     useMemo(() => [...recent, ...cardFiles], [recent, cardFiles]),
@@ -382,7 +436,7 @@ export function FolderItems({
 
   // K-31: subfolders count as originals, except on a folder of folders,
   // whose cards are not its own things (AR-Main: "Originals 0").
-  const subCount = folderOfFolders ? 0 : contents.subfolders.length;
+  const subCount = folderOfFolders ? 0 : subfolders.length;
   const segments = folderSegments({ subfolders: subCount, model });
 
   const originRows = useMemo(
@@ -452,7 +506,7 @@ export function FolderItems({
   // originals, K-31) until a kind narrows it.
   const showSubs = (origin: OriginFilter, kindOn: string | null): boolean =>
     !folderOfFolders && origin !== 'bower' && kindOn === null;
-  const subs = showSubs(view.origin, kind) ? contents.subfolders : [];
+  const subs = showSubs(view.origin, kind) ? subfolders : [];
 
   /** What Filter & sort's "Show <n> things" counts for a draft (K-31):
    * things, not rows, so in All a pair (one row) counts as its two files
@@ -466,9 +520,7 @@ export function FolderItems({
         n + (view.origin === 'all' && row.original !== undefined ? 2 : 1),
       0,
     );
-    return (
-      shown + (showSubs(view.origin, known) ? contents.subfolders.length : 0)
-    );
+    return shown + (showSubs(view.origin, known) ? subfolders.length : 0);
   };
 
   // Holding a row or tile opens quick look (#613); the click that follows a
@@ -549,7 +601,12 @@ export function FolderItems({
 
   function renderEntry(entry: Entry): JSX.Element {
     if (entry.type === 'group') {
-      return <h3 class="folder-group">{entry.label}</h3>;
+      // Inside the desktop's listbox a heading is not allowed: plain text.
+      return (
+        <h3 class="folder-group" role={desktop ? 'presentation' : undefined}>
+          {entry.label}
+        </h3>
+      );
     }
     const { row } = entry;
     const isWaiting =
@@ -597,6 +654,7 @@ export function FolderItems({
       folderPath: folderOf(file.path),
       now: Date.now(),
       bower,
+      answer: model.metas.get(file.id)?.type === 'answer',
     };
   }
 
@@ -652,7 +710,7 @@ export function FolderItems({
       );
       return;
     }
-    const folder = contents.subfolders.find((sub) => sub.path === selectedKey);
+    const folder = subfolders.find((sub) => sub.path === selectedKey);
     if (folder !== undefined) {
       onPreview(paneOfFolder(folder));
       return;
@@ -765,8 +823,7 @@ export function FolderItems({
     layout: folderLayout,
   };
   const para = paraKindOf(contents.path.split('/')[0] ?? '');
-  const emptyFolder =
-    contents.items.length === 0 && contents.subfolders.length === 0;
+  const emptyFolder = contents.items.length === 0 && subfolders.length === 0;
 
   function body(): JSX.Element {
     if (emptyFolder) {
@@ -778,11 +835,11 @@ export function FolderItems({
           <h3 class="folder-group">Folders</h3>
           <ul
             class="folder-cards"
-            role="list"
+            role={desktop ? 'listbox' : 'list'}
             aria-label={`Folders in ${displayName(contents.name)}`}
           >
-            {contents.subfolders.map((folder) => (
-              <li key={folder.path}>
+            {subfolders.map((folder) => (
+              <li key={folder.path} role={desktop ? 'none' : undefined}>
                 <FolderCard
                   folder={{
                     path: folder.path,
@@ -808,7 +865,7 @@ export function FolderItems({
               </h3>
               <ul
                 class="folder-list"
-                role="list"
+                role={desktop ? 'listbox' : 'list'}
                 aria-label={`Recently changed in ${displayName(contents.name)}`}
               >
                 {recent.map((file) => {
@@ -825,7 +882,7 @@ export function FolderItems({
                     parentName: parent.slice(parent.lastIndexOf('/') + 1),
                   };
                   return (
-                    <li key={file.id}>
+                    <li key={file.id} role={desktop ? 'none' : undefined}>
                       <ListRow
                         item={item}
                         meta={metaLine(item, { view: 'mixed-row', now })}
@@ -886,6 +943,8 @@ export function FolderItems({
             groups={groups}
             keyOf={(row) => row.key}
             renderTile={renderTile}
+            selectable={desktop}
+            label={`In ${contents.name}`}
           />
         </>
       );
@@ -917,7 +976,44 @@ export function FolderItems({
             overscan={10}
             getKey={entryKey}
             renderRow={renderEntry}
+            {...(desktop && {
+              role: 'listbox' as const,
+              'aria-label': `In ${contents.name}`,
+              rowProps: () => ({ role: 'none' as const }),
+            })}
           />
+        </>
+      );
+    }
+    if (desktop) {
+      // The desktop's rows can be selected: a listbox of options (spec
+      // 3.17), the folders above it in a list of their own.
+      return (
+        <>
+          {subs.length > 0 && (
+            <ul
+              class="folder-list"
+              role="list"
+              aria-label={`Folders in ${contents.name}`}
+            >
+              {subs.map((folder) => (
+                <li key={folder.path}>
+                  <SubfolderRow folder={folder} />
+                </li>
+              ))}
+            </ul>
+          )}
+          <ul
+            class="folder-list"
+            role="listbox"
+            aria-label={`In ${contents.name}`}
+          >
+            {entries.map((entry) => (
+              <li key={entryKey(entry)} role="none">
+                {renderEntry(entry)}
+              </li>
+            ))}
+          </ul>
         </>
       );
     }
@@ -978,6 +1074,7 @@ export function FolderItems({
           pages={pages.get((quick.original ?? quick.file).id)}
           origin={originOf(quick.original ?? quick.file, catalogue)}
           bower={isBowerWritten(model.metas.get(quick.file.id))}
+          answer={model.metas.get(quick.file.id)?.type === 'answer'}
           folderPath={contents.path}
           now={now}
           onClose={() => setQuick(null)}

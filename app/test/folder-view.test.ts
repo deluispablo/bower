@@ -12,6 +12,8 @@ import {
   rowsFor,
   sortRows,
   subjectOf,
+  folderPagesUnder,
+  subfolderThings,
 } from '../src/folder-view.js';
 import type { FolderSources } from '../src/folder-view.js';
 import { noteMetaFrom } from '../src/note-meta.js';
@@ -232,5 +234,53 @@ describe('sort, kind filter and date groups', () => {
     expect(groupLabel('2026-08-10T12:00:00Z', NOW)).toBe('August');
     expect(groupLabel('2025-12-10T12:00:00Z', NOW)).toBe('December 2025');
     expect(groupLabel('', NOW)).toBe('Undated');
+  });
+});
+
+describe('subfolderThings (#950, K-31)', () => {
+  it('counts everything inside, folders too, but not the folder page Bower wrote', () => {
+    const hub: DriveFile = {
+      id: 'hub',
+      name: 'Apps.md',
+      mimeType: 'text/markdown',
+      parents: [],
+      path: 'P/Apps/Apps.md',
+    };
+    const folders = [{ path: 'P/Apps' }, { path: 'P/Apps/Old' }];
+    const byPath = new Map([[hub.path, hub]]);
+    // folderContents counts the notes and files inside, the hub page too.
+    const sub = { path: 'P/Apps', things: 10 };
+    expect(subfolderThings(sub, folders, byPath, new Set(['hub']))).toBe(10);
+    expect(subfolderThings(sub, folders, byPath, new Set())).toBe(11);
+  });
+});
+
+describe('subfolderThings at every depth (#950, HM-Main)', () => {
+  it("leaves out Bower's folder page of the folder and of every folder under it", () => {
+    const page = (path: string): DriveFile => ({
+      id: path,
+      name: path.slice(path.lastIndexOf('/') + 1),
+      mimeType: 'text/markdown',
+      parents: [],
+      path,
+    });
+    const housing = 'P/Housing Search Australia';
+    const moonee = `${housing}/Moonee Ponds`;
+    const folders = [
+      { path: housing },
+      { path: moonee },
+      { path: `${moonee}/Listings` },
+    ];
+    const pages = [
+      page(`${housing}/Housing Search Australia.md`),
+      page(`${moonee}/Moonee Ponds.md`),
+    ];
+    const byPath = new Map(pages.map((one) => [one.path, one]));
+    expect(folderPagesUnder(folders, byPath, housing)).toHaveLength(2);
+    // Two pages, six notes and six PDFs inside, as folderContents counts
+    // them; plus Moonee Ponds and Listings; less the two pages: 14.
+    const sub = { path: housing, things: 14 };
+    const bower = new Set(pages.map((one) => one.id));
+    expect(subfolderThings(sub, folders, byPath, bower)).toBe(14);
   });
 });

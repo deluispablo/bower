@@ -50,9 +50,8 @@ import type { Run } from '../api.js';
 import { loadNote, loadThumbnail } from '../cache.js';
 import { FOLDER_MIME, getText, searchFullText } from '../drive.js';
 import type { DriveFile } from '../drive.js';
-import { formatSize } from '../file-preview.js';
 import { normalizeTags, parseFrontmatter } from '../markdown/frontmatter.js';
-import { metaLine, shortDate } from '../meta-line.js';
+import { metaLine, shortDate, sizeWords } from '../meta-line.js';
 import type { MetaLine } from '../meta-line.js';
 import { plainText } from '../proposals.js';
 import {
@@ -67,6 +66,7 @@ import {
 import type { ParaKind } from '../navigation.js';
 import { hubNotePath } from '../folder-statuses.js';
 import { isFolderPage } from '../folder-view.js';
+import { ITEM_KIND_WORDS } from '../kinds.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { useOnline } from '../online.js';
@@ -215,8 +215,14 @@ function useRowExtras(
  * in every list (Opened lately, results, tag search) asks the same source,
  * so a Bower note never shows as a plain note. Grows as answers come in.
  */
-function useBowerNotes(files: readonly DriveFile[]): ReadonlySet<string> {
+function useBowerNotes(files: readonly DriveFile[]): {
+  bower: ReadonlySet<string>;
+  answers: ReadonlySet<string>;
+} {
   const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Bower answers (`type: answer`) read "Bower answer", as in the folder
+  // list (R-LI-2, K-14, #950 F-4).
+  const [answers, setAnswers] = useState<ReadonlySet<string>>(() => new Set());
   const asked = useRef(new Set<string>());
   const gone = useRef(false);
   const key = files
@@ -241,7 +247,13 @@ function useBowerNotes(files: readonly DriveFile[]): ReadonlySet<string> {
           const text = knownNoteText(file.id);
           const body =
             text === undefined ? undefined : parseFrontmatter(text).body;
-          if (gone.current || !isBowerWritten(meta, { body })) return;
+          if (gone.current) return;
+          if (meta?.type === 'answer') {
+            setAnswers((prev) =>
+              prev.has(file.id) ? prev : new Set(prev).add(file.id),
+            );
+          }
+          if (!isBowerWritten(meta, { body })) return;
           setIds((prev) =>
             prev.has(file.id) ? prev : new Set(prev).add(file.id),
           );
@@ -253,7 +265,7 @@ function useBowerNotes(files: readonly DriveFile[]): ReadonlySet<string> {
     }
   }, [key]);
 
-  return ids;
+  return { bower: ids, answers };
 }
 
 /**
@@ -531,12 +543,18 @@ function locationOf(row: RowModel, bowerWritten: boolean): string {
 
 /** The row's meta line (R-SE-3, K-15): "Bower note · ● Moonee Ponds",
  * "Folder · ● Housing Search Australia · 7 things · updated today". */
-function rowMeta(row: RowModel, bowerWritten: boolean, now: number): MetaLine {
+function rowMeta(
+  row: RowModel,
+  bowerWritten: boolean,
+  now: number,
+  answer = false,
+): MetaLine {
   return metaLine(
     {
       name: row.file.name,
       mimeType: row.file.mimeType,
       bowerWritten,
+      answer,
       root: row.root,
       ...(locationOf(row, bowerWritten) !== '' && {
         parentName: locationOf(row, bowerWritten),
@@ -707,6 +725,8 @@ interface HitRowProps {
   row: RowModel;
   selected: boolean;
   bowerWritten: boolean;
+  /** A Bower answer: "Bower answer" in the meta line. */
+  answer: boolean;
   now: number;
   onActivate: (row: RowModel) => void;
   onHighlight: () => void;
@@ -723,12 +743,13 @@ function HitRow({
   row,
   selected,
   bowerWritten,
+  answer,
   now,
   onActivate,
   onHighlight,
 }: HitRowProps): JSX.Element {
   // The name and the meta line only, as drawn (SE-Query): no body snippet.
-  const meta = rowMeta(row, bowerWritten, now);
+  const meta = rowMeta(row, bowerWritten, now, answer);
   const time =
     row.kind === 'folder' || row.file.modifiedTime === undefined
       ? null
@@ -822,6 +843,7 @@ function CommandRow({
 function SearchPreview({
   row,
   bowerWritten,
+  answer,
   now,
   pages,
   picture,
@@ -830,6 +852,7 @@ function SearchPreview({
 }: {
   row: RowModel | null;
   bowerWritten: boolean;
+  answer: boolean;
   now: number;
   pages: number | undefined;
   picture: string | null;
@@ -862,13 +885,18 @@ function SearchPreview({
   } else {
     facts.push(
       metaLine(
-        { name: row.file.name, mimeType: row.file.mimeType, bowerWritten },
+        {
+          name: row.file.name,
+          mimeType: row.file.mimeType,
+          bowerWritten,
+          answer,
+        },
         { view: 'row', now },
       ).text,
     );
     if (pages !== undefined) facts.push(pagesWord(pages));
     if (row.kind === 'file' && row.file.size !== undefined) {
-      facts.push(formatSize(row.file.size));
+      facts.push(sizeWords(row.file.size));
     }
   }
   const drive =
@@ -1241,7 +1269,11 @@ function SwitcherPanel({
     () => flatRows.filter((row) => row.kind === 'note').map((row) => row.file),
     [flatRows],
   );
-  const bower = useBowerNotes(noteFiles);
+  const { bower, answers } = useBowerNotes(noteFiles);
+  const isAnswer = (row: RowModel | null): boolean =>
+    row !== null &&
+    (answers.has(row.file.id) ||
+      row.kindWord === ITEM_KIND_WORDS['bower-answer']);
   const entryCount = flatRows.length + matchingCommands.length;
   const extras = useRowExtras(flatRows, index?.byPath);
   const highlightedRow = flatRows[highlightedIndex] ?? null;
@@ -1604,6 +1636,7 @@ function SwitcherPanel({
                           row={row}
                           selected={position === highlightedIndex}
                           bowerWritten={bower.has(row.file.id)}
+                          answer={isAnswer(row)}
                           now={now}
                           onActivate={activateRow}
                           onHighlight={() => {
@@ -1685,6 +1718,7 @@ function SwitcherPanel({
                 bowerWritten={
                   highlightedRow !== null && bower.has(highlightedRow.file.id)
                 }
+                answer={isAnswer(highlightedRow)}
                 now={now}
                 onOpen={activateRow}
                 pages={

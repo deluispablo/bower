@@ -17,15 +17,15 @@ import { isDemo } from '../api.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
-import { formatSize } from '../file-preview.js';
 import { filedBy } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import { whenWords } from '../folder-view.js';
 import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
-import { metaLine, shortDate } from '../meta-line.js';
+import { metaLine, shortDate, sizeWords } from '../meta-line.js';
 import type { MetaItem } from '../meta-line.js';
 import { showToast } from '../toast-store.js';
+import { ITEM_KIND_WORDS } from '../kinds.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
@@ -62,12 +62,16 @@ export function kindLine(
   kind: FileKind,
   pages: number | undefined,
   size: number | undefined,
+  answer = false,
 ): string {
-  const parts: string[] = [FILE_KIND_LABELS[kind]];
+  // A Bower answer reads as the list and the note call it (R-LI-2, K-14).
+  const parts: string[] = [
+    answer ? ITEM_KIND_WORDS['bower-answer'] : FILE_KIND_LABELS[kind],
+  ];
   if (pages !== undefined && pages > 0) {
     parts.push(`${pages} ${pages === 1 ? 'page' : 'pages'}`);
   }
-  if (size !== undefined) parts.push(formatSize(size));
+  if (size !== undefined) parts.push(sizeWords(size));
   return parts.join(' · ');
 }
 
@@ -121,6 +125,8 @@ export interface QuickLookProps {
   origin: Origin | null;
   /** `isBowerWritten` for the row, when the folder knows it. */
   bower?: boolean | undefined;
+  /** The row's own file is a Bower answer (`type: answer`). */
+  answer?: boolean | undefined;
   folderPath: string;
   now: number;
   onClose: () => void;
@@ -135,6 +141,7 @@ export function QuickLook({
   pages,
   origin,
   bower,
+  answer,
   folderPath,
   now,
   onClose,
@@ -196,7 +203,9 @@ export function QuickLook({
             )}
           </div>
           <h2 class="quick-look-title">{title}</h2>
-          <p class="quick-look-kind">{kindLine(kind, pages, shown.size)}</p>
+          <p class="quick-look-kind">
+            {kindLine(kind, pages, shown.size, answer === true && isNote)}
+          </p>
           <p class="quick-look-path">
             {para !== null && <FolderMark kind={para} size={18} />}
             <span class="quick-look-path-text">
@@ -271,6 +280,18 @@ export type PaneItem = PanePreview | PaneFolder;
 
 /** The words the empty column says (K-33). */
 export const PANE_EMPTY = 'Select something to see it here.';
+
+/**
+ * The note's body without its own leading `<h1>`: the column already shows
+ * the name once, in its title (G-7, L-56), and the page keeps one h1.
+ */
+export function withoutTitle(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const first = template.content.firstElementChild;
+  if (first?.tagName === 'H1') first.remove();
+  return template.innerHTML;
+}
 
 /** A note's text, rendered, once it is read; `null` until then. */
 function useRenderedNote(id: string | null, path: string): RenderedNote | null {
@@ -401,7 +422,8 @@ function FolderPane({ item }: { item: PaneFolder }): JSX.Element {
 }
 
 function FilePane({ item }: { item: PanePreview }): JSX.Element {
-  const { title, href, file, original, kind, origin, bower, now } = item;
+  const { title, href, file, original, kind, origin, bower, answer, now } =
+    item;
   const shown = original ?? file;
   // A pair and a note read the note: its Bower's note box and its text.
   const readsNote = original !== undefined || kind === 'note';
@@ -420,6 +442,7 @@ function FilePane({ item }: { item: PanePreview }): JSX.Element {
         bower !== undefined && {
           bowerWritten: bower,
         }),
+      ...(original === undefined && answer === true && { answer: true }),
       ...(shown.size !== undefined && { size: shown.size }),
       filed,
     },
@@ -445,7 +468,9 @@ function FilePane({ item }: { item: PanePreview }): JSX.Element {
       )}
       {rendered !== null && (
         <div class="quick-look-pane-note">
-          <NoteBody html={opening === null ? rendered.html : opening.rest} />
+          <NoteBody
+            html={withoutTitle(opening === null ? rendered.html : opening.rest)}
+          />
         </div>
       )}
       {!readsNote && kind === 'csv' && rows !== null && (

@@ -33,7 +33,9 @@ export interface HomeStateInput {
   /** The last run that finished (`RunStore.lastFinished`), or `null`. */
   lastFinished: Run | null;
   /** The folder index has not resolved yet (`VaultStatus === 'loading'`). */
-  loading: boolean;
+  loading: boolean; /** `false` while there is no index at all: a finished run then does not
+   * leave Loading (the inbox count is not known). Left out, as before. */
+  indexReady?: boolean;
 }
 
 /**
@@ -45,6 +47,22 @@ export interface HomeStateInput {
  * loaded); the index still loading (#322, only once nothing above already
  * answers the question); nothing waiting and never tidied (the first day).
  */
+/**
+ * Home is still loading while the listing is (`status` 'loading'), and also
+ * while a person with a Bower folder has no index yet: the provider can sit
+ * at 'idle' for a moment before its first read starts, and nothing it says
+ * then may read as an empty folder ("Nothing yet", "0 · Nothing waiting").
+ */
+export function isHomeLoading(input: {
+  status: string;
+  indexReady: boolean;
+  hasFolder: boolean;
+}): boolean {
+  if (input.status === 'loading') return true;
+  if (input.indexReady || !input.hasFolder) return false;
+  return input.status !== 'error' && input.status !== 'offline';
+}
+
 export function homeStateFor(input: HomeStateInput): HomeState {
   const { phase, pending, lastFinished, loading } = input;
   if (phase === 'queued' || phase === 'running') return 'running';
@@ -53,6 +71,7 @@ export function homeStateFor(input: HomeStateInput): HomeState {
     return outcome?.state === 'partial' ? 'partial' : 'failed';
   }
   if (phase === 'done') return 'done';
+  if (loading && input.indexReady === false) return 'loading';
   if (pending > 0) {
     // D31: with no bar on Home, the greeting keeps telling the result while
     // the only things waiting are the ones the run left for the person.

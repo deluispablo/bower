@@ -13,10 +13,17 @@
 }
 
 .add-drop-bird {
-  /* 64 px bird with the room of rule 3: 8 px above and each side, 1 px below. */
+  /* AD-Main-1280: a 32 px bird (about 28 px drawn) in line with the text. */
+  display: inline-flex;
   flex: none;
-  padding: 8px 8px 1px;
   pointer-events: none;
+}
+
+/* The posed bird keeps its 40 px size (rule 2: a smaller Bird is the
+   mark), drawn in the board's 32 px box. */
+.add-drop-bird svg {
+  width: 32px;
+  height: 32px;
 }
 
 .add-drop-line {
@@ -48,8 +55,8 @@
   .add-drop-row {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    margin: 0 0 var(--space-3);
+    gap: var(--space-3);
+    margin: 0 0 var(--space-1);
   }
 
   .add-drop-line {
@@ -305,18 +312,35 @@ button.pile-card:focus-visible {
 }
 
 /* AD-Sheet: a secondary button with its + icon. */
+/* AD-Sheet: a secondary sm button that hugs its label (40 drawn, 44 hit). */
 .pile-more {
+  position: relative;
   display: inline-flex;
+  align-self: flex-start;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  box-sizing: border-box;
+  width: auto;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-card);
+  font-size: var(--text-15);
+}
+
+.pile-more::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 100%;
-  min-height: 48px;
+  height: 44px;
+  transform: translate(-50%, -50%);
 }
 
 .pile-more .icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .pile-remove {
@@ -482,6 +506,7 @@ button.pile-card:focus-visible {
   width: 100%;
   min-height: 48px;
   margin-top: 0;
+  border-radius: var(--radius-card);
   font-size: var(--text-base, 16px);
 }
 
@@ -599,17 +624,18 @@ button.pile-card:focus-visible {
   cursor: default;
 }
 
+/* AD-Main: 13 px muted sentences, 8 px apart (R-TOK-30, K-34). */
 .add-note {
-  margin: 0;
+  margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
-  font-size: var(--text-xs, 13px);
+  font-size: var(--text-13);
   line-height: 1.45;
 }
 
 .pile-saved {
   margin: var(--space-1-5, 6px) 0 0;
   color: var(--color-text-muted);
-  font-size: var(--text-xs, 13px);
+  font-size: var(--text-13);
 }
 
 .pile-rows {
@@ -624,24 +650,10 @@ button.pile-card:focus-visible {
   position: relative;
 }
 
-/* AD-Pile: about 65 px a row, the ✕ at the row end. */
+/* AD-Pile-375: the shared row, so the title and the meta each take one or
+   two lines (K-12) and the icon and the ✕ sit at the top. */
 .pile-row .list-row {
-  align-items: center;
   width: 100%;
-  min-height: 65px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-
-/* One line each, as the board draws them, so rows stay about 65 px. */
-.pile-row .list-row-title,
-.pile-row .list-row-meta {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  -webkit-line-clamp: unset;
-  line-clamp: unset;
 }
 
 .pile-row .list-row-text {
@@ -654,6 +666,11 @@ button.pile-card:focus-visible {
   align-items: center;
   gap: var(--space-2);
   margin-left: auto;
+}
+
+/* The ✕ centred on the title's first line, as AD-Pile-375 draws it. */
+.pile-row .list-row-trailing .pile-row-remove {
+  margin: -8px -4px -8px 0;
 }
 
 .pile-row-failed .list-row-meta {
@@ -682,9 +699,32 @@ button.pile-card:focus-visible {
   font-size: var(--text-lg);
 }
 
+/* AD-Waiting: the count under the heading on the phone, at the right of
+   it on desktop; 13 px muted either way. */
+.pile-waiting-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.pile-waiting-head .pile-waiting-title {
+  flex: 1;
+  margin: 0;
+}
+
+@media (min-width: 900px) {
+  .pile-waiting-head {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+}
+
 .pile-waiting-count {
-  margin: 0 0 var(--space-2);
+  margin: 0;
   color: var(--color-text-muted);
+  font-size: var(--text-13);
 }
 
 .pile-card-waiting {
@@ -707,10 +747,15 @@ button.pile-card:focus-visible {
   line-clamp: 2;
 }
 
-.pile-card-waiting .pile-card-meta,
+.pile-card-waiting .pile-card-meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-13);
+}
+
+/* "2 things" in Added from elsewhere: 14 px, as AD-Waiting draws it. */
 .pile-card-elsewhere .pile-card-meta {
   color: var(--color-text-muted);
-  font-size: var(--text-xs, 13px);
+  font-size: var(--text-sm);
 }
 
 .pile-card-elsewhere {

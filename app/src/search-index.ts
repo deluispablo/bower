@@ -16,6 +16,8 @@ import MiniSearch from 'minisearch';
 import type { SearchResult } from 'minisearch';
 
 import { loadSearchIndex, saveSearchIndex } from './cache.js';
+import { ITEM_KIND_WORDS } from './kinds.js';
+import { parseFrontmatter } from './markdown/frontmatter.js';
 import type { DriveFile } from './drive.js';
 import { FOLDER_MIME } from './drive.js';
 import { displayName, folderOf, paraKindOf } from './navigation.js';
@@ -202,8 +204,21 @@ function hitKindOf(file: DriveFile): HitKind {
   return fileKind(file) === 'note' ? 'note' : 'file';
 }
 
-function kindWordOf(file: DriveFile, kind: HitKind): string {
+function kindWordOf(
+  file: DriveFile,
+  kind: HitKind,
+  text: string | undefined,
+): string {
   if (kind === 'folder') return 'Folder';
+  // A Bower answer reads as in the list, the grid and the note (R-LI-2,
+  // K-14): one kind word on every surface.
+  if (
+    kind === 'note' &&
+    text !== undefined &&
+    parseFrontmatter(text).data.type === 'answer'
+  ) {
+    return ITEM_KIND_WORDS['bower-answer'];
+  }
   return FILE_KIND_LABELS[fileKind(file)];
 }
 
@@ -230,7 +245,7 @@ function docFor(
       : '';
   const title = titleOf(file, kind, rawText);
   const path = formatPath(pathSegments(file.path, true));
-  const kindWord = kindWordOf(file, kind);
+  const kindWord = kindWordOf(file, kind, rawText);
   const sig = [
     title,
     path,
@@ -267,7 +282,16 @@ function fuzzyFor(term: string): number | false {
 
 const OPTIONS = {
   fields: ['title', 'path', 'kindWord', 'text'],
-  storeFields: ['title', 'kind', 'sig', 'text', 'root', 'parent', 'updated'],
+  storeFields: [
+    'title',
+    'kind',
+    'kindWord',
+    'sig',
+    'text',
+    'root',
+    'parent',
+    'updated',
+  ],
   processTerm: (term: string): string => fold(term),
   searchOptions: {
     prefix: true,
@@ -525,7 +549,7 @@ function passes(
 
 function hitFor(
   file: DriveFile,
-  doc: { title: string; text: string },
+  doc: { title: string; text: string; kindWord?: string },
   tokens: readonly string[],
   terms: readonly string[],
   hasTextMatch: boolean,
@@ -548,7 +572,10 @@ function hitFor(
     highlights: highlightsFor(doc.title, tokens),
     path,
     pathText: formatPath(path),
-    kindWord: kindWordOf(file, kind),
+    kindWord:
+      doc.kindWord !== undefined && doc.kindWord !== ''
+        ? doc.kindWord
+        : kindWordOf(file, kind, undefined),
     badge:
       kind === 'folder'
         ? ''
@@ -597,6 +624,7 @@ export function searchVault(
     const doc = {
       title: String(result.title ?? ''),
       text: typeof result.text === 'string' ? result.text : '',
+      kindWord: typeof result.kindWord === 'string' ? result.kindWord : '',
     };
     const hasTextMatch = Object.values(result.match).some((fields) =>
       fields.includes('text'),

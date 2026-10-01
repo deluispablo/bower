@@ -14,6 +14,7 @@ import { reply } from './api.js';
 import type { DemoServer } from './server.js';
 import { drivePreviewUrl } from './vault.js';
 import type { Entry } from './vault.js';
+import { demoReadWaitMs, demoSlowMs, takeDemoFail } from './load-switch.js';
 
 /**
  * An e2e-only knob (#322): a Playwright test sets this on `window` before
@@ -31,6 +32,26 @@ function listDelayMs(): number {
   return typeof window === 'undefined'
     ? 0
     : (window.__bowerDemoListDelayMs ?? 0);
+}
+
+/**
+ * A demo read under the gate's switches (`load-switch.ts`): it waits while
+ * slow is on, and fails once when fail is on.
+ */
+function underSwitches<T>(read: () => Promise<T>, ms: number): Promise<T> {
+  const run = (): Promise<T> =>
+    takeDemoFail()
+      ? Promise.reject(
+          new DriveError(503, 'Demo: this read failed on purpose.'),
+        )
+      : read();
+  return ms <= 0
+    ? run()
+    : new Promise<T>((resolve, reject) => {
+        setTimeout(() => {
+          run().then(resolve, reject);
+        }, ms);
+      });
 }
 
 function notFound(): DriveError {
@@ -113,12 +134,7 @@ export function createDemoDrive(server: DemoServer): DriveClient {
             a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
           );
         });
-      const ms = listDelayMs();
-      return ms <= 0
-        ? answer()
-        : new Promise<DriveFile[]>((resolve) => {
-            setTimeout(() => resolve(answer()), ms);
-          });
+      return underSwitches(answer, listDelayMs() + demoSlowMs());
     },
 
     listFolder: (folderId) =>
@@ -142,7 +158,11 @@ export function createDemoDrive(server: DemoServer): DriveClient {
       return hits.slice(0, 50);
     },
 
-    getText: async (id) => (await vault.text(file(id).id)) ?? '',
+    getText: (id) =>
+      underSwitches(
+        async () => (await vault.text(file(id).id)) ?? '',
+        demoReadWaitMs(),
+      ),
 
     getBlob: (id) => reply(() => blobOf(file(id))),
 

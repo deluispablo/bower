@@ -37,7 +37,8 @@
   min-width: 0;
   max-width: 45vw;
   color: var(--color-link);
-  font-size: var(--text-base);
+  /* 14 px like the rest of the footer (NO-Bottom-375). */
+  font-size: var(--text-sm);
 }
 
 .pager-next-name {
@@ -48,9 +49,13 @@
 }
 
 .pager-count {
+  /* One line, as NO-Bottom-375 keeps "3 of 6 in Job Search Australia". */
+  overflow: hidden;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pager-count a {

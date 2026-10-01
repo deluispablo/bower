@@ -74,7 +74,8 @@
   margin: 0;
   color: var(--color-heading);
   font-family: var(--font-display);
-  font-size: var(--text-xl);
+  /* Poppins 700 at 20 px, as JF-Main draws the run's header. */
+  font-size: var(--text-lg);
   font-weight: 700;
 }
 
@@ -97,7 +98,16 @@
   display: flex;
   flex-direction: column-reverse;
   justify-content: flex-end;
-  gap: var(--space-2);
+  gap: 0;
+  /* JF-Main: a small card about 74 px tall, the number over a 13 px
+     label. */
+  box-sizing: border-box;
+  min-height: 74px;
+  padding: var(--space-3);
+}
+
+.just-filed-tiles .stat-tile-label {
+  font-size: var(--text-13);
 }
 
 .just-filed-tiles .stat-tile-value {
@@ -152,13 +162,17 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  box-sizing: border-box;
   width: 100%;
+  /* JF-Main: 52 px rows split by a divider, 15 px over 13 px. */
   min-height: 52px;
-  padding: var(--space-2) 0;
+  padding: 0;
   background: none;
   border: none;
+  border-bottom: 1px solid var(--color-border-subtle);
   color: inherit;
   font: inherit;
+  font-size: var(--text-15);
   text-align: left;
   cursor: pointer;
 }
@@ -199,7 +213,7 @@
 
 .just-filed-earlier-counts {
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-13);
 }
 
 .just-filed-earlier-panel {

@@ -60,6 +60,7 @@ import { isLinkNote } from '../note-title.js';
 import { outcomeFromRun, runSentence } from '../run-outcome.js';
 import { markAllSeen } from '../seen.js';
 import { ACTIVITY_PATH } from '../shell-routes.js';
+import { showToast } from '../toast-store.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
 import type { VaultIndex } from '../vault-index.js';
@@ -451,7 +452,13 @@ export function JustFiled(): JSX.Element {
   const addresses = useAddresses(rows, index);
 
   function markAll(): void {
-    markAllSeen(unseen).catch((err: unknown) => console.error(err));
+    markAllSeen(unseen).then(
+      () => showToast('All marked seen'),
+      (err: unknown) => {
+        console.error(err);
+        showToast('Could not mark them seen. Try again.');
+      },
+    );
   }
 
   let body: JSX.Element;

@@ -23,6 +23,7 @@ import type { Run } from '../api.js';
 import { Badge } from '../components/badge.js';
 import { Bird, BirdNapButton } from '../components/bird.js';
 import { ONCE_STATES } from '../components/bird-classes.js';
+import { ErrorLine, Skeleton } from '../components/system-state.js';
 import type { BirdState } from '../components/bird-classes.js';
 import { Card, StatTile } from '../components/card.js';
 import { Hint } from '../components/hint.js';
@@ -45,14 +46,15 @@ import { findReport, reportDayStart } from '../health-report.js';
 import {
   birdStateFor,
   bubbleFor,
-  greetingFor,
   finishedRunFor,
+  greetingFor,
   homeStateFor,
   homeTiles,
   inboxLine,
+  isHomeLoading,
   lastTidyUpNote,
-  things,
   restingBird,
+  things,
   tidyUpAgo,
 } from '../home.js';
 import type { BubblePart, HomeState } from '../home.js';
@@ -597,7 +599,7 @@ function useLastRun(lastFinished: Run | null): Run | null {
 
 export function Home(): JSX.Element {
   const { me } = useSession();
-  const { index, files, status, unpinNote, unpinFolder, unpinFile } =
+  const { index, files, status, refresh, unpinNote, unpinFolder, unpinFile } =
     useVault();
   // `now` is the run store's own shared clock, so the bubble, the tiles and
   // the working sheet always agree on how long ago something happened.
@@ -643,7 +645,11 @@ export function Home(): JSX.Element {
       : 'Runs every Sunday.';
 
   const offline = !online;
-  const loading = status === 'loading';
+  const loading = isHomeLoading({
+    status,
+    indexReady: index !== null,
+    hasFolder: me?.vault != null,
+  });
   const state = homeStateFor({
     phase,
     pending,
@@ -651,6 +657,9 @@ export function Home(): JSX.Element {
     // session already saw finish is.
     lastFinished: loading ? settled : lastRun,
     loading,
+    // Before the index is there, nothing about the inbox is known yet: a
+    // finished run must not make the tiles read "0 · Nothing waiting".
+    indexReady: index !== null,
   });
 
   // A play-once pose (the first day's hello, the dance after a run) plays
@@ -796,30 +805,33 @@ export function Home(): JSX.Element {
         </Hint>
       )}
 
-      <PinnedSection
-        items={pinnedItems}
-        noteCounts={noteCounts}
-        onUnpinNote={unpinNote}
-        onUnpinFolder={unpinFolder}
-        onUnpinFile={unpinFile}
-        runUnpin={(unpin) => runPinAction(unpin, 'Unpinned')}
-        editing={editingPins}
-        onEditingChange={setEditing}
-      />
+      {state === 'loading' && pinnedItems.length === 0 ? (
+        // No "Pin a folder…" before the pins are known (R-SYS-1).
+        <div class="home-pinned">
+          <div class="home-pinned-head">
+            <h2>Pinned</h2>
+          </div>
+          <Skeleton shape="tiles" count={2} />
+        </div>
+      ) : (
+        <PinnedSection
+          items={pinnedItems}
+          noteCounts={noteCounts}
+          onUnpinNote={unpinNote}
+          onUnpinFolder={unpinFolder}
+          onUnpinFile={unpinFile}
+          runUnpin={(unpin) => runPinAction(unpin, 'Unpinned')}
+          editing={editingPins}
+          onEditingChange={setEditing}
+        />
+      )}
 
       {!editingPins && state === 'loading' && (
         <div class="home-recent" aria-hidden="true">
           <div class="home-recent-head">
             <h2>Recent</h2>
           </div>
-          <ul class="home-notes">
-            {Array.from({ length: RECENT_ROWS }).map((_, i) => (
-              <li key={i} class="home-recent-skeleton-row">
-                <span class="home-skeleton home-recent-skeleton-icon" />
-                <span class="home-skeleton home-recent-skeleton-text" />
-              </li>
-            ))}
-          </ul>
+          <Skeleton shape="rows" count={RECENT_ROWS} />
         </div>
       )}
 
@@ -829,7 +841,9 @@ export function Home(): JSX.Element {
             <h2>Recent</h2>
             {!wide && <a href={FOLDERS_PATH}>All in Folders</a>}
           </div>
-          {recent.length > 0 ? (
+          {index === null && status === 'error' ? (
+            <ErrorLine what="home" onRetry={() => void refresh()} />
+          ) : recent.length > 0 ? (
             <RecentRows notes={recent} titles={recentTitles} now={now} />
           ) : (
             <p class="home-empty">{RECENT_EMPTY}</p>

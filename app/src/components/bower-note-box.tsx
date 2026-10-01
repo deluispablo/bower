@@ -20,10 +20,9 @@ import type { Kind } from '../kinds.js';
 import { noteMetaFrom } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { getPref, setPref } from '../prefs.js';
-import { showToast } from '../toast-store.js';
 import { Bird, BowerMark } from './bird.js';
 import type { BirdState } from './bird.js';
-import { chipLabel, Details, questionsFor } from './details.js';
+import { chipLabel, Details } from './details.js';
 import { NoteBody } from './note-body.js';
 
 import '../styles/bower-note-box.css';
@@ -247,32 +246,20 @@ export function ruleChange(
   };
 }
 
-/** "the agent", "the employer", "payroll": who the questions go to. */
-export function whoFor(kind: Kind | undefined): string {
-  const match = /^Ask (the [^:]+|[^:]+):/.exec(kind?.questionsLabel ?? '');
-  return match?.[1] ?? 'the agent';
-}
-
 /** The things to check: the note's own section, else the fields the
  * document did not state (R-INS-4). */
 export function checkItems(
   kind: Kind | undefined,
   meta: NoteMeta,
   sectionItems: readonly string[],
-): { items: string[]; questions: string[] } {
+): { items: string[] } {
   if (sectionItems.length > 0) {
-    return { items: [...sectionItems], questions: [...sectionItems] };
+    return { items: [...sectionItems] };
   }
   return {
     items: meta.not_stated.map((key) =>
       kind === undefined ? key.replace(/[_-]+/g, ' ') : chipLabel(kind, key),
     ),
-    questions:
-      kind === undefined
-        ? meta.not_stated.map(
-            (key) => `What is the ${key.replace(/[_-]+/g, ' ')}?`,
-          )
-        : questionsFor(kind, meta.not_stated),
   };
 }
 
@@ -326,25 +313,6 @@ export function readingText(
   return `Reading ${what}${from}. About a minute; you can keep reading.`;
 }
 
-function copyLines(lines: readonly string[]): void {
-  const clipboard =
-    typeof navigator === 'undefined' ? undefined : navigator.clipboard;
-  if (clipboard === undefined) {
-    showToast("Bower couldn't copy that. Try again.");
-    return;
-  }
-  const noun = lines.length === 1 ? 'question' : 'questions';
-  clipboard.writeText(lines.join('\n')).then(
-    () => {
-      showToast(`Copied ${String(lines.length)} ${noun}`);
-    },
-    (error: unknown) => {
-      console.error('Copying the questions failed', error);
-      showToast("Bower couldn't copy that. Try again.");
-    },
-  );
-}
-
 export interface BowerNoteBoxProps {
   /** The rendered top box (`.bower-note` and "Joined from"). */
   html: string;
@@ -366,7 +334,7 @@ export interface BowerNoteBoxProps {
   /** Other names the note is asked about by, such as its title: an Ask or
    * Rename request names a note as `[[title]]`. */
   names?: readonly string[];
-  /** The fold chevron ("Fold Bower's note"): on the note page and in the
+  /** The fold control (the head row, named "Bower's note"): on the note page and in the
    * desktop preview column (O-R6); `false` keeps the box open with no
    * control (a picture of the box). */
   fold?: boolean;
@@ -399,6 +367,8 @@ export function BowerNoteBox({
   const folded = fold && foldedState;
   const [changed, setChanged] = useState(false);
   const bodyId = useId();
+  const nameId = useId();
+  const lineId = useId();
   const changeId = useId();
   const [clock, setClock] = useState(() => Date.now());
   const reading =
@@ -475,54 +445,69 @@ export function BowerNoteBox({
     );
   }
 
+  const showLine = folded && counted.points > 0;
+  const head = (
+    <>
+      {headBird === undefined ? (
+        <BowerMark size={32} />
+      ) : (
+        <span class="bower-note-box-head-bird">
+          <Bird state={headBird} size={40} />
+        </span>
+      )}
+      <span class="bower-note-box-name" id={nameId}>
+        {"Bower's note"}
+      </span>
+      {showLine && (
+        <span class="bower-note-box-line" id={lineId}>
+          {foldedLine(counted.points, counted.toCheck)}
+        </span>
+      )}
+      {fold && (
+        <span class="bower-note-box-fold-icon" aria-hidden="true">
+          <svg
+            class="bower-note-box-chevron"
+            viewBox="0 0 20 20"
+            width="16"
+            height="16"
+            focusable="false"
+          >
+            <path
+              d="M5 8l5 5 5-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+      )}
+    </>
+  );
+
   return (
     <section
       class={`bower-note-box${folded ? ' is-folded' : ''}${extra === undefined ? '' : ` ${extra}`}`}
       aria-label="Bower's note"
     >
-      <div class="bower-note-box-head">
-        {headBird === undefined ? (
-          <BowerMark size={32} />
-        ) : (
-          <span class="bower-note-box-head-bird">
-            <Bird state={headBird} size={40} />
-          </span>
-        )}
-        <span class="bower-note-box-name">{"Bower's note"}</span>
-        {folded && counted.points > 0 && (
-          <span class="bower-note-box-line">
-            {foldedLine(counted.points, counted.toCheck)}
-          </span>
-        )}
-        {fold && (
-          <button
-            type="button"
-            class="bower-note-box-fold"
-            aria-label="Fold Bower's note"
-            aria-expanded={!folded}
-            aria-controls={bodyId}
-            onClick={toggle}
-          >
-            <svg
-              class="bower-note-box-chevron"
-              viewBox="0 0 20 20"
-              width="16"
-              height="16"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <path
-                d="M5 8l5 5 5-5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-        )}
-      </div>
+      {fold ? (
+        // The whole head row is the fold control, named "Bower's note"
+        // (spec 3.27); the folded line describes it.
+        <button
+          type="button"
+          class="bower-note-box-head bower-note-box-fold"
+          aria-labelledby={nameId}
+          aria-describedby={showLine ? lineId : undefined}
+          aria-expanded={!folded}
+          aria-controls={bodyId}
+          onClick={toggle}
+        >
+          {head}
+        </button>
+      ) : (
+        <div class="bower-note-box-head">{head}</div>
+      )}
 
       <div id={bodyId} class="bower-note-box-body" hidden={folded}>
         {verdict !== null && (
@@ -588,15 +573,6 @@ export function BowerNoteBox({
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              class="bower-note-box-copy"
-              onClick={() => {
-                copyLines(check.questions);
-              }}
-            >
-              {`Copy as questions for ${whoFor(kind)}`}
-            </button>
           </div>
         )}
       </div>

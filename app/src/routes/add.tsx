@@ -134,7 +134,7 @@ export function AddDropRow({
     <div class="add-drop-row">
       {wide && (
         <div class="add-drop-bird" aria-hidden="true">
-          <Bird state={listening ? 'listening' : 'looking'} size={44} />
+          <Bird state={listening ? 'listening' : 'looking'} size={40} />
         </div>
       )}
       <p class="add-drop-line">{DROP_LINE}</p>
@@ -1108,14 +1108,16 @@ export function Add() {
 
         {waiting.length > 0 && (
           <section class="pile-waiting" aria-labelledby="pile-waiting-title">
-            <h2 id="pile-waiting-title" class="pile-waiting-title">
-              Waiting for the tidy-up
-            </h2>
-            {!loading && (
-              <p class="pile-waiting-count">
-                {thingsText(total)} in your inbox
-              </p>
-            )}
+            <div class="pile-waiting-head">
+              <h2 id="pile-waiting-title" class="pile-waiting-title">
+                Waiting for the tidy-up
+              </h2>
+              {!loading && (
+                <p class="pile-waiting-count">
+                  {thingsText(total)} in your inbox
+                </p>
+              )}
+            </div>
             <ul class="pile-list">
               {waiting.map((pile) => {
                 const note = noteLine(pile);
