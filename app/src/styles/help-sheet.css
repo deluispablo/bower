@@ -376,13 +376,16 @@
   color: var(--color-text-secondary);
 }
 
+/* Even rhythm (F-25): every row is its text plus 7 px above and below, as
+   the Help boards draw `.hr`, so a one-line row is spaced like a two-line
+   one. The rows are not tap targets, so they carry no 44 px minimum. */
 .help-template .help-rows {
-  gap: var(--space-2);
+  gap: 0;
 }
 
 .help-template .help-row {
   gap: var(--space-3);
-  min-height: 44px;
+  padding: 7px 0;
   font-size: var(--text-base);
   color: var(--color-text);
 }
