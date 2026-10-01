@@ -97,9 +97,14 @@ test('Move to… opens the folder picker, not Inbox, and Move here sends the req
   await sheet.getByRole('radio', { name: /Resources/ }).click();
   await sheet.getByRole('button', { name: 'Move here' }).click();
   await expect(sheet).toHaveCount(0);
+  // One Undo (L-20, F-22), as Rename: the page's line, and no toast.
+  await expect(
+    page.getByText(/Moving to Resources at the next tidy-up/),
+  ).toBeVisible();
   await expect(
     page.getByText('In your inbox. Bower moves it at the next tidy-up.'),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Undo/ })).toHaveCount(1);
 });
 
 test('Move to… waits for the tidy-up: no Just this, now (#909)', async ({

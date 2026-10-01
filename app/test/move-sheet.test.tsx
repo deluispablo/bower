@@ -256,10 +256,8 @@ describe('Move to… (#909, PF-Move)', () => {
     expect(content).toContain(
       'Move “Lease agreement 2026” (2-Areas/Home/Lease agreement 2026.pdf) to 2-Areas/Garden.',
     );
-    expect(currentToast()?.message).toBe(
-      'In your inbox. Bower moves it at the next tidy-up.',
-    );
-    expect(currentToast()?.action?.label).toBe('Undo');
+    // One Undo (L-20, F-22): the page's "Moving to …" line, no toast.
+    expect(currentToast()).toBeNull();
     expect(document.body.querySelector('.overlay-panel')).toBeNull();
   });
 
@@ -279,10 +277,7 @@ describe('Move to… (#909, PF-Move)', () => {
     await flush();
     expect(mocks.createTextFile).toHaveBeenCalledTimes(1);
     expect(mocks.deleteFile).toHaveBeenCalledWith('OLD_ID');
-    expect(currentToast()?.message).toBe(
-      'In your inbox. Bower moves it at the next tidy-up.',
-    );
-    expect(currentToast()?.action).toBeUndefined();
+    expect(currentToast()).toBeNull();
   });
 
   it('says so and stays open when the move could not be written', async () => {
