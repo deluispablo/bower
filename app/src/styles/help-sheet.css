@@ -245,6 +245,62 @@
   }
 }
 
+/* The tour card's type (TR-*-Fixed boards): the overline, then the title
+ * (20 px) with Skip (15 px) on its line, then the lede and the rows at 16 px
+ * on the phone and 15 px on desktop. The heading's own box steps aside
+ * (`display: contents`) so its overline, title and lede share one grid with
+ * Skip. */
+.tour-card .help-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--space-2);
+}
+
+.tour-card .help-heading {
+  display: contents;
+}
+
+.tour-card .help-kicker {
+  grid-column: 1 / -1;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.tour-card .help-title {
+  grid-column: 1;
+  margin-top: 2px;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.tour-card .help-skip {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: baseline;
+  min-height: 44px;
+  font-size: var(--text-15);
+  color: var(--color-text-secondary);
+}
+
+.tour-card .help-lede {
+  grid-column: 1 / -1;
+  margin: 2px 0 var(--space-2);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+.tour-card .help-row {
+  font-size: var(--text-base);
+}
+
+@media (min-width: 900px) {
+  .tour-card .help-lede,
+  .tour-card .help-row {
+    font-size: var(--text-15);
+  }
+}
+
 /* The tour keeps its place from before #907: centred, 440 wide. */
 @media (min-width: 900px) {
   .overlay--desktop-center .overlay-panel:has(.tour-card) {

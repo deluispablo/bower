@@ -101,6 +101,42 @@ test.describe('the tour', () => {
     ).toBeVisible();
   });
 
+  test('sets the card in the board type: title 20, Skip 15 on its line, text 16 / 15', async ({
+    page,
+  }, testInfo) => {
+    await page.goto('/');
+    const tour = page.getByRole('dialog', { name: 'Home' });
+    const title = tour.getByRole('heading', { name: 'Home' });
+    const skip = tour.getByRole('button', { name: 'Skip' });
+    const lede = tour.getByText('Where Bower tells you what is going on.');
+    const size = (el: typeof title): Promise<string> =>
+      el.evaluate((node) => getComputedStyle(node).fontSize);
+    expect(await size(title)).toBe('20px');
+    expect(await size(skip)).toBe('15px');
+    // #c6cfdc on the dark boards: the secondary text token in each theme.
+    const secondary = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--color-text-secondary)';
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    expect(await skip.evaluate((node) => getComputedStyle(node).color)).toBe(
+      secondary,
+    );
+    const text = testInfo.project.name === 'phone' ? '16px' : '15px';
+    expect(await size(lede)).toBe(text);
+    expect(await size(tour.locator('.help-row').first())).toBe(text);
+    const t = await title.boundingBox();
+    const s = await skip.boundingBox();
+    if (t === null || s === null) throw new Error('no card');
+    // Skip sits on the title's line, to its right.
+    expect(s.x).toBeGreaterThan(t.x + t.width - 1);
+    expect(s.y).toBeLessThan(t.y + t.height);
+    expect(s.y + s.height).toBeGreaterThan(t.y);
+  });
+
   test('Skip ends it with the replay toast', async ({ page }) => {
     await page.goto('/');
     await page
