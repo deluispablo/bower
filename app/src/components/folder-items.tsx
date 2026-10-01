@@ -16,8 +16,8 @@
  * first row selected; a folder of folders with nothing selected (K-33).
  *
  * Counts come from `folder-view.ts#folderSegments` only, so the meta line,
- * the segments and "Show <n> things" agree (K-31); the route reads them
- * through `onSummary`. Sort, kind and layout are remembered per folder in
+ * the segments and "Show <n> things" agree (K-31); the route counts the
+ * same model itself (`folder-summary.ts`). Sort, kind and layout are remembered per folder in
  * `viewSettings` (#582).
  */
 
@@ -28,20 +28,17 @@ import { folderKeyAction } from '../folder-keys.js';
 import { isBowerWritten } from '../bower-written.js';
 import { loadViewSettings, saveViewSettings } from '../cache.js';
 import type { ViewSettings } from '../cache.js';
-import { parseCatalogueFiles } from '../companion.js';
 import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { dayWords, metaLine, shortDate } from '../meta-line.js';
 import type { MetaItem } from '../meta-line.js';
-import { CATALOGUE_PATH, originOf } from '../file-origin.js';
+import { originOf } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import {
   FOLDER_SORTS,
-  buildFolderModel,
   fileLine,
   filterKind,
   folderSegments,
-  isFolderPage,
   kindOptions,
   rowsFor,
   sortRows,
@@ -54,8 +51,6 @@ import {
   paraKindOf,
 } from '../navigation.js';
 import type { FolderContents, FolderSubfolder } from '../navigation.js';
-import { loadNoteMeta } from '../note-meta.js';
-import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import type { PendingRequest } from '../rename-request.js';
 import { useNew } from '../use-new.js';
@@ -71,6 +66,7 @@ import { Badge } from './badge.js';
 import { FilterSortSheet } from './filter-sort-sheet.js';
 import type { FilterSortChoice } from './filter-sort-sheet.js';
 import { FolderCard } from './folder-card.js';
+import { useFolderModel } from './folder-summary.js';
 import type { FolderCardItem } from './folder-card.js';
 import { FolderGrid, GridTile, defaultLayout } from './folder-grid.js';
 import type { FolderLayout, TileGroup } from './folder-grid.js';
@@ -178,9 +174,6 @@ const VIRTUAL_FROM_ROWS = 150;
 const ROW_ESTIMATE = 62;
 const GROUP_ESTIMATE = 34;
 
-/** How many notes' frontmatter are read at once. */
-const META_BATCH = 8;
-
 type VirtualModule = typeof import('./virtual-list.js');
 
 // Loaded the first time a folder passes the threshold, as the tree does, so
@@ -280,82 +273,6 @@ function useFolderView(
   return [view, update];
 }
 
-function versionKey(notes: readonly DriveFile[]): string {
-  return notes.map((note) => `${note.id}:${note.modifiedTime ?? ''}`).join('|');
-}
-
-/** The frontmatter of the folder's notes, read lazily a few at a time: rows
- * render first and their kinds follow. */
-function useNoteMetas(
-  notes: readonly DriveFile[],
-): ReadonlyMap<string, NoteMeta> {
-  const [metas, setMetas] = useState<ReadonlyMap<string, NoteMeta>>(
-    () => new Map(),
-  );
-  const key = versionKey(notes);
-  const latest = useRef(notes);
-  latest.current = notes;
-
-  useEffect(() => {
-    let cancelled = false;
-    const read = new Map<string, NoteMeta>();
-    void (async () => {
-      const all = latest.current;
-      for (let at = 0; at < all.length && !cancelled; at += META_BATCH) {
-        await Promise.all(
-          all.slice(at, at + META_BATCH).map(async (note) => {
-            try {
-              read.set(note.id, await loadNoteMeta(note));
-            } catch (err) {
-              console.error(err);
-            }
-          }),
-        );
-        if (!cancelled) setMetas(new Map(read));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [key]);
-
-  return metas;
-}
-
-/** `index.md`'s file-to-note rows (`parseCatalogueFiles`), for pairing. */
-function useCatalogueFiles(
-  catalogue: DriveFile | undefined,
-  getNoteText: (id: string) => Promise<string>,
-): ReadonlyMap<string, string> {
-  const [files, setFiles] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
-  );
-  const id = catalogue?.id;
-  const version = catalogue?.modifiedTime;
-
-  useEffect(() => {
-    if (id === undefined) {
-      setFiles(new Map());
-      return;
-    }
-    let cancelled = false;
-    getNoteText(id).then(
-      (text) => {
-        if (!cancelled) setFiles(parseCatalogueFiles(text));
-      },
-      (err: unknown) => {
-        console.error(err);
-        if (!cancelled) setFiles(new Map());
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [id, version, getNoteText]);
-
-  return files;
-}
-
 /** A row's line for what the person added or wrote. A CSV that is the copy
  * of a Google Sheet (`appProperties.bowerSource`, set when Bower exports one
  * from Drive) says so, as the board has it. */
@@ -373,53 +290,6 @@ export function addedLine(
 
 const NO_WAITING: ReadonlyMap<string, PendingRequest> = new Map();
 
-/** What the route's header reads from the body (K-31). */
-export interface FolderSummary {
-  /** The meta line's count: things, or for a folder of folders, folders. */
-  count: number;
-  unit: 'thing' | 'folder';
-  /** The folder's lifecycle from its own note's `status` ("Active"). */
-  lifecycle?: string;
-  /** The newest change in the folder, ISO. */
-  updated?: string;
-}
-
-/** A folder's lifecycle (AR-Sub: "Areas · Active · 2 things"): the `status`
- * of the note named after the folder, capitalised. */
-export function lifecycleOf(
-  contents: Pick<FolderContents, 'name' | 'notes'>,
-  metas: ReadonlyMap<string, NoteMeta>,
-): string | undefined {
-  const own = contents.notes.find(
-    (note) => note.name === `${contents.name}.md`,
-  );
-  const meta = own === undefined ? undefined : metas.get(own.id);
-  // The person's own note about the folder says its lifecycle; a page Bower
-  // keeps for a project (`isFolderPage`) does not (PF-Main: no "Active").
-  if (own === undefined || isFolderPage(own, meta)) return undefined;
-  const status = meta?.fields.status;
-  if (typeof status !== 'string' || status.trim() === '') return undefined;
-  const word = status.trim();
-  return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
-}
-
-/** The newest of the folder's own things and its subfolders, ISO. */
-export function folderUpdated(contents: FolderContents): string | undefined {
-  let newest: string | undefined;
-  const take = (iso: string | undefined): void => {
-    if (
-      iso !== undefined &&
-      iso !== '' &&
-      (newest === undefined || iso > newest)
-    ) {
-      newest = iso;
-    }
-  };
-  for (const item of contents.items) take(item.modifiedTime);
-  for (const folder of contents.subfolders) take(folder.updated);
-  return newest;
-}
-
 export interface FolderItemsProps {
   contents: FolderContents;
   titles: ReadonlyMap<string, string>;
@@ -434,17 +304,12 @@ export interface FolderItemsProps {
   waiting?: ReadonlyMap<string, PendingRequest>;
   /** Tells the preview column what is selected (desktop only). */
   onPreview?: (item: PaneItem | null) => void;
-  /** The header's counts (K-31). */
-  onSummary?: (summary: FolderSummary) => void;
   /** Opens Ask Bower about this folder (the empty folder's link). */
   onAsk?: () => void;
   /** Takes the person up a folder (Backspace); absent at a top level. */
   onUp?: (() => void) | undefined;
   /** Opens a row's address (Enter, double click). */
   onOpen?: (href: string) => void;
-  /** False while another tab (Compare) shows: the list stays mounted, so
-   * its counts keep the meta line right, but takes no keys. */
-  active?: boolean;
 }
 
 /** The row the preview shows: the chosen one, else the first row. */
@@ -479,31 +344,16 @@ export function FolderItems({
   folderOfFolders = false,
   waiting = NO_WAITING,
   onPreview,
-  onSummary,
   onAsk,
   onUp,
   onOpen,
-  active = true,
 }: FolderItemsProps): JSX.Element {
   const fresh = useNew();
   const [quick, setQuick] = useState<FolderRow | null>(null);
-  const { index, getNoteText } = useVault();
+  const { index } = useVault();
   const byPath = index?.byPath ?? NO_FILES;
-  const catalogueFile = byPath.get(CATALOGUE_PATH);
   const [view, onView] = useFolderView(contents.path);
-  const metas = useNoteMetas(contents.notes);
-  const catalogueFiles = useCatalogueFiles(catalogueFile, getNoteText);
-  const model = useMemo(
-    () =>
-      buildFolderModel({
-        items: contents.items,
-        byPath,
-        metas,
-        origins: catalogue,
-        catalogueFiles,
-      }),
-    [contents.items, byPath, metas, catalogue, catalogueFiles],
-  );
+  const { model } = useFolderModel(contents, catalogue);
   const [loaded, setLoaded] = useState<VirtualModule | null>(virtualModule);
 
   // A folder of folders: what its cards and Recently changed list.
@@ -534,18 +384,6 @@ export function FolderItems({
   // whose cards are not its own things (AR-Main: "Originals 0").
   const subCount = folderOfFolders ? 0 : contents.subfolders.length;
   const segments = folderSegments({ subfolders: subCount, model });
-
-  const lifecycle = lifecycleOf(contents, metas);
-  const updated = folderUpdated(contents);
-  const summary: FolderSummary = folderOfFolders
-    ? { count: contents.subfolders.length, unit: 'folder' }
-    : { count: segments.originals + segments.bower, unit: 'thing' };
-  if (lifecycle !== undefined) summary.lifecycle = lifecycle;
-  if (updated !== undefined) summary.updated = updated;
-  const summaryKey = JSON.stringify(summary);
-  useEffect(() => {
-    onSummary?.(summary);
-  }, [summaryKey, contents.path, onSummary]);
 
   const originRows = useMemo(
     () => rowsFor(model, view.origin),
@@ -859,7 +697,7 @@ export function FolderItems({
   };
 
   useEffect(() => {
-    if (!desktop || folderOfFolders || !active) return;
+    if (!desktop || folderOfFolders) return;
     function onKeyDown(event: KeyboardEvent): void {
       const { orderedRows, layout, onUp, onOpen } = live.current;
       if (event.defaultPrevented) return;
@@ -917,7 +755,7 @@ export function FolderItems({
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [desktop, folderOfFolders, active]);
+  }, [desktop, folderOfFolders]);
 
   const VirtualList = loaded?.VirtualList;
   const choice: FilterSortChoice = { sort: view.sort, kind, layout };

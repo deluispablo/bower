@@ -339,8 +339,7 @@ test('Flat hunt has the Compare tab on the phone (#613)', async ({
   await tabs.getByRole('tab', { name: 'Compare 4 flats' }).click();
   // The Compare panel is an empty slot until #916 fills it.
   await expect(page.locator('.compare-slot')).toBeAttached();
-  // The list stays mounted under Compare, hidden (its counts feed the meta).
-  await expect(page.locator('#folder-panel-list')).toBeHidden();
+  await expect(page.locator('.folder-item')).toHaveCount(0);
   await shot(page, testInfo, 'folder-compare');
   await tabs.getByRole('tab', { name: 'List' }).click();
   await expect(page.locator('.folder-item').first()).toBeVisible();

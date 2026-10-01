@@ -32,7 +32,7 @@ import { openAsk } from '../components/send-to-bower.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
-import type { FolderSummary } from '../components/folder-items.js';
+import { useFolderSummary } from '../components/folder-summary.js';
 import { compareKinds, notesOfKind } from '../compare.js';
 import type { CompareNote } from '../compare.js';
 import { FOLDER_MIME } from '../drive.js';
@@ -304,17 +304,6 @@ function FolderBody({
   const waiting = useMemo(() => pendingByPath(requestRows), [requestRows]);
   const compare = useFolderCompare(contents.notes);
   const [menuOpen, setMenuOpen] = useState(false);
-  // Keyed by path: a summary from the previous folder never shows here.
-  const [summaryOf, setSummaryOf] = useState<{
-    path: string;
-    summary: FolderSummary;
-  } | null>(null);
-  const summary = summaryOf?.path === contents.path ? summaryOf.summary : null;
-  const onSummary = useCallback(
-    (next: FolderSummary) =>
-      setSummaryOf({ path: contents.path, summary: next }),
-    [contents.path],
-  );
   useEffect(() => {
     setMenuOpen(false);
   }, [contents.path]);
@@ -324,24 +313,24 @@ function FolderBody({
   const para = paraKindOf(topName);
   const title = root ? rootFolderHeading(contents.path) : contents.name;
   const folderOfFolders = root && contents.subfolders.length > 0;
-  const meta =
-    summary === null
-      ? null
-      : metaLine(
-          {
-            name: contents.name,
-            mimeType: FOLDER_MIME,
-            root: para,
-            rootName: topName,
-            count: summary.count,
-            countUnit: summary.unit,
-            ...(summary.lifecycle !== undefined && {
-              lifecycle: summary.lifecycle,
-            }),
-            ...(summary.updated !== undefined && { updated: summary.updated }),
-          },
-          { view: 'title', now },
-        );
+  // The meta's count from the folder's own data (K-31, `folderCount`), the
+  // same for List and Compare whichever shows first (#920).
+  const summary = useFolderSummary(contents, catalogue, folderOfFolders);
+  const meta = metaLine(
+    {
+      name: contents.name,
+      mimeType: FOLDER_MIME,
+      root: para,
+      rootName: topName,
+      count: summary.count,
+      countUnit: summary.unit,
+      ...(summary.lifecycle !== undefined && {
+        lifecycle: summary.lifecycle,
+      }),
+      ...(summary.updated !== undefined && { updated: summary.updated }),
+    },
+    { view: 'title', now },
+  );
   const ask = (): void =>
     openAsk({
       name: displayName(contents.name),
@@ -390,42 +379,38 @@ function FolderBody({
           onClose={() => setMenuOpen(false)}
         />
       )}
-      {showCompare && compare !== null && (
+      {showCompare && compare !== null ? (
         <CompareSlot
           notes={compare.notes}
           folderPath={contents.path}
           label={compare.label}
           tabId="folder-tab-compare"
         />
+      ) : (
+        <div
+          id="folder-panel-list"
+          {...(compare !== null && {
+            role: 'tabpanel',
+            'aria-labelledby': 'folder-tab-list',
+          })}
+        >
+          {items !== null && (
+            <items.FolderItems
+              contents={contents}
+              titles={titles}
+              catalogue={catalogue}
+              now={now}
+              desktop={desktop}
+              folderOfFolders={folderOfFolders}
+              waiting={waiting}
+              onPreview={onPreview}
+              onAsk={ask}
+              onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
+              onOpen={onNavigate}
+            />
+          )}
+        </div>
       )}
-      {/* The list stays mounted (hidden) under Compare, so the meta line
-          keeps the K-31 count of List, whichever tab shows first. */}
-      <div
-        id="folder-panel-list"
-        hidden={showCompare}
-        {...(compare !== null && {
-          role: 'tabpanel',
-          'aria-labelledby': 'folder-tab-list',
-        })}
-      >
-        {items !== null && (
-          <items.FolderItems
-            contents={contents}
-            titles={titles}
-            catalogue={catalogue}
-            now={now}
-            desktop={desktop}
-            folderOfFolders={folderOfFolders}
-            waiting={waiting}
-            onPreview={onPreview}
-            onSummary={onSummary}
-            onAsk={ask}
-            onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
-            onOpen={onNavigate}
-            active={!showCompare}
-          />
-        )}
-      </div>
     </section>
   );
 }
