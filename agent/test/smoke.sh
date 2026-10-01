@@ -1507,6 +1507,8 @@ if grep -rqF -e 'SUMMARY-MARKER' -e '"type":"result"' "$STATE/runner-temp/bower-
   die 'the agent stream reached the logs dir'
 fi
 [ -z "$(find "$STATE/runner-temp/bower-logs" -name '*.jsonl')" ] || die 'a stream file is in the logs dir'
+expect_eq "$(sed -n 's/^[^ ]* agent stats: //p' "$STATE/out.log")" \
+  'turns=3 api_ms=3500 in=12 out=34 cache_read=560 cache_write=78 tools=Grep:1,Read:1' 'agent stats line'
 if grep -q 'no runner settings file' "$STATE/out.log"; then
   die 'warned about a missing runner settings file that was there'
 fi

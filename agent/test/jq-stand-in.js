@@ -141,6 +141,35 @@ if (filter === '$ARGS.named') {
   const results = streamEvents(input()).filter((e) => e.type === 'result');
   const last = results[results.length - 1];
   if (last !== undefined && typeof last.result === 'string') process.stdout.write(last.result + '\n');
+} else if (filter.startsWith('def n($x): if ($x | type) == "number"') && flags.has('R')) {
+  // run.sh's STATS_FILTER (R-SS-2): the session's numbers and tool counts.
+  const events = streamEvents(input());
+  const results = events.filter((e) => e.type === 'result');
+  const r = results[results.length - 1] ?? {};
+  const u = r.usage !== null && typeof r.usage === 'object' && !Array.isArray(r.usage) ? r.usage : {};
+  const n = (x) => (typeof x === 'number' ? String(Math.floor(x)) : '-');
+  const blocks = [];
+  for (const e of events) {
+    if (e.type !== 'assistant') continue;
+    const m = e.message;
+    if (m === null || typeof m !== 'object' || Array.isArray(m) || !Array.isArray(m.content)) continue;
+    for (const b of m.content) {
+      if (b !== null && typeof b === 'object' && b.type === 'tool_use') blocks.push(b);
+    }
+  }
+  const seen = new Set();
+  const counts = new Map();
+  for (const b of blocks) {
+    if (typeof b.id === 'string') {
+      if (seen.has(b.id)) continue;
+      seen.add(b.id);
+    }
+    const name = typeof b.name === 'string' && /^[A-Za-z0-9_-]+$/.test(b.name) ? b.name : 'other';
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  const names = [...counts.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const tools = names.map((k) => `${k}:${counts.get(k)}`).join(',') || '-';
+  process.stdout.write(`turns=${n(r.num_turns)} api_ms=${n(r.duration_api_ms)} in=${n(u.input_tokens)} out=${n(u.output_tokens)} cache_read=${n(u.cache_read_input_tokens)} cache_write=${n(u.cache_creation_input_tokens)} tools=${tools}\n`);
 } else {
   process.stderr.write('jq stand-in: unsupported filter\n');
   process.exit(3);

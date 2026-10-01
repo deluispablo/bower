@@ -1831,14 +1831,35 @@ agent_failure_reason() {
   fi
 }
 
-# R-SS-2: the text of the last `result` event of the stream-json transcript
-# $1, as the text output used to print it. A line that is not JSON (a stream
-# cut short by a timeout) is skipped. Prints nothing when there is no result.
+# >>> session stats (R-SS-2): agent/test/stats.test.sh runs this block as is.
+# The text of the last `result` event of the stream-json transcript $1, as
+# the text output used to print it. A line that is not JSON (a stream cut
+# short by a timeout) is skipped. Prints nothing when there is no result.
 readonly RESULT_TEXT_FILTER='[inputs | fromjson? | select(type == "object" and .type == "result")]
   | last | .result? | strings'
 agent_result_text() {
   jq -rnR "$RESULT_TEXT_FILTER" "$1"
 }
+# The session's numbers from the transcript $1, as one line of numbers and
+# tool names: the last `result` event's turns, API time and tokens, and the
+# `tool_use` blocks of the assistant events counted by name (a block seen
+# twice, same id, once), sorted by name. A value missing or not a number
+# prints `-`; a tool name that is not a plain word counts as `other`. Never
+# a path, a file name or any text from the stream.
+readonly STATS_FILTER='def n($x): if ($x | type) == "number" then ($x | floor | tostring) else "-" end;
+  [inputs | fromjson? | select(type == "object")] as $e
+  | ([$e[] | select(.type == "result")] | last // {}) as $r
+  | ($r.usage | if type == "object" then . else {} end) as $u
+  | ([$e[] | select(.type == "assistant") | .message | objects | .content | arrays | .[]
+      | select(type == "object" and .type == "tool_use")]
+    | (map(select((.id | type) == "string")) | unique_by(.id)) + map(select((.id | type) != "string"))
+    | map(.name | if type == "string" and test("^[A-Za-z0-9_-]+$") then . else "other" end)
+    | group_by(.) | map("\(.[0]):\(length)") | join(",")) as $t
+  | "turns=\(n($r.num_turns)) api_ms=\(n($r.duration_api_ms)) in=\(n($u.input_tokens)) out=\(n($u.output_tokens)) cache_read=\(n($u.cache_read_input_tokens)) cache_write=\(n($u.cache_creation_input_tokens)) tools=\(if $t == "" then "-" else $t end)"'
+agent_stats() {
+  jq -rnR "$STATS_FILTER" "$1"
+}
+# <<< session stats
 
 # Read one string field of the vault info; empty when absent or null.
 field() { jq -r --arg k "$1" '.[$k] // empty' "$VAULT_JSON"; }
@@ -2408,6 +2429,14 @@ set -e
 # event's text; with no result event (a crash, a timeout) AGENT_OUT is empty,
 # as an empty text output was.
 agent_result_text "$AGENT_STREAM" >"$AGENT_OUT" 2>>"$AGENT_ERR" || : >"$AGENT_OUT"
+# The session's numbers (R-SS-2), logged for every session, failed or not.
+# They are only numbers and tool names; a failure to read them is logged and
+# never fails the run.
+if agent_stats_line=$(agent_stats "$AGENT_STREAM" 2>>"$AGENT_ERR"); then
+  log "agent stats: $agent_stats_line"
+else
+  log 'agent stats: unreadable'
+fi
 if [ "$agent_rc" -ne 0 ]; then
   fail "$STEP: exit $agent_rc" "$(agent_failure_reason "$agent_rc")"
 fi
