@@ -134,7 +134,7 @@ export function AddDropRow({
     <div class="add-drop-row">
       {wide && (
         <div class="add-drop-bird" aria-hidden="true">
-          <Bird state={listening ? 'listening' : 'looking'} size={44} />
+          <Bird state={listening ? 'listening' : 'looking'} size={32} />
         </div>
       )}
       <p class="add-drop-line">{DROP_LINE}</p>

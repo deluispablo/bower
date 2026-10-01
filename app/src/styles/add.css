@@ -13,9 +13,9 @@
 }
 
 .add-drop-bird {
-  /* 64 px bird with the room of rule 3: 8 px above and each side, 1 px below. */
+  /* AD-Main-1280: a 32 px bird (about 28 px drawn) in line with the text. */
+  display: inline-flex;
   flex: none;
-  padding: 8px 8px 1px;
   pointer-events: none;
 }
 
@@ -48,8 +48,8 @@
   .add-drop-row {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    margin: 0 0 var(--space-3);
+    gap: var(--space-3);
+    margin: 0 0 var(--space-1);
   }
 
   .add-drop-line {
