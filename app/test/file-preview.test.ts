@@ -7,10 +7,9 @@ import {
   kindWord,
   metaFacts,
   previewKind,
-  shortDate,
+  fileDate,
   thumbnailUrl,
   typeLine,
-  whenLine,
 } from '../src/file-preview.js';
 
 const NOW = Date.parse('2026-09-28T12:00:00.000Z');
@@ -134,20 +133,6 @@ describe('formatSize and typeLine', () => {
   });
 });
 
-describe('whenLine', () => {
-  it('says who put the file there and when', () => {
-    expect(whenLine('filed', '2026-09-28T08:00:00.000Z', NOW)).toBe(
-      'Filed by Bower · today',
-    );
-    expect(whenLine(null, '2026-09-25T08:00:00.000Z', NOW)).toBe(
-      'In this folder · 3 days ago',
-    );
-    expect(whenLine('drive', undefined, NOW)).toBe(
-      'From your Drive, as Markdown',
-    );
-  });
-});
-
 describe('drivePreviewUrl', () => {
   it('is the address of Drive embeddable viewer', () => {
     expect(drivePreviewUrl('a b')).toBe(
@@ -156,7 +141,7 @@ describe('drivePreviewUrl', () => {
   });
 });
 
-describe('formatDuration and shortDate', () => {
+describe('formatDuration and fileDate', () => {
   it('says a length in words', () => {
     expect(formatDuration(45_000)).toBe('45 s');
     expect(formatDuration(134_000)).toBe('2 min 14 s');
@@ -164,11 +149,11 @@ describe('formatDuration and shortDate', () => {
     expect(formatDuration(3_900_000)).toBe('1 h 5 min');
   });
 
-  it('says a day and month, from an ISO time or EXIF', () => {
-    expect(shortDate('2026-09-26T11:20:00.000Z')).toBe('26 Sep');
-    expect(shortDate('2024:05:01 10:00:00')).toBe('1 May');
-    expect(shortDate('nonsense')).toBeNull();
-    expect(shortDate(undefined)).toBeNull();
+  it('reads a date from an ISO time or EXIF', () => {
+    expect(fileDate('2026-09-26T11:20:00.000Z')?.getUTCDate()).toBe(26);
+    expect(fileDate('2024:05:01 10:00:00')?.getMonth()).toBe(4);
+    expect(fileDate('nonsense')).toBeNull();
+    expect(fileDate(undefined)).toBeNull();
   });
 });
 
@@ -184,12 +169,15 @@ describe('kindWord and metaFacts', () => {
 
   it('follows the boards for each kind', () => {
     expect(
-      metaFacts({
-        name: 'Sign.jpg',
-        mimeType: 'image/jpeg',
-        size: 2_516_582,
-        imageMediaMetadata: { time: '2026:09:26 10:00:00' },
-      }),
+      metaFacts(
+        {
+          name: 'Sign.jpg',
+          mimeType: 'image/jpeg',
+          size: 2_516_582,
+          imageMediaMetadata: { time: '2026:09:26 10:00:00' },
+        },
+        { now: NOW },
+      ),
     ).toEqual(['Taken 26 Sep', '2.4 MB']);
     expect(
       metaFacts(
@@ -198,13 +186,16 @@ describe('kindWord and metaFacts', () => {
       ),
     ).toEqual(['3 KB', '24 rows']);
     expect(
-      metaFacts({
-        name: 'Walk.mp4',
-        mimeType: 'video/mp4',
-        size: 90_177_536,
-        modifiedTime: '2026-09-26T11:20:00.000Z',
-        videoMediaMetadata: { durationMillis: 134_000 },
-      }),
+      metaFacts(
+        {
+          name: 'Walk.mp4',
+          mimeType: 'video/mp4',
+          size: 90_177_536,
+          modifiedTime: '2026-09-26T11:20:00.000Z',
+          videoMediaMetadata: { durationMillis: 134_000 },
+        },
+        { now: NOW },
+      ),
     ).toEqual(['2 min 14 s', '86 MB', '26 Sep']);
     expect(
       metaFacts(
