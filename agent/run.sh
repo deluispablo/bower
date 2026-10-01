@@ -1864,14 +1864,21 @@ agent_failure_reason() {
       ;;
   esac
   # With stream-json the session's own error is in its last result event
-  # (R-SS-2), next to whatever reached stderr.
+  # (R-SS-2), next to whatever reached stderr. The result text is the CLI's
+  # own error message only when it starts with one of the prefixes Claude
+  # Code (2.1.283) prints for one (cli_errors); any other text is the
+  # agent's own prose, which may well say "authentication" without the
+  # model being unreachable, so it is not read for model errors.
   local model_errors='overloaded|rate[ _-]?limit|credit balance|api error|authentication|invalid (api key|x-api-key|bearer)|oauth token|529|503 service'
-  local result_error
+  local cli_errors="^(API Error|Authentication error|Invalid API key|Credit balance is too low|OAuth token|Repeated 529|You've hit your)"
+  local result_error result_text
   result_error=$(agent_result_error "$AGENT_STREAM" 2>/dev/null) || result_error=''
+  result_text=${result_error#error$'\n'}
   if [ "$result_error" = max_turns ] || grep -Eiq 'max(imum)?[ _-]?turns' "$AGENT_ERR" 2>/dev/null; then
     echo timeout
   elif grep -Eiq "$model_errors" "$AGENT_ERR" 2>/dev/null ||
-    { [ "${result_error%%$'\n'*}" = error ] && grep -Eiq "$model_errors" <<<"${result_error#error}"; }; then
+    { [ "${result_error%%$'\n'*}" = error ] && [[ ${result_text%%$'\n'*} =~ $cli_errors ]] &&
+      grep -Eiq "$model_errors" <<<"$result_text"; }; then
     echo model_unavailable
   else
     echo unknown
