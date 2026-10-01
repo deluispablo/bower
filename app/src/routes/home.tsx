@@ -238,9 +238,12 @@ function SkeletonTile({
 function InboxTile({
   state,
   pending,
+  onOpenSheet,
 }: {
   state: HomeState;
   pending: number;
+  /** Opens the working sheet: where "Being tidied up" leads. */
+  onOpenSheet: () => void;
 }): JSX.Element {
   if (state === 'loading')
     return <SkeletonTile label="Inbox" icon={<IconInbox />} />;
@@ -248,7 +251,14 @@ function InboxTile({
   if (state === 'running') {
     return (
       <ActionTile label="Inbox" icon={<IconInbox />} value={pending} active>
-        <div class="stat-tile-note home-tile-running">{line}</div>
+        <button
+          type="button"
+          class="stat-tile-note home-tile-running"
+          aria-haspopup="dialog"
+          onClick={onOpenSheet}
+        >
+          {line}
+        </button>
       </ActionTile>
     );
   }
@@ -724,7 +734,7 @@ export function Home(): JSX.Element {
       )}
 
       <div class="home-tiles">
-        <InboxTile state={state} pending={pending} />
+        <InboxTile state={state} pending={pending} onOpenSheet={openSheet} />
         <LastTidyUpCard
           state={state}
           run={lastRun}

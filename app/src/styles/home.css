@@ -126,8 +126,17 @@
   border-color: var(--color-border);
 }
 
+/* "Being tidied up" opens the working sheet: a button drawn as the note. */
 .home-tile-running {
+  display: block;
+  padding: 0;
+  background: none;
+  border: none;
   color: var(--color-link);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
 }
 
 .home-tile-partial .stat-tile-value {

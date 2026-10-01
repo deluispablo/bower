@@ -25,21 +25,21 @@ test.fixme('Home shows skeletons, not zeros, while the index loads (#584)', asyn
   // Health and Notes are desktop-only cards: on a phone they are in the
   // DOM but hidden, so this reads the DOM, not the screen.
   for (const title of ['Inbox', 'Health', 'Notes']) {
-    const card = page.locator('.home-card', {
+    const card = page.locator('.stat-tile', {
       has: page.getByRole('heading', { name: title, includeHidden: true }),
     });
-    await expect(card, `${title} card`).toHaveClass(/home-card-loading/);
+    await expect(card, `${title} card`).toHaveClass(/home-tile-loading/);
     await expect(card.locator('.home-skeleton').first()).toHaveCount(1);
-    await expect(card.locator('.home-card-count')).toHaveCount(0);
+    await expect(card.locator('.stat-tile-value')).toHaveCount(0);
     await expect(card).not.toContainText('No check yet');
     await expect(card).not.toContainText('Not checked yet');
   }
-  const loadingCards = await page.locator('.home-card-loading').count();
+  const loadingCards = await page.locator('.home-tile-loading').count();
   expect(loadingCards).toBeGreaterThanOrEqual(3);
 
   // Once the listing resolves, the real numbers replace the skeletons.
   await expect(home).not.toHaveAttribute('data-state', 'loading', {
     timeout: DELAY_MS + 5_000,
   });
-  await expect(page.locator('.home-card-loading')).toHaveCount(0);
+  await expect(page.locator('.home-tile-loading')).toHaveCount(0);
 });
