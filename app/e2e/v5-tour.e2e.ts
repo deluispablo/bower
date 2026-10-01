@@ -161,4 +161,28 @@ test.describe('the tour', () => {
       /help-tab-on/,
     );
   });
+
+  test('every step opens with its main button focused (#920)', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const tour = page.getByRole('dialog');
+    await expect(tour.getByText('Tour · 1 of 4')).toBeVisible();
+    await expect(
+      tour.getByRole('button', { name: 'Next: Folders' }),
+    ).toBeFocused();
+    const steps = [
+      ['Next: Folders', 'Next: Add'],
+      ['Next: Add', 'Next: Bower'],
+      ['Next: Bower', "Let's go"],
+    ] as const;
+    for (const [from, to] of steps) {
+      await tour.getByRole('button', { name: from }).click();
+      await expect(tour.getByRole('button', { name: to })).toBeFocused();
+    }
+    await tour.getByRole('button', { name: 'Back' }).click();
+    await expect(
+      tour.getByRole('button', { name: 'Next: Bower' }),
+    ).toBeFocused();
+  });
 });
