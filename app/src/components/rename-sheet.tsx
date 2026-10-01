@@ -11,16 +11,18 @@
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
-import { createTextFile } from '../drive.js';
-import { writeRequestNote } from '../move-request.js';
+import { createTextFile, deleteFile } from '../drive.js';
+import { REPLACE_KEPT, replaceRequestNote } from '../move-request.js';
 import { close, open, OVERLAY_PRIORITY } from '../overlay-queue.js';
 import {
   RENAME_HINT,
+  renamePrefill,
   renameRequestText,
   splitFileName,
   validateRename,
 } from '../rename-request.js';
 import { useSession } from '../session.js';
+import { showToast } from '../toast-store.js';
 import { useVault } from '../vault-store.js';
 import { Composer, COMPOSER_LINES } from './composer.js';
 import { Overlay, OverlayHeader } from './overlay.js';
@@ -38,6 +40,9 @@ export interface RenameTarget {
   isNote: boolean;
   /** The other names in its folder, for the "already has that name" check. */
   siblingNames: readonly string[];
+  /** A rename already waits (§3.6): the box starts with its new name and
+   * sending replaces it (its Drive id, `null` while the listing lacks it). */
+  pending?: { name: string; fileId: string | null };
 }
 
 export interface RenameSheetProps {
@@ -51,8 +56,13 @@ export function RenameSheet({
 }: RenameSheetProps): JSX.Element {
   const { me } = useSession();
   const { refresh } = useVault();
-  const { base, extension } = splitFileName(target.name, target.isNote);
-  const [value, setValue] = useState(base);
+  const { extension } = splitFileName(target.name, target.isNote);
+  const initial = renamePrefill(
+    target.name,
+    target.isNote,
+    target.pending?.name,
+  );
+  const [value, setValue] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
@@ -63,7 +73,7 @@ export function RenameSheet({
     siblingNames: target.siblingNames,
   });
   // A name check speaks once the person has typed something else.
-  const shown = error ?? (value !== base ? problem : null);
+  const shown = error ?? (value !== initial ? problem : null);
 
   async function rename(): Promise<void> {
     if (busy) return;
@@ -77,15 +87,17 @@ export function RenameSheet({
     }
     setBusy(true);
     setError(null);
+    let kept: boolean;
     try {
-      await writeRequestNote(
-        { createTextFile },
+      ({ kept } = await replaceRequestNote(
+        { createTextFile, deleteFile },
         {
           inboxFolderId,
           text: renameRequestText(target.path, value.trim() + extension),
           now: new Date(),
+          replaces: target.pending?.fileId ?? null,
         },
-      );
+      ));
     } catch (err) {
       console.error(err);
       setBusy(false);
@@ -93,7 +105,9 @@ export function RenameSheet({
       return;
     }
     // One Undo (L-20): the page's line "Renaming to <name> at the next
-    // tidy-up" carries it once the listing has the request; no toast.
+    // tidy-up" carries it once the listing has the request; no toast,
+    // unless the waiting request it replaces is still in the inbox.
+    if (kept) showToast(REPLACE_KEPT);
     void refresh();
     onClose();
   }

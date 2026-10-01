@@ -42,6 +42,18 @@ export function splitFileName(name: string, isNote: boolean): NameParts {
     : { base: name, extension: '' };
 }
 
+/**
+ * What Rename's box starts with (§3.6): the waiting request's new name when
+ * one is queued, else the current name; either without its locked extension.
+ */
+export function renamePrefill(
+  name: string,
+  isNote: boolean,
+  pendingName?: string,
+): string {
+  return splitFileName(pendingName ?? name, isNote).base;
+}
+
 const FORBIDDEN = /[/\\:*?"<>|]/;
 
 export const RENAME_MESSAGES = {
@@ -98,6 +110,9 @@ export interface PendingRequest {
   kind: 'rename' | 'move';
   /** The line under the title, without a full stop. */
   line: string;
+  /** What it asks for: a Rename's new full name (extension included), a
+   * Move's destination folder path. Reopening it prefills this (§3.6). */
+  value: string;
   /** The Drive note behind it (Undo sends it to the Bin); `null` while the
    * listing does not have it yet. */
   fileId: string | null;
@@ -117,6 +132,7 @@ function pendingOf(row: RequestRow): [string, PendingRequest] | null {
       {
         kind: 'rename',
         line: `Renaming to ${splitFileName(name, true).base} at the next tidy-up`,
+        value: name,
         fileId: row.fileId,
       },
     ];
@@ -129,6 +145,7 @@ function pendingOf(row: RequestRow): [string, PendingRequest] | null {
     {
       kind: 'move',
       line: `Moving to ${displayPath(destination, ' › ')} at the next tidy-up`,
+      value: destination,
       fileId: row.fileId,
     },
   ];

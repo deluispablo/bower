@@ -37,6 +37,7 @@ import {
 import type { MenuKind, MoreItem, MoreItemId } from '../more-menu.js';
 import { displayName, driveFolderUrl } from '../navigation.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
+import type { PendingRequest } from '../rename-request.js';
 import { revealHref, revealInFolders } from '../reveal.js';
 import { showToast } from '../toast-store.js';
 import { isAppFile } from '../vault-index.js';
@@ -136,9 +137,9 @@ export interface NoteMenuProps {
   /** The names in the same folder, for Rename's "taken" check. Left out,
    * Rename… is too. */
   siblingNames?: readonly string[];
-  /** A rename or a move already waits for the next tidy-up. */
-  pendingRename?: boolean;
-  pendingMove?: boolean;
+  /** A rename or a move already waits for the next tidy-up: the item reads
+   * "Waiting for the next tidy-up" and reopens it, prefilled (§3.6). */
+  pending?: PendingRequest | undefined;
   /** "Help and about this"; the default asks the shell (`requestHelp`). */
   onHelp?: () => void;
   /** Drive ids for the tab menus; an item without its id is left out. */
@@ -265,6 +266,9 @@ export function NoteMenu(props: NoteMenuProps): JSX.Element {
       name: target.name,
       isNote: kind === 'note',
       siblingNames: props.siblingNames ?? [],
+      ...(props.pending?.kind === 'rename' && {
+        pending: { name: props.pending.value, fileId: props.pending.fileId },
+      }),
     });
   }
 
@@ -274,6 +278,12 @@ export function NoteMenu(props: NoteMenuProps): JSX.Element {
     openMoveTo({
       subject: { path: target.path, isFolder: thingKind === 'folder' },
       name: askName,
+      ...(props.pending?.kind === 'move' && {
+        pending: {
+          destination: props.pending.value,
+          fileId: props.pending.fileId,
+        },
+      }),
     });
   }
 
@@ -336,8 +346,8 @@ export function NoteMenu(props: NoteMenuProps): JSX.Element {
     name,
     pinned: props.pinned === true,
     ownFilesShown: props.ownFilesShown === true,
-    pendingRename: props.pendingRename === true,
-    pendingMove: props.pendingMove === true,
+    pendingRename: props.pending?.kind === 'rename',
+    pendingMove: props.pending?.kind === 'move',
     omit,
   });
 

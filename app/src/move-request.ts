@@ -128,6 +128,42 @@ export async function writeRequestNote(
   return file.id ?? null;
 }
 
+/** How a replacing write ended: `kept` means the new note is written but
+ * the waiting one it replaces could not be sent to the Bin. */
+export interface ReplaceResult {
+  id: string | null;
+  kept: boolean;
+}
+
+/**
+ * Writes a request that replaces a waiting one (§3.6): the new note first,
+ * then the old one (`replaces`, its Drive id) goes to the Bin, so the
+ * person never ends up with no request at all. `null` replaces nothing.
+ * Throws when the new note could not be written; then the old one stays.
+ */
+export async function replaceRequestNote(
+  deps: RequestNoteDeps & { deleteFile: (id: string) => Promise<void> },
+  input: {
+    inboxFolderId: string;
+    text: string;
+    now: Date;
+    replaces: string | null;
+  },
+): Promise<ReplaceResult> {
+  const id = await writeRequestNote(deps, input);
+  if (input.replaces === null) return { id, kept: false };
+  try {
+    await deps.deleteFile(input.replaces);
+    return { id, kept: false };
+  } catch (err) {
+    console.error(err);
+    return { id, kept: true };
+  }
+}
+
+/** The line when the waiting request could not be taken out. */
+export const REPLACE_KEPT = 'Sent. The earlier request is still in your inbox.';
+
 /**
  * Undo (R-ASK-2): sends the note just written to Drive's Bin
  * (`deleteFile` only trashes). Never throws: `failed` means the note is
