@@ -91,6 +91,35 @@ describe('parseCatalogueFiles', () => {
       ['lease.pdf', 'lease summary'],
     ]);
   });
+
+  it('reads rules v24 rows, with tags and a description, as it reads v23 rows', () => {
+    const v23 = [
+      '- [[Flat/Lease summary]]: the tenancy ([[Flat/Lease.pdf]])',
+      '- [[Flat/Lease.pdf]] · PDF · filed by Bower',
+    ].join('\n');
+    const v24 = [
+      '## Projects',
+      '- [[Flat/Lease summary]] · Note · #lease #flat-hunt · The tenancy for the flat, twelve months · filed by Bower · [[Flat/Lease.pdf]]',
+      '- [[Flat/Lease.pdf]] · PDF · #lease · Lease agreement for the flat · filed by Bower',
+      '- [[Flat/Viewing notes]] · Note · #flat-hunt · What to check at the viewing · filed by Bower',
+    ].join('\n');
+    expect([...parseCatalogueFiles(v24)]).toEqual([
+      ...parseCatalogueFiles(v23),
+    ]);
+    expect([...parseCatalogueFiles(v24)]).toEqual([
+      ['flat/lease.pdf', 'flat/lease summary'],
+    ]);
+  });
+
+  it('finds nothing in the Tags section', () => {
+    const text = [
+      '## Tags',
+      '- #lease · A tenancy agreement or its summary · 2',
+      '- #flat-hunt · Looking for a flat to rent · 1',
+      '',
+    ].join('\n');
+    expect(parseCatalogueFiles(text).size).toBe(0);
+  });
 });
 
 describe('originalName', () => {
