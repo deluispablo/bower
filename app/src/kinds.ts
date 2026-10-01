@@ -63,9 +63,6 @@ export interface Kind {
   /** Field keys Compare shows as columns, in order; Status follows them
    * when the kind has statuses. Empty when the kind has no Compare table. */
   compareFields: string[];
-  /** The Details button for the "Not in the …" fields; `{n}` is replaced by
-   * a number word ("copy these three as questions"). */
-  questionsLabel: string;
   /** The heading over the fields the document did not state. */
   notStatedLabel: string;
 }
@@ -154,7 +151,6 @@ export const KINDS: readonly Kind[] = [
       'bike_to_office',
       'fit',
     ],
-    questionsLabel: 'Ask the agent: copy these {n} as questions',
     notStatedLabel: 'Not in the listing',
   },
   {
@@ -203,7 +199,6 @@ export const KINDS: readonly Kind[] = [
       'holiday',
       'commute',
     ],
-    questionsLabel: 'Ask the employer: copy these {n} as questions',
     notStatedLabel: 'Not in the offer',
   },
   {
@@ -240,7 +235,6 @@ export const KINDS: readonly Kind[] = [
     statuses: ['active', 'to renew', 'cancelled'],
     compare: 'table',
     compareFields: ['provider', 'amount', 'billed', 'renews_on'],
-    questionsLabel: 'Ask the provider: copy these {n} as questions',
     notStatedLabel: 'Not in the bill',
   },
   {
@@ -272,7 +266,6 @@ export const KINDS: readonly Kind[] = [
     statuses: [],
     compare: 'by-month',
     compareFields: [],
-    questionsLabel: 'Ask the shop: copy these {n} as questions',
     notStatedLabel: 'Not on the receipt',
   },
   {
@@ -311,7 +304,6 @@ export const KINDS: readonly Kind[] = [
     statuses: [],
     compare: 'table',
     compareFields: ['month', 'net', 'gross', 'tax', 'pension'],
-    questionsLabel: 'Ask payroll: copy these {n} as questions',
     notStatedLabel: 'Not on the payslip',
   },
   {
@@ -343,7 +335,6 @@ export const KINDS: readonly Kind[] = [
     statuses: [],
     compare: 'rarely',
     compareFields: [],
-    questionsLabel: 'Ask the other side: copy these {n} as questions',
     notStatedLabel: 'Not in the contract',
   },
   {
@@ -382,7 +373,6 @@ export const KINDS: readonly Kind[] = [
     statuses: [],
     compare: 'timeline',
     compareFields: [],
-    questionsLabel: 'Ask the organiser: copy these {n} as questions',
     notStatedLabel: 'Not in the booking',
   },
   {
@@ -413,7 +403,6 @@ export const KINDS: readonly Kind[] = [
     statuses: [],
     compare: 'table',
     compareFields: ['time', 'serves', 'main_ingredients', 'diet', 'difficulty'],
-    questionsLabel: 'Look up: copy these {n} as questions',
     notStatedLabel: 'Not in the recipe',
   },
 ];
@@ -679,32 +668,6 @@ export function keyFactsFor(
     if (facts.length === 4) break;
   }
   return facts;
-}
-
-const NUMBER_WORDS = [
-  'zero',
-  'one',
-  'two',
-  'three',
-  'four',
-  'five',
-  'six',
-  'seven',
-  'eight',
-  'nine',
-  'ten',
-];
-
-/** The kind's questions button for `n` fields not stated: `{n}` as a
- * number word ("copy these three as questions"), "copy this one as a
- * question" for one. */
-export function questionsLabelFor(kind: Kind, n: number): string {
-  if (n === 1)
-    return kind.questionsLabel.replace(
-      'these {n} as questions',
-      'this one as a question',
-    );
-  return kind.questionsLabel.replace('{n}', NUMBER_WORDS[n] ?? String(n));
 }
 
 /** The Status cell for a note of this kind, '' when it has none. A listing
