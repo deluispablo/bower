@@ -1,8 +1,20 @@
 /*
- * "About this note" (components/about-panel.tsx), the desktop third column
- * (`.shell-aside` in layout.css already sizes and positions the column
- * itself; these rules are its own content).
+ * About this note / About this file (components/about-panel.tsx, spec
+ * §3.28, NO-About and FI-About): the overline sections, the outline and
+ * IN THIS FOLDER. From 1200 px it is the right-hand column, 360 px wide
+ * (`--aside-width`), full height with one scroll (G-6); below that the
+ * same content sits in a content sheet opened by the (i).
  */
+
+@media (min-width: 1200px) {
+  .shell-with-aside .shell-aside:has(> .about-panel) {
+    flex-basis: var(--aside-width, 360px);
+    width: var(--aside-width, 360px);
+    min-height: 100vh;
+    padding: var(--space-6) 20px;
+    border-left-color: var(--color-border-subtle, var(--color-border));
+  }
+}
 
 .about-section + .about-section {
   margin-top: var(--space-6);
@@ -19,22 +31,20 @@
 }
 
 .about-outline,
-.about-links,
 .about-folder {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .about-row {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
   padding: var(--space-1) 0;
-  overflow: hidden;
   color: var(--color-text);
   font-size: var(--text-sm);
   text-decoration: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .about-row:hover {
@@ -47,192 +57,39 @@
   color: var(--color-text-muted);
 }
 
-.about-folder-row[aria-current='page'] {
-  color: var(--color-link);
-  font-weight: var(--weight-medium);
-}
-
-.about-link-row {
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
+.about-folder-row {
+  position: relative;
+  padding-left: var(--space-2);
   border-radius: var(--radius-sm);
 }
 
-/*
- * Properties (issue #307): unlike Outline, Linked mentions and In this
- * folder, which already fold under the note body from 900 px
- * (`.shell-aside` in layout.css), properties wait for the panel proper at
- * 1200 px; below that the note screen's own props line says the same
- * (#609), so this section would otherwise double them up between 900 and
- * 1199.
- */
-.about-properties {
-  display: none;
-}
-
-@media (min-width: 1200px) {
-  .about-properties {
-    display: block;
-  }
-}
-
-/* Key facts, compact Details, Original and the bird on the outline
-   (issue #609, board `Desktop-Note-Details`). */
-.about-details {
-  margin: 0;
-  display: grid;
-  gap: var(--space-1);
-}
-
-.about-detail {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-2);
-  font-size: 0.875rem;
-}
-
-.about-detail dt {
-  color: var(--color-text-muted);
-}
-
-.about-detail dd {
-  margin: 0;
-  text-align: right;
-}
-
-.about-not-stated {
-  margin: var(--space-2) 0 0;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
-.about-original {
-  display: block;
-}
-
-.about-outline-bird {
-  display: inline-flex;
-  margin-left: var(--space-1);
-  vertical-align: middle;
-}
-
-/* The note screen's own layout (issue #609, boards `Phone-Note-Details`,
-   `Flow-07-Answer`): the props line under the title, the question box of an
-   answer, the key facts caption and the "n of m" between previous and next. */
-.note-props {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  margin: 0 0 var(--space-3);
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
-.note-props a {
-  color: inherit;
-}
-
-.note-props .tag {
-  color: var(--color-link);
-}
-
-.note-props-folder {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.note-asked {
-  margin: 0 0 var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-surface);
-}
-
-.note-asked-label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-type-answer);
-}
-
-.note-asked-text {
-  margin: var(--space-1) 0 0;
-  font-weight: 600;
-}
-
-.note-keyfacts-caption {
-  margin: 0 0 var(--space-1);
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.note-siblings-count {
-  align-self: center;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.note-view .key-facts-box + .details {
-  margin-top: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
-/*
- * The pager after the note's body (R-NOTE-4, boards Note-*): a rule above,
- * "‹ previous", the place "1 of 4 offers, by score" and "next ›". Every
- * link is a 44 px target; long titles cut with an ellipsis.
- */
-.note-view .note-siblings {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-6);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
-}
-
-.note-sibling {
-  display: block;
-  min-height: 44px;
+.about-folder-name {
+  min-width: 0;
   overflow: hidden;
-  line-height: 44px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.note-sibling-next {
-  text-align: right;
+/* The one on show: the tint and the bar (D-39, K-31). */
+.about-folder-row[aria-current='page'] {
+  background: var(--color-selection, var(--color-brand-tint));
+  color: var(--color-link);
+  font-weight: var(--weight-medium);
 }
 
-.note-siblings-mid {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+.about-folder-row[aria-current='page']::before {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-link);
+  content: '';
 }
 
-.note-siblings-keys {
-  display: none;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-@media (min-width: 900px) {
-  .note-siblings-keys {
-    display: block;
-  }
-}
-
-/* The outline's links are 44 px tall on phones and tablets (spec §5). */
-@media (max-width: 899px) {
-  .about-outline-row {
-    display: flex;
-    align-items: center;
-    min-height: 44px;
-  }
+/* The phone sheet: 44 px rows to tap (K-27). */
+.about-sheet .about-row {
+  min-height: 36px;
+  font-size: var(--text-base);
 }

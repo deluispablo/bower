@@ -1,35 +1,46 @@
 /*
- * A note's properties list (folder, tags, created, source; issue #307,
- * `components/note-properties.tsx`). The panel-side "Properties" section
- * lives in `about-panel.css` instead, since it is part of `AboutPanel`.
+ * The property rows of About this note / About this file
+ * (`components/note-properties.tsx`, spec §3.28, NO-About and FI-About):
+ * the label muted, the value in the text colour, links teal and
+ * underlined, the source's kind in 12 px muted after its name.
  */
 
-.note-properties-list {
+.about-props {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
-  font-size: var(--text-sm);
+  gap: var(--space-1);
+  margin: 0;
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.5;
+}
+
+.about-prop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+}
+
+.about-prop-label {
   color: var(--color-text-muted);
 }
 
-.note-property {
-  color: var(--color-text-muted);
+.about-prop-value {
+  margin: 0;
+  min-width: 0;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
 }
 
-.note-property-folder {
+.about-prop-value a {
   color: var(--color-link);
-  text-decoration: none;
-}
-
-.note-property-folder:hover {
   text-decoration: underline;
 }
 
-.note-property-label {
-  margin-right: var(--space-1);
+.about-prop-kind {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
 }
 
-.note-property-tags {
-  margin: 0;
+.about-prop-off {
+  color: var(--color-text-muted);
 }

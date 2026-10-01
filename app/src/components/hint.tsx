@@ -9,8 +9,12 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 
+import type { DriveFile } from '../drive.js';
+import { displayName } from '../navigation.js';
 import '../styles/hint.css';
+import { BowerMark } from './bird.js';
 import { IconClose } from './icons.js';
+import { openAsk } from './send-to-bower.js';
 
 export type HintVariant = 'tip' | 'suggestion' | 'state';
 
@@ -22,6 +26,8 @@ export interface HintProps {
   children: ComponentChildren;
   /** Chips or buttons shown under the text. */
   actions?: ComponentChildren;
+  /** An extra class on the box (the file tip's own look). */
+  class?: string;
 }
 
 /** The `localStorage` key that remembers a dismissed hint. */
@@ -71,6 +77,7 @@ export function Hint({
   icon,
   children,
   actions,
+  class: extra,
 }: HintProps): JSX.Element | null {
   const dismissible = variant !== 'state';
   const [dismissed, setDismissed] = useState<boolean>(
@@ -98,7 +105,7 @@ export function Hint({
     <div
       ref={root}
       hidden={waiting}
-      class={`hint hint-${variant}`}
+      class={`hint hint-${variant}${extra === undefined ? '' : ` ${extra}`}`}
       role={variant === 'state' ? 'status' : undefined}
     >
       <span class="hint-icon" aria-hidden="true">
@@ -122,5 +129,62 @@ export function Hint({
         </button>
       )}
     </div>
+  );
+}
+
+/** The file tip's button: what Ask opens prefilled with (S-FI-3). */
+export const FILE_TIP_ASK = 'Summarise this and list what matters';
+
+/** The file tip's dismissal key: remembered per file (spec §3.29). */
+export function fileTipId(fileId: string): string {
+  return `file-note:${fileId}`;
+}
+
+export interface FileTipProps {
+  file: DriveFile;
+  /** Bower filed it unchanged: the line says so. */
+  filedAsItIs: boolean;
+}
+
+/**
+ * The file tip (spec §3.29, R-HINT-1, boards FI-Main and FI-Bottom): the
+ * bird 28, "Want a note on it?", and a button that opens Ask Bower about
+ * the file prefilled with "Summarise this and list what matters"; the page
+ * stays. ✕ dismisses it for this file, for good on this device.
+ */
+export function FileTip({ file, filedAsItIs }: FileTipProps): JSX.Element {
+  return (
+    <Hint
+      id={fileTipId(file.id)}
+      variant="tip"
+      class="hint-file"
+      icon={<BowerMark size={28} />}
+      actions={
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm hint-file-ask"
+          onClick={() => {
+            openAsk(
+              {
+                name: displayName(file.name),
+                kind: 'file',
+                icon: {
+                  name: file.name,
+                  mimeType: file.mimeType,
+                  path: file.path,
+                },
+                buildText: (value) => `About ${file.name}: ${value}`,
+              },
+              { prefill: FILE_TIP_ASK },
+            );
+          }}
+        >
+          {FILE_TIP_ASK}
+        </button>
+      }
+    >
+      <b>Want a note on it?</b>{' '}
+      {filedAsItIs ? 'Bower filed this as it is. ' : ''}Ask for one.
+    </Hint>
   );
 }

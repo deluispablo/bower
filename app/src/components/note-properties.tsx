@@ -1,18 +1,16 @@
 /**
- * A note's properties (folder, tags, created, source; issue #307, spec §6
- * row Note, Part E 18.4): out of the reading flow and into "About this
- * note", the third column from 1200 px (`about-panel.tsx`, `AboutPanel`'s
- * "Properties" section). Below that the note screen's own props line says
- * the same (#609). `NotePropertiesList` is the content.
+ * The property rows of About this note and About this file (spec §3.28,
+ * boards NO-About and FI-About): a label in muted text, then the value.
+ * A row whose value is missing is left out, never "undefined". The same
+ * rows sit in the desktop column and in the phone sheet (`about-panel.tsx`).
  */
 
-import type { JSX } from 'preact';
+import type { ComponentChildren, JSX } from 'preact';
 
-import type { NoteProperties } from '../markdown/frontmatter.js';
 import { shortDate } from '../file-preview.js';
 import { kindById } from '../kinds.js';
+import type { NoteProperties } from '../markdown/frontmatter.js';
 import type { NoteMeta } from '../note-meta.js';
-import { Details } from './details.js';
 import '../styles/note-properties.css';
 
 export interface NoteFolderLink {
@@ -21,8 +19,7 @@ export interface NoteFolderLink {
 }
 
 /** Whether there is anything to show at all: a folder link, tags, a
- * created date or a source. `false` means neither the panel section nor
- * the sheet's trigger should render. */
+ * created date or a source. */
 export function hasNoteProperties(
   folder: NoteFolderLink | undefined,
   properties: NoteProperties,
@@ -37,65 +34,134 @@ export function hasNoteProperties(
   );
 }
 
-/** Whether the note's frontmatter names a kind Bower knows: those notes
- * get `Details` (#603); every other note keeps the plain list. */
+/** Whether the note's frontmatter names a kind Bower knows. */
 export function hasKindDetails(meta: NoteMeta | undefined): boolean {
   return meta?.kind !== undefined && kindById(meta.kind) !== undefined;
 }
 
-export interface NotePropertiesListProps {
-  folder?: NoteFolderLink;
-  properties: NoteProperties;
-  /** The note's frontmatter facts; a known kind adds the Details block. */
-  meta?: NoteMeta;
+/** The file a note was made from, as About's Source row shows it: its
+ * name without brackets or extension, a link when it is in the folder,
+ * and its kind in words ("Word"). */
+export interface AboutSource {
+  name: string;
+  href?: string;
+  kind?: string;
 }
 
-/** The properties themselves: a folder link, tag pills, created, source —
- * each shown only when present. Shared between the About panel's
- * "Properties" section and the sheet below 1200 px. */
+/** The tag search a tag opens (#917's route): `/search?q=%23tag`. */
+export function tagHref(tag: string): string {
+  return `/search?q=${encodeURIComponent(`#${tag}`)}`;
+}
+
+function Row({
+  label,
+  children,
+}: {
+  label: string;
+  children: ComponentChildren;
+}): JSX.Element {
+  return (
+    <div class="about-prop">
+      <dt class="about-prop-label">{label}</dt>
+      <dd class="about-prop-value">{children}</dd>
+    </div>
+  );
+}
+
+export interface NotePropertiesListProps {
+  folder?: NoteFolderLink | undefined;
+  properties: NoteProperties;
+  /** Who wrote it: "Bower" or "you"; left out, the date stands alone. */
+  writtenBy?: 'Bower' | 'you' | undefined;
+  source?: AboutSource | undefined;
+}
+
+/** A note's rows: Folder, Written, Source, Tags (NO-About-375). */
 export function NotePropertiesList({
   folder,
   properties,
-  meta,
+  writtenBy,
+  source,
 }: NotePropertiesListProps): JSX.Element {
-  const kind = meta?.kind === undefined ? undefined : kindById(meta.kind);
+  const day =
+    properties.created === undefined
+      ? undefined
+      : (shortDate(properties.created) ?? properties.created);
   return (
-    <div class="note-properties-list">
+    <dl class="about-props">
       {folder !== undefined && (
-        <a class="note-property note-property-folder" href={folder.href}>
-          <span class="note-property-label">Folder</span>
-          {folder.name}
-        </a>
+        <Row label="Folder">
+          <a href={folder.href}>{folder.name}</a>
+        </Row>
+      )}
+      {day !== undefined && (
+        <Row label="Written">
+          {writtenBy === undefined ? day : `${day}, by ${writtenBy}`}
+        </Row>
+      )}
+      {source !== undefined && source.name !== '' && (
+        <Row label="Source">
+          {source.href === undefined ? (
+            source.name
+          ) : (
+            <a href={source.href}>{source.name}</a>
+          )}
+          {source.kind !== undefined && (
+            <span class="about-prop-kind">{` ${source.kind}`}</span>
+          )}
+        </Row>
       )}
       {properties.tags.length > 0 && (
-        <ul class="tags note-property-tags">
-          {properties.tags.map((tag) => (
-            <li key={tag}>
-              <a
-                class="tag"
-                href={`/search?q=${encodeURIComponent(`#${tag}`)}`}
-              >
+        <Row label="Tags">
+          {properties.tags.map((tag, at) => (
+            <span key={tag}>
+              {at > 0 && ' '}
+              <a class="about-prop-tag" href={tagHref(tag)}>
                 #{tag}
               </a>
-            </li>
+            </span>
           ))}
-        </ul>
+        </Row>
       )}
-      {properties.created !== undefined && (
-        <span class="note-property">
-          <span class="note-property-label">Written</span>
-          {shortDate(properties.created) ?? properties.created}
-        </span>
+    </dl>
+  );
+}
+
+export interface FilePropertiesListProps {
+  folder?: NoteFolderLink | undefined;
+  /** "PDF, 117 KB". */
+  kind: string;
+  /** "yesterday, by Bower, as it is" (`file-origin.ts#filedBy().about`). */
+  filed: string;
+  /** The file in Drive; `null` (the demo) shows the words without a link. */
+  driveHref: string | null;
+}
+
+/** A file's rows: Folder, Kind, Filed, In Drive (FI-About-375). */
+export function FilePropertiesList({
+  folder,
+  kind,
+  filed,
+  driveHref,
+}: FilePropertiesListProps): JSX.Element {
+  return (
+    <dl class="about-props">
+      {folder !== undefined && (
+        <Row label="Folder">
+          <a href={folder.href}>{folder.name}</a>
+        </Row>
       )}
-      {properties.source !== undefined && (
-        <span class="note-property">
-          <span class="note-property-label">Source</span>
-          {properties.source}
-        </span>
-      )}
-      {kind !== undefined && meta !== undefined && (
-        <Details kind={kind} meta={meta} />
-      )}
-    </div>
+      {kind !== '' && <Row label="Kind">{kind}</Row>}
+      {filed !== '' && <Row label="Filed">{filed}</Row>}
+      <Row label="In Drive">
+        {driveHref === null ? (
+          <span class="about-prop-off">Open in Drive</span>
+        ) : (
+          <a href={driveHref} target="_blank" rel="noopener">
+            Open in Drive
+          </a>
+        )}
+      </Row>
+    </dl>
   );
 }
