@@ -370,6 +370,9 @@ export interface BowerNoteBoxProps {
    * desktop preview column (O-R6); `false` keeps the box open with no
    * control (a picture of the box). */
   fold?: boolean;
+  /** The preview column's box (PF-Main, LI-Main): the summary only, no
+   * Details and no "What to check" with its Copy. */
+  summaryOnly?: boolean;
   /** The bird by the box's name: the still mark when left out; a pose
    * (the intro's reading bird, board IN-P2) draws the moving bird at its
    * 40 px floor in the mark's 32 px slot. */
@@ -387,6 +390,7 @@ export function BowerNoteBox({
   updatedAt,
   names,
   fold = true,
+  summaryOnly = false,
   headBird,
 }: BowerNoteBoxProps): JSX.Element {
   const [foldedState, setFolded] = useState<boolean>(() =>
@@ -570,9 +574,11 @@ export function BowerNoteBox({
           </div>
         )}
 
-        {kind !== undefined && <Details kind={kind} meta={meta} />}
+        {!summaryOnly && kind !== undefined && (
+          <Details kind={kind} meta={meta} />
+        )}
 
-        {check.items.length > 0 && (
+        {!summaryOnly && check.items.length > 0 && (
           <div class="bower-note-box-check">
             <h3 class="bower-box-title">What to check</h3>
             <ul class="bower-check-rows">

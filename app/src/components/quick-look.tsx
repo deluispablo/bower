@@ -440,6 +440,7 @@ function FilePane({ item }: { item: PanePreview }): JSX.Element {
           path={file.path}
           names={[title]}
           fold
+          summaryOnly
         />
       )}
       {rendered !== null && (
