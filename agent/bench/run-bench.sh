@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Benchmark for one tidy-up session (R-SS-1, spec 2026-10-01-session-speed).
 #
-#   bash agent/bench/run-bench.sh <label> [case number ...]
+#   bash agent/bench/run-bench.sh <label> [--large] [case number ...]
 #
 # Runs agent/run.sh once per case (all five by default, one at a time) over
 # a copy of the synthetic vault in agent/bench/vault/ with that case's files
@@ -12,6 +12,9 @@
 # Appends one TSV line per case to results/<YYYY-MM-DD>-<label>.tsv and keeps
 # each case's resulting vault in results/<label>/<case>/ (with run.log, the
 # runner's own log). results/ is git-ignored.
+#
+# --large uses agent/bench/vault-large/ (made by make-large-vault.py, about
+# 400 notes) instead of vault/; its TSV lines get a `large:` case prefix.
 #
 # What is stubbed, and how, without changing run.sh:
 # - the Worker: callback-stub.py on 127.0.0.1 answers the vault info with
@@ -30,7 +33,7 @@
 set -euo pipefail
 
 usage() {
-  echo 'usage: run-bench.sh <label> [case number ...]' >&2
+  echo 'usage: run-bench.sh <label> [--large] [case number ...]' >&2
   exit 2
 }
 [ "$#" -ge 1 ] || usage
@@ -44,6 +47,23 @@ BENCH=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 AGENT=$(cd "$BENCH/.." && pwd)
 REPO=$(cd "$AGENT/.." && pwd)
 RESULTS="$BENCH/results"
+
+# --large: the large folder, and a `large:` prefix on the case column.
+VAULT="$BENCH/vault"
+PREFIX=''
+args=()
+for a in "$@"; do
+  case "$a" in
+    --large) VAULT="$BENCH/vault-large"; PREFIX='large:' ;;
+    -*) usage ;;
+    *) args+=("$a") ;;
+  esac
+done
+set -- ${args[@]+"${args[@]}"}
+if [ ! -d "$VAULT" ]; then
+  echo "run-bench: no $(basename "$VAULT")/, run: python agent/bench/make-large-vault.py" >&2
+  exit 2
+fi
 TSV="$RESULTS/$(date +%F)-$LABEL.tsv"
 
 # --- tools -------------------------------------------------------------------
@@ -146,7 +166,7 @@ run_case() {
   local name=$1 dir="$TMP/$1"
   local remote="$dir/remote" temp="$dir/runner-temp" log="$dir/run.log"
   mkdir -p "$remote" "$temp"
-  cp -R "$BENCH/vault/." "$remote/"
+  cp -R "$VAULT/." "$remote/"
   cp "$REPO/vault-template/CLAUDE.md" "$remote/CLAUDE.md"
   cp -R "$BENCH/cases/$name/." "$remote/0-Inbox/"
   fingerprint "$remote" >"$dir/before.txt"
@@ -193,7 +213,7 @@ run_case() {
   cp -R "$remote/." "$keep/"
   cp "$log" "$RESULTS/$LABEL/$name.log"
   [ -s "$TSV" ] || printf 'case\tagent_seconds\tturns\tapi_ms\tin\tout\tcache_read\tcache_write\ttools\tfiles_changed\n' >"$TSV"
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$seconds" "$(field_of turns)" "$(field_of api_ms)" \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$PREFIX$name" "$seconds" "$(field_of turns)" "$(field_of api_ms)" \
     "$(field_of in)" "$(field_of out)" "$(field_of cache_read)" "$(field_of cache_write)" "$(field_of tools)" "$changed" >>"$TSV"
   echo "case $name: run.sh exit $rc, agent ${seconds} s, $changed files changed"
 }
