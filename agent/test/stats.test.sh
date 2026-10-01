@@ -125,3 +125,16 @@ AGENT_STREAM="$ROOT/missing.jsonl"
 expect_eq "$(agent_failure_reason 1)" unknown 'failure reason, no stream'
 expect_eq "$(agent_failure_reason 124)" timeout 'failure reason, time limit'
 echo "ok $CASE"
+
+# 8. A failed session whose result text is the agent's own prose, not an
+#    error the CLI printed: words such as "authentication" in it say nothing
+#    about the model, so the failure is unknown, not model_unavailable.
+CASE=prose
+printf '%s\n' \
+  '{"type":"result","subtype":"success","is_error":true,"num_turns":3,"result":"I could not finish: the note about authentication and the 529 form were unclear."}' \
+  >"$ROOT/prose.jsonl"
+expect_eq "$(head -n 1 <<<"$(agent_result_error "$ROOT/prose.jsonl")")" 'error' 'result error'
+AGENT_STREAM="$ROOT/prose.jsonl"
+: >"$AGENT_ERR"
+expect_eq "$(agent_failure_reason 1)" unknown 'failure reason'
+echo "ok $CASE"

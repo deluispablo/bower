@@ -46,6 +46,16 @@
 #                            tidy-up) or `instructions` (a request's Do it
 #                            now: only the instruction notes, see "list
 #                            pending" below)
+#   BOWER_MODEL              optional; the model the agent runs on (default
+#                            claude-sonnet-5-5); a value that is not a plain
+#                            model name is ignored with a warning
+#   BOWER_EFFORT_LOW         optional; the effort for a lint, and for an
+#                            ingest with no instruction note and no context
+#                            note (default low)
+#   BOWER_EFFORT_HIGH        optional; the effort for any other ingest
+#                            (default high). Both take low, medium, high,
+#                            xhigh or max; any other value is ignored with a
+#                            warning (see "model and effort" below)
 #
 # Environment:
 #   CLAUDE_CODE_OAUTH_TOKEN  or ANTHROPIC_API_KEY; not needed when the API
@@ -90,12 +100,12 @@ export -n BOWER_RUN_ALLOW_WEB
 # arrived in the environment (even empty, next to the file) would otherwise
 # stay exported, and printf -v below would hand the file's value to every
 # child's environment (curl, rclone, jq; issue #276).
-export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES BOWER_SCOPE BOWER_REPORT_BACKOFF
+export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES BOWER_SCOPE BOWER_REPORT_BACKOFF BOWER_MODEL BOWER_EFFORT_LOW BOWER_EFFORT_HIGH
 secrets_file="${RUNNER_TEMP:-}/bower-secrets"
 if [ -n "${RUNNER_TEMP:-}" ] && [ -f "$secrets_file" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
-      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE | BOWER_REPORT_BACKOFF)
+      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE | BOWER_REPORT_BACKOFF | BOWER_MODEL | BOWER_EFFORT_LOW | BOWER_EFFORT_HIGH)
         printf -v "${line%%=*}" '%s' "${line#*=}"
         ;;
       BOWER_RUN_ALLOW_WEB)
@@ -193,6 +203,38 @@ case "$SCOPE" in
     ;;
 esac
 readonly SCOPE
+
+# --- model and effort -------------------------------------------------------
+# R-SS-3 (#965): the agent runs on MODEL, at EFFORT_LOW for a lint and for an
+# ingest whose pending list holds no instruction note and no context note,
+# at EFFORT_HIGH otherwise (chosen just before the agent run, below). Both
+# are passed to `claude -p` as arguments, never as environment. A setting
+# that does not pass its check falls back to the default with a warning
+# that names the setting, never its value.
+readonly DEFAULT_MODEL='claude-sonnet-5-5'
+MODEL=${BOWER_MODEL:-$DEFAULT_MODEL}
+if ! [[ "$MODEL" =~ ^[a-z][a-z0-9.-]*$ ]]; then
+  log "warning: BOWER_MODEL is not a model name, using $DEFAULT_MODEL"
+  MODEL=$DEFAULT_MODEL
+fi
+readonly MODEL
+# Usage: effort_setting <setting name> <default>: sets the variable named
+# after the setting without its BOWER_ prefix (EFFORT_LOW, EFFORT_HIGH).
+effort_setting() {
+  local value=${!1:-}
+  case "$value" in
+    '') value=$2 ;;
+    low | medium | high | xhigh | max) ;;
+    *)
+      log "warning: $1 is not low, medium, high, xhigh or max, using $2"
+      value=$2
+      ;;
+  esac
+  printf -v "${1#BOWER_}" '%s' "$value"
+}
+effort_setting BOWER_EFFORT_LOW low
+effort_setting BOWER_EFFORT_HIGH high
+readonly EFFORT_LOW EFFORT_HIGH
 
 AGENT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly AGENT_DIR
@@ -1822,14 +1864,21 @@ agent_failure_reason() {
       ;;
   esac
   # With stream-json the session's own error is in its last result event
-  # (R-SS-2), next to whatever reached stderr.
+  # (R-SS-2), next to whatever reached stderr. The result text is the CLI's
+  # own error message only when it starts with one of the prefixes Claude
+  # Code (2.1.283) prints for one (cli_errors); any other text is the
+  # agent's own prose, which may well say "authentication" without the
+  # model being unreachable, so it is not read for model errors.
   local model_errors='overloaded|rate[ _-]?limit|credit balance|api error|authentication|invalid (api key|x-api-key|bearer)|oauth token|529|503 service'
-  local result_error
+  local cli_errors="^(API Error|Authentication error|Invalid API key|Credit balance is too low|OAuth token|Repeated 529|You've hit your)"
+  local result_error result_text
   result_error=$(agent_result_error "$AGENT_STREAM" 2>/dev/null) || result_error=''
+  result_text=${result_error#error$'\n'}
   if [ "$result_error" = max_turns ] || grep -Eiq 'max(imum)?[ _-]?turns' "$AGENT_ERR" 2>/dev/null; then
     echo timeout
   elif grep -Eiq "$model_errors" "$AGENT_ERR" 2>/dev/null ||
-    { [ "${result_error%%$'\n'*}" = error ] && grep -Eiq "$model_errors" <<<"${result_error#error}"; }; then
+    { [ "${result_error%%$'\n'*}" = error ] && [[ ${result_text%%$'\n'*} =~ $cli_errors ]] &&
+      grep -Eiq "$model_errors" <<<"$result_text"; }; then
     echo model_unavailable
   else
     echo unknown
@@ -2433,12 +2482,31 @@ if [ "$MODE" = ingest ]; then
 else
   report_phase writing
 fi
+# The effort (see "model and effort" above): high for an ingest whose agent
+# is given an instruction note the app wrote (RULES_WRITABLE, from the
+# instruction allow-list above) or a context note still pending.
+EFFORT=$EFFORT_LOW
+if [ "$MODE" = ingest ]; then
+  if [ "$RULES_WRITABLE" -eq 1 ]; then
+    EFFORT=$EFFORT_HIGH
+  else
+    while IFS= read -r path; do
+      [ -n "$path" ] && [ -f "$VAULT_DIR/$path" ] || continue
+      if is_context_note "$path"; then
+        EFFORT=$EFFORT_HIGH
+        break
+      fi
+    done <"$pending_now"
+  fi
+fi
+readonly EFFORT
 RUN_STARTED=1
 set +e
 (
   cd "$VAULT_DIR"
   timeout -k 30 "$AGENT_TIME_LIMIT" env -i "${claude_env[@]}" \
     claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format stream-json --verbose \
+      --model "$MODEL" --effort "$EFFORT" \
       --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
 ) >"$AGENT_STREAM" 2>"$AGENT_ERR"
 agent_rc=$?
@@ -2451,9 +2519,9 @@ agent_result_text "$AGENT_STREAM" >"$AGENT_OUT" 2>>"$AGENT_ERR" || : >"$AGENT_OU
 # They are only numbers and tool names; a failure to read them is logged and
 # never fails the run.
 if agent_stats_line=$(agent_stats "$AGENT_STREAM" 2>>"$AGENT_ERR"); then
-  log "agent stats: $agent_stats_line"
+  log "agent stats: model=$MODEL effort=$EFFORT $agent_stats_line"
 else
-  log 'agent stats: unreadable'
+  log "agent stats: model=$MODEL effort=$EFFORT unreadable"
 fi
 if [ "$agent_rc" -ne 0 ]; then
   fail "$STEP: exit $agent_rc" "$(agent_failure_reason "$agent_rc")"
