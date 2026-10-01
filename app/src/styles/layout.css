@@ -1291,7 +1291,9 @@ button.page-bare-back {
 
   .shell-folder.shell-with-aside .shell-body {
     display: grid;
-    grid-template-columns: calc(560px + 2 * var(--space-6)) minmax(320px, 560px);
+    /* The preview is 360 wide, as the note's About column (`--aside-width`,
+       #920 DA-13); the folder takes the rest, at most 720. */
+    grid-template-columns: minmax(0, 720px) var(--aside-width, 360px);
     align-items: start;
     justify-content: start;
   }
@@ -1304,5 +1306,7 @@ button.page-bare-back {
      so its empty state centres in it (AR-Main-1280). */
   .shell-folder.shell-with-aside .shell-aside {
     align-self: stretch;
+    width: var(--aside-width, 360px);
+    padding: 0;
   }
 }
