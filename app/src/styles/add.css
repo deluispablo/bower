@@ -19,6 +19,13 @@
   pointer-events: none;
 }
 
+/* The posed bird keeps its 40 px size (rule 2: a smaller Bird is the
+   mark), drawn in the board's 32 px box. */
+.add-drop-bird svg {
+  width: 32px;
+  height: 32px;
+}
+
 .add-drop-line {
   margin: 0 0 var(--space-3);
   color: var(--color-text-muted);
