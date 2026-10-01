@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { isDemo } from '../api.js';
+import { JUST_FILED_PATH } from '../just-filed.js';
 import type { Run } from '../api.js';
 import { outcomeCounts, outcomeFromRun } from '../run-outcome.js';
 import { RUN_CHIP_LIFETIME_MS, runningCount, useRun } from '../run-store.js';
@@ -392,6 +393,9 @@ export function RunChipFiller(): JSX.Element {
   const hidden =
     model === null ||
     path === '/' ||
+    // Just filed is where the finished chip leads: there it would only
+    // repeat the page (DB-7). Running, partly done and failed still show.
+    (path === JUST_FILED_PATH && model.state === 'done') ||
     !usesShell(path, isDemo()) ||
     (!desktop && typing);
   const signature = model === null || hidden ? '' : model.signature;

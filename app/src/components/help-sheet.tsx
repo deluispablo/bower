@@ -37,9 +37,12 @@ import {
 import type { HelpIcon, HelpRow, HelpScreen, HelpTab } from '../help-rows.js';
 import { Bird, BowerMark } from './bird.js';
 import {
+  IconBolt,
   IconChat,
+  IconCheck,
   IconClock,
   IconClose,
+  IconDocument,
   IconEdit,
   IconEyeOff,
   IconFile,
@@ -50,7 +53,9 @@ import {
   IconPlay,
   IconSearch,
   IconShield,
+  IconSort,
   IconSparkle,
+  IconSun,
 } from './icons.js';
 import { Queued } from './queued-overlay.js';
 import { Overlay } from './overlay.js';
@@ -75,6 +80,12 @@ const ICONS: Readonly<Record<HelpIcon, () => JSX.Element>> = {
   sparkle: IconSparkle,
   chat: IconChat,
   shield: IconShield,
+  document: IconDocument,
+  check: IconCheck,
+  bolt: IconBolt,
+  sun: IconSun,
+  play: IconPlay,
+  compare: IconSort,
 };
 
 const DESKTOP_QUERY = '(min-width: 900px)';
@@ -223,8 +234,12 @@ function measureTarget(el: Element | null): Box | null {
   return { ...box, height: Math.max(box.height, bottom - box.top) };
 }
 
-/** Highlights `tab` and keeps the ring and the bird on it as the page moves. */
-function useTourPlacement(tab: HelpTab): TourPlacement {
+/** Highlights `tab` and keeps the ring and the bird on it as the page moves;
+ * also hands back the lit tab and its box, for the copy over the scrim. */
+function useTourPlacement(
+  tab: HelpTab,
+): TourPlacement & { target: HTMLElement | null; box: Box | null } {
+  const [target, setTarget] = useState<HTMLElement | null>(null);
   const [boxes, setBoxes] = useState<{ tab: Box | null; bar: Box | null }>({
     tab: null,
     bar: null,
@@ -236,6 +251,7 @@ function useTourPlacement(tab: HelpTab): TourPlacement {
 
   useLayoutEffect(() => {
     const target = findTab(tab);
+    setTarget(target);
     target?.classList.add('help-tab-on');
     const bar = target?.closest('nav') ?? target;
     const update = (): void => {
@@ -252,7 +268,52 @@ function useTourPlacement(tab: HelpTab): TourPlacement {
     };
   }, [tab]);
 
-  return placeTour(boxes.tab, boxes.bar, viewport.width, viewport.height);
+  return {
+    ...placeTour(boxes.tab, boxes.bar, viewport.width, viewport.height),
+    target,
+    box: boxes.tab,
+  };
+}
+
+/**
+ * The lit phone tab, drawn again over the scrim (TR-*-375 boards): the real
+ * tab sits in the inert page under the scrim, so a copy of it, teal, takes
+ * its place inside the ring. Only on the bottom tab bar; the copy is a
+ * picture (no link, no focus).
+ */
+function TourTabCopy({
+  target,
+  box,
+}: {
+  target: HTMLElement;
+  box: Box;
+}): JSX.Element {
+  const holder = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = holder.current;
+    if (el === null) return;
+    const copy = target.cloneNode(true);
+    if (!(copy instanceof HTMLElement)) return;
+    copy.removeAttribute('href');
+    copy.removeAttribute('id');
+    copy.removeAttribute('data-tour');
+    copy.classList.remove('help-tab-on');
+    copy.setAttribute('tabindex', '-1');
+    el.replaceChildren(copy);
+  }, [target]);
+  return (
+    <div
+      ref={holder}
+      class="bottom-nav tour-tab-copy"
+      inert
+      style={{
+        top: px(box.top),
+        left: px(box.left),
+        width: px(box.width),
+        height: px(box.height),
+      }}
+    />
+  );
 }
 
 /**
@@ -438,6 +499,9 @@ function TourCard({
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const copy = tourSheet(tab, { desktop, demo: isDemo() });
   const place = useTourPlacement(tab);
+  // No focus box when the tour opens (TR-*); the first key press brings the
+  // ring back for keyboard users.
+  const [quiet, setQuiet] = useState(true);
 
   // Every step starts with its main button focused. The overlay's trap
   // focuses its first control when it opens; this runs after it.
@@ -450,6 +514,11 @@ function TourCard({
       {createPortal(
         <div class="tour-stage" aria-hidden="true">
           {place.spot !== null && <div class="tour-spot" style={place.spot} />}
+          {place.facing === 'down' &&
+            place.target !== null &&
+            place.box !== null && (
+              <TourTabCopy target={place.target} box={place.box} />
+            )}
           {place.bird !== null && (
             <span class="tour-bird" style={place.bird}>
               <Bird
@@ -465,7 +534,12 @@ function TourCard({
         </div>,
         document.body,
       )}
-      <div class="help-panel tour-card">
+      <div
+        class={`help-panel tour-card${quiet ? ' tour-quiet' : ''}`}
+        onKeyDown={() => {
+          setQuiet(false);
+        }}
+      >
         <div class="help-head">
           {/* The step's title is announced as it changes; the heading's
               own box is `display: contents` in the card's grid. */}
@@ -485,15 +559,11 @@ function TourCard({
         {copy.rows.length > 0 && <HelpRows rows={copy.rows} />}
         <div class="help-actions">
           {index > 0 && (
-            <button
-              type="button"
-              class="button help-secondary"
-              onClick={onBack}
-            >
+            <button type="button" class="btn btn-secondary" onClick={onBack}>
               Back
             </button>
           )}
-          <button ref={next} type="button" class="button" onClick={onNext}>
+          <button ref={next} type="button" class="btn" onClick={onNext}>
             {tourNextLabel(index)}
           </button>
         </div>

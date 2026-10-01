@@ -342,7 +342,7 @@ export function Add() {
   const [menuOpen, setMenuOpen] = useState(false);
   const toggleMenu = (): void => setMenuOpen((was) => !was);
   const actionsContent = useMemo(
-    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} />,
+    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} name="Add" />,
     [menuOpen],
   );
   useShellSlot('actions', actionsContent);
@@ -945,7 +945,7 @@ export function Add() {
         <PageHeader
           title="Add"
           kind="tab"
-          more={{ expanded: menuOpen, onClick: toggleMenu }}
+          more={{ expanded: menuOpen, onClick: toggleMenu, name: 'Add' }}
         />
         {menuOpen && (
           <NoteMenu
@@ -979,12 +979,14 @@ export function Add() {
 
         <div ref={cardRef} data-pile-id={openPile()?.id}>
           <Card variant="accent" class="pile-card-new">
-            <h2 class="pile-card-title">New pile</h2>
-            <p class="pile-card-count">
-              {openItems.length === 0
-                ? 'Add files or links, and say what they are'
-                : pileCountLine(openItems.length, openUploading)}
-            </p>
+            <div class="pile-card-new-head">
+              <h2 class="pile-card-title">New pile</h2>
+              <p class="pile-card-count">
+                {openItems.length === 0
+                  ? 'Add files or links, and say what they are'
+                  : pileCountLine(openItems.length, openUploading)}
+              </p>
+            </div>
 
             <div class="add-context" onFocusOut={() => saver.flush()}>
               <label class="add-context-label" for="add-context">

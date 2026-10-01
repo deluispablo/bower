@@ -26,12 +26,15 @@
   text-transform: uppercase;
 }
 
-/* The rule itself: body text, 16 px (D-48, R-BW-6), in full. */
+/* The rule itself, in full, as the sheet's title: Poppins 700, 18 px,
+   heading colour (BW-Rule). */
 .rule-sheet-text {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-1-5, 6px) 0 0;
   color: var(--color-heading);
-  font-size: var(--text-base);
-  line-height: var(--leading-body);
+  font-family: var(--font-display);
+  font-size: 1.125rem; /* 18px */
+  font-weight: 700;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 

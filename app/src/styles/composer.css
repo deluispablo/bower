@@ -32,6 +32,14 @@
   border-color: var(--color-brand);
 }
 
+/* Dictation blocked or not available (BW-Blocked): the empty box keeps its
+   plain border while the focus is only on the mic. With the focus in the
+   text field, the teal border stays: it is the field's focus indicator. */
+.composer-dictation-off:not(.composer-filled)
+  .composer-box:has(.round-button:focus) {
+  border-color: var(--color-border);
+}
+
 .composer-input {
   flex: 1;
   align-self: flex-start;

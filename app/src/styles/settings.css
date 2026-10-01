@@ -282,3 +282,23 @@
 .settings-footer a {
   color: var(--color-link);
 }
+
+/* Touch: Delete my Bower account and the footer links keep their look and
+   get a 44 px hit area (K-34). */
+@media (pointer: coarse) {
+  .settings-link-danger,
+  .settings-footer a {
+    position: relative;
+  }
+
+  .settings-link-danger::after,
+  .settings-footer a::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: var(--hit);
+    transform: translateY(-50%);
+  }
+}
