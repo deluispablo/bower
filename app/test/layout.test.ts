@@ -730,8 +730,9 @@ describe('helpScreenFor', () => {
     expect(helpScreenFor('/add')).toBe('add');
     expect(helpScreenFor('/bower')).toBe('bower');
     expect(helpScreenFor('/folder/2-Areas/Cooking')).toBe('folder');
-    expect(helpScreenFor('/note/id-1')).toBe('notes');
-    expect(helpScreenFor('/file/id-2')).toBe('notes');
-    expect(helpScreenFor('/settings')).toBe('home');
+    expect(helpScreenFor('/note/id-1')).toBe('note');
+    expect(helpScreenFor('/file/id-2')).toBe('file');
+    expect(helpScreenFor('/just-filed')).toBe('justFiled');
+    expect(helpScreenFor('/settings')).toBe('settings');
   });
 });

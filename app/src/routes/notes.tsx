@@ -34,6 +34,7 @@ import {
   open as openOverlay,
   OVERLAY_PRIORITY,
 } from '../overlay-queue.js';
+import { requestHelp } from '../more-menu.js';
 import { revealInFolders, targetFromReveal } from '../reveal.js';
 import { useSession } from '../session.js';
 import { FOLDERS_TAB_LABEL } from '../shell-routes.js';
@@ -102,9 +103,8 @@ function FoldersMenu({
           class="folders-menu-item"
           onClick={() => {
             onClose();
-            // The help sheet belongs to the shell: layout.tsx (#906)
-            // listens for this event, as for #907's `requestHelp`.
-            window.dispatchEvent(new CustomEvent('bower:open-help'));
+            // The help sheet belongs to the shell (layout.tsx, #906).
+            requestHelp();
           }}
         >
           <IconHelp />

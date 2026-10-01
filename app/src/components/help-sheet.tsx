@@ -28,6 +28,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { isDemo } from '../api.js';
 import {
   TOUR_TABS,
+  currentHelpTopic,
   helpSheet,
   tourLabel,
   tourNextLabel,
@@ -95,12 +96,20 @@ export interface TourPlacement {
   spot: Style | null;
   /** Where Bower stands (fixed, in px); `null` with no tab on screen. */
   bird: Style | null;
+  /**
+   * How Bower points (R-TR-3): `down` at a phone tab from above it, `left`
+   * at a desktop sidebar target from its right, turned to face it (the one
+   * left-facing bird, G-20).
+   */
+  facing: 'down' | 'left';
 }
 
 /** The tour bird's size (spec 6.21: tour 80). */
 export const TOUR_BIRD_SIZE = 80;
 const SPOT_PAD = 4;
 const EDGE = 8;
+/** Between the desktop ring's right edge and the bird (TR-*-Fixed-1280). */
+const BIRD_GAP = 12;
 /** A bar is a bottom tab bar only when it is short and wide. */
 const BOTTOM_BAR_MAX_HEIGHT = 120;
 const BOTTOM_BAR_MIN_WIDTH = 0.6;
@@ -115,9 +124,11 @@ function clamp(value: number, min: number, max: number): number {
 
 /**
  * Where the ring and Bower go for the lit `tab` in a `width` x `height`
- * viewport. On a bottom tab bar (`bar` in the lower half) the bird's feet
- * stand on the bar's top edge, over the tab; beside a desktop sidebar it
- * stands just past the right edge of the lit row, level with it.
+ * viewport (spec §4.15, TR-*-Fixed boards). On a bottom tab bar (`bar` in
+ * the lower half) the ring is 14 px round, and the bird's feet stand on the
+ * bar's top edge over the tab, pointing down at it. Beside a desktop
+ * sidebar the ring is 10 px round, and the bird stands 12 px past its right
+ * edge, level with its middle, turned to face it and pointing at it.
  */
 export function placeTour(
   tab: Box | null,
@@ -125,42 +136,42 @@ export function placeTour(
   width: number,
   height: number,
 ): TourPlacement {
-  if (tab === null || tab.width === 0 || tab.height === 0) {
-    return { spot: null, bird: null };
-  }
-  const spot: Style = {
-    top: px(tab.top - SPOT_PAD),
-    left: px(tab.left - SPOT_PAD),
-    width: px(tab.width + 2 * SPOT_PAD),
-    height: px(tab.height + 2 * SPOT_PAD),
-  };
   const onBottomBar =
     bar !== null &&
     bar.height > 0 &&
     bar.height < BOTTOM_BAR_MAX_HEIGHT &&
     bar.width >= BOTTOM_BAR_MIN_WIDTH * width &&
     bar.top + bar.height / 2 > height / 2;
+  const facing = onBottomBar ? 'down' : 'left';
+  if (tab === null || tab.width === 0 || tab.height === 0) {
+    return { spot: null, bird: null, facing };
+  }
+  const spot: Style = {
+    top: px(tab.top - SPOT_PAD),
+    left: px(tab.left - SPOT_PAD),
+    width: px(tab.width + 2 * SPOT_PAD),
+    height: px(tab.height + 2 * SPOT_PAD),
+    borderRadius: onBottomBar ? '14px' : '10px',
+  };
   if (!onBottomBar) {
-    // Beside a desktop sidebar the bird stands just past the right edge of
-    // the lit row, level with it, so it never covers the Search field or a
-    // neighbouring row. It stays inside the viewport.
-    const feetLevel = clamp(
-      tab.top + tab.height,
-      TOUR_BIRD_SIZE + EDGE,
-      height - EDGE,
+    const top = clamp(
+      tab.top + (tab.height - TOUR_BIRD_SIZE) / 2,
+      EDGE,
+      height - TOUR_BIRD_SIZE - EDGE,
     );
     return {
       spot,
       bird: {
         left: px(
           clamp(
-            tab.left + tab.width + SPOT_PAD + EDGE,
+            tab.left + tab.width + SPOT_PAD + BIRD_GAP,
             EDGE,
             width - TOUR_BIRD_SIZE - EDGE,
           ),
         ),
-        bottom: px(height - feetLevel),
+        top: px(top),
       },
+      facing,
     };
   }
   const feet = bar?.top ?? tab.top;
@@ -169,7 +180,11 @@ export function placeTour(
     EDGE,
     width - TOUR_BIRD_SIZE - EDGE,
   );
-  return { spot, bird: { left: px(left), bottom: px(height - feet) } };
+  return {
+    spot,
+    bird: { left: px(left), bottom: px(height - feet) },
+    facing,
+  };
 }
 
 /** The tab on screen for `tab`, else the first one in the page. */
@@ -191,6 +206,23 @@ function measure(el: Element | null): Box | null {
   };
 }
 
+/**
+ * The lit target's box. The desktop sidebar's Folders target is the
+ * "YOUR FOLDERS" label; step 2 rings the whole explorer (TR-2), so the box
+ * runs on to the bottom of the tree under it, kept on screen.
+ */
+function measureTarget(el: Element | null): Box | null {
+  const box = measure(el);
+  const tree = el?.nextElementSibling;
+  if (box === null || !(tree?.classList.contains('explorer-tree') ?? false)) {
+    return box;
+  }
+  const below = measure(tree ?? null);
+  if (below === null || below.height === 0) return box;
+  const bottom = Math.min(below.top + below.height, window.innerHeight - EDGE);
+  return { ...box, height: Math.max(box.height, bottom - box.top) };
+}
+
 /** Highlights `tab` and keeps the ring and the bird on it as the page moves. */
 function useTourPlacement(tab: HelpTab): TourPlacement {
   const [boxes, setBoxes] = useState<{ tab: Box | null; bar: Box | null }>({
@@ -207,7 +239,7 @@ function useTourPlacement(tab: HelpTab): TourPlacement {
     target?.classList.add('help-tab-on');
     const bar = target?.closest('nav') ?? target;
     const update = (): void => {
-      setBoxes({ tab: measure(target), bar: measure(bar) });
+      setBoxes({ tab: measureTarget(target), bar: measure(bar) });
       setViewport({ width: window.innerWidth, height: window.innerHeight });
     };
     update();
@@ -301,7 +333,14 @@ export function HelpSheet({
   onClose,
   onShowMeAround,
 }: HelpSheetProps): JSX.Element {
-  const copy = helpSheet(screen, isDemo());
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  // The screen on show may say which of its kinds it is, and what it shows.
+  const topic = currentHelpTopic(screen);
+  const copy = helpSheet(topic.screen, {
+    desktop,
+    demo: isDemo(),
+    ...(topic.context !== undefined && { context: topic.context }),
+  });
   const [tips, setTips] = useState<ScreenTip[]>(() => dismissedTips(screen));
 
   return (
@@ -396,7 +435,8 @@ function TourCard({
 }: TourCardProps): JSX.Element {
   const next = useRef<HTMLButtonElement>(null);
   const tab = TOUR_TABS[index] ?? 'home';
-  const copy = tourSheet(tab, isDemo());
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const copy = tourSheet(tab, { desktop, demo: isDemo() });
   const place = useTourPlacement(tab);
 
   // Every step starts with its main button focused. The overlay's trap
@@ -416,7 +456,8 @@ function TourCard({
                 state="pointing"
                 face="happy"
                 size={TOUR_BIRD_SIZE}
-                down
+                down={place.facing === 'down'}
+                flip={place.facing === 'left'}
                 overlay
               />
             </span>
@@ -426,9 +467,11 @@ function TourCard({
       )}
       <div class="help-panel tour-card">
         <div class="help-head">
-          <div class="help-heading" aria-live="polite">
+          {/* The step's title is announced as it changes; the heading's
+              own box is `display: contents` in the card's grid. */}
+          <div class="help-heading">
             <p class="help-kicker">{tourLabel(index)}</p>
-            <h2 id="tour-title" class="help-title">
+            <h2 id="tour-title" class="help-title" aria-live="polite">
               {copy.title}
             </h2>
             <p id="tour-lede" class="help-lede">
@@ -462,11 +505,10 @@ function TourCard({
 /**
  * The first-run tour: a queued dialog (R-OVL-3) that steps through the four
  * tabs. It waits while another overlay is open. Skip and Escape end it with
- * a one-off toast; on a desktop, "Let's go" lands on Bower (report F8).
+ * a one-off toast; "Let's go" opens the Bower tab (R-TR-5).
  */
 export function Tour({ onEnd }: TourProps): JSX.Element {
   const [index, setIndex] = useState(0);
-  const desktop = useMediaQuery(DESKTOP_QUERY);
   const { route } = useLocation() as Partial<ReturnType<typeof useLocation>>;
 
   const skip = (): void => {
@@ -479,7 +521,7 @@ export function Tour({ onEnd }: TourProps): JSX.Element {
       return;
     }
     onEnd(true);
-    if (desktop) route?.('/bower');
+    route?.('/bower');
   };
 
   return (

@@ -88,21 +88,21 @@ test.describe('open Home', () => {
     // The tour: four sheets, one per tab, each over its highlighted tab.
     const tour = page.getByRole('dialog');
     const sheets = [
-      ['Home', 'Next: Notes'],
-      ['Notes', 'Next: Add'],
-      ['Add', 'Next: Bower'],
-      ['Bower', "Let's go"],
+      ['Home', 'Next: Folders', 'home'],
+      ['Folders', 'Next: Add', 'notes'],
+      ['Add', 'Next: Bower', 'add'],
+      ['Bower', "Let's go", 'bower'],
     ] as const;
-    for (const [index, [title, next]] of sheets.entries()) {
+    for (const [index, [title, next, id]] of sheets.entries()) {
       await expect(tour.getByText(`Tour · ${index + 1} of 4`)).toBeVisible();
       await expect(tour.getByRole('heading', { name: title })).toBeVisible();
       await expect(tour.getByRole('button', { name: 'Skip' })).toBeVisible();
-      await expect(
-        visible(page.locator(`[data-tour="${title.toLowerCase()}"]`)),
-      ).toHaveClass(/help-tab-on/);
+      await expect(visible(page.locator(`[data-tour="${id}"]`))).toHaveClass(
+        /help-tab-on/,
+      );
       if (index === 0) {
         await expect(
-          tour.getByText("These are Alex's things, a sample."),
+          tour.getByText('Where Bower tells you what is going on.'),
         ).toBeVisible();
       }
       if (testInfo.project.name === 'phone') {
@@ -111,14 +111,10 @@ test.describe('open Home', () => {
       await tour.getByRole('button', { name: next }).click();
     }
     await expect(tour).toBeHidden();
-    if (testInfo.project.name === 'phone') {
-      await expect(page).toHaveURL(/\/$/);
-    } else {
-      // On a desktop "Let's go" lands on Bower (#776); back to Home.
-      await expect(page).toHaveURL(/\/bower$/);
-      await visible(page.locator('[data-tour="home"]')).click();
-      await expect(page).toHaveURL(/\/$/);
-    }
+    // "Let's go" opens the Bower tab (R-TR-5); back to Home.
+    await expect(page).toHaveURL(/\/bower$/);
+    await visible(page.locator('[data-tour="home"]')).click();
+    await expect(page).toHaveURL(/\/$/);
     await expect(visible(page.locator('.home-bubble'))).toBeVisible();
     // #906 removed the top bar's "?" (R-TOPBAR-1): Help moves into each
     // screen's ⋯ menu (#907, #919), where these steps come back.

@@ -43,8 +43,8 @@ test.describe('the tour', () => {
     await page.goto('/');
     const tour = page.getByRole('dialog', { name: 'Home' });
     await expect(tour.getByRole('button', { name: 'Back' })).toHaveCount(0);
-    await tour.getByRole('button', { name: 'Next: Notes' }).click();
-    const notes = page.getByRole('dialog', { name: 'Notes' });
+    await tour.getByRole('button', { name: 'Next: Folders' }).click();
+    const notes = page.getByRole('dialog', { name: 'Folders' });
     await expect(notes.getByText('Tour · 2 of 4')).toBeVisible();
     await notes.getByRole('button', { name: 'Back' }).click();
     await expect(
@@ -54,6 +54,87 @@ test.describe('the tour', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(page.getByText(SKIP_TOAST)).toBeVisible();
+  });
+
+  test('on a desktop the bird faces the sidebar row and step 2 rings the explorer', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the sidebar is desktop');
+    await page.goto('/');
+    const tour = page.getByRole('dialog', { name: 'Home' });
+    await expect(tour.getByText('Tour · 1 of 4')).toBeVisible();
+    const bird = page.locator('.tour-bird svg');
+    await expect(bird).toHaveClass(/\bflip\b/);
+    await expect(bird).not.toHaveClass(/\bpd\b/);
+    await tour.getByRole('button', { name: 'Next: Folders' }).click();
+    const spot = await page.locator('.tour-spot').boundingBox();
+    const tree = await visible(page.locator('.explorer-tree')).boundingBox();
+    if (spot === null || tree === null) throw new Error('no ring');
+    expect(spot.y + spot.height).toBeGreaterThan(tree.y);
+  });
+
+  test('Show me around from a Help goes to Home and starts at step 1 (R-TR-4)', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page
+      .getByRole('dialog', { name: 'Home' })
+      .getByRole('button', { name: 'Skip' })
+      .click();
+    await page.goto('/settings');
+    // The page ⋯ "More for Settings" holds Settings' own Help (ST-Help).
+    await visible(
+      page.getByRole('button', { name: 'More for Settings' }),
+    ).click();
+    await page.getByRole('menuitem', { name: 'Help and about this' }).click();
+    const help = page.getByRole('dialog', { name: 'Settings' });
+    await expect(help.getByText('Help and about this')).toBeVisible();
+    await expect(
+      help.getByText(
+        'How Bower works for you, on this device and in your Drive.',
+      ),
+    ).toBeVisible();
+    await help.getByRole('button', { name: 'Show me around' }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(
+      page.getByRole('dialog', { name: 'Home' }).getByText('Tour · 1 of 4'),
+    ).toBeVisible();
+  });
+
+  test('sets the card in the board type: title 20, Skip 15 on its line, text 16 / 15', async ({
+    page,
+  }, testInfo) => {
+    await page.goto('/');
+    const tour = page.getByRole('dialog', { name: 'Home' });
+    const title = tour.getByRole('heading', { name: 'Home' });
+    const skip = tour.getByRole('button', { name: 'Skip' });
+    const lede = tour.getByText('Where Bower tells you what is going on.');
+    const size = (el: typeof title): Promise<string> =>
+      el.evaluate((node) => getComputedStyle(node).fontSize);
+    expect(await size(title)).toBe('20px');
+    expect(await size(skip)).toBe('15px');
+    // #c6cfdc on the dark boards: the secondary text token in each theme.
+    const secondary = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--color-text-secondary)';
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    expect(await skip.evaluate((node) => getComputedStyle(node).color)).toBe(
+      secondary,
+    );
+    const text = testInfo.project.name === 'phone' ? '16px' : '15px';
+    expect(await size(lede)).toBe(text);
+    expect(await size(tour.locator('.help-row').first())).toBe(text);
+    const t = await title.boundingBox();
+    const s = await skip.boundingBox();
+    if (t === null || s === null) throw new Error('no card');
+    // Skip sits on the title's line, to its right.
+    expect(s.x).toBeGreaterThan(t.x + t.width - 1);
+    expect(s.y).toBeLessThan(t.y + t.height);
+    expect(s.y + s.height).toBeGreaterThan(t.y);
   });
 
   test('Skip ends it with the replay toast', async ({ page }) => {
@@ -66,13 +147,10 @@ test.describe('the tour', () => {
     await expect(page.getByText(SKIP_TOAST)).toBeVisible();
   });
 
-  test('on a desktop, "Let\'s go" goes to Bower', async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', 'phones stay on Home');
+  test('"Let\'s go" opens the Bower tab (R-TR-5)', async ({ page }) => {
     await page.goto('/');
     const tour = page.getByRole('dialog');
-    for (const next of ['Next: Notes', 'Next: Add', 'Next: Bower']) {
+    for (const next of ['Next: Folders', 'Next: Add', 'Next: Bower']) {
       await tour.getByRole('button', { name: next }).click();
     }
     await tour.getByRole('button', { name: "Let's go" }).click();
