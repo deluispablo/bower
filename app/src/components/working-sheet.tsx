@@ -917,7 +917,9 @@ export function WorkingSheet({
                   overlay
                 />
               </div>
-              <h3 class="working-sheet-group">{RUNNING_STEPS[2]}</h3>
+              {currentRow !== null && (
+                <h3 class="working-sheet-group">{RUNNING_STEPS[2]}</h3>
+              )}
               {currentRow !== null && (
                 <ul class="working-sheet-rows" aria-label="Working on it">
                   <SheetListRow row={currentRow} />

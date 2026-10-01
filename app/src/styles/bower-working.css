@@ -345,14 +345,13 @@
   min-width: 0;
 }
 
-/* AD-Running: the group over the thing being read. */
+/* AD-Running: "Working on it" in sentence case, small and bold, over the
+   thing being read; shown only once there is one. */
 .working-sheet-group {
-  margin: var(--space-3) 0 0;
+  margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .working-sheet-link {

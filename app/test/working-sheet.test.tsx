@@ -184,9 +184,8 @@ describe('running (R-SHEET-2, R-SHEET-5, R-BIRD-8)', () => {
     expect(
       dialog()?.querySelector('.working-sheet-stage-to')?.textContent,
     ).toBe('Your folders');
-    expect(dialog()?.querySelector('.working-sheet-group')?.textContent).toBe(
-      'Working on it',
-    );
+    // No current item reported: "Working on it" stays hidden (gate 10).
+    expect(dialog()?.querySelector('.working-sheet-group')).toBeNull();
     expect(dialog()?.querySelector('[aria-label="Steps"]')).toBeNull();
     expect(text).toContain(
       'You can close this: the tidy-up carries on. See what changed when it is done.',
@@ -205,9 +204,9 @@ describe('running (R-SHEET-2, R-SHEET-5, R-BIRD-8)', () => {
     expect(bird?.getAttribute('class') ?? '').not.toContain('hello');
   });
 
-  it('keeps "Working on it" without a phase', () => {
+  it('hides "Working on it" until the run reports a current item', () => {
     mount('running', buildRun('running', { phase: undefined }));
-    expect(dialog()?.textContent).toContain('Working on it');
+    expect(dialog()?.textContent).not.toContain('Working on it');
   });
 
   it('before the run exists it still shows the sheet (starting)', () => {
