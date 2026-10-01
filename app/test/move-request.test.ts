@@ -6,6 +6,7 @@ import {
   currentFolderOf,
   moveRequestText,
   pickerFolders,
+  replaceRequestNote,
   requestRowText,
   sendMoveRequest,
   undoRequestNote,
@@ -259,5 +260,63 @@ describe('writeRequestNote and undoRequestNote', () => {
     await expect(undoRequestNote(deleteFile, 'NOTE_ID')).resolves.toBe(
       'failed',
     );
+  });
+});
+
+describe('replaceRequestNote (§3.6)', () => {
+  const now = new Date(2026, 8, 29, 10, 5);
+  const text = 'Move “A” (a.pdf) to X.';
+
+  it('writes the new note, then sends the waiting one to the Bin', async () => {
+    const order: string[] = [];
+    const createTextFile = vi.fn(() => {
+      order.push('write');
+      return Promise.resolve({ id: 'NEW_ID' });
+    });
+    const deleteFile = vi.fn(() => {
+      order.push('bin');
+      return Promise.resolve();
+    });
+    const result = await replaceRequestNote(
+      { createTextFile, deleteFile },
+      { inboxFolderId: 'INBOX_ID', text, now, replaces: 'OLD_ID' },
+    );
+    expect(result).toEqual({ id: 'NEW_ID', kept: false });
+    expect(order).toEqual(['write', 'bin']);
+    expect(deleteFile).toHaveBeenCalledWith('OLD_ID');
+  });
+
+  it('replaces nothing when no waiting note is known', async () => {
+    const createTextFile = vi.fn().mockResolvedValue({ id: 'NEW_ID' });
+    const deleteFile = vi.fn();
+    const result = await replaceRequestNote(
+      { createTextFile, deleteFile },
+      { inboxFolderId: 'INBOX_ID', text, now, replaces: null },
+    );
+    expect(result).toEqual({ id: 'NEW_ID', kept: false });
+    expect(deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('says the waiting one is kept when the Bin fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const createTextFile = vi.fn().mockResolvedValue({ id: 'NEW_ID' });
+    const deleteFile = vi.fn().mockRejectedValue(new Error('offline'));
+    const result = await replaceRequestNote(
+      { createTextFile, deleteFile },
+      { inboxFolderId: 'INBOX_ID', text, now, replaces: 'OLD_ID' },
+    );
+    expect(result).toEqual({ id: 'NEW_ID', kept: true });
+  });
+
+  it('leaves the waiting one alone when the new note fails', async () => {
+    const createTextFile = vi.fn().mockRejectedValue(new Error('offline'));
+    const deleteFile = vi.fn();
+    await expect(
+      replaceRequestNote(
+        { createTextFile, deleteFile },
+        { inboxFolderId: 'INBOX_ID', text, now, replaces: 'OLD_ID' },
+      ),
+    ).rejects.toThrow('offline');
+    expect(deleteFile).not.toHaveBeenCalled();
   });
 });

@@ -151,4 +151,28 @@ describe('Rename…', () => {
     expect(currentToast()).toBeNull();
     expect(body().querySelector('.overlay-panel')).toBeNull();
   });
+
+  it('reopens a waiting rename prefilled, and sending replaces it (§3.6)', async () => {
+    void act(() => {
+      openRename({
+        path: '1-Projects/Jobs/CV insights.md',
+        name: 'CV insights.md',
+        isNote: true,
+        siblingNames: ['CV insights.md', 'Cover letter.md'],
+        pending: { name: 'Resume Australia.md', fileId: 'OLD_ID' },
+      });
+    });
+    expect(box().value).toBe('Resume Australia');
+    expect(line()).toBe('The arrow renames it. The link to it keeps working.');
+    type('Resume Australia 2026');
+    void act(() => roundButton().click());
+    await flush();
+    expect(mocks.createTextFile).toHaveBeenCalledTimes(1);
+    const [, , content] = mocks.createTextFile.mock.calls[0] as string[];
+    expect(content).toContain(
+      'Rename 1-Projects/Jobs/CV insights.md to Resume Australia 2026.md',
+    );
+    expect(mocks.deleteFile).toHaveBeenCalledWith('OLD_ID');
+    expect(currentToast()).toBeNull();
+  });
 });
