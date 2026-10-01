@@ -221,3 +221,20 @@
   width: 14px;
   height: 14px;
 }
+
+/* The legend's sources in bold, in their colours (NO-Main): 13 px. */
+.bower-note-box .markdown .bower-note-legend {
+  font-size: var(--text-13);
+}
+
+.bower-note-box .markdown .bower-note-legend b {
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* "Check" is the amber Badge (K-22): its fill, no outline. */
+.bower-note-box .markdown .bower-note-check .bower-note-word {
+  border-color: transparent;
+  background: var(--color-badge-check-bg);
+  color: var(--color-warn);
+}

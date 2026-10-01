@@ -31,7 +31,7 @@ vi.mock('../src/vault-store.js', () => ({
 const TOP =
   '<div class="bower-note"><div class="bower-note-head">' +
   '<div class="bower-note-title">Bower\'s note</div>' +
-  '<div class="bower-note-legend">· from <em class="bower-legend-file">the file</em>, <em class="bower-legend-notes">your notes</em></div></div>' +
+  '<div class="bower-note-legend">· from <b class="bower-legend-file">the file</b>, <b class="bower-legend-notes">your notes</b></div></div>' +
   '<ul class="bower-note-rows">' +
   '<li class="bower-note-row"><span class="bower-origin bower-origin-file"></span><div class="bower-note-text">Pays 72,000 a year.</div></li>' +
   '<li class="bower-note-row bower-note-check"><span class="bower-origin bower-origin-notes"></span><div class="bower-note-text">Ten minutes by bike.</div><span class="bower-note-word">Check</span></li>' +
@@ -178,14 +178,16 @@ describe('BowerNoteBox (issue #757)', () => {
     const titles = [...host.querySelectorAll('.bower-box-title')].map(
       (node) => node.textContent,
     );
-    expect(titles.slice(0, 2)).toEqual(['Summary', 'Key facts']);
+    expect(titles[0]).toBe('Summary');
     expect(titles[titles.length - 1]).toBe('What to check');
     expect(host.querySelectorAll('.bower-note-row')).toHaveLength(2);
     expect(host.querySelector('.bower-origin-notes')).not.toBeNull();
     expect(host.querySelector('.bower-note-word')?.textContent).toBe('Check');
-    // The key facts appear once, with the score tile first.
-    expect(host.querySelectorAll('.key-facts')).toHaveLength(1);
-    expect(host.querySelector('.key-fact-pill')?.textContent).toBe('79');
+    // No key-fact or score tiles (G-18), no "Joined from" chips (R-NO-7).
+    expect(titles).not.toContain('Key facts');
+    expect(host.querySelector('.key-facts')).toBeNull();
+    expect(host.querySelector('.key-fact-pill')).toBeNull();
+    expect(host.querySelector('.bower-joined')).toBeNull();
   });
 
   it('folds to one 52 px row and remembers it per note (#908, R-NOTEBOX-2)', async () => {
@@ -395,7 +397,7 @@ describe('Bower reads inside the note box (issue #784, R-BIRD-10)', () => {
   it('shows the normal box when the request is not running', () => {
     mountReading([row('done')]);
     expect(host.querySelector('[role="status"]')).toBeNull();
-    expect(host.querySelector('.key-facts')).not.toBeNull();
+    expect(host.querySelector('.bower-note-box-summary')).not.toBeNull();
   });
 });
 
@@ -414,17 +416,16 @@ describe('the verdict row (issue #792, R-VERDICT-1, R-VERDICT-4)', () => {
     expect(verdictRow({ score: 'high', verdict: 'Skip' })).toBeNull();
   });
 
-  it('shows the row and does not repeat the score as a key fact tile', () => {
+  it('shows the row and no key fact tiles', () => {
     mount({ ...OFFER, verdict: 'Apply first' });
     const row = host.querySelector('.bower-note-box-verdict');
     expect(row?.textContent).toBe('79Apply first');
-    expect(host.querySelector('.key-facts .key-fact-pill')).toBeNull();
-    expect(host.querySelector('.key-facts')?.textContent).toContain('72,000');
+    expect(host.querySelector('.key-facts')).toBeNull();
   });
 
-  it('keeps the score tile and shows no row without a verdict', () => {
+  it('shows no row and no score tile without a verdict (G-18)', () => {
     mount(OFFER);
     expect(host.querySelector('.bower-note-box-verdict')).toBeNull();
-    expect(host.querySelector('.key-facts .key-fact-pill')).not.toBeNull();
+    expect(host.querySelector('.key-fact-pill')).toBeNull();
   });
 });
