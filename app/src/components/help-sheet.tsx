@@ -37,6 +37,7 @@ import {
 import type { HelpIcon, HelpRow, HelpScreen, HelpTab } from '../help-rows.js';
 import { Bird, BowerMark } from './bird.js';
 import {
+  IconBolt,
   IconChat,
   IconCheck,
   IconClock,
@@ -86,26 +87,6 @@ const ICONS: Readonly<Record<HelpIcon, () => JSX.Element>> = {
   play: IconPlay,
   compare: IconSort,
 };
-
-/** Settings' "Tidying up" row (ST-Help): a bolt, drawn like the icon set
- * (`components/icons.tsx`), which has no bolt of its own. */
-function IconBolt(): JSX.Element {
-  return (
-    <svg
-      class="icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M13 3L5 14h6l-1 7 8-11h-6z" />
-    </svg>
-  );
-}
 
 const DESKTOP_QUERY = '(min-width: 900px)';
 
