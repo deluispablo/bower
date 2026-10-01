@@ -784,11 +784,11 @@ export function FolderItems({
           <h3 class="folder-group">Folders</h3>
           <ul
             class="folder-cards"
-            role="list"
+            role={desktop ? 'listbox' : 'list'}
             aria-label={`Folders in ${displayName(contents.name)}`}
           >
             {contents.subfolders.map((folder) => (
-              <li key={folder.path}>
+              <li key={folder.path} role={desktop ? 'none' : undefined}>
                 <FolderCard
                   folder={{
                     path: folder.path,
