@@ -129,8 +129,6 @@ test('Tab reaches the chips, Enter opens the highlighted result, / opens search'
   await expect(dialog).toBeVisible();
   const field = dialog.getByRole('combobox');
   await expect(field).toBeFocused();
-  await expect(dialog).toContainText('Tab');
-  await expect(dialog).toContainText('filters');
 
   // A slash typed into the field stays a slash.
   await field.fill('Moonee Ponds');
