@@ -79,6 +79,7 @@ vi.mock('../src/use-request-rows.js', () => ({
 }));
 vi.mock('../src/components/send-to-bower.js', () => ({
   openSendToBower: openSheet,
+  openAsk: openSheet,
 }));
 const pinFolder = vi.fn(() => Promise.resolve());
 const unpinFolder = vi.fn(() => Promise.resolve());
@@ -165,64 +166,50 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-describe('Folder (#348)', () => {
-  it('shows a root folder explained: its meaning, from folder-meanings.ts', () => {
+const segs = (): (string | undefined)[] => texts('.folder-in-row .seg-button');
+const metaText = (): string | undefined =>
+  root.querySelector('.page-header-meta')?.textContent?.replace(/\s+/g, ' ');
+
+describe('Folder header (#911, R-PF-1, R-AR-1)', () => {
+  it('heads a root folder with its name once, its purpose line and no P mark', async () => {
     mount();
-    expect(root.querySelector('.folder-explainer')?.textContent).toBe(
+    expect(root.querySelector('.page-header-title')?.textContent).toBe(
+      'Projects',
+    );
+    expect(root.querySelector('.page-header-purpose')?.textContent).toBe(
       'Things with an end date',
     );
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+    expect(root.querySelector('.folder-mark, .folder-chips')).toBeNull();
+    // Root crumb "Your folders" reveals the tree (E-17).
+    expect(root.querySelector('.page-header-crumbs a')?.textContent).toBe(
+      'Your folders',
+    );
+    await subfoldersReady();
   });
 
-  it('has no meaning line for a folder that is not a root (a project)', () => {
-    route.params.path = '1-Projects/Flat hunt';
+  it('keeps the full name and the parents as crumbs for a folder that is not a root', () => {
+    route.params.path = DIR;
     mount();
-    expect(root.querySelector('.folder-explainer')).toBeNull();
-  });
-
-  it('has no meaning line for a root folder outside the table', () => {
-    // Not one of `folder-meanings.ts`'s six: no line, no crash.
-    route.params.path = 'Clippings';
-    mount();
-    expect(root.querySelector('.folder-explainer')).toBeNull();
+    expect(root.querySelector('.page-header-title')?.textContent).toBe(
+      'Flat hunt',
+    );
+    expect(texts('.page-header-crumbs a')).toEqual(['Projects']);
+    expect(root.querySelector('.page-header-purpose')).toBeNull();
   });
 
   it('shows the shared Not found screen for a path with no folder (#504)', () => {
     route.params.path = 'nope';
     mount();
     expect(root.querySelector('h1')?.textContent).toBe('I can’t find that');
-    expect(root.querySelector('.auth-note')?.textContent).toBe(
-      "This folder isn't in your Bower folder any more. Maybe it moved, or the link is old.",
-    );
   });
 
-  it('still shows subfolders and files under the meaning line', async () => {
+  it('opens the folder ⋯ menu beside the title', () => {
+    route.params.path = DIR;
     mount();
-    await subfoldersReady();
-    const explainer = root.querySelector('.folder-explainer');
-    const subfolder = root.querySelector(
-      'a.folder-card[href="/folder/1-Projects/Flat%20hunt"]',
-    );
-    expect(subfolder).not.toBeNull();
-    expect(explainer?.compareDocumentPosition(subfolder as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
-  });
-});
-
-describe('Folder More menu (#352)', () => {
-  it('opens the one More menu, in its folder version', () => {
-    route.params.path = '1-Projects/Flat hunt';
-    mount();
-    const more = root.querySelector<HTMLButtonElement>('.note-header-more');
+    const more = root.querySelector<HTMLButtonElement>('.page-header-more');
     if (more === null) throw new Error('More button missing');
-    void act(() => {
-      more.click();
-    });
-    const menu = document.querySelector('[role="menu"]');
-    expect(menu?.getAttribute('aria-label')).toBe('Folder actions');
-    expect(document.body.textContent).toContain(
-      'Opens your folders at Flat hunt',
-    );
+    void act(() => more.click());
     const labels = Array.from(
       document.querySelectorAll('.note-menu-row-label'),
       (el) => el.textContent,
@@ -230,194 +217,247 @@ describe('Folder More menu (#352)', () => {
     expect(labels).toContain('Pin to Home');
     expect(labels).not.toContain('Edit the text');
   });
+
+  it('imports neither the (i) pop nor the header actions, and has no Try asking card (E-6)', async () => {
+    route.params.path = DIR;
+    mount();
+    await listReady();
+    expect(root.querySelector('.info-pop-button')).toBeNull();
+    expect(root.querySelector('.header-action')).toBeNull();
+    expect(root.textContent).not.toContain('Try asking');
+    expect(root.textContent).not.toContain('Showing only');
+  });
 });
 
-describe('Root folder screen details (#431, Phone-Folder board)', () => {
-  function heading(): string | null | undefined {
-    return root.querySelector('.folder-head h1')?.textContent;
-  }
-
-  function meta(): string | null | undefined {
-    return root.querySelector('.folder-meta')?.textContent;
-  }
-
-  it('heads a root folder with its name, the numeric prefix stripped', () => {
+describe('Folder counts agree (K-31, R-PF-2)', () => {
+  it('meta equals the segment sums and the Filter "Show n things"', async () => {
+    useFlatHuntWithPair();
     mount();
-    expect(heading()).toBe('Projects');
-    route.params.path = '2-Areas';
-    mount();
-    expect(heading()).toBe('Areas');
+    await listReady();
+    // 2 subfolders + Flat hunt.md, Lease 2026.pdf, the Arlington PDF = 5
+    // originals; the Arlington note = 1 by Bower.
+    await waitUntil(() => segs().join('|') === 'All|Originals 5|By Bower 1');
+    await waitUntil(() => metaText() === 'Projects · 6 things · updated today');
+    void act(() => {
+      root.querySelector<HTMLButtonElement>('.filter-sort-btn')?.click();
+    });
+    expect(document.body.querySelector('.filter-sort-done')?.textContent).toBe(
+      'Show 6 things',
+    );
   });
 
-  it('keeps the full name for a folder that is not a root', () => {
-    route.params.path = '1-Projects/Flat hunt';
-    mount();
-    expect(heading()).toBe('Flat hunt');
-  });
-
-  it('reads "N projects · N things" for 1-Projects', () => {
-    mount();
-    expect(meta()).toBe('2 projects · 4 things');
-  });
-
-  it('keeps the plain notes and folders line for another root folder', () => {
-    route.params.path = '2-Areas';
-    mount();
-    expect(meta()).toBe('1 note · 1 folder');
-  });
-
-  it('gives each subfolder a card: things and when updated (#908, R-FCARD-1)', async () => {
+  it('a folder of folders counts its folders and keeps Originals 0 (AR-Main)', async () => {
     mount();
     await subfoldersReady();
-    // The group label above the cards (board AR-Main-375).
-    expect(root.querySelector('.folder-cards-label')?.textContent).toBe(
-      'Folders',
+    await waitUntil(
+      () => metaText() === 'Projects · 2 folders · updated today',
     );
+    expect(segs()).toEqual(['All', 'Originals 0', 'By Bower 0']);
+  });
+});
+
+describe('Folder of folders (#911, R-AR-*)', () => {
+  it('shows the Folders cards, then Recently changed with the mixed meta', async () => {
+    mount();
+    await subfoldersReady();
+    expect(texts('.folder-group')).toEqual([
+      'Folders',
+      'Recently changed in Projects',
+    ]);
     const card = root.querySelector(
       'a.folder-card[href="/folder/1-Projects/Flat%20hunt"]',
     );
     expect(card?.querySelector('.folder-card-meta')?.textContent).toBe(
       '4 things · updated today',
     );
-    // Up to three things inside, as "title · kind" (G-18).
-    const items = card?.querySelectorAll('.folder-card-item') ?? [];
-    expect(items.length).toBeGreaterThan(0);
-    expect(items.length).toBeLessThanOrEqual(3);
-    route.params.path = '2-Areas';
-    mount();
-    await subfoldersReady();
-    const cooking = root.querySelector(
-      'a.folder-card[href="/folder/2-Areas/Cooking"]',
-    );
-    expect(cooking?.querySelector('.folder-card-meta')?.textContent).toMatch(
-      /^1 thing · updated /,
-    );
-  });
-
-  it('says "Nothing here yet" for an empty subfolder, not "0 things" (#502)', async () => {
-    mount();
-    await subfoldersReady();
     const empty = root.querySelector(
       'a.folder-card[href="/folder/1-Projects/Empty%20project"]',
     );
     expect(empty?.querySelector('.folder-card-meta')?.textContent).toBe(
       'Nothing here yet',
     );
+    const recent = texts('.folder-list .list-row-meta');
+    expect(recent[0]).toBe('PDF · Flat hunt');
+  });
+
+  it('opens on desktop with nothing selected, and one click previews a card', async () => {
+    stubMatchMedia(true);
+    mount();
+    await subfoldersReady();
+    expect(root.querySelector('[data-selected="true"]')).toBeNull();
+    const card = root.querySelector<HTMLAnchorElement>(
+      'a.folder-card[href="/folder/1-Projects/Flat%20hunt"]',
+    );
+    void act(() => card?.click());
+    await waitUntil(() => card?.getAttribute('data-selected') === 'true');
   });
 });
 
-// #457: the non-root folder screen's own subfolder rows (the plain
-// ".folder-row-count" badge, not the root screen's "N things" line above)
-// used to read `FolderSubfolder.count`, notes only -- the same disagreement
-// #425 already fixed for the folder menu, the Notes tree and the sidebar.
-describe('Subfolder rows on a non-root folder screen count files too (#457)', () => {
-  it('counts files and notes together, matching the folder menu/tree/sidebar definition', async () => {
-    route.params.path = '1-Projects/Flat hunt';
+describe('Folder list (#911, R-PF-4, R-PF-5, R-LI-*)', () => {
+  it('heads the list with h2 "In this folder" and lists subfolders first', async () => {
+    useFlatHuntWithPair();
     mount();
-    await subfoldersReady();
-    const row = root.querySelector(
+    await listReady();
+    expect(root.querySelector('h2.folder-in-title')?.textContent).toBe(
+      'In this folder',
+    );
+    await waitUntil(() => root.querySelector('.folder-item') !== null);
+    const list = root.querySelector('ul.folder-list[role="list"]');
+    expect(list?.getAttribute('aria-label')).toBe('In Flat hunt');
+    const first = list?.querySelector('a');
+    expect(first?.getAttribute('href')).toBe(
+      '/folder/1-Projects/Flat%20hunt/Empty',
+    );
+    // Viewings holds one note and one file.
+    const viewings = root.querySelector(
       'a.list-row[href="/folder/1-Projects/Flat%20hunt/Viewings"]',
     );
-    // Viewings holds one note and one file: 2, not 1 (notes only).
-    expect(row?.querySelector('.list-row-trailing')?.textContent).toBe(
+    expect(viewings?.querySelector('.list-row-trailing')?.textContent).toBe(
       '2 things',
     );
-    expect(row?.querySelector('.list-row-meta')).toBeNull();
   });
 
-  it('shows no count badge for an empty subfolder, not "0" (#502)', async () => {
-    route.params.path = '1-Projects/Flat hunt';
+  it('groups the rows by day: Today, Yesterday, then the date', async () => {
+    useFlatHuntWithPair();
     mount();
-    await subfoldersReady();
-    const empty = root.querySelector(
-      'a.list-row[href="/folder/1-Projects/Flat%20hunt/Empty"]',
+    await listReady();
+    await waitUntil(() => texts('.folder-group').length === 3);
+    expect(texts('.folder-group')).toEqual(['Today', 'Yesterday', '20 Sep']);
+  });
+
+  it('keeps an empty segment with its line (R-PF-11, R-LI-1)', async () => {
+    route.params.path = '2-Areas/Cooking';
+    mount();
+    await listReady();
+    const bower = [
+      ...root.querySelectorAll<HTMLButtonElement>('.folder-in-row .seg-button'),
+    ].find((button) => button.textContent?.startsWith('By Bower'));
+    expect(bower?.textContent).toBe('By Bower 0');
+    void act(() => bower?.click());
+    await waitUntil(() => root.querySelector('.empty-segment') !== null);
+    expect(root.querySelector('.empty-segment')?.textContent).toBe(
+      'Nothing by Bower here yet.',
     );
-    expect(empty?.querySelector('.list-row-trailing')?.textContent).toBe('');
   });
-});
 
-describe('Ask Bower about it chip (#354, #899)', () => {
-  it('opens the send-to-Bower sheet in Ask mode with the folder as subject', () => {
-    route.params.path = '1-Projects/Flat hunt';
+  it('draws the empty folder state (R-SYS-4)', async () => {
+    route.params.path = '1-Projects/Flat hunt/Empty';
     mount();
-    openSheet.mockClear();
-    const chip = Array.from(
-      root.querySelectorAll<HTMLElement>('.folder-chips .header-action'),
-    ).find((el) => el.textContent?.includes('Ask Bower about it'));
-    expect(chip?.tagName).toBe('BUTTON');
-    void act(() => chip?.click());
-    expect(openSheet).toHaveBeenCalledTimes(1);
-    const call = openSheet.mock.calls[0]?.[0] as {
-      mode: string;
-      about: string;
-      buildText: (value: string) => string;
-    };
-    expect(call.mode).toBe('ask');
-    expect(call.about).toBe('Flat hunt');
-    expect(call.buildText('when?')).toBe('About Flat hunt: when?');
+    await waitUntil(() => root.querySelector('.empty-folder') !== null);
+    expect(root.querySelector('.empty-folder-title')?.textContent).toBe(
+      'Nothing here yet.',
+    );
   });
-});
 
-describe('Header actions, Drive and the Ask suggestion (R-FOLD-2, R-HINT-2)', () => {
-  it('shows "Open in Drive" from 900 px only, as a header action', () => {
-    route.params.path = '1-Projects/Flat hunt';
+  it('shows a PDF and its note as one row in All, and one each in Originals and By Bower', async () => {
+    useFlatHuntWithPair();
     mount();
-    expect(
-      root.querySelector('.folder-chips a[href*="drive.google"]'),
-    ).toBeNull();
-    void act(() => {
-      render(null, root);
+    await listReady();
+    const names = (): (string | undefined)[] => texts('.list-row-title');
+    await waitUntil(() => names().some((n) => n?.startsWith('Arlington')));
+    expect(names().filter((n) => n?.startsWith('Arlington'))).toHaveLength(1);
+    const buttons = root.querySelectorAll<HTMLButtonElement>(
+      '.folder-in-row .seg-button',
+    );
+    void act(() => buttons[1]?.click());
+    await waitUntil(() => texts('.list-row-meta').includes('PDF'));
+    expect(names()).toContain('Arlington Road, 2 bed');
+    expect(root.querySelector('.kind-badge')).toBeNull();
+  });
+
+  it('remembers the layout per folder and draws the same header in Grid (R-GR-3)', async () => {
+    useFlatHuntWithPair();
+    viewStore.set(DIR, {
+      sort: 'modified',
+      kindFilter: null,
+      originFilter: null,
+      layout: 'grid',
+      layoutChosen: true,
+      compareColumns: ['rent'],
     });
-    stubMatchMedia((query) => query === '(min-width: 900px)');
     mount();
-    const chip = root.querySelector<HTMLAnchorElement>(
-      '.folder-chips a.header-action[href*="drive.google.com"]',
+    await listReady();
+    await waitUntil(() => root.querySelector('.grid-tile') !== null);
+    expect(root.querySelector('h2.folder-in-title')).not.toBeNull();
+    const button = root.querySelector('.filter-sort-btn');
+    expect(button?.getAttribute('aria-label')).toBe(
+      'Filter and sort (grid layout on)',
     );
-    expect(chip?.textContent).toBe('Open in Drive');
+    expect(button?.querySelector('.filter-sort-dot')).not.toBeNull();
+    expect(root.querySelector('.folder-layout')).toBeNull();
   });
 
-  it('pins with the same HeaderAction, as a pressed toggle', () => {
-    route.params.path = '1-Projects/Flat hunt';
+  it('applies Filter & sort only on "Show n things" and stores it', async () => {
+    useFlatHuntWithPair();
     mount();
-    const pin = root.querySelector<HTMLButtonElement>(
-      '.folder-chips button.header-action',
-    );
-    expect(pin?.textContent).toBe('Pin to Home');
-    expect(pin?.getAttribute('aria-pressed')).toBe('false');
-  });
-
-  it('offers a suggestion under the actions, with two chips that open the ask sheet', () => {
-    route.params.path = '1-Projects/Flat hunt';
-    mount();
-    expect(root.querySelector('.folder-tip')).toBeNull();
-    const hint = root.querySelector('.hint-suggestion');
-    expect(hint?.textContent).toContain('Try asking.');
-    const chips = hint?.querySelectorAll<HTMLButtonElement>('.chip') ?? [];
-    expect([...chips].map((chip) => chip.textContent)).toEqual([
-      'Which offer fits me best?',
-      'Pull out every closing date',
-    ]);
-    void act(() => chips[1]?.click());
-    expect(openSheet).toHaveBeenCalledTimes(1);
-    const call = openSheet.mock.calls[0]?.[0] as {
-      mode: string;
-      initialText: string;
-      buildText: (value: string) => string;
-    };
-    expect(call.mode).toBe('ask');
-    expect(call.initialText).toBe('Pull out every closing date');
-    expect(call.buildText('Q')).toBe('About Flat hunt: Q');
-  });
-
-  it('has no suggestion on a root folder, and none once dismissed', () => {
-    mount();
-    expect(root.querySelector('.hint-suggestion')).toBeNull();
-    route.params.path = '1-Projects/Flat hunt';
-    mount();
+    await listReady();
     void act(() => {
-      root.querySelector<HTMLButtonElement>('.hint-dismiss')?.click();
+      root.querySelector<HTMLButtonElement>('.filter-sort-btn')?.click();
     });
-    expect(root.querySelector('.hint-suggestion')).toBeNull();
+    const grid = [
+      ...document.body.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
+    ].find((button) => button.textContent === 'Grid');
+    void act(() => grid?.click());
+    expect(viewStore.get(DIR)?.layout).toBeUndefined();
+    void act(() => {
+      document.body
+        .querySelector<HTMLButtonElement>('.filter-sort-done')
+        ?.click();
+    });
+    await waitUntil(() => viewStore.get(DIR)?.layout === 'grid');
+    expect(viewStore.get(DIR)?.compareColumns).toBeUndefined();
+  });
+
+  it('renders a 500-item folder through VirtualList', async () => {
+    const many = Array.from({ length: 500 }, (_, at) =>
+      file(
+        `${DIR}/Note ${String(at).padStart(3, '0')}.md`,
+        'text/markdown',
+        '2026-09-20T09:00:00Z',
+      ),
+    );
+    index = buildVaultIndex([...files, ...many]);
+    route.params.path = DIR;
+    mount();
+    await listReady();
+    await waitUntil(() => root.querySelector('.folder-virtual') !== null);
+    const rendered = root.querySelectorAll('.folder-item').length;
+    expect(rendered).toBeGreaterThan(0);
+    expect(rendered).toBeLessThan(500);
+    // The CI runner is slower than a laptop: 500 rows need more than 5 s there.
+  }, 20_000);
+
+  it('shows no score or facts on a row (#908, G-18)', async () => {
+    useFlatHuntWithPair();
+    metaStore.set(listingNote.id, {
+      ...metaStore.get(listingNote.id),
+      fit: 79,
+    });
+    mount();
+    await listReady();
+    expect(root.querySelector('.folder-list')?.textContent).not.toContain('79');
+  });
+
+  it('says on the row of a file with a Rename waiting (#765, D32)', async () => {
+    useFlatHuntWithPair();
+    requestRows.list = [
+      {
+        key: 'k',
+        state: 'waiting',
+        text: `Rename ${listingNote.path} to Flat.md`,
+        kind: 'job',
+        since: '2026-09-29T10:00:00Z',
+        fileId: 'NOTE_ID',
+      },
+    ];
+    mount();
+    await listReady();
+    const waitingRows = (): (string | undefined)[] =>
+      texts('.list-row-meta').filter((text) =>
+        text?.endsWith('· waiting for the next tidy-up'),
+      );
+    await waitUntil(() => waitingRows().length > 0);
+    expect(waitingRows()).toHaveLength(1);
   });
 });
 
@@ -441,10 +481,8 @@ async function waitUntil(done: () => boolean): Promise<void> {
 
 /** The list mode has rendered. */
 async function listReady(): Promise<void> {
-  await waitUntil(() => root.querySelector('.folder-seg') !== null);
+  await waitUntil(() => root.querySelector('.folder-in-row') !== null);
 }
-
-const has = (text: string) => (): boolean => root.textContent.includes(text);
 
 async function settle(): Promise<void> {
   await act(async () => {
@@ -480,266 +518,3 @@ function useFlatHuntWithPair(): void {
   });
   route.params.path = DIR;
 }
-
-describe('Folder list mode (#611)', () => {
-  it('draws the path bar, the counts, the origin filter and the date groups', async () => {
-    useFlatHuntWithPair();
-    mount();
-    await listReady();
-    await waitUntil(has('3 originals, 1 by Bower'));
-    expect(texts('.folder-path')[0]).toBe('PProjects›Flat hunt');
-    expect(root.querySelector('.folder-path b')?.textContent).toBe('Flat hunt');
-    expect(root.querySelector('.folder-counts')?.textContent).toBe(
-      '6 things · 3 originals, 1 by Bower',
-    );
-    expect(root.querySelector('.folder-filed')?.textContent).toBe(
-      'Last filed today',
-    );
-    expect(texts('.folder-seg-btn')).toEqual([
-      'All',
-      'Originals 3',
-      'By Bower 1',
-    ]);
-    expect(texts('.folder-group')).toEqual([
-      'Today',
-      'Yesterday',
-      'Earlier this month',
-    ]);
-  });
-
-  it('shows a PDF and its note as one row in All, and one each in Originals and By Bower', async () => {
-    useFlatHuntWithPair();
-    mount();
-    await listReady();
-    const names = (): (string | undefined)[] => texts('.list-row-title');
-    await waitUntil(() => names().some((n) => n?.startsWith('Arlington')));
-    expect(names().filter((n) => n?.startsWith('Arlington'))).toHaveLength(1);
-    const count = names().length;
-
-    const buttons = root.querySelectorAll<HTMLButtonElement>('.folder-seg-btn');
-    void act(() => buttons[1]?.click());
-    await waitUntil(() => texts('.list-row-meta').includes('PDF'));
-    expect(names()).toContain('Arlington Road, 2 bed');
-    // Kinds are words in the meta line; no kind badge (R-FILEICON-2).
-    expect(root.querySelector('.kind-badge')).toBeNull();
-
-    void act(() => buttons[2]?.click());
-    await waitUntil(() => texts('.list-row-meta').includes('Bower note'));
-    expect(names().length).toBeLessThan(count + 1);
-    expect(root.querySelector('.hint-state')?.textContent).toContain(
-      'Showing only By Bower.',
-    );
-    void act(() => {
-      root.querySelector<HTMLButtonElement>('.info-pop-button')?.click();
-    });
-    expect(root.querySelector('.info-pop-panel')?.textContent).toContain(
-      'Only what Bower wrote, with its key facts',
-    );
-    void act(() => {
-      root.querySelector<HTMLButtonElement>('.folder-show-all')?.click();
-    });
-    await waitUntil(() => root.querySelector('.hint-state') === null);
-  });
-
-  it('remembers the filters per folder and keeps the Compare columns', async () => {
-    stubMatchMedia((query) => query === '(min-width: 900px)');
-    useFlatHuntWithPair();
-    viewStore.set(DIR, {
-      sort: 'name',
-      kindFilter: null,
-      originFilter: 'bower',
-      layout: 'list',
-      folderSort: 'oldest',
-      compareColumns: ['rent'],
-    });
-    mount();
-    await listReady();
-    const pressed = root.querySelector('.folder-seg-btn[aria-pressed="true"]');
-    expect(pressed?.textContent).toContain('By Bower');
-    const sort = root.querySelector<HTMLSelectElement>(
-      'select[aria-label="Sort"]',
-    );
-    if (sort === null) throw new Error('no sort select');
-    expect(sort.value).toBe('oldest');
-
-    sort.value = 'name';
-    void act(() => {
-      sort.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    await waitUntil(() => viewStore.get(DIR)?.folderSort === 'name');
-    expect(viewStore.get(DIR)).toMatchObject({
-      sort: 'name',
-      folderSort: 'name',
-      originFilter: 'bower',
-      compareColumns: ['rent'],
-    });
-  });
-
-  it('renders a 500-item folder through VirtualList', async () => {
-    const many = Array.from({ length: 500 }, (_, at) =>
-      file(
-        `${DIR}/Note ${String(at).padStart(3, '0')}.md`,
-        'text/markdown',
-        '2026-09-20T09:00:00Z',
-      ),
-    );
-    index = buildVaultIndex([...files, ...many]);
-    route.params.path = DIR;
-    mount();
-    await listReady();
-    await waitUntil(() => root.querySelector('.folder-virtual') !== null);
-    expect(root.querySelector('.folder-virtual')).not.toBeNull();
-    const rendered = root.querySelectorAll('.folder-item').length;
-    expect(rendered).toBeGreaterThan(0);
-    expect(rendered).toBeLessThan(500);
-  });
-});
-
-describe('One list, path once, names (R-FOLD-1, 3, 5)', () => {
-  it('lists the subfolders first, in the same role="list" as the rows', async () => {
-    useFlatHuntWithPair();
-    mount();
-    await listReady();
-    await waitUntil(() => root.querySelector('.folder-item') !== null);
-    const lists = root.querySelectorAll('ul[role="list"]');
-    expect(lists).toHaveLength(1);
-    expect(lists[0]?.getAttribute('aria-label')).toBe('In Flat hunt');
-    const links = [...lists[0]!.querySelectorAll('a')];
-    expect(links[0]?.getAttribute('href')).toBe(
-      '/folder/1-Projects/Flat%20hunt/Empty',
-    );
-    expect(root.querySelector('.folder-label')).toBeNull();
-  });
-
-  it('names a row by the item only; the detail is its description', async () => {
-    useFlatHuntWithPair();
-    mount();
-    await listReady();
-    const row = root.querySelector<HTMLAnchorElement>('a.folder-item');
-    const nameId = row?.getAttribute('aria-labelledby') ?? '';
-    expect(document.getElementById(nameId)?.textContent).toBe(
-      row?.querySelector('.list-row-title')?.textContent,
-    );
-    const metaId = row?.getAttribute('aria-describedby') ?? '';
-    expect(document.getElementById(metaId)?.className).toBe('list-row-meta');
-    const folder = root.querySelector<HTMLAnchorElement>(
-      'a.list-row:not(.folder-item)',
-    );
-    expect(
-      document.getElementById(folder?.getAttribute('aria-labelledby') ?? '')
-        ?.textContent,
-    ).toBe('Empty');
-  });
-
-  it('draws no PathBar from 900 px, where the top bar carries the path', async () => {
-    stubMatchMedia((query) => query === '(min-width: 900px)');
-    useFlatHuntWithPair();
-    mount();
-    await listReady();
-    expect(root.querySelector('.folder-path')).toBeNull();
-  });
-});
-
-describe('Phone Filter & sort (R-FOLD-6, D34)', () => {
-  const filterButton = (): HTMLButtonElement | null =>
-    root.querySelector<HTMLButtonElement>('.filter-sort-btn');
-
-  it('replaces the sort, kind and layout controls with one named button', async () => {
-    stubMatchMedia(false);
-    useFlatHuntWithPair();
-    mount();
-    await listReady();
-    expect(root.querySelector('select[aria-label="Sort"]')).toBeNull();
-    expect(root.querySelector('.folder-layout')).toBeNull();
-    expect(filterButton()?.getAttribute('aria-label')).toBe(
-      'Filter and sort: newest first, all kinds',
-    );
-    expect(filterButton()?.getAttribute('aria-haspopup')).toBe('dialog');
-  });
-
-  it('opens a sheet whose choices apply and rename the button', async () => {
-    stubMatchMedia(false);
-    useFlatHuntWithPair();
-    mount();
-    await listReady();
-    void act(() => filterButton()?.click());
-    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
-    const oldest = [
-      ...document.body.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
-    ].find((button) => button.textContent === 'Oldest first');
-    void act(() => oldest?.click());
-    await waitUntil(() => viewStore.get(DIR)?.folderSort === 'oldest');
-    expect(filterButton()?.getAttribute('aria-label')).toBe(
-      'Filter and sort: oldest first, all kinds',
-    );
-  });
-
-  it('keeps the toolbar from 900 px up', async () => {
-    stubMatchMedia((query) => query === '(min-width: 900px)');
-    useFlatHuntWithPair();
-    mount();
-    await listReady();
-    expect(filterButton()).toBeNull();
-    expect(root.querySelector('select[aria-label="Sort"]')).not.toBeNull();
-  });
-
-  it('shows no score or facts on a row (#908, G-18)', async () => {
-    stubMatchMedia(false);
-    useFlatHuntWithPair();
-    metaStore.set(listingNote.id, {
-      ...metaStore.get(listingNote.id),
-      fit: 79,
-    });
-    mount();
-    await listReady();
-    expect(root.querySelector('.folder-row-score')).toBeNull();
-    expect(root.querySelector('.folder-list')?.textContent).not.toContain('79');
-  });
-
-  it('puts a clock badge on the row of a file with a Rename waiting (#765, D32)', async () => {
-    stubMatchMedia(false);
-    useFlatHuntWithPair();
-    requestRows.list = [
-      {
-        key: 'k',
-        state: 'waiting',
-        text: `Rename ${listingNote.path} to Flat.md`,
-        kind: 'job',
-        since: '2026-09-29T10:00:00Z',
-        fileId: 'NOTE_ID',
-      },
-    ];
-    mount();
-    await listReady();
-    const waitingRows = (): string[] =>
-      texts('.list-row-meta').filter(
-        (text): text is string =>
-          text?.endsWith('· waiting for the next tidy-up') === true,
-      );
-    await waitUntil(() => waitingRows().length > 0);
-    expect(waitingRows()).toHaveLength(1);
-  });
-
-  it('puts the same clock badge on the row of a file with a Move waiting (#866)', async () => {
-    stubMatchMedia(false);
-    useFlatHuntWithPair();
-    requestRows.list = [
-      {
-        key: 'k',
-        state: 'waiting',
-        text: `Move “Flat” (${listingNote.path}) to 3-Resources.`,
-        kind: 'job',
-        since: '2026-09-29T10:00:00Z',
-        fileId: 'NOTE_ID',
-      },
-    ];
-    mount();
-    await listReady();
-    const waitingRows = (): (string | undefined)[] =>
-      texts('.list-row-meta').filter((text) =>
-        text?.endsWith('· waiting for the next tidy-up'),
-      );
-    await waitUntil(() => waitingRows().length > 0);
-    expect(waitingRows()).toHaveLength(1);
-  });
-});

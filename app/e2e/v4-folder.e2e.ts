@@ -37,7 +37,8 @@ async function pick(
     .getByRole('radio', { name })
     .first()
     .click();
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  // The chips change a draft; "Show <n> things" applies it (§3.34).
+  await sheet.getByRole('button', { name: /^Show \d+ things?$/ }).click();
 }
 
 async function expectLayout(page: Page, name: 'List' | 'Grid'): Promise<void> {
@@ -47,7 +48,7 @@ async function expectLayout(page: Page, name: 'List' | 'Grid'): Promise<void> {
       .getByRole('radiogroup', { name: 'Layout' })
       .getByRole('radio', { name }),
   ).toHaveAttribute('aria-checked', 'true');
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  await sheet.getByRole('button', { name: 'Close Filter and sort' }).click();
 }
 
 test('Flat hunt lists its things as the board does (#611)', async ({
@@ -57,34 +58,31 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   await page.goto(FLAT);
   await expect(page.locator('.folder-item').first()).toBeVisible();
 
-  // Path bar: the PARA mark, "Archives" a link, the current folder bold.
-  const path = page.getByRole('navigation', { name: 'You are in' });
-  await expect(path.locator('.folder-mark')).toBeVisible();
-  await expect(path.getByRole('link', { name: 'Archives' })).toHaveAttribute(
-    'href',
-    '/folder/4-Archives',
+  // #911: back to the parent on the phone, the meta line from the segment
+  // sums (K-31), then h2 "In this folder" and the segments.
+  await expect(
+    page.getByRole('link', { name: 'Back to Archives' }),
+  ).toBeVisible();
+  await expect(page.locator('.page-header-meta')).toHaveText(
+    /^Archives · (Active · )?\d+ things · updated /,
   );
-  await expect(path.locator('b')).toHaveText('Flat hunt');
-
-  // Meta line and the origin filter with its counts.
-  const counts = page.locator('.folder-counts');
-  await expect(counts).toHaveText(/^\d+ things · \d+ originals, \d+ by Bower$/);
-  await expect(page.locator('.folder-filed')).toHaveText(/^Last filed /);
-  const seg = page.getByRole('group', { name: 'Show' });
-  await expect(seg.getByRole('button')).toHaveText([
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'In this folder' }),
+  ).toBeVisible();
+  const seg = page.getByRole('radiogroup', { name: 'Show' });
+  await expect(seg.getByRole('radio')).toHaveText([
     'All',
     /^Originals \d+$/,
     /^By Bower \d+$/,
   ]);
-  await expect(seg.getByRole('button', { name: 'All' })).toHaveAttribute(
-    'aria-pressed',
+  await expect(seg.getByRole('radio', { name: 'All' })).toHaveAttribute(
+    'aria-checked',
     'true',
   );
 
-  // Tool row: sort and kind filter.
-  await expect(filterButton(page)).toHaveAccessibleName(
-    'Filter and sort: newest first, all kinds',
-  );
+  // The Filter & sort icon on the segments row, default: no dot.
+  await expect(filterButton(page)).toHaveAccessibleName('Filter and sort');
+  await expect(page.locator('.filter-sort-dot')).toHaveCount(0);
 
   // Date groups, newest first, and rows with their one-line detail.
   const groups = page.locator('.folder-group');
@@ -96,9 +94,9 @@ test('Flat hunt lists its things as the board does (#611)', async ({
   await expect(pair.locator('.list-row-meta')).toHaveText('Bower note');
   await expect(pair.locator('.kind-badge')).toHaveCount(0);
 
-  // The phone header shows the mark, the name and the actions (R-FOLD-1);
-  // Open in Drive is desktop only.
-  await expect(page.locator('.folder-chips')).toBeVisible();
+  // The header is the title and ⋯ (R-PF-1): no chip row, no P mark.
+  await expect(page.locator('.header-action')).toHaveCount(0);
+  await expect(page.locator('.page-header-more')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.locator('.folder-demo-note')).toHaveCount(0);
   // The kind in words is the row's meta (#908, R-META-1).
@@ -113,11 +111,10 @@ test('Flat hunt lists its things as the board does (#611)', async ({
       .locator('.list-row-meta'),
   ).toHaveText('Note');
 
-  // The list tip, the board's copy.
-  await page.getByRole('button', { name: 'What By Bower means' }).click();
-  await expect(page.locator('.info-pop-panel')).toContainText(
-    'Bower marks what Bower wrote. Everything else is yours: what you added or wrote. An original and the note Bower wrote about it share one row.',
-  );
+  // No (i) on the list any more (PF-Info shows PF-Help).
+  await expect(
+    page.getByRole('button', { name: 'What By Bower means' }),
+  ).toHaveCount(0);
   await shot(page, testInfo, 'folder-list');
 });
 
@@ -126,14 +123,13 @@ test('By Bower shows only what Bower wrote, with its key facts (#611)', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
   await page.goto(FLAT);
-  await page.getByRole('button', { name: /^By Bower/ }).click();
-  await expect(page.getByRole('button', { name: /^By Bower/ })).toHaveAttribute(
-    'aria-pressed',
+  await page.getByRole('radio', { name: /^By Bower/ }).click();
+  await expect(page.getByRole('radio', { name: /^By Bower/ })).toHaveAttribute(
+    'aria-checked',
     'true',
   );
-  await expect(page.locator('.hint-state')).toContainText(
-    'Showing only By Bower.',
-  );
+  // No "Showing only" box (R-PF-5): the segment itself says it.
+  await expect(page.getByText('Showing only')).toHaveCount(0);
   const rows = page.locator('.folder-item');
   await expect(rows.first()).toBeVisible();
   for (const row of await rows.all()) {
@@ -150,7 +146,7 @@ test('By Bower shows only what Bower wrote, with its key facts (#611)', async ({
   await shot(page, testInfo, 'folder-bybower');
 
   // Originals shows the PDF on its own, without Bower's note.
-  await page.getByRole('button', { name: /^Originals/ }).click();
+  await page.getByRole('radio', { name: /^Originals/ }).click();
   const original = page
     .locator('.folder-item', { hasText: 'Arlington Road, 2 bed' })
     .first();
@@ -166,29 +162,29 @@ test('sort, kind filter and origin filter survive a reload, per folder (#611)', 
 
   await pick(page, 'Sort by', 'Name');
   await expect(page.locator('.folder-group')).toHaveCount(0);
-  await page.getByRole('button', { name: /^Originals/ }).click();
+  await page.getByRole('radio', { name: /^Originals/ }).click();
   await pick(page, 'Show', /^(?!All kinds)/);
   const chosen = await filterButton(page).getAttribute('aria-label');
-  expect(chosen).toMatch(/^Filter and sort: name, (?!all kinds)/);
+  expect(chosen).toMatch(/^Filter and sort \(sorted name, \w+ only\)$/);
+  await expect(page.locator('.filter-sort-dot')).toBeVisible();
 
   // The write is asynchronous (IndexedDB): give it a moment before reloading.
   await page.waitForTimeout(300);
   await page.reload();
 
   await expect(filterButton(page)).toHaveAccessibleName(chosen ?? '');
-  await expect(
-    page.getByRole('button', { name: /^Originals/ }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('radio', { name: /^Originals/ })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
 
   // Another folder is not affected.
   await page.goto('/folder/4-Archives/Kitchen%20Refresh');
   await expect(page.locator('.folder-item').first()).toBeVisible();
-  await expect(filterButton(page)).toHaveAccessibleName(
-    'Filter and sort: newest first, all kinds',
-  );
+  await expect(filterButton(page)).toHaveAccessibleName('Filter and sort');
   await expect(
-    page.getByRole('button', { name: 'All', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true');
+    page.getByRole('radio', { name: 'All', exact: true }),
+  ).toHaveAttribute('aria-checked', 'true');
 });
 
 const GARDEN = '/folder/3-Resources/Garden';
@@ -199,25 +195,25 @@ test('a folder of photos opens in Grid and the toggle is remembered (#613)', asy
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
   await page.goto(GARDEN);
-  await expect(page.locator('.folder-grid')).toBeVisible();
+  await expect(page.locator('.folder-grid-groups')).toBeVisible();
   await expectLayout(page, 'Grid');
 
   await pick(page, 'Layout', 'List');
-  await expect(page.locator('.folder-grid')).toHaveCount(0);
+  await expect(page.locator('.folder-grid-groups')).toHaveCount(0);
   await page.waitForTimeout(300);
   await page.reload();
   await expectLayout(page, 'List');
-  await expect(page.locator('.folder-grid')).toHaveCount(0);
+  await expect(page.locator('.folder-grid-groups')).toHaveCount(0);
 
   // Flat hunt is mostly not photos: List, until it is switched to Grid.
   await page.goto(FLAT);
   await expect(page.locator('.folder-item').first()).toBeVisible();
-  await expect(page.locator('.folder-grid')).toHaveCount(0);
+  await expect(page.locator('.folder-grid-groups')).toHaveCount(0);
   await pick(page, 'Layout', 'Grid');
-  await expect(page.locator('.folder-grid')).toBeVisible();
+  await expect(page.locator('.folder-grid-groups')).toBeVisible();
   await page.waitForTimeout(300);
   await page.reload();
-  await expect(page.locator('.folder-grid')).toBeVisible();
+  await expect(page.locator('.folder-grid-groups')).toBeVisible();
   await shot(page, testInfo, 'folder-grid');
 });
 
@@ -236,7 +232,7 @@ test('tiles show thumbnails online and the kind icon offline (#613)', async ({
   await pair.scrollIntoViewIfNeeded();
   await expect(pair.locator('.grid-tile-kind-word')).toHaveText('Bower note');
   await expect(pair.locator('.note-line, .thumb')).toHaveCount(0);
-  await page.getByRole('button', { name: /^Originals/ }).click();
+  await page.getByRole('radio', { name: /^Originals/ }).click();
   const sign = page.locator('.grid-tile', { hasText: 'window sign' });
   await expect(sign.locator('.grid-tile-kind-word')).toHaveText('Photo');
   // Offline, inside the app (no reload): the tiles are drawn again.
@@ -314,18 +310,18 @@ test('an empty folder invites adding things (#613)', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
   await page.goto(EMPTY);
-  const empty = page.locator('.folder-empty');
-  await expect(empty).toContainText('Nothing in Car yet');
+  // R-SYS-4: the looking bird, "Nothing here yet." and the two ways on.
+  const empty = page.locator('.empty-folder');
+  await expect(empty).toContainText('Nothing here yet.');
   await expect(empty).toContainText(
-    'Add tickets, bookings or ideas and Bower files them here at the next tidy-up.',
+    'Add something, or ask Bower to write about this folder.',
   );
   await expect(empty.locator('svg.b')).toBeVisible();
-  await expect(
-    empty.getByRole('link', { name: 'Add something' }),
-  ).toHaveAttribute('href', '/add');
-  await expect(
-    empty.getByRole('link', { name: 'Ask Bower to move things here' }),
-  ).toHaveAttribute('href', /^\/bower\?text=/);
+  await expect(empty.getByRole('link', { name: 'Add' })).toHaveAttribute(
+    'href',
+    '/add',
+  );
+  await expect(empty.getByRole('button', { name: 'Ask Bower' })).toBeVisible();
   await shot(page, testInfo, 'folder-empty');
 });
 
@@ -334,26 +330,32 @@ test('Flat hunt has the Compare tab on the phone (#613)', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', PHONE_ONLY);
   await page.goto(FLAT);
-  const tabs = page.getByRole('tablist', { name: 'Folder content' });
+  const tabs = page.getByRole('tablist', { name: 'Folder views' });
   await expect(tabs.getByRole('tab')).toHaveText(['List', 'Compare 4 flats']);
   await expect(tabs.getByRole('tab', { name: 'List' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await tabs.getByRole('tab', { name: 'Compare 4 flats' }).click();
-  await expect(page.getByRole('region', { name: 'Compare' })).toBeVisible();
+  // The Compare panel is an empty slot until #916 fills it.
+  await expect(page.locator('.compare-slot')).toBeAttached();
   await expect(page.locator('.folder-item')).toHaveCount(0);
   await shot(page, testInfo, 'folder-compare');
   await tabs.getByRole('tab', { name: 'List' }).click();
   await expect(page.locator('.folder-item').first()).toBeVisible();
 });
 
-test('Flat hunt has the Compare button on the desktop (#613)', async ({
+test('Flat hunt has the Compare tab on the desktop too (#911, R-TABS-1)', async ({
   page,
 }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop', 'the button is desktop');
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop layout');
   await page.goto(FLAT);
-  await page.getByRole('button', { name: 'Compare 4 flats' }).click();
-  await expect(page.locator('table').first()).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'List' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Compare 4 flats' }).click();
+  await expect(
+    page.getByRole('tab', { name: 'Compare 4 flats' }),
+  ).toHaveAttribute('aria-selected', 'true');
+  // The Compare panel is an empty slot until #916 fills it.
+  await expect(page.locator('.compare-slot')).toBeAttached();
+  await page.getByRole('tab', { name: 'List' }).click();
+  await expect(page.locator('.folder-item').first()).toBeVisible();
 });

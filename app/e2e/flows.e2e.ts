@@ -2284,11 +2284,16 @@ test('A folder with notes only in a subfolder says so, not "Nothing here yet" (#
   // instance of 1.9: the header's count is the whole subtree, the empty
   // state used to say "Nothing here yet" regardless.
   await page.goto('/folder/1-Projects');
-  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Projects', exact: true }),
+  ).toBeVisible();
   await expect(page.getByText('Nothing here yet.')).toBeHidden();
-  // #424: the total is real (the two projects' notes, #903), but no single
-  // one of them holds all of them, so none is named.
-  await expect(page.getByText(/^\d+ notes in its folders$/)).toBeVisible();
+  // #911: a folder of folders shows its subfolders as cards (AR-Main), and
+  // its meta line counts them.
+  await expect(page.locator('.folder-card').first()).toBeVisible();
+  await expect(page.locator('.page-header-meta')).toHaveText(
+    /^Projects · \d+ folders? · updated /,
+  );
   await shot(page, testInfo, 'folder-notes-elsewhere');
 });
 
@@ -2297,26 +2302,23 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
 }, testInfo) => {
   await openHome(page);
   await page.goto('/folder/1-Projects');
-  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
-  const explainer = page.locator('.folder-explainer');
-  await expect(explainer).toHaveText('Things with an end date');
-  // The meaning line sits between the header and the chip row, above the
-  // subfolders — same words as the intro (#319).
-  // The phone has no chip row (#702); from 900 px it follows the line.
-  const chips = page.locator('.folder-chips');
-  if (await chips.isVisible()) {
-    const explainerBox = await explainer.boundingBox();
-    const chipsBox = await chips.boundingBox();
-    expect((explainerBox?.y ?? 0) < (chipsBox?.y ?? 0)).toBe(true);
-  }
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Projects', exact: true }),
+  ).toBeVisible();
+  // #911: the purpose line sits in the page header, under the meta line;
+  // there is no chip row any more.
+  await expect(page.locator('.page-header-purpose')).toHaveText(
+    'Things with an end date',
+  );
+  await expect(page.locator('.header-action')).toHaveCount(0);
   // The Phone-Folder board's details (#431): the heading without the
   // numeric prefix, "N projects · N things", a second line on each
   // subfolder row.
   await expect(
     page.getByRole('heading', { level: 1, name: 'Projects', exact: true }),
   ).toBeVisible();
-  await expect(page.locator('.folder-meta')).toHaveText(
-    /^\d+ projects? · \d+ things?$/,
+  await expect(page.locator('.page-header-meta')).toHaveText(
+    /^Projects · \d+ folders? · updated /,
   );
   await expect(
     page
@@ -2335,28 +2337,18 @@ test('A root folder explained: the meaning line, then its subfolders (#348)', as
   await expect(
     page.getByRole('heading', { level: 1, name: 'Lisbon Trip', exact: true }),
   ).toBeVisible();
-  await expect(page.locator('.folder-explainer')).toHaveCount(0);
+  await expect(page.locator('.page-header-purpose')).toHaveCount(0);
 });
 
-test('Folder chips fit one row at 375 px, and the tree hides zero counts (#310)', async ({
+test('The folder header has the title and ⋯, no chip row (#911), and the tree hides zero counts (#310)', async ({
   page,
 }, testInfo) => {
-  // The phone has no chip row (#702): those actions live in its More menu.
-  test.skip(testInfo.project.name === 'phone', 'no chip row on the phone');
   await openHome(page);
-
-  // Chips: Pin to Home / Ask Bower about it / Open in Drive, at 13 px,
-  // fit the phone's 343 px content width in one row (2.14) instead of
-  // wrapping to two.
   await page.goto('/folder/4-Archives/Lisbon%20Trip');
-  // The h1 only: on desktop the preview pane can open with the same title as
-  // an h2 (#812), which made the role query ambiguous.
   await expect(page.locator('h1', { hasText: 'Lisbon Trip' })).toBeVisible();
-  const chips = page.locator('.folder-chips .header-action');
-  const ys = await chips.evaluateAll((els) =>
-    els.map((el) => el.getBoundingClientRect().y),
-  );
-  expect(new Set(ys).size).toBe(1);
+  // #911 (R-PF-1): Pin, Ask and Drive live in ⋯ beside the title.
+  await expect(page.locator('.header-action')).toHaveCount(0);
+  await expect(page.locator('.page-header-more')).toBeVisible();
   await shot(page, testInfo, 'folder-chips');
 
   // #909: the tree shows no counts at all (K-1), so none reads "0".
@@ -2377,7 +2369,10 @@ test('folder counts add files and notes together, the same total the folder scre
   // 0-Inbox: 1 file (the boiler invoice) + 1 note (Tomato seedlings) — the
   // folder screen's own header already says "1 file · 1 note".
   await page.goto('/folder/0-Inbox');
-  await expect(page.locator('.folder-meta')).toHaveText('1 file · 1 note');
+  // #911 (K-31): one count, the sum of the segments.
+  await expect(page.locator('.page-header-meta')).toHaveText(
+    /^Inbox · 2 things · updated /,
+  );
 });
 
 test('a project folder lists its files and notes together, newest first, with who put each there', async ({
@@ -2387,8 +2382,8 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(
     page.getByRole('heading', { level: 1, name: 'Kitchen Refresh' }),
   ).toBeVisible();
-  await expect(page.locator('.folder-counts')).toHaveText(
-    /^5 things · \d+ originals?, \d+ by Bower$/,
+  await expect(page.locator('.page-header-meta')).toHaveText(
+    /^Archives · (Active · )?\d+ things · updated /,
   );
 
   const rows = page.locator('.folder-item');
@@ -2406,39 +2401,10 @@ test('a project folder lists its files and notes together, newest first, with wh
   await expect(rows.nth(2)).toHaveAttribute('href', /^\/note\//);
   await shot(page, testInfo, 'folder-project');
 
-  // The end-of-folder tip is generic (#464): it used to name "the flats I
-  // saved" and "rent and size" on every project folder, Kitchen Refresh
-  // included, hard-coding the board's own Flat hunt example.
-  await expect(page.locator('.hint-suggestion')).toContainText(
-    'Try asking. Your question waits in the inbox for the next tidy-up.',
-  );
-
-  // "Open in Drive" is the desktop header's; the phone has it in More.
-  test.skip(testInfo.project.name === 'phone', 'no Drive action on the phone');
-  // The Drive chip is greyed in the demo (#555): the fixture ids are not
-  // real Drive ids, so it never opens a broken Drive page.
-  const drive = page.locator('.folder-chips').getByRole('button', {
-    name: 'Open in Drive',
-    exact: true,
-  });
-  await expect(drive).toBeVisible();
-  await expect(drive).toBeDisabled();
-  // #847: the demo line is the button's tooltip, no longer a line in the header.
-  await expect(drive).toHaveAttribute(
-    'title',
-    'Not in the demo. Run your own Bower to use it.',
-  );
-  await expect(page.getByRole('link', { name: 'Open in Drive' })).toHaveCount(
-    0,
-  );
-
-  // The Ask Bower chip opens the send-to-Bower sheet in Ask mode with the
-  // folder as its subject, not the Bower tab (#354, #899).
-  await page.getByRole('button', { name: 'Ask Bower about it' }).click();
-  const sheet = page.getByRole('dialog');
-  await expect(sheet).toBeVisible();
-  await expect(sheet).toContainText('About Kitchen Refresh');
-  await expect(page).not.toHaveURL(/\/bower/);
+  // #911: no "Try asking" card (E-6) and no header actions: Pin, Ask and
+  // Open in Drive live in ⋯.
+  await expect(page.getByText('Try asking')).toHaveCount(0);
+  await expect(page.locator('.header-action')).toHaveCount(0);
 });
 
 test('a file opens on its own screen: the photo inline, the PDF without a preview says so', async ({
