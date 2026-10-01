@@ -294,6 +294,28 @@ function Summary({ run, now }: { run: Run; now: number }): JSX.Element {
   );
 }
 
+/** Whether a row takes its note's title rather than its file name's. */
+function titled(row: TableRow): boolean {
+  return row.action === 'answered' || linkTitleFromFileName(row.name) !== null;
+}
+
+/**
+ * `rows` with the title every list gives a Bower answer (#920) and a filed
+ * link: the tree's and the note's (`useTitlesAt`), never the host its file
+ * name holds (#950 T950-5). Used by the latest run and every Earlier run.
+ */
+function useTitledRows(rows: readonly TableRow[]): TableRow[] {
+  const { files } = useVault();
+  const titles = useTitlesAt(
+    rows.filter(titled).map((row) => row.notePath),
+    files,
+  );
+  return rows.map((row) => {
+    const title = titled(row) ? titles.get(row.notePath) : undefined;
+    return title === undefined ? row : { ...row, title };
+  });
+}
+
 /** An earlier run opened in place (JF-2): up to three things with where
  * they went, then "and N more". */
 function EarlierBody({
@@ -306,10 +328,11 @@ function EarlierBody({
   now: number;
 }): JSX.Element {
   const [all, setAll] = useState(false);
+  const built = useMemo(() => tableRows(run, index), [run, index]);
+  const rows = useTitledRows(built);
   if (!hasDestinations(run)) {
     return <p class="just-filed-earlier-empty">{noListLine(run)}</p>;
   }
-  const rows = tableRows(run, index);
   if (rows.length === 0) {
     const outcome = outcomeFromRun(run);
     return (
@@ -427,7 +450,7 @@ export function JustFiled(): JSX.Element {
 
   const { query, route } = useLocation();
   const desktop = useMediaQuery(DESKTOP_QUERY);
-  const { index, files } = useVault();
+  const { index } = useVault();
   const { latest, earlier, loaded, unseen, now } = useJustFiled(
     true,
     query.run,
@@ -438,19 +461,7 @@ export function JustFiled(): JSX.Element {
     () => (latest === null ? [] : tableRows(latest, index)),
     [latest, index],
   );
-  // A Bower answer takes the title every list gives it (#920), and so does
-  // a filed link: the tree's and the note's, not its file name's host
-  // (#950 T950-5).
-  const titled = (row: TableRow): boolean =>
-    row.action === 'answered' || linkTitleFromFileName(row.name) !== null;
-  const answerTitles = useTitlesAt(
-    tableRowsNow.filter(titled).map((row) => row.notePath),
-    files,
-  );
-  const rows = tableRowsNow.map((row) => {
-    const title = titled(row) ? answerTitles.get(row.notePath) : undefined;
-    return title === undefined ? row : { ...row, title };
-  });
+  const rows = useTitledRows(tableRowsNow);
   const addresses = useAddresses(rows, index);
 
   function markAll(): void {
