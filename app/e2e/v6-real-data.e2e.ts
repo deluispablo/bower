@@ -1,8 +1,8 @@
 /**
  * T950-1 (#922): on a slow read a folder shows skeletons, never a guessed
  * state. With the demo's slow switch (`bower:demo:slow`, every note read
- * waits about 1.5 s) the first rows, the split, the cards and the Compare
- * tab that appear are already the final ones.
+ * waits about 1.5 s) the meta line, the rows, the split, the cards and the
+ * Compare tab that first appear are already the final ones.
  */
 
 import type { Page } from '@playwright/test';
@@ -26,20 +26,48 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-/** The folder's body text the first moment a row or card shows. */
+/**
+ * Opens `path` from Home the way a person does, once Home's own reads are
+ * done (a read after a pause waits again), and returns the folder's text the
+ * first moment its meta line shows.
+ */
 async function firstBody(page: Page, path: string): Promise<string> {
-  await page.goto(path);
-  const body = page.locator('.folder-view');
-  await expect(
-    body.locator('a[href^="/note/"], a[href^="/file/"], a[href^="/folder/"]'),
-  ).not.toHaveCount(0, { timeout: 15_000 });
-  return body.innerText();
+  await page.goto('/');
+  await expect(page.locator('h1').first()).toBeAttached();
+  await page.waitForTimeout(4000);
+  await page.evaluate((href: string) => {
+    const link = document.createElement('a');
+    link.href = href;
+    link.textContent = 'Open';
+    document.querySelector('main')?.append(link);
+    link.click();
+  }, path);
+  // The header first: its meta line and tabs are final the moment they show.
+  const header = page.locator('.folder-view .page-header').first();
+  await expect(header.locator('.page-header-meta')).toBeAttached({
+    timeout: 15_000,
+  });
+  const head = await header.innerText();
+  // Then the list (its module may load a moment later): final when it shows.
+  const panel = page.locator('#folder-panel-list');
+  await expect(panel.locator('a[href]').first()).toBeAttached({
+    timeout: 15_000,
+  });
+  return `${head}
+---
+${await panel.innerText()}`;
 }
 
 /** The same text once every read has settled. */
 async function settledBody(page: Page): Promise<string> {
   await page.waitForTimeout(4000);
-  return page.locator('.folder-view').innerText();
+  const head = await page
+    .locator('.folder-view .page-header')
+    .first()
+    .innerText();
+  return `${head}
+---
+${await page.locator('#folder-panel-list').innerText()}`;
 }
 
 test.describe('a slow folder never guesses (T950-1)', () => {
