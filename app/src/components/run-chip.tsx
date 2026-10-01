@@ -366,6 +366,9 @@ export function RunChip({ model, desktop, onOpen }: RunChipProps): JSX.Element {
  * which loads this module after start so the chip stays out of the startup
  * budget (#41).
  */
+/** The room the phone chip takes: its 52 px bar and the 8 px around it. */
+export const RUN_CHIP_SPACE = '68px';
+
 export function RunChipFiller(): JSX.Element {
   const { phase, run, lastFinished, resultSeen, now, openSheet } = useRun();
   const { path } = useLocation();
@@ -397,5 +400,15 @@ export function RunChipFiller(): JSX.Element {
     [signature, desktop, openSheet],
   );
   useShellSlot('tidyBar', content);
+  // The phone chip sits over the page above the tab bar: while it shows, the
+  // page keeps room for it at its end (`--run-chip-space`, `layout.css`),
+  // so it never covers the last of the content (#936 gate).
+  const reserve = !desktop && content !== null;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (reserve) root.style.setProperty('--run-chip-space', RUN_CHIP_SPACE);
+    else root.style.removeProperty('--run-chip-space');
+    return () => root.style.removeProperty('--run-chip-space');
+  }, [reserve]);
   return <BowerLedgeFiller />;
 }

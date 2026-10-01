@@ -499,6 +499,12 @@ button.page-bare-back {
   padding-bottom: calc(var(--space-16) + var(--space-6) + var(--dock-height));
 }
 
+/* The phone run chip keeps its room at the end of the page while it shows
+   (`--run-chip-space`, set by `run-chip.tsx`, #936). */
+.content {
+  margin-bottom: var(--run-chip-space, 0px);
+}
+
 .reauth-banner {
   display: flex;
   flex-wrap: wrap;
