@@ -129,8 +129,8 @@ Bower's answers to questions sent as instructions. One note per question, dated.
     content: `---
 tags: [meta, personal]
 created: 2026-09-26
-updated: 2026-09-30
-bower_rules_version: 22
+updated: 2026-10-01
+bower_rules_version: 23
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -169,6 +169,7 @@ log.md              # Chronological record of operations. Append-only.
 \`\`\`
 - Each PARA folder has an \`_<Name>.md\` note explaining its purpose; keep it.
 - Each project or area folder has a **hub note** with the folder's name (e.g. \`Move House/Move House.md\`).
+- A hub note may carry the folder's own status list, \`statuses:\` in its frontmatter (see **A folder's statuses** under **Kinds**).
 - Originals (PDFs, spreadsheets, images, documents) live in their project, area or resource folder, linked from its hub note and listed in \`index.md\`. A note sits next to an original only when one was asked for, the original is of a listed kind (its companion note, see **Kinds**) or it is a document's text copy, and a converted document's \`.md\` sits next to its original (see Ingest).
 - Create subfolders only when a project or area has several notes.
 - In \`3-Resources/\`, one folder per topic, created as needed.
@@ -192,7 +193,7 @@ Example: \`tags: [summary, finance]\`
 \`\`\`yaml
 ---
 tags: [type, domain]
-status: active | waiting | done | archived   # projects and tasks; a companion note uses its kind's values
+status: active | waiting | done | archived   # projects and tasks; a companion note uses its folder's list (see Kinds)
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 source: "[[original file]] or URL"          # when the note derives from a document
@@ -381,7 +382,7 @@ Bower recognises eight kinds of document. For each, the list gives the \`kind\` 
 - Cooking: \`time\` Time (text); \`serves\` Serves (number); \`difficulty\` Difficulty (text)
 
 **Companion note.** When an original is a document of one of these kinds, write one short note about it in the same run, in the same folder, linked from the hub note and \`index.md\`. Name it for what it is, like an original (\`Arlington Road, 2 bed.md\`), never with the base name of a file already in the folder.
-- Frontmatter: \`kind\`; \`tags\` (\`document\` plus a domain); \`created\`; \`original: "[[<file name>]]"\`; \`pages\` (the page count) for a PDF; \`status\`, the kind's first status value, when the kind has statuses; every field of the kind the document states, and the \`for you\` fields the owner's notes give, in the list's order and written as their type says; then \`bower_origins\` and \`not_stated\`.
+- Frontmatter: \`kind\`; \`tags\` (\`document\` plus a domain); \`created\`; \`original: "[[<file name>]]"\`; \`pages\` (the page count) for a PDF; \`status\`, the first value of the folder's status list (the kind's first status value when the folder has no list), when the kind has statuses; every field of the kind the document states, and the \`for you\` fields the owner's notes give, in the list's order and written as their type says; then \`bower_origins\` and \`not_stated\`.
 - \`bower_origins\` says where a field came from: \`file\` (the document), \`notes\` (the owner's notes), \`web\` (looked up) or \`you\` (what the owner told you). \`file\` is the default: list only the other fields, one \`<field>: <origin>\` per indented line, never \`{…}\` on one line. Leave it out when every field came from the file.
 - \`not_stated\` lists, as snake_case keys, what the document leaves out that the owner would want to ask: the kind's fields it should state and does not, and the usual questions for that kind (for a listing: pets, bills, fees). Never a \`for you\` field. Leave it out when nothing is missing.
 - Body: the \`> [!bower] Bower's note\` box, exactly as in **A note from Bower**, then a short body: what it is and what it means for the owner, in a few lines with \`[[wikilinks]]\`. The fields live in the frontmatter: never repeat them as a table.
@@ -393,7 +394,14 @@ Bower recognises eight kinds of document. For each, the list gives the \`kind\` 
 - Photos (a place, a sign, people) and files Bower cannot read get no note unless the owner asks for one (a context note, an instruction note) or a rule in \`Rules.md\` says so: they are only filed. A document of no listed kind gets its text copy (Ingest step 6). A photo of a document of a listed kind (a receipt, a ticket) is that document and gets its companion note.
 - A rule can switch a kind off ("For receipts, no note"): documents of that kind are then only filed.
 - A rule can add a field to a kind ("For job offers, also note the pension"): write it as one more frontmatter field, a snake_case key (\`pension\`), after the kind's own fields, with its origin in \`bower_origins\` as usual. The app shows it in Details, never as a key fact.
-- A rule can add a status value to a kind; the kind's first status value is still the one a new note gets.
+- A rule can add a status value to a kind: add it to the status list of each folder that holds notes of that kind (at its place in the lifecycle when no note uses a later value yet, else at the end), and to the kind's list for folders that have none. A new note still gets the first value.
+
+**A folder's statuses.** Statuses depend on what a folder compares, so the kind's list above is only the fallback.
+- When a project or area folder holds two or more notes of a kind that has statuses, write \`statuses:\` in the frontmatter of that folder's hub note (\`<Folder>/<Folder>.md\`, \`by: bower\`): a YAML list of 3 to 10 lower-case values, at most 24 characters each, no value twice, in lifecycle order, starting with \`new\`, chosen for what the folder compares. A rental search: \`statuses: [new, to view, viewed, applied, approved, signed, not for me, turned down]\`. A job search: \`statuses: [new, applied, interview, offer, accepted, not for me, turned down]\`.
+- Never reorder or drop a value a note in the folder already uses, older values such as \`declined\` or \`rejected\` included: append a missing one at the end instead. Never rewrite a note's \`status\` to fit the list.
+- A new note's \`status\` is the first value of its folder's list; the kind's list is used when the folder has no list.
+- The runner checks every hub note the run changed: a list that is not a list, has fewer than 3 or more than 10 values, a value in capitals, longer than 24 characters or there twice, or that misses a status a note in the folder uses, is removed, and the run reports it. The app then shows the kind's list.
+- The status lines under \`## History\` are written by the runner, as for any status change.
 
 **Long documents.**
 - However long the document, the box stays at three lines and the facts go to the frontmatter fields, never into the box.
