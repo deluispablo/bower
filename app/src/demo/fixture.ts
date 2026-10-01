@@ -573,6 +573,19 @@ function thumb(label: string, fill: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+/** A PDF's first page standing in for Drive's `thumbnailLink` (DA-22): a
+ * portrait page with its title and grey lines of text. */
+function pageThumb(label: string): string {
+  const lines = [64, 80, 96, 112, 136, 152, 168, 184, 200]
+    .map(
+      (y, i) =>
+        `<rect x="20" y="${y}" width="${i % 4 === 3 ? 80 : 130}" height="6" rx="3" fill="#d5dbe3"/>`,
+    )
+    .join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 220" width="340" height="440"><rect width="170" height="220" fill="#ffffff"/><text x="20" y="40" font-family="sans-serif" font-size="13" font-weight="700" fill="#1f2a37">${label}</text>${lines}</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 /** A blob of `text` typed as `mimeType`: a stand-in for a binary file whose
  * Drive size is set on the fixture entry. */
 function stub(text: string, mimeType: string): Blob {
@@ -1296,7 +1309,7 @@ function pdfAt(
     modifiedTime: modified,
     content: new Blob([LEASE_PDF], { type: 'application/pdf' }),
     size,
-    thumbnailLink: thumb(label, '#e8eef7'),
+    thumbnailLink: pageThumb(label),
     ...(filedByBower && { appProperties: { bowerOrigin: 'filed' } }),
   };
 }
