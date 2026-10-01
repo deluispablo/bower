@@ -93,3 +93,26 @@ test('on desktop, Answers lines up with the root discs, and the open Bower note 
   await expect(selected.locator('svg.mark')).toHaveCount(1);
   await expect(selected).toBeInViewport();
 });
+
+test("the tree draws the bird on a Bower note's siblings without opening their folder (#950, #922)", async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  // CV insights: its siblings LinkedIn profile and SEEK profile are Bower's
+  // notes that no folder page has read yet.
+  await page.goto('/note/demo-131');
+  const phone = testInfo.project.name === 'phone';
+  if (phone) {
+    await visible(
+      page.getByRole('button', { name: 'Open your folders' }),
+    ).click();
+  }
+  const tree = phone
+    ? page.getByRole('dialog', { name: 'Your folders' })
+    : page.getByRole('navigation', { name: 'Your folders' });
+  for (const name of ['LinkedIn profile', 'SEEK profile']) {
+    const row = tree.locator('.tree-link', { hasText: name });
+    await expect(row).toHaveCount(1);
+    await expect(row.locator('svg.mark')).toHaveCount(1);
+  }
+});
