@@ -1514,7 +1514,7 @@ export const JOB_OFFERS: readonly Offer[] = [
     callout: [
       "A more hands-on, less leadership-heavy role than Altis's other listing; lists Google Cloud as a preferred platform. (from the file)",
       'Closest technical match of the four: SQL, data modelling, ETL/ELT and GCP line up with your day-to-day work. (from your notes: [[CV insights]])',
-      'Scored 79/100, above the 70-point bar in your CV rule; a tailored [[CV - Senior Consultant, Altis Consulting|CV]] and [[Cover Letter - Senior Consultant, Altis Consulting|cover letter]] are ready.',
+      'Scored 79/100, above the 70-point bar in your CV rule; a tailored [[CV - Senior Consultant, Altis Consulting|CV]] and [[Cover Letter - Senior Consultant, Altis Consulting|cover letter]] are ready. (from the file)',
     ],
     body: 'Hybrid, Melbourne CBD. The listing gives no salary.',
   },
