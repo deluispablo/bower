@@ -36,16 +36,25 @@ describe('openFilePicker', () => {
       }
     }
     const added: unknown[] = [];
-    const builder = {
-      addView(view: DocsView): typeof builder {
+    interface Builder {
+      addView(view: DocsView): Builder;
+      enableFeature(): Builder;
+      setTitle(): Builder;
+      setOAuthToken(): Builder;
+      setDeveloperKey(): Builder;
+      setCallback(): Builder;
+      build(): { setVisible(): void };
+    }
+    const builder: Builder = {
+      addView(view) {
         added.push(view);
         return builder;
       },
-      enableFeature: (): typeof builder => builder,
-      setTitle: (): typeof builder => builder,
-      setOAuthToken: (): typeof builder => builder,
-      setDeveloperKey: (): typeof builder => builder,
-      setCallback: (): typeof builder => builder,
+      enableFeature: () => builder,
+      setTitle: () => builder,
+      setOAuthToken: () => builder,
+      setDeveloperKey: () => builder,
+      setCallback: () => builder,
       build: () => ({ setVisible: (): void => undefined }),
     };
     const api = {
