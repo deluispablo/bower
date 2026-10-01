@@ -65,6 +65,8 @@ import {
   relativeTime,
 } from '../navigation.js';
 import type { ParaKind } from '../navigation.js';
+import { hubNotePath } from '../folder-statuses.js';
+import { isFolderPage } from '../folder-view.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { useOnline } from '../online.js';
@@ -252,6 +254,53 @@ function useBowerNotes(files: readonly DriveFile[]): ReadonlySet<string> {
   }, [key]);
 
   return ids;
+}
+
+/**
+ * Which listed folders have their own page (K-31, L-5): a same-name note
+ * Bower wrote (`isFolderPage`), which the folder page neither lists nor
+ * counts. Read like `useBowerNotes`; a folder whose note is not read yet
+ * keeps the plain count until it is. Folder paths.
+ */
+function useFolderPages(
+  folders: readonly string[],
+  index: VaultIndex | null,
+): ReadonlySet<string> {
+  const [paths, setPaths] = useState<ReadonlySet<string>>(() => new Set());
+  const asked = useRef(new Set<string>());
+  const gone = useRef(false);
+  const key = folders.slice(0, EXTRAS_MAX).join('\n');
+
+  useEffect(
+    () => () => {
+      gone.current = true;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (index === null) return;
+    for (const folder of folders.slice(0, EXTRAS_MAX)) {
+      const hub = index.byPath.get(hubNotePath(folder));
+      if (hub === undefined) continue;
+      const ask = `${hub.id}:${hub.modifiedTime ?? ''}`;
+      if (asked.current.has(ask)) continue;
+      asked.current.add(ask);
+      loadNoteMeta(hub).then(
+        (meta) => {
+          if (gone.current || !isFolderPage(hub, meta)) return;
+          setPaths((prev) =>
+            prev.has(folder) ? prev : new Set(prev).add(folder),
+          );
+        },
+        (err: unknown) => {
+          console.error("A folder's own note could not be read", err);
+        },
+      );
+    }
+  }, [key, index]);
+
+  return paths;
 }
 
 function useTagged(
@@ -1046,7 +1095,7 @@ function SwitcherPanel({
   // One set of kind chips on both sizes (SE-Query-375/1280).
   const activeChip = kindChip;
 
-  const sections = useMemo((): Section[] => {
+  const rawSections = useMemo((): Section[] => {
     if (index === null) return [];
     if (tag !== null) {
       // N-11: one list of the tagged notes, no group label.
@@ -1124,6 +1173,35 @@ function SwitcherPanel({
     lastFinished,
     now,
   ]);
+
+  // K-31: a folder's count is the folder page's, so its own page (a
+  // same-name note Bower wrote) is not one of its things (#950 F-5).
+  const listedFolders = useMemo(
+    () =>
+      rawSections.flatMap((section) =>
+        section.rows.flatMap((row) =>
+          row.kind === 'folder' ? [row.file.path] : [],
+        ),
+      ),
+    [rawSections],
+  );
+  const folderPages = useFolderPages(listedFolders, index);
+  const sections = useMemo(
+    (): Section[] =>
+      folderPages.size === 0
+        ? rawSections
+        : rawSections.map((section) => ({
+            ...section,
+            rows: section.rows.map((row) =>
+              row.count !== null &&
+              row.count > 0 &&
+              folderPages.has(row.file.path)
+                ? { ...row, count: row.count - 1 }
+                : row,
+            ),
+          })),
+    [rawSections, folderPages],
+  );
 
   const matchingCommands = useMemo(() => {
     if (!searching || tag !== null) return [];
