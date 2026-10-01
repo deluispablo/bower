@@ -61,7 +61,6 @@ import { IconCheck, IconClose } from './icons.js';
 import { ListRow } from './list-row.js';
 import { kindLabel } from '../meta-line.js';
 import { startedLine } from '../run-progress.js';
-import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
@@ -158,9 +157,9 @@ export const DEMO_REASSURANCE_REST =
 export const DEMO_PLAYING_BACK = 'Playing back';
 
 /**
- * The running title's count (R-AD-8): the inbox count as the run began,
- * read with `inboxCount` like the sticky button and the confirm, so the
- * three agree; the run's own total only when the listing gave nothing.
+ * The running title's count (R-AD-8): the count the run store kept when
+ * this browser confirmed the tidy-up (the sticky's and the confirm's), else
+ * the run's own total, else the inbox paths as the run began.
  */
 export function runningTotal(
   startCount: number,
@@ -578,6 +577,9 @@ export interface WorkingSheetProps {
    * same old phase change and find it already expired, opening nothing.
    */
   reopenKey?: number;
+  /** The confirmed count of a run this browser started (R-AD-8, the run
+   * store's `keptCount`); `null` falls back to the run's own total. */
+  count?: number | null;
   /** "Finish the tidy-up" and "Tidy up again": straight to the confirmation. */
   onTryAgain?: () => void;
 }
@@ -718,6 +720,7 @@ export function WorkingSheet({
   onDismiss,
   reopenKey = 0,
   onTryAgain,
+  count = null,
 }: WorkingSheetProps): JSX.Element | null {
   const { files } = useVault();
   const desktop = useMediaQuery('(min-width: 900px)');
@@ -727,7 +730,6 @@ export function WorkingSheet({
   const waitingRef = useRef<{
     key: string;
     paths: string[];
-    count: number;
   } | null>(null);
   if (run !== null && files.length > 0) {
     const key = runKey(run);
@@ -735,7 +737,6 @@ export function WorkingSheet({
       waitingRef.current = {
         key,
         paths: waitingPaths(files),
-        count: inboxTotal(inboxCount(files, false)),
       };
     }
   }
@@ -774,11 +775,7 @@ export function WorkingSheet({
 
   if (!visible || state === null || vaultMissing) return null;
 
-  const total = runningTotal(
-    waitingRef.current?.count ?? 0,
-    outcome?.total,
-    waiting.length,
-  );
+  const total = runningTotal(count ?? 0, outcome?.total, waiting.length);
   const heading = sheetTitle(state, state === 'running' ? total : undefined);
   const timeLine =
     state === 'running'

@@ -22,7 +22,7 @@ import { useLocation } from 'preact-iso';
 import { isDemo } from '../api.js';
 import type { Run } from '../api.js';
 import { outcomeCounts, outcomeFromRun } from '../run-outcome.js';
-import { RUN_CHIP_LIFETIME_MS, useRun } from '../run-store.js';
+import { RUN_CHIP_LIFETIME_MS, runningCount, useRun } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import { usesShell } from '../shell-routes.js';
 import { mediaMatches, useMediaQuery } from '../use-media-query.js';
@@ -56,6 +56,8 @@ export interface ChipInput {
   resultSeen: boolean;
   now: number;
   desktop: boolean;
+  /** The run store's kept, confirmed count (R-AD-8). */
+  count?: number | null;
 }
 
 function plural(n: number, one: string): string {
@@ -77,7 +79,7 @@ function finish(model: Omit<ChipModel, 'signature'>): ChipModel {
 
 function runningModel(input: ChipInput): ChipModel {
   const active = input.run;
-  const total = active?.total;
+  const total = runningCount(input.count ?? null, active?.total);
   const things = total === undefined ? '' : plural(total, 'thing');
   const started = active?.startedAt ?? active?.requestedAt;
   const minutes =
@@ -370,7 +372,8 @@ export function RunChip({ model, desktop, onOpen }: RunChipProps): JSX.Element {
 export const RUN_CHIP_SPACE = '68px';
 
 export function RunChipFiller(): JSX.Element {
-  const { phase, run, lastFinished, resultSeen, now, openSheet } = useRun();
+  const { phase, run, lastFinished, resultSeen, now, openSheet, keptCount } =
+    useRun();
   const { path } = useLocation();
   const desktop = useMediaQuery('(min-width: 900px)');
   const typing = useTextFieldFocus();
@@ -382,6 +385,7 @@ export function RunChipFiller(): JSX.Element {
     resultSeen,
     now,
     desktop,
+    count: keptCount,
   });
   // Home's greeting carries the run there (D31); the routes with no shell
   // (onboarding, the intro) have no slot to fill (R-CHIP-5).

@@ -49,6 +49,7 @@ export function RunSheets(): JSX.Element | null {
     confirmScope,
     confirmTidyUp,
     dismissConfirm,
+    keptCount,
   } = useRun();
 
   // Files of a pile still on their way; they wait for the next tidy-up.
@@ -96,6 +97,7 @@ export function RunSheets(): JSX.Element | null {
           onDismiss={dismissSheet}
           reopenKey={sheetReopenKey}
           onTryAgain={tidyUp}
+          count={finishedOpen ? null : keptCount}
         />
       )}
     </>

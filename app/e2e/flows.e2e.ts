@@ -818,8 +818,9 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
 
   // Running: the bubble says so; the card has no button, only its line.
   const sheet = page.getByRole('dialog', { name: SHEET_NAME });
+  // R-AD-8: the sheet and the bubble read the confirmed count (3).
   await expect(
-    sheet.getByRole('heading', { name: /^Tidying up/ }),
+    sheet.getByRole('heading', { name: 'Tidying up 3 things', exact: true }),
   ).toBeVisible();
   await expect(bubble).toHaveText(
     'Tidying up 3 things. It takes a few minutes; you can keep adding.',

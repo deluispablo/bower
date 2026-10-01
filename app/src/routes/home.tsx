@@ -79,7 +79,7 @@ import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { outcomeFromRun } from '../run-outcome.js';
-import { useRun } from '../run-store.js';
+import { runningCount, useRun } from '../run-store.js';
 import { useSession } from '../session.js';
 import type { DriveFile } from '../drive.js';
 import { ACTIVITY_PATH, FOLDERS_PATH } from '../shell-routes.js';
@@ -577,7 +577,8 @@ export function Home(): JSX.Element {
     useVault();
   // `now` is the run store's own shared clock, so the bubble, the tiles and
   // the working sheet always agree on how long ago something happened.
-  const { phase, run, lastFinished, now, tidyUp, openSheet } = useRun();
+  const { phase, run, lastFinished, now, tidyUp, openSheet, keptCount } =
+    useRun();
   const online = useOnline();
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -593,6 +594,9 @@ export function Home(): JSX.Element {
   const recentTitles = useNoteTitles(recent);
   // The same total the working sheet counts against.
   const pending = inboxTotal(inboxCount(files, status === 'loading'));
+  // R-AD-8: while a tidy-up runs, the bubble and the card read the count it
+  // was confirmed with, as the chip and the sheet do.
+  const runPending = runningCount(keptCount, run?.total) ?? pending;
   const noteCounts =
     index === null ? new Map<string, number>() : folderCounts(index);
   const pinnedItems = index === null ? [] : pinned(index);
@@ -643,7 +647,7 @@ export function Home(): JSX.Element {
   const bubble: BubbleProps = {
     parts: bubbleFor({
       state,
-      pending,
+      pending: state === 'running' ? runPending : pending,
       offline,
       error: status === 'error',
       editingPins,
@@ -741,7 +745,7 @@ export function Home(): JSX.Element {
           now={now}
           active={{
             startedAt: run?.startedAt ?? run?.requestedAt ?? '',
-            total: pending,
+            total: runPending,
           }}
           onOpenSheet={openSheet}
         />
