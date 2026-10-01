@@ -204,9 +204,6 @@ export function introNoteHtml(): string {
   );
 }
 
-/** The last page's link to Learn Bower. */
-export const INTRO_LEARN_LABEL = 'See examples and use cases';
-
 /** One run of a prose string: plain, or bold (a `**…**` span). */
 export interface IntroRun {
   text: string;

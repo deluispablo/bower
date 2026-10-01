@@ -1,10 +1,10 @@
 /**
  * Learn Bower (#797): `/learn` and an example page render at 375 and 1280
- * (both projects) without sideways scroll, the intro's last page links to
- * it, and each example opens its four acts.
+ * (both projects) without sideways scroll, Help's Learn Bower opens it, and
+ * each example opens its four acts.
  */
 
-import { expect, test } from './demo.js';
+import { expect, openHome, test, visible } from './demo.js';
 
 test.describe('Learn Bower (#797)', () => {
   test('/learn lists the intro, four cards, six examples and Ideas, without sideways scroll', async ({
@@ -45,15 +45,13 @@ test.describe('Learn Bower (#797)', () => {
     );
   });
 
-  test.describe('from the intro', () => {
-    test.use({ introSeen: false });
-
-    test('the last page links to Learn', async ({ page }) => {
-      await page.goto('/welcome?page=5');
-      await page
-        .getByRole('link', { name: 'See examples and use cases' })
-        .click();
-      await expect(page).toHaveURL(/\/learn$/);
-    });
+  test('Help on Home links to Learn', async ({ page }) => {
+    await openHome(page);
+    await visible(page.getByRole('button', { name: /^More for/ })).click();
+    await visible(
+      page.getByRole('menuitem', { name: 'Help and about this' }),
+    ).click();
+    await page.getByRole('link', { name: 'Learn Bower' }).click();
+    await expect(page).toHaveURL(/\/learn$/);
   });
 });

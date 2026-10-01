@@ -364,9 +364,8 @@ describe('Intro', () => {
     expect(root.querySelector('.intro-footer .intro-cta')?.textContent).toBe(
       'Sign in with Google',
     );
-    expect(root.querySelector('.intro-learn')?.textContent).toBe(
-      'See examples and use cases',
-    );
+    // IN-P5 draws no link to Learn Bower (L-46 reversed).
+    expect(root.querySelector('.intro-learn')).toBeNull();
   });
 
   it('replayed while signed in, the last button reads Back to Bower and goes Home (R-IN-6)', () => {

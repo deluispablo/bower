@@ -129,14 +129,6 @@
   text-decoration: none;
 }
 
-.intro-learn {
-  margin-top: var(--space-2);
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  color: var(--color-link);
-}
-
 /* Progress, then Back and Next. */
 .intro-footer {
   display: flex;

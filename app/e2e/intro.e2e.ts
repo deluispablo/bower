@@ -140,7 +140,7 @@ test.describe('the intro, five pages (#796)', () => {
     ).toBeFocused();
   });
 
-  test('the last page offers sign-in and the way to Learn Bower', async ({
+  test('the last page offers sign-in and no other link (IN-P5)', async ({
     page,
   }) => {
     await page.goto('/welcome?page=5');
@@ -149,7 +149,7 @@ test.describe('the intro, five pages (#796)', () => {
     ).toBeVisible();
     await expect(
       page.getByRole('link', { name: 'See examples and use cases' }),
-    ).toBeVisible();
+    ).toHaveCount(0);
   });
 
   test('the illustrations never loop, and with motion on the birds stay inside the window', async ({
