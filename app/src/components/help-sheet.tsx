@@ -559,15 +559,11 @@ function TourCard({
         {copy.rows.length > 0 && <HelpRows rows={copy.rows} />}
         <div class="help-actions">
           {index > 0 && (
-            <button
-              type="button"
-              class="button help-secondary"
-              onClick={onBack}
-            >
+            <button type="button" class="btn btn-secondary" onClick={onBack}>
               Back
             </button>
           )}
-          <button ref={next} type="button" class="button" onClick={onNext}>
+          <button ref={next} type="button" class="btn" onClick={onNext}>
             {tourNextLabel(index)}
           </button>
         </div>
