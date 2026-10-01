@@ -67,6 +67,7 @@ import {
 import type { ParaKind } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
+import { useOnline } from '../online.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { useRun } from '../run-store.js';
@@ -918,7 +919,8 @@ function SwitcherPanel({
   // text read from the cache), so the results are worked out again.
   const [indexVersion, setIndexVersion] = useState(0);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [online, setOnline] = useState(() => navigator.onLine);
+  // S-SE-9: offline, the index on this device still answers.
+  const online = useOnline();
   const [theme, setThemeState] = useState(effectiveTheme);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -927,19 +929,6 @@ function SwitcherPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   // The clock is read once per open: rows say "yesterday", not a live counter.
   const [now] = useState(() => Date.now());
-
-  // S-SE-9: offline, the index on this device still answers.
-  useEffect(() => {
-    const update = (): void => {
-      setOnline(navigator.onLine);
-    };
-    window.addEventListener('online', update);
-    window.addEventListener('offline', update);
-    return () => {
-      window.removeEventListener('online', update);
-      window.removeEventListener('offline', update);
-    };
-  }, []);
 
   useEffect(() => {
     if (seenRun !== null) return;
@@ -1297,8 +1286,7 @@ function SwitcherPanel({
       : null;
   const paraOfScope =
     scope === null ? null : paraKindOf(scope.path.split('/')[0] ?? '');
-  const showParaChips =
-    !searching && (scope === null || paraScope !== null);
+  const showParaChips = !searching && (scope === null || paraScope !== null);
 
   // The note Search was opened over (a tag on it, R-SE-5): "you stay on …".
   const stayOn = useMemo((): string | null => {

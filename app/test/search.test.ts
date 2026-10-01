@@ -2,11 +2,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DriveFile } from '../src/drive.js';
 import {
+  OFFLINE_LINE,
   clearRecentSearches,
   filterToIndex,
+  hasTag,
   loadRecentSearches,
+  noResultsLine,
   saveRecentSearch,
+  searchGroupLabel,
+  searchTitle,
   snippet,
+  tagLine,
+  tagOfQuery,
+  withoutExtension,
 } from '../src/search.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
@@ -252,5 +260,62 @@ describe('clearRecentSearches', () => {
     expect(() => {
       clearRecentSearches();
     }).not.toThrow();
+  });
+});
+
+describe('the Search screen groups (#917, R-LABEL-1)', () => {
+  it('labels the groups in sentence case, plural, never uppercase', () => {
+    expect(searchGroupLabel('folder')).toBe('Folders');
+    expect(searchGroupLabel('note')).toBe('Notes');
+    expect(searchGroupLabel('file')).toBe('Files');
+    for (const kind of ['folder', 'note', 'file'] as const) {
+      const label = searchGroupLabel(kind);
+      expect(label).not.toBe(label.toUpperCase());
+    }
+  });
+});
+
+describe('result names (#917, R-SE-4)', () => {
+  it('drops the extension and reads underscores as spaces', () => {
+    expect(withoutExtension('Passport_copy.pdf')).toBe('Passport copy');
+    expect(withoutExtension('Resume Australia.docx')).toBe('Resume Australia');
+    expect(withoutExtension('.hidden')).toBe('.hidden');
+  });
+
+  it('keeps the length, so the matched stretches still line up', () => {
+    const title = 'Cover_Letter_Alex';
+    expect(searchTitle(title)).toBe('Cover Letter Alex');
+    expect(searchTitle(title)).toHaveLength(title.length);
+  });
+});
+
+describe('tag search (#917, R-SE-5)', () => {
+  it('reads a #tag query, and nothing else', () => {
+    expect(tagOfQuery('#summary')).toBe('summary');
+    expect(tagOfQuery('  #job-search ')).toBe('job-search');
+    expect(tagOfQuery('summary')).toBeNull();
+    expect(tagOfQuery('#')).toBeNull();
+    expect(tagOfQuery('#two words')).toBeNull();
+  });
+
+  it('matches a tag ignoring case', () => {
+    expect(hasTag(['Summary', 'career'], 'summary')).toBe(true);
+    expect(hasTag(['career'], 'summary')).toBe(false);
+  });
+
+  it('says how many notes and which note you stay on (S-SE-7)', () => {
+    expect(tagLine(11, 'summary', 'CV insights')).toBe(
+      '11 notes tagged #summary · you stay on CV insights',
+    );
+    expect(tagLine(1, 'summary', null)).toBe('1 note tagged #summary');
+  });
+});
+
+describe('the no-results and offline lines (#917, R-SE-6)', () => {
+  it('reads as the spec says', () => {
+    expect(noResultsLine('flat')).toBe(
+      'Nothing matches “flat”. Try fewer words, or another folder.',
+    );
+    expect(OFFLINE_LINE).toBe('Offline: searching what is on this device.');
   });
 });

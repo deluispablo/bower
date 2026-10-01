@@ -96,7 +96,12 @@ vi.mock('../src/drive.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/drive.js')>()),
   searchFullText,
 }));
-vi.mock('../src/cache.js', () => ({ loadNote, loadThumbnail }));
+// `loadNoteMetaEntry`: which notes Bower wrote (the rows' bird, #917).
+vi.mock('../src/cache.js', () => ({
+  loadNote,
+  loadThumbnail,
+  loadNoteMetaEntry: () => Promise.resolve(undefined),
+}));
 vi.mock('../src/note-meta.js', () => ({ loadNoteMeta }));
 vi.mock('../src/api.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/api.js')>()),
@@ -298,7 +303,8 @@ describe('the empty query (#593, board Phone-Search-Start)', () => {
       chip.click();
     });
     const field = document.body.querySelector('input') as HTMLInputElement;
-    expect(field.placeholder).toBe('Search in Areas');
+    // #917: the field keeps its placeholder; the chip shows the scope.
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
 
     void act(() => {
       type(field, 'lisbon');
@@ -328,7 +334,11 @@ describe('results (#593, board Phone-Search)', () => {
     const headings = Array.from(
       document.body.querySelectorAll('.switcher-heading'),
     ).map((el) => el.textContent);
-    expect(headings).toEqual(['Folder', 'Notes', 'Files']);
+    // #917 (R-LABEL-1): sentence-case group labels, always plural.
+    expect(headings).toEqual(['Folders', 'Notes', 'Files']);
+    expect(
+      document.body.querySelector('.switcher-heading.group-label'),
+    ).not.toBeNull();
     expect(buttonNames()).toContain('All 3');
     expect(document.body.textContent).toContain(
       'Close enough counts: “flat hnt” finds Flat hunt.',
@@ -348,10 +358,7 @@ describe('results (#593, board Phone-Search)', () => {
     });
 
     expect(document.body.textContent).toContain(
-      'Nothing called “boiler warranty”',
-    );
-    expect(document.body.textContent).toContain(
-      'No folder, note or file has those words in its name or its text.',
+      'Nothing matches “boiler warranty”. Try fewer words, or another folder.',
     );
     const ask = Array.from(document.body.querySelectorAll('a')).find(
       (el) => el.textContent === 'Ask Bower where it is',
@@ -386,30 +393,27 @@ describe('rows learn a photo thumbnail and a PDF page count (#594)', () => {
     vaultStub.files = FILES;
   });
 
-  it('says "PDF · 6 pages" from the companion note and draws the photo thumbnail', async () => {
+  // #917 (R-SE-3): every row is the FileIcon and "<kind> · ● <parent>",
+  // never a thumbnail; the page count stays for the desktop preview.
+  it('draws the FileIcon and the mixed meta line, no thumbnail', async () => {
     loadNoteMeta.mockResolvedValue({ pages: 6 });
     loadThumbnail.mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
     await flush();
     const field = document.body.querySelector('input') as HTMLInputElement;
     void act(() => {
-      type(field, 'lease');
-    });
-    await flush();
-    await flush();
-    expect(optionTexts().some((t) => t.includes('PDF · 6 pages · '))).toBe(
-      true,
-    );
-
-    void act(() => {
       type(field, 'window');
     });
     await flush();
     await flush();
+    expect(optionTexts().some((t) => t.includes('Photo · Flat hunt'))).toBe(
+      true,
+    );
+    expect(document.body.querySelector('.switcher-row-thumb')).toBeNull();
     expect(
-      document.body
-        .querySelector('.switcher-row-thumb img')
-        ?.getAttribute('src'),
-    ).toBe('blob:thumb');
+      document.body.querySelector(
+        '.switcher-row .file-icon, .switcher-row svg',
+      ),
+    ).not.toBeNull();
   });
 
   it('leaves the PDF row without a count when the note does not say', async () => {
@@ -438,7 +442,7 @@ describe('the multi-word query (#594)', () => {
       await vi.advanceTimersByTimeAsync(500);
     });
     expect(document.body.textContent).toContain(
-      'Nothing called “curry warranty”',
+      'Nothing matches “curry warranty”',
     );
   });
 });
