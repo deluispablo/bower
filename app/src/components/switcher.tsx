@@ -900,29 +900,8 @@ function SwitcherPanel({
   // Opened from a tag on a note (`/search?q=%23tag`, R-SE-5).
   const [openedAsTag] = useState(() => tagOfQuery(initialQuery) !== null);
 
-  // Browser Back closes the tag search and stays on the note: one history
-  // entry of its own (same address) while it is open; closing it any other
-  // way takes that entry back off. A row that opens something pushes its
-  // own entry first, so nothing is taken off then.
-  useEffect(() => {
-    if (!openedAsTag) return;
-    history.pushState({ bowerSearch: 'tag' }, '', window.location.href);
-    const onPop = (): void => {
-      closeSwitcher();
-    };
-    window.addEventListener('popstate', onPop);
-    return () => {
-      window.removeEventListener('popstate', onPop);
-      const state: unknown = history.state;
-      if (
-        typeof state === 'object' &&
-        state !== null &&
-        (state as { bowerSearch?: unknown }).bowerSearch === 'tag'
-      ) {
-        history.back();
-      }
-    };
-  }, [openedAsTag]);
+  // Browser Back closes the search, a tag search too, and stays on the
+  // page: `Overlay` keeps the history entry for it (#920 T-3).
   const [status, setStatus] = useState<SearchStatus>('idle');
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [snippets, setSnippets] = useState<ReadonlyMap<string, string | null>>(

@@ -151,6 +151,87 @@ function anchorTo(panel: HTMLElement, opener: Element | null): void {
   panel.style.setProperty('--overlay-anchor-left', `${left}px`);
 }
 
+/*
+ * Browser and system Back close the overlay on top and stay on the page
+ * (#920 T-3). While any overlay is open, one history entry of its own (same
+ * address, `bowerOverlay` in its state) sits on top: Back pops it and the
+ * newest overlay closes. Closing every overlay any other way takes that
+ * entry back off; an overlay that hands over to the next (a menu opening
+ * Help) keeps it. A pick that navigates pushes its own entry first, so
+ * nothing is taken off then.
+ */
+const backClosers: Array<{ close: () => void }> = [];
+let ignorePops = 0;
+let reconcileQueued = false;
+let popListening = false;
+
+function hasOverlayEntry(): boolean {
+  const state: unknown = history.state;
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { bowerOverlay?: unknown }).bowerOverlay === true
+  );
+}
+
+function reconcileHistory(): void {
+  reconcileQueued = false;
+  const want = backClosers.length > 0;
+  const have = hasOverlayEntry();
+  if (want && !have) {
+    const state: unknown = history.state;
+    const base = typeof state === 'object' && state !== null ? state : {};
+    history.pushState({ ...base, bowerOverlay: true }, '', location.href);
+  } else if (!want && have) {
+    ignorePops += 1;
+    history.back();
+  }
+}
+
+function queueReconcile(): void {
+  if (reconcileQueued) return;
+  reconcileQueued = true;
+  setTimeout(reconcileHistory, 0);
+}
+
+function onBackPop(): void {
+  if (ignorePops > 0) {
+    ignorePops -= 1;
+    return;
+  }
+  if (hasOverlayEntry()) return;
+  backClosers[backClosers.length - 1]?.close();
+  queueReconcile();
+}
+
+/**
+ * Lets Back close this overlay (or the drawer) while `open`; `onClose` is
+ * read at the time Back is pressed.
+ */
+export function useBackCloses(onClose: () => void, open = true): void {
+  const latest = useRef(onClose);
+  latest.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    if (!popListening) {
+      popListening = true;
+      window.addEventListener('popstate', onBackPop);
+    }
+    const entry = {
+      close: () => {
+        latest.current();
+      },
+    };
+    backClosers.push(entry);
+    queueReconcile();
+    return () => {
+      const at = backClosers.indexOf(entry);
+      if (at !== -1) backClosers.splice(at, 1);
+      queueReconcile();
+    };
+  }, [open]);
+}
+
 const MENU_ITEMS =
   '[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"]';
 
@@ -223,6 +304,7 @@ export function Overlay(props: OverlayProps): JSX.Element {
   }, [placement]);
 
   useFocusTrap(panel, onClose, opener);
+  useBackCloses(onClose);
 
   // Declared after the trap, so it runs after focus went back to the opener:
   // an opener that unmounted meanwhile (the run chip) leaves BODY focused.

@@ -71,7 +71,7 @@ import {
   IconSort,
 } from './icons.js';
 import { JustFiledRow } from './just-filed-row.js';
-import { Overlay } from './overlay.js';
+import { Overlay, useBackCloses } from './overlay.js';
 import { PinnedSidebar } from './pinned-sidebar.js';
 import { SearchField } from './search-field.js';
 import { openAsk } from './send-to-bower.js';
@@ -503,6 +503,9 @@ export function FoldersDrawer(): JSX.Element | null {
     onOpen: openFoldersDrawer,
     onCancel: () => dragFoldersDrawer(null),
   });
+
+  // Back closes it and stays on the page (#920 T-3).
+  useBackCloses(closeFoldersDrawer, open);
 
   // Any route change (choosing an item) closes it.
   useEffect(() => {
