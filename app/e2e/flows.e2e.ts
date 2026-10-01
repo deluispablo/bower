@@ -370,8 +370,11 @@ test("previous/next under a note hides Bower's own files and uses titles (#423)"
 
   // The sibling nav offers the other real answer by its title, and never
   // Bower's own file, hidden unless "Show Bower's own files" is on.
-  const siblings = page.locator('.note-siblings');
-  await expect(siblings).toContainText('Which flat should we view first');
+  const siblings = page.locator('.pager');
+  await expect(
+    siblings.locator('[aria-label*="Which flat should we view first"]'),
+  ).toHaveCount(1);
+  await expect(siblings.locator('[aria-label*="Proposals"]')).toHaveCount(0);
   await expect(siblings).not.toContainText('Proposals');
 });
 
@@ -1852,9 +1855,12 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
   const back = bar.getByRole('link', { name: 'Back to Lisbon Trip' });
   await expect(back).toBeVisible();
 
-  // One More menu, not two (#439 already fixed the leftover desktop
-  // trigger; this just guards against it coming back).
-  await expect(bar.getByRole('button', { name: 'More' })).toHaveCount(1);
+  // One More menu, not two (#439): since #912 it is the page header's ⋯,
+  // named for the note, and the bar has none (G-10).
+  await expect(bar.getByRole('button', { name: 'More' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'More for Lisbon Trip' }),
+  ).toHaveCount(1);
 
   // A title far longer than Back's own label still fits the bar with no
   // horizontal overflow, the same guarantee from the other direction.
@@ -2418,12 +2424,9 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(
     page.getByRole('heading', { level: 1, name: 'Sage green test patch' }),
   ).toBeVisible();
-  const props = page.locator('.file-props');
+  const props = page.locator('.page-header-meta');
   await expect(props).toContainText('Photo ·');
-  await expect(
-    props.getByRole('link', { name: 'Kitchen Refresh' }),
-  ).toBeVisible();
-  await expect(props).toContainText('Filed by Bower ·');
+  await expect(props).toContainText('filed by Bower');
   // The photo viewer (#605, #606): the photo fitted, tap to see it whole.
   await expect(
     page.getByRole('button', { name: /Sage green test patch\. Tap to see/ }),

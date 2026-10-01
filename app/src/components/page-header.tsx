@@ -66,7 +66,7 @@ export interface PageHeaderProps {
   /** A root folder's own path: the crumb reads "Your folders" (E-17). */
   rootPath?: string;
   /** The ⋯ button's state and toggle (`MoreButton`'s own props). */
-  more?: { expanded: boolean; onClick: () => void };
+  more?: { expanded: boolean; onClick: () => void; name?: string };
   /** Opens About this note or file; the (i) shows only on notes and files
    * below 1200 px. */
   onAbout?: () => void;
@@ -129,7 +129,11 @@ function Breadcrumb({
     <nav class="page-header-crumbs" aria-label="Breadcrumb">
       {crumbs.map((crumb, i) => (
         <span key={crumb.href}>
-          {i > 0 && ' / '}
+          {i > 0 && (
+            <span class="page-header-crumb-sep" aria-hidden="true">
+              /
+            </span>
+          )}
           <a href={crumb.href}>{crumb.label}</a>
         </span>
       ))}
@@ -176,6 +180,7 @@ export function PageHeader({
               <MoreButton
                 expanded={more.expanded}
                 onClick={more.onClick}
+                {...(more.name !== undefined && { name: more.name })}
                 class="page-header-more"
               />
             )}

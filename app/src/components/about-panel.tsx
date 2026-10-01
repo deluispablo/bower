@@ -1,65 +1,37 @@
 /**
- * Desktop "About this note" third column (spec §5.2, issue #144): Properties
- * (folder, tags, created, source — issue #307, `note-properties.tsx`),
- * Outline (the rendered note's own headings), Linked mentions (only once
- * `VaultIndex` carries `backlinks`, #150 — it does not yet, so this section
- * never renders today) and In this folder (the note's siblings, current one
- * marked). Filled into the shell through the `aside` slot (`shell-slots.ts`)
- * by `routes/note.tsx`; never rendered directly by `Layout`.
+ * About this note / About this file (spec §3.28, R-ABOUT-1..3, boards
+ * NO-About-375/1280, FI-About-375, FI-Main-1280): the properties, the
+ * note's OUTLINE, and IN THIS FOLDER, every sibling in tree order with its
+ * FileIcon, the one on show selected. From 1200 px it is the right-hand
+ * column (the shell's `aside` slot, filled by `routes/note.tsx` and
+ * `routes/file.tsx`); below that the (i) opens the same content as a sheet
+ * (`openAbout`).
  */
 
 import type { JSX } from 'preact';
 
+import { originalDisplayName, resolveOriginal } from '../companion.js';
 import type { DriveFile } from '../drive.js';
-import { kindById, statusLabel } from '../kinds.js';
 import { outlineOf } from '../markdown/frontmatter.js';
 import type { NoteProperties } from '../markdown/frontmatter.js';
-import { extensionOf } from '../markdown/embeds.js';
-import { originalDisplayName, resolveOriginal } from '../companion.js';
+import { kindLabel } from '../meta-line.js';
 import type { NoteMeta } from '../note-meta.js';
-import { noteTitle } from '../note-title.js';
-import { isAppFile } from '../vault-index.js';
+import { isBowerWritten } from '../bower-written.js';
+import { close, open, OVERLAY_PRIORITY } from '../overlay-queue.js';
+import { fileTitle } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
-import { BowerMark } from './bird.js';
-import { detailsGroups, humaniseKey } from './details.js';
-import { hasNoteProperties, NotePropertiesList } from './note-properties.js';
-import type { NoteFolderLink } from './note-properties.js';
+import { FileIcon } from './file-icon.js';
+import { FilePropertiesList, NotePropertiesList } from './note-properties.js';
+import type {
+  AboutSource,
+  FilePropertiesListProps,
+  NoteFolderLink,
+} from './note-properties.js';
+import { Overlay, OverlayHeader } from './overlay.js';
+import { itemHref, itemTitle } from './pager.js';
+import { useBowerWritten } from './tree.js';
+import { useNoteTitles } from './use-note-titles.js';
 import '../styles/about-panel.css';
-
-function folderOf(path: string): string {
-  const slash = path.lastIndexOf('/');
-  return slash === -1 ? '' : path.slice(0, slash);
-}
-
-function compareNames(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
-}
-
-/**
- * Not on `VaultIndex` yet (#150): guarded so "Linked mentions" stays
- * invisible until a real `backlinks` map exists. No data work here, per the
- * issue — this is only the shape the section expects once it does.
- */
-interface IndexWithBacklinks {
-  backlinks: Map<string, DriveFile[]>;
-}
-
-function backlinksFor(index: VaultIndex, id: string): DriveFile[] | undefined {
-  const withBacklinks = index as Partial<IndexWithBacklinks>;
-  return withBacklinks.backlinks?.get(id);
-}
-
-/** The note's siblings (spec: "In this folder"): every visible note in the
- * same folder, by name, the note itself included. */
-function notesInFolder(index: VaultIndex, file: DriveFile): DriveFile[] {
-  const folder = folderOf(file.path);
-  return index.notes
-    .filter(
-      (note) =>
-        folderOf(note.path) === folder && !isAppFile(note.path, note.name),
-    )
-    .sort((a, b) => compareNames(a.name, b.name));
-}
 
 /**
  * The file a note was made from (`original` in its frontmatter), by the
@@ -75,7 +47,7 @@ export function originalFileOf(
 }
 
 /** A value with its `[[wikilinks]]` read as the names they point to, so the
- * panel never shows raw brackets (R-NOTE-5): `[[A/B.pdf|the CV]]` becomes
+ * panel never shows raw brackets (R-ABOUT-3): `[[A/B.pdf|the CV]]` becomes
  * "the CV", `[[A/B.pdf]]` becomes "B.pdf". */
 export function plainNames(value: string): string {
   return value.replace(/\[\[([^\]]*)\]\]/g, (_match, inner: string) => {
@@ -86,96 +58,129 @@ export function plainNames(value: string): string {
   });
 }
 
-/** "PDF, 2 pages": the original's format and its page count. */
-export function originalSummary(meta: NoteMeta): string {
-  const name = originalDisplayName(meta.original ?? '');
-  const extension = extensionOf(name).toUpperCase();
-  const parts: string[] = [];
-  if (extension !== '') parts.push(extension);
-  if (meta.pages !== undefined) {
-    parts.push(`${String(meta.pages)} ${meta.pages === 1 ? 'page' : 'pages'}`);
-  }
-  return parts.join(', ');
-}
-
-/** The anchors of the sections Bower wrote a note under (the contents
- * strip marks them), without the sanitizer's id prefix. */
-function notedAnchors(html: string): Set<string> {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const anchors = new Set<string>();
-  for (const link of doc.querySelectorAll('a.bower-contents-noted')) {
-    const href = link.getAttribute('href') ?? '';
-    anchors.add(href.replace(/^#(?:user-content-)?/, ''));
-  }
-  return anchors;
-}
-
-export interface AboutPanelProps {
-  index: VaultIndex;
-  file: DriveFile;
-  /** The note's rendered, sanitized HTML (`RenderedNote.html`). */
-  html: string;
-  /** Folder, tags, created, source (issue #307); `properties` is the same
-   * object `routes/note.tsx` also hands the phone/tablet sheet. */
-  properties: NoteProperties;
-  folder?: NoteFolderLink;
-  /** The note's frontmatter facts: a known kind adds "Key facts" and the
-   * compact Details list; `original` adds "Original" (board
-   * `Desktop-Note-Details`). */
-  meta?: NoteMeta;
-}
-
-export function AboutPanel({
-  index,
-  file,
-  html,
-  properties,
-  folder,
-  meta,
-}: AboutPanelProps): JSX.Element {
-  const kind = meta?.kind === undefined ? undefined : kindById(meta.kind);
+/**
+ * About's Source row (R-ABOUT-3, N-2): the file the note was made from by
+ * its name, without brackets or extension, a link when it is in the folder,
+ * with its kind in words ("CV Australia · Word"). Falls back to the
+ * frontmatter `source` as plain words; `undefined` when there is neither.
+ */
+export function aboutSource(
+  index: VaultIndex,
+  file: DriveFile,
+  meta: NoteMeta | undefined,
+  source: string | undefined,
+): AboutSource | undefined {
   const original =
     meta === undefined ? undefined : originalFileOf(index, file, meta.original);
-  const summary = meta === undefined ? '' : originalSummary(meta);
-  const noted = notedAnchors(html);
-  const outline = outlineOf(html);
-  const backlinks = backlinksFor(index, file.id);
-  const siblings = notesInFolder(index, file);
+  if (original !== undefined) {
+    return {
+      name: fileTitle(original.name),
+      href: itemHref(original),
+      kind: kindLabel(original),
+    };
+  }
+  const named = meta?.original ?? source;
+  if (named === undefined || named.trim() === '') return undefined;
+  const shown = plainNames(named).trim();
+  if (/^https?:\/\//i.test(shown)) return { name: shown, href: shown };
+  return { name: fileTitle(shown) };
+}
 
+interface NoteAbout {
+  kind: 'note';
+  /** The note's rendered, sanitized HTML (`RenderedNote.html`). */
+  html: string;
+  properties: NoteProperties;
+  meta?: NoteMeta | undefined;
+}
+
+interface FileAbout {
+  kind: 'file';
+  rows: Omit<FilePropertiesListProps, 'folder'>;
+}
+
+export type AboutPanelProps = (NoteAbout | FileAbout) & {
+  index: VaultIndex;
+  file: DriveFile;
+  folder?: NoteFolderLink | undefined;
+  /** The siblings in tree order (`siblings()`), the pager's own list. */
+  items: readonly DriveFile[];
+  /** In the phone sheet: no overline, the sheet's title says it. */
+  inSheet?: boolean;
+};
+
+/** "About this note" / "About this file". */
+export function aboutTitle(kind: 'note' | 'file'): string {
+  return kind === 'note' ? 'About this note' : 'About this file';
+}
+
+function InThisFolder({
+  file,
+  items,
+}: {
+  file: DriveFile;
+  items: readonly DriveFile[];
+}): JSX.Element | null {
+  const titles = useNoteTitles(items);
+  const bowerIds = useBowerWritten(items);
+  if (items.length === 0) return null;
   return (
-    <>
-      {hasNoteProperties(folder, properties) && (
-        <section
-          class="about-section about-properties"
-          aria-label="About this note"
-        >
-          <h2 class="about-heading">About this note</h2>
-          <NotePropertiesList folder={folder} properties={properties} />
-        </section>
-      )}
+    <section class="about-section" aria-label="In this folder">
+      <h3 class="about-heading">In this folder</h3>
+      <nav class="about-folder">
+        {items.map((item) => (
+          <a
+            key={item.id}
+            href={itemHref(item)}
+            class="about-row about-folder-row"
+            aria-current={item.id === file.id ? 'page' : undefined}
+          >
+            <FileIcon
+              item={{ ...item, bowerWritten: bowerIds.has(item.id) }}
+              size={16}
+            />
+            <span class="about-folder-name">{itemTitle(item, titles)}</span>
+          </a>
+        ))}
+      </nav>
+    </section>
+  );
+}
 
-      {kind !== undefined && meta !== undefined && (
-        <AboutKind kind={kind} meta={meta} />
-      )}
-
-      {meta?.original !== undefined && (
-        <section class="about-section" aria-label="Original">
-          <h2 class="about-heading">Original</h2>
-          {original === undefined ? (
-            <span class="about-row">
-              {summary || originalDisplayName(meta.original)}
-            </span>
-          ) : (
-            <a href={`/file/${original.id}`} class="about-row about-original">
-              {summary === '' ? original.name : summary}
-            </a>
-          )}
-        </section>
-      )}
+export function AboutPanel(props: AboutPanelProps): JSX.Element {
+  const { index, file, folder, items, inSheet = false } = props;
+  const title = aboutTitle(props.kind);
+  const outline = props.kind === 'note' ? outlineOf(props.html) : [];
+  return (
+    <div class={`about-panel${inSheet ? ' about-panel-sheet' : ''}`}>
+      <section class="about-section about-properties" aria-label={title}>
+        {!inSheet && <h2 class="about-heading">{title}</h2>}
+        {props.kind === 'note' ? (
+          <NotePropertiesList
+            folder={folder}
+            properties={props.properties}
+            writtenBy={
+              props.meta === undefined
+                ? undefined
+                : isBowerWritten(props.meta)
+                  ? 'Bower'
+                  : 'you'
+            }
+            source={aboutSource(
+              index,
+              file,
+              props.meta,
+              props.properties.source,
+            )}
+          />
+        ) : (
+          <FilePropertiesList folder={folder} {...props.rows} />
+        )}
+      </section>
 
       {outline.length > 0 && (
         <section class="about-section" aria-label="Outline">
-          <h2 class="about-heading">Outline</h2>
+          <h3 class="about-heading">Outline</h3>
           <nav class="about-outline">
             {outline.map((heading) => (
               <a
@@ -184,106 +189,58 @@ export function AboutPanel({
                 class={`about-row about-outline-row about-outline-row-${String(heading.depth)}`}
               >
                 {heading.text}
-                {noted.has(heading.id.replace(/^user-content-/, '')) && (
-                  <span
-                    class="about-outline-bird"
-                    title="Bower on this section"
-                  >
-                    <BowerMark size={14} />
-                  </span>
-                )}
               </a>
             ))}
           </nav>
         </section>
       )}
 
-      {backlinks !== undefined && backlinks.length > 0 && (
-        <section class="about-section" aria-label="Linked mentions">
-          <h2 class="about-heading">Linked mentions</h2>
-          <nav class="about-links">
-            {backlinks.map((note) => (
-              <a
-                key={note.id}
-                href={`/note/${note.id}`}
-                class="about-row about-link-row"
-              >
-                {noteTitle(note)}
-              </a>
-            ))}
-          </nav>
-        </section>
-      )}
-
-      {siblings.length > 0 && (
-        <section class="about-section" aria-label="In this folder">
-          <h2 class="about-heading">In this folder</h2>
-          <nav class="about-folder">
-            {siblings.map((note) => (
-              <a
-                key={note.id}
-                href={`/note/${note.id}`}
-                class="about-row about-folder-row"
-                aria-current={note.id === file.id ? 'page' : undefined}
-              >
-                {noteTitle(note)}
-              </a>
-            ))}
-          </nav>
-        </section>
-      )}
-    </>
+      <InThisFolder file={file} items={items} />
+    </div>
   );
 }
 
-/** The compact Details list and the fields the document did not state
- * (board `Desktop-Note-Details`). The key facts live in the note's own box
- * (R-NOTE-5), not here. */
-function AboutKind({
-  kind,
-  meta,
-}: {
-  kind: NonNullable<ReturnType<typeof kindById>>;
-  meta: NoteMeta;
-}): JSX.Element {
-  const shown = new Set(kind.keyFacts);
-  const rows = detailsGroups(kind, meta)
-    .flatMap((group) => group.rows)
-    .filter((row) => !shown.has(row.key));
-  const status = statusLabel(kind, meta.fields);
-  return (
-    <>
-      {(rows.length > 0 || status !== '' || meta.not_stated.length > 0) && (
-        <section class="about-section" aria-label="Details">
-          <h2 class="about-heading">Details</h2>
-          <dl class="about-details">
-            {rows.map((row) => (
-              <div class="about-detail" key={row.key}>
-                <dt>{row.label}</dt>
-                <dd>{plainNames(row.value)}</dd>
-              </div>
-            ))}
-            {status !== '' && (
-              <div class="about-detail">
-                <dt>Status</dt>
-                <dd>{status}</dd>
-              </div>
-            )}
-          </dl>
-          {meta.not_stated.length > 0 && (
-            <p class="about-not-stated">
-              {`${kind.notStatedLabel}: ${meta.not_stated
-                .map((key) =>
-                  (
-                    kind.fields.find((field) => field.key === key)?.label ??
-                    humaniseKey(key)
-                  ).toLowerCase(),
-                )
-                .join(', ')}`}
-            </p>
-          )}
-        </section>
-      )}
-    </>
-  );
+const ABOUT_ID = 'about';
+
+/** Opens About this note or file as a content sheet (phone and below
+ * 1200 px, K-7): the same content as the column, under a title and ✕. */
+export function openAbout(props: AboutPanelProps): void {
+  const title = aboutTitle(props.kind);
+  const onClose = (): void => close(ABOUT_ID);
+  open({
+    id: ABOUT_ID,
+    priority: OVERLAY_PRIORITY.own,
+    render: () => (
+      <Overlay kind="sheet" labelledBy="about-title" onClose={onClose}>
+        <div class="overlay-body about-sheet">
+          <OverlayHeader
+            titleId="about-title"
+            title={title}
+            closeLabel={
+              props.kind === 'note'
+                ? 'Close About this note'
+                : 'Close About this file'
+            }
+            onClose={onClose}
+          />
+          {/* Following a link leaves the sheet behind. */}
+          <div
+            onClick={(event) => {
+              const target = event.target;
+              if (target instanceof Element && target.closest('a') !== null) {
+                onClose();
+              }
+            }}
+          >
+            <AboutPanel {...props} inSheet />
+          </div>
+        </div>
+      </Overlay>
+    ),
+  });
+}
+
+/** Closes the About sheet (leaving the page, or the column took over). */
+export function closeAbout(): void {
+  close(ABOUT_ID);
 }

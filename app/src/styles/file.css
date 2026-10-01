@@ -12,41 +12,6 @@
   gap: var(--space-3);
 }
 
-.file-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.file-head h1 {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.file-props {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.file-props li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.file-props .icon {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-}
-
 /* The paper card, light in both themes, as on the board. */
 .file-preview {
   overflow: hidden;
@@ -92,15 +57,6 @@
   border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-lg);
   color: var(--color-text-muted);
-}
-
-/* The meta line: badge, kind word and facts (#604). */
-.file-props .kind-badge {
-  flex-shrink: 0;
-}
-
-.file-props .folder-mark {
-  flex-shrink: 0;
 }
 
 /* A CSV as a table: scrolls sideways, the header row stays in view. */
@@ -257,32 +213,6 @@
   flex-shrink: 0;
   min-width: 3.5rem;
   font-weight: 600;
-}
-
-/* Previous and next under the preview: neighbours by title, "n of m" between. */
-.file-walk {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-
-.file-walk-side {
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-walk-next {
-  text-align: right;
-}
-
-.file-walk-place {
-  flex-shrink: 0;
 }
 
 .table-preview-more {

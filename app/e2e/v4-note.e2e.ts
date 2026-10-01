@@ -37,15 +37,16 @@ test('the Arlington Road note shows its props line, key facts and folded Details
   // The title is shown once on the page (the bar's copy is not in the view).
   await expect(view.getByRole('heading', { level: 1 })).toHaveCount(1);
 
+  // #912: no kind chip; the meta line says "Bower note · <date>" and the
+  // original is About's Source row, not a Made from link on the page.
   const kindRow = view.locator('.note-kind-row');
-  await expect(kindRow).toContainText('Rental listing');
-  await expect(kindRow).toContainText('Bower');
+  await expect(kindRow.locator('.note-kind-chip')).toHaveCount(0);
+  await expect(kindRow.locator('select')).toHaveCount(1);
   await expect(
     view.locator('.made-from').getByRole('link', { name: /\.pdf/ }),
-  ).toHaveAttribute('href', /^\/file\//);
+  ).toHaveCount(0);
   const metaLine = view.locator('.note-meta-line');
-  await expect(metaLine.getByRole('link', { name: /Flat hunt/ })).toBeVisible();
-  await expect(metaLine).toContainText('Filed');
+  await expect(metaLine).toContainText(/Bower note · \d+ \w{3}/);
 
   await expect(view.locator('.bower-note-box')).toBeVisible();
   await expect(view.locator('.bower-joined')).toContainText('Joined from:');
@@ -92,7 +93,7 @@ test('an answer shows the question, the lists, the checklist link and Used', asy
   await shot(page, testInfo, 'v4-note-answer');
 });
 
-test('the About panel holds key facts, Details, Original, the folder and the outline', async ({
+test('the About column holds the properties, the outline and In this folder (#912)', async ({
   page,
 }, testInfo) => {
   test.skip(
@@ -106,11 +107,11 @@ test('the About panel holds key facts, Details, Original, the folder and the out
   const headings = page.locator('.about-heading');
   await expect(headings.filter({ hasText: /^About this note$/ })).toBeVisible();
   await expect(headings.filter({ hasText: /^Key facts/ })).toHaveCount(0);
-  await expect(headings.filter({ hasText: /^Details$/ })).toBeVisible();
-  await expect(headings.filter({ hasText: /^Original$/ })).toBeVisible();
   await expect(headings.filter({ hasText: /^In this folder$/ })).toBeVisible();
-  await expect(page.locator('.about-original')).toContainText('PDF');
-  await expect(page.locator('.about-not-stated')).toContainText('Not in the');
+  // Source by name, a link, no brackets or extension (R-ABOUT-3).
+  const source = page.locator('.about-prop', { hasText: /^Source/ });
+  await expect(source.getByRole('link')).toHaveText('Arlington Road, 2 bed');
+  await expect(source).toContainText('PDF');
   await shot(page, testInfo, 'v4-note-desktop');
 });
 

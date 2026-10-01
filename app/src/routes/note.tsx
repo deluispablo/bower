@@ -2,14 +2,18 @@ import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 
-import { AboutPanel } from '../components/about-panel.js';
+import {
+  AboutPanel,
+  closeAbout,
+  openAbout,
+} from '../components/about-panel.js';
+import type { AboutPanelProps } from '../components/about-panel.js';
 import { isBowerWritten } from '../bower-written.js';
 import { originalDisplayName, resolveOriginal } from '../companion.js';
 import { kindById, statusLabel } from '../kinds.js';
 import type { Kind } from '../kinds.js';
 import { statusOptionLabel } from '../compare.js';
 import { changeStatusWithHistory } from '../history.js';
-import { IconChat, IconFile, IconNote } from '../components/icons.js';
 import {
   isMadeForName,
   madeForItem,
@@ -29,16 +33,18 @@ import {
   splitOpening,
   takeCheckSection,
 } from '../components/bower-note-box.js';
-import { FolderMark } from '../components/folder-mark.js';
-import { MoreButton } from '../components/more-button.js';
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { PendingRequestLine } from '../components/pending-request-line.js';
 import type { NoteFolderLink } from '../components/note-properties.js';
+import { crumbsFor, PageHeader } from '../components/page-header.js';
+import { Pager } from '../components/pager.js';
 import { useShellSlot } from '../components/shell-slots.js';
-import { BowerTag } from '../components/tags.js';
-import { useNoteTitles } from '../components/use-note-titles.js';
+import { tagHref } from '../components/note-properties.js';
+import { siblings } from '../folder-view.js';
+import { kindLabel, shortDate } from '../meta-line.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { isProtectedNote } from '../drive.js';
 import type { DriveFile, SaveOptions } from '../drive.js';
 import { propertiesFor } from '../markdown/frontmatter.js';
@@ -46,6 +52,7 @@ import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
 import {
   breadcrumb,
+  buildTree,
   displayName,
   folderHref,
   folderOf,
@@ -58,22 +65,16 @@ import { noteTitle as computeNoteTitle } from '../note-title.js';
 import { useTitle } from '../use-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
-import type { ExplorerSortPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
 import { siblingNames } from '../rename-request.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { isAppFile } from '../vault-index.js';
-import type { VaultIndex } from '../vault-index.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
 import { NotFound } from './not-found.js';
 import '../styles/about-panel.css';
 import '../styles/markdown.css';
 import '../styles/note-header.css';
-
-interface CrumbProps {
-  crumbs: BreadcrumbSegment[];
-}
 
 /** The phone top bar's Back (#318): the immediate parent folder, or Home
  * for a top-level note. */
@@ -83,28 +84,6 @@ function Back({ crumbs }: { crumbs: BreadcrumbSegment[] }): JSX.Element {
     <BackLink href="/" label="Home" />
   ) : (
     <BackLink href={folderHref(parent.path)} label={parent.name} named />
-  );
-}
-
-/**
- * The shell header's `crumb` slot content (spec §6 row Note, issues #144,
- * #318): the desktop breadcrumb. The phone bar has Back only (#704); the
- * title is on the page.
- */
-function Crumb({ crumbs }: CrumbProps): JSX.Element {
-  return (
-    <>
-      {crumbs.length > 0 && (
-        <nav class="breadcrumb" aria-label="Folder">
-          {crumbs.map((crumb, at) => (
-            <span key={crumb.path}>
-              {at > 0 && <span aria-hidden="true"> / </span>}
-              <a href={folderHref(crumb.path)}>{crumb.name}</a>
-            </span>
-          ))}
-        </nav>
-      )}
-    </>
   );
 }
 
@@ -146,129 +125,6 @@ export function shortDay(value: string | undefined): string {
 /** Bower wrote this note (`isBowerWritten`, spec R-NOTE-1). */
 export function isBowerNote(meta: NoteMeta): boolean {
   return isBowerWritten(meta);
-}
-
-/** A note's score or fit (0 to 100), `null` when it has neither. */
-export function noteScore(
-  fields: Record<string, unknown> | undefined,
-): number | null {
-  for (const key of ['score', 'fit']) {
-    const raw = fields?.[key];
-    const n =
-      typeof raw === 'number'
-        ? raw
-        : typeof raw === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(raw)
-          ? Number(raw)
-          : Number.NaN;
-    if (Number.isFinite(n) && n >= 0 && n <= 100) return n;
-  }
-  return null;
-}
-
-/** The pager counts only notes of the note's own kind (R-NOTE-4): a job
- * offer's neighbours are the other offers, not the CV and the letters
- * written for them. `metas` is what is known of the folder's notes. */
-export interface SameKind {
-  kind: string;
-  metas: ReadonlyMap<string, NoteMeta>;
-  /** Best score first, as the offers are ranked. */
-  byScore: boolean;
-}
-
-/** "3 of 4 offers, by score" for a note with a kind; "2 of 5" without one. */
-export function pagerCount(
-  position: number,
-  total: number,
-  kind: Kind | undefined,
-  byScore: boolean,
-): string {
-  const place = `${String(position)} of ${String(total)}`;
-  if (kind === undefined) return place;
-  const last = kind.name.split(' ').pop() ?? kind.name;
-  const noun = last.endsWith('s') ? last : `${last}s`;
-  return `${place} ${noun}${byScore ? ', by score' : ''}`;
-}
-
-/** The pager's accessible name: "Offers in this folder", "Notes in this folder". */
-export function pagerLabel(kind: Kind | undefined): string {
-  if (kind === undefined) return 'Notes in this folder';
-  const last = kind.name.split(' ').pop() ?? kind.name;
-  const noun = last.endsWith('s') ? last : `${last}s`;
-  return `${noun.charAt(0).toUpperCase()}${noun.slice(1)} in this folder`;
-}
-
-export interface FolderWalk {
-  prev: DriveFile | null;
-  next: DriveFile | null;
-  /** 1-based place of the note among the folder's notes. */
-  position: number;
-  total: number;
-}
-
-/**
- * The previous and next note in the note's folder, in the folder's current
- * sort (`explorerSort`: by name, or newest first), with its place ("n of
- * m"). The same notes the folder screen lists: Bower's own files stay out
- * unless `showAppFiles` is on (the current note is always in the walk).
- */
-export function walkFolder(
-  index: VaultIndex,
-  id: string,
-  showAppFiles: boolean,
-  sort: ExplorerSortPref,
-  sameKind?: SameKind,
-): FolderWalk {
-  const none: FolderWalk = { prev: null, next: null, position: 0, total: 0 };
-  const file = index.byId.get(id);
-  if (file === undefined) return none;
-  const folder = folderOf(file.path);
-  const byName = (a: DriveFile, b: DriveFile): number =>
-    a.name.localeCompare(b.name, undefined, {
-      sensitivity: 'base',
-      numeric: true,
-    });
-  const inFolder = index.notes
-    .filter(
-      (note) =>
-        folderOf(note.path) === folder &&
-        (showAppFiles || note.id === id || !isAppFile(note.path, note.name)) &&
-        (sameKind === undefined ||
-          note.id === id ||
-          sameKind.metas.get(note.id)?.kind === sameKind.kind),
-    )
-    .sort((a, b) => {
-      if (sameKind?.byScore === true) {
-        const scoreA = noteScore(sameKind.metas.get(a.id)?.fields);
-        const scoreB = noteScore(sameKind.metas.get(b.id)?.fields);
-        if (scoreA !== scoreB) {
-          if (scoreA === null) return 1;
-          if (scoreB === null) return -1;
-          return scoreB - scoreA;
-        }
-        return byName(a, b);
-      }
-      return sort === 'modified'
-        ? (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
-            a.name.localeCompare(b.name, undefined, { numeric: true })
-        : byName(a, b);
-    });
-  const at = inFolder.findIndex((note) => note.id === id);
-  if (at === -1) return none;
-  return {
-    prev: at > 0 ? (inFolder[at - 1] ?? null) : null,
-    next: at < inFolder.length - 1 ? (inFolder[at + 1] ?? null) : null,
-    position: at + 1,
-    total: inFolder.length,
-  };
-}
-
-/** The kind chip's name (R-NOTE-2): the kind's own, "Answer" for an answer,
- * "Summary" for any other note that names no kind (lead ruling on #758). */
-export function kindChipLabel(meta: NoteMeta): string {
-  if (meta.type === 'answer') return 'Answer';
-  const kind = meta.kind === undefined ? undefined : kindById(meta.kind);
-  if (kind === undefined) return 'Summary';
-  return kind.name.charAt(0).toUpperCase() + kind.name.slice(1);
 }
 
 /** A note's status select (R-NOTE-2): only for a kind that has statuses. */
@@ -383,113 +239,77 @@ function DocumentDivider({ original }: { original: string }): JSX.Element {
   );
 }
 
-/** The kind row of a note Bower wrote: kind chip, By Bower tag, status. */
-function KindRow({
+/** The status of a note whose kind has statuses (R-NOTE-2). The kind
+ * itself is in the meta line ("Bower note"); no chip, no By Bower tag. */
+function StatusRow({
   meta,
   status,
   onStatus,
-  copy,
 }: {
   meta: NoteMeta;
   status: string;
   onStatus: (status: string) => void;
-  copy: TextCopy | null;
-}): JSX.Element {
+}): JSX.Element | null {
   const kind = meta.kind === undefined ? undefined : kindById(meta.kind);
+  if (kind === undefined || kind.statuses.length === 0) return null;
   return (
     <div class="note-kind-row">
-      <span class="note-kind-chip">
-        <span class="note-kind-icon" aria-hidden="true">
-          {copy !== null ? (
-            <IconFile />
-          ) : meta.type === 'answer' ? (
-            <IconChat />
-          ) : (
-            <IconNote />
-          )}
-        </span>
-        {copy !== null ? copy.label : kindChipLabel(meta)}
-      </span>
-      <BowerTag />
-      {kind !== undefined && kind.statuses.length > 0 && (
-        <StatusSelect
-          kind={kind}
-          meta={meta}
-          value={status}
-          onChange={onStatus}
-        />
-      )}
+      <StatusSelect
+        kind={kind}
+        meta={meta}
+        value={status}
+        onChange={onStatus}
+      />
     </div>
   );
 }
 
-/** Under the title of a note Bower wrote: the folder with its PARA mark, and
- * "Filed {date}" when it was made from something, else "Written {date}". */
-function MetaLine({
+/**
+ * The meta line under the title (R-NO-1, K-15, N-6): the root dot, "Bower
+ * note · 29 Sep" ("Note · ..." for your own, "Bower answer · ..." for an
+ * answer), then the tags as teal text links to the tag search (#917's
+ * route; Back returns here).
+ */
+function NoteMetaLine({
   file,
   meta,
   created,
-  folder,
+  tags,
 }: {
   file: DriveFile;
   meta: NoteMeta;
   created: string | undefined;
-  folder: NoteFolderLink | undefined;
-}): JSX.Element | null {
-  const date = shortDay(created ?? file.modifiedTime);
+  tags: readonly string[];
+}): JSX.Element {
+  const kind = kindLabel({
+    name: file.name,
+    mimeType: file.mimeType,
+    bowerWritten: isBowerWritten(meta),
+    answer: meta.type === 'answer',
+  });
+  const when =
+    created !== undefined
+      ? shortDay(created)
+      : file.modifiedTime === undefined
+        ? ''
+        : shortDate(file.modifiedTime, Date.now());
   const top = file.path.split('/')[0] ?? '';
-  const para = file.path.includes('/') ? paraKindOf(top) : null;
-  if (date === '' && folder === undefined) return null;
-  const verb = meta.original === undefined ? 'Written' : 'Filed';
+  const root = file.path.includes('/') ? paraKindOf(top) : null;
   return (
-    <p class="note-meta-line">
-      {folder !== undefined && (
-        <a class="note-props-folder" href={folder.href}>
-          {para !== null && <FolderMark kind={para} size={18} />}
-          {folder.name}
-        </a>
-      )}
-      {folder !== undefined && date !== '' && <span aria-hidden="true">·</span>}
-      {date !== '' && <span>{`${verb} ${date}`}</span>}
-    </p>
-  );
-}
-
-function PropsLine({
-  file,
-  tags,
-  created,
-  folder,
-}: {
-  file: DriveFile;
-  tags: string[];
-  created: string | undefined;
-  folder: NoteFolderLink | undefined;
-}): JSX.Element | null {
-  const date = shortDay(created ?? file.modifiedTime);
-  const top = file.path.split('/')[0] ?? '';
-  const para = file.path.includes('/') ? paraKindOf(top) : null;
-  if (tags.length === 0 && date === '' && folder === undefined) {
-    return null;
-  }
-  return (
-    <p class="note-props">
+    <p class="page-header-meta note-meta-line">
+      <span>
+        <span
+          class="page-header-dot"
+          data-root={root ?? 'none'}
+          aria-hidden="true"
+        />
+        {when === '' ? kind : `${kind} · ${when}`}
+      </span>
       {tags.map((tag) => (
-        <a
-          key={tag}
-          class="tag"
-          href={`/search?q=${encodeURIComponent(`#${tag}`)}`}
-        >
+        <a key={tag} class="note-tag" href={tagHref(tag)}>
           #{tag}
         </a>
       ))}
-      {date !== '' && <span>{date}</span>}
-      {folder !== undefined && (
-        <a class="note-props-folder" href={folder.href}>
-          {para !== null && <FolderMark kind={para} size={18} />}
-          {folder.name}
-        </a>
-      )}
     </p>
   );
 }
@@ -613,30 +433,10 @@ export function Note() {
     });
   }, [id, file === undefined, load]);
 
-  // The previous/next walk (#423): the same folder listing the folder
-  // screen itself shows (Bower's own files hidden unless `showAppFiles` is
-  // on), and their real titles (`noteTitle`, #306) resolved from the note
-  // cache the same way Home's Recent and Pinned rows do, not the file name
-  // with its date prefix.
   const currentMeta =
     load.status === 'ready' && load.id === id
       ? noteMetaFrom(load.rendered.frontmatter)
       : null;
-  const currentKind =
-    currentMeta?.kind === undefined ? undefined : kindById(currentMeta.kind);
-  const folderNotes = useMemo(
-    () =>
-      index === null || file === undefined || currentKind === undefined
-        ? []
-        : index.notes.filter(
-            (note) =>
-              note.id !== id &&
-              folderOf(note.path) === folderOf(file.path) &&
-              !isAppFile(note.path, note.name),
-          ),
-    [index, file, id, currentKind === undefined],
-  );
-  const peerMetas = useNoteMetas(folderNotes);
   // "Made for it" (R-VERDICT-3): the CVs and letters Bower named for an item
   // wherever they live; their `made_for` says which item they belong to.
   const madeForNotes = useMemo(
@@ -649,50 +449,17 @@ export function Note() {
     [index, file, id, currentMeta === null],
   );
   const madeForMetas = useNoteMetas(madeForNotes);
-  const sameKind: SameKind | undefined =
-    currentMeta?.kind === undefined || currentKind === undefined
-      ? undefined
-      : {
-          kind: currentMeta.kind,
-          metas: new Map(peerMetas).set(id, currentMeta),
-          byScore: noteScore(currentMeta.fields) !== null,
-        };
-  const { prev, next, position, total } =
-    index === null
-      ? { prev: null, next: null, position: 0, total: 0 }
-      : walkFolder(
-          index,
-          id,
-          getPref('showAppFiles'),
-          getPref('explorerSort'),
-          sameKind,
-        );
-  const prevLink = useRef<HTMLAnchorElement>(null);
-  const nextLink = useRef<HTMLAnchorElement>(null);
-  // "[" and "]" move between the notes on a keyboard (the pager's hint).
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.key !== '[' && event.key !== ']') return;
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-      ) {
-        return;
-      }
-      (event.key === '[' ? prevLink : nextLink).current?.click();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-    };
-  }, []);
-  const siblingFiles: DriveFile[] = [prev, next].filter(
-    (sibling): sibling is DriveFile => sibling !== null,
+  // The one sibling list (R-API-9, K-31): About's "In this folder" and the
+  // footer both read it, in the tree's own order.
+  const sort = getPref('explorerSort');
+  const items = useMemo(
+    () =>
+      index === null || file === undefined
+        ? []
+        : siblings(file, buildTree(index, sort)),
+    [index, file, sort],
   );
-  const siblingTitles = useNoteTitles(siblingFiles);
+  const aboutColumn = useMediaQuery('(min-width: 1200px)');
 
   useEffect(() => {
     if (index === null || file === undefined) return;
@@ -731,52 +498,49 @@ export function Note() {
     // file it resolves to) becomes available on a cold-start deep link.
   }, [id, index, file, getNoteText]);
 
-  // Fills the shell's header crumb and actions slots and the "About this
-  // note" column (#144, shell-slots.ts). All three hooks run on every
-  // render (Rules of Hooks), before `index`/`file` are known to exist,
-  // hence the guards inside; all are memoized so an unrelated re-render
-  // (typing in the append form, say) does not refill a slot every time.
+  // The phone bar's Back (#318). The desktop breadcrumb and the ⋯ are the
+  // page's own (PageHeader, #906): the shell's crumb and actions slots stay
+  // empty (G-10). From 1200 px the About column fills the `aside` slot;
+  // below that the (i) opens the same content as a sheet.
   const backContent = useMemo(() => {
     if (file === undefined) return null;
     return <Back crumbs={breadcrumb(file.path)} />;
   }, [file]);
   useShellSlot('back', backContent);
 
-  const crumbContent = useMemo(() => {
-    if (file === undefined) return null;
-    return <Crumb crumbs={breadcrumb(file.path)} />;
-  }, [file]);
-  useShellSlot('crumb', crumbContent);
-
-  const actionsContent = useMemo(() => {
-    if (file === undefined) return null;
-    return (
-      <MoreButton
-        expanded={menuOpen}
-        onClick={() => setMenuOpen((open) => !open)}
-      />
-    );
-  }, [file, menuOpen]);
-  useShellSlot('actions', actionsContent);
-
-  const aboutContent = useMemo(() => {
-    if (index === null || file === undefined || load.status !== 'ready') {
-      return null;
-    }
-    return (
-      <AboutPanel
-        index={index}
-        file={file}
-        html={load.rendered.html}
-        properties={propertiesFor(load.rendered.frontmatter)}
-        folder={folderLinkFor(file.path)}
-        meta={noteMetaFrom(load.rendered.frontmatter)}
-      />
-    );
+  const aboutProps: AboutPanelProps | null =
+    index === null || file === undefined || load.status !== 'ready'
+      ? null
+      : {
+          kind: 'note',
+          index,
+          file,
+          html: load.rendered.html,
+          properties: propertiesFor(load.rendered.frontmatter),
+          folder: folderLinkFor(file.path),
+          meta: noteMetaFrom(load.rendered.frontmatter),
+          items,
+        };
+  const aboutContent = useMemo(
+    () =>
+      aboutProps === null || !aboutColumn ? null : (
+        <AboutPanel {...aboutProps} />
+      ),
     // Keyed on the rendered html itself, not the whole `load` (which also
     // changes while still loading, before there is anything new to show).
-  }, [index, file, load.status === 'ready' ? load.rendered.html : null]);
+    [
+      index,
+      file,
+      items,
+      aboutColumn,
+      load.status === 'ready' ? load.rendered.html : null,
+    ],
+  );
   useShellSlot('aside', aboutContent);
+  // The column took over, or another note opened: the sheet goes.
+  useEffect(() => {
+    closeAbout();
+  }, [id, aboutColumn]);
 
   if (index === null) {
     return (
@@ -909,41 +673,51 @@ export function Note() {
 
   return (
     <section class="note-view">
+      <PageHeader
+        title={title}
+        kind="note"
+        crumbs={crumbsFor(file.path)}
+        more={{
+          expanded: menuOpen,
+          onClick: () => setMenuOpen((open) => !open),
+          name: title,
+        }}
+        {...(aboutProps !== null && {
+          onAbout: () => openAbout(aboutProps),
+        })}
+      />
+      {menuOpen && (
+        <NoteMenu
+          file={file}
+          title={title}
+          typeLabel="Note"
+          askName={title}
+          bowerWritten={bowerHeader}
+          canEdit={canEdit}
+          canAppend={canAppend}
+          pinned={index.notePinnedAt.has(file.id)}
+          onTogglePin={() => void handleTogglePin()}
+          onAddParagraph={() => setAppendOpen(true)}
+          onEdit={() => void handleEdit()}
+          siblingNames={siblingNames(index, file.path)}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
+      {!isEditing && meta !== null && properties !== null && (
+        <NoteMetaLine
+          file={file}
+          meta={meta}
+          created={properties.created}
+          tags={properties.tags}
+        />
+      )}
       {!isEditing && bowerHeader && meta !== null && (
-        <KindRow
+        <StatusRow
           meta={meta}
           status={(statusPick ?? meta.status ?? '').toLowerCase()}
           onStatus={(status) => void handleStatus(status)}
-          copy={textCopy}
         />
       )}
-      <div class="note-edit-header">
-        <h1>{title}</h1>
-        <div class="note-header-actions">
-          <MoreButton
-            class="note-header-more"
-            expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-          />
-          {menuOpen && (
-            <NoteMenu
-              file={file}
-              title={title}
-              typeLabel="Note"
-              askName={title}
-              bowerWritten={bowerHeader}
-              canEdit={canEdit}
-              canAppend={canAppend}
-              pinned={index.notePinnedAt.has(file.id)}
-              onTogglePin={() => void handleTogglePin()}
-              onAddParagraph={() => setAppendOpen(true)}
-              onEdit={() => void handleEdit()}
-              siblingNames={siblingNames(index, file.path)}
-              onClose={() => setMenuOpen(false)}
-            />
-          )}
-        </div>
-      </div>
       <PendingRequestLine path={file.path} rows={requests} />
       {editError !== null && (
         <p class="auth-error" role="alert">
@@ -954,12 +728,6 @@ export function Note() {
       {!isEditing && bowerHeader && meta !== null && properties !== null && (
         <>
           {subtitle !== undefined && <p class="note-subtitle">{subtitle}</p>}
-          <MetaLine
-            file={file}
-            meta={meta}
-            created={properties.created}
-            folder={folderLink}
-          />
           <MadeFrom
             apply={applyLinkOf(meta.fields.apply_link)}
             sources={madeFromSources({
@@ -968,10 +736,14 @@ export function Note() {
               source: meta.fields.source,
               kind: meta.kind,
               lookup: index,
-            }).map((source) =>
-              textCopy !== null && source.key.startsWith('original:')
-                ? { ...source, role: 'the original' }
-                : source,
+            }).flatMap((source) =>
+              !source.key.startsWith('original:')
+                ? [source]
+                : textCopy !== null
+                  ? [{ ...source, role: 'the original' }]
+                  : // The file it was made from is About's Source row
+                    // (NO-Main: nothing between the meta line and the box).
+                    [],
             )}
           />
           <MadeForIt
@@ -987,15 +759,6 @@ export function Note() {
           />
         </>
       )}
-      {!isEditing && !bowerHeader && meta !== null && properties !== null && (
-        <PropsLine
-          file={file}
-          tags={properties.tags}
-          created={properties.created}
-          folder={folderLink}
-        />
-      )}
-
       {isAppFile(file.path, file.name) && <AppFileBanner file={file} />}
 
       {isEditing && (
@@ -1063,39 +826,7 @@ export function Note() {
         </>
       )}
 
-      {(prev !== null || next !== null) && (
-        <nav class="note-siblings" aria-label={pagerLabel(currentKind)}>
-          {prev !== null ? (
-            <a ref={prevLink} class="note-sibling" href={`/note/${prev.id}`}>
-              {`‹ ${siblingTitles.get(prev.id) ?? computeNoteTitle(prev)}`}
-            </a>
-          ) : (
-            <span />
-          )}
-          <span class="note-siblings-mid">
-            <span class="note-siblings-count">
-              {pagerCount(
-                position,
-                total,
-                currentKind,
-                sameKind?.byScore === true,
-              )}
-            </span>
-            <span class="note-siblings-keys">[ and ] to move</span>
-          </span>
-          {next !== null ? (
-            <a
-              ref={nextLink}
-              class="note-sibling note-sibling-next"
-              href={`/note/${next.id}`}
-            >
-              {`${siblingTitles.get(next.id) ?? computeNoteTitle(next)} ›`}
-            </a>
-          ) : (
-            <span />
-          )}
-        </nav>
-      )}
+      <Pager id={file.id} items={items} folder={folderLink ?? null} />
     </section>
   );
 }

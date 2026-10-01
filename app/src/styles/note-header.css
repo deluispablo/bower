@@ -1,5 +1,6 @@
-/* The header of a note Bower wrote (issue #758, boards Note-*): the kind
-   row, the subtitle and the meta line. Made from has its own stylesheet. */
+/* The note page under its PageHeader (spec §4.12, NO-Main): the meta line
+   with the tags, the status select of a kind with statuses, the subtitle
+   and an answer's question box. Made from has its own stylesheet. */
 .note-kind-row {
   display: flex;
   flex-wrap: wrap;
@@ -8,31 +9,8 @@
   margin: 0 0 var(--space-2);
 }
 
-.note-kind-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 2px var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface);
-  color: var(--color-heading);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.note-kind-icon {
-  display: inline-flex;
-}
-
-.note-kind-icon .icon {
-  width: 14px;
-  height: 14px;
-}
-
 .note-status {
   min-height: 44px;
-  margin-left: auto;
   padding: 0 var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -48,16 +26,52 @@
   font-size: var(--text-sm);
 }
 
-.note-meta-line {
+/* "● Bower note · 29 Sep #summary #career" (R-NO-1, N-6): the page
+   header's meta look, then the tags as teal 13 px text links with a 44 px
+   hit area (not chips). */
+.note-view .note-meta-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
-  margin: 0 0 var(--space-3);
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  column-gap: var(--space-3);
+  margin: calc(var(--space-1) - 12px) 0 var(--space-3);
 }
 
-.note-meta-line a {
-  color: inherit;
+.note-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-link);
+  font-size: 0.8125rem; /* 13px */
+  text-decoration: none;
+}
+
+.note-tag:hover {
+  text-decoration: underline;
+}
+
+/* An answer's question box (board `Flow-07-Answer`). */
+.note-asked {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.note-asked-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-type-answer);
+}
+
+.note-asked-text {
+  margin: var(--space-1) 0 0;
+  font-weight: 600;
+}
+
+.note-view .key-facts-box + .details {
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-3);
 }
