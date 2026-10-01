@@ -3,13 +3,203 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#0b1220" />
     <title>Bower</title>
     <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
     <link rel="alternate icon" href="/icons/favicon.ico" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!--
+      The start-up screen (docs/superpowers/2026-10-01-startup-screen-spec.md).
+      It paints before tokens.css loads, so the colours below repeat the
+      tokens as literals; app/src/boot-html.test.ts keeps them equal. Same
+      theme selectors as tokens.css. No inline script: the CSP is
+      script-src 'self'.
+    -->
+    <style>
+      :root {
+        --boot-bg: #faf9f6;
+        --boot-text: #1c2333;
+        --boot-muted: #475569;
+        --boot-link: #278074;
+        --boot-focus: #278074;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --boot-bg: #111a2b;
+          --boot-text: #dfe5ee;
+          --boot-muted: #9fabbf;
+          --boot-link: #5fcfbc;
+          --boot-focus: #5fcfbc;
+        }
+      }
+      :root[data-theme='dark'] {
+        --boot-bg: #111a2b;
+        --boot-text: #dfe5ee;
+        --boot-muted: #9fabbf;
+        --boot-link: #5fcfbc;
+        --boot-focus: #5fcfbc;
+      }
+      html {
+        color-scheme: light dark;
+        background: var(--boot-bg);
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: max(16px, env(safe-area-inset-top))
+          max(16px, env(safe-area-inset-right))
+          max(16px, env(safe-area-inset-bottom))
+          max(16px, env(safe-area-inset-left));
+        background: var(--boot-bg);
+        color: var(--boot-muted);
+        font:
+          400 16px/1.5 'Source Sans 3',
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+        text-align: center;
+        opacity: 1;
+        transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      #boot > * {
+        max-width: 320px;
+        margin: 0;
+      }
+      .boot-bird {
+        flex: none;
+        transform-origin: 50% 91%;
+        animation: boot-breath 2.4s ease-in-out 600ms infinite;
+      }
+      .boot-line {
+        opacity: 0;
+        animation: boot-in 200ms cubic-bezier(0.16, 1, 0.3, 1) 600ms forwards;
+      }
+      .boot-hint {
+        display: none;
+      }
+      .boot-retry {
+        display: none;
+        box-sizing: border-box;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid var(--boot-link);
+        border-radius: 6px;
+        color: var(--boot-link);
+        text-decoration: none;
+      }
+      .boot-retry:focus-visible {
+        outline: 2px solid var(--boot-focus);
+        outline-offset: 2px;
+      }
+      /*
+        Fallback while JS has not run (the bundle still downloading, or a
+        failed chunk): with no state by 8 s, CSS alone shows the slow hint
+        and the reload link. Their space is reserved from the start, so
+        nothing moves when they appear.
+      */
+      #boot:not([data-state]) .boot-hint {
+        display: block;
+        visibility: hidden;
+        animation: boot-show 0s linear 8s forwards;
+      }
+      #boot:not([data-state]) .boot-retry {
+        display: inline-flex;
+        visibility: hidden;
+        animation: boot-show 0s linear 8s forwards;
+      }
+      #boot:is(
+          [data-state='slow'],
+          [data-state='offline'],
+          [data-state='error']
+        )
+        .boot-bird {
+        animation: none;
+      }
+      #boot:is(
+          [data-state='slow'],
+          [data-state='offline'],
+          [data-state='error']
+        )
+        .boot-line {
+        opacity: 1;
+        animation: none;
+        color: var(--boot-text);
+      }
+      #boot:is(
+          [data-state='slow'],
+          [data-state='offline'],
+          [data-state='error']
+        )
+        .boot-hint {
+        display: block;
+      }
+      #boot:is(
+          [data-state='slow'],
+          [data-state='offline'],
+          [data-state='error']
+        )
+        .boot-retry {
+        display: inline-flex;
+      }
+      #boot[data-leaving] {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #boot[data-leaving] .boot-bird {
+        animation: none;
+      }
+      @keyframes boot-in {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes boot-breath {
+        0%,
+        100% {
+          transform: scale(1, 1);
+        }
+        50% {
+          transform: scale(1, 1.03);
+        }
+      }
+      @keyframes boot-show {
+        to {
+          visibility: visible;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot {
+          transition: none;
+        }
+        .boot-bird {
+          animation: none;
+        }
+        .boot-line {
+          opacity: 1;
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="boot" aria-busy="true">
+      <!-- prettier-ignore -->
+      <svg class="boot-bird" viewBox="0 0 100 100" width="72" height="72" aria-hidden="true" focusable="false"><g transform="translate(1.031 -4.688)"><rect fill="#2f9c8d" x="6" y="71" width="24" height="5.5" rx="2.75" transform="rotate(-54 30 74)"/><rect fill="#2f9c8d" x="4" y="73" width="26" height="5.5" rx="2.75" transform="rotate(-36 30 76)"/><rect fill="#2f9c8d" x="6" y="75" width="24" height="5.5" rx="2.75" transform="rotate(-18 30 78)"/><path fill="none" stroke="#f0b64f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M40 84V91"/><rect fill="#f0b64f" x="34" y="89" width="13" height="4.5" rx="2.25"/><path fill="none" stroke="#f0b64f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M53 85V91"/><rect fill="#f0b64f" x="47" y="89" width="13" height="4.5" rx="2.25"/><circle fill="#5fcfbc" cx="46" cy="62" r="24"/><ellipse fill="#b9ece2" fill-opacity=".9" cx="52" cy="72" rx="13" ry="10"/><rect fill="#5fcfbc" x="52" y="34" width="16" height="38" rx="8"/><circle fill="#5fcfbc" cx="62" cy="39" r="21"/><circle fill="#1b2233" cx="69" cy="37" r="6.3"/><circle fill="none" stroke="#8e7cf3" stroke-width="1.4" cx="69" cy="37" r="5.6"/><circle fill="#ffffff" cx="71.4" cy="34.6" r="2.3"/><circle fill="#ffffff" cx="66.8" cy="39.6" r="1.1"/><circle fill="#5fcfbc" cx="69" cy="23.2" r="7.6"/><circle fill="#5fcfbc" cx="69" cy="51" r="7.6"/><ellipse fill="#ff9fb4" fill-opacity=".6" cx="78" cy="49" rx="3.4" ry="2.3"/><rect fill="#f0b64f" x="80" y="35" width="11" height="6" rx="3"/><rect fill="#d9952e" x="80" y="40" width="8.5" height="4.5" rx="2.25"/><path fill="#2f9c8d" d="M54 56C64 58 65 68 58 74C44 78 28 78 18 72C28 64 42 56 54 56Z"/></g></svg>
+      <p class="boot-line" role="status" aria-live="polite">Opening Bower…</p>
+      <p class="boot-hint">This is taking longer than usual.</p>
+      <a class="boot-retry" href="">Try again</a>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
