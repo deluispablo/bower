@@ -6,7 +6,7 @@
  * (`folder-items.tsx`) builds its rows from the same hooks.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { parseCatalogueFiles } from '../companion.js';
 import type { DriveFile } from '../drive.js';
@@ -28,20 +28,43 @@ function versionKey(notes: readonly DriveFile[]): string {
   return notes.map((note) => `${note.id}:${note.modifiedTime ?? ''}`).join('|');
 }
 
+/** The folder's notes' frontmatter, and whether a read failed. */
+export interface NoteMetasState {
+  metas: ReadonlyMap<string, NoteMeta>;
+  /** A note's frontmatter could not be read (F-11): the caller shows the
+   * error line, whose "Try again" calls `retry`. */
+  failed: boolean;
+  retry: () => void;
+}
+
 /** The frontmatter of the folder's notes, read lazily a few at a time: rows
- * render first and their kinds follow. */
-export function useNoteMetas(
-  notes: readonly DriveFile[],
-): ReadonlyMap<string, NoteMeta> {
+ * render first and their kinds follow. A failed read is reported, never
+ * absorbed (#950 T950-2). */
+export function useNoteMetas(notes: readonly DriveFile[]): NoteMetasState {
   const [metas, setMetas] = useState<ReadonlyMap<string, NoteMeta>>(
     () => new Map(),
   );
+  const [, setTick] = useState(0);
   const key = versionKey(notes);
   const latest = useRef(notes);
   latest.current = notes;
+  const attempt = readAttempts.get(key) ?? 0;
+
+  // The route's header and the list body read the same notes: one failure
+  // and one "Try again" serve both, so the page shows one error line.
+  useEffect(() => {
+    const listener = (): void => setTick((n) => n + 1);
+    readListeners.add(listener);
+    return () => {
+      readListeners.delete(listener);
+      // Leaving the folder forgets its failures: the next visit reads anew.
+      if (readListeners.size === 0) failedReads.clear();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    let missed = false;
     const read = new Map<string, NoteMeta>();
     void (async () => {
       const all = latest.current;
@@ -52,18 +75,37 @@ export function useNoteMetas(
               read.set(note.id, await loadNoteMeta(note));
             } catch (err) {
               console.error(err);
+              missed = true;
             }
           }),
         );
         if (!cancelled) setMetas(new Map(read));
       }
+      if (cancelled || !missed) return;
+      failedReads.add(key);
+      notifyReads();
     })();
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [key, attempt]);
 
-  return metas;
+  const retry = useCallback(() => {
+    failedReads.delete(key);
+    readAttempts.set(key, (readAttempts.get(key) ?? 0) + 1);
+    notifyReads();
+  }, [key]);
+  return { metas, failed: failedReads.has(key), retry };
+}
+
+/** Note sets whose frontmatter read failed, by `versionKey`. */
+const failedReads = new Set<string>();
+/** Retries asked for, by `versionKey`: a change re-runs the reads. */
+const readAttempts = new Map<string, number>();
+const readListeners = new Set<() => void>();
+
+function notifyReads(): void {
+  for (const listener of readListeners) listener();
 }
 
 /** `index.md`'s file-to-note rows (`parseCatalogueFiles`), for pairing. */
@@ -109,6 +151,9 @@ export interface FolderSummary {
   lifecycle?: string;
   /** The newest change in the folder, ISO. */
   updated?: string;
+  /** A note's frontmatter could not be read, so the count may be off. */
+  failed: boolean;
+  retry: () => void;
 }
 
 /** A folder's lifecycle (AR-Sub: "Areas · Active · 2 things"): the `status`
@@ -151,10 +196,15 @@ export function folderUpdated(contents: FolderContents): string | undefined {
 export function useFolderModel(
   contents: FolderContents,
   catalogue: ReadonlyMap<string, Origin>,
-): { model: FolderModel; metas: ReadonlyMap<string, NoteMeta> } {
+): {
+  model: FolderModel;
+  metas: ReadonlyMap<string, NoteMeta>;
+  failed: boolean;
+  retry: () => void;
+} {
   const { index, getNoteText } = useVault();
   const byPath = index?.byPath ?? NO_FILES;
-  const metas = useNoteMetas(contents.notes);
+  const { metas, failed, retry } = useNoteMetas(contents.notes);
   const catalogueFiles = useCatalogueFiles(
     byPath.get(CATALOGUE_PATH),
     getNoteText,
@@ -170,7 +220,7 @@ export function useFolderModel(
       }),
     [contents.items, byPath, metas, catalogue, catalogueFiles],
   );
-  return { model, metas };
+  return { model, metas, failed, retry };
 }
 
 /** The meta line's summary, from the folder's data alone (K-31): the same
@@ -180,12 +230,14 @@ export function useFolderSummary(
   catalogue: ReadonlyMap<string, Origin>,
   folderOfFolders: boolean,
 ): FolderSummary {
-  const { model, metas } = useFolderModel(contents, catalogue);
+  const { model, metas, failed, retry } = useFolderModel(contents, catalogue);
   // K-31: subfolders count as originals, except on a folder of folders,
   // whose cards are not its own things (AR-Main: "Originals 0").
   const summary: FolderSummary = folderOfFolders
-    ? { count: contents.subfolders.length, unit: 'folder' }
+    ? { count: contents.subfolders.length, unit: 'folder', failed, retry }
     : {
+        failed,
+        retry,
         count: folderCount({
           subfolders: contents.subfolders.length,
           model,
