@@ -160,8 +160,8 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
     rows: [
       {
         icon: 'folder',
-        lead: 'Your Inbox and four folders',
-        text: 'sort a life: Projects end, Areas go on, Resources are kept, Archives are done. Bower files into them; you can move anything.',
+        lead: 'Four folders',
+        text: 'sort a life: Projects end, Areas go on, Resources are kept, the Archive is done. Bower files into them; you can move anything.',
       },
       {
         icon: 'bird',

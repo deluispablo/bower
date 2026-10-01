@@ -44,11 +44,11 @@ describe('HELP_ROWS', () => {
     }
   });
 
-  it('never says "PARA", "vault", "Four folders" or "the Archive"', () => {
+  it('never says "PARA" or "vault"', () => {
     for (const screen of SCREENS) {
       for (const desktop of [false, true]) {
         const text = words(helpSheet(screen, { desktop })).join(' ');
-        expect(text).not.toMatch(/PARA|vault|Four folders|the Archive\b/);
+        expect(text).not.toMatch(/PARA|vault/);
         expect(text).not.toContain('{');
       }
     }
@@ -64,7 +64,7 @@ describe('HELP_ROWS', () => {
       'Pinned and Recent',
     ]);
     expect(leads('notes')).toEqual([
-      'Your Inbox and four folders',
+      'Four folders',
       'The bird',
       'Search',
       "Bower's own files",
@@ -105,9 +105,9 @@ describe('HELP_ROWS', () => {
     ]);
   });
 
-  it('says Archives are done in the Folders Help (S-NT-6)', () => {
+  it('uses the NT-Help and TR-Notes words for the folders row', () => {
     expect(words(helpSheet('notes'))[2]).toBe(
-      'Your Inbox and four folders sort a life: Projects end, Areas go on, Resources are kept, Archives are done. Bower files into them; you can move anything.',
+      'Four folders sort a life: Projects end, Areas go on, Resources are kept, the Archive is done. Bower files into them; you can move anything.',
     );
     expect(words(helpSheet('notes'))[3]).toBe(
       'The bird marks what Bower wrote; everything else is yours, as you added it.',
