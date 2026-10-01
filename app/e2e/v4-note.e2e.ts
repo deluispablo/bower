@@ -92,7 +92,7 @@ test('an answer shows the question, the lists, the checklist link and Used', asy
   await shot(page, testInfo, 'v4-note-answer');
 });
 
-test('the About panel holds key facts, Details, Original, the folder and the outline', async ({
+test('the About column holds the properties, the outline and In this folder (#912)', async ({
   page,
 }, testInfo) => {
   test.skip(
@@ -106,11 +106,11 @@ test('the About panel holds key facts, Details, Original, the folder and the out
   const headings = page.locator('.about-heading');
   await expect(headings.filter({ hasText: /^About this note$/ })).toBeVisible();
   await expect(headings.filter({ hasText: /^Key facts/ })).toHaveCount(0);
-  await expect(headings.filter({ hasText: /^Details$/ })).toBeVisible();
-  await expect(headings.filter({ hasText: /^Original$/ })).toBeVisible();
   await expect(headings.filter({ hasText: /^In this folder$/ })).toBeVisible();
-  await expect(page.locator('.about-original')).toContainText('PDF');
-  await expect(page.locator('.about-not-stated')).toContainText('Not in the');
+  // Source by name, a link, no brackets or extension (R-ABOUT-3).
+  const source = page.locator('.about-prop', { hasText: /^Source/ });
+  await expect(source.getByRole('link')).toHaveText('Arlington Road, 2 bed');
+  await expect(source).toContainText('PDF');
   await shot(page, testInfo, 'v4-note-desktop');
 });
 

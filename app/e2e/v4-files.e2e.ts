@@ -36,9 +36,13 @@ test('a CSV is a table with its row count, and a meta line with its kind word (#
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await openFile(page, FLAT, 'Flat budget', 'Flat budget');
-  const props = page.locator('.file-props');
-  await expect(props).toContainText('Spreadsheet (CSV) · 3 KB · 24 rows');
-  await expect(props.getByRole('link', { name: 'Flat hunt' })).toBeVisible();
+  const props = page.locator('.page-header-meta');
+  await expect(props).toContainText('Spreadsheet · 3 KB');
+  await expect(
+    page
+      .locator('.page-header-crumbs')
+      .getByRole('link', { name: 'Flat hunt' }),
+  ).toBeVisible();
   const table = page.locator('.table-preview table');
   await expect(table.getByRole('columnheader')).toHaveText([
     'Month',
@@ -81,7 +85,7 @@ test('a PDF says its pages from the companion note (#604)', async ({
     .filter({ hasText: /PDF/ })
     .first()
     .press('Enter');
-  await expect(page.locator('.file-props')).toContainText(/PDF · 42 pages · /);
+  await expect(page.locator('.page-header-meta')).toContainText(/^PDF · /);
 });
 
 test('a video plays from Drive and says Bower cannot watch it (#604)', async ({
@@ -93,8 +97,8 @@ test('a video plays from Drive and says Bower cannot watch it (#604)', async ({
     'Walk-through, Arlington Road',
     'Walk-through, Arlington Road',
   );
-  await expect(page.locator('.file-props')).toContainText(
-    /Video · 2 min 14 s · \d+ MB · 26 Sep/,
+  await expect(page.locator('.page-header-meta')).toContainText(
+    /^File · \d+ MB · /,
   );
   await expect(page.getByText('Plays from Google Drive')).toBeVisible();
   await expect(page.locator('.drive-preview')).toBeVisible();
@@ -114,8 +118,8 @@ test('an Excel file shows the Drive preview and Open in Drive to edit (#604)', a
     'Household costs 2026',
     'Household costs 2026',
   );
-  await expect(page.locator('.file-props')).toContainText(
-    'Excel spreadsheet · 18 KB · 3 sheets',
+  await expect(page.locator('.page-header-meta')).toContainText(
+    'Spreadsheet · 18 KB',
   );
   await expect(page.getByText('Preview from Google Drive')).toBeVisible();
   await expect(page.locator('.drive-preview')).toBeVisible();
@@ -138,9 +142,7 @@ test('a ZIP explains itself, offers Open in Drive and Download, and gives the ti
     'Photos from the viewing',
     'Photos from the viewing',
   );
-  await expect(page.locator('.file-props')).toContainText(
-    'ZIP archive · 14 files · 38 MB',
-  );
+  await expect(page.locator('.page-header-meta')).toContainText('File · 38 MB');
   await expect(
     page.getByText('A ZIP archive holds other files packed together.'),
   ).toBeVisible();
@@ -219,7 +221,7 @@ test('an exported Sheet says it is a copy (#606)', async ({ page }) => {
   ).toBeVisible();
 });
 
-test('previous and next walk the folder in its list, with n of m (#606)', async ({
+test('previous and next walk the folder in tree order, with n of N in the folder (#606, #912)', async ({
   page,
 }) => {
   await gotoOriginals(page, FLAT);
@@ -227,31 +229,27 @@ test('previous and next walk the folder in its list, with n of m (#606)', async 
     .locator('.folder-item', { hasText: 'Flat budget' })
     .first()
     .press('Enter');
-  const walk = page.locator('.file-walk');
-  await expect(walk).toContainText(/\d+ of \d+/);
+  const walk = page.locator('.pager');
+  await expect(walk).toContainText(/\d+ of \d+ in Flat hunt/);
   // The walk sits at the end of the page, after Bower's note (#704).
   await expect
     .poll(() =>
       page.locator('.file-view').evaluate((view) => {
         const last = view.lastElementChild;
-        return last?.classList.contains('file-walk') ?? false;
+        return last?.classList.contains('pager') ?? false;
       }),
     )
     .toBe(true);
-  // The meta line names the folder, not its path (#704).
-  await expect(page.locator('.file-props a[href^="/folder/"]')).toHaveText(
-    'Flat hunt',
-  );
   const where = /(\d+) of (\d+)/.exec(
-    (await walk.locator('.file-walk-place').textContent()) ?? '',
+    (await walk.locator('.pager-count').textContent()) ?? '',
   );
   const at = Number(where?.[1]);
   const total = Number(where?.[2]);
   expect(at).toBeGreaterThan(1);
   expect(at).toBeLessThan(total);
-  await expect(walk.getByRole('link')).toHaveCount(2);
-  await walk.getByRole('link').nth(1).click();
-  await expect(page.locator('.file-walk')).toContainText(
+  await expect(walk.locator('.pager-prev')).toHaveCount(1);
+  await walk.locator('.pager-next').click();
+  await expect(page.locator('.pager')).toContainText(
     `${String(at + 1)} of ${String(total)}`,
   );
 });

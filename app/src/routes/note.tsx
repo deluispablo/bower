@@ -254,7 +254,12 @@ function StatusRow({
   if (kind === undefined || kind.statuses.length === 0) return null;
   return (
     <div class="note-kind-row">
-      <StatusSelect kind={kind} meta={meta} value={status} onChange={onStatus} />
+      <StatusSelect
+        kind={kind}
+        meta={meta}
+        value={status}
+        onChange={onStatus}
+      />
     </div>
   );
 }

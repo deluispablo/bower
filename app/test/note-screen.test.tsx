@@ -215,9 +215,9 @@ describe('Note screen (#609)', () => {
     );
     const meta = root.querySelector('.note-meta-line');
     expect(meta?.textContent).toContain('Bower note · 26 Sep');
-    expect(
-      meta?.querySelector('a.note-tag')?.getAttribute('href'),
-    ).toBe('/search?q=%23housing');
+    expect(meta?.querySelector('a.note-tag')?.getAttribute('href')).toBe(
+      '/search?q=%23housing',
+    );
     const original = root.querySelector('.made-from a[href="/file/id-scan"]');
     expect(original?.textContent).toContain('Arlington Road, 2 bed.pdf');
     expect(root.querySelector('.note-props')).toBeNull();

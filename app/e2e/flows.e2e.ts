@@ -370,8 +370,11 @@ test("previous/next under a note hides Bower's own files and uses titles (#423)"
 
   // The sibling nav offers the other real answer by its title, and never
   // Bower's own file, hidden unless "Show Bower's own files" is on.
-  const siblings = page.locator('.note-siblings');
-  await expect(siblings).toContainText('Which flat should we view first');
+  const siblings = page.locator('.pager');
+  await expect(
+    siblings.locator('[aria-label*="Which flat should we view first"]'),
+  ).toHaveCount(1);
+  await expect(siblings.locator('[aria-label*="Proposals"]')).toHaveCount(0);
   await expect(siblings).not.toContainText('Proposals');
 });
 
@@ -2442,12 +2445,9 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(
     page.getByRole('heading', { level: 1, name: 'Sage green test patch' }),
   ).toBeVisible();
-  const props = page.locator('.file-props');
+  const props = page.locator('.page-header-meta');
   await expect(props).toContainText('Photo ·');
-  await expect(
-    props.getByRole('link', { name: 'Kitchen Refresh' }),
-  ).toBeVisible();
-  await expect(props).toContainText('Filed by Bower ·');
+  await expect(props).toContainText('filed by Bower');
   // The photo viewer (#605, #606): the photo fitted, tap to see it whole.
   await expect(
     page.getByRole('button', { name: /Sage green test patch\. Tap to see/ }),

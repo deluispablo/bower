@@ -40,10 +40,7 @@ import { NoteMenu } from '../components/note-menu.js';
 import { PendingRequestLine } from '../components/pending-request-line.js';
 import { PhotoViewer } from '../components/photo-viewer.js';
 import { useShellSlot } from '../components/shell-slots.js';
-import {
-  TablePreview,
-  parseCsv,
-} from '../components/table-preview.js';
+import { TablePreview, parseCsv } from '../components/table-preview.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import {
   companionCandidates,
@@ -66,7 +63,11 @@ import {
 } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH, filedBy, originOf } from '../file-origin.js';
-import { DOC_PREVIEW_MIME, previewKind, thumbnailUrl } from '../file-preview.js';
+import {
+  DOC_PREVIEW_MIME,
+  previewKind,
+  thumbnailUrl,
+} from '../file-preview.js';
 import { siblings } from '../folder-view.js';
 import { formatPolicy } from '../formats.js';
 import { imageMimeType } from '../markdown/embeds.js';

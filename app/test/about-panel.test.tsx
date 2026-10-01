@@ -46,7 +46,10 @@ const RESUME = item(
 );
 
 const index = buildVaultIndex([RESUME, INSIGHTS, LETTER, HUB]);
-const meta = noteMetaFrom({ by: 'bower', original: '[[Resume Australia.docx]]' });
+const meta = noteMetaFrom({
+  by: 'bower',
+  original: '[[Resume Australia.docx]]',
+});
 
 const roots: HTMLDivElement[] = [];
 
@@ -115,7 +118,11 @@ describe('About this note and About this file', () => {
     expect(
       file.querySelector('.about-folder-row[aria-current="page"]')?.textContent,
     ).toBe('Cover Letter - Alex');
-    expect(note.querySelectorAll('.about-folder-row .file-icon, .about-folder-row svg').length).toBeGreaterThan(0);
+    expect(
+      note.querySelectorAll(
+        '.about-folder-row .file-icon, .about-folder-row svg',
+      ).length,
+    ).toBeGreaterThan(0);
 
     expect(note.querySelector('.about-heading')?.textContent).toBe(
       'About this note',
