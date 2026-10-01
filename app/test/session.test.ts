@@ -1,9 +1,45 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+
+import { h, render } from 'preact';
+import { act } from 'preact/test-utils';
+import { LocationProvider, useLocation } from 'preact-iso';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FolderState } from '../src/folder-state.js';
-import { ApiError } from '../src/api.js';
+import { ApiError, getMe } from '../src/api.js';
 import type { Me } from '../src/api.js';
-import { decideRedirect, offlineMe } from '../src/session.js';
+import { bootState } from '../src/boot-screen.js';
+import { loadCachedMe } from '../src/cache.js';
+import { markIntroSeen } from '../src/intro.js';
+import {
+  SessionProvider,
+  decideRedirect,
+  offlineMe,
+  useSession,
+} from '../src/session.js';
+import type { Session } from '../src/session.js';
+
+vi.mock('../src/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/api.js')>()),
+  getMe: vi.fn(),
+}));
+vi.mock('../src/boot-screen.js', () => ({ bootState: vi.fn() }));
+vi.mock('../src/cache.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/cache.js')>()),
+  loadCachedMe: vi.fn(),
+  saveCachedMe: vi.fn(),
+  setIndexFolder: vi.fn(),
+  invalidateIndex: vi.fn(),
+}));
+vi.mock('../src/forget.js', () => ({ default: vi.fn() }));
+vi.mock('../src/folder-state.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/folder-state.js')>()),
+  folderState: vi.fn(() => Promise.resolve('ok')),
+}));
+vi.mock('../src/drive.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/drive.js')>()),
+  watchFolder: vi.fn(),
+}));
 
 // Components are UI smoke only when cheap; `decideRedirect` is the pure
 // logic that decides routing on load, so it is unit-tested directly.
@@ -200,5 +236,134 @@ describe('offlineMe (R-VAULT-13)', () => {
 
   it('has nothing to show without a cached me', () => {
     expect(offlineMe(network, false, undefined)).toBeUndefined();
+  });
+});
+
+describe('SessionProvider on load (#985, R-BOOT-14)', () => {
+  const me = {
+    email: 'you@example.com',
+    vault: { folderId: 'FOLDER_ID', inboxFolderId: 'INBOX_ID', name: 'Bower' },
+    quota: { used: 0, limit: 10 },
+    needsReauth: false,
+    hasApiKey: false,
+  } as Me;
+  const getMeMock = vi.mocked(getMe);
+  const cachedMe = vi.mocked(loadCachedMe);
+  const bootStateMock = vi.mocked(bootState);
+
+  let root: HTMLElement;
+  let session: Session | undefined;
+  let path = '';
+
+  function Probe(): null {
+    session = useSession();
+    path = useLocation().path;
+    return null;
+  }
+
+  async function mount(at: string): Promise<void> {
+    history.replaceState(null, '', at);
+    await act(() => {
+      render(
+        h(LocationProvider, null, h(SessionProvider, null, h(Probe, null))),
+        root,
+      );
+    });
+    // Let the `/me` answer, the state update and the redirect settle.
+    for (let i = 0; i < 5; i += 1) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+  }
+
+  beforeEach(() => {
+    root = document.createElement('div');
+    document.body.append(root);
+    session = undefined;
+    localStorage.clear();
+    sessionStorage.clear();
+    cachedMe.mockReturnValue(undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    render(null, root);
+    root.remove();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  it('stays loading and shows the error state on a network failure with nothing saved', async () => {
+    getMeMock.mockRejectedValue(new ApiError(0, 'network', 'x'));
+    await mount('/');
+    expect(session?.status).toBe('loading');
+    expect(bootStateMock).toHaveBeenCalledWith('error');
+    expect(console.error).toHaveBeenCalled();
+    expect(path).toBe('/');
+  });
+
+  it('stays loading and shows the error state on a server error with nothing saved', async () => {
+    getMeMock.mockRejectedValue(new ApiError(500, 'boom', 'x'));
+    await mount('/settings');
+    expect(session?.status).toBe('loading');
+    expect(bootStateMock).toHaveBeenCalledWith('error');
+    expect(path).toBe('/settings');
+  });
+
+  it('shows the offline state when the device is offline with nothing saved', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    getMeMock.mockRejectedValue(new ApiError(0, 'network', 'x'));
+    await mount('/');
+    expect(session?.status).toBe('loading');
+    expect(bootStateMock).toHaveBeenCalledWith('offline');
+  });
+
+  it('opens the shell offline from the saved me, as before', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    getMeMock.mockRejectedValue(new ApiError(0, 'network', 'x'));
+    cachedMe.mockReturnValue(me);
+    await mount('/');
+    expect(session?.status).toBe('signed-in');
+    expect(session?.offline).toBe(true);
+    expect(bootStateMock).not.toHaveBeenCalled();
+    expect(path).toBe('/');
+  });
+
+  it('hands a 401 over to /login, as before', async () => {
+    markIntroSeen(localStorage);
+    getMeMock.mockRejectedValue(new ApiError(401, 'unauthorized', 'x'));
+    await mount('/');
+    expect(session?.status).toBe('signed-out');
+    expect(bootStateMock).not.toHaveBeenCalled();
+    expect(path).toBe('/login');
+  });
+
+  it('hands a first-time 401 over to /welcome, as before', async () => {
+    getMeMock.mockRejectedValue(new ApiError(401, 'unauthorized', 'x'));
+    await mount('/');
+    expect(session?.status).toBe('signed-out');
+    expect(path).toBe('/welcome');
+  });
+
+  it('never covers a 401 with the saved me', async () => {
+    markIntroSeen(localStorage);
+    cachedMe.mockReturnValue(me);
+    getMeMock.mockRejectedValue(new ApiError(401, 'unauthorized', 'x'));
+    await mount('/');
+    expect(session?.status).toBe('signed-out');
+    expect(path).toBe('/login');
+  });
+
+  it('keeps "not invited" on /not-invited with the address, as before', async () => {
+    getMeMock.mockResolvedValue({
+      notInvited: true,
+      email: 'you@example.com',
+    });
+    await mount('/not-invited');
+    expect(session?.status).toBe('signed-out');
+    expect(session?.notInvitedEmail).toBe('you@example.com');
+    expect(bootStateMock).not.toHaveBeenCalled();
+    expect(path).toBe('/not-invited');
   });
 });
