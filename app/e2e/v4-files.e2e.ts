@@ -151,8 +151,11 @@ test('a ZIP explains itself, offers Open in Drive and Download, and gives the ti
       "It can't be shown here. Open it in Drive to see what is inside, or download it.",
     ),
   ).toBeVisible();
+  // The page's own button; on desktop About's In Drive row has a greyed one.
   await expect(
-    page.getByRole('button', { name: 'Open in Drive' }),
+    page
+      .locator('.file-nopreview')
+      .getByRole('button', { name: 'Open in Drive' }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Download' })).toBeVisible();
   await expect(
