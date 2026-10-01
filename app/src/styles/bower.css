@@ -760,3 +760,26 @@
 .rules-panel > .hint {
   margin-bottom: calc(var(--space-4) - var(--space-1));
 }
+
+/* Touch: the text links inside the cards ("Read the answer", "See what came
+   of it", "In your rules", "and 4 more") keep their look and get a 44 px
+   hit area (K-34). */
+@media (pointer: coarse) {
+  .bower-request-link,
+  .activity-link,
+  .activity-more {
+    position: relative;
+  }
+
+  .bower-request-link::after,
+  .activity-link::after,
+  .activity-more::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: var(--hit);
+    transform: translateY(-50%);
+  }
+}
