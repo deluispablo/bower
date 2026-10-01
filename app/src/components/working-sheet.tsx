@@ -39,7 +39,11 @@ import {
   paraKindOf,
 } from '../navigation.js';
 import { failureCopy, failureReason } from '../run-failure.js';
-import { groupByOrigin, pileOriginOf } from '../pile-groups.js';
+import {
+  groupByOrigin,
+  pileOriginOf,
+  requestRowLabel,
+} from '../pile-groups.js';
 import { outcomeFromRun, runSentence } from '../run-outcome.js';
 import type { OutcomeAction, OutcomeItem, RunOutcome } from '../run-outcome.js';
 import {
@@ -623,16 +627,31 @@ function StatusIcon({ state }: { state: SheetState }): JSX.Element {
 }
 
 /** Rows under "From your pile: …" headings when any came from a pile
- * (R-PILE-5); the rest sit under "Added from elsewhere". */
+ * (R-PILE-5); the rest sit under "Added from elsewhere", and Bower's
+ * answers under "A request for Bower", the groups the confirm listed
+ * (#950 T950-7). */
 function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
   if (rows.length === 0) return null;
   const groups = groupByOrigin(rows, (row) => row.origin);
   if (groups.length === 1 && groups[0]?.origin === undefined) {
     return <RowList rows={rows} />;
   }
+  const requests = rows.filter(
+    (row) => row.origin === undefined && row.action === 'answered',
+  );
+  const shown = groups
+    .map((group) =>
+      group.origin === undefined
+        ? {
+            ...group,
+            rows: group.rows.filter((row) => !requests.includes(row)),
+          }
+        : group,
+    )
+    .filter((group) => group.rows.length > 0);
   return (
     <>
-      {groups.map((group) => (
+      {shown.map((group) => (
         <section key={group.origin ?? 'elsewhere'} class="working-sheet-pile">
           <h3 class="working-sheet-pile-heading">
             {group.origin ?? 'Added from elsewhere'}
@@ -640,6 +659,14 @@ function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
           <RowList rows={group.rows} />
         </section>
       ))}
+      {requests.length > 0 && (
+        <section key="requests" class="working-sheet-pile">
+          <h3 class="working-sheet-pile-heading">
+            {requestRowLabel(requests.length)}
+          </h3>
+          <RowList rows={requests} />
+        </section>
+      )}
     </>
   );
 }
