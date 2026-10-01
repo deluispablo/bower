@@ -125,13 +125,6 @@
   text-decoration: underline;
 }
 
-/* The lit tab. It sits in the inert page under the scrim, so the ring that
- * shows is `.tour-spot`; this only keeps the tab itself readable. */
-.help-tab-on {
-  border-radius: 14px;
-  background: var(--color-surface);
-}
-
 /* The help panel on the shared overlay: its scrim, inert page and slide come
  * from overlay.css; this is what sits inside (R-OVL-4). */
 .help-panel {

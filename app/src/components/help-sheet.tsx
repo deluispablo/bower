@@ -233,7 +233,18 @@ function measureTarget(el: Element | null): Box | null {
   const below = measure(tree ?? null);
   if (below === null || below.height === 0) return box;
   const bottom = Math.min(below.top + below.height, window.innerHeight - EDGE);
-  return { ...box, height: Math.max(box.height, bottom - box.top) };
+  // The explorer's head is inset in the sidebar; the ring spans the
+  // sidebar's row column as the nav rows' rings do, so it clears the tree's
+  // chevrons (TR-Notes-Fixed-1280: x 8 to 256).
+  const column = measure(el?.closest('aside, nav') ?? null);
+  const left = column?.left ?? box.left;
+  const width = column?.width ?? box.width;
+  return {
+    ...box,
+    left,
+    width,
+    height: Math.max(box.height, bottom - box.top),
+  };
 }
 
 /** Highlights `tab` and keeps the ring and the bird on it as the page moves;
