@@ -101,7 +101,7 @@ describe('tableRows', () => {
     ]);
   });
 
-  it('lists a Bower answer as Answered, titled by its question (#920)', () => {
+  it('lists a Bower answer as Answered; the view titles it (#920)', () => {
     const answered = tableRows(
       {
         ...run,
@@ -116,7 +116,7 @@ describe('tableRows', () => {
     expect(answered).toHaveLength(1);
     expect(answered[0]).toMatchObject({
       action: 'answered',
-      title: 'Which flat first',
+      title: '2026-09-29 Which flat first',
     });
     expect(groupRows(answered).map((group) => group.heading)).toEqual([
       'Answered · 1',

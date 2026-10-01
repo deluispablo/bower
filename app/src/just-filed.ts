@@ -15,7 +15,7 @@ import type { Run, RunItem, SetAsideItem, SetAsideReason } from './api.js';
 import type { DriveFile } from './drive.js';
 import { formatPolicy } from './formats.js';
 import { runCounts, things } from './home.js';
-import { answerTitle, outcomeCounts, outcomeFromRun } from './run-outcome.js';
+import { outcomeCounts, outcomeFromRun } from './run-outcome.js';
 import type { OutcomeAction, RunOutcome } from './run-outcome.js';
 import { shortDay } from './rules.js';
 import { displayPath, paraKindOf } from './navigation.js';
@@ -466,10 +466,7 @@ function tableRow(
   const row: TableRow = {
     key: `${action}:${path}`,
     action,
-    title:
-      action === 'answered'
-        ? answerTitle(path)
-        : (linkTitleFromFileName(name) ?? fileTitle(name)),
+    title: linkTitleFromFileName(name) ?? fileTitle(name),
     kind,
     name,
     folder: folderLabel(folderOf(path)),

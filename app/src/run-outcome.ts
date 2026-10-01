@@ -186,11 +186,11 @@ function buildItems(raw: RawOutcome): OutcomeItem[] {
   }
   for (const path of raw.created) {
     if (isContextNote(path)) continue;
-    // An answer is its own action (#920): "Answered", titled by its
-    // question, never a "New note".
+    // An answer is its own action (#920): "Answered", never a "New note".
+    // The views title it as every list does (`useTitlesAt`).
     items.push(
       isAnswerPath(path)
-        ? { action: 'answered', title: answerTitle(path), path }
+        ? { action: 'answered', title: titleOf(path), path }
         : { action: 'new', title: titleOf(path), path },
     );
   }
@@ -221,12 +221,6 @@ function buildItems(raw: RawOutcome): OutcomeItem[] {
 /** An answer note: `Answers/<date> <question>.md`, directly in `Answers/`. */
 export function isAnswerPath(path: string): boolean {
   return /^Answers\/[^/]+\.md$/i.test(path);
-}
-
-/** An answer's title: its question, the file name without the date the
- * agent puts first (`2026-09-30 Which flat first.md`) or the `.md`. */
-export function answerTitle(path: string): string {
-  return titleOf(path).replace(/^\d{4}-\d{2}-\d{2} +/, '');
 }
 
 function build(raw: RawOutcome): RunOutcome {

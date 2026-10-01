@@ -30,6 +30,7 @@ import { NoteMenu } from '../components/note-menu.js';
 import { answeredLine } from '../components/run-summary.js';
 import { HOME_CRUMBS, PageHeader } from '../components/page-header.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { useTitlesAt } from '../components/use-note-titles.js';
 import type { Run } from '../api.js';
 import {
   ACTION_TAG,
@@ -424,17 +425,29 @@ export function JustFiled(): JSX.Element {
 
   const { query, route } = useLocation();
   const desktop = useMediaQuery(DESKTOP_QUERY);
-  const { index } = useVault();
+  const { index, files } = useVault();
   const { latest, earlier, loaded, unseen, now } = useJustFiled(
     true,
     query.run,
   );
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const rows = useMemo(
+  const tableRowsNow = useMemo(
     () => (latest === null ? [] : tableRows(latest, index)),
     [latest, index],
   );
+  // A Bower answer takes the title every list gives it (#920).
+  const answerTitles = useTitlesAt(
+    tableRowsNow
+      .filter((row) => row.action === 'answered')
+      .map((row) => row.notePath),
+    files,
+  );
+  const rows = tableRowsNow.map((row) => {
+    const title =
+      row.action === 'answered' ? answerTitles.get(row.notePath) : undefined;
+    return title === undefined ? row : { ...row, title };
+  });
   const addresses = useAddresses(rows, index);
 
   function markAll(): void {

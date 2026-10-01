@@ -52,7 +52,7 @@ describe('outcomeFromRun (R-RUN-1)', () => {
     expect(outcome.items).toEqual([
       {
         action: 'answered',
-        title: 'Which flat first',
+        title: '2026-09-30 Which flat first',
         path: 'Answers/2026-09-30 Which flat first.md',
       },
     ]);
