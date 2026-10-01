@@ -375,7 +375,11 @@ describe('Layout', () => {
       Array.from(sidebar.querySelectorAll('.explorer-tool')).map((b) =>
         b.getAttribute('aria-label'),
       ),
-    ).toEqual(['Show the open item', 'Sort your folders', 'Collapse all folders']);
+    ).toEqual([
+      'Show the open item',
+      'Sort your folders',
+      'Collapse all folders',
+    ]);
   });
 
   it('"Collapse all folders" collapses every folder (#909)', () => {

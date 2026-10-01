@@ -158,7 +158,11 @@ describe('Notes (#353)', () => {
       Array.from(root.querySelectorAll('.explorer-tool')).map((b) =>
         b.getAttribute('aria-label'),
       ),
-    ).toEqual(['Show the open item', 'Sort your folders', 'Collapse all folders']);
+    ).toEqual([
+      'Show the open item',
+      'Sort your folders',
+      'Collapse all folders',
+    ]);
   });
 
   it('draws the tree with no counts, meanings, badges or new tags (K-1)', () => {
