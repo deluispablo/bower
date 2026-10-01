@@ -74,7 +74,8 @@ test('running: the Tidying bird stage is 118 px (AD-Running), with the three ste
   await openSheet(page, 'Tidying up', false);
   const sheet = page.getByRole('dialog', { name: 'Tidying up' });
   await expect(
-    sheet.getByRole('heading', { name: 'Tidying up 2 things' }),
+    // #914 (R-AD-8): the inbox count as the run began, not the run's own total.
+    sheet.getByRole('heading', { name: /^Tidying up \d+ things?$/ }),
   ).toBeVisible();
   const stage = sheet.locator('.working-sheet-stage');
   const box = await stage.boundingBox();
