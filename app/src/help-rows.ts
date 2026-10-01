@@ -38,13 +38,15 @@ export type HelpScreen =
 
 /** The stroke icon in front of a row (`components/icons.tsx`). */
 export type HelpIcon =
+  | 'bird'
   | 'inbox'
   | 'clock'
   | 'pin'
-  | 'note'
   | 'folder'
   | 'search'
-  | 'eye-off'
+  | 'eye'
+  | 'external'
+  | 'chevron'
   | 'file'
   | 'edit'
   | 'sparkle'
@@ -107,7 +109,7 @@ export const TOUR_TABS: readonly HelpTab[] = ['home', 'notes', 'add', 'bower'];
 
 /** "By Bower" on the folder Helps (PF, LI, GR-Help). */
 const BY_BOWER_ROW: HelpRow = {
-  icon: 'sparkle',
+  icon: 'bird',
   lead: 'By Bower',
   text: 'marks what Bower wrote. Everything else is yours.',
 };
@@ -130,7 +132,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
     tab: 'home',
     rows: [
       {
-        icon: 'sparkle',
+        icon: 'bird',
         lead: "The bird's bubble",
         text: 'says what is happening: a tidy-up in progress, or its result until you open it.',
       },
@@ -162,7 +164,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
         text: 'sort a life: Projects end, Areas go on, Resources are kept, Archives are done. Bower files into them; you can move anything.',
       },
       {
-        icon: 'sparkle',
+        icon: 'bird',
         lead: 'The bird',
         text: 'marks what Bower wrote; everything else is yours, as you added it.',
       },
@@ -172,7 +174,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
         text: 'finds folders, notes and files.',
       },
       {
-        icon: 'eye-off',
+        icon: 'eye',
         lead: "Bower's own files",
         text: 'are hidden; show them from ⋯.',
       },
@@ -243,7 +245,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
         text: 'count what the last tidy-up did.',
       },
       {
-        icon: 'file',
+        icon: 'document',
         lead: 'Each thing',
         text: 'shows where it went. {Tap} it to open it.',
       },
@@ -311,7 +313,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
         text: 'show what is inside and when it changed. {Tap} one to open it.',
       },
       {
-        icon: 'clock',
+        icon: 'document',
         lead: 'Recently changed',
         text: 'lists the newest things in every folder below this one.',
       },
@@ -334,17 +336,17 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
     tab: 'notes',
     rows: [
       {
-        icon: 'note',
+        icon: 'bird',
         lead: "Bower's note",
         text: 'is the short version. Fold it away if you only want the text; it stays folded.',
       },
       {
-        icon: 'shield',
+        icon: 'check',
         lead: 'Check',
         text: 'marks a point worth checking before you use it.',
       },
       {
-        icon: 'file',
+        icon: 'document',
         lead: 'Source and Used',
         text: 'link to the files Bower read.',
       },
@@ -373,17 +375,17 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
     tab: 'notes',
     rows: [
       {
-        icon: 'note',
+        icon: 'bird',
         lead: 'Want a note on it?',
         text: 'Ask Bower: it writes a note next to the file and keeps the file as it is.',
       },
       {
-        icon: 'file',
+        icon: 'external',
         lead: 'Open in Drive',
         text: 'or Download it from ⋯.',
       },
       {
-        icon: 'folder',
+        icon: 'chevron',
         lead: 'The arrows',
         text: 'at the end go to the next thing in the folder.',
       },

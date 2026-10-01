@@ -257,3 +257,20 @@ describe('the Help of a folder, a note and a file', () => {
     expect(helpScreenFor('/folder/2-Areas')).toBe('folder');
   });
 });
+
+describe('Help row icons follow the boards (#950 F-24)', () => {
+  const icons = (screen: HelpScreen): string[] => HELP_ROWS[screen].rows.map((row) => row.icon);
+
+  it('draws the bird on the rows about what Bower wrote', () => {
+    expect(icons('home')[0]).toBe('bird');
+    expect(icons('folder')[0]).toBe('bird');
+  });
+
+  it('uses the icons the NO-, FI-, NT-, AR- and JF-Help boards draw', () => {
+    expect(icons('bowerNote')).toEqual(['bird', 'check', 'document']);
+    expect(icons('file')).toEqual(['bird', 'external', 'chevron']);
+    expect(icons('notes')).toEqual(['folder', 'bird', 'search', 'eye']);
+    expect(icons('folderOfFolders')).toEqual(['folder', 'document', 'chat']);
+    expect(icons('justFiled')).toEqual(['check', 'document', 'clock', 'check']);
+  });
+});

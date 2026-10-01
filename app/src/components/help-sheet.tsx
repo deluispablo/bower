@@ -40,15 +40,16 @@ import {
   IconBolt,
   IconChat,
   IconCheck,
+  IconChevronRight,
   IconClock,
   IconClose,
   IconDocument,
   IconEdit,
-  IconEyeOff,
+  IconExternalLink,
+  IconEye,
   IconFile,
   IconFolder,
   IconInbox,
-  IconNote,
   IconPin,
   IconPlay,
   IconSearch,
@@ -67,14 +68,15 @@ import { useMediaQuery } from '../use-media-query.js';
 
 import '../styles/help-sheet.css';
 
-const ICONS: Readonly<Record<HelpIcon, () => JSX.Element>> = {
+const ICONS: Readonly<Record<Exclude<HelpIcon, 'bird'>, () => JSX.Element>> = {
   inbox: IconInbox,
   clock: IconClock,
   pin: IconPin,
-  note: IconNote,
   folder: IconFolder,
   search: IconSearch,
-  'eye-off': IconEyeOff,
+  eye: IconEye,
+  external: IconExternalLink,
+  chevron: IconChevronRight,
   file: IconFile,
   edit: IconEdit,
   sparkle: IconSparkle,
@@ -318,7 +320,7 @@ function TourTabCopy({
 
 /**
  * Rows about what Bower wrote carry the bird mark, 20 px (R-HELP-4, D-18):
- * the "By Bower" and "The bird" rows. #919 may name them by icon instead.
+ * rows whose icon is 'bird', and the "By Bower" and "The bird" rows.
  */
 export function isBowerRow(lead: string): boolean {
   return /^(by bower|the bird)\b/i.test(lead.trim());
@@ -328,10 +330,10 @@ function HelpRows({ rows }: { rows: readonly HelpRow[] }): JSX.Element {
   return (
     <ul class="help-rows">
       {rows.map(({ icon, lead, text }) => {
-        const Icon = ICONS[icon];
+        const Icon = icon === 'bird' ? null : ICONS[icon];
         return (
           <li key={lead} class="help-row">
-            {isBowerRow(lead) ? <BowerMark size={20} /> : <Icon />}
+            {Icon === null || isBowerRow(lead) ? <BowerMark size={20} /> : <Icon />}
             <span>
               <b>{lead}</b> {text}
             </span>
