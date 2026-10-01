@@ -1,0 +1,2 @@
+scan.pdf	-
+plan.pdf	doc-text/1.txt

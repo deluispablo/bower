@@ -349,6 +349,12 @@ readonly AGENT_OUT="$WORK_DIR/agent.out"
 # tool result of the session, so vault content. It stays in the work dir,
 # never under LOG_DIR, which the workflow uploads when a run fails.
 readonly AGENT_STREAM="$WORK_DIR/agent.stream.jsonl"
+# R-SS-5 (#966): the vault's CLAUDE.md while the agent runs, and the system
+# prompt built from it. Both hold vault text, so both stay in the work dir,
+# which the agent cannot read (blockReadsOutsideWorkingDirectories in
+# claude-settings.json) and which is never uploaded.
+readonly RULEBOOK_FILE="$WORK_DIR/rulebook.md"
+readonly SYSTEM_FILE="$WORK_DIR/system.md"
 readonly AGENT_ERR="$LOG_DIR/agent.err"
 readonly RCLONE_LOG="$LOG_DIR/rclone.log"
 readonly PANDOC_LOG="$LOG_DIR/pandoc.log"
@@ -386,6 +392,7 @@ STEP='start'   # the step in progress, named in any failure report
 REASON=''      # the failure's reason for people, set by fail() (see there)
 REPORTED=0     # 1 once a final state (done or failed) was reported
 RUN_STARTED=0  # 1 once the agent may have changed the local copy
+RULEBOOK_OUT=0 # 1 while CLAUDE.md is out of the local copy (R-SS-5)
 REFUSED_JSON=''      # the audit's refused paths, a JSON array, once it ran
 QUARANTINED_JSON=''  # the pre-scan's quarantined paths, a JSON array, once it ran
 SET_ASIDE_JSON=''    # report v2: what the run set aside and why, a JSON array
@@ -439,8 +446,34 @@ readonly NEXT_FILTER='[inputs | sub("\r$"; "") | split("\t") | map(gsub("^\\s+|\
   | select(length == 2 and all(.[]; length > 0) and (.[1] | length) <= $cut)
   | (if .[0] == "-" then {} else {path: .[0]} end) + {action: .[1]}] | .[0:$max]'
 
+# R-SS-5 (#966): the agent runs without the vault's CLAUDE.md in its folder,
+# so Claude Code does not load all of it and the agent cannot read it; the
+# runner hands it the sections the run needs in the system prompt instead.
+# The move out is the last thing before the agent starts (take_rulebook_out
+# below); the file goes back byte for byte right after the agent ends,
+# before the audit, so the audit sees it unchanged, and on every other way
+# out after the move too: fail() and on_exit() call restore_rulebook before
+# anything is copied up. A missing CLAUDE.md in Drive would break the
+# folder, so a copy up must never run while it is out. Anything the agent
+# left at that path (the permission policy denies writing it) is replaced.
+take_rulebook_out() {
+  cp -p "$VAULT_DIR/CLAUDE.md" "$RULEBOOK_FILE" || return 1
+  RULEBOOK_OUT=1
+  rm -f "$VAULT_DIR/CLAUDE.md"
+}
+restore_rulebook() {
+  [ "$RULEBOOK_OUT" -eq 1 ] || return 0
+  if [ -e "$VAULT_DIR/CLAUDE.md" ] || [ -L "$VAULT_DIR/CLAUDE.md" ]; then
+    log "rulebook: a CLAUDE.md written during the run was replaced"
+    rm -rf "$VAULT_DIR/CLAUDE.md" || return 1
+  fi
+  cp -p "$RULEBOOK_FILE" "$VAULT_DIR/CLAUDE.md" || return 1
+  RULEBOOK_OUT=0
+}
+
 on_exit() {
   local rc=$?
+  restore_rulebook || log "rulebook not restored"
   if [ "$rc" -ne 0 ] && [ "$REPORTED" -eq 0 ]; then
     # An unexpected error that no explicit check caught.
     REPORTED=1
@@ -1402,6 +1435,8 @@ fail() {
   local error=$1
   REASON=${2:-unknown}
   REPORTED=1
+  # R-SS-5: CLAUDE.md is back before anything is copied up.
+  restore_rulebook || log "rulebook not restored"
   # R-VAULT-7: a missing folder gets nothing, not the agent's files, the
   # outcome file, the log line or the paths file.
   [ "$REASON" = vault_missing ] || copy_up_after_failure
@@ -1476,6 +1511,250 @@ already_written_block() {
   printf '%s\n' 'Finishing a tidy-up that stopped partway: the last run wrote the notes below before it stopped. They are already written; do not write these again. A pending file one of them names in its `original:` is filed only.'
   sed 's/.*/- `&`/' <<<"$paths"
 }
+
+# >>> context pack (R-SS-5, R-SS-6)
+# What the agent is handed instead of reading the rulebook, index.md and
+# log.md with tool calls (#966). Each function prints vault text for the
+# system prompt or the prompt, which the caller writes only to files under
+# WORK_DIR; the log gets counts. agent/test/context.test.sh runs this block
+# as it is, against fixture files.
+
+# R-SS-5: the rulebook sections a run needs, from $WORK_DIR/rulebook.md (the
+# vault's CLAUDE.md, rules version 24): the text before the first `##`
+# heading, every `##` section with no load marker (the core), and every
+# section whose marker, the line right after its heading
+# (`<!-- load: ingest, instructions -->`), names one of the modes given;
+# the marker lines are left out. A `##` line inside a fenced code block
+# (``` or ~~~, closed by a fence of the same character at least as long) is
+# text, not a heading. A rulebook with no marker at all (rules version 23
+# or older) is printed whole. Usage: rulebook_for [mode ...]
+rulebook_for() {
+  awk -v modes="$*" '
+    # The fence run (```, ~~~~, ...) a line starts with after at most three
+    # spaces, or nothing; REST is what follows it.
+    function fence_run(t,   s, c, k) {
+      s = t
+      sub(/^ ? ? ?/, "", s)
+      c = substr(s, 1, 1)
+      if (c != "`" && c != "~") return ""
+      k = 0
+      while (substr(s, k + 1, 1) == c) k++
+      if (k < 3) return ""
+      REST = substr(s, k + 1)
+      return substr(s, 1, k)
+    }
+    # The modes a marker line names, as " a b ", or nothing.
+    function marker_of(t,   s, parts, k, i, out) {
+      if (t !~ /^<!--[ \t]*load:/ || t !~ /-->[ \t]*$/) return ""
+      s = t
+      sub(/^<!--[ \t]*load:/, "", s)
+      sub(/-->[ \t]*$/, "", s)
+      k = split(s, parts, ",")
+      out = ""
+      for (i = 1; i <= k; i++) {
+        gsub(/^[ \t]+|[ \t]+$/, "", parts[i])
+        if (parts[i] != "") out = out " " parts[i]
+      }
+      return out == "" ? "" : out " "
+    }
+    BEGIN { n = split(modes, m, " "); for (i = 1; i <= n; i++) want[m[i]] = 1 }
+    { raw[NR] = $0; t = $0; sub(/\r$/, "", t); txt[NR] = t }
+    END {
+      open = ""
+      for (i = 1; i <= NR; i++) {
+        r = fence_run(txt[i])
+        if (open != "") {
+          if (r != "" && substr(r, 1, 1) == substr(open, 1, 1) &&
+            length(r) >= length(open) && REST ~ /^[ \t]*$/) open = ""
+          continue
+        }
+        if (r != "" && !(substr(r, 1, 1) == "`" && index(REST, "`"))) { open = r; continue }
+        if (txt[i] ~ /^## /) {
+          head[i] = 1
+          mk = marker_of(txt[i + 1])
+          if (mk != "") { marks[i] = mk; any = 1 }
+        }
+      }
+      if (!any) { for (i = 1; i <= NR; i++) print raw[i]; exit }
+      keep = 1
+      for (i = 1; i <= NR; i++) {
+        if (i in head) {
+          keep = 1
+          if (i in marks) {
+            keep = 0
+            k = split(marks[i], ms, " ")
+            for (j = 1; j <= k; j++) if (ms[j] in want) keep = 1
+            if (keep) print raw[i]
+            i++
+            continue
+          }
+        }
+        if (keep) print raw[i]
+      }
+    }' "$WORK_DIR/rulebook.md"
+}
+
+# R-SS-5: the system prompt, stable text only (nothing that changes from
+# run to run, so the prompt cache keeps it across the session's turns):
+# the rulebook sections for the modes given (rulebook_for), then Rules.md,
+# then About-Me.md, each under a plain heading. Usage: build_system_prompt
+# [mode ...]
+build_system_prompt() {
+  local name
+  printf '# Your rulebook (CLAUDE.md)\n\n'
+  rulebook_for "$@" || return 1
+  for name in Rules.md About-Me.md; do
+    printf '\n# %s\n\n' "$name"
+    if [ -f "$VAULT_DIR/$name" ]; then
+      awk 1 "$VAULT_DIR/$name" || return 1
+    else
+      printf '(none)\n'
+    fi
+  done
+}
+
+# R-SS-6 {{TAGS}}: the lines of the `## Tags` section of the index file $1
+# (`- #<tag> · <meaning> · <count>`), blank lines left out, or `(none yet)`.
+tags_block() {
+  local out=''
+  if [ -f "$1" ]; then
+    out=$(awk '{ sub(/\r$/, "") }
+      /^## / { on = ($0 ~ /^## Tags[ \t]*$/); next }
+      on && /[^ \t]/' "$1") || return 1
+  fi
+  printf '%s\n' "${out:-(none yet)}"
+}
+
+# One hub note as two lines, its first descriptive line and its statuses:
+# the first body line that is not blank, a heading or a callout's first
+# line (a quote's `>` taken off), and the frontmatter's `statuses:` as
+# `[a, b]`, or an empty line when it has none.
+readonly HUB_AWK='
+  { sub(/\r$/, "") }
+  NR == 1 && $0 == "---" { fm = 1; next }
+  fm && /^---[ \t]*$/ { fm = 0; next }
+  fm && mode == "block" {
+    if ($0 ~ /^[ \t]*-/) { v = $0; sub(/^[ \t]*-[ \t]*/, "", v); list = list (list == "" ? "" : ", ") v; next }
+    mode = ""
+  }
+  fm && mode == "flow" { list = list " " $0; if (index($0, "]")) mode = ""; next }
+  fm && /^statuses:/ {
+    has = 1; v = $0; sub(/^statuses:[ \t]*/, "", v)
+    if (v == "") mode = "block"
+    else { list = v; if (!index(v, "]")) mode = "flow" }
+    next
+  }
+  fm { next }
+  desc == "" && /[^ \t]/ && !/^[ \t]*#/ && !/^[ \t]*>[ \t]*\[!/ {
+    desc = $0; sub(/^[ \t]*(>[ \t]*)?/, "", desc); gsub(/\t/, " ", desc)
+  }
+  END {
+    gsub(/[ \t]+/, " ", list); sub(/^ *\[ */, "", list); sub(/ *\] *$/, "", list)
+    printf "%s\n%s\n", desc, (has ? "[" list "]" : "")
+  }'
+
+# R-SS-6 {{FOLDERS}}: one line per hub note in the PARA folders of the vault
+# at $1, `- <folder> · <first descriptive line> · statuses: [a, b]` (the
+# description cut to 120 characters, the statuses only when the note has
+# them), or `(none yet)`. A hub note is `<folder>/<name>/<name>.md`, as
+# check_hub_statuses finds them, or a folder note `_<name>.md`.
+folders_block() {
+  local LC_ALL=C.UTF-8
+  local vault=$1 path dir name desc statuses line found=0
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    dir=${path%/*}
+    name=${path##*/}
+    case "$name" in
+      _*.md | "${dir##*/}.md") ;;
+      *) continue ;;
+    esac
+    { IFS= read -r desc && IFS= read -r statuses; } < <(awk "$HUB_AWK" "$vault/$path") || continue
+    line="- $dir · ${desc:0:120}"
+    [ -z "$desc" ] && line="- $dir"
+    [ -z "$statuses" ] || line+=" · statuses: $statuses"
+    printf '%s\n' "$line"
+    found=1
+  done < <(cd "$vault" && for d in 1-Projects 2-Areas 3-Resources 4-Archives; do
+    [ ! -d "$d" ] || find "$d" -mindepth 2 -type f -name '*.md'
+  done | LC_ALL=C sort)
+  [ "$found" -eq 1 ] || printf '(none yet)\n'
+}
+
+# R-SS-6 {{CORRECTIONS}}: the `Correction: <from> -> <to> (<date>)` lines of
+# the log file $1, counted per pair, one `- <from> -> <to>: <n>` line per
+# pair in the order each first appears, or `(none)`.
+corrections_block() {
+  local out=''
+  if [ -f "$1" ]; then
+    out=$(awk '{ sub(/\r$/, "") }
+      {
+        i = index($0, "Correction:")
+        if (!i) next
+        s = substr($0, i + 11)
+        j = index(s, " -> ")
+        if (!j) next
+        from = substr(s, 1, j - 1)
+        to = substr(s, j + 4)
+        if (match(to, / \([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)/)) to = substr(to, 1, RSTART - 1)
+        gsub(/^[ \t]+|[ \t]+$/, "", from)
+        gsub(/^[ \t]+|[ \t]+$/, "", to)
+        if (from == "" || to == "") next
+        k = from " -> " to
+        if (!(k in n)) order[++m] = k
+        n[k]++
+      }
+      END { for (i = 1; i <= m; i++) printf "- %s: %d\n", order[i], n[order[i]] }' "$1") || return 1
+  fi
+  printf '%s\n' "${out:-(none)}"
+}
+
+# R-SS-6 {{PENDING}}: the pending files listed in $1 (vault paths), one per
+# line. A document converted before the run is followed by where its text
+# is, the `.md` next to it (`(text: <path>)`); a PDF with no text layer by
+# `(scanned: no text layer)`. `(none)` for an empty list. Reads VAULT_DIR
+# and DOC_TEXT_MAP.
+pending_block() {
+  local path sibling extra found=0
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    extra=''
+    case "${path,,}" in
+      *.docx | *.odt | *.html | *.htm | *.epub | *.rtf)
+        sibling="${path%.*}.md"
+        if [ -f "$VAULT_DIR/$sibling" ] && ! grep -Fxq -- "$sibling" "$1"; then
+          extra=" (text: $sibling)"
+        fi
+        ;;
+      *.pdf)
+        if [ -f "$DOC_TEXT_MAP" ] && N="${path##*/}" awk -F '\t' \
+          '$1 == ENVIRON["N"] && $2 == "-" { f = 1 } END { exit !f }' "$DOC_TEXT_MAP"; then
+          extra=' (scanned: no text layer)'
+        fi
+        ;;
+    esac
+    printf '%s%s\n' "$path" "$extra"
+    found=1
+  done <"$1"
+  [ "$found" -eq 1 ] || printf '(none)\n'
+}
+
+# R-SS-17 {{BACKFILL}}, a lint only: up to 50 rows of the index file $1
+# that lack tags or a description in the rules version 24 sense (fewer
+# than five `·`-separated fields), oldest first (file order), as they are,
+# or `(none)`. The `## Meta` and `## Tags` sections are not rows to
+# complete.
+backfill_block() {
+  local out=''
+  if [ -f "$1" ]; then
+    out=$(awk '{ sub(/\r$/, "") }
+      /^## / { skip = ($0 ~ /^## (Meta|Tags)[ \t]*$/); next }
+      skip { next }
+      /^[ \t]*- \[\[/ && split($0, f, "·") < 5 { print; if (++n == 50) exit }' "$1") || return 1
+  fi
+  printf '%s\n' "${out:-(none)}"
+}
+# <<< context pack
 
 # Whether pending path $1 belongs to an instructions-only run: an
 # instruction-shaped note directly in 0-Inbox/ (`Bower - *.md`, any letter
@@ -2485,7 +2764,10 @@ fi
 # The effort (see "model and effort" above): high for an ingest whose agent
 # is given an instruction note the app wrote (RULES_WRITABLE, from the
 # instruction allow-list above) or a context note still pending.
+# The same test picks the rulebook sections (R-SS-5): `ingest`, plus
+# `instructions` when the effort is high for that reason; `lint` for a lint.
 EFFORT=$EFFORT_LOW
+CONTEXT_MODES=("$MODE")
 if [ "$MODE" = ingest ]; then
   if [ "$RULES_WRITABLE" -eq 1 ]; then
     EFFORT=$EFFORT_HIGH
@@ -2498,19 +2780,62 @@ if [ "$MODE" = ingest ]; then
       fi
     done <"$pending_now"
   fi
+  [ "$EFFORT" != "$EFFORT_HIGH" ] || CONTEXT_MODES+=(instructions)
 fi
 readonly EFFORT
+# R-SS-6 (#966): the run's facts, filled into the prompt the way
+# {{ALREADY_WRITTEN}} is, so the agent never reads index.md or log.md to
+# get them. Built while CLAUDE.md is still in place; vault text goes only
+# into the prompt and into files under the work dir, the log gets counts.
+pending_now="$WORK_DIR/pending-after-scan.txt"
+[ -f "$pending_now" ] || pending_now=$PENDING_FILE
+[ "$MODE" = ingest ] || pending_now=/dev/null
+context_part() { # <name> <builder> [args...]: writes $WORK_DIR/context-<name>.txt
+  local name=$1
+  shift
+  if ! "$@" >"$WORK_DIR/context-$name.txt" 2>/dev/null; then
+    log "context: $name not built"
+    printf '(not available)\n' >"$WORK_DIR/context-$name.txt"
+  fi
+}
+context_part tags tags_block "$VAULT_DIR/index.md"
+context_part folders folders_block "$VAULT_DIR"
+context_part corrections corrections_block "$VAULT_DIR/log.md"
+context_part pending pending_block "$pending_now"
+context_part backfill backfill_block "$VAULT_DIR/index.md"
+context_count() { grep -cv '^(' "$WORK_DIR/context-$1.txt" || true; }
+context_line="context: $(grep -c '^- #' "$WORK_DIR/context-tags.txt" || true) tags, $(context_count folders) folders, $(context_count corrections) correction pairs, $(context_count pending) pending"
+[ "$MODE" != lint ] || context_line+=", $(context_count backfill) rows to complete"
+log "$context_line"
+for name in tags folders corrections pending backfill; do
+  value=$(cat "$WORK_DIR/context-$name.txt")
+  placeholder="{{${name^^}}}"
+  PROMPT=${PROMPT//"$placeholder"/"$value"}
+done
+STEP='rulebook'
+if ! take_rulebook_out; then
+  fail "$STEP: could not move CLAUDE.md out"
+fi
+if ! build_system_prompt "${CONTEXT_MODES[@]}" >"$SYSTEM_FILE" 2>/dev/null; then
+  fail "$STEP: system prompt not built"
+fi
+log "$STEP: $(wc -c <"$SYSTEM_FILE" | tr -d ' ') bytes for ${CONTEXT_MODES[*]}"
+STEP='agent run'
 RUN_STARTED=1
 set +e
 (
   cd "$VAULT_DIR"
   timeout -k 30 "$AGENT_TIME_LIMIT" env -i "${claude_env[@]}" \
     claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format stream-json --verbose \
-      --model "$MODEL" --effort "$EFFORT" \
+      --model "$MODEL" --effort "$EFFORT" --append-system-prompt-file "$SYSTEM_FILE" \
       --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
 ) >"$AGENT_STREAM" 2>"$AGENT_ERR"
 agent_rc=$?
 set -e
+# R-SS-5: CLAUDE.md goes back before anything reads or copies the local copy.
+if ! restore_rulebook; then
+  fail "$STEP: CLAUDE.md not restored"
+fi
 # The agent's closing lines (the report parsed below) are the final result
 # event's text; with no result event (a crash, a timeout) AGENT_OUT is empty,
 # as an empty text output was.
