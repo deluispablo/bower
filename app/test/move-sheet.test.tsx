@@ -177,6 +177,26 @@ describe('FolderChoice', () => {
     expect(onChoose).toHaveBeenCalledWith('3-Resources');
   });
 
+  it('shows a folder being moved dimmed under its parent, not on offer (PF-Move, #950 F-19)', () => {
+    const subject = { path: '2-Areas/Garden', isFolder: true };
+    mount(
+      h(FolderChoice, {
+        subject,
+        folders: pickerFolders(buildTree(INDEX), subject),
+        chosen: '',
+        onChoose: vi.fn(),
+      }),
+    );
+    expect(radio('Garden').disabled).toBe(true);
+    expect(
+      radio('Garden')
+        .closest('.folder-picker-row')
+        ?.classList.contains('folder-picker-current'),
+    ).toBe(true);
+    expect(radio('Areas').disabled).toBe(false);
+    expect(radio('Home').disabled).toBe(false);
+  });
+
   it('expands a landmark with its chevron', () => {
     choice();
     const row = radio('Projects').closest('.folder-picker-row');

@@ -65,18 +65,22 @@ export function currentFolderOf(subject: MoveSubject): string {
 /**
  * The folders the picker offers, as a tree of folders only: the four roots
  * drawn on PF-Move (#909). Inbox (and everything in it), Answers, Clippings
- * and any other top folder are never a destination; a folder being moved is not offered inside itself. The current
- * folder stays in the tree (the picker shows it disabled).
+ * and any other top folder are never a destination. A folder being moved
+ * stays in the tree, without its subfolders, so the picker can show it
+ * dimmed under its parent and never offer it or anything inside it
+ * (PF-Move, #950 F-19). The current folder stays in the tree too.
  */
 export function pickerFolders(
   root: TreeNode,
   subject: MoveSubject,
 ): TreeNode[] {
-  function keep(node: TreeNode): TreeNode | null {
-    if (subject.isFolder && node.path === subject.path) return null;
+  function keep(node: TreeNode): TreeNode {
+    if (subject.isFolder && node.path === subject.path) {
+      return { ...node, folders: [] };
+    }
     return {
       ...node,
-      folders: node.folders.flatMap((child) => keep(child) ?? []),
+      folders: node.folders.map((child) => keep(child)),
     };
   }
   return root.folders
@@ -84,7 +88,7 @@ export function pickerFolders(
       const kind = paraKindOf(top.name);
       return kind !== null && kind !== 'inbox';
     })
-    .flatMap((top) => keep(top) ?? []);
+    .map((top) => keep(top));
 }
 
 /** How a send ended: `run-failed` means the note is written, the run is not. */
