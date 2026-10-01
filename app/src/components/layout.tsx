@@ -55,6 +55,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import { loginUrl } from '../api.js';
+import { HELP_REQUEST_EVENT } from '../more-menu.js';
 import { tourOnScreen } from '../onboarding.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { personOf, useSession } from '../session.js';
@@ -160,13 +161,13 @@ function currentFor(href: string, path: string): 'page' | undefined {
   return href === path ? 'page' : undefined;
 }
 
-/**
+/*
  * Help is opened from each screen's ⋯ menu (#907's `requestHelp` in
- * `more-menu.ts`): it dispatches this cancelable window event and the shell,
- * which keeps the help sheet mounted, cancels it and opens the sheet for the
- * screen on show. There is no "?" in the bar (R-TOPBAR-1).
+ * `more-menu.ts`): it dispatches `HELP_REQUEST_EVENT`, a cancelable window
+ * event, and the shell, which keeps the help sheet mounted, cancels it and
+ * opens the sheet for the screen on show. There is no "?" in the bar
+ * (R-TOPBAR-1).
  */
-export const HELP_REQUEST_EVENT = 'bower:open-help';
 
 const LazyHelp = lazyOverlay(() =>
   import('./help-sheet.js').then((m) => m.HelpSheet),
