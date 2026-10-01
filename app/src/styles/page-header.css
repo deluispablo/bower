@@ -16,12 +16,11 @@
 
 .page-header-crumbs a {
   color: var(--color-text-muted);
-  text-decoration: none;
+  text-decoration: underline;
 }
 
 .page-header-crumbs a:hover {
   color: var(--color-text);
-  text-decoration: underline;
 }
 
 /* The separator, spaced evenly (boards: "Projects / Job Search Australia");
@@ -114,10 +113,12 @@
   background: var(--color-para-archives);
 }
 
+/* 14 px muted on both widths (boards, #920 DA-15). Light: muted and
+   secondary are the same colour, so nothing changes there. */
 .page-header-purpose {
   margin: var(--space-1) 0 0;
-  color: var(--color-text-secondary);
-  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 .page-header-tabs {
@@ -148,10 +149,6 @@
 
   .page-header-buttons {
     margin-top: 0;
-  }
-
-  .page-header-purpose {
-    font-size: var(--text-15);
   }
 }
 
