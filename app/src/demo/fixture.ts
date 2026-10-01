@@ -217,12 +217,32 @@ function unfinished(runId: string, finishedAt: string, minutes: number): Run {
  */
 const LOADED_AT = new Date();
 
-/** Local midnight `offset` days from the viewer's today. */
-function localDay(offset: number): Date {
+/** The latest time of day the fixture writes on its "today" (an offer
+ * Bower wrote at 07:11). */
+const LATEST_TODAY = '0711';
+
+/**
+ * The day the fixture calls today: the viewer's today, or yesterday when
+ * the demo opens before `LATEST_TODAY`, so no time is ever later than the
+ * viewer's clock (T-1). Local midnight.
+ */
+export const DEMO_TODAY: Date = ((): Date => {
+  const minutes = LOADED_AT.getHours() * 60 + LOADED_AT.getMinutes();
+  const latest =
+    Number(LATEST_TODAY.slice(0, 2)) * 60 + Number(LATEST_TODAY.slice(2));
   return new Date(
     LOADED_AT.getFullYear(),
     LOADED_AT.getMonth(),
-    LOADED_AT.getDate() + offset,
+    LOADED_AT.getDate() - (minutes < latest ? 1 : 0),
+  );
+})();
+
+/** Local midnight `offset` days from the fixture's today. */
+function localDay(offset: number): Date {
+  return new Date(
+    DEMO_TODAY.getFullYear(),
+    DEMO_TODAY.getMonth(),
+    DEMO_TODAY.getDate() + offset,
   );
 }
 

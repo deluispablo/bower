@@ -13,6 +13,7 @@ import {
   DEMO_EMAIL,
   DEMO_NAME,
   DEMO_RUNS,
+  DEMO_TODAY,
   EMPTY_INBOX_FILES,
   FIXTURE_FILES,
   FOLDER_STATUSES,
@@ -72,6 +73,15 @@ function roots(): string[] {
 }
 
 describe('the v6 demo world (#903)', () => {
+  it('never dates a file later than the viewer\'s clock (#920 T-1)', () => {
+    const now = Date.now();
+    const later = FIXTURE_FILES.filter(
+      (file) => Date.parse(file.modifiedTime) > now,
+    ).map((file) => file.path);
+    expect(later).toEqual([]);
+    expect(DEMO_TODAY.getTime()).toBeLessThanOrEqual(now);
+  });
+
   it('is Alex, whose avatar reads "A"', () => {
     expect(DEMO_NAME).toBe('Alex');
     expect(DEMO_EMAIL).toBe('alex@example.com');
@@ -127,7 +137,7 @@ describe('the v6 demo world (#903)', () => {
     // A week and a day from the viewer's today (7 Oct and 1 Oct on the
     // e2e clock).
     const inDays = (n: number): string => {
-      const day = new Date();
+      const day = new Date(DEMO_TODAY);
       day.setDate(day.getDate() + n);
       const mm = String(day.getMonth() + 1).padStart(2, '0');
       const dd = String(day.getDate()).padStart(2, '0');
@@ -250,7 +260,7 @@ describe('the v6 demo world (#903)', () => {
     // Yesterday 15:01 to 15:03 on the viewer's own clock.
     const started = new Date(last?.startedAt ?? '');
     const finished = new Date(last?.finishedAt ?? '');
-    const dayBefore = new Date();
+    const dayBefore = new Date(DEMO_TODAY);
     dayBefore.setDate(dayBefore.getDate() - 1);
     expect(started.toDateString()).toBe(dayBefore.toDateString());
     expect([started.getHours(), started.getMinutes()]).toEqual([15, 1]);

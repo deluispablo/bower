@@ -37,6 +37,13 @@
   text-decoration: underline;
 }
 
+/* Tags are targets of at least 24 px (WCAG 2.5.8, T-8). */
+.about-prop-tag {
+  display: inline-block;
+  min-height: 24px;
+  line-height: 24px;
+}
+
 /* The demo's Open in Drive: a text link that says why it does nothing. */
 .about-prop-drive {
   padding: 0;
