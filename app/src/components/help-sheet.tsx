@@ -50,13 +50,13 @@ import {
   IconFile,
   IconFolder,
   IconInbox,
+  IconLook,
   IconPin,
   IconPlay,
   IconSearch,
   IconShield,
   IconSort,
   IconSparkle,
-  IconSun,
 } from './icons.js';
 import { Queued } from './queued-overlay.js';
 import { Overlay } from './overlay.js';
@@ -85,7 +85,7 @@ const ICONS: Readonly<Record<Exclude<HelpIcon, 'bird'>, () => JSX.Element>> = {
   document: IconDocument,
   check: IconCheck,
   bolt: IconBolt,
-  sun: IconSun,
+  sun: IconLook,
   play: IconPlay,
   compare: IconSort,
 };

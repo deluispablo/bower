@@ -274,6 +274,16 @@ export function IconSun(): JSX.Element {
   );
 }
 
+/** The Look row on Settings Help (ST-Help): a sun with four short rays. */
+export function IconLook(): JSX.Element {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4 12H2M22 12h-2" />
+    </Svg>
+  );
+}
+
 export function IconClock(): JSX.Element {
   return (
     <Svg>
