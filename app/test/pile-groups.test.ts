@@ -85,27 +85,27 @@ describe('pileConfirm', () => {
     expect(confirm?.elsewhere).toBe(2);
     if (confirm === undefined) throw new Error('no piles');
     expect(pileConfirmLine(5, confirm)).toBe(
-      '5 things: 2 piles and 2 added from elsewhere',
+      '5 things in 2 piles',
     );
     expect(pileConfirmLine(3, { ...confirm, elsewhere: 0 })).toBe(
       '3 things in 2 piles',
     );
   });
 
-  it('names every part of the total, requests included', () => {
+  it('reads "<n> things in <m> piles" whatever else is waiting (S-AD-19)', () => {
     const line = pileConfirmLine(6, {
       piles: [{ id: 'a', label: 'x', count: 1 }],
       elsewhere: 2,
       requests: 1,
     });
-    expect(line).toBe('6 things: 1 pile, 2 added from elsewhere and 1 request');
+    expect(line).toBe('6 things in 1 pile');
     expect(
       pileConfirmLine(3, {
         piles: [{ id: 'a', label: 'x', count: 2 }],
         elsewhere: 0,
         requests: 1,
       }),
-    ).toBe('3 things: 1 pile and 1 request');
+    ).toBe('3 things in 1 pile');
   });
 
   it('is undefined when no pile has a thing waiting', () => {

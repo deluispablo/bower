@@ -344,7 +344,7 @@ describe('TidyConfirmSheet, piles (#771, R-PILE-5)', () => {
   it('names the piles, one row each, and what came from elsewhere', () => {
     mount(5, vi.fn(), vi.fn(), undefined, false, undefined, { piles });
     const text = document.body.textContent;
-    expect(text).toContain('5 things: 2 piles and 2 added from elsewhere');
+    expect(text).toContain('5 things in 2 piles');
     expect(text).toContain('Bower reads each pile with its own note.');
     expect(text).toContain('From your pile: “Job offers”');
     expect(text).toContain('2 things');
