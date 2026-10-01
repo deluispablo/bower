@@ -107,20 +107,7 @@ Each module's own header comment says what it holds; this table only says where 
 | `app/src/file-facts.ts` | Reads `.bower/file-facts.json`: PDF pages, Excel sheets, ZIP entries. | the file screen's meta line |
 | `app/src/last-run.ts` | Reads `.bower/last-run.json`, the run's own report: state, sentence, counts and, since report v2, `items`, `setAside` and `added`. | the run store, Home, Just filed |
 | `app/src/components/virtual-list.tsx` | The TanStack Virtual adapter: the tree past 150 rows and long folder lists render only what is on screen. | the tree, the folder screen |
-| `app/src/components/explorer.tsx`, `tree.tsx` | The one explorer: the desktop sidebar and the phone's Notes tab, with Pinned, the five landmarks and Expand all. There is no separate phone folder menu. | `layout.tsx`, `routes/notes.tsx` |
-
-### App shell (v6, #906)
-
-- `app/src/shell-routes.ts` names the second tab once (`FOLDERS_TAB_LABEL` "Folders", landmark `FOLDERS_LANDMARK` "Your folders"; the route stays `/notes`) and decides the frame per route: `topBarVariant` (`tab`, `inner`, `explorer`), `activeTab` (Just filed lights Home, Settings none) and `barHasAvatar` (not on Settings).
-- `app/src/components/layout.tsx` draws the phone top bar (files button, back link, title slot, ⋯ slot, avatar button), the tab bar, and the desktop sidebar frame and nav. There is no "?" in the bar and no "Done · 1 filed" pill on desktop (E-9: the run chip hides its done state there); Help lives in each screen's ⋯ menu.
-- `app/src/components/page-header.tsx` is the one page header: the desktop breadcrumb (parents only), the h1 with (i) and ⋯, the meta line from `meta-line.ts`, a purpose line and a tabs slot. Screens adopt it in their own issues.
-
-### One explorer, three hosts (#909)
-
-- `components/tree.tsx` is the one tree, in three hosts: `sidebar` (desktop, rows 28 px), `drawer` and `page` (the phone drawer and the Folders tab, rows 40 px). No counts, badges or hidden-files footer; "Bower's own files" (the `showAppFiles` preference) is a group at the bottom of the tree. Answers and Clippings are rows under it.
-- `components/explorer.tsx` builds each host around it (search slot `ExplorerSearchSlot` for #910, Pinned, YOUR FOLDERS with Show the open item / Sort / Collapse all folders). The sidebar explorer also mounts the phone drawer `FoldersDrawer` (portalled to the body) and the left-edge swipe (`use-edge-swipe.ts`); `folders-drawer.ts` holds its open state (`openFoldersDrawer` for the top bar's files button).
-- `reveal.ts#revealInFolders(path, id?)` opens the drawer on the phone or points the sidebar on desktop, then expands, scrolls to, selects and focuses the row. Used by "Show the open item", the Folders tab's `?reveal=` link and #906's root crumb.
-- `components/folder-picker.tsx#openMoveTo` is Move to…: the same tree rows, folders only, "Move here" writes the request note and confirms by a toast with Undo.
+| `app/src/components/explorer.tsx`, `tree.tsx` | The one explorer, in three hosts since v6: the desktop sidebar, the phone drawer and the Folders tab (see App modules (v6)). | `layout.tsx`, `routes/notes.tsx` |
 
 ## v4 data flows
 
@@ -144,29 +131,8 @@ Runs, piles, uploads, recovery and Bower on screen. Each module's own header com
 | `app/src/upload-queue.ts`, `upload-names.ts` | The durable upload queue: each attached file is copied into IndexedDB (`uploads` store) and sent with Drive's resumable protocol, so switching tab never stops it and closing the app only pauses it. Per user, one tab holds the queue (`navigator.locks`). Over 200 MB, or when the copy fails, a file is sent from memory and says "Keep Bower open until this one is in." | Add, the upload chip, sign-out |
 | `app/src/session.tsx` (`recheckFolder`), `vault-store.tsx` | The vault check: the app asks Drive about the Bower folder when it opens, when a tab is back after ten minutes, when a listing answers 404, and before Add, Tidy up and "Just this, now". The answer (`ok`, in the Bin, gone, no access; `unknown` never overrides what is known) sends the person to `/recover`. The Worker keeps `vault.missingAt` and `vault.setAt` on `/me`. | the layout, `/recover`, the run store |
 | `app/src/overlay-queue.ts`, `components/overlay.tsx` (`OverlayHost`) | The overlay queue: one modal at a time. `open(entry)` answers `'shown'` or `'queued'`; priority (own overlays, then the tidy-up sheet, then the tour, then hints and toasts) only orders the waiting line and nothing is pushed aside. `OverlayHost` is mounted once in `layout.tsx` and portals into `document.body`; on phones every overlay is a bottom sheet with a grab bar. | menus, dialogs, sheets, the tour |
-| `app/src/bird-presence.ts` | The presence store: a tiny external store that counts the birds on screen. `Bird` registers itself on mount when it is animated, at least 40 px and not the perch; the perch shows only while the count is 0; birds inside an overlay pass `overlay` so the others go still. `usePerchVisible()` reads it. Tests call `resetBirdPresence()`. | `Bird`, the perch, the run chip |
+| `app/src/bird-presence.ts` | The presence store: a tiny external store that counts the birds on screen. `Bird` registers itself on mount when it is animated, at least 40 px and not perched; the phone run chip draws its bird only while no other bird is on screen (`useBirdRoom`); birds inside an overlay pass `overlay` so the others go still. Tests call `resetBirdPresence()`. | `Bird`, the run chip |
 | `app/src/history.ts` | Parses and writes the `## History` bullets (`- 29 Sep · Status new → done, by you`) of a note; the runner and the rulebook write the same shape ("by Bower", "(your rule)"). | the note screen, made-from |
-
-### One source for names, kinds, dates and icons (#905)
-
-`app/src/meta-line.ts` (`metaLine`, `kindLabel`, `shortDate`) is the only source of kind words, dates and meta lines, with `displayName`, `folderCount`/`siblings`, `filedBy` and `titleFor` beside it; `components/file-icon.tsx` (`FileIcon`) is the only item icon. Screens import these instead of deriving their own.
-
-### Overlays and the ⋯ menu (#907)
-
-`components/overlay.tsx` has four placements: a phone sheet that hugs its content up to 90 % (every kind), the 440 px side panel (`kind="sheet"`), the 320 px popover (`kind="menu"`) and one centred dialog (`kind="dialog"`, only the tidy-up confirm, Columns and `components/confirm.tsx`); `OverlayHeader` and `OVERLAY_CLOSE_LABELS` name every ✕.
-`more-menu.ts` (`moreMenuGroups`) lists each ⋯ menu kind (folder, root, note, file, home, add, bower, notes, justFiled, settings) in the spec order; `components/note-menu.tsx` draws it and hides Drive items whose id has not reached it.
-
-### Lists and Bower's note box (#908)
-
-`components/list-row.tsx` (`ListRow`) is the one list row, `folder-grid.tsx#GridTile` the one tile and `folder-card.tsx` (`FolderCard`) the folder-of-folders card; with `onSelect` (desktop) one click selects and double click or Enter opens. `components/system-state.tsx` holds the skeleton (after 300 ms), the error line (`ERROR_COPY`) and the empty folder; `BowerNoteBox` folds per note (`foldedNotes` in `prefs.ts`) and takes `fold` for the preview column.
-
-### The one text box and the search field (#910)
-
-`components/composer.tsx` (`Composer`, modes `send` and `save`, rows 1 or 3) is every text box: one round button (`RoundButton`) that is the mic when empty, the arrow named by effect with text, and the asking, listening, sending, failed, blocked, unavailable and offline states with one live line under the box. Dictation runs on `useDictation` (`components/dictate-button.tsx`), the Web Speech state machine (`ready | asking | listening | blocked | unavailable`, `nextDictateState`), with the language from Settings. `components/search-field.tsx` (`SearchField`) is the same box as a `trigger` (the explorer's search slot) or Search's own `input`. `openAsk` (`send-to-bower.tsx`), `openRename` (`rename-sheet.tsx`) and `AppendForm` are the Ask, Rename… and Add a paragraph… sheets.
-
-### Compare and the folder's statuses (#916)
-
-`CompareSlot` (`routes/folder.tsx`) mounts `CompareView` (`components/compare.tsx`): phone cards with the Sort chip, the folder's quick filter and the `StatusSelect` (`components/status-select.tsx`); a desktop table sorted by a header click, with the Columns popover. `compare.ts#tableColumns` holds the boards' tables (flats, job offers; any other kind keeps its `compareFields`). The status list is the folder's: `folder-statuses.ts#folderStatuses` reads `statuses: [..]` (a non-empty list of short lower-case words, no duplicates) from the folder's hub note `<Folder>/<Folder>.md` and falls back to the kind's `statuses`; a note's older value stays as an extra option. The change is written to the note's `status` (R-API-14).
 
 ## v5 data flows
 
@@ -175,6 +141,69 @@ Runs, piles, uploads, recovery and Bower on screen. Each module's own header com
 - **Uploads.** `uploadQueue().start(email)` runs after sign-in; the queue is keyed by the signed-in email because `/me` has no user id. On a reload it asks Drive how many bytes arrived and sends the rest; the copy is deleted only when Drive confirms the file. Sign-out, `DELETE /me` and "Forget this device" call `clearUploadQueue`, after the unfinished-uploads dialog.
 - **Vault check.** `recheckFolder` reads the folder's own metadata from Drive. Trashed shows "Put it back", 404 shows "gone", a shared-drive or lost-access answer shows "can't open"; a 403 or 5xx from Drive is not "gone". The runner reports `vault_missing` when the folder is gone before it uploads anything, so a restored folder is never overwritten. See the runbook's "Your Bower folder was deleted".
 - **Overlays and the bird.** Every overlay asks the queue to open; `OverlayHost` shows the one in front and restores focus to the opener when it closes. A bird inside an overlay registers as an overlay bird, which stills the others; under reduced motion a still pose replaces the animated one.
+
+## App modules (v6)
+
+v6 gives every screen the same parts: one text box, one round button, one list row, one file icon, one page header, four overlay placements and one explorer. Each part is the single source of its look and words; screens import it instead of drawing their own. `docs/brand.md` has the tokens and primitives.
+
+### App shell (#906)
+
+- `app/src/shell-routes.ts` names the second tab once (`FOLDERS_TAB_LABEL` "Folders", landmark `FOLDERS_LANDMARK` "Your folders"; the route stays `/notes`) and decides the frame per route: `topBarVariant` (`tab`, `inner`, `explorer`), `activeTab` (Just filed lights Home, Settings none) and `barHasAvatar` (not on Settings).
+- `app/src/components/layout.tsx` draws the phone top bar (files button, back link, title slot, ⋯ slot, avatar button), the tab bar, and the desktop sidebar frame and nav. Every nav item is a stroke icon; Bower's is the speech bubble. The sidebar has no bird (the old ledge is gone; `components/bower-ledge.tsx` keeps only `useBirdRoom`, used by the phone run chip) and Add has no waiting-count badge. There is no "?" in the bar and no "Done · 1 filed" pill on desktop (E-9); Help lives in each screen's ⋯ menu.
+
+### PageHeader (#906)
+
+`components/page-header.tsx` (`PageHeader`) is the one page header, on every screen, so a name appears once: the desktop breadcrumb (parents only; a root folder's crumb reads "Your folders" and reveals the tree), the h1 (28 px on the phone, 32 px from 900 px; it wraps, never truncates) with (i) and ⋯ beside its first line, the meta line from `meta-line.ts`, an optional purpose line (a folder of folders) and an optional tabs row. `PageKind` is `screen`, `tab`, `folder`, `note` or `file`.
+
+### One source for names, kinds, dates, counts and icons (#905)
+
+- `app/src/meta-line.ts` (`metaLine`, `kindLabel`, `itemKind`, `shortDate`, `dayWords`, `sizeWords`) is the only source of kind words, dates and meta lines.
+- `file-origin.ts#filedBy` says who put a file in its folder and when ("filed by Bower …", "added …"); `bower-written.ts#isBowerWritten` is the one rule for "Bower wrote this note".
+- `components/file-icon.tsx` (`FileIcon`) is the only item icon: the still bird mark for anything Bower wrote; one document glyph (`IconDocument`) for every original, stroked in its root's colour (the kind word in the meta line tells a PDF from a photo); the folder outline in its root's colour for a subfolder; the PARA disc (`FolderMark`) for a root; muted for Answers, Clippings and anything outside the five roots. Four sizes: 16, 20, 28, 40.
+- **A folder's own page** (K-31, `folder-view.ts#isFolderPage`): a note named after its own folder (`Moonee Ponds/Moonee Ponds.md`) is that folder's page, unless it says `by: person`. It is not listed in the folder and not counted; `siblings` (About's "In this folder", the n of N footer) skips it too.
+- **Counts** (K-31, `folder-view.ts`): a page header counts the items directly in the folder (`folderCount`: Originals plus By Bower, subfolders counted as originals), so the meta line, Filter & sort's "Show n things" and the segments agree. A subfolder's row and card count everything inside it, the folders under it included, minus the folders' own pages (`subfolderThings`); a pinned folder's tile counts everything inside it too (`navigation.ts#folderCounts`).
+
+### Overlays and the ⋯ menu (#907)
+
+`components/overlay.tsx` has four placements: a phone sheet that hugs its content up to 90 % (every kind, on the phone), the 440 px side panel (`kind="sheet"`), the 320 px popover (`kind="menu"`) and one centred dialog (`kind="dialog"`, only the tidy-up confirm, Columns and `components/confirm.tsx`); `OverlayHeader` and `OVERLAY_CLOSE_LABELS` name every ✕. One overlay shows at a time (`overlay-queue.ts`, see v5).
+`more-menu.ts` (`moreMenuGroups`) lists each ⋯ menu kind (`MenuKind`: folder, root, note, file, home, add, bower, notes, justFiled, settings, health) in the spec order; `components/note-menu.tsx` draws it and hides a Drive item whose id has not arrived.
+
+### Lists, cards and Bower's note box (#908)
+
+`components/list-row.tsx` (`ListRow`) is the one list row, `folder-grid.tsx#GridTile` the one tile and `folder-card.tsx` (`FolderCard`) the folder-of-folders card (the folder outline at 40 px, "<n> things · updated <when>", a "<n> new" badge and up to three things inside). With `onSelect` (desktop) one click selects, and a double click or Enter opens. `components/system-state.tsx` holds the skeleton (after 300 ms), the error line (`ERROR_COPY`) and the empty folder. `BowerNoteBox` folds per note (`foldedNotes` in `prefs.ts`) and takes `fold` for the preview column.
+
+### The one text box, the round button and the search field (#910)
+
+- `components/composer.tsx` (`Composer`) is every text box: mode `send` (with text, the arrow, named by its effect: Send, Put in the inbox, Rename) or `save` (keeps the mic and saves as you type, `SAVE_DEBOUNCE_MS` after the last key), one line or three (`rows: 1 | 3`; Enter commits in one line, Ctrl or ⌘ + Enter in three). `composerButton` and `composerLine` decide the one button and the one live line under the box.
+- `components/round-button.tsx` (`RoundButton`) is that button, 40 px (32 in the desktop search field), always in the same place, in six states: `mic` (empty box), `asking` (permission prompt), `mic-off` (crossed out, dimmed), `arrow` (text typed in `send` mode), `stop` (dictating) and `spinner` (sending).
+- Dictation runs on `useDictation` (`components/dictate-button.tsx`), the Web Speech state machine (`DictateState`: `ready | asking | listening | blocked | unavailable`, `nextDictateState`), with the language from Settings. Dictation off has two states, both with the crossed-out mic and their own line: `blocked` ("The microphone is blocked. You can allow it in your browser settings.") and `unavailable` ("Dictation is off in this browser. Type instead."). Offline has its own line too.
+- `components/search-field.tsx` (`SearchField`) is the same box as a `trigger` (the explorer's search slot, which opens Search) or Search's own `input`. `openAsk` (`send-to-bower.tsx`), `openRename` (`rename-sheet.tsx`) and `AppendForm` are the Ask, Rename… and Add a paragraph… sheets around a `Composer`.
+
+### One explorer, three hosts (#909)
+
+- `components/tree.tsx` is the one tree, in three hosts: `sidebar` (desktop, rows 28 px), `drawer` and `page` (the phone drawer and the Folders tab, rows 40 px). No counts, badges or hidden-files footer; "Bower's own files" (the `showAppFiles` preference) is a group at the bottom of the tree. Answers and Clippings are rows under it.
+- `components/explorer.tsx` builds each host around it (the search slot, Pinned, YOUR FOLDERS with Show the open item / Sort / Collapse all folders). The sidebar explorer also mounts the phone drawer `FoldersDrawer` (portalled to the body) and the left-edge swipe (`use-edge-swipe.ts`); `folders-drawer.ts` holds its open state (`openFoldersDrawer` for the top bar's files button).
+- `reveal.ts#revealInFolders(path, id?)` opens the drawer on the phone or points the sidebar on desktop, then expands, scrolls to, selects and focuses the row. Used by "Show the open item", the Folders tab's `?reveal=` link and the root crumb.
+- `components/folder-picker.tsx#openMoveTo` is Move to…: the same tree rows, folders only; "Move here" writes the request note and confirms with a toast with Undo.
+
+### Compare and the folder's statuses (#916, #921)
+
+`CompareSlot` (`routes/folder.tsx`) mounts `CompareView` (`components/compare.tsx`): phone cards with the Sort chip, the folder's quick filter and the `StatusSelect` (`components/status-select.tsx`); a desktop table sorted by a header click, with the Columns popover. `compare.ts#tableColumns` holds the boards' tables (flats, job offers; any other kind keeps its `compareFields`).
+
+Statuses are chosen per folder (rulebook v23). `folder-statuses.ts#folderStatuses` reads `statuses: [..]` from the folder's hub note `<Folder>/<Folder>.md` (`hubNotePath`): a non-empty list of lower-case values of at most `MAX_STATUS_LENGTH` (24) characters, no duplicates. A missing or unusable list falls back to the kind's `statuses` (`kinds.ts`), and the console says why. `statusOptions` keeps a note's older value that is not in the list as the last option, so it stays choosable until it is changed. A change is written to the note's `status` (R-API-14).
+
+**The hub-note contract.** The rulebook (`vault-template/CLAUDE.md`, v23) has Bower write the list when a project or area folder holds two or more notes of a kind with statuses: 3 to 10 values, lifecycle order, starting with `new`; it appends a value a note uses rather than dropping it. The runner (`agent/run.sh`, `check_hub_statuses`) removes the list from a hub note the run changed when it breaks those rules or lacks a status a note next to it uses, and says so in the run's summary. The app and the runner apply the same 24-character limit.
+
+### The demo is the UI's data contract (#903, #922)
+
+`app/src/demo/` (`index.ts` installs it; `fixture.ts` is Alex's folder, `server.ts` the pretend Worker and scripted run, `drive.ts` the in-memory Drive) feeds the app through the same `WorkerClient` and `DriveClient` the real build uses, with the shapes the boards draw: hub notes with `statuses:`, runs with `startedAt`, who filed what, Drive ids for the ⋯ menu. Where the demo and real data disagree, the demo is the contract and the real client follows it. `demo/load-switch.ts` adds two demo-only switches in session storage: `bower:demo:slow` (reads wait about 1.5 s, so the skeletons show) and `bower:demo:fail` (the next read fails once, so the error line and Try again show). The demo is built locally only (`pnpm -C app build:demo`); it is not deployed.
+
+## v6 data flows
+
+- **Run start time.** The Worker sets `run.startedAt` when a run first reports `running` (`api/src/runner.ts`) and returns it on `GET /status`; the demo's server does the same. `run-progress.ts#runStartTime` reads it (else `requestedAt`) and `startedLine` writes "Started 11:57 · it takes a few minutes" for the running sheet and Home.
+- **Who filed.** `file-origin.ts#originOf` reads a file's origin (the `bowerOrigin` Drive app property, else its `index.md` row); `filedBy` turns it into "filed by Bower <when>" (the run's time when known, else Drive's created time) or "added <when>" for something you added or a file without an origin. The file page's About, the quick look, a note's properties and the meta line read it.
+- **Statuses.** In a tidy-up the agent writes `statuses:` in the hub note and the runner checks every hub note the run changed, removing an unusable list. In the app, Compare reads the hub note with the folder's notes, `folderStatuses` gives the list (or the kind's), `statusOptions` adds the note's legacy value at the end, and a change writes the note's `status` in Drive. No Worker call.
+- **Folder counts.** Telling a folder's own page apart needs its frontmatter (`note-meta.ts`), so the folder page reads its notes before it lists and counts them; the header counts what is directly in the folder, and each subfolder's card or row, and a pinned folder, count everything inside it.
 
 ## Credentials
 
