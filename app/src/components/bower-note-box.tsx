@@ -20,10 +20,9 @@ import type { Kind } from '../kinds.js';
 import { noteMetaFrom } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { getPref, setPref } from '../prefs.js';
-import { showToast } from '../toast-store.js';
 import { Bird, BowerMark } from './bird.js';
 import type { BirdState } from './bird.js';
-import { chipLabel, Details, questionsFor } from './details.js';
+import { chipLabel, Details } from './details.js';
 import { NoteBody } from './note-body.js';
 
 import '../styles/bower-note-box.css';
@@ -247,32 +246,20 @@ export function ruleChange(
   };
 }
 
-/** "the agent", "the employer", "payroll": who the questions go to. */
-export function whoFor(kind: Kind | undefined): string {
-  const match = /^Ask (the [^:]+|[^:]+):/.exec(kind?.questionsLabel ?? '');
-  return match?.[1] ?? 'the agent';
-}
-
 /** The things to check: the note's own section, else the fields the
  * document did not state (R-INS-4). */
 export function checkItems(
   kind: Kind | undefined,
   meta: NoteMeta,
   sectionItems: readonly string[],
-): { items: string[]; questions: string[] } {
+): { items: string[] } {
   if (sectionItems.length > 0) {
-    return { items: [...sectionItems], questions: [...sectionItems] };
+    return { items: [...sectionItems] };
   }
   return {
     items: meta.not_stated.map((key) =>
       kind === undefined ? key.replace(/[_-]+/g, ' ') : chipLabel(kind, key),
     ),
-    questions:
-      kind === undefined
-        ? meta.not_stated.map(
-            (key) => `What is the ${key.replace(/[_-]+/g, ' ')}?`,
-          )
-        : questionsFor(kind, meta.not_stated),
   };
 }
 
@@ -324,25 +311,6 @@ export function readingText(
   const what = readingNoun(kind);
   const from = named.length === 0 ? '' : ` and ${named.join(' and ')}`;
   return `Reading ${what}${from}. About a minute; you can keep reading.`;
-}
-
-function copyLines(lines: readonly string[]): void {
-  const clipboard =
-    typeof navigator === 'undefined' ? undefined : navigator.clipboard;
-  if (clipboard === undefined) {
-    showToast("Bower couldn't copy that. Try again.");
-    return;
-  }
-  const noun = lines.length === 1 ? 'question' : 'questions';
-  clipboard.writeText(lines.join('\n')).then(
-    () => {
-      showToast(`Copied ${String(lines.length)} ${noun}`);
-    },
-    (error: unknown) => {
-      console.error('Copying the questions failed', error);
-      showToast("Bower couldn't copy that. Try again.");
-    },
-  );
 }
 
 export interface BowerNoteBoxProps {
@@ -588,15 +556,6 @@ export function BowerNoteBox({
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              class="bower-note-box-copy"
-              onClick={() => {
-                copyLines(check.questions);
-              }}
-            >
-              {`Copy as questions for ${whoFor(kind)}`}
-            </button>
           </div>
         )}
       </div>

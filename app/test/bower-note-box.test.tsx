@@ -17,12 +17,11 @@ import {
   takeCheckSection,
   updatedWhen,
   verdictRow,
-  whoFor,
 } from '../src/components/bower-note-box.js';
 import type { RequestRow } from '../src/bower-tab.js';
 import { kindById } from '../src/kinds.js';
 import { noteMetaFrom } from '../src/note-meta.js';
-import { currentToast, dismissToast } from '../src/toast-store.js';
+import { dismissToast } from '../src/toast-store.js';
 
 vi.mock('../src/vault-store.js', () => ({
   useVault: () => ({ index: null, getNoteText: () => Promise.resolve('') }),
@@ -113,21 +112,14 @@ describe('pure helpers', () => {
     });
   });
 
-  it('names the check items from not_stated, one question per item', () => {
+  it('names the check items from not_stated, one per field not stated', () => {
     const kind = kindById('job-offer');
     const meta = noteMetaFrom(OFFER);
     const out = checkItems(kind, meta, []);
     expect(out.items).toHaveLength(2);
-    expect(out.questions).toHaveLength(2);
     expect(checkItems(kind, meta, ['Ask about the start date']).items).toEqual([
       'Ask about the start date',
     ]);
-  });
-
-  it('says who the questions go to', () => {
-    expect(whoFor(kindById('job-offer'))).toBe('the employer');
-    expect(whoFor(kindById('rental-listing'))).toBe('the agent');
-    expect(whoFor(undefined)).toBe('the agent');
   });
 
   it('writes the rule-change line only when bower_change is there', () => {
@@ -277,31 +269,10 @@ describe('BowerNoteBox (issue #757)', () => {
     expect(host.querySelector('.bower-note-box-updated')).toBeNull();
   });
 
-  it('copies one question per line and says so', async () => {
+  it('offers no copy-as-questions button (spec 1.4)', () => {
     mount(OFFER);
-    await act(() => {
-      host.querySelector<HTMLButtonElement>('.bower-note-box-copy')?.click();
-    });
-    expect(writeText).toHaveBeenCalledTimes(1);
-    expect((writeText.mock.calls[0]?.[0] ?? '').split('\n')).toHaveLength(2);
-    expect(currentToast()?.message).toBe('Copied 2 questions');
-    expect(host.querySelector('.bower-note-box-copy')?.textContent).toBe(
-      'Copy as questions for the employer',
-    );
-  });
-
-  it('says so when the clipboard is missing', async () => {
-    Object.defineProperty(navigator, 'clipboard', {
-      value: undefined,
-      configurable: true,
-    });
-    mount(OFFER);
-    await act(() => {
-      host.querySelector<HTMLButtonElement>('.bower-note-box-copy')?.click();
-    });
-    expect(currentToast()?.message).toBe(
-      "Bower couldn't copy that. Try again.",
-    );
+    expect(host.querySelector('.bower-note-box-check')).not.toBeNull();
+    expect(host.textContent).not.toContain('Copy as questions');
   });
 
   it('shows no What to check without anything to check', () => {

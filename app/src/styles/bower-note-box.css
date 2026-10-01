@@ -141,8 +141,7 @@
   font-size: var(--text-sm);
 }
 
-.bower-note-box-changed,
-.bower-note-box-copy {
+.bower-note-box-changed {
   min-height: 44px;
   padding: 0 var(--space-3);
   border: 0;
@@ -152,14 +151,6 @@
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
-}
-
-.bower-note-box-copy {
-  align-self: flex-start;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-full);
-  color: var(--color-text);
-  text-decoration: none;
 }
 
 .bower-note-box-before p {
