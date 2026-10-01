@@ -5,12 +5,18 @@ import { readFileSync } from 'node:fs';
 import { h, render } from 'preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
+const openAsk = vi.fn();
+vi.mock('../src/components/send-to-bower.js', () => ({ openAsk }));
+
+const {
+  FILE_TIP_ASK,
+  FileTip,
+  fileTipId,
   Hint,
   hintStorageKey,
   isHintDismissed,
   restoreHint,
-} from '../src/components/hint.js';
+} = await import('../src/components/hint.js');
 
 let host: HTMLElement | undefined;
 
@@ -145,5 +151,54 @@ describe('Hint (issue #742)', () => {
     const left = [...host.querySelectorAll<HTMLElement>('.hint')];
     expect(left).toHaveLength(1);
     expect(left[0]?.hidden).toBe(false);
+  });
+});
+
+describe('The file tip (#912, R-HINT-1, FI-Main)', () => {
+  const file = {
+    id: 'id-letter',
+    name: 'Cover Letter - Alex.pdf',
+    mimeType: 'application/pdf',
+    parents: ['FOLDER_ID'],
+    path: '1-Projects/Job Search Australia/Cover Letter - Alex.pdf',
+  };
+
+  function mountTip(): HTMLElement {
+    host = document.createElement('div');
+    document.body.append(host);
+    render(h(FileTip, { file, filedAsItIs: true }), host);
+    return host;
+  }
+
+  it('reads as the board and opens Ask about the file, prefilled', () => {
+    openAsk.mockClear();
+    const root = mountTip();
+    expect(root.textContent).toContain(
+      'Want a note on it? Bower filed this as it is. Ask for one.',
+    );
+    const button = root.querySelector<HTMLButtonElement>('.hint-file-ask');
+    expect(button?.textContent).toBe('Summarise this and list what matters');
+    button?.click();
+    expect(openAsk).toHaveBeenCalledTimes(1);
+    const [item, options] = openAsk.mock.calls[0] as [
+      { name: string; kind: string },
+      { prefill: string },
+    ];
+    expect(item.name).toBe('Cover Letter - Alex');
+    expect(item.kind).toBe('file');
+    expect(options.prefill).toBe(FILE_TIP_ASK);
+  });
+
+  it('remembers its dismissal for this file', async () => {
+    const root = mountTip();
+    root.querySelector<HTMLButtonElement>('.hint-dismiss')?.click();
+    // Preact flushes state updates on a microtask.
+    await Promise.resolve();
+    expect(root.querySelector('.hint')).toBeNull();
+    expect(isHintDismissed(fileTipId(file.id))).toBe(true);
+    expect(isHintDismissed(fileTipId('another-file'))).toBe(false);
+    render(null, root);
+    render(h(FileTip, { file, filedAsItIs: true }), root);
+    expect(root.querySelector('.hint')).toBeNull();
   });
 });

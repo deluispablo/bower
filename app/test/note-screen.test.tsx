@@ -128,6 +128,7 @@ vi.mock('preact-iso', () => ({ useRoute: () => route }));
 
 vi.mock('../src/cache.js', () => ({
   loadNote: () => Promise.resolve(undefined),
+  loadNoteMetaEntry: () => Promise.resolve(undefined),
 }));
 const markSeen = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
 vi.mock('../src/seen.js', () => ({ markSeen }));
@@ -205,18 +206,18 @@ describe('Note screen (#609)', () => {
   it('lays out props line, then one box with key facts once and Details open', async () => {
     await mount(LISTING.id);
 
-    // R-NOTE-2: kind row, meta line, Made from (the original by name).
+    // R-NO-1: the meta line "Bower note · 26 Sep" with the tags as links;
+    // the status select of a kind with statuses; Made from (the original).
     const row = root.querySelector('.note-kind-row');
-    expect(row?.querySelector('.note-kind-chip')?.textContent).toBe(
-      'Rental listing',
-    );
-    expect(row?.textContent).toContain('Bower');
+    expect(row?.querySelector('.note-kind-chip')).toBeNull();
     expect(row?.querySelector('select')?.getAttribute('aria-label')).toBe(
       'Status: To view. Change',
     );
     const meta = root.querySelector('.note-meta-line');
-    expect(meta?.textContent).toContain('Flat hunt');
-    expect(meta?.textContent).toContain('Filed 26 Sep');
+    expect(meta?.textContent).toContain('Bower note · 26 Sep');
+    expect(
+      meta?.querySelector('a.note-tag')?.getAttribute('href'),
+    ).toBe('/search?q=%23housing');
     const original = root.querySelector('.made-from a[href="/file/id-scan"]');
     expect(original?.textContent).toContain('Arlington Road, 2 bed.pdf');
     expect(root.querySelector('.note-props')).toBeNull();
@@ -273,12 +274,12 @@ describe('Note screen (#609)', () => {
     expect(root.querySelectorAll('h1')).toHaveLength(1);
   });
 
-  it('names an answer "Answer" with no status select, and "Written" in its meta line', async () => {
+  it('names an answer "Bower answer" in its meta line, with no status select', async () => {
     await mount(ANSWER.id);
-    expect(root.querySelector('.note-kind-chip')?.textContent).toBe('Answer');
+    expect(root.querySelector('.note-kind-row')).toBeNull();
     expect(root.querySelector('.note-status')).toBeNull();
     expect(root.querySelector('.note-meta-line')?.textContent).toContain(
-      'Written 28 Sep',
+      'Bower answer · 28 Sep',
     );
     expect(root.querySelector('.made-from')).toBeNull();
   });
@@ -318,9 +319,6 @@ describe('Text copy of a document (#760, R-NOTE-8)', () => {
     await mount(COPY.id);
 
     expect(root.querySelector('h1')?.textContent).toBe('CV 2026');
-    expect(root.querySelector('.note-kind-chip')?.textContent).toBe(
-      'Word document, as text',
-    );
     const original = root.querySelector('.made-from a[href="/file/id-cv"]');
     expect(original?.textContent).toContain('CV 2026.docx');
     expect(original?.textContent).toContain('the original');
@@ -336,7 +334,7 @@ describe('Text copy of a document (#760, R-NOTE-8)', () => {
     expect(root.textContent).toContain('Six years of experience.');
 
     const order = [
-      '.note-kind-row',
+      '.note-meta-line',
       '.made-from',
       '.bower-note-box',
       '.note-document-divider',
@@ -381,8 +379,8 @@ describe('Text copy of a document (#760, R-NOTE-8)', () => {
   });
 });
 
-describe('About panel (#609)', () => {
-  it('holds About this note, Details, Original, Outline and In this folder, and no key facts (R-NOTE-5)', async () => {
+describe('About this note (#912, R-ABOUT-1..3)', () => {
+  it('holds the properties, OUTLINE and IN THIS FOLDER; Source by name, no brackets or extension', async () => {
     const text = texts.get(LISTING.id) ?? '';
     const rendered = renderNote(text, index, { path: LISTING.path });
     root = document.createElement('div');
@@ -390,12 +388,14 @@ describe('About panel (#609)', () => {
     await act(() => {
       render(
         h(AboutPanel, {
+          kind: 'note',
           index,
           file: LISTING,
           html: rendered.html,
-          properties: { tags: ['housing'] },
+          properties: { tags: ['housing'], created: '2026-09-26' },
           folder: { name: 'Flat hunt', href: '/folder/x' },
           meta: noteMetaFrom(rendered.frontmatter),
+          items: [LISTING, SCAN],
         }),
         root,
       );
@@ -404,21 +404,19 @@ describe('About panel (#609)', () => {
     const headings = Array.from(root.querySelectorAll('.about-heading')).map(
       (heading) => heading.textContent,
     );
-    expect(headings).toEqual([
-      'About this note',
-      'Details',
-      'Original',
-      'Outline',
-      'In this folder',
+    expect(headings).toEqual(['About this note', 'Outline', 'In this folder']);
+    const rows = Array.from(root.querySelectorAll('.about-prop')).map(
+      (row) => row.textContent,
+    );
+    expect(rows).toEqual([
+      'FolderFlat hunt',
+      'Written26 Sep, by Bower',
+      'SourceArlington Road, 2 bed PDF',
+      'Tags#housing',
     ]);
-    expect(root.querySelector('[aria-label="Key facts"]')).toBeNull();
-    expect(root.querySelector('.about-not-stated')?.textContent).toContain(
-      'pets, bills',
-    );
-    expect(root.querySelector('.about-original')?.textContent).toBe(
-      'PDF, 2 pages',
-    );
-    expect(root.querySelector('.about-detail dt')?.textContent).toBeDefined();
+    const source = root.querySelector('.about-prop a[href="/file/id-scan"]');
+    expect(source?.textContent).toBe('Arlington Road, 2 bed');
+    expect(root.textContent).not.toContain('[[');
   });
 });
 
