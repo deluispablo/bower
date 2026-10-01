@@ -160,6 +160,8 @@ interface TipProps {
 /** The "?" tip under the box: what can be said, and three examples that
  * fill the box when tapped (never send it). */
 function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
+  // K-27: desktop says "click", the phone says "tap".
+  const desktop = useMediaQuery('(min-width: 900px)');
   return (
     <div class="bower-tip">
       <button
@@ -178,7 +180,8 @@ function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
           <p>
             A rule (&ldquo;from now on&hellip;&rdquo;), a job (&ldquo;make a
             document&hellip;&rdquo;) or a question, in your words. A rule starts
-            at once; a job or a question waits for the next tidy-up. Tap one:
+            at once; a job or a question waits for the next tidy-up.{' '}
+            {desktop ? 'Click one:' : 'Tap one:'}
           </p>
           <ul class="bower-examples">
             {examples.map((example) => (
