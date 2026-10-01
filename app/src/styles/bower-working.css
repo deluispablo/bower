@@ -363,6 +363,11 @@
   width: 100%;
 }
 
+/* AR-Run: room under the button, clear of the phone's home indicator. */
+.working-sheet-done .working-sheet-actions {
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
 /* Done: the bird says what it added. */
 .working-sheet-say {
   display: flex;
