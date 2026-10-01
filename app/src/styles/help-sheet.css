@@ -275,7 +275,7 @@ body:has(.tour-spot) .overlay:has(.tour-card) > .overlay-scrim {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  column-gap: var(--space-2);
+  gap: 0 var(--space-2);
 }
 
 .tour-card .help-heading {
@@ -285,6 +285,7 @@ body:has(.tour-spot) .overlay:has(.tour-card) > .overlay-scrim {
 .tour-card .help-kicker {
   grid-column: 1 / -1;
   font-weight: 700;
+  line-height: 1.4;
   letter-spacing: 0.08em;
 }
 
@@ -293,6 +294,7 @@ body:has(.tour-spot) .overlay:has(.tour-card) > .overlay-scrim {
   margin-top: 2px;
   font-weight: 700;
   font-size: 20px;
+  line-height: 1.5;
 }
 
 .tour-card .help-skip {
@@ -300,7 +302,10 @@ body:has(.tour-spot) .overlay:has(.tour-card) > .overlay-scrim {
   grid-row: 2;
   align-self: baseline;
   position: relative;
-  min-height: 44px;
+  /* The 44 px hit area is the ::after box, so the link adds no height to
+     the title's line (TR-*: the lede sits 2 px under the title). */
+  min-height: 0;
+  padding: 0;
   font-size: var(--text-15);
   color: var(--color-text-secondary);
   /* An underlined text link (TR-*), with a 44 px hit area around it. */
@@ -324,15 +329,40 @@ body:has(.tour-spot) .overlay:has(.tour-card) > .overlay-scrim {
   outline: none;
 }
 
+/* TR-*: the card is 16 px from its top edge and 18 px from the sides on the
+ * phone (20 on desktop), the lede 2 px under the title, each row its text
+ * plus 7 px above and below, the buttons 16 px under the last row. */
+.help-panel.tour-card {
+  gap: 0;
+  padding: 16px 18px 18px;
+}
+
 .tour-card .help-lede {
   grid-column: 1 / -1;
-  margin: 2px 0 var(--space-2);
+  margin: 2px 0 0;
   font-size: var(--text-base);
-  line-height: 1.5;
+  line-height: 1.4;
+}
+
+.tour-card .help-rows {
+  gap: 0;
 }
 
 .tour-card .help-row {
+  gap: var(--space-3);
+  padding: 7px 0;
   font-size: var(--text-base);
+}
+
+.tour-card .help-row > svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+
+.tour-card .help-actions {
+  margin-top: 16px;
 }
 
 @media (min-width: 900px) {
@@ -342,13 +372,24 @@ body:has(.tour-spot) .overlay:has(.tour-card) > .overlay-scrim {
   }
 }
 
-/* The tour keeps its place from before #907: centred, 440 wide. */
+/* The tour card on desktop (TR-*-Fixed-1280): 482 wide with its border,
+ * its left edge 100 px left of the window's centre (x 540 at 1280), 230 px
+ * from the top, nearer the top on a short window. */
 @media (min-width: 900px) {
-  .overlay--desktop-center .overlay-panel:has(.tour-card) {
-    --dialog-width: 440px;
+  .help-panel.tour-card {
+    padding: 16px 20px 20px;
+  }
 
-    bottom: 0;
-    margin: auto;
+  .overlay--desktop-center .overlay-panel:has(.tour-card) {
+    top: clamp(16px, calc(100vh - 570px), 230px);
+    right: auto;
+    left: calc(50% - 100px);
+    box-sizing: border-box;
+    width: min(482px, calc(50% + 100px - var(--space-4)));
+    max-height: calc(
+      100vh - clamp(16px, calc(100vh - 570px), 230px) - var(--space-4)
+    );
+    margin: 0;
   }
 }
 
