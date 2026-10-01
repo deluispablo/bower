@@ -31,10 +31,12 @@ jobs:
       contents: read
     env:
       VAULT_ID: ${{ github.event.client_payload.vault_id }}
-      # Both pinned deliberately; the cache keys below derive from these,
+      # All pinned deliberately; the cache keys below derive from these,
       # so bumping a version here invalidates the matching cache too.
       BOWER_RCLONE_VERSION: '1.75.1'
       BOWER_RCLONE_SHA256: '982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab'
+      BOWER_PANDOC_VERSION: '3.1.3'
+      BOWER_PANDOC_SHA256: '74bc434908e4d858b3edbfd6271d2e9e499477837e5df1d630df4e62f113803d'
       CLAUDE_CODE_VERSION: '2.1.283'
     steps:
       - name: Checkout
@@ -67,10 +69,34 @@ jobs:
           sudo install -m 755 ~/rclone-bin/rclone /usr/local/bin/rclone
           rclone version
 
+      - name: Cache pandoc
+        id: cache-pandoc
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/pandoc-bin
+          key: pandoc-${{ runner.os }}-${{ env.BOWER_PANDOC_VERSION }}
+
+      # Official release, downloaded directly and verified by hash, like
+      # rclone. 3.1.3 is the version apt installed on ubuntu-latest, so the
+      # conversions in run.sh (which need --sandbox, pandoc 2.15+) do not
+      # change. pandoc publishes no checksum file for this release:
+      # BOWER_PANDOC_SHA256 is the sha256sum of
+      # https://github.com/jgm/pandoc/releases/download/3.1.3/pandoc-3.1.3-linux-amd64.tar.gz.
+      - name: Download pandoc
+        if: steps.cache-pandoc.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o pandoc.tar.gz \
+            "https://github.com/jgm/pandoc/releases/download/${BOWER_PANDOC_VERSION}/pandoc-${BOWER_PANDOC_VERSION}-linux-amd64.tar.gz"
+          echo "${BOWER_PANDOC_SHA256}  pandoc.tar.gz" | sha256sum -c -
+          tar -xzf pandoc.tar.gz
+          mkdir -p ~/pandoc-bin
+          install -m 755 "pandoc-${BOWER_PANDOC_VERSION}/bin/pandoc" ~/pandoc-bin/pandoc
+          rm -rf pandoc.tar.gz "pandoc-${BOWER_PANDOC_VERSION}"
+
       - name: Install pandoc
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pandoc
+          sudo install -m 755 ~/pandoc-bin/pandoc /usr/local/bin/pandoc
+          pandoc --version
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
