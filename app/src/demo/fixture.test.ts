@@ -6,9 +6,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { activityCards } from '../activity.js';
+import { isBowerWritten } from '../bower-written.js';
 import { siblings } from '../folder-view.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
 import { buildTree } from '../navigation.js';
+import { noteMetaFrom } from '../note-meta.js';
 import { buildVaultIndex } from '../vault-index.js';
 import {
   DEMO_EMAIL,
@@ -346,4 +348,32 @@ describe('the v6 demo world (#903)', () => {
     const passport = cards[0]?.rows[0];
     expect(passport?.path).toBe('2-Areas/Visa & Immigration/Passport copy.pdf');
   });
+});
+
+describe('which demo notes Bower wrote (#950, NO-Main, PF-Filter)', () => {
+  // Pinned so a rebase cannot drop a `by: bower` without a failing test:
+  // the tree, In this folder and the counts read it.
+  const bowerWritten = (path: string): boolean => {
+    const file = FIXTURE_FILES.find((one) => one.path === path);
+    const text = typeof file?.content === 'string' ? file.content : '';
+    const { data, body } = parseFrontmatter(text);
+    return isBowerWritten(noteMetaFrom(data), { body });
+  };
+
+  it.each([
+    `${HOUSING}/Housing Search Australia.md`,
+    `${MOONEE_PONDS}/Moonee Ponds.md`,
+    `${JOBS}/CV insights.md`,
+    `${JOBS}/LinkedIn profile.md`,
+    `${JOBS}/SEEK profile.md`,
+  ])('%s is Bower-written', (path) => {
+    expect(bowerWritten(path)).toBe(true);
+  });
+
+  it.each([`${JOBS}/Job Search Australia.md`, `${VISA}/Visa & Immigration.md`])(
+    "%s is the person's own",
+    (path) => {
+      expect(bowerWritten(path)).toBe(false);
+    },
+  );
 });
