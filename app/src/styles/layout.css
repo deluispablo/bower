@@ -505,6 +505,32 @@ button.page-bare-back {
   margin-bottom: var(--run-chip-space, 0px);
 }
 
+/* The page heading and main take focus after a route change (#920 T-2):
+   a programmatic focus draws no ring. */
+.content:focus,
+#app h1[tabindex='-1']:focus:not(:focus-visible),
+#app .topbar-title[tabindex='-1']:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* "Skip to content" (WCAG 2.4.1): off screen until it has focus. */
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 1000;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-heading);
+  font-weight: var(--weight-bold);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
 .reauth-banner {
   display: flex;
   flex-wrap: wrap;

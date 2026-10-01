@@ -78,7 +78,7 @@ import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
 import { BowerMark } from './bird.js';
 import { DemoBanner } from './demo-banner.js';
-import { openFoldersDrawer } from '../folders-drawer.js';
+import { openFoldersDrawer, useFoldersDrawer } from '../folders-drawer.js';
 import { Explorer, HEALTH_PATH } from './explorer.js';
 import { SidebarSeparator } from './sidebar-separator.js';
 import { useShellSlots } from './shell-slots.js';
@@ -176,6 +176,83 @@ const LazyHelpSheet = LazyHelp.Component;
 
 const HOME_BACK = <BackLink href="/" label="Home" />;
 
+/** The page's heading as shown: the h1 on screen, else the phone bar's
+ * title. Hidden copies (`display: none` at this width) are skipped. */
+export function shownHeading(): HTMLElement | null {
+  const all = document.querySelectorAll<HTMLElement>(
+    '#app h1, #app .topbar-title',
+  );
+  for (const el of Array.from(all)) {
+    if (el.getClientRects().length > 0) return el;
+  }
+  return null;
+}
+
+/** Focuses the page's heading (`tabIndex` -1); false when there is none. */
+export function focusHeading(): boolean {
+  const heading = shownHeading();
+  if (heading === null) return false;
+  if (!heading.hasAttribute('tabindex')) heading.tabIndex = -1;
+  heading.focus({ preventScroll: true });
+  return document.activeElement === heading;
+}
+
+/** How long a new page may take to draw its heading. */
+const HEADING_WAIT_MS = 1_500;
+const HEADING_POLL_MS = 100;
+
+/**
+ * After a route change (#920 T-2, T-21, WCAG 2.4.3): focus goes to the new
+ * page's heading, unless the new page or a dialog already took it (a text
+ * box that focuses itself, a reveal that focused its tree row). `from` is
+ * what had focus when the route changed.
+ */
+export function focusNewPage(from: Element | null): void {
+  const started = Date.now();
+  const retry = (): void => {
+    if (Date.now() - started < HEADING_WAIT_MS) {
+      setTimeout(attempt, HEADING_POLL_MS);
+    }
+  };
+  function attempt(): void {
+    const active = document.activeElement;
+    const leftAlone =
+      active === null ||
+      active === document.body ||
+      active === from ||
+      (from !== null && !from.isConnected);
+    // A reveal focused its tree row; the new page focused its own control.
+    if (active !== null && active !== from) {
+      if (active.closest('[role="tree"]') !== null) return;
+    }
+    if (!leftAlone && active.closest('#app main') !== null) return;
+    // A dialog still open (the drawer closing after a pick): wait for it.
+    if (document.querySelector('[aria-modal="true"]') !== null) {
+      retry();
+      return;
+    }
+    if (!focusHeading()) retry();
+  }
+  requestAnimationFrame(attempt);
+}
+
+/** "Skip to content" (WCAG 2.4.1): the first stop, shown when focused. */
+function SkipLink(): JSX.Element {
+  return (
+    <a
+      href="#content"
+      class="skip-link"
+      onClick={(event) => {
+        event.preventDefault();
+        if (focusHeading()) return;
+        document.getElementById('content')?.focus();
+      }}
+    >
+      Skip to content
+    </a>
+  );
+}
+
 const SIDEBAR_WIDTH_KEY = 'bower:pref:sidebarWidth';
 export const SIDEBAR_WIDTH_MIN = 200;
 export const SIDEBAR_WIDTH_MAX = 480;
@@ -267,6 +344,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const { files, status } = useVault();
   const { path, route } = useLocation();
   const tour = useTour();
+  const drawer = useFoldersDrawer();
   const {
     back,
     crumb,
@@ -382,6 +460,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           : { '--sidebar-width': `${sidebarWidth}px` }
       }
     >
+      <SkipLink />
       {/* The tour's Notes step lights the "Your folders" header row inside the
           explorer (`data-tour` in explorer.tsx), not this whole column. */}
       <div class="shell-sidebar">
@@ -418,6 +497,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
                   type="button"
                   class="topbar-files"
                   aria-label="Open your folders"
+                  aria-expanded={drawer.open}
                   onClick={openFoldersDrawer}
                 >
                   <IconPanel />
@@ -468,7 +548,9 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             )}
           </div>
           <div class="shell-body">
-            <main class="content">{children}</main>
+            <main id="content" class="content" tabIndex={-1}>
+              {children}
+            </main>
             {aside !== null && (
               <aside
                 class="shell-aside"

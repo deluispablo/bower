@@ -512,10 +512,14 @@ export function FoldersDrawer(): JSX.Element | null {
   // Focus moves in on open and back to the opener on close; Esc closes;
   // Tab stays inside while it is open.
   // Before any row inside takes focus (a reveal focuses its row).
+  const openedAt = useRef(path);
+  const pathRef = useRef(path);
+  pathRef.current = path;
   useLayoutEffect(() => {
     if (!open) return;
     const active = document.activeElement;
     opener.current = active instanceof HTMLElement ? active : null;
+    openedAt.current = path;
   }, [open]);
 
   useEffect(() => {
@@ -548,7 +552,9 @@ export function FoldersDrawer(): JSX.Element | null {
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      opener.current?.focus();
+      // Choosing an item leaves focus to the new page's heading (#920
+      // T-21, `focusNewPage`); any other close hands it back.
+      if (pathRef.current === openedAt.current) opener.current?.focus();
     };
   }, [open]);
 
