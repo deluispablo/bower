@@ -50,7 +50,7 @@ afterEach(() => {
 });
 
 function mount(runs: Run[]): void {
-  act(() => {
+  void act(() => {
     render(h(ActivityPanel, { load: { status: 'ready', runs } }), root);
   });
 }
@@ -85,7 +85,7 @@ describe('ActivityPanel (#915)', () => {
       (b) => b.textContent === 'and 2 more',
     );
     expect(more).toBeDefined();
-    act(() => {
+    void act(() => {
       more?.click();
     });
     expect(root.querySelectorAll('.list-row')).toHaveLength(4);

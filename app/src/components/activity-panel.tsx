@@ -99,9 +99,7 @@ function rowItem(row: ActivityRow, files: readonly DriveFile[]): ListRowItem {
   const name =
     path === undefined ? row.title : path.slice(path.lastIndexOf('/') + 1);
   const listed =
-    path === undefined
-      ? undefined
-      : files.find((file) => file.path === path);
+    path === undefined ? undefined : files.find((file) => file.path === path);
   return {
     id: row.key,
     title: row.renamed ?? displayName(path === undefined ? row.title : name),

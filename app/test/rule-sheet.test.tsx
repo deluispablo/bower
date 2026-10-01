@@ -44,7 +44,7 @@ afterEach(() => {
 
 function mount(desktop: boolean, onPick = vi.fn()): void {
   stubMatchMedia(desktop);
-  act(() => {
+  void act(() => {
     render(
       h(
         Fragment,
@@ -104,7 +104,7 @@ describe('RuleSheet (#915)', () => {
     const remove = [
       ...document.body.querySelectorAll<HTMLButtonElement>('.rule-sheet-row'),
     ].find((b) => b.textContent?.includes('Remove it'));
-    act(() => {
+    void act(() => {
       remove?.click();
     });
     expect(onPick).toHaveBeenCalledWith('remove');

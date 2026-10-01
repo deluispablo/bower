@@ -45,9 +45,6 @@
   align-items: center;
 }
 
-
-
-
 /* The "?" tip: a disclosure with the hint look (`hint.css`: surface fill,
    1 px border, 12 px radius, 15 px text), open on request. */
 
@@ -755,7 +752,6 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
-
 
 .bower-send-confirm {
   margin: 0;

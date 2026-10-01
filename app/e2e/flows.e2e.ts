@@ -1187,7 +1187,9 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
   await expect(rule.getByText('Paused', { exact: true })).toHaveCount(0);
   await rule.click();
   // A phone action sheet (role menu) or a desktop side panel (#915).
-  const sheet = page.locator('.overlay-panel[aria-label="Never archive Money"]');
+  const sheet = page.locator(
+    '.overlay-panel[aria-label="Never archive Money"]',
+  );
   await expect(sheet).toBeVisible();
   await shot(page, testInfo, 'bower-rule-menu');
   await sheet.getByText('Pause it', { exact: true }).click();

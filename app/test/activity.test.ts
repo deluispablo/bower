@@ -198,9 +198,7 @@ describe('activityCards (#345)', () => {
       files: [],
       now: NOW,
     });
-    expect(reported?.sentence).toMatch(
-      /^1 filed · 1 new note · 1 updated\.$/,
-    );
+    expect(reported?.sentence).toMatch(/^1 filed · 1 new note · 1 updated\.$/);
   });
 
   it('set aside, in people words: a document that could not be read and a quarantined file', () => {

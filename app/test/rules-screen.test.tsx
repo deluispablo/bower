@@ -262,9 +262,7 @@ describe('the Rules screen', () => {
     );
     await mount();
     const paused = buttonWith('Never archive Money', panel());
-    expect(paused.querySelector('.badge-check')?.textContent).toBe(
-      'Paused',
-    );
+    expect(paused.querySelector('.badge-check')?.textContent).toBe('Paused');
     expect(paused.textContent).toContain('Since 28 Sep');
     expect(
       buttonWith('Receipts go to Money', panel()).textContent,
