@@ -661,6 +661,11 @@ button.pile-card:focus-visible {
   margin-left: auto;
 }
 
+/* The ✕ centred on the title's first line, as AD-Pile-375 draws it. */
+.pile-row .list-row-trailing .pile-row-remove {
+  margin: -8px -4px -8px 0;
+}
+
 .pile-row-failed .list-row-meta {
   color: var(--color-danger);
 }
