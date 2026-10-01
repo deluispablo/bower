@@ -40,7 +40,7 @@ import {
   JUST_MARK_ALL,
   linkAddress,
   moreLabel,
-  NO_LIST,
+  noListLine,
   previewRows,
   runBadge,
   runKey,
@@ -297,7 +297,7 @@ function EarlierBody({
 }): JSX.Element {
   const [all, setAll] = useState(false);
   if (!hasDestinations(run)) {
-    return <p class="just-filed-earlier-empty">{NO_LIST}</p>;
+    return <p class="just-filed-earlier-empty">{noListLine(run)}</p>;
   }
   const rows = tableRows(run, index);
   if (rows.length === 0) {

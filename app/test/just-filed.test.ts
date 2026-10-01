@@ -29,7 +29,7 @@ import {
   setAsideRows,
   unseenIds,
   wasLabel,
-  NO_LIST,
+  noListLine,
   earlierSub,
   moreLabel,
   previewRows,
@@ -280,7 +280,17 @@ describe('earlier tidy-ups (#913, S-JF-5..7, R-JF-4, R-JF-5, R-API-2)', () => {
       items: (run.items ?? []).map(({ path, kind }) => ({ path, kind })),
     };
     expect(hasDestinations(old)).toBe(false);
-    expect(NO_LIST).toBe('Bower did not keep a list for this one.');
+    expect(noListLine(old)).toBe('Bower did not keep a list for this one.');
+  });
+
+  it('says "Nothing was filed." for a failed run that filed nothing', () => {
+    const failed: Run = {
+      state: 'failed',
+      requestedAt: run.requestedAt,
+      reason: 'drive_unavailable',
+    };
+    expect(hasDestinations(failed)).toBe(false);
+    expect(noListLine(failed)).toBe('Nothing was filed.');
   });
 
   it('says tap on the phone and click on desktop (K-27)', () => {

@@ -608,6 +608,20 @@ export const NOTHING_LOST = 'nothing was lost; the things stayed in the inbox';
 /** S-JF-12: an old run whose report has no destinations (R-API-2). */
 export const NO_LIST = 'Bower did not keep a list for this one.';
 
+/** An opened run that did not file anything (a failed one, for example). */
+export const NOTHING_FILED = 'Nothing was filed.';
+
+/**
+ * What an opened earlier run says when it has no destinations to list: a
+ * run that failed, or had no files at all, filed nothing; only an old run
+ * whose files carry no `to` (a report before v2) has no list (R-API-2).
+ */
+export function noListLine(run: Run): string {
+  const files = (run.items ?? []).some((item) => item.kind === 'file');
+  if (outcomeFromRun(run).state === 'failed' || !files) return NOTHING_FILED;
+  return NO_LIST;
+}
+
 /** S-JF-5: "Tap" on the phone, "Click" on desktop (K-27). */
 export function earlierSub(desktop: boolean): string {
   return `Newest first. ${desktop ? 'Click' : 'Tap'} one to see what it did.`;
