@@ -174,6 +174,11 @@ vi.mock('preact-iso', () => ({
   useLocation: () => location,
 }));
 
+// Page 2 draws the real note box, whose body reads the vault for embeds.
+vi.mock('../src/vault-store.js', () => ({
+  useVault: () => ({ index: null, getNoteText: () => Promise.resolve('') }),
+}));
+
 const { Intro } = await import('../src/routes/intro.js');
 
 // jsdom does not implement element scrolling; the track only needs to accept it.

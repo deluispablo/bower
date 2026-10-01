@@ -114,7 +114,7 @@
 
 .intro-body {
   margin: var(--space-3) 0 0;
-  font-size: var(--text-lg);
+  font-size: 1.0625rem;
   line-height: var(--leading-body);
 }
 
@@ -269,129 +269,94 @@
   font-size: var(--text-sm);
 }
 
-.intro-row svg {
+.intro-row > svg {
   flex: none;
   width: 18px;
   height: 18px;
   color: var(--color-text-muted);
 }
 
+/* A file's document glyph, stroked in its folder's colour. */
+.intro-doc {
+  display: inline-flex;
+  flex: none;
+}
+
+.intro-doc--inbox {
+  color: var(--color-para-inbox);
+}
+
+.intro-doc--areas {
+  color: var(--color-para-areas);
+}
+
 /* Page 1: the pile. */
 .intro-hero-bird {
   display: flex;
   justify-content: center;
-  /* Room above the 96 px bird for his props: 12% of his size (R-BIRD-6). */
-  padding-top: 12px;
 }
 
-.intro-pile-line {
-  font-weight: var(--weight-medium);
-}
-
-.intro-fake-button {
-  align-self: flex-start;
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-brand);
-  color: var(--color-on-brand);
-  border-radius: var(--radius-sm);
-  font-weight: var(--weight-medium);
-}
-
-.intro-chips {
-  display: flex;
-  justify-content: center;
+.intro-pile .intro-rows {
   gap: var(--space-2);
 }
 
-.intro-chip {
-  padding: 4px 12px;
-  border-radius: var(--radius-full);
-  color: #fff;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
+.intro-pile .intro-row {
+  font-size: var(--text-15);
+}
+
+.intro-row .intro-doc svg {
+  width: 16px;
+  height: 16px;
+}
+
+.intro-tidy {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  font-size: var(--text-15);
+}
+
+.intro-tidy svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Page 2: the original and Bower's note. */
 .intro-original {
   flex-direction: row;
   align-items: center;
+  gap: var(--space-2-5);
 }
 
-.intro-note {
-  border-left: 4px solid var(--color-brand);
-  margin-left: var(--space-4);
-}
-
-.intro-note-title {
-  font-size: var(--text-lg);
-}
-
-.intro-facts {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.intro-facts li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.intro-origin {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  background: var(--color-origin-file);
-}
-
-.intro-origin--1 {
-  background: var(--color-origin-web);
-}
-
-.intro-check {
-  padding: var(--space-2);
-  background: var(--color-warn-bg);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
+.intro-original b {
+  font-size: var(--text-15);
 }
 
 /* Page 3: two notes join. */
 .intro-join {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
+  gap: var(--space-2-5);
 }
 
 .intro-join-note {
   flex-direction: row;
   align-items: center;
-  font-size: var(--text-sm);
+  font-size: var(--text-15);
 }
 
-.intro-join-line {
+.intro-join-bird {
   display: flex;
   justify-content: center;
-  border-left: 2px dashed var(--color-border-strong);
-  margin: 0 auto;
-  padding: var(--space-2) 0;
-  width: 0;
-  min-height: 56px;
-  align-items: center;
-}
-
-.intro-join-line svg {
-  flex: none;
-  margin-left: 0;
 }
 
 .intro-join-result {
   border-color: var(--color-brand);
-  font-weight: var(--weight-medium);
+  background: transparent;
+  box-shadow: none;
 }
 
 .intro-join-disagree {
@@ -399,78 +364,45 @@
   text-align: center;
 }
 
-/* Page 4: a request and the bar. */
-.intro-bubble {
-  align-self: flex-end;
-  max-width: 85%;
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-brand-tint);
-  border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
-}
-
-.intro-waits {
-  align-self: flex-end;
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-
-.intro-counts {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* Page 4: the request, then the bird on Home with his bubble. */
+.intro-home-bird {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-2-5);
 }
 
-.intro-counts li {
-  padding: 2px 10px;
-  background: var(--color-success-bg);
-  border-radius: var(--radius-full);
+.intro-home-bird svg {
+  flex: none;
+}
+
+.intro-done {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   font-size: var(--text-sm);
 }
 
 /* Page 5: the same folder in three places. */
 .intro-places {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
 .intro-place {
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-2-5) var(--space-3);
+  gap: var(--space-1-5);
 }
 
 .intro-place .intro-row {
-  font-size: var(--text-xs);
+  font-size: var(--text-13);
+  align-items: flex-start;
+  overflow-wrap: anywhere;
 }
 
-.intro-place .intro-row svg {
+.intro-place .intro-row > svg {
   width: 14px;
   height: 14px;
-}
-
-/* Short phones (375x812 and below): the pile art must fit above the dots, so
- * the colour chips step aside, the bird shrinks and the cards tighten. */
-@media (max-width: 899px) and (max-height: 860px) {
-  .intro-page--1 .intro-chips {
-    display: none;
-  }
-
-  .intro-page--1 .intro-hero-bird {
-    padding-top: 0;
-  }
-
-  .intro-page--1 .intro-hero-bird svg {
-    width: 64px;
-    height: 64px;
-  }
-
-  .intro-page--1 .intro-card {
-    padding: var(--space-2) var(--space-3);
-  }
 }
 
 @media (min-width: 900px) and (pointer: fine) {
