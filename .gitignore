@@ -26,3 +26,6 @@ __pycache__/
 app/e2e/results/
 app/e2e/screenshots/
 playwright-report/
+
+# Benchmark output (agent/bench/README.md)
+agent/bench/results/

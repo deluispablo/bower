@@ -1,0 +1,52 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 561 >>
+stream
+BT
+/F1 11 Tf
+14 TL
+56 780 Td
+(EXAMPLE HARDWARE) Tj T*
+(42 Sample Road, Leeds) Tj T*
+() Tj T*
+(Receipt no. 000123        2026-09-14 15:42) Tj T*
+() Tj T*
+(Wood screws 4x40 \(200\)          6.49) Tj T*
+(Paving slab 450x450 x 6        23.94) Tj T*
+(Sharp sand 25 kg x 2            9.98) Tj T*
+(Spirit level 600 mm            11.50) Tj T*
+() Tj T*
+(Subtotal                       51.91) Tj T*
+(VAT included                    8.65) Tj T*
+(TOTAL                          51.91) Tj T*
+() Tj T*
+(Paid by card) Tj T*
+(Returns within 28 days with this receipt.) Tj T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000338 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+950
+%%EOF

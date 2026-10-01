@@ -303,6 +303,10 @@ readonly UNLISTED_FILE="$WORK_DIR/instruction-unlisted.txt"
 readonly SAVED_KEYS="$WORK_DIR/saved-keys.txt"
 readonly PRE_RUN_DIR="$WORK_DIR/pre-run"
 readonly AGENT_OUT="$WORK_DIR/agent.out"
+# The agent's stream-json transcript (R-SS-2): every message, tool call and
+# tool result of the session, so vault content. It stays in the work dir,
+# never under LOG_DIR, which the workflow uploads when a run fails.
+readonly AGENT_STREAM="$WORK_DIR/agent.stream.jsonl"
 readonly AGENT_ERR="$LOG_DIR/agent.err"
 readonly RCLONE_LOG="$LOG_DIR/rclone.log"
 readonly PANDOC_LOG="$LOG_DIR/pandoc.log"
@@ -1817,15 +1821,63 @@ agent_failure_reason() {
       return
       ;;
   esac
-  if grep -Eiq 'max(imum)?[ _-]?turns' "$AGENT_ERR" 2>/dev/null; then
+  # With stream-json the session's own error is in its last result event
+  # (R-SS-2), next to whatever reached stderr.
+  local model_errors='overloaded|rate[ _-]?limit|credit balance|api error|authentication|invalid (api key|x-api-key|bearer)|oauth token|529|503 service'
+  local result_error
+  result_error=$(agent_result_error "$AGENT_STREAM" 2>/dev/null) || result_error=''
+  if [ "$result_error" = max_turns ] || grep -Eiq 'max(imum)?[ _-]?turns' "$AGENT_ERR" 2>/dev/null; then
     echo timeout
-  elif grep -Eiq 'overloaded|rate[ _-]?limit|credit balance|api error|authentication|invalid (api key|x-api-key|bearer)|oauth token|529|503 service' \
-    "$AGENT_ERR" 2>/dev/null; then
+  elif grep -Eiq "$model_errors" "$AGENT_ERR" 2>/dev/null ||
+    { [ "${result_error%%$'\n'*}" = error ] && grep -Eiq "$model_errors" <<<"${result_error#error}"; }; then
     echo model_unavailable
   else
     echo unknown
   fi
 }
+
+# >>> session stats (R-SS-2): agent/test/stats.test.sh runs this block as is.
+# The text of the last `result` event of the stream-json transcript $1, as
+# the text output used to print it. A line that is not JSON (a stream cut
+# short by a timeout) is skipped. Prints nothing when there is no result.
+readonly RESULT_TEXT_FILTER='[inputs | fromjson? | select(type == "object" and .type == "result")]
+  | last | .result? | strings'
+agent_result_text() {
+  jq -rnR "$RESULT_TEXT_FILTER" "$1"
+}
+# The session's numbers from the transcript $1, as one line of numbers and
+# tool names: the last `result` event's turns, API time and tokens, and the
+# `tool_use` blocks of the assistant events counted by name (a block seen
+# twice, same id, once), sorted by name. A value missing or not a number
+# prints `-`; a tool name that is not a plain word counts as `other`. Never
+# a path, a file name or any text from the stream.
+readonly STATS_FILTER='def n($x): if ($x | type) == "number" then ($x | floor | tostring) else "-" end;
+  [inputs | fromjson? | select(type == "object")] as $e
+  | ([$e[] | select(.type == "result")] | last // {}) as $r
+  | ($r.usage | if type == "object" then . else {} end) as $u
+  | ([$e[] | select(.type == "assistant") | .message | objects | .content | arrays | .[]
+      | select(type == "object" and .type == "tool_use")]
+    | (map(select((.id | type) == "string")) | unique_by(.id)) + map(select((.id | type) != "string"))
+    | map(.name | if type == "string" and test("^[A-Za-z0-9_-]+$") then . else "other" end)
+    | group_by(.) | map("\(.[0]):\(length)") | join(",")) as $t
+  | "turns=\(n($r.num_turns)) api_ms=\(n($r.duration_api_ms)) in=\(n($u.input_tokens)) out=\(n($u.output_tokens)) cache_read=\(n($u.cache_read_input_tokens)) cache_write=\(n($u.cache_creation_input_tokens)) tools=\(if $t == "" then "-" else $t end)"'
+agent_stats() {
+  jq -rnR "$STATS_FILTER" "$1"
+}
+# How the session in the transcript $1 says it failed, from its last
+# `result` event (stream-json puts it there, not on stderr): `max_turns` for
+# subtype error_max_turns; otherwise, when is_error is true, `error` and the
+# event's text on the next lines; nothing for a session that did not fail or
+# has no result event. Read only for a failed session (agent_failure_reason).
+readonly RESULT_ERROR_FILTER='[inputs | fromjson? | select(type == "object" and .type == "result")]
+  | last | objects
+  | if .subtype == "error_max_turns" then "max_turns"
+    elif .is_error == true then "error\n\(.result | if type == "string" then . else "" end)"
+    else empty end'
+agent_result_error() {
+  jq -rnR "$RESULT_ERROR_FILTER" "$1"
+}
+# <<< session stats
 
 # Read one string field of the vault info; empty when absent or null.
 field() { jq -r --arg k "$1" '.[$k] // empty' "$VAULT_JSON"; }
@@ -2386,11 +2438,23 @@ set +e
 (
   cd "$VAULT_DIR"
   timeout -k 30 "$AGENT_TIME_LIMIT" env -i "${claude_env[@]}" \
-    claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format text \
+    claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format stream-json --verbose \
       --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
-) >"$AGENT_OUT" 2>"$AGENT_ERR"
+) >"$AGENT_STREAM" 2>"$AGENT_ERR"
 agent_rc=$?
 set -e
+# The agent's closing lines (the report parsed below) are the final result
+# event's text; with no result event (a crash, a timeout) AGENT_OUT is empty,
+# as an empty text output was.
+agent_result_text "$AGENT_STREAM" >"$AGENT_OUT" 2>>"$AGENT_ERR" || : >"$AGENT_OUT"
+# The session's numbers (R-SS-2), logged for every session, failed or not.
+# They are only numbers and tool names; a failure to read them is logged and
+# never fails the run.
+if agent_stats_line=$(agent_stats "$AGENT_STREAM" 2>>"$AGENT_ERR"); then
+  log "agent stats: $agent_stats_line"
+else
+  log 'agent stats: unreadable'
+fi
 if [ "$agent_rc" -ne 0 ]; then
   fail "$STEP: exit $agent_rc" "$(agent_failure_reason "$agent_rc")"
 fi
