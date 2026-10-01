@@ -14,8 +14,9 @@
 import type { Kind } from './kinds.js';
 import { parseFrontmatter } from './markdown/frontmatter.js';
 
-/** The longest status a list may hold, in characters. */
-export const MAX_STATUS_LENGTH = 32;
+/** The longest status a list may hold, in characters: the same limit as the
+ * rulebook and the runner's check (`agent/run.sh`, #921). */
+export const MAX_STATUS_LENGTH = 24;
 
 /** The hub note of the folder at `folderPath`: "a/Moonee Ponds" gives
  * "a/Moonee Ponds/Moonee Ponds.md". */
