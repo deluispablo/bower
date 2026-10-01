@@ -16,6 +16,13 @@
   padding-bottom: 0;
 }
 
+/* A posed bird by the name: 40 px drawn in the mark's 32 px slot. */
+.bower-note-box-head-bird {
+  display: inline-flex;
+  flex: none;
+  margin: -4px;
+}
+
 .bower-note-box-head {
   position: relative;
   display: flex;

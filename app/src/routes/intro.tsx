@@ -162,6 +162,7 @@ function Page2Art(): JSX.Element {
       <BowerNoteBox
         html={introNoteHtml()}
         frontmatter={{}}
+        headBird="reading"
         class="intro-note-box"
       />
     </Art>

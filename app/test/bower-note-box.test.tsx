@@ -152,6 +152,21 @@ describe('pure helpers', () => {
 });
 
 describe('BowerNoteBox (issue #757)', () => {
+  it('draws the still mark by its name, or a posed bird when asked (#918)', () => {
+    mount({});
+    const head = (): Element | null =>
+      host.querySelector('.bower-note-box-head');
+    expect(head()?.querySelector('svg.b.mark')).not.toBeNull();
+    void act(() => {
+      render(
+        h(BowerNoteBox, { html: TOP, frontmatter: {}, headBird: 'reading' }),
+        host,
+      );
+    });
+    expect(head()?.querySelector('svg.b.mark')).toBeNull();
+    expect(head()?.querySelector('svg.b.p-read')).not.toBeNull();
+  });
+
   it('is open by default with every section, in order', () => {
     mount(OFFER);
     const head = foldButton();
