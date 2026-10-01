@@ -26,19 +26,33 @@
   text-transform: uppercase;
 }
 
+/* The rule itself: body text, 16 px (D-48, R-BW-6), in full. */
 .rule-sheet-text {
   margin: var(--space-1) 0 0;
   color: var(--color-heading);
-  font-family: var(--font-display);
-  font-weight: var(--weight-medium);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
   overflow-wrap: anywhere;
 }
+
+/* Desktop: the panel's ✕ "Close the rule" sits top right. */
+.rule-sheet-body--close {
+  position: relative;
+  padding-top: var(--space-6);
+}
+
+.rule-sheet-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+}
+
 
 .rule-sheet-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 50px;
+  min-height: 52px;
   padding: var(--space-1) var(--space-2);
   border: 0;
   border-radius: var(--radius-md);
@@ -88,4 +102,10 @@
 .rule-sheet-cancel:focus-visible {
   outline: 2px solid var(--color-accent-line);
   outline-offset: 2px;
+}
+
+/* Remove it reads in the danger colour, its icon too (§4.6). */
+.rule-sheet-row--remove,
+.rule-sheet-row--remove .icon {
+  color: var(--color-danger);
 }

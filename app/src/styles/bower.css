@@ -476,6 +476,8 @@
   flex-grow: 1;
   min-width: 0;
   overflow: hidden;
+  color: var(--color-heading);
+  font-size: var(--text-base);
   font-weight: var(--weight-bold);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -759,4 +761,38 @@
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+}
+
+/* The Rules tip (#915, BW-Rules): a Card with the shield, the two lines
+   in 15 px and ✕ "Hide this tip". */
+.rules-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.rules-tip > .icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+}
+
+.rules-tip-text {
+  flex-grow: 1;
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  line-height: var(--leading-body);
+}
+
+.rules-tip-text b {
+  color: var(--color-heading);
+}
+
+.rules-tip-hide {
+  flex-shrink: 0;
+  margin: -6px -6px 0 0;
 }
