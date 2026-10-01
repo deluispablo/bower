@@ -979,12 +979,14 @@ export function Add() {
 
         <div ref={cardRef} data-pile-id={openPile()?.id}>
           <Card variant="accent" class="pile-card-new">
-            <h2 class="pile-card-title">New pile</h2>
-            <p class="pile-card-count">
-              {openItems.length === 0
-                ? 'Add files or links, and say what they are'
-                : pileCountLine(openItems.length, openUploading)}
-            </p>
+            <div class="pile-card-new-head">
+              <h2 class="pile-card-title">New pile</h2>
+              <p class="pile-card-count">
+                {openItems.length === 0
+                  ? 'Add files or links, and say what they are'
+                  : pileCountLine(openItems.length, openUploading)}
+              </p>
+            </div>
 
             <div class="add-context" onFocusOut={() => saver.flush()}>
               <label class="add-context-label" for="add-context">
