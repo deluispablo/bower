@@ -194,6 +194,37 @@ function runOf(
   };
 }
 
+/** The last part of a path. */
+function lastPart(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+/**
+ * `log.md`'s `Filed:` lines for `runs`, oldest first, each stamped (UTC, as
+ * the agent writes it) at its run's finish, so Activity finds every file
+ * row's folder in its run's window (DB-16).
+ */
+export function filedLogLines(runs: readonly Run[]): string {
+  const lines: string[] = [];
+  for (const run of [...runs].reverse()) {
+    const at = run.finishedAt;
+    if (at === undefined || run.state !== 'done') continue;
+    const stamp = `${at.slice(0, 10)} ${at.slice(11, 16)}`;
+    for (const item of run.items ?? []) {
+      if (item.kind !== 'file' || item.to === undefined) continue;
+      const folder = item.to.slice(0, item.to.lastIndexOf('/'));
+      const renamed =
+        item.renamedFrom === undefined
+          ? ''
+          : `, renamed from ${lastPart(item.path)}`;
+      lines.push(
+        `- ${stamp} · Filed: ${lastPart(item.to)} → ${folder}${renamed}`,
+      );
+    }
+  }
+  return lines.join('\n');
+}
+
 /** A run that did not finish: nothing moved, the inbox kept everything. */
 function unfinished(runId: string, finishedAt: string, minutes: number): Run {
   const run = runOf(
@@ -1864,11 +1895,7 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
 - 2026-09-12 · Filed · Flights and stays, Things to see in Lisbon
 - 2026-09-18 · Filed · Paint colours, Quotes from fitters
 - 2026-09-21 · Answered · Which subscriptions renew this autumn
-- 2026-09-26 08:10 · Filed: Running log.md → 3-Resources/Health
-- 2026-09-26 08:11 · Filed: Weeknight curry.md → 3-Resources/Cooking
-- 2026-09-27 06:49 · Filed: Lease agreement 2026.pdf → 4-Archives/Flat hunt
-- 2026-09-27 06:50 · Filed: Arlington Road, window sign.jpg → 4-Archives/Flat hunt, renamed from IMG_4471.jpg
-- 2026-09-27 06:51 · Filed: Notes from the viewing.md → 4-Archives/Flat hunt`,
+${filedLogLines(DEMO_RUNS)}`,
   ),
   note(
     'Lint Report.md',

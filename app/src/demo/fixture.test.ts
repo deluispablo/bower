@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { activityCards } from '../activity.js';
 import { siblings } from '../folder-view.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
 import { buildTree } from '../navigation.js';
@@ -322,5 +323,27 @@ describe('the v6 demo world (#903)', () => {
     expect(inboxOf(waiting)).toHaveLength(3);
     expect(inboxOf(empty)).toEqual([]);
     expect(EMPTY_INBOX_FILES.length).toBeLessThan(FIXTURE_FILES.length);
+  });
+
+  it("log.md matches the runs: every filed row knows where it went (#920 DB-16)", () => {
+    const log = FIXTURE_FILES.find((file) => file.path === 'log.md');
+    const cards = activityCards({
+      runs: DEMO_RUNS,
+      log: typeof log?.content === 'string' ? log.content : '',
+      files: [],
+      now: Date.now(),
+    });
+    const filedRows = cards
+      .flatMap((card) => card.rows)
+      .filter(
+        (row) =>
+          ['note', 'pdf', 'image', 'file'].includes(row.tone) &&
+          row.outcome === undefined &&
+          row.answerId === undefined,
+      );
+    expect(filedRows.length).toBeGreaterThan(10);
+    expect(filedRows.filter((row) => row.path === undefined)).toEqual([]);
+    const passport = cards[0]?.rows[0];
+    expect(passport?.path).toBe('2-Areas/Visa & Immigration/Passport copy.pdf');
   });
 });
