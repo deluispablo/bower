@@ -37,15 +37,16 @@ test('the Arlington Road note shows its props line, key facts and folded Details
   // The title is shown once on the page (the bar's copy is not in the view).
   await expect(view.getByRole('heading', { level: 1 })).toHaveCount(1);
 
+  // #912: no kind chip; the meta line says "Bower note · <date>" and the
+  // original is About's Source row, not a Made from link on the page.
   const kindRow = view.locator('.note-kind-row');
-  await expect(kindRow).toContainText('Rental listing');
-  await expect(kindRow).toContainText('Bower');
+  await expect(kindRow.locator('.note-kind-chip')).toHaveCount(0);
+  await expect(kindRow.locator('select')).toHaveCount(1);
   await expect(
     view.locator('.made-from').getByRole('link', { name: /\.pdf/ }),
-  ).toHaveAttribute('href', /^\/file\//);
+  ).toHaveCount(0);
   const metaLine = view.locator('.note-meta-line');
-  await expect(metaLine.getByRole('link', { name: /Flat hunt/ })).toBeVisible();
-  await expect(metaLine).toContainText('Filed');
+  await expect(metaLine).toContainText(/Bower note · \d+ \w{3}/);
 
   await expect(view.locator('.bower-note-box')).toBeVisible();
   await expect(view.locator('.bower-joined')).toContainText('Joined from:');

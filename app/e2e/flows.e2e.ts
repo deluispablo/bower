@@ -1845,9 +1845,12 @@ test("a note's top bar: the title keeps a readable floor, Back gives way first, 
   const back = bar.getByRole('link', { name: 'Back to Lisbon Trip' });
   await expect(back).toBeVisible();
 
-  // One More menu, not two (#439 already fixed the leftover desktop
-  // trigger; this just guards against it coming back).
-  await expect(bar.getByRole('button', { name: 'More' })).toHaveCount(1);
+  // One More menu, not two (#439): since #912 it is the page header's ⋯,
+  // named for the note, and the bar has none (G-10).
+  await expect(bar.getByRole('button', { name: 'More' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'More for Lisbon Trip' }),
+  ).toHaveCount(1);
 
   // A title far longer than Back's own label still fits the bar with no
   // horizontal overflow, the same guarantee from the other direction.
