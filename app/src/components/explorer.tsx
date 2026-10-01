@@ -181,12 +181,27 @@ export function setShowAppFiles(on: boolean): void {
 /** The `showAppFiles` preference, following `setShowAppFiles`. */
 export function useShowAppFiles(): boolean {
   const [on, setOn] = useState(() => getPref('showAppFiles'));
+  const { path } = useLocation();
   useEffect(() => {
     appFilesListeners.add(setOn);
+    // Settings' own switch writes the preference with `setPref` directly:
+    // any form change (after its handler ran), another tab's write, or a
+    // route change is a cue to read it again, so the desktop sidebar
+    // follows at once (#920 T-14).
+    const reread = (): void => {
+      setOn(getPref('showAppFiles'));
+    };
+    document.addEventListener('change', reread);
+    window.addEventListener('storage', reread);
     return () => {
       appFilesListeners.delete(setOn);
+      document.removeEventListener('change', reread);
+      window.removeEventListener('storage', reread);
     };
   }, []);
+  useEffect(() => {
+    setOn(getPref('showAppFiles'));
+  }, [path]);
   return on;
 }
 
