@@ -1186,10 +1186,11 @@ test('Rules: the explanation on top, groups with counts, pause a rule and see th
   const rule = rules.getByRole('button', { name: /Never archive Money/ });
   await expect(rule.getByText('Paused', { exact: true })).toHaveCount(0);
   await rule.click();
-  const sheet = page.getByRole('dialog', { name: 'Never archive Money' });
+  // A phone action sheet (role menu) or a desktop side panel (#915).
+  const sheet = page.locator('.overlay-panel[aria-label="Never archive Money"]');
   await expect(sheet).toBeVisible();
   await shot(page, testInfo, 'bower-rule-menu');
-  await sheet.getByRole('button', { name: /Pause it/ }).click();
+  await sheet.getByText('Pause it', { exact: true }).click();
   await expect(sheet).toBeHidden();
   await expect(rule.getByText('Paused', { exact: true })).toBeVisible();
 });
@@ -2550,7 +2551,8 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   await expect(cards).toHaveCount(14);
   await expect(cards.nth(0)).toContainText('Yesterday, 15:03');
   await expect(cards.nth(0)).toContainText('Done');
-  await expect(activity).toContainText('Something in the wrong place?');
+  // No relative times in Activity (K-16, #915).
+  await expect(activity).not.toContainText(' ago');
   await shot(page, testInfo, 'bower-activity');
 
   // A tidy-up from Home: its card comes first, the question with "read it".
@@ -2585,12 +2587,14 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
   await expect(bowerPart(page, 'Activity')).toBeVisible();
   await expect(cards).toHaveCount(15);
   await expect(cards.nth(0)).toContainText('Today, 12:10 · 1 min');
-  await expect(rowWith(0, 'Boiler service invoice.pdf')).toContainText(
-    '→ Resources / Home',
+  // Files are ListRows, "<kind> · ● <parent>"; past two, "and N more"
+  // (#915, BW-Activity-375).
+  const more = cards.nth(0).getByRole('button', { name: /^and \d+ more$/ });
+  if (await more.isVisible()) await more.click();
+  await expect(rowWith(0, 'Boiler service invoice')).toContainText(
+    'PDF · Home',
   );
-  await expect(rowWith(0, 'Tomato seedlings')).toContainText(
-    '→ Resources / Garden',
-  );
+  await expect(rowWith(0, 'Tomato seedlings')).toContainText('Garden');
   const question = rowWith(0, 'What do I still need for the visa?');
   await expect(question).toContainText('→ Answers, read it');
   await expect(question.getByRole('link', { name: 'read it' })).toBeVisible();
