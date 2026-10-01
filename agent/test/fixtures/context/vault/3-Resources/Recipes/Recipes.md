@@ -1,0 +1,5 @@
+---
+tags: [hub]
+---
+
+# Recipes
