@@ -1370,6 +1370,31 @@ sheet_text_ok() {
   [ "$(sheet_chars "$1")" -le "$2" ]
 }
 
+# The row text $1 for a limit of $2 characters, printed: every rule of
+# sheet_text_ok but the length is checked on the whole text (returns 1 when
+# one fails), then a text over the limit is shortened instead of refused
+# (the rulebook still asks the agent for at most 100; the runner is only
+# lenient here): its first words, as many as fit with a trailing `…`
+# (counted in the limit), a `,`, `;`, `:` or space before the `…` dropped.
+# Returns 1 when not even the first word fits.
+sheet_text_fit() {
+  local text=$1 max=$2 words=() w acc='' try
+  sheet_text_ok "$text" 1000000 || return 1
+  if [ "$(sheet_chars "$text")" -le "$max" ]; then
+    printf '%s' "$text"
+    return 0
+  fi
+  read -r -a words <<<"$text"
+  for w in "${words[@]}"; do
+    try=${acc:+$acc }$w
+    [ "$(sheet_chars "$try")" -le $((max - 1)) ] || break
+    acc=$try
+  done
+  while [[ $acc == *[,\;:\ ] ]]; do acc=${acc%?}; done
+  [ -n "$acc" ] || return 1
+  printf '%s…' "$acc"
+}
+
 # The row type for the file name $1, from its extension: the app's kinds
 # (app/src/vault-index.ts EXTENSION_KINDS and FILE_KIND_LABELS) folded into
 # the rulebook's words:
@@ -1620,18 +1645,28 @@ sheet_index_row() {
 sheet_file_line() {
   local vault=$1 pending=$2 before=$3 day=$4 src=$5 dest=$6 name=$7 tags=$8 desc=$9
   local kind target plan='' arr=()
+  SHEET_WHY=path
   sheet_path_ok "$src" pending || return 1
   grep -qxF -- "$src" "$pending" || return 1
   [ -f "$vault/$src" ] && [ ! -L "$vault/$src" ] || return 1
   kind=$(sheet_dest_kind "$vault" "$dest") || return 1
+  SHEET_WHY=name
   sheet_name_ok "$name" "${src##*/}" || return 1
   if [ "$kind" = processed ]; then
-    [ "$tags" = - ] && [ "$desc" = - ] || return 1
+    SHEET_WHY=tag
+    [ "$tags" = - ] || return 1
+    SHEET_WHY=description
+    [ "$desc" = - ] || return 1
   else
-    sheet_tags_ok "$tags" && sheet_text_ok "$desc" 100 || return 1
+    SHEET_WHY=tag
+    sheet_tags_ok "$tags" || return 1
+    SHEET_WHY=description
+    desc=$(sheet_text_fit "$desc" 100) || return 1
   fi
   target="$dest/$name"
+  SHEET_WHY=name
   ! sheet_taken "$vault/$dest" "$name" || return 1
+  SHEET_WHY=other
   if [ "$kind" != processed ]; then
     sheet_index_ok "$vault" || return 1
     plan=$(sheet_hub_plan "$vault" "$dest" "$before") || return 1
@@ -1683,11 +1718,17 @@ sheet_note_ok() {
 sheet_note_line() {
   local vault=$1 before=$2 day=$3 note=$4 orig=$5 tags=$6 desc=$7
   local dir name row plan='' arr=()
+  SHEET_WHY=path
   sheet_note_ok "$vault" "$note" "$before" || return 1
+  SHEET_WHY=original
   if [ "$orig" != - ]; then
     sheet_path_ok "$orig" && [ -f "$vault/$orig" ] && [ ! -L "$vault/$orig" ] || return 1
   fi
-  sheet_tags_ok "$tags" && sheet_text_ok "$desc" 100 || return 1
+  SHEET_WHY=tag
+  sheet_tags_ok "$tags" || return 1
+  SHEET_WHY=description
+  desc=$(sheet_text_fit "$desc" 100) || return 1
+  SHEET_WHY=other
   sheet_index_ok "$vault" || return 1
   read -r -a arr <<<"$tags"
   tags="${arr[*]}"
@@ -1710,9 +1751,13 @@ sheet_note_line() {
 # 80 characters). Otherwise adds `- <tag> · <meaning> · 1` to `## Tags`
 # unless the section has the tag already; book_tags then recounts it.
 sheet_tag_line() {
-  local index="$1/index.md"
+  local index="$1/index.md" meaning
+  SHEET_WHY=tag
   [[ $2 =~ ^#[a-z0-9]+(-[a-z0-9]+)*$ ]] && [ "${#2}" -le 64 ] || return 1
-  sheet_text_ok "$3" 80 || return 1
+  # A meaning is counted with the descriptions.
+  SHEET_WHY=description
+  meaning=$(sheet_text_fit "$3" 80) || return 1
+  SHEET_WHY=other
   sheet_index_ok "$1" || return 1
   if [ -f "$index" ] && T="$2" awk '{ sub(/\r$/, "") }
     /^## / { if (on) exit; on = ($0 ~ /^## Tags[ \t]*$/); next }
@@ -1720,7 +1765,7 @@ sheet_tag_line() {
     END { exit !f }' "$index"; then
     return 0
   fi
-  sheet_section_add "$index" '## Tags' "- $2 · $3 · 1"
+  sheet_section_add "$index" '## Tags' "- $2 · $meaning · 1"
 }
 
 # The fields of the sheet line $1 in SHEET_FIELDS: split at each TAB (an
@@ -1753,9 +1798,9 @@ apply_filing_sheet() {
   # is counted the same way by every count, so the warning never
   # under-reports.
   local LC_ALL=C
-  local vault=$1 sheet=$2 pending=$3 before=$4 day=$5 line total read rc pass
+  local vault=$1 sheet=$2 pending=$3 before=$4 day=$5 line total read rc pass reason
   local lines=()
-  SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0
+  SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0 SHEET_SKIP_REASONS=''
   [ -f "$sheet" ] && [ ! -L "$sheet" ] || return 0
   total=$(tr -d '\000' <"$sheet" | grep -ac '[^[:space:]]' || true)
   # At most SHEET_MAX_BYTES and SHEET_MAX_LINES are read.
@@ -1766,16 +1811,21 @@ apply_filing_sheet() {
   done
   SHEET_SKIPPED=$((total - read))
   [ "$SHEET_SKIPPED" -ge 0 ] || SHEET_SKIPPED=0
+  local -A why=([description]=0 [path]=0 [name]=0 [tag]=0 [original]=0 [other]=$SHEET_SKIPPED)
   for pass in file other; do
     for line in ${lines[@]+"${lines[@]}"}; do
       [[ $line == *[^[:space:]]* ]] || continue
       # A line longer than SHEET_MAX_LINE bytes is skipped unread.
       if [ "${#line}" -gt "$SHEET_MAX_LINE" ]; then
-        [ "$pass" != file ] || SHEET_SKIPPED=$((SHEET_SKIPPED + 1))
+        if [ "$pass" = file ]; then
+          SHEET_SKIPPED=$((SHEET_SKIPPED + 1))
+          why[other]=$((why[other] + 1))
+        fi
         continue
       fi
       sheet_split "$line"
       rc=0
+      SHEET_WHY=other
       case "${SHEET_FIELDS[0]}:${#SHEET_FIELDS[@]}:$pass" in
         file:6:file)
           sheet_file_line "$vault" "$pending" "$before" "$day" "${SHEET_FIELDS[@]:1}" || rc=$?
@@ -1796,8 +1846,16 @@ apply_filing_sheet() {
           ;;
       esac
       [ "$rc" -ne 2 ] || return 1
-      [ "$rc" -eq 0 ] || SHEET_SKIPPED=$((SHEET_SKIPPED + 1))
+      [ "$rc" -eq 0 ] && continue
+      SHEET_SKIPPED=$((SHEET_SKIPPED + 1))
+      [ -n "${why[$SHEET_WHY]+x}" ] || SHEET_WHY=other
+      why[$SHEET_WHY]=$((why[$SHEET_WHY] + 1))
     done
+  done
+  SHEET_SKIP_REASONS=''
+  for reason in description path name tag original other; do
+    [ "${why[$reason]}" -eq 0 ] ||
+      SHEET_SKIP_REASONS+="${SHEET_SKIP_REASONS:+, }${why[$reason]} $reason"
   done
 }
 # <<< filing sheet
@@ -3807,7 +3865,8 @@ if [ -f "$SHEET_TAKEN" ]; then
     # never uploaded, not in the logs.
     fail "$STEP: filing sheet failed"
   fi
-  log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped"
+  # Counts only, with the skipped lines per reason (#978 follow-up).
+  log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped${SHEET_SKIP_REASONS:+ (skipped: $SHEET_SKIP_REASONS)}"
   [ "$SHEET_SKIPPED" -eq 0 ] ||
     SHEET_WARNING="Warning: $SHEET_SKIPPED filing $([ "$SHEET_SKIPPED" -eq 1 ] && echo 'decision was' || echo 'decisions were') not usable and skipped; what they named stays where it was."
 fi
