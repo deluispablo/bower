@@ -213,6 +213,9 @@ export function useTextFieldFocus(): boolean {
     };
     document.addEventListener('focusin', onIn);
     document.addEventListener('focusout', onOut);
+    // #927: a field focused between the first render and this post-paint
+    // effect sent its focusin before anyone listened; read it once now.
+    setTyping(isTextField(document.activeElement));
     return () => {
       document.removeEventListener('focusin', onIn);
       document.removeEventListener('focusout', onOut);

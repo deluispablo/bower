@@ -5,7 +5,12 @@ import type { VNode } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { RunChip, chipModel, isTextField } from '../src/components/run-chip.js';
+import {
+  RunChip,
+  chipModel,
+  isTextField,
+  useTextFieldFocus,
+} from '../src/components/run-chip.js';
 import type { ChipInput } from '../src/components/run-chip.js';
 import {
   RUN_CHIP_LIFETIME_MS,
@@ -236,5 +241,30 @@ describe('isTextField', () => {
     expect(isTextField(box)).toBe(false);
     expect(isTextField(button)).toBe(false);
     expect(isTextField(null)).toBe(false);
+  });
+});
+
+describe('useTextFieldFocus', () => {
+  it('sees a field focused before its listeners attached (#927)', () => {
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    let typing: boolean | null = null;
+    function Probe(): null {
+      typing = useTextFieldFocus();
+      return null;
+    }
+    act(() => {
+      render(<Probe />, root);
+      // After the first render, before the post-paint effect listens.
+      field.focus();
+    });
+    expect(typing).toBe(true);
+    act(() => {
+      render(null, root);
+    });
+    field.remove();
+    root.remove();
   });
 });
