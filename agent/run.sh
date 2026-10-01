@@ -295,6 +295,11 @@ AUDIT_WARNING=''
 # one-line warning.
 readonly INDEX_BEFORE="$WORK_DIR/index-before.md"
 ROWS_WARNING=''
+# The filing sheet (#978) once the session is over, moved out of the local
+# copy so it is never uploaded, and the one-line warning for its skipped
+# lines.
+readonly SHEET_TAKEN="$WORK_DIR/filing.tsv"
+SHEET_WARNING=''
 # In the vault: the pending files over the size limit, for the agent to file
 # by name and date without reading them (written before the agent starts),
 # and the one clause the agent may write about what it added besides filing
@@ -2155,6 +2160,8 @@ copy_up_after_failure() {
     log "sync up (copy only)"
     # The agent's added note and the too-large list are never uploaded (#598).
     rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST"
+    # Nor is the filing sheet (#978): a failed run files nothing from it.
+    rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE"
     # Its one line per updated note is kept for the report, never uploaded.
     read_updated
     copy_changed_up || log "sync up (copy only) failed"
@@ -3594,6 +3601,9 @@ log "$STEP: $(wc -c <"$SYSTEM_FILE" | tr -d ' ') bytes for ${CONTEXT_MODES[*]}"
 rm -f "$INDEX_BEFORE"
 [ ! -f "$VAULT_DIR/index.md" ] || cp "$VAULT_DIR/index.md" "$INDEX_BEFORE" ||
   fail "$STEP: index.md not kept"
+# #978: the session starts with no filing sheet, so an old one is never
+# carried out again.
+rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: old filing sheet not removed"
 # Logged right before the agent starts: the next line is its stats, so the
 # two timestamps bound the agent's own time (agent/bench/run-bench.sh).
 STEP='agent run'
@@ -3618,6 +3628,14 @@ set -e
 if ! restore_rulebook; then
   fail "$STEP: CLAUDE.md not restored"
 fi
+# #978: the filing sheet leaves the local copy at once, so no copy up, the
+# one after a failure included, ever takes it to Drive. Only a plain file
+# is kept; anything else at its path is removed.
+rm -f "$SHEET_TAKEN"
+if [ -f "$VAULT_DIR/$SHEET_FILE" ] && [ ! -L "$VAULT_DIR/$SHEET_FILE" ]; then
+  mv -- "$VAULT_DIR/$SHEET_FILE" "$SHEET_TAKEN" || fail "$STEP: filing sheet not taken"
+fi
+rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: filing sheet not taken"
 # The agent's closing lines (the report parsed below) are the final result
 # event's text; with no result event (a crash, a timeout) AGENT_OUT is empty,
 # as an empty text output was.
@@ -3662,6 +3680,22 @@ report_phase saving
 read_added
 read_updated
 read_meaning
+# #978: the filing sheet is carried out in the local copy before the audit,
+# so the move phase below finds each filed original by its content, moves
+# it in Drive and writes its `Filed:` line, and the audit checks every file
+# the sheet wrote. Its pending list is the one the agent was given.
+if [ -f "$SHEET_TAKEN" ]; then
+  sheet_pending="$WORK_DIR/pending-after-scan.txt"
+  [ -f "$sheet_pending" ] || sheet_pending=$PENDING_FILE
+  [ "$MODE" = ingest ] || sheet_pending=/dev/null
+  if ! apply_filing_sheet "$VAULT_DIR" "$SHEET_TAKEN" "$sheet_pending" "$MANIFEST_BEFORE" \
+    "$(date -u +%F)" 2>>"$LOG_DIR/bookkeeping.err"; then
+    fail "$STEP: filing sheet failed"
+  fi
+  log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped"
+  [ "$SHEET_SKIPPED" -eq 0 ] ||
+    SHEET_WARNING="Warning: $SHEET_SKIPPED filing $([ "$SHEET_SKIPPED" -eq 1 ] && echo 'decision was' || echo 'decisions were') not usable and skipped; what they named stays where it was."
+fi
 if ! audit || ! record_saved_keys; then
   fail "$STEP: copy failed" drive_unavailable
 fi
@@ -3769,6 +3803,8 @@ else
 '}$STATUSES_WARNING"
   [ -z "$ROWS_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
 '}$ROWS_WARNING"
+  [ -z "$SHEET_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
+'}$SHEET_WARNING"
   # A silent no-op (#967): the agent was given at least one file (not an
   # instruction or context note) after the pre-scan, left every one of them
   # where it was (not filed, not moved to Processed/; the quarantined ones

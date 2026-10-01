@@ -378,6 +378,19 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
         '- #flat · Flat hunt papers · 1' '- #receipt · Receipts · 1' >"$remote/index.md"
       echo '# Log' >"$remote/log.md"
     fi
+    if [ "$SMOKE_SCENARIO" = sheet ] || [ "$SMOKE_SCENARIO" = sheettrav ]; then
+      # #978: an index with a filed bill, an area folder with its hub note,
+      # and a photo in the inbox next to the PDF.
+      mkdir -p "$remote/2-Areas/Finance"
+      echo bill >"$remote/2-Areas/Finance/Old bill.pdf"
+      printf -- '---\ntags: [hub, area]\nby: bower\n---\n\n# Finance\n\n- [[Old bill.pdf]] An old bill\n' \
+        >"$remote/2-Areas/Finance/Finance.md"
+      echo photo >"$remote/0-Inbox/receipt.jpg"
+      printf -- '%s\n' '# Index' '' '## Projects' '_(none yet)_' '' '## Areas' \
+        '- [[2-Areas/Finance/Old bill.pdf]] · PDF · #receipt · An old bill · filed by Bower' '' \
+        '## Tags' '- #receipt · Receipts · 1' >"$remote/index.md"
+      echo '# Log' >"$remote/log.md"
+    fi
     if [ "$SMOKE_SCENARIO" = filedpdf ]; then
       # R-SS-12 (#967): filed PDFs, a text one and a scan, and an older
       # text copy of a third one.
@@ -1073,6 +1086,34 @@ case "$SMOKE_SCENARIO" in
     done
     echo 'One more line.' >>3-Resources/Old.md
     ;;
+  # #978: the agent files through the sheet only: a PDF renamed into a new
+  # project folder with its companion note, a photo into an existing area,
+  # a clipping set aside in Processed, and a new tag.
+  sheet)
+    mkdir -p '1-Projects/Job hunt' .bower
+    printf -- '---\nby: bower\n---\n\nA summary of the offer.\n' >'1-Projects/Job hunt/Offer summary.md'
+    {
+      printf 'note\t1-Projects/Job hunt/Offer summary.md\t1-Projects/Job hunt/Offer letter.pdf\t#job-offer\tSummary of the offer\n'
+      printf 'file\t0-Inbox/a.pdf\t1-Projects/Job hunt\tOffer letter.pdf\t#job-offer\tOffer from North Ltd\n'
+      printf 'file\t0-Inbox/receipt.jpg\t2-Areas/Finance\tGarage receipt.jpg\t#receipt\tReceipt for the garage\n'
+      printf 'file\tClippings/b.md\t0-Inbox/Processed\tb.md\t-\t-\n'
+      printf 'tag\t#job-offer\tJob offers and contracts\n'
+    } >.bower/filing.tsv
+    ;;
+  # #978: a sheet that tries to leave the folder, reach a protected path or
+  # overwrite a file: every line is skipped.
+  sheettrav)
+    mkdir -p .bower
+    {
+      printf 'file\t0-Inbox/a.pdf\t../../outside\ta.pdf\t#flat\tEscape\n'
+      printf 'file\t0-Inbox/a.pdf\t1-Projects/../../../outside\ta.pdf\t#flat\tEscape\n'
+      printf 'file\t../../outside/a.pdf\t2-Areas/Finance\ta.pdf\t#flat\tEscape\n'
+      printf 'file\t0-Inbox/a.pdf\t2-Areas/Finance\t../../../a.pdf\t#flat\tEscape\n'
+      printf 'file\t0-Inbox/receipt.jpg\t2-Areas/Finance\tOld bill.pdf\t#flat\tOverwrite\n'
+      printf 'file\t0-Inbox/a.pdf\t.claude\ta.pdf\t#flat\tProtected\n'
+      printf 'note\t.claude/settings.json\t-\t#flat\tProtected\n'
+    } >.bower/filing.tsv
+    ;;
   # More changes than BOWER_MAX_CHANGES=3, all inside the known roots.
   toomany)
     for n in 1 2 3 4; do echo "note $n" >"3-Resources/new-$n.md"; done
@@ -1089,7 +1130,11 @@ if [ "$SMOKE_SCENARIO" = overloaded ]; then
   exit 1
 fi
 # "noop" (#967): the agent leaves every pending file where it was.
-[ "$SMOKE_SCENARIO" = noop ] || [ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/
+# "sheet" and "sheettrav" (#978): the filing sheet moves it, if anything.
+case "$SMOKE_SCENARIO" in
+  noop | sheet | sheettrav) ;;
+  *) [ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/ ;;
+esac
 # run.sh asks for --output-format stream-json --verbose (R-SS-2): one JSON
 # event per line, the agent's text and tool calls (which name vault paths)
 # along the way and the closing text in the final result event.
@@ -3188,3 +3233,82 @@ if grep -Eq 'Contract|Scan\.|Missing' "$STATE/out.log"; then die 'filedpdf: the 
 expect_content_free
 expect_cleaned_up
 echo "ok a new text copy of a filed PDF gets the text, a filed scan the scan line"
+
+# 46. #978: the agent files through the filing sheet only. The runner moves
+# each original in the local copy before the move phase, which repeats the
+# move in Drive (keeping the file's id) and writes the `Filed:` line; the
+# runner writes the hub lines (a new folder gets its hub note), the v24
+# rows and the new tag, and the sheet itself never reaches Drive. A
+# clipping set aside in Processed gets no row. Only counts reach the log.
+MODE=ingest
+run_case sheet
+expect_eq "$RC" 0 'sheet: exit code'
+expect_eq "$(post "$(posts_count)" p.state)" done 'sheet: final state'
+remote="$STATE/remote"
+grep -Fxq '0-Inbox/a.pdf -> 1-Projects/Job hunt/Offer letter.pdf' "$STATE/moved.txt" ||
+  die 'sheet: the PDF was not moved in Drive'
+grep -Fxq '0-Inbox/receipt.jpg -> 2-Areas/Finance/Garage receipt.jpg' "$STATE/moved.txt" ||
+  die 'sheet: the photo was not moved in Drive'
+expect_eq "$(cat "$remote/1-Projects/Job hunt/Offer letter.pdf")" pdf 'sheet: the filed PDF in Drive'
+for f in 0-Inbox/a.pdf 0-Inbox/receipt.jpg Clippings/b.md .bower/filing.tsv; do
+  [ ! -e "$remote/$f" ] || die "sheet: still in Drive: $f"
+done
+[ -f "$remote/0-Inbox/Processed/b.md" ] || die 'sheet: the clipping is not in Processed'
+if grep -q 'filing.tsv' "$STATE/uploaded.txt"; then die 'sheet: the sheet was uploaded'; fi
+# The runner's History section (R-RUNNER-9) follows the list.
+expect_eq "$(sed -n '/^## Notes & documents$/,/^$/p' "$remote/1-Projects/Job hunt/Job hunt.md")" \
+  "$(printf '%s\n' '## Notes & documents' '- [[Offer letter.pdf]] Offer from North Ltd' \
+    '- [[Offer summary]] Summary of the offer' '')" 'sheet: the new hub note and its lines'
+grep -q '^by: bower$' "$remote/1-Projects/Job hunt/Job hunt.md" || die 'sheet: the hub note is not by Bower'
+expect_eq "$(tail -n 1 "$remote/2-Areas/Finance/Finance.md")" '- [[Garage receipt.jpg]] Receipt for the garage' \
+  'sheet: the hub line in the existing hub note'
+expect_eq "$(sed -n '/^## Projects$/,/^## Tags$/p' "$remote/index.md")" "$(printf '%s\n' '## Projects' \
+  '- [[1-Projects/Job hunt/Offer letter.pdf]] · PDF · #job-offer · Offer from North Ltd · filed by Bower' \
+  '- [[1-Projects/Job hunt/Offer summary.md]] · Note · #job-offer · Summary of the offer · filed by Bower · [[1-Projects/Job hunt/Offer letter.pdf]]' \
+  '' '## Areas' \
+  '- [[2-Areas/Finance/Old bill.pdf]] · PDF · #receipt · An old bill · filed by Bower' \
+  '- [[2-Areas/Finance/Garage receipt.jpg]] · Photo · #receipt · Receipt for the garage · filed by Bower' \
+  '' '## Tags')" 'sheet: the rows in Drive'
+if grep -q 'b.md' "$remote/index.md"; then die 'sheet: a row for Processed'; fi
+expect_eq "$(sed -n '/^## Tags$/,$p' "$remote/index.md")" "$(printf -- '%s\n' '## Tags' \
+  '- #job-offer · Job offers and contracts · 2' '- #receipt · Receipts · 2')" 'sheet: the tags in Drive'
+grep -Eq ' · Filed: Offer letter\.pdf → 1-Projects/Job hunt, renamed from a\.pdf$' "$remote/log.md" ||
+  die 'sheet: no Filed: line for the PDF'
+grep -Eq ' · Filed: Garage receipt\.jpg → 2-Areas/Finance, renamed from receipt\.jpg$' "$remote/log.md" ||
+  die 'sheet: no Filed: line for the photo'
+grep -q ' · Tag added: #job-offer$' "$remote/log.md" || die 'sheet: no Tag added: line'
+grep -q ' filing sheet: 3 filed, 1 notes booked, 1 tags, 0 lines skipped$' "$STATE/out.log" ||
+  die 'sheet: not counted in the log'
+grep -q ' row check: 0 of 3 rows not in the expected form$' "$STATE/out.log" || die 'sheet: rows not checked'
+if grep -q 'Warning' <<<"$(post "$(posts_count)" p.summary)"; then die 'sheet: a warning in the summary'; fi
+if grep -Eq 'Offer|Garage|job-offer|North' "$STATE/out.log"; then die 'sheet: the log names a file or a tag'; fi
+expect_content_free
+expect_cleaned_up
+echo "ok the runner files from the sheet: moved in Drive, hub lines, rows, tags and Filed: lines"
+
+# 47. #978: a sheet whose lines try to leave the folder, reach a protected
+# path or overwrite a file. Every line is skipped: nothing moves, nothing
+# is written outside the folder or in it for them, and the count of
+# skipped lines is a warning in the summary, never a path.
+MODE=ingest
+run_case sheettrav
+expect_eq "$RC" 0 'sheettrav: exit code'
+expect_eq "$(post "$(posts_count)" p.state)" done 'sheettrav: final state'
+remote="$STATE/remote"
+expect_eq "$(cat "$STATE/moved.txt")" '' 'sheettrav: nothing moved in Drive'
+[ -f "$remote/0-Inbox/a.pdf" ] && [ -f "$remote/0-Inbox/receipt.jpg" ] || die 'sheettrav: a file left the inbox'
+expect_eq "$(cat "$remote/2-Areas/Finance/Old bill.pdf")" bill 'sheettrav: the existing file is untouched'
+for d in "$STATE" "$STATE/runner-temp" "$ROOT"; do
+  [ ! -e "$d/outside" ] && [ ! -e "$d/a.pdf" ] || die 'sheettrav: a file left the folder'
+done
+if [ -n "$(find "$STATE/runner-temp" -path '*/outside*' -print -quit 2>/dev/null)" ]; then
+  die 'sheettrav: a file left the folder'
+fi
+grep -Fxq 'Warning: 7 filing decisions were not usable and skipped; what they named stays where it was.' \
+  <<<"$(post "$(posts_count)" p.summary)" || die 'sheettrav: the warning is not in the summary'
+grep -q ' filing sheet: 0 filed, 0 notes booked, 0 tags, 7 lines skipped$' "$STATE/out.log" ||
+  die 'sheettrav: not counted in the log'
+if grep -Eq 'outside|Escape|Overwrite|Old bill' "$STATE/out.log"; then die 'sheettrav: the log names a field'; fi
+expect_content_free
+expect_cleaned_up
+echo "ok a filing sheet that tries to leave the folder is skipped, with a warning"
