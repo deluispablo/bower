@@ -622,7 +622,7 @@ function AdvancedSection({ me }: { me: Me }): JSX.Element {
 
       <Toggle
         label="Show Bower's own files"
-        hint="Files Bower keeps for itself, grouped at the bottom of your notes."
+        hint="Rulebook, your rules, about me, catalogue, journal, instruction notes, health reports and other files Bower keeps for itself, at the bottom of your folders."
         checked={showAppFiles}
         onChange={(checked) => {
           setShowAppFiles(checked);

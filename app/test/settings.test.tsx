@@ -153,7 +153,9 @@ describe('Settings › copy (K-30)', () => {
   it('uses the new words and none of the old ones (R-ST-6)', () => {
     mount(baseMe);
     const text = root.textContent ?? '';
-    expect(text).toContain('Files Bower keeps for itself');
+    expect(text).toContain(
+      'other files Bower keeps for itself, at the bottom of your folders.',
+    );
     expect(text).toContain('Things you can ask');
     expect(text).toContain('your Bower folder stays');
     expect(text).toContain('Ping me when it is done');
