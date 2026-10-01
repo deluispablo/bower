@@ -186,22 +186,35 @@
   text-decoration: underline;
 }
 
-/* The tour: the ring round the lit tab and Bower on the tab bar, above the
- * scrim (Tour-375). Neither takes taps. */
+/* The tour: the ring round the lit target and Bower beside it (TR-*).
+ * Neither takes taps. The ring is a cut-out in the scrim (spec 4.15, F-26):
+ * its own shadow is the scrim, so the target inside it stays lit. The stage
+ * sits just under the overlay, whose scrim turns clear while a ring is on
+ * screen; the overlay's clear scrim still takes the taps, and the card stays
+ * above the shadow. */
 .tour-stage {
   position: fixed;
   inset: 0;
-  z-index: var(--z-overlay);
+  z-index: calc(var(--z-scrim) - 1);
   pointer-events: none;
 }
 
 .tour-spot {
   position: fixed;
   box-sizing: border-box;
-  border-radius: 16px;
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: 0;
-  background: rgb(255 255 255 / 0.1);
+  border: 2px solid var(--color-accent-line);
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px var(--color-scrim);
+}
+
+body:has(.tour-spot) .overlay:has(.tour-card) > .overlay-scrim {
+  background: transparent;
+}
+
+@media (min-width: 900px) {
+  .tour-spot {
+    border-radius: 10px;
+  }
 }
 
 /* The lit phone tab, drawn again above the scrim inside the ring, its icon
