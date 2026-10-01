@@ -317,3 +317,125 @@ printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/$(touch pwned)\tx.pdf\t#flat\t$(t
 [ ! -e "$ROOT/pwned" ] && [ ! -e "$ROOT/pwned2" ] && [ ! -e "$ROOT/pwned3" ] && [ ! -e "$V/pwned" ] ||
   die 'a field ran as a command'
 echo "ok $CASE"
+
+# --- hardening (security review of #982) ---------------------------------------------
+CASE='memory files'
+fresh
+for bad in 1-Projects/Claude 1-Projects/CLAUDE.local '2-Areas/claude.LOCAL'; do
+  no_ sheet_dest_kind "$V" "$bad"
+done
+for bad in '1-Projects/a/Claude.Local.MD' 'claude.local.md' '1-Projects/claude/x.pdf'; do
+  no_ sheet_path_ok "$bad"
+done
+no_ sheet_path_ok '0-Inbox/CLAUDE.local.md' pending
+no_ sheet_name_ok 'claude.local.md' page.md
+# may_write, as run.sh defines it: a memory file in any letter case is never written.
+eval "$(sed -n '/^in_known_root() {/,/^}/p; /^may_write() {/,/^}/p; /^is_memory_file() {/,/^}/p' "$HERE/../run.sh")"
+RULES_WRITABLE=0
+for bad in CLAUDE.md claude.md 1-Projects/x/Claude.md 3-Resources/CLAUDE.local.md 2-Areas/claude.local.MD; do
+  no_ may_write "$bad"
+done
+yes_ may_write '3-Resources/Claude notes.md'
+echo "ok $CASE"
+
+CASE='windows names and format characters'
+for bad in '1-Projects/a:b' '1-Projects/a*b' '1-Projects/a?b' '1-Projects/a"b' '1-Projects/a<b' '1-Projects/a>b' \
+  '1-Projects/CON' '1-Projects/con.pdf' '1-Projects/x/Nul.txt' '1-Projects/LPT1.pdf' '1-Projects/com9' 'AUX' \
+  $'1-Projects/a​b' $'1-Projects/a‮b.pdf' $'1-Projects/a⁦b' $'1-Projects/﻿a' \
+  $'1-Projects/a­b' $'1-Projects/a\xf3\xa0\x81\x81b'; do
+  no_ sheet_path_ok "$bad"
+done
+yes_ sheet_path_ok '1-Projects/Console notes'
+yes_ sheet_path_ok '1-Projects/Café menu.pdf'
+no_ sheet_name_ok 'CON.pdf' scan.pdf
+no_ sheet_name_ok $'list‮ing.pdf' scan.pdf
+no_ sheet_name_ok 'a:b.pdf' scan.pdf
+no_ sheet_text_ok $'A note​' 100
+echo "ok $CASE"
+
+CASE='reserved names'
+for bad in index.md INDEX.MD log.md Rules.md rules.md README.md About-Me.md about-me.MD CLAUDE.md; do
+  no_ sheet_path_ok "1-Projects/Flat hunt/$bad"
+  no_ sheet_path_ok "$bad"
+done
+fresh
+echo changed >"$V/3-Resources/index.md"
+rc=0
+sheet_note_line "$V" "$BEFORE" "$DAY" 3-Resources/index.md - '#flat' 'An index' || rc=$?
+expect_eq "$rc" 1 'a note named index.md'
+echo "ok $CASE"
+
+CASE='other letter case'
+fresh
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' lease.pdf '#flat' 'Same name, other case'
+refused 0-Inbox/scan0001.pdf 2-Areas/finance scan0001.pdf '#flat' 'Same folder, other case'
+[ -f "$V/0-Inbox/scan0001.pdf" ] || die 'moved'
+echo "ok $CASE"
+
+CASE='processed and failed moves'
+fresh
+rm -rf "$V/0-Inbox/Processed"
+echo file >"$V/0-Inbox/Processed"
+refused Clippings/page.md 0-Inbox/Processed page.md - -
+fresh
+rm -rf "$V/4-Archives"
+echo 'not a folder' >"$V/4-Archives"
+refused 0-Inbox/scan0001.pdf 4-Archives/Old scan0001.pdf '#flat' 'mkdir fails'
+[ -f "$V/0-Inbox/scan0001.pdf" ] || die 'moved after a failed mkdir'
+echo "ok $CASE"
+
+CASE='hub and index paths'
+fresh
+# The new hub note's path is taken by a folder: the line is skipped.
+mkdir -p "$V/1-Projects/Job hunt/Job hunt.md"
+refused 0-Inbox/scan0001.pdf '1-Projects/Job hunt' Offer.pdf '#job' 'Hub path taken'
+[ -f "$V/0-Inbox/scan0001.pdf" ] || die 'moved with no hub note to write'
+# An existing hub path that is not a plain file.
+fresh
+rm "$V/1-Projects/Flat hunt/Flat hunt.md"
+mkdir "$V/1-Projects/Flat hunt/Flat hunt.md"
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' Scan.pdf '#flat' 'Hub is a folder'
+# index.md that is not a plain file.
+fresh
+rm "$V/index.md"
+mkdir "$V/index.md"
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' Scan.pdf '#flat' 'Index is a folder'
+no_ sheet_tag_line "$V" '#new' 'A new tag'
+# Links, where the system makes real ones.
+fresh
+ln -s "$ROOT" "$V/link-test" 2>/dev/null || true
+if [ -L "$V/link-test" ]; then
+  rm "$V/link-test"
+  mv "$V/index.md" "$ROOT/outside-index.md"
+  ln -s "$ROOT/outside-index.md" "$V/index.md"
+  refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' Scan.pdf '#flat' 'Index is a link'
+  no_ sheet_tag_line "$V" '#new' 'A new tag'
+  if grep -q 'Scan.pdf\|#new' "$ROOT/outside-index.md"; then die 'wrote through a linked index.md'; fi
+  fresh
+  mv "$V/1-Projects/Flat hunt/Flat hunt.md" "$ROOT/outside-hub.md"
+  ln -s "$ROOT/outside-hub.md" "$V/1-Projects/Flat hunt/Flat hunt.md"
+  refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' Scan.pdf '#flat' 'Hub is a link'
+  if grep -q 'Scan.pdf' "$ROOT/outside-hub.md"; then die 'wrote through a linked hub note'; fi
+  echo "ok $CASE (links included)"
+else
+  echo "ok $CASE (no links on this system)"
+fi
+
+CASE='size caps'
+fresh
+{
+  printf 'tag\t#ok\t%s\n' "$(printf 'a%.0s' {1..3000})"
+  printf '\xff\xfe not text\n'
+  printf 'tag\t#job-offer\tJob offers and contracts\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_TAGS $SHEET_SKIPPED" '1 2' 'a long line and a line that is not text are skipped and counted'
+fresh
+filler=$(printf 'x%.0s' {1..1800})
+{
+  for _ in $(seq 1 600); do printf 'junk\t%s\n' "$filler"; done
+  printf 'tag\t#job-offer\tJob offers and contracts\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_TAGS $SHEET_SKIPPED" '0 601' 'nothing past 1 MiB is read, all of it counted'
+echo "ok $CASE"

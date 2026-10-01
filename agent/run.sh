@@ -702,24 +702,33 @@ in_known_root() {
 # (RULES_WRITABLE, set after the pre-scan). Otherwise one injected note could
 # plant a standing "rule" in an ordinary ingest (issue #263).
 may_write() {
+  ! is_memory_file "$1" || return 1
   case "$1" in
-    CLAUDE.md | */CLAUDE.md) return 1 ;;
     Rules.md) [ "$RULES_WRITABLE" -eq 1 ] || return 1 ;;
   esac
   in_known_root "$1"
 }
 
+# Whether the path $1 is a file Claude Code loads as memory: a CLAUDE.md or
+# a CLAUDE.local.md at any depth, in any letter case (a case-insensitive
+# disk or Drive client may serve one as the other).
+is_memory_file() {
+  case "${1,,}" in
+    claude.md | */claude.md | claude.local.md | */claude.local.md) return 0 ;;
+  esac
+  return 1
+}
+
 # Before the run: keep a copy of every file the audit may have to put back:
 # those outside the known roots (CLAUDE.md and README.md among them),
-# Rules.md and any nested CLAUDE.md. Whether Rules.md may change is not
-# known yet at this point, so it is always kept.
+# Rules.md and any nested memory file (is_memory_file). Whether Rules.md may
+# change is not known yet at this point, so it is always kept.
 keep_pre_run_copy() {
   local path
   while IFS= read -r path; do
-    case "$path" in
-      Rules.md | */CLAUDE.md) ;;
-      *) in_known_root "$path" && continue ;;
-    esac
+    if [ "$path" != Rules.md ] && ! is_memory_file "$path"; then
+      in_known_root "$path" && continue
+    fi
     mkdir -p "$PRE_RUN_DIR/$(dirname "$path")" &&
       cp -p "$VAULT_DIR/$path" "$PRE_RUN_DIR/$path" || return 1
   done < <(cut -d ' ' -f 3- "$MANIFEST_BEFORE")
@@ -1238,6 +1247,8 @@ check_rows() {
 # logs a path, a name or a field.
 readonly SHEET_FILE='.bower/filing.tsv'
 readonly SHEET_MAX_LINES=2000
+readonly SHEET_MAX_BYTES=1048576
+readonly SHEET_MAX_LINE=2048
 
 # The number of characters (not bytes) of $1.
 sheet_chars() { printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' '; }
@@ -1250,25 +1261,75 @@ sheet_chars() { printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' 
 # row also has no `[ ] | # ^ ·`, and no segment with a space or a `.` at
 # its end; with $2 = pending (a path as the runner's own pending list
 # gives it, only compared) those are allowed.
+#
+# Also refused, except for a pending path: the characters Windows forbids
+# in a name (`: * ? " < >`), a Unicode format character (sheet_has_format),
+# a Windows reserved name (CON, PRN, AUX, NUL, COM1-9, LPT1-9, with or
+# without an extension), a folder named `claude` or `claude.local`, and a
+# name the runner or Claude Code owns: index.md, log.md, Rules.md,
+# README.md, About-Me.md, CLAUDE.md and CLAUDE.local.md, any letter case.
+# Memory files (CLAUDE.md, CLAUDE.local.md) are refused in a pending path too.
 sheet_path_ok() {
-  local p=$1 rest seg
+  local p=$1 rest seg low
   [ -n "$p" ] || return 1
   case "$p" in /* | */ | *//* | *\\* | [A-Za-z]:*) return 1 ;; esac
   [[ $p != *[[:cntrl:]]* ]] || return 1
   if [ "${2:-}" != pending ]; then
-    case "$p" in *'['* | *']'* | *'|'* | *'#'* | *'^'* | *'·'*) return 1 ;; esac
+    case "$p" in *'['* | *']'* | *'|'* | *'#'* | *'^'* | *'·'* | *[*?:\"\<\>]*) return 1 ;; esac
+    ! sheet_has_format "$p" || return 1
   fi
   rest=$p
   while :; do
     seg=${rest%%/*}
+    low=${seg,,}
     case "$seg" in '' | .*) return 1 ;; esac
-    [ "${seg,,}" != claude.md ] || return 1
+    case "$low" in claude.md | claude.local.md) return 1 ;; esac
     if [ "${2:-}" != pending ]; then
       case "$seg" in ' '* | *' ' | *.) return 1 ;; esac
+      case "$low" in
+        index.md | log.md | rules.md | readme.md | about-me.md | claude | claude.local) return 1 ;;
+      esac
+      case "${low%%.*}" in
+        con | prn | aux | nul | com[1-9] | lpt[1-9]) return 1 ;;
+      esac
     fi
     [ "$seg" != "$rest" ] || return 0
     rest=${rest#*/}
   done
+}
+
+# Whether $1 holds a Unicode format character (category Cf) that can hide
+# or reorder text: the soft hyphen, the Arabic and Syriac marks, the
+# Mongolian vowel separator, zero-width characters and joiners, the
+# left-to-right and right-to-left marks, embeddings, overrides and
+# isolates, word joiners and invisible operators, the byte order mark,
+# the interlinear annotation characters and the tag characters. Matched
+# on their UTF-8 bytes, so the locale does not matter.
+sheet_has_format() {
+  printf '%s' "$1" | LC_ALL=C grep -aqE \
+    $'\xc2\xad|\xd8[\x80-\x85\x9c]|\xdb\x9d|\xdc\x8f|\xe0\xa3\xa2|\xe1\xa0\x8e|\xe2\x80[\x8b-\x8f\xaa-\xae]|\xe2\x81[\xa0-\xa4\xa6-\xaf]|\xef\xbb\xbf|\xef\xbf[\xb9-\xbb]|\xf3\xa0[\x80-\x81]'
+}
+
+# Whether every segment of the checked path $2 (sheet_path_ok: no glob
+# character) is in the vault $1 under exactly that name.
+sheet_exact() {
+  local dir=$1 rest=$2 seg
+  while [ -n "$rest" ]; do
+    seg=${rest%%/*}
+    [ -n "$(find "$dir" -mindepth 1 -maxdepth 1 -name "$seg" -print -quit 2>/dev/null)" ] || return 1
+    dir="$dir/$seg"
+    [ "$seg" != "$rest" ] || return 0
+    rest=${rest#*/}
+  done
+}
+
+# Whether the folder $1 holds an entry named $2 in any letter case (or
+# exactly, a link included): such a name counts as taken. $2 is a checked
+# name (sheet_path_ok), so it holds no glob character.
+sheet_taken() {
+  [ ! -e "$1/$2" ] && [ ! -L "$1/$2" ] || return 0
+  [ -d "$1" ] || return 1
+  [ -n "$(find "$1" -mindepth 1 -maxdepth 1 -iname "$2" -print -quit 2>/dev/null)" ]
 }
 
 # The extension of the file name $1 in lower case, or nothing.
@@ -1305,6 +1366,7 @@ sheet_tags_ok() {
 sheet_text_ok() {
   [ -n "$1" ] && [ "$1" != - ] || return 1
   [[ $1 != *[[:cntrl:]]* && $1 != *'·'* && $1 != *'[['* && $1 != *']]'* ]] || return 1
+  ! sheet_has_format "$1" || return 1
   [ "$(sheet_chars "$1")" -le "$2" ]
 }
 
@@ -1345,6 +1407,8 @@ sheet_dest_kind() {
   local vault=$1 dest=$2 real top
   if [ "$dest" = 0-Inbox/Processed ]; then
     [ ! -L "$vault/0-Inbox" ] && [ ! -L "$vault/$dest" ] || return 1
+    [ ! -e "$vault/0-Inbox" ] || [ -d "$vault/0-Inbox" ] || return 1
+    [ ! -e "$vault/$dest" ] || [ -d "$vault/$dest" ] || return 1
     echo processed
     return 0
   fi
@@ -1356,24 +1420,39 @@ sheet_dest_kind() {
     real=$(cd -- "$vault/$dest" && pwd -P) || return 1
     top=$(cd -- "$vault" && pwd -P) || return 1
     [ "$real" = "$top/$dest" ] || return 1
+    # Each folder on the way under this exact letter case (a disk that
+    # ignores case finds `finance` when `Finance` is there).
+    sheet_exact "$vault" "$dest" || return 1
     echo existing
     return 0
   fi
   [[ ${dest#*/} != */* ]] || return 1
   [ "$(sheet_chars "${dest#*/}")" -le 60 ] || return 1
+  # A folder there under another letter case is not a new one.
+  ! sheet_taken "$vault/${dest%%/*}" "${dest#*/}" || return 1
   echo new
 }
 
-# The hub note of the folder $2 in the vault $1, as folders_block finds
-# them: `<folder>/<name>.md`, else the folder note `<folder>/_<name>.md`;
-# nothing when it has neither.
-sheet_hub_of() {
-  local name=${2##*/}
-  if [ -f "$1/$2/$name.md" ] && [ ! -L "$1/$2/$name.md" ]; then
-    printf '%s\n' "$2/$name.md"
-  elif [ -f "$1/$2/_$name.md" ] && [ ! -L "$1/$2/_$name.md" ]; then
-    printf '%s\n' "$2/_$name.md"
-  fi
+# The hub note for a line booked in the folder $2 (vault $1, the manifest
+# before the run $3), decided before anything is written: its hub note as
+# folders_block finds them (`<folder>/<name>.md`, else the folder note
+# `<folder>/_<name>.md`), printed as its path; for a folder new in this run
+# with neither (sheet_fresh_folder), `new <folder>/<name>.md`; nothing for
+# any other folder. Returns 1 (the line is skipped) when one of those paths
+# is a link or not a plain file, or when the new hub note's name is taken
+# in another letter case.
+sheet_hub_plan() {
+  local name=${2##*/} p
+  for p in "$2/$name.md" "$2/_$name.md"; do
+    [ ! -L "$1/$p" ] || return 1
+    [ -e "$1/$p" ] || continue
+    [ -f "$1/$p" ] || return 1
+    printf '%s\n' "$p"
+    return 0
+  done
+  sheet_fresh_folder "$3" "$2" || return 0
+  [ ! -d "$1/$2" ] || ! sheet_taken "$1/$2" "$name.md" || return 1
+  printf 'new %s\n' "$2/$name.md"
 }
 
 # Whether the folder $2 is new in this run: a direct subfolder of a PARA
@@ -1410,24 +1489,36 @@ sheet_new_hub() {
   } >"$vault/$dir/$name.md"
 }
 
-# The hub note of the folder $2 (vault $1) for a line being booked: the one
-# it has, or, for a folder new in this run with none (sheet_fresh_folder;
-# the manifest $3), a new one (sheet_new_hub, the date $4 and tags $5);
-# nothing for any other folder.
-sheet_hub_for() {
-  local hub
-  hub=$(sheet_hub_of "$1" "$2")
-  if [ -z "$hub" ] && sheet_fresh_folder "$3" "$2"; then
-    sheet_new_hub "$1" "$2" "$4" "$5" || return 1
-    hub="$2/${2##*/}.md"
+# Writes the hub line `- [[<link $3>]] <description $4>` as the plan $2
+# (sheet_hub_plan) says, in the vault $1: nothing for no plan; for `new`,
+# first the new hub note (sheet_new_hub, the date $5 and tags $6), only
+# while nothing is at its path.
+sheet_hub_write() {
+  local vault=$1 plan=$2 hub
+  [ -n "$plan" ] || return 0
+  hub=${plan#new }
+  if [ "$hub" != "$plan" ]; then
+    [ ! -e "$vault/$hub" ] && [ ! -L "$vault/$hub" ] || return 1
+    sheet_new_hub "$vault" "${hub%/*}" "$5" "$6" || return 1
   fi
-  printf '%s' "$hub"
+  sheet_hub_line "$vault/$hub" "$3" "$4"
+}
+
+# Whether index.md in the vault $1 may be written: a plain file reached
+# through no link, or not there yet.
+sheet_index_ok() {
+  [ ! -L "$1/index.md" ] || return 1
+  [ ! -e "$1/index.md" ] || [ -f "$1/index.md" ]
 }
 
 # Rewrites the file $1 with the awk program $2 (L and S come from the
-# environment), keeping Windows line ends when it has them.
+# environment), keeping Windows line ends when it has them. Only a plain
+# file reached through no link is rewritten; the work file is outside the
+# vault.
 sheet_rewrite() {
-  local file=$1 tmp="$1.bower-sheet"
+  local file=$1 tmp
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  tmp=$(mktemp "${TMPDIR:-/tmp}/bower-sheet.XXXXXX") || return 1
   awk "$2" "$file" >"$tmp" || { rm -f "$tmp"; return 1; }
   if [ -n "$(tr -cd '\r' <"$file" | head -c 1)" ]; then
     sed 's/$/\r/' "$tmp" >"$file" || { rm -f "$tmp"; return 1; }
@@ -1464,7 +1555,9 @@ sheet_hub_line() {
 # `_(none yet)_` line dropped (the tag recount drops it in `## Tags`). A
 # missing section is added before `## Tags`, or at the end.
 sheet_section_add() {
-  [ -f "$1" ] || printf '# Index\n' >"$1" || return 1
+  if [ ! -e "$1" ] && [ ! -L "$1" ]; then
+    printf '# Index\n' >"$1" || return 1
+  fi
   S="$2" L="$3" sheet_rewrite "$1" '
     { sub(/\r$/, ""); line[++n] = $0 }
     END {
@@ -1516,14 +1609,17 @@ sheet_index_row() {
 # changed nothing, when the line is not usable: the pending path is not on
 # the pending list or not a file there; the destination is not one
 # sheet_dest_kind accepts; the file name is not usable (sheet_name_ok) or
-# names a file that is there already; the tags or the description are not
-# in the v24 form (both `-` for 0-Inbox/Processed). Otherwise moves the
-# file in the local copy, then writes its hub line (in the folder's hub
-# note, made for a new folder) and its index row; nothing more for
-# Processed. Returns 2 when a write fails.
+# names a file that is there already (in any letter case); the tags or the
+# description are not in the v24 form (both `-` for 0-Inbox/Processed);
+# index.md or the folder's hub note is a link or not a plain file
+# (sheet_index_ok, sheet_hub_plan). A failed mkdir or mv also skips the
+# line. Otherwise moves the file in the local copy, then writes its hub
+# line (in the folder's hub note, made for a new folder) and its index
+# row; nothing more for Processed. Returns 2 when one of those writes
+# fails after the move.
 sheet_file_line() {
   local vault=$1 pending=$2 before=$3 day=$4 src=$5 dest=$6 name=$7 tags=$8 desc=$9
-  local kind target hub arr=()
+  local kind target plan='' arr=()
   sheet_path_ok "$src" pending || return 1
   grep -qxF -- "$src" "$pending" || return 1
   [ -f "$vault/$src" ] && [ ! -L "$vault/$src" ] || return 1
@@ -1535,15 +1631,18 @@ sheet_file_line() {
     sheet_tags_ok "$tags" && sheet_text_ok "$desc" 100 || return 1
   fi
   target="$dest/$name"
-  [ ! -e "$vault/$target" ] && [ ! -L "$vault/$target" ] || return 1
-  mkdir -p -- "$vault/$dest" || return 2
-  mv -n -- "$vault/$src" "$vault/$target" || return 2
-  [ -f "$vault/$target" ] && [ ! -e "$vault/$src" ] || return 2
+  ! sheet_taken "$vault/$dest" "$name" || return 1
+  if [ "$kind" != processed ]; then
+    sheet_index_ok "$vault" || return 1
+    plan=$(sheet_hub_plan "$vault" "$dest" "$before") || return 1
+  fi
+  mkdir -p -- "$vault/$dest" 2>/dev/null || return 1
+  mv -n -- "$vault/$src" "$vault/$target" 2>/dev/null || return 1
+  [ -f "$vault/$target" ] && [ ! -e "$vault/$src" ] || return 1
   [ "$kind" != processed ] || return 0
   read -r -a arr <<<"$tags"
   tags="${arr[*]}"
-  hub=$(sheet_hub_for "$vault" "$dest" "$before" "$day" "$tags") || return 2
-  [ -z "$hub" ] || sheet_hub_line "$vault/$hub" "$name" "$desc" || return 2
+  sheet_hub_write "$vault" "$plan" "$name" "$desc" "$day" "$tags" || return 2
   sheet_index_row "$vault" "- [[$target]] · $(sheet_type_of "$name") · $tags · $desc · filed by Bower" "$target" ||
     return 2
 }
@@ -1583,22 +1682,24 @@ sheet_note_ok() {
 # one. Returns 2 when a write fails.
 sheet_note_line() {
   local vault=$1 before=$2 day=$3 note=$4 orig=$5 tags=$6 desc=$7
-  local dir hub name row arr=()
+  local dir name row plan='' arr=()
   sheet_note_ok "$vault" "$note" "$before" || return 1
   if [ "$orig" != - ]; then
     sheet_path_ok "$orig" && [ -f "$vault/$orig" ] && [ ! -L "$vault/$orig" ] || return 1
   fi
   sheet_tags_ok "$tags" && sheet_text_ok "$desc" 100 || return 1
+  sheet_index_ok "$vault" || return 1
   read -r -a arr <<<"$tags"
   tags="${arr[*]}"
   dir=${note%/*}
   name=${note##*/}
-  hub=''
   case "$dir" in
     Answers | Answers/*) ;;
-    *) hub=$(sheet_hub_for "$vault" "$dir" "$before" "$day" "$tags") || return 2 ;;
+    *) plan=$(sheet_hub_plan "$vault" "$dir" "$before") || return 1 ;;
   esac
-  [ -z "$hub" ] || [ "$hub" = "$note" ] || sheet_hub_line "$vault/$hub" "${name%.*}" "$desc" || return 2
+  # A hub note booked itself gets no line in itself.
+  [ "$plan" != "$note" ] || plan=''
+  sheet_hub_write "$vault" "$plan" "${name%.*}" "$desc" "$day" "$tags" || return 2
   row="- [[$note]] · Note · $tags · $desc · filed by Bower"
   [ "$orig" = - ] || row+=" · [[$orig]]"
   sheet_index_row "$vault" "$row" "$note" || return 2
@@ -1612,6 +1713,7 @@ sheet_tag_line() {
   local index="$1/index.md"
   [[ $2 =~ ^#[a-z0-9]+(-[a-z0-9]+)*$ ]] && [ "${#2}" -le 64 ] || return 1
   sheet_text_ok "$3" 80 || return 1
+  sheet_index_ok "$1" || return 1
   if [ -f "$index" ] && T="$2" awk '{ sub(/\r$/, "") }
     /^## / { if (on) exit; on = ($0 ~ /^## Tags[ \t]*$/); next }
     on && /^- #/ { t = substr($0, 3); sub(/[ \t].*$/, "", t); if (t == ENVIRON["T"]) { f = 1; exit } }
@@ -1647,20 +1749,31 @@ sheet_split() {
 # rest are skipped. Sets SHEET_FILED, SHEET_NOTES, SHEET_TAGS and
 # SHEET_SKIPPED (counts only). Returns 1 when a write fails.
 apply_filing_sheet() {
+  # Bytes, not characters, everywhere below: a line that is not valid UTF-8
+  # is counted the same way by every count, so the warning never
+  # under-reports.
+  local LC_ALL=C
   local vault=$1 sheet=$2 pending=$3 before=$4 day=$5 line total read rc pass
   local lines=()
   SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0
   [ -f "$sheet" ] && [ ! -L "$sheet" ] || return 0
-  total=$(tr -d '\000' <"$sheet" | grep -c '[^[:space:]]' || true)
-  mapfile -t lines < <(tr -d '\000' <"$sheet" | head -n "$SHEET_MAX_LINES")
+  total=$(tr -d '\000' <"$sheet" | grep -ac '[^[:space:]]' || true)
+  # At most SHEET_MAX_BYTES and SHEET_MAX_LINES are read.
+  mapfile -t lines < <(head -c "$SHEET_MAX_BYTES" "$sheet" | tr -d '\000' | head -n "$SHEET_MAX_LINES")
   read=0
   for line in ${lines[@]+"${lines[@]}"}; do
     [[ $line != *[^[:space:]]* ]] || read=$((read + 1))
   done
   SHEET_SKIPPED=$((total - read))
+  [ "$SHEET_SKIPPED" -ge 0 ] || SHEET_SKIPPED=0
   for pass in file other; do
     for line in ${lines[@]+"${lines[@]}"}; do
       [[ $line == *[^[:space:]]* ]] || continue
+      # A line longer than SHEET_MAX_LINE bytes is skipped unread.
+      if [ "${#line}" -gt "$SHEET_MAX_LINE" ]; then
+        [ "$pass" != file ] || SHEET_SKIPPED=$((SHEET_SKIPPED + 1))
+        continue
+      fi
       sheet_split "$line"
       rc=0
       case "${SHEET_FIELDS[0]}:${#SHEET_FIELDS[@]}:$pass" in
@@ -3689,7 +3802,9 @@ if [ -f "$SHEET_TAKEN" ]; then
   [ -f "$sheet_pending" ] || sheet_pending=$PENDING_FILE
   [ "$MODE" = ingest ] || sheet_pending=/dev/null
   if ! apply_filing_sheet "$VAULT_DIR" "$SHEET_TAKEN" "$sheet_pending" "$MANIFEST_BEFORE" \
-    "$(date -u +%F)" 2>>"$LOG_DIR/bookkeeping.err"; then
+    "$(date -u +%F)" 2>>"$WORK_DIR/filing-sheet.err"; then
+    # The message names vault paths: it stays in the work dir, which is
+    # never uploaded, not in the logs.
     fail "$STEP: filing sheet failed"
   fi
   log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped"
