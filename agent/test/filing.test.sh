@@ -438,4 +438,58 @@ filler=$(printf 'x%.0s' {1..1800})
 } >"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
 expect_eq "$SHEET_TAGS $SHEET_SKIPPED" '0 601' 'nothing past 1 MiB is read, all of it counted'
+expect_eq "$SHEET_SKIP_REASONS" '601 other' 'unread lines count as other'
+echo "ok $CASE"
+
+# --- long texts and skip reasons (#978 follow-up) -----------------------------------
+CASE='long texts'
+long='Résumé of the offer at Example Corp in Leeds, hybrid, salary between 36,000 and 40,000 a year, apply by 17 October, compared with two others'
+expect_eq "$(sheet_chars "$long")" 140 'the long description'
+fit=$(sheet_text_fit "$long" 100)
+expect_eq "$fit" 'Résumé of the offer at Example Corp in Leeds, hybrid, salary between 36,000 and 40,000 a year…' \
+  'cut at the last word that fits, the comma dropped, … added'
+[ "$(sheet_chars "$fit")" -le 100 ] || die 'over 100 characters'
+expect_eq "$(sheet_text_fit 'Short enough' 100)" 'Short enough' 'a text that fits stays as it is'
+expect_eq "$(sheet_text_fit 'The search for a flat to rent near the station, with two bedrooms and a garden, in Leeds' 80)" \
+  'The search for a flat to rent near the station, with two bedrooms and a garden…' 'a long meaning'
+no_ sheet_text_fit "$(printf 'a%.0s' {1..101})" 100
+no_ sheet_text_fit "$long · more" 100
+no_ sheet_text_fit "$long [[Lease]]" 100
+no_ sheet_text_fit '' 100
+no_ sheet_text_fit '-' 100
+fresh
+mkdir -p "$V/1-Projects/Job hunt"
+printf -- '---\nby: bower\n---\nA summary.\n' >"$V/1-Projects/Job hunt/Example Corp, data analyst.md"
+{
+  printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\t%s\n' "$long"
+  printf 'note\t1-Projects/Job hunt/Example Corp, data analyst.md\t1-Projects/Job hunt/Offer letter.docx\t#job-offer #career\t%s\n' "$long"
+  printf 'tag\t#job-offer\tA job offer or a job ad, from a company or an agency, for a role Alex might apply to\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_TAGS $SHEET_SKIPPED" '1 1 1 0' 'long texts are shortened, not skipped'
+grep -qF -- "- [[1-Projects/Job hunt/Example Corp, data analyst.md]] · Note · #job-offer #career · $fit · filed by Bower · [[1-Projects/Job hunt/Offer letter.docx]]" \
+  "$V/index.md" || die 'the note row with the shortened description'
+grep -qF -- "- [[Offer letter.docx]] $fit" "$V/1-Projects/Job hunt/Job hunt.md" || die 'the hub line'
+grep -qF -- '- #job-offer · A job offer or a job ad, from a company or an agency, for a role Alex might… · 1' \
+  "$V/index.md" || die 'the shortened meaning'
+echo "ok $CASE"
+
+CASE='skip reasons'
+fresh
+{
+  printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/Flat hunt\tscan0001.pdf\t#flat\t%s\n' "$(printf 'a%.0s' {1..120})"
+  printf 'file\t0-Inbox/scan0001.pdf\t../outside\tscan0001.pdf\t#flat\tA scan\n'
+  printf 'file\t0-Inbox/receipt.jpg\t1-Projects/Flat hunt\treceipt.pdf\t#flat\tA receipt\n'
+  printf 'file\t0-Inbox/offer.docx\t1-Projects/Flat hunt\toffer.docx\t#Flat\tAn offer\n'
+  printf 'move\t0-Inbox/scan0001.pdf\n'
+} >"$V/.bower/filing.tsv"
+echo 'changed' >>"$V/3-Resources/Old.md"
+printf 'note\t3-Resources/Old.md\t3-Resources/Gone.pdf\t#flat\tChanged\n' >>"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_SKIPPED" 6 'six lines skipped'
+expect_eq "$SHEET_SKIP_REASONS" '1 description, 1 path, 1 name, 1 tag, 1 original, 1 other' 'counted per reason'
+fresh
+: >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_SKIP_REASONS" '' 'no reason when nothing is skipped'
 echo "ok $CASE"

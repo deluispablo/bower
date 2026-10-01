@@ -3311,7 +3311,7 @@ if [ -n "$(find "$STATE/runner-temp" -path '*/outside*' -print -quit 2>/dev/null
 fi
 grep -Fxq 'Warning: 7 filing decisions were not usable and skipped; what they named stays where it was.' \
   <<<"$(post "$(posts_count)" p.summary)" || die 'sheettrav: the warning is not in the summary'
-grep -q ' filing sheet: 0 filed, 0 notes booked, 0 tags, 7 lines skipped$' "$STATE/out.log" ||
+grep -q ' filing sheet: 0 filed, 0 notes booked, 0 tags, 7 lines skipped (skipped: 5 path, 2 name)$' "$STATE/out.log" ||
   die 'sheettrav: not counted in the log'
 if grep -Eq 'outside|Escape|Overwrite|Old bill' "$STATE/out.log"; then die 'sheettrav: the log names a field'; fi
 expect_content_free
