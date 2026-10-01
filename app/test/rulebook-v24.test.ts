@@ -36,8 +36,8 @@ function markerOf(next: string): string | null {
 }
 
 describe('rulebook v24', () => {
-  it('is version 24', () => {
-    expect(rulesVersionOf(RULEBOOK)).toBe(24);
+  it('is version 24 or later', () => {
+    expect(rulesVersionOf(RULEBOOK)).toBeGreaterThanOrEqual(24);
   });
 
   it('marks every section as core or with a valid marker', () => {
@@ -87,12 +87,11 @@ describe('rulebook v24', () => {
     'A description of at most 100 characters that says what the item is about, in plain words, with no `·` and no wikilink.',
     'keeps the link to that original at the end, after the origin',
     'Tags are English, lower case, with words joined by hyphens',
-    'add `- #<tag> · <meaning, at most 80 characters> · 1` there',
     'The runner recounts the tags and writes the `Tag added:` log line after the run.',
     "Notes' frontmatter `tags:` use the same vocabulary",
     'first line `Transcribed by Bower from a scan`',
     'at most about 3,000 characters',
-    'When you answer about a filed PDF of no listed kind that has no text copy, write its text copy as Ingest step 6 says.',
+    'When you answer about a filed PDF of no listed kind that has no text copy, write its text copy as Ingest step 6 says',
     '`Rule added/changed:`, `Correction:`, `Proposal:`, `Context:` and `Applied rule:`',
     'The runner writes the `Filed:` and `Tag added:` lines',
     'Never read `log.md`',

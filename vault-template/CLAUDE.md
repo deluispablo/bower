@@ -485,7 +485,8 @@ Your own rules live in `Rules.md`; Bower reads both. Where they disagree, `Rules
 
 Three files, three owners: this `CLAUDE.md` is Bower's own and is replaced whole when Bower's rules are updated (`bower_rules_version` above); `Rules.md` holds the owner's rules and `About-Me.md` the owner's profile, and an update never touches either. This rulebook, `Rules.md` and `About-Me.md` are already in your instructions; do not open them.
 
-- Never edit this `CLAUDE.md`, `README.md` or anything under `.claude/`; the owner's rules go to `Rules.md`. Write only inside the folders above and to `Rules.md`, `About-Me.md`, `index.md`, `log.md`, `Lint Report.md` and, under `.bower/`, `filing.tsv`, `added.txt`, `updated.txt`, `checks.txt` and `next.txt`: in unattended runs anything else is undone after the run.
+- Never edit this `CLAUDE.md`, `README.md` or anything under `.claude/`; the owner's rules go to `Rules.md`. Write only inside the folders above and to `Rules.md`, `About-Me.md`, `index.md`, `log.md`, `Lint Report.md` and, under `.bower/`, `added.txt`, `updated.txt`, `checks.txt` and `next.txt`: in unattended runs anything else is undone after the run.
+- Also write `.bower/filing.tsv`, the filing sheet (see **index.md and log.md**); the runner reads it after the run.
 - Never touch `.obsidian/`. In unattended runs this is absolute; if a rule would need it (e.g. a graph colour for a new tag), write the pending change to `log.md` instead.
 - System and sync files (`desktop.ini`, `Thumbs.db`, `.DS_Store`, `~$` lock files and the like) are never read, filed, moved or listed; if one turns up, leave it where it is.
 - Never delete notes or originals. Archive them, or set a pending one aside with a `file` line to `0-Inbox/Processed`.
