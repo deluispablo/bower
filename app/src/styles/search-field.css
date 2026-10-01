@@ -140,10 +140,11 @@
   margin: var(--space-2) var(--space-3);
 }
 
-/* The 44 px field keeps the sidebar row's old 54 px, so the tree's four
-   rows still fit above the ledge in an 800 px window (#847). */
+/* The sidebar's 44 px field sits in the explorer's own 4 px gaps with no
+   margin of its own, so the tree still ends above the ledge in an 800 px
+   window (#847). */
 .shell-sidebar .explorer-search-slot .search-field {
-  margin: 5px var(--space-3);
+  margin: 0 var(--space-3);
 }
 
 .explorer-drawer .explorer-search-slot .search-field,
