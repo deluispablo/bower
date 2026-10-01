@@ -342,7 +342,7 @@ export function Add() {
   const [menuOpen, setMenuOpen] = useState(false);
   const toggleMenu = (): void => setMenuOpen((was) => !was);
   const actionsContent = useMemo(
-    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} />,
+    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} name="Add" />,
     [menuOpen],
   );
   useShellSlot('actions', actionsContent);

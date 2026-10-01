@@ -588,7 +588,7 @@ export function Bower(): JSX.Element {
     setMenuOpen(false);
   }, []);
   const actionsContent = useMemo(
-    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} />,
+    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} name="Bower" />,
     [menuOpen, toggleMenu],
   );
   useShellSlot('actions', actionsContent);
