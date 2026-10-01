@@ -92,7 +92,7 @@ import { useMediaQuery } from '../use-media-query.js';
 import { fileHelpTopic, useHelpTopic } from '../help-rows.js';
 import { useTitle } from '../use-title.js';
 import { useRequestRows } from '../use-request-rows.js';
-import { Skeleton } from '../components/system-state.js';
+import { ErrorLine, Skeleton } from '../components/system-state.js';
 import { useVault } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind, VaultIndex } from '../vault-index.js';
@@ -655,7 +655,8 @@ export function FileScreen(): JSX.Element {
   const { params } = useRoute();
   const { route } = useLocation();
   const id = params.id ?? '';
-  const { index, getNoteText, pinFile, unpinFile } = useVault();
+  const { index, status, refresh, getNoteText, pinFile, unpinFile } =
+    useVault();
   const [menuOpen, setMenuOpen] = useState(false);
   const requests = useRequestRows();
   const [thumbnailBroken, setThumbnailBroken] = useState(false);
@@ -769,7 +770,11 @@ export function FileScreen(): JSX.Element {
   if (index === null || isNote) {
     return (
       <section>
-        <Skeleton shape="properties" count={6} />
+        {index === null && status === 'error' ? (
+          <ErrorLine what="file" onRetry={() => void refresh()} />
+        ) : (
+          <Skeleton shape="properties" count={6} />
+        )}
       </section>
     );
   }

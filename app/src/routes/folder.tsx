@@ -57,7 +57,7 @@ import { FOLDERS_LANDMARK } from '../shell-routes.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { useTitle } from '../use-title.js';
-import { Skeleton } from '../components/system-state.js';
+import { ErrorLine, Skeleton } from '../components/system-state.js';
 import { useVault } from '../vault-store.js';
 import { NotFound } from './not-found.js';
 import '../styles/folder.css';
@@ -419,7 +419,7 @@ function FolderBody({
 export function Folder(): JSX.Element {
   const { params } = useRoute();
   const path = params.path ?? '';
-  const { index, pinFolder, unpinFolder } = useVault();
+  const { index, status, refresh, pinFolder, unpinFolder } = useVault();
 
   const contents = useMemo(
     () =>
@@ -492,7 +492,11 @@ export function Folder(): JSX.Element {
   if (index === null) {
     return (
       <section>
-        <Skeleton shape="rows" count={6} />
+        {status === 'error' ? (
+          <ErrorLine what="folder" onRetry={() => void refresh()} />
+        ) : (
+          <Skeleton shape="rows" count={6} />
+        )}
       </section>
     );
   }

@@ -23,6 +23,7 @@ import type { Run } from '../api.js';
 import { Badge } from '../components/badge.js';
 import { Bird, BirdNapButton } from '../components/bird.js';
 import { ONCE_STATES } from '../components/bird-classes.js';
+import { ErrorLine } from '../components/system-state.js';
 import type { BirdState } from '../components/bird-classes.js';
 import { Card, StatTile } from '../components/card.js';
 import { Hint } from '../components/hint.js';
@@ -597,8 +598,15 @@ function useLastRun(lastFinished: Run | null): Run | null {
 
 export function Home(): JSX.Element {
   const { me } = useSession();
-  const { index, files, status, unpinNote, unpinFolder, unpinFile } =
-    useVault();
+  const {
+    index,
+    files,
+    status,
+    refresh,
+    unpinNote,
+    unpinFolder,
+    unpinFile,
+  } = useVault();
   // `now` is the run store's own shared clock, so the bubble, the tiles and
   // the working sheet always agree on how long ago something happened.
   const { phase, run, lastFinished, now, tidyUp, openSheet, keptCount } =
@@ -829,7 +837,9 @@ export function Home(): JSX.Element {
             <h2>Recent</h2>
             {!wide && <a href={FOLDERS_PATH}>All in Folders</a>}
           </div>
-          {recent.length > 0 ? (
+          {index === null && status === 'error' ? (
+            <ErrorLine what="home" onRetry={() => void refresh()} />
+          ) : recent.length > 0 ? (
             <RecentRows notes={recent} titles={recentTitles} now={now} />
           ) : (
             <p class="home-empty">{RECENT_EMPTY}</p>

@@ -70,7 +70,7 @@ import { markSeen } from '../seen.js';
 import { siblingNames } from '../rename-request.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { isAppFile } from '../vault-index.js';
-import { Skeleton } from '../components/system-state.js';
+import { ErrorLine, Skeleton } from '../components/system-state.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
 import { NotFound } from './not-found.js';
@@ -367,7 +367,7 @@ type NoteLoad =
   // re-fetching it.
   | { status: 'ready'; id: string; text: string; rendered: RenderedNote }
   | { status: 'offline' }
-  | { status: 'error'; message: string };
+  | { status: 'error' };
 
 /** The editor open on note `id`; a different note shows its rendered view. */
 interface Editing {
@@ -380,6 +380,8 @@ export function Note() {
   const id = params.id ?? '';
   const {
     index,
+    status,
+    refresh,
     getNoteText,
     appendToNote,
     openNoteForEdit,
@@ -388,6 +390,8 @@ export function Note() {
     unpinNote,
   } = useVault();
   const [load, setLoad] = useState<NoteLoad>({ status: 'loading' });
+  // Bumped by "Try again" on a load error: fetches the note once more.
+  const [attempt, setAttempt] = useState(0);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -491,14 +495,14 @@ export function Note() {
           return;
         }
         console.error(err);
-        setLoad({ status: 'error', message: 'Could not load this note.' });
+        setLoad({ status: 'error' });
       });
     return () => {
       cancelled = true;
     };
     // Re-fetches when the note id changes, or once the index (and so the
     // file it resolves to) becomes available on a cold-start deep link.
-  }, [id, index, file, getNoteText]);
+  }, [id, index, file, getNoteText, attempt]);
 
   // The phone bar's Back (#318). The desktop breadcrumb and the ⋯ are the
   // page's own (PageHeader, #906): the shell's crumb and actions slots stay
@@ -554,7 +558,11 @@ export function Note() {
   if (index === null) {
     return (
       <section>
-        <Skeleton shape="properties" count={6} />
+        {status === 'error' ? (
+          <ErrorLine what="note" onRetry={() => void refresh()} />
+        ) : (
+          <Skeleton shape="properties" count={6} />
+        )}
       </section>
     );
   }
@@ -801,7 +809,14 @@ export function Note() {
       {!isEditing && load.status === 'offline' && (
         <p>Offline: this note is not saved on this device yet.</p>
       )}
-      {!isEditing && load.status === 'error' && <p>{load.message}</p>}
+      {!isEditing && load.status === 'error' && (
+        <ErrorLine
+          what="note"
+          onRetry={() => {
+            setAttempt((n) => n + 1);
+          }}
+        />
+      )}
       {!isEditing && load.status === 'ready' && (
         <>
           {question !== undefined && (
