@@ -650,16 +650,21 @@ function SignOutSection(): JSX.Element {
   const { signOut } = useSession();
   // With files still uploading, Sign out first asks (R-UPL-4).
   const { request, dialog } = useGuardedSignOut(signOut);
+  // The demo cannot sign out either: disabled, like the other account
+  // actions, with the same line.
+  const demo = isDemo();
 
   return (
     <div class="settings-section">
       <button
         type="button"
         class="btn btn-secondary btn-block settings-sign-out"
+        disabled={demo}
         onClick={request}
       >
         Sign out
       </button>
+      {demo && <p class="settings-note">{NOT_IN_DEMO}</p>}
       {dialog}
     </div>
   );

@@ -103,14 +103,14 @@ describe('Settings in a demo build', () => {
     );
   });
 
-  it('disables Sign out everywhere and Delete, keeps Sign out', () => {
+  it('disables Sign out, Sign out everywhere and Delete', () => {
     state.demo = true;
     mount();
     expect(button('Sign out everywhere')?.disabled).toBe(true);
     expect(
       button('Delete my Bower account (your Bower folder stays)')?.disabled,
     ).toBe(true);
-    expect(button('Sign out')?.disabled).toBe(false);
+    expect(button('Sign out')?.disabled).toBe(true);
   });
 
   it('turns the push toggle off with the same sentence', () => {

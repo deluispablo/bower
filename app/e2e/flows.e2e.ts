@@ -1588,18 +1588,18 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
   // Sign out is a plain button, apart from Sign out everywhere. In the
   // demo build (#917, spec §4.14 states) the account controls stay on
   // screen as drawn, disabled, each with "Not in the demo. Run your own
-  // Bower to use it.": the push toggle, the key box and Delete. Scoped to
+  // Bower to use it.": the push toggle, the key box, Sign out and Delete. Scoped to
   // the settings section: the desktop sidebar has its own Sign out button.
   const settings = page.locator('.settings');
   await expect(
     settings.getByRole('button', { name: 'Sign out', exact: true }),
-  ).toBeVisible();
+  ).toBeDisabled();
   await expect(
     settings.getByRole('button', { name: 'Sign out everywhere' }),
   ).toBeDisabled();
   await expect(
     settings.getByText('Not in the demo. Run your own Bower to use it.'),
-  ).toHaveCount(3);
+  ).toHaveCount(4);
 
   const pushToggle = settings.getByRole('switch', {
     name: 'Ping me when it is done',
