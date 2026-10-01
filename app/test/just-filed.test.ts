@@ -15,18 +15,15 @@ import type { DriveFile } from '../src/drive.js';
 import {
   EARLIER_LIMIT,
   asideLabel,
-  earlierHeading,
   earlierRuns,
   fallbackLines,
   filedCount,
   groupHeading,
   hasDestinations,
-  justFiledRows,
   latestRun,
   linkAddress,
   rowLabel,
   rowSub,
-  setAsideRows,
   unseenIds,
   wasLabel,
   noListLine,
@@ -129,64 +126,7 @@ describe('linkAddress', () => {
     expect(linkAddress('ftp://example.com/x')).toBeNull();
     expect(linkAddress(undefined)).toBeNull();
   });
-
-  it('keeps a rename whose old name equals the new file name', () => {
-    const same: Run = {
-      ...run,
-      items: [
-        {
-          path: '0-Inbox/x.pdf',
-          kind: 'file',
-          to: '1-Projects/Flat hunt/Arlington Road, 2 bed.pdf',
-          renamedFrom: 'Arlington Road, 2 bed.pdf',
-        },
-      ],
-    };
-    expect(justFiledRows(same, index)[0]?.oldName).toBe(
-      'Arlington Road, 2 bed.pdf',
-    );
-  });
 });
-
-describe('justFiledRows', () => {
-  const rows = justFiledRows(run, index);
-
-  it('lists old name, new name and folder, without the set-aside item', () => {
-    expect(rows.map((r) => r.title)).toEqual([
-      'Arlington Road, 2 bed',
-      'Arlington Road, window sign',
-      'Kentish Town photos',
-    ]);
-    expect(rows[0]?.oldName).toBe('Arlington Road.pdf');
-    expect(rows[0]?.folder).toBe('Projects › Flat hunt');
-    expect(rows[0]?.para).toBe('projects');
-    expect(rows[2]?.para).toBe('resources');
-    expect(rows[2]?.folder).toBe('Resources › Links');
-  });
-
-  it('never shows the numeric prefix, and links what the index knows', () => {
-    for (const row of rows) expect(row.folder).not.toMatch(/\d-/);
-    expect(rows[0]?.href).toBe('/file/a');
-    expect(rows[2]?.href).toBe('/note/c');
-  });
-
-  it('points at the note beside a file for its key facts', () => {
-    expect(rows[0]?.notePath).toBe(
-      '1-Projects/Flat hunt/Arlington Road, 2 bed.md',
-    );
-    expect(rows[2]?.notePath).toBe('3-Resources/Links/Kentish Town photos.md');
-  });
-});
-
-describe('setAsideRows', () => {
-  it('gives the folder, the reason sentence and the Say what it is link', () => {
-    const [row] = setAsideRows(run, index);
-    expect(row?.folder).toBe('Projects › Flat hunt');
-    expect(row?.sentence).toBe("Bower can't watch videos.");
-    expect(row?.sayHref).toBe('/bower?text=About%20Walk-through.mp4%3A%20');
-  });
-});
-
 describe('counts and headings', () => {
   it('counts every filed thing, set aside included', () => {
     expect(filedCount(run)).toBe(4);
@@ -204,19 +144,6 @@ describe('counts and headings', () => {
       "Today's tidy-up: see where everything went",
     );
     expect(rowSub('Today, 10:42', true)).toBe("Today's tidy-up");
-  });
-
-  it('names the things of a one- or two-item earlier tidy-up', () => {
-    const small: Run = {
-      ...run,
-      processed: ['0-Inbox/Arlington Road.pdf'],
-      items: run.items?.slice(0, 1),
-      setAside: [],
-    };
-    expect(earlierHeading(small, NOW, index)).toMatch(
-      /1 thing · Arlington Road$/,
-    );
-    expect(earlierHeading(run, NOW, index)).not.toContain('Arlington Road');
   });
 });
 

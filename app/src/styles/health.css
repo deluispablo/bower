@@ -11,11 +11,16 @@
 }
 
 .health-head {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   flex-wrap: wrap;
+}
+
+.health-head > .page-header {
+  flex: 1 1 100%;
 }
 
 .health-head h1 {

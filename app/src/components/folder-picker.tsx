@@ -2,7 +2,8 @@
  * Move to… (#909, spec §3.36, R-EDITS-2; boards PF-Move-375/1280): the
  * explorer's tree, folders only, as a choice of destination. The app never
  * moves anything itself (D1): "Move here" writes a request note into the
- * inbox (`move-request.ts`) and confirms by a toast with Undo.
+ * inbox (`move-request.ts`); the page then says "Moving to <folder> at the
+ * next tidy-up" with the one Undo (L-20, F-22).
  *
  * `FolderChoice` is the tree alone (same rows, guides, chevrons and icons as
  * `tree.tsx`; the folder the thing sits in now is muted and not on offer;
@@ -24,7 +25,6 @@ import {
   pickerFolders,
   REPLACE_KEPT,
   replaceRequestNote,
-  undoRequestNote,
 } from '../move-request.js';
 import type { MoveSubject } from '../move-request.js';
 import { buildTree, displayName, paraKindOf } from '../navigation.js';
@@ -221,16 +221,6 @@ export function MoveToSheet({
   );
   const inboxFolderId = me?.vault?.inboxFolderId ?? null;
 
-  async function undo(id: string): Promise<void> {
-    const result = await undoRequestNote(deleteFile, id);
-    if (result === 'failed') {
-      showToast("Couldn't take that back. It is still in your inbox.");
-      return;
-    }
-    void refresh();
-    showToast('Taken out of your inbox.');
-  }
-
   async function moveHere(): Promise<void> {
     if (chosen === '') return;
     if (inboxFolderId === null) {
@@ -239,10 +229,9 @@ export function MoveToSheet({
     }
     setBusy(true);
     setError(null);
-    let id: string | null;
     let kept: boolean;
     try {
-      ({ id, kept } = await replaceRequestNote(
+      ({ kept } = await replaceRequestNote(
         { createTextFile, deleteFile },
         {
           inboxFolderId,
@@ -257,18 +246,11 @@ export function MoveToSheet({
       setError('Could not send that. Try again.');
       return;
     }
+    // One Undo (L-20, F-22), as Rename: the page's line "Moving to <folder>
+    // at the next tidy-up" carries it once the listing has the request; no
+    // toast, unless the waiting request it replaces is still in the inbox.
+    if (kept) showToast(REPLACE_KEPT);
     void refresh();
-    showToast(
-      kept
-        ? REPLACE_KEPT
-        : 'In your inbox. Bower moves it at the next tidy-up.',
-      undefined,
-      // Undo only takes back a fresh request: a replaced one is already
-      // in the Bin, so undoing would leave no request at all.
-      id === null || pending !== undefined
-        ? undefined
-        : { label: 'Undo', run: () => void undo(id) },
-    );
     onClose();
   }
 

@@ -27,6 +27,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import type { Run, RunPhase as StepPhase } from '../api.js';
 import { isDemo } from '../api.js';
+import { durationWords } from '../activity.js';
 import { linkTitleFromFileName } from '../add.js';
 import { sinceLabel } from '../bower-tab.js';
 import { doneNotes, things } from '../home.js';
@@ -38,7 +39,11 @@ import {
   paraKindOf,
 } from '../navigation.js';
 import { failureCopy, failureReason } from '../run-failure.js';
-import { groupByOrigin, pileOriginOf } from '../pile-groups.js';
+import {
+  groupByOrigin,
+  pileOriginOf,
+  requestRowLabel,
+} from '../pile-groups.js';
 import { outcomeFromRun, runSentence } from '../run-outcome.js';
 import type { OutcomeAction, OutcomeItem, RunOutcome } from '../run-outcome.js';
 import {
@@ -310,7 +315,8 @@ export function sheetTimeLine(
   const from = clockTime(outcome.startedAt);
   const to = clockTime(outcome.finishedAt);
   if (from === '' || to === '') return from === '' ? '' : `Started ${from}`;
-  const length = minutesLabel(
+  // The words Just filed and Activity use for the same run (#950 T950-6).
+  const length = durationWords(
     Date.parse(outcome.finishedAt ?? '') - Date.parse(outcome.startedAt),
   );
   return `${from} to ${to} · ${state === 'done' ? length : `stopped after ${length}`}`;
@@ -621,16 +627,31 @@ function StatusIcon({ state }: { state: SheetState }): JSX.Element {
 }
 
 /** Rows under "From your pile: …" headings when any came from a pile
- * (R-PILE-5); the rest sit under "Added from elsewhere". */
+ * (R-PILE-5); the rest sit under "Added from elsewhere", and Bower's
+ * answers under "A request for Bower", the groups the confirm listed
+ * (#950 T950-7). */
 function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
   if (rows.length === 0) return null;
   const groups = groupByOrigin(rows, (row) => row.origin);
   if (groups.length === 1 && groups[0]?.origin === undefined) {
     return <RowList rows={rows} />;
   }
+  const requests = rows.filter(
+    (row) => row.origin === undefined && row.action === 'answered',
+  );
+  const shown = groups
+    .map((group) =>
+      group.origin === undefined
+        ? {
+            ...group,
+            rows: group.rows.filter((row) => !requests.includes(row)),
+          }
+        : group,
+    )
+    .filter((group) => group.rows.length > 0);
   return (
     <>
-      {groups.map((group) => (
+      {shown.map((group) => (
         <section key={group.origin ?? 'elsewhere'} class="working-sheet-pile">
           <h3 class="working-sheet-pile-heading">
             {group.origin ?? 'Added from elsewhere'}
@@ -638,8 +659,22 @@ function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
           <RowList rows={group.rows} />
         </section>
       ))}
+      {requests.length > 0 && (
+        <section key="requests" class="working-sheet-pile">
+          <h3 class="working-sheet-pile-heading">
+            {requestRowLabel(requests.length)}
+          </h3>
+          <RowList rows={requests} />
+        </section>
+      )}
     </>
   );
+}
+
+/** Whether `path` is a saved link's note (Add's `Link - host …` name). */
+function isLinkPath(path: string | undefined): boolean {
+  if (path === undefined) return false;
+  return linkTitleFromFileName(path.slice(path.lastIndexOf('/') + 1)) !== null;
 }
 
 /** The Badge tone of each row tag (AR-Run: "Filed"). */
@@ -785,10 +820,17 @@ export function WorkingSheet({
 
   // A Bower answer takes the title every list gives it (#920). A hook, so
   // before the early return.
+  // A filed link likewise takes the tree's and the note's title, never
+  // the host alone its file name holds (#950 T950-5).
   const answerTitles = useTitlesAt(
     (outcome?.items ?? [])
-      .filter((item) => item.action === 'answered')
-      .map((item) => item.path),
+      .map((item) =>
+        item.action === 'filed' ? (item.to ?? item.path) : item.path,
+      )
+      .filter(
+        (path, at) =>
+          outcome?.items[at]?.action === 'answered' || isLinkPath(path),
+      ),
     files,
   );
 
@@ -823,7 +865,8 @@ export function WorkingSheet({
           rows: sheet.rows.map((row) => {
             const title =
               row.path === undefined ? undefined : answerTitles.get(row.path);
-            return row.action === 'answered' && title !== undefined
+            return title !== undefined &&
+              (row.action === 'answered' || isLinkPath(row.path))
               ? { ...row, title }
               : row;
           }),

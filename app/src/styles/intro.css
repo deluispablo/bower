@@ -79,6 +79,15 @@
   scrollbar-width: none;
 }
 
+.intro-track:focus {
+  outline: none;
+}
+
+.intro-track:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
 .intro-track::-webkit-scrollbar {
   display: none;
 }

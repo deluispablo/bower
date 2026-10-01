@@ -38,6 +38,7 @@ import { ListRow } from '../components/list-row.js';
 import { MoreButton } from '../components/more-button.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { PinnedSection } from '../components/pinned-section.js';
+import { useBowerNotes } from '../components/tree.js';
 import { ProcessButton } from '../components/process-button.js';
 import { SearchField } from '../components/search-field.js';
 import { useShellSlot } from '../components/shell-slots.js';
@@ -68,7 +69,6 @@ import {
   recentNotes,
   relativeTime,
 } from '../navigation.js';
-import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { tourOnScreen } from '../onboarding.js';
 import { useOnline } from '../online.js';
@@ -88,7 +88,6 @@ import {
   useTour,
 } from '../tour-store.js';
 import { useMediaQuery } from '../use-media-query.js';
-import { isBowerWritten } from '../bower-written.js';
 import { lazyOverlay } from '../lazy-overlay.js';
 import { pinned, useVault } from '../vault-store.js';
 import '../styles/home.css';
@@ -456,57 +455,6 @@ function HealthTile({
   );
 }
 
-/** Which of the Recent notes Bower wrote (the bird icon, "Bower note"),
- * and which of those are its answers ("Bower answer", `type: answer`),
- * read from each note's frontmatter (the cache first). A note that cannot
- * be read keeps the plain row. */
-interface BowerNotes {
-  written: ReadonlySet<string>;
-  answers: ReadonlySet<string>;
-}
-
-function useBowerWritten(notes: readonly DriveFile[]): BowerNotes {
-  const [found, setFound] = useState<BowerNotes>({
-    written: new Set(),
-    answers: new Set(),
-  });
-  const key = notes
-    .map((note) => `${note.id}:${note.modifiedTime ?? ''}`)
-    .join();
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all(
-      notes.map(
-        async (note): Promise<{ id: string; answer: boolean } | null> => {
-          try {
-            const meta = await loadNoteMeta(note);
-            return isBowerWritten(meta)
-              ? { id: note.id, answer: meta.type === 'answer' }
-              : null;
-          } catch (err: unknown) {
-            console.error('Reading a note for Recent failed', err);
-            return null;
-          }
-        },
-      ),
-    ).then((rows) => {
-      if (cancelled) return;
-      const mine = rows.filter(
-        (row): row is { id: string; answer: boolean } => row !== null,
-      );
-      setFound({
-        written: new Set(mine.map((row) => row.id)),
-        answers: new Set(mine.filter((row) => row.answer).map((row) => row.id)),
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // `key` stands for `notes`, which is a new array on every render.
-  }, [key]);
-  return found;
-}
-
 /** The parent folder's name and its root, for the row's "where". */
 function whereOf(
   path: string,
@@ -535,7 +483,7 @@ export function RecentRows({
   titles: ReadonlyMap<string, string>;
   now: number;
 }): JSX.Element {
-  const bower = useBowerWritten(notes);
+  const bower = useBowerNotes(notes);
   return (
     <ul class="home-notes" role="list">
       {notes.map((note) => {

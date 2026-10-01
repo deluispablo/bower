@@ -81,7 +81,7 @@ import { QuickLook } from './quick-look.js';
 import type { PaneInsideItem, PaneItem } from './quick-look.js';
 import { Segmented } from './segmented.js';
 import { EmptyFolder, EmptySegment } from './system-state.js';
-import { useBowerWritten } from './tree.js';
+import { useBowerNotes, useBowerWritten } from './tree.js';
 import { useLongPress } from './use-long-press.js';
 
 /** "1 thing" / "3 things". */
@@ -167,6 +167,7 @@ export function firstInside(
   path: string,
   max = 3,
   bower: ReadonlySet<string> = new Set(),
+  answers: ReadonlySet<string> = new Set(),
 ): FolderCardItem[] {
   return changedUnder(byPath, path, max).map((file) => ({
     id: file.id,
@@ -175,6 +176,7 @@ export function firstInside(
     mimeType: file.mimeType,
     path: file.path,
     bowerWritten: bower.has(file.id),
+    answer: answers.has(file.id),
   }));
 }
 
@@ -426,6 +428,10 @@ export function FolderItems({
     [folderOfFolders, byPath, subfolders],
   );
   const bowerSet = useBowerWritten(
+    useMemo(() => [...recent, ...cardFiles], [recent, cardFiles]),
+  );
+  // Which of those are answers: "Bower answer", as the list says (K-14).
+  const { answers } = useBowerNotes(
     useMemo(() => [...recent, ...cardFiles], [recent, cardFiles]),
   );
 
@@ -850,7 +856,7 @@ export function FolderItems({
                       updated: folder.updated,
                     }),
                   }}
-                  items={firstInside(byPath, folder.path, 3, bowerSet)}
+                  items={firstInside(byPath, folder.path, 3, bowerSet, answers)}
                   newCount={fresh.newCountIn(folder.path)}
                   now={now}
                   {...selectProps(folder.path, folderHref(folder.path))}
@@ -878,6 +884,7 @@ export function FolderItems({
                     mimeType: file.mimeType,
                     path: file.path,
                     bowerWritten: bowerSet.has(file.id),
+                    answer: answers.has(file.id),
                     root: para,
                     parentName: parent.slice(parent.lastIndexOf('/') + 1),
                   };

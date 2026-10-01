@@ -119,7 +119,10 @@ export function isInnerScreen(path: string, demo = false): boolean {
  * Folders Help on Search, which is reached from Folders; Home's elsewhere.
  */
 export function helpScreenFor(path: string): HelpScreen {
-  if (path === FOLDERS_PATH || path === '/search') return 'notes';
+  // Health lives under the Folders tab: its Help is the Folders one.
+  if (path === FOLDERS_PATH || path === '/search' || path === '/health') {
+    return 'notes';
+  }
   if (path === JUST_FILED_PATH) return 'justFiled';
   if (path === SETTINGS_PATH) return 'settings';
   if (path.startsWith('/note/')) return 'note';

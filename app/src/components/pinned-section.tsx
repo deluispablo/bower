@@ -29,6 +29,8 @@ import { BowerMark } from './bird.js';
 import { FileIcon } from './file-icon.js';
 import type { FileIconItem } from './file-icon.js';
 import { IconClose } from './icons.js';
+import { useBowerNotes } from './tree.js';
+import type { BowerNotes } from './tree.js';
 import { useNoteTitles } from './use-note-titles.js';
 import '../styles/pinned-section.css';
 
@@ -53,12 +55,14 @@ function lastName(path: string): string {
 }
 
 /** "Bower note · Applications": a pinned note or file's kind and folder. */
-function thingMeta(file: DriveFile): string {
+function thingMeta(file: DriveFile, bower?: BowerNotes): string {
   const parent = folderOf(file.path);
   return metaLine(
     {
       name: file.name,
       mimeType: file.mimeType,
+      bowerWritten: bower?.written.has(file.id) === true,
+      answer: bower?.answers.has(file.id) === true,
       ...(parent !== '' && { parentName: lastName(parent) }),
     },
     { view: 'mixed-row', now: Date.now() },
@@ -84,6 +88,7 @@ function tileFor(
   item: PinnedItem,
   noteCounts: ReadonlyMap<string, number>,
   titles: ReadonlyMap<string, string>,
+  bower: BowerNotes,
   onUnpinNote: (id: string) => Promise<void>,
   onUnpinFolder: (path: string) => Promise<void>,
   onUnpinFile: (id: string) => Promise<void>,
@@ -103,7 +108,7 @@ function tileFor(
       key: item.file.id,
       href: `/note/${item.file.id}`,
       name: titles.get(item.file.id) ?? noteTitle(item.file),
-      meta: thingMeta(item.file),
+      meta: thingMeta(item.file, bower),
       icon: item.file,
       unpin: () => onUnpinNote(item.file.id),
     };
@@ -113,7 +118,7 @@ function tileFor(
       key: item.file.id,
       href: `/file/${item.file.id}`,
       name: fileTitle(item.file.name),
-      meta: thingMeta(item.file),
+      meta: thingMeta(item.file, bower),
       icon: item.file,
       unpin: () => onUnpinFile(item.file.id),
     };
@@ -198,6 +203,7 @@ export function PinnedSection({
     )
     .map((item) => item.file);
   const titles = useNoteTitles(noteFiles);
+  const bower = useBowerNotes(noteFiles);
 
   if (items.length === 0 && pending === null) {
     return (
@@ -213,7 +219,15 @@ export function PinnedSection({
   }
 
   const live = shown.map((item) =>
-    tileFor(item, noteCounts, titles, onUnpinNote, onUnpinFolder, onUnpinFile),
+    tileFor(
+      item,
+      noteCounts,
+      titles,
+      bower,
+      onUnpinNote,
+      onUnpinFolder,
+      onUnpinFile,
+    ),
   );
   const tiles =
     pending !== null && !live.some((tile) => tile.key === pending.key)

@@ -383,6 +383,9 @@ export function Intro(): JSX.Element {
   }
 
   function onKeyDown(event: JSX.TargetedKeyboardEvent<HTMLElement>): void {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    // The pager turns the page; the track's own scroll would fight it.
+    event.preventDefault();
     if (event.key === 'ArrowRight') goTo(page + 1, true);
     else if (event.key === 'ArrowLeft') goTo(page - 1, true);
   }
@@ -410,7 +413,16 @@ export function Intro(): JSX.Element {
         <DemoBanner />
 
         <div class="intro-viewport">
-          <div class="intro-track" ref={trackRef}>
+          {/* The track scrolls (swipe), so it takes focus and a name: the
+              arrow keys then turn its pages (axe scrollable-region-focusable,
+              #950 T950-8). */}
+          <div
+            class="intro-track"
+            ref={trackRef}
+            role="region"
+            aria-label="Intro pages"
+            tabIndex={0}
+          >
             {INTRO_PAGES.map((item: IntroPage, index) => {
               const Illustration = ART[index];
               return (

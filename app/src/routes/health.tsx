@@ -1,8 +1,11 @@
+import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 
 import { BackLink } from '../components/back-link.js';
 import { Bird } from '../components/bird.js';
 import { IconExternalLink } from '../components/icons.js';
+import { NoteMenu } from '../components/note-menu.js';
+import { PageHeader } from '../components/page-header.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { FOLDERS_PATH, FOLDERS_TAB_LABEL } from '../shell-routes.js';
 import { useOpenProposals } from '../components/suggested-rules.js';
@@ -130,15 +133,46 @@ function SuggestedPointer() {
  * A line under the report points to Bower's open suggestions on the Bower
  * tab (`SuggestedPointer`).
  */
-/** The phone top bar (#318, Phone-Health board): Back to the Folders tab,
- * where the Health row lives, and the screen's title. Stable elements, so
- * they never refill the shell's slots on a re-render (`shell-slots.ts`). */
+/** The phone top bar (#318): Back to the Folders tab, where the Health row
+ * lives. The title is the page's own header, as on Settings and Just
+ * filed (#950 T950-3). A stable element, so it never refills the shell's
+ * slot on a re-render (`shell-slots.ts`). */
 const BACK = <BackLink href={FOLDERS_PATH} label={FOLDERS_TAB_LABEL} />;
-const CRUMB = <span class="topbar-title">Health check</span>;
+const HEALTH_CRUMBS = [{ label: FOLDERS_TAB_LABEL, href: FOLDERS_PATH }];
+const TITLE = 'Health check';
+
+/** The page header with ⋯ › "Help and about this", like every screen. */
+function HealthHeader({
+  children,
+}: {
+  children?: ComponentChildren;
+}): JSX.Element {
+  const [menuOpen, setMenuOpen] = useState(false);
+  return (
+    <div class="health-head">
+      <PageHeader
+        title={TITLE}
+        crumbs={HEALTH_CRUMBS}
+        more={{
+          expanded: menuOpen,
+          onClick: () => setMenuOpen((open) => !open),
+          name: TITLE,
+        }}
+      />
+      {menuOpen && (
+        <NoteMenu
+          kind="health"
+          title={TITLE}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
+      {children}
+    </div>
+  );
+}
 
 export function Health() {
   useShellSlot('back', BACK);
-  useShellSlot('crumb', CRUMB);
   const { index, status, error, getNoteText } = useVault();
   const [load, setLoad] = useState<ReportLoad>({ status: 'loading' });
 
@@ -198,7 +232,7 @@ export function Health() {
   if (index === null && (status === 'loading' || status === 'error')) {
     return (
       <section class="health page-column">
-        <h1>Health check</h1>
+        <HealthHeader />
         {status === 'error' ? (
           <p>{error ?? 'Could not load your notes.'}</p>
         ) : (
@@ -212,7 +246,7 @@ export function Health() {
   if (file === undefined) {
     return (
       <section class="health page-column">
-        <h1>Health check</h1>
+        <HealthHeader />
         <p class="health-explainer">{EXPLAINER}</p>
         <p>No health check yet. Runs every Sunday.</p>
         <SuggestedPointer />
@@ -229,8 +263,7 @@ export function Health() {
 
   return (
     <section class="health page-column">
-      <div class="health-head">
-        <h1>Health check</h1>
+      <HealthHeader>
         {file.webViewLink !== undefined && (
           <a
             href={file.webViewLink}
@@ -241,7 +274,7 @@ export function Health() {
             <IconExternalLink /> Open report in Drive
           </a>
         )}
-      </div>
+      </HealthHeader>
       <p class="health-explainer">{EXPLAINER}</p>
 
       {load.status === 'loading' && <Skeleton shape="properties" count={4} />}
