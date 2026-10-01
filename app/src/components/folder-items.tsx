@@ -659,7 +659,7 @@ export function FolderItems({
     const bower =
       model.bowerIds.has(file.id) ||
       bowerSet.has(file.id) ||
-      isBowerWritten(model.metas.get(file.id));
+      isBowerWritten(model.metas.get(file.id), file);
     return {
       title:
         fileKind(file) === 'note'
@@ -1094,7 +1094,7 @@ export function FolderItems({
           kind={quick.kind}
           pages={pages.get((quick.original ?? quick.file).id)}
           origin={originOf(quick.original ?? quick.file, catalogue)}
-          bower={isBowerWritten(model.metas.get(quick.file.id))}
+          bower={isBowerWritten(model.metas.get(quick.file.id), quick.file)}
           answer={model.metas.get(quick.file.id)?.type === 'answer'}
           folderPath={contents.path}
           now={now}

@@ -126,8 +126,11 @@ export function shortDay(value: string | undefined): string {
 }
 
 /** Bower wrote this note (`isBowerWritten`, spec R-NOTE-1). */
-export function isBowerNote(meta: NoteMeta): boolean {
-  return isBowerWritten(meta);
+export function isBowerNote(
+  meta: NoteMeta,
+  file?: Pick<DriveFile, 'path' | 'name'>,
+): boolean {
+  return isBowerWritten(meta, file);
 }
 
 /** A note's status select (R-NOTE-2): only for a kind that has statuses. */
@@ -287,7 +290,7 @@ function NoteMetaLine({
   const kind = kindLabel({
     name: file.name,
     mimeType: file.mimeType,
-    bowerWritten: isBowerWritten(meta),
+    bowerWritten: isBowerWritten(meta, file),
     answer: meta.type === 'answer',
   });
   const when =
@@ -556,7 +559,7 @@ export function Note() {
   useHelpTopic(
     noteHelpTopic(
       file?.path,
-      bowerMeta !== undefined && isBowerNote(bowerMeta),
+      bowerMeta !== undefined && isBowerNote(bowerMeta, file),
     ),
   );
   // The column took over, or another note opened: the sheet goes.
@@ -701,7 +704,7 @@ export function Note() {
   // writable but not offered here, on purpose.
   const canEdit = !isAppFile(file.path, file.name) && !isEditing;
   const canAppend = !isProtectedNote(file.name);
-  const bowerHeader = meta !== null && isBowerNote(meta);
+  const bowerHeader = meta !== null && isBowerNote(meta, file);
   const frontTitle = meta?.fields.title;
   // The frontmatter title, when it says more than the name (R-NOTE-2).
   const subtitle =
@@ -852,7 +855,7 @@ export function Note() {
           {opening !== null &&
             opening.top === '' &&
             meta !== null &&
-            isBowerNote(meta) && (
+            isBowerNote(meta, file) && (
               <p class="note-no-box">
                 Bower adds its insights next time it touches this note.
               </p>

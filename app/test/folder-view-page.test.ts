@@ -59,7 +59,7 @@ const metas = new Map<string, NoteMeta>(
     .map((file) => [
       file.id,
       file === NOTE
-        ? noteMetaFrom({ tags: ['area'] })
+        ? noteMetaFrom({ by: 'person', tags: ['area'] })
         : noteMetaFrom({ by: 'bower' }),
     ]),
 );

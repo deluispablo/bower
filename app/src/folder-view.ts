@@ -7,7 +7,7 @@
  * Drive, the clock or the locale.
  */
 
-import { isBowerWritten } from './bower-written.js';
+import { isBowerWritten, isNamedAfterFolder } from './bower-written.js';
 import { findCompanion } from './companion.js';
 import { sizeWords } from './meta-line.js';
 import type { DriveFile } from './drive.js';
@@ -85,7 +85,7 @@ function writtenByBower(
   if (file.path === CATALOGUE_PATH) return true;
   if (fileKind(file) !== 'note') return false;
   if (originOf(file, origins) === 'asked') return true;
-  return isBowerWritten(meta);
+  return isBowerWritten(meta, file);
 }
 
 /**
@@ -404,11 +404,9 @@ export function isFolderPage(
   meta: NoteMeta | undefined,
 ): boolean {
   if (meta === undefined || fileKind(file) !== 'note') return false;
-  const folder = folderOf(file.path);
-  const name = folder.slice(folder.lastIndexOf('/') + 1);
-  if (name === '' || file.name !== `${name}.md`) return false;
-  const by = meta.fields.by;
-  return typeof by === 'string' && by.trim().toLowerCase() === 'bower';
+  // K-31 on real data (#922): named after its folder, it is the folder's
+  // page unless it says `by: person`, `by:` or not.
+  return isNamedAfterFolder(file) && isBowerWritten(meta, file);
 }
 
 /** What `folderCount` adds up: the folder's subfolders and its model. */

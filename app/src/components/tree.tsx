@@ -210,7 +210,7 @@ function useOwnHubs(hubs: readonly DriveFile[]): ReadonlySet<string> {
     void Promise.all(
       hubs.map((hub) =>
         loadNoteMeta(hub)
-          .then((meta) => (isBowerWritten(meta) ? null : hub.id))
+          .then((meta) => (isBowerWritten(meta, hub) ? null : hub.id))
           .catch((err: unknown) => {
             console.error("Could not read a folder's own note", err);
             return null;
@@ -399,7 +399,7 @@ export function readBowerWritten(file: DriveFile): Promise<boolean> {
   const known = bowerReads.get(key);
   if (known !== undefined) return known;
   const read = loadNoteMeta(file).then(
-    (meta) => isBowerWritten(meta),
+    (meta) => isBowerWritten(meta, file),
     (err: unknown) => {
       console.error('Could not read who wrote a note', err);
       bowerReads.delete(key);
@@ -427,7 +427,7 @@ export function useBowerWritten(
     () =>
       new Set(
         files
-          .filter((file) => isBowerWritten(peekNoteMeta(file)))
+          .filter((file) => isBowerWritten(peekNoteMeta(file), file))
           .map((file) => file.id),
       ),
   );
@@ -462,7 +462,9 @@ export function useBowerWritten(
         ? []
         : [
             loadNoteMeta(current)
-              .then((meta) => (isBowerWritten(meta) ? current.id : null))
+              .then((meta) =>
+                isBowerWritten(meta, current) ? current.id : null,
+              )
               .catch((err: unknown) => {
                 console.error('Could not read the open note', err);
                 return null;
@@ -500,7 +502,9 @@ export interface BowerNotes {
 export function useBowerNotes(notes: readonly DriveFile[]): BowerNotes {
   // What this tab already read (#922): a card never reads "Note" first.
   const [found, setFound] = useState<BowerNotes>(() => {
-    const mine = notes.filter((note) => isBowerWritten(peekNoteMeta(note)));
+    const mine = notes.filter((note) =>
+      isBowerWritten(peekNoteMeta(note), note),
+    );
     return {
       written: new Set(mine.map((note) => note.id)),
       answers: new Set(
@@ -522,7 +526,7 @@ export function useBowerNotes(notes: readonly DriveFile[]): BowerNotes {
           if (kind !== 'note' && kind !== 'markdown') return null;
           try {
             const meta = await loadNoteMeta(note);
-            return isBowerWritten(meta)
+            return isBowerWritten(meta, note)
               ? { id: note.id, answer: meta.type === 'answer' }
               : null;
           } catch (err: unknown) {

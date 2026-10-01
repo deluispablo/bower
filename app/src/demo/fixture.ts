@@ -74,11 +74,30 @@ function note(
   extra = '',
 ): FixtureFile {
   const date = `2026-09-${String(day).padStart(2, '0')}`;
+  const front = personHub(
+    path,
+    `tags: [${tags}]\ncreated: ${date}\nupdated: ${date}\n${extra}`,
+  );
   return {
     path,
     modifiedTime: at(day),
-    content: `---\ntags: [${tags}]\ncreated: ${date}\nupdated: ${date}\n${extra}---\n\n${body.trim()}\n`,
+    content: `---\n${front}---\n\n${body.trim()}\n`,
   };
+}
+
+/**
+ * K-31 on real data (#922): a note named after its folder is the folder's
+ * page, Bower's, unless it says `by: person`. The demo's hub notes the
+ * person keeps say so, so they stay listed and counted as the boards draw
+ * them. Adds the line to such a note's frontmatter when it names no `by`.
+ */
+function personHub(path: string, frontmatter: string): string {
+  const parts = path.split('/');
+  const folder = parts[parts.length - 2] ?? '';
+  const named = parts[parts.length - 1] === `${folder}.md`;
+  return named && !/^by:/m.test(frontmatter)
+    ? `by: person\n${frontmatter}`
+    : frontmatter;
 }
 
 /** A drawing for the Garden note: the one image attachment. */
@@ -1291,7 +1310,7 @@ function noteAt(
   return {
     path,
     modifiedTime: modified,
-    content: `---\n${frontmatter.join('\n')}\n---\n\n${body.trim()}\n`,
+    content: `---\n${personHub(path, frontmatter.join('\n'))}\n---\n\n${body.trim()}\n`,
   };
 }
 

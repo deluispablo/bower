@@ -254,7 +254,8 @@ function useBowerNotes(files: readonly DriveFile[]): {
               prev.has(file.id) ? prev : new Set(prev).add(file.id),
             );
           }
-          if (!isBowerWritten(meta, { body })) return;
+          if (!isBowerWritten(meta, { body, path: file.path, name: file.name }))
+            return;
           setIds((prev) =>
             prev.has(file.id) ? prev : new Set(prev).add(file.id),
           );

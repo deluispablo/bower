@@ -149,6 +149,9 @@ beforeEach(() => {
   requestRows.list = [];
   viewStore.clear();
   metaStore.clear();
+  // The person's own note about the folder: named after it, so it says
+  // `by: person` to stay listed and counted (K-31, #922).
+  metaStore.set('id-1-Projects/Flat hunt/Flat hunt.md', { by: 'person' });
   index = undefined;
   route.params.path = '1-Projects';
   vi.useFakeTimers({ toFake: ['Date'] });
