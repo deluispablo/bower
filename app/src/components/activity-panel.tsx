@@ -24,7 +24,6 @@ import {
   IconClock,
   IconEyeOff,
   IconFile,
-  IconHelp,
   IconImage,
   IconNote,
   IconPdf,
@@ -32,7 +31,6 @@ import {
   IconShield,
 } from './icons.js';
 import { Badge } from './badge.js';
-import { Hint } from './hint.js';
 import { ListRow } from './list-row.js';
 import type { ListRowItem } from './list-row.js';
 import { RunMeaning } from './run-meaning.js';
@@ -106,7 +104,7 @@ function rowItem(row: ActivityRow, files: readonly DriveFile[]): ListRowItem {
       : files.find((file) => file.path === path);
   return {
     id: row.key,
-    title: row.renamed ?? (path === undefined ? row.title : displayName(name)),
+    title: row.renamed ?? displayName(path === undefined ? row.title : name),
     name: row.tone === 'note' && !/\.md$/i.test(name) ? `${name}.md` : name,
     mimeType: listed?.mimeType ?? '',
     ...(path !== undefined && { path, root: rootOfPath(path) }),
@@ -282,10 +280,6 @@ export function ActivityPanel({ load }: { load: RunsLoad }): JSX.Element {
   }
   return (
     <>
-      <Hint id="activity-fix" variant="tip" icon={<IconHelp />}>
-        Something in the wrong place? Say so: &ldquo;The lease goes under Home,
-        not Flat hunt&rdquo;. Bower moves it and remembers.
-      </Hint>
       <ol class="activity-cards" aria-label="Tidy-ups, newest first">
         {cards.map((card) => (
           <Card key={card.key} card={card} files={files} />
