@@ -56,6 +56,7 @@ import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { ancestorsOf, mergeExpanded } from '../reveal.js';
+import type { PreviewedItem } from '../reveal.js';
 import { useVault } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
@@ -357,6 +358,8 @@ export interface TreeProps {
   currentId?: string;
   /** A new value (from `revealInFolders`) also moves focus to the row. */
   revealSeq?: number;
+  /** The row a folder page previews (R-EXP-3/4): it wears the selection. */
+  previewed?: PreviewedItem | null;
   /** Called with whether any folder is open, whenever that changes. */
   onOpenChange?: (anyOpen: boolean) => void;
   /** The Folders tab: tapping its tab again scrolls to the top (R-REVEAL-2). */
@@ -376,6 +379,7 @@ export function Tree({
   revealPath,
   currentId,
   revealSeq = 0,
+  previewed = null,
   onOpenChange,
   topOnTabTap = false,
   onAsk,
@@ -797,8 +801,18 @@ export function Tree({
   }
 
   /** Whether `row` wears the selection (tint and bar): the open note or
-   * file. An open folder wears its root's colour instead (#920 DA-8). */
+   * file, or the row a folder page previews (R-EXP-3/4). An open folder
+   * wears its root's colour instead (#920 DA-8). */
   function isSelected(row: Row): boolean {
+    if (previewed !== null) {
+      if (
+        'id' in previewed
+          ? row.id === previewed.id
+          : row.kind === 'folder' && row.path === previewed.path
+      ) {
+        return true;
+      }
+    }
     return currentId !== undefined && isCurrent(row);
   }
 

@@ -155,3 +155,27 @@ test('Filter & sort counts and filters by kind (#911, R-FILTER-3)', async ({
     page.getByRole('button', { name: /^Filter and sort \(notes only\)$/ }),
   ).toBeVisible();
 });
+
+test('1280 px: the previewed row wears the selection in the sidebar tree too (R-EXP-3/4)', async ({
+  page,
+}) => {
+  await open(page, 1280);
+  const tree = page.getByRole('navigation', { name: 'Your folders' });
+  const selected = tree.locator('.tree-link[aria-selected="true"]');
+  const rows = page.locator('.folder-item');
+  const title = async (n: number): Promise<string> =>
+    (await rows.nth(n).locator('.list-row-title').innerText()).trim();
+
+  await expect(rows.first()).toHaveAttribute('data-selected', 'true');
+  await expect(selected).toHaveCount(1);
+  await expect(selected).toHaveAttribute('aria-label', await title(0));
+  await expect(tree.locator('.tree-row-selected')).toHaveCount(1);
+
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(1)).toHaveAttribute('data-selected', 'true');
+  await expect(selected).toHaveAttribute('aria-label', await title(1));
+
+  // Leaving the folder drops the preview's selection from the tree.
+  await page.goto('/');
+  await expect(selected).toHaveCount(0);
+});

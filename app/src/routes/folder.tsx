@@ -52,7 +52,7 @@ import type { FolderContents } from '../navigation.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { pendingByPath } from '../rename-request.js';
-import { revealHref } from '../reveal.js';
+import { revealHref, setPreviewed } from '../reveal.js';
 import { FOLDERS_LANDMARK } from '../shell-routes.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useRequestRows } from '../use-request-rows.js';
@@ -466,6 +466,27 @@ export function Folder(): JSX.Element {
     [wide, preview, comparing],
   );
   useShellSlot('aside', asideContent);
+
+  // The previewed row also wears the selection in the sidebar tree
+  // (R-EXP-3/4); only while the preview column is on screen.
+  const shown = wide && !comparing ? preview : null;
+  const previewedKey =
+    shown === null
+      ? null
+      : shown.type === 'folder'
+        ? shown.path
+        : shown.file.id;
+  useEffect(() => {
+    setPreviewed(
+      shown === null
+        ? null
+        : shown.type === 'folder'
+          ? { path: shown.path }
+          : { id: shown.file.id },
+    );
+    // Keyed on the row, not the item object, which is rebuilt per render.
+  }, [previewedKey]);
+  useEffect(() => () => setPreviewed(null), []);
 
   if (index === null) {
     return (

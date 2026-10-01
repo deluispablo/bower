@@ -162,3 +162,37 @@ export function revealInFolders(path: string, id?: string): void {
   if (!desktop) openFoldersDrawer();
   for (const listener of requestListeners) listener();
 }
+
+/**
+ * The row a folder page shows in its preview column (spec R-EXP-3/4): the
+ * sidebar tree gives it the selection's tint and bar too: a note or file
+ * by its Drive `id`, a folder by its `path`. `null` when nothing is
+ * previewed or the page has no preview column.
+ */
+export type PreviewedItem = { id: string } | { path: string };
+
+function sameItem(a: PreviewedItem | null, b: PreviewedItem | null): boolean {
+  if (a === null || b === null) return a === b;
+  if ('id' in a) return 'id' in b && a.id === b.id;
+  return 'path' in b && a.path === b.path;
+}
+
+let previewedItem: PreviewedItem | null = null;
+const previewedListeners = new Set<() => void>();
+
+export function previewed(): PreviewedItem | null {
+  return previewedItem;
+}
+
+export function setPreviewed(item: PreviewedItem | null): void {
+  if (sameItem(previewedItem, item)) return;
+  previewedItem = item;
+  for (const listener of previewedListeners) listener();
+}
+
+export function subscribePreviewed(listener: () => void): () => void {
+  previewedListeners.add(listener);
+  return () => {
+    previewedListeners.delete(listener);
+  };
+}
