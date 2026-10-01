@@ -22,7 +22,7 @@ import { DrivePreview } from '../components/drive-preview.js';
 import { FolderMark } from '../components/folder-mark.js';
 import { Hint } from '../components/hint.js';
 import { IconClock, IconFolder, IconSparkle } from '../components/icons.js';
-import { openSendToBower } from '../components/send-to-bower.js';
+import { openAsk } from '../components/send-to-bower.js';
 import { KindBadge } from '../components/kind-badge.js';
 import { MoreButton } from '../components/more-button.js';
 import {
@@ -887,7 +887,7 @@ export function FileScreen(): JSX.Element {
               file={file}
               title={title}
               typeLabel={FILE_KIND_LABELS[kind]}
-              askName={file.name}
+              askName={displayName(file.name)}
               pinned={filePinned}
               onTogglePin={
                 folder === '' ? undefined : () => void handleTogglePin()
@@ -978,12 +978,19 @@ export function FileScreen(): JSX.Element {
                 type="button"
                 class="chip"
                 onClick={() =>
-                  openSendToBower({
-                    mode: 'ask',
-                    about: file.name,
-                    initialText: ASK_NOTE,
-                    buildText: (value) => `About ${file.name}: ${value}`,
-                  })
+                  openAsk(
+                    {
+                      name: displayName(file.name),
+                      kind: 'file',
+                      icon: {
+                        name: file.name,
+                        mimeType: file.mimeType,
+                        path: file.path,
+                      },
+                      buildText: (value) => `About ${file.name}: ${value}`,
+                    },
+                    { prefill: ASK_NOTE },
+                  )
                 }
               >
                 {ASK_NOTE}
