@@ -98,7 +98,7 @@ describe('PinSheet ask row', () => {
 });
 
 describe('RuleSheet on Overlay', () => {
-  it('is a named dialog, locks the page and reports the picked row', () => {
+  it('is a named action sheet on the phone, locks the page and reports the picked row', () => {
     const onPick = vi.fn();
     const rule: Rule = {
       line: 1,
@@ -113,7 +113,7 @@ describe('RuleSheet on Overlay', () => {
     };
     mount(h(RuleSheet, { topic: 'Money', rule, onPick, onClose: vi.fn() }));
     const panel = document.body.querySelector('.overlay-panel');
-    expect(panel?.getAttribute('role')).toBe('dialog');
+    expect(panel?.getAttribute('role')).toBe('menu');
     expect(panel?.getAttribute('aria-label')).toBe('Receipts go to Finance');
     expect(document.body.style.overflow).toBe('hidden');
     expect(document.body.querySelector('.rule-sheet-backdrop')).toBeNull();

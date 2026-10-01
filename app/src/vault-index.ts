@@ -121,6 +121,31 @@ export function isHidden(file: DriveFile): boolean {
   return !isFolder(file) && isFolderNoteName(file.name);
 }
 
+/**
+ * The files anywhere under the folder at `path` (subfolders included, the
+ * folders themselves and hidden files left out), newest first, at most
+ * `max` (R-API-1): a folder card's first three things and a folder of
+ * folders' "Recently changed in <folder>" group read this one list.
+ */
+export function changedUnder(
+  byPath: ReadonlyMap<string, DriveFile>,
+  path: string,
+  max = Number.POSITIVE_INFINITY,
+): DriveFile[] {
+  const prefix = path === '' ? '' : `${path.replace(/\/+$/, '')}/`;
+  const inside: DriveFile[] = [];
+  for (const [at, file] of byPath) {
+    if (!at.startsWith(prefix) || isFolder(file) || isHidden(file)) continue;
+    inside.push(file);
+  }
+  inside.sort(
+    (a, b) =>
+      (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '') ||
+      a.name.localeCompare(b.name),
+  );
+  return inside.slice(0, max);
+}
+
 /** `path`'s containing folder (everything before its last `/`), or `''` for
  * a top-level file. */
 function dirname(path: string): string {

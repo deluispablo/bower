@@ -148,7 +148,7 @@ test.describe('nothing clips Bower in the states he shows himself', () => {
 
   test('an empty folder', async ({ page }) => {
     await page.goto(EMPTY_FOLDER);
-    await expect(page.locator('.folder-empty svg.b')).toBeVisible();
+    await expect(page.locator('.empty-folder svg.b')).toBeVisible();
     await expectRoom(page, 'an empty folder');
   });
 

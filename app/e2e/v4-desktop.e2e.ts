@@ -41,7 +41,9 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
   const firstTitle = (
     await first.locator('.list-row-title').innerText()
   ).trim();
-  await expect(preview.locator('.quick-look-title')).toHaveText(firstTitle);
+  await expect(preview.locator('.quick-look-pane-title')).toHaveText(
+    firstTitle,
+  );
   await expect(
     preview.getByRole('link', { name: 'Open', exact: true }),
   ).toBeVisible();
@@ -53,23 +55,24 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
   const secondTitle = (
     await rows.nth(1).locator('.list-row-title').innerText()
   ).trim();
-  await expect(preview.locator('.quick-look-title')).toHaveText(secondTitle);
-
-  // The header, the dates and the hint line.
-  await expect(
-    page.getByRole('button', { name: /^Pin to Home|^Pinned/ }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Ask Bower about it' }),
-  ).toBeVisible();
-  await expect(page.locator('.folder-counts')).toHaveText(
-    /^\d+ things?( · \d+ new)? · \d+ originals?, \d+ by Bower$/,
+  await expect(preview.locator('.quick-look-pane-title')).toHaveText(
+    secondTitle,
   );
+
+  // #911: the meta line, the segments and the Filter & sort icon; the
+  // dates on the right; no header actions, no hint line.
+  await expect(page.locator('.page-header-meta')).toHaveText(
+    /^Archives · (Active · )?\d+ things · updated /,
+  );
+  await expect(
+    page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio'),
+  ).toHaveText(['All', /^Originals \d+$/, /^By Bower \d+$/]);
+  await expect(
+    page.getByRole('button', { name: 'Filter and sort' }),
+  ).toBeVisible();
+  await expect(page.locator('.header-action')).toHaveCount(0);
   await expect(page.locator('.folder-row-date').first()).toHaveText(
     /^(\d\d:\d\d|\d+ [A-Z][a-z]{2}( \d{4})?)$/,
-  );
-  await expect(page.locator('.folder-keys-hint')).toHaveText(
-    '↑ ↓ move · Space quick look · Enter open · ⌫ up a folder',
   );
   await shot(page, testInfo, 'desktop-folder-panes');
 });
@@ -83,12 +86,11 @@ test('the pair on the preview: Bower and the original, the note rendered', async
     .locator('.folder-item', { hasText: 'Arlington Road, 2 bed' })
     .first()
     .click();
-  await expect(preview.locator('.quick-look-title')).toContainText(
+  await expect(preview.locator('.quick-look-pane-title')).toContainText(
     'Arlington Road',
   );
-  await expect(preview.locator('.quick-look-kind')).toContainText(
-    'Bower · Original: PDF',
-  );
+  // The meta line describes the original; the note is rendered under it.
+  await expect(preview.locator('.quick-look-pane-meta')).toHaveText(/^PDF · /);
   await expect(preview.locator('.quick-look-pane-note')).toBeVisible();
 });
 
@@ -120,27 +122,34 @@ test('1100 px: the single column stays, with no preview pane', async ({
     page.getByRole('complementary', { name: 'Preview' }),
   ).toHaveCount(0);
   await expect(page.locator('.folder-keys-hint')).toHaveCount(0);
-  await expect(page.getByLabel('Kind')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Filter and sort' }),
+  ).toBeVisible();
   const box = await page.locator('.folder-view').boundingBox();
   expect(box?.width).toBeGreaterThan(600);
 });
 
-test('the kind chips count and filter', async ({ page }) => {
+test('Filter & sort counts and filters by kind (#911, R-FILTER-3)', async ({
+  page,
+}) => {
   await open(page, 1280);
-  const chips = page.getByRole('group', { name: 'Kind' });
-  await expect(chips.getByRole('button').first()).toHaveText(/^All \d+$/);
-  await expect(page.getByLabel('Kind')).toHaveCount(1);
-  const all = Number(
-    (await chips.getByRole('button').first().innerText()).replace(/\D+/g, ''),
-  );
-  const notes = chips.getByRole('button', { name: /^Notes \d+$/ });
+  await page.getByRole('button', { name: 'Filter and sort' }).click();
+  const popover = page.getByRole('dialog', { name: 'Filter & sort' });
+  const show = popover.getByRole('radiogroup', { name: 'Show' });
+  await expect(show.getByRole('radio').first()).toHaveText('All kinds');
+  const notes = show.getByRole('radio', { name: /^Notes \d+$/ });
   await expect(notes).toBeVisible();
   const count = Number((await notes.innerText()).replace(/\D+/g, ''));
   expect(count).toBeGreaterThan(0);
-  expect(count).toBeLessThan(all);
   await notes.click();
-  await expect(notes).toHaveAttribute('aria-pressed', 'true');
+  // The count follows the draft and equals what will be shown (K-31).
+  await popover
+    .getByRole('button', {
+      name: count === 1 ? 'Show 1 thing' : `Show ${count} things`,
+    })
+    .click();
   await expect(page.locator('.folder-item')).toHaveCount(count);
-  await chips.getByRole('button', { name: /^All / }).click();
-  await expect(page.locator('.folder-item')).toHaveCount(all);
+  await expect(
+    page.getByRole('button', { name: /^Filter and sort \(notes only\)$/ }),
+  ).toBeVisible();
 });

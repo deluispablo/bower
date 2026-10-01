@@ -222,6 +222,16 @@ export function IconCollapse(): JSX.Element {
   );
 }
 
+/** Up and down chevrons, apart: "Apply it to what is already filed"
+ * (BW-Rule), the opposite of `IconCollapse`. */
+export function IconExpand(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M7 9l5-5 5 5M7 15l5 5 5-5" />
+    </Svg>
+  );
+}
+
 export function IconEyeOff(): JSX.Element {
   return (
     <Svg>

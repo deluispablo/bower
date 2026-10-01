@@ -141,7 +141,9 @@ describe('FileIcon', () => {
   it('strokes a glyph in the root colour token', async () => {
     const icon = await mount(<FileIcon item={inboxPdf} size={20} box />);
     expect(icon.style.color).toBe('var(--color-para-inbox)');
-    expect(icon.style.background).toBe('var(--color-surface)');
+    // The box fill is a class (`file-icon.css`), not an inline style.
+    expect(icon.classList.contains('file-icon-box')).toBe(true);
+    expect(icon.style.background).toBe('');
     expect(icon.querySelector<SVGElement>('svg')?.style.width).toBe('20px');
   });
 

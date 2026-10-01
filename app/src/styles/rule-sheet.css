@@ -26,19 +26,29 @@
   text-transform: uppercase;
 }
 
+/* The rule itself: body text, 16 px (D-48, R-BW-6), in full. */
 .rule-sheet-text {
   margin: var(--space-1) 0 0;
   color: var(--color-heading);
-  font-family: var(--font-display);
-  font-weight: var(--weight-medium);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
   overflow-wrap: anywhere;
+}
+
+/* Desktop: OverlayHeader holds the overline and ✕ "Close the rule". */
+.rule-sheet-head .overlay-head {
+  min-height: 32px;
+}
+
+.rule-sheet-head .overlay-title {
+  font-size: inherit;
 }
 
 .rule-sheet-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 50px;
+  min-height: 52px;
   padding: var(--space-1) var(--space-2);
   border: 0;
   border-radius: var(--radius-md);

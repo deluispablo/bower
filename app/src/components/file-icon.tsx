@@ -27,6 +27,8 @@ import { BowerMark } from './bird.js';
 import { FolderMark, markSizeFor } from './folder-mark.js';
 import { IconDocument, IconFolder } from './icons.js';
 
+import '../styles/file-icon.css';
+
 export type FileIconSize = 16 | 20 | 28 | 40;
 
 /** What FileIcon reads of an item. */
@@ -134,7 +136,6 @@ export function FileIcon({
         width: '32px',
         height: '32px',
         borderRadius: 'var(--radius-row, 8px)',
-        background: 'var(--color-surface)',
       }
     : {};
   return (

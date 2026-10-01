@@ -28,7 +28,7 @@ const FLAT = '4-Archives/Flat%20hunt';
  * its companion note are one row that opens the note. */
 async function gotoOriginals(page: Page, folder: string): Promise<void> {
   await page.goto(`/folder/${folder}`);
-  await page.getByRole('button', { name: /^Originals/ }).click();
+  await page.getByRole('radio', { name: /^Originals/ }).click();
 }
 
 test('a CSV is a table with its row count, and a meta line with its kind word (#604)', async ({

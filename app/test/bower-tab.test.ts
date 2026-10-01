@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BUBBLE,
   CONTEXT_TITLE,
+  birdPose,
+  requestWhen,
   EXAMPLES,
   dayLabel,
   examplesFor,
@@ -630,5 +633,27 @@ describe('ruleSentences', () => {
     expect(
       ruleSentences('I want you to never archive Finance statements.'),
     ).toEqual([]);
+  });
+});
+
+describe('the bird and the bubble (#915, G-24, K-32, R-BW-1)', () => {
+  it('looks by default and listens only while the box is dictating', () => {
+    expect(birdPose(false)).toBe('looking');
+    expect(birdPose(true)).toBe('listening');
+  });
+
+  it('says one line, with no PARA in it', () => {
+    expect(BUBBLE).toBe(
+      'Tell me what you want, in your words. I work out whether it is a rule, a job or a question.',
+    );
+    expect(BUBBLE).not.toMatch(/PARA/);
+  });
+});
+
+describe('requestWhen (#915, K-16)', () => {
+  it('writes the day and the time, never a relative phrase', () => {
+    const iso = new Date(2026, 8, 29, 12, 31).toISOString();
+    expect(requestWhen(iso)).toBe('29 Sep, 12:31');
+    expect(requestWhen('not a date')).toBe('');
   });
 });
