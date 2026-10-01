@@ -94,15 +94,19 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  box-sizing: border-box;
+  /* K-20 lg, as the AD-Confirm boards draw it: 48 px, radius 12, the full
+     width of the sheet, bold label. */
   width: 100%;
-  max-width: 22rem;
-  min-height: 48px;
-  padding: var(--space-2) var(--space-4);
+  min-height: var(--control-lg, 48px);
+  padding: 0 var(--space-4);
   background: var(--color-brand);
   color: var(--color-on-brand);
   border: none;
-  border-radius: var(--radius-full);
-  font-weight: var(--weight-medium);
+  border-radius: var(--radius-card);
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -115,6 +119,7 @@
   background: none;
   color: var(--color-text);
   border: 1px solid var(--color-border);
+  font-weight: var(--weight-regular);
 }
 
 .tidy-confirm-piles {

@@ -482,6 +482,7 @@ button.pile-card:focus-visible {
   width: 100%;
   min-height: 48px;
   margin-top: 0;
+  border-radius: var(--radius-card);
   font-size: var(--text-base, 16px);
 }
 
