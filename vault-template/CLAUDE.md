@@ -2,7 +2,7 @@
 tags: [meta, personal]
 created: 2026-09-26
 updated: 2026-10-01
-bower_rules_version: 24
+bower_rules_version: 25
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -38,7 +38,7 @@ Clippings/          # Web clipper default folder. Treat like 0-Inbox for ingest 
 Answers/            # Answers to the owner's questions (Instructions workflow) and Bower - Proposals.md (see Self-learning).
 About-Me.md         # Owner profile, loaded every session.
 Rules.md            # The owner's own rules (Instructions workflow), loaded every session.
-index.md            # Content catalogue. Add a row for every new note or file; the runner updates rows for moves.
+index.md            # Content catalogue. The runner adds a row for every line of the filing sheet and updates rows for moves.
 log.md              # Chronological record of operations. Append-only.
 ```
 - Each PARA folder has an `_<Name>.md` note explaining its purpose; keep it.
@@ -56,7 +56,7 @@ Every note gets at least one **type** tag and one **domain** tag (what topic) in
 
 **The tag vocabulary.** The `## Tags` section at the end of `index.md` holds every tag in use, one line per tag: `- #<tag> · <meaning> · <count>`.
 - Tags are English, lower case, with words joined by hyphens (`#job-offer`).
-- Reuse a tag from `## Tags` whose meaning fits. Only when none fits, add `- #<tag> · <meaning, at most 80 characters> · 1` there.
+- Reuse a tag from `## Tags` whose meaning fits. Only when none fits, declare a new one with a `tag` line on the filing sheet (see **index.md and log.md**); the runner adds it to `## Tags` as `- #<tag> · <meaning> · 1`. Never edit `## Tags` yourself.
 - The runner recounts the tags and writes the `Tag added:` log line after the run.
 - Notes' frontmatter `tags:` use the same vocabulary: the type tags above, and domain tags from `## Tags`.
 
@@ -65,7 +65,7 @@ Example: `tags: [summary, finance]`
 **Tagging is mandatory:** every `.md` note gets frontmatter tags. Originals cannot hold tags; their row in `index.md` gives their type.
 
 ## index.md and log.md
-**Rows.** `index.md` lists every note and file, under its folder's section, so the app can find them. Every row you add is:
+**Rows.** `index.md` lists every note and file, under its folder's section, so the app can find them. The runner writes the row for every item on the filing sheet (below); you edit a row yourself only to complete an old one in **Lint**. Every row is:
 `- [[<path from the top of the folder>]] · <Type> · <#tag #tag> · <description> · <origin>`
 - The path carries the folder and the extension.
 - The type is one word as the app names it (Note, PDF, Photo, Image, Spreadsheet, Document, Audio, Video, File).
@@ -78,6 +78,32 @@ Example rows, a listing and its companion note:
 ```markdown
 - [[1-Projects/Flat hunt/Arlington Road, listing.pdf]] · PDF · #rental-listing #flat-hunt · Listing for a two-bed flat on Arlington Road · filed by Bower
 - [[1-Projects/Flat hunt/Arlington Road, 2 bed]] · Note · #rental-listing #flat-hunt · Two-bed flat on Arlington Road, available in November · filed by Bower · [[1-Projects/Flat hunt/Arlington Road, listing.pdf]]
+```
+
+**The filing sheet.** You decide where each item goes; the runner carries it out after the run. Write one line per decision to `.bower/filing.tsv`: UTF-8, one record per line, fields separated by a single TAB (each `<TAB>` below is one TAB character). No header. No TAB or newline inside a field. Three kinds of line:
+1. `file<TAB><pending path><TAB><destination folder><TAB><file name><TAB><#tag #tag><TAB><description>` files one pending original.
+   - `<pending path>`: the path as the run's pending list gives it.
+   - `<destination folder>`: one of these:
+     - an existing folder under `1-Projects/`, `2-Areas/`, `3-Resources/` or `4-Archives/`;
+     - a new direct subfolder of one of those four (the runner creates it and its hub note);
+     - `0-Inbox/Processed` (raw clips once their note is written, unconvertible documents, duplicates).
+   - `<file name>`: the base name to give it, keeping the original extension (the same name when it already says what it is), as **File names (originals)** says.
+   - Tags and description: as the row format above says, 1 to 5 tags and at most 100 characters. Use `-` for both when the destination is `0-Inbox/Processed`.
+2. `note<TAB><note path><TAB><original path or -><TAB><#tag #tag><TAB><description>` books a note you wrote in this run (a companion note, a text copy, an answer, a clip's note) at its final path.
+   - The original path is the original's path after filing, or `-` when the note has no original.
+3. `tag<TAB><#tag><TAB><meaning>` declares a new tag, at most 80 characters of meaning.
+
+The runner derives the row type from the extension, writes the hub line (`- [[<file name>]] <description>`) and the `index.md` row, adds new tags to `## Tags`, and writes the `Filed:` and `Tag added:` log lines.
+- File a pending original only through a `file` line: never move it yourself, never write its hub line or its `index.md` row, and never edit `## Tags`.
+- Write every note you create (a companion note, a text copy, an answer, a clip's note) directly at its final path, then book it with a `note` line; never add its hub line or its `index.md` row yourself.
+- Paths run from the top of the folder and carry the extension; a destination folder has no `/` at the end.
+
+Example lines: a listing with a name that says nothing, filed into a new project folder; its companion note; the new tag; and a second copy of the same listing, set aside as a duplicate:
+```
+file<TAB>0-Inbox/scan0001.pdf<TAB>1-Projects/Flat hunt<TAB>Arlington Road, listing.pdf<TAB>#rental-listing #flat-hunt<TAB>Listing for a two-bed flat on Arlington Road
+note<TAB>1-Projects/Flat hunt/Arlington Road, 2 bed.md<TAB>1-Projects/Flat hunt/Arlington Road, listing.pdf<TAB>#rental-listing #flat-hunt<TAB>Two-bed flat on Arlington Road, available in November
+tag<TAB>#flat-hunt<TAB>The search for a flat to rent
+file<TAB>0-Inbox/scan0001 (1).pdf<TAB>0-Inbox/Processed<TAB>scan0001 (1).pdf<TAB>-<TAB>-
 ```
 
 **`log.md`** is append-only. Write only these lines, as the workflows give them: `Rule added/changed:`, `Correction:`, `Proposal:`, `Context:` and `Applied rule:` (and a pending `.obsidian/` change, see **Rules**). The runner writes the `Filed:` and `Tag added:` lines and books moves and renames. Never read `log.md`: your instructions already include the past corrections, counted per `<from folder> -> <to folder>` pair.
