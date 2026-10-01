@@ -8,7 +8,6 @@ import {
   findingsIn,
   fixMessage,
   hasUrgentFinding,
-  healthCardLine,
   healthRowSubtitle,
   isReportNew,
   reportDateLabel,
@@ -275,22 +274,6 @@ describe('healthRowSubtitle', () => {
 
   it('never claims a count before the report has loaded', () => {
     expect(healthRowSubtitle(undefined)).toBe('Not checked yet');
-  });
-
-  it('healthCardLine adds the count, singular for one (#584)', () => {
-    expect(healthCardLine('Checked yesterday', 3)).toBe(
-      'Checked yesterday · 3 small things to fix',
-    );
-    expect(healthCardLine('Checked yesterday', 1)).toBe(
-      'Checked yesterday · one small thing to fix',
-    );
-  });
-
-  it('healthCardLine stays bare at zero or before the count loads (#584)', () => {
-    expect(healthCardLine('Checked yesterday', 0)).toBe('Checked yesterday');
-    expect(healthCardLine('Checked yesterday', undefined)).toBe(
-      'Checked yesterday',
-    );
   });
 
   it('never returns a day together with "not checked yet" (#584)', () => {

@@ -22,7 +22,7 @@ import { isContextNote } from './run-progress.js';
 
 export type OutcomeState = 'running' | 'done' | 'partial' | 'failed';
 
-export type OutcomeAction = 'new' | 'updated' | 'filed' | 'needs';
+export type OutcomeAction = 'new' | 'answered' | 'updated' | 'filed' | 'needs';
 
 export interface OutcomeItem {
   action: OutcomeAction;
@@ -44,8 +44,12 @@ export interface RunOutcome {
   finishedAt?: string;
   /** Files moved out of the inbox (`items[kind=file].to`). */
   filed: number;
-  /** Notes written that did not exist before. */
+  /** Notes written that did not exist before, answers left out. */
   created: number;
+  /** Questions the run answered: new notes directly in `Answers/`, where
+   * every answer goes (`vault-template/CLAUDE.md`, "An answer"). Absent
+   * reads as none. */
+  answered?: number;
   /** Notes that existed and changed. */
   updated: number;
   /** Things the person must deal with: set aside plus left in the inbox. */
@@ -182,7 +186,13 @@ function buildItems(raw: RawOutcome): OutcomeItem[] {
   }
   for (const path of raw.created) {
     if (isContextNote(path)) continue;
-    items.push({ action: 'new', title: titleOf(path), path });
+    // An answer is its own action (#920): "Answered", never a "New note".
+    // The views title it as every list does (`useTitlesAt`).
+    items.push(
+      isAnswerPath(path)
+        ? { action: 'answered', title: titleOf(path), path }
+        : { action: 'new', title: titleOf(path), path },
+    );
   }
   for (const change of raw.updated) {
     const entry: OutcomeItem = {
@@ -208,11 +218,17 @@ function buildItems(raw: RawOutcome): OutcomeItem[] {
   return items;
 }
 
+/** An answer note: `Answers/<date> <question>.md`, directly in `Answers/`. */
+export function isAnswerPath(path: string): boolean {
+  return /^Answers\/[^/]+\.md$/i.test(path);
+}
+
 function build(raw: RawOutcome): RunOutcome {
   const items = buildItems(raw);
   const count = (action: OutcomeAction): number =>
     items.filter((item) => item.action === action).length;
   const filed = count('filed');
+  const answered = count('answered');
   const created = count('new');
   const updated = count('updated');
   const left = raw.left.length;
@@ -227,6 +243,7 @@ function build(raw: RawOutcome): RunOutcome {
     startedAt: raw.startedAt,
     filed,
     created,
+    answered,
     updated,
     needsYou: raw.setAside.length + left,
     requests,
@@ -324,7 +341,8 @@ export interface CountsOptions {
 
 /**
  * The counts as one line, zeros left out, in the order filed, new, updated,
- * then what is left: "2 filed · 3 new notes · 2 updated · 1 needs you". On a
+ * then the questions answered, then what is left: "2 filed · 3 new notes ·
+ * 2 updated · 1 answered · 1 needs you". On a
  * partly done run what is left in the inbox reads "5 still in your inbox"
  * (R-RUN-5) and "needs you" keeps only what Bower could not read.
  */
@@ -342,6 +360,8 @@ export function outcomeCounts(
     );
   }
   if (outcome.updated > 0) parts.push(`${outcome.updated} updated`);
+  const answered = outcome.answered ?? 0;
+  if (answered > 0) parts.push(`${answered} answered`);
   if (outcome.state === 'partial') {
     if (outcome.left > 0) parts.push(`${outcome.left} still in your inbox`);
     const unread = outcome.needsYou - outcome.left;

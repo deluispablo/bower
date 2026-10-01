@@ -14,7 +14,7 @@
  * `modifiedTime` changed) is resolved again rather than shown stale.
  */
 
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 
 import { loadNote } from '../cache.js';
 import type { DriveFile } from '../drive.js';
@@ -57,4 +57,26 @@ export function useNoteTitles(
     titles.set(file.id, memo.get(titleCacheKey(file)) ?? noteTitle(file));
   }
   return titles;
+}
+
+/**
+ * The titles of the notes at `paths`, by path, from the same source as
+ * every other list (`useNoteTitles`): Bower's answers on the run sheet and
+ * Just filed read "What do I still need…?" as Home does, never their dated
+ * file name. A path with no file in `files` is left out.
+ */
+export function useTitlesAt(
+  paths: readonly string[],
+  files: readonly DriveFile[],
+): ReadonlyMap<string, string> {
+  const key = paths.join('\n');
+  const found = useMemo(
+    () => files.filter((file) => paths.includes(file.path)),
+    // `key` stands for `paths`, a new array on every render.
+    [key, files],
+  );
+  const titles = useNoteTitles(found);
+  return new Map(
+    found.map((file) => [file.path, titles.get(file.id) ?? noteTitle(file)]),
+  );
 }

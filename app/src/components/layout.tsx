@@ -425,7 +425,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           aria-current={currentFor(href, path)}
           data-tour={tour}
         >
-          <Icon />
+          {/* R-ICON-27: the Bower item wears the bird, as on the tab bar. */}
+          {href === BOWER.href ? <BowerMark size={20} /> : <Icon />}
           <span class="explorer-row-label">{label}</span>
           {href === ADD.href && pending > 0 && (
             // aria-hidden: the link's accessible name stays plain "Add"

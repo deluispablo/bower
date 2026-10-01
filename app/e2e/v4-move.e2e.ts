@@ -52,6 +52,37 @@ test('Show in folders reveals the note in the tree', async ({
   ).toHaveCount(1);
 });
 
+test('1280: Show in folders reveals in place, and one Back leaves the note (#920)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the sidebar is the desktop');
+  await openMenu(page);
+  const note = page.url();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (history.state as { bowerOverlay?: boolean } | null)?.bowerOverlay ===
+          true,
+      ),
+    )
+    .toBe(true);
+  await page.getByRole('menuitem', { name: /Show in folders/ }).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page).toHaveURL(note);
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Your folders' })
+      .locator('a[aria-current="page"]'),
+  ).toHaveCount(1);
+  // The menu's own Back entry is gone, and no other was pushed.
+  await expect
+    .poll(() => page.evaluate(() => history.state === null))
+    .toBe(true);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test('Move to… opens the folder picker, not Inbox, and Move here sends the request (#909, #910)', async ({
   page,
 }) => {

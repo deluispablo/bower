@@ -2568,6 +2568,10 @@ test('Activity: one card per tidy-up, what went where, set aside, and Last tidy-
     page.locator('.stat-tile', { hasText: 'Last tidy-up' }),
   ).click();
   await expect(page).toHaveURL(/\/just-filed$/);
+  // #920: the answer reads its title, as Home does, never its dated name.
+  await expect(
+    page.getByText('What do I still need to sort out for the visa?').first(),
+  ).toBeVisible();
   // The push prompt a finished run raises covers the phone's tab bar.
   const prompt = page.locator('.push-prompt');
   if (await prompt.isVisible()) {

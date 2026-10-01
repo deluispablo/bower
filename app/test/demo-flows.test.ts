@@ -207,7 +207,7 @@ describe('demo mode', () => {
     const done = (await api.getStatus()).run;
     expect(done?.state).toBe('done');
     expect(done?.processed).toHaveLength(1);
-    expect(done?.summary).toContain('your request');
+    expect(done?.summary).toContain('1 answered');
     expect(done?.summary).not.toContain('Nothing new');
 
     const after = await paths();

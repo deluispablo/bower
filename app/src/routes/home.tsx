@@ -41,11 +41,7 @@ import { ProcessButton } from '../components/process-button.js';
 import { SearchField } from '../components/search-field.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
-import {
-  findReport,
-  healthCardLine,
-  reportDayStart,
-} from '../health-report.js';
+import { findReport, reportDayStart } from '../health-report.js';
 import {
   birdStateFor,
   bubbleFor,
@@ -415,13 +411,22 @@ export function LastTidyUpCard({
   );
 }
 
+/** "today" as a tile value reads "Today"; "4 days ago" stays as it is. */
+function sentenceCase(text: string): string {
+  return /^(today|yesterday)$/.test(text)
+    ? `${text.charAt(0).toUpperCase()}${text.slice(1)}`
+    : text;
+}
+
 /** The Health check tile (S-HM-12, E-8): desktop only, as on HM-Main-1280. */
 function HealthTile({
   loading,
-  line,
+  value,
+  note,
 }: {
   loading: boolean;
-  line: string;
+  value: string;
+  note: string;
 }): JSX.Element {
   if (loading) {
     return (
@@ -436,13 +441,13 @@ function HealthTile({
     <a
       class="home-tile-link home-desktop-only"
       href={HEALTH_PATH}
-      aria-label={`Health check: ${line}. Runs every Sunday.`}
+      aria-label={`Health check: ${value}. ${note}`}
     >
       <StatTile
         label="Health check"
         icon={<IconHeart />}
-        value={line}
-        note="Runs every Sunday."
+        value={value}
+        note={note}
         class="home-tile"
       />
     </a>
@@ -450,35 +455,54 @@ function HealthTile({
 }
 
 /** Which of the Recent notes Bower wrote (the bird icon, "Bower note"),
+ * and which of those are its answers ("Bower answer", `type: answer`),
  * read from each note's frontmatter (the cache first). A note that cannot
  * be read keeps the plain row. */
-function useBowerWritten(notes: readonly DriveFile[]): ReadonlySet<string> {
-  const [ids, setIds] = useState<ReadonlySet<string>>(new Set());
+interface BowerNotes {
+  written: ReadonlySet<string>;
+  answers: ReadonlySet<string>;
+}
+
+function useBowerWritten(notes: readonly DriveFile[]): BowerNotes {
+  const [found, setFound] = useState<BowerNotes>({
+    written: new Set(),
+    answers: new Set(),
+  });
   const key = notes
     .map((note) => `${note.id}:${note.modifiedTime ?? ''}`)
     .join();
   useEffect(() => {
     let cancelled = false;
     void Promise.all(
-      notes.map(async (note): Promise<string | null> => {
-        try {
-          const meta = await loadNoteMeta(note);
-          return isBowerWritten(meta) ? note.id : null;
-        } catch (err: unknown) {
-          console.error('Reading a note for Recent failed', err);
-          return null;
-        }
-      }),
-    ).then((found) => {
+      notes.map(
+        async (note): Promise<{ id: string; answer: boolean } | null> => {
+          try {
+            const meta = await loadNoteMeta(note);
+            return isBowerWritten(meta)
+              ? { id: note.id, answer: meta.type === 'answer' }
+              : null;
+          } catch (err: unknown) {
+            console.error('Reading a note for Recent failed', err);
+            return null;
+          }
+        },
+      ),
+    ).then((rows) => {
       if (cancelled) return;
-      setIds(new Set(found.filter((id): id is string => id !== null)));
+      const mine = rows.filter(
+        (row): row is { id: string; answer: boolean } => row !== null,
+      );
+      setFound({
+        written: new Set(mine.map((row) => row.id)),
+        answers: new Set(mine.filter((row) => row.answer).map((row) => row.id)),
+      });
     });
     return () => {
       cancelled = true;
     };
     // `key` stands for `notes`, which is a new array on every render.
   }, [key]);
-  return ids;
+  return found;
 }
 
 /** The parent folder's name and its root, for the row's "where". */
@@ -520,7 +544,8 @@ export function RecentRows({
           name: note.name,
           mimeType: note.mimeType,
           path: note.path,
-          bowerWritten: bower.has(note.id),
+          bowerWritten: bower.written.has(note.id),
+          answer: bower.answers.has(note.id),
         };
         const where = whereOf(note.path);
         return (
@@ -606,13 +631,16 @@ export function Home(): JSX.Element {
     index === null ? undefined : findReport(index)?.modifiedTime;
   // The tile states where the check stands, never a bare "New" that reads
   // like a badge (HM-Main-1280, DA-28).
-  const healthLine =
+  // One line each, like the other tiles (lead ruling, #920): the value is
+  // when it last ran ("4 days ago"), the meta what it found.
+  const healthValue =
     reportTime === undefined
       ? 'Not checked yet'
-      : healthCardLine(
-          `Checked ${relativeTime(reportDayStart(reportTime), now)}`,
-          findings,
-        );
+      : sentenceCase(relativeTime(reportDayStart(reportTime), now));
+  const healthNote =
+    reportTime !== undefined && findings !== undefined && findings > 0
+      ? `${String(findings)} small ${findings === 1 ? 'thing' : 'things'} to fix`
+      : 'Runs every Sunday.';
 
   const offline = !online;
   const loading = status === 'loading';
@@ -756,7 +784,7 @@ export function Home(): JSX.Element {
           onOpenSheet={openSheet}
         />
         {homeTiles(wide).includes('Health check') && (
-          <HealthTile loading={loading} line={healthLine} />
+          <HealthTile loading={loading} value={healthValue} note={healthNote} />
         )}
       </div>
 

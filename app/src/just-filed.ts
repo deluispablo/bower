@@ -395,6 +395,7 @@ export function isProcessedPath(path: string): boolean {
 export const GROUP_ORDER: readonly OutcomeAction[] = [
   'needs',
   'new',
+  'answered',
   'updated',
   'filed',
 ];
@@ -402,6 +403,7 @@ export const GROUP_ORDER: readonly OutcomeAction[] = [
 export const ACTION_TAG: Readonly<Record<OutcomeAction, string>> = {
   needs: 'Needs you',
   new: 'New note',
+  answered: 'Answered',
   updated: 'Updated',
   filed: 'Filed',
 };
@@ -409,6 +411,7 @@ export const ACTION_TAG: Readonly<Record<OutcomeAction, string>> = {
 const GROUP_HEADING: Readonly<Record<OutcomeAction, string>> = {
   needs: 'Needs you',
   new: 'New notes',
+  answered: 'Answered',
   updated: 'Updated',
   filed: 'Filed',
 };

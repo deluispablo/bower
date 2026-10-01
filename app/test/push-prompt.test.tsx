@@ -14,8 +14,13 @@ const run = vi.hoisted(() => ({
   confirmOpen: false,
 }));
 const push = vi.hoisted(() => ({ prompted: false, markPrompted: vi.fn() }));
+const demo = vi.hoisted(() => ({ on: false }));
 
 vi.mock('../src/run-store.js', () => ({ useRun: () => run }));
+vi.mock('../src/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/api.js')>()),
+  isDemo: () => demo.on,
+}));
 vi.mock('../src/push.js', () => ({
   currentPermission: () => 'default',
   currentPushSupport: () => 'supported',
@@ -47,6 +52,7 @@ beforeEach(() => {
   run.sheetOpen = false;
   run.confirmOpen = false;
   push.prompted = false;
+  demo.on = false;
   push.markPrompted.mockClear();
 });
 
@@ -63,6 +69,12 @@ describe('PushPrompt on Overlay', () => {
     mount();
     expect(dialog()?.getAttribute('aria-modal')).toBe('true');
     expect(dialog()?.textContent).toContain('Want a ping when I');
+  });
+
+  it('never shows in the demo, which has no notifications (#920 F-3)', () => {
+    demo.on = true;
+    mount();
+    expect(dialog()).toBeNull();
   });
 
   it('does not show while the chip is still in the done state', () => {

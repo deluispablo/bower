@@ -36,6 +36,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { isBowerWritten } from '../bower-written.js';
 import { loadNoteMetaEntry, loadTreeState, saveTreeState } from '../cache.js';
+import { subscribeNoteMetaCached } from '../note-meta-events.js';
 import type { DriveFile } from '../drive.js';
 import { FOLDER_MIME } from '../drive.js';
 import { hubNotePath } from '../folder-statuses.js';
@@ -56,6 +57,7 @@ import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { ancestorsOf, mergeExpanded } from '../reveal.js';
+import type { PreviewedItem } from '../reveal.js';
 import { useVault } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
@@ -302,6 +304,24 @@ export function useBowerWritten(
 ): ReadonlySet<string> {
   const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
   const key = files.map((file) => file.id).join(',');
+  // A folder screen caches its notes' frontmatter as it reads them; read
+  // the cache again then (coalesced), so the bird shows without a Drive
+  // read of the tree's own.
+  const [cached, setCached] = useState(0);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = subscribeNoteMetaCached(() => {
+      if (timer !== undefined) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        setCached((n) => n + 1);
+      }, 100);
+    });
+    return () => {
+      stop();
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
@@ -333,7 +353,7 @@ export function useBowerWritten(
     return () => {
       cancelled = true;
     };
-  }, [key, current?.id, current?.modifiedTime]);
+  }, [key, current?.id, current?.modifiedTime, cached]);
   return ids;
 }
 
@@ -357,6 +377,8 @@ export interface TreeProps {
   currentId?: string;
   /** A new value (from `revealInFolders`) also moves focus to the row. */
   revealSeq?: number;
+  /** The row a folder page previews (R-EXP-3/4): it wears the selection. */
+  previewed?: PreviewedItem | null;
   /** Called with whether any folder is open, whenever that changes. */
   onOpenChange?: (anyOpen: boolean) => void;
   /** The Folders tab: tapping its tab again scrolls to the top (R-REVEAL-2). */
@@ -376,6 +398,7 @@ export function Tree({
   revealPath,
   currentId,
   revealSeq = 0,
+  previewed = null,
   onOpenChange,
   topOnTabTap = false,
   onAsk,
@@ -797,8 +820,18 @@ export function Tree({
   }
 
   /** Whether `row` wears the selection (tint and bar): the open note or
-   * file. An open folder wears its root's colour instead (#920 DA-8). */
+   * file, or the row a folder page previews (R-EXP-3/4). An open folder
+   * wears its root's colour instead (#920 DA-8). */
   function isSelected(row: Row): boolean {
+    if (previewed !== null) {
+      if (
+        'id' in previewed
+          ? row.id === previewed.id
+          : row.kind === 'folder' && row.path === previewed.path
+      ) {
+        return true;
+      }
+    }
     return currentId !== undefined && isCurrent(row);
   }
 

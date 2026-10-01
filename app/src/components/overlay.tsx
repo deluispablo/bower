@@ -27,6 +27,7 @@
  */
 
 import { Fragment } from 'preact';
+import { useLocation } from 'preact-iso';
 import type { ComponentChildren, JSX, RefObject } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
@@ -163,8 +164,10 @@ function anchorTo(panel: HTMLElement, opener: Element | null): void {
  * address, `bowerOverlay` in its state) sits on top: Back pops it and the
  * newest overlay closes. Closing every overlay any other way takes that
  * entry back off; an overlay that hands over to the next (a menu opening
- * Help) keeps it. A pick that navigates pushes its own entry first, so
- * nothing is taken off then.
+ * Help) keeps it. A link inside an overlay that navigates ("See what
+ * changed", "Show in folders") closes it and replaces the overlay's entry
+ * instead of pushing on top of it (`linkLeavesOverlay`, #920 F-2), so the
+ * next Back leaves the new page in one step.
  */
 const backClosers: Array<{ close: () => void }> = [];
 let ignorePops = 0;
@@ -198,6 +201,36 @@ function queueReconcile(): void {
   if (reconcileQueued) return;
   reconcileQueued = true;
   setTimeout(reconcileHistory, 0);
+}
+
+/**
+ * The app path a click on an in-app link inside an overlay goes to, or
+ * `null` when the router would not take it (a modified click, another
+ * origin, a new tab, a download, a `#` link) and the browser should.
+ */
+function inAppLinkTarget(event: MouseEvent): string | null {
+  if (
+    event.button !== 0 ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    event.shiftKey
+  ) {
+    return null;
+  }
+  const target = event.target instanceof Element ? event.target : null;
+  const link = target?.closest('a[href]');
+  if (!(link instanceof HTMLAnchorElement)) return null;
+  const href = link.getAttribute('href') ?? '';
+  if (
+    link.origin !== location.origin ||
+    href.startsWith('#') ||
+    !/^(_?self)?$/i.test(link.target) ||
+    link.hasAttribute('download')
+  ) {
+    return null;
+  }
+  return link.href.replace(location.origin, '');
 }
 
 function onBackPop(): void {
@@ -286,6 +319,28 @@ export function Overlay(props: OverlayProps): JSX.Element {
   const { kind, onClose, children } = props;
   const placement = props.desktopPlacement ?? DEFAULT_PLACEMENT[kind];
   const panel = useRef<HTMLDivElement>(null);
+  // `undefined` outside the router (unit tests): links then go the
+  // router's own way.
+  const router = useLocation() as
+    Partial<ReturnType<typeof useLocation>> | undefined;
+  const route = router?.route;
+
+  // A link that leaves the overlay closes it and takes the overlay's Back
+  // entry (replace), so the next Back leaves the new page in one step
+  // (#920 F-2). It runs before the router's own click listener.
+  const onLinkClick = (event: MouseEvent): void => {
+    if (route === undefined) return;
+    const url = inAppLinkTarget(event);
+    if (url === null) return;
+    // The router's window listener would push the link even when its own
+    // handler prevented the default (an in-place reveal): it never sees it.
+    event.stopPropagation();
+    if (event.defaultPrevented) return;
+    event.preventDefault();
+    const replace = hasOverlayEntry();
+    onClose();
+    route(url, replace);
+  };
 
   const opener = useRef<HTMLElement | null>(null);
   // Set on the first render, not in an effect, so a second tap that arrives
@@ -389,6 +444,7 @@ export function Overlay(props: OverlayProps): JSX.Element {
         aria-label={props.label}
         tabIndex={-1}
         onKeyDown={onMenuKey}
+        onClick={onLinkClick}
       >
         <div class="overlay-grab" aria-hidden="true" />
         {children}

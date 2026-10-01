@@ -27,8 +27,10 @@ import { IconChevronRight } from '../components/icons.js';
 import { useJustFiled } from '../components/just-filed-row.js';
 import { ListRow } from '../components/list-row.js';
 import { NoteMenu } from '../components/note-menu.js';
+import { answeredLine } from '../components/run-summary.js';
 import { HOME_CRUMBS, PageHeader } from '../components/page-header.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { useTitlesAt } from '../components/use-note-titles.js';
 import type { Run } from '../api.js';
 import {
   ACTION_TAG,
@@ -125,6 +127,7 @@ function rowItem(row: TableRow): {
   mimeType: string;
   root: TableRow['para'];
   bowerWritten: boolean;
+  answer: boolean;
   href?: string;
 } {
   return {
@@ -133,7 +136,8 @@ function rowItem(row: TableRow): {
     name: row.name,
     mimeType: '',
     root: row.para,
-    bowerWritten: row.action === 'new',
+    bowerWritten: row.action === 'new' || row.action === 'answered',
+    answer: row.action === 'answered',
     ...(row.href !== undefined && { href: row.href }),
   };
 }
@@ -194,6 +198,7 @@ const TAG_TONE: Readonly<
 > = {
   filed: 'filed',
   new: 'new',
+  answered: 'filed',
   updated: 'filed',
   needs: 'check',
 };
@@ -267,6 +272,7 @@ function DesktopTable({
 function Summary({ run, now }: { run: Run; now: number }): JSX.Element {
   const outcome = outcomeFromRun(run);
   const badge = runBadge(outcome);
+  const answered = answeredLine(outcome);
   return (
     <Card class="just-filed-summary">
       <h2 class="just-filed-when">
@@ -281,6 +287,7 @@ function Summary({ run, now }: { run: Run; now: number }): JSX.Element {
         <StatTile label="Updated" value={outcome.updated} />
         <StatTile label="Needs you" value={outcome.needsYou} />
       </div>
+      {answered !== '' && <p class="run-summary-answered">{answered}</p>}
     </Card>
   );
 }
@@ -418,17 +425,29 @@ export function JustFiled(): JSX.Element {
 
   const { query, route } = useLocation();
   const desktop = useMediaQuery(DESKTOP_QUERY);
-  const { index } = useVault();
+  const { index, files } = useVault();
   const { latest, earlier, loaded, unseen, now } = useJustFiled(
     true,
     query.run,
   );
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const rows = useMemo(
+  const tableRowsNow = useMemo(
     () => (latest === null ? [] : tableRows(latest, index)),
     [latest, index],
   );
+  // A Bower answer takes the title every list gives it (#920).
+  const answerTitles = useTitlesAt(
+    tableRowsNow
+      .filter((row) => row.action === 'answered')
+      .map((row) => row.notePath),
+    files,
+  );
+  const rows = tableRowsNow.map((row) => {
+    const title =
+      row.action === 'answered' ? answerTitles.get(row.notePath) : undefined;
+    return title === undefined ? row : { ...row, title };
+  });
   const addresses = useAddresses(rows, index);
 
   function markAll(): void {

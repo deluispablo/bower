@@ -503,8 +503,9 @@ function TourCard({
   // ring back for keyboard users.
   const [quiet, setQuiet] = useState(true);
 
-  // Every step starts with its main button focused. The overlay's trap
-  // focuses its first control when it opens; this runs after it.
+  // Every step starts with its main button focused. The overlay focuses it
+  // when the tour opens (`initialFocus`); this moves it there again on
+  // each later step, after Back or Next re-rendered the card.
   useEffect(() => {
     queueMicrotask(() => next.current?.focus());
   }, [index]);
@@ -563,7 +564,12 @@ function TourCard({
               Back
             </button>
           )}
-          <button ref={next} type="button" class="btn" onClick={onNext}>
+          <button
+            ref={next}
+            type="button"
+            class="btn tour-next"
+            onClick={onNext}
+          >
             {tourNextLabel(index)}
           </button>
         </div>
@@ -596,7 +602,12 @@ export function Tour({ onEnd }: TourProps): JSX.Element {
 
   return (
     <Queued id="tour" priority={OVERLAY_PRIORITY.tour}>
-      <Overlay kind="dialog" labelledBy="tour-title" onClose={skip}>
+      <Overlay
+        kind="dialog"
+        labelledBy="tour-title"
+        onClose={skip}
+        initialFocus=".tour-next"
+      >
         <TourCard
           index={index}
           onBack={() => {

@@ -51,6 +51,7 @@ import type { RowTone } from '../run-progress.js';
 import { runKey } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import { useMediaQuery } from '../use-media-query.js';
+import { useTitlesAt } from './use-note-titles.js';
 import { useVault } from '../vault-store.js';
 import { BowerWorking, workingLabel } from './bower-working.js';
 import type { WorkingState } from './bower-working.js';
@@ -395,6 +396,7 @@ export function sheetSteps(
 /** The tag on a row. */
 export const ACTION_TAG: Record<OutcomeAction, string> = {
   new: 'New note',
+  answered: 'Answered',
   updated: 'Updated',
   filed: 'Filed',
   needs: 'Needs you',
@@ -421,13 +423,16 @@ export interface SheetRow {
   /** The file name with its extension, for the kind in words and the icon
    * (the title drops it, K-17). */
   name?: string;
+  /** Where the item is now (a Bower answer's note, for its title). */
+  path?: string;
 }
 
 const ACTION_ORDER: Record<OutcomeAction, number> = {
   needs: 0,
   new: 1,
-  updated: 2,
-  filed: 3,
+  answered: 2,
+  updated: 3,
+  filed: 4,
 };
 
 /** The items with what needs the person first, then the rest in the order
@@ -493,6 +498,7 @@ export function rowFor(
       : undefined;
   return {
     key: `${item.action}:${item.path}`,
+    path: at,
     title,
     name: (at ?? item.path).slice((at ?? item.path).lastIndexOf('/') + 1),
     tone: toneOfName(title),
@@ -639,6 +645,7 @@ function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
 /** The Badge tone of each row tag (AR-Run: "Filed"). */
 const ACTION_TONE: Record<OutcomeAction, BadgeTone> = {
   new: 'new',
+  answered: 'filed',
   updated: 'done',
   filed: 'filed',
   needs: 'check',
@@ -648,7 +655,9 @@ const ACTION_TONE: Record<OutcomeAction, BadgeTone> = {
  * kind in words, the folder after its root dot, and the tag as a Badge. */
 function SheetListRow({ row }: { row: SheetRow }): JSX.Element {
   const name = row.name ?? row.title;
-  const kind = kindLabel({ name, mimeType: '' });
+  // A Bower answer reads as on Home (#920): the bird, "Bower answer".
+  const answer = row.action === 'answered';
+  const kind = kindLabel({ name, mimeType: '', bowerWritten: answer, answer });
   const title =
     linkTitleFromFileName(name) === null ? displayName(row.title) : row.title;
   const meta = [kind, row.note]
@@ -663,6 +672,7 @@ function SheetListRow({ row }: { row: SheetRow }): JSX.Element {
           name,
           mimeType: '',
           root: row.iconRoot ?? row.para,
+          bowerWritten: answer,
         }}
         meta={meta}
         {...(row.where === ''
@@ -773,6 +783,15 @@ export function WorkingSheet({
   const vaultMissing =
     phase === 'failed' && failureReason(run?.reason) === 'vault_missing';
 
+  // A Bower answer takes the title every list gives it (#920). A hook, so
+  // before the early return.
+  const answerTitles = useTitlesAt(
+    (outcome?.items ?? [])
+      .filter((item) => item.action === 'answered')
+      .map((item) => item.path),
+    files,
+  );
+
   if (!visible || state === null || vaultMissing) return null;
 
   const total = runningTotal(count ?? 0, outcome?.total, waiting.length);
@@ -792,10 +811,23 @@ export function WorkingSheet({
     (run?.setAside ?? []).map((aside) => [aside.path, keptNote(aside)]),
   );
   const limit = desktop ? SHEET_ROWS_DESKTOP : SHEET_ROWS_PHONE;
-  const finished =
+  const sheet =
     outcome !== null && (state === 'done' || state === 'partial')
       ? sheetRows(outcome, limit, asideNotes)
       : null;
+  const finished =
+    sheet === null
+      ? null
+      : {
+          ...sheet,
+          rows: sheet.rows.map((row) => {
+            const title =
+              row.path === undefined ? undefined : answerTitles.get(row.path);
+            return row.action === 'answered' && title !== undefined
+              ? { ...row, title }
+              : row;
+          }),
+        };
 
   // The thing the run is on now (AD-Running "Working on it"): the last row
   // the run reports as being read, when it reports one.

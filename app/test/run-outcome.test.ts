@@ -41,6 +41,25 @@ describe('outcomeFromRun (R-RUN-1)', () => {
     });
   });
 
+  it('counts a new note in Answers/ as answered, not as a new note (#920)', () => {
+    const outcome = outcomeFromRun({
+      ...buildRun('done'),
+      items: [{ path: '0-Inbox/Bower - ask.md', kind: 'request' }],
+      created: ['Answers/2026-09-30 Which flat first.md'],
+      updated: [],
+    });
+    expect(outcome).toMatchObject({ created: 0, answered: 1 });
+    expect(outcome.items).toEqual([
+      {
+        action: 'answered',
+        title: '2026-09-30 Which flat first',
+        path: 'Answers/2026-09-30 Which flat first.md',
+      },
+    ]);
+    expect(outcomeCounts(outcome)).toBe('1 answered');
+    expect(runSentence(outcome, { now: NOW })).toContain(': 1 answered.');
+  });
+
   it('counts updates on a run that filed nothing (the 1.11 case)', () => {
     const outcome = outcomeFromRun(
       buildRun('done', { items: [], processed: [], created: [] }),

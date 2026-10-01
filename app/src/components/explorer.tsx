@@ -51,9 +51,11 @@ import { getPref, setPref, subscribePref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
 import {
   lastTarget,
+  previewed,
   rememberTarget,
   revealInFolders,
   revealRequest,
+  subscribePreviewed,
   subscribeReveal,
   targetFromReveal,
   targetFromRoute,
@@ -354,6 +356,13 @@ function useTarget(
   return routeTarget ?? lastTarget();
 }
 
+/** The folder page's previewed row (`setPreviewed`), kept current. */
+function usePreviewed(): ReturnType<typeof previewed> {
+  const [item, setItem] = useState(previewed);
+  useEffect(() => subscribePreviewed(() => setItem(previewed())), []);
+  return item;
+}
+
 /** The `revealInFolders` request, re-read whenever a new one comes. */
 function useRevealRequest(): ReturnType<typeof revealRequest> {
   const [request, setRequest] = useState(revealRequest);
@@ -371,6 +380,7 @@ export function Explorer({
   const { path } = useLocation();
   const target = useTarget(variant, index);
   const request = useRevealRequest();
+  const previewedItem = usePreviewed();
   // A `revealInFolders` request made on this screen wins over the route
   // until the person goes somewhere else.
   const fresh = request !== null && request.at === path ? request : null;
@@ -479,6 +489,7 @@ export function Explorer({
             showAppFiles={showAppFiles}
             revealPath={revealPath}
             currentId={currentId}
+            previewed={previewedItem}
             revealSeq={fresh?.seq ?? 0}
             topOnTabTap={variant === 'page'}
           />
