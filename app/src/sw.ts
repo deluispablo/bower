@@ -47,14 +47,16 @@ const precacheController = new PrecacheController({
   cacheName: PRECACHE_NAME,
   plugins: [
     {
-      cacheWillUpdate: async ({ request, response }) =>
-        isCacheablePrecacheResponse(
-          new URL(request.url),
-          response.status,
-          response.headers.get('content-type'),
-        )
-          ? response
-          : null,
+      cacheWillUpdate: ({ request, response }) =>
+        Promise.resolve(
+          isCacheablePrecacheResponse(
+            new URL(request.url),
+            response.status,
+            response.headers.get('content-type'),
+          )
+            ? response
+            : null,
+        ),
     },
   ],
 });
