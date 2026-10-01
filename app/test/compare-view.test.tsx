@@ -268,10 +268,12 @@ describe('Compare on a phone (PF-Compare-375, PF-Sort-375)', () => {
     });
     const saved = cache.saveViewSettings.mock.calls.at(-1) as [
       string,
-      { compareSort: unknown },
+      { compareSort: unknown; sort: unknown },
     ];
     expect(saved[0]).toBe(FOLDER);
     expect(saved[1].compareSort).toEqual({ column: 'rent', direction: 'asc' });
+    // The List keeps its own default, newest first (#950 F-3).
+    expect(saved[1].sort).toBe('modified');
   });
 
   it('starts from the sort remembered for the folder', async () => {

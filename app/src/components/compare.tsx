@@ -466,7 +466,7 @@ export function CompareView({
     loadViewSettings(folderPath)
       .then((settings) => {
         const base: ViewSettings = settings ?? {
-          sort: 'name',
+          sort: 'modified',
           kindFilter: null,
           originFilter: null,
           layout: 'list',
