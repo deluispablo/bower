@@ -758,3 +758,8 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* The Rules tip keeps the normal gap between blocks (16 px, BW-Rules). */
+.rules-panel > .hint {
+  margin-bottom: calc(var(--space-4) - var(--space-1));
+}
