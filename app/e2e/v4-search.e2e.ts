@@ -1,10 +1,11 @@
 /**
  * Search on the phone (#593, boards `Phone-Search-Start`, `Phone-Search`,
  * `Phone-Search-None`): grouped results with chips and counts, the start
- * screen, scope, no results, and the bird staying clear of the field.
+ * screen, scope, no results; v6 (#917): the SearchField, sentence-case
+ * group labels, FileIcon rows and the tag search over a note.
  */
 
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import { expect, openHome, shot, test } from './demo.js';
 
@@ -60,18 +61,20 @@ test('"flat hnt" finds Flat hunt: chips with counts and the three groups in orde
     'auto',
   );
 
+  // #917 (R-LABEL-1): sentence-case group labels, always plural.
   await expect(
-    dialog.locator('.switcher-heading').filter({ hasText: /^Folder$/ }),
+    dialog.locator('.switcher-heading').filter({ hasText: /^Folders$/ }),
   ).toBeVisible();
   const headings = await dialog.locator('.switcher-heading').allTextContents();
-  expect(headings.slice(0, 3)).toEqual(['Folder', 'Notes', 'Files']);
+  expect(headings.slice(0, 3)).toEqual(['Folders', 'Notes', 'Files']);
 
+  // R-SE-3: FileIcon and "Folder · ● <parent> · <n> things".
   const folder = dialog.getByRole('option', { name: /Flat hunt/ }).first();
-  await expect(folder).toContainText('Archives');
+  await expect(folder).toContainText('Folder · Archives');
   await expect(folder).toContainText('things');
-  await expect(folder.locator('.folder-mark')).toBeVisible();
+  await expect(folder.locator('.list-row-dot')).toBeVisible();
   await expect(dialog.locator('.switcher-match').first()).toBeVisible();
-  await expect(dialog.locator('.kind-badge').first()).toBeVisible();
+  await expect(dialog.locator('.kind-badge')).toHaveCount(0);
   await expect(dialog).toContainText(
     'Close enough counts: “flat hnt” finds Flat hunt.',
   );
@@ -79,7 +82,7 @@ test('"flat hnt" finds Flat hunt: chips with counts and the three groups in orde
 
   // A chip narrows the list to one group.
   await chips.getByRole('button', { name: /^Folders/ }).click();
-  await expect(dialog.locator('.switcher-heading')).toHaveText(['Folder']);
+  await expect(dialog.locator('.switcher-heading')).toHaveText(['Folders']);
 });
 
 test('the empty query shows the PARA chips, Opened lately, Filed in the last tidy-up and Searched before', async ({
@@ -129,38 +132,32 @@ test('search from the Flat hunt screen is scoped and can be widened', async ({
   ).toBeVisible();
   const dialog = await openSearch(page);
   const field = dialog.getByRole('combobox');
-  await expect(field).toHaveAttribute('placeholder', 'Search in Flat hunt');
-  await expect(
-    dialog.getByRole('button', { name: 'Clear search in Flat hunt' }),
-  ).toBeVisible();
+  // #917: the field keeps its words (#910's SearchField); the chip names
+  // the folder.
+  const scope = dialog.getByRole('button', {
+    name: 'Clear search in Flat hunt',
+  });
+  await expect(scope).toBeVisible();
 
   // Kentish Town is a listing in Flat hunt; the Lisbon trip is elsewhere.
   await field.fill('lisbon');
-  await expect(dialog.getByText(/^Nothing called/)).toBeVisible();
-  await dialog
-    .getByRole('button', { name: 'Search all of Flat hunt instead' })
-    .click();
+  await expect(dialog.getByText(/^Nothing matches/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Search all folders' }).click();
   await expect(
     dialog.getByRole('option', { name: /Lisbon Trip/ }).first(),
   ).toBeVisible();
-  await expect(field).toHaveAttribute(
-    'placeholder',
-    'Search folders, notes and files',
-  );
+  await expect(scope).toHaveCount(0);
 });
 
-test('no results offers Ask Bower where it is, prefilled', async ({
+test('no results says so and offers Ask Bower where it is, prefilled', async ({
   page,
 }, testInfo) => {
   await openHome(page);
   const dialog = await openSearch(page);
   await dialog.getByRole('combobox').fill('quartz zeppelin');
   await expect(
-    dialog.getByText('Nothing called “quartz zeppelin”'),
-  ).toBeVisible();
-  await expect(
     dialog.getByText(
-      'No folder, note or file has those words in its name or its text.',
+      'Nothing matches “quartz zeppelin”. Try fewer words, or another folder.',
     ),
   ).toBeVisible();
   await shot(page, testInfo, 'search-none');
@@ -173,26 +170,68 @@ test('no results offers Ask Bower where it is, prefilled', async ({
   );
 });
 
-test('the bird never intersects the field or Close at 375 px', async ({
+test('the field is the SearchField with its mic and Close Search (SE-Empty)', async ({
   page,
 }) => {
   await openHome(page);
   const dialog = await openSearch(page);
-  const field = await dialog.locator('.switcher-field').boundingBox();
-  const close = await dialog
-    .getByRole('button', { name: 'Close' })
-    .boundingBox();
-  const bird = dialog.locator('.switcher-bird');
-  const birdBox = (await bird.isVisible()) ? await bird.boundingBox() : null;
-  expect(field).not.toBeNull();
-  expect(close).not.toBeNull();
-  if (birdBox === null || field === null || close === null) return;
-  for (const box of [field, close]) {
-    const apart =
-      birdBox.x + birdBox.width <= box.x ||
-      box.x + box.width <= birdBox.x ||
-      birdBox.y + birdBox.height <= box.y ||
-      box.y + box.height <= birdBox.y;
-    expect(apart).toBe(true);
-  }
+  const field = dialog.locator('.switcher-field .search-field-input');
+  await expect(field).toBeVisible();
+  await expect(
+    field.getByRole('button', { name: /^(Dictate|Dictation is off)$/ }),
+  ).toBeVisible();
+  await expect(dialog.locator('.switcher-bird')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Close Search' }).click();
+  await expect(dialog).toBeHidden();
 });
+
+test('a tag on a note opens the tag search over it; closing returns to the note (NO-Tag)', async ({
+  page,
+}, testInfo) => {
+  await openHome(page);
+  const tag = await firstTagLink(page);
+  test.skip(tag === null, 'no note with a tag in the demo');
+  if (tag === null) return;
+  const notePath = new URL(page.url()).pathname;
+  const name = (await tag.textContent())?.trim().replace(/^#/, '') ?? '';
+  await tag.click();
+
+  const dialog = page.getByRole('dialog', { name: 'Quick switcher' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('combobox')).toHaveValue(`#${name}`);
+  await expect(dialog.locator('.switcher-tag-line')).toContainText(
+    `tagged #${name} · you stay on`,
+  );
+  await expect(dialog.getByRole('option').first()).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`${notePath}$`));
+  await shot(page, testInfo, 'search-tag');
+
+  await dialog.getByRole('button', { name: 'Close Search' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`${notePath}$`));
+});
+
+/** The first tag link of a note reached from Search, or `null`. */
+async function firstTagLink(page: Page): Promise<Locator | null> {
+  // "Job offer, Northwind Data" is tagged work and summary in the demo.
+  for (const query of ['Northwind', 'insights']) {
+    const dialog = await openSearch(page);
+    await dialog.getByRole('combobox').fill(query);
+    await expect(dialog.getByRole('option').first()).toBeVisible();
+    const note = dialog.locator('.switcher-row[data-kind="note"]').first();
+    if ((await note.count()) === 0) {
+      await dialog.getByRole('button', { name: 'Close Search' }).click();
+      continue;
+    }
+    await note.click();
+    await expect(page).toHaveURL(/\/note\//);
+    // The note's tags render once its text is read.
+    const link = page.locator('a[href^="/search?q=%23"]').first();
+    await link.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {
+      /* no tag on this note */
+    });
+    if (await link.isVisible()) return link;
+    await page.goto('/');
+  }
+  return null;
+}

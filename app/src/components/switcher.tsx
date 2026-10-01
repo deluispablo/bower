@@ -925,7 +925,24 @@ function SwitcherPanel({
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  // SearchField hands its input over through this ref; the combobox role
+  // goes on as soon as it does, whenever the overlay host mounts it.
+  const [inputRef] = useState(() => {
+    let field: HTMLInputElement | null = null;
+    return {
+      get current(): HTMLInputElement | null {
+        return field;
+      },
+      set current(next: HTMLInputElement | null) {
+        field = next;
+        if (next === null) return;
+        next.setAttribute('role', 'combobox');
+        next.setAttribute('aria-expanded', 'true');
+        next.setAttribute('aria-controls', 'switcher-listbox');
+        next.setAttribute('autocomplete', 'off');
+      },
+    };
+  });
   const panelRef = useRef<HTMLDivElement>(null);
   // The clock is read once per open: rows say "yesterday", not a live counter.
   const [now] = useState(() => Date.now());
@@ -1302,14 +1319,10 @@ function SwitcherPanel({
     return file === undefined ? null : searchTitle(noteTitle(file));
   }, [location, index]);
 
-  // The field is #910's SearchField; the listbox pattern lives on its input.
+  // The highlighted option, on the field (the listbox pattern).
   useEffect(() => {
     const input = inputRef.current;
     if (input === null) return;
-    input.setAttribute('role', 'combobox');
-    input.setAttribute('aria-expanded', 'true');
-    input.setAttribute('aria-controls', 'switcher-listbox');
-    input.setAttribute('autocomplete', 'off');
     if (entryCount > 0) {
       input.setAttribute(
         'aria-activedescendant',
@@ -1318,7 +1331,7 @@ function SwitcherPanel({
     } else {
       input.removeAttribute('aria-activedescendant');
     }
-  }, [entryCount, highlightedIndex]);
+  });
 
   let at = 0;
   const statusText =

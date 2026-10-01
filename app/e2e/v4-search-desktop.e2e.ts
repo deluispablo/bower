@@ -67,30 +67,36 @@ test('the kind chips count each kind and filter the list', async ({ page }) => {
   // stale, so every count is read again until the chips and the list agree.
   const chips = dialog.locator('.switcher-chips');
   const all = chips.getByRole('button', { name: /^All \d+$/ });
-  const pdfs = chips.getByRole('button', { name: /^PDFs \d+$/ });
+  // #917 (SE-Query-1280): the same kind chips as the phone.
+  const notes = chips.getByRole('button', { name: /^Notes \d+$/ });
+  await expect(
+    chips.getByRole('button', { name: /^Folders \d+$/ }),
+  ).toBeVisible();
+  await expect(
+    chips.getByRole('button', { name: /^Files \d+$/ }),
+  ).toBeVisible();
   const options = dialog.getByRole('option');
   const countOf = async (chip: Locator): Promise<number> =>
     Number(((await chip.textContent()) ?? '').replace(/\D/g, ''));
   await expect(all).toBeVisible();
-  await expect(pdfs).toBeVisible();
-  await expect(chips.getByRole('button', { name: 'Any time' })).toBeVisible();
+  await expect(notes).toBeVisible();
 
   await expect
     .poll(async () => {
       const total = await countOf(all);
-      const pdfCount = await countOf(pdfs);
+      const noteCount = await countOf(notes);
       return (
-        total === (await options.count()) && pdfCount > 0 && pdfCount < total
+        total === (await options.count()) && noteCount > 0 && noteCount < total
       );
     })
     .toBe(true);
 
-  await pdfs.click();
-  await expect(pdfs).toHaveAttribute('aria-pressed', 'true');
+  await notes.click();
+  await expect(notes).toHaveAttribute('aria-pressed', 'true');
   await expect
-    .poll(async () => (await options.count()) === (await countOf(pdfs)))
+    .poll(async () => (await options.count()) === (await countOf(notes)))
     .toBe(true);
-  await expect(dialog.locator('.switcher-heading')).toHaveText(['Files']);
+  await expect(dialog.locator('.switcher-heading')).toHaveText(['Notes']);
 
   await all.click();
   await expect

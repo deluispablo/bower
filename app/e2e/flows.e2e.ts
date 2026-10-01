@@ -1505,8 +1505,9 @@ test('Settings footer carries the build commit next to the version (#512)', asyn
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   // The demo build runs from this same git checkout, so a real commit is
   // always available: no dangling "Bower 0.1.0 ·" with nothing after it.
-  await expect(page.locator('.settings-footer p').first()).toHaveText(
-    /^Bower \d+\.\d+\.\d+ · [0-9a-f]{7,12}$/,
+  // #917: one footer line, "Bower <version> · <sha> · Source code · …".
+  await expect(page.locator('.settings-footer')).toHaveText(
+    /^Bower \d+\.\d+\.\d+ · [0-9a-f]{7,12} · Source code · Privacy · Terms$/,
   );
 });
 
@@ -1590,29 +1591,26 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
   await webLookup.click();
   await expect(webLookup).not.toBeChecked();
 
-  // Sign out is a plain button, apart from Sign out everywhere; in the
-  // demo build, Sign out everywhere and the own API key render nothing of
-  // their own — one sentence covers the whole Advanced section instead of
-  // repeating per control (#364) — and Delete (its own section) keeps its
-  // own sentence: twice total, not three times. Scoped to the settings
-  // section: the desktop sidebar has its own Sign out button.
+  // Sign out is a plain button, apart from Sign out everywhere. In the
+  // demo build (#917, spec §4.14 states) the account controls stay on
+  // screen as drawn, disabled, each with "Not in the demo. Run your own
+  // Bower to use it.": the push toggle, the key box and Delete. Scoped to
+  // the settings section: the desktop sidebar has its own Sign out button.
   const settings = page.locator('.settings');
   await expect(
     settings.getByRole('button', { name: 'Sign out', exact: true }),
   ).toBeVisible();
   await expect(
-    settings.getByText('Not in the demo: run your own Bower to use this.'),
-  ).toHaveCount(2);
-
-  // The push toggle is greyed with its own sentence (#364, handover
-  // C.10/D.6), word for word what "From your Drive" gets in Add.
-  const pushToggle = settings.getByRole('switch', {
-    name: "Ping me when it's done",
-  });
-  await expect(pushToggle).toBeDisabled();
+    settings.getByRole('button', { name: 'Sign out everywhere' }),
+  ).toBeDisabled();
   await expect(
     settings.getByText('Not in the demo. Run your own Bower to use it.'),
-  ).toBeVisible();
+  ).toHaveCount(3);
+
+  const pushToggle = settings.getByRole('switch', {
+    name: 'Ping me when it is done',
+  });
+  await expect(pushToggle).toBeDisabled();
 });
 
 test.describe('/login never redirects to the intro (#313)', () => {
