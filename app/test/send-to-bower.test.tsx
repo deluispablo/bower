@@ -139,6 +139,14 @@ describe('Ask sheet', () => {
     );
   });
 
+  it('puts focus in the question box, not on ✕, when it opens', async () => {
+    ask();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.activeElement).toBe(box());
+  });
+
   it('shows the arrow "Put in the inbox" with a prefilled question', () => {
     ask('What should I fix first?');
     expect(box().value).toBe('What should I fix first?');

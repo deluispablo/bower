@@ -229,8 +229,18 @@ export function Composer({
     hint,
   });
 
+  // After the overlay's focus trap has put focus on its first control (the
+  // ✕): the trap's effect runs after this one, so wait one task.
   useEffect(() => {
-    if (autoFocus) field.current?.focus();
+    if (!autoFocus) return undefined;
+    const timer = setTimeout(() => {
+      const f = field.current;
+      if (f === null) return;
+      f.focus();
+      const end = f.value.length;
+      f.setSelectionRange(end, end);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // `save`: the text is kept 600 ms after the last change, never on mount.

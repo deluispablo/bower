@@ -113,6 +113,14 @@ describe('Rename…', () => {
     expect(line()).toBe('The arrow renames it. The link to it keeps working.');
   });
 
+  it('puts focus in the box, not on ✕, when it opens', async () => {
+    rename();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.activeElement).toBe(box());
+  });
+
   it('shows the mic when the box is emptied', () => {
     rename();
     type('');

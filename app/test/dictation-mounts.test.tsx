@@ -58,6 +58,16 @@ describe('Add a paragraph…', () => {
     );
   });
 
+  it('puts focus in the box when it opens', async () => {
+    await act(() => {
+      render(h(AppendForm, { onAppend: vi.fn(), onClose: vi.fn() }), root);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.activeElement?.id).toBe('append-text');
+  });
+
   it('has a microphone that dictates into its box', async () => {
     await act(() => {
       render(h(AppendForm, { onAppend: vi.fn(), onClose: vi.fn() }), root);
