@@ -243,6 +243,21 @@ function scrollBoxOf(el: HTMLElement): HTMLElement | null {
  * column), never the page behind it; the page itself when nothing else
  * scrolls (the Folders tab).
  */
+/**
+ * Puts Chrome's sequential focus starting point back at the top of the
+ * page, so the next Tab reaches "Skip to content" (#920 T-2). Scrolling
+ * the tree on load can move it next to the rows. Only while nothing has
+ * focus: a focused control keeps its place.
+ */
+export function resetFocusStart(): void {
+  const active = document.activeElement;
+  if (active !== null && active !== document.body) return;
+  const start = document.querySelector<HTMLElement>('.focus-start');
+  if (start === null) return;
+  start.focus({ preventScroll: true });
+  start.blur();
+}
+
 function scrollRowIntoView(el: HTMLElement): void {
   const parent = scrollBoxOf(el);
   if (parent === null) {
@@ -406,6 +421,7 @@ export function Tree({
               '.tree-link[aria-current="page"]',
             );
             if (selected != null) scrollRowIntoView(selected);
+            resetFocusStart();
           }),
         );
         if (state === undefined) return;
@@ -584,6 +600,7 @@ export function Tree({
       // expansion arriving), so the row is still in view.
       requestAnimationFrame(() => {
         if (el.isConnected) scrollRowIntoView(el);
+        resetFocusStart();
       });
       if (pendingRevealFocus.current) el.focus();
     } else if (listHandle.current !== null) {

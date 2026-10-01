@@ -166,3 +166,20 @@ test('a quick switcher option holds no link or button (#920 T-5)', async ({
   await expect(switcher.getByRole('option').first()).toBeVisible();
   await expectNoRoleViolations(page, '.overlay-panel');
 });
+
+test('the first Tab on a root folder reaches Skip to content (#920 T-2)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.goto('/folder/1-Projects');
+  await expect(
+    page.locator('h1.page-header-title', { hasText: 'Projects' }),
+  ).toBeVisible();
+  // The tree has opened on the folder and scrolled to it.
+  await expect(page.locator('.tree-row-open').first()).toBeAttached();
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Tab');
+  await expect(
+    page.getByRole('link', { name: 'Skip to content' }),
+  ).toBeFocused();
+});

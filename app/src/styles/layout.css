@@ -519,6 +519,16 @@ button.page-bare-back {
   outline: none;
 }
 
+/* The focus starting point before Skip to content: out of the shell's
+   grid, never drawn. */
+.focus-start {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  outline: none;
+}
+
 /* "Skip to content" (WCAG 2.4.1): off screen until it has focus. */
 .skip-link {
   position: fixed;

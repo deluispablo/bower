@@ -462,6 +462,9 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           : { '--sidebar-width': `${sidebarWidth}px` }
       }
     >
+      {/* Where the next Tab starts from after the tree scrolls on load
+          (`resetFocusStart` in tree.tsx): just before Skip to content. */}
+      <span class="focus-start" tabIndex={-1} aria-hidden="true" />
       <SkipLink />
       {/* The tour's Notes step lights the "Your folders" header row inside the
           explorer (`data-tour` in explorer.tsx), not this whole column. */}
