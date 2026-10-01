@@ -31,7 +31,9 @@ export function MoreButton({
     <button
       type="button"
       class={
-        className === undefined ? 'icon-button' : `icon-button ${className}`
+        className === undefined
+          ? 'icon-button more-button'
+          : `icon-button more-button ${className}`
       }
       aria-label={label}
       title={label}
