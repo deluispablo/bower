@@ -210,7 +210,6 @@ function queueReconcile(): void {
  */
 function inAppLinkTarget(event: MouseEvent): string | null {
   if (
-    event.defaultPrevented ||
     event.button !== 0 ||
     event.ctrlKey ||
     event.metaKey ||
@@ -333,8 +332,11 @@ export function Overlay(props: OverlayProps): JSX.Element {
     if (route === undefined) return;
     const url = inAppLinkTarget(event);
     if (url === null) return;
-    event.preventDefault();
+    // The router's window listener would push the link even when its own
+    // handler prevented the default (an in-place reveal): it never sees it.
     event.stopPropagation();
+    if (event.defaultPrevented) return;
+    event.preventDefault();
     const replace = hasOverlayEntry();
     onClose();
     route(url, replace);

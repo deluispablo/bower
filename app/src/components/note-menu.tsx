@@ -37,7 +37,7 @@ import {
 import type { MenuKind, MoreItem, MoreItemId } from '../more-menu.js';
 import { displayName, driveFolderUrl } from '../navigation.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
-import { revealHref } from '../reveal.js';
+import { revealHref, revealInFolders } from '../reveal.js';
 import { showToast } from '../toast-store.js';
 import { isAppFile } from '../vault-index.js';
 import { mediaMatches } from '../use-media-query.js';
@@ -224,14 +224,17 @@ export function NoteMenu(props: NoteMenuProps): JSX.Element {
    * open item. Otherwise (phone, or no such row) the link opens the Folders
    * tab revealed at it. */
   function showInFolders(event: MouseEvent): void {
-    if (mediaMatches('(min-width: 900px)')) {
-      const row = document.querySelector(
-        '.explorer-sidebar [aria-current="page"]',
-      );
-      if (row !== null) {
-        event.preventDefault();
-        row.scrollIntoView?.({ block: 'nearest' });
-      }
+    // The desktop reveals in place, in the sidebar (R-NT-5): nothing in the
+    // address changes, so no navigation and no history entry; closing the
+    // menu takes its own Back entry off, and one Back then leaves the page
+    // (#920).
+    if (
+      mediaMatches('(min-width: 900px)') &&
+      file !== undefined &&
+      thingKind !== null
+    ) {
+      event.preventDefault();
+      revealInFolders(file.path, thingKind === 'folder' ? undefined : file.id);
     }
     onClose();
   }
