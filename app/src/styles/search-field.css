@@ -135,6 +135,25 @@
   gap: 8px;
 }
 
+/* ✕ "Close Search": the boards' 40 px `.ib`, 44 px hit, so the phone's
+   placeholder "Search folders, notes and files" fits whole at 375
+   (SE-Empty-375, #920 DB-26). */
+.search-field-row > .search-field-close {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.search-field-row > .search-field-close::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  content: '';
+}
+
 /* The line under the box (O-R2), the Composer's muted 13 px line. */
 .search-field-line {
   flex-basis: 100%;
