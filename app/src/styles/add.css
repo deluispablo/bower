@@ -712,7 +712,10 @@ button.pile-card:focus-visible {
   }
 
   .shell-with-dock:has(.add-tidy) .content {
-    padding-bottom: calc(var(--space-16) + var(--space-6) + var(--dock-height) + var(--add-tidy-height, 72px));
+    padding-bottom: calc(
+      var(--space-16) + var(--space-6) + var(--dock-height) +
+        var(--add-tidy-height, 72px)
+    );
   }
 }
 
