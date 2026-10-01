@@ -743,8 +743,10 @@ button.pile-card:focus-visible {
 /* AD-Waiting: "Say what they are" is a teal text link at the row end
    (board over spec's secondary button). */
 .pile-say {
+  display: inline-flex;
   flex: none;
+  align-items: center;
   min-height: 44px;
   margin-left: auto;
-  color: var(--color-brand);
+  color: var(--color-link);
 }
