@@ -158,12 +158,12 @@ describe('Layout', () => {
     const nav = query('nav.bottom-nav');
     expect(nav.getAttribute('aria-label')).toBe('Main');
     const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>('a'));
-    expect(links.map((a) => a.textContent)).toEqual([
-      'Home',
-      'Folders',
-      'Add',
-      'Bower',
-    ]);
+    // The label only: the Bower tab's bird mark carries its own hidden
+    // drawing text (#915).
+    expect(
+      links.map((a) => a.querySelector(':scope > span')?.textContent),
+    ).toEqual(['Home', 'Folders', 'Add', 'Bower']);
+    expect(links[3]?.querySelector('svg.b.mark')).not.toBeNull();
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
       '/',
       '/notes',
