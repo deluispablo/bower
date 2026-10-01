@@ -57,10 +57,10 @@ Wave = order in the dependency graph. Budget = the agent's own ceiling (tool cal
 | #917 | I-13 | Search and Settings: the Search screen (also from Home and from a tag), and Settings with Look as a segmented control and the key box as a text box with the mic | M49 | 2b | #906, #907, #908, #909, #910 | 90 / 90 min | merged (#943) |
 | #918 | I-14b | Intro: five pages with the real text box and note box as pictures, 40 px heroes, the bird's pose per page | M49 | 2b | #908, #910 (and M48) | 50 / 60 min | merged (#941) |
 | #919 | I-14a | Every Help text and the tour: one Help per screen in the approved words, tap on the phone and click on desktop, and a tour that uses the same words | M49 | 3 | #911, #916, #912, #913, #914, #915, #917, #918 | 90 / 90 min | merged (#944) |
-| #920 | I-15a | Design gate: walk the local demo against every board, fix the differences, one element one look, accessible names audit | M50 | 4 | all of M49 | 120 / 120 min (revise from findings) | in-progress (review) |
-| #921 | I-8c | Bower chooses the status list for each folder: rulebook version, the agent writes it in the hub note, the runner checks it, the app reads it on real data | M51 | 5 | #920 (owner sign-off), #916 | 80 / 90 min | pending |
-| #922 | I-16 | Real data under the new UI: run start time, who filed a file, Drive ids, one title per file, search index fields, and dictation on real browsers | M51 | 5 | #920 (owner sign-off) | 90 / 100 min | pending |
-| #923 | I-15b | Docs for v6 and the production release: ARCHITECTURE, runbook, brand, README screenshots, changelog, then deploy production | M51 | 6 | #921, #922 | 60 / 70 min | pending |
+| #920 | I-15a | Design gate: walk the local demo against every board, fix the differences, one element one look, accessible names audit | M50 | 4 | all of M49 | 120 / 120 min (revise from findings) | merged (#946–#949; owner sign-off 1 Oct) |
+| #921 | I-8c | Bower chooses the status list for each folder: rulebook version, the agent writes it in the hub note, the runner checks it, the app reads it on real data | M51 | 5 | #920 (owner sign-off), #916 | 80 / 90 min | merged (#957); real-data check on production pending |
+| #922 | I-16 | Real data under the new UI: run start time, who filed a file, Drive ids, one title per file, search index fields, and dictation on real browsers | M51 | 5 | #920 (owner sign-off) | 90 / 100 min | merged (#958) |
+| #923 | I-15b | Docs for v6 and the production release: ARCHITECTURE, runbook, brand, README screenshots, changelog, then deploy production | M51 | 6 | #921, #922 | 60 / 70 min | merged (#959); production deployed 1 Oct |
 
 ## Waves
 
@@ -74,3 +74,20 @@ Wave = order in the dependency graph. Budget = the agent's own ceiling (tool cal
 ## Decisions taken for this plan
 
 E-3 Folders (labels only; route `/notes`, kind "Notes" unchanged). E-4 overridden: every text box and search field has the microphone; blocked dictation shows it crossed out. E-5 "new" per device. E-6 no "Try asking" card. E-7 statuses chosen by Bower per folder (hub note `statuses:`, kind list as fallback). E-8 Health check tile on desktop Home only. E-9 no "Done · 1 filed" pill, no sidebar "Just filed". E-10, E-11 ⋯ on Home and Add as drawn. E-12 demo subfolder "Listings". E-13 the sparkle stays. E-14 the tree. E-15 the spec's new copy approved. E-16 the spec's order replaces the review-tab waves. E-17 the root crumb reveals the tree. Light theme: unchanged.
+
+## Production deploy (1 Oct 2026)
+
+v6 was deployed to production from main at 9d660829:
+- Worker version 17d93053;
+- the runner in the instance repo, with the run.sh that checks folder status lists;
+- the Pages app, 128.8 KB startup, with the Picker key.
+
+Health checks passed, and the signed-in app serves the v6 screens.
+
+The audit fixes (#950, PRs #951–#956) went in before the deploy.
+
+Owner actions:
+- apply rulebook v23 under Settings → Advanced → "Update Bower's rules";
+- test on a real phone: the edge swipe and the iOS keyboard;
+- verify the folder statuses on the first v23 tidy-up, which closes #921.
+
