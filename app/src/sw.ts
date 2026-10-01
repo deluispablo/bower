@@ -20,7 +20,11 @@ import {
   isTrustedShareRequest,
   storeSharedFiles,
 } from './share-target.js';
-import { isOutdatedPrecache, PRECACHE_NAME } from './sw-precache.js';
+import {
+  isCacheablePrecacheResponse,
+  isOutdatedPrecache,
+  PRECACHE_NAME,
+} from './sw-precache.js';
 import './sw-push.js';
 import { isApiStatusRequest } from './sw-routes.js';
 
@@ -34,8 +38,25 @@ declare const self: ServiceWorkerGlobalScope & {
 // take a name without `workbox-core`'s `setCacheNameDetails` (not a direct
 // dependency), so the controller is built explicitly; `precache` adds the
 // same `install` and `activate` listeners `precacheAndRoute` does.
+//
+// The `cacheWillUpdate` plugin refuses HTML stored as a script or a style
+// (`isCacheablePrecacheResponse`); a refused entry fails the install, and the
+// browser retries later. Being a `cacheWillUpdate` plugin, it replaces
+// Workbox's default precache check, so it refuses error statuses too.
 const precacheController = new PrecacheController({
   cacheName: PRECACHE_NAME,
+  plugins: [
+    {
+      cacheWillUpdate: async ({ request, response }) =>
+        isCacheablePrecacheResponse(
+          new URL(request.url),
+          response.status,
+          response.headers.get('content-type'),
+        )
+          ? response
+          : null,
+    },
+  ],
 });
 precacheController.precache(self.__WB_MANIFEST);
 registerRoute(new PrecacheRoute(precacheController));
