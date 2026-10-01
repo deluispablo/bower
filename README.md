@@ -27,7 +27,7 @@ Self-hosted, zero servers, 0 € a month.</p>
   </tr>
 </table>
 
-<p align="center"><sub>Screenshots of the local demo (Alex, an invented person), dark theme, 1280 px wide.</sub></p>
+<p align="center"><sub>Screenshots of the local demo (Alex, an invented person), dark theme, 1280 px wide, taken by the end-to-end tests (<code>pnpm -C app e2e:shots</code>).</sub></p>
 
 ---
 

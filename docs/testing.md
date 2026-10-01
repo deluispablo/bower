@@ -152,7 +152,7 @@ pnpm -C app exec playwright show-trace e2e/results/<test>/trace.zip
 pnpm -C app build:demo && E2E_PREBUILT=1 pnpm -C app exec playwright test --shard=2/4   # one CI shard
 ```
 
-**README screenshots.** `pnpm -C app e2e:shots` runs the desktop project and also writes its six screenshots to `docs/assets/screenshots/`, which the README shows under the demo link. Run it and commit the PNGs when a screen changes visibly; they only ever show the demo's sample notes. The Tidy up one differs by a few pixels between runs, the others are identical.
+**README screenshots.** `pnpm -C app e2e:shots` runs `app/e2e/readme-shots.e2e.ts` in the desktop project (1280 × 800, dark theme, tour skipped) and writes six screenshots to `docs/assets/screenshots/` (home, note, add, bower, settings, tidy-up), which the README shows. Without `BOWER_README_SHOTS=1` that spec is skipped, so other e2e runs never touch the images. Run it and commit the PNGs when a screen changes visibly; they only ever show the demo's sample notes. The Tidy up one differs by a few pixels between runs.
 
 ## Real data under the v6 screens (#922)
 

@@ -8,9 +8,6 @@
 import { expect, test as base } from '@playwright/test';
 import type { Locator, Page, Route, TestInfo } from '@playwright/test';
 
-// No `@types/node` in this repo; `process` is a real Node global here.
-declare const process: { env: Record<string, string | undefined> };
-
 /**
  * Wednesday 30 September 2026, around noon: the day the demo fixture is written
  * for (`src/demo/fixture.ts`). The clock runs on from here as real time
@@ -115,8 +112,8 @@ export async function openSettings(page: Page): Promise<void> {
 
 /**
  * Saves the screen as `e2e/screenshots/<project>/<name>.png` (uploaded as a
- * CI artifact). With `BOWER_README_SHOTS=1` (`pnpm e2e:shots`) the desktop
- * run also writes it to `docs/assets/screenshots/`, where the README shows it.
+ * CI artifact). The README's screenshots come from `readme-shots.e2e.ts`
+ * (`pnpm e2e:shots`), not from here.
  */
 export async function shot(
   page: Page,
@@ -129,12 +126,6 @@ export async function shot(
     ...options,
     path: `${testDir}/screenshots/${project}/${name}.png`,
   });
-  if (process.env.BOWER_README_SHOTS === '1' && project === 'desktop') {
-    await page.screenshot({
-      ...options,
-      path: `${testDir}/../../docs/assets/screenshots/${name}.png`,
-    });
-  }
 }
 
 /**
