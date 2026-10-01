@@ -391,7 +391,11 @@ export function Intro(): JSX.Element {
         <header class="intro-bar">
           <span class="intro-brand">
             {page === LAST ? (
-              <Bird state="idle" face="happy" size={32} />
+              // The happy bird (K-32) at the 40 px floor for a moving bird
+              // (spec 6.21 rule 2), set in the mark's 32 px slot.
+              <span class="intro-happy">
+                <Bird state="idle" face="happy" size={40} />
+              </span>
             ) : (
               <BowerMark size={32} />
             )}

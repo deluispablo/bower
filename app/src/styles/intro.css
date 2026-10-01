@@ -42,6 +42,12 @@
   color: var(--color-heading);
 }
 
+/* Page 5's happy bird: 40 px drawn in the mark's 32 px slot. */
+.intro-happy {
+  display: inline-flex;
+  margin: -4px;
+}
+
 .intro-skip {
   display: inline-flex;
   align-items: center;
