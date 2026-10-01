@@ -29,13 +29,15 @@
   border-radius: 6px;
 }
 
-/* Where it is now: muted, not on offer. */
+/* Where it is now, or the folder being moved: dimmed, not on offer
+   (PF-Move: the disabled colour, #950 F-19). */
 .folder-picker-current {
-  color: var(--color-text-muted);
+  color: var(--color-text-disabled, var(--color-text-muted));
   font-weight: 400;
 }
 
-.folder-picker-current .folder-picker-choice {
+.folder-picker-current .folder-picker-choice,
+.folder-picker-current .tree-chevron:disabled {
   cursor: default;
 }
 
@@ -44,12 +46,6 @@
   flex-direction: column;
   gap: var(--space-3);
   min-height: 0;
-}
-
-.move-to-sub {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 15px;
 }
 
 .move-to-foot {

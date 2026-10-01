@@ -164,8 +164,7 @@ test.describe('nothing clips Bower in the states he shows himself', () => {
 
   test('404', async ({ page }) => {
     await page.goto('/no/such/page');
-    // The desktop sidebar's Bower item carries a bird too (R-ICON-27),
-    // hidden on the phone: wait for one on screen.
+    // The page's own bird: wait for one on screen.
     await expect(
       page.locator('svg.b').filter({ visible: true }).first(),
     ).toBeVisible();

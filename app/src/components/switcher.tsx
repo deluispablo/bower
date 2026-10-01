@@ -11,7 +11,7 @@
  * typo tolerance, and the debounced Drive full-text search
  * (`mergeFullText`) adds what only Drive's own text index knows. Results
  * come as Folders, Notes and Files, with chips that filter by kind (with
- * counts) and by time. Opened from a folder screen the search is scoped to
+ * counts); no board draws a time chip (SE-Query, #950 D-5). Opened from a folder screen the search is scoped to
  * that folder; on an empty query the PARA chips scope it too. Commands
  * always come last and only when the query matches one (R-SEARCH-8).
  *
@@ -65,6 +65,8 @@ import {
   relativeTime,
 } from '../navigation.js';
 import type { ParaKind } from '../navigation.js';
+import { hubNotePath } from '../folder-statuses.js';
+import { isFolderPage } from '../folder-view.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { useOnline } from '../online.js';
@@ -113,7 +115,6 @@ import { ListRow } from './list-row.js';
 import { FolderMark } from './folder-mark.js';
 import {
   IconChat,
-  IconClock,
   IconClose,
   IconInbox,
   IconMoon,
@@ -129,7 +130,6 @@ import '../styles/switcher.css';
 
 const MIN_QUERY_LENGTH = 2;
 const DEBOUNCE_MS = 300;
-const DAY_MS = 86_400_000;
 const START_LIST_MAX = 5;
 
 /** The desktop overlay's two columns start here (`switcher.css`). */
@@ -256,6 +256,53 @@ function useBowerNotes(files: readonly DriveFile[]): ReadonlySet<string> {
   return ids;
 }
 
+/**
+ * Which listed folders have their own page (K-31, L-5): a same-name note
+ * Bower wrote (`isFolderPage`), which the folder page neither lists nor
+ * counts. Read like `useBowerNotes`; a folder whose note is not read yet
+ * keeps the plain count until it is. Folder paths.
+ */
+function useFolderPages(
+  folders: readonly string[],
+  index: VaultIndex | null,
+): ReadonlySet<string> {
+  const [paths, setPaths] = useState<ReadonlySet<string>>(() => new Set());
+  const asked = useRef(new Set<string>());
+  const gone = useRef(false);
+  const key = folders.slice(0, EXTRAS_MAX).join('\n');
+
+  useEffect(
+    () => () => {
+      gone.current = true;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (index === null) return;
+    for (const folder of folders.slice(0, EXTRAS_MAX)) {
+      const hub = index.byPath.get(hubNotePath(folder));
+      if (hub === undefined) continue;
+      const ask = `${hub.id}:${hub.modifiedTime ?? ''}`;
+      if (asked.current.has(ask)) continue;
+      asked.current.add(ask);
+      loadNoteMeta(hub).then(
+        (meta) => {
+          if (gone.current || !isFolderPage(hub, meta)) return;
+          setPaths((prev) =>
+            prev.has(folder) ? prev : new Set(prev).add(folder),
+          );
+        },
+        (err: unknown) => {
+          console.error("A folder's own note could not be read", err);
+        },
+      );
+    }
+  }, [key, index]);
+
+  return paths;
+}
+
 function useTagged(
   tag: string | null,
   index: VaultIndex | null,
@@ -380,35 +427,6 @@ function usePreview(
 
   return { picture, lines };
 }
-type TimeKey = 'any' | 'today' | '7d' | '30d' | 'year';
-
-const TIME_LABELS: Readonly<Record<TimeKey, string>> = {
-  any: 'Any time',
-  today: 'Today',
-  '7d': '7 days',
-  '30d': '30 days',
-  year: 'This year',
-};
-
-/** The earliest modified time (epoch ms) a time filter lets through. */
-function sinceFor(time: TimeKey, now: number): number | undefined {
-  switch (time) {
-    case 'any':
-      return undefined;
-    case 'today': {
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      return start.getTime();
-    }
-    case '7d':
-      return now - 7 * DAY_MS;
-    case '30d':
-      return now - 30 * DAY_MS;
-    case 'year':
-      return new Date(new Date(now).getFullYear(), 0, 1).getTime();
-  }
-}
-
 /** A folder to search inside: its path from the top, and how it reads. */
 interface Scope {
   path: string;
@@ -492,6 +510,25 @@ interface RowModel {
   updated: string;
 }
 
+/**
+ * Where a row says it is: its folder, except a folder's own page (a
+ * same-name note Bower wrote), which stands for the folder and so sits
+ * where the folder sits: "Housing Search Australia" for Moonee Ponds's
+ * page (SE-Query, #950).
+ */
+function locationOf(row: RowModel, bowerWritten: boolean): string {
+  const folder = folderOf(row.file.path);
+  if (
+    row.kind === 'note' &&
+    bowerWritten &&
+    folder !== '' &&
+    row.file.path === hubNotePath(folder)
+  ) {
+    return lastSegment(folderOf(folder));
+  }
+  return row.parentName;
+}
+
 /** The row's meta line (R-SE-3, K-15): "Bower note · ● Moonee Ponds",
  * "Folder · ● Housing Search Australia · 7 things · updated today". */
 function rowMeta(row: RowModel, bowerWritten: boolean, now: number): MetaLine {
@@ -501,7 +538,9 @@ function rowMeta(row: RowModel, bowerWritten: boolean, now: number): MetaLine {
       mimeType: row.file.mimeType,
       bowerWritten,
       root: row.root,
-      ...(row.parentName !== '' && { parentName: row.parentName }),
+      ...(locationOf(row, bowerWritten) !== '' && {
+        parentName: locationOf(row, bowerWritten),
+      }),
       ...(row.count !== null && { count: row.count }),
       ...(row.kind === 'folder' &&
         row.updated !== '' && { updated: row.updated }),
@@ -914,8 +953,6 @@ function SwitcherPanel({
   );
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const [kindChip, setKindChip] = useState<KindChip>('all');
-  const [time, setTime] = useState<TimeKey>('any');
-  const [timeOpen, setTimeOpen] = useState(false);
   // Bumped when the index learns something on its own (a restored copy, note
   // text read from the cache), so the results are worked out again.
   const [indexVersion, setIndexVersion] = useState(0);
@@ -1044,11 +1081,9 @@ function SwitcherPanel({
   // no Drive call, so this never waits on the full-text search.
   const results = useMemo((): SearchResults | null => {
     if (!searching || tag !== null || index === null) return null;
-    const since = sinceFor(time, now);
     const options: SearchOptions = {
       showAppFiles: getPref('showAppFiles'),
       ...(scope !== null && { scope: scope.path }),
-      ...(since !== undefined && { since }),
     };
     const handle = syncedSearchIndex(index);
     const local = searchVault(handle, index, trimmed, options);
@@ -1060,8 +1095,6 @@ function SwitcherPanel({
     index,
     trimmed,
     scope,
-    time,
-    now,
     driveFiles,
     snippets,
     indexVersion,
@@ -1083,7 +1116,7 @@ function SwitcherPanel({
   // One set of kind chips on both sizes (SE-Query-375/1280).
   const activeChip = kindChip;
 
-  const sections = useMemo((): Section[] => {
+  const rawSections = useMemo((): Section[] => {
     if (index === null) return [];
     if (tag !== null) {
       // N-11: one list of the tagged notes, no group label.
@@ -1162,6 +1195,35 @@ function SwitcherPanel({
     now,
   ]);
 
+  // K-31: a folder's count is the folder page's, so its own page (a
+  // same-name note Bower wrote) is not one of its things (#950 F-5).
+  const listedFolders = useMemo(
+    () =>
+      rawSections.flatMap((section) =>
+        section.rows.flatMap((row) =>
+          row.kind === 'folder' ? [row.file.path] : [],
+        ),
+      ),
+    [rawSections],
+  );
+  const folderPages = useFolderPages(listedFolders, index);
+  const sections = useMemo(
+    (): Section[] =>
+      folderPages.size === 0
+        ? rawSections
+        : rawSections.map((section) => ({
+            ...section,
+            rows: section.rows.map((row) =>
+              row.count !== null &&
+              row.count > 0 &&
+              folderPages.has(row.file.path)
+                ? { ...row, count: row.count - 1 }
+                : row,
+            ),
+          })),
+    [rawSections, folderPages],
+  );
+
   const matchingCommands = useMemo(() => {
     if (!searching || tag !== null) return [];
     const needle = trimmed.toLowerCase();
@@ -1189,7 +1251,7 @@ function SwitcherPanel({
   // list itself changes shape.
   useEffect(() => {
     setHighlightedIndex(0);
-  }, [entryCount, trimmed, activeChip, scope, time]);
+  }, [entryCount, trimmed, activeChip, scope]);
 
   const goTo = useCallback(
     (href: string) => {
@@ -1364,6 +1426,8 @@ function SwitcherPanel({
           <div class="switcher-field">
             <SearchField
               variant="input"
+              // Owner review O-R4: 44 px with a 32 px mic on desktop, 52 px
+              // with a 40 px mic on the phone (over SE-Query-1280).
               size={desktop ? 'desktop' : 'phone'}
               value={query}
               onChange={setQuery}
@@ -1451,41 +1515,18 @@ function SwitcherPanel({
                     {label} {count}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  class="switcher-chip switcher-time"
-                  aria-expanded={timeOpen}
-                  data-active={time !== 'any'}
-                  onClick={() => {
-                    setTimeOpen((open) => !open);
-                  }}
-                >
-                  <IconClock />
-                  {TIME_LABELS[time]}
-                </button>
               </>
             )}
           </div>
-          {searching && timeOpen && (
-            <div class="switcher-chips" role="group" aria-label="Time">
-              {(Object.keys(TIME_LABELS) as TimeKey[]).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  class="switcher-chip"
-                  aria-pressed={time === key}
-                  onClick={() => {
-                    setTime(key);
-                    setTimeOpen(false);
-                  }}
-                >
-                  {TIME_LABELS[key]}
-                </button>
-              ))}
-            </div>
-          )}
           <div class="switcher-columns">
-            <div class="switcher-body">
+            {/* A scroll box reachable by keyboard, named, so axe's
+                scrollable-region-focusable holds (#950). */}
+            <div
+              class="switcher-body"
+              role="region"
+              aria-label="Search results"
+              tabIndex={0}
+            >
               {scope !== null && !desktop && (
                 <button
                   type="button"

@@ -175,10 +175,77 @@
   cursor: default;
 }
 
-.switcher-chip[aria-pressed='true'],
-.switcher-time[data-active='true'] {
+.switcher-chip[aria-pressed='true'] {
   border-color: var(--color-link);
   background: var(--color-surface);
+}
+
+/* Dark: the one chip, a 32 px pill with a 44 px target, 14 px, the .4
+   control border, teal .16 when on (K-21, R-CHIP-1, board SE-Empty
+   `.chip`, #950 F-14). The light theme keeps today's chip. The row gives
+   the target 6 px of room above without moving anything. */
+:where(:root[data-theme='dark']) .switcher-chips {
+  margin-top: -6px;
+  padding-top: 6px;
+  overflow-y: hidden;
+}
+
+:where(:root[data-theme='dark']) .switcher-chip {
+  position: relative;
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 0;
+  border-color: var(--color-border-control);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+:where(:root[data-theme='dark']) .switcher-chip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--hit);
+  transform: translateY(-50%);
+}
+
+:where(:root[data-theme='dark']) .switcher-chip[aria-pressed='true'] {
+  border-color: var(--color-brand);
+  background: var(--color-brand-tint);
+}
+
+@media (prefers-color-scheme: dark) {
+  :where(:root:not([data-theme='light'])) .switcher-chips {
+    margin-top: -6px;
+    padding-top: 6px;
+    overflow-y: hidden;
+  }
+
+  :where(:root:not([data-theme='light'])) .switcher-chip {
+    position: relative;
+    box-sizing: border-box;
+    height: 32px;
+    min-height: 0;
+    border-color: var(--color-border-control);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  :where(:root:not([data-theme='light'])) .switcher-chip::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: var(--hit);
+    transform: translateY(-50%);
+  }
+
+  :where(:root:not([data-theme='light'])) .switcher-chip[aria-pressed='true'] {
+    border-color: var(--color-brand);
+    background: var(--color-brand-tint);
+  }
 }
 
 .switcher-chip i {
@@ -189,14 +256,6 @@
 .switcher-chip .icon {
   width: 16px;
   height: 16px;
-}
-
-.switcher-time select {
-  border: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
 }
 
 .switcher-link {
@@ -244,7 +303,7 @@
 }
 
 @media (max-width: 899px) {
-  /* The chip row scrolls sideways; the last chip ("Any time") never clips. */
+  /* The chip row scrolls sideways; the last chip never clips. */
   .switcher-chips {
     max-width: 100%;
     scroll-padding-inline: var(--space-3);
@@ -296,9 +355,12 @@
     overflow-y: auto;
   }
 
+  /* SE-Query-1280: the display face, 18 px 700 (#950). */
   .switcher-preview-title {
     color: var(--color-text);
-    font-size: var(--text-lg);
+    font-family: var(--font-display);
+    font-size: var(--text-18);
+    font-weight: 700;
     overflow-wrap: anywhere;
   }
 
@@ -403,4 +465,11 @@
   .switcher-columns {
     display: contents;
   }
+}
+
+/* The results scroll box takes keyboard focus (axe scrollable-region-
+   focusable, #950): the ring sits inside it. */
+.switcher-body:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
 }

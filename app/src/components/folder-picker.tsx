@@ -6,7 +6,8 @@
  *
  * `FolderChoice` is the tree alone (same rows, guides, chevrons and icons as
  * `tree.tsx`; the folder the thing sits in now is muted and not on offer;
- * the chosen one is selected). `MoveToSheet` / `openMoveTo` is the whole
+ * a folder being moved shows muted under its parent instead, its chevron
+ * inert, as PF-Move draws it (#950 F-19); the chosen one is selected). `MoveToSheet` / `openMoveTo` is the whole
  * sheet: "Move to…", the line "Pick a folder for <name>. Bower moves it at
  * the next tidy-up.", the tree, "Moving to <folder>" and "Move here".
  */
@@ -14,6 +15,7 @@
 import { useMemo, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
+import { isDemo } from '../api.js';
 import { createTextFile, deleteFile } from '../drive.js';
 import { FOLDER_MIME } from '../drive.js';
 import {
@@ -35,7 +37,7 @@ import { FileIcon } from './file-icon.js';
 import { FolderMark } from './folder-mark.js';
 import { IconChevronRight } from './icons.js';
 import { Overlay, OverlayHeader } from './overlay.js';
-import { TREE_INDENT } from './tree.js';
+import { firstVisitOpen, TREE_INDENT } from './tree.js';
 
 import '../styles/tree.css';
 import '../styles/folder-picker.css';
@@ -47,6 +49,8 @@ export interface FolderChoiceProps {
   /** The chosen folder's path, `''` for none yet. */
   chosen: string;
   onChoose: (destination: string) => void;
+  /** A folder being moved has folders of its own (its chevron shows). */
+  subjectHasFolders?: boolean;
 }
 
 function topOf(path: string): string {
@@ -59,11 +63,19 @@ export function FolderChoice({
   folders,
   chosen,
   onChoose,
+  subjectHasFolders = false,
 }: FolderChoiceProps): JSX.Element {
   const current = currentFolderOf(subject);
-  // The current folder's ancestors start open, so it is visible in place.
+  // What is not on offer: the folder being moved, else where the thing is.
+  const unavailable = subject.isFolder ? subject.path : current;
+  // The current folder's ancestors start open, so it is visible in place;
+  // in the demo, Projects and Areas too, as PF-Move draws it (#950).
   const [openPaths, setOpenPaths] = useState<ReadonlySet<string>>(
-    () => new Set(ancestorsOf(`${current}/x`)),
+    () =>
+      new Set([
+        ...ancestorsOf(`${current}/x`),
+        ...firstVisitOpen({ folders: [...folders] }, isDemo()),
+      ]),
   );
 
   function toggle(path: string): void {
@@ -76,11 +88,12 @@ export function FolderChoice({
   }
 
   function choice(node: TreeNode, depth: number): JSX.Element {
-    const isCurrent = node.path === current;
+    const isCurrent = node.path === unavailable;
+    const isMoving = subject.isFolder && node.path === subject.path;
     const isChosen = node.path === chosen;
     const root = paraKindOf(topOf(node.path));
-    const expandable = node.folders.length > 0;
-    const expanded = openPaths.has(node.path);
+    const expandable = isMoving ? subjectHasFolders : node.folders.length > 0;
+    const expanded = !isMoving && openPaths.has(node.path);
     const label = displayName(node.name);
     return (
       <div
@@ -113,6 +126,7 @@ export function FolderChoice({
             class={`tree-chevron${expanded ? ' tree-chevron-open' : ''}`}
             aria-hidden="true"
             tabIndex={-1}
+            disabled={isMoving}
             onClick={() => toggle(node.path)}
           >
             <IconChevronRight />
@@ -129,7 +143,7 @@ export function FolderChoice({
           title={label}
           onClick={() => onChoose(node.path)}
           onKeyDown={(event) => {
-            if (!expandable) return;
+            if (!expandable || isMoving) return;
             if (event.key === 'ArrowRight' && !expanded) {
               event.preventDefault();
               toggle(node.path);
@@ -148,7 +162,11 @@ export function FolderChoice({
             />
           )}
           <span class="tree-name folder-picker-name">{label}</span>
-          {isCurrent && <span class="tree-sr"> (where it is now)</span>}
+          {isCurrent && (
+            <span class="tree-sr">
+              {isMoving ? ' (the folder being moved)' : ' (where it is now)'}
+            </span>
+          )}
         </button>
       </div>
     );
@@ -254,12 +272,17 @@ export function MoveToSheet({
           title="Move to…"
           closeLabel="Close Move to"
           onClose={onClose}
+          subtitle={`Pick a folder for ${name}. Bower moves it at the next tidy-up.`}
         />
-        <p class="move-to-sub">
-          Pick a folder for {name}. Bower moves it at the next tidy-up.
-        </p>
         <FolderChoice
           subject={subject}
+          subjectHasFolders={
+            subject.isFolder &&
+            (index?.folders.some((folder) =>
+              folder.path.startsWith(`${subject.path}/`),
+            ) ??
+              false)
+          }
           folders={folders}
           chosen={chosen}
           onChoose={(path) => {

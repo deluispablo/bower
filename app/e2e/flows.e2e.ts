@@ -1643,8 +1643,8 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
     await expect(tabs).toBeHidden();
 
     // The sidebar (#422, #909, C.9): the three tools on YOUR FOLDERS (#909
-    // replaced the Expand/Collapse all toggle), and the waiting-count bubble
-    // on Add's row, where the pile gets filled, not Home's.
+    // replaced the Expand/Collapse all toggle). No board draws a count
+    // bubble on a nav item (#950 D-1).
     const sidebar = page.getByRole('navigation', { name: 'Your folders' });
     for (const name of [
       'Show the open item',
@@ -1653,21 +1653,22 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
     ]) {
       await expect(sidebar.getByRole('button', { name })).toBeVisible();
     }
-    await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveText('3');
-    await expect(sidebar.locator('a[href="/"] .nav-badge')).toHaveCount(0);
+    await expect(sidebar.locator('.nav-badge')).toHaveCount(0);
+    await expect(page.locator('.shell-ledge')).toHaveCount(0);
     await shot(page, testInfo, 'desktop-sidebar');
     return;
   }
   await expect(tabs).toBeVisible();
   const links = tabs.getByRole('link');
-  // The labels (the Bower tab's bird mark holds hidden drawing text, #915).
+  // The labels; the Bower tab is the speech bubble the boards draw (#950 D-2).
   await expect(links.locator(':scope > span')).toHaveText([
     'Home',
     'Folders',
     'Add',
     'Bower',
   ]);
-  await expect(links.last().locator('svg.b.mark')).toHaveCount(1);
+  await expect(links.last().locator('svg.b')).toHaveCount(0);
+  await expect(links.last().locator('svg.icon')).toHaveCount(1);
   await expect(links.first()).toHaveAttribute('aria-current', 'page');
 
   await tabs.getByRole('link', { name: 'Folders' }).click();
@@ -1957,13 +1958,13 @@ test('At 1920 the content stays in one centred container, away from the right ed
   const width = async (): Promise<number> =>
     (await container.boundingBox())?.width ?? NaN;
 
-  // Home: 980 px, centred right of the sidebar; the header row inside.
+  // Home: 1000 px, centred right of the sidebar; the header row inside.
   // #909: the sidebar's Inbox row is a treeitem, and #934's demo Home has no
   // visible Inbox link; the page is ready once the tree shows Inbox.
   await expect(
     page.getByRole('treeitem', { name: /Inbox/ }).first(),
   ).toBeVisible();
-  expect(await width()).toBeCloseTo(980, 0);
+  expect(await width()).toBeCloseTo(1000, 0);
   const [box, main, bar] = await Promise.all([
     container.boundingBox(),
     page.locator('.shell-main').boundingBox(),
@@ -2002,7 +2003,7 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await navigate(page, /^Add$/);
   await expect(page).toHaveURL(/\/add$/);
   await expect(content).toBeVisible();
-  expect(await width()).toBeCloseTo(980, 0);
+  expect(await width()).toBeCloseTo(1000, 0);
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-add');
 
@@ -2165,12 +2166,12 @@ test('At 1920 a note and its About panel are one row next to the measure, centre
     page.locator('.shell-body').boundingBox(),
   ]);
   const textRight = (text?.x ?? NaN) + (text?.width ?? NaN);
-  // The panel starts right after the text column's padding, not on the
-  // far side of the container (6.1.5: 900 px away at 1920).
-  expect((aside?.x ?? NaN) - textRight).toBeLessThanOrEqual(25);
+  // The panel starts right after the text column's 32 px padding (#950
+  // F-9), not on the far side of the container (6.1.5: 900 px away at 1920).
+  expect((aside?.x ?? NaN) - textRight).toBeLessThanOrEqual(33);
   expect((aside?.x ?? NaN) - textRight).toBeGreaterThanOrEqual(0);
   // The row (text column and panel) is centred in the container.
-  const left = (text?.x ?? NaN) - 24 - (body?.x ?? NaN);
+  const left = (text?.x ?? NaN) - 32 - (body?.x ?? NaN);
   const right =
     (body?.x ?? NaN) +
     (body?.width ?? NaN) -

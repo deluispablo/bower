@@ -420,16 +420,6 @@ button.page-bare-back {
   display: none;
 }
 
-.nav-badge {
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  line-height: 1.5;
-}
-
 /* The tab bar (#906, spec §3.2): 64 px plus the safe area, the sidebar
    colour, four equal cells Home · Folders · Add · Bower; icon 22, label
    12 px 600, gap 4; idle muted, active teal icon and label. */
@@ -901,7 +891,7 @@ button.page-bare-back {
     border-right: 1px solid var(--color-border);
   }
 
-  /* The explorer fills the column; the ledge slot sits under it (#741). */
+  /* The explorer fills the column, down to the bottom (#950 D-1). */
   .shell-sidebar-nav {
     display: flex;
     flex: 1;
@@ -923,25 +913,6 @@ button.page-bare-back {
   .shell-sidebar .explorer-tree {
     flex-shrink: 0;
     min-height: 176px;
-  }
-
-  .shell-ledge {
-    flex: 0 0 66px;
-    height: 66px;
-    overflow: hidden;
-  }
-
-  .shell-ledge:empty {
-    display: none;
-  }
-
-  /* A window shorter than 800 px trims the ledge's room (#847); the bird
-     (7 px up, 52 px tall) still fits. */
-  @media (max-height: 799px) {
-    .shell-ledge {
-      flex-basis: 60px;
-      height: 60px;
-    }
   }
 
   /* Empty slots take no room, not even a flex gap (#741). */
@@ -984,12 +955,14 @@ button.page-bare-back {
   }
 
   /*
-   * One centred container (#355, Desktop-Responsive board): 980 px, 1200
-   * on a note with the About panel; the rest of a wide window is margin,
-   * so nothing is ever pinned to the viewport's right edge.
+   * One centred container (#355, Desktop-Responsive board): 1000 px, so at
+   * 1280 the content (32 px sides) runs from 304 to 1240 as HM-Main-1280 and
+   * JF-Drawer-1280 draw it (#950); 1200 on a note with the About panel; the
+   * rest of a wide window is margin, so nothing is ever pinned to the
+   * viewport's right edge.
    */
   .shell-container {
-    max-width: 980px;
+    max-width: 1000px;
     margin-inline: auto;
   }
 
@@ -1027,7 +1000,7 @@ button.page-bare-back {
   .topbar {
     position: static;
     min-height: 48px;
-    padding: 0 var(--space-6);
+    padding: 0 var(--space-8);
     gap: var(--space-3);
     background: transparent;
   }
@@ -1061,8 +1034,10 @@ button.page-bare-back {
     display: block;
   }
 
+  /* The main column's sides are 32 px, as every 1280 board draws them
+     (#950 F-9); the top bar above lines up with it. */
   .content {
-    padding: var(--space-6);
+    padding: var(--space-6) var(--space-8);
   }
 }
 
@@ -1088,7 +1063,7 @@ button.page-bare-back {
   }
 
   .shell-with-aside .content {
-    flex: 0 1 calc(720px + 2 * var(--space-6));
+    flex: 0 1 calc(720px + 2 * var(--space-8));
   }
 
   .shell-aside {

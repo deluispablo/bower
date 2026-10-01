@@ -36,8 +36,7 @@ export { FOLDERS_LANDMARK, FOLDERS_TAB_LABEL } from '../shell-routes.js';
  * that fill them never edit the shell: `tidyBar` (the tidy-up bar: docked
  * above the phone tab bar, a chip in the desktop top bar), `uploadChip` (the
  * upload chip, same place; the tidy-up bar wins when both are set, spec
- * 6.15b), `breadcrumb` (the desktop top bar's own breadcrumb) and `ledge`
- * (the 66 px strip under the sidebar's explorer).
+ * 6.15b) and `breadcrumb` (the desktop top bar's own breadcrumb).
  */
 export type ShellSlot =
   | 'back'
@@ -46,8 +45,7 @@ export type ShellSlot =
   | 'aside'
   | 'tidyBar'
   | 'uploadChip'
-  | 'breadcrumb'
-  | 'ledge';
+  | 'breadcrumb';
 
 interface ShellSlotsState {
   back: ComponentChildren;
@@ -57,7 +55,6 @@ interface ShellSlotsState {
   tidyBar: ComponentChildren;
   uploadChip: ComponentChildren;
   breadcrumb: ComponentChildren;
-  ledge: ComponentChildren;
 }
 
 type ShellSlotsSetters = {
@@ -78,7 +75,6 @@ const DEFAULT_API: ShellSlotsApi = {
   tidyBar: null,
   uploadChip: null,
   breadcrumb: null,
-  ledge: null,
   setBack: noop,
   setCrumb: noop,
   setActions: noop,
@@ -86,7 +82,6 @@ const DEFAULT_API: ShellSlotsApi = {
   setTidyBar: noop,
   setUploadChip: noop,
   setBreadcrumb: noop,
-  setLedge: noop,
 };
 
 const ShellSlotsContext = createContext<ShellSlotsApi>(DEFAULT_API);
@@ -105,7 +100,6 @@ export function ShellSlotsProvider({
   const [tidyBar, setTidyBar] = useState<ComponentChildren>(null);
   const [uploadChip, setUploadChip] = useState<ComponentChildren>(null);
   const [breadcrumb, setBreadcrumb] = useState<ComponentChildren>(null);
-  const [ledge, setLedge] = useState<ComponentChildren>(null);
   return h(
     ShellSlotsContext.Provider,
     {
@@ -117,7 +111,6 @@ export function ShellSlotsProvider({
         tidyBar,
         uploadChip,
         breadcrumb,
-        ledge,
         setBack,
         setCrumb,
         setActions,
@@ -125,7 +118,6 @@ export function ShellSlotsProvider({
         setTidyBar,
         setUploadChip,
         setBreadcrumb,
-        setLedge,
       },
     },
     children,
@@ -134,16 +126,8 @@ export function ShellSlotsProvider({
 
 /** `Layout`: the slots' current content. */
 export function useShellSlots(): ShellSlotsState {
-  const {
-    back,
-    crumb,
-    actions,
-    aside,
-    tidyBar,
-    uploadChip,
-    breadcrumb,
-    ledge,
-  } = useContext(ShellSlotsContext);
+  const { back, crumb, actions, aside, tidyBar, uploadChip, breadcrumb } =
+    useContext(ShellSlotsContext);
   return {
     back,
     crumb,
@@ -152,7 +136,6 @@ export function useShellSlots(): ShellSlotsState {
     tidyBar,
     uploadChip,
     breadcrumb,
-    ledge,
   };
 }
 
@@ -164,7 +147,6 @@ const SETTERS: Record<ShellSlot, keyof ShellSlotsSetters> = {
   tidyBar: 'setTidyBar',
   uploadChip: 'setUploadChip',
   breadcrumb: 'setBreadcrumb',
-  ledge: 'setLedge',
 };
 
 /**

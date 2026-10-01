@@ -63,11 +63,13 @@
   height: 16px;
 }
 
-/* 44 px targets on touch, the drawn button stays 28 px. */
+/* 44 x 44 targets on touch, the drawn button stays 28 px (R-EXP-5, K-34,
+   #950 F-10). The tools sit side by side as drawn, so neighbouring targets
+   overlap; each still measures 44. */
 @media (pointer: coarse) {
   .explorer-tool::after {
     position: absolute;
-    inset: -8px -4px;
+    inset: -8px;
     content: '';
   }
 }
@@ -352,7 +354,14 @@
 
 .folders-drawer .explorer {
   height: auto;
-  padding: 4px 4px 0;
+  padding: 4px 0 0;
+}
+
+/* NO-Drawer-375: a 16 px gutter for the labels, rows and tree (the
+   drawer's 8 plus each row's own 8); only the search box is inset 4 more,
+   at 12 (#950). */
+.folders-drawer .explorer-search-slot {
+  margin-inline: 4px;
 }
 
 .folders-drawer .explorer-section {
@@ -454,4 +463,11 @@
   color: var(--color-text-muted);
   font-size: 13px;
   white-space: nowrap;
+}
+
+/* The drawer's sections sit on their own margins with no flex gap between
+   them, so the pinned rows, YOUR FOLDERS and the first tree row land where
+   the *-Drawer-375 boards draw them (it was about 10 px lower, #950). */
+.explorer.explorer-drawer {
+  gap: 0;
 }

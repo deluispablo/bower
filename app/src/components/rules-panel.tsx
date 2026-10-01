@@ -290,7 +290,7 @@ export function RulesPanel({
 
   return (
     <div class="rules-panel" aria-busy={busy}>
-      {/* The shared tip (#908's Hint; its ✕ reads "Hide this tip"). */}
+      {/* The shared tip (#908's Hint; its ✕ reads "Dismiss this tip"). */}
       <Hint id="rules-yours" variant="tip" icon={<IconShield />}>
         <b>Rules are yours and start at once.</b> {rulesTipText(desktop)}
       </Hint>

@@ -34,6 +34,7 @@ import { Fragment } from 'preact';
 import type { JSX, RefCallback } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import { isDemo } from '../api.js';
 import { isBowerWritten } from '../bower-written.js';
 import { loadNoteMetaEntry, loadTreeState, saveTreeState } from '../cache.js';
 import { subscribeNoteMetaCached } from '../note-meta-events.js';
@@ -119,6 +120,28 @@ type VirtualModule = typeof import('./virtual-list.js');
 // stays out of the startup chunk. Until it arrives the plain list renders.
 let virtualModule: VirtualModule | null = null;
 
+/** The roots the demo's tree opens on a first visit, as the 1280 boards
+ * draw it (TR-Notes-1280 and most others, #950). */
+const DEMO_OPEN_ROOTS: readonly ParaKind[] = ['projects', 'areas'];
+
+/**
+ * The folders a tree opens with when nothing was saved yet: in the demo
+ * build only, Projects and Areas; a real folder starts closed. Saved state
+ * always wins.
+ */
+export function firstVisitOpen(
+  tree: Pick<TreeNode, 'folders'>,
+  demo: boolean,
+): string[] {
+  if (!demo) return [];
+  return tree.folders
+    .filter((folder) => {
+      const kind = paraKindOf(folder.name);
+      return kind !== null && DEMO_OPEN_ROOTS.includes(kind);
+    })
+    .map((folder) => folder.path);
+}
+
 /** How long the revealed row's highlight lasts (matches `tree.css`). */
 const REVEAL_FLASH_MS = 600;
 
@@ -138,19 +161,87 @@ export function isBelowTree(name: string): boolean {
   return BELOW_TREE_NAMES.includes(folderDisplayName(name));
 }
 
+/**
+ * A folder's hub note (X/X.md): left out of the tree when Bower wrote it
+ * (its own page for the folder, #920 DA-10), listed when the person wrote
+ * it, like any of their notes (L-5, #950 F-18). `ownHubs` holds the ids of
+ * the hub notes known to be the person's.
+ */
+function isHiddenHub(
+  item: DriveFile,
+  folderPath: string,
+  ownHubs: ReadonlySet<string>,
+): boolean {
+  return (
+    folderPath !== '' &&
+    item.path === hubNotePath(folderPath) &&
+    !ownHubs.has(item.id)
+  );
+}
+
+/** The hub notes of the folders on screen (a row, or open), so the tree
+ * learns who wrote each without reading the whole folder. */
+function hubNotesOf(
+  node: TreeNode,
+  expanded: ReadonlySet<string>,
+  out: DriveFile[],
+): DriveFile[] {
+  for (const folder of node.folders) {
+    const hub = hubNotePath(folder.path);
+    for (const item of folder.items) if (item.path === hub) out.push(item);
+    if (expanded.has(folder.path)) hubNotesOf(folder, expanded, out);
+  }
+  return out;
+}
+
+/**
+ * Which of `hubs` the person wrote (`loadNoteMeta`: the cached frontmatter,
+ * else one read), so the tree lists them (#950 F-18). A note still being
+ * read is left out until it is known.
+ */
+function useOwnHubs(hubs: readonly DriveFile[]): ReadonlySet<string> {
+  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  const key = hubs.map((hub) => `${hub.id}:${hub.modifiedTime ?? ''}`).join();
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      hubs.map((hub) =>
+        loadNoteMeta(hub)
+          .then((meta) => (isBowerWritten(meta) ? null : hub.id))
+          .catch((err: unknown) => {
+            console.error("Could not read a folder's own note", err);
+            return null;
+          }),
+      ),
+    ).then((found) => {
+      if (cancelled) return;
+      const next = new Set(found.filter((id): id is string => id !== null));
+      setIds((prev) =>
+        prev.size === next.size && [...next].every((id) => prev.has(id))
+          ? prev
+          : next,
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+  return ids;
+}
+
 function flatten(
   node: TreeNode,
   depth: number,
   expanded: ReadonlySet<string>,
   out: Row[],
+  ownHubs: ReadonlySet<string>,
 ): void {
   for (const folder of node.folders) {
     if (depth === 0 && isBelowTree(folder.name)) continue;
     const isExpanded = expanded.has(folder.path);
-    const hubPath = hubNotePath(folder.path);
     const empty =
       folder.folders.length === 0 &&
-      folder.items.every((item) => item.path === hubPath);
+      folder.items.every((item) => isHiddenHub(item, folder.path, ownHubs));
     out.push({
       kind: 'folder',
       path: folder.path,
@@ -159,13 +250,10 @@ function flatten(
       name: folder.name,
       empty,
     });
-    if (isExpanded) flatten(folder, depth + 1, expanded, out);
+    if (isExpanded) flatten(folder, depth + 1, expanded, out, ownHubs);
   }
-  // A folder's hub note (X/X.md) is Bower's own page for it: the tree
-  // leaves it out (#920 DA-10).
-  const hub = node.path === '' ? null : hubNotePath(node.path);
   for (const item of node.items) {
-    if (item.path === hub) continue;
+    if (isHiddenHub(item, node.path, ownHubs)) continue;
     const isNote = fileKind(item) === 'note';
     out.push({
       kind: isNote ? 'note' : 'file',
@@ -408,6 +496,11 @@ export function Tree({
   const [openRow, setOpenRow] = useState<Row | null>(null);
   const tree = useMemo(() => buildTree(index, sort), [index, sort]);
   const group = useMemo(() => appFileGroup(index), [index]);
+  // A first tree this session (nothing remembered) may open the demo's
+  // roots once the stored state turns out to be empty.
+  const firstThisSession = useRef(rememberedExpanded === null);
+  const treeRef = useRef(tree);
+  treeRef.current = tree;
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
     mergeExpanded(
       rememberedExpanded ?? new Set<string>(),
@@ -447,7 +540,15 @@ export function Tree({
             resetFocusStart();
           }),
         );
-        if (state === undefined) return;
+        if (state === undefined) {
+          const open = firstThisSession.current
+            ? firstVisitOpen(treeRef.current, isDemo())
+            : [];
+          if (open.length > 0) {
+            setExpanded((prev) => mergeExpanded(prev, open));
+          }
+          return;
+        }
         const target = revealRef.current;
         setExpanded(
           mergeExpanded(
@@ -563,11 +664,22 @@ export function Tree({
     setFocusIndex(0);
   }, [expandKey, tree]);
 
+  const openFile =
+    currentId === undefined ? undefined : index.byId.get(currentId);
+  const openNote =
+    openFile !== undefined && fileKind(openFile) === 'note'
+      ? openFile
+      : undefined;
+  const hubNotes = useMemo(
+    () => hubNotesOf(tree, expanded, []),
+    [tree, expanded],
+  );
+  const ownHubs = useOwnHubs(hubNotes);
   const rows = useMemo(() => {
     const out: Row[] = [];
-    flatten(tree, 0, expanded, out);
+    flatten(tree, 0, expanded, out, ownHubs);
     return out;
-  }, [tree, expanded]);
+  }, [tree, expanded, ownHubs]);
   const noteFiles = useMemo(
     () =>
       rows
@@ -577,14 +689,7 @@ export function Tree({
     [rows, index],
   );
   const titles = useNoteTitles(noteFiles);
-  const openNote =
-    currentId === undefined ? undefined : index.byId.get(currentId);
-  const bowerIds = useBowerWritten(
-    noteFiles,
-    openNote !== undefined && fileKind(openNote) === 'note'
-      ? openNote
-      : undefined,
-  );
+  const bowerIds = useBowerWritten(noteFiles, openNote);
 
   const wantsVirtual = rows.length > VIRTUAL_FROM_ROWS;
   useEffect(() => {

@@ -39,7 +39,8 @@ test('"flat hnt" finds Flat hunt: chips with counts and the three groups in orde
   await expect(
     chips.getByRole('button', { name: /^Files \d+$/ }),
   ).toBeVisible();
-  await expect(chips.getByRole('button', { name: 'Any time' })).toBeVisible();
+  // No time chip: no board draws one (SE-Query, #950 D-5).
+  await expect(chips.getByRole('button', { name: 'Any time' })).toHaveCount(0);
 
   // Full screen below 900 px, and the chip row scrolls rather than clipping.
   const viewport = page.viewportSize();
@@ -50,9 +51,9 @@ test('"flat hnt" finds Flat hunt: chips with counts and the three groups in orde
     width: viewport?.width,
     height: viewport?.height,
   });
-  const time = chips.getByRole('button', { name: 'Any time' });
-  await time.scrollIntoViewIfNeeded();
-  const chipBox = await time.boundingBox();
+  const last = chips.getByRole('button', { name: /^Files \d+$/ });
+  await last.scrollIntoViewIfNeeded();
+  const chipBox = await last.boundingBox();
   expect(chipBox).not.toBeNull();
   expect((chipBox?.x ?? 0) + (chipBox?.width ?? 0)).toBeLessThanOrEqual(
     viewport?.width ?? 0,

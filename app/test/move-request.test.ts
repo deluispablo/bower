@@ -82,12 +82,12 @@ describe('pickerFolders', () => {
     ]);
   });
 
-  it('does not offer a folder inside itself', () => {
+  it('keeps a folder being moved, without anything inside it (PF-Move)', () => {
     const list = pickerFolders(tree(), {
       path: '2-Areas/Garden',
       isFolder: true,
     });
-    expect(paths(list)).not.toContain('2-Areas/Garden');
+    expect(paths(list)).toContain('2-Areas/Garden');
     expect(paths(list)).not.toContain('2-Areas/Garden/Beds');
     expect(paths(list)).toContain('2-Areas');
   });

@@ -16,7 +16,7 @@
 .run-your-own-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.625rem;
+  font-size: var(--text-28);
   line-height: 1.15;
   color: var(--color-heading);
 }

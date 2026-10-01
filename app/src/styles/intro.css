@@ -116,7 +116,8 @@
 
 .intro-body {
   margin: var(--space-3) 0 0;
-  font-size: 1.0625rem;
+  /* 18 px as IN-P1..P5 draw it; no 17 px anywhere (spec 2.2, #950). */
+  font-size: var(--text-18);
   line-height: var(--leading-body);
 }
 
@@ -200,7 +201,8 @@
 .intro-next {
   margin-left: auto;
   border: none;
-  font-size: 1.0625rem;
+  /* 16 px, the lg button (spec 2.2: no 17 px, #950). */
+  font-size: var(--text-base);
   font-weight: var(--weight-bold);
 }
 
