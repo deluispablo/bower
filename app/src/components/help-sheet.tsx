@@ -467,9 +467,11 @@ function TourCard({
       )}
       <div class="help-panel tour-card">
         <div class="help-head">
-          <div class="help-heading" aria-live="polite">
+          {/* The step's title is announced as it changes; the heading's
+              own box is `display: contents` in the card's grid. */}
+          <div class="help-heading">
             <p class="help-kicker">{tourLabel(index)}</p>
-            <h2 id="tour-title" class="help-title">
+            <h2 id="tour-title" class="help-title" aria-live="polite">
               {copy.title}
             </h2>
             <p id="tour-lede" class="help-lede">

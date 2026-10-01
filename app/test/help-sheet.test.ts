@@ -113,6 +113,11 @@ describe('Tour', () => {
     const onEnd = await mountTour();
 
     expect(dialog().getAttribute('aria-modal')).toBe('true');
+    // The live region is the title, not the `display: contents` heading box.
+    expect(dialog().querySelector('h2')?.getAttribute('aria-live')).toBe(
+      'polite',
+    );
+    expect(dialog().querySelector('.help-heading[aria-live]')).toBeNull();
     const titles: string[] = [];
     for (const [index, name] of TOUR_TABS.entries()) {
       expect(dialog().textContent).toContain(`Tour · ${index + 1} of 4`);
