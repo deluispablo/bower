@@ -67,7 +67,7 @@ import { useTitle } from '../use-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
-import { siblingNames } from '../rename-request.js';
+import { pendingByPath, siblingNames } from '../rename-request.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { isAppFile } from '../vault-index.js';
 import { ErrorLine, Skeleton } from '../components/system-state.js';
@@ -729,6 +729,10 @@ export function Note() {
           onAddParagraph={() => setAppendOpen(true)}
           onEdit={() => void handleEdit()}
           siblingNames={siblingNames(index, file.path)}
+          pendingRename={
+            pendingByPath(requests).get(file.path)?.kind === 'rename'
+          }
+          pendingMove={pendingByPath(requests).get(file.path)?.kind === 'move'}
           onClose={() => setMenuOpen(false)}
         />
       )}

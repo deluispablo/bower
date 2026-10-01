@@ -87,7 +87,7 @@ import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
-import { siblingNames } from '../rename-request.js';
+import { pendingByPath, siblingNames } from '../rename-request.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { fileHelpTopic, useHelpTopic } from '../help-rows.js';
 import { useTitle } from '../use-title.js';
@@ -841,6 +841,10 @@ export function FileScreen(): JSX.Element {
           pinned={filePinned}
           onTogglePin={folder === '' ? undefined : () => void handleTogglePin()}
           siblingNames={siblingNames(index, file.path)}
+          pendingRename={
+            pendingByPath(requests).get(file.path)?.kind === 'rename'
+          }
+          pendingMove={pendingByPath(requests).get(file.path)?.kind === 'move'}
           onClose={() => setMenuOpen(false)}
         />
       )}
