@@ -9,9 +9,11 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 2px 0 0;
-  font-size: 14px;
-  color: var(--color-text-muted);
+  margin: var(--space-1) 0 0;
+  /* 16 px in the text colour, as PF-Ask and LI-Ask draw it (board over
+     spec 3.13). */
+  font-size: var(--text-base);
+  color: var(--color-text);
 }
 
 .ask-label {
