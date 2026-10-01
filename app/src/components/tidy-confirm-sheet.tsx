@@ -253,7 +253,7 @@ export function TidyConfirmSheet({
                   {stillUploadingLine(uploading)}
                 </p>
               )}
-              <p class="tidy-confirm-text">{CONFIRM_COST}</p>
+              <p class="tidy-confirm-text tidy-confirm-cost">{CONFIRM_COST}</p>
             </>
           )}
           <button
