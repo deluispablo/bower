@@ -29,7 +29,13 @@
 
 import type { ComponentChildren, JSX } from 'preact';
 import { createPortal } from 'preact/compat';
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
 import {
@@ -74,7 +80,10 @@ import {
   IconLocate,
   IconSort,
 } from './icons.js';
-import { JustFiledRow } from './just-filed-row.js';
+import type { Run } from '../api.js';
+import { fileKind } from '../vault-index.js';
+import { JUST_FILED_PATH } from '../shell-routes.js';
+import { JustFiledRow, useJustFiled } from './just-filed-row.js';
 import { Overlay, useBackCloses } from './overlay.js';
 import { PinnedSidebar } from './pinned-sidebar.js';
 import { SearchField } from './search-field.js';
@@ -332,13 +341,58 @@ export interface ExplorerProps {
   onNavigate?: () => void;
 }
 
+/**
+ * The newest thing the latest tidy-up filed (its first filed item that is
+ * still in the folder): where the tree opens on Just filed, selected
+ * (JF-Drawer-375/1280, spec 4.5, #950 F-6). `null` before any.
+ */
+export function newestFiled(
+  run: Run | null,
+  index: VaultIndex | null,
+): RevealTarget | null {
+  if (run === null || index === null) return null;
+  for (const item of run.items ?? []) {
+    if (item.kind !== 'file' || item.to === undefined) continue;
+    const file = index.byPath.get(item.to);
+    if (file === undefined) continue;
+    return {
+      kind: fileKind(file) === 'note' ? 'note' : 'file',
+      id: file.id,
+      path: file.path,
+    };
+  }
+  return null;
+}
+
+/** Mounted on Just filed only, so the runs are read only there: reports
+ * the newest filed thing to the explorer. */
+function JustFiledTarget({
+  onTarget,
+}: {
+  onTarget: (target: RevealTarget | null) => void;
+}): null {
+  const { latest } = useJustFiled();
+  const { index } = useVault();
+  const target = useMemo(() => newestFiled(latest, index), [latest, index]);
+  useEffect(() => {
+    onTarget(target);
+  }, [target?.id, target?.path]);
+  useEffect(() => () => onTarget(null), []);
+  return null;
+}
+
 /** The current open item: the route on desktop, else the last one kept. */
 function useTarget(
   variant: TreeHost,
   index: VaultIndex | null,
+  filed: RevealTarget | null,
 ): RevealTarget | null {
   const { path } = useLocation();
-  const routeTarget = targetFromRoute(path, index);
+  // Just filed opens the tree at the newest filed thing (#950 F-6).
+  const routeTarget =
+    path === JUST_FILED_PATH && filed !== null
+      ? filed
+      : targetFromRoute(path, index);
   useEffect(() => {
     rememberTarget(routeTarget);
   }, [routeTarget?.kind, routeTarget?.path]);
@@ -378,7 +432,8 @@ export function Explorer({
 }: ExplorerProps): JSX.Element {
   const { index, status, refresh } = useVault();
   const { path } = useLocation();
-  const target = useTarget(variant, index);
+  const [filed, setFiled] = useState<RevealTarget | null>(null);
+  const target = useTarget(variant, index, filed);
   const request = useRevealRequest();
   const previewedItem = usePreviewed();
   // A `revealInFolders` request made on this screen wins over the route
@@ -429,6 +484,9 @@ export function Explorer({
 
   return (
     <div class={`explorer explorer-${variant}`}>
+      {path === JUST_FILED_PATH && variant !== 'page' && (
+        <JustFiledTarget onTarget={setFiled} />
+      )}
       {variant === 'sidebar' && (
         <a href="/" class="brand explorer-brand" aria-label="Bower home">
           <span class="brand-word">Bower</span>
