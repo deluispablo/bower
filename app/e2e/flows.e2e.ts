@@ -298,21 +298,15 @@ test('/search?q= lands on Home with the switcher open and prefilled (#495)', asy
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
   await expect(switcher.getByRole('combobox')).toHaveValue('laundry');
-  // A recent note: a snippet needs the note's text in the cache, and the
-  // load caches the newest notes first, up to a fetch cap.
+  // A note found by its text still lists; #917 (SE-Query): the row is the
+  // name and the meta line only, no body snippet (so no raw Markdown).
   const option = switcher
     .getByRole('option', { name: /10-43 Buckley St, Moonee Ponds/ })
     .first();
   await expect(option).toBeVisible();
-  // The snippet reads like the note body, not the raw file (#554): no
-  // frontmatter keys, fences or the heading's own "#" mark.
-  // #917: the snippet is the meta line's last part, in quotes.
   const meta = (await option.locator('.list-row-meta').textContent()) ?? '';
-  const snippetText = /“([^”]*)”$/.exec(meta)?.[1] ?? null;
-  expect(snippetText).not.toBeNull();
-  expect(snippetText).not.toContain('---');
-  expect(snippetText).not.toContain('status:');
-  expect(snippetText?.trimStart().startsWith('#')).toBe(false);
+  expect(meta).not.toContain('“');
+  expect(meta).not.toContain('---');
 });
 
 test("a note Bower wrote opens with Bower's note and the Used line (#351, #602)", async ({

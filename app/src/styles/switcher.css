@@ -112,10 +112,6 @@
   font-size: var(--text-base);
 }
 
-.switcher-row-snippet {
-  color: var(--color-text-muted);
-}
-
 /* The matched words (SE-Query): teal, 600 (the link token, so the light
    theme keeps today's colour). */
 .switcher-match {

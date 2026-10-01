@@ -688,16 +688,8 @@ function HitRow({
   onActivate,
   onHighlight,
 }: HitRowProps): JSX.Element {
-  const line = rowMeta(row, bowerWritten, now);
-  // A text hit adds its snippet as the last part of the meta line.
-  const meta: MetaLine =
-    row.snippet === null
-      ? line
-      : {
-          ...line,
-          parts: [...line.parts, `“${row.snippet}”`],
-          text: `${line.text} · “${row.snippet}”`,
-        };
+  // The name and the meta line only, as drawn (SE-Query): no body snippet.
+  const meta = rowMeta(row, bowerWritten, now);
   const time =
     row.kind === 'folder' || row.file.modifiedTime === undefined
       ? null
