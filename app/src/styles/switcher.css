@@ -334,6 +334,18 @@
     display: contents;
   }
 
+  /* NO-Tag-1280: the tag search is the list only, no preview column, in a
+     narrower dialog as tall as its rows. */
+  .switcher-panel.is-tag {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overlay .overlay-panel:has(> .switcher-panel.is-tag) {
+    width: min(560px, calc(100vw - var(--space-8)));
+    height: auto;
+    max-height: min(600px, calc(100vh - 120px));
+  }
+
   .switcher-columns > .switcher-body {
     grid-column: 1;
     grid-row: 4;
