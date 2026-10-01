@@ -362,19 +362,37 @@ The step is skippable (writes nothing) and replayable any time from **Settings �
 
 ### Bower's suggestions
 
+### Deploy order for the v6 update
+
+v6 redraws every screen and adds per-folder statuses (rulebook v23). The Worker's API is unchanged; its bundled folder template now carries rulebook v23, so new Bower folders start on it. Same order as before, from a clone of `main` with the instance's own `api/wrangler.local.toml` and secrets outside the repo:
+
+1. **Worker**: `bash scripts/deploy-api.sh`.
+2. **Runner and app**: rerun `bash scripts/deploy.sh`. The instance repo gets the new `run.sh` (it checks the folder status lists, see "Rulebook v23" below), and the app is built with your `VITE_API_URL` and deployed to Pages. Secrets that are already set are skipped.
+3. **Check**: open the app signed in, at phone width (375 px) and desktop width (1280 px), and look at Home, a folder, a note, Add and the Bower tab. `curl https://api.example.com/health` (your real `API_ORIGIN`) should answer 200.
+4. **Rulebooks**: each owner taps **Settings → Advanced → "Update Bower's rules"** once, after the runner is deployed.
+
+What people see change in v6:
+
+- **The Folders tab.** The phone's second tab is **Folders** (it was Notes): the same explorer as the desktop sidebar. On the phone it also opens as a drawer, from the files button in the top bar or by swiping in from the left edge. **Move to…** uses the same tree.
+- **One text box with a mic.** Every place you type (the Bower tab, Add's "What is this pile?", Ask, Rename, Add a paragraph, search) is the same box with one round button: the mic while it is empty, an arrow once you type, a stop square while dictating. The line under the box says what is happening.
+- **Dictation off.** Where the browser cannot dictate (Firefox, for example), the mic is crossed out and dimmed and the line reads "Dictation is off in this browser. Type instead." A blocked microphone shows "The microphone is blocked. You can allow it in your browser settings."
+- **Statuses per folder.** In a folder's Compare tab the status select offers the list Bower chose for that folder (see "A folder's statuses (Compare)").
+- **Folder pages and counts.** A note named after its own folder is that folder's page: it is not listed or counted, unless it says `by: person`. A folder's header counts what is directly in it; a subfolder's row or card, and a pinned folder, count everything inside it.
+- **The Bower item** in the sidebar and the tab bar is a speech bubble. The sidebar has no bird and Add has no waiting-count badge.
+
 Bower never changes the user's rules on its own (#199). When it would like the user to decide something — a new rule, a workflow for a document it has seen three times, a domain tag it keeps using — it appends a section to `Answers/Bower - Proposals.md` (fields `id`, `kind: rule|workflow|tag`, `text`, `evidence`, `status: open`, `created`) and writes a one-line `Proposal: …` pointer to `log.md`; the format is in the rulebook's **Proposals** section. The **Bower** tab lists the open ones as the **Suggested** group on top of **Rules**, each with **Accept** and **Dismiss** (#346); **Health** keeps one line under the report, "2 suggested rules on the Bower tab", linking there. Accept appends the rule to `Rules.md` under `## From Bower's suggestions`, marked `(accepted suggestion, <date>)`, then sets `status: accepted` and a `decided` date in the proposals file; Dismiss only sets `status: dismissed` and `decided`. Both writes go through Drive, conflict-checked like the rulebook update: a run writing the proposals file at the same moment makes the tap fail with a short message, and trying again never adds the rule twice. The weekly health check removes sections that were accepted or dismissed more than 30 days ago and never touches an open one.
 
 The runner's audit keeps this honest: `Answers/` is an ordinary place for the agent to write, while any change it makes to `Rules.md` in a run without an instruction note the app wrote is put back and reported as `refused` (#263), so an accepted suggestion is the only way a rule reaches `Rules.md` besides Tell Bower. Existing folders get the new rulebook text from **Settings → Advanced → "Update Bower's rules"** (version 5); the updated `prompts/ingest.md` already spells out the section format, so their proposals reach the Bower tab either way, and the new rulebook adds the rest (when to file a workflow or a tag proposal, and never to repeat a dismissed one).
 
 ### Rulebook v23: statuses chosen per folder
 
-Rulebook v23 (#921, decision E-7) makes statuses depend on the folder: when a project or area folder holds two or more notes of a kind with statuses, Bower writes `statuses:` in that folder's hub note, 3 to 10 lower-case values of at most 24 characters, in lifecycle order, starting with `new` (a rental search might get `new, to view, viewed, applied, approved, signed, not for me, turned down`). A new note takes the list's first value; the kind's list stays the fallback. Old values such as `declined` or `rejected` stay valid: Bower appends a value notes use instead of dropping it, and nothing is migrated.
+Rulebook v23 (#921, decision E-7) makes statuses depend on the folder: when a project or area folder holds two or more notes of a kind with statuses, Bower writes `statuses:` in that folder's hub note, 3 to 10 lower-case values of at most 24 characters, in lifecycle order, starting with `new` (a rental search might get `new, to view, viewed, applied, approved, signed, not for me, turned down`). A new note takes the list's first value; the kind's list stays the fallback. Old values such as `declined` or `rejected` stay valid: Bower appends a value notes use instead of dropping it, the app keeps a note's legacy value as the last option of its status select, and nothing is migrated.
 
 After the agent step, the runner checks every hub note the run changed: a `statuses:` that is not a list, has fewer than 3 or more than 10 values, a value in capitals, over 24 characters or there twice, or misses a status a note in that folder uses, is removed from the hub note, and the run's summary ends with "Warning: … folder status lists were not usable and removed". The log says only how many lists were checked and removed. Operator action: none beyond the usual update (deploy the runner, then each owner applies v23 from Settings → Advanced → "Update Bower's rules"). A v23 folder on an older runner gets the lists unchecked; the app still ignores an unusable one.
 
 ### A folder's statuses (Compare)
 
-The status select in a folder's Compare tab offers the folder's own list, read from `statuses: [..]` in its hub note (`<Folder>/<Folder>.md`); without one, or with a list that is not a non-empty list of short lower-case words, it falls back to the kind's list in `app/src/kinds.ts` (the console says why). A note whose status is not in the list keeps it as an extra option.
+The status select in a folder's Compare tab offers the folder's own list, read from `statuses: [..]` in its hub note (`<Folder>/<Folder>.md`); without one, or with a list that is not a non-empty list of lower-case values of at most 24 characters with no duplicates, it falls back to the kind's list in `app/src/kinds.ts` (the console says why). A note whose status is not in the list (a legacy value) keeps it as the last option.
 
 ### Reading logs
 
@@ -566,11 +584,12 @@ A folder opens at `/folder/<path>` (issue #214) — the path relative to the Bow
 
 This replaces the v4 list above where they differ.
 
-- **Header.** The folder's name once, with ⋯ beside it (pin, ask, rename, move live there; no Pin, Ask or Drive buttons on the page, no (i)). Under it the meta line, "Projects · 7 things · updated today", whose count is always Originals plus By Bower; a folder of folders reads "Areas · 1 folder" and adds its purpose line. A root's back link and breadcrumb read "Your folders" and open the tree at it.
+- **Header.** The folder's name once, with ⋯ beside it (pin, ask, rename, move live there; no Pin, Ask or Drive buttons on the page, no (i)). Under it the meta line, "Projects · 7 things · updated today", whose count is what is directly in the folder, always Originals plus By Bower; a folder of folders reads "Areas · 1 folder" and adds its purpose line. A root's back link and breadcrumb read "Your folders" and open the tree at it.
 - **Tabs.** "List" and "Compare <n> <things>", only when the folder has comparable notes. Compare's panel is an empty slot until #916. The arrow keys move between the tabs, and the Compare tab is kept in the URL (`?view=compare`), so Back from a breadcrumb returns to Compare with its columns and sort (#920).
 - **In this folder.** All / Originals <n> / By Bower <n> (a zero stays), and a Filter & sort icon on the same row. Filter & sort holds Sort by, Show (kinds with counts) and Layout (List or Grid); nothing changes until **Show <n> things**. A dot on the icon, and its name "Filter and sort (grid layout on)", say when the choice is not the folder's default. There are no List/Grid buttons, kind chips or "Showing only" box any more, and no "Try asking" card.
 - **Rows.** Subfolders first, then day groups "Today", "Yesterday", "29 Sep"; each row shows only its icon, title, kind and date. On desktop one click selects, a double click or Enter opens.
-- **Folder of folders.** A root with subfolders shows "Folders" as cards (count, last change, "1 new", the first three things), then "Recently changed in <folder>". On desktop it opens with nothing selected.
+- **The folder's own page.** A note named after its own folder (`Moonee Ponds/Moonee Ponds.md`) is that folder's page: it is not listed and not counted, unless its frontmatter says `by: person`.
+- **Folder of folders.** A root with subfolders shows "Folders" as cards (a count of everything inside, last change, "1 new", the first three things), then "Recently changed in <folder>". On desktop it opens with nothing selected.
 - **Preview column.** From 1200 px: "Select something to see it here." until something is selected; then its title, Open, Open in Drive, the meta line and Bower's note box, which folds as on the note page (a PDF shows its first page, a spreadsheet a table, a folder "Inside" and its rows).
 
 ## Pins
@@ -579,7 +598,7 @@ A note is pinned when its frontmatter has `pinned: <ISO 8601 time>` — the time
 
 This means a `pinned` line can show up if you open a note straight in Obsidian or another editor — it's expected, not a stray field, and the agent's `CLAUDE.md` tells it to leave `pinned` as it is when it rewrites a note. Removing the line by hand unpins the note the same way the app would.
 
-The UI (issue #216): Home shows a Pinned section above Recent, hidden while there is nothing pinned — up to 8 tiles, "All pinned" past that, an Edit toggle turning tiles into rows with an unpin button. The desktop sidebar shows the same items as a Pinned group above the tree, up to 5. Four entry points pin or unpin: the note's own menu (More → Pin to Home), opening a Notes-tab row's context menu (a sheet: Pin to Home, Open the folder, Ask Bower about it, Open in Drive, Cancel), a tree row's hover pin button on desktop with the same items on right-click or the keyboard's Menu key, and the Folder screen's Pinned chip. Every one of them shows the same toast, "Pinned to Home" or "Unpinned"; a failure shows one sentence instead and changes nothing. The quick switcher has no filter mode of its own yet, so "All pinned" opens it with `pinned:` already typed in the field rather than actually narrowing the list — a real filter is left for a later issue.
+The UI (issue #216): Home shows a Pinned section above Recent, hidden while there is nothing pinned — up to 8 tiles, "All pinned" past that, an Edit toggle turning tiles into rows with an unpin button. The desktop sidebar shows the same items as a Pinned group above the tree, up to 5. Four entry points pin or unpin: the note's own menu (More → Pin to Home), opening a Folders-tab row's context menu (a sheet: Pin to Home, Open the folder, Ask Bower about it, Open in Drive, Cancel), a tree row's hover pin button on desktop with the same items on right-click or the keyboard's Menu key, and the Folder screen's Pinned chip. Every one of them shows the same toast, "Pinned to Home" or "Unpinned"; a failure shows one sentence instead and changes nothing. The quick switcher has no filter mode of its own yet, so "All pinned" opens it with `pinned:` already typed in the field rather than actually narrowing the list — a real filter is left for a later issue.
 
 ## Extensions
 
