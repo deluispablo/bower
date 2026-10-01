@@ -6,7 +6,13 @@
  * (`folder-items.tsx`) builds its rows from the same hooks.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks';
 
 import { parseCatalogueFiles } from '../companion.js';
 import type { DriveFile } from '../drive.js';

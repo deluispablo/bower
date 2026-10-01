@@ -856,13 +856,7 @@ export function FolderItems({
                       updated: folder.updated,
                     }),
                   }}
-                  items={firstInside(
-                    byPath,
-                    folder.path,
-                    3,
-                    bowerSet,
-                    answers,
-                  )}
+                  items={firstInside(byPath, folder.path, 3, bowerSet, answers)}
                   newCount={fresh.newCountIn(folder.path)}
                   now={now}
                   {...selectProps(folder.path, folderHref(folder.path))}
