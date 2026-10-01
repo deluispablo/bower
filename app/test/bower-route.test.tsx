@@ -144,7 +144,7 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 
 const { Bower } = await import('../src/routes/bower.js');
 const { buildVaultIndex } = await import('../src/vault-index.js');
-const { cardWhen } = await import('../src/activity.js');
+const { requestWhen } = await import('../src/bower-tab.js');
 
 import { OverlayHost } from '../src/components/overlay.js';
 import { resetOverlayQueue } from '../src/overlay-queue.js';
@@ -217,16 +217,16 @@ describe('the Bower tab', () => {
     expect(text).not.toMatch(/\bvault\b/i);
   });
 
-  it('draws the bird 56 px high above the composer (ruling, R-BIRD)', async () => {
+  it('draws the bird 72 px high above the composer (#915, BW-Rules)', async () => {
     await mount();
     const bird = root.querySelector('.bower-box-intro svg');
-    expect(bird?.getAttribute('width')).toBe('56');
-    expect(bird?.getAttribute('height')).toBe('56');
+    expect(bird?.getAttribute('width')).toBe('72');
+    expect(bird?.getAttribute('height')).toBe('72');
   });
 
   it('the first time: the tip is open, and an example fills the box without sending', async () => {
     await mount();
-    expect(root.textContent).toContain('Nothing yet');
+    expect(root.textContent).toContain('No rules yet.');
     const examples = [...root.querySelectorAll('.bower-example')];
     expect(examples).toHaveLength(3);
     await act(() => {
@@ -576,9 +576,7 @@ describe('Requests (#344)', () => {
     const done = row('Make a packing list');
     expect(done?.textContent).toContain('Done');
     expect(done?.textContent).toContain(
-      `${cardWhen('2026-09-27T08:26:00.000Z', state.now)
-        .charAt(0)
-        .toLowerCase()}${cardWhen('2026-09-27T08:26:00.000Z', state.now).slice(1)} · 1 new · 1 updated`,
+      `${requestWhen('2026-09-27T08:26:00.000Z')} · 1 new · 1 updated`,
     );
     const link = done?.querySelector('a');
     expect(link?.textContent).toBe('See what came of it');
@@ -755,7 +753,7 @@ describe('dictation in the Bower box (#780)', () => {
     expect(box().classList.contains('composer-input')).toBe(true);
   });
 
-  it('shows the listening bird and bubble only while the microphone is on', async () => {
+  it('shows the listening bird only while the microphone is on; the bubble stays (BW-Dictating)', async () => {
     await mount();
     const bubble = (): string =>
       root.querySelector('.bower-bubble')?.textContent ?? '';
@@ -767,7 +765,7 @@ describe('dictation in the Bower box (#780)', () => {
       micButton().click();
     });
     expect(stub.latest().starts).toBe(1);
-    expect(bubble()).toBe("I'm listening. Speak as you would to a person.");
+    expect(bubble()).toMatch(/^Tell me what you want/);
     expect(bird()?.classList.contains('p-listen')).toBe(true);
     await act(() => {
       micButton().click();

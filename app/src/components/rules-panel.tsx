@@ -16,16 +16,19 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
-import { Bird } from './bird.js';
+import { Badge } from './badge.js';
+import { Confirm } from './confirm.js';
 import { Hint } from './hint.js';
 import { IconChevronRight, IconShield } from './icons.js';
-import { RuleSheet } from './rule-sheet.js';
+import { RULE_PANEL_QUERY, RuleSheet } from './rule-sheet.js';
 import type { RuleAction } from './rule-sheet.js';
 import { SuggestedRules, useOpenProposals } from './suggested-rules.js';
 import { SaveError } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { parseRules, RuleError, ruleMeta } from '../rules.js';
 import type { Rule, RuleGroup } from '../rules.js';
+import { showToast } from '../toast-store.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { OfflineError, useVault } from '../vault-store.js';
 
 /** Where the owner's rules live, from the top of the Bower folder. */
@@ -157,11 +160,7 @@ function Group({
                     <span class="rules-rule-text">{rule.text}</span>
                     {(rule.paused || meta !== '') && (
                       <span class="rules-rule-meta">
-                        {rule.paused && (
-                          <span class="bower-state bower-state--paused">
-                            Paused
-                          </span>
-                        )}
+                        {rule.paused && <Badge tone="check">Paused</Badge>}
                         {meta}
                       </span>
                     )}
@@ -184,6 +183,12 @@ function Group({
   );
 }
 
+/** The Rules intro (S-BW-6, BW-Rules): what rules are, then how to use
+ * them; the phone says "Tap", desktop "Click" (K-27). */
+export function rulesTipText(desktop: boolean): string {
+  return `Bower files everything else into your four folders. ${desktop ? 'Click' : 'Tap'} a rule to change it, pause it, remove it, or apply it to what is already filed.`;
+}
+
 export function RulesPanel({
   message,
   onMessage,
@@ -199,7 +204,10 @@ export function RulesPanel({
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [full, setFull] = useState<Record<string, boolean>>({});
   const [picked, setPicked] = useState<Picked | null>(null);
+  // Remove asks first (#907's confirm, "Remove this rule?").
+  const [removing, setRemoving] = useState<Rule | null>(null);
   const [busy, setBusy] = useState(false);
+  const desktop = useMediaQuery(RULE_PANEL_QUERY);
 
   const groups =
     rulesLoad.status === 'ready' ? parseRules(rulesLoad.text).groups : [];
@@ -231,6 +239,17 @@ export function RulesPanel({
       onApply(rule);
       return;
     }
+    if (action === 'remove') {
+      setRemoving(rule);
+      return;
+    }
+    await editRuleNow(rule, action);
+  }
+
+  async function editRuleNow(
+    rule: Rule,
+    action: Exclude<RuleAction, 'change' | 'apply'>,
+  ): Promise<void> {
     setBusy(true);
     onMessage(null);
     try {
@@ -238,13 +257,11 @@ export function RulesPanel({
         kind: action,
         rule: { line: rule.line, raw: rule.raw },
       });
-      const done =
-        action === 'pause'
-          ? 'Paused'
-          : action === 'resume'
-            ? 'Resumed'
-            : 'Removed';
-      onMessage(`${done}: ${rule.text}`);
+      if (action === 'remove') {
+        showToast('Rule removed.');
+      } else {
+        onMessage(`${action === 'pause' ? 'Paused' : 'Resumed'}: ${rule.text}`);
+      }
     } catch (err) {
       console.error(err);
       onMessage(writeError(err));
@@ -264,24 +281,18 @@ export function RulesPanel({
     return (
       <>
         {status}
-        <div class="bower-first">
-          <Bird state="looking" size={84} />
-          <h2>Nothing yet</h2>
-          <p>
-            Bower files things its own way until you tell it yours. Write one
-            above, in your words.
-          </p>
-        </div>
+        <p class="bower-panel-note">
+          No rules yet. Say one in the box: &ldquo;From now on&hellip;&rdquo;
+        </p>
       </>
     );
   }
 
   return (
     <div class="rules-panel" aria-busy={busy}>
+      {/* The shared tip (#908's Hint; its ✕ reads "Hide this tip"). */}
       <Hint id="rules-yours" variant="tip" icon={<IconShield />}>
-        <b>Rules are yours and start at once.</b> Bower files its own way (PARA)
-        for anything you have not said anything about. Tap a rule to change it,
-        pause it, remove it, or apply it to what is already filed.
+        <b>Rules are yours and start at once.</b> {rulesTipText(desktop)}
       </Hint>
       {status}
       <SuggestedRules />
@@ -307,6 +318,19 @@ export function RulesPanel({
           />
         );
       })}
+      {removing !== null && (
+        <Confirm
+          action="removeRule"
+          onConfirm={() => {
+            const rule = removing;
+            setRemoving(null);
+            void editRuleNow(rule, 'remove');
+          }}
+          onCancel={() => {
+            setRemoving(null);
+          }}
+        />
+      )}
       {picked !== null && (
         <RuleSheet
           topic={picked.topic}

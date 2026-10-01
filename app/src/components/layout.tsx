@@ -75,6 +75,7 @@ import { replayTour, useTour } from '../tour-store.js';
 import { useVault } from '../vault-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
+import { BowerMark } from './bird.js';
 import { DemoBanner } from './demo-banner.js';
 import { openFoldersDrawer } from '../folders-drawer.js';
 import { Explorer, HEALTH_PATH } from './explorer.js';
@@ -495,7 +496,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             aria-current={id !== undefined && id === tab ? 'page' : undefined}
             data-tour={tour}
           >
-            <Icon />
+            {/* The Bower tab is the still bird mark, 22 px (§3.2, #915). */}
+            {id === 'bower' ? <BowerMark size={22} /> : <Icon />}
             <span>{label}</span>
           </a>
         ))}

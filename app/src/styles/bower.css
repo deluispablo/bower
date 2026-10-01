@@ -18,8 +18,8 @@
 }
 
 .bower-box-intro > :first-child {
-  /* The 56 px Bower tab bird keeps the room of rule 3. */
-  margin: 7px 7px 1px;
+  /* The 72 px bird looking (BW-Rules), listening only while dictating. */
+  flex-shrink: 0;
 }
 
 .bower-box-intro {
@@ -36,41 +36,13 @@
   border-bottom-left-radius: var(--space-1);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: var(--text-sm);
+  font-size: 0.9375rem;
   line-height: var(--leading-body);
-  /* Both states' words fit in three lines, so the bubble keeps its height
-     when listening starts and stops (#888). */
-  box-sizing: border-box;
-  min-height: calc(
-    3 * var(--text-sm) * var(--leading-body) + 2 * var(--space-2) + 2px
-  );
 }
 
-.bower-box-row {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-2);
-}
-
-.bower-textarea {
-  flex-grow: 1;
-  min-height: 3.25rem;
-  max-height: 8rem;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
-  color: var(--color-text);
-  font: inherit;
-  resize: vertical;
-}
-
-.bower-send {
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  padding: 0;
-  border-radius: var(--radius-md);
+/* The bubble's words never change (BW-Dictating): only the bird does. */
+.bower-box-intro {
+  align-items: center;
 }
 
 /* The "?" tip: a disclosure with the hint look (`hint.css`: surface fill,
@@ -103,8 +75,28 @@
 }
 
 .bower-tip-toggle .icon {
-  width: 18px;
-  height: 18px;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-muted);
+}
+
+.bower-tip-title {
+  flex-grow: 1;
+  color: var(--color-heading);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+/* The chevron points down when closed, up when open (BW-Tips). */
+.bower-tip-toggle > .icon:last-child {
+  width: 16px;
+  height: 16px;
+  transform: rotate(90deg);
+}
+
+.bower-tip-toggle[aria-expanded='true'] > .icon:last-child {
+  transform: rotate(-90deg);
 }
 
 .bower-tip-body p {
@@ -408,11 +400,6 @@
 
 /* #507: one line under the box confirming what Send just did — not an
  * error, so it never borrows `.auth-error`'s colour. */
-.bower-send-confirm {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
 
 .bower-changing-cancel {
   min-height: 44px;
@@ -486,6 +473,8 @@
   flex-grow: 1;
   min-width: 0;
   overflow: hidden;
+  color: var(--color-heading);
+  font-size: var(--text-base);
   font-weight: var(--weight-bold);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -612,8 +601,7 @@
     align-items: flex-end;
     min-height: 32px;
     margin: 0 0 var(--space-1);
-    border-bottom: 1px solid var(--color-border);
-    font-size: var(--text-lg);
+    font-size: 1.25rem; /* K-9: h2 20 px */
     white-space: nowrap;
   }
 
@@ -655,8 +643,43 @@
   color: var(--color-text-muted);
 }
 
-.activity-head > .bower-state {
+.activity-head > .bower-state,
+.activity-head > .activity-badge {
   margin-left: auto;
+}
+
+/* A file the run filed is the one list row (#915, BW-Activity-375). */
+.activity-filed {
+  list-style: none;
+}
+
+/* The rounded tile behind the glyph (BW-Activity-375): tinted with the
+   root's colour when the row knows where the file went, neutral when not.
+   FileIcon's box takes its fill from `--file-icon-box`; `currentColor` is
+   the root tint FileIcon sets. */
+.activity-filed .file-icon-box {
+  --file-icon-box: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.activity-filed .file-icon-box[data-root='none'] {
+  --file-icon-box: var(--color-surface-hover);
+}
+
+.activity-more {
+  min-height: 32px;
+  margin-top: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.activity-more:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 2px;
 }
 
 .activity-state--done {
@@ -742,8 +765,13 @@
   font-size: var(--text-sm);
 }
 
-/* The Bower box's dictate wrapper takes the textarea's place in the row. */
-.bower-dictate {
-  flex: 1 1 auto;
-  min-width: 0;
+.bower-send-confirm {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The Rules tip keeps the normal gap between blocks (16 px, BW-Rules). */
+.rules-panel > .hint {
+  margin-bottom: calc(var(--space-4) - var(--space-1));
 }
