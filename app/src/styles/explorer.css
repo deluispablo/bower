@@ -354,7 +354,14 @@
 
 .folders-drawer .explorer {
   height: auto;
-  padding: 4px 4px 0;
+  padding: 4px 0 0;
+}
+
+/* NO-Drawer-375: a 16 px gutter for the labels, rows and tree (the
+   drawer's 8 plus each row's own 8); only the search box is inset 4 more,
+   at 12 (#950). */
+.folders-drawer .explorer-search-slot {
+  margin-inline: 4px;
 }
 
 .folders-drawer .explorer-section {
