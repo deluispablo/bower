@@ -478,7 +478,10 @@ button.pile-card:focus-visible {
  * at the foot of the page, under the right column, on desktop. */
 .add-tidy {
   position: sticky;
-  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  /* Docks just above the tab bar and, while it shows, the phone run chip. */
+  bottom: calc(
+    64px + env(safe-area-inset-bottom, 0px) + var(--run-chip-space, 0px)
+  );
   z-index: 1;
   margin: var(--space-3) 0;
   padding: var(--space-2) 0;
@@ -704,18 +707,12 @@ button.pile-card:focus-visible {
   padding-bottom: var(--space-6);
 }
 
-/* The phone Done chip stacks above the sticky Tidy up, never over it
-   (the dock is `layout.css`; this only lifts it while Add shows one). */
+/* With the run chip in the dock, the sticky Tidy up is the page end: no
+   reserved room is left under it (the chip comes right after it). */
 @media (max-width: 899px) {
-  .shell-with-dock:has(.add-tidy) .shell-dock {
-    bottom: calc(var(--bottom-nav-height) + var(--add-tidy-height, 72px));
-  }
-
-  .shell-with-dock:has(.add-tidy) .content {
-    padding-bottom: calc(
-      var(--space-16) + var(--space-6) + var(--dock-height) +
-        var(--add-tidy-height, 72px)
-    );
+  .shell-with-dock .content:has(.add-tidy) {
+    margin-bottom: 0;
+    padding-bottom: var(--space-2);
   }
 }
 
