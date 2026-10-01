@@ -32,6 +32,15 @@ printf '%s' "$DRIVE_TOKEN" >"$ROOT/values/drive-token"
 printf '%s' "$USER_API_KEY" >"$ROOT/values/user-api-key"
 # The folder status list fixtures (#921), for the rclone and claude stubs.
 printf '%s' "$HERE/fixtures/statuses" >"$ROOT/values/statuses-fixtures"
+# The fake Drive's CLAUDE.md (R-SS-5, #966): a core section and one section
+# per load marker, so the system prompt each run gets can be checked.
+printf '%s\n' '# rules' '' '## Core' 'CORE-SECTION-MARKER' '' '## Kinds' '<!-- load: ingest -->' \
+  'INGEST-SECTION-MARKER' '' '## Instructions' '<!-- load: instructions -->' \
+  'INSTRUCTIONS-SECTION-MARKER' '' '## Lint' '<!-- load: lint -->' 'LINT-SECTION-MARKER' \
+  >"$ROOT/values/rulebook.md"
+
+# The context pack's own unit test (#966) runs first: it is quick.
+bash "$HERE/context.test.sh"
 
 # --- stubs ------------------------------------------------------------------
 
@@ -281,7 +290,7 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
   if [ ! -d "$remote" ]; then
     mkdir -p "$remote/0-Inbox/Processed" "$remote/Clippings"
     touch "$remote/0-Inbox/.gitkeep"
-    [ "$SMOKE_SCENARIO" = nocfg ] || echo '# rules' >"$remote/CLAUDE.md"
+    [ "$SMOKE_SCENARIO" = nocfg ] || cp "$SMOKE_STATE/../values/rulebook.md" "$remote/CLAUDE.md"
     case "$SMOKE_SCENARIO" in
       empty | reauth) ;;
       facts)
@@ -572,6 +581,11 @@ elif [ "$1" = sync ]; then
   mkdir -p "$remote/${3#vault:}"
   cp -R "$2/." "$remote/${3#vault:}/"
 elif [ "$1" = copy ] && [ "$3" = vault: ]; then
+  # R-SS-5 (#966): whether the local copy holds CLAUDE.md when the agent's
+  # changes go up; it must never be out then.
+  case "$2" in
+    */vault) echo "rulebook $([ -f "$2/CLAUDE.md" ] && echo present || echo missing)" >>"$SMOKE_STATE/copy-rulebook.log" ;;
+  esac
   case "${4:-}" in
     --files-from | --files-from-raw)
       while IFS= read -r path; do
@@ -723,10 +737,11 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SMOKE_STATE=$(cat "$HERE/../current-state")
 SMOKE_SCENARIO=$(cat "$HERE/../current-scenario")
-turns='' tools='' denied='' prompt='' format='' verbose=no model='' effort=''
+turns='' tools='' denied='' prompt='' format='' verbose=no model='' effort='' system=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -p) prompt=$2; shift 2 ;;
+    --append-system-prompt-file) system=$2; shift 2 ;;
     --max-turns) turns=$2; shift 2 ;;
     --output-format) format=$2; shift 2 ;;
     --verbose) verbose=yes; shift ;;
@@ -743,6 +758,9 @@ printf '%s' "$prompt" >"$SMOKE_STATE/claude-prompt.txt"
 printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
 printf 'format=%s verbose=%s' "$format" "$verbose" >"$SMOKE_STATE/claude-format.txt"
 printf 'model=%s effort=%s' "$model" "$effort" >"$SMOKE_STATE/claude-model.txt"
+# R-SS-5 (#966): the system prompt file run.sh hands in, as the agent got it.
+rm -f "$SMOKE_STATE/claude-system.md"
+[ -z "$system" ] || cp "$system" "$SMOKE_STATE/claude-system.md"
 # The model's own environment, exactly as run.sh's env -i allow-list built
 # it: the test greps this for the Drive token, the run ticket, BOWER_* and
 # the model credential, never the console output (that stays content-free).
@@ -800,10 +818,10 @@ echo late >"$SMOKE_STATE/remote/Clippings/late.md"
     >"$SMOKE_STATE/remote/0-Inbox/Bower - 2026-01-15 0910 Late request.md"
 # "gone": the pending original is removed from Drive while the agent works.
 [ "$SMOKE_SCENARIO" != gone ] || rm "$SMOKE_STATE/remote/0-Inbox/a.pdf"
-# "edited" and "fail": the user edits one note in the app while the agent
-# rewrites another one.
+# "edited", "fail" and "agenttimeout": the user edits one note in the app
+# while the agent rewrites another one (so a failed run has a copy up).
 case "$SMOKE_SCENARIO" in
-  edited | fail)
+  edited | fail | agenttimeout)
     echo 'v2 from the app' >"$SMOKE_STATE/remote/3-Resources/app.md"
     echo 'v2 from the agent' >3-Resources/agent.md
     ;;
@@ -1122,6 +1140,7 @@ run_case() {
   : >"$STATE/moved.txt"
   : >"$STATE/paths-calls.log"
   : >"$STATE/paths-uploaded.txt"
+  : >"$STATE/copy-rulebook.log"
   rm -f "$STATE/curl-env-leak" "$STATE/ticket-retired" "$STATE/final-tries"
   # No wait between the final report's tries (#315), unless a case says.
   local settings=("BOWER_API_URL=$API_URL" "BOWER_RUN_TICKET=$RUN_TICKET" BOWER_REPORT_BACKOFF=0) extra=() arg
@@ -1177,11 +1196,37 @@ expect_content_free() {
     'Bower - ' 'Tidy up' 'Weekly planning' Rules.md 1-Projects 2-Areas \
     Proposals Answers Recipes Invoices receipt 'Flat hunt' Finance 'Clipped trick' IMG_4471 Arlington 'Which flat' offer- 'Job hunt' till-slip 'Old receipts' \
     clip.mp4 budget huge-photo long-scan 'bike times' 'second line' \
+    SECTION-MARKER \
     "$DRIVE_TOKEN" "$USER_API_KEY" "$RUN_TICKET" "$OPERATOR_KEY" test-oauth-token; do
     if grep -qF -- "$needle" "$STATE/out.log"; then
       die "script output contains [$needle]"
     fi
   done
+}
+
+# R-SS-5 (#966): the agent ran without CLAUDE.md in its folder, every copy
+# up saw it back in the local copy, and Drive holds it unchanged.
+expect_rulebook_kept() {
+  grep -Fq ' rulebook=no ' <<<"$(calls claude)" || die 'CLAUDE.md was in the agent folder'
+  ! grep -q missing "$STATE/copy-rulebook.log" || die 'a copy up ran while CLAUDE.md was out'
+  cmp -s "$ROOT/values/rulebook.md" "$STATE/remote/CLAUDE.md" || die 'CLAUDE.md in Drive changed'
+}
+
+# R-SS-5: the system prompt file the agent was given holds the sections
+# named PRESENT and not those named ABSENT (CORE, INGEST, INSTRUCTIONS,
+# LINT). Usage: expect_system_sections "<present ...>" "<absent ...>"
+expect_system_sections() {
+  local name
+  [ -s "$STATE/claude-system.md" ] || die 'no --append-system-prompt-file'
+  for name in $1; do
+    grep -Fq "$name-SECTION-MARKER" "$STATE/claude-system.md" || die "system prompt lacks the $name section"
+  done
+  for name in $2; do
+    ! grep -Fq "$name-SECTION-MARKER" "$STATE/claude-system.md" || die "system prompt has the $name section"
+  done
+  ! grep -Fq '<!-- load:' "$STATE/claude-system.md" || die 'system prompt keeps a load marker'
+  grep -Fxq '# Rules.md' "$STATE/claude-system.md" || die 'system prompt lacks Rules.md'
+  grep -Fxq '# About-Me.md' "$STATE/claude-system.md" || die 'system prompt lacks About-Me.md'
 }
 
 # The work dir (with the vault in it) and the runner settings file are
@@ -1323,7 +1368,7 @@ grep -Fq 'at most 60 characters' <<<"$RULEBOOK" ||
   die 'the rulebook does not cap a new file name at 60 characters (#369)'
 grep -Fq "Never put the owner's name or any other person's name in a file name" <<<"$RULEBOOK" ||
   die 'the rulebook lets a person name reach a file name (#369)'
-grep -Fq 'starts with the **A note from Bower** template in `CLAUDE.md`' <<<"$INGEST_PROMPT" ||
+grep -Fq 'starts with the **A note from Bower** template' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not point at the note-from-Bower template (#371)'
 BOWER_NOTE_TEMPLATE=$(awk '/^\*\*A note from Bower\*\*/ { f = 1 }
   f && /^```markdown$/ { g = 1; next }
@@ -1389,6 +1434,31 @@ grep -Fq 'Start the title of each such finding with `Urgent:`' <<<"$LINT_PROMPT"
   die 'lint prompt does not mark forbidden-content findings Urgent: (#524)'
 grep -Fq 'a paused rule (`~~text~~ (paused …)`) is not in force, so skip it here' <<<"$LINT_PROMPT" ||
   die 'lint prompt does not skip paused rules in the contradiction check (#376)'
+# R-SS-6 (#966): the runner hands the rulebook and the run's facts in. The
+# prompts carry the placeholders and never send the agent to read the
+# rulebook, index.md or log.md; the closing summaries run.sh parses stay.
+for placeholder in '{{PENDING}}' '{{FOLDERS}}' '{{TAGS}}' '{{CORRECTIONS}}'; do
+  grep -Fxq "$placeholder" <<<"$INGEST_PROMPT" || die "ingest prompt has no $placeholder line"
+done
+for placeholder in '{{FOLDERS}}' '{{TAGS}}' '{{BACKFILL}}'; do
+  grep -Fxq "$placeholder" <<<"$LINT_PROMPT" || die "lint prompt has no $placeholder line"
+done
+for prompt_name in INGEST_PROMPT LINT_PROMPT; do
+  # "never read `index.md` ... whole" is the one way the prompts name a read.
+  text=$(sed 's/never read [^.;]*//g' <<<"${!prompt_name}")
+  grep -Fq '`About-Me.md` are already in your instructions; do not open them' <<<"$text" ||
+    die "$prompt_name does not say the rulebook is already given"
+  ! grep -Eiq 'read `(CLAUDE|Rules|About-Me|index|log)\.md`' <<<"$text" ||
+    die "$prompt_name tells the agent to read a file the runner hands in"
+done
+grep -Fq 'never read `index.md` or `log.md` whole' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt does not keep the agent off reading index.md whole'
+expect_eq "$(tail -n 7 <<<"$INGEST_PROMPT" | sed 's/^[0-9]*\. //')" "$(printf '%s\n' \
+  'Finish by printing exactly six lines, nothing after them, one item per line (`Filed` counts the originals you moved into a folder, `Created` the notes you wrote):' \
+  '   Processed: <n> files' '   Filed: <n> files' '   Created: <n> notes' '   Updated: <n> notes' \
+  '   Rules: <changed|unchanged>' '   Problems: <none|short text>')" 'ingest closing summary'
+[ "$(wc -c <"$HERE/../prompts/ingest.md")" -le 5331 ] || die 'ingest prompt over 60 % of its v23 length (8885 bytes)'
+[ "$(wc -c <"$HERE/../prompts/lint.md")" -le 1799 ] || die 'lint prompt over 60 % of its v23 length (2999 bytes)'
 echo "ok ingest prompt contract"
 
 # 1. Ingest happy path, with the refused list reported: a run that stays
@@ -1486,7 +1556,19 @@ expect_eq "$(cat "$remote/2-Areas/Insurance.md")" \
 # instruction note would be.
 [ -f "$remote/Clippings/Bower trick.md" ] ||
   die 'a Bower-named clipping was treated as an instruction note, not a clipping'
-expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
+expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=no prompt=yes' 'claude call'
+# R-SS-5 and 6 (#966): the rulebook's core and ingest sections in the system
+# prompt, the run's facts in the prompt, counts only in the log.
+expect_rulebook_kept
+expect_system_sections 'CORE INGEST' 'INSTRUCTIONS LINT'
+prompt=$(cat "$STATE/claude-prompt.txt")
+! grep -Fq '{{' <<<"$prompt" || die 'a placeholder left in the prompt'
+for line in '0-Inbox/a.pdf' 'Clippings/b.md' '(none yet)' '(none)'; do
+  grep -Fxq -- "$line" <<<"$prompt" || die "prompt lacks the line [$line]"
+done
+grep -Eq ' context: 0 tags, 0 folders, 0 correction pairs, [0-9]+ pending$' "$STATE/out.log" ||
+  die 'no context counts in the log'
+grep -Eq ' rulebook: [0-9]+ bytes for ingest$' "$STATE/out.log" || die 'no rulebook size in the log'
 expect_eq "$(cat "$STATE/claude-tools.txt")" \
   'Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash(mv:*),Bash(mkdir:*),Bash(ls:*)' \
   'allowed tools (no web by default)'
@@ -1570,6 +1652,10 @@ expect_eq "$(post 2 'JSON.stringify([p.created, p.updated, p.left])')" \
   'created, updated and left of the failed run'
 grep -Fq "\"left\":$(post 2 'JSON.stringify(p.left)')" <<<"$outcome" || die 'last-run.json lacks left'
 grep -q 'Tidy-up failed' <<<"$(tail -n 1 "$STATE/remote/log.md")" || die 'log.md has no failed line'
+# R-SS-5 (#966): the agent ran without CLAUDE.md and failed; it was back in
+# the local copy before the failed run's copy up, and Drive keeps it as it was.
+expect_rulebook_kept
+expect_eq "$(cat "$STATE/copy-rulebook.log")" 'rulebook present' 'CLAUDE.md at the copy up'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -1625,6 +1711,12 @@ for reason_case in 'syncfail drive_unavailable' 'agenttimeout timeout' \
     expect_eq "$(post "$(posts_count)" 'JSON.stringify([p.created, p.updated, p.left])')" '[[],[],[]]' \
       'created, updated and left of a run failing before sync down'
   fi
+  # R-SS-5 (#966): stopped by its time limit, the agent leaves CLAUDE.md out;
+  # the runner puts it back before the copy up.
+  if [ "$CASE" = agenttimeout ]; then
+    expect_rulebook_kept
+    expect_eq "$(cat "$STATE/copy-rulebook.log")" 'rulebook present' 'CLAUDE.md at the copy up'
+  fi
   expect_content_free
   expect_cleaned_up
 done
@@ -1673,7 +1765,12 @@ expect_eq "$(post 2 p.kind)" lint 'second kind'
 expect_eq "$(post 2 'p.processed === undefined')" true 'lint has no processed'
 expect_eq "$(cat "$STATE/claude-model.txt")" 'model=claude-sonnet-5-5 effort=low' 'model and effort (lint)'
 expect_eq "$(post 2 'p.summary.split("\n").length')" 5 'summary lines'
-expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=yes prompt=yes' 'claude call'
+expect_eq "$(calls claude)" 'claude max-turns=30 rulebook=no prompt=yes' 'claude call'
+expect_rulebook_kept
+expect_system_sections 'CORE LINT' 'INGEST INSTRUCTIONS'
+! grep -Fq '{{' "$STATE/claude-prompt.txt" || die 'a placeholder left in the lint prompt'
+grep -Eq ' context: [0-9]+ tags, [0-9]+ folders, [0-9]+ correction pairs, 0 pending, [0-9]+ rows to complete$' \
+  "$STATE/out.log" || die 'no lint context counts in the log'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -1793,27 +1890,35 @@ expect_eq "$(cat "$remote/Clippings/saved-page.md")" 'converted by pandoc' 'conv
 expect_eq "$(cat "$remote/0-Inbox/already.md")" 'mine' 'existing sibling left alone'
 expect_eq "$(post 2 'p.processed.some((i) => i.path.endsWith("quarterly-report.md") || i.path.endsWith("saved-page.md"))')" \
   false 'converted siblings are not reported as processed originals'
+# R-SS-6 (#966): the pending list in the prompt says where a converted
+# document's text is.
+grep -Fxq '0-Inbox/quarterly-report.docx (text: 0-Inbox/quarterly-report.md)' "$STATE/claude-prompt.txt" ||
+  die 'the prompt does not point at the converted text'
 expect_no_copy_or_convert_tool
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
 echo "ok documents converted before the run"
 
-# 12. A prompt-injected run rewrites CLAUDE.md and writes evil/x.md (and a
-# skill under .claude/): the audit reverts both, uploads neither, lists both
-# in `refused`, and still saves the legitimate change. .claude/ is never
-# uploaded, so it needs no refused entry.
+# 12. A prompt-injected run writes a CLAUDE.md and evil/x.md (and a skill
+# under .claude/): CLAUDE.md is out of the folder during the run (R-SS-5,
+# #966), so the file the agent wrote is replaced by the rulebook before the
+# audit and needs no refused entry; the audit reverts evil/x.md, uploads
+# neither, lists it in `refused`, and still saves the legitimate change.
+# .claude/ is never uploaded, so it needs no refused entry.
 run_case protected BOWER_REPORT_REFUSED=1
 expect_eq "$RC" 0 'exit code'
 expect_eq "$(post 2 p.state)" done 'second state'
-expect_eq "$(post 2 p.refused)" '["CLAUDE.md","evil/x.md"]' 'refused'
+expect_eq "$(post 2 p.refused)" '["evil/x.md"]' 'refused'
 remote="$STATE/remote"
-expect_eq "$(cat "$remote/CLAUDE.md")" '# rules' 'rulebook in Drive'
+expect_rulebook_kept
+grep -q ' rulebook: a CLAUDE.md written during the run was replaced$' "$STATE/out.log" ||
+  die 'the CLAUDE.md the agent wrote was not replaced'
 [ ! -e "$remote/evil" ] || die 'a file outside the known roots reached Drive'
 [ ! -e "$remote/.claude/skills" ] || die 'a file under .claude/ reached Drive'
 expect_eq "$(sort "$STATE/uploaded.txt" | tr '\n' ' ')" '3-Resources/agent.md log.md ' 'uploaded files (the filed original is moved, #595, and logged, #596)'
 expect_eq "$(cat "$remote/3-Resources/agent.md")" 'v2 from the agent' 'accepted change'
-grep -q ' 2 changes refused$' "$STATE/out.log" || die 'refused count not logged'
+grep -q ' 1 changes refused$' "$STATE/out.log" || die 'refused count not logged'
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
@@ -2098,6 +2203,9 @@ expect_eq "$(post 2 p.quarantined)" \
   '["0-Inbox/Quarantine/Bower - 2026-01-15 0901 Weekly planning tips.md"]' 'quarantined'
 expect_eq "$(tr '\n' '|' <"$STATE/remote/Rules.md")" '# my rules|Tidy the notes every week|' 'Rules.md in Drive'
 grep -Fxq 'Rules.md' "$STATE/uploaded.txt" || die 'Rules.md not uploaded'
+# R-SS-5 (#966): an instruction note adds the instructions sections.
+expect_system_sections 'CORE INGEST INSTRUCTIONS' 'LINT'
+expect_rulebook_kept
 expect_claude_env unset test-oauth-token
 expect_content_free
 expect_cleaned_up
