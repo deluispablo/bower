@@ -412,12 +412,24 @@ export function SessionProvider({ children }: SessionProviderProps) {
     route('/login');
   };
 
+  // Every change of `me` from here (#922): a `/me` answer that was asked
+  // for before a newer `setMe` (onboarding's POST /vault) never undoes it.
+  const meVersionRef = useRef(0);
+
   const setMe = (me: Me): void => {
+    meVersionRef.current += 1;
+    // As for a `/me` answer: the index cache follows the new folder.
+    setIndexFolder(me.vault?.folderId ?? null);
+    saveCachedMe(me);
     setState({ status: 'signed-in', me, folder: 'ok' });
   };
 
   const refresh = async (): Promise<void> => {
-    setState(stateFromMe(await getMe()));
+    const asked = meVersionRef.current;
+    const me = await getMe();
+    if (meVersionRef.current !== asked) return;
+    meVersionRef.current += 1;
+    setState(stateFromMe(me));
   };
 
   const value: Session = {

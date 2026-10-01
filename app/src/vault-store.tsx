@@ -23,7 +23,7 @@ import {
 
 import { ApiError } from './api.js';
 import {
-  invalidateIndex as invalidateIndexCache,
+  invalidateOnRunComplete,
   loadIndex,
   loadNote,
   saveIndex,
@@ -994,7 +994,11 @@ export function VaultProvider({ children }: VaultProviderProps) {
           return;
         }
         const fetchedAt = new Date().toISOString();
-        await saveIndex(fresh, fetchedAt);
+        // Kept for the next start, never waited on (#922): a slow or stuck
+        // IndexedDB must not hold the listing back from the screens.
+        saveIndex(fresh, fetchedAt).catch((err: unknown) => {
+          console.error('Could not keep the listing on this device', err);
+        });
         const index = await hydrate(buildVaultIndex(fresh));
         setState({
           index,
@@ -1031,16 +1035,26 @@ export function VaultProvider({ children }: VaultProviderProps) {
       return;
     }
     let cancelled = false;
+    // The Drive listing starts at once, whatever the device cache does
+    // (#922): after a fresh sign-in the cached copy may never answer, and
+    // the folder and tree must not wait on it.
+    void load('initial');
     loadIndex()
       .then((cached) => {
         if (cancelled || cached === undefined) return;
+        // The cached copy paints only while Drive has not answered yet.
+        if (stateRef.current.index !== null) return;
         const builtIndex = buildVaultIndex(cached.files);
-        setState({
-          index: builtIndex,
-          files: cached.files,
-          fetchedAt: cached.fetchedAt,
-          status: 'idle',
-        });
+        setState((prev) =>
+          prev.index !== null
+            ? prev
+            : {
+                index: builtIndex,
+                files: cached.files,
+                fetchedAt: cached.fetchedAt,
+                status: 'idle',
+              },
+        );
         // Pinned state and the rulebook's version lag a beat behind the
         // instant cached paint above (this file's own opening comment):
         // fill them in as soon as they are ready, unless `load('initial')`
@@ -1054,9 +1068,6 @@ export function VaultProvider({ children }: VaultProviderProps) {
       })
       .catch((err: unknown) => {
         console.error(err);
-      })
-      .finally(() => {
-        if (!cancelled) void load('initial');
       });
     return () => {
       cancelled = true;
@@ -1632,5 +1643,7 @@ export function useVault(): Vault {
  * `refresh()` from `useVault()` to update the mounted provider right away.
  */
 export async function invalidateAfterRun(): Promise<void> {
-  await invalidateIndexCache();
+  // The shared titles go too (R-API-7, #922): a run may rename or rewrite
+  // notes, so every view re-resolves them together.
+  await invalidateOnRunComplete();
 }

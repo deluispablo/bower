@@ -162,7 +162,7 @@ export function AboutPanel(props: AboutPanelProps): JSX.Element {
             writtenBy={
               props.meta === undefined
                 ? undefined
-                : isBowerWritten(props.meta)
+                : isBowerWritten(props.meta, file)
                   ? 'Bower'
                   : 'you'
             }

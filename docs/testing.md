@@ -154,6 +154,36 @@ pnpm -C app build:demo && E2E_PREBUILT=1 pnpm -C app exec playwright test --shar
 
 **README screenshots.** `pnpm -C app e2e:shots` runs the desktop project and also writes its six screenshots to `docs/assets/screenshots/`, which the README shows under the demo link. Run it and commit the PNGs when a screen changes visibly; they only ever show the demo's sample notes. The Tidy up one differs by a few pixels between runs, the others are identical.
 
+## Real data under the v6 screens (#922)
+
+The demo is the data contract; this walk checks that a real Bower folder gives the screens the same shapes. Run it against a local build signed in to a test account (`pnpm -C api dev`, `pnpm -C app dev`), never production. The account owner signs in themself. Screenshots taken for a PR are redacted: no names, file names, folder ids or note text.
+
+Run a tidy-up with two or three files in the inbox, then at 375 and 1280 wide:
+
+- [ ] **Running sheet and Home tile**: while it runs, the sheet reads "Started <hh:mm> · it takes a few minutes" with the time the run started (`GET /status` gives `run.startedAt`), not the time the sheet was opened.
+- [ ] **Who filed it**: open a file the run filed. About's "Filed" reads "<when>, by Bower, as it is"; the folder preview reads "filed by Bower <when>", with the run's day. A file that was in the folder before report v2 (no destination in its run) reads "added <when>" from Drive's created time.
+- [ ] **⋯ Drive items**: on Add, Bower, Settings and Folders, the ⋯ menu's "Open … in Drive" opens the inbox, the rules file and the Bower folder. Opened before the account or the listing has loaded, the item is not there (never a broken link).
+- [ ] **One title per file**: a note the run wrote reads the same title in the folder list, the grid, the sidebar tree and Search; after the run it changes everywhere together.
+- [ ] **Search**: a hit shows its root's dot, its parent folder and "updated <when>".
+- [ ] **A slow first open**: on a phone over a slow network (or Chrome's "Slow 4G"), open a folder you have not opened in this tab. It shows skeleton rows until it knows who wrote what; it never shows every Bower note as "Note", "By Bower 0" or a missing Compare tab first. Opened again, it shows its state at once.
+- [ ] **Areas**: the folder of folders' cards show the same counts as each folder's own page.
+
+**Known limit.** A note says it is Bower's in its front matter (`by: bower`, `type: answer`, a `kind`, an `original`, `bower_origins`) or with a `[!bower]` callout; a file other than a note only through its `bowerOrigin` app property or its `index.md` row. A non-note file Bower wrote before those existed cannot be told apart from the person's own and reads "added <when>". The run history recovers files filed by a report v2 run (it names their destination); older ones stay unmarked.
+
+### Dictation on real browsers
+
+The microphone uses the browser's own Web Speech recogniser; nothing is sent to Bower. Check the Bower box, the Composer and Search on each, and record the result here.
+
+| Browser | Expected | Result |
+| --- | --- | --- |
+| Chrome (desktop and Android) | Dictates: the mic turns on, words appear (BW-Dictating) | Pending the lead |
+| Edge (desktop) | Dictates (BW-Dictating) | Pending the lead |
+| Firefox | Crossed-out, dimmed mic and "Dictation is off in this browser. Type instead." (BW-Blocked) | Pending the lead |
+| Any, microphone blocked in site settings | The blocked line (BW-Blocked); typing still works | Pending the lead |
+| Safari (macOS, iOS) and the installed iOS app | Record what happens; no promise | Pending the lead |
+
+Also on the phone: opening Ask, Rename or Add a paragraph should raise the keyboard (Android Chrome does; iOS Safari may need a tap in the box). Record what each does.
+
 ## Where to look
 
 - **Cloudflare `wrangler tail`** (`pnpm -C api exec wrangler tail`, or the dashboard for a deployed instance): what the Worker logs — request ids and `error.code` values, never a token, a refresh token or an email.

@@ -7,7 +7,7 @@
  * Drive, the clock or the locale.
  */
 
-import { isBowerWritten } from './bower-written.js';
+import { isBowerWritten, isNamedAfterFolder } from './bower-written.js';
 import { findCompanion } from './companion.js';
 import { sizeWords } from './meta-line.js';
 import type { DriveFile } from './drive.js';
@@ -20,6 +20,7 @@ import type { NoteMeta } from './note-meta.js';
 import {
   FILE_KIND_LABELS,
   FILE_KIND_PLURALS,
+  changedUnder,
   fileKind,
 } from './vault-index.js';
 import type { FileKind } from './vault-index.js';
@@ -84,7 +85,7 @@ function writtenByBower(
   if (file.path === CATALOGUE_PATH) return true;
   if (fileKind(file) !== 'note') return false;
   if (originOf(file, origins) === 'asked') return true;
-  return isBowerWritten(meta);
+  return isBowerWritten(meta, file);
 }
 
 /**
@@ -403,11 +404,9 @@ export function isFolderPage(
   meta: NoteMeta | undefined,
 ): boolean {
   if (meta === undefined || fileKind(file) !== 'note') return false;
-  const folder = folderOf(file.path);
-  const name = folder.slice(folder.lastIndexOf('/') + 1);
-  if (name === '' || file.name !== `${name}.md`) return false;
-  const by = meta.fields.by;
-  return typeof by === 'string' && by.trim().toLowerCase() === 'bower';
+  // K-31 on real data (#922): named after its folder, it is the folder's
+  // page unless it says `by: person`, `by:` or not.
+  return isNamedAfterFolder(file) && isBowerWritten(meta, file);
 }
 
 /** What `folderCount` adds up: the folder's subfolders and its model. */
@@ -502,4 +501,85 @@ export function subfolderThings(
     bowerPages.has(page.id),
   ).length;
   return Math.max(0, sub.things + inside - pages);
+}
+
+/** How many rows "Recently changed in <folder>" lists. */
+export const RECENT_MAX = 5;
+
+/** How many of a subfolder's newest things its card reads. */
+export const CARD_RECENT_MAX = 10;
+
+/**
+ * Every note whose frontmatter a folder screen states something about
+ * (#922, T950-1): the folder's own notes (rows, the split, the count and
+ * Compare), the same-name pages under its subfolders (each card's count)
+ * and, on a folder of folders, the notes its cards and Recently changed
+ * list name ("Bower note"). The screen waits for these before it says
+ * who wrote what, instead of guessing.
+ */
+export function folderReads(
+  folder: {
+    path: string;
+    notes: readonly DriveFile[];
+    subfolders: readonly { path: string }[];
+  },
+  folders: readonly Pick<DriveFile, 'path'>[],
+  byPath: ReadonlyMap<string, DriveFile>,
+  folderOfFolders: boolean,
+): DriveFile[] {
+  const reads = new Map<string, DriveFile>();
+  const add = (file: DriveFile): void => {
+    const kind = fileKind(file);
+    if (kind === 'note' || kind === 'markdown') reads.set(file.id, file);
+  };
+  folder.notes.forEach(add);
+  for (const sub of folder.subfolders) {
+    folderPagesUnder(folders, byPath, sub.path).forEach(add);
+  }
+  if (folderOfFolders) {
+    listedUnder(byPath, folder.path, RECENT_MAX).forEach(add);
+    for (const sub of folder.subfolders) {
+      listedUnder(byPath, sub.path, CARD_RECENT_MAX).forEach(add);
+    }
+  }
+  return [...reads.values()];
+}
+
+/**
+ * How many subfolders the Originals segment counts (K-31): none on a
+ * folder of folders, or on one that holds only folders (DA-30, AR boards,
+ * #922): there the segments count only what is directly in it. Pure.
+ */
+export function segmentSubfolders(
+  subfolders: number,
+  folderOfFolders: boolean,
+  model: Pick<FolderModel, 'originals' | 'bower'>,
+): number {
+  const onlyFolders = model.originals.length === 0 && model.bower.length === 0;
+  return folderOfFolders || onlyFolders ? 0 : subfolders;
+}
+
+/**
+ * The things under the folder at `path`, newest first, at most `max`, as a
+ * card's preview, the preview column and "Recently changed" list them: never
+ * a folder's own page (K-31, #922). A note named after its folder counts as
+ * its page until `metaOf` says otherwise (`by: person`), so a page never
+ * shows first and disappears after. Pure.
+ */
+export function listedUnder(
+  byPath: ReadonlyMap<string, DriveFile>,
+  path: string,
+  max = Number.POSITIVE_INFINITY,
+  metaOf: (file: DriveFile) => NoteMeta | undefined = () => undefined,
+): DriveFile[] {
+  const listed: DriveFile[] = [];
+  for (const file of changedUnder(byPath, path)) {
+    if (listed.length >= max) break;
+    if (fileKind(file) === 'note' && isNamedAfterFolder(file)) {
+      const meta = metaOf(file);
+      if (meta === undefined || isFolderPage(file, meta)) continue;
+    }
+    listed.push(file);
+  }
+  return listed;
 }

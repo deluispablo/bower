@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { DriveFile } from '../src/drive.js';
 import {
+  bestNameMatch,
   commandsFor,
   folderPath,
+  keptHighlight,
   mergeResults,
   rankNotes,
 } from '../src/switcher.js';
@@ -239,5 +241,40 @@ describe('folderPath', () => {
 
   it('is empty for a top-level file', () => {
     expect(folderPath(note('a', 'Plan.md'))).toBe('');
+  });
+});
+
+describe('the highlight never depends on when Drive answers (#922, SE-Query)', () => {
+  const folder = 'folder-lisbon';
+  const note = 'note-lisbon';
+
+  it('starts on the first row, the best name match (a folder first)', () => {
+    expect(keptHighlight(null, [folder, note], false)).toBe(0);
+  });
+
+  it('stays on the row it was on when full-text rows arrive', () => {
+    // Drive's answer adds a row above the highlighted one: it does not move.
+    expect(keptHighlight(folder, ['drive-hit', folder, note], false)).toBe(1);
+    expect(keptHighlight(note, [folder, 'drive-hit', note], false)).toBe(2);
+  });
+
+  it('goes back to the first row for a new search, or when its row is gone', () => {
+    expect(keptHighlight(note, [folder, note], true)).toBe(0);
+    expect(keptHighlight('gone', [folder, note], false)).toBe(0);
+  });
+
+  it('picks the best name match from local hits, folders first on a tie', () => {
+    const hit = (id: string, score: number): { id: string; score: number } => ({
+      id,
+      score,
+    });
+    const groups = {
+      folders: [hit(folder, 5)],
+      notes: [hit(note, 5), hit('other', 2)],
+      files: [],
+    };
+    expect(bestNameMatch(groups)?.id).toBe(folder);
+    expect(bestNameMatch({ ...groups, notes: [hit(note, 9)] })?.id).toBe(note);
+    expect(bestNameMatch({ folders: [], notes: [], files: [] })).toBeNull();
   });
 });

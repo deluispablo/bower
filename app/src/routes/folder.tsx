@@ -20,7 +20,13 @@
  */
 
 import type { JSX } from 'preact';
-import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
 
 import { BackLink } from '../components/back-link.js';
@@ -32,13 +38,17 @@ import { openAsk } from '../components/send-to-bower.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
-import { useFolderSummary } from '../components/folder-summary.js';
+import {
+  useFolderKnown,
+  useFolderSummary,
+} from '../components/folder-summary.js';
 import { compareKinds, notesOfKind } from '../compare.js';
 import type { CompareNote } from '../compare.js';
 import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH } from '../file-origin.js';
 import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
+import { folderReads } from '../folder-view.js';
 import { folderHelpTopic, useHelpTopic } from '../help-rows.js';
 import { metaLine } from '../meta-line.js';
 import {
@@ -94,20 +104,44 @@ const TAB_NOUN: Readonly<Record<string, string>> = {
   'rental-listing': 'flats',
 };
 
+/** Each folder's Compare tab as this tab last worked it out, by its notes'
+ * versions (#922, T950-1): a folder opened again shows its tab at once. */
+const compareMemo = new Map<string, FolderCompare | null>();
+
 /** The Compare tab (R-TABS-1): the folder's notes that name a kind, once at
- * least two of one comparable kind are there. */
-function useFolderCompare(notes: readonly DriveFile[]): FolderCompare | null {
-  const [found, setFound] = useState<FolderCompare | null>(null);
+ * least two of one comparable kind are there. `settled` once it is worked
+ * out for these notes; until then `compare` is the last one this screen
+ * showed (or `null`). */
+function useFolderCompare(notes: readonly DriveFile[]): {
+  compare: FolderCompare | null;
+  settled: boolean;
+} {
   const key = notes
     .map((note) => `${note.id}:${note.modifiedTime ?? ''}`)
     .join('|');
+  const [found, setFound] = useState<{
+    key: string;
+    compare: FolderCompare | null;
+  } | null>(() =>
+    compareMemo.has(key)
+      ? { key, compare: compareMemo.get(key) ?? null }
+      : null,
+  );
 
   useEffect(() => {
     let cancelled = false;
+    const settle = (compare: FolderCompare | null, keep: boolean): void => {
+      if (keep) compareMemo.set(key, compare);
+      if (!cancelled) setFound({ key, compare });
+    };
+    if (compareMemo.has(key)) {
+      settle(compareMemo.get(key) ?? null, false);
+      return;
+    }
     void (async () => {
       try {
         if (notes.length < 2) {
-          if (!cancelled) setFound(null);
+          settle(null, true);
           return;
         }
         const module = await import('../components/compare.js');
@@ -115,16 +149,20 @@ function useFolderCompare(notes: readonly DriveFile[]): FolderCompare | null {
         if (cancelled) return;
         const kind = compareKinds(loaded)[0];
         if (kind === undefined) {
-          setFound(null);
+          settle(null, true);
           return;
         }
         const count = notesOfKind(loaded, kind).length;
-        setFound({
-          notes: loaded,
-          label: `Compare ${count} ${TAB_NOUN[kind.id] ?? kind.plural}`,
-        });
+        settle(
+          {
+            notes: loaded,
+            label: `Compare ${count} ${TAB_NOUN[kind.id] ?? kind.plural}`,
+          },
+          true,
+        );
       } catch (err) {
         console.error('Could not read the notes for Compare', err);
+        settle(null, false);
       }
     })();
     return () => {
@@ -132,7 +170,11 @@ function useFolderCompare(notes: readonly DriveFile[]): FolderCompare | null {
     };
   }, [key]);
 
-  return found;
+  if (found?.key === key) return { compare: found.compare, settled: true };
+  if (compareMemo.has(key)) {
+    return { compare: compareMemo.get(key) ?? null, settled: true };
+  }
+  return { compare: found?.compare ?? null, settled: false };
 }
 
 /** What the Compare panel receives (frozen for #916, which fills it). */
@@ -303,17 +345,42 @@ function FolderBody({
   const items = useFolderItems();
   const requestRows = useRequestRows();
   const waiting = useMemo(() => pendingByPath(requestRows), [requestRows]);
-  const compare = useFolderCompare(contents.notes);
+  const { compare: lastCompare, settled: compareSettled } = useFolderCompare(
+    contents.notes,
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
     setMenuOpen(false);
   }, [contents.path]);
-  const showCompare = comparing && compare !== null;
 
   const topName = contents.path.split('/')[0] ?? '';
   const para = paraKindOf(topName);
   const title = root ? rootFolderHeading(contents.path) : contents.name;
   const folderOfFolders = root && contents.subfolders.length > 0;
+
+  // T950-1 (#922): until who wrote what and how many are known, the page
+  // shows skeletons, never a guess ("Note", "By Bower 0", no Compare tab).
+  // A folder once shown keeps its last state while it is read again.
+  const reads = useMemo(
+    () =>
+      folderReads(
+        contents,
+        index?.folders ?? [],
+        index?.byPath ?? new Map<string, DriveFile>(),
+        folderOfFolders,
+      ),
+    [contents, index, folderOfFolders],
+  );
+  const read = useFolderKnown(
+    reads,
+    index?.byPath.get(CATALOGUE_PATH),
+    getNoteText,
+  );
+  const shownPath = useRef<string | null>(null);
+  if (read && compareSettled) shownPath.current = contents.path;
+  const known = shownPath.current === contents.path;
+  const compare = known ? lastCompare : null;
+  const showCompare = comparing && compare !== null;
   // The meta's count from the folder's own data (K-31, `folderCount`), the
   // same for List and Compare whichever shows first (#920).
   const summary = useFolderSummary(contents, catalogue, folderOfFolders);
@@ -356,7 +423,7 @@ function FolderBody({
             name: title,
           },
         })}
-        meta={meta}
+        meta={known ? meta : null}
         {...(purpose !== undefined && { purpose })}
         {...(compare !== null && {
           tabs: (
@@ -381,7 +448,9 @@ function FolderBody({
         />
       )}
       {summary.failed && <ErrorLine what="folder" onRetry={summary.retry} />}
-      {showCompare && compare !== null ? (
+      {!known ? (
+        <Skeleton shape={folderOfFolders ? 'tiles' : 'rows'} count={6} />
+      ) : showCompare && compare !== null ? (
         <CompareSlot
           notes={compare.notes}
           folderPath={contents.path}

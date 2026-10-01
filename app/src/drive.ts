@@ -28,8 +28,10 @@ const FILE_FIELDS = 'id,name,mimeType,parents,modifiedTime,size,webViewLink';
 /** The listing also asks for `appProperties`: a folder screen reads who put
  * a file there from them (`file-origin.ts`, #349). Drive only returns the
  * properties this app's own OAuth client set. It also asks for the grid
- * thumbnail and the photo and video metadata the file screens show (#582). */
-const LIST_FIELDS = `${FILE_FIELDS},appProperties,thumbnailLink,imageMediaMetadata(time,width,height),videoMediaMetadata(durationMillis)`;
+ * thumbnail and the photo and video metadata the file screens show (#582),
+ * and `createdTime`, the "added <when>" of a file no run history names
+ * (`file-origin.ts#filedBy`, #922). */
+const LIST_FIELDS = `${FILE_FIELDS},createdTime,appProperties,thumbnailLink,imageMediaMetadata(time,width,height),videoMediaMetadata(durationMillis)`;
 
 export interface DriveToken {
   accessToken: string;
@@ -54,6 +56,8 @@ export interface DriveFile {
   mimeType: string;
   parents: string[];
   modifiedTime?: string;
+  /** When the file was created in Drive, from the vault listing (#922). */
+  createdTime?: string;
   size?: number;
   webViewLink?: string;
   /** The file's private app properties (string values only), when the
@@ -332,6 +336,9 @@ function parseFile(value: unknown, path: string): DriveFile {
   };
   if (typeof value.modifiedTime === 'string') {
     file.modifiedTime = value.modifiedTime;
+  }
+  if (typeof value.createdTime === 'string') {
+    file.createdTime = value.createdTime;
   }
   // Drive sends int64 fields as strings.
   if (typeof value.size === 'string' || typeof value.size === 'number') {

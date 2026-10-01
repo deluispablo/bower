@@ -12,6 +12,8 @@ import {
   buildFolderModel,
   folderCount,
   isFolderPage,
+  listedUnder,
+  segmentSubfolders,
   siblings,
 } from '../src/folder-view.js';
 import { buildTree, folderContents } from '../src/navigation.js';
@@ -59,7 +61,7 @@ const metas = new Map<string, NoteMeta>(
     .map((file) => [
       file.id,
       file === NOTE
-        ? noteMetaFrom({ tags: ['area'] })
+        ? noteMetaFrom({ by: 'person', tags: ['area'] })
         : noteMetaFrom({ by: 'bower' }),
     ]),
 );
@@ -100,5 +102,50 @@ describe('a folder’s own page', () => {
     expect(siblings(NOTE, tree, metas).map((file) => file.name)).toContain(
       'Visa & Immigration.md',
     );
+  });
+});
+
+describe('a folder page never shows in a list (#922)', () => {
+  const at = (path: string, minute: number): DriveFile => ({
+    id: `id-${path}`,
+    name: path.slice(path.lastIndexOf('/') + 1),
+    mimeType: MD,
+    parents: ['FOLDER_ID'],
+    path,
+    modifiedTime: `2026-09-30T10:${String(minute).padStart(2, '0')}:00Z`,
+  });
+  const page = at('2-Areas/Visa/Visa.md', 59);
+  const mine = at('2-Areas/Home/Home.md', 58);
+  const note = at('2-Areas/Visa/Checklist.md', 10);
+  const byPath = new Map([page, mine, note].map((f) => [f.path, f]));
+  const known = new Map<string, NoteMeta>([
+    [page.id, noteMetaFrom({ tags: ['area'] })],
+    [mine.id, noteMetaFrom({ by: 'person' })],
+  ]);
+
+  it('leaves pages out of a card preview and Recently changed', () => {
+    const shown = listedUnder(byPath, '2-Areas', 5, (f) => known.get(f.id));
+    expect(shown.map((f) => f.path)).toEqual([mine.path, note.path]);
+    const card = listedUnder(byPath, '2-Areas/Visa', 3, (f) => known.get(f.id));
+    expect(card.map((f) => f.path)).toEqual([note.path]);
+  });
+
+  it('counts no subfolder as an original in a folder that holds only folders', () => {
+    const empty = { originals: [], bower: [] };
+    // Housing Search Australia: only the Moonee Ponds subfolder (and its
+    // own page, which is not listed): "Originals 0 · By Bower 0".
+    expect(segmentSubfolders(1, false, empty)).toBe(0);
+    expect(segmentSubfolders(2, true, { originals: [note], bower: [] })).toBe(
+      0,
+    );
+    expect(segmentSubfolders(2, false, { originals: [note], bower: [] })).toBe(
+      2,
+    );
+  });
+
+  it('treats a same-name note as a page until its frontmatter is read', () => {
+    expect(listedUnder(byPath, '2-Areas', 5).map((f) => f.path)).toEqual([
+      note.path,
+    ]);
   });
 });

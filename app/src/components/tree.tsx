@@ -53,7 +53,7 @@ import {
   paraKindOf,
 } from '../navigation.js';
 import type { ParaKind, TreeNode, TreeRow, TreeSort } from '../navigation.js';
-import { loadNoteMeta } from '../note-meta.js';
+import { loadNoteMeta, peekNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { ancestorsOf, mergeExpanded } from '../reveal.js';
@@ -210,7 +210,7 @@ function useOwnHubs(hubs: readonly DriveFile[]): ReadonlySet<string> {
     void Promise.all(
       hubs.map((hub) =>
         loadNoteMeta(hub)
-          .then((meta) => (isBowerWritten(meta) ? null : hub.id))
+          .then((meta) => (isBowerWritten(meta, hub) ? null : hub.id))
           .catch((err: unknown) => {
             console.error("Could not read a folder's own note", err);
             return null;
@@ -399,7 +399,7 @@ export function readBowerWritten(file: DriveFile): Promise<boolean> {
   const known = bowerReads.get(key);
   if (known !== undefined) return known;
   const read = loadNoteMeta(file).then(
-    (meta) => isBowerWritten(meta),
+    (meta) => isBowerWritten(meta, file),
     (err: unknown) => {
       console.error('Could not read who wrote a note', err);
       bowerReads.delete(key);
@@ -421,7 +421,16 @@ export function useBowerWritten(
   files: readonly DriveFile[],
   current?: DriveFile,
 ): ReadonlySet<string> {
-  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  // What this tab already read (#922): no document glyph first on a
+  // folder opened again.
+  const [ids, setIds] = useState<ReadonlySet<string>>(
+    () =>
+      new Set(
+        files
+          .filter((file) => isBowerWritten(peekNoteMeta(file), file))
+          .map((file) => file.id),
+      ),
+  );
   const key = files.map((file) => file.id).join(',');
   // A folder screen caches its notes' frontmatter as it reads them; read
   // the cache again then (coalesced), so the bird shows without a Drive
@@ -453,7 +462,9 @@ export function useBowerWritten(
         ? []
         : [
             loadNoteMeta(current)
-              .then((meta) => (isBowerWritten(meta) ? current.id : null))
+              .then((meta) =>
+                isBowerWritten(meta, current) ? current.id : null,
+              )
               .catch((err: unknown) => {
                 console.error('Could not read the open note', err);
                 return null;
@@ -489,9 +500,19 @@ export interface BowerNotes {
  * plain "Note".
  */
 export function useBowerNotes(notes: readonly DriveFile[]): BowerNotes {
-  const [found, setFound] = useState<BowerNotes>({
-    written: new Set(),
-    answers: new Set(),
+  // What this tab already read (#922): a card never reads "Note" first.
+  const [found, setFound] = useState<BowerNotes>(() => {
+    const mine = notes.filter((note) =>
+      isBowerWritten(peekNoteMeta(note), note),
+    );
+    return {
+      written: new Set(mine.map((note) => note.id)),
+      answers: new Set(
+        mine
+          .filter((note) => peekNoteMeta(note)?.type === 'answer')
+          .map((note) => note.id),
+      ),
+    };
   });
   const key = notes
     .map((note) => `${note.id}:${note.modifiedTime ?? ''}`)
@@ -505,7 +526,7 @@ export function useBowerNotes(notes: readonly DriveFile[]): BowerNotes {
           if (kind !== 'note' && kind !== 'markdown') return null;
           try {
             const meta = await loadNoteMeta(note);
-            return isBowerWritten(meta)
+            return isBowerWritten(meta, note)
               ? { id: note.id, answer: meta.type === 'answer' }
               : null;
           } catch (err: unknown) {

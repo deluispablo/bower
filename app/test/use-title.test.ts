@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { documentTitle, titleForPath } from '../src/use-title.js';
+import { fileTitle } from '../src/vault-index.js';
 
 describe('documentTitle', () => {
   it('adds the app name', () => {
@@ -39,5 +40,13 @@ describe('titleForPath', () => {
 
   it('calls an unknown path a missing page', () => {
     expect(titleForPath('/nope')).toBe('Page not found · Bower');
+  });
+});
+
+describe('a file page tab (#922)', () => {
+  it('reads the display name without its extension', () => {
+    expect(documentTitle(fileTitle('Passport copy.pdf'))).toBe(
+      'Passport copy · Bower',
+    );
   });
 });

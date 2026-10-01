@@ -215,3 +215,61 @@ export function filedBy(
   }
   return { by, at, line: join('added', when), about: when };
 }
+
+/** What `filedHistory` reads of a finished run (`api.ts#Run`). */
+export interface HistoryRun {
+  state: string;
+  finishedAt?: string | undefined;
+  items?: readonly { path: string; to?: string | undefined }[] | undefined;
+}
+
+/**
+ * When each file a run filed was filed, by its path from the top of the
+ * Bower folder (R-API-3, #922), from the run history (`GET /runs`): every
+ * finished run's items that say where they ended up (`to`, report v2) map
+ * to that run's `finishedAt`; the newest run wins. A run reported before
+ * report v2 has no `to` and adds nothing, so its files fall back to
+ * Drive's created time ("added <when>").
+ */
+export function filedHistory(
+  runs: readonly HistoryRun[],
+): ReadonlyMap<string, string> {
+  const at = new Map<string, string>();
+  for (const run of runs) {
+    if (run.state !== 'done' || run.finishedAt === undefined) continue;
+    const finished = run.finishedAt;
+    for (const item of run.items ?? []) {
+      if (item.to === undefined || item.to === '') continue;
+      const known = at.get(item.to);
+      if (known === undefined || Date.parse(finished) > Date.parse(known)) {
+        at.set(item.to, finished);
+      }
+    }
+  }
+  return at;
+}
+
+/**
+ * `file` and its origin with the run history applied (#922): a file the
+ * history names was filed by Bower at that run's end, unless the file or
+ * the catalogue already says the person put it there. Pass the result to
+ * `filedBy`.
+ */
+export function withHistory<T extends FiledSource & Pick<DriveFile, 'path'>>(
+  file: T,
+  origin: Origin | null,
+  history: ReadonlyMap<string, string>,
+): { file: T; origin: Origin | null } {
+  const filedAt = history.get(file.path);
+  if (filedAt === undefined) return { file, origin };
+  const known = origin ?? 'filed';
+  if (known !== 'filed' && known !== 'asked') return { file, origin: known };
+  // Moving a file keeps Drive's times, so an original Bower filed reads its
+  // run's time. A file changed since (a note a later run updated) keeps
+  // reading its own last change, as the demo's contract does.
+  const changed = Date.parse(file.modifiedTime ?? '');
+  if (!Number.isNaN(changed) && changed >= Date.parse(filedAt)) {
+    return { file, origin: known };
+  }
+  return { file: { ...file, filedAt }, origin: known };
+}

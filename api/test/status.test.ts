@@ -271,6 +271,22 @@ describe('GET /status', () => {
     expect(await getRun(kv, USER_ID)).toEqual(body.run);
   });
 
+  it('gives a running run its startedAt, as the demo does (R-API-4, #922)', async () => {
+    await seedUser();
+    const run = runningFor(60 * 1000);
+    await putRun(kv, USER_ID, run);
+
+    const response = await getStatus(await sessionCookie());
+
+    expect(response.status).toBe(200);
+    const body = await response.json<StatusResponseBody>();
+    expect(body.stale).toBe(false);
+    expect(body.run?.state).toBe('running');
+    // The same ISO string the runner's first report stored, never rewritten.
+    expect(body.run?.startedAt).toBe(run.startedAt);
+    expect(Number.isNaN(Date.parse(body.run?.startedAt ?? ''))).toBe(false);
+  });
+
   it('shows done with processed and summary once the runner reports it', async () => {
     await seedUser();
     const run: Run = {

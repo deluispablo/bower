@@ -21,9 +21,13 @@ import { CATALOGUE_PATH } from '../file-origin.js';
 import { buildFolderModel, folderCount, isFolderPage } from '../folder-view.js';
 import type { FolderModel } from '../folder-view.js';
 import type { FolderContents } from '../navigation.js';
-import { loadNoteMeta } from '../note-meta.js';
+import { loadNoteMeta, peekNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { useVault } from '../vault-store.js';
+import {
+  peekCatalogueText,
+  readCatalogueText,
+} from './use-catalogue-origins.js';
 
 /** How many notes' frontmatter is read at once. */
 const META_BATCH = 8;
@@ -47,11 +51,15 @@ export interface NoteMetasState {
  * render first and their kinds follow. A failed read is reported, never
  * absorbed (#950 T950-2). */
 export function useNoteMetas(notes: readonly DriveFile[]): NoteMetasState {
-  const [metas, setMetas] = useState<ReadonlyMap<string, NoteMeta>>(
-    () => new Map(),
-  );
-  const [, setTick] = useState(0);
   const key = versionKey(notes);
+  // Keyed by the notes' versions: another folder's frontmatter is never
+  // read for this one. Starts from what this tab already read (#922).
+  const [state, setState] = useState<{
+    key: string;
+    metas: ReadonlyMap<string, NoteMeta>;
+  }>(() => ({ key, metas: knownMetas(notes) }));
+  const metas = state.key === key ? state.metas : knownMetas(notes);
+  const [, setTick] = useState(0);
   const latest = useRef(notes);
   latest.current = notes;
   const attempt = readAttempts.get(key) ?? 0;
@@ -71,9 +79,10 @@ export function useNoteMetas(notes: readonly DriveFile[]): NoteMetasState {
   useEffect(() => {
     let cancelled = false;
     let missed = false;
-    const read = new Map<string, NoteMeta>();
+    const read = new Map<string, NoteMeta>(knownMetas(latest.current));
     void (async () => {
-      const all = latest.current;
+      const all = latest.current.filter((note) => !read.has(note.id));
+      if (all.length === 0) setState({ key, metas: new Map(read) });
       for (let at = 0; at < all.length && !cancelled; at += META_BATCH) {
         await Promise.all(
           all.slice(at, at + META_BATCH).map(async (note) => {
@@ -85,7 +94,7 @@ export function useNoteMetas(notes: readonly DriveFile[]): NoteMetasState {
             }
           }),
         );
-        if (!cancelled) setMetas(new Map(read));
+        if (!cancelled) setState({ key, metas: new Map(read) });
       }
       if (cancelled || !missed) return;
       failedReads.add(key);
@@ -104,6 +113,16 @@ export function useNoteMetas(notes: readonly DriveFile[]): NoteMetasState {
   return { metas, failed: failedReads.has(key), retry };
 }
 
+/** The frontmatter this tab already read for `notes` (`peekNoteMeta`). */
+function knownMetas(notes: readonly DriveFile[]): Map<string, NoteMeta> {
+  const known = new Map<string, NoteMeta>();
+  for (const note of notes) {
+    const meta = peekNoteMeta(note);
+    if (meta !== undefined) known.set(note.id, meta);
+  }
+  return known;
+}
+
 /** Note sets whose frontmatter read failed, by `versionKey`. */
 const failedReads = new Set<string>();
 /** Retries asked for, by `versionKey`: a change re-runs the reads. */
@@ -119,27 +138,21 @@ export function useCatalogueFiles(
   catalogue: DriveFile | undefined,
   getNoteText: (id: string) => Promise<string>,
 ): ReadonlyMap<string, string> {
-  const [files, setFiles] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
+  const [files, setFiles] = useState<ReadonlyMap<string, string>>(() =>
+    parseCatalogueFiles(peekCatalogueText(catalogue) ?? ''),
   );
   const id = catalogue?.id;
   const version = catalogue?.modifiedTime;
 
   useEffect(() => {
-    if (id === undefined) {
+    if (catalogue === undefined) {
       setFiles(new Map());
       return;
     }
     let cancelled = false;
-    getNoteText(id).then(
-      (text) => {
-        if (!cancelled) setFiles(parseCatalogueFiles(text));
-      },
-      (err: unknown) => {
-        console.error(err);
-        if (!cancelled) setFiles(new Map());
-      },
-    );
+    void readCatalogueText(catalogue, getNoteText).then((text) => {
+      if (!cancelled) setFiles(parseCatalogueFiles(text));
+    });
     return () => {
       cancelled = true;
     };
@@ -255,4 +268,47 @@ export function useFolderSummary(
   if (lifecycle !== undefined) summary.lifecycle = lifecycle;
   if (updated !== undefined) summary.updated = updated;
   return summary;
+}
+
+/**
+ * Whether a folder screen knows who wrote its things and how many there
+ * are (#922, T950-1): the frontmatter of every note it states something
+ * about (`folderReads`) and the catalogue have been read, or this tab
+ * already read them. Until then the screen shows skeletons instead of
+ * guessing ("Note", "By Bower 0", a missing Compare tab). A read that
+ * fails still counts as done: the screen then shows its error line.
+ */
+export function useFolderKnown(
+  reads: readonly DriveFile[],
+  catalogue: DriveFile | undefined,
+  getNoteText: (id: string) => Promise<string>,
+): boolean {
+  const key = `${versionKey(reads)}#${catalogue?.id ?? ''}:${catalogue?.modifiedTime ?? ''}`;
+  const knownNow =
+    reads.every((file) => peekNoteMeta(file) !== undefined) &&
+    peekCatalogueText(catalogue) !== undefined;
+  const [doneKey, setDoneKey] = useState<string | null>(null);
+  const latest = useRef({ reads, catalogue });
+  latest.current = { reads, catalogue };
+
+  useEffect(() => {
+    if (knownNow) return;
+    let cancelled = false;
+    const now = latest.current;
+    void Promise.all([
+      ...now.reads.map((file) =>
+        loadNoteMeta(file).catch((err: unknown) => {
+          console.error(err);
+        }),
+      ),
+      readCatalogueText(now.catalogue, getNoteText),
+    ]).then(() => {
+      if (!cancelled) setDoneKey(key);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, knownNow, getNoteText]);
+
+  return knownNow || doneKey === key;
 }

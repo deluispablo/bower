@@ -69,6 +69,7 @@ import { isFolderPage } from '../folder-view.js';
 import { ITEM_KIND_WORDS } from '../kinds.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
+import { sharedTitleOf } from '../note-titles.js';
 import { useOnline } from '../online.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
@@ -105,7 +106,7 @@ import {
   useSwitcherOpen,
 } from '../switcher-store.js';
 import type { Command } from '../switcher.js';
-import { commandsFor } from '../switcher.js';
+import { bestNameMatch, commandsFor, keptHighlight } from '../switcher.js';
 import { effectiveTheme, setTheme } from '../theme.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { FILE_KIND_LABELS, fileKind, isAppFile } from '../vault-index.js';
@@ -253,7 +254,8 @@ function useBowerNotes(files: readonly DriveFile[]): {
               prev.has(file.id) ? prev : new Set(prev).add(file.id),
             );
           }
-          if (!isBowerWritten(meta, { body })) return;
+          if (!isBowerWritten(meta, { body, path: file.path, name: file.name }))
+            return;
           setIds((prev) =>
             prev.has(file.id) ? prev : new Set(prev).add(file.id),
           );
@@ -665,7 +667,7 @@ function rowFromFile(
       kind === 'folder'
         ? displayName(file.name)
         : kind === 'note'
-          ? searchTitle(noteTitle(file))
+          ? searchTitle(sharedTitleOf(file) ?? noteTitle(file))
           : withoutExtension(file.name),
     highlights: [],
     para,
@@ -785,7 +787,8 @@ function HitRow({
           class: 'switcher-row',
           'data-highlighted': selected,
           'data-kind': row.kind,
-          onMouseEnter: onHighlight,
+          // A real pointer move, never rows shifting under a still pointer.
+          onMouseMove: onHighlight,
           onClick: (event: MouseEvent) => {
             event.preventDefault();
             onActivate(row);
@@ -827,7 +830,7 @@ function CommandRow({
       <div
         class="switcher-row"
         data-highlighted={selected}
-        onMouseEnter={onHighlight}
+        onMouseMove={onHighlight}
         onClick={() => {
           onActivate(command);
         }}
@@ -991,6 +994,8 @@ function SwitcherPanel({
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
+  /** The name matches found on this device, before Drive's full text. */
+  const localRef = useRef<SearchResults | null>(null);
   // SearchField hands its input over through this ref; the combobox role
   // goes on as soon as it does, whenever the overlay host mounts it.
   const [inputRef] = useState(() => {
@@ -1115,6 +1120,7 @@ function SwitcherPanel({
     };
     const handle = syncedSearchIndex(index);
     const local = searchVault(handle, index, trimmed, options);
+    localRef.current = local;
     return mergeFullText(local, driveFiles, index, trimmed, options, snippets);
     // `indexVersion` is not read here: it only forces this to run again.
   }, [
@@ -1128,18 +1134,15 @@ function SwitcherPanel({
     indexVersion,
   ]);
 
-  const topHit = useMemo((): SearchHit | null => {
-    if (results === null) return null;
-    let best: SearchHit | null = null;
-    for (const hit of [
-      ...results.folders,
-      ...results.notes,
-      ...results.files,
-    ]) {
-      if (best === null || hit.score > best.score) best = hit;
-    }
-    return best;
-  }, [results]);
+  // The best name match, from the hits found on this device only: it never
+  // changes when Drive's full-text answer arrives (#922).
+  const topHit = useMemo(
+    (): SearchHit | null =>
+      results === null || localRef.current === null
+        ? null
+        : bestNameMatch(localRef.current),
+    [results],
+  );
 
   // One set of kind chips on both sizes (SE-Query-375/1280).
   const activeChip = kindChip;
@@ -1279,11 +1282,26 @@ function SwitcherPanel({
   const highlightedRow = flatRows[highlightedIndex] ?? null;
   const preview = usePreview(desktop ? highlightedRow : null, index?.byPath);
 
-  // The highlight starts (and resets) on the list's first row whenever the
-  // list itself changes shape.
+  // The highlight starts on the list's first row and goes back there when
+  // the search changes (query, chip, scope). When only the rows change
+  // (Drive's full-text answer arriving), it stays on the row it was on, so
+  // the highlighted row never depends on when Drive answers (#922).
+  const rowKeys = useMemo(
+    () => [
+      ...flatRows.map((row) => row.file.id),
+      ...matchingCommands.map((command) => `command:${command.id}`),
+    ],
+    [flatRows, matchingCommands],
+  );
+  const highlightedKey = useRef<string | null>(null);
+  highlightedKey.current = rowKeys[highlightedIndex] ?? null;
+  const searchKey = `${trimmed}${String(activeChip)}${scope?.path ?? ''}`;
+  const lastSearch = useRef(searchKey);
   useEffect(() => {
-    setHighlightedIndex(0);
-  }, [entryCount, trimmed, activeChip, scope]);
+    const reset = lastSearch.current !== searchKey;
+    lastSearch.current = searchKey;
+    setHighlightedIndex(keptHighlight(highlightedKey.current, rowKeys, reset));
+  }, [rowKeys, searchKey]);
 
   const goTo = useCallback(
     (href: string) => {
@@ -1411,7 +1429,9 @@ function SwitcherPanel({
       return null;
     }
     const file = index.byId.get(id);
-    return file === undefined ? null : searchTitle(noteTitle(file));
+    return file === undefined
+      ? null
+      : searchTitle(sharedTitleOf(file) ?? noteTitle(file));
   }, [location, index]);
 
   // The highlighted option, on the field (the listbox pattern).

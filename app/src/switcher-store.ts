@@ -66,6 +66,8 @@ export function useSwitcherOpen(): SwitcherOpenState {
 
 let searchHandle: SearchIndexHandle = createSearchIndex();
 const noteTexts = new Map<string, string>();
+/** The `modifiedTime` each text in `noteTexts` was read at (#922). */
+const textVersions = new Map<string, string>();
 let restoreStarted = false;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -115,17 +117,29 @@ export async function restoreSavedSearchIndex(): Promise<boolean> {
  * network). Resolves to `true` when it learned text it did not have.
  */
 export async function feedCachedNoteText(vault: VaultIndex): Promise<boolean> {
-  const missing = vault.notes.filter((note) => !noteTexts.has(note.id));
+  // A note a run rewrote since its text was read is read again (#922).
+  const missing = vault.notes.filter(
+    (note) =>
+      !noteTexts.has(note.id) ||
+      textVersions.get(note.id) !== (note.modifiedTime ?? ''),
+  );
   const read = await Promise.all(
     missing.map(async (note) => {
       const cached = await loadNote(note.id).catch(() => undefined);
-      return cached === undefined ? null : ([note.id, cached.text] as const);
+      // Never text of a known older version (#922): it would title the hit
+      // differently from every other list (R-API-7).
+      return cached === undefined ||
+        (cached.modifiedTime !== '' &&
+          cached.modifiedTime !== (note.modifiedTime ?? ''))
+        ? null
+        : ([note.id, cached.text, note.modifiedTime ?? ''] as const);
     }),
   );
   let learned = false;
   for (const entry of read) {
     if (entry === null) continue;
     noteTexts.set(entry[0], entry[1]);
+    textVersions.set(entry[0], entry[2]);
     learned = true;
   }
   return learned;

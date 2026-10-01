@@ -456,6 +456,27 @@ describe('startedLine (R-API-4)', () => {
     vi.useRealTimers();
   });
 
+  it('reads startedAt from a real GET /status body (#922)', () => {
+    // The Worker's `StatusBody` as it goes over the wire: the run is the
+    // stored `Run`, `startedAt` an ISO string, the same shape the demo's
+    // `server.status()` answers.
+    const started = new Date(2026, 8, 30, 11, 57);
+    const wire = JSON.parse(
+      JSON.stringify({
+        run: {
+          state: 'running',
+          requestedAt: new Date(2026, 8, 30, 11, 56).toISOString(),
+          startedAt: started.toISOString(),
+          runId: '4242',
+        },
+        stale: false,
+      }),
+    ) as { run: { startedAt?: string; requestedAt: string } };
+    expect(startedLine(wire.run)).toBe(
+      'Started 11:57 · it takes a few minutes',
+    );
+  });
+
   it('falls back to the request time, then to "just now"', () => {
     const asked = new Date(2026, 8, 30, 9, 5).toISOString();
     expect(runStartTime({ requestedAt: asked })).toBe('09:05');

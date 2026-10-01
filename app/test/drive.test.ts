@@ -386,7 +386,7 @@ describe('listVault', () => {
       "'it\\'s' in parents and trashed = false",
     );
     expect(url?.searchParams.get('fields')).toBe(
-      'nextPageToken,files(id,name,mimeType,parents,modifiedTime,size,webViewLink,appProperties,thumbnailLink,imageMediaMetadata(time,width,height),videoMediaMetadata(durationMillis))',
+      'nextPageToken,files(id,name,mimeType,parents,modifiedTime,size,webViewLink,createdTime,appProperties,thumbnailLink,imageMediaMetadata(time,width,height),videoMediaMetadata(durationMillis))',
     );
     expect(url?.searchParams.get('pageSize')).toBe('1000');
   });

@@ -35,7 +35,9 @@ import type { MetaItem } from '../meta-line.js';
 import { originOf } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import {
+  CARD_RECENT_MAX,
   FOLDER_SORTS,
+  RECENT_MAX,
   fileLine,
   filterKind,
   folderSegments,
@@ -43,11 +45,13 @@ import {
   rowsFor,
   sortRows,
   folderPagesUnder,
+  listedUnder,
+  segmentSubfolders,
   isFolderPage,
   subfolderThings,
 } from '../folder-view.js';
 import type { FolderRow, FolderSort, OriginFilter } from '../folder-view.js';
-import { loadNoteMeta } from '../note-meta.js';
+import { loadNoteMeta, peekNoteMeta } from '../note-meta.js';
 import {
   displayName,
   folderHref,
@@ -59,12 +63,7 @@ import { noteTitle } from '../note-title.js';
 import type { PendingRequest } from '../rename-request.js';
 import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
-import {
-  FILE_KIND_LABELS,
-  changedUnder,
-  fileKind,
-  fileTitle,
-} from '../vault-index.js';
+import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
 import { Badge } from './badge.js';
 import { FilterSortSheet } from './filter-sort-sheet.js';
@@ -99,7 +98,18 @@ function things(n: number): string {
  * at every depth is left out (K-31, #950).
  */
 function useBowerFolderPages(pages: readonly DriveFile[]): ReadonlySet<string> {
-  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  // What this tab already read (#922): a card's count is never guessed.
+  const [ids, setIds] = useState<ReadonlySet<string>>(
+    () =>
+      new Set(
+        pages
+          .filter((page) => {
+            const meta = peekNoteMeta(page);
+            return meta !== undefined && isFolderPage(page, meta);
+          })
+          .map((page) => page.id),
+      ),
+  );
   const key = pages
     .map((page) => `${page.id}:${page.modifiedTime ?? ''}`)
     .join(',');
@@ -169,7 +179,7 @@ export function firstInside(
   bower: ReadonlySet<string> = new Set(),
   answers: ReadonlySet<string> = new Set(),
 ): FolderCardItem[] {
-  return changedUnder(byPath, path, max).map((file) => ({
+  return listedUnder(byPath, path, max, peekNoteMeta).map((file) => ({
     id: file.id,
     title: titleOfFile(file),
     name: file.name,
@@ -180,8 +190,7 @@ export function firstInside(
   }));
 }
 
-/** How many rows "Recently changed in <folder>" lists. */
-export const RECENT_MAX = 5;
+export { RECENT_MAX } from '../folder-view.js';
 
 /** A day group's label: "Today", "Yesterday", "29 Sep" (S-PF-6). */
 export function dayLabel(iso: string, now: number): string {
@@ -417,13 +426,17 @@ export function FolderItems({
   // A folder of folders: what its cards and Recently changed list.
   const recent = useMemo(
     () =>
-      folderOfFolders ? changedUnder(byPath, contents.path, RECENT_MAX) : [],
+      folderOfFolders
+        ? listedUnder(byPath, contents.path, RECENT_MAX, peekNoteMeta)
+        : [],
     [folderOfFolders, byPath, contents.path],
   );
   const cardFiles = useMemo(
     () =>
       folderOfFolders
-        ? subfolders.flatMap((folder) => changedUnder(byPath, folder.path, 10))
+        ? subfolders.flatMap((folder) =>
+            listedUnder(byPath, folder.path, CARD_RECENT_MAX, peekNoteMeta),
+          )
         : [],
     [folderOfFolders, byPath, subfolders],
   );
@@ -441,8 +454,9 @@ export function FolderItems({
       : fileTitle(row.file.name);
 
   // K-31: subfolders count as originals, except on a folder of folders,
-  // whose cards are not its own things (AR-Main: "Originals 0").
-  const subCount = folderOfFolders ? 0 : subfolders.length;
+  // whose cards are not its own things (AR-Main: "Originals 0"), or on
+  // one that holds only folders (#922).
+  const subCount = segmentSubfolders(subfolders.length, folderOfFolders, model);
   const segments = folderSegments({ subfolders: subCount, model });
 
   const originRows = useMemo(
@@ -645,7 +659,7 @@ export function FolderItems({
     const bower =
       model.bowerIds.has(file.id) ||
       bowerSet.has(file.id) ||
-      isBowerWritten(model.metas.get(file.id));
+      isBowerWritten(model.metas.get(file.id), file);
     return {
       title:
         fileKind(file) === 'note'
@@ -666,19 +680,22 @@ export function FolderItems({
 
   /** A subfolder card, as the preview column shows it (AR-Select-1280). */
   function paneOfFolder(folder: FolderSubfolder): PaneItem {
-    const inside: PaneInsideItem[] = changedUnder(byPath, folder.path, 10).map(
-      (file) => ({
-        id: file.id,
-        title: titleOfFile(file),
-        href: hrefOfFile(file),
-        name: file.name,
-        mimeType: file.mimeType,
-        path: file.path,
-        bowerWritten: bowerSet.has(file.id),
-        isNew: fresh.isNew(file.id),
-        ...(file.modifiedTime !== undefined && { modified: file.modifiedTime }),
-      }),
-    );
+    const inside: PaneInsideItem[] = listedUnder(
+      byPath,
+      folder.path,
+      CARD_RECENT_MAX,
+      peekNoteMeta,
+    ).map((file) => ({
+      id: file.id,
+      title: titleOfFile(file),
+      href: hrefOfFile(file),
+      name: file.name,
+      mimeType: file.mimeType,
+      path: file.path,
+      bowerWritten: bowerSet.has(file.id),
+      isNew: fresh.isNew(file.id),
+      ...(file.modifiedTime !== undefined && { modified: file.modifiedTime }),
+    }));
     const own = byPath.get(folder.path);
     return {
       type: 'folder',
@@ -1080,7 +1097,7 @@ export function FolderItems({
           kind={quick.kind}
           pages={pages.get((quick.original ?? quick.file).id)}
           origin={originOf(quick.original ?? quick.file, catalogue)}
-          bower={isBowerWritten(model.metas.get(quick.file.id))}
+          bower={isBowerWritten(model.metas.get(quick.file.id), quick.file)}
           answer={model.metas.get(quick.file.id)?.type === 'answer'}
           folderPath={contents.path}
           now={now}
