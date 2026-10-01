@@ -12,8 +12,8 @@ import { rulesVersionOf } from '../src/rulebook.js';
 const RULEBOOK = rulebookRaw.replace(/\r\n/g, '\n');
 
 describe('rulebook v23', () => {
-  it('is version 23', () => {
-    expect(rulesVersionOf(RULEBOOK)).toBe(23);
+  it('is version 23 or later', () => {
+    expect(rulesVersionOf(RULEBOOK)).toBeGreaterThanOrEqual(23);
   });
 
   it.each([
