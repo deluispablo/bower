@@ -39,6 +39,7 @@ import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH } from '../file-origin.js';
 import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
+import { folderHelpTopic, useHelpTopic } from '../help-rows.js';
 import { metaLine } from '../meta-line.js';
 import {
   breadcrumb,
@@ -326,6 +327,7 @@ function FolderBody({
       icon: { name: contents.name, mimeType: FOLDER_MIME, path: contents.path },
     });
   const purpose = root ? folderMeaning(contents.path) : undefined;
+  useHelpTopic(folderHelpTopic(title, folderOfFolders, compare?.label));
 
   return (
     <section class="folder-view">

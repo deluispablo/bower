@@ -62,6 +62,7 @@ import type { BreadcrumbSegment } from '../navigation.js';
 import { loadNoteMeta, noteMetaFrom, recordNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle as computeNoteTitle } from '../note-title.js';
+import { noteHelpTopic, useHelpTopic } from '../help-rows.js';
 import { useTitle } from '../use-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
@@ -537,6 +538,13 @@ export function Note() {
     ],
   );
   useShellSlot('aside', aboutContent);
+  const bowerMeta = aboutProps?.meta;
+  useHelpTopic(
+    noteHelpTopic(
+      file?.path,
+      bowerMeta !== undefined && isBowerNote(bowerMeta),
+    ),
+  );
   // The column took over, or another note opened: the sheet goes.
   useEffect(() => {
     closeAbout();

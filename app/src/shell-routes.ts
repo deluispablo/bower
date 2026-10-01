@@ -113,20 +113,17 @@ export function isInnerScreen(path: string, demo = false): boolean {
 }
 
 /**
- * Which help sheet the top bar's "?" opens on `path` (#330): the tab's own
- * sheet on a tab; the folder sheet on a folder; the Notes sheet on a note,
- * a file or a search, which are reached from Notes; Home's everywhere else.
+ * Which Help "Help and about this" opens on `path` (#330, #919, R-HELP-2):
+ * the tab's own on a tab; Just filed's and Settings' own; a folder's, a
+ * note's or a file's own (the screen refines it with `useHelpTopic`); the
+ * Folders Help on Search, which is reached from Folders; Home's elsewhere.
  */
 export function helpScreenFor(path: string): HelpScreen {
-  if (
-    path === '/notes' ||
-    path === '/search' ||
-    path === '/just-filed' ||
-    path.startsWith('/note/') ||
-    path.startsWith('/file/')
-  ) {
-    return 'notes';
-  }
+  if (path === FOLDERS_PATH || path === '/search') return 'notes';
+  if (path === JUST_FILED_PATH) return 'justFiled';
+  if (path === SETTINGS_PATH) return 'settings';
+  if (path.startsWith('/note/')) return 'note';
+  if (path.startsWith('/file/')) return 'file';
   if (path === '/folder' || path.startsWith('/folder/')) return 'folder';
   if (path === '/add') return 'add';
   if (path === BOWER_PATH) return 'bower';

@@ -89,6 +89,7 @@ import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
 import { siblingNames } from '../rename-request.js';
 import { useMediaQuery } from '../use-media-query.js';
+import { fileHelpTopic, useHelpTopic } from '../help-rows.js';
 import { useTitle } from '../use-title.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { useVault } from '../vault-store.js';
@@ -753,6 +754,9 @@ export function FileScreen(): JSX.Element {
     [index, file, items, aboutColumn, filed?.about],
   );
   useShellSlot('aside', aboutContent);
+  useHelpTopic(
+    fileHelpTopic(file?.path, file && kindLabel(file), filed?.by ?? null),
+  );
   useEffect(() => {
     closeAbout();
   }, [id, aboutColumn]);
