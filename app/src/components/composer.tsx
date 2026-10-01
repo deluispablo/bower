@@ -339,6 +339,7 @@ export function Composer({
     `composer-rows-${rows}`,
     hasText ? 'composer-filled' : '',
     dictation.state === 'listening' ? 'composer-listening' : '',
+    button.state === 'mic-off' ? 'composer-dictation-off' : '',
     rootClass ?? '',
   ]
     .filter((c) => c !== '')

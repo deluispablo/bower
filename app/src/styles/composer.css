@@ -32,6 +32,12 @@
   border-color: var(--color-brand);
 }
 
+/* Dictation blocked or not available (BW-Blocked): the empty box keeps its
+   plain border, even with focus left on the mic. */
+.composer-dictation-off:not(.composer-filled) .composer-box:focus-within {
+  border-color: var(--color-border);
+}
+
 .composer-input {
   flex: 1;
   align-self: flex-start;
