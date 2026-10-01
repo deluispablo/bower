@@ -17,8 +17,6 @@
 
 import { useEffect } from 'preact/hooks';
 
-import { displayName, folderOf } from './navigation.js';
-
 /** The four tabs at the bottom of the phone (#317), in their order. */
 export type HelpTab = 'home' | 'notes' | 'add' | 'bower';
 
@@ -559,11 +557,27 @@ export function tourNextLabel(index: number): string {
   return next === undefined ? "Let's go" : `Next: ${HELP_ROWS[next].title}`;
 }
 
+/**
+ * A path's last name as shown: no "1-" prefix, no extension ("1-Projects"
+ * → "Projects"). `navigation.ts`'s `displayName` in short; this module
+ * stays free of the Drive imports so any screen can load it.
+ */
+function shownName(path: string): string {
+  const last = path.slice(path.lastIndexOf('/') + 1);
+  const shown = last
+    .replace(/^\d{1,2}-/, '')
+    .replace(/\.[^./]+$/, '')
+    .replace(/_+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return shown === '' ? last : shown;
+}
+
 /** The folder a path sits in, as shown: "Job Search Australia". */
 function shownFolder(path: string | undefined): string | undefined {
   if (path === undefined) return undefined;
-  const folder = folderOf(path);
-  return folder === '' ? undefined : displayName(folder);
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? undefined : shownName(path.slice(0, slash));
 }
 
 /** A folder screen's Help (R-HELP-3: one text for List and Grid). */
@@ -585,8 +599,7 @@ export function noteHelpTopic(
   byBower: boolean,
 ): HelpTopic {
   const folder = shownFolder(path);
-  const name =
-    path === undefined ? undefined : displayName(path).replace(/\.md$/i, '');
+  const name = path === undefined ? undefined : shownName(path);
   return {
     screen: byBower ? 'bowerNote' : 'note',
     context: {
