@@ -242,7 +242,7 @@ export function TidyConfirmSheet({
                         {requestRowLabel(piles.requests ?? 0)}
                       </span>
                       <span class="tidy-confirm-pile-count">
-                        {String(piles.requests ?? 0)}
+                        {`${piles.requests ?? 0} ${(piles.requests ?? 0) === 1 ? 'thing' : 'things'}`}
                       </span>
                     </li>
                   )}
