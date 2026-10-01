@@ -11,7 +11,7 @@
  * typo tolerance, and the debounced Drive full-text search
  * (`mergeFullText`) adds what only Drive's own text index knows. Results
  * come as Folders, Notes and Files, with chips that filter by kind (with
- * counts) and by time. Opened from a folder screen the search is scoped to
+ * counts); no board draws a time chip (SE-Query, #950 D-5). Opened from a folder screen the search is scoped to
  * that folder; on an empty query the PARA chips scope it too. Commands
  * always come last and only when the query matches one (R-SEARCH-8).
  *
@@ -113,7 +113,6 @@ import { ListRow } from './list-row.js';
 import { FolderMark } from './folder-mark.js';
 import {
   IconChat,
-  IconClock,
   IconClose,
   IconInbox,
   IconMoon,
@@ -129,7 +128,6 @@ import '../styles/switcher.css';
 
 const MIN_QUERY_LENGTH = 2;
 const DEBOUNCE_MS = 300;
-const DAY_MS = 86_400_000;
 const START_LIST_MAX = 5;
 
 /** The desktop overlay's two columns start here (`switcher.css`). */
@@ -380,35 +378,6 @@ function usePreview(
 
   return { picture, lines };
 }
-type TimeKey = 'any' | 'today' | '7d' | '30d' | 'year';
-
-const TIME_LABELS: Readonly<Record<TimeKey, string>> = {
-  any: 'Any time',
-  today: 'Today',
-  '7d': '7 days',
-  '30d': '30 days',
-  year: 'This year',
-};
-
-/** The earliest modified time (epoch ms) a time filter lets through. */
-function sinceFor(time: TimeKey, now: number): number | undefined {
-  switch (time) {
-    case 'any':
-      return undefined;
-    case 'today': {
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      return start.getTime();
-    }
-    case '7d':
-      return now - 7 * DAY_MS;
-    case '30d':
-      return now - 30 * DAY_MS;
-    case 'year':
-      return new Date(new Date(now).getFullYear(), 0, 1).getTime();
-  }
-}
-
 /** A folder to search inside: its path from the top, and how it reads. */
 interface Scope {
   path: string;
@@ -914,8 +883,6 @@ function SwitcherPanel({
   );
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const [kindChip, setKindChip] = useState<KindChip>('all');
-  const [time, setTime] = useState<TimeKey>('any');
-  const [timeOpen, setTimeOpen] = useState(false);
   // Bumped when the index learns something on its own (a restored copy, note
   // text read from the cache), so the results are worked out again.
   const [indexVersion, setIndexVersion] = useState(0);
@@ -1044,11 +1011,9 @@ function SwitcherPanel({
   // no Drive call, so this never waits on the full-text search.
   const results = useMemo((): SearchResults | null => {
     if (!searching || tag !== null || index === null) return null;
-    const since = sinceFor(time, now);
     const options: SearchOptions = {
       showAppFiles: getPref('showAppFiles'),
       ...(scope !== null && { scope: scope.path }),
-      ...(since !== undefined && { since }),
     };
     const handle = syncedSearchIndex(index);
     const local = searchVault(handle, index, trimmed, options);
@@ -1060,8 +1025,6 @@ function SwitcherPanel({
     index,
     trimmed,
     scope,
-    time,
-    now,
     driveFiles,
     snippets,
     indexVersion,
@@ -1189,7 +1152,7 @@ function SwitcherPanel({
   // list itself changes shape.
   useEffect(() => {
     setHighlightedIndex(0);
-  }, [entryCount, trimmed, activeChip, scope, time]);
+  }, [entryCount, trimmed, activeChip, scope]);
 
   const goTo = useCallback(
     (href: string) => {
@@ -1451,39 +1414,9 @@ function SwitcherPanel({
                     {label} {count}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  class="switcher-chip switcher-time"
-                  aria-expanded={timeOpen}
-                  data-active={time !== 'any'}
-                  onClick={() => {
-                    setTimeOpen((open) => !open);
-                  }}
-                >
-                  <IconClock />
-                  {TIME_LABELS[time]}
-                </button>
               </>
             )}
           </div>
-          {searching && timeOpen && (
-            <div class="switcher-chips" role="group" aria-label="Time">
-              {(Object.keys(TIME_LABELS) as TimeKey[]).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  class="switcher-chip"
-                  aria-pressed={time === key}
-                  onClick={() => {
-                    setTime(key);
-                    setTimeOpen(false);
-                  }}
-                >
-                  {TIME_LABELS[key]}
-                </button>
-              ))}
-            </div>
-          )}
           <div class="switcher-columns">
             <div class="switcher-body">
               {scope !== null && !desktop && (

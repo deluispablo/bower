@@ -175,8 +175,7 @@
   cursor: default;
 }
 
-.switcher-chip[aria-pressed='true'],
-.switcher-time[data-active='true'] {
+.switcher-chip[aria-pressed='true'] {
   border-color: var(--color-link);
   background: var(--color-surface);
 }
@@ -189,14 +188,6 @@
 .switcher-chip .icon {
   width: 16px;
   height: 16px;
-}
-
-.switcher-time select {
-  border: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
 }
 
 .switcher-link {
@@ -244,7 +235,7 @@
 }
 
 @media (max-width: 899px) {
-  /* The chip row scrolls sideways; the last chip ("Any time") never clips. */
+  /* The chip row scrolls sideways; the last chip never clips. */
   .switcher-chips {
     max-width: 100%;
     scroll-padding-inline: var(--space-3);
