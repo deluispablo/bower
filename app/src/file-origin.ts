@@ -264,5 +264,12 @@ export function withHistory<T extends FiledSource & Pick<DriveFile, 'path'>>(
   if (filedAt === undefined) return { file, origin };
   const known = origin ?? 'filed';
   if (known !== 'filed' && known !== 'asked') return { file, origin: known };
+  // Moving a file keeps Drive's times, so an original Bower filed reads its
+  // run's time. A file changed since (a note a later run updated) keeps
+  // reading its own last change, as the demo's contract does.
+  const changed = Date.parse(file.modifiedTime ?? '');
+  if (!Number.isNaN(changed) && changed >= Date.parse(filedAt)) {
+    return { file, origin: known };
+  }
   return { file: { ...file, filedAt }, origin: known };
 }

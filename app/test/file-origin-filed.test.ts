@@ -92,6 +92,13 @@ describe('filedHistory and withHistory (#922, real run history)', () => {
     expect(facts.about).toBe('yesterday, by Bower, as it is');
   });
 
+  it('a file changed after it was filed reads its own last change', () => {
+    const today = new Date(2026, 8, 30, 7, 11).toISOString();
+    const edited = { ...pdfAt, createdTime: undefined, modifiedTime: today };
+    const { file, origin } = withHistory(edited, null, filedHistory([v2]));
+    expect(filedBy(file, origin, NOW).line).toBe('filed by Bower today');
+  });
+
   it('a v1 run history names no destination: "added <created>"', () => {
     const history = filedHistory([v1]);
     expect(history.size).toBe(0);
