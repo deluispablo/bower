@@ -8,13 +8,17 @@ import {
   compareColumns,
   compareKinds,
   defaultSort,
-  dropColumn,
-  fadedLine,
+  factsLine,
+  hiddenWithoutDate,
   filterChips,
-  moveColumn,
-  orderedColumnIds,
+  quickFilter,
+  quickFilterText,
   setFrontmatterValue,
+  sortChipText,
   sortNotes,
+  sortOptions,
+  statusDateLine,
+  tableColumns,
 } from '../src/compare.js';
 import type { CompareNote } from '../src/compare.js';
 import { kindById } from '../src/kinds.js';
@@ -135,23 +139,6 @@ describe('columns and sort', () => {
     });
     expect(sorted[0]?.name).toBe('Kentish Town, 2 bed.md');
   });
-
-  it('applies a stored column order, keeps the title first and adds new columns', () => {
-    const order = orderedColumnIds(rental, ['fit', 'nope', 'rent']);
-    expect(order.slice(0, 3)).toEqual(['title', 'fit', 'rent']);
-    expect(order).toHaveLength(8);
-    expect(moveColumn(order, 'fit', 'left')).toEqual(order);
-    expect(moveColumn(order, 'rent', 'left').slice(0, 3)).toEqual([
-      'title',
-      'rent',
-      'fit',
-    ]);
-    expect(dropColumn(order, 'status', 'fit').slice(0, 3)).toEqual([
-      'title',
-      'status',
-      'fit',
-    ]);
-  });
 });
 
 describe('filter chips', () => {
@@ -162,16 +149,13 @@ describe('filter chips', () => {
     ]);
   });
 
-  it('hides what fails and names it', () => {
+  it('hides what fails', () => {
     const chips = filterChips(rental, listings);
     const under = chips[0];
     if (under === undefined) throw new Error('no chip');
     const { shown, hidden } = applyFilters(listings, [under]);
     expect(shown).toHaveLength(3);
     expect(hidden.map((n) => n.name)).toEqual(['Kentish Town, 2 bed.md']);
-    expect(fadedLine(hidden, [under])).toBe(
-      'Kentish Town is over £2,300, shown faded.',
-    );
   });
 
   it('offers none when nothing would be hidden', () => {
@@ -297,11 +281,11 @@ describe('Compare wording (R-FOLD-6)', () => {
     expect(labels).not.toContain('Office');
   });
 
-  it('says "No date" for a date the note does not have', () => {
+  it('says "No date yet" for a date the note does not have', () => {
     const column = compareColumns(kind).find((c) => c.id === 'reply_by');
     if (column === undefined) throw new Error('no reply_by column');
     expect(cellText(kind, note('Offer', 'job-offer', {}), column)).toBe(
-      'No date',
+      'No date yet',
     );
     expect(
       cellText(
@@ -309,6 +293,173 @@ describe('Compare wording (R-FOLD-6)', () => {
         note('Offer', 'job-offer', { reply_by: '2026-10-14' }),
         column,
       ),
-    ).not.toBe('No date');
+    ).not.toBe('No date yet');
+  });
+});
+
+// --- The boards' Compare (#916) ---------------------------------------------
+
+const jobKind = kindById('job-offer');
+if (jobKind === undefined) throw new Error('kind missing');
+
+const flats = [
+  note('10-43 Buckley St', 'rental-listing', {
+    rent: '460 AUD/week',
+    rooms: '1 bed',
+    available: '2026-10-07',
+    against_area: '−15% vs area median',
+    fit: 73,
+    status: 'to view',
+    viewing: '2026-10-01',
+  }),
+  note('6-20 Mantell St', 'rental-listing', {
+    rent: '350 AUD/week',
+    rooms: '1 bed',
+    against_area: '−35% vs area median',
+    fit: 72,
+    status: 'to view',
+  }),
+  note('21-51 Buckley St', 'rental-listing', {
+    rent: '395 AUD/week',
+    rooms: '1 bed',
+    available: '2026-09-25',
+    against_area: '−27% vs area median',
+    fit: 66,
+    status: 'new',
+  }),
+];
+
+function flat(index: number): CompareNote {
+  const found = flats[index];
+  if (found === undefined) throw new Error('no flat');
+  return found;
+}
+
+describe('the flats table (PF-Compare, PF-Columns)', () => {
+  const columns = tableColumns(rental, flats);
+
+  it('has six default columns, and Rooms and Bike to the office in Columns', () => {
+    expect(
+      columns.filter((c) => c.optional !== true).map((c) => c.label),
+    ).toEqual([
+      'Flat',
+      'Rent',
+      'Available',
+      'Against the area',
+      'Fit',
+      'Status',
+    ]);
+    expect(
+      columns.filter((c) => c.optional === true).map((c) => c.label),
+    ).toEqual(['Rooms', 'Bike to the office']);
+  });
+
+  it('says "Rent a week" in Sort by, with Fit first and Name last', () => {
+    const shown = columns.filter((c) => c.optional !== true);
+    expect(
+      sortOptions(shown).map((c) =>
+        c.id === 'title' ? 'Name' : (c.option ?? c.label),
+      ),
+    ).toEqual([
+      'Fit',
+      'Rent a week',
+      'Available',
+      'Against the area',
+      'Status',
+      'Name',
+    ]);
+    const fit = columns.find((c) => c.id === 'fit');
+    if (fit === undefined) throw new Error('no fit');
+    expect(sortChipText(fit, 'desc')).toBe('Fit, high first');
+  });
+
+  it('sorts by a header: rent low first, statuses in the folder order', () => {
+    const fields = columns.filter((c) => c.field !== undefined);
+    const byRent = sortNotes(
+      rental,
+      flats,
+      { column: 'rent', direction: 'asc' },
+      fields,
+    );
+    expect(byRent.map((n) => n.name)).toEqual([
+      '6-20 Mantell St.md',
+      '21-51 Buckley St.md',
+      '10-43 Buckley St.md',
+    ]);
+    const byStatus = sortNotes(
+      rental,
+      flats,
+      { column: 'status', direction: 'asc' },
+      fields,
+      ['new', 'to view', 'viewed'],
+    );
+    expect(byStatus[0]?.name).toBe('21-51 Buckley St.md');
+  });
+
+  it('reads the same words on the card as in the table (K-30)', () => {
+    expect(factsLine(rental, flat(0))).toBe(
+      '460 AUD/week · 1 bed · from 7 Oct',
+    );
+    expect(factsLine(rental, flat(1))).toBe(
+      '350 AUD/week · 1 bed · No date yet',
+    );
+    expect(statusDateLine(rental, flat(0))).toBe('Viewing Thu 1 Oct');
+    expect(statusDateLine(rental, flat(1))).toBe('');
+  });
+});
+
+describe('the quick filter (R-COMPARE-3)', () => {
+  it('is "Free before <the latest day>" and hides the flats without a date', () => {
+    const chip = quickFilter(rental, flats);
+    if (chip === undefined) throw new Error('no quick filter');
+    expect(chip.label).toBe('Free before 7 Oct');
+    const { shown, hidden } = applyFilters(flats, [chip]);
+    expect(shown).toHaveLength(2);
+    expect(hiddenWithoutDate(hidden, chip)).toBe(1);
+    expect(quickFilterText(chip, 1)).toBe(
+      'Free before 7 Oct · 1 hidden without a date',
+    );
+    expect(quickFilterText(chip, 0)).toBe('Free before 7 Oct');
+  });
+
+  it('is offered for no job offers (FL-3)', () => {
+    expect(
+      quickFilter(jobKind, [
+        note('A', 'job-offer', { starts: '2026-10-01' }),
+        note('B', 'job-offer', {}),
+      ]),
+    ).toBeUndefined();
+  });
+});
+
+describe('the job offers table (LI-Compare)', () => {
+  const offer = note('Senior Consultant', 'job-offer', {
+    office: 'Melbourne, VIC',
+    hours: 'Hybrid',
+    fit: 79,
+  });
+  const columns = tableColumns(jobKind, [offer, offer]);
+
+  it('has six default columns, and Starts and Reply by in Columns', () => {
+    expect(
+      columns.filter((c) => c.optional !== true).map((c) => c.label),
+    ).toEqual(['Offer', 'Salary', 'Where', 'Holiday', 'Fit', 'Status']);
+    expect(
+      columns.filter((c) => c.optional === true).map((c) => c.label),
+    ).toEqual(['Starts', 'Reply by']);
+  });
+
+  it('says "Not stated", "—" and where with how it is worked', () => {
+    const text = (id: string): string => {
+      const column = columns.find((c) => c.id === id);
+      if (column === undefined) throw new Error(`no ${id}`);
+      return cellText(jobKind, offer, column);
+    };
+    expect(text('salary')).toBe('Not stated');
+    expect(text('holiday')).toBe('—');
+    expect(text('office')).toBe('Melbourne, VIC (Hybrid)');
+    expect(factsLine(jobKind, offer)).toBe(
+      'Melbourne, VIC · Hybrid · Salary: Not stated',
+    );
   });
 });

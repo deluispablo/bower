@@ -83,6 +83,9 @@ export interface CompareColumn {
   /** `title`, a field key or `status`. */
   id: string;
   label: string;
+  /** The name in Columns and in the Sort by sheet when it differs from the
+   * header ("Rent a week" over the "Rent" column, K-30). */
+  option?: string;
   /** Present for a field column. */
   field?: KindField;
   /** Off until the person picks it in "Columns" (#795). */
@@ -354,6 +357,224 @@ export function compareColumns(
   return columns;
 }
 
+// --- The boards' tables (#916) ---------------------------------------------
+
+interface BoardColumn {
+  id: string;
+  /** The table header. */
+  header: string;
+  /** The name in Columns and Sort by, when it differs from the header. */
+  option?: string;
+  /** Off until picked in Columns. */
+  off?: true;
+}
+
+interface BoardTable {
+  title: string;
+  columns: readonly BoardColumn[];
+}
+
+/**
+ * The tables the boards draw (PF-Compare, PF-Columns, LI-Compare, spec
+ * §3.35): flats Flat · Rent · Available · Against the area · Fit · Status
+ * with Rooms and Bike to the office in Columns; job offers Offer · Salary ·
+ * Where · Holiday · Fit · Status with Starts and Reply by in Columns.
+ */
+const BOARD_TABLES: Readonly<Record<string, BoardTable>> = {
+  'rental-listing': {
+    title: 'Flat',
+    columns: [
+      { id: 'rent', header: 'Rent', option: 'Rent a week' },
+      { id: 'rooms', header: 'Rooms', off: true },
+      { id: 'available', header: 'Available' },
+      { id: 'against_area', header: 'Against the area' },
+      { id: 'bike_to_office', header: 'Bike to the office', off: true },
+      { id: 'fit', header: 'Fit' },
+    ],
+  },
+  'job-offer': {
+    title: 'Offer',
+    columns: [
+      { id: 'salary', header: 'Salary' },
+      { id: 'office', header: 'Where' },
+      { id: 'holiday', header: 'Holiday' },
+      { id: 'starts', header: 'Starts', off: true },
+      { id: 'reply_by', header: 'Reply by', off: true },
+      { id: 'fit', header: 'Fit' },
+    ],
+  },
+};
+
+/** The rent column's name in Columns and Sort by: "Rent a week" when the
+ * rents are weekly (K-30), the kind's own "Rent a month" otherwise. */
+function rentOption(notes: readonly CompareNote[], fallback: string): string {
+  const weekly = notes.some(
+    (note) =>
+      typeof note.fields.rent === 'string' && /week/i.test(note.fields.rent),
+  );
+  return weekly ? 'Rent a week' : fallback;
+}
+
+/**
+ * Every column Compare can show for `notes` of `kind`, in order: the title,
+ * the fields, Status, then the extras. Columns that are `optional` are off
+ * until picked in Columns. The boards' kinds (flats, job offers) use their
+ * drawn table; any other kind uses its `compareFields` and `columnExtras`.
+ */
+export function tableColumns(
+  kind: Kind,
+  notes: readonly CompareNote[],
+): CompareColumn[] {
+  const extras = columnExtras(kind, notes);
+  const board = BOARD_TABLES[kind.id];
+  if (board === undefined) return compareColumns(kind, undefined, extras);
+  const columns: CompareColumn[] = [{ id: TITLE_COLUMN, label: board.title }];
+  for (const drawn of board.columns) {
+    const own = kind.fields.find((field) => field.key === drawn.id);
+    const field =
+      drawn.id === 'fit'
+        ? numberField('fit', 'Fit', SCORE_GROUP)
+        : (own ?? {
+            key: drawn.id,
+            label: drawn.header,
+            type: 'text',
+            group: '',
+          });
+    const option =
+      drawn.id === 'rent'
+        ? rentOption(notes, own?.compareLabel ?? drawn.header)
+        : drawn.option;
+    columns.push({
+      id: drawn.id,
+      label: drawn.header,
+      field,
+      ...(option !== undefined && option !== drawn.header && { option }),
+      ...(drawn.off === true && { optional: true }),
+    });
+  }
+  if (kind.statuses.length > 0) {
+    columns.push({ id: STATUS_COLUMN, label: 'Status' });
+  }
+  const taken = new Set(columns.map((column) => column.id));
+  for (const extra of extras) {
+    if (taken.has(extra.id) || extra.id === 'score') continue;
+    columns.push({ ...extra, optional: true });
+  }
+  return columns;
+}
+
+/** A column's name in Columns and in the Sort by sheet. */
+export function optionLabel(column: CompareColumn): string {
+  if (column.id === TITLE_COLUMN) return 'Name';
+  return column.option ?? column.label;
+}
+
+/** The columns the Sort by sheet offers, in its order (PF-Sort-375): the
+ * score ("Fit") first, the other shown columns, then Name. */
+export function sortOptions(
+  columns: readonly CompareColumn[],
+): CompareColumn[] {
+  const rest = columns.filter(
+    (column) => column.id !== TITLE_COLUMN && column.virtual === undefined,
+  );
+  return [
+    ...rest.filter((column) => column.field?.group === SCORE_GROUP),
+    ...rest.filter((column) => column.field?.group !== SCORE_GROUP),
+    ...columns.filter((column) => column.id === TITLE_COLUMN),
+  ];
+}
+
+/** The Sort chip's words: "Fit, high first", "Rent a week, low first". */
+export function sortChipText(
+  column: CompareColumn,
+  direction: 'asc' | 'desc',
+): string {
+  return `${optionLabel(column)}, ${direction === 'desc' ? 'high' : 'low'} first`;
+}
+
+const ITEM_NOUNS: Readonly<Record<string, readonly [string, string]>> = {
+  'rental-listing': ['flat', 'flats'],
+};
+
+/** What the items are called: "flats", "job offers", "1 flat". */
+export function itemNoun(kind: Kind, count: number): string {
+  const [one, many] = ITEM_NOUNS[kind.id] ?? [kind.name, kind.plural];
+  return count === 1 ? one : many;
+}
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SHORT_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/** "Wed 1 Oct" for a `YYYY-MM-DD` date; '' for anything else. */
+export function weekdayDate(raw: unknown): string {
+  if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(raw.trim())) {
+    return '';
+  }
+  const time = dateOf(raw);
+  if (time === null) return '';
+  const day = new Date(time);
+  return `${DAY_NAMES[day.getUTCDay()] ?? ''} ${day.getUTCDate()} ${SHORT_MONTHS[day.getUTCMonth()] ?? ''}`;
+}
+
+/** The line under (or beside) the status select: "Viewing Wed 1 Oct" for
+ * a flat with a viewing date; '' otherwise. */
+export function statusDateLine(kind: Kind, note: CompareNote): string {
+  if (kind.id !== 'rental-listing') return '';
+  const day = weekdayDate(note.fields.viewing);
+  return day === '' ? '' : `Viewing ${day}`;
+}
+
+/** A field's text, '' when the note has none. */
+function fieldText(kind: Kind, note: CompareNote, key: string): string {
+  const field = kind.fields.find((candidate) => candidate.key === key);
+  if (field === undefined) {
+    const raw = note.fields[key];
+    return typeof raw === 'string' ? raw.trim() : '';
+  }
+  return formatFieldValue(field, note.fields[key]);
+}
+
+/**
+ * The phone card's facts line (K-30, the same words as the table): flats
+ * "460 AUD/week · 1 bed · from 7 Oct" (or "No date yet"); job offers
+ * "Melbourne, VIC · Hybrid · Salary: Not stated"; other kinds their first
+ * three key facts.
+ */
+export function factsLine(kind: Kind, note: CompareNote): string {
+  let parts: string[];
+  if (kind.id === 'rental-listing') {
+    const available = fieldText(kind, note, 'available');
+    parts = [
+      fieldText(kind, note, 'rent'),
+      fieldText(kind, note, 'rooms'),
+      available === '' ? NO_DATE : `from ${available}`,
+    ];
+  } else if (kind.id === 'job-offer') {
+    const salary = fieldText(kind, note, 'salary');
+    parts = [
+      fieldText(kind, note, 'office'),
+      fieldText(kind, note, 'hours'),
+      salary === '' ? `Salary: ${NOT_STATED}` : salary,
+    ];
+  } else {
+    parts = kind.keyFacts.slice(0, 3).map((key) => fieldText(kind, note, key));
+  }
+  return parts.filter((part) => part !== '').join(' · ');
+}
+
 /**
  * The columns the person sees: the title, then those in `visible` (the
  * stored choice) or, without one, every column that is not optional. R-CMP-7.
@@ -387,44 +608,12 @@ export function toggleColumn(
     : [...now, id];
 }
 
-/** `order` with the column `id` moved one place left or right; the title
- * never moves and nothing moves past it. */
-export function moveColumn(
-  order: readonly string[],
-  id: string,
-  direction: 'left' | 'right',
-): string[] {
-  const next = [...order];
-  const from = next.indexOf(id);
-  const to = direction === 'left' ? from - 1 : from + 1;
-  if (from < 1 || to < 1 || to >= next.length) return next;
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved ?? id);
-  return next;
-}
-
-/** `order` with the column `id` dropped where `target` is. */
-export function dropColumn(
-  order: readonly string[],
-  id: string,
-  target: string,
-): string[] {
-  if (id === target || id === TITLE_COLUMN || target === TITLE_COLUMN) {
-    return [...order];
-  }
-  const next = order.filter((column) => column !== id);
-  const at = next.indexOf(target);
-  if (at === -1) return [...order];
-  const from = order.indexOf(id);
-  const to = order.indexOf(target);
-  next.splice(from < to ? at + 1 : at, 0, id);
-  return next;
-}
-
 // --- Values, sorting ---------------------------------------------------------
 
-/** What a date cell says when the note has no readable date. */
-export const NO_DATE = 'No date';
+/** What a date cell says when the note has no readable date (K-30). */
+export const NO_DATE = 'No date yet';
+/** What an empty money cell says ("Salary: Not stated" on a card). */
+export const NOT_STATED = 'Not stated';
 
 /** The cell's text: the title, the status the way Details says it, or the
  * field formatted as the boards draw it. */
@@ -445,7 +634,17 @@ export function cellText(
     return score === null ? '' : `${Math.round(score)}/100`;
   }
   const text = formatFieldValue(column.field, note.fields[column.id]);
-  return text === '' && column.field.type === 'date' ? NO_DATE : text;
+  if (text === '') {
+    if (column.field.type === 'date') return NO_DATE;
+    if (column.field.type === 'money') return NOT_STATED;
+    return NONE;
+  }
+  // A job offer's "Where" says how it is worked: "Melbourne, VIC (Hybrid)".
+  if (kind.id === 'job-offer' && column.id === 'office') {
+    const hours = fieldText(kind, note, 'hours');
+    return hours === '' ? text : `${text} (${hours})`;
+  }
+  return text;
 }
 
 /** A number out of "£2,150", "22 min", "−10 %" or 81, `null` when the value
@@ -516,6 +715,7 @@ function sortValue(
   note: CompareNote,
   column: string,
   extras: readonly CompareColumn[],
+  statuses: readonly string[],
 ): SortValue {
   const extra = extras.find((candidate) => candidate.id === column);
   if (extra !== undefined) {
@@ -526,6 +726,7 @@ function sortValue(
     }
     if (extra.virtual === 'apply') return applyHref(note);
     const raw = note.fields[column];
+    if (extra.field?.type === 'date') return dateOf(raw);
     if (extra.field?.type === 'text') {
       if (typeof raw !== 'string' || raw.trim() === '') {
         return numberOf(raw);
@@ -536,7 +737,7 @@ function sortValue(
   }
   if (column === TITLE_COLUMN) return noteTitle(note).toLowerCase();
   if (column === STATUS_COLUMN) {
-    const index = kind.statuses.indexOf(statusValue(note));
+    const index = statuses.indexOf(statusValue(note));
     return index === -1 ? null : index;
   }
   const field = kind.fields.find((candidate) => candidate.key === column);
@@ -567,13 +768,14 @@ export function sortNotes(
   notes: readonly CompareNote[],
   sort: CompareSort,
   extras: readonly CompareColumn[] = [],
+  statuses: readonly string[] = kind.statuses,
 ): CompareNote[] {
   const sign = sort.direction === 'asc' ? 1 : -1;
   const first = kind.compareFields[0] ?? TITLE_COLUMN;
   return [...notes].sort((a, b) => {
     for (const column of [sort.column, first, TITLE_COLUMN]) {
-      const left = sortValue(kind, a, column, extras);
-      const right = sortValue(kind, b, column, extras);
+      const left = sortValue(kind, a, column, extras, statuses);
+      const right = sortValue(kind, b, column, extras, statuses);
       if (left === null && right === null) continue;
       if (left === null) return 1;
       if (right === null) return -1;
@@ -582,49 +784,6 @@ export function sortNotes(
     }
     return 0;
   });
-}
-
-// --- The phone's Sort sheet (R-CMP-1) ---------------------------------------
-
-/** How a column's values read when ordered: numbers and statuses high or
- * low first, text A to Z, dates soonest first. */
-export type SortStyle = 'number' | 'text' | 'date';
-
-export function sortStyle(column: CompareColumn): SortStyle {
-  if (column.id === TITLE_COLUMN) return 'text';
-  if (column.id === STATUS_COLUMN) return 'number';
-  const type = column.field?.type;
-  if (type === 'date') return 'date';
-  if (type === 'money' || type === 'number') return 'number';
-  return 'text';
-}
-
-/** The two direction labels of a style, by the direction they sort in. */
-export function directionLabels(style: SortStyle): {
-  asc: string;
-  desc: string;
-} {
-  if (style === 'text') return { asc: 'A to Z', desc: 'Z to A' };
-  if (style === 'date') return { asc: 'Soonest first', desc: 'Latest first' };
-  return { asc: 'Low first', desc: 'High first' };
-}
-
-/** The Sort button's text: "Sort: Your score, high first". */
-export function sortButtonText(
-  column: CompareColumn,
-  direction: 'asc' | 'desc',
-): string {
-  const text = directionLabels(sortStyle(column))[direction];
-  const lower = /^[AZ] to/.test(text)
-    ? text
-    : text.charAt(0).toLowerCase() + text.slice(1);
-  return `Sort: ${column.label}, ${lower}`;
-}
-
-/** The last word of a kind's plural or singular, for "Show 4 offers". */
-export function offerWord(kind: Kind, count: number): string {
-  const words = (count === 1 ? kind.name : kind.plural).split(' ');
-  return words[words.length - 1] ?? '';
 }
 
 // --- Filter chips ----------------------------------------------------------
@@ -714,8 +873,10 @@ export function filterChips(
   return chips;
 }
 
-/** Whether `note` passes `chip`. A missing or unreadable value passes: a
- * note is never hidden for what Bower did not read. */
+/** Whether `note` passes `chip`. A missing amount passes ("Under £X" never
+ * hides what Bower did not read); a missing date does not: "Free before
+ * 7 Oct" hides the items without a date and says how many (R-COMPARE-3).
+ * The day itself counts as before it. */
 export function passesChip(note: CompareNote, chip: FilterChip): boolean {
   const raw = note.fields[chip.field];
   if (chip.op === 'under') {
@@ -723,7 +884,39 @@ export function passesChip(note: CompareNote, chip: FilterChip): boolean {
     return value === null || value <= chip.limit;
   }
   const value = dateOf(raw);
-  return value === null || value < chip.limit;
+  return value !== null && value <= chip.limit;
+}
+
+/** The folder's one quick filter (spec §3.35): "Free before <day>" for
+ * flats, none for job offers (FL-3), the first chip for other kinds. */
+export function quickFilter(
+  kind: Kind,
+  notes: readonly CompareNote[],
+): FilterChip | undefined {
+  if (kind.id === 'job-offer') return undefined;
+  const chips = filterChips(kind, notes);
+  if (kind.id === 'rental-listing') {
+    return chips.find((chip) => chip.field === 'available');
+  }
+  return chips[0];
+}
+
+/** How many of `hidden` the date chip hides for having no date at all. */
+export function hiddenWithoutDate(
+  hidden: readonly CompareNote[],
+  chip: FilterChip,
+): number {
+  if (chip.op !== 'before') return 0;
+  return hidden.filter((note) => dateOf(note.fields[chip.field]) === null)
+    .length;
+}
+
+/** The quick filter chip's words: "Free before 7 Oct", and while it is on
+ * and hides undated items, "Free before 7 Oct · 1 hidden without a date". */
+export function quickFilterText(chip: FilterChip, withoutDate: number): string {
+  return withoutDate === 0
+    ? chip.label
+    : `${chip.label} · ${withoutDate} hidden without a date`;
 }
 
 function splitByChip(
@@ -767,79 +960,6 @@ const NUMBER_WORDS = [
 /** "four" for 4, digits above ten. */
 export function countWord(count: number): string {
   return NUMBER_WORDS[count] ?? String(count);
-}
-
-function joinNames(names: readonly string[]): string {
-  if (names.length <= 1) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''}`;
-}
-
-/** The phone's explainer (board `Phone-Folder-Compare`). */
-export function phoneExplainer(kind: Kind, count: number): string {
-  const facts = kind.compareFields
-    .slice(0, 4)
-    .map((key) => kind.fields.find((field) => field.key === key))
-    .filter((field): field is KindField => field !== undefined)
-    .map((field) => field.label.toLowerCase())
-    .join(', ');
-  return (
-    `You saved ${countWord(count)} ${kind.plural} here. Bower read the same ` +
-    `things from each one (${facts}), so they line up side by side. This ` +
-    'tab appears when a folder holds two or more of the same kind.'
-  );
-}
-
-/** The desktop's explainer (board `Compare-Table-1280`): what Bower read,
- * where a score comes from (when the table has one), and how to sort. */
-export function desktopExplainer(kind: Kind, hasScore: boolean): string {
-  return (
-    `Bower read the same things from each ${offerWord(kind, 1)}. ` +
-    (hasScore ? `Your score comes from your ${kind.id} rule. ` : '') +
-    'Click a header to sort.'
-  );
-}
-
-/** The line under the phone cards when a filter fades some: "Kentish Town is
- * over £2,300, shown faded." Empty when nothing is faded. */
-export function fadedLine(
-  hidden: readonly CompareNote[],
-  active: readonly FilterChip[],
-): string {
-  const reasons: string[] = [];
-  for (const chip of active) {
-    const names = hidden
-      .filter((note) => !passesChip(note, chip))
-      .map((note) => shortTitle(note));
-    if (names.length === 0) continue;
-    const verb = names.length === 1 ? 'is' : 'are';
-    const what =
-      chip.op === 'under'
-        ? `over ${chip.limitText}`
-        : `free from ${chip.limitText}`;
-    reasons.push(`${joinNames(names)} ${verb} ${what}`);
-  }
-  return reasons.length === 0 ? '' : `${reasons.join('; ')}, shown faded.`;
-}
-
-/** The phone's footer. */
-export function footerLine(kind: Kind): string {
-  return `Bower read these details from each ${kind.name}.`;
-}
-
-const ASK_QUESTIONS: Readonly<Record<string, string>> = {
-  'rental-listing': 'Which two should we view first, and why?',
-  'job-offer': 'Which one should I answer first, and why?',
-  bill: 'Which one should I look at first, and why?',
-};
-
-/** The Ask Bower tip's question for a kind. */
-export function askQuestion(kind: Kind): string {
-  return ASK_QUESTIONS[kind.id] ?? 'Which one should I look at first, and why?';
-}
-
-/** What the suggestion is about: "these five". */
-export function askSubject(count: number): string {
-  return `these ${countWord(count)}`;
 }
 
 // --- Editing the status ------------------------------------------------------
@@ -1120,34 +1240,3 @@ export function timelineExplainer(count: number): string {
 }
 
 // --- Copy as table (R-CMP-9) -------------------------------------------------
-
-function markdownCell(text: string): string {
-  return text.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
-}
-
-/**
- * `notes` as a Markdown table: one column per entry of `columns` (the
- * visible ones, in their order) and one row per note (already sorted and
- * filtered, as the table shows them). The Apply cell is a link.
- */
-export function tableMarkdown(
-  kind: Kind,
-  notes: readonly CompareNote[],
-  columns: readonly CompareColumn[],
-): string {
-  const line = (cells: readonly string[]): string => `| ${cells.join(' | ')} |`;
-  const rows = notes.map((note) =>
-    line(
-      columns.map((column) => {
-        const text = markdownCell(cellText(kind, note, column));
-        const href = column.virtual === 'apply' ? applyHref(note) : null;
-        return href === null ? text : `[${text}](${href})`;
-      }),
-    ),
-  );
-  return [
-    line(columns.map((column) => markdownCell(column.label))),
-    line(columns.map(() => '---')),
-    ...rows,
-  ].join('\n');
-}

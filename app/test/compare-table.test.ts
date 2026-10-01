@@ -5,13 +5,11 @@ import {
   cellText,
   columnExtras,
   compareColumns,
-  desktopExplainer,
   MADE_FOR_COLUMN,
   madeForBadge,
   orderedColumnIds,
   shownColumns,
   sortNotes,
-  tableMarkdown,
   toggleColumn,
 } from '../src/compare.js';
 import type { CompareColumn, CompareNote } from '../src/compare.js';
@@ -137,65 +135,5 @@ describe('The column choice (R-CMP-7)', () => {
   it('keeps an optional column in the stored order', () => {
     const order = orderedColumnIds(kind, ['interview_panel'], extras);
     expect(order[1]).toBe('interview_panel');
-  });
-});
-
-describe('Copy as table (R-CMP-9)', () => {
-  const extras = columnExtras(kind, offers);
-  const all = compareColumns(kind, undefined, extras);
-
-  it('writes the visible columns in order, sorted rows, Apply as a link', () => {
-    const columns = shownColumns(all, ['score', 'apply_link']);
-    const sorted = sortNotes(
-      kind,
-      offers,
-      { column: 'score', direction: 'desc' },
-      extras,
-    );
-    expect(tableMarkdown(kind, sorted, columns)).toBe(
-      [
-        '| Offer | Your score | Apply |',
-        '| --- | --- | --- |',
-        '| Fabrikam | 91/100 | — |',
-        '| Northwind | 79/100 | [Apply](https://jobs.example.com/apply?a=1) |',
-        '| Contoso | 55/100 | — |',
-      ].join('\n'),
-    );
-  });
-
-  it('follows the sort direction and hidden columns', () => {
-    const columns = shownColumns(all, ['score']);
-    const sorted = sortNotes(
-      kind,
-      offers,
-      { column: 'score', direction: 'asc' },
-      extras,
-    );
-    const lines = tableMarkdown(kind, sorted, columns).split('\n');
-    expect(lines[0]).toBe('| Offer | Your score |');
-    expect(lines.slice(2).map((l) => l.split(' | ')[0])).toEqual([
-      '| Contoso',
-      '| Northwind',
-      '| Fabrikam',
-    ]);
-  });
-
-  it('escapes a pipe in a cell', () => {
-    const columns = shownColumns(all, ['interview_panel']);
-    expect(tableMarkdown(kind, [northwind], columns)).toContain('Alex \\| Sam');
-  });
-});
-
-describe('The desktop explainer (Compare-Table-1280)', () => {
-  it('says what Bower read, where the score comes from, and how to sort', () => {
-    expect(desktopExplainer(kind, true)).toBe(
-      'Bower read the same things from each offer. Your score comes from your job-offer rule. Click a header to sort.',
-    );
-  });
-
-  it('leaves the score sentence out when there is no score column', () => {
-    expect(desktopExplainer(kind, false)).toBe(
-      'Bower read the same things from each offer. Click a header to sort.',
-    );
   });
 });
