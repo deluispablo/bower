@@ -600,17 +600,18 @@ button.pile-card:focus-visible {
   cursor: default;
 }
 
+/* AD-Main: 13 px muted sentences, 8 px apart (R-TOK-30, K-34). */
 .add-note {
-  margin: 0;
+  margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
-  font-size: var(--text-xs, 13px);
+  font-size: var(--text-13);
   line-height: 1.45;
 }
 
 .pile-saved {
   margin: var(--space-1-5, 6px) 0 0;
   color: var(--color-text-muted);
-  font-size: var(--text-xs, 13px);
+  font-size: var(--text-13);
 }
 
 .pile-rows {
@@ -669,9 +670,32 @@ button.pile-card:focus-visible {
   font-size: var(--text-lg);
 }
 
+/* AD-Waiting: the count under the heading on the phone, at the right of
+   it on desktop; 13 px muted either way. */
+.pile-waiting-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.pile-waiting-head .pile-waiting-title {
+  flex: 1;
+  margin: 0;
+}
+
+@media (min-width: 900px) {
+  .pile-waiting-head {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+}
+
 .pile-waiting-count {
-  margin: 0 0 var(--space-2);
+  margin: 0;
   color: var(--color-text-muted);
+  font-size: var(--text-13);
 }
 
 .pile-card-waiting {
@@ -694,10 +718,15 @@ button.pile-card:focus-visible {
   line-clamp: 2;
 }
 
-.pile-card-waiting .pile-card-meta,
+.pile-card-waiting .pile-card-meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-13);
+}
+
+/* "2 things" in Added from elsewhere: 14 px, as AD-Waiting draws it. */
 .pile-card-elsewhere .pile-card-meta {
   color: var(--color-text-muted);
-  font-size: var(--text-xs, 13px);
+  font-size: var(--text-sm);
 }
 
 .pile-card-elsewhere {

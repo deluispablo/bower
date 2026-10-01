@@ -1108,14 +1108,16 @@ export function Add() {
 
         {waiting.length > 0 && (
           <section class="pile-waiting" aria-labelledby="pile-waiting-title">
-            <h2 id="pile-waiting-title" class="pile-waiting-title">
-              Waiting for the tidy-up
-            </h2>
-            {!loading && (
-              <p class="pile-waiting-count">
-                {thingsText(total)} in your inbox
-              </p>
-            )}
+            <div class="pile-waiting-head">
+              <h2 id="pile-waiting-title" class="pile-waiting-title">
+                Waiting for the tidy-up
+              </h2>
+              {!loading && (
+                <p class="pile-waiting-count">
+                  {thingsText(total)} in your inbox
+                </p>
+              )}
+            </div>
             <ul class="pile-list">
               {waiting.map((pile) => {
                 const note = noteLine(pile);
