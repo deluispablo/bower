@@ -668,7 +668,8 @@ export function FileScreen(): JSX.Element {
   const [thumbnailBroken, setThumbnailBroken] = useState(false);
 
   const file = index?.byId.get(id);
-  useTitle(file?.name ?? null);
+  // The tab reads the name as the page does, without its extension (#922).
+  useTitle(file === undefined ? null : fileTitle(file.name));
   const isNote = file !== undefined && fileKind(file) === 'note';
   const load = usePreview(file);
   const companion = useCompanion(file, index, getNoteText);
