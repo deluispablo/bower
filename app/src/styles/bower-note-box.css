@@ -239,33 +239,49 @@
   color: var(--color-warn);
 }
 
-/* The rows, origin squares, legend and words of the box, scoped to the box
-   itself: the folder preview column loads no markdown.css (DA-11). The same
-   rules as markdown.css, so the note page and the preview match. */
-.bower-note-box .bower-note-legend {
+/* The box's rows, origin squares and their glyphs, legend colours and the
+   Check / Problem words (moved from markdown.css, DA-11): this stylesheet
+   owns them, so the note page, the file page and the folder preview column
+   all get them with the component. A section box in the body uses the same
+   rows. */
+.bower-note-box .bower-note-legend,
+.bower-section .bower-note-legend,
+.bower-note .bower-note-legend {
   font-size: 0.75rem; /* 12px */
   color: var(--color-text-muted);
 }
 
-.bower-note-box .bower-note-legend em {
+.bower-note-box .bower-note-legend em,
+.bower-section .bower-note-legend em,
+.bower-note .bower-note-legend em {
   font-style: normal;
   font-weight: 600;
 }
 
-.bower-note-box .bower-legend-file {
+.bower-note-box .bower-legend-file,
+.bower-section .bower-legend-file,
+.bower-note .bower-legend-file {
   color: var(--color-origin-file);
 }
-.bower-note-box .bower-legend-notes {
+.bower-note-box .bower-legend-notes,
+.bower-section .bower-legend-notes,
+.bower-note .bower-legend-notes {
   color: var(--color-origin-notes);
 }
-.bower-note-box .bower-legend-web {
+.bower-note-box .bower-legend-web,
+.bower-section .bower-legend-web,
+.bower-note .bower-legend-web {
   color: var(--color-origin-web);
 }
-.bower-note-box .bower-legend-you {
+.bower-note-box .bower-legend-you,
+.bower-section .bower-legend-you,
+.bower-note .bower-legend-you {
   color: var(--color-origin-you);
 }
 
-.bower-note-box .bower-note-rows {
+.bower-note-box .bower-note-rows,
+.bower-section .bower-note-rows,
+.bower-note .bower-note-rows {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -274,7 +290,9 @@
   list-style: none;
 }
 
-.bower-note-box .bower-note-row {
+.bower-note-box .bower-note-row,
+.bower-section .bower-note-row,
+.bower-note .bower-note-row {
   display: flex;
   gap: var(--space-2);
   align-items: flex-start;
@@ -282,16 +300,22 @@
   line-height: 1.4;
 }
 
-.bower-note-box .bower-note-text {
+.bower-note-box .bower-note-text,
+.bower-section .bower-note-text,
+.bower-note .bower-note-text {
   min-width: 0;
 }
 
-.bower-note-box .bower-note-text > :last-child {
+.bower-note-box .bower-note-text > :last-child,
+.bower-section .bower-note-text > :last-child,
+.bower-note .bower-note-text > :last-child {
   margin-bottom: 0;
 }
 
 /* The origin square: the same tints as `OriginSquare` (marks.css). */
-.bower-note-box .bower-origin {
+.bower-note-box .bower-origin,
+.bower-section .bower-origin,
+.bower-note .bower-origin {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -302,7 +326,9 @@
   border-radius: 5px;
 }
 
-.bower-note-box .bower-origin::before {
+.bower-note-box .bower-origin::before,
+.bower-section .bower-origin::before,
+.bower-note .bower-origin::before {
   content: '';
   width: 12px;
   height: 12px;
@@ -310,29 +336,39 @@
   mask: var(--origin-icon) center / contain no-repeat;
 }
 
-.bower-note-box .bower-origin-file {
+.bower-note-box .bower-origin-file,
+.bower-section .bower-origin-file,
+.bower-note .bower-origin-file {
   --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h8l4 4v14H6z'/%3E%3Cpath d='M14 3v4h4'/%3E%3C/svg%3E");
   background: var(--color-origin-file-bg);
   color: var(--color-origin-file);
 }
-.bower-note-box .bower-origin-notes {
+.bower-note-box .bower-origin-notes,
+.bower-section .bower-origin-notes,
+.bower-note .bower-origin-notes {
   --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 4h10l4 4v12H5z'/%3E%3Cpath d='M8 12h8M8 16h5'/%3E%3C/svg%3E");
   background: var(--color-origin-notes-bg);
   color: var(--color-origin-notes);
 }
-.bower-note-box .bower-origin-web {
+.bower-note-box .bower-origin-web,
+.bower-section .bower-origin-web,
+.bower-note .bower-origin-web {
   --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16'/%3E%3C/svg%3E");
   background: var(--color-origin-web-bg);
   color: var(--color-origin-web);
 }
-.bower-note-box .bower-origin-you {
+.bower-note-box .bower-origin-you,
+.bower-section .bower-origin-you,
+.bower-note .bower-origin-you {
   --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='3.5'/%3E%3Cpath d='M5 20c1-4 4-6 7-6s6 2 7 6'/%3E%3C/svg%3E");
   background: var(--color-origin-you-bg);
   color: var(--color-origin-you);
 }
 
 /* "Check" (and a v3 "Problem"): a small word at the end of the line. */
-.bower-note-box .bower-note-word {
+.bower-note-box .bower-note-word,
+.bower-section .bower-note-word,
+.bower-note .bower-note-word {
   flex-shrink: 0;
   margin-left: auto;
   padding: 0 6px;
@@ -344,7 +380,9 @@
   color: var(--color-text-muted);
 }
 
-.bower-note-box .bower-note-problem .bower-note-word {
+.bower-note-box .bower-note-problem .bower-note-word,
+.bower-section .bower-note-problem .bower-note-word,
+.bower-note .bower-note-problem .bower-note-word {
   border-color: var(--color-danger);
   color: var(--color-danger);
 }
