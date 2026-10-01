@@ -816,11 +816,14 @@ export function Tree({
     return parts.join(' ');
   }
 
+  // The chevron sits inside its treeitem (axe `aria-required-children`,
+  // #920 T-4): a tree owns treeitems only. Its click stays its own.
   function rowLink(
     row: Row,
     i: number,
     href: string,
     icon: JSX.Element,
+    lead?: JSX.Element,
   ): JSX.Element {
     const name = displayName(row);
     const root = rootOf(row.path);
@@ -830,6 +833,7 @@ export function Tree({
         ref={rowRef(i)}
         role="treeitem"
         class="tree-link"
+        aria-label={name}
         aria-level={row.depth + 1}
         aria-expanded={
           row.kind === 'folder' && row.empty !== true ? row.expanded : undefined
@@ -852,6 +856,7 @@ export function Tree({
         onKeyDown={(event) => onRowKeyDown(event, i)}
         onFocus={() => setFocusIndex(i)}
       >
+        {lead}
         {icon}
         <span class="tree-name">{name}</span>
       </a>
@@ -880,20 +885,31 @@ export function Tree({
         }}
       >
         {guides(row.depth)}
-        {row.empty === true ? (
-          <span class="tree-spacer" aria-hidden="true" />
-        ) : (
-          <button
-            type="button"
-            class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
-            tabIndex={-1}
-            aria-label={`${row.expanded === true ? 'Collapse' : 'Expand'} ${name}`}
-            onClick={() => toggle(row.path)}
-          >
-            <IconChevronRight />
-          </button>
+        {rowLink(
+          row,
+          i,
+          folderHref(row.path),
+          icon,
+          row.empty === true ? (
+            <span class="tree-spacer" aria-hidden="true" />
+          ) : (
+            <button
+              type="button"
+              class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
+              tabIndex={-1}
+              aria-label={`${row.expanded === true ? 'Collapse' : 'Expand'} ${name}`}
+              onClick={(event) => {
+                // Inside the row's link: open or close, never follow it.
+                event.preventDefault();
+                event.stopPropagation();
+                toggle(row.path);
+              }}
+              onDblClick={(event) => event.stopPropagation()}
+            >
+              <IconChevronRight />
+            </button>
+          ),
         )}
-        {rowLink(row, i, folderHref(row.path), icon)}
         {openRow?.path === row.path && pinSheetFor(row)}
       </span>
     );

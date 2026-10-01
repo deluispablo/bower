@@ -104,12 +104,15 @@ export function FolderChoice({
             style={{ left: `${10 + k * TREE_INDENT}px` }}
           />
         ))}
+        {/* A radiogroup owns radios only (axe `aria-required-children`,
+            #920 T-4): the chevron is for the pointer, and the radio opens
+            or closes its folder with the right and left arrows. */}
         {expandable ? (
           <button
             type="button"
             class={`tree-chevron${expanded ? ' tree-chevron-open' : ''}`}
-            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${label}`}
-            aria-expanded={expanded}
+            aria-hidden="true"
+            tabIndex={-1}
             onClick={() => toggle(node.path)}
           >
             <IconChevronRight />
@@ -125,6 +128,16 @@ export function FolderChoice({
           disabled={isCurrent}
           title={label}
           onClick={() => onChoose(node.path)}
+          onKeyDown={(event) => {
+            if (!expandable) return;
+            if (event.key === 'ArrowRight' && !expanded) {
+              event.preventDefault();
+              toggle(node.path);
+            } else if (event.key === 'ArrowLeft' && expanded) {
+              event.preventDefault();
+              toggle(node.path);
+            }
+          }}
         >
           {depth === 0 && root !== null ? (
             <FolderMark kind={root} size={18} />
