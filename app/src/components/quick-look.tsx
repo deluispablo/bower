@@ -17,7 +17,7 @@ import { isDemo } from '../api.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
-import { filedBy } from '../file-origin.js';
+import { filedBy, withHistory } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import { whenWords } from '../folder-view.js';
 import { renderNote } from '../markdown/render.js';
@@ -45,6 +45,7 @@ import { IconDoc, IconImage, IconNote, IconPanel, IconPdf } from './icons.js';
 import { ListRow } from './list-row.js';
 import { NoteBody } from './note-body.js';
 import { TablePreview, parseCsv } from './table-preview.js';
+import { useFiledHistory } from './use-filed-history.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
 import '../styles/quick-look.css';
@@ -152,7 +153,13 @@ export function QuickLook({
   const isNote = shown === file && kind === 'note';
   const segments = folderPath.split('/').filter(Boolean);
   const para = paraKindOf(segments[0] ?? '');
-  const filed = filedLine(origin, shown.modifiedTime, now, bower);
+  const history = useFiledHistory();
+  const filed = filedLine(
+    origin,
+    history.get(shown.path) ?? shown.modifiedTime,
+    now,
+    bower,
+  );
   const demo = isDemo();
 
   return (
@@ -429,11 +436,13 @@ function FilePane({ item }: { item: PanePreview }): JSX.Element {
   const readsNote = original !== undefined || kind === 'note';
   const rendered = useRenderedNote(readsNote ? file.id : null, file.path);
   const rows = useCsvRows(!readsNote && kind === 'csv' ? shown.id : null);
-  const filed = filedBy(
+  // Who filed it and when, from the run history (R-API-3, #922).
+  const known = withHistory(
     shown,
     origin ?? (bower === true ? 'filed' : null),
-    now,
-  ).line;
+    useFiledHistory(),
+  );
+  const filed = filedBy(known.file, known.origin, now).line;
   const meta = metaLine(
     {
       name: shown.name,

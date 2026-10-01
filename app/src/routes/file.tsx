@@ -42,6 +42,7 @@ import { PhotoViewer } from '../components/photo-viewer.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { TablePreview, parseCsv } from '../components/table-preview.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
+import { useFiledHistory } from '../components/use-filed-history.js';
 import {
   companionCandidates,
   copyNotice,
@@ -62,7 +63,12 @@ import {
   thumbnailLinkOf,
 } from '../drive.js';
 import type { DriveFile } from '../drive.js';
-import { CATALOGUE_PATH, filedBy, originOf } from '../file-origin.js';
+import {
+  CATALOGUE_PATH,
+  filedBy,
+  originOf,
+  withHistory,
+} from '../file-origin.js';
 import {
   DOC_PREVIEW_MIME,
   previewKind,
@@ -721,8 +727,12 @@ export function FileScreen(): JSX.Element {
   );
   const aboutColumn = useMediaQuery('(min-width: 1200px)');
   const now = Date.now();
+  const history = useFiledHistory();
   const origin = file === undefined ? null : originOf(file, catalogue);
-  const filed = file === undefined ? null : filedBy(file, origin, now);
+  // Who filed it and when, from the run history (R-API-3, #922).
+  const known = file === undefined ? null : withHistory(file, origin, history);
+  const filed =
+    known === null ? null : filedBy(known.file, known.origin, now);
   const folderPath = file === undefined ? '' : folderOf(file.path);
   const aboutProps: AboutPanelProps | null =
     index === null || file === undefined || filed === null
