@@ -458,18 +458,28 @@ readonly NEXT_FILTER='[inputs | sub("\r$"; "") | split("\t") | map(gsub("^\\s+|\
 # anything is copied up. A missing CLAUDE.md in Drive would break the
 # folder, so a copy up must never run while it is out. Anything the agent
 # left at that path (the permission policy denies writing it) is replaced.
+# The copy in the work dir is checked against the sha256 taken when it was
+# moved out: if anything changed it during the run, CLAUDE.md is restored
+# from the pre-run copy (PRE_RUN_DIR, keep_pre_run_copy above) instead.
+RULEBOOK_SUM=''
 take_rulebook_out() {
   cp -p "$VAULT_DIR/CLAUDE.md" "$RULEBOOK_FILE" || return 1
+  RULEBOOK_SUM=$(sha256sum <"$RULEBOOK_FILE") || return 1
   RULEBOOK_OUT=1
   rm -f "$VAULT_DIR/CLAUDE.md"
 }
 restore_rulebook() {
-  [ "$RULEBOOK_OUT" -eq 1 ] || return 0
+  [ "${RULEBOOK_OUT:-0}" -eq 1 ] || return 0
+  local from=$RULEBOOK_FILE
+  if [ "$(sha256sum <"$RULEBOOK_FILE" 2>/dev/null)" != "$RULEBOOK_SUM" ]; then
+    log "rulebook copy changed during the run: restored from the pre-run copy"
+    from="$PRE_RUN_DIR/CLAUDE.md"
+  fi
   if [ -e "$VAULT_DIR/CLAUDE.md" ] || [ -L "$VAULT_DIR/CLAUDE.md" ]; then
     log "rulebook: a CLAUDE.md written during the run was replaced"
     rm -rf "$VAULT_DIR/CLAUDE.md" || return 1
   fi
-  cp -p "$RULEBOOK_FILE" "$VAULT_DIR/CLAUDE.md" || return 1
+  cp -p "$from" "$VAULT_DIR/CLAUDE.md" || return 1
   RULEBOOK_OUT=0
 }
 
@@ -1712,7 +1722,8 @@ corrections_block() {
 }
 
 # R-SS-6 {{PENDING}}: the pending files listed in $1 (vault paths), one per
-# line. A document converted before the run is followed by where its text
+# line, quoted as `- \`<path>\`` like already_written_block, since a name is
+# untrusted text. A document converted before the run is followed by where its text
 # is, the `.md` next to it (`(text: <path>)`); a PDF with no text layer by
 # `(scanned: no text layer)`. `(none)` for an empty list. Reads VAULT_DIR
 # and DOC_TEXT_MAP.
@@ -1725,7 +1736,7 @@ pending_block() {
       *.docx | *.odt | *.html | *.htm | *.epub | *.rtf)
         sibling="${path%.*}.md"
         if [ -f "$VAULT_DIR/$sibling" ] && ! grep -Fxq -- "$sibling" "$1"; then
-          extra=" (text: $sibling)"
+          extra=" (text: \`$sibling\`)"
         fi
         ;;
       *.pdf)
@@ -1735,7 +1746,7 @@ pending_block() {
         fi
         ;;
     esac
-    printf '%s%s\n' "$path" "$extra"
+    printf -- '- `%s`%s\n' "$path" "$extra"
     found=1
   done <"$1"
   [ "$found" -eq 1 ] || printf '(none)\n'
@@ -1755,6 +1766,27 @@ backfill_block() {
       /^[ \t]*- \[\[/ && split($0, f, "·") < 5 { print; if (++n == 50) exit }' "$1") || return 1
   fi
   printf '%s\n' "${out:-(none)}"
+}
+
+# R-SS-6: fills a prompt read on stdin in one pass. Each line that is exactly
+# `{{NAME}}` is replaced by the contents of $1/context-<name>.txt (the name in
+# lower case) when that file exists; any other line is printed as it is.
+# Inserted text is never scanned again, so vault text that holds a
+# placeholder stays literal.
+fill_placeholders() {
+  D=$1 awk '
+    { line = $0; sub(/\r$/, "", line) }
+    line ~ /^\{\{[A-Z_]+\}\}$/ {
+      file = ENVIRON["D"] "/context-" tolower(substr(line, 3, length(line) - 4)) ".txt"
+      if ((getline text < file) > 0) {
+        print text
+        while ((getline text < file) > 0) print text
+        close(file)
+        next
+      }
+      close(file)
+    }
+    { print }'
 }
 # <<< context pack
 
@@ -2809,11 +2841,8 @@ context_count() { grep -cv '^(' "$WORK_DIR/context-$1.txt" || true; }
 context_line="context: $(grep -c '^- #' "$WORK_DIR/context-tags.txt" || true) tags, $(context_count folders) folders, $(context_count corrections) correction pairs, $(context_count pending) pending"
 [ "$MODE" != lint ] || context_line+=", $(context_count backfill) rows to complete"
 log "$context_line"
-for name in tags folders corrections pending backfill; do
-  value=$(cat "$WORK_DIR/context-$name.txt")
-  placeholder="{{${name^^}}}"
-  PROMPT=${PROMPT//"$placeholder"/"$value"}
-done
+# One pass (fill_placeholders): text a block inserts is never filled again.
+PROMPT=$(printf '%s\n' "$PROMPT" | fill_placeholders "$WORK_DIR")
 STEP='rulebook'
 if ! take_rulebook_out; then
   fail "$STEP: could not move CLAUDE.md out"

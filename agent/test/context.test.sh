@@ -175,8 +175,8 @@ echo "ok $CASE"
 #     converted and a PDF with text say nothing more.
 CASE=pending
 expect_eq "$(pending_block "$FIXTURES/pending.txt")" "$(join \
-  '0-Inbox/broken.odt' '0-Inbox/plan.pdf' '0-Inbox/report.docx (text: 0-Inbox/report.md)' \
-  '0-Inbox/scan.pdf (scanned: no text layer)' 'Clippings/b.md')" 'pending'
+  '- `0-Inbox/broken.odt`' '- `0-Inbox/plan.pdf`' '- `0-Inbox/report.docx` (text: `0-Inbox/report.md`)' \
+  '- `0-Inbox/scan.pdf` (scanned: no text layer)' '- `Clippings/b.md`')" 'pending'
 : >"$ROOT/none.txt"
 expect_eq "$(pending_block "$ROOT/none.txt")" '(none)' 'nothing pending'
 echo "ok $CASE"
@@ -197,4 +197,24 @@ expect_eq "$(grep -c . <<<"$rows")" 50 'at most 50 rows'
 expect_eq "$(head -n 1 <<<"$rows")" '- [[3-Resources/n1.md]] · Note' 'oldest first'
 printf '# Index\n\n## Areas\n- [[2-Areas/a.pdf]] · PDF · #health · A letter · filed by Bower\n' >"$ROOT/full.md"
 expect_eq "$(backfill_block "$ROOT/full.md")" '(none)' 'every row complete'
+echo "ok $CASE"
+
+# 13. One pass (fill_placeholders): each line that is exactly a placeholder
+#     gets its block; vault text that holds a placeholder, inline in a hub
+#     description or as a line of its own in a block, stays literal.
+CASE='one pass'
+FILL_VAULT="$ROOT/fill-vault"
+mkdir -p "$FILL_VAULT/2-Areas/Trap"
+printf -- '---\ntags: [hub]\n---\nSee {{PENDING}} and {{BACKFILL}}\n' >"$FILL_VAULT/2-Areas/Trap/Trap.md"
+FILL_DIR="$ROOT/fill"
+mkdir -p "$FILL_DIR"
+folders_block "$FILL_VAULT" >"$FILL_DIR/context-folders.txt"
+printf '{{PENDING}}\n{{BACKFILL}}\n' >"$FILL_DIR/context-tags.txt"
+printf -- '- `0-Inbox/a.pdf`\n' >"$FILL_DIR/context-pending.txt"
+printf '(none)\n' >"$FILL_DIR/context-backfill.txt"
+template=$(printf '%s\n' 'Tags:' '{{TAGS}}' 'Folders:' '{{FOLDERS}}' 'Pending:' '{{PENDING}}' \
+  'Rows:' '{{BACKFILL}}' 'Kept: {{TAGS}} inline' '{{UNKNOWN}}')
+expect_eq "$(fill_placeholders "$FILL_DIR" <<<"$template")" "$(join 'Tags:' '{{PENDING}}' '{{BACKFILL}}' \
+  'Folders:' '- 2-Areas/Trap · See {{PENDING}} and {{BACKFILL}}' 'Pending:' '- `0-Inbox/a.pdf`' \
+  'Rows:' '(none)' 'Kept: {{TAGS}} inline' '{{UNKNOWN}}')" 'filled prompt'
 echo "ok $CASE"
