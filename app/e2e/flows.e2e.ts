@@ -2166,12 +2166,12 @@ test('At 1920 a note and its About panel are one row next to the measure, centre
     page.locator('.shell-body').boundingBox(),
   ]);
   const textRight = (text?.x ?? NaN) + (text?.width ?? NaN);
-  // The panel starts right after the text column's padding, not on the
-  // far side of the container (6.1.5: 900 px away at 1920).
-  expect((aside?.x ?? NaN) - textRight).toBeLessThanOrEqual(25);
+  // The panel starts right after the text column's 32 px padding (#950
+  // F-9), not on the far side of the container (6.1.5: 900 px away at 1920).
+  expect((aside?.x ?? NaN) - textRight).toBeLessThanOrEqual(33);
   expect((aside?.x ?? NaN) - textRight).toBeGreaterThanOrEqual(0);
   // The row (text column and panel) is centred in the container.
-  const left = (text?.x ?? NaN) - 24 - (body?.x ?? NaN);
+  const left = (text?.x ?? NaN) - 32 - (body?.x ?? NaN);
   const right =
     (body?.x ?? NaN) +
     (body?.width ?? NaN) -

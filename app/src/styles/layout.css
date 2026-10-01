@@ -998,7 +998,7 @@ button.page-bare-back {
   .topbar {
     position: static;
     min-height: 48px;
-    padding: 0 var(--space-6);
+    padding: 0 var(--space-8);
     gap: var(--space-3);
     background: transparent;
   }
@@ -1032,8 +1032,10 @@ button.page-bare-back {
     display: block;
   }
 
+  /* The main column's sides are 32 px, as every 1280 board draws them
+     (#950 F-9); the top bar above lines up with it. */
   .content {
-    padding: var(--space-6);
+    padding: var(--space-6) var(--space-8);
   }
 }
 
@@ -1059,7 +1061,7 @@ button.page-bare-back {
   }
 
   .shell-with-aside .content {
-    flex: 0 1 calc(720px + 2 * var(--space-6));
+    flex: 0 1 calc(720px + 2 * var(--space-8));
   }
 
   .shell-aside {
