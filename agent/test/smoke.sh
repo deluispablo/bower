@@ -1544,6 +1544,11 @@ for prompt_name in INGEST_PROMPT LINT_PROMPT; do
 done
 grep -Fq 'never read `index.md` or `log.md` whole' <<<"$INGEST_PROMPT" ||
   die 'ingest prompt does not keep the agent off reading index.md whole'
+# #978: the agent files through the filing sheet, never by hand.
+grep -Fq 'File through the filing sheet, `.bower/filing.tsv`' <<<"$INGEST_PROMPT" ||
+  die 'ingest prompt does not send the filing through the sheet'
+grep -Fq 'Never move a pending original yourself, and never edit hub lists, `index.md` rows or `## Tags`' \
+  <<<"$INGEST_PROMPT" || die 'ingest prompt lets the agent file by hand'
 expect_eq "$(tail -n 7 <<<"$INGEST_PROMPT" | sed 's/^[0-9]*\. //')" "$(printf '%s\n' \
   'Finish by printing exactly six lines, nothing after them, one item per line (`Filed` counts the originals you moved into a folder, `Created` the notes you wrote):' \
   '   Processed: <n> files' '   Filed: <n> files' '   Created: <n> notes' '   Updated: <n> notes' \
