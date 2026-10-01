@@ -129,7 +129,11 @@ function Breadcrumb({
     <nav class="page-header-crumbs" aria-label="Breadcrumb">
       {crumbs.map((crumb, i) => (
         <span key={crumb.href}>
-          {i > 0 && ' / '}
+          {i > 0 && (
+            <span class="page-header-crumb-sep" aria-hidden="true">
+              /
+            </span>
+          )}
           <a href={crumb.href}>{crumb.label}</a>
         </span>
       ))}

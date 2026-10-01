@@ -87,9 +87,12 @@ describe('PageHeader (R-HEADER-1..4)', () => {
       .map((a) => a.textContent)
       .join(' / ');
     expect(texts).toBe('Projects / Housing Search');
+    // The separator is its own element, spaced by CSS, so it cannot
+    // collapse at the start of a flex item ("Projects/ Housing Search").
     expect(root.querySelector('.page-header-crumbs')?.textContent).toBe(
-      'Projects / Housing Search',
+      'Projects/Housing Search',
     );
+    expect(root.querySelectorAll('.page-header-crumb-sep')).toHaveLength(1);
   });
 
   it('reads Home on Settings and Just filed', () => {

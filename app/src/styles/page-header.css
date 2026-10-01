@@ -24,6 +24,12 @@
   text-decoration: underline;
 }
 
+/* The separator, spaced evenly (boards: "Projects / Job Search Australia");
+   a text space would collapse at the start of a flex item. */
+.page-header-crumb-sep {
+  margin: 0 6px;
+}
+
 /* Title then (i) and ⋯, 2 px apart; the buttons sit on the first line,
    their centre on its centre (−3 px on the phone, 0 on desktop as the
    1280 boards draw it). */
