@@ -27,7 +27,7 @@ import { isDemo } from '../api.js';
 import { Bird } from './bird.js';
 import { IconSparkle } from './icons.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
-import { pileConfirmLine } from '../pile-groups.js';
+import { pileConfirmLine, requestRowLabel } from '../pile-groups.js';
 import type { PileConfirm } from '../pile-groups.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
@@ -233,6 +233,16 @@ export function TidyConfirmSheet({
                       </span>
                       <span class="tidy-confirm-pile-count">
                         {`${piles.elsewhere} ${piles.elsewhere === 1 ? 'thing' : 'things'} · no note`}
+                      </span>
+                    </li>
+                  )}
+                  {(piles.requests ?? 0) > 0 && (
+                    <li>
+                      <span class="tidy-confirm-pile-label">
+                        {requestRowLabel(piles.requests ?? 0)}
+                      </span>
+                      <span class="tidy-confirm-pile-count">
+                        {String(piles.requests ?? 0)}
                       </span>
                     </li>
                   )}

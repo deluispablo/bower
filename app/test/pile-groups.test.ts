@@ -10,6 +10,8 @@ import {
   groupByOrigin,
   pileConfirm,
   pileConfirmLine,
+  confirmRows,
+  requestRowLabel,
   pileHeading,
   pileOriginOf,
   pileSnippet,
@@ -84,26 +86,37 @@ describe('pileConfirm', () => {
     ]);
     expect(confirm?.elsewhere).toBe(2);
     if (confirm === undefined) throw new Error('no piles');
-    expect(pileConfirmLine(5, confirm)).toBe('5 things in 2 piles');
+    // Two noted piles and the "Added from elsewhere" row: three rows.
+    expect(pileConfirmLine(5, confirm)).toBe('5 things in 3 piles');
     expect(pileConfirmLine(3, { ...confirm, elsewhere: 0 })).toBe(
       '3 things in 2 piles',
     );
   });
 
-  it('reads "<n> things in <m> piles" whatever else is waiting (S-AD-19)', () => {
-    const line = pileConfirmLine(6, {
-      piles: [{ id: 'a', label: 'x', count: 1 }],
+  it('counts every row the confirm lists as a pile, the request included (AD-Confirm ruling)', () => {
+    // One noted pile of 2 plus the default demo inbox (2 from elsewhere and
+    // a waiting request): 5 things, three rows.
+    const demo = {
+      piles: [{ id: 'a', label: 'x', count: 2 }],
       elsewhere: 2,
       requests: 1,
-    });
-    expect(line).toBe('6 things in 1 pile');
+    };
+    expect(pileConfirmLine(5, demo)).toBe('5 things in 3 piles');
+    expect(confirmRows(demo)).toBe(3);
     expect(
       pileConfirmLine(3, {
         piles: [{ id: 'a', label: 'x', count: 2 }],
         elsewhere: 0,
         requests: 1,
       }),
-    ).toBe('3 things in 1 pile');
+    ).toBe('3 things in 2 piles');
+    expect(
+      pileConfirmLine(2, {
+        piles: [{ id: 'a', label: 'x', count: 2 }],
+        elsewhere: 0,
+      }),
+    ).toBe('2 things in 1 pile');
+    expect(requestRowLabel(1)).toBe('A request for Bower');
   });
 
   it('is undefined when no pile has a thing waiting', () => {

@@ -153,6 +153,21 @@ export function pileConfirm(
   return { piles: rows, elsewhere: waiting.size - claimed.size, requests };
 }
 
+/** How many rows the confirm lists: the piles, then "Added from elsewhere"
+ * and the requests when there are any. */
+export function confirmRows(confirm: PileConfirm): number {
+  return (
+    confirm.piles.length +
+    (confirm.elsewhere > 0 ? 1 : 0) +
+    ((confirm.requests ?? 0) > 0 ? 1 : 0)
+  );
+}
+
+/** The confirm's request row (AD-Confirm ruling): "A request for Bower". */
+export function requestRowLabel(count: number): string {
+  return count === 1 ? 'A request for Bower' : 'Requests for Bower';
+}
+
 /**
  * The confirm's count line, as the board and S-AD-19 word it (lead ruling
  * on #936): "6 things in 2 piles". The total is the sticky button's and the
@@ -160,7 +175,9 @@ export function pileConfirm(
  */
 export function pileConfirmLine(total: number, confirm: PileConfirm): string {
   const things = `${total} ${total === 1 ? 'thing' : 'things'}`;
-  const n = confirm.piles.length;
+  // Every row the list shows is a pile: each noted pile, "Added from
+  // elsewhere" and the waiting requests (lead ruling, AD-Confirm).
+  const n = confirmRows(confirm);
   return `${things} in ${n} ${n === 1 ? 'pile' : 'piles'}`;
 }
 

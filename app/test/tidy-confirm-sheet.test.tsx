@@ -332,6 +332,24 @@ describe('TidyConfirmSheet, counts agree (#914, R-AD-8, AD-Confirm)', () => {
   });
 });
 
+describe('TidyConfirmSheet, the request as its own row (AD-Confirm ruling)', () => {
+  it('lists the request so the rows add up to the count', () => {
+    const demo: PileConfirm = {
+      piles: [{ id: 'a', label: 'From your pile: “Two job offers”', count: 2 }],
+      elsewhere: 2,
+      requests: 1,
+    };
+    mount(5, vi.fn(), vi.fn(), undefined, false, undefined, { piles: demo });
+    const text = document.body.textContent;
+    expect(text).toContain('5 things in 3 piles');
+    const rows = [
+      ...document.body.querySelectorAll('[aria-label="Your piles"] li'),
+    ];
+    expect(rows).toHaveLength(3);
+    expect(rows[2]?.textContent).toBe('A request for Bower1');
+  });
+});
+
 describe('TidyConfirmSheet, piles (#771, R-PILE-5)', () => {
   const piles: PileConfirm = {
     piles: [
@@ -344,7 +362,7 @@ describe('TidyConfirmSheet, piles (#771, R-PILE-5)', () => {
   it('names the piles, one row each, and what came from elsewhere', () => {
     mount(5, vi.fn(), vi.fn(), undefined, false, undefined, { piles });
     const text = document.body.textContent;
-    expect(text).toContain('5 things in 2 piles');
+    expect(text).toContain('5 things in 3 piles');
     expect(text).toContain('Bower reads each pile with its own note.');
     expect(text).toContain('From your pile: “Job offers”');
     expect(text).toContain('2 things');
