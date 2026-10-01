@@ -177,7 +177,8 @@ function Card({
           tone={card.failed ? 'failed' : setAside ? 'check' : 'done'}
           class="activity-badge"
         >
-          {card.status}
+          {/* One wording for a failed run, as on Just filed (DB-17). */}
+          {card.failed ? 'Did not finish' : card.status}
         </Badge>
       </p>
       <p class="activity-counts">{card.sentence}</p>
