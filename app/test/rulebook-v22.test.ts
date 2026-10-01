@@ -21,8 +21,8 @@ function thinksSection(text: string): string {
 }
 
 describe('rulebook v22', () => {
-  it('is version 22', () => {
-    expect(rulesVersionOf(RULEBOOK)).toBe(22);
+  it('is version 22 or later', () => {
+    expect(rulesVersionOf(RULEBOOK)).toBeGreaterThanOrEqual(22);
   });
 
   it('has the nine principles, in order, in about 25 lines', () => {

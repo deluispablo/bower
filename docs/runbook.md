@@ -366,6 +366,12 @@ Bower never changes the user's rules on its own (#199). When it would like the u
 
 The runner's audit keeps this honest: `Answers/` is an ordinary place for the agent to write, while any change it makes to `Rules.md` in a run without an instruction note the app wrote is put back and reported as `refused` (#263), so an accepted suggestion is the only way a rule reaches `Rules.md` besides Tell Bower. Existing folders get the new rulebook text from **Settings → Advanced → "Update Bower's rules"** (version 5); the updated `prompts/ingest.md` already spells out the section format, so their proposals reach the Bower tab either way, and the new rulebook adds the rest (when to file a workflow or a tag proposal, and never to repeat a dismissed one).
 
+### Rulebook v23: statuses chosen per folder
+
+Rulebook v23 (#921, decision E-7) makes statuses depend on the folder: when a project or area folder holds two or more notes of a kind with statuses, Bower writes `statuses:` in that folder's hub note, 3 to 10 lower-case values of at most 24 characters, in lifecycle order, starting with `new` (a rental search might get `new, to view, viewed, applied, approved, signed, not for me, turned down`). A new note takes the list's first value; the kind's list stays the fallback. Old values such as `declined` or `rejected` stay valid: Bower appends a value notes use instead of dropping it, and nothing is migrated.
+
+After the agent step, the runner checks every hub note the run changed: a `statuses:` that is not a list, has fewer than 3 or more than 10 values, a value in capitals, over 24 characters or there twice, or misses a status a note in that folder uses, is removed from the hub note, and the run's summary ends with "Warning: … folder status lists were not usable and removed". The log says only how many lists were checked and removed. Operator action: none beyond the usual update (deploy the runner, then each owner applies v23 from Settings → Advanced → "Update Bower's rules"). A v23 folder on an older runner gets the lists unchecked; the app still ignores an unusable one.
+
 ### A folder's statuses (Compare)
 
 The status select in a folder's Compare tab offers the folder's own list, read from `statuses: [..]` in its hub note (`<Folder>/<Folder>.md`); without one, or with a list that is not a non-empty list of short lower-case words, it falls back to the kind's list in `app/src/kinds.ts` (the console says why). A note whose status is not in the list keeps it as an extra option.

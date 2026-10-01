@@ -30,6 +30,8 @@ printf '%s' "$RUN_TICKET" >"$ROOT/values/run-ticket"
 printf '%s' "$OPERATOR_KEY" >"$ROOT/values/operator-key"
 printf '%s' "$DRIVE_TOKEN" >"$ROOT/values/drive-token"
 printf '%s' "$USER_API_KEY" >"$ROOT/values/user-api-key"
+# The folder status list fixtures (#921), for the rclone and claude stubs.
+printf '%s' "$HERE/fixtures/statuses" >"$ROOT/values/statuses-fixtures"
 
 # --- stubs ------------------------------------------------------------------
 
@@ -344,6 +346,11 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
       printf -- '---\nby: bower\n---\n\nThe old place.\n\n## History\n\n- 1 Jan · Filed to 3-Resources, by Bower\n\n## Reference\n\nKept.\n' \
         >"$remote/3-Resources/Old place.md"
       printf -- '---\nstatus: new\n---\n\nMine.\n' >"$remote/2-Areas/Mine.md"
+    fi
+    if [ "$SMOKE_SCENARIO" = statuses ]; then
+      # E-7 (#921): four folders of notes with statuses and their hub notes,
+      # none with a status list yet.
+      cp -R "$(cat "$SMOKE_STATE/../values/statuses-fixtures")/before/." "$remote/"
     fi
     if [ "$SMOKE_SCENARIO" = convert ]; then
       # Documents run.sh converts before the agent runs: two good ones, one
@@ -949,6 +956,12 @@ case "$SMOKE_SCENARIO" in
     } >.bower/checks.txt
     printf '%s\t%s\n' '2-Areas/Flat.md' 'Book a viewing' '-' 'Send the signed lease back' \
       'x.md' '' 'y.md' 'Three' 'z.md' 'Four' >.bower/next.txt
+    ;;
+  # E-7 (#921): the agent writes a status list in four hub notes: a usable
+  # one, one that drops a status a note uses, one with a value in capitals,
+  # and none at all.
+  statuses)
+    cp -R "$(cat "$SMOKE_STATE/../values/statuses-fixtures")/after/." .
     ;;
   # A name that says nothing (issue #369): the photo is renamed from its
   # content, indexed with its type and origin, and the rename logged.
@@ -2990,3 +3003,32 @@ grep -q ' 3 History lines written$' "$STATE/out.log" || die 'meaning: History li
 expect_content_free
 expect_cleaned_up
 echo "ok the report says what disagrees and what is next, and Bower's notes keep their History"
+
+# 42. E-7 (#921): the runner checks the `statuses:` list in each hub note the
+# run changed. A usable list (3 to 10 short lower-case values, none twice,
+# every status a note in the folder uses) stays as the agent wrote it; one
+# that drops a status in use, or has a value in capitals, is removed from the
+# hub note (the rest of the note kept as written), and the summary says so;
+# a hub note without a list is left alone. Only counts reach the log.
+MODE=ingest
+run_case statuses
+expect_eq "$RC" 0 'statuses: exit code'
+expect_eq "$(post "$(posts_count)" p.state)" done 'statuses: final state'
+fixtures="$HERE/fixtures/statuses"
+remote="$STATE/remote"
+for hub in '1-Projects/Moonee Ponds/Moonee Ponds.md' '1-Projects/Bike/Bike.md'; do
+  expect_eq "$(cat "$remote/$hub")" "$(cat "$fixtures/after/$hub")" "statuses: a usable or absent list is kept ($hub)"
+done
+for hub in '2-Areas/Applications/Applications.md' '1-Projects/Kitchen quotes/Kitchen quotes.md'; do
+  expect_eq "$(cat "$remote/$hub")" "$(cat "$fixtures/expected/$hub")" "statuses: an unusable list is removed ($hub)"
+done
+expect_eq "$(post "$(posts_count)" 'p.summary.split("\n").pop()')" \
+  'Warning: 2 folder status lists were not usable and removed; those folders use the usual statuses.' \
+  'statuses: the warning in the summary'
+grep -q ' status lists: 3 checked, 2 removed$' "$STATE/out.log" || die 'statuses: counts not logged'
+if grep -Eq 'Moonee|Applications|Kitchen|Bike|Smith|Park Lane|analyst|Store manager|turned down|Quoted' "$STATE/out.log"; then
+  die 'statuses: the log names a folder, a note or a status'
+fi
+expect_content_free
+expect_cleaned_up
+echo "ok the runner keeps a usable folder status list and removes an unusable one"

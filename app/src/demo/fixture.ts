@@ -1339,6 +1339,8 @@ export const FOLDER_STATUSES: Readonly<Record<string, readonly string[]>> = {
     'accepted',
     'not for me',
     'turned down',
+    // A value a note already uses is kept, at the end (rulebook v23, #921).
+    'declined',
   ],
 };
 
@@ -1507,8 +1509,8 @@ export const JOB_OFFERS: readonly Offer[] = [
     employer: 'Altis Consulting',
     office: 'Melbourne, VIC',
     fit: 79,
-    // The old value, drawn on LI-Compare-375 ("Declined"): not in the
-    // folder's list, so the status menu shows it as an extra option (#916).
+    // The old value, drawn on LI-Compare-375 ("Declined"): the folder's
+    // list keeps it as its last value, as the rulebook says (#921).
     status: 'declined',
     modified: today('0711'),
     callout: [

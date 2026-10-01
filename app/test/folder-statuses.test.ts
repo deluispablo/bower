@@ -58,11 +58,19 @@ describe('folderStatuses', () => {
       'statuses: [new, New]',
       'statuses: [new, new]',
       'statuses: [new, 3]',
-      `statuses: [new, ${'x'.repeat(40)}]`,
+      `statuses: [new, ${'x'.repeat(25)}]`,
     ]) {
       expect(folderStatuses(hub(line), KIND)).toEqual(KIND.statuses);
     }
     expect(log).toHaveBeenCalledTimes(6);
+  });
+
+  it('takes a status of exactly 24 characters, as the runner does', () => {
+    const long = 'x'.repeat(24);
+    expect(folderStatuses(hub(`statuses: [new, ${long}]`), KIND)).toEqual([
+      'new',
+      long,
+    ]);
   });
 
   it('never throws on a broken note', () => {

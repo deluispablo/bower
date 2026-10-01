@@ -856,6 +856,125 @@ audit_note_names() {
   log "note name audit: $long over 40 characters, $same named like their original"
 }
 
+# A hub note's `statuses:` (decision E-7, #921): "none" when its frontmatter
+# has no such key, "bad" when the value is not a list, else "list" and one
+# value per line (quotes removed). Reads a flow list (`[a, b]`, on one line
+# or several) and a block list (`- a` lines).
+readonly STATUSES_AWK='
+  function emit(v) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
+    if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
+    out[++n] = v }
+  { sub(/\r$/, "") }
+  NR == 1 { if ($0 != "---") exit; next }
+  /^---[ \t]*$/ { exit }
+  mode == "flow" { flow = flow " " $0; if (index($0, "]")) exit; next }
+  mode == "block" {
+    if ($0 ~ /^[ \t]*-([ \t]|$)/) { v = $0; sub(/^[ \t]*-/, "", v); emit(v); next }
+    if ($0 ~ /^[ \t]+[^ \t]/) { bad = 1; next }
+    exit
+  }
+  /^statuses:/ {
+    found = 1; v = $0; sub(/^statuses:[ \t]*/, "", v); sub(/[ \t]+(#.*)?$/, "", v)
+    if (v == "") { mode = "block"; next }
+    if (substr(v, 1, 1) == "[") { flow = v; if (index(v, "]")) exit; mode = "flow"; next }
+    bad = 1; exit
+  }
+  END {
+    if (!found) { print "none"; exit }
+    if (mode == "flow" || flow != "") {
+      sub(/^[ \t]*\[/, "", flow)
+      if (flow !~ /\][ \t]*$/) { print "bad"; exit }
+      sub(/\][ \t]*$/, "", flow)
+      if (flow ~ /^[ \t]*$/) { print "list"; exit }
+      k = split(flow, parts, ",")
+      for (i = 1; i <= k; i++) emit(parts[i])
+    }
+    if (bad) { print "bad"; exit }
+    print "list"
+    for (i = 1; i <= n; i++) print out[i]
+  }'
+
+# Removes `statuses:` (and its list lines) from the frontmatter of file $1;
+# nothing else in the file changes.
+drop_statuses() {
+  local tmp="$1.bower-statuses"
+  awk '
+    NR == 1 { fm = ($0 ~ /^---\r?$/); print; next }
+    fm && /^---[ \t]*\r?$/ { fm = 0; skip = 0; print; next }
+    fm && skip == 1 { if ($0 ~ /^[ \t]/) next; skip = 0 }
+    fm && skip == 2 { if (index($0, "]")) skip = 0; next }
+    fm && /^statuses:/ {
+      v = $0; sub(/\r$/, "", v); sub(/^statuses:[ \t]*/, "", v)
+      if (v == "") skip = 1
+      else if (substr(v, 1, 1) == "[" && !index(v, "]")) skip = 2
+      next
+    }
+    { print }' "$1" >"$tmp" || { rm -f "$tmp"; return 1; }
+  cat "$tmp" >"$1" && rm -f "$tmp"
+}
+
+# Why the `statuses:` of the hub note $1 (relative to VAULT_DIR) is not
+# usable, printed as one word, or nothing when it is usable or absent. A
+# usable list has 3 to 10 values, each lower case, at most 24 characters and
+# there once, and holds every `status:` a note next to the hub note uses.
+statuses_problem() {
+  local path=$1 dir name shape value chars used n=0 values=()
+  local -A seen=()
+  dir=${path%/*}
+  name=${path##*/}
+  { read -r shape; mapfile -t values; } < <(awk "$STATUSES_AWK" "$VAULT_DIR/$path")
+  case "$shape" in
+    none | '') return 0 ;;
+    bad) echo shape; return 0 ;;
+  esac
+  for value in ${values[@]+"${values[@]}"}; do
+    n=$((n + 1))
+    [ -n "$value" ] || { echo blank; return 0; }
+    chars=$(LC_ALL=C.UTF-8 bash -c 'printf "%s" "${#1}"' _ "$value" 2>/dev/null) || chars=${#value}
+    [ "$chars" -le 24 ] || { echo long; return 0; }
+    [ "$value" = "$(LC_ALL=C.UTF-8 tr '[:upper:]' '[:lower:]' <<<"$value")" ] || { echo case; return 0; }
+    [ -z "${seen[$value]+x}" ] || { echo twice; return 0; }
+    seen[$value]=1
+  done
+  [ "$n" -ge 3 ] && [ "$n" -le 10 ] || { echo count; return 0; }
+  while IFS= read -r used; do
+    [ -n "$used" ] || continue
+    [ -n "${seen[$used]+x}" ] || { echo missing; return 0; }
+  done < <(cd "$VAULT_DIR/$dir" && find . -maxdepth 1 -type f -name '*.md' -print0 |
+    xargs -0 -r awk "$STATUS_AWK" | N="./$name" awk -F '\t' '$1 != ENVIRON["N"] { print $2 }')
+}
+
+# E-7 (#921), after the move detection: each hub note the run changed
+# (`<folder>/<name>/<name>.md`, not one only moved) whose `statuses:` is not
+# a usable list (statuses_problem above) has the list removed, so the app
+# falls back to the kind's list, and the run's summary (the status callback)
+# carries a warning. Only counts are logged: no note name or path.
+STATUSES_WARNING=''
+check_hub_statuses() {
+  STATUSES_WARNING=''
+  [ "$TOO_MANY_CHANGES" -eq 0 ] || return 0
+  local path dir moved="$WORK_DIR/moved-to.txt" problem checked=0 removed=0
+  cut -f 2 "$MOVES_FILE" >"$moved" || return 1
+  while IFS= read -r path; do
+    case "$path" in */*/*.md) ;; *) continue ;; esac
+    dir=${path%/*}
+    [ "${path##*/}" = "${dir##*/}.md" ] || continue
+    [ -f "$VAULT_DIR/$path" ] || continue
+    ! grep -qxF -- "$path" "$moved" || continue
+    grep -q '^statuses:' "$VAULT_DIR/$path" || continue
+    checked=$((checked + 1))
+    problem=$(statuses_problem "$path") || return 1
+    [ -n "$problem" ] || continue
+    drop_statuses "$VAULT_DIR/$path" || return 1
+    removed=$((removed + 1))
+  done <"$CHANGED_FILE"
+  [ "$checked" -eq 0 ] || log "status lists: $checked checked, $removed removed"
+  [ "$removed" -gt 0 ] || return 0
+  STATUSES_WARNING="Warning: $removed folder status $([ "$removed" -eq 1 ] && echo 'list was' || echo 'lists were') not usable and removed; those folders use the usual statuses."
+  # The removal changed those files: the manifest must say so.
+  manifest >"$MANIFEST_AFTER"
+}
+
 # The move phase (#595): each move in MOVES_FILE is done in Drive itself, as
 # a server-side move (rclone moveto; on Drive that changes the file's parent
 # folder and keeps its id), after creating the new parent folder. So a moved
@@ -2315,6 +2434,10 @@ fi
 if ! append_document_text || ! audit_note_names; then
   fail "$STEP: text copy failed"
 fi
+# E-7 (#921): an unusable folder status list in a changed hub note is removed.
+if ! check_hub_statuses; then
+  fail "$STEP: status list check failed"
+fi
 if ! move_up; then
   fail "$STEP: move failed"
 fi
@@ -2385,6 +2508,8 @@ if [ "$TOO_MANY_CHANGES" -eq 1 ]; then
 else
   [ -z "$AUDIT_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
 '}$AUDIT_WARNING"
+  [ -z "$STATUSES_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
+'}$STATUSES_WARNING"
   filed=$(count_lines "$WORK_DIR/pending-after-scan.txt")
   [ -f "$WORK_DIR/pending-after-scan.txt" ] || filed=$(count_lines "$PENDING_FILE")
   write_outcome done "Tidied up $filed $([ "$filed" -eq 1 ] && echo thing || echo things)."
