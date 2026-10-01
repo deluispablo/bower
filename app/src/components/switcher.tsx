@@ -1519,7 +1519,14 @@ function SwitcherPanel({
             )}
           </div>
           <div class="switcher-columns">
-            <div class="switcher-body">
+            {/* A scroll box reachable by keyboard, named, so axe's
+                scrollable-region-focusable holds (#950). */}
+            <div
+              class="switcher-body"
+              role="region"
+              aria-label="Search results"
+              tabIndex={0}
+            >
               {scope !== null && !desktop && (
                 <button
                   type="button"
