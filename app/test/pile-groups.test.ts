@@ -84,9 +84,7 @@ describe('pileConfirm', () => {
     ]);
     expect(confirm?.elsewhere).toBe(2);
     if (confirm === undefined) throw new Error('no piles');
-    expect(pileConfirmLine(5, confirm)).toBe(
-      '5 things in 2 piles',
-    );
+    expect(pileConfirmLine(5, confirm)).toBe('5 things in 2 piles');
     expect(pileConfirmLine(3, { ...confirm, elsewhere: 0 })).toBe(
       '3 things in 2 piles',
     );
