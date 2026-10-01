@@ -343,6 +343,13 @@ function useTarget(
   if (variant === 'page') {
     return targetFromReveal(revealParam(), index) ?? lastTarget();
   }
+  // Add's open item is the inbox: the drawer opens on it (#920 DB-4).
+  if (path === '/add') {
+    const inbox = index?.folders.find(
+      (file) => !file.path.includes('/') && displayName(file.name) === 'Inbox',
+    );
+    if (inbox !== undefined) return { kind: 'folder', path: inbox.path };
+  }
   return routeTarget ?? lastTarget();
 }
 
