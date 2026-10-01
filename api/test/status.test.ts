@@ -253,11 +253,27 @@ describe('GET /status', () => {
     expect(await getRun(kv, USER_ID)).toEqual(body.run);
   });
 
-  it('marks a stale queued run failed too', async () => {
+  it('keeps a queued run active at 16 minutes', async () => {
+    await seedUser();
+    const run: Run = {
+      state: 'queued',
+      requestedAt: new Date(Date.now() - 16 * 60 * 1000).toISOString(),
+      runId: 'run-1',
+    };
+    await putRun(kv, USER_ID, run);
+
+    const response = await getStatus(await sessionCookie());
+
+    const body = await response.json<StatusResponseBody>();
+    expect(body.stale).toBe(false);
+    expect(body.run).toEqual(run);
+  });
+
+  it('marks a queued run failed with error stale at 17 minutes', async () => {
     await seedUser();
     const stale: Run = {
       state: 'queued',
-      requestedAt: new Date(Date.now() - QUEUED_STALE_MS - 1000).toISOString(),
+      requestedAt: new Date(Date.now() - 17 * 60 * 1000).toISOString(),
       runId: 'run-1',
     };
     await putRun(kv, USER_ID, stale);

@@ -137,13 +137,20 @@ describe('runStaleness', () => {
   const minutesAgo = (minutes: number): string =>
     new Date(now.getTime() - minutes * 60 * 1000).toISOString();
 
-  it('queued is active at 24 minutes, stale at 26', () => {
+  it('queued is active at 16 minutes, stale at 17', () => {
     expect(
-      runStaleness({ state: 'queued', requestedAt: minutesAgo(24) }, now),
+      runStaleness({ state: 'queued', requestedAt: minutesAgo(16) }, now),
     ).toEqual({ active: true, stale: false });
     expect(
-      runStaleness({ state: 'queued', requestedAt: minutesAgo(26) }, now),
+      runStaleness({ state: 'queued', requestedAt: minutesAgo(17) }, now),
     ).toEqual({ active: false, stale: true });
+  });
+
+  it('pins the windows: 17 min queued, 30 min running, 47 min ticket', () => {
+    // GitHub gives up a job no machine picks up after 15 minutes; plus 2.
+    expect(QUEUED_STALE_MS).toBe(17 * 60 * 1000);
+    expect(RUNNING_STALE_MS).toBe(30 * 60 * 1000);
+    expect(RUN_TICKET_TTL_MS).toBe(47 * 60 * 1000);
   });
 
   it('running is active at 29 minutes from startedAt, stale at 31', () => {

@@ -32,9 +32,12 @@ import type { Run } from './types.js';
 
 /**
  * A stored `queued` run with no news for this long is stale: the runner
- * never started, and the Process button unblocks.
+ * never started, and the Process button unblocks. 17 minutes is GitHub's
+ * 15-minute limit for a job no machine picks up, plus 2: past it, GitHub has
+ * already given the job up, and the Worker knows no GitHub run id for a
+ * queued run to ask about it.
  */
-export const QUEUED_STALE_MS = 25 * 60 * 1000;
+export const QUEUED_STALE_MS = 17 * 60 * 1000;
 
 /**
  * A stored `running` run with no news for this long is stale: the runner
