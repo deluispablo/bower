@@ -82,12 +82,18 @@ test.describe('the tour', () => {
       .getByRole('button', { name: 'Skip' })
       .click();
     await page.goto('/settings');
-    // The ⋯ menu's "Help and about this" sends this event (`requestHelp`).
-    await page.evaluate(() => {
-      window.dispatchEvent(new Event('bower:open-help', { cancelable: true }));
-    });
+    // The page ⋯ "More for Settings" holds Settings' own Help (ST-Help).
+    await visible(
+      page.getByRole('button', { name: 'More for Settings' }),
+    ).click();
+    await page.getByRole('menuitem', { name: 'Help and about this' }).click();
     const help = page.getByRole('dialog', { name: 'Settings' });
     await expect(help.getByText('Help and about this')).toBeVisible();
+    await expect(
+      help.getByText(
+        'How Bower works for you, on this device and in your Drive.',
+      ),
+    ).toBeVisible();
     await help.getByRole('button', { name: 'Show me around' }).click();
     await expect(page).toHaveURL(/\/$/);
     await expect(
