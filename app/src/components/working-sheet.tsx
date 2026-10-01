@@ -645,7 +645,7 @@ function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
 /** The Badge tone of each row tag (AR-Run: "Filed"). */
 const ACTION_TONE: Record<OutcomeAction, BadgeTone> = {
   new: 'new',
-  answered: 'done',
+  answered: 'filed',
   updated: 'done',
   filed: 'filed',
   needs: 'check',
