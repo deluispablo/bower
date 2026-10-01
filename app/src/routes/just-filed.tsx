@@ -41,6 +41,7 @@ import {
   linkAddress,
   moreLabel,
   noListLine,
+  NOTHING_FILED,
   previewRows,
   runBadge,
   runKey,
@@ -304,9 +305,11 @@ function EarlierBody({
     const outcome = outcomeFromRun(run);
     return (
       <p class="just-filed-earlier-empty">
-        {outcome.state === 'failed' || outcome.state === 'partial'
-          ? runSentence(outcome, { voice: 'third', now })
-          : 'Nothing to show for this one.'}
+        {outcome.state === 'failed'
+          ? NOTHING_FILED
+          : outcome.state === 'partial'
+            ? runSentence(outcome, { voice: 'third', now })
+            : 'Nothing to show for this one.'}
       </p>
     );
   }
