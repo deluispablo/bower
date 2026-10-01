@@ -598,15 +598,8 @@ function useLastRun(lastFinished: Run | null): Run | null {
 
 export function Home(): JSX.Element {
   const { me } = useSession();
-  const {
-    index,
-    files,
-    status,
-    refresh,
-    unpinNote,
-    unpinFolder,
-    unpinFile,
-  } = useVault();
+  const { index, files, status, refresh, unpinNote, unpinFolder, unpinFile } =
+    useVault();
   // `now` is the run store's own shared clock, so the bubble, the tiles and
   // the working sheet always agree on how long ago something happened.
   const { phase, run, lastFinished, now, tidyUp, openSheet, keptCount } =
