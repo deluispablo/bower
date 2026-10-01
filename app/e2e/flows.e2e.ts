@@ -1656,7 +1656,14 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
   }
   await expect(tabs).toBeVisible();
   const links = tabs.getByRole('link');
-  await expect(links).toHaveText(['Home', 'Folders', 'Add', 'Bower']);
+  // The labels (the Bower tab's bird mark holds hidden drawing text, #915).
+  await expect(links.locator(':scope > span')).toHaveText([
+    'Home',
+    'Folders',
+    'Add',
+    'Bower',
+  ]);
+  await expect(links.last().locator('svg.b.mark')).toHaveCount(1);
   await expect(links.first()).toHaveAttribute('aria-current', 'page');
 
   await tabs.getByRole('link', { name: 'Folders' }).click();
