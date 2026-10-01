@@ -14,7 +14,7 @@ import { reply } from './api.js';
 import type { DemoServer } from './server.js';
 import { drivePreviewUrl } from './vault.js';
 import type { Entry } from './vault.js';
-import { demoSlowMs, takeDemoFail } from './load-switch.js';
+import { demoReadWaitMs, demoSlowMs, takeDemoFail } from './load-switch.js';
 
 /**
  * An e2e-only knob (#322): a Playwright test sets this on `window` before
@@ -38,8 +38,7 @@ function listDelayMs(): number {
  * A demo read under the gate's switches (`load-switch.ts`): it waits while
  * slow is on, and fails once when fail is on.
  */
-function underSwitches<T>(read: () => Promise<T>, extraMs = 0): Promise<T> {
-  const ms = extraMs + demoSlowMs();
+function underSwitches<T>(read: () => Promise<T>, ms: number): Promise<T> {
   const run = (): Promise<T> =>
     takeDemoFail()
       ? Promise.reject(
@@ -135,7 +134,7 @@ export function createDemoDrive(server: DemoServer): DriveClient {
             a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
           );
         });
-      return underSwitches(answer, listDelayMs());
+      return underSwitches(answer, listDelayMs() + demoSlowMs());
     },
 
     listFolder: (folderId) =>
@@ -160,7 +159,10 @@ export function createDemoDrive(server: DemoServer): DriveClient {
     },
 
     getText: (id) =>
-      underSwitches(async () => (await vault.text(file(id).id)) ?? ''),
+      underSwitches(
+        async () => (await vault.text(file(id).id)) ?? '',
+        demoReadWaitMs(),
+      ),
 
     getBlob: (id) => reply(() => blobOf(file(id))),
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Run } from '../src/api.js';
 import {
+  isHomeLoading,
   birdStateFor,
   bubbleFor,
   finishedRunFor,
@@ -504,5 +505,60 @@ describe('inboxLine', () => {
     expect(inboxLine('failed', 3)).toBe('still waiting');
     expect(inboxLine('done', 0)).toBe('Nothing waiting. Add something.');
     expect(inboxLine('empty', 0)).toBe('Nothing waiting. Add something.');
+  });
+});
+
+describe('Home while it loads (#950)', () => {
+  it('never shows empty copy before the index is there', () => {
+    // The provider can sit at 'idle' before its first read starts.
+    for (const status of ['idle', 'loading', 'refreshing']) {
+      const loading = isHomeLoading({
+        status,
+        indexReady: false,
+        hasFolder: true,
+      });
+      expect(loading).toBe(true);
+      const state = homeStateFor({
+        phase: 'idle',
+        pending: 0,
+        loading,
+        lastFinished: null,
+      });
+      expect(state).toBe('loading');
+      // Even with yesterday's run finished, no "0 · Nothing waiting".
+      expect(
+        homeStateFor({
+          phase: 'idle',
+          pending: 0,
+          loading,
+          lastFinished: finishedRunFor('done', PARTIAL_RUN, null),
+          indexReady: false,
+        }),
+      ).toBe('loading');
+      const words = bubbleFor({
+        state,
+        pending: 0,
+        offline: false,
+        error: false,
+        editingPins: false,
+        lastFinished: null,
+        now: Date.now(),
+      })
+        .map((part) => (typeof part === 'string' ? part : part.text))
+        .join('');
+      expect(words).not.toMatch(/Nothing|Add a few things/);
+    }
+  });
+
+  it('stops loading once the index is there, or on an error', () => {
+    expect(
+      isHomeLoading({ status: 'idle', indexReady: true, hasFolder: true }),
+    ).toBe(false);
+    expect(
+      isHomeLoading({ status: 'error', indexReady: false, hasFolder: true }),
+    ).toBe(false);
+    expect(
+      isHomeLoading({ status: 'idle', indexReady: false, hasFolder: false }),
+    ).toBe(false);
   });
 });

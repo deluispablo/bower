@@ -6,6 +6,7 @@ import {
   DEMO_FAIL_KEY,
   DEMO_SLOW_KEY,
   DEMO_SLOW_MS,
+  demoReadWaitMs,
   demoSlowMs,
   takeDemoFail,
 } from '../src/demo/load-switch.js';
@@ -24,5 +25,13 @@ describe('the demo load switches (#950)', () => {
     sessionStorage.setItem(DEMO_FAIL_KEY, '1');
     expect(takeDemoFail()).toBe(true);
     expect(takeDemoFail()).toBe(false);
+  });
+
+  it('lets reads in a row share one wait, and waits again after a pause', () => {
+    sessionStorage.setItem(DEMO_SLOW_KEY, '1');
+    expect(demoReadWaitMs(100_000)).toBe(DEMO_SLOW_MS);
+    expect(demoReadWaitMs(100_000 + DEMO_SLOW_MS)).toBe(0);
+    expect(demoReadWaitMs(100_000 + DEMO_SLOW_MS + 200)).toBe(0);
+    expect(demoReadWaitMs(200_000)).toBe(DEMO_SLOW_MS);
   });
 });
