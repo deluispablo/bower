@@ -224,9 +224,25 @@
   list-style: none;
 }
 
+/* The note's text under the box, as PF-Main-1280 draws it: 14 px, line
+   height 1.5, 12 px under the box (the column's gap and nothing else). */
+.quick-look-pane .bower-note-box {
+  margin: 0;
+}
+
 .quick-look-pane-note {
   min-width: 0;
-  font-size: var(--text-15);
+}
+
+.quick-look-pane-note .markdown,
+.quick-look-pane-note .markdown p,
+.quick-look-pane-note .markdown li {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.quick-look-pane-note .markdown > :first-child {
+  margin-top: 0;
 }
 
 .quick-look-pane .table-preview {
