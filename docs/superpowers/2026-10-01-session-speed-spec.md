@@ -31,7 +31,7 @@ The agent is 85 % of the run. Today it runs Claude Code with no `--model` (the d
 | D-1 | Optimise one session first. One structured call per file, files in parallel and replacing GitHub Actions are out of scope for now. | The owner's call: the session is where the time goes, and it is backend-only. |
 | D-2 | Sonnet 5.5 at low effort for plain tidy-ups; high effort for instructions, context notes, "apply this rule" and questions. | The owner's call. Filing is pattern work; reasoning-heavy requests get more. |
 | D-3 | A persistent Claude session is rejected. | Start-up costs seconds; each run's time is turns × time per turn. A long-lived session grows its history every run, mixes runs and needs a server. |
-| D-4 | Replacing GitHub Actions is rejected for now. | It costs about 30 s of a run. Every option that runs the `claude` CLI with the subscription token needs a server or a paid plan. The incident risk is handled by R-SS-14. |
+| D-4 | Replacing GitHub Actions is rejected for now. | It costs about 30 s of a run. Every option that runs the `claude` CLI with the subscription token needs a server or a paid plan. R-SS-14 shortens how long an incident leaves a run hanging. |
 | D-5 | The session never gets Drive credentials. A partial download (Markdown only, binaries on demand through `.bower/need.txt` and `claude -p --resume`) is a later phase. | Security: a malicious file could otherwise act on Drive. The sync down costs 7 s today; R-SS-15 measures its growth. |
 | D-6 | Text copies stay visible next to their originals (option A). Hidden copies under `.bower/` (option B) wait for an app phase. | The app reads text copies to show a file's details; hiding them needs an app change. |
 | D-7 | The tag vocabulary lives in a `## Tags` section at the end of `index.md`, not in a separate file. | The owner's call. The runner cuts the section out for the prompt. |
@@ -139,11 +139,13 @@ Reading `index.md` whole is not allowed. R-SS-2 counts Read calls, so the benchm
 
 ### Reliability and growth
 
-**R-SS-14. A run that never starts is failed after 25 minutes.**
-- When the Worker reads a run's status (the endpoint the app polls) and the run has been `queued` or `running` for more than 25 minutes since its last callback, the Worker marks it `failed` with reason `timeout`, an existing `RUN_FAILURE_REASONS` value the app already turns into a sentence.
-- The 25 minutes are the job's 20-minute limit plus 5.
-- Handler tests in `api/test/`: a stale run is failed, a fresh run is untouched.
-- No cron and no app change.
+**R-SS-14. A run that never starts is failed sooner.**
+- The watchdog already exists:
+  - `GET /status` marks a `queued` run `failed` with `error: 'stale'` after `QUEUED_STALE_MS` (25 minutes) without news (`api/src/process.ts`, `api/src/status.ts`).
+  - It does the same for a `running` run after `RUNNING_STALE_MS` (30 minutes).
+  - A `running` run is also settled from its GitHub job's conclusion after 5 minutes.
+- On 1 October 2026 the owner's run stayed `queued`. GitHub never gave the job a machine and gave up after 15 minutes. The Worker knows no GitHub run id for a queued run, so only the 25-minute window could end it.
+- Change: `QUEUED_STALE_MS` becomes 17 minutes, GitHub's 15-minute limit for an unassigned job plus 2. `RUN_TICKET_TTL_MS` follows it (47 minutes). No app change.
 
 **R-SS-15. Sync-down numbers.** `run.sh` logs `sync down: <n> files, <n> MB, <n> s` after the sync down. When the time passes 20 s in normal use, the partial download (D-5) moves up.
 
@@ -162,7 +164,7 @@ Reading `index.md` whole is not allowed. R-SS-2 counts Read calls, so the benchm
 3. **Rulebook v24:** R-SS-4, R-SS-8, R-SS-9 (rule text), R-SS-11, R-SS-12 (rule text), R-SS-13 (rule text), R-SS-17 (rule text) in `vault-template/`, plus the two prompts. One owner for `vault-template/CLAUDE.md`, `vault-template/index.md` and `agent/prompts/`.
 4. **Runner context pack:** R-SS-5, R-SS-6, R-SS-7, after step 3.
 5. **Runner after the session:** R-SS-9 (counts), R-SS-10, R-SS-12 (pdftotext), R-SS-13, R-SS-15.
-6. **In parallel with steps 2 to 5, other files:** R-SS-14 (`api/`) and R-SS-16 (`agent/workflows/`).
+6. **In parallel with step 1, other files:** R-SS-14 (`api/`) and R-SS-16 (`agent/workflows/`).
 7. **Benchmark the result**, then docs: `docs/runbook.md` (model and effort variables, benchmark, stats line), `ARCHITECTURE.md` (the session's inputs), `docs/changelog.md` (rules v24).
 8. **Production:** only with the owner's yes. Redeploy the runner with `scripts/new-instance.sh`; the owner applies rules v24 in Settings; the next lint starts the backfill.
 
