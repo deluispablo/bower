@@ -601,6 +601,24 @@ button.pile-card:focus-visible {
   position: relative;
 }
 
+/* AD-Pile: about 65 px a row, the ✕ at the row end. */
+.pile-row .list-row {
+  align-items: center;
+  min-height: 65px;
+}
+
+.pile-row .list-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pile-row .list-row-trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
 .pile-row-failed .list-row-meta {
   color: var(--color-danger);
 }

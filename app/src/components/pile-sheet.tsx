@@ -239,7 +239,13 @@ export function PileRows({
         return (
           <li key={row.name} class={`pile-row pile-row-${row.state}`}>
             <ListRow
-              item={{ id: row.name, title, name: row.name, mimeType: '' }}
+              item={{
+                id: row.name,
+                title,
+                name: row.name,
+                mimeType: '',
+                root: 'inbox',
+              }}
               meta={rowMeta(row)}
               trailing={
                 <>
