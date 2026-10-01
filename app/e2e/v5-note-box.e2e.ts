@@ -27,7 +27,7 @@ test("Bower's note folds to one line and stays folded on the device", async ({
 }) => {
   await openArlington(page);
 
-  const head = page.getByRole('button', { name: "Fold Bower's note" });
+  const head = page.getByRole('button', { name: "Bower's note" });
   await expect(head).toHaveAttribute('aria-expanded', 'true');
   const box = await page.locator('.bower-note-box-head').boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);

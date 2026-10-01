@@ -306,9 +306,7 @@ describe('QuickLookPane, the desktop preview column (§3.37, R-PREVIEW-1)', () =
     expect(root.querySelector('.quick-look-pane-meta')?.textContent).toBe(
       'Bower note · 1 KB · filed by Bower today',
     );
-    const fold = root.querySelector<HTMLButtonElement>(
-      '[aria-label="Fold Bower\'s note"]',
-    );
+    const fold = root.querySelector<HTMLButtonElement>('.bower-note-box-fold');
     expect(fold).not.toBeNull();
     void act(() => fold?.click());
     expect(fold?.getAttribute('aria-expanded')).toBe('false');

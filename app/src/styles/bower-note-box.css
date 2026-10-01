@@ -49,9 +49,21 @@
   white-space: nowrap;
 }
 
-/* The fold control ("Fold Bower's note"); its hit area covers the whole
-   head row, so a tap anywhere on it folds or opens the box. */
+/* The fold control is the head row itself, a button named "Bower's note"
+   (spec 3.27): a tap anywhere on it folds or opens the box. */
 .bower-note-box-fold {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bower-note-box-fold-icon {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -59,18 +71,12 @@
   width: 32px;
   height: 32px;
   margin-left: auto;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
   color: var(--color-text-muted);
-  cursor: pointer;
 }
 
-.bower-note-box-fold::after {
-  position: absolute;
-  inset: 0;
-  content: '';
+/* Folded, the whole box is one 52 px row, its 1 px borders included. */
+.bower-note-box.is-folded .bower-note-box-head {
+  min-height: 50px;
 }
 
 .bower-note-box-fold:focus-visible {

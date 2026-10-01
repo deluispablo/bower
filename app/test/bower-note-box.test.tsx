@@ -163,7 +163,10 @@ describe('BowerNoteBox (issue #757)', () => {
     mount(OFFER);
     const head = foldButton();
     expect(head?.tagName).toBe('BUTTON');
-    expect(head?.getAttribute('aria-label')).toBe("Fold Bower's note");
+    const named = head?.getAttribute('aria-labelledby') ?? '';
+    expect(host.querySelector(`[id="${named}"]`)?.textContent).toBe(
+      "Bower's note",
+    );
     expect(head?.getAttribute('aria-expanded')).toBe('true');
     const controls = head?.getAttribute('aria-controls') ?? '';
     expect(host.querySelector(`[id="${controls}"]`)).not.toBeNull();

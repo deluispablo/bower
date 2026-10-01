@@ -334,7 +334,7 @@ export interface BowerNoteBoxProps {
   /** Other names the note is asked about by, such as its title: an Ask or
    * Rename request names a note as `[[title]]`. */
   names?: readonly string[];
-  /** The fold chevron ("Fold Bower's note"): on the note page and in the
+  /** The fold control (the head row, named "Bower's note"): on the note page and in the
    * desktop preview column (O-R6); `false` keeps the box open with no
    * control (a picture of the box). */
   fold?: boolean;
@@ -367,6 +367,8 @@ export function BowerNoteBox({
   const folded = fold && foldedState;
   const [changed, setChanged] = useState(false);
   const bodyId = useId();
+  const nameId = useId();
+  const lineId = useId();
   const changeId = useId();
   const [clock, setClock] = useState(() => Date.now());
   const reading =
@@ -443,54 +445,69 @@ export function BowerNoteBox({
     );
   }
 
+  const showLine = folded && counted.points > 0;
+  const head = (
+    <>
+      {headBird === undefined ? (
+        <BowerMark size={32} />
+      ) : (
+        <span class="bower-note-box-head-bird">
+          <Bird state={headBird} size={40} />
+        </span>
+      )}
+      <span class="bower-note-box-name" id={nameId}>
+        {"Bower's note"}
+      </span>
+      {showLine && (
+        <span class="bower-note-box-line" id={lineId}>
+          {foldedLine(counted.points, counted.toCheck)}
+        </span>
+      )}
+      {fold && (
+        <span class="bower-note-box-fold-icon" aria-hidden="true">
+          <svg
+            class="bower-note-box-chevron"
+            viewBox="0 0 20 20"
+            width="16"
+            height="16"
+            focusable="false"
+          >
+            <path
+              d="M5 8l5 5 5-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+      )}
+    </>
+  );
+
   return (
     <section
       class={`bower-note-box${folded ? ' is-folded' : ''}${extra === undefined ? '' : ` ${extra}`}`}
       aria-label="Bower's note"
     >
-      <div class="bower-note-box-head">
-        {headBird === undefined ? (
-          <BowerMark size={32} />
-        ) : (
-          <span class="bower-note-box-head-bird">
-            <Bird state={headBird} size={40} />
-          </span>
-        )}
-        <span class="bower-note-box-name">{"Bower's note"}</span>
-        {folded && counted.points > 0 && (
-          <span class="bower-note-box-line">
-            {foldedLine(counted.points, counted.toCheck)}
-          </span>
-        )}
-        {fold && (
-          <button
-            type="button"
-            class="bower-note-box-fold"
-            aria-label="Fold Bower's note"
-            aria-expanded={!folded}
-            aria-controls={bodyId}
-            onClick={toggle}
-          >
-            <svg
-              class="bower-note-box-chevron"
-              viewBox="0 0 20 20"
-              width="16"
-              height="16"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <path
-                d="M5 8l5 5 5-5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-        )}
-      </div>
+      {fold ? (
+        // The whole head row is the fold control, named "Bower's note"
+        // (spec 3.27); the folded line describes it.
+        <button
+          type="button"
+          class="bower-note-box-head bower-note-box-fold"
+          aria-labelledby={nameId}
+          aria-describedby={showLine ? lineId : undefined}
+          aria-expanded={!folded}
+          aria-controls={bodyId}
+          onClick={toggle}
+        >
+          {head}
+        </button>
+      ) : (
+        <div class="bower-note-box-head">{head}</div>
+      )}
 
       <div id={bodyId} class="bower-note-box-body" hidden={folded}>
         {verdict !== null && (
