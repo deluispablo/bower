@@ -460,6 +460,22 @@
   transform: translateY(-50%);
 }
 
+/* Touch: each segment's hit area reaches 44 px however the track is drawn
+   (K-21, K-34, #920 DB-21): 5 px over and under the 34 px button. */
+@media (pointer: coarse) {
+  .seg-button {
+    position: relative;
+  }
+
+  .seg-button::after {
+    top: -5px;
+    bottom: -5px;
+    height: auto;
+    min-height: 44px;
+    transform: none;
+  }
+}
+
 .seg-button[aria-checked='true'] {
   background: var(--color-surface-strong);
   color: var(--color-heading);
