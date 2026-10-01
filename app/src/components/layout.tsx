@@ -215,6 +215,8 @@ export function focusNewPage(from: Element | null): void {
     }
   };
   function attempt(): void {
+    // A menu or sheet opened on the new page already: it keeps focus.
+    if (document.querySelector('.overlay') !== null) return;
     const active = document.activeElement;
     const leftAlone =
       active === null ||
