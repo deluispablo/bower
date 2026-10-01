@@ -5,18 +5,13 @@ import { describe, expect, it } from 'vitest';
 /*
  * The start-up screen paints before tokens.css loads, so index.html repeats
  * some tokens as literals (R-BOOT-9). These tests keep them equal, and pin
- * the markup contract that boot-screen.ts (#985) relies on.
+ * the markup contract that boot-screen.ts (#985) relies on. Paths are
+ * relative to app/, where vitest runs (as in the other file-reading tests).
  */
 
-const HTML = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const TOKENS = readFileSync(
-  new URL('./styles/tokens.css', import.meta.url),
-  'utf8',
-);
-const VITE_CONFIG = readFileSync(
-  new URL('../vite.config.ts', import.meta.url),
-  'utf8',
-);
+const HTML = readFileSync('index.html', 'utf8');
+const TOKENS = readFileSync('src/styles/tokens.css', 'utf8');
+const VITE_CONFIG = readFileSync('vite.config.ts', 'utf8');
 
 const STYLE = /<style>([\s\S]*?)<\/style>/.exec(HTML)?.[1] ?? '';
 
