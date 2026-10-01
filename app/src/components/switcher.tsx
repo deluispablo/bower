@@ -510,6 +510,25 @@ interface RowModel {
   updated: string;
 }
 
+/**
+ * Where a row says it is: its folder, except a folder's own page (a
+ * same-name note Bower wrote), which stands for the folder and so sits
+ * where the folder sits: "Housing Search Australia" for Moonee Ponds's
+ * page (SE-Query, #950).
+ */
+function locationOf(row: RowModel, bowerWritten: boolean): string {
+  const folder = folderOf(row.file.path);
+  if (
+    row.kind === 'note' &&
+    bowerWritten &&
+    folder !== '' &&
+    row.file.path === hubNotePath(folder)
+  ) {
+    return lastSegment(folderOf(folder));
+  }
+  return row.parentName;
+}
+
 /** The row's meta line (R-SE-3, K-15): "Bower note · ● Moonee Ponds",
  * "Folder · ● Housing Search Australia · 7 things · updated today". */
 function rowMeta(row: RowModel, bowerWritten: boolean, now: number): MetaLine {
@@ -519,7 +538,9 @@ function rowMeta(row: RowModel, bowerWritten: boolean, now: number): MetaLine {
       mimeType: row.file.mimeType,
       bowerWritten,
       root: row.root,
-      ...(row.parentName !== '' && { parentName: row.parentName }),
+      ...(locationOf(row, bowerWritten) !== '' && {
+        parentName: locationOf(row, bowerWritten),
+      }),
       ...(row.count !== null && { count: row.count }),
       ...(row.kind === 'folder' &&
         row.updated !== '' && { updated: row.updated }),
