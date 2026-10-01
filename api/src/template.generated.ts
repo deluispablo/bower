@@ -561,7 +561,7 @@ When a project is done or dropped: set \`status: archived\`, move its folder to 
 - **Never** change rules on your own initiative. Rules change only through the Instructions workflow, or when the owner accepts a proposal in the app (the app writes \`Rules.md\` then, not you).
 
 ## Proposals
-<!-- load: instructions -->
+<!-- load: ingest, instructions -->
 Anything you would like the owner to decide (a new rule, a workflow for a recurring kind of document) is a proposal. Append it to \`Answers/Bower - Proposals.md\` (create the file if missing, with \`tags: [meta]\` frontmatter and the title \`# Bower - Proposals\`), one section per proposal:
 \`\`\`markdown
 ## <short title>
