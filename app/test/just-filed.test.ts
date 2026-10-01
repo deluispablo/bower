@@ -29,7 +29,14 @@ import {
   setAsideRows,
   unseenIds,
   wasLabel,
+  NO_LIST,
+  earlierSub,
+  moreLabel,
+  previewRows,
+  runBadge,
+  runLine,
 } from '../src/just-filed.js';
+import { outcomeFromRun } from '../src/run-outcome.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
@@ -223,6 +230,63 @@ describe('unseen ids', () => {
     ]);
     expect([...unseenIds(run, index, new Set(['a', 'b', 'c', 'd']))]).toEqual(
       [],
+    );
+  });
+});
+
+describe('earlier tidy-ups (#913, S-JF-5..7, R-JF-4, R-JF-5, R-API-2)', () => {
+  it('gives each run its Badge: Done, Did not finish', () => {
+    expect(runBadge(outcomeFromRun(run))).toEqual({
+      tone: 'done',
+      label: 'Done',
+    });
+    const failed: Run = {
+      requestedAt: run.requestedAt,
+      state: 'failed',
+      reason: 'drive_unavailable',
+    };
+    expect(runBadge(outcomeFromRun(failed))).toEqual({
+      tone: 'failed',
+      label: 'Did not finish',
+    });
+  });
+
+  it('says the outcome once: "n filed", or that nothing was lost', () => {
+    expect(runLine(run, Date.parse(run.finishedAt ?? '')).counts).toBe(
+      `${String(filedCount(run))} filed`,
+    );
+    const failed: Run = {
+      requestedAt: run.requestedAt,
+      state: 'failed',
+      reason: 'drive_unavailable',
+    };
+    expect(runLine(failed, Date.now()).counts).toBe(
+      'nothing was lost; the things stayed in the inbox',
+    );
+  });
+
+  it('shows up to three things, then "and N more"', () => {
+    expect(previewRows([1, 2, 3, 4, 5, 6])).toEqual({
+      shown: [1, 2, 3],
+      more: 3,
+    });
+    expect(previewRows([1, 2])).toEqual({ shown: [1, 2], more: 0 });
+    expect(moreLabel(3)).toBe('and 3 more');
+  });
+
+  it('falls back for an old run without destinations', () => {
+    const old: Run = {
+      ...run,
+      items: (run.items ?? []).map(({ path, kind }) => ({ path, kind })),
+    };
+    expect(hasDestinations(old)).toBe(false);
+    expect(NO_LIST).toBe('Bower did not keep a list for this one.');
+  });
+
+  it('says tap on the phone and click on desktop (K-27)', () => {
+    expect(earlierSub(false)).toBe('Newest first. Tap one to see what it did.');
+    expect(earlierSub(true)).toBe(
+      'Newest first. Click one to see what it did.',
     );
   });
 });
