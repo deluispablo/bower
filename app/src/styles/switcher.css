@@ -180,6 +180,74 @@
   background: var(--color-surface);
 }
 
+/* Dark: the one chip, a 32 px pill with a 44 px target, 14 px, the .4
+   control border, teal .16 when on (K-21, R-CHIP-1, board SE-Empty
+   `.chip`, #950 F-14). The light theme keeps today's chip. The row gives
+   the target 6 px of room above without moving anything. */
+:where(:root[data-theme='dark']) .switcher-chips {
+  margin-top: -6px;
+  padding-top: 6px;
+  overflow-y: hidden;
+}
+
+:where(:root[data-theme='dark']) .switcher-chip {
+  position: relative;
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 0;
+  border-color: var(--color-border-control);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+:where(:root[data-theme='dark']) .switcher-chip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--hit);
+  transform: translateY(-50%);
+}
+
+:where(:root[data-theme='dark']) .switcher-chip[aria-pressed='true'] {
+  border-color: var(--color-brand);
+  background: var(--color-brand-tint);
+}
+
+@media (prefers-color-scheme: dark) {
+  :where(:root:not([data-theme='light'])) .switcher-chips {
+    margin-top: -6px;
+    padding-top: 6px;
+    overflow-y: hidden;
+  }
+
+  :where(:root:not([data-theme='light'])) .switcher-chip {
+    position: relative;
+    box-sizing: border-box;
+    height: 32px;
+    min-height: 0;
+    border-color: var(--color-border-control);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  :where(:root:not([data-theme='light'])) .switcher-chip::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: var(--hit);
+    transform: translateY(-50%);
+  }
+
+  :where(:root:not([data-theme='light'])) .switcher-chip[aria-pressed='true'] {
+    border-color: var(--color-brand);
+    background: var(--color-brand-tint);
+  }
+}
+
 .switcher-chip i {
   color: var(--color-text-muted);
   font-style: normal;
