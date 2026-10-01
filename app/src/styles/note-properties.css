@@ -31,17 +31,22 @@
   overflow-wrap: anywhere;
 }
 
-.about-prop-value a {
+.about-prop-value a,
+.about-prop-drive {
   color: var(--color-link);
   text-decoration: underline;
+}
+
+/* The demo's Open in Drive: a text link that says why it does nothing. */
+.about-prop-drive {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
 }
 
 .about-prop-kind {
   color: var(--color-text-muted);
   font-size: var(--text-xs);
-}
-
-/* The demo's greyed Open in Drive button sits on the row's line. */
-.about-prop:has(.about-prop-drive) {
-  align-items: center;
 }

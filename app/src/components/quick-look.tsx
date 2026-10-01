@@ -25,6 +25,7 @@ import { renderNote } from '../markdown/render.js';
 import type { RenderedNote } from '../markdown/render.js';
 import { metaLine, shortDate } from '../meta-line.js';
 import type { MetaItem } from '../meta-line.js';
+import { showToast } from '../toast-store.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
@@ -327,12 +328,15 @@ function PaneActions({
         Open
       </a>
       {isDemo() || driveUrl === null ? (
+        // Drawn as the board draws it (secondary sm, PF-Main-1280); in the
+        // demo it says why it does nothing rather than greying out.
         <button
           type="button"
           class="btn btn-sm btn-secondary"
-          disabled
-          aria-disabled
           title={NOT_IN_DEMO_DRIVE}
+          onClick={() => {
+            showToast(NOT_IN_DEMO_DRIVE);
+          }}
         >
           Open in Drive
         </button>
