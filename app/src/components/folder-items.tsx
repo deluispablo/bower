@@ -597,6 +597,7 @@ export function FolderItems({
       folderPath: folderOf(file.path),
       now: Date.now(),
       bower,
+      answer: model.metas.get(file.id)?.type === 'answer',
     };
   }
 
@@ -978,6 +979,7 @@ export function FolderItems({
           pages={pages.get((quick.original ?? quick.file).id)}
           origin={originOf(quick.original ?? quick.file, catalogue)}
           bower={isBowerWritten(model.metas.get(quick.file.id))}
+          answer={model.metas.get(quick.file.id)?.type === 'answer'}
           folderPath={contents.path}
           now={now}
           onClose={() => setQuick(null)}

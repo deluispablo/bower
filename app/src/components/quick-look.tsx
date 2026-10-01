@@ -26,6 +26,7 @@ import type { RenderedNote } from '../markdown/render.js';
 import { metaLine, shortDate } from '../meta-line.js';
 import type { MetaItem } from '../meta-line.js';
 import { showToast } from '../toast-store.js';
+import { ITEM_KIND_WORDS } from '../kinds.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
@@ -62,8 +63,12 @@ export function kindLine(
   kind: FileKind,
   pages: number | undefined,
   size: number | undefined,
+  answer = false,
 ): string {
-  const parts: string[] = [FILE_KIND_LABELS[kind]];
+  // A Bower answer reads as the list and the note call it (R-LI-2, K-14).
+  const parts: string[] = [
+    answer ? ITEM_KIND_WORDS['bower-answer'] : FILE_KIND_LABELS[kind],
+  ];
   if (pages !== undefined && pages > 0) {
     parts.push(`${pages} ${pages === 1 ? 'page' : 'pages'}`);
   }
@@ -121,6 +126,8 @@ export interface QuickLookProps {
   origin: Origin | null;
   /** `isBowerWritten` for the row, when the folder knows it. */
   bower?: boolean | undefined;
+  /** The row's own file is a Bower answer (`type: answer`). */
+  answer?: boolean | undefined;
   folderPath: string;
   now: number;
   onClose: () => void;
@@ -135,6 +142,7 @@ export function QuickLook({
   pages,
   origin,
   bower,
+  answer,
   folderPath,
   now,
   onClose,
@@ -196,7 +204,7 @@ export function QuickLook({
             )}
           </div>
           <h2 class="quick-look-title">{title}</h2>
-          <p class="quick-look-kind">{kindLine(kind, pages, shown.size)}</p>
+          <p class="quick-look-kind">{kindLine(kind, pages, shown.size, answer === true && isNote)}</p>
           <p class="quick-look-path">
             {para !== null && <FolderMark kind={para} size={18} />}
             <span class="quick-look-path-text">
@@ -401,7 +409,8 @@ function FolderPane({ item }: { item: PaneFolder }): JSX.Element {
 }
 
 function FilePane({ item }: { item: PanePreview }): JSX.Element {
-  const { title, href, file, original, kind, origin, bower, now } = item;
+  const { title, href, file, original, kind, origin, bower, answer, now } =
+    item;
   const shown = original ?? file;
   // A pair and a note read the note: its Bower's note box and its text.
   const readsNote = original !== undefined || kind === 'note';
@@ -420,6 +429,7 @@ function FilePane({ item }: { item: PanePreview }): JSX.Element {
         bower !== undefined && {
           bowerWritten: bower,
         }),
+      ...(original === undefined && answer === true && { answer: true }),
       ...(shown.size !== undefined && { size: shown.size }),
       filed,
     },
