@@ -130,7 +130,7 @@ Contrast: these are the pairs already in the brand contrast table (muted and lin
 <div id="app"></div>
 ```
 
-- `#boot`: `position: fixed; inset: 0; z-index: 1000` (above the app while it renders under it), `display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px`, padding `max(16px, env(safe-area-inset-*))`, background `--color-bg` literal. The group sits at the optical centre: `padding-bottom: 8vh` so the bird is slightly above the middle.
+- `#boot`: `position: fixed; inset: 0; z-index: 1000` (above the app while it renders under it), `display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px`, padding `max(16px, env(safe-area-inset-*))`, background `--color-bg` literal. The group is centred with no extra lift: the hint and "Try again" space is reserved below it, which already places the bird above the middle (designer verification, 2 Oct 2026).
 - Same layout at 375 and 1280: the group is centred, max-width 20 rem (320 px), text centred. Nothing else on screen at either width (no sidebar placeholder: the shell skeleton appears only after the hand-over).
 - `html` also gets the background literal (fixes the overscroll area) and `color-scheme: light dark`, plus `<meta name="color-scheme" content="light dark">` in `<head>`.
 - Text: `font: 400 16px/1.5 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif`. The web font may not be loaded yet; the fallback is accepted (no font preload added).
