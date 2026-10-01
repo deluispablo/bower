@@ -29,3 +29,4 @@ playwright-report/
 
 # Benchmark output (agent/bench/README.md)
 agent/bench/results/
+agent/bench/vault-large/
