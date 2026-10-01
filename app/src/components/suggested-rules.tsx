@@ -153,7 +153,7 @@ export function SuggestedRules(): JSX.Element | null {
           </p>
           <ul class="suggested-list">
             {load.open.map((proposal) => (
-              <li key={proposal.id} class="suggested-card">
+              <li key={proposal.id} class="card suggested-card">
                 <p class="suggested-kind">{KIND_LABELS[proposal.kind]}</p>
                 <p class="suggested-title">{proposal.title}</p>
                 <p class="suggested-text">{plainText(proposal.text)}</p>

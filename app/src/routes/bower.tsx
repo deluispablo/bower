@@ -464,7 +464,7 @@ function RequestsList({
         {rows.map((row) => (
           <li
             key={row.key}
-            class={`bower-request bower-request--${toneOf(row.state)}`}
+            class={`card bower-request bower-request--${toneOf(row.state)}`}
           >
             <StateIcon state={row.state} />
             <div class="bower-request-body">

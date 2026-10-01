@@ -167,7 +167,7 @@ function Card({
   const shown = all ? card.rows : card.rows.slice(0, CARD_ROWS);
   const more = card.rows.length - shown.length;
   return (
-    <li class="activity-card">
+    <li class="card activity-card">
       <p class="activity-head">
         <IconClock />
         <b>

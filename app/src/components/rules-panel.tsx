@@ -151,7 +151,7 @@ function Group({
               <li key={`${String(rule.line)}:${rule.raw}`}>
                 <button
                   type="button"
-                  class="rules-rule"
+                  class="card rules-rule"
                   onClick={() => {
                     onPick(rule);
                   }}
