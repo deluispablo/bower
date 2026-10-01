@@ -164,7 +164,20 @@
 }
 
 .quick-look-pane-empty {
+  align-items: center;
   justify-content: center;
+  gap: var(--space-2);
+}
+
+/* The panel glyph above the empty line (AR-Main-1280): 28, muted. */
+.quick-look-empty-icon {
+  display: inline-flex;
+  color: var(--color-text-muted);
+}
+
+.quick-look-empty-icon .icon {
+  width: 28px;
+  height: 28px;
 }
 
 .quick-look-empty {

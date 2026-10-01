@@ -40,7 +40,7 @@ import { FileIcon } from './file-icon.js';
 import { folderCardMeta } from './folder-card.js';
 import { FolderMark } from './folder-mark.js';
 import { Thumb, NoteLines } from './folder-grid.js';
-import { IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
+import { IconDoc, IconImage, IconNote, IconPanel, IconPdf } from './icons.js';
 import { ListRow } from './list-row.js';
 import { NoteBody } from './note-body.js';
 import { TablePreview, parseCsv } from './table-preview.js';
@@ -476,6 +476,9 @@ export function QuickLookPane({
   if (item === null) {
     return (
       <div class="quick-look-pane quick-look-pane-empty">
+        <span class="quick-look-empty-icon" aria-hidden="true">
+          <IconPanel />
+        </span>
         <p class="quick-look-empty">{PANE_EMPTY}</p>
       </div>
     );
