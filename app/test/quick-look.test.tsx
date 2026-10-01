@@ -22,7 +22,29 @@ vi.mock('../src/cache.js', async (importOriginal) => {
   };
 });
 
-const { QuickLook, filedLine, kindLine } =
+// A note Bower wrote, for the preview column's Bower's note box.
+const NOTE_TEXT = vi.hoisted(() =>
+  [
+    '---',
+    'by: bower',
+    '---',
+    "## Bower's note",
+    '- ✅ 10 % under the area average.',
+    '',
+    '## Why',
+    'Cheapest, and close to the station.',
+    '',
+  ].join('\n'),
+);
+vi.mock('../src/vault-store.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/vault-store.js')>();
+  const { buildVaultIndex } = await import('../src/vault-index.js');
+  const index = buildVaultIndex([]);
+  const getNoteText = (): Promise<string> => Promise.resolve(NOTE_TEXT);
+  return { ...real, useVault: () => ({ index, getNoteText }) };
+});
+
+const { QuickLook, QuickLookPane, filedLine, kindLine } =
   await import('../src/components/quick-look.js');
 const { defaultLayout, noteLines } =
   await import('../src/components/folder-grid.js');
@@ -212,5 +234,124 @@ describe('QuickLook', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('QuickLookPane, the desktop preview column (§3.37, R-PREVIEW-1)', () => {
+  let root: HTMLElement;
+
+  const note: DriveFile = {
+    id: 'NOTE_ID',
+    name: '10-43 Example St.md',
+    mimeType: 'text/markdown',
+    parents: ['FOLDER_ID'],
+    path: '1-Projects/Flat hunt/10-43 Example St.md',
+    modifiedTime: '2026-09-28T08:00:00Z',
+    size: 1024,
+  };
+
+  beforeEach(() => {
+    demo = false;
+    localStorage.clear();
+    root = document.createElement('div');
+    document.body.appendChild(root);
+  });
+
+  afterEach(() => {
+    void act(() => render(null, root));
+    root.remove();
+  });
+
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 5; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+  }
+
+  it('says "Select something to see it here." when nothing is selected', () => {
+    void act(() => render(<QuickLookPane item={null} />, root));
+    expect(root.querySelector('.quick-look-empty')?.textContent).toBe(
+      'Select something to see it here.',
+    );
+  });
+
+  it("shows Open, Open in Drive, the meta and Bower's note box, which folds", async () => {
+    void act(() =>
+      render(
+        <QuickLookPane
+          item={{
+            title: '10-43 Example St',
+            href: '/note/NOTE_ID',
+            file: note,
+            kind: 'note',
+            origin: null,
+            bower: true,
+            folderPath: '1-Projects/Flat hunt',
+            now: NOW,
+          }}
+        />,
+        root,
+      ),
+    );
+    await settle();
+    expect(root.querySelector('.quick-look-pane-title')?.textContent).toBe(
+      '10-43 Example St',
+    );
+    const buttons = [
+      ...root.querySelectorAll('.quick-look-pane-actions .btn-sm'),
+    ].map((el) => el.textContent);
+    expect(buttons).toEqual(['Open', 'Open in Drive']);
+    expect(root.querySelector('.quick-look-pane-meta')?.textContent).toBe(
+      'Bower note · 1 KB · filed by Bower today',
+    );
+    const fold = root.querySelector<HTMLButtonElement>(
+      '[aria-label="Fold Bower\'s note"]',
+    );
+    expect(fold).not.toBeNull();
+    void act(() => fold?.click());
+    expect(fold?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('shows a folder with "Inside" and its rows', () => {
+    void act(() =>
+      render(
+        <QuickLookPane
+          item={{
+            type: 'folder',
+            title: 'Viewings',
+            href: '/folder/1-Projects/Flat%20hunt/Viewings',
+            path: '1-Projects/Flat hunt/Viewings',
+            things: 2,
+            updated: '2026-09-27T09:00:00Z',
+            now: NOW,
+            inside: [
+              {
+                id: 'PDF_ID',
+                title: 'Floor plan',
+                href: '/file/PDF_ID',
+                name: 'Floor plan.pdf',
+                mimeType: 'application/pdf',
+                path: '1-Projects/Flat hunt/Viewings/Floor plan.pdf',
+                modified: '2026-09-27T09:00:00Z',
+                isNew: true,
+              },
+            ],
+          }}
+        />,
+        root,
+      ),
+    );
+    expect(root.querySelector('.quick-look-pane-meta')?.textContent).toBe(
+      'Folder · 2 things · updated yesterday',
+    );
+    expect(root.querySelector('.quick-look-pane-overline')?.textContent).toBe(
+      'Inside',
+    );
+    expect(root.querySelector('.list-row-title')?.textContent).toBe(
+      'Floor plan',
+    );
+    expect(root.textContent).toContain('New');
   });
 });
