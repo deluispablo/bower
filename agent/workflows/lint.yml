@@ -138,6 +138,12 @@ jobs:
           BOWER_ALLOW_WEB: ${{ vars.BOWER_ALLOW_WEB }}
           # Unset by default: run.sh falls back to the API's own maxTurns.
           BOWER_MAX_TURNS: ${{ vars.BOWER_MAX_TURNS }}
+          # Unset by default: the agent runs on claude-sonnet-5-5, at low
+          # effort for a plain tidy-up or a lint and high otherwise (see
+          # run.sh, "model and effort"). Written only when set.
+          BOWER_MODEL: ${{ vars.BOWER_MODEL }}
+          BOWER_EFFORT_LOW: ${{ vars.BOWER_EFFORT_LOW }}
+          BOWER_EFFORT_HIGH: ${{ vars.BOWER_EFFORT_HIGH }}
         run: |
           echo "::add-mask::$BOWER_RUN_TICKET"
           umask 077
@@ -146,6 +152,9 @@ jobs:
             printf 'BOWER_RUN_TICKET=%s\n' "$BOWER_RUN_TICKET"
             printf 'BOWER_ALLOW_WEB=%s\n' "$BOWER_ALLOW_WEB"
             printf 'BOWER_MAX_TURNS=%s\n' "$BOWER_MAX_TURNS"
+            if [ -n "$BOWER_MODEL" ]; then printf 'BOWER_MODEL=%s\n' "$BOWER_MODEL"; fi
+            if [ -n "$BOWER_EFFORT_LOW" ]; then printf 'BOWER_EFFORT_LOW=%s\n' "$BOWER_EFFORT_LOW"; fi
+            if [ -n "$BOWER_EFFORT_HIGH" ]; then printf 'BOWER_EFFORT_HIGH=%s\n' "$BOWER_EFFORT_HIGH"; fi
           } >"$RUNNER_TEMP/bower-secrets"
           chmod 600 "$RUNNER_TEMP/bower-secrets"
 

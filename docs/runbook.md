@@ -169,6 +169,9 @@ Either way, set these under the instance repo's **Settings → Secrets and varia
 | `ANTHROPIC_API_KEY` | Secret (this or `CLAUDE_CODE_OAUTH_TOKEN`) | Claude Console → API keys |
 | `BOWER_API_URL` | Variable | The Worker's deployed origin, same as `API_ORIGIN` | 
 | `BOWER_MAX_TURNS` | Variable (optional) | Overrides the Worker's `DEFAULT_MAX_TURNS` for this instance |
+| `BOWER_MODEL` | Variable (optional) | The model the agent runs on; unset, `claude-sonnet-5-5`. See "Model and effort" in section 6 |
+| `BOWER_EFFORT_LOW` | Variable (optional) | The effort for a plain tidy-up and the weekly lint; unset, `low`. See "Model and effort" in section 6 |
+| `BOWER_EFFORT_HIGH` | Variable (optional) | The effort for a tidy-up with a request or a context note; unset, `high`. See "Model and effort" in section 6 |
 | `BOWER_ALLOW_WEB` | Variable (optional) | Leave unset (the default): the agent gets no web access, so a clipped page cannot make it send notes anywhere. This variable is the instance's half of the one way a run can reach the network: with `1`, a tidy-up gets `WebSearch` and `WebFetch` only for a user who also turned on **Let Bower look things up on the web** in Settings (stored by the Worker, sent as the dispatch's `allow_web`, #374). Unset, the Settings switch still shows and saves, but no run gets the web. Only set it if your users need the web, and tell them (`docs/privacy.md`). The weekly lint never gets the web tools. See "Tools and web access" in `agent/README.md` |
 
 With the GitHub CLI, from the instance repo's checkout (or add `-R OWNER/bower-home`):
@@ -278,6 +281,24 @@ Thinking costs turns, so `DEFAULT_MAX_TURNS` went from 30 to 60 after a measurem
 | v22 draft | 32 | 3.2 | 31 |
 
 Turns vary from run to run as much as between the two rulebooks (a second setup gave 30 and 30), so the default is about 1.5 times the highest run, not the v22 one. The runs were local, not on the instance: the turn count depends only on the agent, the prompt and the rules, not on Drive. An instance with its own `DEFAULT_MAX_TURNS` in `wrangler.local.toml`, or a `BOWER_MAX_TURNS` variable, keeps that value: raise it to 60 by hand if it is lower.
+
+### Model and effort
+
+Since #965 the runner picks the model and the effort for each run and passes them to `claude -p` as `--model` and `--effort`. The model is `claude-sonnet-5-5`. The effort is low for a plain tidy-up (nothing pending is a request from the Bower tab or a context note from Add) and for the weekly lint; it is high for a tidy-up whose pending files include a request the app wrote or a context note. The runner logs both on the `agent stats:` line, for example `agent stats: model=claude-sonnet-5-5 effort=low turns=...`.
+
+Three optional repository variables on the instance repo change this. `ingest.yml` and `lint.yml` pass them to `run.sh` only when they are set:
+
+- `BOWER_MODEL`: the model id. It must contain only lower-case letters, digits, dots and hyphens.
+- `BOWER_EFFORT_LOW`: the effort for a plain tidy-up and the lint.
+- `BOWER_EFFORT_HIGH`: the effort for a tidy-up with a request or a context note.
+
+The two effort variables take `low`, `medium`, `high`, `xhigh` or `max`. A value that does not pass its check is ignored: the run uses the default and logs a warning that names the variable but not its value.
+
+```bash
+gh variable set BOWER_EFFORT_LOW --body medium -R OWNER/bower-home
+```
+
+**Rolling back.** Before #965 the agent ran on the CLI's own default model for the instance's credential. To go back to it, set `BOWER_MODEL` to that model's id (with the same credential, `claude` and then `/model` shows it). The effort is still passed; to give every run high effort as well, set `BOWER_EFFORT_LOW` to `high`. To undo the rollback, delete the variables (`gh variable delete BOWER_MODEL -R OWNER/bower-home`). The next run picks the change up; nothing needs redeploying.
 
 ### One tidy-up, phase by phase
 
