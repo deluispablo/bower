@@ -209,7 +209,7 @@ test('the demo banner carries Run your own on Home, Add and Settings (#362)', as
   ).toBeVisible();
 });
 
-test('Run your own Bower: the rows, the runbook, and the five screens with Close (#366)', async ({
+test('Run your own Bower: the rows, the runbook, and the five screens with Skip on pages 1 to 4 and Close on page 5 (#366)', async ({
   page,
 }, testInfo) => {
   await openHome(page);
