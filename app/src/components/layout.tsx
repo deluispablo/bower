@@ -350,6 +350,13 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   const bar = tidyBar ?? uploadChip;
   const desktop = useDesktop();
   const sidebarWidth = useSidebarWidth();
+  // The same width on :root, for what is portalled outside the shell (the
+  // toast, the switcher, the centred dialog), so they follow a resize (#950).
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (sidebarWidth === undefined) root.removeProperty('--sidebar-width');
+    else root.setProperty('--sidebar-width', `${sidebarWidth}px`);
+  }, [sidebarWidth]);
   // The overlays' code is fetched once the page is idle, so each opens at once.
   useEffect(
     () =>

@@ -572,6 +572,10 @@ describe('Layout v5 slots (#741)', () => {
     expect(
       query<HTMLElement>('.shell').style.getPropertyValue('--sidebar-width'),
     ).toBe(`${clampSidebarWidth(320, window.innerWidth)}px`);
+    // Mirrored on :root for the toast, the switcher and the dialog (#950).
+    expect(
+      document.documentElement.style.getPropertyValue('--sidebar-width'),
+    ).toBe(`${clampSidebarWidth(320, window.innerWidth)}px`);
   });
 
   it('leaves --sidebar-width to the stylesheet with nothing stored or a bad value', () => {

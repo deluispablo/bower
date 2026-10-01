@@ -123,6 +123,9 @@ export function SidebarSeparator(): JSX.Element {
   /** Writes `px` to the DOM only (no state), for the drag's frames. */
   function paint(px: number): void {
     shell().style.setProperty('--sidebar-width', `${px}px`);
+    // Mirrored on :root for what sits outside the shell (the toast, the
+    // switcher, the centred dialog), so they follow a drag (#950).
+    document.documentElement.style.setProperty('--sidebar-width', `${px}px`);
     ref.current?.setAttribute('aria-valuenow', String(px));
   }
 
