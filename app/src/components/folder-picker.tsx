@@ -15,6 +15,7 @@
 import { useMemo, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
+import { isDemo } from '../api.js';
 import { createTextFile, deleteFile } from '../drive.js';
 import { FOLDER_MIME } from '../drive.js';
 import {
@@ -36,7 +37,7 @@ import { FileIcon } from './file-icon.js';
 import { FolderMark } from './folder-mark.js';
 import { IconChevronRight } from './icons.js';
 import { Overlay, OverlayHeader } from './overlay.js';
-import { TREE_INDENT } from './tree.js';
+import { firstVisitOpen, TREE_INDENT } from './tree.js';
 
 import '../styles/tree.css';
 import '../styles/folder-picker.css';
@@ -67,9 +68,14 @@ export function FolderChoice({
   const current = currentFolderOf(subject);
   // What is not on offer: the folder being moved, else where the thing is.
   const unavailable = subject.isFolder ? subject.path : current;
-  // The current folder's ancestors start open, so it is visible in place.
+  // The current folder's ancestors start open, so it is visible in place;
+  // in the demo, Projects and Areas too, as PF-Move draws it (#950).
   const [openPaths, setOpenPaths] = useState<ReadonlySet<string>>(
-    () => new Set(ancestorsOf(`${current}/x`)),
+    () =>
+      new Set([
+        ...ancestorsOf(`${current}/x`),
+        ...firstVisitOpen({ folders: [...folders] }, isDemo()),
+      ]),
   );
 
   function toggle(path: string): void {

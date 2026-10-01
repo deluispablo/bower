@@ -129,7 +129,10 @@ const DEMO_OPEN_ROOTS: readonly ParaKind[] = ['projects', 'areas'];
  * build only, Projects and Areas; a real folder starts closed. Saved state
  * always wins.
  */
-export function firstVisitOpen(tree: TreeNode, demo: boolean): string[] {
+export function firstVisitOpen(
+  tree: Pick<TreeNode, 'folders'>,
+  demo: boolean,
+): string[] {
   if (!demo) return [];
   return tree.folders
     .filter((folder) => {
