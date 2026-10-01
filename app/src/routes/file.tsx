@@ -1,12 +1,13 @@
 /**
- * A file's own screen (issue #350, the Phone-File board): `/file/:id`, for
- * anything in the Bower folder that is not a note — a PDF, a photo, a
- * Google Doc. The title in the bar, then three lines (its type and size,
- * its folder, who put it there and when), the preview (`file-preview.ts`
- * chooses: an image inline, a Google Doc as text, else Drive's thumbnail,
- * which for a PDF is its first page), and a tip to ask Bower for a note on
- * it. Open in Drive is in the More menu, the one menu for note, file and
- * folder (#352, `note-menu.tsx`, `kind="file"`).
+ * A file's own screen (spec §4.13, boards FI-Main, FI-About, FI-Bottom):
+ * `/file/:id`, for anything in the Bower folder that is not a note — a
+ * PDF, a photo, a Google Doc. The PageHeader (title once, (i) and ⋯, the
+ * meta line "PDF · 117 KB · filed by Bower yesterday"), the preview
+ * (`file-preview.ts` chooses: an image inline, a Google Doc as text, else
+ * Drive's thumbnail, which for a PDF is its first page), the file tip
+ * (`FileTip`), and the "n of N" footer. About this file is the column from
+ * 1200 px and a sheet from the (i) below that. Open in Drive is in the ⋯
+ * menu (`note-menu.tsx`, `kind="file"`).
  *
  * A note's id opens the note screen instead; an id the index does not have
  * shows Not found.
@@ -17,14 +18,18 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
 
 import { isDemo } from '../api.js';
+import {
+  AboutPanel,
+  closeAbout,
+  openAbout,
+} from '../components/about-panel.js';
+import type { AboutPanelProps } from '../components/about-panel.js';
 import { BackLink } from '../components/back-link.js';
 import { DrivePreview } from '../components/drive-preview.js';
-import { FolderMark } from '../components/folder-mark.js';
-import { Hint } from '../components/hint.js';
-import { IconClock, IconFolder, IconSparkle } from '../components/icons.js';
-import { openAsk } from '../components/send-to-bower.js';
-import { KindBadge } from '../components/kind-badge.js';
-import { MoreButton } from '../components/more-button.js';
+import { FileTip, Hint } from '../components/hint.js';
+import { IconSparkle } from '../components/icons.js';
+import { crumbsFor, PageHeader } from '../components/page-header.js';
+import { itemHref, itemTitle, Pager } from '../components/pager.js';
 import {
   BowerNoteBox,
   splitOpening,
@@ -37,7 +42,6 @@ import { PhotoViewer } from '../components/photo-viewer.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import {
   TablePreview,
-  dataRowCount,
   parseCsv,
 } from '../components/table-preview.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
@@ -49,11 +53,10 @@ import {
   parseCatalogueFiles,
   sourceKindOf,
   sourceUrl,
-  walkOf,
   whereToLook,
   withoutWhereToLook,
 } from '../companion.js';
-import type { SourceKind, Walk } from '../companion.js';
+import type { SourceKind } from '../companion.js';
 import {
   driveFetch,
   exportFile,
@@ -62,38 +65,33 @@ import {
   thumbnailLinkOf,
 } from '../drive.js';
 import type { DriveFile } from '../drive.js';
-import { CATALOGUE_PATH, originOf } from '../file-origin.js';
-import {
-  DOC_PREVIEW_MIME,
-  kindWord,
-  metaFacts,
-  previewKind,
-  thumbnailUrl,
-  whenLine,
-} from '../file-preview.js';
+import { CATALOGUE_PATH, filedBy, originOf } from '../file-origin.js';
+import { DOC_PREVIEW_MIME, previewKind, thumbnailUrl } from '../file-preview.js';
+import { siblings } from '../folder-view.js';
 import { formatPolicy } from '../formats.js';
 import { imageMimeType } from '../markdown/embeds.js';
 import { renderNote } from '../markdown/render.js';
+import { kindLabel, metaLine, sizeWords } from '../meta-line.js';
 import {
   breadcrumb,
+  buildTree,
   displayName,
   driveFileUrl,
-  folderContents,
   folderHref,
   folderOf,
   paraKindOf,
 } from '../navigation.js';
-import type { BreadcrumbSegment } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { markSeen } from '../seen.js';
 import { siblingNames } from '../rename-request.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { useTitle } from '../use-title.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { useVault } from '../vault-store.js';
-import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
+import { fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind, VaultIndex } from '../vault-index.js';
 import { NotFound } from './not-found.js';
 import '../styles/markdown.css';
@@ -117,9 +115,6 @@ type PreviewLoad =
  * in Drive" is dropped instead of opening a broken Drive page, the same
  * sentence as Add's own greyed Drive door. */
 const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
-
-/** The suggestion chip under a file with no note. */
-const ASK_NOTE = 'Summarise this and list what matters';
 
 /**
  * Fetches `file`'s preview as `previewKind` says. Starts over for another
@@ -275,30 +270,6 @@ function Preview({
   }
 }
 
-interface CrumbProps {
-  crumbs: BreadcrumbSegment[];
-}
-
-/** The shell header's `crumb` slot: the desktop breadcrumb, the same as a
- * note's (`routes/note.tsx`). The phone bar has Back only (#704): the title
- * is on the page. */
-function Crumb({ crumbs }: CrumbProps): JSX.Element {
-  return (
-    <>
-      {crumbs.length > 0 && (
-        <nav class="breadcrumb" aria-label="Folder">
-          {crumbs.map((crumb, i) => (
-            <span key={crumb.path}>
-              <a href={folderHref(crumb.path)}>{crumb.name}</a>
-              {i < crumbs.length - 1 && <span aria-hidden="true"> / </span>}
-            </span>
-          ))}
-        </nav>
-      )}
-    </>
-  );
-}
-
 /** Open in Drive as a button; in the demo, a greyed one with the same sentence as elsewhere. */
 function OpenInDrive({
   file,
@@ -427,39 +398,6 @@ function NoPreview({
       )}
     </div>
   );
-}
-
-/** A PDF's page count, from its companion note's `pages` (`Name.pdf` → `Name.md`). */
-function usePages(
-  file: DriveFile | undefined,
-  byPath: ReadonlyMap<string, DriveFile> | undefined,
-): number | undefined {
-  const [pages, setPages] = useState<number | undefined>(undefined);
-  const path = file?.path;
-  const isPdf = file !== undefined && fileKind(file) === 'pdf';
-  const companion =
-    isPdf && path !== undefined && byPath !== undefined
-      ? byPath.get(path.replace(/\.[^./]+$/, '.md'))
-      : undefined;
-  const id = companion?.id;
-  const version = companion?.modifiedTime;
-
-  useEffect(() => {
-    setPages(undefined);
-    if (companion === undefined) return;
-    let cancelled = false;
-    loadNoteMeta(companion).then(
-      (meta) => {
-        if (!cancelled) setPages(meta.pages);
-      },
-      (err: unknown) => console.error(err),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [id, version]);
-
-  return pages;
 }
 
 interface Companion {
@@ -706,54 +644,11 @@ export function CopyNotice({
   );
 }
 
-function walkHref(item: DriveFile): string {
-  return fileKind(item) === 'note' ? `/note/${item.id}` : `/file/${item.id}`;
-}
-
-function walkTitle(item: DriveFile): string {
-  return fileKind(item) === 'note' ? noteTitle(item) : fileTitle(item.name);
-}
-
-/** Previous and next in the folder's list: "Lease agreement · 4 of 5 · Viewing notes". */
-function WalkBar({ walk }: { walk: Walk }): JSX.Element {
-  return (
-    <nav class="file-walk" aria-label="In this folder">
-      {walk.previous === null ? (
-        <span class="file-walk-side" />
-      ) : (
-        <a
-          class="file-walk-side file-walk-previous"
-          rel="prev"
-          href={walkHref(walk.previous)}
-        >
-          <span aria-hidden="true">&lsaquo; </span>
-          {walkTitle(walk.previous)}
-        </a>
-      )}
-      <span class="file-walk-place">
-        {walk.position} of {walk.total}
-      </span>
-      {walk.next === null ? (
-        <span class="file-walk-side" />
-      ) : (
-        <a
-          class="file-walk-side file-walk-next"
-          rel="next"
-          href={walkHref(walk.next)}
-        >
-          {walkTitle(walk.next)}
-          <span aria-hidden="true"> &rsaquo;</span>
-        </a>
-      )}
-    </nav>
-  );
-}
-
 export function FileScreen(): JSX.Element {
   const { params } = useRoute();
   const { route } = useLocation();
   const id = params.id ?? '';
-  const { index, getNoteText, fileFacts, pinFile, unpinFile } = useVault();
+  const { index, getNoteText, pinFile, unpinFile } = useVault();
   const [menuOpen, setMenuOpen] = useState(false);
   const requests = useRequestRows();
   const [thumbnailBroken, setThumbnailBroken] = useState(false);
@@ -762,7 +657,6 @@ export function FileScreen(): JSX.Element {
   useTitle(file?.name ?? null);
   const isNote = file !== undefined && fileKind(file) === 'note';
   const load = usePreview(file);
-  const pages = usePages(file, index?.byPath);
   const companion = useCompanion(file, index, getNoteText);
 
   useEffect(() => {
@@ -793,34 +687,74 @@ export function FileScreen(): JSX.Element {
   );
   const title = file === undefined ? '' : fileTitle(file.name);
 
+  // The phone bar's Back, with the parent's full name (R-FI-1). The
+  // breadcrumb and the ⋯ are the page's own (PageHeader): the shell's crumb
+  // and actions slots stay empty (G-10).
   const backContent = useMemo(() => {
     if (file === undefined) return null;
     const parent = crumbs[crumbs.length - 1];
     return parent === undefined ? (
       <BackLink href="/" label="Home" />
     ) : (
-      <BackLink href={folderHref(parent.path)} label={parent.name} />
+      <BackLink href={folderHref(parent.path)} label={parent.name} named />
     );
   }, [file === undefined, crumbs]);
   useShellSlot('back', backContent);
 
-  const crumbContent = useMemo(
-    () => (file === undefined ? null : <Crumb crumbs={crumbs} />),
-    [file === undefined, crumbs],
-  );
-  useShellSlot('crumb', crumbContent);
-
-  const actionsContent = useMemo(
+  // The one sibling list (R-API-9, K-31), in the tree's order: About's
+  // "In this folder" and the footer both read it.
+  const sort = getPref('explorerSort');
+  const items = useMemo(
     () =>
-      file === undefined ? null : (
-        <MoreButton
-          expanded={menuOpen}
-          onClick={() => setMenuOpen((open) => !open)}
-        />
-      ),
-    [file === undefined, menuOpen],
+      index === null || file === undefined
+        ? []
+        : siblings(file, buildTree(index, sort)),
+    [index, file, sort],
   );
-  useShellSlot('actions', actionsContent);
+  const aboutColumn = useMediaQuery('(min-width: 1200px)');
+  const now = Date.now();
+  const origin = file === undefined ? null : originOf(file, catalogue);
+  const filed = file === undefined ? null : filedBy(file, origin, now);
+  const folderPath = file === undefined ? '' : folderOf(file.path);
+  const aboutProps: AboutPanelProps | null =
+    index === null || file === undefined || filed === null
+      ? null
+      : {
+          kind: 'file',
+          index,
+          file,
+          folder:
+            folderPath === ''
+              ? undefined
+              : {
+                  name: displayName(
+                    folderPath.slice(folderPath.lastIndexOf('/') + 1),
+                  ),
+                  href: folderHref(folderPath),
+                },
+          items,
+          rows: {
+            kind: [
+              kindLabel(file),
+              file.size === undefined ? '' : sizeWords(file.size),
+            ]
+              .filter((part) => part !== '')
+              .join(', '),
+            filed: filed.about,
+            driveHref: isDemo() ? null : driveFileUrl(file),
+          },
+        };
+  const aboutContent = useMemo(
+    () =>
+      aboutProps === null || !aboutColumn ? null : (
+        <AboutPanel {...aboutProps} />
+      ),
+    [index, file, items, aboutColumn, filed?.about],
+  );
+  useShellSlot('aside', aboutContent);
+  useEffect(() => {
+    closeAbout();
+  }, [id, aboutColumn]);
 
   if (index === null || isNote) {
     return (
@@ -832,7 +766,6 @@ export function FileScreen(): JSX.Element {
 
   if (file === undefined) return <NotFound kind="file" />;
 
-  const origin = originOf(file, catalogue);
   const folder = folderOf(file.path);
   const filePinned = index.filePinnedAt.has(file.id);
 
@@ -848,80 +781,54 @@ export function FileScreen(): JSX.Element {
   const policy = formatPolicy(kind);
   const preview: PreviewLoad =
     thumbnailBroken && load.status === 'thumbnail' ? { status: 'none' } : load;
-  const rows = load.status === 'table' ? dataRowCount(load.rows) : undefined;
-  const known = fileFacts.get(file.path);
-  const facts = metaFacts(file, {
-    pages: pages ?? known?.pages,
-    rows,
-    sheets: known?.sheets,
-    entries: known?.entries,
-  });
   const topFolder = folder.split('/')[0] ?? '';
-  const para = paraKindOf(topFolder);
+  const para = folder === '' ? null : paraKindOf(topFolder);
   const folderName = displayName(folder.slice(folder.lastIndexOf('/') + 1));
-  const walkSiblings =
-    folderContents(index, folder, getPref('explorerSort'))?.items ?? [];
-  const walk = walkOf(walkSiblings, file);
   // The photo viewer's counter walks the folder's photos and files only, not
   // its notes (#704).
-  const viewerSiblings = walkSiblings.filter(
-    (item) => fileKind(item) !== 'note',
-  );
+  const viewerSiblings = items.filter((item) => fileKind(item) !== 'note');
   const viewerAt = viewerSiblings.findIndex((item) => item.id === file.id);
+  const meta = metaLine(
+    {
+      name: file.name,
+      mimeType: file.mimeType,
+      ...(file.size !== undefined && { size: file.size }),
+      ...(filed !== null && filed.line !== '' && { filed: filed.line }),
+      ...(file.modifiedTime !== undefined && { modified: file.modifiedTime }),
+    },
+    { view: 'title', now },
+  );
   const sourceKind = sourceKindOf(file);
   const source = file.appProperties?.bowerSource;
 
   return (
     <section class="note-view file-view">
-      <div class="file-head">
-        <h1>{title}</h1>
-        <div class="note-header-actions">
-          <MoreButton
-            class="note-header-more"
-            expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-          />
-          {menuOpen && (
-            <NoteMenu
-              kind="file"
-              file={file}
-              title={title}
-              typeLabel={FILE_KIND_LABELS[kind]}
-              askName={displayName(file.name)}
-              pinned={filePinned}
-              onTogglePin={
-                folder === '' ? undefined : () => void handleTogglePin()
-              }
-              siblingNames={
-                index === null ? undefined : siblingNames(index, file.path)
-              }
-              onClose={() => setMenuOpen(false)}
-            />
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={title}
+        kind="file"
+        crumbs={crumbsFor(file.path)}
+        more={{
+          expanded: menuOpen,
+          onClick: () => setMenuOpen((open) => !open),
+        }}
+        meta={{ ...meta, dot: { at: 0, root: para } }}
+        {...(aboutProps !== null && {
+          onAbout: () => openAbout(aboutProps),
+        })}
+      />
+      {menuOpen && (
+        <NoteMenu
+          kind="file"
+          file={file}
+          title={title}
+          askName={displayName(file.name)}
+          pinned={filePinned}
+          onTogglePin={folder === '' ? undefined : () => void handleTogglePin()}
+          siblingNames={siblingNames(index, file.path)}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
       <PendingRequestLine path={file.path} rows={requests} />
-
-      <ul class="file-props">
-        <li>
-          <KindBadge kind={kind} file={file} />
-          {[kindWord(file), ...facts].join(' · ')}
-        </li>
-        {folder !== '' && (
-          <li>
-            {para === null ? (
-              <IconFolder />
-            ) : (
-              <FolderMark kind={para} size={18} />
-            )}
-            <a href={folderHref(folder)}>{folderName}</a>
-          </li>
-        )}
-        <li>
-          <IconClock />
-          {whenLine(origin, file.modifiedTime, Date.now())}
-        </li>
-      </ul>
 
       <FileNotice file={file} kind={kind} />
       {sourceKind !== null && source !== undefined && source !== '' && (
@@ -936,13 +843,13 @@ export function FileScreen(): JSX.Element {
           title={title}
           siblings={(viewerAt === -1 ? [file] : viewerSiblings).map((item) => ({
             id: item.id,
-            name: walkTitle(item),
+            name: itemTitle(item),
           }))}
           index={viewerAt === -1 ? 0 : viewerAt}
           folderName={folder === '' ? 'Bower' : folderName}
           onNavigate={(at) => {
             const target = viewerSiblings[at];
-            if (target !== undefined) route(walkHref(target));
+            if (target !== undefined) route(itemHref(target));
           }}
           onMore={() => setMenuOpen(true)}
           moreOpen={menuOpen}
@@ -962,48 +869,23 @@ export function FileScreen(): JSX.Element {
         </>
       )}
 
+      {policy.bowerReads === 'yes' &&
+        companion === null &&
+        source === undefined && (
+          <FileTip file={file} filedAsItIs={origin === 'filed'} />
+        )}
+
       {companion !== null && companion !== undefined && (
         <BowerNote file={file} companion={companion} index={index} />
       )}
 
-      {policy.bowerReads === 'yes' &&
-        companion === null &&
-        source === undefined && (
-          <Hint
-            id="file-note"
-            variant="suggestion"
-            icon={<IconSparkle />}
-            actions={
-              <button
-                type="button"
-                class="chip"
-                onClick={() =>
-                  openAsk(
-                    {
-                      name: displayName(file.name),
-                      kind: 'file',
-                      icon: {
-                        name: file.name,
-                        mimeType: file.mimeType,
-                        path: file.path,
-                      },
-                      buildText: (value) => `About ${file.name}: ${value}`,
-                    },
-                    { prefill: ASK_NOTE },
-                  )
-                }
-              >
-                {ASK_NOTE}
-              </button>
-            }
-          >
-            <b>Want a note on it?</b>{' '}
-            {origin === 'filed' ? 'Bower filed this as it is. ' : ''}Ask for
-            one.
-          </Hint>
-        )}
-
-      {walk !== null && walk.total > 1 && <WalkBar walk={walk} />}
+      <Pager
+        id={file.id}
+        items={items}
+        folder={
+          folder === '' ? null : { name: folderName, href: folderHref(folder) }
+        }
+      />
     </section>
   );
 }
