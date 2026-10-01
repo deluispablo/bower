@@ -417,6 +417,7 @@ If the note is ambiguous, pick the most likely reading, say so at the top of wha
 4. Contradictions between notes (dates, amounts, names).
 5. Stale items: finished projects to move to `4-Archives/`; items in `0-Inbox/` or `Clippings/` not ingested; `Processed/` older than 90 days (list, do not delete).
 6. Decided proposals: in `Answers/Bower - Proposals.md`, remove the sections whose `status` is `accepted` or `dismissed` and whose `decided` date is more than 30 days ago. Never touch an `open` one. Say in `Lint Report.md` how many were removed.
+7. Old rows: complete up to 50 rows of `index.md` that lack tags or a description, oldest first, in the row format **index.md and log.md** gives, reusing or adding tags as **Tags** says. For each, read the note or the text copy, never a binary; describe a binary that has no text copy from its name and folder.
 Write the result to `Lint Report.md` at the vault root.
 
 ## Archive
