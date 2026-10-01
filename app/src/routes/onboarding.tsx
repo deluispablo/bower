@@ -515,6 +515,7 @@ export function Onboarding(): JSX.Element {
                 </label>
                 <Composer
                   id="onboarding-folder"
+                  inputMode="url"
                   mode="send"
                   rows={1}
                   label="Paste the folder link or id"

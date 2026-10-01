@@ -280,6 +280,7 @@ export function Recover() {
           <label for="recover-link">Link to the folder</label>
           <Composer
             id="recover-link"
+            inputMode="url"
             mode="send"
             rows={1}
             label="Link to the folder"

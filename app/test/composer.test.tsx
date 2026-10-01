@@ -337,6 +337,13 @@ describe('Composer', () => {
     expect(button(root).dataset.state).toBe('mic');
   });
 
+  it('asks for the URL keyboard for a pasted link', () => {
+    const root = mount('', { inputMode: 'url' });
+    expect(root.querySelector('textarea')?.getAttribute('inputmode')).toBe(
+      'url',
+    );
+  });
+
   it('draws the key box as a password field in mono with the mic', () => {
     const root = mount('', {
       inputType: 'password',

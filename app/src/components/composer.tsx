@@ -66,6 +66,9 @@ export interface ComposerProps {
   commitLabel?: string;
   /** A real `<input>` of this type (the link, the key); a textarea otherwise. */
   inputType?: 'text' | 'url' | 'password';
+  /** The on-screen keyboard to show (`url` for a pasted link), keeping
+   * the growing textarea. */
+  inputMode?: 'text' | 'url';
   /** The commit is on its way: the spinner, the text read-only. */
   sending?: boolean;
   /** A failure to show under the box in the danger colour. */
@@ -189,6 +192,7 @@ export function Composer({
   onCommit,
   commitLabel = 'Send',
   inputType,
+  inputMode,
   sending = false,
   error = null,
   hint = null,
@@ -312,6 +316,7 @@ export function Composer({
     placeholder,
     maxLength,
     readOnly: sending,
+    inputMode,
     disabled,
     'aria-label': label,
     'aria-invalid': invalid || undefined,
