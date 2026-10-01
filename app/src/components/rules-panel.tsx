@@ -17,10 +17,9 @@ import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 
 import { Badge } from './badge.js';
-import { Card } from './card.js';
 import { Confirm } from './confirm.js';
-import { dismissHint, isHintDismissed } from './hint.js';
-import { IconChevronRight, IconClose, IconShield } from './icons.js';
+import { Hint } from './hint.js';
+import { IconChevronRight, IconShield } from './icons.js';
 import { RULE_PANEL_QUERY, RuleSheet } from './rule-sheet.js';
 import type { RuleAction } from './rule-sheet.js';
 import { SuggestedRules, useOpenProposals } from './suggested-rules.js';
@@ -190,35 +189,6 @@ export function rulesTipText(desktop: boolean): string {
   return `Bower files everything else into your four folders. ${desktop ? 'Click' : 'Tap'} a rule to change it, pause it, remove it, or apply it to what is already filed.`;
 }
 
-/** Remembered like any other tip (`hint.ts` storage), so once hidden it
- * stays hidden. */
-const RULES_TIP_ID = 'rules-yours';
-
-/** The dismissible tip Card above the rules (15 px, ✕ "Hide this tip"). */
-function RulesTip({ desktop }: { desktop: boolean }): JSX.Element | null {
-  const [hidden, setHidden] = useState(() => isHintDismissed(RULES_TIP_ID));
-  if (hidden) return null;
-  return (
-    <Card class="rules-tip">
-      <IconShield />
-      <p class="rules-tip-text">
-        <b>Rules are yours and start at once.</b> {rulesTipText(desktop)}
-      </p>
-      <button
-        type="button"
-        class="icon-button rules-tip-hide"
-        aria-label="Hide this tip"
-        onClick={() => {
-          dismissHint(RULES_TIP_ID);
-          setHidden(true);
-        }}
-      >
-        <IconClose />
-      </button>
-    </Card>
-  );
-}
-
 export function RulesPanel({
   message,
   onMessage,
@@ -320,7 +290,10 @@ export function RulesPanel({
 
   return (
     <div class="rules-panel" aria-busy={busy}>
-      <RulesTip desktop={desktop} />
+      {/* The shared tip (#908's Hint; its ✕ reads "Hide this tip"). */}
+      <Hint id="rules-yours" variant="tip" icon={<IconShield />}>
+        <b>Rules are yours and start at once.</b> {rulesTipText(desktop)}
+      </Hint>
       {status}
       <SuggestedRules />
       {groups.map((group, i) => {
