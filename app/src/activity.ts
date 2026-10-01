@@ -143,6 +143,9 @@ export interface ActivityRow {
   title: string;
   /** The folder it went to, as people read it (`1-Projects / Flat hunt`). */
   destination?: string;
+  /** Where it now lives, from the top of the Bower folder (the filed name
+   * in its folder): gives the row its root colour and its parent. */
+  path?: string;
   /** The name Bower gave it, without its extension. */
   renamed?: string;
   /** The answer's Drive id: the row's "read it" opens it. */
@@ -166,7 +169,7 @@ export interface ActivityCard {
   failed: boolean;
   /** What the run did, from the one place that reads a report (R-RUN-4). */
   outcome: RunOutcome;
-  /** The card's sentence, in the third person ("Done 3 h ago: …"). */
+  /** What the run did, with no relative time ("1 filed.", K-16). */
   sentence: string;
   rows: ActivityRow[];
 }
@@ -311,6 +314,7 @@ function fileRow(
     tone: toneOf(name),
     title: fileDisplayName(name),
     destination: folderLabel(line.folder),
+    path: `${line.folder}/${line.name}`,
   };
   if (line.renamedFrom === name && line.name !== name) {
     row.renamed = fileTitle(line.name);
@@ -378,6 +382,19 @@ function setAsideStatus(count: number): string {
   return `${word} ${count === 1 ? 'thing' : 'things'} set aside`;
 }
 
+/** The card's line under its title, as drawn ("1 filed."): the run's
+ * sentence without any relative time (K-16: those are for Home only) and
+ * without the "Done" the Badge already says. */
+export function cardSentence(outcome: RunOutcome, now: number): string {
+  const timeless: RunOutcome = { ...outcome };
+  delete timeless.finishedAt;
+  const sentence = runSentence(timeless, { now, voice: 'third' }).replace(
+    /^Done: /,
+    '',
+  );
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
 /** One card for `run` (see the module note); `lastOfDay` when no later
  * run finished the same (UTC) day, so a log line with a day and no time
  * belongs to this one. */
@@ -435,7 +452,7 @@ export function activityCard(
     status,
     failed,
     outcome,
-    sentence: runSentence(outcome, { now, voice: 'third' }),
+    sentence: cardSentence(outcome, now),
     rows,
   };
 }

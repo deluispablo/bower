@@ -34,13 +34,13 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
-import { cardWhen } from '../activity.js';
 import type { Run } from '../api.js';
 import {
   answerNotes,
   clockLabel,
   examplesFor,
   lowerFirst,
+  requestWhen,
   requestMeta,
   requestRows,
   sentenceKind,
@@ -54,6 +54,8 @@ import type {
   SentRequest,
 } from '../bower-tab.js';
 import { ActivityPanel, useRuns } from '../components/activity-panel.js';
+import { Badge } from '../components/badge.js';
+import type { BadgeTone } from '../components/badge.js';
 import { Bird } from '../components/bird.js';
 import { Composer, COMPOSER_LINES } from '../components/composer.js';
 import {
@@ -204,6 +206,14 @@ function StateIcon({ state }: { state: RequestState }): JSX.Element {
   return <IconCheck />;
 }
 
+/** The Badge on a request (BW-Requests-375): done, answered and kept read
+ * as done; a run that did not finish as failed; a wait as new. */
+function badgeTone(state: RequestState): BadgeTone {
+  if (state === 'failed') return 'failed';
+  if (state === 'waiting' || state === 'tidying') return 'new';
+  return 'done';
+}
+
 /** The CSS state a row is drawn in: a finished run reads like the green
  * "something came of it", a run that did not finish like the amber wait. */
 function toneOf(state: RequestState): string {
@@ -276,14 +286,15 @@ interface RequestsListProps {
 
 function RequestMeta({
   row,
-  now,
   runStarted,
   runs,
   onRules,
-}: Pick<RequestsListProps, 'now' | 'runStarted' | 'runs' | 'onRules'> & {
+}: Pick<RequestsListProps, 'runStarted' | 'runs' | 'onRules'> & {
   row: RequestRow;
 }): JSX.Element {
-  const when = lowerFirst(cardWhen(row.since, now));
+  // Always the day and the time ("29 Sep, 12:31"): relative words are
+  // for Home only (K-16).
+  const when = requestWhen(row.since);
   const run = runs.find((item) => runKey(item) === row.runKey);
   const counts =
     row.state === 'done' && run !== undefined
@@ -420,7 +431,6 @@ function RequestMenu({
 
 function RequestsList({
   rows,
-  now,
   runStarted,
   runs,
   runNow,
@@ -447,13 +457,12 @@ function RequestsList({
                 <span class="bower-request-text">
                   {requestRowText(row.text)}
                 </span>
-                <span class={`bower-state bower-state--${toneOf(row.state)}`}>
+                <Badge tone={badgeTone(row.state)} class="bower-request-badge">
                   {stateLabel(row)}
-                </span>
+                </Badge>
               </p>
               <RequestMeta
                 row={row}
-                now={now}
                 runStarted={runStarted}
                 runs={runs}
                 onRules={onRules}

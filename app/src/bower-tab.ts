@@ -631,3 +631,11 @@ export function dayLabel(iso: string): string {
     `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
   );
 }
+
+/** When a request was sent or done, as the Requests rows write it: the day
+ * and the time on this device ("29 Sep, 12:31"), never a relative phrase
+ * (K-16); empty for a date it cannot read. */
+export function requestWhen(iso: string): string {
+  const day = dayLabel(iso);
+  return day === '' ? '' : `${day}, ${clockLabel(iso)}`;
+}

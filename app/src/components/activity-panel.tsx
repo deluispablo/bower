@@ -13,6 +13,10 @@ import { activityCards } from '../activity.js';
 import type { ActivityCard, ActivityRow, ActivityTone } from '../activity.js';
 import { getRuns } from '../api.js';
 import type { Run } from '../api.js';
+import type { DriveFile } from '../drive.js';
+import { kindLabel } from '../meta-line.js';
+import { displayName, paraKindOf } from '../navigation.js';
+import type { ParaKind } from '../navigation.js';
 import { useRun } from '../run-store.js';
 import { useVault } from '../vault-store.js';
 import {
@@ -27,7 +31,10 @@ import {
   IconRedo,
   IconShield,
 } from './icons.js';
+import { Badge } from './badge.js';
 import { Hint } from './hint.js';
+import { ListRow } from './list-row.js';
+import type { ListRowItem } from './list-row.js';
 import { RunMeaning } from './run-meaning.js';
 import { useFileText } from './rules-panel.js';
 
@@ -78,12 +85,74 @@ function RowWhere({ row }: { row: ActivityRow }): JSX.Element | null {
   return null;
 }
 
-function Card({ card }: { card: ActivityCard }): JSX.Element {
-  const tone = card.failed
-    ? 'failed'
-    : card.rows.some((row) => row.setAside !== undefined)
-      ? 'set-aside'
-      : 'done';
+/** How many rows a card shows before "and N more" (BW-Activity-375). */
+export const CARD_ROWS = 2;
+
+/** A row's root, from the top folder of where it now lives. */
+function rootOfPath(path: string): ParaKind | null {
+  return paraKindOf(path.split('/')[0] ?? '');
+}
+
+/** What the row's icon and kind word read of it: the listing's entry when
+ * the folder is loaded, else its name alone. A note a tidy-up filed is
+ * Bower's (it wrote it from what was in the inbox): it shows the bird. */
+function rowItem(
+  row: ActivityRow & { path: string },
+  files: readonly DriveFile[],
+): ListRowItem {
+  const name = row.path.slice(row.path.lastIndexOf('/') + 1);
+  const listed = files.find((file) => file.path === row.path);
+  return {
+    id: row.key,
+    title: row.renamed ?? displayName(name),
+    name,
+    mimeType: listed?.mimeType ?? '',
+    path: row.path,
+    root: rootOfPath(row.path),
+    bowerWritten: row.tone === 'note',
+    ...(listed !== undefined && {
+      href: `/${/\.md$/i.test(name) ? 'note' : 'file'}/${listed.id}`,
+    }),
+  };
+}
+
+/** A file the run filed: the one ListRow (R-BW-5), "<kind> · ● <parent>". */
+function FiledRow({
+  row,
+  files,
+}: {
+  row: ActivityRow & { path: string };
+  files: readonly DriveFile[];
+}): JSX.Element {
+  const item = rowItem(row, files);
+  const parts = row.path.split('/');
+  const parent = parts.length > 1 ? (parts[parts.length - 2] ?? '') : '';
+  return (
+    <li class="activity-filed">
+      <ListRow
+        item={item}
+        meta={kindLabel(item)}
+        where={{ name: displayName(parent), root: item.root ?? null }}
+      />
+    </li>
+  );
+}
+
+function hasPath(row: ActivityRow): row is ActivityRow & { path: string } {
+  return row.path !== undefined && row.setAside === undefined;
+}
+
+function Card({
+  card,
+  files,
+}: {
+  card: ActivityCard;
+  files: readonly DriveFile[];
+}): JSX.Element {
+  const [all, setAll] = useState(false);
+  const setAside = card.rows.some((row) => row.setAside !== undefined);
+  const shown = all ? card.rows : card.rows.slice(0, CARD_ROWS);
+  const more = card.rows.length - shown.length;
   return (
     <li class="activity-card">
       <p class="activity-head">
@@ -91,13 +160,21 @@ function Card({ card }: { card: ActivityCard }): JSX.Element {
         <b>
           {card.when} · {card.duration}
         </b>
-        <span class={`bower-state activity-state--${tone}`}>{card.status}</span>
+        <Badge
+          tone={card.failed ? 'failed' : setAside ? 'check' : 'done'}
+          class="activity-badge"
+        >
+          {card.status}
+        </Badge>
       </p>
       <p class="activity-counts">{card.sentence}</p>
       <RunMeaning outcome={card.outcome} />
-      {card.rows.length > 0 && (
+      {shown.length > 0 && (
         <ul class="activity-rows">
-          {card.rows.map((row) => {
+          {shown.map((row) => {
+            if (hasPath(row)) {
+              return <FiledRow key={row.key} row={row} files={files} />;
+            }
             const Icon = TONE_ICONS[row.tone];
             return (
               <li
@@ -111,6 +188,17 @@ function Card({ card }: { card: ActivityCard }): JSX.Element {
             );
           })}
         </ul>
+      )}
+      {more > 0 && (
+        <button
+          type="button"
+          class="activity-more"
+          onClick={() => {
+            setAll(true);
+          }}
+        >
+          and {more} more
+        </button>
       )}
     </li>
   );
@@ -183,7 +271,7 @@ export function ActivityPanel({ load }: { load: RunsLoad }): JSX.Element {
       </Hint>
       <ol class="activity-cards" aria-label="Tidy-ups, newest first">
         {cards.map((card) => (
-          <Card key={card.key} card={card} />
+          <Card key={card.key} card={card} files={files} />
         ))}
       </ol>
     </>

@@ -655,8 +655,31 @@
   color: var(--color-text-muted);
 }
 
-.activity-head > .bower-state {
+.activity-head > .bower-state,
+.activity-head > .activity-badge {
   margin-left: auto;
+}
+
+/* A file the run filed is the one list row (#915, BW-Activity-375). */
+.activity-filed {
+  list-style: none;
+}
+
+.activity-more {
+  min-height: 32px;
+  margin-top: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.activity-more:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 2px;
 }
 
 .activity-state--done {

@@ -142,12 +142,14 @@ describe('activityCards (#345)', () => {
         tone: 'pdf',
         title: 'Lease agreement 2026.pdf',
         destination: 'Projects / Flat hunt',
+        path: '1-Projects/Flat hunt/Lease agreement 2026.pdf',
       },
       {
         key: '0-Inbox/IMG_4471.jpg',
         tone: 'image',
         title: 'IMG_4471.jpg',
         destination: 'Projects / Flat hunt',
+        path: '1-Projects/Flat hunt/Arlington Road, window sign.jpg',
         renamed: 'Arlington Road, window sign',
       },
       {
@@ -155,6 +157,7 @@ describe('activityCards (#345)', () => {
         tone: 'note',
         title: 'Notes from the viewing',
         destination: 'Projects / Flat hunt',
+        path: '1-Projects/Flat hunt/Notes from the viewing.md',
       },
       {
         key: QUESTION,
@@ -196,7 +199,7 @@ describe('activityCards (#345)', () => {
       now: NOW,
     });
     expect(reported?.sentence).toMatch(
-      /^Done .*: 1 filed · 1 new note · 1 updated\.$/,
+      /^1 filed · 1 new note · 1 updated\.$/,
     );
   });
 
@@ -208,6 +211,7 @@ describe('activityCards (#345)', () => {
         tone: 'image',
         title: 'receipt-hardware-store.jpg',
         destination: 'Areas / Finance',
+        path: '2-Areas/Finance/receipt-hardware-store.jpg',
       },
       {
         key: '0-Inbox/Old notes.rtf',
