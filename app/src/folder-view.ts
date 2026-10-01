@@ -546,6 +546,20 @@ export function folderReads(
 }
 
 /**
+ * How many subfolders the Originals segment counts (K-31): none on a
+ * folder of folders, or on one that holds only folders (DA-30, AR boards,
+ * #922): there the segments count only what is directly in it. Pure.
+ */
+export function segmentSubfolders(
+  subfolders: number,
+  folderOfFolders: boolean,
+  model: Pick<FolderModel, 'originals' | 'bower'>,
+): number {
+  const onlyFolders = model.originals.length === 0 && model.bower.length === 0;
+  return folderOfFolders || onlyFolders ? 0 : subfolders;
+}
+
+/**
  * The things under the folder at `path`, newest first, at most `max`, as a
  * card's preview, the preview column and "Recently changed" list them: never
  * a folder's own page (K-31, #922). A note named after its folder counts as

@@ -13,6 +13,7 @@ import {
   folderCount,
   isFolderPage,
   listedUnder,
+  segmentSubfolders,
   siblings,
 } from '../src/folder-view.js';
 import { buildTree, folderContents } from '../src/navigation.js';
@@ -127,6 +128,19 @@ describe('a folder page never shows in a list (#922)', () => {
     expect(shown.map((f) => f.path)).toEqual([mine.path, note.path]);
     const card = listedUnder(byPath, '2-Areas/Visa', 3, (f) => known.get(f.id));
     expect(card.map((f) => f.path)).toEqual([note.path]);
+  });
+
+  it('counts no subfolder as an original in a folder that holds only folders', () => {
+    const empty = { originals: [], bower: [] };
+    // Housing Search Australia: only the Moonee Ponds subfolder (and its
+    // own page, which is not listed): "Originals 0 · By Bower 0".
+    expect(segmentSubfolders(1, false, empty)).toBe(0);
+    expect(segmentSubfolders(2, true, { originals: [note], bower: [] })).toBe(
+      0,
+    );
+    expect(segmentSubfolders(2, false, { originals: [note], bower: [] })).toBe(
+      2,
+    );
   });
 
   it('treats a same-name note as a page until its frontmatter is read', () => {

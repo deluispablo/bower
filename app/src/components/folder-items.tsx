@@ -46,6 +46,7 @@ import {
   sortRows,
   folderPagesUnder,
   listedUnder,
+  segmentSubfolders,
   isFolderPage,
   subfolderThings,
 } from '../folder-view.js';
@@ -453,8 +454,9 @@ export function FolderItems({
       : fileTitle(row.file.name);
 
   // K-31: subfolders count as originals, except on a folder of folders,
-  // whose cards are not its own things (AR-Main: "Originals 0").
-  const subCount = folderOfFolders ? 0 : subfolders.length;
+  // whose cards are not its own things (AR-Main: "Originals 0"), or on
+  // one that holds only folders (#922).
+  const subCount = segmentSubfolders(subfolders.length, folderOfFolders, model);
   const segments = folderSegments({ subfolders: subCount, model });
 
   const originRows = useMemo(
