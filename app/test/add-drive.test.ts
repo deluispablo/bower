@@ -252,7 +252,7 @@ describe('Add from your Drive', () => {
     await waitFor(
       () =>
         root.querySelectorAll('.pile-row').length === 3 &&
-        (root.textContent ?? '').includes('From your Drive'),
+        (root.textContent ?? '').includes('from your Drive'),
     );
   });
 
@@ -420,9 +420,9 @@ describe('Add from your Drive', () => {
     await waitFor(() => {
       const text = root.textContent ?? '';
       return (
-        text.includes('From your Drive · saved as text') &&
-        text.includes('From your Drive · saved as a table, first sheet only') &&
-        text.includes('From your Drive · saved as a PDF')
+        text.includes('from your Drive · saved as text') &&
+        text.includes('from your Drive · saved as a table, first sheet only') &&
+        text.includes('from your Drive · saved as a PDF')
       );
     });
   });
@@ -453,7 +453,7 @@ describe('Add from your Drive', () => {
   it('shows the footer sentence about conversions', async () => {
     await mountAdd('test-key');
     expect(root.textContent).toContain(
-      'Docs become Markdown, Sheets a table, Slides a PDF. Everything else is copied as it is.',
+      'Docs become notes, Sheets a table, Slides a PDF. Everything else is copied as it is.',
     );
   });
 });

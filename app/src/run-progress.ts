@@ -400,7 +400,10 @@ export function runStartTime(run: {
 /** "Started 11:57 · it takes a few minutes" (S-AD-20 as the board words
  * it); "Started just now · …" before the run reports a time. */
 export function startedLine(
-  run: { startedAt?: string | undefined; requestedAt?: string | undefined } | null,
+  run: {
+    startedAt?: string | undefined;
+    requestedAt?: string | undefined;
+  } | null,
 ): string {
   const time = run === null ? null : runStartTime(run);
   return `Started ${time ?? 'just now'} · ${RUN_LENGTH_WORDS}`;

@@ -175,10 +175,18 @@ describe('running (R-SHEET-2, R-SHEET-5, R-BIRD-8)', () => {
     mount('running', buildRun('running'));
     const text = dialog()?.textContent ?? '';
     expect(text).toContain('Tidying up 2 things');
-    expect(text).toMatch(/Started (\d\d:\d\d|just now) · it takes a few minutes/);
-    expect(dialog()?.querySelector('.working-sheet-stage-from')?.textContent).toBe('Inbox');
-    expect(dialog()?.querySelector('.working-sheet-stage-to')?.textContent).toBe('Your folders');
-    expect(dialog()?.querySelector('.working-sheet-group')?.textContent).toBe('Working on it');
+    expect(text).toMatch(
+      /Started (\d\d:\d\d|just now) · it takes a few minutes/,
+    );
+    expect(
+      dialog()?.querySelector('.working-sheet-stage-from')?.textContent,
+    ).toBe('Inbox');
+    expect(
+      dialog()?.querySelector('.working-sheet-stage-to')?.textContent,
+    ).toBe('Your folders');
+    expect(dialog()?.querySelector('.working-sheet-group')?.textContent).toBe(
+      'Working on it',
+    );
     expect(dialog()?.querySelector('[aria-label="Steps"]')).toBeNull();
     expect(text).toContain(
       'You can close this: the tidy-up carries on. See what changed when it is done.',

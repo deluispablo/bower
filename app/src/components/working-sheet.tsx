@@ -172,7 +172,11 @@ export const SEE_WHAT_CHANGED = 'See what changed';
 
 /** The running sheet's three steps (AD-Running): the stage's two ends and
  * the group over the thing being read. */
-export const RUNNING_STEPS = ['Inbox', 'Your folders', 'Working on it'] as const;
+export const RUNNING_STEPS = [
+  'Inbox',
+  'Your folders',
+  'Working on it',
+] as const;
 
 /** The running sheet's last line, around its "See what changed" link. */
 export const RUNNING_NOTE_LEAD = 'You can close this: the tidy-up carries on.';
@@ -638,7 +642,8 @@ const ACTION_TONE: Record<OutcomeAction, BadgeTone> = {
 function SheetListRow({ row }: { row: SheetRow }): JSX.Element {
   const name = row.name ?? row.title;
   const kind = kindLabel({ name, mimeType: '' });
-  const title = linkTitleFromFileName(name) === null ? displayName(row.title) : row.title;
+  const title =
+    linkTitleFromFileName(name) === null ? displayName(row.title) : row.title;
   const meta = [kind, row.note]
     .filter((bit): bit is string => bit !== null && bit !== '')
     .join(' · ');
@@ -658,7 +663,9 @@ function SheetListRow({ row }: { row: SheetRow }): JSX.Element {
           : { where: { name: row.where, root: row.para } })}
         badge={
           row.action === null ? undefined : (
-            <Badge tone={ACTION_TONE[row.action]}>{ACTION_TAG[row.action]}</Badge>
+            <Badge tone={ACTION_TONE[row.action]}>
+              {ACTION_TAG[row.action]}
+            </Badge>
           )
         }
       />

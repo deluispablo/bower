@@ -255,13 +255,13 @@ describe('useTextFieldFocus', () => {
       typing = useTextFieldFocus();
       return null;
     }
-    act(() => {
+    void act(() => {
       render(<Probe />, root);
       // After the first render, before the post-paint effect listens.
       field.focus();
     });
     expect(typing).toBe(true);
-    act(() => {
+    void act(() => {
       render(null, root);
     });
     field.remove();

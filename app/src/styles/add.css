@@ -527,3 +527,165 @@ button.pile-card:focus-visible {
     transition: none;
   }
 }
+
+/* #914: Add as the boards draw it (AD-Main, AD-Pile, AD-Waiting): one
+   column, centred and 720 wide on desktop; the new pile accent Card; the
+   doors; kinds in words on ListRows; waiting piles as Cards. */
+
+.add-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.pile-card-new .pile-card-title {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: var(--text-lg);
+}
+
+.pile-card-new .pile-card-count {
+  margin: 2px 0 var(--space-3);
+  color: var(--color-text-secondary, var(--color-text-muted));
+  font-size: var(--text-base);
+}
+
+.add-context-label {
+  display: block;
+  margin-bottom: var(--space-1-5, 6px);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.add-doors {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.door-button {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  height: 64px;
+  padding: 0;
+  border: 1px solid var(--color-border-control, var(--color-border));
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.door-button .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.door-button:hover:not(:disabled) {
+  background: var(--color-surface);
+}
+
+.door-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.add-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 13px);
+  line-height: 1.45;
+}
+
+.pile-saved {
+  margin: var(--space-1-5, 6px) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 13px);
+}
+
+.pile-rows {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pile-row {
+  position: relative;
+}
+
+.pile-row-failed .list-row-meta {
+  color: var(--color-danger);
+}
+
+.pile-row-bar {
+  display: block;
+  height: 2px;
+  background: var(--color-border);
+}
+
+.pile-row-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-brand);
+}
+
+.pile-another {
+  align-self: flex-start;
+}
+
+.pile-waiting-title {
+  margin: var(--space-3) 0 0;
+  color: var(--color-heading);
+  font-size: var(--text-lg);
+}
+
+.pile-waiting-count {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.pile-card-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pile-card-waiting .pile-card-note {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--text-base);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.pile-card-waiting .pile-card-meta,
+.pile-card-elsewhere .pile-card-meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs, 13px);
+}
+
+.pile-card-elsewhere {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+@media (min-width: 900px) {
+  .door-button {
+    height: 76px;
+  }
+}

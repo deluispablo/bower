@@ -33,7 +33,6 @@ vi.mock('../src/vault-store.js', async (importOriginal) => ({
 
 const {
   WorkingSheet,
-  runningNote,
   DEMO_REASSURANCE_LEAD,
   DEMO_REASSURANCE_REST,
   DEMO_PLAYING_BACK,
