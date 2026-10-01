@@ -181,19 +181,9 @@ button.pile-card:focus-visible {
 
 /* The pile's items: one row each, in the card and in the sheet. */
 .pile-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.pile-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-1) 0;
 }
 
 .pile-row-body {
@@ -605,6 +595,8 @@ button.pile-card:focus-visible {
 }
 
 .pile-rows {
+  display: block;
+  width: 100%;
   margin: var(--space-2) 0 0;
   padding: 0;
   list-style: none;
@@ -617,7 +609,21 @@ button.pile-card:focus-visible {
 /* AD-Pile: about 65 px a row, the ✕ at the row end. */
 .pile-row .list-row {
   align-items: center;
+  width: 100%;
   min-height: 65px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+/* One line each, as the board draws them, so rows stay about 65 px. */
+.pile-row .list-row-title,
+.pile-row .list-row-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
 }
 
 .pile-row .list-row-text {
