@@ -2399,14 +2399,6 @@ Home insurance on 3 November, and the streaming service every month until you ca
   ...V6_WORLD,
 ];
 
-/**
- * What the scripted tidy-up also files (#674, boards `Flow-05-Home`,
- * `Phone-JustFiled`): the flat listings, each with the companion note that
- * carries `kind: rental-listing`, and the clause Home's bubble adds.
- */
-export const SCRIPTED_LISTINGS: readonly RunItem[] = (
-  DEMO_RUNS.find((run) => run.runId === 'demo-run-earlier-4')?.items ?? []
-).filter((item) => /^4-Archives\/Flat hunt\/.*\.pdf$/.test(item.to ?? ''));
 
 // --- Test states (#735, spec §7c item 4) --------------------------------
 // Extra vault shapes and run states the v5 tests need. Nothing here is part

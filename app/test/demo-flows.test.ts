@@ -162,7 +162,9 @@ describe('demo mode', () => {
     vi.advanceTimersByTime(DONE_MS);
     const done = (await api.getStatus()).run;
     expect(done?.state).toBe('done');
-    expect(done?.processed).toHaveLength(6);
+    // What was in the inbox, and nothing else (#920 T-18): two files and
+    // the question it answers.
+    expect(done?.processed).toHaveLength(3);
     // "Tidying up N things" counts what ends up filed (#888).
     // The requests Bower answers are not things it files (#899, R-CONF-2).
     expect(running?.total).toBe(
@@ -178,10 +180,13 @@ describe('demo mode', () => {
     for (const item of done?.items ?? []) {
       expect(item.to).toEqual(expect.any(String));
     }
-    // The flat listings come with the run (#674), each with its note.
-    // Nothing was updated, so Bower claims no update (#899).
+    // Nothing was updated, so Bower claims no update (#899); nothing from
+    // outside the inbox comes with the run (#920 T-18).
     expect(done?.added).toBeUndefined();
-    expect(done?.processed).toContain('0-Inbox/Arlington Road, 2 bed.pdf');
+    expect(done?.processed).not.toContain('0-Inbox/Arlington Road, 2 bed.pdf');
+    expect(done?.items).toContainEqual(
+      expect.objectContaining({ kind: 'request' }),
+    );
 
     const after = await paths();
     expect(after.filter(isInboxItem)).toHaveLength(0);
@@ -275,7 +280,7 @@ describe('demo mode', () => {
     );
     expect(answers.some((p) => /Context/.test(p))).toBe(false);
     expect(answers).toHaveLength(1);
-    expect(runCounts(run)).toEqual({ filed: 5, answered: 1 });
+    expect(runCounts(run)).toEqual({ filed: 2, answered: 1 });
   });
 
   it('adds files to the inbox, and the next run files them', async () => {
