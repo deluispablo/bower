@@ -1958,13 +1958,13 @@ test('At 1920 the content stays in one centred container, away from the right ed
   const width = async (): Promise<number> =>
     (await container.boundingBox())?.width ?? NaN;
 
-  // Home: 980 px, centred right of the sidebar; the header row inside.
+  // Home: 1000 px, centred right of the sidebar; the header row inside.
   // #909: the sidebar's Inbox row is a treeitem, and #934's demo Home has no
   // visible Inbox link; the page is ready once the tree shows Inbox.
   await expect(
     page.getByRole('treeitem', { name: /Inbox/ }).first(),
   ).toBeVisible();
-  expect(await width()).toBeCloseTo(980, 0);
+  expect(await width()).toBeCloseTo(1000, 0);
   const [box, main, bar] = await Promise.all([
     container.boundingBox(),
     page.locator('.shell-main').boundingBox(),
@@ -2003,7 +2003,7 @@ test('At 1920 the content stays in one centred container, away from the right ed
   await navigate(page, /^Add$/);
   await expect(page).toHaveURL(/\/add$/);
   await expect(content).toBeVisible();
-  expect(await width()).toBeCloseTo(980, 0);
+  expect(await width()).toBeCloseTo(1000, 0);
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-add');
 

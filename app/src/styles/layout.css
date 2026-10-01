@@ -955,12 +955,14 @@ button.page-bare-back {
   }
 
   /*
-   * One centred container (#355, Desktop-Responsive board): 980 px, 1200
-   * on a note with the About panel; the rest of a wide window is margin,
-   * so nothing is ever pinned to the viewport's right edge.
+   * One centred container (#355, Desktop-Responsive board): 1000 px, so at
+   * 1280 the content (32 px sides) runs from 304 to 1240 as HM-Main-1280 and
+   * JF-Drawer-1280 draw it (#950); 1200 on a note with the About panel; the
+   * rest of a wide window is margin, so nothing is ever pinned to the
+   * viewport's right edge.
    */
   .shell-container {
-    max-width: 980px;
+    max-width: 1000px;
     margin-inline: auto;
   }
 
