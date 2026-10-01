@@ -41,11 +41,7 @@ import { ProcessButton } from '../components/process-button.js';
 import { SearchField } from '../components/search-field.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
-import {
-  findReport,
-  healthCardLine,
-  reportDayStart,
-} from '../health-report.js';
+import { findReport, reportDayStart } from '../health-report.js';
 import {
   birdStateFor,
   bubbleFor,
@@ -415,13 +411,22 @@ export function LastTidyUpCard({
   );
 }
 
+/** "today" as a tile value reads "Today"; "4 days ago" stays as it is. */
+function sentenceCase(text: string): string {
+  return /^(today|yesterday)$/.test(text)
+    ? `${text.charAt(0).toUpperCase()}${text.slice(1)}`
+    : text;
+}
+
 /** The Health check tile (S-HM-12, E-8): desktop only, as on HM-Main-1280. */
 function HealthTile({
   loading,
-  line,
+  value,
+  note,
 }: {
   loading: boolean;
-  line: string;
+  value: string;
+  note: string;
 }): JSX.Element {
   if (loading) {
     return (
@@ -436,13 +441,13 @@ function HealthTile({
     <a
       class="home-tile-link home-desktop-only"
       href={HEALTH_PATH}
-      aria-label={`Health check: ${line}. Runs every Sunday.`}
+      aria-label={`Health check: ${value}. ${note}`}
     >
       <StatTile
         label="Health check"
         icon={<IconHeart />}
-        value={line}
-        note="Runs every Sunday."
+        value={value}
+        note={note}
         class="home-tile"
       />
     </a>
@@ -626,13 +631,16 @@ export function Home(): JSX.Element {
     index === null ? undefined : findReport(index)?.modifiedTime;
   // The tile states where the check stands, never a bare "New" that reads
   // like a badge (HM-Main-1280, DA-28).
-  const healthLine =
+  // One line each, like the other tiles (lead ruling, #920): the value is
+  // when it last ran ("4 days ago"), the meta what it found.
+  const healthValue =
     reportTime === undefined
       ? 'Not checked yet'
-      : healthCardLine(
-          `Checked ${relativeTime(reportDayStart(reportTime), now)}`,
-          findings,
-        );
+      : sentenceCase(relativeTime(reportDayStart(reportTime), now));
+  const healthNote =
+    reportTime !== undefined && findings !== undefined && findings > 0
+      ? `${String(findings)} small ${findings === 1 ? 'thing' : 'things'} to fix`
+      : 'Runs every Sunday.';
 
   const offline = !online;
   const loading = status === 'loading';
@@ -776,7 +784,7 @@ export function Home(): JSX.Element {
           onOpenSheet={openSheet}
         />
         {homeTiles(wide).includes('Health check') && (
-          <HealthTile loading={loading} line={healthLine} />
+          <HealthTile loading={loading} value={healthValue} note={healthNote} />
         )}
       </div>
 
