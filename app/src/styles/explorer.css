@@ -457,3 +457,10 @@
   font-size: 13px;
   white-space: nowrap;
 }
+
+/* The drawer's sections sit on their own margins with no flex gap between
+   them, so the pinned rows, YOUR FOLDERS and the first tree row land where
+   the *-Drawer-375 boards draw them (it was about 10 px lower, #950). */
+.explorer.explorer-drawer {
+  gap: 0;
+}
