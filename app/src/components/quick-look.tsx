@@ -15,22 +15,35 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { isDemo } from '../api.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
+import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { formatSize } from '../file-preview.js';
+import { filedBy } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import { whenWords } from '../folder-view.js';
 import { renderNote } from '../markdown/render.js';
+import type { RenderedNote } from '../markdown/render.js';
+import { metaLine, shortDate } from '../meta-line.js';
+import type { MetaItem } from '../meta-line.js';
 import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
-import { displayName, driveFileUrl, paraKindOf } from '../navigation.js';
+import {
+  displayName,
+  driveFileUrl,
+  driveFolderUrl,
+  paraKindOf,
+} from '../navigation.js';
+import { Badge } from './badge.js';
+import { BowerNoteBox, splitOpening } from './bower-note-box.js';
+import { FileIcon } from './file-icon.js';
+import { folderCardMeta } from './folder-card.js';
 import { FolderMark } from './folder-mark.js';
 import { Thumb, NoteLines } from './folder-grid.js';
-import { IconDoc, IconImage, IconNote, IconPdf } from './icons.js';
-import { KeyFacts } from './key-facts.js';
-import type { KeyFact } from './key-facts.js';
-import { KindBadge } from './kind-badge.js';
+import { IconDoc, IconImage, IconNote, IconPanel, IconPdf } from './icons.js';
+import { ListRow } from './list-row.js';
 import { NoteBody } from './note-body.js';
+import { TablePreview, parseCsv } from './table-preview.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
 import '../styles/quick-look.css';
@@ -180,7 +193,6 @@ export function QuickLook({
                 }
               />
             )}
-            {!isNote && <KindBadge kind={kind} file={shown} />}
           </div>
           <h2 class="quick-look-title">{title}</h2>
           <p class="quick-look-kind">{kindLine(kind, pages, shown.size)}</p>
@@ -224,23 +236,52 @@ export function QuickLook({
   );
 }
 
-/** What the desktop's preview pane shows: a quick look's own details, plus
- * a companion note's key facts. */
+/** A file, note or pair the desktop preview column shows (§3.37). */
 export type PanePreview = Omit<QuickLookProps, 'onClose'> & {
-  facts: readonly KeyFact[];
+  type?: 'file';
 };
 
+/** One thing inside a folder the preview column shows ("INSIDE", AR-4). */
+export interface PaneInsideItem extends MetaItem {
+  id: string;
+  title: string;
+  href: string;
+  path: string;
+  /** ISO, for the trailing date. */
+  modified?: string;
+  isNew?: boolean;
+}
+
+/** A folder the preview column shows (AR-Select-1280). */
+export interface PaneFolder {
+  type: 'folder';
+  title: string;
+  href: string;
+  path: string;
+  /** The folder's own Drive entry, for Open in Drive. */
+  file?: DriveFile;
+  things: number;
+  updated?: string;
+  inside: readonly PaneInsideItem[];
+  now: number;
+}
+
+export type PaneItem = PanePreview | PaneFolder;
+
+/** The words the empty column says (K-33). */
+export const PANE_EMPTY = 'Select something to see it here.';
+
 /** A note's text, rendered, once it is read; `null` until then. */
-function useNoteHtml(id: string | null, path: string): string | null {
+function useRenderedNote(id: string | null, path: string): RenderedNote | null {
   const { index, getNoteText } = useVault();
-  const [html, setHtml] = useState<string | null>(null);
+  const [rendered, setRendered] = useState<RenderedNote | null>(null);
   useEffect(() => {
-    setHtml(null);
+    setRendered(null);
     if (id === null || index === null) return;
     let cancelled = false;
     getNoteText(id).then(
       (text) => {
-        if (!cancelled) setHtml(renderNote(text, index, { path }).html);
+        if (!cancelled) setRendered(renderNote(text, index, { path }));
       },
       (err: unknown) => console.error('Could not read a note', err),
     );
@@ -248,90 +289,200 @@ function useNoteHtml(id: string | null, path: string): string | null {
       cancelled = true;
     };
   }, [id, index, getNoteText, path]);
-  return html;
+  return rendered;
 }
 
-/**
- * Quick look's pane variant (#614, board `Desktop-Explorer` and
- * `Desktop-Folder`): the same details in the desktop's right-hand column,
- * with Bower's note rendered under them, in place of the phone's sheet.
- * `item` is `null` when nothing is selected.
- */
-export function QuickLookPane({
-  item,
+/** A spreadsheet's rows, once read; `null` until then or on failure. */
+function useCsvRows(id: string | null): string[][] | null {
+  const { getNoteText } = useVault();
+  const [rows, setRows] = useState<string[][] | null>(null);
+  useEffect(() => {
+    setRows(null);
+    if (id === null) return;
+    let cancelled = false;
+    getNoteText(id).then(
+      (text) => {
+        if (!cancelled) setRows(parseCsv(text));
+      },
+      (err: unknown) => console.error('Could not read a spreadsheet', err),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [id, getNoteText]);
+  return rows;
+}
+
+/** Open (primary sm) and Open in Drive (secondary sm), as on every pane. */
+function PaneActions({
+  href,
+  driveUrl,
 }: {
-  item: PanePreview | null;
+  href: string;
+  driveUrl: string | null;
 }): JSX.Element {
-  const noteId =
-    item === null
-      ? null
-      : item.original !== undefined || item.kind === 'note'
-        ? item.file.id
-        : null;
-  const notePath = item === null ? '' : item.file.path;
-  const html = useNoteHtml(noteId, notePath);
-  if (item === null) {
-    return <p class="quick-look-empty">Select something to preview it.</p>;
-  }
-  const { title, href, file, original, kind, pages, origin, bower, now } = item;
+  return (
+    <div class="quick-look-pane-actions">
+      <a class="btn btn-sm" href={href}>
+        Open
+      </a>
+      {isDemo() || driveUrl === null ? (
+        <button
+          type="button"
+          class="btn btn-sm btn-secondary"
+          disabled
+          aria-disabled
+          title={NOT_IN_DEMO_DRIVE}
+        >
+          Open in Drive
+        </button>
+      ) : (
+        <a
+          class="btn btn-sm btn-secondary"
+          href={driveUrl}
+          target="_blank"
+          rel="noopener"
+        >
+          Open in Drive
+        </a>
+      )}
+    </div>
+  );
+}
+
+function FolderPane({ item }: { item: PaneFolder }): JSX.Element {
+  const icon = { name: item.title, mimeType: FOLDER_MIME, path: item.path };
+  return (
+    <div class="quick-look-pane">
+      <h2 class="quick-look-pane-title quick-look-pane-folder">
+        <FileIcon item={icon} size={20} />
+        <span>{item.title}</span>
+      </h2>
+      <PaneActions
+        href={item.href}
+        driveUrl={item.file === undefined ? null : driveFolderUrl(item.file)}
+      />
+      <p class="quick-look-pane-meta">
+        Folder · {folderCardMeta(item.things, item.updated, item.now)}
+      </p>
+      {item.inside.length > 0 && (
+        <>
+          <p class="quick-look-pane-overline">Inside</p>
+          <ul class="quick-look-pane-inside" role="list">
+            {item.inside.map((thing) => (
+              <li key={thing.id}>
+                <ListRow
+                  item={thing}
+                  meta={metaLine(thing, { view: 'row', now: item.now })}
+                  badge={
+                    thing.isNew === true ? (
+                      <Badge tone="new">New</Badge>
+                    ) : undefined
+                  }
+                  trailing={
+                    thing.modified === undefined ? undefined : (
+                      <time dateTime={thing.modified}>
+                        {shortDate(thing.modified, item.now)}
+                      </time>
+                    )
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+function FilePane({ item }: { item: PanePreview }): JSX.Element {
+  const { title, href, file, original, kind, origin, bower, now } = item;
   const shown = original ?? file;
-  const isNote = shown === file && kind === 'note';
-  const filed = filedLine(origin, shown.modifiedTime, now, bower);
-  const demo = isDemo();
-  const line =
-    original === undefined
-      ? kindLine(kind, pages, shown.size)
-      : `Bower · Original: ${kindLine(kind, pages, undefined)}`;
+  // A pair and a note read the note: its Bower's note box and its text.
+  const readsNote = original !== undefined || kind === 'note';
+  const rendered = useRenderedNote(readsNote ? file.id : null, file.path);
+  const rows = useCsvRows(!readsNote && kind === 'csv' ? shown.id : null);
+  const filed = filedBy(
+    shown,
+    origin ?? (bower === true ? 'filed' : null),
+    now,
+  ).line;
+  const meta = metaLine(
+    {
+      name: shown.name,
+      mimeType: shown.mimeType,
+      ...(original === undefined &&
+        bower !== undefined && {
+          bowerWritten: bower,
+        }),
+      ...(shown.size !== undefined && { size: shown.size }),
+      filed,
+    },
+    { view: 'title', now },
+  ).text;
+  const opening =
+    rendered === null || bower !== true ? null : splitOpening(rendered.html);
 
   return (
     <div class="quick-look-pane">
-      <h2 class="quick-look-title">{title}</h2>
-      <div class="quick-look-actions quick-look-pane-actions">
-        <a class="quick-look-open" href={href}>
-          Open
-        </a>
-        {demo ? (
-          <button
-            type="button"
-            class="quick-look-drive"
-            disabled
-            aria-disabled
-            title={NOT_IN_DEMO_DRIVE}
-          >
-            Open in Drive
-          </button>
-        ) : (
-          <a
-            class="quick-look-drive"
-            href={driveFileUrl(shown)}
-            target="_blank"
-            rel="noopener"
-          >
-            Open in Drive
-          </a>
-        )}
-      </div>
-      <p class="quick-look-kind">
-        {line}
-        {filed !== null && original === undefined && ` · ${filed}`}
-      </p>
-      {original !== undefined && <KeyFacts facts={item.facts} />}
-      {noteId !== null && html !== null && (
+      <h2 class="quick-look-pane-title">{title}</h2>
+      <PaneActions href={href} driveUrl={driveFileUrl(shown)} />
+      <p class="quick-look-pane-meta">{meta}</p>
+      {rendered !== null && opening !== null && opening.top !== '' && (
+        <BowerNoteBox
+          html={opening.top}
+          frontmatter={rendered.frontmatter}
+          path={file.path}
+          names={[title]}
+          fold
+        />
+      )}
+      {rendered !== null && (
         <div class="quick-look-pane-note">
-          <NoteBody html={html} />
+          <NoteBody html={opening === null ? rendered.html : opening.rest} />
         </div>
       )}
-      {!isNote && (
+      {!readsNote && kind === 'csv' && rows !== null && (
+        <TablePreview rows={rows} />
+      )}
+      {!readsNote && kind !== 'csv' && (
         <div class="quick-look-preview">
           <Thumb
             file={shown}
             kind={kind}
-            alt={`Preview of ${title}`}
+            alt={kind === 'pdf' ? 'PDF preview' : `Preview of ${title}`}
             fallback={<span class="quick-look-icon">{previewIcon(kind)}</span>}
           />
-          <KindBadge kind={kind} file={shown} />
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * The desktop preview column (§3.37, R-PREVIEW-1, boards PF-Main-1280,
+ * AR-Main-1280, AR-Select-1280): from 1200 px, 360 wide, full height, one
+ * vertical scroll. Nothing selected: "Select something to see it here."
+ * A selected item: its title, Open and Open in Drive, the meta line, then
+ * Bower's note box (folding, O-R6) for a note, the first page for a PDF, a
+ * table for a spreadsheet, or "INSIDE" and its rows for a folder.
+ */
+export function QuickLookPane({
+  item,
+}: {
+  item: PaneItem | null;
+}): JSX.Element {
+  if (item === null) {
+    return (
+      <div class="quick-look-pane quick-look-pane-empty">
+        <span class="quick-look-empty-icon" aria-hidden="true">
+          <IconPanel />
+        </span>
+        <p class="quick-look-empty">{PANE_EMPTY}</p>
+      </div>
+    );
+  }
+  if (item.type === 'folder') return <FolderPane item={item} />;
+  return <FilePane item={item} />;
 }

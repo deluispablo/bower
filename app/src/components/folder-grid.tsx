@@ -1,7 +1,9 @@
 /**
  * The folder screen's grid mode (issue #613, spec §6.5 R-FOLDER-5, board
- * `Phone-Folder-Grid`): the List/Grid toggle, the thumbnail a tile shows and
- * the first lines of a note. Shared with quick look (`quick-look.tsx`).
+ * `Phone-Folder-Grid`): the layout itself (`FolderGrid`: groups of tiles, 2
+ * columns on the phone, 3 on desktop, boards GR-Main and GR-PhoneGrid), the
+ * thumbnail and the first lines of a note quick look shows. Layout is chosen
+ * only in Filter & sort (GR-4): there is no List/Grid toggle here.
  *
  * Thumbnails come from `loadThumbnail` (the blob cache, then a fetch of
  * Drive's `thumbnailLink`, refreshed once when it has expired). The CSP
@@ -207,63 +209,6 @@ export function NoteLines({
   );
 }
 
-/** The List/Grid switch of the tool row (board `Phone-Folder-Grid`). */
-export function LayoutToggle({
-  layout,
-  onChange,
-}: {
-  layout: FolderLayout;
-  onChange: (layout: FolderLayout) => void;
-}): JSX.Element {
-  return (
-    <div class="folder-layout" role="group" aria-label="View">
-      <button
-        type="button"
-        class="folder-layout-btn"
-        aria-label="List"
-        aria-pressed={layout === 'list'}
-        onClick={() => onChange('list')}
-      >
-        <svg
-          class="icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linecap="round"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        class="folder-layout-btn"
-        aria-label="Grid"
-        aria-pressed={layout === 'grid'}
-        onClick={() => onChange('grid')}
-      >
-        <svg
-          class="icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linejoin="round"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <rect x="4" y="4" width="7" height="7" rx="1.5" />
-          <rect x="13" y="4" width="7" height="7" rx="1.5" />
-          <rect x="4" y="13" width="7" height="7" rx="1.5" />
-          <rect x="13" y="13" width="7" height="7" rx="1.5" />
-        </svg>
-      </button>
-    </div>
-  );
-}
-
 export interface GridTileProps {
   item: ListRowItem;
   /** The date line (`shortDate`, R-META-3); empty for none. */
@@ -369,5 +314,44 @@ export function GridTile({
         </time>
       )}
     </a>
+  );
+}
+
+/** One date group of tiles ("Today", "Yesterday", "29 Sep"); `label` is
+ * `null` when the sort has no groups (Name, Kind). */
+export interface TileGroup<T> {
+  label: string | null;
+  items: readonly T[];
+}
+
+export interface FolderGridProps<T> {
+  groups: readonly TileGroup<T>[];
+  keyOf: (item: T) => string;
+  renderTile: (item: T) => JSX.Element;
+}
+
+/**
+ * The grid layout (§3.18, R-GR-1, boards GR-Main and GR-PhoneGrid): each
+ * group's label, then its tiles, 2 columns on the phone and 3 on desktop,
+ * every tile the same height. The tile itself is `GridTile`.
+ */
+export function FolderGrid<T>({
+  groups,
+  keyOf,
+  renderTile,
+}: FolderGridProps<T>): JSX.Element {
+  return (
+    <div class="folder-grid-groups">
+      {groups.map((group, at) => (
+        <div key={group.label ?? `group-${at}`} class="folder-grid-group">
+          {group.label !== null && <h3 class="folder-group">{group.label}</h3>}
+          <ul class="folder-grid" role="list">
+            {group.items.map((item) => (
+              <li key={keyOf(item)}>{renderTile(item)}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }

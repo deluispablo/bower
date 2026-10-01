@@ -1,167 +1,72 @@
 /**
- * Folder screen (issue #214, spec §14 "Folder screen"): `/folder/:path*`,
- * one screen for a folder wherever it is reached from — the Home Answers
- * card, a note's breadcrumb, the desktop tree's folder name, or another
- * Folder screen's own subfolder rows. Shows the folder's icon and name, its
- * counts, a chip row (Pinned, Ask Bower about it, Drive), its
- * subfolders (with their own counts) and its own notes and files together,
- * newest first (#349): each row with the type icon, the title and who put
- * it there (`file-origin.ts`). A note opens in the app, any other file on
- * its own screen (`routes/file.tsx`, #350). Any folder but a root one ends
- * with a tip inviting more from Bower (#453, Phone-Folder-Project board).
+ * Folder screen (issue #911, spec §4.8–4.11): `/folder/:path*`, one screen
+ * for every folder, drawn four ways on the boards: a project folder
+ * (PF-Main), a folder list and grid (LI-Main, GR-Main) and a folder of
+ * folders (AR-Main, AR-Sub).
  *
- * The More menu (#352) is the one a note and a file have
- * (`note-menu.tsx`, `kind="folder"`): its phone trigger in the shell's
- * `actions` slot, its desktop one next to the heading, as on a note.
+ * The PageHeader (#906) carries the title once with ⋯ beside it (the
+ * folder's or a root's menu, #907), the meta line "Projects · 7 things ·
+ * updated today" (K-31: the sum of the segments) and, for a folder of
+ * folders, its purpose line. Under it the tabs "List" | "Compare <n>
+ * <things>" when the folder has comparable items (R-TABS-1); the Compare
+ * panel is `CompareSlot`, which #916 fills. The body (`folder-items.tsx`)
+ * is loaded on demand.
  *
- * The chips share `styles/layout.css`'s generic `.chip` (also used by the
- * interview's answers). Pinned toggles the folder's own pin (#215, #216:
- * `pinFolder`/`unpinFolder`, through `pin-action.ts`'s shared toast).
- *
- * The header's `back` and `crumb` slots (`shell-slots.ts`) work exactly
- * like a note's (`routes/note.tsx#Crumb`, #144, #318): Back to the parent
- * folder (or Home for a top-level one), then the phone title and the
- * desktop breadcrumb, both always in the markup, `layout.css` showing only
- * the one that fits — except the
- * breadcrumb here also ends in the folder's own name (not a link), since,
- * unlike a note, the folder itself is a valid breadcrumb segment.
+ * Back on the phone goes to the parent folder, or for a root to "‹ Your
+ * folders" (K-5); the desktop breadcrumb lists the parents, or for a root
+ * reads "Your folders" and reveals it in the tree (E-17). From 1200 px the
+ * shell's right-hand column is the preview (§3.37), except while Compare
+ * shows.
  */
 
 import type { JSX } from 'preact';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso';
 
-import { isDemo } from '../api.js';
-import { Bird, BowerMark } from '../components/bird.js';
-import {
-  IconChat,
-  IconExternalLink,
-  IconFolder,
-  IconPin,
-  IconSparkle,
-} from '../components/icons.js';
 import { BackLink } from '../components/back-link.js';
-import { FolderMark } from '../components/folder-mark.js';
-import { HeaderAction } from '../components/header-action.js';
-import { Hint } from '../components/hint.js';
-import { MoreButton } from '../components/more-button.js';
 import { NoteMenu } from '../components/note-menu.js';
-import { ProjectFront, projectNoteOf } from '../components/project-front.js';
+import { PageHeader, crumbsFor } from '../components/page-header.js';
 import { QuickLookPane } from '../components/quick-look.js';
-import type { PanePreview } from '../components/quick-look.js';
+import type { PaneItem } from '../components/quick-look.js';
+import { openAsk } from '../components/send-to-bower.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
+import type { FolderSummary } from '../components/folder-items.js';
 import { compareKinds, notesOfKind } from '../compare.js';
 import type { CompareNote } from '../compare.js';
+import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { CATALOGUE_PATH } from '../file-origin.js';
-import type { Origin } from '../file-origin.js';
 import { folderMeaning, rootFolderHeading } from '../folder-meanings.js';
-import { openSendToBower } from '../components/send-to-bower.js';
+import { metaLine } from '../meta-line.js';
 import {
   breadcrumb,
   displayName,
-  driveFolderUrl,
   folderContents,
-  folderEmptyState,
   folderHref,
   paraKindOf,
 } from '../navigation.js';
-import type { BreadcrumbSegment, FolderContents } from '../navigation.js';
+import type { FolderContents } from '../navigation.js';
 import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
-import { useMediaQuery } from '../use-media-query.js';
 import { pendingByPath } from '../rename-request.js';
-import { useTitle } from '../use-title.js';
+import { revealHref } from '../reveal.js';
+import { FOLDERS_LANDMARK } from '../shell-routes.js';
+import { useMediaQuery } from '../use-media-query.js';
 import { useRequestRows } from '../use-request-rows.js';
+import { useTitle } from '../use-title.js';
 import { useVault } from '../vault-store.js';
 import { NotFound } from './not-found.js';
 import '../styles/folder.css';
 
-/** From here the folder has three panes (#614, D13, R-DESK-2). */
+/** From here the folder has the preview column (#614, §3.37). */
 export const PANES_QUERY = '(min-width: 1200px)';
-
-/** From here the top bar carries the path and the in-content bar goes
- * (R-FOLD-3, D12). */
-export const DESKTOP_QUERY = '(min-width: 900px)';
-
-/** The two questions the suggestion offers (R-FOLD, board Ask-*). */
-const ASK_CHIPS: readonly string[] = [
-  'Which offer fits me best?',
-  'Pull out every closing date',
-];
-
-/** "1 note" / "3 notes", "1 folder" / "2 folders" — the header's count line. */
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
-}
-
-/** The folder that holds projects, whose screen counts them (#431). */
-const PROJECTS_PATH = '1-Projects';
-
-/** #555/#364: the demo's fixture ids are not real Drive ids, so the Drive
- * chip is disabled instead of opening a broken Drive page, the same
- * sentence as Add's own greyed Drive door. */
-const NOT_IN_DEMO_DRIVE = 'Not in the demo. Run your own Bower to use it.';
-
-/** The header's line under the name, as the Phone-Folder-Project board has
- * it: "1-Projects · 4 files · 2 notes · pinned". Files and folders only
- * when there are any; notes always. 1-Projects itself reads the way the
- * Phone-Folder board has it instead: "2 projects · 9 things" (#431). */
-function metaLine(
-  contents: FolderContents,
-  parentName: string | null,
-  pinned: boolean,
-): string {
-  if (contents.path === PROJECTS_PATH) {
-    return `${plural(contents.subfolders.length, 'project')} · ${plural(
-      contents.noteCount + contents.fileCount,
-      'thing',
-    )}`;
-  }
-  const parts: string[] = [];
-  if (parentName !== null) parts.push(parentName);
-  if (contents.fileCount > 0) parts.push(plural(contents.fileCount, 'file'));
-  parts.push(plural(contents.noteCount, 'note'));
-  if (contents.subfolders.length > 0) {
-    parts.push(plural(contents.subfolders.length, 'folder'));
-  }
-  if (pinned) parts.push('pinned');
-  return parts.join(' · ');
-}
-
-interface FolderCrumbProps {
-  /** This folder's ancestors only (`breadcrumb`), nearest last. */
-  ancestors: BreadcrumbSegment[];
-  /** This folder's own name — the breadcrumb's last, unlinked segment. */
-  name: string;
-}
-
-/** The shell header's `crumb` slot content, folder version of #144's `Crumb`. */
-function FolderCrumb({ ancestors, name }: FolderCrumbProps): JSX.Element {
-  return (
-    <>
-      <span class="topbar-title">{displayName(name)}</span>
-      <nav class="breadcrumb" aria-label="Folder">
-        {ancestors.map((crumb) => (
-          <span key={crumb.path}>
-            <a href={folderHref(crumb.path)}>{crumb.name}</a>
-            <span aria-hidden="true"> / </span>
-          </span>
-        ))}
-        <span class="breadcrumb-current" aria-current="page">
-          {name}
-        </span>
-      </nav>
-    </>
-  );
-}
 
 type ItemsModule = typeof import('../components/folder-items.js');
 
-// Loaded when a folder is first shown, so the path bar and the list mode
-// (filters, pairing, rows) stay out of the startup chunk (#41's budget).
+// Loaded when a folder is first shown, so the list (filters, pairing, rows)
+// stays out of the startup chunk (#41's budget).
 let itemsModule: ItemsModule | null = null;
 
 function useFolderItems(): ItemsModule | null {
@@ -175,18 +80,9 @@ function useFolderItems(): ItemsModule | null {
   return loaded;
 }
 
-/** The Bower box, prefilled to ask for things to be moved into this folder
- * (R-FOLDER-9). */
-function moveHereHref(name: string): string {
-  return `/bower?text=${encodeURIComponent(`Move things into ${name}: `)}`;
-}
-
-type CompareModule = typeof import('../components/compare.js');
-
 interface FolderCompare {
-  module: CompareModule;
   notes: CompareNote[];
-  /** "Compare 4 flats": the tab's and the desktop button's words. */
+  /** "Compare 6 flats": the tab's words. */
   label: string;
 }
 
@@ -196,9 +92,8 @@ const TAB_NOUN: Readonly<Record<string, string>> = {
   'rental-listing': 'flats',
 };
 
-/** The Compare tab (#612, R-COMP-1): the folder's notes that name a kind,
- * once at least two of one comparable kind are there. Loaded on demand, so
- * the Compare view stays out of the startup chunk. */
+/** The Compare tab (R-TABS-1): the folder's notes that name a kind, once at
+ * least two of one comparable kind are there. */
 function useFolderCompare(notes: readonly DriveFile[]): FolderCompare | null {
   const [found, setFound] = useState<FolderCompare | null>(null);
   const key = notes
@@ -223,7 +118,6 @@ function useFolderCompare(notes: readonly DriveFile[]): FolderCompare | null {
         }
         const count = notesOfKind(loaded, kind).length;
         setFound({
-          module,
           notes: loaded,
           label: `Compare ${count} ${TAB_NOUN[kind.id] ?? kind.plural}`,
         });
@@ -239,321 +133,240 @@ function useFolderCompare(notes: readonly DriveFile[]): FolderCompare | null {
   return found;
 }
 
+/** What the Compare panel receives (frozen for #916, which fills it). */
+export interface CompareSlotProps {
+  /** The folder's notes with their properties (`loadCompareNotes`). */
+  notes: readonly CompareNote[];
+  folderPath: string;
+  /** The tab's words, "Compare 6 flats", naming the panel. */
+  label: string;
+  /** The id of the tab that labels this panel. */
+  tabId: string;
+}
+
+/** The Compare tab's panel: an empty slot until #916 fills it. */
+export function CompareSlot({ label, tabId }: CompareSlotProps): JSX.Element {
+  return (
+    <div
+      class="compare-slot"
+      role="tabpanel"
+      id="folder-panel-compare"
+      aria-labelledby={tabId}
+      data-label={label}
+    />
+  );
+}
+
+interface FolderTabsProps {
+  label: string;
+  comparing: boolean;
+  onChange: (comparing: boolean) => void;
+}
+
+/** "List" | "Compare <n> <things>" (§3.24): only on a folder with a
+ * comparison; switching never moves the header above. */
+function FolderTabs({
+  label,
+  comparing,
+  onChange,
+}: FolderTabsProps): JSX.Element {
+  return (
+    <div class="folder-tabs" role="tablist" aria-label="Folder views">
+      <button
+        type="button"
+        role="tab"
+        id="folder-tab-list"
+        class="folder-tab"
+        aria-selected={!comparing}
+        aria-controls="folder-panel-list"
+        onClick={() => onChange(false)}
+      >
+        List
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="folder-tab-compare"
+        class="folder-tab"
+        aria-selected={comparing}
+        aria-controls="folder-panel-compare"
+        onClick={() => onChange(true)}
+      >
+        {label}
+      </button>
+    </div>
+  );
+}
+
+/** A root folder's phone Back: "‹ Your folders", which opens the Folders
+ * tab with this root revealed (K-5, E-17). */
+function RootBackLink({ path }: { path: string }): JSX.Element {
+  return (
+    <BackLink
+      href={revealHref({ kind: 'folder', path })}
+      label={FOLDERS_LANDMARK}
+      name="Back to your folders"
+      named
+    />
+  );
+}
+
 interface FolderBodyProps {
   contents: FolderContents;
-  parentName: string | null;
-  /** The `<h1>`: a root folder's name without its numeric prefix
-   * ("Projects", #431); any other folder's own name. */
-  heading: string;
-  /**
-   * A root folder's one-line meaning (#348, C.5), from the one table
-   * `folder-meanings.ts` — the same words the Notes tab and the
-   * "What is Bower" intro use. `undefined` for any other folder.
-   */
-  meaning: string | undefined;
-  /** Who put each file there, from `index.md` (`useCatalogueOrigins`). */
-  catalogue: ReadonlyMap<string, Origin>;
-  /** The folder's own Drive file, for the Drive chip; always set in
-   * practice (`contents` only exists for a folder the index already has). */
+  root: boolean;
   file: DriveFile | undefined;
-  /** Whether the folder has a `pinned` timestamp (#215, #216). */
   pinned: boolean;
-  /** Pins or unpins the folder; the chip's own label follows `pinned`. */
   onTogglePin: () => void;
-  /** True for the two seconds right after a successful toggle, showing the
-   * bird's `done` pose on the chip instead of the pin icon. */
-  justChanged: boolean;
-  onDoneShown: () => void;
-  /** Whether the More menu (#352) is open, and its toggle. */
-  menuOpen: boolean;
-  onToggleMenu: () => void;
-  onCloseMenu: () => void;
-  /** Three panes (#614): the selection, the keys and the chips. */
   desktop: boolean;
-  /** 900 px and wider: no PathBar, and Drive shows in the header. */
-  topBarPath: boolean;
-  onPreview: (item: PanePreview | null) => void;
-  /** The Compare tab is showing: the preview pane makes way for the table. */
+  onPreview: (item: PaneItem | null) => void;
   onComparing: (comparing: boolean) => void;
-  /** The parent folder's address; `undefined` at a top-level folder. */
   upHref: string | undefined;
   onNavigate: (href: string) => void;
 }
 
 function FolderBody({
   contents,
-  parentName,
-  heading,
-  meaning,
-  catalogue,
+  root,
   file,
   pinned,
   onTogglePin,
-  justChanged,
-  onDoneShown,
-  menuOpen,
-  onToggleMenu,
-  onCloseMenu,
   desktop,
-  topBarPath,
-  onComparing,
   onPreview,
+  onComparing,
   upHref,
   onNavigate,
 }: FolderBodyProps): JSX.Element {
-  // "About <folder>: " and nothing else from the folder (#354), through
-  // the same `/bower?text=` link the More menu's rows use.
   const now = Date.now();
   const titles = useNoteTitles(contents.notes);
-  const emptyState = folderEmptyState(contents);
-  const isInboxFolder =
-    parentName === null && paraKindOf(contents.name) === 'inbox';
+  const { index, getNoteText } = useVault();
+  const catalogue = useCatalogueOrigins(
+    index?.byPath.get(CATALOGUE_PATH),
+    getNoteText,
+  );
   const items = useFolderItems();
   const requestRows = useRequestRows();
   const waiting = useMemo(() => pendingByPath(requestRows), [requestRows]);
   const compare = useFolderCompare(contents.notes);
-  const [tab, setTab] = useState<'everything' | 'compare'>('everything');
-  useEffect(() => setTab('everything'), [contents.path]);
-  // The mark is still, so the chip's confirmation ends on a timer, after
-  // the two seconds the `done` pose used to take.
+  const [comparing, setComparing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Keyed by path: a summary from the previous folder never shows here.
+  const [summaryOf, setSummaryOf] = useState<{
+    path: string;
+    summary: FolderSummary;
+  } | null>(null);
+  const summary = summaryOf?.path === contents.path ? summaryOf.summary : null;
+  const onSummary = useCallback(
+    (next: FolderSummary) =>
+      setSummaryOf({ path: contents.path, summary: next }),
+    [contents.path],
+  );
   useEffect(() => {
-    if (!justChanged) return;
-    const timer = setTimeout(onDoneShown, 2000);
-    return () => clearTimeout(timer);
-  }, [justChanged, onDoneShown]);
-  const comparing = tab === 'compare' && compare !== null;
+    setComparing(false);
+    setMenuOpen(false);
+  }, [contents.path]);
+  const showCompare = comparing && compare !== null;
   useEffect(() => {
-    onComparing(comparing);
+    onComparing(showCompare);
     return () => onComparing(false);
-  }, [comparing, onComparing]);
-  // The board's header (#611) for a folder with things in it; a root folder
-  // and an empty one keep the counts line they have always had.
-  const paraOfFolder = paraKindOf(contents.path.split('/')[0] ?? '');
-  const boardHeader = parentName !== null && contents.items.length > 0;
-  // The project note is the front card, so Quick Look never opens on it.
-  const hubId =
-    parentName === null
-      ? undefined
-      : projectNoteOf(contents.name, contents.notes)?.id;
+  }, [showCompare, onComparing]);
+
+  const topName = contents.path.split('/')[0] ?? '';
+  const para = paraKindOf(topName);
+  const title = root ? rootFolderHeading(contents.path) : contents.name;
+  const folderOfFolders = root && contents.subfolders.length > 0;
+  const meta =
+    summary === null
+      ? null
+      : metaLine(
+          {
+            name: contents.name,
+            mimeType: FOLDER_MIME,
+            root: para,
+            rootName: topName,
+            count: summary.count,
+            countUnit: summary.unit,
+            ...(summary.lifecycle !== undefined && {
+              lifecycle: summary.lifecycle,
+            }),
+            ...(summary.updated !== undefined && { updated: summary.updated }),
+          },
+          { view: 'title', now },
+        );
+  const ask = (): void =>
+    openAsk({
+      name: displayName(contents.name),
+      kind: 'folder',
+      icon: { name: contents.name, mimeType: FOLDER_MIME, path: contents.path },
+    });
+  const purpose = root ? folderMeaning(contents.path) : undefined;
 
   return (
     <section class="folder-view">
-      {items !== null && !topBarPath && <items.PathBar path={contents.path} />}
-      <div class="folder-head">
-        {paraOfFolder === null ? (
-          <IconFolder />
-        ) : (
-          <FolderMark kind={paraOfFolder} size={28} />
-        )}
-        <div class="folder-head-text">
-          <h1>{heading}</h1>
-          {!boardHeader && (
-            <p class="folder-meta">{metaLine(contents, parentName, pinned)}</p>
-          )}
-        </div>
-        {file !== undefined && (
-          <div class="note-header-actions folder-head-actions">
-            <MoreButton
-              class="note-header-more"
-              expanded={menuOpen}
-              onClick={onToggleMenu}
+      <PageHeader
+        title={title}
+        kind="folder"
+        {...(root
+          ? { rootPath: contents.path }
+          : { crumbs: crumbsFor(contents.path) })}
+        {...(file !== undefined && {
+          more: { expanded: menuOpen, onClick: () => setMenuOpen((o) => !o) },
+        })}
+        meta={meta}
+        {...(purpose !== undefined && { purpose })}
+        {...(compare !== null && {
+          tabs: (
+            <FolderTabs
+              label={compare.label}
+              comparing={showCompare}
+              onChange={setComparing}
             />
-            {menuOpen && (
-              <NoteMenu
-                kind="folder"
-                file={file}
-                title={contents.name}
-                typeLabel="Folder"
-                askName={contents.name}
-                pinned={pinned}
-                onTogglePin={onTogglePin}
-                onClose={onCloseMenu}
-              />
-            )}
-          </div>
-        )}
-      </div>
-
-      {meaning !== undefined && <p class="folder-explainer">{meaning}</p>}
-
-      <div class="folder-chips">
-        <HeaderAction
-          icon={justChanged ? <BowerMark size={16} /> : <IconPin />}
-          pressed={pinned}
-          onClick={onTogglePin}
-        >
-          {pinned ? 'Pinned' : 'Pin to Home'}
-        </HeaderAction>
-        <HeaderAction
-          icon={<IconChat />}
-          onClick={() =>
-            openSendToBower({
-              mode: 'ask',
-              about: contents.name,
-              ...(paraOfFolder !== null && { aboutKind: paraOfFolder }),
-              buildText: (value) => `About ${contents.name}: ${value}`,
-            })
-          }
-        >
-          Ask Bower about it
-        </HeaderAction>
-        {file !== undefined && topBarPath && !isDemo() && (
-          <HeaderAction
-            icon={<IconExternalLink />}
-            href={driveFolderUrl(file)}
-            external
-          >
-            Open in Drive
-          </HeaderAction>
-        )}
-        {file !== undefined && topBarPath && isDemo() && (
-          <HeaderAction
-            icon={<IconExternalLink />}
-            disabled
-            title={NOT_IN_DEMO_DRIVE}
-          >
-            Open in Drive
-          </HeaderAction>
-        )}
-      </div>
-
-      {parentName !== null && !comparing && (
-        <Hint
-          id="folder-ask"
-          variant="suggestion"
-          icon={<IconSparkle />}
-          actions={ASK_CHIPS.map((question) => (
-            <button
-              key={question}
-              type="button"
-              class="chip"
-              onClick={() =>
-                openSendToBower({
-                  mode: 'ask',
-                  about: contents.name,
-                  ...(paraOfFolder !== null && { aboutKind: paraOfFolder }),
-                  initialText: question,
-                  buildText: (value) => `About ${contents.name}: ${value}`,
-                })
-              }
-            >
-              {question}
-            </button>
-          ))}
-        >
-          Try asking. Your question waits in the inbox for the next tidy-up.
-        </Hint>
+          ),
+        })}
+      />
+      {menuOpen && file !== undefined && (
+        <NoteMenu
+          kind="folder"
+          file={file}
+          title={contents.name}
+          typeLabel="Folder"
+          askName={contents.name}
+          pinned={pinned}
+          onTogglePin={onTogglePin}
+          onClose={() => setMenuOpen(false)}
+        />
       )}
-
-      {compare !== null && (
-        <div
-          class={`folder-tabs${comparing ? ' is-compare' : ''}`}
-          role="tablist"
-          aria-label="Folder content"
-        >
-          <button
-            type="button"
-            role="tab"
-            class="folder-tab"
-            aria-selected={!comparing}
-            onClick={() => setTab('everything')}
-          >
-            List
-          </button>
-          <button
-            type="button"
-            role="tab"
-            class="folder-tab"
-            aria-selected={comparing}
-            onClick={() => setTab('compare')}
-          >
-            {compare.label}
-          </button>
-        </div>
-      )}
-
-      {comparing && (
-        <compare.module.CompareView
+      {showCompare && compare !== null ? (
+        <CompareSlot
           notes={compare.notes}
           folderPath={contents.path}
+          label={compare.label}
+          tabId="folder-tab-compare"
         />
-      )}
-
-      {!comparing && parentName !== null && (
-        // The front card is the project note: Quick Look stays off it (#896).
-        <ProjectFront
-          folderName={contents.name}
-          notes={contents.notes}
-          para={paraOfFolder}
-          compare={
-            compare === null
-              ? null
-              : { label: compare.label, onOpen: () => setTab('compare') }
-          }
-        />
-      )}
-
-      {comparing ? null : contents.items.length === 0 ? (
-        <div class="folder-section">
+      ) : (
+        <div
+          id="folder-panel-list"
+          {...(compare !== null && {
+            role: 'tabpanel',
+            'aria-labelledby': 'folder-tab-list',
+          })}
+        >
           {items !== null && (
-            <items.SubfolderList
+            <items.FolderItems
               contents={contents}
+              titles={titles}
+              catalogue={catalogue}
               now={now}
-              detailed={parentName === null}
+              desktop={desktop}
+              folderOfFolders={folderOfFolders}
+              waiting={waiting}
+              onPreview={onPreview}
+              onSummary={onSummary}
+              onAsk={ask}
+              onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
+              onOpen={onNavigate}
             />
           )}
-          {emptyState.elsewhere !== null ? (
-            <p class="folder-elsewhere">
-              {plural(
-                emptyState.elsewhere.count,
-                contents.noteCount > 0 ? 'note' : 'file',
-              )}{' '}
-              in {emptyState.elsewhere.subfolderName ?? 'its folders'}
-            </p>
-          ) : (
-            <div class="folder-empty">
-              <div class="folder-empty-bird">
-                <Bird state="asleep" size={64} />
-              </div>
-              <p class="folder-empty-title">
-                Nothing in{' '}
-                {isInboxFolder ? displayName(contents.name) : contents.name} yet
-              </p>
-              <p class="folder-empty-text">
-                {isInboxFolder
-                  ? 'Nothing waiting. Add something and it waits here for the next tidy-up.'
-                  : 'Add tickets, bookings or ideas and Bower files them here at the next tidy-up.'}
-              </p>
-              <a class="button" href="/add">
-                Add something
-              </a>
-              <a class="folder-empty-ask" href={moveHereHref(contents.name)}>
-                Ask Bower to move things here
-              </a>
-            </div>
-          )}
         </div>
-      ) : (
-        items !== null && (
-          <items.FolderItems
-            contents={contents}
-            titles={titles}
-            catalogue={catalogue}
-            now={now}
-            desktop={desktop}
-            waiting={waiting}
-            onPreview={onPreview}
-            noAutoPreview={hubId}
-            onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
-            onOpen={onNavigate}
-            {...(compare !== null && {
-              compare: {
-                label: compare.label,
-                onOpen: () => setTab('compare'),
-              },
-            })}
-          />
-        )
       )}
     </section>
   );
@@ -562,10 +375,8 @@ function FolderBody({
 export function Folder(): JSX.Element {
   const { params } = useRoute();
   const path = params.path ?? '';
-  const { index, pinFolder, unpinFolder, getNoteText } = useVault();
-  const [justChanged, setJustChanged] = useState(false);
+  const { index, pinFolder, unpinFolder } = useVault();
   const [comparing, setComparing] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const contents = useMemo(
     () =>
@@ -574,60 +385,37 @@ export function Folder(): JSX.Element {
         : folderContents(index, path, getPref('explorerSort')),
     [index, path],
   );
-  useTitle(contents?.name ?? null);
+  useTitle(contents === null ? null : displayName(contents.name));
   const ancestors = useMemo(() => breadcrumb(path), [path]);
   const parent = ancestors[ancestors.length - 1];
   const { route } = useLocation();
   const wide = useMediaQuery(PANES_QUERY);
-  const topBarPath = useMediaQuery(DESKTOP_QUERY);
-  const [preview, setPreview] = useState<PanePreview | null>(null);
+  const [preview, setPreview] = useState<PaneItem | null>(null);
+  const onPreview = useCallback(
+    (item: PaneItem | null) => setPreview(item),
+    [],
+  );
+  const onComparing = useCallback((on: boolean) => setComparing(on), []);
 
-  // The phone top bar's Back (#318): the parent folder, or Home for a
-  // top-level one.
+  // The phone top bar's Back (K-5): the parent folder, or for a root
+  // "‹ Your folders".
   const backContent = useMemo(
     () =>
       parent === undefined ? (
-        <BackLink href="/" label="Home" />
+        <RootBackLink path={path} />
       ) : (
-        <BackLink href={folderHref(parent.path)} label={parent.name} />
+        <BackLink href={folderHref(parent.path)} label={parent.name} named />
       ),
-    [parent],
+    [parent, path],
   );
   useShellSlot('back', backContent);
 
-  const crumbContent = useMemo(() => {
-    if (contents === null) return null;
-    return <FolderCrumb ancestors={ancestors} name={contents.name} />;
-  }, [contents, ancestors]);
-  useShellSlot('crumb', crumbContent);
-
-  // The phone's More trigger (#352), in the shell's `actions` slot like a
-  // note's; only once the folder's own Drive entry is known.
-  const hasFile =
-    contents !== null && index?.byPath.get(contents.path) !== undefined;
-  const actionsContent = useMemo(
-    () =>
-      hasFile ? (
-        <MoreButton
-          expanded={menuOpen}
-          onClick={() => setMenuOpen((open) => !open)}
-        />
-      ) : null,
-    [hasFile, menuOpen],
-  );
-  useShellSlot('actions', actionsContent);
-
-  // The preview pane (#614): the shell's right-hand column, as on a note.
+  // The preview column (§3.37): the shell's right-hand column.
   const asideContent = useMemo(
     () => (wide && !comparing ? <QuickLookPane item={preview} /> : null),
     [wide, preview, comparing],
   );
   useShellSlot('aside', asideContent);
-
-  const catalogue = useCatalogueOrigins(
-    index?.byPath.get(CATALOGUE_PATH),
-    getNoteText,
-  );
 
   if (index === null) {
     return (
@@ -645,34 +433,22 @@ export function Folder(): JSX.Element {
   const pinned = index.folderPinnedAt.has(folderPath);
 
   async function handleTogglePin(): Promise<void> {
-    const ok = await runPinAction(
+    await runPinAction(
       () => (pinned ? unpinFolder(folderPath) : pinFolder(folderPath)),
       pinned ? 'Unpinned' : 'Pinned to Home',
     );
-    if (ok) setJustChanged(true);
   }
 
   return (
     <FolderBody
       contents={contents}
-      parentName={parent === undefined ? null : parent.name}
-      heading={
-        parent === undefined ? rootFolderHeading(contents.path) : contents.name
-      }
-      meaning={parent === undefined ? folderMeaning(contents.path) : undefined}
-      catalogue={catalogue}
+      root={parent === undefined}
       file={index.byPath.get(contents.path)}
       pinned={pinned}
       onTogglePin={() => void handleTogglePin()}
-      justChanged={justChanged}
-      onDoneShown={() => setJustChanged(false)}
-      menuOpen={menuOpen}
-      onToggleMenu={() => setMenuOpen((open) => !open)}
-      onCloseMenu={() => setMenuOpen(false)}
       desktop={wide}
-      topBarPath={topBarPath}
-      onPreview={setPreview}
-      onComparing={setComparing}
+      onPreview={onPreview}
+      onComparing={onComparing}
       onNavigate={route}
       upHref={parent === undefined ? undefined : folderHref(parent.path)}
     />

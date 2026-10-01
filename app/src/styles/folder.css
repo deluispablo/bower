@@ -1,477 +1,119 @@
 /*
- * Folder screen (issue #214): the folder's icon and name, its counts, a
- * chip row, its subfolders and its own notes. One column, phone-first;
- * nothing here changes above 900 px — the shell (layout.css) already
- * widens the content column and swaps the header's crumb slot for the
- * desktop breadcrumb.
+ * Folder screen (issue #911, spec §4.8–4.11, boards PF-Main, LI-Main,
+ * GR-Main, AR-Main, AR-Sub). The PageHeader (`page-header.css`) carries the
+ * title, ⋯, meta and purpose; this file draws the List | Compare tabs, the
+ * "In this folder" heading with its segments row, the rows, the grid
+ * groups and the folder of folders' groups. Nothing here scrolls sideways
+ * (G-6, FL-5).
  */
 
 .folder-view {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-}
-
-.folder-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.folder-head > .icon {
-  flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  color: var(--color-accent);
-}
-
-.folder-head-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  gap: var(--space-4);
   min-width: 0;
 }
 
-.folder-head-text h1 {
-  margin: 0;
-}
-
-.folder-meta {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-/* A root folder only (#348, C.5): the one-line meaning from
-   `folder-meanings.ts`, between the header and the chips. Same treatment
-   as the Health screen's own explainer paragraph (`health-explainer`). */
-.folder-explainer {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.folder-chips {
+/* Tabs (§3.24): gap 24, 44 high, 16 px muted; active heading colour with a
+   2 px brand underline; a subtle rule under the row. */
+.folder-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
+  gap: var(--space-6);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
-/* Pinned's toggled look comes from `header-action.css` (R-FOLD-2); only
-   the bird's confirmation is sized here. */
-.folder-chips .header-action .b {
-  flex-shrink: 0;
-}
-
-.folder-row-chevron {
-  display: inline-flex;
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-}
-
-.folder-row-chevron .icon {
-  width: 16px;
-  height: 16px;
-}
-
-/* Wrappers that only carry an id for aria-describedby (R-FOLD-5). */
-.folder-row-describe {
-  display: contents;
-}
-
-.folder-filter-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.folder-show-all {
+.folder-tab {
   min-height: 44px;
-  padding: 0 var(--space-2);
-  border: 0;
+  padding: 0;
+  border: none;
+  border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--color-link);
+  color: var(--color-text-muted);
   font: inherit;
-  font-size: var(--text-sm);
-  text-decoration: underline;
+  font-size: var(--text-base);
   cursor: pointer;
 }
 
-.folder-label {
-  margin: 0 0 var(--space-2);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
+.folder-tab[aria-selected='true'] {
+  border-bottom-color: var(--color-brand);
+  color: var(--color-heading);
 }
 
+.folder-tab:focus-visible {
+  outline: 2px solid var(--color-accent-line);
+  outline-offset: 2px;
+}
+
+.folder-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* h2 "In this folder" (20 px, canon over the boards' 18 px span), then the
+   segments and the Filter & sort icon on one row (G-13). */
+.folder-in-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.folder-in-title {
+  margin: 0;
+  color: var(--color-heading);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.folder-in-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* One list: subfolders first, then the day groups and their rows. */
 .folder-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.folder-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 44px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-sm);
-  color: inherit;
-  text-decoration: none;
-}
-
-.folder-row:hover {
-  background: var(--color-surface-hover);
-}
-
-.folder-row:focus-visible {
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: -2px;
-}
-
-.folder-row .icon {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  color: var(--color-text-muted);
-}
-
-.folder-row-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-weight: var(--weight-medium);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-/* Phone row titles are 15.5px; the two-line clamp stays. */
-@media (max-width: 899.98px) {
-  .folder-row-name {
-    font-size: 15.5px;
-  }
-}
-
-@media (min-width: 900px) {
-  .folder-row-name {
-    display: block;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    -webkit-line-clamp: unset;
-  }
-}
-
-.folder-row-meta {
-  flex-shrink: 0;
-  max-width: 40%;
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.folder-row-count {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-.folder-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.folder-empty p {
-  margin: 0;
-  color: var(--color-text-muted);
-}
-
-/* This folder's own list is empty, but its subtree is not (#310, 1.9):
-   a plain note pointing at the subfolder instead of "Nothing here yet"
-   and an Add button, which would be misleading — there is something
-   here, just one level down. */
-.folder-elsewhere {
-  margin: 0;
-  color: var(--color-text-muted);
-}
-
-/* Notes and files together (#349, Phone-Folder-Project board): a taller
-   row with the type icon in a small tile, the title over who put it there,
-   and the age on the right. */
-.folder-item {
-  min-height: 54px;
-}
-
-.folder-row-icon {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-}
-
-.folder-row .folder-row-icon .icon {
-  width: 18px;
-  height: 18px;
-  color: inherit;
-}
-
-.folder-row-icon.tone-note {
-  color: var(--color-text-muted);
-}
-
-.folder-row-icon.tone-pdf {
-  color: var(--color-danger);
-}
-
-.folder-row-icon.tone-image,
-.folder-row-icon.tone-drive {
-  color: var(--color-info);
-}
-
-.folder-row-text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.folder-row-detail {
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The desktop More trigger (#352) sits at the heading's far end, as on a
-   note; `note-menu.css` shows it from 900 px up. */
-.folder-head-actions {
-  margin-left: auto;
-}
-
-/* The board's list mode (#611, Phone-Folder-List): path bar, counts, origin
-   filter, tool row, date groups and rows. */
-.folder-path {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-}
-
-.folder-path-part {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.folder-path a {
-  color: var(--color-text-muted);
-  text-decoration: none;
-}
-
-.folder-path a:hover {
-  text-decoration: underline;
-}
-
-.folder-path-sep {
-  color: var(--color-text-muted);
-}
-
-.folder-counts,
-.folder-filed {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.folder-seg {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  margin-bottom: var(--space-2);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-}
-
-.folder-seg-btn {
-  flex: 1;
-  white-space: nowrap;
-  min-height: 36px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  font: inherit;
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-}
-
-.folder-seg-btn[aria-pressed='true'] {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
-
-.folder-seg-btn:focus-visible,
-.folder-select:focus-visible {
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: 2px;
-}
-
-.folder-seg-count {
-  font-weight: 400;
-  color: var(--color-text-muted);
-}
-
-.folder-tools {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-/* From 900 px the tools are one row that never wraps or clips: the sort and
-   the List/Grid switch keep their size, the kind chips take what is left
-   and scroll sideways rather than pushing the sort into their rows. */
-@media (min-width: 900px) {
-  .folder-tools {
-    flex-wrap: nowrap;
-  }
-
-  .folder-tools > .folder-select,
-  .folder-tools > .folder-layout,
-  .folder-tools > .folder-compare-btn {
-    flex-shrink: 0;
-  }
-
-  .folder-tools > .folder-kind-chips {
-    flex: 1 1 0;
-    flex-wrap: nowrap;
-    min-width: 0;
-    padding-block: 2px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .folder-tools > .folder-layout {
-    margin-left: auto;
-  }
-}
-
-.folder-select {
-  min-height: 36px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: inherit;
-  font: inherit;
-  font-size: var(--text-sm);
-}
-
-.folder-view-slot {
-  margin-left: auto;
-}
-
 .folder-group {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-3) 0 var(--space-1);
   padding: 0 var(--space-2);
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
+  font-size: var(--text-13);
+  font-weight: 600;
 }
 
-.folder-row-icon {
-  position: relative;
-}
-
-.folder-row-icon .kind-badge {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-}
-
-.folder-row-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.folder-row-detail {
-  /* The bird mark keeps its 12% room (R-BIRD-6): nothing here clips it. */
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-}
-
-.folder-row-detail .bower-tag {
-  vertical-align: middle;
-}
-
-.folder-row-lead {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  font-size: var(--text-sm);
-}
-
-/* Rows and tiles: no text selection or callout while held (quick look, #613). */
 .folder-item {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* The List/Grid switch (#613). */
-.folder-layout {
-  display: inline-flex;
-  margin-left: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.folder-layout-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  min-height: 36px;
-  border: none;
-  background: var(--color-surface);
+.folder-row-date {
+  flex-shrink: 0;
   color: var(--color-text-muted);
-  cursor: pointer;
+  font-size: var(--text-13);
+  white-space: nowrap;
 }
 
-.folder-layout-btn[aria-pressed='true'] {
-  background: var(--color-brand-tint);
-  color: var(--color-text);
+/* Grid (§3.18, R-GR-1): 2 columns on the phone, 3 on desktop. */
+.folder-grid-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
-.folder-layout-btn:focus-visible {
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: -2px;
-}
-
-/* Grid mode (#613, board Phone-Folder-Grid): two columns on the phone. */
 .folder-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -481,271 +123,23 @@
   list-style: none;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 900px) {
   .folder-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-.folder-tile {
+/* A folder of folders: the "Folders" cards. */
+.folder-cards {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  color: inherit;
-  text-decoration: none;
-}
-
-.folder-tile-thumb {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 4 / 3;
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-}
-
-.folder-tile:hover .folder-tile-thumb {
-  border-color: var(--color-border-strong);
-}
-
-.folder-tile-thumb .thumb {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-
-.folder-tile-thumb .thumb-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.folder-tile-thumb .folder-row-icon {
-  width: 44px;
-  height: 44px;
-  background: transparent;
-}
-
-.folder-tile-thumb .folder-row-icon .icon {
-  width: 28px;
-  height: 28px;
-}
-
-.folder-tile-thumb > .kind-badge {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-}
-
-.folder-tile-note {
-  display: flex;
-  flex-direction: column;
-  align-self: stretch;
-  gap: 2px;
-  padding: var(--space-2);
-  overflow: hidden;
-  font-size: var(--text-sm);
-  line-height: 1.35;
-  text-align: left;
-}
-
-.folder-tile-note .note-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.folder-tile-note .note-line {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.folder-tile-bower {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: var(--weight-medium);
-}
-
-.folder-tile-title {
-  display: -webkit-box;
-  margin-top: var(--space-1);
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  overflow-wrap: anywhere;
-}
-
-.folder-tile-line {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-/* The Compare tabs (phone) and button (desktop), #613 / R-COMP-1. */
-.folder-tabs {
-  display: flex;
-  gap: var(--space-1);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.folder-tab {
-  min-height: 40px;
-  padding: 0 var(--space-3);
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--color-text-muted);
-  font: inherit;
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-}
-
-.folder-tab[aria-selected='true'] {
-  border-bottom-color: var(--color-accent-line);
-  color: var(--color-text);
-}
-
-.folder-tab:focus-visible,
-.folder-compare-btn:focus-visible {
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: -2px;
-}
-
-.folder-compare-btn {
-  display: none;
-  min-height: 36px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-@media (min-width: 900px) {
-  /* The button replaces the tabs, until Compare is open: then the tabs are
-     the way back to Everything. */
-  .folder-tabs:not(.is-compare) {
-    display: none;
-  }
-
-  .folder-compare-btn {
-    display: inline-flex;
-    align-items: center;
-  }
-}
-
-/* The empty folder (R-FOLDER-9, board Phone-Folder-Empty). */
-.folder-empty {
-  align-items: center;
-  text-align: center;
-}
-
-.folder-empty .folder-empty-title {
-  color: var(--color-text);
-  font-size: var(--text-lg);
-  font-weight: var(--weight-medium);
-}
-
-.folder-empty .folder-empty-text {
-  max-width: 26rem;
-}
-
-/* Asleep in the empty folder and inbox: 64 px with the room of rule 3
-   (12% above and each side, 2% below) so nothing clips him. */
-.folder-empty-bird {
-  padding: 8px 8px 1px;
-}
-
-.folder-empty-ask {
-  color: var(--color-link);
-}
-
-/* The desktop's three panes (#614): the selected row, the right-hand date,
-   the kind chips and the key hint. */
-.folder-item[data-selected='true'] {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
-}
-
-.folder-row-date {
-  flex-shrink: 0;
-  margin-left: auto;
-  padding-left: var(--space-3);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.folder-kind-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.folder-kind-chip {
-  flex-shrink: 0;
-  min-height: 32px;
-  white-space: nowrap;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.folder-kind-chip[aria-pressed='true'] {
-  background: var(--color-surface);
-  border-color: var(--color-accent);
-  font-weight: var(--weight-medium);
-}
-
-.folder-kind-chip:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-.folder-keys-hint {
+  gap: var(--space-3);
   margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
+  padding: 0;
+  list-style: none;
 }
 
-/* The header on the phone (R-FOLD-1, boards Folder-List-375): the mark, the
-   name at 24 px and the actions all show; from 900 px the name is 30 px. */
-.folder-head-text h1 {
-  font-size: 24px;
-}
-
-@media (min-width: 900px) {
-  .folder-head-text h1 {
-    font-size: 30px;
-  }
-}
-
-/* The clock badge of a row with a Rename or Move waiting (#765, D32). */
-.folder-row-waiting {
-  display: inline-flex;
-  align-items: center;
-  margin-left: var(--space-2);
-}
-
-.folder-row-waiting .icon {
-  width: 16px;
-  height: 16px;
+/* The Compare tab's panel, filled by #916. */
+.compare-slot {
+  min-height: 0;
 }

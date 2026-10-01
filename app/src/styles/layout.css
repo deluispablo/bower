@@ -1267,4 +1267,10 @@ button.page-bare-back {
   .shell-folder.shell-with-aside .content {
     min-width: 0;
   }
+
+  /* The preview column runs the full height of the window (§3.37, G-6),
+     so its empty state centres in it (AR-Main-1280). */
+  .shell-folder.shell-with-aside .shell-aside {
+    align-self: stretch;
+  }
 }
