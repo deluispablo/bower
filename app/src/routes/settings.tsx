@@ -207,6 +207,7 @@ function LookSection(): JSX.Element {
       <h2>Look</h2>
       <Segmented
         label="Look"
+        outlined
         options={THEME_OPTIONS}
         value={theme}
         onChange={(value) => {

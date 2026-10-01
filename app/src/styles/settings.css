@@ -33,6 +33,18 @@
   font-weight: 700;
 }
 
+/* Look (ST-Top): the outlined track spans the column, three equal parts. */
+.settings .seg {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.settings .seg-button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 /* Profile row: the initial disc (40), the name and address, Drive. */
 
 .settings-account {
