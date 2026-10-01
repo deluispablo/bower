@@ -215,6 +215,25 @@
   background: rgb(255 255 255 / 0.1);
 }
 
+/* The lit phone tab, drawn again above the scrim inside the ring, its icon
+ * and label teal (TR-*-375). It borrows `.bottom-nav a`'s layout; only its
+ * box is its own. */
+.tour-stage .bottom-nav.tour-tab-copy {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  z-index: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.tour-stage .bottom-nav.tour-tab-copy > a {
+  color: var(--color-link);
+}
+
 .tour-bird {
   position: fixed;
   display: block;
@@ -278,9 +297,29 @@
   grid-column: 2;
   grid-row: 2;
   align-self: baseline;
+  position: relative;
   min-height: 44px;
   font-size: var(--text-15);
   color: var(--color-text-secondary);
+  /* An underlined text link (TR-*), with a 44 px hit area around it. */
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tour-card .help-skip::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--hit));
+  height: var(--hit);
+  transform: translate(-50%, -50%);
+}
+
+/* Opening the tour draws no focus box (TR-*): the main button has the
+ * focus, and the ring shows once a key is pressed. */
+.tour-card.tour-quiet :focus-visible {
+  outline: none;
 }
 
 .tour-card .help-lede {
