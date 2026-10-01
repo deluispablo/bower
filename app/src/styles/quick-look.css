@@ -56,12 +56,6 @@
   object-fit: contain;
 }
 
-.quick-look-preview .kind-badge {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-}
-
 .quick-look-icon .icon {
   width: 48px;
   height: 48px;

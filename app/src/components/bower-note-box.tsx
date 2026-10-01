@@ -24,10 +24,15 @@ import { showToast } from '../toast-store.js';
 import { Bird, BowerMark } from './bird.js';
 import type { BirdState } from './bird.js';
 import { chipLabel, Details, questionsFor } from './details.js';
-import { scoreName } from './key-facts.js';
 import { NoteBody } from './note-body.js';
 
 import '../styles/bower-note-box.css';
+
+/** The accessible name of a score pill: "Your score 82 of 100". */
+export function scoreName(value: string): string | undefined {
+  const n = Number.parseInt(value, 10);
+  return Number.isNaN(n) ? undefined : `Your score ${n} of 100`;
+}
 
 /** Where the folds live: the `foldedNotes` preference (`prefs.ts`). */
 export const NOTE_FOLDED_KEY = 'bower:pref:foldedNotes';

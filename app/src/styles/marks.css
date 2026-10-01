@@ -110,19 +110,6 @@
   color: var(--color-origin-you);
 }
 
-.kind-badge {
-  display: inline-block;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--color-surface-hover);
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  line-height: 15px;
-  white-space: nowrap;
-}
-
 .bower-tag {
   display: inline-flex;
   align-items: center;
