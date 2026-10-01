@@ -43,6 +43,8 @@ The wrappers that make this work live in a temporary folder, first on `PATH`; `r
 
 The folder in `vault/` holds about 60 notes and files across `1-Projects` to `4-Archives`, hub notes, `index.md`, `log.md`, `Rules.md` with two rules and `About-Me.md` with a fake profile (Alex). Everything in it is made up.
 
+`index.md` keeps the rows of rules version 23 (no tags, no description) and has no `## Tags` section, on purpose: that is what a real folder looks like before the lint backfill (R-SS-17), so the baseline stays realistic.
+
 The PDFs are written by `make-fixtures.py` (Python 3; the scan needs Pillow) and committed, so every run reads the same bytes. Run `python agent/bench/make-fixtures.py` only to change one.
 
 ## Results
