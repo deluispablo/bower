@@ -137,9 +137,7 @@ test('Tab reaches the chips, Enter opens the highlighted result, / opens search'
   await expect(dialog.getByRole('option').first()).toBeVisible();
   // Wait until the list has caught up with the query: right after `fill`
   // the highlight can still be the empty query's first row.
-  const highlighted = dialog.locator(
-    '.switcher-row[data-highlighted="true"]',
-  );
+  const highlighted = dialog.locator('.switcher-row[data-highlighted="true"]');
   await expect(highlighted).toContainText('Moonee Ponds');
   const firstHref = await highlighted.getAttribute('href');
 
