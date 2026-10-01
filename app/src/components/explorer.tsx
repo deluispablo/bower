@@ -47,7 +47,7 @@ import {
   open as openOverlay,
   OVERLAY_PRIORITY,
 } from '../overlay-queue.js';
-import { getPref, setPref } from '../prefs.js';
+import { getPref, setPref, subscribePref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
 import {
   lastTarget,
@@ -169,39 +169,25 @@ export function useHealthFindings(enabled: boolean): number | undefined {
 }
 
 // "Show Bower's own files" (the `showAppFiles` preference): the Folders ⋯
-// flips it, every explorer on screen follows.
-const appFilesListeners = new Set<(on: boolean) => void>();
+// or Settings flips it, every explorer on screen follows (`subscribePref`).
 
 /** Shows or hides Bower's own files in every explorer. */
 export function setShowAppFiles(on: boolean): void {
   setPref('showAppFiles', on);
-  for (const listener of appFilesListeners) listener(on);
 }
 
-/** The `showAppFiles` preference, following `setShowAppFiles`. */
+/** The `showAppFiles` preference, following every `setPref` of it. */
 export function useShowAppFiles(): boolean {
   const [on, setOn] = useState(() => getPref('showAppFiles'));
-  const { path } = useLocation();
-  useEffect(() => {
-    appFilesListeners.add(setOn);
-    // Settings' own switch writes the preference with `setPref` directly:
-    // any form change (after its handler ran), another tab's write, or a
-    // route change is a cue to read it again, so the desktop sidebar
-    // follows at once (#920 T-14).
-    const reread = (): void => {
-      setOn(getPref('showAppFiles'));
-    };
-    document.addEventListener('change', reread);
-    window.addEventListener('storage', reread);
-    return () => {
-      appFilesListeners.delete(setOn);
-      document.removeEventListener('change', reread);
-      window.removeEventListener('storage', reread);
-    };
-  }, []);
-  useEffect(() => {
-    setOn(getPref('showAppFiles'));
-  }, [path]);
+  // `setPref` signals every change (Settings writes it directly), and the
+  // storage event brings another tab's (#920 T-14).
+  useEffect(
+    () =>
+      subscribePref('showAppFiles', () => {
+        setOn(getPref('showAppFiles'));
+      }),
+    [],
+  );
   return on;
 }
 
