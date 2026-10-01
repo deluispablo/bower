@@ -374,3 +374,37 @@ export function destinationsLabel(rows: readonly RunRow[]): string | null {
   }
   return names.length === 0 ? null : names.slice(0, 3).join(' · ');
 }
+
+/** The running sheet's promise under its title (AD-Running board; K-30). */
+export const RUN_LENGTH_WORDS = 'it takes a few minutes';
+
+/**
+ * When the running tidy-up started (R-API-4): the run's own `startedAt`
+ * (the Worker and the demo both set it), else when it was asked for, as
+ * the local "11:57"; `null` when neither parses.
+ */
+export function runStartTime(run: {
+  startedAt?: string | undefined;
+  requestedAt?: string | undefined;
+}): string | null {
+  for (const iso of [run.startedAt, run.requestedAt]) {
+    if (iso === undefined) continue;
+    const at = new Date(iso);
+    if (Number.isNaN(at.getTime())) continue;
+    const two = (n: number): string => String(n).padStart(2, '0');
+    return `${two(at.getHours())}:${two(at.getMinutes())}`;
+  }
+  return null;
+}
+
+/** "Started 11:57 · it takes a few minutes" (S-AD-20 as the board words
+ * it); "Started just now · …" before the run reports a time. */
+export function startedLine(
+  run: {
+    startedAt?: string | undefined;
+    requestedAt?: string | undefined;
+  } | null,
+): string {
+  const time = run === null ? null : runStartTime(run);
+  return `Started ${time ?? 'just now'} · ${RUN_LENGTH_WORDS}`;
+}

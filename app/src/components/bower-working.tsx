@@ -28,6 +28,8 @@ export interface BowerWorkingProps {
   reducedMotion?: boolean;
   /** The bird is the one an overlay shows (spec 6.21 rule 1): the sheet's stage. */
   overlay?: boolean;
+  /** The bird's size; the running sheet's stage draws it at 70 (AD-Running). */
+  size?: number;
 }
 
 /** Bird size in the sheet, px. */
@@ -78,6 +80,7 @@ export function BowerWorking({
   state,
   reducedMotion = false,
   overlay = false,
+  size = WORKING_BIRD_SIZE,
 }: BowerWorkingProps): JSX.Element {
   // Show-off plays once; then the bird goes back to looking around until
   // the run state changes again. Each state change is a new play, counted
@@ -99,7 +102,7 @@ export function BowerWorking({
       <div class="bw-stage">
         <Bird
           state={bird}
-          size={WORKING_BIRD_SIZE}
+          size={size}
           scene={bird === 'tidying'}
           reducedMotion={reducedMotion}
           overlay={overlay}

@@ -10,7 +10,6 @@ import {
   needsFirst,
   partialFolder,
   rowFor,
-  runningNote,
   sheetLabel,
   sheetRows,
   sheetStateOf,
@@ -235,13 +234,6 @@ describe('rows (R-SHEET-3)', () => {
 });
 
 describe('the running note and the stage', () => {
-  it('names the tidy-up bar where it is', () => {
-    expect(runningNote(false)).toBe(
-      'You can close this. Bower carries on; the tidy-up bar above the tabs shows how it goes.',
-    );
-    expect(runningNote(true)).toContain('the tidy-up bar at the top');
-  });
-
   it('R-BIRD-8: the stage is 166 px high', () => {
     expect(WORKING_STAGE_HEIGHT).toBe(166);
   });

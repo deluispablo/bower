@@ -429,7 +429,7 @@ test('a missing file shows Not found with its own sentence, not the generic page
 /** Waits for what was just attached to Add to be in the inbox: every file
  * starts uploading at once (R-ADD-1), so there is nothing to press. */
 async function addPileToInbox(page: Page): Promise<void> {
-  await expect(page.locator('.pile-row-ok').first()).toBeVisible({
+  await expect(page.locator('.pile-row-done').first()).toBeVisible({
     timeout: 15_000,
   });
 }
@@ -441,7 +441,9 @@ async function saveLink(page: Page, url: string): Promise<void> {
     .getByRole('button', { name: 'Paste a link' })
     .click();
   await page.locator('#add-link').fill(url);
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Save the link', exact: true })
+    .click();
 }
 
 test('Add: four doors in one row, and the drop line on desktop (#333, #770)', async ({
@@ -517,7 +519,11 @@ test('Add puts a file in the inbox and stays on Add (#421)', async ({
     .setInputFiles(
       `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
     );
-  await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
+  await expect(
+    page.locator('.pile-row .list-row-title', {
+      hasText: 'Garden centre receipt',
+    }),
+  ).toBeVisible();
   await addPileToInbox(page);
   await shot(page, testInfo, 'add');
 
@@ -549,7 +555,11 @@ test('Add: the pile waits under "Waiting for the tidy-up" after leaving the tab 
     .setInputFiles(
       `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
     );
-  await expect(page.getByText('Garden centre receipt.txt')).toBeVisible();
+  await expect(
+    page.locator('.pile-row .list-row-title', {
+      hasText: 'Garden centre receipt',
+    }),
+  ).toBeVisible();
   await addPileToInbox(page);
 
   // Leaving Add closes the pile; coming back within the session lists it as
@@ -808,8 +818,9 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
 
   // Running: the bubble says so; the card has no button, only its line.
   const sheet = page.getByRole('dialog', { name: SHEET_NAME });
+  // R-AD-8: the sheet and the bubble read the confirmed count (3).
   await expect(
-    sheet.getByRole('heading', { name: /^Tidying up/ }),
+    sheet.getByRole('heading', { name: 'Tidying up 3 things', exact: true }),
   ).toBeVisible();
   await expect(bubble).toHaveText(
     'Tidying up 3 things. It takes a few minutes; you can keep adding.',
@@ -826,7 +837,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toContainText(
     'In the demo the bird plays back a real run in twenty seconds',
   );
-  await expect(sheet).toContainText('Playing back');
+  await expect(sheet).toContainText('it takes a few minutes');
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed
@@ -950,7 +961,7 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   // line (#363), and the item being read.
   const sheet = page.getByRole('dialog', { name: SHEET_NAME });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
-  await expect(sheet.getByText('Playing back')).toBeVisible();
+  await expect(sheet.getByText(/it takes a few minutes/)).toBeVisible();
   await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(

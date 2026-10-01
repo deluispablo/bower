@@ -19,8 +19,21 @@
 .tidy-confirm-row {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
   min-height: 2.75rem;
+}
+
+/* AD-Confirm, S-AD-19: "<n> things in <m> piles" bold 14, then the muted
+   13 line "Bower reads each pile with its own note." */
+.tidy-confirm-row b {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tidy-confirm-row span {
+  color: var(--color-text-muted);
+  font-size: 13px;
 }
 
 .tidy-confirm-skeleton {

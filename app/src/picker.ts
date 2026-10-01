@@ -117,10 +117,13 @@ export function folderIdFromPickerResponse(
 
 const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 
+/** The file Picker's two views, in order (R-API-6). */
+export const FILE_PICKER_VIEWS = ['My Drive', 'Shared with me'] as const;
+
 /**
  * Builds and shows the Picker for Add's "From your Drive" button: several
- * files and folders at once, over four views (recent files, the ones the
- * user owns, the ones shared with them, the starred ones). Same library
+ * files and folders at once, over two views only, `FILE_PICKER_VIEWS`
+ * ("My Drive" and "Shared with me", R-API-6). Same library
  * load and Drive access token as `openFolderPicker`. `onResult` receives
  * the raw picker response; pass it to `filesFromPickerResponse`.
  */
@@ -138,13 +141,10 @@ export function openFilePicker(
     // My Drive first (#312): real folder navigation from the root, so the
     // Picker opens the same tree the user sees in Drive, not a flat grid of
     // every folder in the account (the Bower folder's own subfolders
-    // included). The other views (recent, owned by me, shared, starred)
-    // are unchanged.
-    .addView(view().setParent('root'))
-    .addView(view())
-    .addView(view().setOwnedByMe(true))
-    .addView(view().setOwnedByMe(false))
-    .addView(view().setStarred(true))
+    // included). Then what others shared; nothing else (R-API-6: no row
+    // of identical "Google Drive" tabs).
+    .addView(view().setParent('root').setLabel(FILE_PICKER_VIEWS[0]))
+    .addView(view().setOwnedByMe(false).setLabel(FILE_PICKER_VIEWS[1]))
     .enableFeature(pickerApi.Feature.MULTISELECT_ENABLED)
     .setTitle('From your Drive')
     .setOAuthToken(accessToken)

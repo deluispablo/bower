@@ -156,6 +156,84 @@ export interface RunSheetStorage {
 
 const SHEET_SEEN_KEY = 'bower-run-sheet-seen';
 
+/** Where the confirmed count of a tidy-up this browser started is kept
+ * (R-AD-8, #914): the number the sticky button and the confirm showed. */
+const KEPT_COUNT_KEY = 'bower-run-kept-count';
+
+/** A run asked for this long before or after the confirm is that run. */
+const KEPT_BEFORE_MS = 2 * 60_000;
+const KEPT_AFTER_MS = 5 * 60_000;
+
+/** The confirmed count and when "Yes, tidy up" was pressed. */
+export interface KeptCount {
+  count: number;
+  at: number;
+}
+
+/** Keeps the confirmed count when a tidy-up starts. */
+export function keepRunCount(
+  storage: RunSheetStorage,
+  count: number,
+  at: number,
+): KeptCount {
+  const kept = { count, at };
+  try {
+    storage.setItem(KEPT_COUNT_KEY, JSON.stringify(kept));
+  } catch (err) {
+    console.error('Could not keep the tidy-up count.', err);
+  }
+  return kept;
+}
+
+/** The kept count, or `null` when there is none or it does not parse. */
+export function readKeptCount(storage: RunSheetStorage): KeptCount | null {
+  try {
+    const raw = storage.getItem(KEPT_COUNT_KEY);
+    if (raw === null) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof (parsed as KeptCount).count === 'number' &&
+      typeof (parsed as KeptCount).at === 'number'
+    ) {
+      return parsed as KeptCount;
+    }
+  } catch (err) {
+    console.error('Could not read the tidy-up count.', err);
+  }
+  return null;
+}
+
+/**
+ * The confirmed count of `run` when this browser started it (asked for
+ * around the time "Yes, tidy up" was pressed), else `null`: a run started
+ * elsewhere falls back to its own total.
+ */
+export function keptCountFor(
+  run: Run | null,
+  kept: KeptCount | null,
+): number | null {
+  if (run === null || kept === null) return null;
+  const asked = Date.parse(run.requestedAt);
+  if (Number.isNaN(asked)) return null;
+  return asked >= kept.at - KEPT_BEFORE_MS && asked <= kept.at + KEPT_AFTER_MS
+    ? kept.count
+    : null;
+}
+
+/**
+ * The one count of a running tidy-up (R-AD-8): the kept, confirmed count,
+ * else the run's own total. The chip, the working sheet title and Home's
+ * running bubble all read this.
+ */
+export function runningCount(
+  kept: number | null,
+  runTotal: number | undefined,
+): number | undefined {
+  return kept ?? runTotal;
+}
+
 /**
  * The run key (`runKey`) whose working sheet has already opened, kept in
  * `sessionStorage` (#497) so a run already seen never opens it again —
@@ -535,6 +613,9 @@ export interface RunStore extends RunState {
   confirmScope: RunScope;
   /** The confirmation's "Yes, tidy up": closes it and starts the run. */
   confirmTidyUp: () => void;
+  /** The confirmed count of the current run when this browser started it
+   * (R-AD-8); `null` for a run started elsewhere. */
+  keptCount: number | null;
   /** The confirmation's "Add more first": closes it, no run starts. */
   dismissConfirm: () => void;
   /**
@@ -784,6 +865,11 @@ export function RunProvider({ children }: RunProviderProps) {
   // "Yes, tidy up") goes on to open the working sheet and start the run,
   // with the scope the sheet was opened for.
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [kept, setKept] = useState<KeptCount | null>(() =>
+    typeof sessionStorage === 'undefined'
+      ? null
+      : readKeptCount(sessionStorage),
+  );
   const [requestCount, setRequestCount] = useState(0);
   const [confirmScope, setConfirmScope] = useState<RunScope>('all');
 
@@ -831,7 +917,13 @@ export function RunProvider({ children }: RunProviderProps) {
     setSheetReopenKey((key) => key + 1);
     // The run moves the files away and the store forgets their piles, so
     // Just filed and the sheet name the pile from this snapshot (R-PILE-5).
-    if (confirmScope === 'all') rememberPileOrigins(getPiles());
+    if (confirmScope === 'all') {
+      rememberPileOrigins(getPiles());
+      // R-AD-8: the run keeps the number the sticky and the confirm showed.
+      if (typeof sessionStorage !== 'undefined') {
+        setKept(keepRunCount(sessionStorage, confirmCount, Date.now()));
+      }
+    }
     void startConfirmedTidyUp(
       apply,
       (start) => tidyUpWhenFlushed(start, inboxFolderId, keepRule),
@@ -841,7 +933,7 @@ export function RunProvider({ children }: RunProviderProps) {
         );
       },
     );
-  }, [apply, process, inboxFolderId, keepRule, confirmScope]);
+  }, [apply, process, inboxFolderId, keepRule, confirmScope, confirmCount]);
 
   const dismissConfirm = useCallback((): void => {
     setConfirmOpen(false);
@@ -865,6 +957,7 @@ export function RunProvider({ children }: RunProviderProps) {
     confirmScope,
     confirmTidyUp,
     dismissConfirm,
+    keptCount: keptCountFor(state.run, kept),
     now,
   };
 

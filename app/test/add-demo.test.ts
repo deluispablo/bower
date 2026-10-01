@@ -135,7 +135,7 @@ describe('Add doors per the boards (R-ADD-1)', () => {
     state.demo = false;
     await mountAdd();
     const words = Array.from(
-      root.querySelectorAll('.add-doors > button.add-door'),
+      root.querySelectorAll('.add-doors > button.door-button'),
     ).map((b) => b.textContent);
     expect(words).toEqual(expect.arrayContaining(['Files', 'Link']));
     expect(root.textContent).not.toContain('voice memos');

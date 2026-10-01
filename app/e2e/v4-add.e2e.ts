@@ -14,7 +14,7 @@ test('the four doors fit one row at 375 px with 44 px targets (R-ADD-1, #770)', 
   await openHome(page);
   await navigate(page, /^Add$/);
 
-  const doors = page.locator('.add-doors > button.add-door');
+  const doors = page.locator('.add-doors > button.door-button');
   // Photo (the fake webcam gives the phone a camera), Files, Drive, Link.
   await expect(doors).toHaveCount(4);
   const boxes = await doors.evaluateAll((els) =>
@@ -55,10 +55,12 @@ test('the button reads "Tidy up 5 things" with five items and opens the confirma
         `${testInfo.project.testDir}/files/Garden centre receipt.txt`,
       ),
     );
-  await expect(page.locator('.pile-row-ok')).toHaveCount(2, {
+  await expect(page.locator('.pile-row-done')).toHaveCount(2, {
     timeout: 15_000,
   });
-  await expect(page.locator('.pile-row .kind-badge')).toHaveCount(2);
+  // #914 (R-AD-5): kinds in words in the row meta, no badges.
+  await expect(page.locator('.pile-row .list-row-meta')).toHaveCount(2);
+  await expect(page.locator('.pile-row .kind-badge')).toHaveCount(0);
 
   const tidy = page.locator('.add-tidy-button');
   await expect(tidy).toHaveText('Tidy up 5 things');
@@ -102,7 +104,7 @@ test('the desktop drop line, and a dropped file joins the new pile (R-ADD-6, #77
   });
 
   await expect(page.locator('.pile-row')).toHaveCount(1);
-  await expect(page.locator('.pile-row .kind-badge')).toHaveText('PDF');
+  await expect(page.locator('.pile-row .list-row-meta')).toHaveText(/^PDF · /);
   await expect(
     page.getByRole('textbox', { name: 'What is this pile?' }),
   ).toBeVisible();

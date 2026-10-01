@@ -153,23 +153,32 @@ export function pileConfirm(
   return { piles: rows, elsewhere: waiting.size - claimed.size, requests };
 }
 
+/** How many rows the confirm lists: the piles, then "Added from elsewhere"
+ * and the requests when there are any. */
+export function confirmRows(confirm: PileConfirm): number {
+  return (
+    confirm.piles.length +
+    (confirm.elsewhere > 0 ? 1 : 0) +
+    ((confirm.requests ?? 0) > 0 ? 1 : 0)
+  );
+}
+
+/** The confirm's request row (AD-Confirm ruling): "A request for Bower". */
+export function requestRowLabel(count: number): string {
+  return count === 1 ? 'A request for Bower' : 'Requests for Bower';
+}
+
 /**
- * "10 things: 2 piles and 2 added from elsewhere", "6 things: 1 pile, 2 added
- * from elsewhere and 1 request", "10 things in 2 piles". Every part of the
- * total is named, so the count matches what is listed.
+ * The confirm's count line, as the board and S-AD-19 word it (lead ruling
+ * on #936): "6 things in 2 piles". The total is the sticky button's and the
+ * running title's; things from elsewhere keep their own row in the list.
  */
 export function pileConfirmLine(total: number, confirm: PileConfirm): string {
   const things = `${total} ${total === 1 ? 'thing' : 'things'}`;
-  const n = confirm.piles.length;
-  const requests = confirm.requests ?? 0;
-  const parts = [`${n} ${n === 1 ? 'pile' : 'piles'}`];
-  if (confirm.elsewhere > 0)
-    parts.push(`${confirm.elsewhere} added from elsewhere`);
-  if (requests > 0)
-    parts.push(`${requests} ${requests === 1 ? 'request' : 'requests'}`);
-  if (parts.length === 1) return `${things} in ${parts[0]}`;
-  const last = parts[parts.length - 1];
-  return `${things}: ${parts.slice(0, -1).join(', ')} and ${last}`;
+  // Every row the list shows is a pile: each noted pile, "Added from
+  // elsewhere" and the waiting requests (lead ruling, AD-Confirm).
+  const n = confirmRows(confirm);
+  return `${things} in ${n} ${n === 1 ? 'pile' : 'piles'}`;
 }
 
 /** Items in first-seen group order, keyed by an origin (or none). */
