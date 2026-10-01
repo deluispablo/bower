@@ -6,7 +6,9 @@
 
 .pager {
   display: grid;
-  grid-template-columns: minmax(44px, 1fr) auto minmax(44px, 1fr);
+  /* The count takes what is left, so the next name shows in full first
+     (FI-Bottom-375: "CV insights" whole). */
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-6);
@@ -33,7 +35,7 @@
   justify-content: flex-end;
   gap: var(--space-1);
   min-width: 0;
-  max-width: 100%;
+  max-width: 45vw;
   color: var(--color-link);
   font-size: var(--text-base);
 }
