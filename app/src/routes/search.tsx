@@ -26,11 +26,20 @@ export function SearchRedirect(): null {
   useEffect(() => {
     const initialQuery = query.q ?? '';
     if (lastPage() !== null) {
-      // The page behind is the previous history entry: step back to it.
+      // The page behind is the previous history entry: step back to it,
+      // and open Search once the step has landed, so Search's own history
+      // entry (the tag sheet's Back) goes on top of the note's.
+      window.addEventListener(
+        'popstate',
+        () => {
+          openSwitcher(initialQuery);
+        },
+        { once: true },
+      );
       history.back();
-    } else {
-      route('/', true);
+      return;
     }
+    route('/', true);
     queueMicrotask(() => {
       openSwitcher(initialQuery);
     });

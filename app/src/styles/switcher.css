@@ -4,7 +4,7 @@
 /* The overlay's own panel (`overlay.css`) takes the switcher's size: a full
    screen on the phone, a wide dialog from 900 px. The scrim, the animation
    and the focus trap are the overlay's. */
-.overlay .overlay-panel:has(> .switcher-panel) {
+.overlay .overlay-panel:has(> .switcher-panel:not(.is-sheet)) {
   top: 0;
   right: 0;
   bottom: 0;
@@ -19,8 +19,18 @@
   box-shadow: none;
 }
 
-.overlay .overlay-panel:has(> .switcher-panel) > .overlay-grab {
+.overlay .overlay-panel:has(> .switcher-panel:not(.is-sheet)) > .overlay-grab {
   display: none;
+}
+
+/* NO-Tag-375: the tag search opened from a note is a content sheet on the
+   surface colour over the note (the overlay's own sheet). */
+.overlay .overlay-panel:has(> .switcher-panel.is-sheet) {
+  background: var(--color-surface);
+}
+
+.switcher-panel.is-sheet .switcher-body {
+  padding-bottom: var(--space-6);
 }
 
 .switcher-panel {

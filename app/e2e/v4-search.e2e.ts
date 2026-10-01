@@ -206,7 +206,10 @@ test('a tag on a note opens the tag search over it; closing returns to the note 
   await expect(page).toHaveURL(new RegExp(`${notePath}$`));
   await shot(page, testInfo, 'search-tag');
 
-  await dialog.getByRole('button', { name: 'Close Search' }).click();
+  // NO-Tag-375: a sheet over the note; the browser's Back closes it and
+  // stays on the note.
+  await expect(dialog.locator('.switcher-panel.is-sheet')).toBeVisible();
+  await page.goBack();
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`${notePath}$`));
 });

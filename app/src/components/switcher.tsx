@@ -913,6 +913,32 @@ function SwitcherPanel({
   const lastFinished = seenRun ?? reportedRun;
 
   const [query, setQuery] = useState(initialQuery);
+  // Opened from a tag on a note (`/search?q=%23tag`, R-SE-5).
+  const [openedAsTag] = useState(() => tagOfQuery(initialQuery) !== null);
+
+  // Browser Back closes the tag search and stays on the note: one history
+  // entry of its own (same address) while it is open; closing it any other
+  // way takes that entry back off. A row that opens something pushes its
+  // own entry first, so nothing is taken off then.
+  useEffect(() => {
+    if (!openedAsTag) return;
+    history.pushState({ bowerSearch: 'tag' }, '', window.location.href);
+    const onPop = (): void => {
+      closeSwitcher();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      const state: unknown = history.state;
+      if (
+        typeof state === 'object' &&
+        state !== null &&
+        (state as { bowerSearch?: unknown }).bowerSearch === 'tag'
+      ) {
+        history.back();
+      }
+    };
+  }, [openedAsTag]);
   const [status, setStatus] = useState<SearchStatus>('idle');
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [snippets, setSnippets] = useState<ReadonlyMap<string, string | null>>(
@@ -1357,10 +1383,21 @@ function SwitcherPanel({
             ? `No results for ${trimmed}.`
             : `${total} result${total === 1 ? '' : 's'}.`;
 
+  // NO-Tag-375: opened from a tag, the phone shows a content sheet over the
+  // note, not the full screen.
+  const sheet = openedAsTag && !desktop;
+  const panelClass = `switcher-panel${tag !== null ? ' is-tag' : ''}${
+    sheet ? ' is-sheet' : ''
+  }`;
+
   return (
     <Queued id="switcher" priority={OVERLAY_PRIORITY.own}>
-      <Overlay kind="dialog" label="Quick switcher" onClose={closeSwitcher}>
-        <div ref={panelRef} class="switcher-panel">
+      <Overlay
+        kind={sheet ? 'sheet' : 'dialog'}
+        label="Quick switcher"
+        onClose={closeSwitcher}
+      >
+        <div ref={panelRef} class={panelClass}>
           <div class="switcher-field">
             <SearchField
               variant="input"
@@ -1649,7 +1686,7 @@ function SwitcherPanel({
                 </div>
               )}
             </div>
-            {desktop && (
+            {desktop && tag === null && (
               <SearchPreview
                 row={highlightedRow}
                 bowerWritten={

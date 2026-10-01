@@ -70,6 +70,7 @@ describe('the /search redirect', () => {
   it('steps back to the note a tag was tapped on, then opens the tag search (R-SE-5)', async () => {
     const back = vi.spyOn(history, 'back').mockImplementation(() => {
       state.calls.push('back');
+      window.dispatchEvent(new PopStateEvent('popstate'));
     });
     state.lastPage = '/note/NOTE_ID';
     state.query = { q: '#summary' };
