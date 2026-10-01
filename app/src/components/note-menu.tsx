@@ -12,11 +12,11 @@
  * An item whose handler is not given, or whose Drive id is not loaded yet
  * (R-API-5), is left out.
  *
- * "Ask Bower about this" still opens the Bower tab's box prefilled through
- * `/bower?text=` (`more-menu.ts`); #910 swaps it for `openAsk`. Rename… and
- * Move to… open the send sheet (`send-to-bower.tsx`): the app never renames
- * or moves anything itself, it writes a request for Bower. "Help and about
- * this" asks the shell for Help (`requestHelp`).
+ * "Ask Bower about this" opens the Ask sheet over the page (`openAsk`,
+ * #910). Rename… opens the Rename sheet (`rename-sheet.tsx`) and Move to…
+ * the folder picker (`openMoveTo`, #909): the app never renames or moves
+ * anything itself, it writes a request for Bower. "Help and about this"
+ * asks the shell for Help (`requestHelp`).
  */
 
 import { useState } from 'preact/hooks';
@@ -29,21 +29,13 @@ import type { DriveFile } from '../drive.js';
 import { driveViewUrl } from '../markdown/embeds.js';
 import {
   MENU_NAMES,
-  askBowerHref,
   isRootFolder,
   moreMenuGroups,
-  moreMenuHeader,
   requestHelp,
   showInFoldersHref,
 } from '../more-menu.js';
 import type { MenuKind, MoreItem, MoreItemId } from '../more-menu.js';
-import { moveRequestText } from '../move-request.js';
 import { displayName, driveFolderUrl } from '../navigation.js';
-import {
-  renameRequestText,
-  splitFileName,
-  validateRename,
-} from '../rename-request.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { revealHref } from '../reveal.js';
 import { showToast } from '../toast-store.js';
@@ -51,7 +43,9 @@ import { isAppFile } from '../vault-index.js';
 import { mediaMatches } from '../use-media-query.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
-import { openSendToBower } from './send-to-bower.js';
+import { openMoveTo } from './folder-picker.js';
+import { openRename } from './rename-sheet.js';
+import { openAsk } from './send-to-bower.js';
 import {
   IconAddParagraph,
   IconBulb,
@@ -127,6 +121,8 @@ export interface NoteMenuProps {
   typeLabel?: string;
   /** The name "Ask Bower about this" prefills and Move to… uses. */
   askName?: string;
+  /** Bower wrote this note: Ask's context line shows the bird (K-29). */
+  bowerWritten?: boolean;
   /** False for Bower's own files and for anything but a note. */
   canEdit?: boolean;
   /** False for a protected note and for anything but a note. */
@@ -258,40 +254,38 @@ export function NoteMenu(props: NoteMenuProps): JSX.Element {
     );
   }
 
-  /** Rename… (#765): the shared send sheet, with the name check. */
+  /** Rename… (#765, #910): the Rename sheet, with the name check. */
   function rename(target: DriveFile): void {
-    const { base, extension } = splitFileName(target.name, kind === 'note');
-    const place = moreMenuHeader('', target.path).place;
     onClose();
-    openSendToBower({
-      mode: 'rename',
-      about: place?.label ?? 'your notes',
-      ...(place?.kind != null && { aboutKind: place.kind }),
-      initialText: base,
-      ...(extension !== '' && { extension }),
-      buildText: (value) =>
-        renameRequestText(target.path, value.trim() + extension),
-      validate: (value) =>
-        validateRename({
-          currentName: target.name,
-          input: value,
-          extension,
-          siblingNames: props.siblingNames ?? [],
-        }),
+    openRename({
+      path: target.path,
+      name: target.name,
+      isNote: kind === 'note',
+      siblingNames: props.siblingNames ?? [],
     });
   }
 
-  /** Move to… (#866): the same send sheet, with a folder choice. */
+  /** Move to… (#909): the folder picker. */
   function move(target: DriveFile): void {
-    const place = moreMenuHeader('', target.path).place;
     onClose();
-    openSendToBower({
-      mode: 'move',
-      about: place?.label ?? 'your notes',
-      ...(place?.kind != null && { aboutKind: place.kind }),
-      moveSubject: { path: target.path, isFolder: thingKind === 'folder' },
-      buildText: (destination) =>
-        moveRequestText(askName, target.path, destination),
+    openMoveTo({
+      subject: { path: target.path, isFolder: thingKind === 'folder' },
+      name: askName,
+    });
+  }
+
+  /** Ask Bower about this (R-MORE-5, #910): the Ask sheet over this page. */
+  function ask(target: DriveFile, about: 'note' | 'file' | 'folder'): void {
+    onClose();
+    openAsk({
+      name: askName,
+      kind: about,
+      icon: {
+        name: target.name,
+        mimeType: target.mimeType,
+        path: target.path,
+        ...(props.bowerWritten === true && { bowerWritten: true }),
+      },
     });
   }
 
@@ -406,20 +400,6 @@ export function NoteMenu(props: NoteMenuProps): JSX.Element {
       );
     }
 
-    if (id === 'ask' && file !== undefined && thingKind !== null) {
-      return (
-        <a
-          role="menuitem"
-          class="note-menu-row"
-          href={askBowerHref(thingKind, askName)}
-          onClick={onClose}
-        >
-          <Icon />
-          {renderText(entry)}
-        </a>
-      );
-    }
-
     if (id === 'show' && file !== undefined && thingKind !== null) {
       return (
         <a
@@ -480,6 +460,11 @@ export function NoteMenu(props: NoteMenuProps): JSX.Element {
         move: () => {
           move(file);
         },
+        ...(thingKind !== null && {
+          ask: () => {
+            ask(file, thingKind);
+          },
+        }),
         download: () => {
           download(file);
         },

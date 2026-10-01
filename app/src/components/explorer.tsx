@@ -58,7 +58,6 @@ import {
   targetFromRoute,
 } from '../reveal.js';
 import type { RevealTarget } from '../reveal.js';
-import { openSwitcher } from '../switcher-store.js';
 import { useEdgeSwipe } from '../use-edge-swipe.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { pinned, useVault } from '../vault-store.js';
@@ -69,15 +68,15 @@ import {
   IconCollapse,
   IconHeart,
   IconLocate,
-  IconSearch,
   IconSort,
 } from './icons.js';
 import { JustFiledRow } from './just-filed-row.js';
 import { Overlay } from './overlay.js';
 import { PinnedSidebar } from './pinned-sidebar.js';
-import { openSendToBower } from './send-to-bower.js';
+import { SearchField } from './search-field.js';
+import { openAsk } from './send-to-bower.js';
 import { BELOW_TREE_NAMES, Tree } from './tree.js';
-import type { TreeHost } from './tree.js';
+import type { TreeAskSubject, TreeHost } from './tree.js';
 
 import '../styles/explorer.css';
 
@@ -157,40 +156,25 @@ export function useShowAppFiles(): boolean {
   return on;
 }
 
-/** The pin menu's "Ask Bower about this": the send-to-Bower sheet. */
-function askAbout(name: string): void {
-  openSendToBower({
-    mode: 'ask',
-    about: name,
-    buildText: (value) => `About ${name}: ${value}`,
-  });
+/** The pin menu's "Ask Bower about this": the Ask sheet about that row,
+ * a folder or a note or file, with its own icon (#910). */
+function askAbout(subject: TreeAskSubject): void {
+  openAsk({ name: subject.name, kind: subject.kind, icon: subject.icon });
 }
 
 /**
- * The search trigger (#910 swaps it for the shared search field): today's
- * button, which opens the quick switcher.
+ * The search trigger (#910): the shared search field. The sidebar draws the
+ * desktop size with the Ctrl K hint; the drawer closes before Search opens.
  */
 export function ExplorerSearchSlot({ host }: { host: TreeHost }): JSX.Element {
   return (
     <div class="explorer-search-slot" data-slot="explorer-search">
-      <button
-        type="button"
-        class="explorer-filter"
-        onClick={() => {
-          if (host === 'drawer') closeFoldersDrawer();
-          openSwitcher();
-        }}
-      >
-        <IconSearch />
-        <span class="explorer-filter-label">
-          Search folders, notes and files
-        </span>
-        {host === 'sidebar' && (
-          <span class="explorer-filter-kbd" aria-hidden="true">
-            Ctrl K
-          </span>
-        )}
-      </button>
+      <SearchField
+        variant="trigger"
+        size={host === 'sidebar' ? 'desktop' : 'phone'}
+        shortcut={host === 'sidebar'}
+        {...(host === 'drawer' && { onOpen: closeFoldersDrawer })}
+      />
     </div>
   );
 }

@@ -462,6 +462,7 @@ What you, the operator, can do:
 - A tidy-up that finds the folder gone fails with the reason `vault_missing`. It uploads nothing, so a restored folder is not overwritten. The app then shows the screens above, not the failure sheet.
 - The Worker marks the folder missing (`vault.missingAt` on `/me`) and skips it in the weekly health check until it is found again. "Put it back" and "Use another folder" clear the mark.
 - A drive or Google Workspace admin can restore a deleted file for a limited time (Google says about 25 days). Ask before starting a new folder if the notes matter.
+| A text box shows the microphone crossed out and "Dictation is off in this browser. Type instead." | The browser has no speech recognition (Firefox, some iPhone browsers); "The microphone is blocked" instead means the person refused the microphone for the site | Nothing to fix on the instance: typing works. For dictation, use Chrome, Edge or Safari, or allow the microphone in the browser's site settings and reload |
 
 ## 9. Hardening your instance
 

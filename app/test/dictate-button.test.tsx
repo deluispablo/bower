@@ -10,6 +10,9 @@ import {
   SILENCE_MS,
   insertSpoken,
   languageLabel,
+  nextDictateState,
+  pressWord,
+  resetDictationBlocked,
 } from '../src/components/dictate-button.js';
 import {
   FakeSpeechRecognition,
@@ -58,6 +61,7 @@ function button(root: HTMLElement): HTMLButtonElement {
 
 beforeEach(() => {
   stub = installSpeechRecognition();
+  resetDictationBlocked();
   localStorage.clear();
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -89,6 +93,43 @@ describe('insertSpoken', () => {
 
   it('ignores empty speech', () => {
     expect(insertSpoken('abc', '   ', 3, 3)).toBeNull();
+  });
+});
+
+describe('nextDictateState (R-API-12)', () => {
+  it('asks the first time, then listens once the recogniser starts', () => {
+    expect(nextDictateState('ready', { type: 'start', firstUse: true })).toBe(
+      'asking',
+    );
+    expect(nextDictateState('ready', { type: 'start', firstUse: false })).toBe(
+      'ready',
+    );
+    expect(nextDictateState('asking', { type: 'started' })).toBe('listening');
+    expect(nextDictateState('listening', { type: 'stop' })).toBe('ready');
+  });
+
+  it('is blocked on a refusal and ready after any other failure', () => {
+    expect(
+      nextDictateState('asking', { type: 'error', error: 'not-allowed' }),
+    ).toBe('blocked');
+    expect(
+      nextDictateState('listening', {
+        type: 'error',
+        error: 'service-not-allowed',
+      }),
+    ).toBe('blocked');
+    expect(
+      nextDictateState('listening', { type: 'error', error: 'network' }),
+    ).toBe('ready');
+    expect(nextDictateState('blocked', { type: 'stop' })).toBe('blocked');
+    expect(nextDictateState('blocked', { type: 'started' })).toBe('listening');
+  });
+
+  it('stays unavailable for good', () => {
+    expect(nextDictateState('ready', { type: 'missing' })).toBe('unavailable');
+    expect(nextDictateState('unavailable', { type: 'started' })).toBe(
+      'unavailable',
+    );
   });
 });
 
@@ -217,6 +258,33 @@ describe('DictateButton', () => {
     expect(root.querySelector('[role="alert"]')?.textContent).toContain(
       'Dictation stopped.',
     );
+  });
+
+  it('says Tap on the phone and Click on desktop after a failure (K-27)', () => {
+    const phone = mount();
+    flush(() => button(phone).click());
+    flush(() => stub.latest().fail('network'));
+    expect(phone.querySelector('[role="alert"]')?.textContent).toBe(
+      'Dictation stopped. Tap the mic to try again.',
+    );
+    render(null, phone);
+    phone.remove();
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(min-width: 900px)',
+      addEventListener: (): void => undefined,
+      removeEventListener: (): void => undefined,
+    }));
+    const desktop = mount();
+    flush(() => button(desktop).click());
+    flush(() => stub.latest().fail('network'));
+    expect(desktop.querySelector('[role="alert"]')?.textContent).toBe(
+      'Dictation stopped. Click the mic to try again.',
+    );
+  });
+
+  it('says Click on desktop and Tap on the phone (pressWord)', () => {
+    expect(pressWord(true)).toBe('Click');
+    expect(pressWord(false)).toBe('Tap');
   });
 
   it('keeps a language chosen in the menu and restarts with it', () => {

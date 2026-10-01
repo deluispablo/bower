@@ -52,6 +52,14 @@ export const RENAME_MESSAGES = {
   tooLong: 'Keep it under 120 characters.',
 } as const;
 
+/** The line under Rename's box (board NO-Rename). */
+export const RENAME_HINT =
+  'The arrow renames it. The link to it keeps working.';
+
+/** The toast once the rename request is in the inbox (with Undo). */
+export const RENAME_SENT_TOAST =
+  'In your inbox. Bower renames it at the next tidy-up.';
+
 /** The longest name Rename takes, in characters (without the extension). */
 export const RENAME_MAX_LENGTH = 120;
 

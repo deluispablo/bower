@@ -10,6 +10,7 @@ import { useLocation } from 'preact-iso';
 
 import { ApiError, createVault, selectVault } from '../api.js';
 import { Bird } from '../components/bird.js';
+import { Composer } from '../components/composer.js';
 import type { BirdState } from '../components/bird-classes.js';
 import { getToken } from '../drive.js';
 import { isRecoverReason, putItBack } from '../folder-state.js';
@@ -229,8 +230,7 @@ export function Recover() {
     }
   }
 
-  function submitLink(event: Event): void {
-    event.preventDefault();
+  function submitLink(): void {
     const id = parseFolderId(link);
     if (id === null) {
       setNotice(NOTICES.badLink);
@@ -276,18 +276,23 @@ export function Recover() {
         ))}
       </div>
       {pasting && (
-        <form class="recover-paste" onSubmit={submitLink}>
+        <div class="recover-paste">
           <label for="recover-link">Link to the folder</label>
-          <input
+          <Composer
             id="recover-link"
-            type="text"
+            inputMode="url"
+            mode="send"
+            rows={1}
+            label="Link to the folder"
+            commitLabel="Use this folder"
             value={link}
-            onInput={(event) => setLink(event.currentTarget.value)}
+            onChange={setLink}
+            onCommit={() => {
+              if (!busy) submitLink();
+            }}
+            sending={busy}
           />
-          <button type="submit" class="button" disabled={busy}>
-            Use this folder
-          </button>
-        </form>
+        </div>
       )}
       <p class="recover-foot">{screen.foot}</p>
       <p class="recover-links">

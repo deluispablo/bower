@@ -931,6 +931,7 @@ export function Note() {
               title={title}
               typeLabel="Note"
               askName={title}
+              bowerWritten={bowerHeader}
               canEdit={canEdit}
               canAppend={canAppend}
               pinned={index.notePinnedAt.has(file.id)}
@@ -1053,7 +1054,11 @@ export function Note() {
             </>
           )}
           {canAppend && appendOpen && (
-            <AppendForm key={id} onAppend={handleAppend} />
+            <AppendForm
+              key={id}
+              onAppend={handleAppend}
+              onClose={() => setAppendOpen(false)}
+            />
           )}
         </>
       )}

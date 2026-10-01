@@ -143,7 +143,7 @@ describe('Notes (#353)', () => {
   it('has a search row that opens the quick switcher, no inline filter (#433)', () => {
     mount();
     expect(root.querySelector('input')).toBeNull();
-    const row = query<HTMLButtonElement>('button.explorer-filter');
+    const row = query<HTMLButtonElement>('button.search-field-open');
     expect(row.textContent).toBe('Search folders, notes and files');
     void act(() => {
       row.click();
@@ -191,7 +191,7 @@ describe('Notes (#353)', () => {
     mount();
     const slot = query('[data-slot="just-filed"]');
     expect(slot.childElementCount).toBe(0);
-    const search = query('button.explorer-filter');
+    const search = query('button.search-field-open');
     const heading = query('.explorer-label');
     expect(
       search.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING,

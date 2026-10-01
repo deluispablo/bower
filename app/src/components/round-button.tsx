@@ -24,6 +24,10 @@ export interface RoundButtonProps {
   onPress?: () => void;
   /** 32 px, for the desktop search field; 40 px otherwise. */
   small?: boolean;
+  /** `aria-pressed` for the mic (false) and the stop square (true). */
+  pressed?: boolean;
+  /** Focusable but inert (`aria-disabled`), for the arrow while offline. */
+  disabled?: boolean;
 }
 
 /** The drawn size in px; the same in every state. */
@@ -53,15 +57,20 @@ export function RoundButton({
   label,
   onPress,
   small = false,
+  pressed,
+  disabled = false,
 }: RoundButtonProps): JSX.Element {
-  const inert = INERT.has(state);
+  const inert = INERT.has(state) || disabled;
   const classes = `round-button round-button-${state}${small ? ' round-button-small' : ''}`;
   return (
     <button
       type="button"
       class={classes}
       aria-label={label}
+      aria-pressed={pressed === undefined ? undefined : pressed}
       aria-disabled={inert ? 'true' : undefined}
+      // Keeps the caret in the box: a press never takes focus from it.
+      onPointerDown={(e) => e.preventDefault()}
       aria-busy={state === 'spinner' ? 'true' : undefined}
       data-state={state}
       onClick={() => {

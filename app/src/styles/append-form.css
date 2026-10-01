@@ -1,34 +1,9 @@
-.append-form {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
-  max-width: 32rem;
-  margin-top: var(--space-6);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border);
-}
+/* The note's edit sheets: Add a paragraph… (`components/append-form.tsx`,
+   board NO-Append) and Rename… (`components/rename-sheet.tsx`, board
+   NO-Rename). The box itself is the Composer (`composer.css`). */
 
-.append-form label {
-  font-size: var(--text-sm);
+.edit-sheet-line {
+  margin: 2px 0 16px;
+  font-size: 15px;
   color: var(--color-text-muted);
-}
-
-.append-textarea {
-  min-height: 5rem;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  font: inherit;
-  color: var(--color-text);
-  background: var(--color-bg);
-  resize: vertical;
-}
-
-.append-form .button {
-  align-self: flex-start;
-}
-
-.append-status {
-  color: var(--color-success);
 }

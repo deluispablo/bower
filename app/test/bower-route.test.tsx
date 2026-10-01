@@ -204,7 +204,8 @@ describe('the Bower tab', () => {
     expect(box().getAttribute('aria-label')).toBe(
       'Tell Bower what to do, or ask it something',
     );
-    expect(buttonNamed('Send')).toBeDefined();
+    // One round button in the box; Send once it holds text (O-R1).
+    expect(root.querySelectorAll('.composer .round-button')).toHaveLength(1);
     const tabs = [...root.querySelectorAll('[role="tab"]')].map((tab) =>
       tab.textContent?.trim(),
     );
@@ -305,7 +306,7 @@ describe('the Bower tab', () => {
       buttonNamed('Send')?.click();
       await Promise.resolve();
     });
-    expect(root.textContent).toContain('Could not send that. Try again.');
+    expect(root.textContent).toContain('Could not send. Try again.');
     expect(box().value).toBe('Hello');
     consoleError.mockRestore();
   });
@@ -740,16 +741,18 @@ describe('dictation in the Bower box (#780)', () => {
   });
 
   function micButton(): HTMLButtonElement {
-    const button = root.querySelector<HTMLButtonElement>('.dictate-btn');
+    const button = root.querySelector<HTMLButtonElement>(
+      '.composer .round-button',
+    );
     if (button === null) throw new Error('No microphone');
     return button;
   }
 
   it('puts the microphone in the box, and only that box', async () => {
     await mount();
-    expect(root.querySelectorAll('.dictate-btn')).toHaveLength(1);
-    expect(box().closest('.dictate-box')).not.toBeNull();
-    expect(box().classList.contains('bower-textarea')).toBe(true);
+    expect(root.querySelectorAll('.round-button')).toHaveLength(1);
+    expect(box().closest('.composer-box')).not.toBeNull();
+    expect(box().classList.contains('composer-input')).toBe(true);
   });
 
   it('shows the listening bird and bubble only while the microphone is on', async () => {
