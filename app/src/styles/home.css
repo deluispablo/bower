@@ -63,10 +63,12 @@
   font-size: var(--text-2xl);
 }
 
+/* The board's `.bubble`: body weight and colour; only the links are 600
+   and teal. */
 .home-bubble {
   margin: 0;
-  color: var(--color-heading);
-  font-weight: 600;
+  color: var(--color-text);
+  font-weight: 400;
 }
 
 .home-greeting--desktop .home-bubble {
