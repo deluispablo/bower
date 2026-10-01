@@ -660,10 +660,17 @@ export function Home(): JSX.Element {
   const greeting = greetingFor(me?.name);
   const toggleMenu = (): void => setMenuOpen((open) => !open);
 
-  // The phone's top bar (R-HM-1): "G'day, Alex" and its ⋯.
+  // The phone's top bar (R-HM-1): "G'day, Alex" and its ⋯. The page's one
+  // h1 on the phone, as on Add and Bower (DA-1, T-9); the desktop's h1 is
+  // the greeting in the page, so the bar's copy stays a plain span there.
   const crumb = useMemo(
-    () => <span class="topbar-title">{greeting}</span>,
-    [greeting],
+    () =>
+      wide ? (
+        <span class="topbar-title">{greeting}</span>
+      ) : (
+        <h1 class="topbar-title">{greeting}</h1>
+      ),
+    [greeting, wide],
   );
   useShellSlot('crumb', crumb);
   const actions = useMemo(

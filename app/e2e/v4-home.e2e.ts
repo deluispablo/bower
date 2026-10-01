@@ -98,16 +98,19 @@ test('Recent rows show the kind and the where dot, and All in Folders on the pho
   }
 });
 
-test("phone Home: the top bar says G'day, Alex and there is no greeting heading; desktop has the h1 (R-HM-1)", async ({
+test("phone Home: the top bar's G'day, Alex is the page's one h1; desktop has the h1 in the page (R-HM-1, #920 DA-1)", async ({
   page,
 }, testInfo) => {
   await openHome(page);
   const greeting = page.getByRole('heading', { name: "G'day, Alex" });
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   if (testInfo.project.name === 'phone') {
     await expect(
-      page.locator('header.topbar').getByText("G'day, Alex", { exact: true }),
+      page
+        .locator('header.topbar')
+        .getByRole('heading', { level: 1, name: "G'day, Alex" }),
     ).toBeVisible();
-    await expect(greeting).toHaveCount(0);
+    await expect(page.locator('.home-h1')).toHaveCount(0);
     await expect(visible(page.locator('.home-bubble'))).toBeVisible();
   } else {
     await expect(greeting).toBeVisible();
