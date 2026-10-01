@@ -85,10 +85,8 @@
 /* ---------- The ⋯ (§3.6, #920 DA-7) ---------- */
 
 /* One ⋯ everywhere, as the boards' `.ib`: 40 visual, 44 hit, radius 10,
-   the secondary text colour, a 22 px glyph. The Folders tab draws its own
-   button inside `.folders-more`. */
-.icon-button.more-button,
-.folders-more > .icon-button {
+   the secondary text colour, a 22 px glyph (`MoreButton`). */
+.icon-button.more-button {
   position: relative;
   width: 40px;
   height: 40px;
@@ -96,8 +94,7 @@
   color: var(--color-text-secondary);
 }
 
-.icon-button.more-button::after,
-.folders-more > .icon-button::after {
+.icon-button.more-button::after {
   position: absolute;
   top: 50%;
   left: 50%;

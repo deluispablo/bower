@@ -19,22 +19,15 @@ import {
   setShowAppFiles,
   useShowAppFiles,
 } from '../components/explorer.js';
-import { IconMore } from '../components/icons.js';
+import { MoreButton } from '../components/more-button.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { folderHref } from '../navigation.js';
-import {
-  close as closeOverlay,
-  open as openOverlay,
-  OVERLAY_PRIORITY,
-} from '../overlay-queue.js';
 import { revealInFolders, targetFromReveal } from '../reveal.js';
 import { useSession } from '../session.js';
 import { FOLDERS_TAB_LABEL } from '../shell-routes.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
-
-const MORE_ID = 'folders-more';
 
 export function Notes(): JSX.Element | null {
   const desktop = useMediaQuery(DESKTOP_QUERY);
@@ -64,48 +57,19 @@ export function Notes(): JSX.Element | null {
     revealInFolders(target.path, target.id);
   }, [desktop, index]);
 
-  function openMenu(): void {
-    setMenuOpen(true);
-    openOverlay({
-      id: MORE_ID,
-      priority: OVERLAY_PRIORITY.own,
-      render: () => (
-        // The shared ⋯ action sheet (#920 DA-5): 52 px items, group
-        // separators and Cancel on the phone, as every other ⋯.
-        <NoteMenu
-          kind="notes"
-          {...(folderId !== null && { driveIds: { root: folderId } })}
-          ownFilesShown={shown}
-          onToggleOwnFiles={() => setShowAppFiles(!shown)}
-          onClose={() => {
-            setMenuOpen(false);
-            closeOverlay(MORE_ID);
-          }}
-        />
-      ),
-    });
-  }
-
-  // The bar's title is the shell's (`topBarVariant` "explorer"); the ⋯
-  // follows it in the actions slot.
+  // The bar's title is the shell's (`topBarVariant` "explorer"); the shared
+  // ⋯ follows it in the actions slot.
   const more = useMemo(
     () => (
       <div class="folders-title">
-        <span class="folders-more">
-          <button
-            type="button"
-            class="icon-button"
-            aria-label={`More for ${FOLDERS_TAB_LABEL}`}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={openMenu}
-          >
-            <IconMore />
-          </button>
-        </span>
+        <MoreButton
+          expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+          name={FOLDERS_TAB_LABEL}
+        />
       </div>
     ),
-    [menuOpen, shown, folderId],
+    [menuOpen],
   );
 
   useShellSlot('actions', more);
@@ -115,6 +79,19 @@ export function Notes(): JSX.Element | null {
   return (
     <div class="notes-screen">
       <Explorer variant="page" />
+      {/* The shared ⋯ action sheet (#920 DA-5), rendered as every other
+          page renders it (it queues itself): 52 px items, separators and
+          Cancel on the phone. */}
+      {menuOpen && (
+        <NoteMenu
+          kind="notes"
+          title={FOLDERS_TAB_LABEL}
+          {...(folderId !== null && { driveIds: { root: folderId } })}
+          ownFilesShown={shown}
+          onToggleOwnFiles={() => setShowAppFiles(!shown)}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
     </div>
   );
 }
