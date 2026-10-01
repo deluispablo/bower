@@ -496,6 +496,8 @@ After deploying (`scripts/deploy.sh`, or any change to `app/public/_headers` or 
 
 A grade below A on the app usually means `app/public/_headers` didn't ship with the deploy — check the build actually generated it: `grep -n "" app/dist/_headers` (`pnpm -C app build` writes it from `VITE_API_URL` and, if set, `VITE_GOOGLE_API_KEY`; without `VITE_API_URL` it warns and falls back to `connect-src 'self'` alone, but a value that's set and not a URL fails the build outright rather than shipping a placeholder).
 
+A missing file under `/assets/` must answer 404, never the app: `curl -s -o /dev/null -w '%{http_code}\n' "$APP_ORIGIN/assets/missing.js"` prints `404`, while `"$APP_ORIGIN/note/x"` prints `200`. The 404 comes from `app/public/assets/404.html` (Pages serves the closest `404.html`; with no top-level one, every other route still gets `index.html`). Never add a top-level `404.html`: that turns off the app's fallback for deep links. If devices ever keep a broken copy of a script in the offline cache, bump `PRECACHE_NAME` in `app/src/sw-precache.ts`; the next service worker downloads every file again and deletes the old cache.
+
 ### Red-team the agent
 
 Before a release, run the prompt-injection corpus once against a real model and fill in its outcome table: `docs/security.md` § "Prompt injection".
