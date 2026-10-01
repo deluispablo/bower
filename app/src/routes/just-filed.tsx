@@ -345,11 +345,17 @@ function EarlierBody({
       </p>
     );
   }
-  const { shown, more } = all ? { shown: rows, more: 0 } : previewRows(rows);
+  // The run's line already counts its requests ("1 request · 3 filed"):
+  // the list and its "and N more" are the filed things alone (#950).
+  const filed = rows.filter((row) => row.action === 'filed');
+  const listed = filed.length > 0 ? filed : rows;
+  const { shown, more } = all
+    ? { shown: listed, more: 0 }
+    : previewRows(listed);
   return (
     <>
       {groupRows(shown).map((group) => {
-        const full = groupRows(rows).find((g) => g.action === group.action);
+        const full = groupRows(listed).find((g) => g.action === group.action);
         return (
           <div key={group.action}>
             <p class="just-filed-overline">{full?.heading ?? group.heading}</p>
