@@ -346,8 +346,12 @@ test("previous/next under a note hides Bower's own files and uses titles (#423)"
   // alongside Bower's own "Bower - Proposals.md" (#420's demo fixture
   // already has it, matching the issue's own repro).
   await page.goto('/folder/Answers');
+  // A link on the phone; on desktop an option of the folder's listbox
+  // (#950 F-15).
+  const name = /Which subscriptions renew this autumn/;
   await page
-    .getByRole('link', { name: /Which subscriptions renew this autumn/ })
+    .getByRole('link', { name })
+    .or(page.getByRole('option', { name }))
     .press('Enter');
   await expect(
     page.getByRole('heading', {
