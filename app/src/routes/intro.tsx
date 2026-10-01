@@ -123,6 +123,7 @@ function Page1Art(): JSX.Element {
         <Composer
           mode="save"
           rows={1}
+          picture
           label="Say in a line what this pile is"
           value={INTRO_PILE.line}
           onChange={noop}
@@ -193,6 +194,7 @@ function Page4Art(): JSX.Element {
       <Composer
         mode="send"
         rows={1}
+        picture
         label="Ask Bower"
         commitLabel="Send"
         value={INTRO_REQUEST.question}

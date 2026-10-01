@@ -411,8 +411,7 @@ describe('Intro', () => {
   });
 
   it('draws pages 1 and 4 with the real text box and page 2 with the note box (R-IN-2, R-IN-3)', () => {
-    // A browser that can dictate: page 1's round button is the microphone.
-    Object.assign(window, { webkitSpeechRecognition: class {} });
+    // A picture: the resting mic whatever the browser (jsdom has no speech API).
     mount();
     const one = root.querySelector('.intro-page--1 .composer');
     expect(one).not.toBeNull();
