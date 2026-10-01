@@ -55,14 +55,14 @@ describe('Hint (issue #742)', () => {
   });
 
   it.each(['tip', 'suggestion'] as const)(
-    '%s has a dismiss button named "Hide this tip"',
+    '%s has a dismiss button named "Dismiss this tip"',
     (variant) => {
       const root = mount(variant);
       expect(root.querySelector('.hint')?.className).toBe(
         `hint hint-${variant}`,
       );
       const button = root.querySelector('button');
-      expect(button?.getAttribute('aria-label')).toBe('Hide this tip');
+      expect(button?.getAttribute('aria-label')).toBe('Dismiss this tip');
     },
   );
 
