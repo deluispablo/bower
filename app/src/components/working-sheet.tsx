@@ -642,6 +642,12 @@ function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
   );
 }
 
+/** Whether `path` is a saved link's note (Add's `Link - host …` name). */
+function isLinkPath(path: string | undefined): boolean {
+  if (path === undefined) return false;
+  return linkTitleFromFileName(path.slice(path.lastIndexOf('/') + 1)) !== null;
+}
+
 /** The Badge tone of each row tag (AR-Run: "Filed"). */
 const ACTION_TONE: Record<OutcomeAction, BadgeTone> = {
   new: 'new',
@@ -785,10 +791,17 @@ export function WorkingSheet({
 
   // A Bower answer takes the title every list gives it (#920). A hook, so
   // before the early return.
+  // A filed link likewise takes the tree's and the note's title, never
+  // the host alone its file name holds (#950 T950-5).
   const answerTitles = useTitlesAt(
     (outcome?.items ?? [])
-      .filter((item) => item.action === 'answered')
-      .map((item) => item.path),
+      .map((item) =>
+        item.action === 'filed' ? (item.to ?? item.path) : item.path,
+      )
+      .filter(
+        (path, at) =>
+          outcome?.items[at]?.action === 'answered' || isLinkPath(path),
+      ),
     files,
   );
 
@@ -823,7 +836,8 @@ export function WorkingSheet({
           rows: sheet.rows.map((row) => {
             const title =
               row.path === undefined ? undefined : answerTitles.get(row.path);
-            return row.action === 'answered' && title !== undefined
+            return title !== undefined &&
+              (row.action === 'answered' || isLinkPath(row.path))
               ? { ...row, title }
               : row;
           }),

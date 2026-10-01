@@ -54,6 +54,7 @@ import {
   youAdded,
 } from '../just-filed.js';
 import type { TableRow } from '../just-filed.js';
+import { linkTitleFromFileName } from '../add.js';
 import { kindLabel } from '../meta-line.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { isLinkNote } from '../note-title.js';
@@ -437,16 +438,17 @@ export function JustFiled(): JSX.Element {
     () => (latest === null ? [] : tableRows(latest, index)),
     [latest, index],
   );
-  // A Bower answer takes the title every list gives it (#920).
+  // A Bower answer takes the title every list gives it (#920), and so does
+  // a filed link: the tree's and the note's, not its file name's host
+  // (#950 T950-5).
+  const titled = (row: TableRow): boolean =>
+    row.action === 'answered' || linkTitleFromFileName(row.name) !== null;
   const answerTitles = useTitlesAt(
-    tableRowsNow
-      .filter((row) => row.action === 'answered')
-      .map((row) => row.notePath),
+    tableRowsNow.filter(titled).map((row) => row.notePath),
     files,
   );
   const rows = tableRowsNow.map((row) => {
-    const title =
-      row.action === 'answered' ? answerTitles.get(row.notePath) : undefined;
+    const title = titled(row) ? answerTitles.get(row.notePath) : undefined;
     return title === undefined ? row : { ...row, title };
   });
   const addresses = useAddresses(rows, index);
