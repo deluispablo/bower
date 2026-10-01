@@ -11,7 +11,7 @@
  */
 import { ExpirationPlugin } from 'workbox-expiration';
 import type { PrecacheEntry } from 'workbox-precaching';
-import { createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
+import { PrecacheController, PrecacheRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { NetworkFirst } from 'workbox-strategies';
 
@@ -20,6 +20,7 @@ import {
   isTrustedShareRequest,
   storeSharedFiles,
 } from './share-target.js';
+import { isOutdatedPrecache, PRECACHE_NAME } from './sw-precache.js';
 import './sw-push.js';
 import { isApiStatusRequest } from './sw-routes.js';
 
@@ -27,7 +28,17 @@ declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry | string>;
 };
 
-precacheAndRoute(self.__WB_MANIFEST);
+// The precache under its own name (#992), not Workbox's default one: a
+// renamed cache makes every device fetch every shell file again, which heals
+// devices that stored `index.html` as a JS chunk. `precacheAndRoute` cannot
+// take a name without `workbox-core`'s `setCacheNameDetails` (not a direct
+// dependency), so the controller is built explicitly; `precache` adds the
+// same `install` and `activate` listeners `precacheAndRoute` does.
+const precacheController = new PrecacheController({
+  cacheName: PRECACHE_NAME,
+});
+precacheController.precache(self.__WB_MANIFEST);
+registerRoute(new PrecacheRoute(precacheController));
 
 const SHARE_TARGET_PATH = '/add';
 
@@ -80,15 +91,29 @@ registerRoute(
 // fetch handler above already owns and responds to it, so it's denylisted
 // here to avoid a second, conflicting `respondWith`.
 registerRoute(
-  new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-    denylist: [new RegExp(`^${SHARE_TARGET_PATH}(\\?|$)`)],
-  }),
+  new NavigationRoute(
+    precacheController.createHandlerBoundToURL('/index.html'),
+    {
+      denylist: [new RegExp(`^${SHARE_TARGET_PATH}(\\?|$)`)],
+    },
+  ),
 );
 
 self.addEventListener('install', () => {
   void self.skipWaiting();
 });
 
+/** Deletes every earlier precache (`isOutdatedPrecache`), e.g. Workbox's
+ * default `workbox-precache-v2-<scope>` that held the bad chunk (#992). */
+async function deleteOutdatedPrecaches(): Promise<void> {
+  const names = await caches.keys();
+  await Promise.all(
+    names.filter(isOutdatedPrecache).map((name) => caches.delete(name)),
+  );
+}
+
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    Promise.all([deleteOutdatedPrecaches(), self.clients.claim()]),
+  );
 });
