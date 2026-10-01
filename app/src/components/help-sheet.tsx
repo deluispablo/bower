@@ -333,7 +333,11 @@ function HelpRows({ rows }: { rows: readonly HelpRow[] }): JSX.Element {
         const Icon = icon === 'bird' ? null : ICONS[icon];
         return (
           <li key={lead} class="help-row">
-            {Icon === null || isBowerRow(lead) ? <BowerMark size={20} /> : <Icon />}
+            {Icon === null || isBowerRow(lead) ? (
+              <BowerMark size={20} />
+            ) : (
+              <Icon />
+            )}
             <span>
               <b>{lead}</b> {text}
             </span>

@@ -259,7 +259,8 @@ describe('the Help of a folder, a note and a file', () => {
 });
 
 describe('Help row icons follow the boards (#950 F-24)', () => {
-  const icons = (screen: HelpScreen): string[] => HELP_ROWS[screen].rows.map((row) => row.icon);
+  const icons = (screen: HelpScreen): string[] =>
+    HELP_ROWS[screen].rows.map((row) => row.icon);
 
   it('draws the bird on the rows about what Bower wrote', () => {
     expect(icons('home')[0]).toBe('bird');
