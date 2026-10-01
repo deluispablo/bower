@@ -238,3 +238,112 @@
   background: var(--color-badge-check-bg);
   color: var(--color-warn);
 }
+
+/* The rows, origin squares, legend and words of the box, scoped to the box
+   itself: the folder preview column loads no markdown.css (DA-11). The same
+   rules as markdown.css, so the note page and the preview match. */
+.bower-note-box .bower-note-legend {
+  font-size: 0.75rem; /* 12px */
+  color: var(--color-text-muted);
+}
+
+.bower-note-box .bower-note-legend em {
+  font-style: normal;
+  font-weight: 600;
+}
+
+.bower-note-box .bower-legend-file {
+  color: var(--color-origin-file);
+}
+.bower-note-box .bower-legend-notes {
+  color: var(--color-origin-notes);
+}
+.bower-note-box .bower-legend-web {
+  color: var(--color-origin-web);
+}
+.bower-note-box .bower-legend-you {
+  color: var(--color-origin-you);
+}
+
+.bower-note-box .bower-note-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bower-note-box .bower-note-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.bower-note-box .bower-note-text {
+  min-width: 0;
+}
+
+.bower-note-box .bower-note-text > :last-child {
+  margin-bottom: 0;
+}
+
+/* The origin square: the same tints as `OriginSquare` (marks.css). */
+.bower-note-box .bower-origin {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 5px;
+}
+
+.bower-note-box .bower-origin::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  mask: var(--origin-icon) center / contain no-repeat;
+}
+
+.bower-note-box .bower-origin-file {
+  --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h8l4 4v14H6z'/%3E%3Cpath d='M14 3v4h4'/%3E%3C/svg%3E");
+  background: var(--color-origin-file-bg);
+  color: var(--color-origin-file);
+}
+.bower-note-box .bower-origin-notes {
+  --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 4h10l4 4v12H5z'/%3E%3Cpath d='M8 12h8M8 16h5'/%3E%3C/svg%3E");
+  background: var(--color-origin-notes-bg);
+  color: var(--color-origin-notes);
+}
+.bower-note-box .bower-origin-web {
+  --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8'/%3E%3Cpath d='M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16'/%3E%3C/svg%3E");
+  background: var(--color-origin-web-bg);
+  color: var(--color-origin-web);
+}
+.bower-note-box .bower-origin-you {
+  --origin-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='3.5'/%3E%3Cpath d='M5 20c1-4 4-6 7-6s6 2 7 6'/%3E%3C/svg%3E");
+  background: var(--color-origin-you-bg);
+  color: var(--color-origin-you);
+}
+
+/* "Check" (and a v3 "Problem"): a small word at the end of the line. */
+.bower-note-box .bower-note-word {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font-size: 0.71875rem; /* 11.5px */
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--color-text-muted);
+}
+
+.bower-note-box .bower-note-problem .bower-note-word {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
