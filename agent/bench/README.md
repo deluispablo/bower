@@ -8,6 +8,7 @@ Measures one tidy-up session, case by case, so a change to the session can be co
 bash agent/bench/run-bench.sh <label>            # all five cases, one after the other
 bash agent/bench/run-bench.sh <label> 2          # only case 2
 bash agent/bench/run-bench.sh <label> 1 5        # cases 1 and 5
+bash agent/bench/run-bench.sh <label> --large 2  # case 2 on the large folder (see below)
 ```
 
 `<label>` names the run (`baseline`, `sonnet-low`, ...): letters, digits, `.`, `_` and `-`.
@@ -45,6 +46,19 @@ The folder in `vault/` holds about 60 notes and files across `1-Projects` to `4-
 
 `index.md` keeps the rows of rules version 23 (no tags, no description) and has no `## Tags` section, on purpose: that is what a real folder looks like before the lint backfill (R-SS-17), so the baseline stays realistic.
 
+## The large folder
+
+The small folder is too small to show what a long `index.md` costs. For that, there is a large one, made on demand and git-ignored:
+
+```bash
+python agent/bench/make-large-vault.py           # writes agent/bench/vault-large/
+bash agent/bench/run-bench.sh <label> --large 2  # case 2 against it
+```
+
+`make-large-vault.py` (Python 3, standard library only) starts from a copy of `vault/` and adds made-up project and area folders, for about 30 of them with a hub note each, 400 notes and 120 originals (small text PDFs and PNG pictures). It rewrites `index.md` with a row for every note and file, in the same rules version 23 shape, and `log.md` with about 600 lines, some of them `Correction:` lines. A fixed seed and no clock: every run writes the same bytes, so runs on different days compare. Run it again after a change to `vault/`.
+
+With `--large`, every case runs against `vault-large/` instead of `vault/`, and the `case` column gets a `large:` prefix (`large:2-text-pdf`), so both kinds of line can share a TSV.
+
 The PDFs are written by `make-fixtures.py` (Python 3; the scan needs Pillow) and committed, so every run reads the same bytes. Run `python agent/bench/make-fixtures.py` only to change one.
 
 ## Results
@@ -59,7 +73,7 @@ The columns:
 
 | Column | Meaning |
 | --- | --- |
-| `case` | The case folder's name |
+| `case` | The case folder's name, prefixed `large:` with `--large` |
 | `agent_seconds` | Wall time of the agent step: from the runner's `agent run` line to its next line |
 | `turns` | The session's turns (`num_turns`) |
 | `api_ms` | Time spent waiting for the model (`duration_api_ms`) |
